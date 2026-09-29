@@ -823,6 +823,8 @@ function projetar(model: BlueprintModel): {
       potenciaW: t.potenciaW ?? undefined,
       tipoEletrico: t.tipoEletrico ?? undefined,
       comando: t.comando ?? undefined,
+      // E2.1: `true` ou AUSENTE, pela mesma razão de `sugerida`.
+      comandoGlobal: t.comandoGlobal ? (true as const) : undefined,
       // ⚠️ `true` ou AUSENTE — nunca `false`. "Não sugerida" é o estado de todo
       // ponto anterior a 10/09/2026, e emitir `false` neles mudaria o hash do
       // acervo inteiro.
@@ -1488,6 +1490,8 @@ export interface CanonicalPayload {
     potenciaW?: number;
     /** Letra do comando ("a", "b"). Ausente sob kernel < 0.23.0 e quando não há. */
     comando?: string;
+    /** A letra vale no desenho inteiro (E2.1). Ausente sob kernel < 0.71.0 e quando falso. */
+    comandoGlobal?: true;
     /** Gerado pelo sistema e ainda não tocado. Ausente sob kernel < 0.24.0 e quando falso. */
     sugerida?: true;
     /** Variante do interruptor. Ausente sob kernel < 0.27.0 e quando não declarada. */
@@ -2188,6 +2192,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       potenciaW: t.potenciaW ?? null,
       tipoEletrico: (t.tipoEletrico as TipoDePontoEletrico) ?? null,
       comando: t.comando ?? null,
+      comandoGlobal: t.comandoGlobal ? true : null,
       sugerida: t.sugerida ? true : null,
       interruptor: (t.interruptor as TipoDeInterruptor | undefined) ?? null,
       tipoHidraulico: (t.tipoHidraulico as TipoDePontoHidraulico | undefined) ?? null,

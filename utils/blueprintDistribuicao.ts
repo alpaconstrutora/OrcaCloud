@@ -652,40 +652,59 @@ export function conferirComandos(space: Space, terminais: readonly Terminal[]): 
   const letrasDasLuzes = new Set(luzes.flatMap(letrasDe));
   const letrasDosInterruptores = new Set(interruptores.flatMap(letrasDe));
 
+  // COMANDO ENTRE PAVIMENTOS (E2.1): a letra marcada `comandoGlobal` vale no
+  // desenho inteiro — a luz da escada acesa de baixo e de cima. Os globais
+  // são lidos do modelo TODO, não do cômodo nem do pavimento.
+  const globais = terminais.filter((t) => t.disciplina === 'ELETRICA' && t.comandoGlobal === true);
+  const letrasGlobaisDeInterruptor = new Set(globais.filter((t) => t.tipoEletrico === 'INTERRUPTOR').flatMap(letrasDe));
+  const letrasGlobaisDeLuz = new Set(globais.filter(ehLuz).flatMap(letrasDe));
+
   const luzesSemInterruptor: PontoELetra[] = [];
   for (const l of luzes) {
     for (const letra of letrasDe(l)) {
-      if (!letrasDosInterruptores.has(letra)) luzesSemInterruptor.push({ id: l.id, letra });
+      if (letrasDosInterruptores.has(letra)) continue;
+      if (l.comandoGlobal && letrasGlobaisDeInterruptor.has(letra)) continue;
+      luzesSemInterruptor.push({ id: l.id, letra });
     }
   }
   const interruptoresSemLuz: PontoELetra[] = [];
   for (const i of interruptores) {
     for (const letra of letrasDe(i)) {
-      if (!letrasDasLuzes.has(letra)) interruptoresSemLuz.push({ id: i.id, letra });
+      if (letrasDasLuzes.has(letra)) continue;
+      if (i.comandoGlobal && letrasGlobaisDeLuz.has(letra)) continue;
+      interruptoresSemLuz.push({ id: i.id, letra });
     }
   }
 
-  // Paralelos e intermediários: o par é procurado no pavimento inteiro.
+  // Paralelos e intermediários: o par é procurado no pavimento inteiro — ou
+  // no desenho inteiro, quando o interruptor é global.
   const doNivel = terminais.filter(
     (t) => t.levelId === space.levelId && t.disciplina === 'ELETRICA' && t.tipoEletrico === 'INTERRUPTOR',
   );
-  const paralelosPorLetra = new Map<string, number>();
-  for (const t of doNivel) {
-    if (t.interruptor !== 'PARALELO') continue;
-    for (const letra of letrasDe(t)) paralelosPorLetra.set(letra, (paralelosPorLetra.get(letra) ?? 0) + 1);
-  }
+  const contar = (lista: readonly Terminal[]) => {
+    const mapa = new Map<string, number>();
+    for (const t of lista) {
+      if (t.interruptor !== 'PARALELO') continue;
+      for (const letra of letrasDe(t)) mapa.set(letra, (mapa.get(letra) ?? 0) + 1);
+    }
+    return mapa;
+  };
+  const paralelosPorLetra = contar(doNivel);
+  const paralelosGlobaisPorLetra = contar(globais.filter((t) => t.tipoEletrico === 'INTERRUPTOR'));
+  const paralelosDe = (i: Terminal, letra: string) =>
+    (i.comandoGlobal ? paralelosGlobaisPorLetra : paralelosPorLetra).get(letra) ?? 0;
   const paralelosSemPar: PontoELetra[] = [];
   const intermediariosSemParalelos: PontoELetra[] = [];
   for (const i of interruptores) {
     const letras = letrasDe(i);
     if (i.interruptor === 'PARALELO') {
       for (const letra of letras) {
-        if ((paralelosPorLetra.get(letra) ?? 0) < 2) paralelosSemPar.push({ id: i.id, letra });
+        if (paralelosDe(i, letra) < 2) paralelosSemPar.push({ id: i.id, letra });
       }
     }
     if (i.interruptor === 'INTERMEDIARIO') {
       for (const letra of letras) {
-        if ((paralelosPorLetra.get(letra) ?? 0) < 2) intermediariosSemParalelos.push({ id: i.id, letra });
+        if (paralelosDe(i, letra) < 2) intermediariosSemParalelos.push({ id: i.id, letra });
       }
     }
   }

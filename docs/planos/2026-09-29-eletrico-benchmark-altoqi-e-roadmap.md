@@ -1933,7 +1933,7 @@ Fecha o bloco **5**.
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 2.1 Comando como relação | `Comando {id, letra, nome?, levelIds[]}` derivado das letras (índice), com **letra global opcional** para comando entre pavimentos (`Terminal.comandoGlobal: boolean`); painel "Comandos" no Navegador: renomear, listar interruptores e luzes, achar par de paralelo em outro andar | conferência 9.5.2.1 aceita paralelo em pavimentos diferentes quando global; goldens; teste `blueprintNbr5410Iluminacao` |
+| 2.1 Comando como relação ✅ (kernel 0.71.0) | `Comando {id, letra, nome?, levelIds[]}` derivado das letras (índice), com **letra global opcional** para comando entre pavimentos (`Terminal.comandoGlobal: boolean`); painel "Comandos" no Navegador: renomear, listar interruptores e luzes, achar par de paralelo em outro andar | conferência 9.5.2.1 aceita paralelo em pavimentos diferentes quando global; goldens; teste `blueprintNbr5410Iluminacao` |
 | 2.2 Motor de esquemas de ligação | `utils/blueprintEsquemasDeLigacao.ts` puro: tabela **ESQUEMAS** (interruptor simples / 2 e 3 seções / paralelo / intermediário / luz sem interruptor / tomada / TUE / ligação direta × FN/FF/FFF → condutores F, N, R, T por TRECHO entre os pontos do comando), com fonte (NBR 5410 6.1.5 + prática de prancha); `condutoresDoTrecho(model, trecho)` passa a **derivar** fase/neutro/retorno/terra por circuito e por comando que atravessa o trecho — retorno só entre interruptor e luz; `Trecho.condutores` vira **declarado opcional** que sobrescreve (marcado na tela) | teste com sala: interruptor paralelo + 2 luzes → o trecho entre os interruptores tem 2 retornos e nenhum neutro; prancha mostra os traços certos; `blueprintCondutores.test.ts` reescrito |
 | 2.3 Seção por condutor | `SECOES_PE_TAB58` (S_PE por S_fase, NBR 5410 Tab. 58) e regra do neutro (6.2.6.2: igual à fase em FN/FF e FFF ≤ 25 mm²; redução admitida acima, hipótese); `Circuito.secaoNeutroMm2`/`secaoPeMm2` declarados opcionais; unifilar escreve "2#2,5 + N2,5 + T2,5" quando diferem; quantitativo de fio **por tipo e seção** substitui o total da 0.3 | teste Tab. 58 pontos contra o PDF; `Trecho.condutores` declarado ≠ derivado aparece em âmbar; quant bump |
 | 2.4 Fiação na planta e no quadro de cargas | rótulo por trecho com contagem por tipo; coluna "Condutores" no quadro de cargas ("2F+N+T"); ocupação do eletroduto usa a seção real de cada condutor (não mais a do 1º circuito); legenda numérica de trecho quando > N condutores (`Trecho.rotulo` impresso + tabela na folha) | harness da prancha olhado com trecho de 7 condutores; `ocupacaoDoEletrodutoCompartilhado` com seções mistas testado |
@@ -2429,3 +2429,50 @@ painéis) · suíte inteira **6.196 ✓ / 0 ✗ / 33 skip** (566 arquivos) · `b
 
 **Etapa 1: 3 de 3 fases** ✓ (kernel 0.68.0 → 0.70.0). Próxima: **E2 — Comandos, esquemas de ligação
 e fiação** (bump; o motor que o benchmark apontou como o maior buraco).
+
+### E2.1 — Comando como relação (29/09/2026) · frente `eletrico-e2` · **kernel 0.70.0 → 0.71.0**
+
+**O que mudou**
+
+- `utils/blueprintKernel/model.ts` — **`Terminal.comandoGlobal`**: a letra do comando passa a
+  poder valer no desenho inteiro (a ESCADA: o paralelo de baixo e o de cima acendem a mesma
+  luz). Sem a marca, a letra continua sendo do pavimento — o "a" do térreo não é o "a" do andar
+  de cima, e é assim que um projeto se lê. Invariante: global só COM letra; tirar a letra tira
+  a marca. Canônico emite `true` ou omite (como `sugerida`) — nenhum desenho existente muda de
+  payload; **bump 0.71.0** provado pelo ritual dos goldens (7/7 em 0.70.0; depois, só os hashes).
+- **`utils/blueprintComandos.ts`** (novo, puro) — `comandosDoModelo(model)`: o **objeto de
+  comando DERIVADO** das letras — um por (pavimento, letra), ou um só para a letra global —, com
+  interruptores, luzes, pavimentos, variantes; `pendenciasDoComando` (sem interruptor, sem luz,
+  paralelo sem par, intermediário sem paralelos). Nada gravado além da letra e da marca: o
+  índice se refaz a cada mudança. É o que a E2.2 lê para saber quantos retornos passam num trecho.
+- `utils/blueprintDistribuicao.ts` — `conferirComandos` aceita o par do paralelo e a luz do
+  interruptor **em outro pavimento quando os dois são globais**; sem a marca, continua a falta —
+  a marca não inventa um interruptor.
+- `components/blueprint/PainelTrechoSelecionado.tsx` — checkbox **"Comando entre pavimentos
+  (escada)"** em interruptor e luz, desligado sem letra (o title diz por quê).
+- `components/blueprint/PainelEletrica.tsx` — aba **"Comandos"**: tabela padrão (letra · pavimento
+  · interruptores · variantes · luzes · pendências) com "ver" no desenho e badge na aba.
+- **Não entrou (declarado)**: NOME do comando (a letra é o nome; um nome livre seria payload
+  novo sem leitor — se um dia a prancha pedir "comando da escada", entra aqui); comando
+  automático de paralelo/intermediário (qual porta faz par com qual é decisão de projeto —
+  continua manual, como em 10/09).
+
+**Testes** — novo `__tests__/blueprintComandos.test.ts` (6): a mesma letra em dois pavimentos são
+DOIS comandos e a letra global junta os dois (paralelo em cada andar + luz em cima = um comando
+completo); pendências; **9.5.2.1: sem a marca, "paralelo 'e' sem o par" nos dois andares e aviso
+de interruptor que não comanda nada; com `comandoGlobal` nos três pontos, nenhum achado com "e"**;
+luz global sem interruptor continua falta; canônico omite a chave quando falsa e emite `true`;
+invariante recusa global sem letra; `SetTerminalProps` liga/desliga e tirar a letra tira a marca.
+**14 pinos** de `KERNEL_VERSION` 0.70.0 → 0.71.0.
+
+**O que os testes pegaram antes de publicar**: `canonicalPayload` devolve a string canônica (eu a
+reserializei e procurei aspas que não existiam); e com o cômodo sem interruptor NENHUM a 9.5.2.1
+diz "sem interruptor" antes de olhar letras — dois ajustes no teste, nenhum no código.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova + hashes) · alvo 145 ✓ · suíte inteira **6.202 ✓ / 0 ✗ / 33 skip** (567 arquivos) · `build` ✓ · `check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ · `planta-api`
+401/401. **Sem teste jsdom da aba Comandos nem do checkbox** — fica dito.
+
+**Efeito no benchmark**: §1 "Organização por comandos" 🟡→✅; §3 "Comandos entre pavimentos" ❌→✅,
+"Associação entre luminárias e comandos" 🟡→✅ (objeto derivado, visível); §6 "Criar comandos" 🟡→✅,
+"Nomear/numerar" 🟡 (a letra é o nome), "Comandar um ponto de locais diferentes" 🟡 (pareamento ✅;
+fiação de retorno é a E2.2), "Comandos atravessando pavimentos" ❌→✅.

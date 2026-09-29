@@ -19,6 +19,8 @@ import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import ActionIconButton from '../ui/ActionIconButton';
 import { pontosAPreencher } from '../../utils/blueprintPotenciaPadrao';
 import { proximoNumeroDeCircuito, renumerarCircuitos } from '../../utils/blueprintCircuitosAutomaticos';
+import { comandosDoModelo, pendenciasDoComando } from '../../utils/blueprintComandos';
+import { ROTULO_DO_INTERRUPTOR } from '../../utils/blueprintRede';
 import {
   CRITERIOS_DE_AGRUPAMENTO,
   CRITERIO_SUGERIDO,
@@ -66,7 +68,29 @@ import {
  *
  * "Novo circuito" é a ação primária (§17) no slot da barra de abas.
  */
-export type AbaDoQuadroDeCargas = 'circuitos' | 'pontos' | 'quadros' | 'conferencia' | 'hipoteses';
+export type AbaDoQuadroDeCargas = 'circuitos' | 'pontos' | 'quadros' | 'comandos' | 'conferencia' | 'hipoteses';
+
+/** Uma linha da aba Comandos (E2.1): a relação interruptor ↔ luz derivada das letras. */
+interface LinhaDeComando {
+  chave: string;
+  letra: string;
+  pavimento: string;
+  global: boolean;
+  interruptores: number;
+  luzes: number;
+  variantes: string;
+  pendencias: string;
+  ids: string[];
+}
+
+const COLUNAS_DE_COMANDO: StandardTableColumn[] = [
+  { key: 'letra', label: 'Comando', width: 96 },
+  { key: 'pavimento', label: 'Pavimento', width: 160 },
+  { key: 'interruptores', label: 'Interruptores', width: 110, align: 'right' },
+  { key: 'variantes', label: 'Variantes', width: 200 },
+  { key: 'luzes', label: 'Luzes', width: 80, align: 'right' },
+  { key: 'pendencias', label: 'Pendências', width: 220 },
+];
 
 /** Uma linha da tabela: o circuito do quadro de cargas + o que o kernel guarda + o pré-dim. */
 interface LinhaDeCircuito {
@@ -368,6 +392,21 @@ export default function PainelEletrica({
   }));
 
   const pendenciasDaConferencia = (conferenciaPendencias?.faltas ?? 0) + (conferenciaPendencias?.avisos ?? 0);
+
+  const linhasDeComando = useMemo<LinhaDeComando[]>(() => {
+    const nomeDoNivel = new Map(model.levels.map((l) => [l.id, l.name]));
+    return comandosDoModelo(model).map((c) => ({
+      chave: c.chave,
+      letra: c.letra,
+      pavimento: c.global ? `todos (${c.levelIds.map((id) => nomeDoNivel.get(id) ?? '?').join(', ')})` : (nomeDoNivel.get(c.levelIds[0]) ?? '?'),
+      global: c.global,
+      interruptores: c.interruptorIds.length,
+      luzes: c.luzIds.length,
+      variantes: c.variantes.map((v) => ROTULO_DO_INTERRUPTOR[v]).join(', '),
+      pendencias: pendenciasDoComando(c).join(' · '),
+      ids: [...c.interruptorIds, ...c.luzIds],
+    }));
+  }, [model]);
   const abas: TabsBarItem<AbaDoQuadroDeCargas>[] = [
     { id: 'circuitos', label: 'Circuitos', badge: linhas.length },
     {
@@ -377,6 +416,8 @@ export default function PainelEletrica({
       icon: cargas.pontosSemCircuito > 0 ? <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> : undefined,
     },
     { id: 'quadros', label: 'Quadros', badge: cargas.quadros.length },
+    // E2.1: a relação interruptor ↔ luz, derivada das letras — o "objeto de comando" do AltoQi.
+    { id: 'comandos', label: 'Comandos', badge: linhasDeComando.length },
     ...(conferenciaSlot ? [{ id: 'conferencia' as const, label: 'Conferência NBR 5410', badge: pendenciasDaConferencia }] : []),
     ...(onHipoteses ? [{ id: 'hipoteses' as const, label: 'Hipóteses' }] : []),
   ];
@@ -981,6 +1022,49 @@ export default function PainelEletrica({
             );
           })}
         </div>
+      )}
+
+      {aba === 'comandos' && (
+        <StandardTable<LinhaDeComando>
+          columns={COLUNAS_DE_COMANDO}
+          storageKey="blueprint:comandos"
+          rows={linhasDeComando}
+          rowKey={(l) => l.chave}
+          renderCell={(key, l) => {
+            switch (key) {
+              case 'letra':
+                return (
+                  <span className="text-sm text-gray-800">
+                    <span className="italic">{l.letra}</span>
+                    {l.global && <span className="ml-1 text-xs text-blue-700" title="A letra vale no desenho inteiro (escada)">entre pavimentos</span>}
+                  </span>
+                );
+              case 'pendencias':
+                return <span className={`text-sm ${l.pendencias ? 'text-red-700' : 'text-emerald-700'}`}>{l.pendencias || 'completo'}</span>;
+              case 'interruptores':
+              case 'luzes':
+                return <span className="block text-right text-sm tabular-nums text-gray-700">{l[key]}</span>;
+              default:
+                return <span className="text-sm text-gray-700">{String((l as unknown as Record<string, string>)[key] ?? '')}</span>;
+            }
+          }}
+          sortValue={(key, l) => (l as unknown as Record<string, string | number | boolean>)[key]}
+          searchText={(l) => `${l.letra} ${l.pavimento} ${l.variantes} ${l.pendencias}`}
+          searchPlaceholder="Buscar comando..."
+          empty={{ title: 'Nenhum comando', subtitle: 'Dê a mesma letra a um interruptor e à luz que ele acende — no painel do ponto ou por Distribuir › Completar pela norma.' }}
+          actions={
+            onSelecionar
+              ? {
+                  width: 72,
+                  render: (l) => (
+                    <button type="button" onClick={() => onSelecionar(l.ids[0])} title="Seleciona as peças do comando no desenho" className="text-xs font-medium text-blue-700 hover:underline">
+                      ver
+                    </button>
+                  ),
+                }
+              : undefined
+          }
+        />
       )}
 
       {aba === 'conferencia' && conferenciaSlot && (

@@ -689,6 +689,8 @@ export type Command =
       tipoEletrico?: TipoDePontoEletrico | null;
       /** Letra do comando, quando já se sabe qual é. */
       comando?: string | null;
+      /** E2.1: a letra vale no desenho inteiro (escada). `null`/`false` = do pavimento. */
+      comandoGlobal?: boolean | null;
       /** Gerado pela distribuição automática — ver `Terminal.sugerida`. */
       sugerida?: boolean | null;
       /** Potência já conhecida ao criar (a mínima da norma na luz sugerida). */
@@ -719,6 +721,8 @@ export type Command =
       potenciaW?: number | null;
       /** Letra do comando ("a", "b"). `null` apaga. */
       comando?: string | null;
+      /** E2.1: a letra vale no desenho inteiro (escada). `null`/`false` = do pavimento. */
+      comandoGlobal?: boolean | null;
       /** `false` aceita a posição sugerida. */
       sugerida?: boolean | null;
       interruptor?: TipoDeInterruptor | null;
@@ -3307,6 +3311,7 @@ function aplicarSemHash(
           rotulo: command.rotulo?.trim() || null,
           tipoEletrico: command.tipoEletrico ?? null,
           comando: command.comando?.trim() || null,
+          comandoGlobal: command.comandoGlobal ? true : null,
           sugerida: command.sugerida ? true : null,
           ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
           ...(command.interruptor != null && command.tipoEletrico === 'INTERRUPTOR'
@@ -3350,6 +3355,9 @@ function aplicarSemHash(
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
+      if (command.comandoGlobal !== undefined) terminal.comandoGlobal = command.comandoGlobal ? true : null;
+      // Sem letra não há comando global — tirar a letra tira a marca junto.
+      if (!terminal.comando) terminal.comandoGlobal = null;
       if (command.sugerida !== undefined) terminal.sugerida = command.sugerida ? true : null;
       if (command.interruptor !== undefined) terminal.interruptor = command.interruptor;
       // Deixar de ser interruptor leva a variante junto — ela não tem sentido

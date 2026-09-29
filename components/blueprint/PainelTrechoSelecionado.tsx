@@ -80,6 +80,8 @@ interface Props {
     potenciaW?: number | null;
     interruptor?: TipoDeInterruptor | null;
     comando?: string | null;
+    /** E2.1: a letra vale no desenho inteiro (escada). */
+    comandoGlobal?: boolean | null;
     tipoEletrico?: TipoDePontoEletrico | null;
     /** Classificação hidráulica (18/09/2026). `null` volta a "a classificar". */
     tipoHidraulico?: TipoDePontoHidraulico | null;
@@ -442,6 +444,24 @@ export default function PainelTrechoSelecionado({
                   )}
                 </span>
               </label>
+              {/* E2.1: a ESCADA — o paralelo de baixo e o de cima comandam a mesma
+                  luz. Marcado, a letra deste ponto vale no desenho inteiro; sem
+                  a marca, a letra é do pavimento (o "a" do térreo não é o "a" do
+                  andar de cima). Só com letra. */}
+              {(terminal.tipoEletrico === 'INTERRUPTOR' || terminal.tipoEletrico?.startsWith('ILUMINACAO')) && (
+                <label className="flex items-center gap-2 text-[11px] text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={terminal.comandoGlobal === true}
+                    disabled={!terminal.comando?.trim()}
+                    onChange={(e) => onTerminal({ comandoGlobal: e.target.checked })}
+                    aria-label="Comando entre pavimentos"
+                    title={terminal.comando?.trim() ? 'A letra vale no desenho inteiro — o par do paralelo ou a luz podem estar em outro pavimento (escada)' : 'Dê uma letra ao comando primeiro'}
+                    className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Comando entre pavimentos (escada)
+                </label>
+              )}
             </>
           )}
 

@@ -2801,6 +2801,17 @@ export interface Terminal {
    */
   comando?: string | null;
   /**
+   * COMANDO ENTRE PAVIMENTOS (E2.1 do roadmap elétrico, 29/09/2026, kernel
+   * 0.71.0). A letra vale POR PAVIMENTO ("a" do térreo não é o "a" do andar de
+   * cima) — e é assim que um projeto se lê. A escada quebra a regra: o
+   * paralelo de baixo e o de cima comandam a MESMA luz. Marcado `true`, a
+   * letra deste ponto vale no desenho inteiro: o par do paralelo e a luz do
+   * interruptor podem estar em outro andar. Só tem sentido COM letra
+   * (invariante). Ausente/`false` = a letra é do pavimento, como sempre foi;
+   * omitido no canônico quando falso, para o acervo não mudar de hash.
+   */
+  comandoGlobal?: boolean | null;
+  /**
    * A VARIANTE do interruptor — só faz sentido em `tipoEletrico: 'INTERRUPTOR'`;
    * a invariante recusa nos outros. Ver `TIPOS_DE_INTERRUPTOR`. Ausente =
    * uma seção, que é o comum.
@@ -5441,6 +5452,9 @@ export function assertModelInvariants(model: BlueprintModel): void {
       // Uma LETRA, não um texto: ela é escrita ao lado do símbolo, num espaço
       // do tamanho de um caractere. Quatro já é folga.
       throw new KernelError('BAD_COMMAND', `Comando muito longo em ${t.id}: "${t.comando}"`);
+    }
+    if (t.comandoGlobal && !t.comando?.trim()) {
+      throw new KernelError('BAD_COMMAND', `Comando global sem letra em ${t.id}`);
     }
     if (t.tipoEletrico != null) {
       if (t.disciplina !== 'ELETRICA') {

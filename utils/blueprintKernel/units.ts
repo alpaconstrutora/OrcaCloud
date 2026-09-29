@@ -385,7 +385,15 @@
  * do componente ganhou `ligaAoPontoEletrico` (catálogo, não payload). Vocabulário
  * novo, forma igual — provado antes do bump com os goldens na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.70.0';
+/**
+ * ─── 0.70.0 → 0.71.0 (29/09/2026) — O COMANDO ENTRE PAVIMENTOS ──────────────
+ *
+ * `Terminal.comandoGlobal` (E2.1 do roadmap elétrico): a letra do comando vale
+ * no desenho inteiro — a luz da escada acesa pelo paralelo de baixo e pelo de
+ * cima. `true` ou ausente no canônico, como `sugerida`; nenhum desenho existente
+ * muda de payload — provado antes do bump com os goldens na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.71.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

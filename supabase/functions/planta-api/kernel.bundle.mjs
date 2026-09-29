@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.70.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.71.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2065,6 +2065,8 @@ function projetar(model) {
       potenciaW: t.potenciaW ?? void 0,
       tipoEletrico: t.tipoEletrico ?? void 0,
       comando: t.comando ?? void 0,
+      // E2.1: `true` ou AUSENTE, pela mesma razão de `sugerida`.
+      comandoGlobal: t.comandoGlobal ? true : void 0,
       // ⚠️ `true` ou AUSENTE — nunca `false`. "Não sugerida" é o estado de todo
       // ponto anterior a 10/09/2026, e emitir `false` neles mudaria o hash do
       // acervo inteiro.
@@ -2773,6 +2775,7 @@ function modelFromCanonicalPayload(payload) {
       potenciaW: t.potenciaW ?? null,
       tipoEletrico: t.tipoEletrico ?? null,
       comando: t.comando ?? null,
+      comandoGlobal: t.comandoGlobal ? true : null,
       sugerida: t.sugerida ? true : null,
       interruptor: t.interruptor ?? null,
       tipoHidraulico: t.tipoHidraulico ?? null,

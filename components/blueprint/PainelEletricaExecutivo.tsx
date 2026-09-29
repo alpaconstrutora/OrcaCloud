@@ -3,6 +3,9 @@ import { Check } from 'lucide-react';
 import type { BlueprintProjetoExecutivoRow } from '../../types/blueprint';
 import type { ResponsavelTecnico, EmissaoExecutiva } from '../../utils/blueprintTopografiaExecutivo';
 import type { ResultadoEletricoExecutivo, VerificacaoEletrica } from '../../utils/blueprintEletricaExecutivo';
+import PainelMemoriaisHidro, { type FormatoDoMemorial, type QualMemorial } from './PainelMemoriaisHidro';
+import type { BlocoDoMemorial } from '../../utils/blueprintMemorialHidro';
+import { TEXTOS_PADRAO_DO_MEMORIAL_ELETRICO, type TextosDoMemorialEletrico } from '../../utils/blueprintEletricaDimensionamento';
 
 /**
  * PROJETO EXECUTIVO ELÉTRICO com ART — a tela (F7, 13/09/2026).
@@ -25,9 +28,24 @@ export interface EletricaExecutivoNoPainel {
   onEmitir: () => void;
   emitindo: boolean;
   erro: string | null;
-  onBaixarMemorial: (row: BlueprintProjetoExecutivoRow) => void;
+  /** O memorial GRAVADO na emissão, em PDF ou DOCX (E5.3; sem formato = PDF, como antes). */
+  onBaixarMemorial: (row: BlueprintProjetoExecutivoRow, formato?: FormatoDoMemorial) => void;
   persistenciaIndisponivel: boolean;
+  /**
+   * E5.3 — os memoriais descritivo e de cálculo DERIVADOS AGORA (antes da
+   * emissão), e os textos editáveis do descritivo. Ausentes = o painel não os mostra.
+   */
+  memoriais?: { calculo: BlocoDoMemorial[]; descritivo: BlocoDoMemorial[]; onBaixar: (qual: QualMemorial, formato: FormatoDoMemorial) => Promise<void> };
+  textosDoMemorial?: TextosDoMemorialEletrico;
+  onTextosDoMemorial?: (t: TextosDoMemorialEletrico) => void;
 }
+
+const CAMPOS_DO_MEMORIAL: { chave: keyof TextosDoMemorialEletrico; rotulo: string; ajuda: string }[] = [
+  { chave: 'objeto', rotulo: 'Objeto', ajuda: 'Vazio: gerado do desenho (quadros, circuitos, pontos, pavimentos).' },
+  { chave: 'execucao', rotulo: 'Condutores e eletrodutos (execução)', ajuda: 'Vazio: o texto padrão (cores da NBR 5410 6.1.5.3, PVC antichama, identificação no quadro).' },
+  { chave: 'aterramento', rotulo: 'Aterramento', ajuda: 'Vazio: o texto padrão (PE em todos os circuitos, BEP junto à entrada, Tab. 58).' },
+  { chave: 'observacoes', rotulo: 'Observações', ajuda: 'Vazio: a seção não sai.' },
+];
 
 const ROTULO_DO_GRUPO: Record<VerificacaoEletrica['grupo'], string> = {
   RESPONSAVEL: 'Responsável técnico',
@@ -175,13 +193,58 @@ export default function PainelEletricaExecutivo({
                   {resp.conselho === 'CAU' ? 'RRT' : 'ART'} {resp.artNumero} · {resp.nome} · {row.emitido_em ? dataBr(row.emitido_em) : ''}{' '}
                   <span className={vale ? 'text-emerald-700' : 'text-amber-700'}>{vale ? '(vale para o desenho atual)' : '(o desenho ou as hipóteses mudaram desde a emissão)'}</span>
                 </span>
-                <button type="button" onClick={() => e.onBaixarMemorial(row)} className="shrink-0 text-blue-700 transition-colors hover:text-blue-900">
-                  Memorial (PDF)
-                </button>
+                <span className="flex shrink-0 gap-2">
+                  <button type="button" onClick={() => e.onBaixarMemorial(row, 'pdf')} className="text-blue-700 transition-colors hover:text-blue-900">
+                    Memorial (PDF)
+                  </button>
+                  <button type="button" onClick={() => e.onBaixarMemorial(row, 'docx')} className="text-blue-700 transition-colors hover:text-blue-900">
+                    DOCX
+                  </button>
+                </span>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {/* E5.3 — os memoriais A QUALQUER MOMENTO (não só na emissão) e os textos editáveis do descritivo. */}
+      {e.memoriais && (
+        <section className="mt-5 border-t border-slate-100 pt-4" aria-label="Memoriais elétricos">
+          <p className="mb-2 text-sm font-semibold text-slate-800">Memoriais (antes da emissão)</p>
+          <PainelMemoriaisHidro
+            calculo={e.memoriais.calculo}
+            descritivo={e.memoriais.descritivo}
+            onBaixar={e.memoriais.onBaixar}
+            textos={{
+              calculo: 'Hipóteses, cada quadro (demanda, alimentador, queda até a origem) com a tabela dos circuitos (IB, seção, Iz, disjuntor, curva, ΔV) e a conferência NBR 5410 regra a regra.',
+              descritivo: 'Objeto, normas, entrada, quadros, circuitos, proteção, condutores e eletrodutos, aterramento e quantitativos — com os textos editáveis abaixo.',
+              vazio: 'O desenho não tem quadro de distribuição — não há o que memorializar.',
+              tituloVazio: 'Sem quadro de distribuição no desenho',
+              testId: 'memoriais-eletricos',
+            }}
+          />
+          {e.onTextosDoMemorial && (
+            <details className="mt-3 rounded-[10px] border border-slate-200 bg-white p-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Textos do memorial descritivo (editáveis)</summary>
+              <div className="mt-2 space-y-2">
+                {CAMPOS_DO_MEMORIAL.map((c) => (
+                  <label key={c.chave} className="block text-xs text-slate-500">
+                    {c.rotulo}
+                    <textarea
+                      value={e.textosDoMemorial?.[c.chave] ?? ''}
+                      placeholder={TEXTOS_PADRAO_DO_MEMORIAL_ELETRICO[c.chave] || c.ajuda}
+                      aria-label={`Texto do memorial — ${c.rotulo}`}
+                      rows={3}
+                      onChange={(ev) => e.onTextosDoMemorial?.({ ...(e.textosDoMemorial ?? {}), [c.chave]: ev.target.value })}
+                      className="mt-0.5 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                    />
+                    <span className="mt-0.5 block text-[11px] text-slate-400">{c.ajuda} Não altera a validade da emissão.</span>
+                  </label>
+                ))}
+              </div>
+            </details>
+          )}
+        </section>
       )}
     </div>
   );

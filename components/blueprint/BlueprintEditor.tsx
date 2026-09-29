@@ -707,6 +707,7 @@ import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
 import { blueprintUnidadesPlantaAiService } from '../../services/blueprintUnidadesPlantaAiService';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
+import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
 
@@ -4220,16 +4221,42 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       hashDaBase: hashEletrico.base,
       emitidoEm,
     }, editor.model); // E3.1: o modelo, para o memorial listar os DRs do quadro
+    // E5.3: a emissão grava a capa + o memorial de cálculo + o descritivo (em blocos → texto).
+    const blocosDaEmissao = memorialExecutivoEletrico(linhas, editor.model, hipotesesEletricas, { nomeDoEstudo: study.name, geradoEm: emitidoEm });
     await executivoEletrico.emitir({
       topografia_id: null,
       topografia_versao: null,
       topografia_hash: null,
       hash_da_base: hashEletrico.base,
       verificacoes: resultadoEletrico.verificacoes,
-      memorial: linhas.join('\n'),
+      memorial: linhasDoMemorial(blocosDaEmissao).join('\n'),
       emitido_em: emitidoEm,
     });
-  }, [resultadoEletrico, executivoEletrico, hipotesesEletricas, study.name, hashEletrico]);
+  }, [resultadoEletrico, executivoEletrico, hipotesesEletricas, study.name, hashEletrico, editor.model]);
+  /** E5.3: os memoriais elétricos derivados agora — só com a tela do executivo aberta (não custa nada fechada). */
+  const memoriaisEletricos = useMemo(() => {
+    if (telaAberta !== 'executivo-eletrico') return null;
+    const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
+    return { calculo: memorialDeCalculoEletrico(editor.model, hipotesesEletricas, ctx), descritivo: memorialDescritivoEletrico(editor.model, hipotesesEletricas, ctx) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telaAberta, editor.model, hipotesesEletricas, study.name]);
+  const baixarMemorialEletrico = useCallback(
+    async (qual: QualMemorial, formato: FormatoDoMemorial) => {
+      const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
+      const blocos = qual === 'calculo' ? memorialDeCalculoEletrico(editor.model, hipotesesEletricas, ctx) : memorialDescritivoEletrico(editor.model, hipotesesEletricas, ctx);
+      const titulo = `${study.name} — memorial ${qual === 'calculo' ? 'de cálculo' : 'descritivo'} elétrico`;
+      baixarArtefatos(await artefatosDoMemorial(blocos, titulo, titulo, formato));
+    },
+    [editor.model, hipotesesEletricas, study.name],
+  );
+  /** E5.3: o memorial GRAVADO na emissão (texto) → PDF com tabelas ou DOCX. Não recalcula: é o que foi emitido. */
+  const baixarMemorialEmitidoEletrico = useCallback(
+    async (row: BlueprintProjetoExecutivoRow, formato: FormatoDoMemorial = 'pdf') => {
+      const nome = `${study.name} - projeto executivo elétrico ${row.responsavel.conselho === 'CAU' ? 'RRT' : 'ART'} ${row.responsavel.artNumero}`;
+      baixarArtefatos(await artefatosDoMemorial(blocosDasLinhas((row.memorial ?? '').split('\n')), nome, nome, formato));
+    },
+    [study.name],
+  );
 
   /** A curva clicada na planta: índice na versão exibida + o ponto do clique. */
   const [curvaEmDestaque, setCurvaEmDestaque] = useState<{ indice: number; ponto: Point } | null>(null);
@@ -9693,8 +9720,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onEmitir: () => void emitirEletrico(),
                 emitindo: executivoEletrico.emitindo,
                 erro: executivoEletrico.erro,
-                onBaixarMemorial: (row) => executivoEletrico.baixarMemorial(row, study.name),
+                onBaixarMemorial: (row, formato) => void baixarMemorialEmitidoEletrico(row, formato ?? 'pdf'),
                 persistenciaIndisponivel: executivoEletrico.persistenciaIndisponivel,
+                memoriais: memoriaisEletricos ? { ...memoriaisEletricos, onBaixar: baixarMemorialEletrico } : undefined,
+                textosDoMemorial: hipotesesEletricas.textosDoMemorial,
+                onTextosDoMemorial: (t) => setHipotesesEletricas({ ...hipotesesEletricas, textosDoMemorial: t }),
               }}
             />
           </div>

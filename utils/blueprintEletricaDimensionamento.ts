@@ -285,6 +285,13 @@ export interface HipotesesEletricas {
    */
   padraoDeEntrada: string;
   /**
+   * E5.3 — os TEXTOS do memorial descritivo que o projetista edita por estudo
+   * (objeto, execução, aterramento, observações). Não são base de cálculo: o
+   * hash da base (`hashDaBaseEletrica`) os deixa de fora — editar um texto não
+   * invalida emissão nenhuma. Vazio = o texto gerado/padrão.
+   */
+  textosDoMemorial: TextosDoMemorialEletrico;
+  /**
    * E4.4 — o FATOR DE DIVERSIDADE do uso coletivo (id em
    * `FATORES_DE_DIVERSIDADE`): no quadro que alimenta quadros de UNIDADES, a
    * demanda das unidades é Σ × fator(n). "SEM" (1,00, conservador) é o padrão;
@@ -382,7 +389,36 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   origemComTransformador: false,
   padraoDeEntrada: 'GENERICO',
   diversidade: 'SEM',
+  textosDoMemorial: {},
 };
+
+/** E5.3 — os textos editáveis do memorial descritivo. Ausente/vazio = o padrão (`TEXTOS_PADRAO_DO_MEMORIAL_ELETRICO`). */
+export interface TextosDoMemorialEletrico {
+  objeto?: string;
+  execucao?: string;
+  aterramento?: string;
+  observacoes?: string;
+}
+
+/**
+ * Os TEXTOS PADRÃO — ponto de partida do projetista, não declaração do
+ * programa: o memorial diz que são editáveis. O objeto, vazio, é gerado do
+ * desenho. As cores dos condutores são as da NBR 5410 6.1.5.3.
+ */
+export const TEXTOS_PADRAO_DO_MEMORIAL_ELETRICO: Required<TextosDoMemorialEletrico> = {
+  objeto: '',
+  execucao:
+    'Condutores de cobre com isolação para 450/750 V (PVC 70 °C), identificados por cor: neutro azul-claro, proteção (PE) verde-amarela ou verde, fases nas demais cores (NBR 5410, 6.1.5.3). Eletrodutos embutidos de PVC antichama, com caixas de passagem nos pontos indicados na planta. Todos os circuitos identificados no quadro, conforme o quadro de cargas.',
+  aterramento:
+    'Condutor de proteção (PE) em todos os circuitos, ligado ao barramento de equipotencialização principal junto ao quadro de entrada; seções do PE pela Tabela 58 da NBR 5410, indicadas por circuito. O esquema de aterramento e a resistência medida devem ser confirmados e registrados na execução.',
+  observacoes: '',
+};
+
+/** O texto que vale: o do estudo quando não vazio; senão o padrão. */
+export function textoDoMemorial(hip: Pick<HipotesesEletricas, 'textosDoMemorial'>, campo: keyof TextosDoMemorialEletrico): string {
+  const v = hip.textosDoMemorial?.[campo];
+  return v && v.trim() ? v.trim() : TEXTOS_PADRAO_DO_MEMORIAL_ELETRICO[campo];
+}
 
 /** E4.4 — presets do fator de diversidade. `fator(n)` para n unidades; 1 unidade = 1,00 sempre. */
 export interface FatorDeDiversidade {

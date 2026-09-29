@@ -109,7 +109,7 @@ export function entradaDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: 
   const compativeis = padrao.categorias.filter((c) => c.ligacao === r.ligacao).sort((a, b) => a.demandaMaxKva - b.demandaMaxKva);
   const categoria = compativeis.find((c) => c.demandaMaxKva >= demandaKva) ?? null;
   if (compativeis.length === 0) achados.push({ nivel: 'AVISO', mensagem: `padrão "${padrao.nome}" não tem categoria para ligação ${r.ligacao}` });
-  else if (!categoria) achados.push({ nivel: 'FALTA', mensagem: `demanda ${demandaKva.toFixed(1).replace('.', ',')} kVA acima da maior categoria ${r.ligacao} do padrão (${compativeis[compativeis.length - 1].demandaMaxKva} kVA) — mudar a ligação ou tratar com a concessionária` });
+  else if (!categoria) achados.push({ nivel: 'FALTA', mensagem: `demanda ${demandaKva.toFixed(1).replace('.', ',')} kVA acima da maior categoria ${r.ligacao} do padrão (${f1(compativeis[compativeis.length - 1].demandaMaxKva)} kVA) — mudar a ligação ou tratar com a concessionária` });
   // O ramal pelo motor — método do padrão (enterrado), uso de força.
   const calc = r.ibA != null ? secaoMinima(r.ibA, { ...hip, metodoDeInstalacao: padrao.metodoDoRamal }, r.ligacao, 'FORCA') : null;
   const ramalMm2 = categoria || calc ? Math.max(categoria?.ramalMm2 ?? 0, calc?.secaoMm2 ?? 0) : null;
@@ -157,7 +157,7 @@ const mm2 = (v: number | null) => (v == null ? '—' : String(v).replace('.', ',
 /** "categoria B1 (FF até 12 kVA) · ramal 16 mm² · geral 63 A · eletroduto Ø32 · terra 16 mm² — padrão genérico (hipótese)". */
 export function rotuloDaEntrada(e: EntradaDoQuadro): string {
   const partes = [
-    e.categoria ? `categoria ${e.categoria.id} (${e.ligacao} até ${e.categoria.demandaMaxKva} kVA)` : `sem categoria para ${f1(e.demandaKva)} kVA ${e.ligacao}`,
+    e.categoria ? `categoria ${e.categoria.id} (${e.ligacao} até ${f1(e.categoria.demandaMaxKva)} kVA)` : `sem categoria para ${f1(e.demandaKva)} kVA ${e.ligacao}`,
     `demanda ${f1(e.demandaKva)} kVA`,
     `ramal ${mm2(e.ramalMm2)} mm²${e.ramalCalculadoMm2 != null && e.categoria && e.ramalCalculadoMm2 > e.categoria.ramalMm2 ? ` (Tab. 36 pede ${mm2(e.ramalCalculadoMm2)})` : ''}`,
     `geral ${e.disjuntorGeralA ?? '—'} A`,

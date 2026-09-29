@@ -140,7 +140,11 @@ export function verificacoesEletricas(
  */
 export function hashDaBaseEletrica(model: BlueprintModel, hip: HipotesesEletricas): { desenho: string; base: string } {
   const desenho = snapshotHash(model);
-  return { desenho, base: sha256(stableStringify({ desenho, hipoteses: hip })) };
+  // E5.3: os TEXTOS do memorial não são base de cálculo — ficam fora do hash
+  // (editar um texto não invalida emissão; e a chave nova não muda o hash de ninguém).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { textosDoMemorial, ...base } = hip;
+  return { desenho, base: sha256(stableStringify({ desenho, hipoteses: base })) };
 }
 
 /** O memorial, em linhas (título, seções, itens) — o PDF só quebra e pagina. */

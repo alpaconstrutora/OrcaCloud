@@ -1962,13 +1962,13 @@ Fecha o bloco **3**.
 
 Fecha o bloco **1** e o resto do **2**.
 
-## Etapa 5 — Documentação · sem bump · 3 fases
+## Etapa 5 — Documentação · sem bump · 3 fases · **✅ CONCLUÍDA em 29/09/2026 (3 de 3)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 5.1 Plantas de luz e força ✅ (PDF sem recorte provado byte a byte: 173 chamadas, mesmo hash; DXF só muda de camada) | `TipoDePrancha` ELETRICA ganha variantes `ILUMINACAO` (luzes, interruptores, comandos e seus eletrodutos) e `TOMADAS_FORCA` (TUG, TUE, LD, dados e seus eletrodutos) além da unificada; filtro por tipo no `desenharEletrica` e nas camadas da vista (`CamadasDaPlanta` por tipo de ponto); DXF com camadas `ELETRICA-ILUMINACAO` / `ELETRICA-FORCA` | PDF sem `ILUMINACAO` sai byte a byte igual ao de hoje; harness com as duas plantas |
 | 5.2 Legenda desenhada e lista de materiais na prancha ✅ (símbolo real na planta e no quadro de cargas; folha MATERIAIS_ELETRICA; harness olhado) | legenda com o SÍMBOLO desenhado (não só texto) na folha da planta, só dos tipos presentes; folha "Lista de materiais" com o quantitativo elétrico (0.3 + 2.3) por pavimento e por quadro | `DesenhistaDeProva.textos()` lista a legenda; PDF com a folha nova |
-| 5.3 Memorial descritivo e DOCX | `utils/blueprintMemorialEletrico.ts` gera **memorial descritivo** (blocos: objeto, normas, entrada, quadros, circuitos, proteção, condutores, eletrodutos, aterramento, quantitativos) e **memorial de cálculo** como `BlocoDoMemorial`; PDF e DOCX pelo `blueprintMemorialDocx.ts` (já existe); textos padrão editáveis por estudo (hipótese `textosDoMemorial`); a emissão com ART anexa os dois | DOCX abre no Word; memorial gerado antes da emissão (não só nela); `paraWinAnsi` aplicado |
+| 5.3 Memorial descritivo e DOCX ✅ (descritivo + cálculo em PDF e DOCX antes da emissão; textos por estudo fora do hash; emissão grava os dois) | `utils/blueprintMemorialEletrico.ts` gera **memorial descritivo** (blocos: objeto, normas, entrada, quadros, circuitos, proteção, condutores, eletrodutos, aterramento, quantitativos) e **memorial de cálculo** como `BlocoDoMemorial`; PDF e DOCX pelo `blueprintMemorialDocx.ts` (já existe); textos padrão editáveis por estudo (hipótese `textosDoMemorial`); a emissão com ART anexa os dois | DOCX abre no Word; memorial gerado antes da emissão (não só nela); `paraWinAnsi` aplicado |
 
 Fecha o bloco **7** e a parte do **6** que é "lista de materiais".
 
@@ -3253,3 +3253,55 @@ conta fechada; uma rodada anterior perdeu um worker para o crash do V8 e não fo
 **Efeito no benchmark**: §27/§8 "Legenda com símbolos na prancha" 🟡→✅ (antes só texto), "Lista de
 materiais na prancha" ❌→✅ (total, por quadro, por pavimento); §13 "Relatório de materiais elétricos"
 🟡→✅.
+### E5.3 — Memorial descritivo e DOCX (29/09/2026) · frente `eletrico-e5` · sem bump · **fecha a Etapa 5**
+
+**O que mudou**
+
+- **Memoriais elétricos** (`utils/blueprintMemorialEletrico.ts`, novo), como `BlocoDoMemorial` — o
+  mesmo formato do hidrossanitário, então PDF e DOCX saem pelo mesmo serviço:
+  - `memorialDescritivoEletrico(model, hip, ctx)`: Objeto, Normas (as que se aplicam ao que o desenho
+    tem), Entrada de energia (categoria da concessionária e o "conferir"), Quadros de distribuição (tipo,
+    pai, DPS, Icn), Circuitos (seções F/N/PE), Proteção (disjuntor com curva, DR), Condutores e
+    eletrodutos, Aterramento, Quantitativos e — só se houver texto — Observações.
+  - `memorialDeCalculoEletrico`: Hipóteses; Quadros e circuitos (uma subseção por quadro com a tabela IB,
+    seção, Iz, disjuntor, curva, ΔV, situação); Conferência NBR 5410 regra a regra.
+  - `memorialExecutivoEletrico`: capa + cálculo + descritivo — é o que a emissão com ART grava agora (antes
+    só o cálculo). Sem quadro no desenho, cada memorial é só o cabeçalho.
+- **Textos editáveis por estudo**: hipótese `textosDoMemorial` (objeto, execução, aterramento,
+  observações; padrão em `TEXTOS_PADRAO_DO_MEMORIAL_ELETRICO`, usado quando vazio). Ficam **fora** do
+  `hashDaBaseEletrica` — editar o texto não invalida uma emissão. A leitura da coluna aceita só string,
+  até 4.000 caracteres.
+- **Painel do executivo elétrico**: seção "Memoriais (antes da emissão)" com os dois cartões (sumário
+  das seções, botões PDF e DOCX — desligados com o motivo quando não há quadro) e os campos de texto do
+  descritivo; cada emissão baixa o memorial em PDF **e** DOCX. `PainelMemoriaisHidro` ganhou a prop
+  `textos` para servir aos dois.
+- **`paraWinAnsi`**: Ω → "ohm", ρ → "rho", ≤ → "<=", ≥ → ">=" (saíam "?" no PDF).
+- **Entrada de energia**: a demanda máxima da categoria sai com vírgula ("7,5 kVA", antes "7.5").
+
+**Testes** — novo `__tests__/blueprintMemorialEletrico.test.ts` (7): seções na ordem, Observações só com
+texto, sem quadro só o cabeçalho; conteúdo tirado do desenho; textos editáveis com padrão e fora do hash;
+tabelas do cálculo; a emissão grava capa + cálculo + descritivo e o texto gravado volta aos mesmos blocos;
+DOCX (zip com as cinco partes, título/seções/tabelas no `document.xml`, tags balanceadas, leitura pelo
+mammoth); PDF com Ω ρ ≤ ≥ legíveis. Novo `__tests__/components/PainelEletricaMemoriais.test.tsx` (4, jsdom):
+PDF/DOCX antes da emissão, botões desligados dizendo por quê, edição dos textos, PDF e DOCX por emissão,
+seção ausente sem `memoriais`.
+
+**O que os testes pegaram antes de publicar**: o título do botão do painel hidro mudou ao generalizar o
+componente (ganhou `tituloVazio` separado); o teste de componente sem a diretiva `// @vitest-environment
+jsdom` (o Vitest 4 não usa mais o glob do `vite.config.ts` para isso). **O harness pegou** (PDFs lidos):
+Ω/ρ/≤/≥ como "?", "7.5 kVA" com ponto e a frase do "conferir" começando em minúscula.
+
+**Harness (olhado)**: memorial de cálculo e descritivo em PDF de uma casa com QDC + subquadro, DR e DPS.
+
+**Verificação**: `tsc` ✓ · alvo 16 ✓ · suíte inteira **6.294 ✓** (6.327 = 6.294 + 33 pulados, 585
+arquivos, conta fechada, sem queda de worker) · `vite build` ✓ · `check-ui-standard` ✓ (3 arquivos) ·
+`check-xss-sinks` ✓ · sem mudança no kernel. O "abre no Word" foi provado pelo XML bem formado e pela
+leitura do mammoth — não houve Word nesta máquina para abrir o arquivo.
+
+**Efeito no benchmark**: §50 "Memorial descritivo (o documento)" ❌→✅, "Textos padrão" 🟡→✅, "Textos
+personalizados" ❌→✅, "Quantitativos" ❌→✅, "DOCX" ❌→✅; §51 "Documentação técnica" 🟡→✅ (prancha +
+memorial de cálculo + descritivo). Continuam ❌ em §50: "Legendas" e "Blocos de texto reutilizáveis"
+entre estudos (o texto é por estudo).
+
+**Etapa 5 concluída** (3 de 3, sem bump de kernel): plantas de luz e força, legenda desenhada e lista de
+materiais, memoriais descritivo e de cálculo em PDF/DOCX.

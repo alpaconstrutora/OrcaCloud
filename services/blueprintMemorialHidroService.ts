@@ -26,6 +26,11 @@ export function paraWinAnsi(s: string): string {
     .replace(/→/g, '->')
     .replace(/[✓]/g, 'OK')
     .replace(/[✗]/g, 'X')
+    // E5.3: o memorial elétrico usa Ω (ρ em Ω·mm²/m) e ≤ ≥ (IB ≤ In ≤ Iz, Icn ≥ Ik) — viravam "?".
+    .replace(/Ω/g, 'ohm')
+    .replace(/ρ/g, 'rho')
+    .replace(/≤/g, '<=')
+    .replace(/≥/g, '>=')
     .replace(/[^\u0000-ÿ–—‘’“”•…€]/g, '?');
 }
 

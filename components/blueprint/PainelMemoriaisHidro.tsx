@@ -15,7 +15,17 @@ interface Props {
   calculo: BlocoDoMemorial[];
   descritivo: BlocoDoMemorial[];
   onBaixar: (qual: QualMemorial, formato: FormatoDoMemorial) => Promise<void>;
+  /** E5.3: o mesmo painel serve à elétrica — os textos mudam, o padrão é o hidrossanitário. */
+  textos?: { calculo: string; descritivo: string; vazio: string; tituloVazio: string; testId?: string };
 }
+
+const TEXTOS_HIDRO = {
+  calculo: 'Água trecho a trecho (ΣP, Q, DN, V, J, perdas, pressão) e ponto a ponto; esgoto por UHC, DN, declividade e cotas; caixas, colunas e reservatório.',
+  descritivo: 'Objeto, normas, sistemas, materiais, peças, premissas e ensaios — montado dos mesmos dados.',
+  vazio: 'O desenho não tem rede de água nem de esgoto — não há o que memorializar.',
+  tituloVazio: 'Sem rede hidrossanitária no desenho',
+  testId: 'memoriais-hidro',
+};
 
 const secoes = (b: BlocoDoMemorial[]) => b.filter((x) => x.tipo === 'secao').map((x) => (x as { texto: string }).texto);
 
@@ -26,9 +36,14 @@ function Cartao({
   gerando,
   ocupado,
   onBaixar,
+  mensagemVazio,
+  tituloVazio,
 }: {
   titulo: string;
   descricao: string;
+  mensagemVazio: string;
+  /** O `title` do botão desligado — o motivo em poucas palavras. */
+  tituloVazio: string;
   blocos: BlocoDoMemorial[];
   /** O formato que ESTE cartão está gerando. */
   gerando: FormatoDoMemorial | null;
@@ -44,7 +59,7 @@ function Cartao({
       <p className="text-sm font-semibold text-slate-800">{titulo}</p>
       <p className="mt-0.5 text-xs text-slate-500">{descricao}</p>
       {vazio ? (
-        <p className="mt-2 text-xs text-amber-700">O desenho não tem rede de água nem de esgoto — não há o que memorializar.</p>
+        <p className="mt-2 text-xs text-amber-700">{mensagemVazio}</p>
       ) : (
         <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs text-slate-600">
           {lista.map((s) => (
@@ -58,7 +73,7 @@ function Cartao({
             key={f}
             type="button"
             disabled={vazio || ocupado}
-            title={vazio ? 'Sem rede hidrossanitária no desenho' : ocupado ? 'Aguarde: outro arquivo está sendo gerado' : undefined}
+            title={vazio ? tituloVazio : ocupado ? 'Aguarde: outro arquivo está sendo gerado' : undefined}
             onClick={() => onBaixar(f)}
             className={botao}
           >
@@ -71,7 +86,7 @@ function Cartao({
   );
 }
 
-export default function PainelMemoriaisHidro({ calculo, descritivo, onBaixar }: Props) {
+export default function PainelMemoriaisHidro({ calculo, descritivo, onBaixar, textos = TEXTOS_HIDRO }: Props) {
   const [gerando, setGerando] = useState<{ qual: QualMemorial; formato: FormatoDoMemorial } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const baixar = async (qual: QualMemorial, formato: FormatoDoMemorial) => {
@@ -86,10 +101,12 @@ export default function PainelMemoriaisHidro({ calculo, descritivo, onBaixar }: 
     }
   };
   return (
-    <div className="space-y-3" data-testid="memoriais-hidro">
+    <div className="space-y-3" data-testid={textos.testId ?? 'memoriais-hidro'}>
       <Cartao
         titulo="Memorial de cálculo"
-        descricao="Água trecho a trecho (ΣP, Q, DN, V, J, perdas, pressão) e ponto a ponto; esgoto por UHC, DN, declividade e cotas; caixas, colunas e reservatório."
+        descricao={textos.calculo}
+        mensagemVazio={textos.vazio}
+        tituloVazio={textos.tituloVazio}
         blocos={calculo}
         gerando={gerando?.qual === 'calculo' ? gerando.formato : null}
         ocupado={gerando !== null}
@@ -97,7 +114,9 @@ export default function PainelMemoriaisHidro({ calculo, descritivo, onBaixar }: 
       />
       <Cartao
         titulo="Memorial descritivo"
-        descricao="Objeto, normas, sistemas, materiais, peças, premissas e ensaios — montado dos mesmos dados."
+        descricao={textos.descritivo}
+        mensagemVazio={textos.vazio}
+        tituloVazio={textos.tituloVazio}
         blocos={descritivo}
         gerando={gerando?.qual === 'descritivo' ? gerando.formato : null}
         ocupado={gerando !== null}

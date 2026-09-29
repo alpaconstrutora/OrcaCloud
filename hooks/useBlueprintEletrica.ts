@@ -75,6 +75,13 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     padraoDeEntrada: typeof r.padraoDeEntrada === 'string' && r.padraoDeEntrada.trim() ? r.padraoDeEntrada : HIPOTESES_PADRAO.padraoDeEntrada,
     // E4.4: o fator de diversidade — só ids conhecidos; senão "sem".
     diversidade: FATORES_DE_DIVERSIDADE.some((f) => f.id === r.diversidade) ? (r.diversidade as string) : HIPOTESES_PADRAO.diversidade,
+    // E5.3: os textos do memorial — só strings, até 4.000 caracteres cada.
+    textosDoMemorial: (() => {
+      const t = (r.textosDoMemorial && typeof r.textosDoMemorial === 'object' ? r.textosDoMemorial : {}) as Record<string, unknown>;
+      const saida: Record<string, string> = {};
+      for (const k of ['objeto', 'execucao', 'aterramento', 'observacoes']) if (typeof t[k] === 'string') saida[k] = (t[k] as string).slice(0, 4000);
+      return saida;
+    })(),
   };
 }
 

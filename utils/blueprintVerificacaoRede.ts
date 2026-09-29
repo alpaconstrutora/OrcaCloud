@@ -18,6 +18,7 @@
 import { verificarVentilacao } from './blueprintVentilacao';
 import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
 import { DECLIVIDADE_MINIMA_DA_CALHA_PCT, verificarCalhas } from './blueprintCalhas';
+import { DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT, DN_MINIMO_DO_VERTICAL_MM, verificarCondutores } from './blueprintCondutoresPluviais';
 import { HIPOTESES_PLUVIAIS_PADRAO, type HipotesesPluviais } from './blueprintPluvial';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
 import { conexoesDerivadas, conflitosDoModelo } from './blueprintKernel';
@@ -47,7 +48,10 @@ export type TipoDeMarca =
   | 'CRUZA_VIGA'
   // E6.2 — calhas: a que não leva a vazão da água e a que tem menos de 0,5 %.
   | 'CALHA_INSUFICIENTE'
-  | 'CALHA_DECLIVIDADE';
+  | 'CALHA_DECLIVIDADE'
+  // E6.3 — condutores: o que não leva a vazão acumulada e o horizontal com menos de 0,5 %.
+  | 'CONDUTOR_INSUFICIENTE'
+  | 'CONDUTOR_DECLIVIDADE';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -171,6 +175,19 @@ export function marcasDeVerificacao(
     }
   }
 
+  // E6.3: os condutores — a vazão acumulada por gravidade contra a capacidade, e a declividade.
+  if ((model.trechos ?? []).some((t) => t.disciplina === 'PLUVIAL' && !t.secaoCalha)) {
+    const um0 = (v: number) => Math.round(v).toLocaleString('pt-BR');
+    for (const c of verificarCondutores(model, pluvial)) {
+      if (!c.declividadeOk) {
+        marcas.push({ chave: `condi|${c.trechoId}`, tipo: 'CONDUTOR_DECLIVIDADE', levelId: c.levelId, at: aoLongo(c.trechoId, 0.3), texto: `i ${um1(c.declividadePct!)} % < ${um1(DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT)} %`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'PLUVIAL' });
+      } else if (!c.atende) {
+        const texto = c.vertical && c.dnMm < DN_MINIMO_DO_VERTICAL_MM ? `condutor vertical DN ${c.dnMm} < ${DN_MINIMO_DO_VERTICAL_MM}` : `condutor leva ${um0(c.capacidadeLMin)} < ${um0(c.vazaoLMin)} L/min`;
+        marcas.push({ chave: `condq|${c.trechoId}`, tipo: 'CONDUTOR_INSUFICIENTE', levelId: c.levelId, at: aoLongo(c.trechoId, 0.5), texto, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'PLUVIAL' });
+      }
+    }
+  }
+
   for (const v of verificarDnDoEsgoto(model)) {
     const menor = v.tipo === 'MENOR';
     marcas.push({
@@ -225,6 +242,6 @@ export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disci
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE'].includes(m.tipo)),
   };
 }

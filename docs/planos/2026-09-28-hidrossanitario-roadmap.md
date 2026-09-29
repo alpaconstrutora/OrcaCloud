@@ -846,3 +846,32 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   o bocal para o lado da caixa de areia; depois de lançadas tudo atende e relançar respeita a
   confirmada; os motivos; a ø100 que não leva a chuva de São Paulo; a calha sem caimento) e 3 em
   `PainelCalhas.test.tsx`. Suíte: 547 arquivos / 6.103 testes.
+
+### E6.3 — Condutores verticais e horizontais (29/09/2026)
+
+- `utils/blueprintCondutoresPluviais.ts` (novo — ⚠️ `blueprintCondutores.ts` é o dos fios do
+  eletroduto; um `Write` o sobrescreveu durante a fase e ele foi restaurado do git antes do commit).
+- **Horizontal**: Manning com lâmina de **2/3 do diâmetro** (NBR 10844, 5.7.3) — reproduz a
+  **Tabela 4** (DN 100 → 204 L/min, DN 150 → 601 L/min a 0,5 %, dentro de 1 %, teste);
+  declividade mínima **0,5 %** (5.7.2).
+- **Vertical**: DN mínimo **75** (5.6.3 pede 70). ⚠️ A norma dimensiona pelo **ábaco da Figura 3**
+  (vazão × lâmina na calha × comprimento), não transcrível com segurança; a capacidade aqui usa
+  **Wyly–Eaton com ocupação de 1/3** (a fórmula da EN 12056-3) — **CONFERIR NO ÁBACO** antes de
+  emitir; o painel diz isso.
+- **Lançamento** (gaveta Águas pluviais → "Lançar condutores"): de cada bocal (e ralo pluvial) um
+  vertical na posição dele, pavimento a pavimento (a laje é o encontro), até a profundidade do
+  condutor enterrado (premissa, 0,30 m); o horizontal até a **caixa de areia** mais perto (sem
+  caixa, direto à **saída pluvial**); de cada caixa que recebe, um horizontal à saída. DN do
+  horizontal nunca menor que o do vertical, nem o da saída da caixa menor que o de quem chega.
+  Avisos: condutor chegando abaixo do fundo da caixa; saída alta demais para a gravidade; sem
+  saída. Relançar troca os sugeridos; bocal com condutor confirmado fica de fora.
+- **Verificação** da rede inteira (a lançada e a desenhada à mão): a vazão **acumulada por
+  gravidade** — cada nó do mais alto ao mais baixo, a caixa como um nó só — contra a capacidade;
+  marcas **CONDUTOR_INSUFICIENTE** (e o vertical abaixo de DN 75) e **CONDUTOR_DECLIVIDADE**.
+- Fora (declarado): a vazão do ralo de piso é zero — a área de piso descoberto ainda não entra na
+  contribuição; o ralo é ligado, mas não pesa no DN.
+- **Pronto quando** ✔: 8 testes em `blueprintCondutoresPluviais.test.ts` (Tabela 4; o vertical
+  mínimo; a casa térrea — 2 verticais, 3 horizontais, nada solto, a caixa → saída levando 230 L/min;
+  o sobrado com o vertical atravessando a laje; direto à saída sem caixa e o aviso sem saída; os
+  motivos; relançar e o confirmado; as marcas do DN 50 e do horizontal sem caimento) e 2 em
+  `PainelCondutores.test.tsx`. Suíte: 549 arquivos / 6.113 testes.

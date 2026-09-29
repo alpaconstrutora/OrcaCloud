@@ -42,6 +42,10 @@ export interface HipotesesPluviais {
   materialDaCalha: string;
   /** E6.2: a declividade das calhas lançadas, % (nunca abaixo de 0,5). */
   declividadeDaCalhaPct: number;
+  /** E6.3: a declividade dos condutores horizontais lançados, % (nunca abaixo de 0,5). */
+  declividadeDoCondutorPct: number;
+  /** E6.3: a profundidade do condutor enterrado no pé do vertical, mm abaixo do piso. */
+  profundidadeDoCondutorMm: number;
 }
 
 export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
@@ -51,6 +55,8 @@ export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
   secaoDaCalha: 'SEMICIRCULAR',
   materialDaCalha: 'PLASTICO_METAL',
   declividadeDaCalhaPct: 0.5,
+  declividadeDoCondutorPct: 1,
+  profundidadeDoCondutorMm: 300,
 };
 
 /**

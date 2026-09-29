@@ -21,6 +21,8 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   CRUZA_VIGA: 'Cruza viga',
   CALHA_INSUFICIENTE: 'Calha insuficiente',
   CALHA_DECLIVIDADE: 'Declividade da calha',
+  CONDUTOR_INSUFICIENTE: 'Condutor insuficiente',
+  CONDUTOR_DECLIVIDADE: 'Declividade do condutor',
 };
 
 interface Props {

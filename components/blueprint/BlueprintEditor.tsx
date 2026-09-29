@@ -217,8 +217,10 @@ import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
 import PainelCalhas from './PainelCalhas';
+import PainelCondutores from './PainelCondutores';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
 import { planejarCalhas, verificarCalhas } from '../../utils/blueprintCalhas';
+import { planejarCondutores, verificarCondutores } from '../../utils/blueprintCondutoresPluviais';
 import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
@@ -7275,6 +7277,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefaAberta === 'pluvial' ? verificarCalhas(editor.model, hipotesesHidro.pluvial) : []),
     [tarefaAberta, editor.model, hipotesesHidro.pluvial],
   );
+  // CONDUTORES (29/09/2026, E6.3): do bocal à caixa de areia e à saída pluvial.
+  const planoDeCondutores = useMemo(
+    () => (tarefaAberta === 'pluvial' ? planejarCondutores(editor.model, hipotesesHidro.pluvial) : null),
+    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+  );
+  const condutoresDoDesenho = useMemo(
+    () => (tarefaAberta === 'pluvial' ? verificarCondutores(editor.model, hipotesesHidro.pluvial) : []),
+    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+  );
   const resultadoHidro = useMemo(
     () => (tarefaAberta === 'memoriaisHidro' ? verificacoesHidro(editor.model, hipotesesHidro, executivoHidro.responsavel) : null),
     [tarefaAberta, editor.model, hipotesesHidro, executivoHidro.responsavel],
@@ -13824,6 +13835,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
                     onLancar={() => {
                       if (planoDeCalhas.comandos.length) editor.runBatch(planoDeCalhas.comandos);
+                    }}
+                    onSelecionar={selecionar}
+                  />
+                </div>
+              )}
+              {planoDeCondutores && (
+                <div className="mt-4">
+                  <PainelCondutores
+                    plano={planoDeCondutores}
+                    condutores={condutoresDoDesenho}
+                    hip={hipotesesHidro.pluvial}
+                    onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
+                    onLancar={() => {
+                      if (planoDeCondutores.comandos.length) editor.runBatch(planoDeCondutores.comandos);
                     }}
                     onSelecionar={selecionar}
                   />

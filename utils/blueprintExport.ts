@@ -384,7 +384,8 @@ export const AVISO_PADRAO =
   'ESTUDO PRELIMINAR — sem responsável técnico. Não substitui projeto executivo ' +
   'nem vale para aprovação legal ou execução.';
 
-import { desenharEletrica, desenharQuadroDeCargas } from './blueprintPranchaEletrica';
+import { LARGURA_DA_LEGENDA_MM, alturaDaLegendaEletrica, desenharEletrica, desenharLegendaEletrica, desenharQuadroDeCargas } from './blueprintPranchaEletrica';
+import { desenharListaDeMateriaisEletrica } from './blueprintListaDeMateriaisEletrica';
 import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 import { desenharEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
 import type { RecorteEletrico } from './blueprintRecorteEletrico';
@@ -593,6 +594,25 @@ export function desenharPlanta(
   // A camada elétrica vem DEPOIS da arquitetura e ANTES das cotas: símbolo
   // por cima da parede, cota por cima de tudo — a ordem da prancha.
   if (opcoes.eletrica) desenharEletrica(d, model, { px, py }, 1, opcoes.recorteEletrico ? { recorte: opcoes.recorteEletrico } : {});
+  // E5.2: a LEGENDA DESENHADA na folha da planta elétrica — na faixa livre à
+  // direita do desenho; senão embaixo; senão uma nota remete à folha do quadro
+  // de cargas (que sempre a traz). Nunca por cima do desenho.
+  if (opcoes.eletrica && !opcoes.recorte) {
+    const recorte = opcoes.recorteEletrico ?? null;
+    const h = alturaDaLegendaEletrica(model, recorte);
+    if (h > 0) {
+      const livreDireita = Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+      const livreAbaixo = Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) - (opcoes.cotas ? FAIXA_COTA_MM : 0);
+      const topoUtil = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+      if (livreDireita >= LARGURA_DA_LEGENDA_MM + 6 && enq.utilAlturaMm >= h + 4) {
+        desenharLegendaEletrica(d, model, enq.offsetXMm + enq.desenhoLarguraMm + livreDireita - LARGURA_DA_LEGENDA_MM - 2, topoUtil + 2, LARGURA_DA_LEGENDA_MM, recorte);
+      } else if (livreAbaixo >= h + 4) {
+        desenharLegendaEletrica(d, model, enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2) + 2, topoUtil + enq.utilAlturaMm - h - 2, LARGURA_DA_LEGENDA_MM, recorte);
+      } else {
+        d.texto(enq.offsetXMm, topoUtil + enq.utilAlturaMm - 1.5, 'Legenda: ver a folha do quadro de cargas.', 2.0, '#555555');
+      }
+    }
+  }
   if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null, opcoes.nomesDasColunas ?? nomesDasColunas(model));
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
@@ -901,6 +921,23 @@ export function desenharFolhaDoEsquemaVertical(
   const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
   d.texto(x0, topo + 6, 'ESQUEMA VERTICAL HIDROSSANITÁRIO', 3.2);
   desenharEsquemaVertical(d, model, redes, x0, topo + 12, enq.utilLarguraMm, enq.utilAlturaMm - 14);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA DA LISTA DE MATERIAIS ELÉTRICOS (E5.2, 29/09/2026): o quantitativo
+ * elétrico — totais, por quadro e por pavimento — no papel, com o carimbo.
+ */
+export function desenharFolhaDaListaDeMateriaisEletrica(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  d.texto(x0, topo + 6, 'LISTA DE MATERIAIS — ELÉTRICA', 3.2);
+  desenharListaDeMateriaisEletrica(d, model, x0, topo + 12, enq.utilLarguraMm, enq.utilAlturaMm - 14);
   desenharCarimbo(d, opcoes, enq);
 }
 

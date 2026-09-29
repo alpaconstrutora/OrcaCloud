@@ -78,8 +78,9 @@ describe('esquema vertical elétrico', () => {
   it('no conjunto: a folha ESQUEMA_ELETRICO vem depois do unifilar quando há o que cortar; casa térrea de um quadro não a tem', () => {
     const t = { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, indice: false, plantas: false, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false, eletrica: true } };
     const plano = planejarConjunto(sobrado(), t);
-    expect(plano.map((p) => p.tipo).slice(-3)).toEqual(['QUADRO_DE_CARGAS', 'UNIFILAR', 'ESQUEMA_ELETRICO']);
-    expect(plano[plano.length - 1].titulo).toBe('Esquema vertical elétrico');
+    // E5.2: a lista de materiais fecha o bloco elétrico, depois do esquema.
+    expect(plano.map((p) => p.tipo).slice(-4)).toEqual(['QUADRO_DE_CARGAS', 'UNIFILAR', 'ESQUEMA_ELETRICO', 'MATERIAIS_ELETRICA']);
+    expect(plano[plano.length - 2].titulo).toBe('Esquema vertical elétrico');
     const terrea = planejarConjunto(sobrado({ comQdSuperior: false }), t);
     expect(terrea.map((p) => p.tipo)).not.toContain('ESQUEMA_ELETRICO');
   });

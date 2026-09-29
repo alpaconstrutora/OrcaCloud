@@ -16,6 +16,7 @@ import {
   desenharFolhaDeDetalhesHidro,
   desenharFolhaDoEsquemaVertical,
   desenharFolhaDoEsquemaVerticalEletrico,
+  desenharFolhaDaListaDeMateriaisEletrica,
   desenharFolhaDoQuadroDeCargas,
   desenharFolhaDoUnifilar,
   desenharPlanta,
@@ -397,6 +398,8 @@ export function exportarPranchasPdf(
     /** F8: a segunda página da prancha elétrica — legenda e quadro de cargas. */
     quadroDeCargas?: boolean;
     unifilar?: boolean;
+    /** E5.2: a folha da lista de materiais elétricos. */
+    materiais?: boolean;
     /** E2.1: a folha de legenda das plantas hidrossanitárias. */
     legendaHidro?: boolean;
     /** E2.3: a folha do esquema vertical, logo depois da legenda. */
@@ -408,8 +411,8 @@ export function exportarPranchasPdf(
     if (ehPlantaDaPrancha(p)) {
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      // A prancha elétrica são TRÊS folhas: a planta, o quadro de cargas e o unifilar.
-      if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }, { p, enq, proj: null, unifilar: true }];
+      // A prancha elétrica são QUATRO folhas: a planta, o quadro de cargas, o unifilar e (E5.2) a lista de materiais.
+      if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }, { p, enq, proj: null, unifilar: true }, { p, enq, proj: null, materiais: true }];
       if (levaLegendaHidro(p, pranchas)) {
         const esquema = temColuna(model, redesDasPranchas(pranchas)) ? [{ p, enq, proj: null, esquemaHidro: true }] : [];
         return [{ p, enq, proj: null }, { p, enq, proj: null, legendaHidro: true }, ...esquema];
@@ -430,18 +433,19 @@ export function exportarPranchasPdf(
     orientation: o.papel.larguraMm > o.papel.alturaMm ? 'landscape' : 'portrait',
   });
 
-  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar, legendaHidro, esquemaHidro }, i) => {
+  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar, materiais, legendaHidro, esquemaHidro }, i) => {
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
     const oPagina = {
       ...o,
       // As anotações do corte/elevação viajam nas opções: a folha não recebe o modelo (E8.1).
       anotacoes: model.anotacoes ?? [],
       ...opcoesDaCamada(p),
-      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : legendaHidro ? 'Legenda hidrossanitária' : esquemaHidro ? 'Esquema vertical' : rotuloDaPrancha(model, p)}`,
+      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : materiais ? 'Lista de materiais — elétrica' : legendaHidro ? 'Legenda hidrossanitária' : esquemaHidro ? 'Esquema vertical' : rotuloDaPrancha(model, p)}`,
     };
     const desenhista = new DesenhistaPdf(doc);
     if (quadroDeCargas) desenharFolhaDoQuadroDeCargas(desenhista, model, oPagina, enq);
     else if (unifilar) desenharFolhaDoUnifilar(desenhista, model, oPagina, enq);
+    else if (materiais) desenharFolhaDaListaDeMateriaisEletrica(desenhista, model, oPagina, enq);
     else if (legendaHidro) desenharFolhaDeDetalhesHidro(desenhista, model, { ...oPagina, denominador: 0 }, enq);
     else if (esquemaHidro) desenharFolhaDoEsquemaVertical(desenhista, model, { ...oPagina, denominador: 0 }, enq, redesDasPranchas(pranchas));
     else if (proj) desenharElevacao(desenhista, proj, { ...oPagina, instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 }, enq);
@@ -531,10 +535,12 @@ export function desenharConjunto(
       }
       case 'QUADRO_DE_CARGAS':
       case 'UNIFILAR':
-      case 'ESQUEMA_ELETRICO': {
+      case 'ESQUEMA_ELETRICO':
+      case 'MATERIAIS_ELETRICA': {
         const enq = enquadrar(model, template.denominadorPlanta, papel, false);
         if (p.tipo === 'QUADRO_DE_CARGAS') desenharFolhaDoQuadroDeCargas(d, model, comPrancha(0, { eletrica: true }), enq);
         else if (p.tipo === 'ESQUEMA_ELETRICO') desenharFolhaDoEsquemaVerticalEletrico(d, model, comPrancha(0, { eletrica: true }), enq);
+        else if (p.tipo === 'MATERIAIS_ELETRICA') desenharFolhaDaListaDeMateriaisEletrica(d, model, comPrancha(0, { eletrica: true }), enq);
         else desenharFolhaDoUnifilar(d, model, comPrancha(0, { eletrica: true }), enq);
         folhas.push({ prancha: p, denominador: 0 });
         break;
@@ -700,6 +706,20 @@ export function exportarPranchasPng(
           const nome3 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-unifilar.png');
           c3.toBlob((blob) => {
             if (blob) baixar(blob, nome3);
+          }, 'image/png');
+        }
+        // E5.2: e a quarta — a lista de materiais.
+        const c4 = document.createElement('canvas');
+        c4.width = canvas.width;
+        c4.height = canvas.height;
+        const ctx4 = c4.getContext('2d');
+        if (ctx4) {
+          ctx4.fillStyle = '#ffffff';
+          ctx4.fillRect(0, 0, c4.width, c4.height);
+          desenharFolhaDaListaDeMateriaisEletrica(new DesenhistaCanvas(ctx4, dpi), model, { ...oArquivo, titulo: `${o.titulo} — Lista de materiais — elétrica` }, enq);
+          const nome4 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-materiais.png');
+          c4.toBlob((blob) => {
+            if (blob) baixar(blob, nome4);
           }, 'image/png');
         }
       }

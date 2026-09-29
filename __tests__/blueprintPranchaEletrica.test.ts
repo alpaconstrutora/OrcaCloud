@@ -93,10 +93,14 @@ describe('a planta elétrica no papel', () => {
   it('a tomada MÉDIA ganha meio preenchimento a mais que a BAIXA (um polígono preto a mais)', () => {
     const m = casa();
     const d = new DesenhistaDeProva();
-    desenharPlanta(d, m, opcoes({ eletrica: true }), enquadrar(m, 50, papel, false));
+    const enq = enquadrar(m, 50, papel, false);
+    desenharPlanta(d, m, opcoes({ eletrica: true }), enq);
     const pretos = d.chamadas.filter((c) => c.tipo === 'poligono' && c.args[1] === '#000000');
-    // Uma tomada média (1.300) → um polígono cheio; a baixa (300) → nenhum.
-    expect(pretos).toHaveLength(1);
+    // DENTRO do desenho: uma tomada média (1.300) → um polígono cheio; a baixa (300) → nenhum.
+    const dentro = (c: { args: unknown[] }) => (c.args[0] as { x: number }[]).every((p) => p.x >= enq.offsetXMm - 1 && p.x <= enq.offsetXMm + enq.desenhoLarguraMm + 1);
+    expect(pretos.filter(dentro)).toHaveLength(1);
+    // E5.2: a legenda, fora do desenho, mostra as três alturas — média e alta levam preenchimento.
+    expect(pretos.filter((c) => !dentro(c))).toHaveLength(2);
   });
 
   it('a folha do quadro de cargas traz título, o quadro, o circuito com IB e as hipóteses; a legenda só lista o que existe', () => {

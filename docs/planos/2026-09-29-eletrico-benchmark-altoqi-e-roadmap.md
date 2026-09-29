@@ -1967,7 +1967,7 @@ Fecha o bloco **1** e o resto do **2**.
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 5.1 Plantas de luz e força ✅ (PDF sem recorte provado byte a byte: 173 chamadas, mesmo hash; DXF só muda de camada) | `TipoDePrancha` ELETRICA ganha variantes `ILUMINACAO` (luzes, interruptores, comandos e seus eletrodutos) e `TOMADAS_FORCA` (TUG, TUE, LD, dados e seus eletrodutos) além da unificada; filtro por tipo no `desenharEletrica` e nas camadas da vista (`CamadasDaPlanta` por tipo de ponto); DXF com camadas `ELETRICA-ILUMINACAO` / `ELETRICA-FORCA` | PDF sem `ILUMINACAO` sai byte a byte igual ao de hoje; harness com as duas plantas |
-| 5.2 Legenda desenhada e lista de materiais na prancha | legenda com o SÍMBOLO desenhado (não só texto) na folha da planta, só dos tipos presentes; folha "Lista de materiais" com o quantitativo elétrico (0.3 + 2.3) por pavimento e por quadro | `DesenhistaDeProva.textos()` lista a legenda; PDF com a folha nova |
+| 5.2 Legenda desenhada e lista de materiais na prancha ✅ (símbolo real na planta e no quadro de cargas; folha MATERIAIS_ELETRICA; harness olhado) | legenda com o SÍMBOLO desenhado (não só texto) na folha da planta, só dos tipos presentes; folha "Lista de materiais" com o quantitativo elétrico (0.3 + 2.3) por pavimento e por quadro | `DesenhistaDeProva.textos()` lista a legenda; PDF com a folha nova |
 | 5.3 Memorial descritivo e DOCX | `utils/blueprintMemorialEletrico.ts` gera **memorial descritivo** (blocos: objeto, normas, entrada, quadros, circuitos, proteção, condutores, eletrodutos, aterramento, quantitativos) e **memorial de cálculo** como `BlocoDoMemorial`; PDF e DOCX pelo `blueprintMemorialDocx.ts` (já existe); textos padrão editáveis por estudo (hipótese `textosDoMemorial`); a emissão com ART anexa os dois | DOCX abre no Word; memorial gerado antes da emissão (não só nela); `paraWinAnsi` aplicado |
 
 Fecha o bloco **7** e a parte do **6** que é "lista de materiais".
@@ -3199,3 +3199,57 @@ sem mudança no kernel.
 
 **Efeito no benchmark**: §27/§8 "Planta de iluminação separada" ❌→✅, "Planta de tomadas e força
 separada" ❌→✅, "Camadas por tipo de ponto (vista e DXF)" ❌→✅.
+
+### E5.2 — Legenda desenhada e lista de materiais (29/09/2026) · frente `eletrico-e5` · sem bump
+
+**O que mudou**
+
+- **Legenda com o SÍMBOLO desenhado** (`blueprintPranchaEletrica.ts`): `itensDaLegendaEletrica(model,
+  recorte)` — um item por família presente, na ordem da prancha (quadro, luminária de teto, arandela/
+  piso, interruptor, tomada em três alturas, ligação direta, equipamento, campainha, dados, terra,
+  caixa, entrada, medidor, eletroduto com os quatro traços fase/neutro/retorno/terra, eletroduto no
+  piso, trecho numerado, ponto sem tipo); cada símbolo é desenhado pela MESMA `simboloDoPonto` da
+  planta. Numa planta com recorte (E5.1), só as famílias daquele recorte (o comum nas duas), e o título
+  diz "LEGENDA — ILUMINAÇÃO" / "— TOMADAS E FORÇA". `desenharLegendaEletrica` (moldura, título, símbolo +
+  nome curto) e `alturaDaLegendaEletrica`.
+- **Na folha da planta elétrica** (`desenharPlanta`): a legenda vai para a faixa livre à DIREITA do
+  desenho; sem ela, EMBAIXO (descontada a faixa de cotas); sem nenhuma das duas, a nota "Legenda: ver a
+  folha do quadro de cargas." — nunca por cima do desenho. Não entra em ampliação nem em planta sem
+  `eletrica`.
+- **Na folha do quadro de cargas**: a legenda desenhada no lugar da lista em texto, e as linhas longas
+  (alturas da tomada, traços dos condutores…) seguem abaixo como "CONVENÇÕES".
+- **Lista de materiais** (`utils/blueprintListaDeMateriaisEletrica.ts`, novo): `materiaisEletricos(model)`
+  — o MESMO `computeQuantities` do orçamento e da planilha, arrumado para compra: TOTAL (condutores por
+  tipo e seção; eletrodutos por Ø e conexões; pontos e caixas por tipo; quadros; disjuntores por In/
+  curva/Icn; DR por In/IΔn/polos; DPS por classe/In/Up), POR QUADRO (circuitos, pontos, eletroduto,
+  condutor, disjuntores, DR, DPS) e POR PAVIMENTO (eletroduto, condutor, pontos). `desenharListaDeMateriaisEletrica`
+  em colunas que fluem, com a nota de que perdas e sobras não estão incluídas.
+- **Folha nova no conjunto**: `MATERIAIS_ELETRICA` ("Lista de materiais — elétrica"), fechando o bloco
+  elétrico (depois do unifilar e do esquema vertical); também como 4ª folha da exportação avulsa
+  "elétrica" (PDF e PNG).
+
+**Testes** — novo `__tests__/blueprintLegendaEMateriaisEletrica.test.ts` (6): itens só das famílias
+presentes, na ordem, e por recorte; o desenho da legenda (moldura, título, rótulos, as três tomadas com os
+2 polígonos pretos de média e alta; título do recorte); na planta à direita do desenho, a nota quando não
+cabe (A4 a 1:25), nada sem `eletrica`; a folha do quadro de cargas com a legenda e as CONVENÇÕES;
+materiais: totais por grupo com os rótulos do sistema, por quadro (2 circuitos, DPS), por pavimento (4
+pontos), vazio sem elétrica; a folha com as três seções e unidades; o conjunto termina em
+`MATERIAIS_ELETRICA`. Ajustados: `blueprintPranchaEletrica` (o polígono preto da tomada média é contado
+DENTRO do desenho; a legenda, fora, traz os 2 dela) e `blueprintEsquemaVerticalEletrico` (a lista de
+materiais depois do esquema).
+
+**O que os testes pegaram antes de publicar**: nada no motor — o rótulo real da tomada no sistema é "TUG
+— tomada de uso geral" (o teste tinha outro). **O harness pegou**: a nota de rodapé da lista de
+materiais encostava na borda do carimbo (ia para o pé da área útil); passou para logo depois do conteúdo.
+
+**Harness (olhado)**: planta A3 1:50 com a legenda no canto superior direito, folha do quadro de cargas
+com a legenda e as convenções, e a lista de materiais — SVG → Edge headless.
+
+**Verificação**: `tsc` ✓ (na 3ª tentativa: duas quedas 0xC0000005 sem erro de tipo — a instabilidade
+conhecida do Node) · alvo 6 ✓ · suíte inteira **6.283 ✓** (6.316 = 6.283 + 33 pulados, 583 arquivos,
+conta fechada; uma rodada anterior perdeu um worker para o crash do V8 e não foi aceita) · `vite build`
+✓ · `check-ui-standard` ✓ · `check-xss-sinks` ✓ · sem mudança no kernel.
+
+**Efeito no benchmark**: §27/§8 "Legenda com símbolos na prancha" 🟡→✅ (antes só texto), "Lista de
+materiais na prancha" ❌→✅ (total, por quadro, por pavimento); §13 "Relatório de materiais elétricos"
+🟡→✅.

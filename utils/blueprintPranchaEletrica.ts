@@ -26,7 +26,7 @@
  * em escala (a norma não desenha tomada em escala), e o rótulo é legível em
  * qualquer 1:N — o mesmo critério do canvas.
  */
-import type { BlueprintModel, Terminal, Trecho } from './blueprintKernel';
+import type { TipoDePontoEletrico, BlueprintModel, Terminal, Trecho } from './blueprintKernel';
 import type { Desenhista, Enquadramento, OpcoesExportacao } from './blueprintExport';
 // `OpcoesExportacao` só pela folha do quadro de cargas (carimbo por quem chama).
 import {
@@ -49,7 +49,7 @@ import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trec
 import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
 import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
-import { categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
+import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -615,6 +615,127 @@ export function desenharQuadroDeCargas(
   linha(`Cobre / PVC 70 °C, método ${hip.metodoDeInstalacao} (Tab. 36) · ${hip.temperaturaAmbienteC} °C (Tab. 40) · ${hip.circuitosAgrupados} circ./eletroduto (Tab. 42) · mínimo por uso Tab. 47 · TUE ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese) · ρ ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m · ΔV ≤ ${hip.limiteQuedaTerminalPct} % terminal, ≤ ${hip.limiteQuedaTotalPct} % da origem · IB ≤ In ≤ Iz (5.3.4.1)`, 1.8);
   linha(`Demanda: ${hip.demanda.nome} (luz ${hip.demanda.ILUMINACAO} · TUG ${hip.demanda.TUG} · força ${hip.demanda.FORCA} · motores/AC ${hip.demanda.MOTOR ?? 1}). Pré-dimensionamento: sugere; o dimensionamento é do responsável técnico.`, 1.8);
   y += 1;
-  linha('LEGENDA', 2.6);
+  // E5.2: a legenda com os SÍMBOLOS desenhados; embaixo, as convenções em texto.
+  y += desenharLegendaEletrica(d, model, x0, y - 3, Math.min(larg - 2, 110)) + 3;
+  linha('CONVENÇÕES', 2.6);
   for (const l of linhasDaLegenda(model)) linha(l, 1.8);
+}
+
+// ─── A LEGENDA DESENHADA (E5.2, 29/09/2026) ─────────────────────────────────
+//
+// O SÍMBOLO de verdade — a mesma `simboloDoPonto` que desenha a planta —, e ao
+// lado o nome curto. Só as famílias presentes (e, numa planta com recorte, só
+// as daquele recorte). As convenções longas (alturas, traços dos condutores)
+// continuam em `linhasDaLegenda`, em texto.
+
+export interface ItemDaLegendaEletrica {
+  familia: string;
+  rotulo: string;
+  /** Desenha o símbolo com o centro em (cx, cy), mm de papel. */
+  desenhar: (d: Desenhista, cx: number, cy: number) => void;
+}
+
+/** Largura do bloco da legenda, mm de papel. */
+export const LARGURA_DA_LEGENDA_MM = 74;
+const PASSO_DA_LEGENDA_MM = 6;
+
+const M_LEGENDA = { TOMADA_MM: TOMADA_PAPEL_MM, LUZ_R_MM: LUZ_R_PAPEL_MM, INT_R_MM: INT_R_PAPEL_MM, LD_MM: LD_PAPEL_MM, FINA: FINA_PAPEL, MEDIA: MEDIA_PAPEL };
+const pontoDeLegenda = (tipoEletrico: TipoDePontoEletrico | null, extra: Partial<Pick<Terminal, 'cotaMm' | 'interruptor' | 'comando'>> = {}) =>
+  ({ tipoEletrico, cotaMm: extra.cotaMm ?? 300, interruptor: extra.interruptor ?? null, comando: extra.comando ?? null, potenciaW: null }) as Pick<Terminal, 'tipoEletrico' | 'cotaMm' | 'interruptor' | 'comando' | 'potenciaW'>;
+
+/** Os itens da legenda, na ordem da prancha: quadro, luz, comando, tomadas, força, dados, infraestrutura, eletrodutos. */
+export function itensDaLegendaEletrica(model: BlueprintModel, recorte: RecorteEletrico | null = null): ItemDaLegendaEletrica[] {
+  const f = familiasPresentes(model);
+  const cabe = (tipo: TipoDePontoEletrico) => entraNoRecorte(categoriaDoPonto(tipo), recorte);
+  const itens: ItemDaLegendaEletrica[] = [];
+  const ponto = (familia: string, tipo: TipoDePontoEletrico, rotulo: string, extra: Partial<Pick<Terminal, 'cotaMm' | 'interruptor' | 'comando'>> = {}) => {
+    if (f.has(familia) && cabe(tipo)) itens.push({ familia, rotulo, desenhar: (d, cx, cy) => simboloDoPonto(d, pontoDeLegenda(tipo, extra), { x: cx, y: cy }, 90, M_LEGENDA) });
+  };
+  if (f.has('QUADRO')) {
+    itens.push({
+      familia: 'QUADRO',
+      rotulo: 'Quadro de distribuição',
+      desenhar: (d, cx, cy) => {
+        d.retangulo(cx - 2.5, cy - 1.5, 5, 3, { espessuraMm: MEDIA_PAPEL, cor: COR });
+        d.linha(cx - 2.5, cy + 1.5, cx + 2.5, cy - 1.5, { espessuraMm: FINA_PAPEL, cor: COR });
+      },
+    });
+  }
+  ponto('ILUMINACAO_TETO', 'ILUMINACAO_TETO', 'Luminária de teto');
+  if ((f.has('ILUMINACAO_PAREDE') || f.has('ILUMINACAO_PISO')) && cabe('ILUMINACAO_PAREDE')) {
+    itens.push({ familia: 'ILUMINACAO_PAREDE', rotulo: 'Arandela / luminária de piso', desenhar: (d, cx, cy) => simboloDoPonto(d, pontoDeLegenda('ILUMINACAO_PAREDE'), { x: cx, y: cy }, 90, M_LEGENDA) });
+  }
+  ponto('INTERRUPTOR', 'INTERRUPTOR', 'Interruptor (letra = comando)', { interruptor: 'UMA_SECAO', comando: 'a' });
+  if ((f.has('TUG') || f.has('TUE')) && cabe('TUG')) {
+    itens.push({
+      familia: 'TUG',
+      rotulo: 'Tomada — baixa · média · alta',
+      desenhar: (d, cx, cy) => {
+        for (const [dx, cota] of [[-3.4, 300], [0, 1300], [3.4, 2000]] as const) simboloDoPonto(d, pontoDeLegenda('TUG', { cotaMm: cota }), { x: cx + dx, y: cy }, 90, M_LEGENDA);
+      },
+    });
+  }
+  ponto('LIGACAO_DIRETA', 'LIGACAO_DIRETA', 'Ligação direta (chuveiro, aquecedor)');
+  const equipamento = [...TIPOS_DE_EQUIPAMENTO_ELETRICO].find((x) => f.has(x));
+  if (equipamento && cabe(equipamento)) {
+    itens.push({ familia: 'EQUIPAMENTO', rotulo: 'Equipamento (sigla: AC, Motor, VE…)', desenhar: (d, cx, cy) => simboloDoPonto(d, pontoDeLegenda(equipamento), { x: cx, y: cy }, 90, M_LEGENDA) });
+  }
+  ponto('CAMPAINHA', 'CAMPAINHA', 'Campainha');
+  const dados = (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'] as const).find((x) => f.has(x));
+  if (dados && cabe(dados)) itens.push({ familia: 'DADOS', rotulo: 'Dados (telefone, TV, rede, USB)', desenhar: (d, cx, cy) => simboloDoPonto(d, pontoDeLegenda(dados), { x: cx, y: cy }, 90, M_LEGENDA) });
+  ponto('ATERRAMENTO', 'ATERRAMENTO', 'Aterramento');
+  ponto('CAIXA_PASSAGEM', 'CAIXA_PASSAGEM', 'Caixa de passagem');
+  ponto('ENTRADA_SERVICO', 'ENTRADA_SERVICO', 'Entrada de serviço');
+  ponto('MEDIDOR', 'MEDIDOR', 'Medidor de energia');
+  if (f.has('ELETRODUTO')) {
+    itens.push({
+      familia: 'ELETRODUTO',
+      rotulo: 'Eletroduto · fase · neutro · retorno · terra',
+      desenhar: (d, cx, cy) => {
+        d.linha(cx - 4.5, cy, cx + 4.5, cy, { espessuraMm: MEDIA_PAPEL, cor: COR });
+        (['FASE', 'NEUTRO', 'RETORNO', 'TERRA'] as const).forEach((tipo, i) => {
+          const x = cx - 2.7 + i * 1.8;
+          for (const seg of tracosDoCondutor(tipo)) d.linha(x + seg.de.t * 1.1, cy - seg.de.s * 1.1, x + seg.ate.t * 1.1, cy - seg.ate.s * 1.1, { espessuraMm: FINA_PAPEL, cor: COR });
+        });
+      },
+    });
+  }
+  if (f.has('ELETRODUTO_PISO')) itens.push({ familia: 'ELETRODUTO_PISO', rotulo: 'Eletroduto no piso', desenhar: (d, cx, cy) => tracejada(d, { x: cx - 4.5, y: cy }, { x: cx + 4.5, y: cy }, MEDIA_PAPEL, 1.5) });
+  if (trechosNumerados(model).size > 0) {
+    itens.push({
+      familia: 'TRECHO_NUMERADO',
+      rotulo: 'Trecho numerado (ver tabela da fiação)',
+      desenhar: (d, cx, cy) => {
+        d.linha(cx - 4.5, cy, cx + 4.5, cy, { espessuraMm: MEDIA_PAPEL, cor: COR });
+        circulo(d, { x: cx, y: cy }, 2.2, { traco: FINA_PAPEL, cheio: '#ffffff' });
+        d.texto(cx - 0.7, cy + 0.7, '1', TEXTO_PAPEL_MM * 0.9);
+      },
+    });
+  }
+  if (f.has('SEM_TIPO')) itens.push({ familia: 'SEM_TIPO', rotulo: 'Ponto sem tipo (a classificar)', desenhar: (d, cx, cy) => circulo(d, { x: cx, y: cy }, 1.0, { cheio: COR, traco: FINA_PAPEL }) });
+  return itens;
+}
+
+/** Altura do bloco da legenda (título + itens), mm de papel. */
+export function alturaDaLegendaEletrica(model: BlueprintModel, recorte: RecorteEletrico | null = null): number {
+  const n = itensDaLegendaEletrica(model, recorte).length;
+  return n === 0 ? 0 : 7 + n * PASSO_DA_LEGENDA_MM + 2;
+}
+
+/**
+ * Desenha a legenda em (x, y) — canto superior esquerdo —, com moldura;
+ * devolve a altura usada (0 sem nada a legendar).
+ */
+export function desenharLegendaEletrica(d: Desenhista, model: BlueprintModel, x: number, y: number, largura = LARGURA_DA_LEGENDA_MM, recorte: RecorteEletrico | null = null): number {
+  const itens = itensDaLegendaEletrica(model, recorte);
+  if (itens.length === 0) return 0;
+  const altura = alturaDaLegendaEletrica(model, recorte);
+  d.retangulo(x, y, largura, altura, { espessuraMm: 0.2, cor: COR });
+  d.texto(x + 2, y + 5, recorte ? `LEGENDA — ${ROTULO_DO_RECORTE[recorte].toUpperCase()}` : 'LEGENDA', 2.4);
+  itens.forEach((it, i) => {
+    const cy = y + 7 + (i + 0.5) * PASSO_DA_LEGENDA_MM;
+    it.desenhar(d, x + 7, cy);
+    d.texto(x + 14, cy + 0.8, it.rotulo, 2.0);
+  });
+  return altura;
 }

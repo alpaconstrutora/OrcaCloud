@@ -162,6 +162,9 @@ const HIDRAULICA_DA_ORIGEM: Record<'RESERVATORIO' | 'AQUECEDOR', DisciplinaDeRed
   AQUECEDOR: 'AGUA_QUENTE',
 };
 
+/** Os rótulos dos trechos de água que não são rede de distribuição (E4.2/E4.3). */
+export const FORA_DA_DISTRIBUICAO = new Set(['Alimentador', 'Extravasor', 'Limpeza']);
+
 /** As origens do desenho: caixas d'água (água fria) e aquecedores (água quente). */
 export function origensDeAgua(model: BlueprintModel): { origem: Terminal; disciplina: DisciplinaDeRede }[] {
   return (model.terminais ?? [])
@@ -195,7 +198,9 @@ export function pontosDeAgua(model: BlueprintModel, origem: Terminal, disciplina
 /** A rede da disciplina LIGADA à origem (por adjacência de nós, com a laje como encontro). */
 export function redeDaOrigem(model: BlueprintModel, origem: Terminal, disciplina: DisciplinaDeRede): Trecho[] {
   const chave = fazerChave(model.levels);
-  const todos = (model.trechos ?? []).filter((t) => t.disciplina === disciplina);
+  // E4.2/E4.3: alimentador, extravasor e limpeza NUNCA são distribuição — mesmo que
+  // encostem num nó dela (a subida do alimentador pode cruzar a posição de uma coluna).
+  const todos = (model.trechos ?? []).filter((t) => t.disciplina === disciplina && !FORA_DA_DISTRIBUICAO.has(t.rotulo ?? ''));
   const noDe = (t: Trecho) => [chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm)];
   const alcancados = new Set<No>([chave(origem.levelId, origem.at.x, origem.at.y, origem.cotaMm)]);
   const ligados = new Set<ObjectId>();

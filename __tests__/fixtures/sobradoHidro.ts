@@ -8,13 +8,16 @@ import { applyBatch, applyCommand, emptyModel, point, recomputeSpaces, type Blue
 import { planejarAgua } from '../../utils/blueprintAguaAutomatica';
 import { planejarEsgoto } from '../../utils/blueprintEsgotoAutomatico';
 import { comAjusteDePressao } from '../../utils/blueprintPressaoDaRede';
+import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador } from '../../utils/blueprintAlimentador';
+import { HIPOTESES_RESERVATORIO_PADRAO } from '../../utils/blueprintReservacao';
+import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
 
 /**
  * O banheiro repetido nos dois andares; caixa d'água no teto do superior (ou
  * `cotaDaCaixaMm` acima do piso dele — a caixa elevada da E3.3); CI no térreo.
  * `comAjuste`: a água sai com o DN ajustado pela pressão, como no editor.
  */
-export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number } = {}): BlueprintModel {
+export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; comAjuste?: boolean; volumeDaCaixaL?: number; alimentador?: boolean } = {}): BlueprintModel {
   let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   if (doisAndares) m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
   const niveis = m.levels.map((l) => l.id);
@@ -50,5 +53,13 @@ export function sobrado(doisAndares = true, opcoes: { cotaDaCaixaMm?: number; co
   }
   const plano = planejarAgua(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!);
   m = applyBatch(m, (opcoes.comAjuste ? comAjusteDePressao(m, plano) : plano).comandos).model;
-  return applyBatch(m, planejarEsgoto(m).comandos).model;
+  m = applyBatch(m, planejarEsgoto(m).comandos).model;
+  // E4.3: o hidrômetro no limite do lote (6 m à direita, térreo) e o alimentador até a caixa.
+  if (opcoes.alimentador) {
+    // As peças da caixa primeiro (E4.2): o alimentador chega à torneira de boia.
+    m = applyBatch(m, planejarPecasDaCaixa(m, m.terminais!.find((t) => t.tipoHidraulico === 'RESERVATORIO')!).comandos).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: niveis[0], disciplina: 'AGUA_FRIA', tipo: 'Hidrômetro', at: point(6000, 1500), cotaMm: 600, tipoHidraulico: 'HIDROMETRO' } as Command).model;
+    m = applyBatch(m, planejarAlimentador(m, HIPOTESES_ALIMENTACAO_PADRAO, HIPOTESES_RESERVATORIO_PADRAO, 3).comandos).model;
+  }
+  return m;
 }

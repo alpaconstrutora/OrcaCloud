@@ -26,6 +26,7 @@ import { esgotoTrechoATrecho, planejarEsgoto } from './blueprintEsgotoAutomatico
 import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
 import { dimensionarReservacao } from './blueprintReservacao';
+import { ROTULO_DO_ALIMENTADOR, planejarAlimentador } from './blueprintAlimentador';
 import { memorialDeCalculoHidro, memorialDescritivoHidro, nBr, type BlocoDoMemorial, type HipotesesHidro } from './blueprintMemorialHidro';
 
 export interface VerificacaoHidro {
@@ -117,6 +118,27 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     const altas = pontos.filter((p) => p.estado === 'EXCESSIVA').length;
     v.push({ grupo: 'NBR5626', item: 'Pressão estática máxima', norma: 'NBR 5626:2020', exigido: `≤ ${nBr(hip.pressao.estaticaMaximaKpa, 0)} kPa`, obtido: altas ? `${altas} ponto(s) acima` : 'todos abaixo', atende: altas === 0 });
     const vMax = Math.max(0, ...pressoes.flatMap((r) => r.trechos.map((t) => t.velocidadeMs)));
+    // E4.3: a entrada de água e o alimentador até a boia, com pressão.
+    const alim = planejarAlimentador(model, hip.alimentacao, hip.reservatorio, hip.pressao.qMaxDoHidrometroM3h);
+    const lancado = (model.trechos ?? []).some((t) => t.rotulo === ROTULO_DO_ALIMENTADOR);
+    v.push({
+      grupo: 'NBR5626',
+      item: 'Entrada de água e alimentador predial',
+      norma: 'NBR 5626',
+      exigido: 'hidrômetro e alimentador até o reservatório',
+      obtido: alim.motivo ?? (lancado ? `DN ${alim.dnMm}, ${nBr(alim.comprimentoM)} m` : 'alimentador não lançado'),
+      atende: !alim.motivo && lancado,
+    });
+    if (!alim.motivo) {
+      v.push({
+        grupo: 'NBR5626',
+        item: 'Pressão na torneira de boia',
+        norma: 'NBR 5626',
+        exigido: `≥ ${nBr(hip.alimentacao.pressaoMinimaNaBoiaKpa, 0)} kPa (rede pública ${nBr(hip.alimentacao.pressaoDaRedePublicaKpa, 0)} kPa)`,
+        obtido: `${nBr(alim.pressaoNaBoiaKpa, 1)} kPa`,
+        atende: alim.atende,
+      });
+    }
     // E4.1: a caixa guarda ao menos o consumo dos dias de reserva.
     const reserva = dimensionarReservacao(model, hip.reservatorio);
     v.push({

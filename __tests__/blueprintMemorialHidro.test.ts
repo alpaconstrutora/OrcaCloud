@@ -27,7 +27,7 @@ describe('E3.1 — memorial de cálculo', () => {
   it('sobrado: premissas, água, reservação, esgoto e colunas — nessa ordem', () => {
     const b = memorialDeCalculoHidro(sobrado(), HIPOTESES_HIDRO_PADRAO, ctx);
     expect(b[0]).toEqual({ tipo: 'titulo', texto: 'Memorial de cálculo — instalações hidrossanitárias' });
-    expect(secoes(b)).toEqual(['Premissas de cálculo', 'Água fria e água quente', 'Reservação', 'Esgoto sanitário', 'Colunas, tubos de queda e ventilação']);
+    expect(secoes(b)).toEqual(['Premissas de cálculo', 'Água fria e água quente', 'Reservação', 'Alimentação predial', 'Esgoto sanitário', 'Colunas, tubos de queda e ventilação']);
     // E4.1: sem volume nem medidas na caixa, a reservação diz que não dá para conferir.
     expect(b.some((x) => x.tipo === 'paragrafo' && /^Não atende: Reservar 800 L, mas há caixa sem volume/.test(x.texto))).toBe(true);
   });

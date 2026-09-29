@@ -610,3 +610,28 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   extravasor, as três peças e a idempotência, a caixa girada 90° e nenhuma ponta aberta). Harness
   `docs/spikes/esgoto-isometrico?cena=agua&cilindro=1&pecas=1` conferido em 2D e 3D. Suíte: 534
   arquivos / 6.007 testes.
+
+### E4.3 — Entrada de água e alimentador predial (29/09/2026)
+
+- `utils/blueprintAlimentador.ts` (novo, puro): do **hidrômetro** (a entrada — o projetista põe no
+  cavalete, no limite do lote) desce à cota enterrada (−0,30), encosta na parede mais próxima, corre
+  **pelas paredes** do pavimento de entrada (`arvorePelasParedes`) até a parede sob a caixa, **sobe**
+  atravessando os pavimentos e chega à **torneira de boia** (E4.2; sem ela, ao alto da caixa, com
+  aviso). Destino: o reservatório INFERIOR, se houver, senão o superior. **DN** pelo consumo diário
+  em 24 h (Q = CD/86 400), V ≤ 1 m/s, mínimo 25. **Pressão na boia** = rede pública (100 kPa,
+  premissa) − desnível − perda distribuída − localizadas (um joelho por mudança de direção +
+  registro) − hidrômetro; abaixo de 10 kPa, o aviso manda usar inferior com recalque. Trechos
+  "Alimentador", sugeridos; relançar apaga os sugeridos e refaz, confirmado fica.
+- `redeDaOrigem`: alimentador, extravasor e limpeza **nunca** são distribuição (a subida pode cruzar
+  a posição de uma coluna). As pontas no hidrômetro e na boia fecham (terminal no nó).
+- Gaveta de água: bloco **Alimentador predial** (`PainelAlimentador`) — pressão na boia colorida,
+  DN, comprimento, vazão, velocidade, desnível e perdas, premissas (rede pública, cota enterrada) e
+  "Lançar/Relançar alimentador" (desligado dizendo por quê). Memorial de cálculo: seção
+  **Alimentação predial**. Conferência da emissão: **Entrada de água e alimentador predial** e
+  **Pressão na torneira de boia**. Premissas no estudo (`alimentacao`).
+- Fixture do sobrado: `alimentador: true` (peças da caixa e o alimentador de um hidrômetro a 6 m).
+- **Pronto quando** ✔: 8 testes em `blueprintAlimentador.test.ts` (sem hidrômetro/sem caixa,
+  caminho contínuo do cavalete à boia atravessando a laje, DN 25 por 800 L/dia, desnível 7,5 m e a
+  conta da pressão, rede fraca → aviso de inferior, destino inferior, relançar × confirmado, fora
+  da distribuição e sem ponta aberta, coluna antiga). Harness
+  `esgoto-isometrico?cena=agua&pecas=1&alimentador=1` em 3D. Suíte: 536 arquivos / 6.023 testes.

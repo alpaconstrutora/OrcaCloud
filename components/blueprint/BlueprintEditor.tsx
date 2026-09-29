@@ -214,6 +214,8 @@ import { blocosDasLinhas, linhasDoMemorial, memorialDeCalculoHidro, memorialDesc
 import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../../utils/blueprintHidroExecutivo';
 import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
+import PainelAlimentador from './PainelAlimentador';
+import { planejarAlimentador } from '../../utils/blueprintAlimentador';
 import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
 import { dimensionarReservacao } from '../../utils/blueprintReservacao';
 import { useBlueprintHidro } from '../../hooks/useBlueprintHidro';
@@ -7163,6 +7165,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
   const hipPressao = hidroDoEstudo.hipoteses.pressao;
   /** RESERVAÇÃO (29/09/2026, E4.1): população → consumo → volume, contra a(s) caixa(s). */
+  /** ALIMENTADOR PREDIAL (29/09/2026, E4.3): do hidrômetro à boia, com a pressão que chega. */
+  const planoDoAlimentador = useMemo(
+    () =>
+      tarefaAberta === 'agua'
+        ? planejarAlimentador(editor.model, hidroDoEstudo.hipoteses.alimentacao, hidroDoEstudo.hipoteses.reservatorio, hidroDoEstudo.hipoteses.pressao.qMaxDoHidrometroM3h)
+        : null,
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses],
+  );
   const dimensionamentoDaReservacao = useMemo(
     () => (tarefaAberta === 'agua' ? dimensionarReservacao(editor.model, hidroDoEstudo.hipoteses.reservatorio) : null),
     [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.reservatorio],
@@ -13971,6 +13981,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   r={dimensionamentoDaReservacao}
                   hip={hidroDoEstudo.hipoteses.reservatorio}
                   onHip={(reservatorio) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, reservatorio })}
+                />
+              )}
+              {planoDoAlimentador && (
+                <PainelAlimentador
+                  plano={planoDoAlimentador}
+                  hip={hidroDoEstudo.hipoteses.alimentacao}
+                  onHip={(alimentacao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, alimentacao })}
+                  onLancar={() => {
+                    if (planoDoAlimentador.comandos.length) editor.runBatch(planoDoAlimentador.comandos);
+                  }}
                 />
               )}
               <PainelPressoesDaAgua

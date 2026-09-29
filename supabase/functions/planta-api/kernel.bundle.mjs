@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.68.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.69.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -3938,7 +3938,15 @@ var ROTULO_DO_PONTO_ELETRICO = {
   DADOS_REDE: "Rede (internet)",
   DADOS_USB: "USB",
   LIGACAO_DIRETA: "Liga\xE7\xE3o direta (chuveiro, aquecedor)",
-  INTERRUPTOR: "Interruptor"
+  INTERRUPTOR: "Interruptor",
+  AR_CONDICIONADO: "Ar-condicionado (ponto de for\xE7a)",
+  MOTOR_BOMBA: "Motor / bomba",
+  VENTILADOR_EXAUSTOR: "Ventilador / exaustor",
+  PORTAO: "Port\xE3o motorizado",
+  CARREGADOR_VE: "Carregador de ve\xEDculo el\xE9trico",
+  CAMPAINHA: "Campainha",
+  PONTO_ESPERA: "Ponto de espera (equipamento a definir)",
+  ATERRAMENTO: "Ponto de aterramento"
 };
 
 // utils/blueprintIfc.ts
@@ -4963,6 +4971,27 @@ function entidadeDoPontoEletrico(tipo) {
       return { entidade: "IFCJUNCTIONBOX", predefinido: ".POWER.", objectType: tipo };
     case "INTERRUPTOR":
       return { entidade: "IFCSWITCHINGDEVICE", predefinido: ".TOGGLESWITCH.", objectType: tipo };
+    // E1.1 (29/09/2026) — os EQUIPAMENTOS. O que está na parede é o PONTO de
+    // ligação do equipamento, não o equipamento (a evaporadora é um
+    // IfcUnitaryEquipment, já emitido pelo Componente). Ar-condicionado e
+    // carregador de veículo se ligam por tomada dedicada → IfcOutlet; motor,
+    // bomba, ventilador, portão e espera se ligam em caixa → IfcJunctionBox;
+    // campainha é sinalização sonora → IfcAudioVisualAppliance (IFC4, nove
+    // atributos, mesmo formato). Nenhum enum do IFC4 nomeia VE, espera ou
+    // aterramento: `.USERDEFINED.` com o `ObjectType` dizendo o tipo do kernel.
+    case "AR_CONDICIONADO":
+      return OUTLET(".POWEROUTLET.", tipo);
+    case "CARREGADOR_VE":
+      return OUTLET(".USERDEFINED.", tipo);
+    case "MOTOR_BOMBA":
+    case "VENTILADOR_EXAUSTOR":
+    case "PORTAO":
+      return { entidade: "IFCJUNCTIONBOX", predefinido: ".POWER.", objectType: tipo };
+    case "PONTO_ESPERA":
+    case "ATERRAMENTO":
+      return { entidade: "IFCJUNCTIONBOX", predefinido: ".USERDEFINED.", objectType: tipo };
+    case "CAMPAINHA":
+      return { entidade: "IFCAUDIOVISUALAPPLIANCE", predefinido: ".USERDEFINED.", objectType: tipo };
   }
 }
 function entidadeDoPontoHidraulico(tipo) {

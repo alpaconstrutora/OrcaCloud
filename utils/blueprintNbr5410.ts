@@ -38,6 +38,7 @@ import {
   ocupacaoDoTrecho,
   preDimensionarCircuito,
   preDimensionarQuadroCompleto,
+  TIPOS_DE_USO_ESPECIFICO,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
 
@@ -94,7 +95,8 @@ const AMBIENTES_9532: ReadonlySet<TipoDeAmbiente> = new Set(['COZINHA_SERVICO'])
 
 const ehTomada = (t: Terminal) => t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE';
 const ehLuz = (t: Terminal) => t.tipoEletrico?.startsWith('ILUMINACAO') ?? false;
-const ehForca = (t: Terminal) => t.tipoEletrico === 'TUE' || t.tipoEletrico === 'LIGACAO_DIRETA';
+// E1.1: os EQUIPAMENTOS (AC, motor, portão, VE…) são força — a 9.5.3.1 os olha também.
+const ehForca = (t: Terminal) => !!t.tipoEletrico && TIPOS_DE_USO_ESPECIFICO.has(t.tipoEletrico);
 
 /** Aquecedor de água pelo TEXTO que o projetista escreveu — o que há para saber. */
 const AQUECEDOR = /chuveiro|aquecedor|boiler|torneira\s+el[eé]trica|ducha/i;

@@ -82,7 +82,7 @@ export default function PainelQuadroAlimentador({
       </div>
 
       <p className={faltas.length > 0 ? 'text-red-700' : q.ibA == null ? 'text-slate-400' : 'text-emerald-700'}>
-        {va(q.sInstaladaVA)} instalados (luz {va(q.porGrupoVA.ILUMINACAO)} · TUG {va(q.porGrupoVA.TUG)} · força {va(q.porGrupoVA.FORCA)})
+        {va(q.sInstaladaVA)} instalados (luz {va(q.porGrupoVA.ILUMINACAO)} · TUG {va(q.porGrupoVA.TUG)} · força {va(q.porGrupoVA.FORCA)}{q.porGrupoVA.MOTOR ? <> · motores/AC {va(q.porGrupoVA.MOTOR)}</> : null})
         {q.sDemandadaVA !== q.sInstaladaVA && <> · demandados {va(q.sDemandadaVA)} ({q.demanda.nome})</>}
         {q.ibA != null && (
           <>

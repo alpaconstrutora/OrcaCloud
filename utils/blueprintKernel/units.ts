@@ -369,7 +369,15 @@
  * TUBO (`CAIXAS_DE_ESGOTO.cotaE = 'TUBO'`); `AddTerminal` aceita as medidas.
  * Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.68.0';
+/**
+ * ─── 0.68.0 → 0.69.0 (29/09/2026) — OS EQUIPAMENTOS ELÉTRICOS ───────────────
+ *
+ * `tipoEletrico` aceita `AR_CONDICIONADO`, `MOTOR_BOMBA`, `VENTILADOR_EXAUSTOR`,
+ * `PORTAO`, `CARREGADOR_VE`, `CAMPAINHA`, `PONTO_ESPERA` e `ATERRAMENTO` (E1.1
+ * do roadmap elétrico). Vocabulário novo, forma igual: nenhum desenho existente
+ * muda de payload — provado antes do bump com a suíte inteira na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.69.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -2198,6 +2198,27 @@ function entidadeDoPontoEletrico(
       // O comando do ponto de luz: `IfcSwitchingDevice.TOGGLESWITCH`, IFC4 de
       // origem, nove atributos — lido de volta pelo web-ifc como os demais.
       return { entidade: 'IFCSWITCHINGDEVICE', predefinido: '.TOGGLESWITCH.', objectType: tipo };
+    // E1.1 (29/09/2026) — os EQUIPAMENTOS. O que está na parede é o PONTO de
+    // ligação do equipamento, não o equipamento (a evaporadora é um
+    // IfcUnitaryEquipment, já emitido pelo Componente). Ar-condicionado e
+    // carregador de veículo se ligam por tomada dedicada → IfcOutlet; motor,
+    // bomba, ventilador, portão e espera se ligam em caixa → IfcJunctionBox;
+    // campainha é sinalização sonora → IfcAudioVisualAppliance (IFC4, nove
+    // atributos, mesmo formato). Nenhum enum do IFC4 nomeia VE, espera ou
+    // aterramento: `.USERDEFINED.` com o `ObjectType` dizendo o tipo do kernel.
+    case 'AR_CONDICIONADO':
+      return OUTLET('.POWEROUTLET.', tipo);
+    case 'CARREGADOR_VE':
+      return OUTLET('.USERDEFINED.', tipo);
+    case 'MOTOR_BOMBA':
+    case 'VENTILADOR_EXAUSTOR':
+    case 'PORTAO':
+      return { entidade: 'IFCJUNCTIONBOX', predefinido: '.POWER.', objectType: tipo };
+    case 'PONTO_ESPERA':
+    case 'ATERRAMENTO':
+      return { entidade: 'IFCJUNCTIONBOX', predefinido: '.USERDEFINED.', objectType: tipo };
+    case 'CAMPAINHA':
+      return { entidade: 'IFCAUDIOVISUALAPPLIANCE', predefinido: '.USERDEFINED.', objectType: tipo };
   }
 }
 

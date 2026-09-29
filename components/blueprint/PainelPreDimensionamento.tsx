@@ -8,7 +8,7 @@ import {
   type PreDimensionamentoDoCircuito,
 } from '../../utils/blueprintEletricaDimensionamento';
 
-const ROTULO_DO_GRUPO = { ILUMINACAO: 'iluminação', TUG: 'TUG', FORCA: 'força' } as const;
+const ROTULO_DO_GRUPO = { ILUMINACAO: 'iluminação', TUG: 'TUG', FORCA: 'força', MOTOR: 'motores / ar-condicionado' } as const;
 /** Fator de demanda entre 0 e 1; texto vazio ou inválido mantém o atual. */
 const fatorDeDemanda = (v: string, atual: number) => {
   const n = Number(v);
@@ -144,7 +144,8 @@ export function HipotesesDoPreDimensionamento({
     hipoteses.demanda.nome !== DEMANDA_SEM_FATOR.nome ||
     hipoteses.demanda.ILUMINACAO !== 1 ||
     hipoteses.demanda.TUG !== 1 ||
-    hipoteses.demanda.FORCA !== 1;
+    hipoteses.demanda.FORCA !== 1 ||
+    (hipoteses.demanda.MOTOR ?? 1) !== 1;
   const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % (origem ${hipoteses.limiteQuedaTotalPct} %) · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²${demandaInformada ? ` · demanda: ${hipoteses.demanda.nome}` : ''}`;
   const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-sm';
   return (
@@ -236,7 +237,7 @@ export function HipotesesDoPreDimensionamento({
                 <span>Fonte da tabela</span>
                 <input type="text" value={hipoteses.demanda.nome} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, nome: e.target.value } })} aria-label="Fonte da tabela de demanda" className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm" />
               </label>
-              {(['ILUMINACAO', 'TUG', 'FORCA'] as const).map((g) => (
+              {(['ILUMINACAO', 'TUG', 'FORCA', 'MOTOR'] as const).map((g) => (
                 <label key={g} className="flex items-center justify-between gap-2">
                   <span>Fator — {ROTULO_DO_GRUPO[g]}</span>
                   <input type="number" step="0.05" min={0} max={1} value={hipoteses.demanda[g]} onChange={(e) => onChange({ ...hipoteses, demanda: { ...hipoteses.demanda, [g]: fatorDeDemanda(e.target.value, hipoteses.demanda[g]) } })} aria-label={`Fator de demanda de ${ROTULO_DO_GRUPO[g]}`} className={campo} />

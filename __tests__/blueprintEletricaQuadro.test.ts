@@ -65,7 +65,7 @@ describe('demanda e alimentador', () => {
     m = ponto(m, levelId, 2000, 'TUG', 600, c2);
     m = ponto(m, levelId, 3000, 'TUG', 600, c2);
     const q = preDimensionarQuadroCompleto(m, quadroId)!;
-    expect(q.porGrupoVA).toEqual({ ILUMINACAO: 400, TUG: 1200, FORCA: 0 });
+    expect(q.porGrupoVA).toEqual({ ILUMINACAO: 400, TUG: 1200, FORCA: 0, MOTOR: 0 });
     expect(q.sInstaladaVA).toBe(1600);
     expect(q.sDemandadaVA).toBe(1600);
     expect(q.demanda).toEqual(DEMANDA_SEM_FATOR);
@@ -82,7 +82,7 @@ describe('demanda e alimentador', () => {
     const { m: m1, id: c1 } = circuito(m0, quadroId);
     let m = m1;
     for (const x of [1000, 2000, 3000, 4000]) m = ponto(m, levelId, x, 'TUG', 600, c1); // 2.400 VA
-    const hip = { ...HIPOTESES_PADRAO, demanda: { nome: 'teste 50 % em TUG', ILUMINACAO: 1, TUG: 0.5, FORCA: 1 } };
+    const hip = { ...HIPOTESES_PADRAO, demanda: { nome: 'teste 50 % em TUG', ILUMINACAO: 1, TUG: 0.5, FORCA: 1, MOTOR: 1 } };
     const q = preDimensionarQuadroCompleto(m, quadroId, hip)!;
     expect(q.sInstaladaVA).toBe(2400);
     expect(q.sDemandadaVA).toBe(1200);

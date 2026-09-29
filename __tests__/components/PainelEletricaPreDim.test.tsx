@@ -124,7 +124,7 @@ describe('PainelEletrica · pré-dimensionamento', () => {
 
   it('E0.1: com demanda informada, a fonte e os três fatores são editáveis e o fator fica entre 0 e 1', async () => {
     const onHipoteses = vi.fn();
-    const hip = { ...HIPOTESES_PADRAO, demanda: { nome: 'NT concessionária X', ILUMINACAO: 0.8, TUG: 0.5, FORCA: 1 } };
+    const hip = { ...HIPOTESES_PADRAO, demanda: { nome: 'NT concessionária X', ILUMINACAO: 0.8, TUG: 0.5, FORCA: 1, MOTOR: 1 } };
     render(<PainelEletrica model={cena()} onCircuitoProps={vi.fn()} hipoteses={hip} onHipoteses={onHipoteses} {...props} />);
     await abrirAba(/^hipóteses$/i);
     const botao = screen.getByRole('button', { name: /Hipóteses do pré-dimensionamento/ });

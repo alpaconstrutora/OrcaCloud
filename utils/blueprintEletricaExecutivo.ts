@@ -152,12 +152,12 @@ export function memorialEletrico(
   L.push('## 3. Hipóteses');
   L.push(`Condutores de cobre, isolação PVC 70 °C, método de instalação ${hip.metodoDeInstalacao} (Tabela 36); temperatura ambiente ${hip.temperaturaAmbienteC} °C (Tabela 40); ${hip.circuitosAgrupados} circuito(s) por eletroduto (Tabela 42); seção mínima por uso pela Tabela 47; TUE / ligação direta ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese de projeto).`);
   L.push(`ρ do cobre ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m; queda máxima ${hip.limiteQuedaTerminalPct} % no circuito terminal e ${hip.limiteQuedaTotalPct} % da origem (6.2.7). Disjuntores: ${hip.catalogoDeDisjuntoresA.join(', ')} A (IB ≤ In ≤ Iz, 5.3.4.1).`);
-  L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
+  L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}, motores/AC ${hip.demanda.MOTOR ?? 1}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
   L.push('');
   L.push('## 4. Quadros e circuitos');
   for (const q of r.quadros) {
     L.push(`### ${q.nome} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (ligação deduzida dos circuitos)' : ''}`);
-    L.push(`Carga instalada ${Math.round(q.sInstaladaVA)} VA (iluminação ${Math.round(q.porGrupoVA.ILUMINACAO)}, TUG ${Math.round(q.porGrupoVA.TUG)}, força ${Math.round(q.porGrupoVA.FORCA)}); demandada ${Math.round(q.sDemandadaVA)} VA.`);
+    L.push(`Carga instalada ${Math.round(q.sInstaladaVA)} VA (iluminação ${Math.round(q.porGrupoVA.ILUMINACAO)}, TUG ${Math.round(q.porGrupoVA.TUG)}, força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? `, motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}); demandada ${Math.round(q.sDemandadaVA)} VA.`);
     if (q.ibA != null) {
       L.push(`Alimentador: IB ${n1(q.ibA)} A; seção ${mm2(q.secaoCalculada?.secaoMm2)} mm² (Iz ${q.secaoCalculada ? n1(q.secaoCalculada.izA) : '—'} A); disjuntor geral ${q.disjuntorGeralA ?? '—'} A${q.quedaAlimentadorPct != null ? `; queda no alimentador ${n1(q.quedaAlimentadorPct)} %, total até o pior ponto ${n1(q.quedaTotalMaxPct ?? 0)} %` : ''}.`);
     }

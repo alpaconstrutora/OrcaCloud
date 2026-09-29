@@ -54,6 +54,7 @@ import {
   type Terminal,
   type TipoDePontoEletrico,
 } from './blueprintKernel';
+import { TIPOS_DE_USO_ESPECIFICO } from './blueprintEletricaDimensionamento';
 import { ambienteDoPonto, FORA_DE_AMBIENTE } from './blueprintAgrupamentoDePontos';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 import {
@@ -157,9 +158,12 @@ export interface PlanoDeCircuitos {
 export function funcaoDoPonto(tipo: TipoDePontoEletrico | null | undefined): FuncaoDoCircuito | 'COMANDO' | null {
   if (!tipo) return null;
   if (tipo.startsWith('ILUMINACAO')) return 'ILUMINACAO';
-  if (tipo === 'TUG') return 'TUG';
-  if (tipo === 'TUE' || tipo === 'LIGACAO_DIRETA') return 'TUE';
+  // E1.1: a campainha é carga mínima e anda com as tomadas de uso geral.
+  if (tipo === 'TUG' || tipo === 'CAMPAINHA') return 'TUG';
+  // TUE, ligação direta e os EQUIPAMENTOS (AC, motor, portão, VE, espera): um circuito cada.
+  if (TIPOS_DE_USO_ESPECIFICO.has(tipo)) return 'TUE';
   if (tipo === 'INTERRUPTOR') return 'COMANDO';
+  // Dados e ATERRAMENTO não são carga: ficam fora do plano.
   return null;
 }
 

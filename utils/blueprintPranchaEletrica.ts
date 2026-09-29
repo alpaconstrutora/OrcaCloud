@@ -43,6 +43,7 @@ import {
   secoesDoInterruptor,
   trianguloDaTomada,
 } from './blueprintRede';
+import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from './blueprintRede';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
 import {
   HIPOTESES_PADRAO,
@@ -162,9 +163,20 @@ function simboloDoPonto(d: Desenhista, t: Pick<Terminal, 'tipoEletrico' | 'cotaM
     }
     return;
   }
-  if (tipo === 'LIGACAO_DIRETA') {
+  if (tipo === 'LIGACAO_DIRETA' || (tipo && TIPOS_DE_EQUIPAMENTO_ELETRICO.has(tipo))) {
+    // A CAIXA de ligação (sem tomada) — a mesma da ligação direta; o EQUIPAMENTO
+    // (E1.1) se distingue pela sigla ao lado ("AC · C3"), não por outro símbolo.
     d.retangulo(c.x - LD_MM / 2, c.y - LD_MM / 2, LD_MM, LD_MM, { espessuraMm: MEDIA, cor: COR });
     d.linha(c.x - LD_MM / 2, c.y + LD_MM / 2, c.x + LD_MM / 2, c.y - LD_MM / 2, { espessuraMm: MEDIA, cor: COR });
+    return;
+  }
+  if (tipo === 'ATERRAMENTO') {
+    // O símbolo de TERRA: haste vertical e três traços decrescentes (IEC 60417-5017).
+    const h = LD_MM;
+    d.linha(c.x, c.y - h / 2, c.x, c.y, { espessuraMm: MEDIA, cor: COR });
+    d.linha(c.x - h / 2, c.y, c.x + h / 2, c.y, { espessuraMm: MEDIA, cor: COR });
+    d.linha(c.x - h / 3, c.y + h / 5, c.x + h / 3, c.y + h / 5, { espessuraMm: MEDIA, cor: COR });
+    d.linha(c.x - h / 6, c.y + (2 * h) / 5, c.x + h / 6, c.y + (2 * h) / 5, { espessuraMm: MEDIA, cor: COR });
     return;
   }
   if (tipo?.startsWith('ILUMINACAO')) {
@@ -344,6 +356,9 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
   if (f.has('ILUMINACAO_PAREDE') || f.has('ILUMINACAO_PISO')) L.push('ARANDELA / LUZ PISO — círculo sem cruz');
   if (f.has('INTERRUPTOR')) L.push('INTERRUPTOR — círculo; uma seção (letra), duas (diâmetro, a|b), três (Y, a b c); paralelo = cheio; intermediário = metade hachurada');
   if (f.has('LIGACAO_DIRETA')) L.push('LIGAÇÃO DIRETA — quadrado com diagonal (chuveiro, aquecedor: sem tomada, NBR 5410 9.5.2.3)');
+  if ([...TIPOS_DE_EQUIPAMENTO_ELETRICO].some((x) => f.has(x))) L.push('EQUIPAMENTO — quadrado com diagonal e a sigla ao lado: AC = ar-condicionado, Motor = motor/bomba, Vent = ventilador/exaustor, Portão, VE = carregador de veículo, Espera = equipamento a definir');
+  if (f.has('CAMPAINHA')) L.push('CAMP — campainha (círculo pequeno com traço)');
+  if (f.has('ATERRAMENTO')) L.push('TERRA — ponto de aterramento (haste e três traços)');
   if (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'].some((x) => f.has(x))) L.push('DADOS — círculo pequeno com traço (telefone, TV, rede, USB)');
   if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal ao lado; condutores (NBR 5444): traço reto = fase, com pé = neutro, só de um lado = retorno, com barra = terra; número do circuito em cima, seção (mm²) embaixo');
   if (f.has('ELETRODUTO_PISO')) L.push('ELETRODUTO NO PISO — linha tracejada');
@@ -439,7 +454,7 @@ export function desenharQuadroDeCargas(
     d.retangulo(x0 - 1.5, topoTabela, larg - 2, y - topoTabela + 0.5, { espessuraMm: 0.2, cor: COR });
     y += 2.5;
     linha(
-      `Instalado ${Math.round(q.sInstaladaVA)} VA (luz ${Math.round(q.porGrupoVA.ILUMINACAO)} · TUG ${Math.round(q.porGrupoVA.TUG)} · força ${Math.round(q.porGrupoVA.FORCA)}) · demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})` +
+      `Instalado ${Math.round(q.sInstaladaVA)} VA (luz ${Math.round(q.porGrupoVA.ILUMINACAO)} · TUG ${Math.round(q.porGrupoVA.TUG)} · força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? ` · motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}) · demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})` +
         (q.ibA != null ? ` · alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm², geral ${q.disjuntorGeralA ?? '—'} A` : '') +
         (q.quedaTotalMaxPct != null ? ` · ΔV total ${n1(q.quedaTotalMaxPct)} %` : ''),
       2.0,
@@ -453,7 +468,7 @@ export function desenharQuadroDeCargas(
   y += 1;
   linha('HIPÓTESES', 2.6);
   linha(`Cobre / PVC 70 °C, método ${hip.metodoDeInstalacao} (Tab. 36) · ${hip.temperaturaAmbienteC} °C (Tab. 40) · ${hip.circuitosAgrupados} circ./eletroduto (Tab. 42) · mínimo por uso Tab. 47 · TUE ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese) · ρ ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m · ΔV ≤ ${hip.limiteQuedaTerminalPct} % terminal, ≤ ${hip.limiteQuedaTotalPct} % da origem · IB ≤ In ≤ Iz (5.3.4.1)`, 1.8);
-  linha(`Demanda: ${hip.demanda.nome} (luz ${hip.demanda.ILUMINACAO} · TUG ${hip.demanda.TUG} · força ${hip.demanda.FORCA}). Pré-dimensionamento: sugere; o dimensionamento é do responsável técnico.`, 1.8);
+  linha(`Demanda: ${hip.demanda.nome} (luz ${hip.demanda.ILUMINACAO} · TUG ${hip.demanda.TUG} · força ${hip.demanda.FORCA} · motores/AC ${hip.demanda.MOTOR ?? 1}). Pré-dimensionamento: sugere; o dimensionamento é do responsável técnico.`, 1.8);
   y += 1;
   linha('LEGENDA', 2.6);
   for (const l of linhasDaLegenda(model)) linha(l, 1.8);

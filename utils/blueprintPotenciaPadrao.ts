@@ -47,6 +47,23 @@ import { etiquetaDoAmbiente, minimoDeIluminacaoVA } from './blueprintDistribuica
 export const POTENCIA_MINIMA_TOMADA_VA = 100;
 export const POTENCIA_TOMADA_MOLHADA_VA = 600;
 
+/**
+ * A potência TÍPICA de placa dos EQUIPAMENTOS (E1.1, 29/09/2026) — HIPÓTESE de
+ * projeto, não norma: a NBR 5410 não dá número para eles. É ponto de partida
+ * para o quadro de cargas não ficar em branco (split de 9.000 BTU ≈ 1.400 VA;
+ * bomba de 1/2 cv ≈ 750 VA; carregador residencial de 7,4 kW), e o projetista
+ * troca no painel do ponto pela placa do equipamento. ESPERA e ATERRAMENTO não
+ * têm número: ninguém conhece o equipamento, e terra não é carga.
+ */
+export const POTENCIA_TIPICA_DO_EQUIPAMENTO_VA: Partial<Record<TipoDePontoEletrico, number>> = {
+  AR_CONDICIONADO: 1400,
+  MOTOR_BOMBA: 750,
+  VENTILADOR_EXAUSTOR: 150,
+  PORTAO: 500,
+  CARREGADOR_VE: 7400,
+  CAMPAINHA: 20,
+};
+
 const MOLHADOS: ReadonlySet<TipoDeAmbiente> = new Set(['BANHEIRO', 'COZINHA_SERVICO']);
 const ehTomada = (t: TipoDePontoEletrico | null | undefined) => t === 'TUG' || t === 'TUE';
 const ehLuz = (t: TipoDePontoEletrico | null | undefined) => !!t && t.startsWith('ILUMINACAO');
@@ -79,6 +96,9 @@ export function potenciaPadraoVA(
     if (!ctx) return minimoDeIluminacaoVA(0);
     return Math.max(minimoDeIluminacaoVA(0), minimoDeIluminacaoVA(ctx.areaM2) - ctx.luzDeclaradaVA);
   }
+  // Equipamentos (E1.1): a potência típica de placa, como HIPÓTESE editável.
+  const tipica = POTENCIA_TIPICA_DO_EQUIPAMENTO_VA[tipoEletrico];
+  if (tipica != null) return tipica;
   return null;
 }
 

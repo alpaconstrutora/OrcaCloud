@@ -119,3 +119,16 @@ emitido — já aconteceu duas vezes, com o quadro e com o circuito.
 4. Suíte cheia e `npm run build`.
 5. ⏳ **Falta o que só quem usa vê**: inserir uma arandela e uma TUG e conferir
    que caem em grupos diferentes na lista.
+
+## Atualização 29/09/2026 — E1.1 do roadmap elétrico (kernel 0.69.0)
+
+O campo continua FECHADO, e ganhou oito valores vindos do benchmark do AltoQi Builder
+(`docs/planos/2026-09-29-eletrico-benchmark-altoqi-e-roadmap.md`): `AR_CONDICIONADO`,
+`MOTOR_BOMBA`, `VENTILADOR_EXAUSTOR`, `PORTAO`, `CARREGADOR_VE` e `PONTO_ESPERA` (quinto grupo,
+"Elétrica — equipamentos": pontos de força com carga própria, uso específico, caixa com diagonal
+no desenho e a sigla dizendo qual é), mais `CAMPAINHA` e `ATERRAMENTO` (em "especiais e dados";
+terra não é carga — fora de circuito, grupo e demanda). Grupo de demanda `MOTOR` (AC, motor,
+ventilador, portão). Potência típica dos equipamentos é HIPÓTESE editável
+(`POTENCIA_TIPICA_DO_EQUIPAMENTO_VA`), não norma; espera e terra ficam sem número. IFC: AC e VE em
+`IfcOutlet`, motor/ventilador/portão em `IfcJunctionBox .POWER.`, campainha em
+`IfcAudioVisualAppliance`, espera e terra em `IfcJunctionBox .USERDEFINED.`.

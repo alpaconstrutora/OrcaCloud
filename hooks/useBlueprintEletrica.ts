@@ -48,6 +48,8 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
       ILUMINACAO: n(d.ILUMINACAO, 1),
       TUG: n(d.TUG, 1),
       FORCA: n(d.FORCA, 1),
+      // E1.1: coluna gravada antes do grupo MOTOR não o tem — vale 1,00.
+      MOTOR: n(d.MOTOR, 1),
     },
     limiteQuedaTotalPct: n(r.limiteQuedaTotalPct, HIPOTESES_PADRAO.limiteQuedaTotalPct),
     desequilibrioMaxPct: n(r.desequilibrioMaxPct, HIPOTESES_PADRAO.desequilibrioMaxPct),

@@ -2559,6 +2559,23 @@ export const TIPOS_DE_PONTO_ELETRICO = [
   'DADOS_USB',
   'LIGACAO_DIRETA',
   'INTERRUPTOR',
+  // E1.1 do roadmap elétrico (29/09/2026, kernel 0.69.0) — os EQUIPAMENTOS que
+  // o benchmark do AltoQi mostrou faltando: cada um é um ponto de força com
+  // carga própria, circuito exclusivo quando passa de 10 A (9.5.3.1), e grupo
+  // de demanda MOTOR quando tem motor. Antes viravam "TUE" ou texto livre, e o
+  // quadro de cargas não sabia distinguir o ar-condicionado da máquina de lavar.
+  'AR_CONDICIONADO',
+  'MOTOR_BOMBA',
+  'VENTILADOR_EXAUSTOR',
+  'PORTAO',
+  'CARREGADOR_VE',
+  // A campainha é carga mínima nos "especiais"; a ESPERA é o ponto para
+  // equipamento ainda não definido (sem potência padrão: ninguém a conhece).
+  'CAMPAINHA',
+  'PONTO_ESPERA',
+  // O ponto de ATERRAMENTO não é carga: não entra em circuito nem em demanda —
+  // é o lugar da haste/BEP no desenho, para a E7 (aterramento) e o quantitativo.
+  'ATERRAMENTO',
 ] as const;
 
 export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];

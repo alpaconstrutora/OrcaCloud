@@ -600,7 +600,29 @@ export const ROTULO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   DADOS_USB: 'USB',
   LIGACAO_DIRETA: 'Ligação direta (chuveiro, aquecedor)',
   INTERRUPTOR: 'Interruptor',
+  AR_CONDICIONADO: 'Ar-condicionado (ponto de força)',
+  MOTOR_BOMBA: 'Motor / bomba',
+  VENTILADOR_EXAUSTOR: 'Ventilador / exaustor',
+  PORTAO: 'Portão motorizado',
+  CARREGADOR_VE: 'Carregador de veículo elétrico',
+  CAMPAINHA: 'Campainha',
+  PONTO_ESPERA: 'Ponto de espera (equipamento a definir)',
+  ATERRAMENTO: 'Ponto de aterramento',
 };
+
+/**
+ * Os EQUIPAMENTOS (E1.1): pontos de força com carga própria — no desenho usam
+ * o quadrado com diagonal da ligação direta (caixa, sem tomada) e a sigla diz
+ * qual é. Um lugar só para o canvas, a prancha e a regra 9.5.3.1 lerem igual.
+ */
+export const TIPOS_DE_EQUIPAMENTO_ELETRICO: ReadonlySet<TipoDePontoEletrico> = new Set<TipoDePontoEletrico>([
+  'AR_CONDICIONADO',
+  'MOTOR_BOMBA',
+  'VENTILADOR_EXAUSTOR',
+  'PORTAO',
+  'CARREGADOR_VE',
+  'PONTO_ESPERA',
+]);
 
 /** O texto curto, para caber ao lado do ponto e na lista. */
 export const SIGLA_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
@@ -615,6 +637,14 @@ export const SIGLA_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   DADOS_USB: 'USB',
   LIGACAO_DIRETA: 'LD',
   INTERRUPTOR: 'Int',
+  AR_CONDICIONADO: 'AC',
+  MOTOR_BOMBA: 'Motor',
+  VENTILADOR_EXAUSTOR: 'Vent',
+  PORTAO: 'Portão',
+  CARREGADOR_VE: 'VE',
+  CAMPAINHA: 'Camp',
+  PONTO_ESPERA: 'Espera',
+  ATERRAMENTO: 'Terra',
 };
 
 /**
@@ -641,6 +671,17 @@ export const GRUPO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   // Comando, não ponto de utilização: grupo próprio. Os três grupos do pedido
   // eram de PONTOS; o interruptor é o que os acende.
   INTERRUPTOR: 'Elétrica — interruptores',
+  // E1.1: o QUINTO grupo, dos equipamentos com carga própria — é onde quem
+  // projeta procura o ar-condicionado, e não entre as tomadas.
+  AR_CONDICIONADO: 'Elétrica — equipamentos',
+  MOTOR_BOMBA: 'Elétrica — equipamentos',
+  VENTILADOR_EXAUSTOR: 'Elétrica — equipamentos',
+  PORTAO: 'Elétrica — equipamentos',
+  CARREGADOR_VE: 'Elétrica — equipamentos',
+  PONTO_ESPERA: 'Elétrica — equipamentos',
+  // Campainha e aterramento não são carga de utilização: moram com os especiais.
+  CAMPAINHA: 'Elétrica — especiais e dados',
+  ATERRAMENTO: 'Elétrica — especiais e dados',
 };
 
 /**
@@ -665,6 +706,17 @@ export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> =
   LIGACAO_DIRETA: 2200,
   // Interruptor à altura da mão.
   INTERRUPTOR: 1100,
+  // Equipamentos (E1.1) — pontos de partida usuais, não norma: evaporadora
+  // hi-wall alta; motor/bomba, portão e carregador à altura do equipamento.
+  AR_CONDICIONADO: 2200,
+  MOTOR_BOMBA: 1200,
+  VENTILADOR_EXAUSTOR: 2300,
+  PORTAO: 1200,
+  CARREGADOR_VE: 1200,
+  CAMPAINHA: 2200,
+  PONTO_ESPERA: 300,
+  // A haste/BEP fica no piso.
+  ATERRAMENTO: 0,
 };
 
 /**

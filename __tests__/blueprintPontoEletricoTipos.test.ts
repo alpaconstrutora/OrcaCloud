@@ -75,6 +75,16 @@ describe('taxonomia · os três grupos', () => {
       // comandado por interruptor" — sem ele a conferência da 9.5.2.1.1 não
       // teria o que contar, e a prancha elétrica não fecha.
       'INTERRUPTOR',
+      // E1.1 (29/09/2026, kernel 0.69.0): os EQUIPAMENTOS do benchmark AltoQi,
+      // a campainha, o ponto de espera e o de aterramento.
+      'AR_CONDICIONADO',
+      'MOTOR_BOMBA',
+      'VENTILADOR_EXAUSTOR',
+      'PORTAO',
+      'CARREGADOR_VE',
+      'CAMPAINHA',
+      'PONTO_ESPERA',
+      'ATERRAMENTO',
     ]);
   });
 
@@ -84,6 +94,7 @@ describe('taxonomia · os três grupos', () => {
     // procurar entre as tomadas.
     const grupos = new Set(TIPOS_DE_PONTO_ELETRICO.map((t) => GRUPO_DO_PONTO_ELETRICO[t]));
     expect([...grupos].sort()).toEqual([
+      'Elétrica — equipamentos',
       'Elétrica — especiais e dados',
       'Elétrica — iluminação',
       'Elétrica — interruptores',

@@ -134,6 +134,7 @@ import {
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
 } from '../../utils/blueprintRede';
+import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from '../../utils/blueprintRede';
 import {
   COR_DO_CONTORNO_DA_PECA,
   LARGURA_MINIMA_DO_DETALHE_PX,
@@ -6080,7 +6081,10 @@ export default function BlueprintCanvas({
       // diagonal — a caixa de ligação —, branco por dentro, no tamanho de
       // símbolo (piso de 10 px) como a tomada. Não é o triângulo: desenhar
       // tomada onde a norma proíbe tomada seria a prancha mentindo.
-      const ehLigacaoDireta = t.disciplina === 'ELETRICA' && t.tipoEletrico === 'LIGACAO_DIRETA';
+      // E1.1: os EQUIPAMENTOS (AC, motor, portão, VE, espera) usam a mesma caixa —
+      // a sigla ao lado é que diz qual é.
+      const ehLigacaoDireta =
+        t.disciplina === 'ELETRICA' && (t.tipoEletrico === 'LIGACAO_DIRETA' || (!!t.tipoEletrico && TIPOS_DE_EQUIPAMENTO_ELETRICO.has(t.tipoEletrico)));
       if (ehLigacaoDireta) {
         const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
         const lado = Math.max(emTela(md.larguraMm), 10);

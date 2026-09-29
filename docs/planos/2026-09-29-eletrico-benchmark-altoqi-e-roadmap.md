@@ -1923,7 +1923,7 @@ Fecha o bloco **6** (parcial — o fio completo depende da E2), parte do **2** e
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 1.1 Tipos de ponto que faltam | `TIPOS_DE_PONTO_ELETRICO` ganha `AR_CONDICIONADO`, `MOTOR_BOMBA`, `CAMPAINHA`, `PORTAO`, `CARREGADOR_VE`, `PONTO_ESPERA`, `VENTILADOR_EXAUSTOR`, `ATERRAMENTO`, cada um com cota usual, potência padrão (hipótese nomeada — AC por BTU, VE 7,4 kW), grupo de carga (novo grupo `MOTOR` com fator próprio), uso do circuito (TUE/FORCA), símbolo NBR 5444, entidade IFC (`IfcElectricAppliance`, `IfcElectricMotor`, `IfcAudioVisualAppliance`…) e regra 9.5.3.1 quando > 10 A | goldens com os tipos novos; `blueprintPontoEletricoTipos.test.ts`; menu de inserir mostra os grupos; IFC valida no visualizador |
+| 1.1 Tipos de ponto que faltam ✅ (kernel 0.69.0) | `TIPOS_DE_PONTO_ELETRICO` ganha `AR_CONDICIONADO`, `MOTOR_BOMBA`, `CAMPAINHA`, `PORTAO`, `CARREGADOR_VE`, `PONTO_ESPERA`, `VENTILADOR_EXAUSTOR`, `ATERRAMENTO`, cada um com cota usual, potência padrão (hipótese nomeada — AC por BTU, VE 7,4 kW), grupo de carga (novo grupo `MOTOR` com fator próprio), uso do circuito (TUE/FORCA), símbolo NBR 5444, entidade IFC (`IfcElectricAppliance`, `IfcElectricMotor`, `IfcAudioVisualAppliance`…) e regra 9.5.3.1 quando > 10 A | goldens com os tipos novos; `blueprintPontoEletricoTipos.test.ts`; menu de inserir mostra os grupos; IFC valida no visualizador |
 | 1.2 Componente com carga | `Componente` de CLIMATIZACAO/EXAUSTOR **lança o ponto elétrico** ao ser inserido (molde: louça → ponto hidráulico, 27/09) e o ponto carrega a potência do componente; caixa `CAIXA_PASSAGEM` como terminal com medidas (4×2, 4×4, octogonal) — a tomada/interruptor já é a própria caixa | inserir evaporadora cria `AR_CONDICIONADO` na parede atrás dela; apagar o componente apaga o ponto (invariante); caixa aparece no 2D/3D/IFC/quantitativo |
 | 1.3 Tensão e padrão visíveis no ponto; copiar entre pavimentos | painel do ponto mostra tensão e ligação **derivadas do circuito** e o padrão da tomada (2P+T 10 A / 20 A por potência, hipótese); `DuplicateLevel`/área de transferência aceitam terminal, trecho e quadro (com `circuitoId` remapeado ou zerado — dito na prévia) | teste: duplicar pavimento copia pontos e eletrodutos, circuitos ficam por criar; Ctrl+V de seleção elétrica funciona; goldens |
 
@@ -2265,3 +2265,71 @@ estrutura" ✅, "Elétrica × hidráulica" ✅ — as três com a ressalva remov
 (1 e 4–7 na 0.1, 3 na 0.2, 2 aqui).
 
 **Etapa 0: 4 de 4 fases** ✓. Próxima: **E1 — Modelo de pontos e caixas** (bump de kernel).
+
+### E1.1 — Tipos de ponto que faltam (29/09/2026) · frente `eletrico-e1` · **kernel 0.68.0 → 0.69.0**
+
+**O que mudou**
+
+- `utils/blueprintKernel/model.ts` — `TIPOS_DE_PONTO_ELETRICO` (campo FECHADO, decisão de 09/09
+  mantida) ganhou **oito valores**: `AR_CONDICIONADO`, `MOTOR_BOMBA`, `VENTILADOR_EXAUSTOR`,
+  `PORTAO`, `CARREGADOR_VE`, `PONTO_ESPERA` (o **quinto grupo**, "Elétrica — equipamentos": pontos
+  de força com carga própria), `CAMPAINHA` e `ATERRAMENTO` (em "especiais e dados"; **terra não é
+  carga**: fora de circuito, grupo e demanda). Vocabulário novo, forma igual — **bump 0.69.0**
+  provado pelo ritual dos goldens (7/7 com a string em 0.68.0; depois, só os seis hashes).
+- `utils/blueprintRede.ts` — rótulo, sigla (AC, Motor, Vent, Portão, VE, Camp, Espera, Terra),
+  grupo e cota usual de cada um; `TIPOS_DE_EQUIPAMENTO_ELETRICO` como fonte única para canvas,
+  prancha e regra. Motor foi para o grupo `MOTOR`, VE e espera para `FORCA`, campainha para `TUG`.
+- `utils/blueprintEletricaDimensionamento.ts` — **grupo de demanda `MOTOR`** (AC, motor/bomba,
+  ventilador/exaustor, portão): `GrupoDeCarga`, `FatoresDeDemanda.MOTOR`, `porGrupoVA.MOTOR`,
+  instalada e demandada somam o grupo; `TIPOS_DE_USO_ESPECIFICO` (TUE, ligação direta e os
+  equipamentos → circuito de uso específico) e `TIPOS_SEM_CARGA` (interruptor, aterramento) como
+  fonte única para `usoDoCircuito`, a **9.5.3.1** (`Nbr`) e `funcaoDoPonto` (planejador: um
+  circuito por equipamento; campainha anda com as TUG; terra fica fora do plano).
+- Demanda `MOTOR` chega à tela (`PainelPreDimensionamento`, quarto fator), à coluna gravada
+  (`hipotesesDaColuna` lê 1,00 quando ausente — coluna antiga não muda de conta), ao painel do
+  quadro, ao memorial e à prancha (só quando há carga no grupo).
+- `utils/blueprintPotenciaPadrao.ts` — **`POTENCIA_TIPICA_DO_EQUIPAMENTO_VA` é HIPÓTESE, não
+  norma** (split 9.000 BTU ≈ 1.400 VA; bomba 1/2 cv ≈ 750; ventilador 150; portão 500; carregador
+  7.400; campainha 20), dita no código e editável no painel; **espera e terra ficam sem número**
+  (ninguém conhece o equipamento; terra não é carga). Com 1.400 VA em 127 V o AC dá 11 A e a
+  9.5.3.1 já o quer sozinho no circuito — provado no teste.
+- Desenho: os equipamentos usam a **caixa com diagonal** da ligação direta no canvas e na prancha
+  (a sigla ao lado diz qual é — "AC · C3"); `ATERRAMENTO` tem o símbolo de terra (haste e três
+  traços, IEC 60417-5017) na prancha; legenda ganhou EQUIPAMENTO, CAMP e TERRA. Menu de inserir:
+  o grupo novo aparece por derivação (ícone `Fan`).
+- `utils/blueprintIfc.ts` — o que está na parede é o PONTO de ligação, não o equipamento: AC e VE
+  → `IfcOutlet` (`.POWEROUTLET.` / `.USERDEFINED.`); motor, ventilador, portão → `IfcJunctionBox
+  .POWER.`; campainha → `IfcAudioVisualAppliance .USERDEFINED.`; espera e terra → `IfcJunctionBox
+  .USERDEFINED.`, sempre com o `ObjectType` dizendo o tipo do kernel.
+- **`planta-api` redeployada** (bundle 0.69.0): `GET /v1/estudos` sem token **401**, token falso **401**.
+- `docs/planos/2026-09-09-taxonomia-do-ponto-eletrico.md` ganhou a nota de atualização.
+- **Não entrou (declarado)**: Componente com carga (a evaporadora lançando o ponto) e a CAIXA como
+  terminal → **E1.2**; tensão/padrão visíveis no painel e cópia entre pavimentos → **E1.3**;
+  símbolo NBR 5444 próprio por equipamento (círculo com M do motor etc.) — a caixa + sigla é
+  legível na prancha e fica; símbolo por tipo entra com a biblioteca (backlog A).
+
+**Testes** — novo `__tests__/blueprintEquipamentosEletricos.test.ts` (7): kernel 0.69.0 e as quatro
+tabelas completas para todo tipo; a invariante aceita os oito num terminal ELÉTRICO; grupo de carga
+por tipo (MOTOR / FORCA / TUG / nenhum); uso específico + `funcaoDoPonto` + terra fora; **AC 1.400 +
+TUG 600 com MOTOR 0,5 → demandada 1.300 VA**, e a 9.5.3.1 acusa o AC (11,0 A) quando divide o
+circuito; potência típica (AC 1.400, VE 7.400, campainha 20; espera e terra `null`); IFC com a
+entidade e o `PredefinedType` de cada um (via `gerarIfc`). `blueprintPontoEletricoTipos.test.ts`
+atualizado (lista de 19 tipos, 5 grupos). Pinos: `porGrupoVA` no teste do quadro ganhou `MOTOR: 0`;
+`demanda` em dois testes ganhou `MOTOR: 1`; **12 pinos de `KERNEL_VERSION`** 0.68.0 → 0.69.0.
+
+**O que os testes pegaram antes de publicar**: o nome da função de exportação é `gerarIfc(model,
+opções)` e não `exportarIfc` (chute meu, o teste caiu na hora); o teste antigo do quadro comparava
+`porGrupoVA` inteiro e precisou do grupo novo; e a suíte inteira acusou os 12 pinos de versão que o
+`grep` não tinha procurado — outra vez a suíte inteira como portão.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova + hashes) · alvo 151 ✓ · suíte inteira **6.185 ✓ / 0 ✗ / 33 skip** (564 arquivos, depois dos 12 pinos) · `build` ✓ · `check-ui-standard` nos 4 `.tsx` ✓ · `check-xss-sinks` ✓ ·
+`planta-api` 401/401. **Harness visual não rodou** e o glifo de terra (o único traçado novo, só na
+prancha) **não tem teste de traçado próprio** — os equipamentos reutilizam a caixa da ligação
+direta, que tem. Fica dito.
+
+**Efeito no benchmark**: §2 "Condicionadores de ar" 🟡→✅ (ponto com carga e circuito), "Bombas"
+🟡→✅, "Motores" ❌→✅, "Portões motorizados" ❌→✅, "Ventiladores" ❌→✅, "Exaustores" 🟡→✅,
+"Campainhas" ❌→✅, "Carregadores para veículos elétricos" ❌→✅, "Pontos de espera" ❌→✅, "Pontos
+de aterramento" ❌→✅ (ponto no desenho; dimensionamento do PE é E2.3), "Pontos para equipamentos"
+🟡→✅; §10 "Demanda por tipo de carga" 🟡 (agora 4 grupos, ainda sem tabela escalonada — E4.2);
+§30 "Pontos de aterramento" ❌→✅.

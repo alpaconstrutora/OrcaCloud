@@ -183,11 +183,31 @@ export const ROTULO_DO_USO: Record<UsoDoCircuito, string> = {
  * interruptores) é iluminação. Misturado, vale o maior mínimo — é o que
  * "1,5 mm² quando em circuito exclusivo" quer dizer. Sem pontos, `null`.
  */
+/**
+ * Os tipos que pedem circuito de USO ESPECÍFICO (E1.1): TUE, ligação direta e
+ * os equipamentos — cada um é UMA carga conhecida, e a prática (e a 9.5.3.1
+ * acima de 10 A) os quer em circuito próprio. Um lugar só para o uso, a regra
+ * 9.5.3.1 e o planejador de circuitos.
+ */
+export const TIPOS_DE_USO_ESPECIFICO: ReadonlySet<string> = new Set([
+  'TUE',
+  'LIGACAO_DIRETA',
+  'AR_CONDICIONADO',
+  'MOTOR_BOMBA',
+  'VENTILADOR_EXAUSTOR',
+  'PORTAO',
+  'CARREGADOR_VE',
+  'PONTO_ESPERA',
+]);
+
+/** Tipos que NÃO são carga: comando e aterramento ficam fora de uso, grupo e demanda. */
+export const TIPOS_SEM_CARGA: ReadonlySet<string> = new Set(['INTERRUPTOR', 'ATERRAMENTO']);
+
 export function usoDoCircuito(pontos: readonly Pick<Terminal, 'tipoEletrico'>[]): UsoDoCircuito | null {
   if (pontos.length === 0) return null;
-  if (pontos.some((p) => p.tipoEletrico === 'TUE' || p.tipoEletrico === 'LIGACAO_DIRETA')) return 'TUE';
+  if (pontos.some((p) => p.tipoEletrico && TIPOS_DE_USO_ESPECIFICO.has(p.tipoEletrico))) return 'TUE';
   const ehForca = pontos.some(
-    (p) => p.tipoEletrico && !p.tipoEletrico.startsWith('ILUMINACAO') && p.tipoEletrico !== 'INTERRUPTOR',
+    (p) => p.tipoEletrico && !p.tipoEletrico.startsWith('ILUMINACAO') && !TIPOS_SEM_CARGA.has(p.tipoEletrico),
   );
   return ehForca ? 'FORCA' : 'ILUMINACAO';
 }
@@ -268,7 +288,7 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   limiteQuedaTerminalPct: 4,
   catalogoDeDisjuntoresA: SERIE_COMERCIAL_DE_DISJUNTORES_A,
   secaoMinimaTueMm2: 4,
-  demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 },
+  demanda: { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1, MOTOR: 1 },
   limiteQuedaTotalPct: 5,
   desequilibrioMaxPct: 10,
   diametroExternoCondutorMm: DIAMETRO_EXTERNO_CONDUTOR_MM,
@@ -673,14 +693,27 @@ export function preDimensionarQuadro(
 // hipótese NOMEADA (`demanda.nome`), padrão 1,00 em todos os grupos (sem
 // demanda), nunca como verdade do software.
 
-/** Os grupos de carga que a demanda distingue. */
-export type GrupoDeCarga = 'ILUMINACAO' | 'TUG' | 'FORCA';
+/**
+ * Os grupos de carga que a demanda distingue. MOTOR entrou na E1.1 (29/09/2026):
+ * as tabelas de demanda das concessionárias tratam motores e ar-condicionado
+ * à parte de tomadas e aquecimento, e sem o grupo o fator não teria onde cair.
+ */
+export type GrupoDeCarga = 'ILUMINACAO' | 'TUG' | 'FORCA' | 'MOTOR';
+export const GRUPOS_DE_CARGA: readonly GrupoDeCarga[] = ['ILUMINACAO', 'TUG', 'FORCA', 'MOTOR'];
 
-/** O grupo de um ponto pelo tipo: luz → iluminação; TUG e dados → TUG; TUE e ligação direta → força. */
+/** Os tipos com MOTOR: ar-condicionado (compressor), bomba, ventilador/exaustor, portão. */
+const TIPOS_COM_MOTOR: ReadonlySet<string> = new Set(['AR_CONDICIONADO', 'MOTOR_BOMBA', 'VENTILADOR_EXAUSTOR', 'PORTAO']);
+
+/**
+ * O grupo de um ponto pelo tipo: luz → iluminação; motores → MOTOR; TUE,
+ * ligação direta, carregador e espera → força; TUG, dados e campainha → TUG;
+ * interruptor e aterramento → nenhum (não são carga).
+ */
 export function grupoDeCarga(tipoEletrico: Terminal['tipoEletrico']): GrupoDeCarga | null {
-  if (!tipoEletrico || tipoEletrico === 'INTERRUPTOR') return null;
+  if (!tipoEletrico || TIPOS_SEM_CARGA.has(tipoEletrico)) return null;
   if (tipoEletrico.startsWith('ILUMINACAO')) return 'ILUMINACAO';
-  if (tipoEletrico === 'TUE' || tipoEletrico === 'LIGACAO_DIRETA') return 'FORCA';
+  if (TIPOS_COM_MOTOR.has(tipoEletrico)) return 'MOTOR';
+  if (tipoEletrico === 'TUE' || tipoEletrico === 'LIGACAO_DIRETA' || tipoEletrico === 'CARREGADOR_VE' || tipoEletrico === 'PONTO_ESPERA') return 'FORCA';
   return 'TUG';
 }
 
@@ -690,9 +723,11 @@ export interface FatoresDeDemanda {
   ILUMINACAO: number;
   TUG: number;
   FORCA: number;
+  /** Motores e ar-condicionado (E1.1). Coluna gravada antes dele lê 1,00. */
+  MOTOR: number;
 }
 
-export const DEMANDA_SEM_FATOR: FatoresDeDemanda = { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1 };
+export const DEMANDA_SEM_FATOR: FatoresDeDemanda = { nome: 'sem demanda (1,00)', ILUMINACAO: 1, TUG: 1, FORCA: 1, MOTOR: 1 };
 
 export interface CargaPorFase {
   R: number;
@@ -760,7 +795,7 @@ export function preDimensionarQuadroCompleto(
   const naoAvaliado: string[] = [];
 
   // Carga por grupo.
-  const porGrupoVA: Record<GrupoDeCarga, number> = { ILUMINACAO: 0, TUG: 0, FORCA: 0 };
+  const porGrupoVA: Record<GrupoDeCarga, number> = { ILUMINACAO: 0, TUG: 0, FORCA: 0, MOTOR: 0 };
   let semPotencia = 0;
   for (const t of model.terminais ?? []) {
     if (t.disciplina !== 'ELETRICA' || !t.circuitoId) continue;
@@ -774,9 +809,13 @@ export function preDimensionarQuadroCompleto(
     porGrupoVA[g] += t.potenciaW;
   }
   if (semPotencia > 0) naoAvaliado.push(`${semPotencia} ponto(s) sem potência fora da soma do quadro`);
-  const sInstaladaVA = porGrupoVA.ILUMINACAO + porGrupoVA.TUG + porGrupoVA.FORCA;
+  const sInstaladaVA = porGrupoVA.ILUMINACAO + porGrupoVA.TUG + porGrupoVA.FORCA + porGrupoVA.MOTOR;
   const demanda = hip.demanda;
-  const sDemandadaVA = porGrupoVA.ILUMINACAO * demanda.ILUMINACAO + porGrupoVA.TUG * demanda.TUG + porGrupoVA.FORCA * demanda.FORCA;
+  const sDemandadaVA =
+    porGrupoVA.ILUMINACAO * demanda.ILUMINACAO +
+    porGrupoVA.TUG * demanda.TUG +
+    porGrupoVA.FORCA * demanda.FORCA +
+    porGrupoVA.MOTOR * (demanda.MOTOR ?? 1);
 
   const { ligacao, deduzida } = ligacaoDoQuadro(quadro, circuitosDoQuadro);
   const tensaoV = tensaoDoQuadro(quadro, circuitosDoQuadro);

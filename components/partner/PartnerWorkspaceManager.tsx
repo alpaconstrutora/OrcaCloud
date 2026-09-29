@@ -39,6 +39,7 @@ import { organizationService } from '../../services/organizationService';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
 import { KpiCard } from '../ui/KpiCard';
 import { contractService } from '../../services/contractService';
 import ContractRetentionReleaseModal from '../ContractRetentionReleaseModal';
@@ -245,8 +246,20 @@ const CATEGORIA_LABELS: Record<string, string> = {
 };
 const CATEGORIA_ORDER = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
 
+// "AbortError: signal is aborted without reason" é o timeout de 20 s de
+// lib/supabase.ts estourando — quer dizer "nada respondeu a tempo", não "a
+// operação falhou". Em 29/09/2026 o primeiro clique em "Gerar link" morreu
+// assim e a segunda tentativa funcionou; a RPC em si roda em < 1 s. O
+// supabase-js entrega esse caso como objeto { message: 'AbortError: ...',
+// code: '' }, não como Error com name — por isso o teste é pela mensagem.
+const isRequestTimeout = (err: unknown): boolean => {
+  const e = err as { name?: string; message?: string } | null;
+  return !!e && (e.name === 'AbortError' || /abort|failed to fetch|networkerror/i.test(String(e.message ?? '')));
+};
+
 export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = ({ organizationId, currentUserEmail }) => {
   const confirm = useConfirm();
+  const { showToast } = useToast();
   const [workspaces, setWorkspaces] = useState<PartnerWorkspace[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<PartnerWorkspace | null>(null);
 
@@ -739,7 +752,21 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       setPortalToken(tok);
     } catch (err) {
       console.error('Erro ao gerar link do portal:', err);
-      alert('Erro ao gerar o link de acesso.');
+      if (isRequestTimeout(err)) {
+        // O navegador desistiu, mas o upsert pode ter completado no servidor.
+        // Antes de acusar erro, reconsulta: token diferente do que havia = gerou.
+        const anterior = portalToken?.token ?? null;
+        const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id).catch(() => null);
+        if (tok && tok.token !== anterior) {
+          setPortalToken(tok);
+          showToast('O servidor demorou a responder, mas o link foi gerado.', 'success');
+        } else {
+          showToast('O servidor não respondeu em 20 segundos. Tente gerar o link novamente.', 'error');
+        }
+      } else {
+        const msg = (err as { message?: string } | null)?.message;
+        showToast(msg ? `Erro ao gerar o link de acesso: ${msg}` : 'Erro ao gerar o link de acesso.', 'error');
+      }
     } finally {
       setTokenLoading(false);
     }
@@ -770,7 +797,19 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       setPortalToken(null);
     } catch (err) {
       console.error('Erro ao revogar link:', err);
-      alert('Erro ao revogar o link.');
+      if (isRequestTimeout(err)) {
+        // Mesmo caso do gerar: o navegador desistiu, o servidor pode ter revogado.
+        const tok = await partnerPortalTokenService.getTokenForWorkspace(selectedWorkspace.id).catch(() => portalToken);
+        if (!tok) {
+          setPortalToken(null);
+          showToast('O servidor demorou a responder, mas o link foi revogado.', 'success');
+        } else {
+          showToast('O servidor não respondeu em 20 segundos. Tente revogar o link novamente.', 'error');
+        }
+      } else {
+        const msg = (err as { message?: string } | null)?.message;
+        showToast(msg ? `Erro ao revogar o link: ${msg}` : 'Erro ao revogar o link.', 'error');
+      }
     } finally {
       setTokenLoading(false);
     }

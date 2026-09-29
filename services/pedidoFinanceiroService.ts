@@ -24,6 +24,7 @@ type FinanceiroRow = {
     parcelas?: {
         id: string; numero: number; total_parcelas: number; due_date: string | null;
         amount: number | string; payment_date?: string | null; effective_status: string;
+        recibo_numero?: number | null;
     }[] | null;
 };
 
@@ -47,6 +48,7 @@ export const mapFinanceiroRow = (raw: unknown): PedidoFinanceiro => {
             amount: Number(p.amount),
             paymentDate: p.payment_date ?? undefined,
             status: p.effective_status as ParcelaStatus,
+            reciboNumero: p.recibo_numero != null ? Number(p.recibo_numero) : undefined,
         })),
     };
 };

@@ -39,6 +39,17 @@ describe('mapFinanceiroRow', () => {
         expect(f.parcelas[0]).toEqual({ id: 'a', numero: 1, totalParcelas: 8, dueDate: '2026-04-11', amount: 561.25, paymentDate: undefined, status: 'VENCIDO' });
     });
 
+    it('recibo de pagamento: número quando emitido, ausente quando não (aplicar_20270928000120)', () => {
+        const f = mapFinanceiroRow({
+            parcelas: [
+                { id: 'a', numero: 1, total_parcelas: 2, due_date: '2026-04-11', amount: 10, effective_status: 'PAGO', recibo_numero: 7 },
+                { id: 'b', numero: 2, total_parcelas: 2, due_date: '2026-05-11', amount: 10, effective_status: 'PREVISTO', recibo_numero: null },
+            ],
+        });
+        expect(f.parcelas[0].reciboNumero).toBe(7);
+        expect(f.parcelas[1].reciboNumero).toBeUndefined();
+    });
+
     it('aguenta null/ausente (pedido sem financeiro)', () => {
         expect(mapFinanceiroRow(null).parcelas).toEqual([]);
         expect(mapFinanceiroRow({}).condicoes.paymentTermType).toBeUndefined();

@@ -36,6 +36,8 @@ import { extractTokenFromFileName } from '../../utils/dmsUtils';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
+import { reciboPagamentoPortalService, rotuloRecibo } from '../../services/reciboPagamentoPortalService';
+import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -184,11 +186,31 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Financeiro (parcelas, medições com NF, retenção) — agregado de todos os contratos do fornecedor
   const [financials, setFinancials] = useState<{
     contracts: { id: string; number: string; title: string | null; current_value: number; retention_rate: number | null; status: string }[];
-    installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string }[];
+    installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string; recibo_numero?: number | null }[];
     measurements: { id: string; contract_id: string; number: number; period_start: string | null; period_end: string | null; status: string; total_value: number; retention_value: number; net_value: number; invoice_url: string | null }[];
     retention: { retained: number; released: number; balance: number };
   }>({ contracts: [], installments: [], measurements: [], retention: { retained: 0, released: 0, balance: 0 } });
   const [financialsLoading, setFinancialsLoading] = useState(false);
+  // Recibo de pagamento (o parceiro assina) — PDF guardado pela construtora.
+  // Link público autoriza pelo token; no app, pelo workspace (Edge Function
+  // partner-portal-recibo-download chama a MESMA RPC desta tela).
+  const [baixandoRecibo, setBaixandoRecibo] = useState<string | null>(null);
+  const [erroRecibo, setErroRecibo] = useState<string | null>(null);
+  const baixarRecibo = async (transactionId: string) => {
+    setBaixandoRecibo(transactionId);
+    setErroRecibo(null);
+    try {
+      await reciboPagamentoPortalService.baixarDoParceiro({
+        token: isTokenMode ? portalToken : undefined,
+        workspaceId: isTokenMode ? undefined : workspace?.id,
+        transactionId,
+      });
+    } catch (e) {
+      setErroRecibo((e as Error).message || 'Não foi possível baixar o recibo.');
+    } finally {
+      setBaixandoRecibo(null);
+    }
+  };
   const [uploadingInvoiceFor, setUploadingInvoiceFor] = useState<string | null>(null);
   const [invoiceUploadError, setInvoiceUploadError] = useState<string | null>(null);
 
@@ -1847,22 +1869,37 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   {/* Parcelas / contas a pagar */}
                   <div>
                     <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Parcelas</h4>
+                    {erroRecibo && <p className="text-xs text-red-600 mb-2">{erroRecibo}</p>}
                     <div className="flex flex-col gap-2">
-                      {financials.installments.map((t) => (
+                      {financials.installments.map((t) => {
+                        const situacao = situacaoDaParcela(t);
+                        return (
                         <div key={t.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-gray-900 truncate">{t.description || 'Parcela do contrato'}</p>
                             <p className="text-[10px] text-gray-400">Vencimento: {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString() : '-'}</p>
                           </div>
                           <div className="flex items-center gap-3 shrink-0">
+                            {situacao === 'PAGA' && t.recibo_numero != null && (
+                              <button
+                                type="button"
+                                onClick={() => baixarRecibo(t.id)}
+                                disabled={baixandoRecibo === t.id}
+                                title="Baixar o recibo deste pagamento"
+                                className="text-[10px] text-orange-500 hover:text-orange-600 font-semibold disabled:opacity-50"
+                              >
+                                {baixandoRecibo === t.id ? 'Baixando…' : `Recibo ${rotuloRecibo(t.recibo_numero)}`}
+                              </button>
+                            )}
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
-                              ${t.business_status === 'PAGO' || t.status !== 'PENDING' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {t.business_status === 'PAGO' || t.status !== 'PENDING' ? 'Pago' : 'Pendente'}
+                              ${situacao === 'PAGA' ? 'bg-green-100 text-green-700' : situacao === 'CANCELADA' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'}`}>
+                              {situacao === 'PAGA' ? 'Pago' : situacao === 'CANCELADA' ? 'Cancelado' : 'Pendente'}
                             </span>
                             <span className="text-xs font-black text-gray-900">R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                       {financials.installments.length === 0 && (
                         <div className="text-center py-8 text-xs text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma parcela encontrada.</div>
                       )}

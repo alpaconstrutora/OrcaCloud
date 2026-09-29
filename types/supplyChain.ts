@@ -58,6 +58,9 @@ export interface ParcelaDoPedido {
     amount: number;
     paymentDate?: string;
     status: ParcelaStatus;
+    /** Nº do recibo de pagamento ATIVO (o credor assina), se já emitido.
+     *  aplicar_20270928000120. */
+    reciboNumero?: number;
 }
 
 /**

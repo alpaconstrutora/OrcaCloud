@@ -757,7 +757,7 @@ export const partnerService = {
   // sobre as tabelas — e duas implementações do mesmo dado divergem.
   async listFinancials(workspaceId: string, contractId?: string): Promise<{
     contracts: { id: string; number: string; title: string | null; current_value: number; retention_rate: number | null; status: string }[];
-    installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string }[];
+    installments: { id: string; transaction_date: string; amount: number; direction: string; description: string | null; status: string; business_status: string | null; installment_type: string | null; source_system: string; recibo_numero?: number | null }[];
     measurements: { id: string; contract_id: string; number: number; period_start: string | null; period_end: string | null; status: string; total_value: number; retention_value: number; net_value: number; invoice_url: string | null }[];
     retention: { retained: number; released: number; balance: number };
   }> {

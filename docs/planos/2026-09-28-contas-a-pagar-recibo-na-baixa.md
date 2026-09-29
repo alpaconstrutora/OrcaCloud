@@ -199,7 +199,7 @@ O caminho é o mesmo: autorizar pela **mesma RPC do portal** com a credencial de
 - [x] 7. `ContasPagarParcelas`: "Pago" abre o painel, lote "Dar baixa", coluna Recibo antes de Status, ícone de recibo nas pagas, o estorno limpa. Coberto por `__tests__/components/ContasPagarRecibo.test.tsx` (5 testes); deep-link e paginação (8) seguem verdes; `check-ui-standard.sh` limpo.
 - [x] `npm run ci` completo na frente (518 arquivos / 5.882 testes); após rebase, 5.897 testes verdes
 - [x] Publicação — push `7f6bf64b..1d16990f`; `conferir-producao.sh` provou o domínio em `1d16990` com "Confirmar pagamento" no bundle
-- [ ] Usuário confere um recibo real
+- [x] Usuário confere um recibo real — 28/09/2026: *"1,2 e 3 estao ok"* (baixa com recibo nº 000001, PDF com a empresa no cabeçalho e o credor na assinatura, reimpressão idêntica)
 
 ### Correção pedida depois da Fase 1 (28/09/2026)
 
@@ -213,7 +213,22 @@ O caminho é o mesmo: autorizar pela **mesma RPC do portal** com a credencial de
   - título a receber em aberto com `business_status` NULL: antes emitia recibo, depois é recusado;
   - estorno deixando NULL: antes não cancelava, depois cancela.
   - ACL igual, sem mojibake, e 5 recibos antes e depois.
-- [ ] 2. Portal do Parceiro: parcela CANCELLED aparecendo como "Pago" → entra na Fase 2 (item 10).
+- [x] 2. Portal do Parceiro: parcela CANCELLED aparecendo como "Pago" — corrigido na Fase 2 (ver item 10).
 
 ### Fase 2
-- [ ] 8 · [ ] 9 · [ ] 10 (só depois da conferência da Fase 1)
+- [x] 8. `aplicar_20270928000120_portais_recibo_pagamento.sql` (aplicada): os dois núcleos, reescritos dos arquivos (conferido que são as versões vivas), com `recibo_numero` via LEFT JOIN no recibo PAGAMENTO ativo. ACL igual, sem mojibake. `partner_ws_financials` do workspace do credor do recibo real devolve `recibo_numero = 1` na parcela paga.
+- [x] 9. Edge Functions `supplier-portal-recibo-download` e `partner-portal-recibo-download`, publicadas com o deploy padrão da função de cliente. Sondas da Pergunta 3:
+  - sem header: 401 (as duas);
+  - chave anon com token falso: 403 "Link inválido ou expirado" (as duas);
+  - chave anon com o workspace real, sem sessão: 403 "Entre no portal…";
+  - chave anon com um pedido, sem sessão: 403.
+  - O caminho do dono (token real do credor) é uma credencial e fica para a conferência do usuário no portal.
+- [x] 10. Telas:
+  - `PortalFinanceiro` (link público, com o elemento novo `TextLinkButton` no `PortalKit`, §24);
+  - `SupplierFinanceiroTab` (app, coluna Recibo no `StandardTable`);
+  - aba Financeiro do detalhe do pedido (`SupplyChainOrderDetails`);
+  - `PartnerPortal` (link "Recibo Nº X" ao lado do status).
+  - Serviço `reciboPagamentoPortalService` (+ `rotuloRecibo`, sem puxar o jsPDF para o portal).
+  - **Status do parceiro:** `utils/situacaoParcelaParceiro.ts` passa a ser o predicado único de `PartnerPortal` e `PartnerWorkspaceManager`; cancelada vira "Cancelado" e deixa de somar no "pago" do gestor. Status reais das parcelas de contrato em 28/09/2026: só PENDING, CONCILIATED e CANCELLED; a regra nova só muda as 5 canceladas.
+  - Testes: `situacaoParcelaParceiro.test.ts`, `pedidoFinanceiroService.test.ts` (recibo_numero) e `PortalFinanceiro.test.tsx` (2 novos).
+- [ ] `npm run ci` + publicação + conferência do usuário nos dois portais

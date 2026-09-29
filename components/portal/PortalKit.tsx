@@ -215,6 +215,18 @@ export const GhostButton: React.FC<BtnProps> = ({ children, className = '', ...r
     </button>
 );
 
+/** Ação em texto dentro de uma linha de tabela (ex.: "Recibo Nº 000001"). Não
+ *  aumenta a altura da linha como os botões h-9; cor do acento do portal. */
+export const TextLinkButton: React.FC<BtnProps> = ({ children, className = '', ...rest }) => (
+    <button
+        type="button"
+        {...rest}
+        className={`inline-flex items-center gap-1.5 text-[13px] font-medium text-[#C24428] hover:text-[#E1553C] transition-colors disabled:opacity-50 disabled:cursor-wait ${className}`}
+    >
+        {children}
+    </button>
+);
+
 // ── Tabela ────────────────────────────────────────────────────────────────────
 /** Cabeçalho em caixa alta — §24 (exceção ao §6.2). */
 export const Th: React.FC<{ className?: string; children?: React.ReactNode }> = ({ className = '', children }) => (

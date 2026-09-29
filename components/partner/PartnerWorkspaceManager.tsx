@@ -31,6 +31,7 @@ import Button from '../ui/Button';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
+import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
 import { partnerPortalTokenService, PartnerPortalToken } from '../../services/partnerPortalTokenService';
 import { supplierService, getSupplierDisplayName } from '../../services/supplierService';
 import { appSettingsService } from '../../services/appSettingsService';
@@ -591,11 +592,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
    * de `vw_payables`, e inventar um segundo critério aqui faria a mesma parcela
    * aparecer "Pendente" de um lado e "Paga" do outro.
    */
-  const parcelaQuitada = (t: WsFinancials['installments'][number]) =>
-    t.business_status === 'PAGO' || t.status !== 'PENDING';
+  const parcelaQuitada = (t: WsFinancials['installments'][number]) => situacaoDaParcela(t) === 'PAGA';
+  const parcelaCancelada = (t: WsFinancials['installments'][number]) => situacaoDaParcela(t) === 'CANCELADA';
 
   const financeiroKpis = useMemo(() => {
-    const emAberto = financials.installments.filter((t) => !parcelaQuitada(t));
+    // Cancelada não é aberta nem paga (até 28/09/2026 caía em "pago").
+    const emAberto = financials.installments.filter((t) => situacaoDaParcela(t) === 'ABERTA');
     const quitadas = financials.installments.filter(parcelaQuitada);
     const aguardando = financials.measurements.filter((m) => m.status === 'Em Análise');
     // Soma dos LEDGERS, não do `retention` agregado do payload (ver comentário
@@ -648,7 +650,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         case 'vencimento': return t.transaction_date ?? '';
         case 'descricao': return (t.description ?? '').toLowerCase();
         case 'origem': return payableOrigemLabel(t.source_system).toLowerCase();
-        case 'status': return parcelaQuitada(t) ? 'PAGO' : (t.business_status ?? 'PREVISTO');
+        case 'status': return parcelaQuitada(t) ? 'PAGO' : parcelaCancelada(t) ? 'CANCELADO' : (t.business_status ?? 'PREVISTO');
         case 'valor': return Number(t.amount ?? 0);
         default: return '';
       }
@@ -1805,6 +1807,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           <tbody className="divide-y divide-gray-200">
                             {parcelasOrdenadas.map((t) => {
                               const quitada = parcelaQuitada(t);
+                              const cancelada = parcelaCancelada(t);
                               return (
                                 <tr key={t.id} className="hover:bg-blue-50/50 transition-colors">
                                   {installmentColumns.visibleColumns.includes('vencimento') && (
@@ -1820,8 +1823,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                                   )}
                                   {installmentColumns.visibleColumns.includes('status') && (
                                     <td className="px-6 py-2.5 border-r border-gray-100">
-                                      <span className={`text-sm font-normal ${quitada ? 'text-emerald-700' : 'text-amber-700'}`}>
-                                        {quitada ? 'Pago' : (PAYABLE_STATUS_PT[t.business_status ?? ''] ?? 'Previsto')}
+                                      <span className={`text-sm font-normal ${quitada ? 'text-emerald-700' : cancelada ? 'text-gray-500' : 'text-amber-700'}`}>
+                                        {quitada ? 'Pago' : cancelada ? 'Cancelado' : (PAYABLE_STATUS_PT[t.business_status ?? ''] ?? 'Previsto')}
                                       </span>
                                     </td>
                                   )}

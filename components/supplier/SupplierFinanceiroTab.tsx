@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CalendarClock, CheckCircle2, HandCoins, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, Download, HandCoins, Loader2, Wallet } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../../types';
 import { useFinanceiroDoFornecedor } from '../../hooks/useFinanceiroDoFornecedor';
 import { descreverCondicoes, linhasDaAbaFinanceiro, LinhaFinanceiro, STATUS_EM_ABERTO } from '../../services/pedidoFinanceiroService';
@@ -8,6 +8,7 @@ import { KpiCard } from '../ui/KpiCard';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { formatCurrency } from '../../utils/financialMath';
 import { fmtDate, parseDate } from '../portal/PortalKit';
+import { reciboPagamentoPortalService, rotuloRecibo } from '../../services/reciboPagamentoPortalService';
 
 interface Props {
     supplier: Supplier;
@@ -21,6 +22,8 @@ const COLUMNS: StandardTableColumn[] = [
     { key: 'parcela',    label: 'Parcela',    sortable: true, width: 100, align: 'center' },
     { key: 'vencimento', label: 'Vencimento', sortable: true, width: 200 },
     { key: 'valor',      label: 'Valor',      sortable: true, width: 140, align: 'right' },
+    // Recibo de pagamento que o credor assina (Contas a Pagar, 28/09/2026).
+    { key: 'recibo',     label: 'Recibo',     sortable: true, width: 130 },
     { key: 'status',     label: 'Status',     sortable: true, width: 130 },
 ];
 
@@ -45,6 +48,20 @@ type FiltroStatus = 'TODAS' | 'ABERTAS' | 'VENCIDAS' | 'PAGAS';
 const SupplierFinanceiroTab: React.FC<Props> = ({ orders, onOpenOrder }) => {
     const { pedidos, resumo, loading, error } = useFinanceiroDoFornecedor({ orders });
     const [filtro, setFiltro] = React.useState<FiltroStatus>('TODAS');
+    const [baixandoRecibo, setBaixandoRecibo] = React.useState<string | null>(null);
+    const [erroRecibo, setErroRecibo] = React.useState<string | null>(null);
+    const baixarRecibo = async (orderId: string, transactionId: string) => {
+        setBaixandoRecibo(transactionId);
+        setErroRecibo(null);
+        try {
+            // Logado: autoriza pelo pedido (fornecedor dono ou comprador).
+            await reciboPagamentoPortalService.baixarDoFornecedor({ orderId, transactionId });
+        } catch (e) {
+            setErroRecibo((e as Error).message || 'Não foi possível baixar o recibo.');
+        } finally {
+            setBaixandoRecibo(null);
+        }
+    };
 
     const linhas = React.useMemo(() => linhasDaAbaFinanceiro(pedidos), [pedidos]);
     const visiveis = linhas.filter(l => {
@@ -65,10 +82,10 @@ const SupplierFinanceiroTab: React.FC<Props> = ({ orders, onOpenOrder }) => {
 
     return (
         <div className="space-y-3">
-            {error && (
+            {(error || erroRecibo) && (
                 <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-[10px] px-4 py-3 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    {error}
+                    {error || erroRecibo}
                 </div>
             )}
 
@@ -112,6 +129,7 @@ const SupplierFinanceiroTab: React.FC<Props> = ({ orders, onOpenOrder }) => {
                         case 'vencimento': return l.parcela?.dueDate ?? '9999';
                         case 'valor': return l.parcela ? l.parcela.amount : l.pedido.total;
                         case 'status': return l.parcela ? PAYABLE_STATUS[l.parcela.status].label : SEM_PARCELAS.label;
+                        case 'recibo': return l.parcela?.reciboNumero ?? -1;
                         default: return '';
                     }
                 }}
@@ -143,6 +161,24 @@ const SupplierFinanceiroTab: React.FC<Props> = ({ orders, onOpenOrder }) => {
                                 <span className="text-sm font-medium text-gray-800 tabular-nums">
                                     {formatCurrency(parcela ? parcela.amount : pedido.total)}
                                 </span>
+                            );
+                        case 'recibo':
+                            if (parcela?.status !== 'PAGO' || parcela.reciboNumero == null) {
+                                return <span className="text-sm font-normal text-gray-400">—</span>;
+                            }
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={() => baixarRecibo(pedido.orderId, parcela.id)}
+                                    disabled={baixandoRecibo === parcela.id}
+                                    title="Baixar o recibo deste pagamento"
+                                    className="flex items-center gap-1.5 text-sm font-normal text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                                >
+                                    {baixandoRecibo === parcela.id
+                                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        : <Download className="w-3.5 h-3.5" />}
+                                    {rotuloRecibo(parcela.reciboNumero)}
+                                </button>
                             );
                         case 'status': {
                             if (!parcela) {

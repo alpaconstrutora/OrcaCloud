@@ -26,6 +26,11 @@ vi.mock('../../services/supplierPortalTokenService', () => ({
 vi.mock('../../lib/supabase', () => ({
     supabase: { rpc: (...a: unknown[]) => rpc(...a) },
 }));
+const baixarDoFornecedor = vi.fn(async () => {});
+vi.mock('../../services/reciboPagamentoPortalService', () => ({
+    reciboPagamentoPortalService: { baixarDoFornecedor: (...a: unknown[]) => baixarDoFornecedor(...a) },
+    rotuloRecibo: (n: number) => `Nº ${String(n).padStart(6, '0')}`,
+}));
 
 import PortalFinanceiro from '../../components/supplier/portal/PortalFinanceiro';
 import SupplierFinanceiroTab from '../../components/supplier/SupplierFinanceiroTab';
@@ -134,5 +139,35 @@ describe('SupplierFinanceiroTab (app, fornecedor logado)', () => {
         expect(screen.getByText(brl('500'))).toBeTruthy();
         // 200,00 aparece no KPI Vencido E na linha da parcela 2/3.
         expect(screen.getAllByText(brl('200'))).toHaveLength(2);
+    });
+});
+
+/**
+ * Recibo de pagamento (o credor assina) — Fase 2 de
+ * docs/planos/2026-09-28-contas-a-pagar-recibo-na-baixa.md.
+ */
+describe('Portal do Fornecedor — recibo de pagamento na parcela paga', () => {
+    beforeEach(() => { getFinancials.mockReset(); baixarDoFornecedor.mockClear(); });
+
+    it('parcela paga com recibo mostra o número; clicar baixa pelo TOKEN do link', async () => {
+        const comRecibo: PedidoComFinanceiro = {
+            ...COM_PARCELAS,
+            financeiro: {
+                ...COM_PARCELAS.financeiro,
+                parcelas: COM_PARCELAS.financeiro.parcelas.map(p => p.id === 'p1' ? { ...p, reciboNumero: 7 } : p),
+            },
+        };
+        getFinancials.mockResolvedValue([comRecibo]);
+        render(<PortalFinanceiro supplier={SUPPLIER} orders={[]} portalToken="tok" onOpenOrder={() => {}} />);
+        const link = await screen.findByText('Nº 000007');
+        await userEvent.click(link);
+        await waitFor(() => expect(baixarDoFornecedor).toHaveBeenCalledWith({ token: 'tok', orderId: undefined, transactionId: 'p1' }));
+    });
+
+    it('parcela sem recibo (ou não paga) não oferece download', async () => {
+        getFinancials.mockResolvedValue([COM_PARCELAS]);
+        render(<PortalFinanceiro supplier={SUPPLIER} orders={[]} portalToken="tok" onOpenOrder={() => {}} />);
+        expect((await screen.findAllByText('PO-551252')).length).toBeGreaterThan(0);
+        expect(screen.queryByText(/^Nº \d{6}$/)).toBeNull();
     });
 });

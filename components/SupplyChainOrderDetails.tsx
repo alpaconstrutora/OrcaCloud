@@ -26,6 +26,7 @@ import { pedidoCompradorService } from '../services/pedidoCompradorService';
 import { pedidoFinanceiroService } from '../services/pedidoFinanceiroService';
 import { PAYABLE_STATUS } from './supplier/portal/status';
 import { fmtDate } from './portal/PortalKit';
+import { reciboPagamentoPortalService, rotuloRecibo } from '../services/reciboPagamentoPortalService';
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 import { round2 } from '../utils/financialMath';
 import { fornecedorPodeCotar, temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
@@ -1626,6 +1627,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Parcela</th>
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Vencimento</th>
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500 text-right">Valor</th>
+                                                <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Recibo</th>
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Status</th>
                                             </tr>
                                         </thead>
@@ -1635,6 +1637,24 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                     <td className="px-3 py-2 text-sm font-normal text-gray-700 whitespace-nowrap">{p.numero}/{p.totalParcelas}</td>
                                                     <td className="px-3 py-2 text-sm font-normal text-gray-700 whitespace-nowrap">{fmtDate(p.dueDate)}</td>
                                                     <td className="px-3 py-2 text-sm font-medium text-gray-800 text-right tabular-nums whitespace-nowrap">{formatBRL(p.amount)}</td>
+                                                    <td className="px-3 py-2 whitespace-nowrap">
+                                                        {p.status === 'PAGO' && p.reciboNumero != null ? (
+                                                            <button
+                                                                type="button"
+                                                                title="Baixar o recibo deste pagamento"
+                                                                onClick={() => {
+                                                                    reciboPagamentoPortalService
+                                                                        .baixarDoFornecedor({ token: portalToken, orderId: portalToken ? undefined : orderId, transactionId: p.id })
+                                                                        .catch(e => notify((e as Error).message || 'Não foi possível baixar o recibo.', 'error'));
+                                                                }}
+                                                                className={`text-sm font-normal ${A.text} hover:underline`}
+                                                            >
+                                                                {rotuloRecibo(p.reciboNumero)}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-sm font-normal text-gray-400">—</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-3 py-2">
                                                         <span className={`text-sm font-normal ${
                                                             p.status === 'PAGO' ? 'text-emerald-600'

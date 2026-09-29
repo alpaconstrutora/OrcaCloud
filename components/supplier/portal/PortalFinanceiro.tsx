@@ -1,12 +1,13 @@
 import React from 'react';
-import { AlertCircle, CalendarDays, HandCoins } from 'lucide-react';
+import { AlertCircle, CalendarDays, Download, HandCoins, Loader2 } from 'lucide-react';
 import { PurchaseOrder, Supplier } from '../../../types';
 import { useFinanceiroDoFornecedor } from '../../../hooks/useFinanceiroDoFornecedor';
 import { descreverCondicoes, linhasDaAbaFinanceiro, LinhaFinanceiro, STATUS_EM_ABERTO } from '../../../services/pedidoFinanceiroService';
 import {
     CardHeader, fmtBRL, fmtBRLCents, fmtDate, KpiItem, KpiStrip, parseDate, PortalCard,
-    PortalEmpty, PortalLoading, PortalTabs, SoftButton, StatusPill, Td, Th,
+    PortalEmpty, PortalLoading, PortalTabs, SoftButton, StatusPill, Td, TextLinkButton, Th,
 } from '../../portal/PortalKit';
+import { reciboPagamentoPortalService, rotuloRecibo } from '../../../services/reciboPagamentoPortalService';
 import { PAYABLE_STATUS, SEM_PARCELAS } from './status';
 
 interface Props {
@@ -36,6 +37,24 @@ type FiltroId = typeof FILTROS[number]['id'];
 const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder }) => {
     const { pedidos, resumo, loading, error, reload } = useFinanceiroDoFornecedor({ orders, portalToken });
     const [filtro, setFiltro] = React.useState<FiltroId>('todas');
+    // Recibo de pagamento: o credor baixa o PDF que a construtora guardou.
+    const [baixandoRecibo, setBaixandoRecibo] = React.useState<string | null>(null);
+    const [erroRecibo, setErroRecibo] = React.useState<string | null>(null);
+    const baixarRecibo = async (orderId: string, transactionId: string) => {
+        setBaixandoRecibo(transactionId);
+        setErroRecibo(null);
+        try {
+            await reciboPagamentoPortalService.baixarDoFornecedor({
+                token: portalToken,
+                orderId: portalToken ? undefined : orderId,
+                transactionId,
+            });
+        } catch (e) {
+            setErroRecibo((e as Error).message || 'Não foi possível baixar o recibo.');
+        } finally {
+            setBaixandoRecibo(null);
+        }
+    };
 
     const linhas = React.useMemo(() => linhasDaAbaFinanceiro(pedidos), [pedidos]);
     const ativo = FILTROS.find(f => f.id === filtro) ?? FILTROS[0];
@@ -68,6 +87,13 @@ const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder })
                 </PortalCard>
             )}
 
+            {erroRecibo && (
+                <PortalCard className="px-5 py-3.5 flex items-start gap-3 border-[#F3D9D1] bg-[#FDF8F6]">
+                    <AlertCircle className="w-4 h-4 text-[#C24428] shrink-0 mt-0.5" />
+                    <p className="text-[13px] text-[#C24428] flex-1">{erroRecibo}</p>
+                </PortalCard>
+            )}
+
             <KpiStrip items={kpis} />
 
             {resumo.proximoVencimento && (
@@ -95,7 +121,7 @@ const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder })
                     <PortalLoading label="Carregando parcelas..." />
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full min-w-[760px]">
+                        <table className="w-full min-w-[880px]">
                             <thead>
                                 <tr className="border-b border-[#ECECEF]">
                                     <Th>Pedido</Th>
@@ -103,13 +129,14 @@ const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder })
                                     <Th>Parcela</Th>
                                     <Th>Vencimento</Th>
                                     <Th>Valor</Th>
+                                    <Th>Recibo</Th>
                                     <Th>Status</Th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-[#F4F4F6]">
                                 {visiveis.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6}>
+                                        <td colSpan={7}>
                                             <PortalEmpty
                                                 icon={<HandCoins className="w-9 h-9" />}
                                                 title={linhas.length === 0 ? 'Nenhum pedido com financeiro' : 'Nenhuma parcela neste filtro'}
@@ -139,6 +166,22 @@ const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder })
                                             </Td>
                                             <Td className="text-[#1F2430] font-medium tabular-nums whitespace-nowrap">
                                                 {parcela ? fmtBRLCents(parcela.amount) : fmtBRLCents(pedido.total)}
+                                            </Td>
+                                            <Td className="whitespace-nowrap">
+                                                {parcela?.status === 'PAGO' && parcela.reciboNumero != null ? (
+                                                    <TextLinkButton
+                                                        onClick={() => baixarRecibo(pedido.orderId, parcela.id)}
+                                                        disabled={baixandoRecibo === parcela.id}
+                                                        title="Baixar o recibo deste pagamento"
+                                                    >
+                                                        {baixandoRecibo === parcela.id
+                                                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            : <Download className="w-3.5 h-3.5" />}
+                                                        {rotuloRecibo(parcela.reciboNumero)}
+                                                    </TextLinkButton>
+                                                ) : (
+                                                    <span className="text-[#A0A4AD]">—</span>
+                                                )}
                                             </Td>
                                             <Td>
                                                 <span title={parcela ? undefined : 'Parcelas são geradas na entrega, com nota fiscal vinculada'}>

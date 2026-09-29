@@ -24,7 +24,8 @@
  * Tudo derivado do modelo e das premissas do estudo; nada gravado.
  */
 import type { Agua, BlueprintModel, ObjectId, Point, SecaoDeCalha } from './blueprintKernel';
-import { pegadaEmPlanta, pointInPolygon, polygonArea } from './blueprintKernel';
+import { extensaoVerticalDaCaixa, pegadaEmPlanta, pointInPolygon, polygonArea } from './blueprintKernel';
+import { fazerChave } from './blueprintGrafoDeRede';
 
 /** Os períodos de retorno da NBR 10844 (5.1.2), em anos. */
 export const PERIODOS_DE_RETORNO = [1, 5, 25] as const;
@@ -179,4 +180,55 @@ export function contribuicaoPluvial(model: BlueprintModel, hip: HipotesesPluviai
     vazaoTotalLMin: I ? vazaoDeProjetoLMin(I.mmH, areaContribuicaoTotalM2) : null,
     pendencias,
   };
+}
+
+// ─── E6.4 — redes independentes ─────────────────────────────────────────────
+
+export interface MisturaDeRedes {
+  /** O trecho que encosta na outra rede. */
+  trechoId: ObjectId;
+  levelId: ObjectId;
+  at: { x: number; y: number };
+  /** Com o que ele se mistura: o tubo da outra rede, ou a caixa/saída dela. */
+  com: 'TRECHO' | 'CAIXA';
+}
+
+const CAIXAS_DO_ESGOTO = new Set(['CAIXA_INSPECAO', 'CAIXA_GORDURA', 'CAIXA_SIFONADA', 'RALO_SIFONADO', 'LIGACAO_ESGOTO']);
+const CAIXAS_DA_PLUVIAL = new Set(['CAIXA_AREIA', 'LIGACAO_PLUVIAL']);
+
+/**
+ * Onde a rede PLUVIAL encosta na de ESGOTO (NBR 10844: as águas pluviais não
+ * vão para a rede de esgoto; NBR 8160: o esgoto não vai para a pluvial): a
+ * ponta de um tubo no nó de um tubo da outra rede, ou dentro de uma caixa ou
+ * saída da outra rede. Vazio = redes independentes.
+ */
+export function misturasPluvialEsgoto(model: BlueprintModel): MisturaDeRedes[] {
+  const chave = fazerChave(model.levels);
+  const trechos = (model.trechos ?? []).filter((t) => t.disciplina === 'PLUVIAL' || t.disciplina === 'ESGOTO');
+  const pontas = trechos.flatMap((t) => [
+    { t, p: t.a, cota: t.cotaAMm },
+    { t, p: t.b, cota: t.cotaBMm },
+  ]);
+  const nosDe = (d: string) => new Set(pontas.filter((x) => x.t.disciplina === d).map((x) => chave(x.t.levelId, x.p.x, x.p.y, x.cota)));
+  const nos = { PLUVIAL: nosDe('PLUVIAL'), ESGOTO: nosDe('ESGOTO') };
+  const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico && (CAIXAS_DO_ESGOTO.has(t.tipoHidraulico) || CAIXAS_DA_PLUVIAL.has(t.tipoHidraulico)));
+  const saida: MisturaDeRedes[] = [];
+  const vistos = new Set<string>();
+  for (const { t, p, cota } of pontas) {
+    const outra = t.disciplina === 'PLUVIAL' ? 'ESGOTO' : 'PLUVIAL';
+    const k = chave(t.levelId, p.x, p.y, cota);
+    let com: MisturaDeRedes['com'] | null = nos[outra].has(k) ? 'TRECHO' : null;
+    if (!com) {
+      const daOutra = outra === 'ESGOTO' ? CAIXAS_DO_ESGOTO : CAIXAS_DA_PLUVIAL;
+      const caixa = caixas.find((c) => daOutra.has(c.tipoHidraulico!) && c.at.x === p.x && c.at.y === p.y && chave(c.levelId, p.x, p.y, 0) === chave(t.levelId, p.x, p.y, 0));
+      if (caixa) {
+        const ext = extensaoVerticalDaCaixa(caixa) ?? { fundoMm: caixa.cotaMm, topoMm: caixa.cotaMm };
+        if (cota >= ext.fundoMm - 1 && cota <= ext.topoMm + 1) com = 'CAIXA';
+      }
+    }
+    if (!com || vistos.has(`${t.id}|${p.x},${p.y}`)) continue;
+    vistos.add(`${t.id}|${p.x},${p.y}`);
+    saida.push({ trechoId: t.id, levelId: t.levelId, at: { x: p.x, y: p.y }, com });
+  }
+  return saida.sort((a, b) => a.trechoId.localeCompare(b.trechoId) || a.at.x - b.at.x || a.at.y - b.at.y);
 }

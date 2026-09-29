@@ -12,8 +12,9 @@
  * verificações, declaração) seguida do memorial de cálculo e do descritivo —
  * guardado em texto (`linhasDoMemorial`) e reaberto em PDF/DOCX.
  *
- * NBR 10844 (pluvial) e 7229 (tanque séptico) entram quando os sistemas
- * existirem no desenho (Etapas 6 e 7); hoje não há o que conferir.
+ * NBR 10844 (pluvial, E6.4): quando há rede pluvial no desenho — intensidade,
+ * calhas, condutores, bocais ligados, saída e a independência do esgoto.
+ * NBR 7229 (tanque séptico) entra com a Etapa 7.
  *
  * O software não emite projeto — quem emite é o responsável técnico.
  */
@@ -31,9 +32,12 @@ import { dimensionarReservacao } from './blueprintReservacao';
 import { ROTULO_DO_ALIMENTADOR, planejarAlimentador } from './blueprintAlimentador';
 import { ROTULO_DA_SUCCAO, ROTULO_DO_RECALQUE, planejarRecalque } from './blueprintRecalque';
 import { memorialDeCalculoHidro, memorialDescritivoHidro, nBr, type BlocoDoMemorial, type HipotesesHidro } from './blueprintMemorialHidro';
+import { contribuicaoPluvial, misturasPluvialEsgoto } from './blueprintPluvial';
+import { verificarCalhas } from './blueprintCalhas';
+import { verificarCondutores } from './blueprintCondutoresPluviais';
 
 export interface VerificacaoHidro {
-  grupo: 'RESPONSAVEL' | 'DADOS' | 'NBR5626' | 'NBR8160';
+  grupo: 'RESPONSAVEL' | 'DADOS' | 'NBR5626' | 'NBR8160' | 'NBR10844';
   item: string;
   norma: string;
   exigido: string;
@@ -49,7 +53,7 @@ export interface ResultadoHidroExecutivo {
 
 /** Velocidade máxima da NBR 5626 (a premissa de projeto costuma ser menor). */
 const VELOCIDADE_MAXIMA_DA_NORMA_MS = 3;
-const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'] as const;
+const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'] as const;
 
 export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, responsavel: ResponsavelTecnico): ResultadoHidroExecutivo {
   const v: VerificacaoHidro[] = [];
@@ -73,8 +77,10 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
 
   const trechos = (model.trechos ?? []).filter((t) => (HIDRAULICAS as readonly string[]).includes(t.disciplina));
   const terminais = (model.terminais ?? []).filter((t) => t.tipoHidraulico && (HIDRAULICAS as readonly string[]).includes(t.disciplina));
-  const temAgua = trechos.some((t) => t.disciplina !== 'ESGOTO') || terminais.some((t) => t.disciplina !== 'ESGOTO');
+  const ehAgua = (d: string) => d === 'AGUA_FRIA' || d === 'AGUA_QUENTE';
+  const temAgua = trechos.some((t) => ehAgua(t.disciplina)) || terminais.some((t) => ehAgua(t.disciplina));
   const temEsgoto = trechos.some((t) => t.disciplina === 'ESGOTO') || terminais.some((t) => t.disciplina === 'ESGOTO');
+  const temPluvial = trechos.some((t) => t.disciplina === 'PLUVIAL') || terminais.some((t) => t.disciplina === 'PLUVIAL');
 
   // ── Dados do desenho ────────────────────────────────────────────────────────
   v.push({
@@ -82,8 +88,8 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     item: 'Há instalação hidrossanitária no desenho',
     norma: '—',
     exigido: 'rede de água ou de esgoto',
-    obtido: temAgua || temEsgoto ? [temAgua && 'água', temEsgoto && 'esgoto'].filter(Boolean).join(' e ') : 'nenhuma',
-    atende: temAgua || temEsgoto,
+    obtido: temAgua || temEsgoto || temPluvial ? [temAgua && 'água', temEsgoto && 'esgoto', temPluvial && 'águas pluviais'].filter(Boolean).join(', ') : 'nenhuma',
+    atende: temAgua || temEsgoto || temPluvial,
   });
   const sugeridos = trechos.filter((t) => t.sugerido).length + terminais.filter((t) => t.sugerida).length;
   v.push({
@@ -217,6 +223,28 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     v.push({ grupo: 'NBR8160', item: 'Tubo de queda ventilado', norma: 'NBR 8160:1999', exigido: 'todo TQ com coluna de ventilação', obtido: tqs.length ? (semVentilacao ? `${semVentilacao} sem ventilação` : `${tqs.length} TQ ventilado(s)`) : 'sem tubo de queda', atende: semVentilacao === 0 });
   }
 
+  // ── NBR 10844 (E6.4) ────────────────────────────────────────────────────────
+  if (temPluvial) {
+    const c = contribuicaoPluvial(model, hip.pluvial);
+    v.push({ grupo: 'NBR10844', item: 'Intensidade pluviométrica definida', norma: 'NBR 10844:1989, 5.1', exigido: 'da cidade, informada ou 150 mm/h até 100 m²', obtido: c.intensidadeMmH != null ? `${c.intensidadeMmH} mm/h` : (c.pendencias[0] ?? 'sem intensidade'), atende: c.intensidadeMmH != null });
+    const calhas = verificarCalhas(model, hip.pluvial);
+    const calhasRuins = calhas.filter((x) => !x.atende).length;
+    v.push({ grupo: 'NBR10844', item: 'Calhas: capacidade e declividade', norma: 'NBR 10844:1989, 5.5', exigido: 'Manning ≥ vazão da água; i ≥ 0,5 %', obtido: calhas.length ? (calhasRuins ? `${calhasRuins} de ${calhas.length} fora` : `${calhas.length} calha(s) em ordem`) : 'nenhuma calha', atende: calhasRuins === 0 });
+    const condutores = verificarCondutores(model, hip.pluvial);
+    const condRuins = condutores.filter((x) => !x.atende).length;
+    v.push({ grupo: 'NBR10844', item: 'Condutores: capacidade, DN e declividade', norma: 'NBR 10844:1989, 5.6 e 5.7', exigido: 'vertical DN ≥ 75; horizontal a 2/3 com i ≥ 0,5 %', obtido: condutores.length ? (condRuins ? `${condRuins} de ${condutores.length} fora` : `${condutores.length} trecho(s) em ordem`) : 'nenhum condutor', atende: condRuins === 0 });
+    // Todo bocal/ralo pluvial com um condutor saindo dele.
+    const condutoresT = (model.trechos ?? []).filter((t) => t.disciplina === 'PLUVIAL' && !t.secaoCalha);
+    const ralos = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RALO_PLUVIAL');
+    const soltos = ralos.filter((r) => !condutoresT.some((t) => t.levelId === r.levelId && ((t.a.x === r.at.x && t.a.y === r.at.y && t.cotaAMm === r.cotaMm) || (t.b.x === r.at.x && t.b.y === r.at.y && t.cotaBMm === r.cotaMm)))).length;
+    v.push({ grupo: 'NBR10844', item: 'Todo bocal e ralo pluvial com condutor', norma: 'NBR 10844', exigido: '0 sem condutor', obtido: ralos.length ? (soltos ? `${soltos} sem condutor` : `${ralos.length} ligado(s)`) : 'nenhum bocal', atende: ralos.length > 0 && soltos === 0 });
+    const saidas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'LIGACAO_PLUVIAL');
+    const chega = saidas.some((s) => condutoresT.some((t) => t.levelId === s.levelId && ((t.a.x === s.at.x && t.a.y === s.at.y) || (t.b.x === s.at.x && t.b.y === s.at.y))));
+    v.push({ grupo: 'NBR10844', item: 'A água chega à saída (sarjeta ou galeria)', norma: 'NBR 10844', exigido: 'saída pluvial com condutor chegando', obtido: saidas.length ? (chega ? 'chega' : 'nenhum condutor chega à saída') : 'sem saída pluvial', atende: chega });
+    const misturas = misturasPluvialEsgoto(model).length;
+    v.push({ grupo: 'NBR10844', item: 'Rede pluvial independente do esgoto', norma: 'NBR 10844 · NBR 8160', exigido: 'nenhum encontro entre as redes', obtido: misturas ? `${misturas} encontro(s)` : 'independentes', atende: misturas === 0 });
+  }
+
   const pendencias = v.filter((x) => !x.atende).map((x) => `${x.item}: ${x.obtido}`);
   return { verificacoes: v, podeEmitir: pendencias.length === 0, pendencias };
 }
@@ -232,6 +260,7 @@ const ROTULO_DO_GRUPO: Record<VerificacaoHidro['grupo'], string> = {
   DADOS: 'Dados do desenho',
   NBR5626: 'Água fria e quente — NBR 5626',
   NBR8160: 'Esgoto sanitário — NBR 8160',
+  NBR10844: 'Águas pluviais — NBR 10844',
 };
 
 /** A capa executiva + o memorial de cálculo + o descritivo, como blocos. */

@@ -35,7 +35,9 @@ import { verificarVentilacao } from './blueprintVentilacao';
 import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque } from './blueprintRecalque';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
-import { HIPOTESES_PLUVIAIS_PADRAO, type HipotesesPluviais } from './blueprintPluvial';
+import { HIPOTESES_PLUVIAIS_PADRAO, contribuicaoPluvial, type HipotesesPluviais } from './blueprintPluvial';
+import { RUGOSIDADE_DA_CALHA, verificarCalhas } from './blueprintCalhas';
+import { verificarCondutores } from './blueprintCondutoresPluviais';
 
 // ─── Blocos ──────────────────────────────────────────────────────────────────
 
@@ -151,10 +153,11 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
   const esgoto = esgotoTrechoATrecho(model, hip.esgoto);
   const temAgua = redesDeAgua.length > 0;
   const temEsgoto = esgoto.length > 0;
+  const temPluvial = (model.trechos ?? []).some((t) => t.disciplina === 'PLUVIAL');
   const B: BlocoDoMemorial[] = [...cabecalho(model, ctx, 'Memorial de cálculo — instalações hidrossanitárias')];
 
-  if (!temAgua && !temEsgoto) {
-    B.push({ tipo: 'paragrafo', texto: 'O desenho não tem rede de água nem de esgoto calculável: nada a memorializar.' });
+  if (!temAgua && !temEsgoto && !temPluvial) {
+    B.push({ tipo: 'paragrafo', texto: 'O desenho não tem rede de água, de esgoto nem de águas pluviais calculável: nada a memorializar.' });
     return B;
   }
   B.push(...blocoDePremissas(model, hip, temAgua, temEsgoto));
@@ -436,11 +439,63 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     }
   }
 
+  // ── Águas pluviais (E6.4) ───────────────────────────────────────────────────
+  if (temPluvial) B.push(...secaoPluvial(model, hip.pluvial, nivel));
+
   // ── Colunas (E2.3) ──────────────────────────────────────────────────────────
   const colunas = colunasDoModelo(model);
   if (colunas.length) {
     B.push({ tipo: 'secao', texto: 'Colunas, tubos de queda e ventilação' });
     for (const l of linhasDaLegendaDeColunas(model, colunas)) B.push({ tipo: 'paragrafo', texto: l });
+  }
+  return B;
+}
+
+/** A seção de águas pluviais do memorial de cálculo (E6.4): contribuição, calhas e condutores. */
+function secaoPluvial(model: BlueprintModel, hip: HipotesesPluviais, nivel: (id: ObjectId) => string): BlocoDoMemorial[] {
+  const B: BlocoDoMemorial[] = [{ tipo: 'secao', texto: 'Águas pluviais' }];
+  const c = contribuicaoPluvial(model, hip);
+  const origem = c.origem === 'INFORMADA' ? 'informada pelo projetista' : c.origem === 'TABELA' ? `NBR 10844, Tabela 5 — ${hip.cidade}, período de retorno de ${hip.periodoDeRetornoAnos} ano(s)` : c.origem === 'ATE_100M2' ? 'NBR 10844, 5.1.4 — projeção de até 100 m²' : '—';
+  B.push({ tipo: 'paragrafo', texto: c.intensidadeMmH != null ? `Intensidade pluviométrica de projeto: ${c.intensidadeMmH} mm/h (${origem}), chuva de 5 minutos. Vazão de projeto Q = I·A/60 (L/min).` : `Sem intensidade pluviométrica: ${c.pendencias[0] ?? ''}` });
+  if (c.superficies.length) {
+    B.push({ tipo: 'subsecao', texto: 'Áreas de contribuição' });
+    B.push({
+      tipo: 'tabela',
+      cabecalho: ['Superfície', 'Projeção (m²)', 'Inclinação (%)', 'Contribuição (m²)', 'Vazão (L/min)'],
+      linhas: [
+        ...c.superficies.map((s) => [s.rotulo, nBr(s.areaProjecaoM2), nBr(s.inclinacaoPct, 0), nBr(s.areaContribuicaoM2), s.vazaoLMin != null ? nBr(s.vazaoLMin, 1) : '—']),
+        ['Total', nBr(c.areaProjecaoTotalM2), '', nBr(c.areaContribuicaoTotalM2), c.vazaoTotalLMin != null ? nBr(c.vazaoTotalLMin, 1) : '—'],
+      ],
+    });
+    B.push({ tipo: 'paragrafo', texto: 'Área de contribuição da superfície inclinada: A = Ap·(1 + i/2) (NBR 10844, 5.2); a laje descoberta conta a projeção. As paredes que interceptam a chuva não foram consideradas.' });
+  }
+  const calhas = verificarCalhas(model, hip);
+  if (calhas.length) {
+    const n = RUGOSIDADE_DA_CALHA[hip.materialDaCalha] ?? RUGOSIDADE_DA_CALHA.PLASTICO_METAL;
+    B.push({ tipo: 'subsecao', texto: 'Calhas' });
+    B.push({
+      tipo: 'tabela',
+      cabecalho: ['Calha', 'Pav.', 'Comprimento (m)', 'Declividade (%)', 'Vazão (L/min)', 'Capacidade (L/min)', 'Situação'],
+      linhas: calhas.map((x) => [
+        x.secao.secao === 'SEMICIRCULAR' ? `Meia-cana ø${x.secao.larguraMm}` : `Retangular ${x.secao.larguraMm}×${x.secao.alturaMm}`,
+        nivel(x.levelId), nBr(x.comprimentoM), nBr(x.declividadePct), x.vazaoLMin != null ? nBr(x.vazaoLMin, 1) : '—', nBr(x.capacidadeLMin, 1),
+        !x.declividadeOk ? 'Declividade abaixo de 0,5 %' : x.atende ? 'Atende' : 'Capacidade insuficiente',
+      ]),
+    });
+    B.push({ tipo: 'paragrafo', texto: `Capacidade por Manning-Strickler, seção cheia: Q = 60 000·(S/n)·Rh^(2/3)·i^(1/2) (NBR 10844, 5.5), n = ${nBr(n.n, 3)} (${n.rotulo.toLowerCase()}).` });
+  }
+  const condutores = verificarCondutores(model, hip);
+  if (condutores.length) {
+    B.push({ tipo: 'subsecao', texto: 'Condutores' });
+    B.push({
+      tipo: 'tabela',
+      cabecalho: ['Condutor', 'Pav.', 'DN', 'Declividade (%)', 'Vazão (L/min)', 'Capacidade (L/min)', 'Situação'],
+      linhas: condutores.map((x) => [
+        x.vertical ? 'Vertical' : 'Horizontal', nivel(x.levelId), String(x.dnMm), x.declividadePct == null ? 'vertical' : nBr(x.declividadePct), nBr(x.vazaoLMin, 1), nBr(x.capacidadeLMin, 1),
+        !x.declividadeOk ? 'Declividade abaixo de 0,5 %' : x.atende ? 'Atende' : x.vertical && x.dnMm < 75 ? 'DN abaixo de 75' : 'Capacidade insuficiente',
+      ]),
+    });
+    B.push({ tipo: 'paragrafo', texto: 'Horizontais por Manning com lâmina de 2/3 do diâmetro (NBR 10844, 5.7, Tabela 4), declividade mínima de 0,5 %. Verticais com DN mínimo de 75 mm (5.6.3); capacidade pela fórmula de Wyly–Eaton com ocupação de 1/3, a conferir no ábaco da Figura 3 da norma. Vazão de cada trecho acumulada por gravidade a partir dos bocais.' });
   }
   return B;
 }
@@ -454,20 +509,22 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
   const temFria = tem('AGUA_FRIA');
   const temQuente = tem('AGUA_QUENTE');
   const temEsgoto = tem('ESGOTO');
+  const temPluvial = tem('PLUVIAL');
   const B: BlocoDoMemorial[] = [...cabecalho(model, ctx, 'Memorial descritivo — instalações hidrossanitárias')];
-  if (!temFria && !temQuente && !temEsgoto) {
+  if (!temFria && !temQuente && !temEsgoto && !temPluvial) {
     B.push({ tipo: 'paragrafo', texto: 'O desenho não tem instalação hidrossanitária.' });
     return B;
   }
 
   B.push({ tipo: 'secao', texto: 'Objeto' });
-  const sistemas = listaBr([temFria && 'água fria', temQuente && 'água quente', temEsgoto && 'esgoto sanitário'].filter((x): x is string => !!x));
+  const sistemas = listaBr([temFria && 'água fria', temQuente && 'água quente', temEsgoto && 'esgoto sanitário', temPluvial && 'águas pluviais'].filter((x): x is string => !!x));
   B.push({ tipo: 'paragrafo', texto: `Este memorial descreve as instalações de ${sistemas} do estudo "${ctx.nomeDoEstudo}", em ${model.levels.length} pavimento(s): ${[...model.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => l.name).join(', ')}.` });
 
   B.push({ tipo: 'secao', texto: 'Normas' });
   const normas: string[][] = [];
   if (temFria || temQuente) normas.push(['ABNT NBR 5626:2020', 'Sistemas prediais de água fria e água quente — projeto, execução, operação e manutenção']);
   if (temEsgoto) normas.push(['ABNT NBR 8160:1999', 'Sistemas prediais de esgoto sanitário — projeto e execução']);
+  if (temPluvial) normas.push(['ABNT NBR 10844:1989', 'Instalações prediais de águas pluviais']);
   B.push({ tipo: 'tabela', cabecalho: ['Norma', 'Assunto'], linhas: normas });
 
   B.push({ tipo: 'secao', texto: 'Sistemas' });
@@ -504,12 +561,25 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
     });
   }
 
+  if (temPluvial) {
+    const c = contribuicaoPluvial(model, hip.pluvial);
+    const calhas = trechos.filter((t) => t.secaoCalha).length;
+    const caixas = terminais.filter((t) => t.tipoHidraulico === 'CAIXA_AREIA').length;
+    B.push({ tipo: 'subsecao', texto: 'Águas pluviais' });
+    B.push({
+      tipo: 'paragrafo',
+      texto: `Captação da chuva de ${nBr(c.areaContribuicaoTotalM2)} m² de área de contribuição${c.intensidadeMmH != null ? `, com intensidade de ${c.intensidadeMmH} mm/h` : ''}${calhas ? ` por ${calhas} calha(s) com declividade mínima de 0,5 %` : ''}, condutores verticais (DN mínimo 75) e horizontais enterrados com declividade mínima de 0,5 %${caixas ? `, passando por ${caixas} caixa(s) de areia` : ''}, até a saída para a sarjeta ou a galeria pluvial. A rede pluvial é independente da de esgoto sanitário.`,
+    });
+  }
+
   B.push({ tipo: 'secao', texto: 'Materiais' });
   const materiais = new Map<string, Set<number>>();
   for (const t of trechos) {
-    if (!['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'].includes(t.disciplina)) continue;
+    if (!['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'].includes(t.disciplina)) continue;
     const m = materialDoTrecho(t);
-    const nome = `${ROTULO_DA_DISCIPLINA[t.disciplina]} — ${m ? FICHA_DO_MATERIAL[m].rotulo : 'PVC esgoto série normal (NBR 5688)'}`;
+    const nome = t.secaoCalha
+      ? `${ROTULO_DA_DISCIPLINA.PLUVIAL} — calha ${t.secaoCalha === 'SEMICIRCULAR' ? 'meia-cana' : 'retangular'}`
+      : `${ROTULO_DA_DISCIPLINA[t.disciplina]} — ${m ? FICHA_DO_MATERIAL[m].rotulo : t.disciplina === 'PLUVIAL' ? 'PVC série R (NBR 5688)' : 'PVC esgoto série normal (NBR 5688)'}`;
     materiais.set(nome, (materiais.get(nome) ?? new Set()).add(t.bitolaMm));
   }
   B.push({
@@ -537,6 +607,7 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
   B.push({ tipo: 'secao', texto: 'Execução e ensaios' });
   if (temFria || temQuente) B.push({ tipo: 'paragrafo', texto: 'As tubulações de água devem ser ensaiadas quanto à estanqueidade antes do fechamento das paredes e forros, conforme a NBR 5626.' });
   if (temEsgoto) B.push({ tipo: 'paragrafo', texto: 'A rede de esgoto deve ser ensaiada quanto à estanqueidade (ensaio com água ou ar) antes do reaterro e do fechamento, conforme a NBR 8160; as caixas devem permitir inspeção e limpeza.' });
+  if (temPluvial) B.push({ tipo: 'paragrafo', texto: 'Calhas e condutores pluviais devem ser ensaiados quanto à estanqueidade antes do reaterro, conforme a NBR 10844; as caixas de areia devem permitir inspeção e limpeza. Nenhuma ligação entre a rede pluvial e a de esgoto.' });
   B.push({ tipo: 'paragrafo', texto: 'Diâmetros, cotas e declividades são os do memorial de cálculo e das pranchas deste mesmo desenho.' });
   return B;
 }

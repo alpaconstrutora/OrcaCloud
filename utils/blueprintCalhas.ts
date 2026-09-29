@@ -224,3 +224,8 @@ export function planejarCalhas(model: BlueprintModel, hip: HipotesesPluviais): P
     comandos: calhas.length === 0 && sugeridas.length === 0 && bocaisSugeridos.length === 0 ? [] : comandos,
   };
 }
+
+/** O nome da linha de compra da calha (quantitativo, planilha): a seção e a medida. */
+export function nomeDaCalha(secao: string, larguraMm: number): string {
+  return secao === 'SEMICIRCULAR' ? `Calha meia-cana ø${larguraMm}` : `Calha retangular ${larguraMm} mm de largura`;
+}

@@ -33,6 +33,7 @@ import { ROTULO_DA_CONEXAO, type DisciplinaDeRede, type MaterialDeTubo, type Tip
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { ROTULO_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { nomeDaCalha } from './blueprintCalhas';
 
 /** " · PVC soldável" — o material do tubo no fim do rótulo (E1.1); vazio fora de água. */
 function rotuloDoMaterial(material: string | null | undefined): string {
@@ -194,7 +195,7 @@ export function abasDoQuantitativo(
       : `${p.tipo} (sem tipo)`;
   if ((t.porBitola ?? []).length > 0 || (t.porTerminal ?? []).length > 0) {
     totais.push([], ['INSTALAÇÕES']);
-    for (const b of t.porBitola ?? []) totais.push([`${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), 'm']);
+    for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` · ${b.itemCode}` : ''}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), 'm']);
     for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} · ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, 'un']);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, 'un']);
     totais.push(['Rede — comprimento total', n2(t.comprimentoRedeM), 'm']);

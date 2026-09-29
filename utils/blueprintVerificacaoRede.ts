@@ -19,7 +19,7 @@ import { verificarVentilacao } from './blueprintVentilacao';
 import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
 import { DECLIVIDADE_MINIMA_DA_CALHA_PCT, verificarCalhas } from './blueprintCalhas';
 import { DECLIVIDADE_MINIMA_DO_HORIZONTAL_PCT, DN_MINIMO_DO_VERTICAL_MM, verificarCondutores } from './blueprintCondutoresPluviais';
-import { HIPOTESES_PLUVIAIS_PADRAO, type HipotesesPluviais } from './blueprintPluvial';
+import { HIPOTESES_PLUVIAIS_PADRAO, misturasPluvialEsgoto, type HipotesesPluviais } from './blueprintPluvial';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
 import { conexoesDerivadas, conflitosDoModelo } from './blueprintKernel';
 import { esgotoTrechoATrecho, trechosDeEsgotoSemDestino, verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
@@ -51,7 +51,9 @@ export type TipoDeMarca =
   | 'CALHA_DECLIVIDADE'
   // E6.3 — condutores: o que não leva a vazão acumulada e o horizontal com menos de 0,5 %.
   | 'CONDUTOR_INSUFICIENTE'
-  | 'CONDUTOR_DECLIVIDADE';
+  | 'CONDUTOR_DECLIVIDADE'
+  // E6.4 — a pluvial encostando no esgoto (e vice-versa): redes independentes.
+  | 'PLUVIAL_NO_ESGOTO';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -188,6 +190,12 @@ export function marcasDeVerificacao(
     }
   }
 
+  // E6.4: redes independentes — a pluvial não entra no esgoto, nem o esgoto na pluvial.
+  for (const x of misturasPluvialEsgoto(model)) {
+    const t = trechoPorIdE.get(x.trechoId)!;
+    marcas.push({ chave: `mistura|${x.trechoId}|${x.at.x},${x.at.y}`, tipo: 'PLUVIAL_NO_ESGOTO', levelId: x.levelId, at: x.at, texto: t.disciplina === 'PLUVIAL' ? 'pluvial ligada ao esgoto' : 'esgoto ligado à pluvial', severidade: 'ERRO', alvoId: x.trechoId, disciplina: t.disciplina });
+  }
+
   for (const v of verificarDnDoEsgoto(model)) {
     const menor = v.tipo === 'MENOR';
     marcas.push({
@@ -242,6 +250,6 @@ export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disci
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO'].includes(m.tipo)),
   };
 }

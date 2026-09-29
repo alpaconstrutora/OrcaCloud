@@ -33,6 +33,7 @@ const ROTULO_DO_GRUPO: Record<VerificacaoHidro['grupo'], string> = {
   DADOS: 'Dados do desenho',
   NBR5626: 'Água fria e quente — NBR 5626',
   NBR8160: 'Esgoto sanitário — NBR 8160',
+  NBR10844: 'Águas pluviais — NBR 10844',
 };
 
 function CampoTexto({ rotulo, valor, onMudar, placeholder }: { rotulo: string; valor: string; onMudar: (v: string) => void; placeholder?: string }) {

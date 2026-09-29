@@ -228,6 +228,7 @@ vez de deixar a documentação para o fim.
 | Imagens nas notas BCF, vínculo vivo de IFC externo, filtro por pavimento nas colisões | A/M | coordenação, não projeto |
 | Hunter probabilístico para água, sub-redes nomeadas além do pluvial | M/A | a NBR 5626 usa pesos; sub-rede entra só onde uma fase precisar |
 | Integração com AltoQi Cloud | N | produto de terceiro |
+| Pluvial no ORÇAMENTO (medida de calha e de tubo pluvial no de-para SINAPI), contribuição do piso descoberto nos ralos, paredes que interceptam a chuva (5.2.2), ábaco da Figura 3 no lugar de Wyly–Eaton | A/M | a E6 fechou o projeto; o orçamento é a E8 (insumos), e as três contas pedem dado que o desenho ainda não tem |
 | Desvio estrutural do ESGOTO, do alimentador e do recalque; contorno do pilar de canto | A | a E5.5 fez a água (onde está o grafo pelas paredes); o esgoto tem traçado próprio (junções 45°), e o pilar de canto pede rota fora do eixo — hoje ficam como marca e pendência |
 
 ## Execução
@@ -875,3 +876,30 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   o sobrado com o vertical atravessando a laje; direto à saída sem caixa e o aviso sem saída; os
   motivos; relançar e o confirmado; as marcas do DN 50 e do horizontal sem caimento) e 2 em
   `PainelCondutores.test.tsx`. Suíte: 549 arquivos / 6.113 testes.
+
+### E6.4 — Ralos, redes independentes, quantitativo e conferência NBR 10844 (29/09/2026) · fecha a Etapa 6
+
+- **Redes independentes** (`misturasPluvialEsgoto`, em `blueprintPluvial.ts`): a ponta de um tubo
+  pluvial no nó de um tubo de esgoto (ou dentro de caixa/ligação do esgoto), e vice-versa — marca
+  **PLUVIAL_NO_ESGOTO** e item da conferência.
+- **Conferência NBR 10844** (grupo novo na emissão com ART, só quando há rede pluvial):
+  intensidade definida; calhas (capacidade e 0,5 %); condutores (capacidade, DN 75, 0,5 %); todo
+  bocal e ralo com condutor; a água chega à saída; rede independente do esgoto.
+- **Memorial de cálculo**: seção **Águas pluviais** — a intensidade e a origem dela, as áreas de
+  contribuição, as calhas (Manning, n) e os condutores (vazão acumulada, capacidade, situação).
+  **Descritivo**: NBR 10844 nas normas, o sistema, "calha meia-cana" e "PVC série R" nos materiais
+  e o ensaio de estanqueidade.
+- **Quantitativo** (tela e planilha): a calha é linha própria — "Calha meia-cana ø100", família
+  **Calha**.
+- **Ralos**: o `RALO_PLUVIAL` (E6.1) é o de piso descoberto e o bocal hemisférico da calha; o
+  lançamento dos condutores liga os dois. A contribuição do piso descoberto fica no backlog.
+- **Pronto quando** ✔: 9 testes em `blueprintPluvialConferencia.test.ts` (a casa sem encontro; o
+  condutor na CI e o esgoto na caixa de areia — duas marcas e a pendência; o encontro no mesmo nó;
+  o grupo NBR 10844 inteiro atendendo com calhas e condutores lançados; só as calhas deixa bocal
+  sem condutor e a água sem chegar à saída; sem pluvial, sem grupo; os dois memoriais; o nome da
+  calha). Suíte: 550 arquivos / 6.122 testes.
+
+**Etapa 6 fechada**: disciplina PLUVIAL (kernel 0.66.0), calha com seção (0.67.0, quant-1.18.0),
+contribuição, calhas por Manning, condutores até a caixa de areia e a saída, conferência e
+memoriais. ⚠️ A conferir na norma antes de emitir: a **tabela de intensidades** (E6.1) e a
+**capacidade do condutor vertical** (E6.3, Wyly–Eaton no lugar do ábaco).

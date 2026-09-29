@@ -5,6 +5,7 @@ import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type Disc
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
 import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
+import { nomeDaCalha } from '../../utils/blueprintCalhas';
 import type { ArmaduraQuantificada } from '../../utils/blueprintArmadura';
 import {
   nomeDoPavimento,
@@ -49,7 +50,7 @@ type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' 
 /** Uma linha de compra das instalações: tubo por DN, ponto por classificação, conexão por tipo × DN. */
 interface LinhaDeInstalacao {
   chave: string;
-  familia: 'Tubo' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa';
+  familia: 'Tubo' | 'Calha' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa';
   disciplina: DisciplinaDeRede;
   item: string;
   dnMm: number | null;
@@ -284,7 +285,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     // INSTALAÇÕES (18/09/2026): tubo por disciplina e DN, pontos por classificação,
     // conexões deduzidas dos encontros — as linhas de compra da rede.
     for (const b of t.porBitola ?? []) {
-      add({ grupo: 'Instalações', item: `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}${nomeDoMaterial(b.material)}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
+      add({ grupo: 'Instalações', item: b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)} · ${ROTULO_DA_DISCIPLINA.PLUVIAL}` : `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}${nomeDoMaterial(b.material)}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
     }
     for (const p of t.porTerminal ?? []) {
       if (p.disciplina === 'ELETRICA') continue;
@@ -314,7 +315,9 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     const linhas: LinhaDeInstalacao[] = [];
     const t = redeVisivel;
     for (const b of t.porBitola ?? []) {
-      linhas.push({ chave: `tubo:${b.disciplina}:${b.material ?? ''}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${nomeDoMaterial(b.material)}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real, com prumadas e caimento` });
+      // E6.4: a calha é linha própria, pelo nome da seção (quant-1.18.0 já as separa).
+      const item = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${nomeDoMaterial(b.material)}`;
+      linhas.push({ chave: `tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: b.secaoCalha ? 'Calha' : 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${item}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real${b.secaoCalha ? ', com o caimento' : ', com prumadas e caimento'}` });
     }
     // A CAIXA D'ÁGUA por volume (E0.2): é assim que se compra.
     for (const r of reservatoriosPorVolume(model, pavimentoFiltro || null)) {

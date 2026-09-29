@@ -15,6 +15,7 @@
  */
 import { DISCIPLINAS_DA_REDE, temRedeNoPavimento, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
+import { temEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
 import type { BlueprintModel, ObjectId, Point, TipoDeAmbiente } from './blueprintKernel';
 import { ESCALAS, PAPEIS, type Papel } from './blueprintExport';
 
@@ -143,7 +144,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -215,6 +216,8 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
     if (alguma && (model.circuitos ?? []).length > 0) {
       numerar({ tipo: 'QUADRO_DE_CARGAS', titulo: 'Quadro de cargas', denominador: 0 });
       numerar({ tipo: 'UNIFILAR', titulo: 'Diagrama unifilar', denominador: 0 });
+      // E4.5: o esquema vertical elétrico só quando há o que cortar — hierarquia, quadros em mais de um pavimento ou prumada.
+      if (temEsquemaVerticalEletrico(model)) numerar({ tipo: 'ESQUEMA_ELETRICO', titulo: 'Esquema vertical elétrico', denominador: 0 });
     }
   }
   // HIDROSSANITÁRIO (E2.1, 28/09/2026): planta de água e de esgoto por pavimento

@@ -92,6 +92,8 @@ export interface DiagramaUnifilar {
     icnKa: number | null;
     /** E4.1: o quadro que alimenta este (nome) — a entrada deixa de ser "ALIMENTAÇÃO" e vira "de QGBT". */
     alimentadoPor: string | null;
+    /** E4.5: o id do quadro-pai — é por ele que a árvore se monta. */
+    alimentadoPorId: string | null;
     /** E4.1: de onde veio o comprimento do alimentador. */
     alimentadorOrigem: 'DECLARADO' | 'ELETRODUTOS' | null;
   };
@@ -206,6 +208,7 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
           dps: quadro.dps ? rotuloDoDPS(quadro.dps) : null,
           icnKa: quadro.icnKa ?? null,
           alimentadoPor: q.paiNome,
+          alimentadoPorId: quadro.quadroPaiId ?? null,
           alimentadorOrigem: q.alimentadorOrigem,
           drGeral: (() => {
             const g = drsDoQuadro(model, quadro.id).find((d) => d.geral);
@@ -370,7 +373,9 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     d.linha(xD - 2.2 * k, yD, xD + 2.2 * k, yD, { espessuraMm: fina, cor: COR });
     d.linha(xD - 1.4 * k, yD + 0.9 * k, xD + 1.4 * k, yD + 0.9 * k, { espessuraMm: fina, cor: COR });
     d.linha(xD - 0.6 * k, yD + 1.8 * k, xD + 0.6 * k, yD + 1.8 * k, { espessuraMm: fina, cor: COR });
-    t(xD + 3 * k, yBus + 6.5 * k, e.dps, 1.5 * k, COR_FRACA);
+    // O rótulo à ESQUERDA do barramento, sob as anotações da entrada: ao lado da
+    // derivação ele atropelava o disjuntor do primeiro ramal (visto no harness da E4.5).
+    t(xIni, yBus + 12 * k, e.dps, 1.5 * k, COR_FRACA);
   }
 
   // ── Ramais ────────────────────────────────────────────────────────────
@@ -454,4 +459,97 @@ export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string
   if (diagramas.some((d) => d.comFases)) L.push('R / S / T sobre o ramal: fase declarada do circuito F-N no quadro trifásico — o balanceamento soma por fase.');
   if (diagramas.some((d) => d.comSugerido)) L.push('"sug." = valor do pré-dimensionamento, ainda não declarado no quadro de cargas — declare para assumir.');
   return L;
+}
+
+// ─── O UNIFILAR EM ÁRVORE (E4.5, 29/09/2026) ────────────────────────────────
+//
+// Com hierarquia de quadros (E4.1), um diagrama por quadro empilhado perde a
+// leitura do conjunto: o QGBT alimenta QD1 e QD2, e isso tem de se ver. A
+// árvore põe as ENTRADAS (quadros sem pai) na primeira linha, os filhos na
+// linha de baixo, e liga o pai ao filho com um traço em L saindo do rodapé do
+// pai. Cada nó é o MESMO desenho de `desenharUnifilar` — nada é redesenhado.
+
+/** Há hierarquia quando algum diagrama é alimentado por outro do conjunto. */
+export function temHierarquia(diagramas: readonly DiagramaUnifilar[]): boolean {
+  const ids = new Set(diagramas.map((d) => d.quadroId));
+  return diagramas.some((d) => d.entrada.alimentadoPorId != null && ids.has(d.entrada.alimentadoPorId));
+}
+
+/**
+ * As LINHAS da árvore: entradas primeiro, depois os filhos na ordem dos pais.
+ * Um filho cujo pai não está no conjunto vira entrada (não some).
+ */
+export function niveisDaArvore(diagramas: readonly DiagramaUnifilar[]): DiagramaUnifilar[][] {
+  const ids = new Set(diagramas.map((d) => d.quadroId));
+  const raiz = diagramas.filter((d) => d.entrada.alimentadoPorId == null || !ids.has(d.entrada.alimentadoPorId));
+  const linhas: DiagramaUnifilar[][] = [];
+  const vistos = new Set<string>();
+  let atual = raiz;
+  while (atual.length) {
+    linhas.push(atual);
+    for (const d of atual) vistos.add(d.quadroId);
+    const paisDaLinha = atual.map((d) => d.quadroId);
+    atual = paisDaLinha.flatMap((pid) => diagramas.filter((d) => d.entrada.alimentadoPorId === pid && !vistos.has(d.quadroId)));
+  }
+  // Ciclo (que a invariante recusa) ou órfãos: entram no fim, para não sumir.
+  const sobras = diagramas.filter((d) => !vistos.has(d.quadroId));
+  if (sobras.length) linhas.push(sobras);
+  return linhas;
+}
+
+export const ARVORE = {
+  /** Entre diagramas da mesma linha. */
+  vaoMm: 10,
+  /** Entre linhas — cabe o traço em L e o rótulo. */
+  entreLinhasMm: 14,
+};
+
+/** A posição de cada diagrama na árvore (mm de papel, k = 1) e as medidas do conjunto. */
+export function layoutDaArvore(diagramas: readonly DiagramaUnifilar[], k = 1): { posicoes: Map<string, { x: number; y: number; larguraMm: number; alturaMm: number }>; larguraMm: number; alturaMm: number } {
+  const posicoes = new Map<string, { x: number; y: number; larguraMm: number; alturaMm: number }>();
+  let y = 0;
+  let larguraMax = 0;
+  for (const linha of niveisDaArvore(diagramas)) {
+    let x = 0;
+    let alturaDaLinha = 0;
+    for (const d of linha) {
+      const m = medidasDoUnifilar(d, k);
+      posicoes.set(d.quadroId, { x, y, larguraMm: m.larguraMm, alturaMm: m.alturaMm });
+      x += m.larguraMm + ARVORE.vaoMm * k;
+      alturaDaLinha = Math.max(alturaDaLinha, m.alturaMm);
+    }
+    larguraMax = Math.max(larguraMax, x - ARVORE.vaoMm * k);
+    y += alturaDaLinha + ARVORE.entreLinhasMm * k;
+  }
+  return { posicoes, larguraMm: larguraMax, alturaMm: Math.max(0, y - ARVORE.entreLinhasMm * k) };
+}
+
+/** Desenha a árvore inteira em (x0, y0); devolve as medidas ocupadas. */
+export function desenharUnifilarEmArvore(d: Desenhista, diagramas: readonly DiagramaUnifilar[], x0: number, y0: number, k = 1): { larguraMm: number; alturaMm: number } {
+  const lay = layoutDaArvore(diagramas, k);
+  const porId = new Map(diagramas.map((dg) => [dg.quadroId, dg]));
+  for (const dg of diagramas) {
+    const p = lay.posicoes.get(dg.quadroId);
+    if (!p) continue;
+    desenharUnifilar(d, dg, x0 + p.x, y0 + p.y, k);
+    // O traço do pai até este filho: desce do RAMAL do pai que o alimenta ("→ QD1"),
+    // anda até a coluna do filho e chega ao topo dele. Cada filho do mesmo pai
+    // anda numa altura um pouco diferente, para os traços não se sobreporem.
+    const pai = dg.entrada.alimentadoPorId ? porId.get(dg.entrada.alimentadoPorId) : null;
+    const pp = pai ? lay.posicoes.get(pai.quadroId) : null;
+    if (pai && pp) {
+      const iRamal = pai.ramais.findIndex((r) => r.quadroFilho && r.circuitoId === dg.quadroId);
+      const iFilho = pai.ramais.filter((r) => r.quadroFilho).findIndex((r) => r.circuitoId === dg.quadroId);
+      const xPai = iRamal >= 0 ? x0 + pp.x + (UNIFILAR.entradaMm + (iRamal + 0.5) * UNIFILAR.ramalMm) * k : x0 + pp.x + 2 * k;
+      const yPai = y0 + pp.y + pp.alturaMm;
+      const xFilho = x0 + p.x + 2 * k;
+      const yFilho = y0 + p.y;
+      const yMeio = yFilho - (ARVORE.entreLinhasMm * k) / 2 - Math.max(0, iFilho) * 1.2 * k;
+      d.linha(xPai, yPai, xPai, yMeio, { espessuraMm: 0.45 * k, cor: '#000000' });
+      d.linha(xPai, yMeio, xFilho, yMeio, { espessuraMm: 0.45 * k, cor: '#000000' });
+      d.linha(xFilho, yMeio, xFilho, yFilho, { espessuraMm: 0.45 * k, cor: '#000000' });
+      d.texto(xFilho + 1.5 * k, yMeio - 0.8 * k, `${pai.nome} → ${dg.nome}${dg.entrada.condutores ? ` · ${dg.entrada.condutores}` : ''}${dg.entrada.alimentadorM != null ? ` · ${String(dg.entrada.alimentadorM).replace('.', ',')} m` : ''}`, 1.8 * k, '#555555');
+    }
+  }
+  return { larguraMm: lay.larguraMm, alturaMm: lay.alturaMm };
 }

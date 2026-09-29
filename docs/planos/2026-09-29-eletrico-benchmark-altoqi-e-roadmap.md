@@ -1950,7 +1950,7 @@ Fecha o bloco **4** e completa o **6** (fios).
 
 Fecha o bloco **3**.
 
-## Etapa 4 — Hierarquia de quadros e entrada de energia · kernel bump · 5 fases
+## Etapa 4 — Hierarquia de quadros e entrada de energia · kernel bump · 5 fases · **✅ CONCLUÍDA em 29/09/2026 (5 de 5; kernel 0.75.0 → 0.78.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1958,7 +1958,7 @@ Fecha o bloco **3**.
 | 4.2 Demanda e queda acumuladas ✅ (cadeia até a origem; 7 % com trafo como hipótese; fonte/data da demanda) | demanda do pai = Σ demanda dos filhos + cargas próprias, com **fatores por tabela nomeada** (presets por concessionária como hipótese com fonte e data — a "verdade da concessionária" continua preset, nunca embutida); queda acumulada multinível até a origem (6.2.7.1: 5 %, ou 7 % com trafo — hipótese `origemComTransformador`) | teste: QGBT→QD→C1 com quedas 1 + 2 + 2,5 → FALTA; memorial mostra a cadeia |
 | 4.3 Entrada de energia no desenho ✅ (kernel 0.77.0; padrão GENERICO como hipótese; ramal = maior entre categoria e Tab. 36) | terminal `ENTRADA_SERVICO` (poste/mureta) e `MEDIDOR` (por unidade), ligados ao quadro de MEDICAO; **preset de padrão de entrada** (tabela `PADROES_DE_ENTRADA` por concessionária: categoria × demanda → ramal, disjuntor geral, eletroduto de entrada, aterramento — cada preset com fonte e "CONFERIR na norma da concessionária"); dimensionamento do ramal = o mesmo motor de condutores com método D/B1 | teste com preset "genérico — hipótese": 12 kVA → categoria, ramal 16 mm², disjuntor 63 A; falta se demanda > categoria; goldens |
 | 4.4 Uso coletivo (A, mas destravado aqui) ✅ (kernel 0.78.0; medidor por unidade; diversidade SEM/GENERICO como hipótese; CODI no backlog) | medição por unidade do Empreendimento (unidades já existem em `empreendimento_*`): um MEDIDOR por unidade, demanda do condomínio = Σ unidades × fator de diversidade (hipótese nomeada) + serviço; fora: CODI por concessionária (backlog) | teste com 8 unidades; unifilar do QGBT lista os medidores |
-| 4.5 Unifilar hierárquico e esquema vertical elétrico | unifilar em árvore (QGBT no topo, filhos abaixo, um diagrama só ou por quadro — opção); `utils/blueprintEsquemaVertical.ts` ganha a disciplina ELETRICA: pavimentos × quadros × prumadas × alimentadores, folha "ESQUEMA VERTICAL ELÉTRICO" na prancha; unifilar sai em DXF | harness da prancha olhado; `blueprintEsquemaVertical` testado com sobrado de 2 quadros; DXF abre com camada `UNIFILAR` |
+| 4.5 Unifilar hierárquico e esquema vertical elétrico ✅ (árvore + DXF UNIFILAR; folha ESQUEMA_ELETRICO; harness olhado) | unifilar em árvore (QGBT no topo, filhos abaixo, um diagrama só ou por quadro — opção); `utils/blueprintEsquemaVertical.ts` ganha a disciplina ELETRICA: pavimentos × quadros × prumadas × alimentadores, folha "ESQUEMA VERTICAL ELÉTRICO" na prancha; unifilar sai em DXF | harness da prancha olhado; `blueprintEsquemaVertical` testado com sobrado de 2 quadros; DXF abre com camada `UNIFILAR` |
 
 Fecha o bloco **1** e o resto do **2**.
 
@@ -3075,3 +3075,69 @@ suíte inteira **6.265 ✓** (574 arquivos) · `vite build` ✓ · `check-ui-sta
 **Efeito no benchmark**: §1 "Edificação de uso coletivo" A ❌→🟡 (medição por unidade + fator de
 diversidade como hipótese; CODI real no backlog), "Medidores" ❌→✅ (peça por unidade, ligada ao quadro
 de medição), "Demanda de edificação de uso coletivo" ❌→🟡; §26 "Unifilar do QGBT com a medição" ❌→✅.
+
+### E4.5 — Unifilar hierárquico e esquema vertical elétrico (29/09/2026) · frente `eletrico-e4` · sem bump
+
+**O que mudou**
+
+- **Unifilar em árvore** (`blueprintUnifilar.ts`): `temHierarquia`, `niveisDaArvore` (entradas na 1ª
+  linha, filhos na de baixo na ordem dos pais; órfão/ciclo vira entrada — não some), `layoutDaArvore`
+  e `desenharUnifilarEmArvore` — cada nó é o MESMO `desenharUnifilar`, e o traço até o filho **desce
+  do ramal do pai que o alimenta** ("→ QD1"), anda até a coluna do filho e chega ao topo dele, com o
+  rótulo "QGBT → QD1 · 2#2,5 + T2,5 · 10 m"; filhos do mesmo pai andam em alturas levemente
+  diferentes para os traços não se sobreporem. `DiagramaUnifilar.entrada.alimentadoPorId`.
+- **Folha do unifilar**: com hierarquia, a árvore (encolhida para caber na largura) é o padrão;
+  `OpcoesExportacao.unifilarPorQuadro` volta ao um-por-quadro. **Tela** (`PainelUnifilar`): botões
+  "em árvore" / "por quadro" quando há hierarquia.
+- **Unifilar no DXF**: camadas novas **`UNIFILAR`** e **`UNIFILAR-TEXTO`**, o mesmo traçado da folha
+  (árvore quando há hierarquia) escrito ×50 à DIREITA da planta; `boundingBoxDoModelo` ganhou
+  `maxX/maxY`; a cobertura do DXF diz onde está.
+- **Esquema vertical elétrico** (`utils/blueprintEsquemaVerticalEletrico.ts`, irmão do hidro): pavimentos
+  com cota, cada QUADRO na sua altura (caixa com diagonal; tipo embaixo só quando o nome não o diz), a
+  **entrada** (seta) no quadro sem pai, o **alimentador** em L do pai ao filho com "seção · geral ·
+  metros (eletroduto)", as **prumadas** de eletroduto (`prumadasEletricas`: vertical ELETRICA fora da
+  descida ao próprio quadro, agrupada por (x, y) em P-1, P-2…; a laje ≤ 300 mm é emendada) com Ø, e a
+  legenda (`linhasDaLegendaEletrica`: tipo, unidade, ligação, "de X"/"entrada", "alimenta …", prumadas).
+  `temEsquemaVerticalEletrico`: há hierarquia, quadros em mais de um pavimento ou prumada.
+- **Conjunto de pranchas**: tipo novo **`ESQUEMA_ELETRICO`** ("Esquema vertical elétrico"), depois do
+  unifilar, só quando há o que cortar; `desenharFolhaDoEsquemaVerticalEletrico` (PDF do conjunto e
+  exportação por prancha); rótulo curto "Esq. elétrico" no painel do conjunto.
+- **Defeito da E3.2 achado pelo harness e corrigido**: o rótulo do DPS no unifilar ficava ao lado da
+  derivação e **atropelava o disjuntor do primeiro ramal** ("16 A C*"); foi para a esquerda do barramento,
+  sob as anotações da entrada.
+
+**Testes** — novos `__tests__/blueprintUnifilarArvore.test.ts` (2): QGBT → QD1, QD2 → QD2.1 em três
+linhas; largura = linha mais larga; posição da 2ª linha; textos dos quatro quadros e os rótulos "QGBT →
+QD1 · 2#… · 10 m" / "QD2 → QD2.1"; sem hierarquia, uma linha; a folha usa a árvore e volta ao
+por-quadro com a opção (4 "GERAL"); DXF com as camadas UNIFILAR/UNIFILAR-TEXTO, "DIAGRAMA UNIFILAR" e
+"QGBT → QD1", e nada disso sem `eletrica`. `__tests__/blueprintEsquemaVerticalEletrico.test.ts` (3):
+sobrado com QGBT no térreo alimentando QD1 no superior e prumada Ø32 nos dois pavimentos — P-1 com os
+segmentos [0–2800] e [2900–5700], a descida ao quadro fora; legenda exata; o desenho com pavimentos e
+cotas, quadros, "entrada", alimentador "2,5 mm² · N A · 6 m", P-1, Ø32, escala; sem quadro = aviso e 0;
+a folha com o título; **no conjunto**: `…QUADRO_DE_CARGAS, UNIFILAR, ESQUEMA_ELETRICO` e a casa térrea
+de um quadro sem a folha.
+
+**Harness visual (o "pronto quando" pedia olhar)**: SVG pelo mesmo `Desenhista` → screenshot no Edge
+headless, olhado em três rodadas: (1) o traço saía da borda do pai, não do ramal — corrigido; "QGBT"
+duplicado e "entrada" colado à seta no esquema — corrigidos; (2) o rótulo do DPS atropelando o
+primeiro ramal (defeito da E3.2) — corrigido; (3) limpo. O harness foi um teste temporário, apagado
+antes do commit.
+
+**Ambiente (dito)**: o Node 24.12 desta máquina cai de forma INTERMITENTE com crash interno do V8
+(`Check failed: index < size()` num worker do Vitest; 0xC0000005 no `tsc` mesmo com 12 GB de heap, onde
+antes passou usando 4,45 GB). Duas de quatro rodadas da suíte perderam um worker; o veredito vale só
+com a contagem fechando — **6.303 = 6.270 ✓ + 33 pulados, 581 arquivos, 0 falhas** (reporter JSON).
+`tsc` ✓ (0 erros) na repetição; `vite build` ✓ (exit 0, PWA gerado) na repetição.
+
+**Verificação**: `tsc` ✓ · alvo 41 ✓ (9 arquivos) · suíte inteira 6.270 ✓ (conta fechada) · `vite
+build` ✓ · `check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ · sem mudança no kernel (bundle
+da planta-api intacto) · harness visual olhado.
+
+**Efeito no benchmark**: §26 "Unifilar hierárquico (árvore)" ❌→✅, "Unifilar no DXF" ❌→✅; §27/§8
+"Esquema vertical elétrico" ❌→✅ (pavimentos × quadros × alimentadores × prumadas); §1 "Prumadas de
+eletroduto identificadas" ❌→✅.
+
+**Etapa 4 concluída** — cinco fases, kernel 0.75.0 → 0.78.0. Backlog que sai daqui: CODI por
+concessionária (preset com fonte e data); presets reais de padrão de entrada; fatores de demanda por
+nível; demanda por tipologia; redução do neutro trifásico > 25 mm² (herdado da E2); medidor
+"geral/serviço" como peça distinta; estabilidade do Node 24 no Windows (ferramenta).

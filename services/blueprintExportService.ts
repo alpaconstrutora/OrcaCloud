@@ -15,6 +15,7 @@ import {
   desenharElevacao,
   desenharFolhaDeDetalhesHidro,
   desenharFolhaDoEsquemaVertical,
+  desenharFolhaDoEsquemaVerticalEletrico,
   desenharFolhaDoQuadroDeCargas,
   desenharFolhaDoUnifilar,
   desenharPlanta,
@@ -529,9 +530,11 @@ export function desenharConjunto(
         break;
       }
       case 'QUADRO_DE_CARGAS':
-      case 'UNIFILAR': {
+      case 'UNIFILAR':
+      case 'ESQUEMA_ELETRICO': {
         const enq = enquadrar(model, template.denominadorPlanta, papel, false);
         if (p.tipo === 'QUADRO_DE_CARGAS') desenharFolhaDoQuadroDeCargas(d, model, comPrancha(0, { eletrica: true }), enq);
+        else if (p.tipo === 'ESQUEMA_ELETRICO') desenharFolhaDoEsquemaVerticalEletrico(d, model, comPrancha(0, { eletrica: true }), enq);
         else desenharFolhaDoUnifilar(d, model, comPrancha(0, { eletrica: true }), enq);
         folhas.push({ prancha: p, denominador: 0 });
         break;

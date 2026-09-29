@@ -147,6 +147,12 @@ export const CAMADAS = {
   AGUA_TEXTO: 'PLANTA-AGUA-TEXTO',
   ESGOTO: 'PLANTA-ESGOTO',
   ESGOTO_TEXTO: 'PLANTA-ESGOTO-TEXTO',
+  /**
+   * O DIAGRAMA UNIFILAR (E4.5, 29/09/2026): traçado e textos em camadas
+   * próprias, à direita da planta — quem plota a planta desliga as duas.
+   */
+  UNIFILAR: 'UNIFILAR',
+  UNIFILAR_TEXTO: 'UNIFILAR-TEXTO',
 } as const;
 
 /** Cor por índice ACI, como o R12 espera. */
@@ -188,6 +194,8 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.AGUA_TEXTO]: 5,
   [CAMADAS.ESGOTO]: 32, // marrom — a convenção de esgoto em prancha
   [CAMADAS.ESGOTO_TEXTO]: 32,
+  [CAMADAS.UNIFILAR]: 7,
+  [CAMADAS.UNIFILAR_TEXTO]: 2,
 };
 
 const ROTULO_ELEVACAO: Record<string, string> = {
@@ -479,6 +487,7 @@ function entidadesDeAgua(r: Agua): string {
 import type { Desenhista } from './blueprintExport';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { desenharEletrica, linhasDoQuadroDeCargas } from './blueprintPranchaEletrica';
+import { desenharUnifilar, desenharUnifilarEmArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 
 export interface OpcoesDxf {
   titulo: string;
@@ -966,6 +975,48 @@ function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): s
     saida += texto(CAMADAS.ELETRICA_TEXTO, { x, y }, l, altura);
     y -= altura * 1.8;
   }
+  // E4.5: o UNIFILAR à direita da planta, em camadas próprias — o mesmo
+  // traçado da folha (árvore com hierarquia), no "papel a 1:50" escrito ×50.
+  saida += entidadesDoUnifilar(model, hip, (bb?.maxX ?? 0) + 2000, bb?.maxY ?? 0);
+  return saida;
+}
+
+/** O diagrama unifilar como entidades DXF, com o canto superior esquerdo em (xReal, yReal) mm do mundo. */
+function entidadesDoUnifilar(model: BlueprintModel, hip: HipotesesEletricas | undefined, xReal: number, yReal: number): string {
+  const diagramas = montarUnifilar(model, hip);
+  if (diagramas.length === 0) return '';
+  let saida = '';
+  const FATOR = 50;
+  // Papel: (0,0) no canto do diagrama, Y para baixo; mundo: Y para cima, ×50.
+  const real = (x: number, y: number) => ({ x: xReal + x * FATOR, y: yReal - y * FATOR });
+  const d: Desenhista = {
+    linha: (x1, y1, x2, y2) => {
+      saida += linha(CAMADAS.UNIFILAR, real(x1, y1), real(x2, y2));
+    },
+    poligono: (pontos) => {
+      saida += polilinha(CAMADAS.UNIFILAR, pontos.map((p) => real(p.x, p.y)));
+    },
+    texto: (x, y, t, alturaMm) => {
+      saida += texto(CAMADAS.UNIFILAR_TEXTO, real(x, y), t, alturaMm * FATOR);
+    },
+    retangulo: (x, y, w, h) => {
+      saida += polilinha(CAMADAS.UNIFILAR, [real(x, y), real(x + w, y), real(x + w, y + h), real(x, y + h)]);
+    },
+  };
+  d.texto(0, 3.2, 'DIAGRAMA UNIFILAR', 3);
+  let y = 8;
+  if (temHierarquia(diagramas)) {
+    y += desenharUnifilarEmArvore(d, diagramas, 0, y, 1).alturaMm + 6;
+  } else {
+    for (const dg of diagramas) {
+      desenharUnifilar(d, dg, 0, y, 1);
+      y += medidasDoUnifilar(dg).alturaMm + 8;
+    }
+  }
+  for (const l of rodapeDoUnifilar(diagramas)) {
+    d.texto(0, y, l, 1.9);
+    y += 3.6;
+  }
   return saida;
 }
 
@@ -999,7 +1050,7 @@ function entidadesDaRedeHidro(model: BlueprintModel, rede: RedeDaPrancha): strin
   return saida;
 }
 
-function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: number } | null {
+function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: number; maxX: number; maxY: number } | null {
   const xs: number[] = [];
   const ys: number[] = [];
   for (const w of model.walls) {
@@ -1007,7 +1058,8 @@ function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: numbe
     ys.push(w.a.y, w.b.y);
   }
   if (xs.length === 0) return null;
-  return { minX: Math.min(...xs), minY: Math.min(...ys) };
+  // E4.5: o máximo também — o unifilar vai à DIREITA da planta, a partir do topo dela.
+  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
 }
 
 /**
@@ -1069,7 +1121,7 @@ function entidadesDeCota(model: BlueprintModel): string {
  */
 export const COBERTURA_DXF = [
   'Hidrossanitário (quando pedido): tubos na largura real (bifilar), conexões, caixas e pontos em PLANTA-AGUA e PLANTA-ESGOTO; ø, i % e siglas em PLANTA-AGUA-TEXTO e PLANTA-ESGOTO-TEXTO, no tamanho de papel a 1:50. A cota do tubo não está na geometria 2D — só no IFC.',
-  'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA, rótulos (sigla · circuito, Ø, #seção, VA) em PLANTA-ELETRICA-TEXTO; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta.',
+  'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA, rótulos (sigla · circuito, Ø, #seção, VA) em PLANTA-ELETRICA-TEXTO; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta; o diagrama unifilar (em árvore quando há hierarquia de quadros) em UNIFILAR / UNIFILAR-TEXTO, à direita da planta.',
   'Unidade: MILÍMETRO, declarada em $INSUNITS. O desenho está em 1:1 — a escala é da prancha.',
   'Paredes: sólido fechado por parede, NÃO APARADO nas junções (os retângulos se sobrepõem).',
   'Eixos: em camada própria, para reeditar as paredes.',

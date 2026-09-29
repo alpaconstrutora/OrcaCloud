@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import type { Desenhista, EstiloTraco } from '../../utils/blueprintExport';
 import { HIPOTESES_PADRAO, type HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
-import { desenharUnifilar, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar } from '../../utils/blueprintUnifilar';
+import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from '../../utils/blueprintUnifilar';
 
 /**
  * DIAGRAMA UNIFILAR na tela (15/09/2026) — ver `blueprintUnifilar.ts`.
@@ -83,6 +83,10 @@ export default function PainelUnifilar({
   hipoteses?: HipotesesEletricas;
 }) {
   const diagramas = useMemo(() => montarUnifilar(model, hipoteses), [model, hipoteses]);
+  // E4.5: com hierarquia de quadros, a ÁRVORE é o padrão; "por quadro" continua à mão.
+  const hierarquia = temHierarquia(diagramas);
+  const [porQuadro, setPorQuadro] = useState(false);
+  const arvore = hierarquia && !porQuadro;
 
   if (diagramas.length === 0) {
     return (
@@ -95,7 +99,36 @@ export default function PainelUnifilar({
 
   return (
     <div className="space-y-6" data-testid="unifilar">
-      {diagramas.map((dg) => {
+      {hierarquia && (
+        <div className="flex items-center gap-2 text-xs text-slate-600">
+          <span>Ver:</span>
+          <button type="button" onClick={() => setPorQuadro(false)} aria-pressed={!porQuadro} className={`rounded px-2 py-1 ${!porQuadro ? 'bg-slate-800 text-white' : 'border border-slate-300 hover:bg-slate-50'}`}>
+            em árvore
+          </button>
+          <button type="button" onClick={() => setPorQuadro(true)} aria-pressed={porQuadro} className={`rounded px-2 py-1 ${porQuadro ? 'bg-slate-800 text-white' : 'border border-slate-300 hover:bg-slate-50'}`}>
+            por quadro
+          </button>
+        </div>
+      )}
+      {arvore &&
+        (() => {
+          const lay = layoutDaArvore(diagramas);
+          const d = new DesenhistaSvg(PX_POR_MM);
+          desenharUnifilarEmArvore(d, diagramas, 0, 0, 1);
+          const w = Math.ceil(lay.larguraMm * PX_POR_MM);
+          const h = Math.ceil(lay.alturaMm * PX_POR_MM);
+          return (
+            <section aria-label="Diagrama unifilar em árvore">
+              <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+                <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Unifilar em árvore — entradas em cima, quadros alimentados embaixo">
+                  {d.nos}
+                </svg>
+              </div>
+            </section>
+          );
+        })()}
+      {!arvore &&
+        diagramas.map((dg) => {
         const { larguraMm, alturaMm } = medidasDoUnifilar(dg);
         const d = new DesenhistaSvg(PX_POR_MM);
         desenharUnifilar(d, dg, 0, 0, 1);

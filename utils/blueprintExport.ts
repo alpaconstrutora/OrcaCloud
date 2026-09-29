@@ -360,6 +360,8 @@ export interface OpcoesExportacao {
   instalacoesNoCorte?: boolean;
   /** Hipóteses do pré-dimensionamento, para o quadro de cargas da prancha. */
   hipotesesEletricas?: HipotesesEletricas;
+  /** E4.5: força um diagrama POR QUADRO mesmo com hierarquia (o padrão com hierarquia é a árvore). */
+  unifilarPorQuadro?: boolean;
   /**
    * As definições de parâmetro COM FÓRMULA da organização (E1.5). Com elas, o
    * IFC e a planilha levam também os valores calculados — a ficha completa da
@@ -378,7 +380,8 @@ export const AVISO_PADRAO =
   'nem vale para aprovação legal ou execução.';
 
 import { desenharEletrica, desenharQuadroDeCargas } from './blueprintPranchaEletrica';
-import { desenharUnifilar, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar } from './blueprintUnifilar';
+import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
+import { desenharEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 const COR_TRACO = '#000000';
@@ -896,6 +899,23 @@ export function desenharFolhaDoEsquemaVertical(
 }
 
 /**
+ * A FOLHA DO ESQUEMA VERTICAL ELÉTRICO (E4.5, 29/09/2026): pavimentos ×
+ * quadros × alimentadores × prumadas de eletroduto, e a legenda dos quadros.
+ */
+export function desenharFolhaDoEsquemaVerticalEletrico(
+  d: Desenhista,
+  model: BlueprintModel,
+  opcoes: OpcoesExportacao,
+  enq: Enquadramento,
+): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  d.texto(x0, topo + 6, 'ESQUEMA VERTICAL ELÉTRICO', 3.2);
+  desenharEsquemaVerticalEletrico(d, model, opcoes.hipotesesEletricas, x0, topo + 12, enq.utilLarguraMm, enq.utilAlturaMm - 14);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
  * A FOLHA DE LEGENDA E DETALHES HIDROSSANITÁRIOS (E2.1, 28/09/2026): a legenda
  * do desenho inteiro — condutos por rede × material × DN, conexões, pontos e
  * peças que EXISTEM — e, abaixo dela (E2.2), os isométricos por ambiente molhado.
@@ -940,11 +960,19 @@ export function desenharFolhaDoUnifilar(
   y += 7;
   const diagramas = montarUnifilar(model, opcoes.hipotesesEletricas);
   if (diagramas.length === 0) d.texto(x0, y, 'Sem quadro de distribuição neste desenho.', 2.2, '#555555');
-  for (const dg of diagramas) {
-    const { larguraMm, alturaMm } = medidasDoUnifilar(dg);
-    const k = Math.min(1, enq.utilLarguraMm / larguraMm);
-    desenharUnifilar(d, dg, x0, y, k);
-    y += alturaMm * k + 8;
+  if (!opcoes.unifilarPorQuadro && temHierarquia(diagramas)) {
+    // E4.5: com hierarquia, a ÁRVORE (entradas em cima, filhos embaixo, ligados) — encolhida para caber na largura.
+    const lay = layoutDaArvore(diagramas);
+    const k = Math.min(1, enq.utilLarguraMm / Math.max(1, lay.larguraMm));
+    const m = desenharUnifilarEmArvore(d, diagramas, x0, y, k);
+    y += m.alturaMm + 8;
+  } else {
+    for (const dg of diagramas) {
+      const { larguraMm, alturaMm } = medidasDoUnifilar(dg);
+      const k = Math.min(1, enq.utilLarguraMm / larguraMm);
+      desenharUnifilar(d, dg, x0, y, k);
+      y += alturaMm * k + 8;
+    }
   }
   y += 2;
   for (const l of rodapeDoUnifilar(diagramas)) {

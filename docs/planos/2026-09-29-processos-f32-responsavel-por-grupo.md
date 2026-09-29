@@ -138,3 +138,11 @@ Um item por arquivo. Cada item: **o que muda** · **como sei que terminou**.
   | depois de assumida sai da fila do grupo | 0 | 0 |
   | limpeza: vínculo de teste removido | 0 | 0 |
   Instância de teste CANCELADA, template ARQUIVADO, vínculo removido. A notificação ficou no sino para conferência visual
+
+## Publicação
+
+| Data | Commit | Prova |
+|---|---|---|
+| 2026-09-29 | `065ddc25` (push aceito na 1ª, sobre 3 commits de outras frentes) | `conferir-producao.sh "Ninguém — etapas deste grupo ficam sem dono" "Assumir etapa"` → carimbado `065ddc2`, os dois textos presentes |
+
+Pendente: conferência visual da aba Equipes, do seletor de responsável com grupos, do botão "Assumir etapa" e do "via <grupo>" em Pendente comigo. Nenhum grupo tem membro marcado ainda — o vínculo de teste foi removido; marcar as pessoas reais é o próximo passo de uso.

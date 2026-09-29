@@ -174,6 +174,11 @@ describe('baixa de título → internal_transaction.paid', () => {
         expect(disparos.map(d => d.eventKey)).toEqual(['internal_transaction.paid']);
     });
 
+    it('payableService.darBaixa (painel, main 1d16990f) dispara também', async () => {
+        await payableService.darBaixa('t1', { paymentDate: '2026-09-28', paymentType: null });
+        expect(disparos.map(d => d.eventKey)).toEqual(['internal_transaction.paid']);
+    });
+
     it('bankReconciliationService.createMatch dispara depois da RPC', async () => {
         const r = await bankReconciliationService.createMatch('b1', 't1', 'MANUAL' as never, 1);
         expect(rpcs).toEqual(['fn_reconcile_match']);

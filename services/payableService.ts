@@ -162,6 +162,15 @@ export const payableService = {
             })
             .eq('id', id);
         if (error) throw error;
+
+        // Mesma costura P2P do `updateStatus('PAGO')` — esta função nasceu em
+        // main (1d16990f) em paralelo ao Passo 3 e grava PAGO sem passar por lá;
+        // sem esta linha a baixa pelo painel ficava invisível para Processos.
+        try {
+            await processService.triggerForTransaction(id, 'internal_transaction.paid');
+        } catch (e) {
+            console.error('[payableService] process trigger (paid, darBaixa) failed:', e);
+        }
     },
 
     async create(

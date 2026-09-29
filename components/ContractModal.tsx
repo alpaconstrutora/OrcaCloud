@@ -81,6 +81,11 @@ interface ContractModalProps {
     sections?: ContractFormSection[];
 }
 
+// Gatilho dos seletores hierárquicos (Centro de Custo, Conta Financeira, Plano de
+// Contas) no mesmo recorte h-9 dos outros campos do formulário — o tamanho 'md'
+// do HierarchicalSelect é py-4 + rounded-2xl (54px), fora do §16/§30.
+const SELETOR_H9 = 'h-9 bg-gray-50 border border-gray-100 rounded-[6px] pl-3 pr-2 hover:border-blue-200';
+
 export const ContractModal: React.FC<ContractModalProps> = ({
     isOpen,
     onClose,
@@ -1393,9 +1398,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 <HandCoins className="w-4 h-4 text-blue-600" />
                                 <h3 className="text-sm font-semibold text-gray-900">Condições de Pagamento</h3>
                             </div>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            {/* Embutido (aba Financeiro › Dados Gerais) em 3 colunas: Forma,
+                                Condição e Prazo são campos curtos e ficavam 2+1, com meia
+                                linha vazia (§30). Blocos largos usam col-span-full. */}
+                            <div className={`grid ${inline ? 'grid-cols-3' : 'grid-cols-2'} gap-x-6 gap-y-4`}>
                                 {/* Modalidade de faturamento */}
-                                <div className="col-span-2 space-y-1.5">
+                                <div className="col-span-full space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Modalidade de Faturamento</label>
                                     <div className="flex gap-2 flex-wrap">
                                         {([
@@ -1409,7 +1417,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 key={opt.label}
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, billing_mode: opt.value as any }))}
-                                                className={`px-4 py-2 rounded-[6px] text-form-input font-medium border transition-all ${
+                                                className={`h-9 px-3.5 rounded-[6px] text-[13px] font-medium border transition-all ${
                                                     (formData.billing_mode ?? undefined) === opt.value
                                                         ? 'bg-blue-600 text-white border-blue-600'
                                                         : 'bg-gray-50 text-gray-500 border-gray-100 hover:border-blue-300'
@@ -1488,18 +1496,18 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 )}
                                 <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Condição de Pagamento</label>
-                                    <div className="flex bg-gray-50 rounded-[10px] p-1 border border-gray-100">
+                                    <div className="flex h-9 bg-gray-50 rounded-[6px] p-0.5 border border-gray-100">
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Vista' })}
-                                            className={`flex-1 py-3 px-4 rounded-[6px] text-[13px] font-medium transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                            className={`flex-1 px-3 rounded-[4px] text-[13px] font-medium transition-all ${formData.payment_term_type === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             À Vista
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setFormData({ ...formData, payment_term_type: 'Parcelado' })}
-                                            className={`flex-1 py-3 px-4 rounded-[6px] text-button font-medium transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                            className={`flex-1 px-3 rounded-[4px] text-[13px] font-medium transition-all ${formData.payment_term_type === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             Parcelado
                                         </button>
@@ -1531,7 +1539,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         tipo === TIPO_ENTRADA ? 'Entrada' : (labelForInstallmentType(DEFAULT_PAYMENT_TYPES, tipo ?? undefined) || '—');
                                     const campo = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200';
                                     return (
-                                    <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-2">
+                                    <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-full">
                                         {/* O que o usuário pensa: entrada + N parcelas de X em X meses. Os
                                             campos regeram o cronograma abaixo; as linhas continuam editáveis
                                             uma a uma (utils/contractInstallments.ts). Malha do §30: campo
@@ -1775,6 +1783,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         onChange={(v) => setFormData({ ...formData, cost_center_id: v })}
                                         placeholder="Nenhum centro vinculado"
                                         hoverCls="hover:bg-blue-50"
+                                        size="sm"
+                                        triggerClassName={SELETOR_H9}
                                     />
                                 </div>
                                 <div className="space-y-1.5">
@@ -1788,6 +1798,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         hoverCls="hover:bg-blue-50"
                                         panelVariant="drawer"
                                         drawerTitle="Selecionar Conta Financeira"
+                                        size="sm"
+                                        triggerClassName={SELETOR_H9}
                                     />
                                 </div>
                                 {/* Dimensão distinta de Centro de Custo (cost_centers_v2) e de Conta
@@ -1801,6 +1813,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v })}
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
+                                        size="sm"
+                                        triggerClassName={SELETOR_H9}
                                     />
                                 </div>
                                 {/* Vínculo DIRETO, independente da obra: contrato sem obra
@@ -1871,7 +1885,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                         </select>
                                     </div>
                                 </div>
-                                <div className="space-y-1.5">
+                                <div className="col-span-2 space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Classificação Fiscal (Opcional)</label>
                                     <input
                                         type="text"

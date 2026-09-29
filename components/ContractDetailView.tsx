@@ -8,7 +8,7 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
     Package, Pencil, Settings, Search, Lock as LockIcon,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -1789,70 +1789,74 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             faturar), não campo editável. Os cards Partes/Configurações
                             que ficavam aqui saíram ao virar duplicata do formulário. */}
                         {showOv('resumo') && (
-                        <div className="bg-[#0B1727] p-5 rounded-[10px] text-white space-y-4 relative overflow-hidden group shadow-2xl shadow-blue-900/10">
-                            <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/10 rounded-full -mr-20 -mt-20 group-hover:scale-150 transition-transform duration-700" />
-
-                            <div className="space-y-4 relative z-10">
-                                <div>
-                                    <p className="text-xs font-medium text-blue-400 mb-1">Valor Atual do Contrato</p>
-                                    <h4 className="text-2xl font-medium tracking-tighter">
-                                        R$ {contract.current_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                    </h4>
-                                    <div className="flex items-center gap-2 mt-1 text-emerald-400">
-                                        <TrendingUp className="w-4 h-4" />
-                                        <span className="text-xs font-medium">{addendumsMetrics.percentage > 0 ? '+' : ''} {addendumsMetrics.percentage.toFixed(1)}% em Aditivos</span>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 pt-3 border-t border-white/10">
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-400 font-medium">Valor Original</span>
-                                        <span className="font-medium">R$ {contract.original_value.toLocaleString('pt-BR')}</span>
-                                    </div>
-                                    {(contract as any).labor_value > 0 && (
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-400 font-medium">↳ Mão de Obra</span>
-                                            <span className="font-medium text-gray-300">R$ {(contract as any).labor_value.toLocaleString('pt-BR')}</span>
-                                        </div>
-                                    )}
-                                    {(contract as any).materials_value > 0 && (
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-400 font-medium">↳ Materiais</span>
-                                            <span className="font-medium text-gray-300">R$ {(contract as any).materials_value.toLocaleString('pt-BR')}</span>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-400 font-medium">Total Medido</span>
-                                        <span className="font-medium text-blue-400">R$ {totalMeasurements.toLocaleString('pt-BR')}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-xs">
-                                        <span className="text-gray-400 font-medium">Retenções</span>
-                                        <span className="font-medium text-amber-400">R$ {(totalMeasurements * (contract.retention_rate / 100)).toLocaleString('pt-BR')}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-xs pt-2 border-t border-white/10">
-                                        <span className="text-emerald-400 font-medium">Saldo a Faturar</span>
-                                        <span className="font-medium text-emerald-400">R$ {(contract.current_value - totalMeasurements).toLocaleString('pt-BR')}</span>
-                                    </div>
+                        <div className="bg-white p-5 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                            {/* Mesma linguagem dos outros cards da tela (branco, borda
+                                cinza) e as cores semânticas do KpiCard: medido azul,
+                                retido âmbar, saldo verde. Era um card #0B1727 com
+                                círculo decorativo — fora da paleta do app. */}
+                            <div>
+                                <p className="text-xs font-medium text-gray-500 mb-1">Valor Atual do Contrato</p>
+                                <h4 className="text-2xl font-medium text-gray-900 tracking-tight">
+                                    R$ {fmt(contract.current_value)}
+                                </h4>
+                                <div className="flex items-center gap-1.5 mt-1 text-emerald-600">
+                                    <TrendingUp className="w-4 h-4" />
+                                    <span className="text-xs font-medium">
+                                        {addendumsMetrics.percentage > 0 ? '+' : ''}{addendumsMetrics.percentage.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% em Aditivos
+                                    </span>
                                 </div>
                             </div>
 
-                            <Button
+                            <div className="space-y-2 pt-3 border-t border-gray-100">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-500 font-medium">Valor Original</span>
+                                    <span className="font-medium text-gray-900">R$ {fmt(contract.original_value)}</span>
+                                </div>
+                                {(contract as any).labor_value > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500 font-medium">↳ Mão de Obra</span>
+                                        <span className="font-medium text-gray-700">R$ {fmt((contract as any).labor_value)}</span>
+                                    </div>
+                                )}
+                                {(contract as any).materials_value > 0 && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500 font-medium">↳ Materiais</span>
+                                        <span className="font-medium text-gray-700">R$ {fmt((contract as any).materials_value)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-500 font-medium">Total Medido</span>
+                                    <span className="font-medium text-blue-600">R$ {fmt(totalMeasurements)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-500 font-medium">Retenções</span>
+                                    <span className="font-medium text-amber-600">R$ {fmt(totalMeasurements * (contract.retention_rate / 100))}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs pt-2 border-t border-gray-100">
+                                    <span className="text-emerald-700 font-medium">Saldo a Faturar</span>
+                                    <span className="font-medium text-emerald-700">R$ {fmt(contract.current_value - totalMeasurements)}</span>
+                                </div>
+                            </div>
+
+                            {/* §17 — secundário: a ação primária azul da tela é "Enviar automação". */}
+                            <button
+                                type="button"
                                 onClick={handleExportReport}
                                 disabled={exporting}
-                                className={`w-full rounded-[6px] ${exporting ? 'bg-gray-700 hover:bg-gray-700 cursor-not-allowed' : ''}`}
+                                className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {exporting ? (
                                     <>
-                                        <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                                        <Loader2 className="w-[15px] h-[15px] animate-spin" />
                                         Gerando Dossiê...
                                     </>
                                 ) : (
                                     <>
-                                        <FileText className="w-4 h-4" />
+                                        <FileText className="w-[15px] h-[15px]" />
                                         Emitir Relatório Completo
                                     </>
                                 )}
-                            </Button>
+                            </button>
                         </div>
                         )}
 

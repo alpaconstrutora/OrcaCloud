@@ -63,8 +63,12 @@ describe('planejarEsgoto — casa térrea', () => {
     const { m } = casa();
     const p = planejarEsgoto(m);
     expect(p.motivo).toBeNull();
-    expect(p.avisos).toEqual([]);
+    // E5.1: o que chega à CI é SUBCOLETOR (tabela 7, DN mínimo 100) — um trecho sobe de DN.
+    expect(p.avisos).toEqual(['1 trecho(s) com o DN pelas tabelas da NBR 8160 (tubo de queda, subcoletor)']);
     const tr = novos(p);
+    const naCI = tr.filter((c) => (c.b.x === 6000 && c.b.y === -1500) || (c.a.x === 6000 && c.a.y === -1500));
+    expect(naCI.length).toBeGreaterThan(0);
+    for (const c of naCI) expect(c.bitolaMm).toBeGreaterThanOrEqual(100);
     // Do lavatório (600,2500) sai um ramal horizontal DN 40 rumo à caixa sifonada.
     const doLavatorio = tr.filter((c) => horizontal(c) && em(c, 600, 2500));
     expect(doLavatorio).toHaveLength(1);

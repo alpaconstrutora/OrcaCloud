@@ -40,8 +40,9 @@
  * desvio de fundação, viga ou laje — o desenho não os conhece. É
  * pré-dimensionamento; o executivo é do projetista.
  */
+import { dnDoRamalDeEsgoto, dnDoSubcoletor, dnDoTuboDeQueda, type PapelNoEsgoto } from './blueprintNbr8160';
 import type { BlueprintModel, Command, ObjectId, Space, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
-import { CATALOGO_DE_COMPONENTES, pointInPolygon } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, applyBatch, pointInPolygon } from './blueprintKernel';
 import {
   arvoreComRotaLimitada,
   comprimentoMm,
@@ -235,7 +236,47 @@ export function caixasDeInspecao(model: BlueprintModel): Terminal[] {
   return (model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'CAIXA_INSPECAO');
 }
 
+/**
+ * O PLANO DO ESGOTO, já com os DN das TABELAS da NBR 8160 (E5.1, 29/09/2026).
+ *
+ * O traçado (abaixo, `planejarEsgotoTracado`) escolhe os DN pelo degrau do
+ * ramal; aqui o plano é aplicado numa cópia, o cálculo por PAPEL
+ * (`esgotoTrechoATrecho`: tubo de queda pela tabela 6, subcoletor pela 7, DN
+ * mínimo 100) diz onde falta diâmetro, e o DN é corrigido NO PRÓPRIO
+ * `AddTrecho` — sem depender dos ids que o kernel dará (relançar apaga antes).
+ */
 export function planejarEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): PlanoDeEsgoto {
+  const plano = planejarEsgotoTracado(model, hip);
+  const indices = plano.comandos.map((c, i) => (c.type === 'AddTrecho' ? i : -1)).filter((i) => i >= 0);
+  if (indices.length === 0) return plano;
+  let aplicado: BlueprintModel;
+  let criados: string[];
+  try {
+    const r = applyBatch(model, plano.comandos);
+    aplicado = r.model;
+    criados = r.diff.created.filter((id) => (aplicado.trechos ?? []).some((t) => t.id === id));
+  } catch {
+    return plano;
+  }
+  if (criados.length !== indices.length) return plano;
+  const indiceDoTrecho = new Map(criados.map((id, k) => [id, indices[k]]));
+  const novoDn = new Map<number, number>();
+  for (const c of esgotoTrechoATrecho(aplicado, hip)) {
+    const i = indiceDoTrecho.get(c.trechoId);
+    if (i != null && c.dnAtualMm < c.dnNecessarioMm) novoDn.set(i, c.dnNecessarioMm);
+  }
+  if (novoDn.size === 0) return plano;
+  const comandos = plano.comandos.map((c, i) => (novoDn.has(i) && c.type === 'AddTrecho' ? { ...c, bitolaMm: novoDn.get(i)! } : c));
+  return {
+    ...plano,
+    comandos,
+    dnMaximoMm: Math.max(plano.dnMaximoMm, ...novoDn.values()),
+    avisos: [...plano.avisos, `${novoDn.size} trecho(s) com o DN pelas tabelas da NBR 8160 (tubo de queda, subcoletor)`],
+  };
+}
+
+/** O TRAÇADO do esgoto (antes de E5.1, `planejarEsgoto`): caminhos, cotas e o DN pelo degrau do ramal. */
+function planejarEsgotoTracado(model: BlueprintModel, hip: HipotesesDeEsgoto): PlanoDeEsgoto {
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const indice = new Map(niveis.map((l, i) => [l.id, i]));
   const cis = caixasDeInspecao(model);
@@ -551,16 +592,28 @@ export interface TrechoDeEsgotoCalculado extends Omit<DnForaDoNecessario, 'tipo'
   /** Declividade do trecho, % (null na prumada). */
   declividadePct: number | null;
   declividadeMinimaPct: number;
+  /** O papel na árvore (E5.1) — decide a tabela da NBR 8160. */
+  papel: PapelNoEsgoto;
 }
 
 export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): TrechoDeEsgotoCalculado[] {
   const chave = fazerChave(model.levels);
-  const fontes = new Map<string, { uhc: number; dn: number }>();
+  // O que chega a cada nó (E5.1): UHC, o maior DN de aparelho, quantas fontes, de
+  // quais ambientes e quanta UHC por pavimento — é o que decide o PAPEL do trecho.
+  type Carga = { uhc: number; dn: number; fontes: number; ambientes: Set<string>; porNivel: Map<ObjectId, number>; temTQ: boolean };
+  const nova = (): Carga => ({ uhc: 0, dn: 40, fontes: 0, ambientes: new Set(), porNivel: new Map(), temTQ: false });
+  const fontes = new Map<string, Carga>();
   for (const f of fontesDeEsgoto(model)) {
     const k = chave(f.levelId, f.at.x, f.at.y, f.cotaMm);
-    const atual = fontes.get(k) ?? { uhc: 0, dn: 40 };
-    fontes.set(k, { uhc: atual.uhc + uhcDe(f), dn: Math.max(atual.dn, dnFichaDe(f)) });
+    const atual = fontes.get(k) ?? nova();
+    atual.uhc += uhcDe(f);
+    atual.dn = Math.max(atual.dn, dnFichaDe(f));
+    atual.fontes += 1;
+    atual.ambientes.add(espacoDe(model, f)?.id ?? `fora|${f.levelId}`);
+    atual.porNivel.set(f.levelId, (atual.porNivel.get(f.levelId) ?? 0) + uhcDe(f));
+    fontes.set(k, atual);
   }
+  const pavimentos = model.levels.length;
   const saida: TrechoDeEsgotoCalculado[] = [];
   const vistos = new Set<ObjectId>();
   for (const ci of caixasDeInspecao(model)) {
@@ -585,14 +638,37 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
         fila.push(outro);
       }
     }
-    const acumular = (n: string): { uhc: number; dn: number } => {
-      let { uhc, dn } = fontes.get(n) ?? { uhc: 0, dn: 40 };
+    const acumular = (n: string): Carga => {
+      const base = fontes.get(n);
+      const soma: Carga = base
+        ? { ...base, ambientes: new Set(base.ambientes), porNivel: new Map(base.porNivel) }
+        : nova();
       for (const { t, filho } of filhos.get(n) ?? []) {
         const sub = acumular(filho);
-        const passa = t.rotulo === 'TQ' ? Math.max(sub.dn, hip.dnTuboQuedaMm) : sub.dn;
+        const ehTQ = t.rotulo === 'TQ';
+        const passa = ehTQ ? Math.max(sub.dn, hip.dnTuboQuedaMm) : sub.dn;
         if (sub.uhc > 0 && !vistos.has(t.id)) {
           vistos.add(t.id);
-          const necessario = Math.max(dnPorUhc(sub.uhc), passa);
+          const plantaMm = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+          const montanteA = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm) === filho;
+          const decl = plantaMm < 1 ? null : (((montanteA ? t.cotaAMm : t.cotaBMm) - (montanteA ? t.cotaBMm : t.cotaAMm)) / plantaMm) * 100;
+          // O PAPEL (E5.1) e a tabela da NBR 8160 que vale para ele.
+          const papel: PapelNoEsgoto = ehTQ
+            ? 'TUBO_DE_QUEDA'
+            : sub.temTQ || n === raiz || sub.ambientes.size >= 2
+              ? 'SUBCOLETOR'
+              : sub.fontes <= 1
+                ? 'RAMAL_DE_DESCARGA'
+                : 'RAMAL_DE_ESGOTO';
+          const daTabela =
+            papel === 'TUBO_DE_QUEDA'
+              ? dnDoTuboDeQueda(sub.uhc, Math.max(0, ...sub.porNivel.values()), pavimentos)
+              : papel === 'SUBCOLETOR'
+                ? dnDoSubcoletor(sub.uhc, decl)
+                : papel === 'RAMAL_DE_ESGOTO'
+                  ? dnDoRamalDeEsgoto(sub.uhc)
+                  : 0; // ramal de descarga: o DN do aparelho (`passa`)
+          const necessario = Math.max(daTabela, passa);
           const tipo = t.bitolaMm < necessario ? 'MENOR' : t.bitolaMm > necessario && t.rotulo !== 'TQ' ? 'MAIOR' : null;
           // Montante = a ponta do FILHO (mais longe da caixa); jusante = a do nó `n`.
           const montanteEhA = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm) === filho;
@@ -607,12 +683,17 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
             cotaMontanteMm, cotaJusanteMm,
             declividadePct: planta < 1 ? null : ((cotaMontanteMm - cotaJusanteMm) / planta) * 100,
             declividadeMinimaPct: caimentoPct(t.bitolaMm, hip),
+            papel,
           });
         }
-        uhc += sub.uhc;
-        dn = Math.max(dn, passa);
+        soma.uhc += sub.uhc;
+        soma.dn = Math.max(soma.dn, passa);
+        soma.fontes += sub.fontes;
+        for (const a of sub.ambientes) soma.ambientes.add(a);
+        for (const [l, u] of sub.porNivel) soma.porNivel.set(l, (soma.porNivel.get(l) ?? 0) + u);
+        soma.temTQ = soma.temTQ || sub.temTQ || ehTQ;
       }
-      return { uhc, dn };
+      return soma;
     };
     acumular(raiz);
   }

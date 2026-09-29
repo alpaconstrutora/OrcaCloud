@@ -29,6 +29,7 @@ import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type EstadoDaPressao, type 
 import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, esgotoTrechoATrecho, fontesDeEsgoto, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
 import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVertical';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import { ROTULO_DO_PAPEL } from './blueprintNbr8160';
 import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque } from './blueprintRecalque';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
@@ -353,7 +354,7 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     B.push({ tipo: 'subsecao', texto: 'Trechos' });
     B.push({
       tipo: 'tabela',
-      cabecalho: ['Trecho', 'Pav.', 'Caixa', 'UHC', 'DN', 'DN mín.', 'L (m)', 'i (%)', 'i mín. (%)', 'Cota mont.', 'Cota jus.', 'Situação'],
+      cabecalho: ['Trecho', 'Papel', 'Pav.', 'Caixa', 'UHC', 'DN', 'DN mín.', 'L (m)', 'i (%)', 'i mín. (%)', 'Cota mont.', 'Cota jus.', 'Situação'],
       linhas: ordenados.map((c, i) => {
         const situacao: string[] = [];
         if (c.dnAtualMm < c.dnNecessarioMm) situacao.push(`DN abaixo do exigido (${c.dnNecessarioMm})`);
@@ -361,6 +362,7 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
         if (c.tipo === 'MAIOR') situacao.push('DN acima do necessário');
         return [
           `E${String(i + 1).padStart(2, '0')}${c.rotulo ? ` (${c.rotulo})` : ''}`,
+          ROTULO_DO_PAPEL[c.papel],
           nivel(c.levelId),
           siglaDe(caixas.get(c.caixaId)),
           String(c.uhc),
@@ -450,7 +452,7 @@ export function memorialDescritivoHidro(model: BlueprintModel, hip: HipotesesHid
     B.push({ tipo: 'subsecao', texto: 'Esgoto sanitário' });
     B.push({
       tipo: 'paragrafo',
-      texto: `Coleta por ramais de descarga e de esgoto com declividade mínima de ${nBr(hip.esgoto.caimentoPctAte75, 0)} % (DN até 75) e ${nBr(hip.esgoto.caimentoPctDe100, 0)} % (DN 100 ou mais), com junções a 45°${colunas.length ? `, ${colunas.length} tubo(s) de queda com ventilação` : ''}, até ${cis} caixa(s) de inspeção. Diâmetros pelas unidades Hunter de contribuição (UHC) acumuladas.`,
+      texto: `Diâmetros pelas tabelas da NBR 8160 conforme o papel do trecho (ramal de descarga, ramal de esgoto, tubo de queda, subcoletor — este com DN mínimo 100). Coleta por ramais de descarga e de esgoto com declividade mínima de ${nBr(hip.esgoto.caimentoPctAte75, 0)} % (DN até 75) e ${nBr(hip.esgoto.caimentoPctDe100, 0)} % (DN 100 ou mais), com junções a 45°${colunas.length ? `, ${colunas.length} tubo(s) de queda com ventilação` : ''}, até ${cis} caixa(s) de inspeção. Diâmetros pelas unidades Hunter de contribuição (UHC) acumuladas.`,
     });
   }
 

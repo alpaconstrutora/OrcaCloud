@@ -662,3 +662,23 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   com a descida do vaso de cima. Vem das Etapas anteriores (planejadores), não do recalque.
 
 **Etapa 4: 4 de 4 fases publicadas.**
+
+### E5.1 — Tabelas da NBR 8160 (29/09/2026)
+
+- `utils/blueprintNbr8160.ts` (novo, puro): **tabela 5** (ramal de esgoto: 3/6/20/160 UHC em DN
+  40/50/75/100), **tabela 6** (tubo de queda: até 3 pavimentos pela UHC total; acima, também pela
+  UHC num pavimento — 40…300), **tabela 7** (subcoletor/coletor pela UHC e declividade 0,5/1/2/4 %,
+  DN mínimo 100; DN 100/150 não existem a 0,5 % e usam a de 1 %; vertical usa a de 4 %). O antigo
+  `dnPorUhc` era só a tabela 5.
+- `esgotoTrechoATrecho`: cada trecho ganha o **papel** — TQ → tubo de queda; recebe um TQ, junta
+  ambientes diferentes ou chega à CI → **subcoletor**; um aparelho só → ramal de descarga (o DN do
+  aparelho); o resto → ramal de esgoto — e o DN necessário sai da tabela do papel (nunca abaixo do
+  maior aparelho a montante). A verificação do DN, o memorial (coluna Papel) e a conferência usam
+  isso.
+- `planejarEsgoto`: o traçado (agora `planejarEsgotoTracado`) + um passe que aplica o plano numa
+  cópia, calcula por papel e **corrige o DN no próprio `AddTrecho`** (sem depender dos ids — relançar
+  apaga antes). Na casa térrea do teste, o trecho da caixa de gordura à CI subiu de DN 50 para 100
+  (subcoletor).
+- **Pronto quando** ✔: 6 testes em `blueprintNbr8160.test.ts` (as três tabelas com os limites, o
+  papel de cada trecho no sobrado, o que chega à CI é subcoletor ≥ 100, o lançamento já sai de
+  acordo, subcoletor reduzido a 75 → a verificação pede 100). Suíte: 539 arquivos / 6.047 testes.

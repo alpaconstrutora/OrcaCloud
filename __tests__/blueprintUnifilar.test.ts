@@ -96,7 +96,8 @@ describe('desenharUnifilar — o traçado pelo Desenhista', () => {
     expect(textos.some((t) => /^GERAL \d+ A$/.test(t))).toBe(true);
     expect(textos).toContain('C1');
     expect(textos).toContain('C2');
-    expect(textos).toContain('16 A');
+    // E3.3: a curva ao lado do In — sugerida (C) marcada com '*' enquanto não declarada.
+    expect(textos).toContain('16 A C*');
     expect(textos).toContain('2#2,5 + T2,5');
     expect(textos).toContain('2#1,5 + T1,5 sug.');
     expect(textos).toContain('DR');

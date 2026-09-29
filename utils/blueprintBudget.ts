@@ -432,7 +432,7 @@ export const MEDIDAS: DefinicaoMedida[] = [
     rotulo: 'Disjuntores',
     escopo: 'INSTALACAO',
     dimensao: 'UN',
-    descricao: 'Disjuntores dos circuitos por corrente nominal DECLARADA (uma linha por In). O disjuntor geral do quadro não entra: é calculado, não declarado (E4).',
+    descricao: 'Disjuntores dos circuitos por In e curva declarados e Icn do quadro (uma linha por combinação). O disjuntor geral do quadro não entra: é calculado, não declarado (E4).',
   },
   {
     id: 'CONTAGEM_DR',
@@ -1042,14 +1042,15 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     case 'CONTAGEM_DISJUNTORES': {
       return (quant.totais.porDisjuntor ?? [])
         .filter((d) => d.quantidade > 0)
-        .map((d) => ({ d, rotulo: d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)' }))
+        // E3.3: In, curva e Icn — é assim que se compra o disjuntor.
+        .map((d) => ({ d, rotulo: `Disjuntor ${d.inA != null ? `${d.inA} A` : '(In não declarado)'}${d.curva ? ` curva ${d.curva}` : ''}${d.icnKa != null ? ` · ${String(d.icnKa).replace('.', ',')} kA` : ''}` }))
         .filter(({ rotulo }) => combina(rotulo))
         .map(({ d, rotulo }) => ({
-          ref: `disjuntor-${d.inA ?? 'sem-in'}`,
+          ref: `disjuntor-${d.inA ?? 'sem-in'}-${d.curva ?? 'x'}-${d.icnKa ?? 'x'}`,
           rotulo,
           valor: d.quantidade,
-          formula: 'um por circuito, pelo In declarado',
-          variaveis: { inA: d.inA ?? 'não declarado', quantidade: d.quantidade },
+          formula: 'um por circuito, pelo In e curva declarados e a Icn do quadro',
+          variaveis: { inA: d.inA ?? 'não declarado', curva: d.curva ?? 'não declarada', icnKa: d.icnKa ?? 'não declarada', quantidade: d.quantidade },
         }));
     }
 

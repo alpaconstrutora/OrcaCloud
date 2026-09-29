@@ -202,7 +202,7 @@ export function abasDoQuantitativo(
     // ELÉTRICA (E0.3, quant-1.19.0): fio por seção, quadros, disjuntores e DR.
     for (const c of t.porCondutor ?? []) totais.push([`Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace('.', ',')} mm²` : ' (circuito sem seção)'} · Elétrica`, n2(c.comprimentoM), 'm']);
     if ((t.quadros ?? 0) > 0) totais.push(['Quadros de distribuição', t.quadros, 'un']);
-    for (const d of t.porDisjuntor ?? []) totais.push([d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)', d.quantidade, 'un']);
+    for (const d of t.porDisjuntor ?? []) totais.push([`Disjuntor ${d.inA != null ? `${d.inA} A` : '(In não declarado)'}${d.curva ? ` curva ${d.curva}` : ''}${d.icnKa != null ? ` · ${String(d.icnKa).replace('.', ',')} kA` : ''}`, d.quantidade, 'un']);
     if ((t.drs ?? 0) > 0) totais.push(['DR 30 mA (por circuito)', t.drs, 'un']);
     totais.push(['Rede — comprimento total', n2(t.comprimentoRedeM), 'm']);
   }

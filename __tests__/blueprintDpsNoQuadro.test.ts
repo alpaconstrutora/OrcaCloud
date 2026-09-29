@@ -29,8 +29,8 @@ const regra = (m: BlueprintModel, hip: HipotesesEletricas = HIPOTESES_PADRAO) =>
 
 describe('DPS · kernel 0.74.0', () => {
   it('versões; SetQuadroProps grava e tira; canônico omite sem DPS e faz ida e volta com ele; valores inválidos são recusados', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.74.0');
-    expect(POLITICA_PADRAO.version).toBe('quant-1.22.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.75.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.23.0');
     const m0 = casa();
     const antes = canonicalPayload(m0) as unknown as string;
     expect(antes).not.toContain('"dps"');

@@ -735,7 +735,8 @@ function projetar(model: BlueprintModel): {
       ligacao: q.ligacao ?? undefined,
       tensaoV: q.tensaoV ?? undefined,
       alimentadorM: q.alimentadorM ?? undefined,
-      // DPS (E3.2, 0.74.0): omitido quando não há — hash do acervo intacto.
+      // Icn (E3.3, 0.75.0) e DPS (E3.2, 0.74.0): omitidos quando não há — hash do acervo intacto.
+      icnKa: q.icnKa ?? undefined,
       dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : undefined,
       parametros: parametrosCanonicos(q.parametros),
     }),
@@ -760,6 +761,8 @@ function projetar(model: BlueprintModel): {
       ligacao: c.ligacao ?? undefined,
       protecaoDR: c.protecaoDR ?? undefined,
       fase: c.fase ?? undefined,
+      // E3.3: curva do disjuntor, omitida quando não declarada.
+      curva: c.curva ?? undefined,
     }),
     (x, y) =>
       (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) ||
@@ -1554,6 +1557,8 @@ export interface CanonicalPayload {
     ligacao?: string;
     tensaoV?: number;
     alimentadorM?: number;
+    /** Icn dos disjuntores do quadro, kA (E3.3). Ausente sob kernel < 0.75.0 e quando não declarada. */
+    icnKa?: number;
     /** DPS do quadro (E3.2). Ausente sob kernel < 0.74.0 e quando não declarado. */
     dps?: { classe: string; upKv: number | null; inKa: number | null; disjuntorDesconexaoA: number | null };
     parametros?: Parametros;
@@ -1578,6 +1583,8 @@ export interface CanonicalPayload {
     ligacao?: string;
     protecaoDR?: boolean;
     fase?: string;
+    /** Curva do disjuntor (E3.3). Ausente sob kernel < 0.75.0 e quando não declarada. */
+    curva?: string;
   }[];
   /**
    * Dispositivos DR (E3.1). Ausente sob kernel < 0.73.0 e quando nenhum foi
@@ -2154,6 +2161,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ligacao: (q.ligacao as LigacaoDoCircuito | undefined) ?? null,
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
+      icnKa: q.icnKa ?? null,
       dps: q.dps ? { classe: q.dps.classe as 'I' | 'II' | 'III', upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : null,
       ...(q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}),
     });
@@ -2178,6 +2186,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ligacao: (c.ligacao as LigacaoDoCircuito | undefined) ?? null,
       protecaoDR: c.protecaoDR ?? null,
       fase: (c.fase as FaseDoCircuito | undefined) ?? null,
+      curva: (c.curva as 'B' | 'C' | 'D' | undefined) ?? null,
     });
   });
 

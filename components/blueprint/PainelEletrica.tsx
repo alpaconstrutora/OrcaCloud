@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
-import type { BlueprintModel, Command, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
-import { drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
+import type { BlueprintModel, Command, CurvaDoDisjuntor, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
+import { CURVAS_DO_DISJUNTOR, drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
 import { sugerirDRs } from '../../utils/blueprintNbr5410';
 import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
 import {
@@ -12,6 +12,7 @@ import {
   preDimensionarQuadroCompleto,
   sugerirInDoDR,
   sugerirDPS,
+  sugerirCurva,
   ROTULO_DA_EXPOSICAO,
   type HipotesesEletricas,
   type PreDimensionamentoDoCircuito,
@@ -114,6 +115,9 @@ interface LinhaDeCircuito {
   /** In de DR que o catálogo sugere para um DR individual novo (≥ disjuntor declarado/sugerido). */
   drInSugeridoA: number | null;
   disjuntorA: number | null;
+  /** E3.3: curva declarada (`null` = a sugerida, que `curvaSugerida` mostra). */
+  curva: CurvaDoDisjuntor | null;
+  curvaSugerida: CurvaDoDisjuntor;
   secaoMm2: number | null;
   /** E2.3: declarados; `null` = a conta da norma, que `neutroDerivadoMm2`/`peDerivadoMm2` mostram. */
   secaoNeutroMm2: number | null;
@@ -146,6 +150,8 @@ const COLUNAS_DE_CIRCUITO: StandardTableColumn[] = [
   // E3.1: o DR é PEÇA do quadro — a célula escolhe qual DR protege o circuito (ou cria um individual de 30 mA).
   { key: 'protecaoDR', label: 'DR', width: 150 },
   { key: 'disjuntorA', label: 'Disjuntor (A)', width: 100, align: 'right' },
+  // E3.3: a curva do disjuntor — em branco vale a sugerida (C; D com motor), e a célula diz.
+  { key: 'curva', label: 'Curva', width: 96 },
   { key: 'secaoMm2', label: 'Seção (mm²)', width: 100, align: 'right' },
   // E2.3: neutro e PE — em branco vale a norma (neutro = fase; PE pela Tab. 58), e a célula diz o valor.
   { key: 'secaoNeutroMm2', label: 'Neutro (mm²)', width: 108, align: 'right' },
@@ -203,6 +209,8 @@ export default function PainelEletrica({
       ligacao?: LigacaoDoCircuito | null;
       protecaoDR?: boolean | null;
       fase?: FaseDoCircuito | null;
+      /** E3.3: curva do disjuntor; `null` volta à sugerida. */
+      curva?: CurvaDoDisjuntor | null;
     },
   ) => void;
   /**
@@ -216,7 +224,7 @@ export default function PainelEletrica({
   /** F6: a alimentação do quadro (ligação, tensão, metros até a origem) — declarações. */
   onQuadroProps?: (
     quadroId: ObjectId,
-    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null },
+    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null },
   ) => void;
   /** F7: o projeto executivo elétrico com ART, montado por quem tem o estudo em mãos. */
   executivoSlot?: React.ReactNode;
@@ -367,6 +375,8 @@ export default function PainelEletrica({
             return inDisj != null ? sugerirInDoDR(inDisj, hipoteses.catalogoDeDrA) : null;
           })(),
           disjuntorA: c.disjuntorA ?? null,
+          curva: circuito?.curva ?? null,
+          curvaSugerida: sugerirCurva((model.terminais ?? []).filter((t) => t.circuitoId === c.circuitoId)),
           secaoMm2: c.secaoMm2 ?? null,
           secaoNeutroMm2: circuito?.secaoNeutroMm2 ?? null,
           secaoPeMm2: circuito?.secaoPeMm2 ?? null,
@@ -649,6 +659,23 @@ export default function PainelEletrica({
           </select>
         );
       }
+      case 'curva':
+        return (
+          <select
+            value={l.curva ?? ''}
+            onChange={(e) => onCircuitoProps(l.circuitoId, { curva: (e.target.value || null) as CurvaDoDisjuntor | null })}
+            aria-label={`Curva do circuito ${l.nome}`}
+            title="B: 3–5·In (cargas resistivas, cabos longos); C: 5–10·In (o usual — tomadas e iluminação); D: 10–20·In (motores, compressores). Em branco vale a sugerida"
+            className={`${CAMPO_NA_CELULA} ${l.curva == null ? 'text-gray-500' : ''}`}
+          >
+            <option value="">{l.curvaSugerida} (sug.)</option>
+            {CURVAS_DO_DISJUNTOR.map((cv) => (
+              <option key={cv} value={cv}>
+                {cv}
+              </option>
+            ))}
+          </select>
+        );
       case 'secaoMm2':
         return (
           <input
@@ -1138,6 +1165,8 @@ export default function PainelEletrica({
                       dpsSugerido={sugerirDPS(hipoteses)}
                       exposicao={ROTULO_DA_EXPOSICAO[hipoteses.exposicaoARaios]}
                       catalogoDeDisjuntoresA={hipoteses.catalogoDeDisjuntoresA}
+                      icnKa={quadro.icnKa ?? null}
+                      ikEntradaKa={hipoteses.ikEntradaKa}
                     />
                   ) : (
                     <p className="text-sm text-gray-500">

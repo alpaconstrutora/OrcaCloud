@@ -63,6 +63,8 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     // E3.2: a exposição a raios é do lugar — gravada; o DPS padrão é catálogo, sempre o padrão.
     exposicaoARaios: (EXPOSICOES_A_RAIOS as readonly string[]).includes(String(r.exposicaoARaios)) ? (r.exposicaoARaios as ExposicaoARaios) : HIPOTESES_PADRAO.exposicaoARaios,
     dpsPadrao: HIPOTESES_PADRAO.dpsPadrao,
+    // E3.3: a Ik presumida é do lugar — gravada.
+    ikEntradaKa: Math.max(0.1, n(r.ikEntradaKa, HIPOTESES_PADRAO.ikEntradaKa)),
   };
 }
 

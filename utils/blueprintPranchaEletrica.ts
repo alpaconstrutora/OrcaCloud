@@ -402,7 +402,7 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
       const dr = drDoC ? `${rotuloDoDR(drDoC)}${drDoC.geral ? ' (geral)' : drDoC.circuitoIds.length > 1 ? ' (grupo)' : ''}` : circuito?.protecaoDR === false ? 'nao' : '-';
       const cond = circuito ? condutoresDoCircuito(circuito, c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null, fiacao).texto : '-';
       L.push(
-        `${c.nome} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'} / ${c.disjuntorSugeridoA ?? '-'} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr} | ${cond}`,
+        `${c.nome} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'}${c.curvaDeclarada ? ` ${c.curvaDeclarada}` : ''} / ${c.disjuntorSugeridoA ?? '-'} ${c.curvaSugerida} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr} | ${cond}`,
       );
       for (const a of c.achados.filter((x) => x.nivel === 'FALTA')) L.push(`  ${a.referencia}: ${a.mensagem}`);
     }
@@ -410,6 +410,7 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
     {
       const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
       L.push(`  ${quadroDoModelo?.dps ? rotuloDoDPS(quadroDoModelo.dps) : 'sem DPS'}`);
+      L.push(`  Icn dos disjuntores: ${quadroDoModelo?.icnKa != null ? `${String(quadroDoModelo.icnKa).replace('.', ',')} kA` : 'nao declarada'} - Ik presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipotese)`);
     }
     L.push(`Instalado ${Math.round(q.sInstaladaVA)} VA - demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})${q.ibA != null ? ` - alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm2, geral ${q.disjuntorGeralA ?? '-'} A` : ''}${q.quedaTotalMaxPct != null ? ` - dV total ${n1(q.quedaTotalMaxPct)} %` : ''}`);
     for (const a of q.achados) L.push(`  ${a.referencia}: ${a.mensagem}`);
@@ -420,6 +421,7 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
     L.push('No. | Pavimento | Cond. | Composicao por circuito');
     for (const n of numerados) L.push(`${n.rotulo} | ${n.pavimento} | ${n.condutores} | ${n.descricao}`);
   }
+  L.push(`Curva do disjuntor: letra apos o In (declarada / sugerida - C; D onde ha motor, hipotese). Ik presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipotese).`);
   L.push(`Hipoteses: cobre/PVC, metodo ${hip.metodoDeInstalacao}, ${hip.temperaturaAmbienteC} C, ${hip.circuitosAgrupados} circ./eletroduto, rho ${hip.rhoOhmMm2PorM}, dV <= ${hip.limiteQuedaTerminalPct} % terminal / ${hip.limiteQuedaTotalPct} % origem, demanda ${hip.demanda.nome}.`);
   L.push('LEGENDA');
   for (const l of linhasDaLegenda(model)) L.push(l);
@@ -484,7 +486,8 @@ export function desenharQuadroDeCargas(
           if (c.secaoPeMm2 != null && c.secaoPeMm2 !== fase) partes.push(`PE ${mm2(c.secaoPeMm2)}`);
           return partes.length ? ` · ${partes.join(' · ')}` : '';
         })()}`,
-        `${c.disjuntorDeclaradoA ?? '—'} / ${c.disjuntorSugeridoA ?? '—'}`,
+        // E3.3: a curva ao lado do In — declarada à esquerda, sugerida à direita.
+        `${c.disjuntorDeclaradoA ?? '—'}${c.curvaDeclarada ? ` ${c.curvaDeclarada}` : ''} / ${c.disjuntorSugeridoA ?? '—'} ${c.curvaSugerida}`,
         c.quedaPct == null ? '—' : `${n1(c.quedaPct)}${c.comprimento?.origem === 'ESTIMADO' ? '*' : ''}`,
         dr,
         circuito?.fase ?? (c.ligacao === 'FN' ? '—' : ''),
@@ -511,6 +514,13 @@ export function desenharQuadroDeCargas(
       // E3.2: o DPS do quadro, ou a ausência dele — dita.
       const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
       linha(quadroDoModelo?.dps ? rotuloDoDPS(quadroDoModelo.dps) : 'Sem DPS declarado (6.3.5.2 — ver conferência)', 1.8, quadroDoModelo?.dps ? undefined : COR_FRACA);
+      // E3.3: a Icn contra a Ik presumida — hipótese dita na própria linha.
+      const icn = quadroDoModelo?.icnKa ?? null;
+      linha(
+        `Icn dos disjuntores: ${icn != null ? `${String(icn).replace('.', ',')} kA` : 'não declarada'} · Ik presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipótese, a confirmar com a concessionária)${icn != null && icn < hip.ikEntradaKa ? ' — NÃO ATENDE 5.3.5.5' : ''}`,
+        1.8,
+        icn != null && icn < hip.ikEntradaKa ? '#b91c1c' : icn == null ? COR_FRACA : undefined,
+      );
     }
     linha(
       `Instalado ${Math.round(q.sInstaladaVA)} VA (luz ${Math.round(q.porGrupoVA.ILUMINACAO)} · TUG ${Math.round(q.porGrupoVA.TUG)} · força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? ` · motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}) · demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})` +

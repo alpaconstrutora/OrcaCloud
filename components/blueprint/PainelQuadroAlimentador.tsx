@@ -34,12 +34,14 @@ export default function PainelQuadroAlimentador({
   dpsSugerido,
   exposicao,
   catalogoDeDisjuntoresA = [],
+  icnKa = null,
+  ikEntradaKa,
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
   tensaoDeclarada: number | null;
   alimentadorM: number | null;
-  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null }) => void;
+  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null }) => void;
   /** Em quadro trifásico: a fase declarada de cada circuito FN, para o select. */
   fasesDosCircuitos: { circuitoId: string; nome: string; ligacao: LigacaoDoCircuito; fase: FaseDoCircuito | null }[];
   onFase: (circuitoId: string, fase: FaseDoCircuito | null) => void;
@@ -53,6 +55,9 @@ export default function PainelQuadroAlimentador({
   dpsSugerido?: DispositivoDPS;
   exposicao?: string;
   catalogoDeDisjuntoresA?: readonly number[];
+  /** E3.3: Icn declarada dos disjuntores do quadro e a Ik presumida (hipótese) que ela tem de cobrir. */
+  icnKa?: number | null;
+  ikEntradaKa?: number;
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
@@ -99,6 +104,24 @@ export default function PainelQuadroAlimentador({
             className={`w-16 text-right ${campo}`}
           />
           m
+        </label>
+        {/* E3.3: Icn dos disjuntores do quadro × Ik presumida (hipótese das hipóteses). */}
+        <label className="flex items-center gap-1" title={`Capacidade de interrupção dos disjuntores do quadro (NBR NM 60898: 3, 4,5, 6, 10 kA). Tem de ser ≥ à corrente de curto presumida${ikEntradaKa != null ? ` — ${String(ikEntradaKa).replace('.', ',')} kA, hipótese a confirmar com a concessionária` : ''} (5.3.5.5)`}>
+          Icn
+          <select
+            value={icnKa ?? ''}
+            onChange={(e) => onQuadro({ icnKa: e.target.value === '' ? null : Number(e.target.value) })}
+            aria-label={`Capacidade de interrupção dos disjuntores do quadro ${q.nome}, em kA`}
+            className={`${campo} ${ikEntradaKa != null && icnKa != null && icnKa < ikEntradaKa ? 'text-red-700' : ''}`}
+          >
+            <option value="">—</option>
+            {[3, 4.5, 6, 10, 15, 25].map((v) => (
+              <option key={v} value={v}>
+                {String(v).replace('.', ',')} kA
+              </option>
+            ))}
+          </select>
+          {ikEntradaKa != null && <span className="text-xs text-slate-400">Ik {String(ikEntradaKa).replace('.', ',')} kA (hip.)</span>}
         </label>
       </div>
 

@@ -115,6 +115,16 @@ export function verificacoesEletricas(
       obtido: q.ibA == null ? 'não calculado' : `${n1(q.sDemandadaVA)} VA (${q.demanda.nome}) · IB ${n1(q.ibA)} A · ${mm2(q.secaoCalculada?.secaoMm2)} mm² · geral ${q.disjuntorGeralA ?? '—'} A${q.quedaTotalMaxPct != null ? ` · ΔV total ${n1(q.quedaTotalMaxPct)} %` : ' · alimentador sem comprimento'}`,
       atende: q.ibA != null && faltasQ.length === 0 && q.quedaTotalMaxPct != null,
     });
+    // E3.3: Icn declarada e ≥ Ik presumida — sem Icn a prancha não compra o disjuntor.
+    const icn = (model.quadros ?? []).find((x) => x.id === q.quadroId)?.icnKa ?? null;
+    v.push({
+      grupo: 'QUADROS',
+      item: `${q.nome} — capacidade de interrupção`,
+      norma: '5.3.5.5',
+      exigido: `Icn ≥ Ik presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipótese)`,
+      obtido: icn == null ? 'Icn não declarada' : `Icn ${String(icn).replace('.', ',')} kA`,
+      atende: icn != null && icn >= hip.ikEntradaKa,
+    });
   }
 
   const pendencias = v.filter((x) => !x.atende).map((x) => `${x.item}: ${x.obtido}`);
@@ -159,6 +169,7 @@ export function memorialEletrico(
   L.push(`ρ do cobre ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m; queda máxima ${hip.limiteQuedaTerminalPct} % no circuito terminal e ${hip.limiteQuedaTotalPct} % da origem (6.2.7). Disjuntores: ${hip.catalogoDeDisjuntoresA.join(', ')} A (IB ≤ In ≤ Iz, 5.3.4.1).`);
   L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}, motores/AC ${hip.demanda.MOTOR ?? 1}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
   L.push(`Exposição a descargas atmosféricas (6.3.5.2.1): ${ROTULO_DA_EXPOSICAO[hip.exposicaoARaios]}. DPS sugerido quando falta: classe ${hip.dpsPadrao.classe}, ${hip.dpsPadrao.inKa} kA, Up ${String(hip.dpsPadrao.upKv).replace('.', ',')} kV (hipótese de catálogo).`);
+  L.push(`Corrente de curto-circuito presumida na entrada: ${String(hip.ikEntradaKa).replace('.', ',')} kA — hipótese, a confirmar com a concessionária; Icn dos disjuntores ≥ Ik (5.3.5.5). Cálculo por impedância da rede não realizado.`);
   L.push('');
   L.push('## 4. Quadros e circuitos');
   for (const q of r.quadros) {
@@ -178,10 +189,15 @@ export function memorialEletrico(
       const quadroDoModelo = model?.quadros.find((x) => x.id === q.quadroId);
       if (quadroDoModelo?.dps) L.push(`Proteção contra surtos: ${rotuloDoDPS(quadroDoModelo.dps)}.`);
       else if (model) L.push(`Proteção contra surtos: sem DPS declarado — exposição a descargas ${ROTULO_DA_EXPOSICAO[hip.exposicaoARaios]}.`);
+      // E3.3: Icn × Ik presumida.
+      if (model) {
+        const icn = quadroDoModelo?.icnKa ?? null;
+        L.push(`Capacidade de interrupção dos disjuntores: ${icn != null ? `Icn ${String(icn).replace('.', ',')} kA` : 'não declarada'}; corrente de curto presumida na entrada ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipótese, a confirmar com a concessionária). ${icn == null ? 'NÃO AVALIADO.' : icn >= hip.ikEntradaKa ? 'ATENDE 5.3.5.5.' : 'NÃO ATENDE 5.3.5.5.'}`);
+      }
     }
     for (const c of q.circuitos) {
       L.push(
-        `${c.nome} (${c.ligacao}${c.tensaoV ? ` ${c.tensaoV} V` : ''}): ${c.pontos} ponto(s), ${Math.round(c.sVA)} VA, IB ${c.ibA == null ? '—' : n1(c.ibA)} A; seção declarada ${mm2(c.secaoDeclaradaMm2)} mm² (mínima ${mm2(c.secaoCalculada?.secaoMm2)} mm²)${c.secaoPeMm2 != null ? `; PE ${mm2(c.secaoPeMm2)} mm² (${c.peDerivado ? 'Tab. 58' : 'declarado'})` : ''}${c.secaoNeutroMm2 != null && c.secaoNeutroMm2 !== (c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2) ? `; neutro ${mm2(c.secaoNeutroMm2)} mm²` : ''}; disjuntor ${c.disjuntorDeclaradoA ?? '—'} A (sugerido ${c.disjuntorSugeridoA ?? '—'} A)${c.quedaPct != null && c.comprimento ? `; ΔV ${n1(c.quedaPct)} % em ${n1(c.comprimento.metros)} m ${c.comprimento.origem === 'ESTIMADO' ? '(estimado)' : '(eletrodutos)'}` : ''}. ${c.achados.some((a) => a.nivel === 'FALTA') ? 'NÃO ATENDE.' : 'ATENDE.'}`,
+        `${c.nome} (${c.ligacao}${c.tensaoV ? ` ${c.tensaoV} V` : ''}): ${c.pontos} ponto(s), ${Math.round(c.sVA)} VA, IB ${c.ibA == null ? '—' : n1(c.ibA)} A; seção declarada ${mm2(c.secaoDeclaradaMm2)} mm² (mínima ${mm2(c.secaoCalculada?.secaoMm2)} mm²)${c.secaoPeMm2 != null ? `; PE ${mm2(c.secaoPeMm2)} mm² (${c.peDerivado ? 'Tab. 58' : 'declarado'})` : ''}${c.secaoNeutroMm2 != null && c.secaoNeutroMm2 !== (c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2) ? `; neutro ${mm2(c.secaoNeutroMm2)} mm²` : ''}; disjuntor ${c.disjuntorDeclaradoA ?? '—'} A${c.curvaDeclarada ? ` curva ${c.curvaDeclarada}` : ` (curva sugerida ${c.curvaSugerida})`} (sugerido ${c.disjuntorSugeridoA ?? '—'} A)${c.quedaPct != null && c.comprimento ? `; ΔV ${n1(c.quedaPct)} % em ${n1(c.comprimento.metros)} m ${c.comprimento.origem === 'ESTIMADO' ? '(estimado)' : '(eletrodutos)'}` : ''}. ${c.achados.some((a) => a.nivel === 'FALTA') ? 'NÃO ATENDE.' : 'ATENDE.'}`,
       );
     }
     L.push('');

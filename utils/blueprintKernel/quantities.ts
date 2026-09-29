@@ -31,7 +31,7 @@ import { conexoesDerivadas, type ConexaoDerivada, type TipoDeConexao } from './c
 import { composicaoDaRede } from './fiacao';
 import { secoesDosCondutores, type TipoDeCondutor } from './condutores';
 import { drsDoModelo, drsDoQuadro, rotuloDoDPS, type DRDoQuadro } from './protecaoDr';
-import type { DispositivoDPS } from './model';
+import type { DispositivoDPS, Quadro } from './model';
 import {
   areCollinear,
   isBetween,
@@ -193,7 +193,9 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // legados), não circuitos marcados.
   // quant-1.22.0 (29/09/2026, E3.2): o DPS do quadro — `dps` (rótulo) no
   // quadro; `dps` (contagem) e `porDPS` (classe / In / Up) no total.
-  version: 'quant-1.22.0',
+  // quant-1.23.0 (29/09/2026, E3.3): o disjuntor se compra por In, CURVA e
+  // Icn — `porDisjuntor` ganhou `curva` (declarada) e `icnKa` (do quadro).
+  version: 'quant-1.23.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -677,9 +679,11 @@ export interface QuantidadePorCondutor {
   trechos: number;
 }
 
-/** Disjuntores por corrente nominal DECLARADA (`inA` null = circuito sem disjuntor declarado). */
+/** Disjuntores por In DECLARADO, curva declarada e Icn do quadro (quant-1.23.0). `null` = não declarado. */
 export interface QuantidadePorDisjuntor {
   inA: number | null;
+  curva: string | null;
+  icnKa: number | null;
   quantidade: number;
 }
 
@@ -991,16 +995,20 @@ export function agruparPorCondutor(trechos: readonly QuantidadeTrecho[]): Quanti
   );
 }
 
-/** Disjuntores por In declarado; sem declaração por último. */
-export function agruparPorDisjuntor(circuitos: readonly Circuito[]): QuantidadePorDisjuntor[] {
+/** Disjuntores por (In, curva, Icn do quadro); sem In por último. */
+export function agruparPorDisjuntor(circuitos: readonly Circuito[], quadros: readonly Pick<Quadro, 'id' | 'icnKa'>[] = []): QuantidadePorDisjuntor[] {
+  const icnPorQuadro = new Map(quadros.map((q) => [q.id, q.icnKa ?? null]));
   const mapa = new Map<string, QuantidadePorDisjuntor>();
   for (const c of circuitos) {
-    const k = String(c.disjuntorA ?? '');
-    const atual = mapa.get(k) ?? { inA: c.disjuntorA ?? null, quantidade: 0 };
+    const icnKa = icnPorQuadro.get(c.quadroId) ?? null;
+    const k = `${c.disjuntorA ?? ''}|${c.curva ?? ''}|${icnKa ?? ''}`;
+    const atual = mapa.get(k) ?? { inA: c.disjuntorA ?? null, curva: c.curva ?? null, icnKa, quantidade: 0 };
     atual.quantidade += 1;
     mapa.set(k, atual);
   }
-  return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY));
+  return [...mapa.values()].sort(
+    (a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY) || (a.curva ?? '').localeCompare(b.curva ?? '') || (a.icnKa ?? 0) - (b.icnKa ?? 0),
+  );
 }
 
 /** DRs por (In, IΔn, polos); sem In por último. */
@@ -1051,7 +1059,7 @@ export function quadrosQuantificados(model: BlueprintModel, trechos: readonly Qu
       nome: q.nome,
       circuitos: circuitos.length,
       pontos,
-      porDisjuntor: agruparPorDisjuntor(circuitos),
+      porDisjuntor: agruparPorDisjuntor(circuitos, [q]),
       drs: drsDoQuadro(model, q.id).length,
       porDR: agruparPorDR(drsDoQuadro(model, q.id)),
       dps: q.dps ? rotuloDoDPS(q.dps) : null,
@@ -2074,7 +2082,7 @@ export function computeQuantities(
       comprimentoCondutorM: porCondutor.reduce((s, c) => s + c.comprimentoM, 0),
       porQuadro,
       quadros: porQuadro.length,
-      porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
+      porDisjuntor: agruparPorDisjuntor(model.circuitos ?? [], model.quadros ?? []),
       drs: drsDoModelo(model).length,
       porDR: agruparPorDR(drsDoModelo(model)),
       dps: (model.quadros ?? []).filter((q) => q.dps).length,

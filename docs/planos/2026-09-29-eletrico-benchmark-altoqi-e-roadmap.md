@@ -1940,13 +1940,13 @@ Fecha o bloco **5**.
 
 Fecha o bloco **4** e completa o **6** (fios).
 
-## Etapa 3 — Proteção: DR, DPS e disjuntor · kernel bump · 3 fases
+## Etapa 3 — Proteção: DR, DPS e disjuntor · kernel bump · 3 fases · **✅ CONCLUÍDA em 29/09/2026 (3 de 3; kernel 0.72.0 → 0.75.0 · quant-1.20.0 → 1.23.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 3.1 DR como peça ✅ (kernel 0.73.0 · quant-1.21.0; legado `protecaoDR` lido igual) | `Quadro.drs[]: {id, inA, idnMa (30/100/300), polos, escopo: 'GERAL' \| circuitoIds[]}` substitui `Circuito.protecaoDR` (migração de leitura: booleano vira DR individual de 30 mA); sugestão automática: In ≥ disjuntor do grupo, 30 mA onde 5.1.3.2.2 exige; regra "circuito exigido sem DR", "DR com In < soma", "mais de N circuitos no mesmo DR (hipótese)"; unifilar e quadro de cargas mostram o DR na posição certa (geral / grupo / ramal) | goldens; `blueprintNbr5410DrEPreDim.test.ts`; legado com `protecaoDR: true` lê igual; quantitativo conta DR por In/IΔn |
 | 3.2 DPS no quadro ✅ (kernel 0.74.0 · quant-1.22.0; exposição como hipótese) | `Quadro.dps?: {classe (I/II), upKv, inKa, disjuntorDesconexaoA}` com sugestão (classe II, 20 kA, hipótese) e regra 6.3.5.2 "quadro de entrada sem DPS" (aviso, porque depende da exposição — declarada como hipótese `exposicaoARaios`); unifilar, quadro de cargas, quantitativo, memorial | teste: quadro sem pai e sem DPS → AVISO; com DPS → símbolo no unifilar |
-| 3.3 Disjuntor completo e curto simplificado | `Circuito.curva ('B' \| 'C' \| 'D')` e `Quadro.icnKa` declarados; hipótese `ikEntradaKa` (corrente de curto na entrada, padrão 4,5 kA "a confirmar com a concessionária"); regra "Icn < Ik" (FALTA) e `quadroDeCargas` com coluna Curva/Icn; **fora**: cálculo de Ik por impedância (backlog) | teste Icn 3 kA × Ik 4,5 → FALTA citando 5.3.5.5; memorial lista Icn e Ik assumido |
+| 3.3 Disjuntor completo e curto simplificado ✅ (kernel 0.75.0 · quant-1.23.0; Ik como hipótese) | `Circuito.curva ('B' \| 'C' \| 'D')` e `Quadro.icnKa` declarados; hipótese `ikEntradaKa` (corrente de curto na entrada, padrão 4,5 kA "a confirmar com a concessionária"); regra "Icn < Ik" (FALTA) e `quadroDeCargas` com coluna Curva/Icn; **fora**: cálculo de Ik por impedância (backlog) | teste Icn 3 kA × Ik 4,5 → FALTA citando 5.3.5.5; memorial lista Icn e Ik assumido |
 
 Fecha o bloco **3**.
 
@@ -2780,3 +2780,66 @@ unifilar com DPS (derivação a 3 mm do início do barramento; o primeiro ramal 
 **Efeito no benchmark**: §16 "DPS no quadro (classe, In, Up)" ❌→✅, "Regra 6.3.5.2 quadro de entrada
 sem DPS" ❌→✅ (com a exposição como hipótese), "Disjuntor de desconexão do DPS" ❌→✅; §26 "DPS no
 unifilar" ❌→✅; §13/§20 "Quantitativo de DPS" ❌→✅; §27 "Memorial cita exposição e DPS" ❌→✅.
+
+### E3.3 — Disjuntor completo e curto simplificado (29/09/2026) · frente `eletrico-e3` · **kernel 0.74.0 → 0.75.0 · quant-1.22.0 → 1.23.0**
+
+**O que mudou**
+
+- **Kernel 0.75.0** — `Circuito.curva` (B/C/D, `CURVAS_DO_DISJUNTOR`) e `Quadro.icnKa` (capacidade
+  de interrupção dos disjuntores do quadro, kA — um valor por quadro: os minidisjuntores de uma
+  mesma linha são iguais; caso diferente é nota, dito no modelo). `AddCircuito`/`SetCircuitoProps`
+  aceitam `curva`; `AddQuadro`/`SetQuadroProps` aceitam `icnKa`. Omitidos no canônico quando
+  ausentes — goldens 7/7 com a string em 0.74.0. Invariantes: curva do catálogo, Icn finita e positiva.
+- **A Ik presumida é HIPÓTESE** — `hip.ikEntradaKa` (4,5 kA, "a confirmar com a concessionária"),
+  gravada na coluna de hipóteses e no hash da base. **Fora (declarado)**: cálculo da Ik por
+  impedância da rede — backlog; o memorial diz "cálculo por impedância não realizado".
+- **Regra 5.3.5.5** (entre a 6.3.5.2 e a 6.2.11.1.6): Icn não declarada → AVISO (com a Ik hipótese);
+  Icn < Ik → FALTA "Icn 3 kA abaixo da corrente de curto presumida 4,5 kA — o disjuntor não interrompe
+  o curto (5.3.5.5)". Executivo: verificação **"QDC — capacidade de interrupção"** por quadro (Icn não
+  declarada = pendência — sem ela a prancha não compra o disjuntor); memorial cita a Ik hipótese, a Icn
+  e o veredito, e a curva de cada circuito (declarada ou "curva sugerida C").
+- **Curva sugerida** (`sugerirCurva`): D onde há motor/compressor (MOTOR_BOMBA, AR_CONDICIONADO,
+  VENTILADOR_EXAUSTOR, PORTAO — partida), C no resto — hipótese dita; `PreDimensionamentoDoCircuito`
+  ganhou `curvaDeclarada`/`curvaSugerida`. Sem falta por curva ausente: é declaração.
+- **Unifilar** — "16 A C" (declarada), "20 A D*" (sugerida, só quando o In é declarado); GERAL leva
+  "· 6 kA" quando a Icn é declarada; rodapé explica letra e asterisco.
+- **Quadro de cargas** — tela: coluna **Curva** (select B/C/D; em branco mostra "C (sug.)"); bloco
+  Alimentação ganhou **Icn** (select 3 / 4,5 / 6 / 10 / 15 / 25 kA, vermelho abaixo da Ik, "Ik 4,5 kA
+  (hip.)" ao lado). Folha e texto/DXF: célula Disj. "16 C / 10 C" (declarado com curva / sugerido com
+  curva), linha "Icn dos disjuntores: … · Ik presumida … (hipótese)" (vermelha quando não atende),
+  legenda da curva. Aba Hipóteses: campo "Corrente de curto presumida na entrada".
+- **quant-1.23.0** — `porDisjuntor` por (In, **curva**, **Icn do quadro**); orçamento "Disjuntor 16 A
+  curva C · 6 kA"; tela de quantitativos e planilha idem. É assim que se compra o disjuntor.
+- **Não entrou (declarado)**: Ik por impedância (backlog); Icn por circuito (um valor por quadro);
+  curva como FALTA (é escolha de projeto — só sugestão); seletividade/coordenação entre proteções.
+
+**Testes** — novo `__tests__/blueprintDisjuntorCurvaIcn.test.ts` (5): versões, gravar/tirar, canônico
+omite e faz ida e volta, valores inválidos recusados; curva sugerida C/D e o pré-dim com declarada ×
+sugerida; **5.3.5.5**: sem Icn = AVISO com a Ik hipótese, 3 kA × 4,5 = FALTA citando 5.3.5.5, 6 kA
+passa, Ik 10 derruba o 6; executivo: item "capacidade de interrupção" pendente sem Icn e atendido com
+6 kA, memorial cita Ik hipótese, veredito e curva sugerida; unifilar "16 A C" / "20 A D*" / "GERAL n A ·
+6 kA", texto do quadro de cargas com curva e a linha de Icn, `porDisjuntor` por (In, curva, Icn).
+Atualizados: quantitativo (`porDisjuntor` com `curva`/`icnKa` nulos), ordem das regras (treze),
+Unifilar ("16 A C*"), Executivo (a casa completa declara `icnKa: 6`; regex do memorial com a curva
+sugerida), componente (`aria-label` da curva sem colidir com "Disjuntor do circuito"). **18 pinos** de
+`KERNEL_VERSION` e **13** de `quant`.
+
+**O que os testes pegaram antes de publicar**: (1) a casa "completa" do executivo deixou de poder emitir
+— Icn não declarada virou pendência, como deve; o teste passou a declarar 6 kA; (2) a `aria-label`
+"Curva do disjuntor do circuito C1" casava com o regex `/Disjuntor do circuito C1/` do teste antigo
+(dois elementos) — renomeada para "Curva do circuito C1"; (3) o rótulo do ramal ganhou a curva
+sugerida com "*" e o teste do unifilar esperava "16 A". Nada no motor.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova em 0.74.0 + hashes) · alvo 83 ✓ (10 arquivos) · suíte
+inteira **6.249 ✓** (570 arquivos) · `build` ✓ · `check-ui-standard` nos 4 `.tsx` ✓ · `check-xss-sinks` ✓
+· bundle da `planta-api` regenerado · deploy · `GET /v1/estudos` **401/401**. **Sem harness visual** da
+coluna Curva e do select de Icn — fica dito.
+
+**Efeito no benchmark**: §16 "Curva do disjuntor (B/C/D)" ❌→✅, "Capacidade de interrupção (Icn)" ❌→✅,
+"Ik na entrada" ❌→🟡 (hipótese declarada, sem cálculo por impedância), "Regra Icn ≥ Ik" ❌→✅; §26
+"Unifilar com curva e Icn" ❌→✅; §13/§20 "Disjuntor comprado por In/curva/Icn" 🟡→✅; §27 "Memorial
+cita Ik assumida e Icn" ❌→✅.
+
+**Etapa 3 concluída** — três fases, kernel 0.72.0 → 0.75.0, quant-1.20.0 → 1.23.0. Backlog que sai
+daqui: DR tipo A/AC/B e seletividade DR geral × grupo; coordenação Up × Tab. 31 numérica; DPS classe
+III por circuito; Ik por impedância; Icn por circuito; conversão do legado `protecaoDR` em peça.

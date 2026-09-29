@@ -304,7 +304,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     }
     if ((t.quadros ?? 0) > 0) add({ grupo: 'Instalações', item: 'Quadros de distribuição', valor: t.quadros, unidade: 'un', detalhe: (t.porQuadro ?? []).map((q) => `${q.nome}: ${q.circuitos} circ.`).join(' · ') });
     for (const d of t.porDisjuntor ?? []) {
-      add({ grupo: 'Instalações', item: d.inA != null ? `Disjuntor ${d.inA} A` : 'Disjuntor (In não declarado)', valor: d.quantidade, unidade: 'un', detalhe: 'um por circuito, pelo In declarado' });
+      add({ grupo: 'Instalações', item: `Disjuntor ${d.inA != null ? `${d.inA} A` : '(In não declarado)'}${d.curva ? ` curva ${d.curva}` : ''}${d.icnKa != null ? ` · ${String(d.icnKa).replace('.', ',')} kA` : ''}`, valor: d.quantidade, unidade: 'un', detalhe: 'um por circuito — In e curva declarados, Icn do quadro' });
     }
     if ((t.drs ?? 0) > 0) add({ grupo: 'Instalações', item: 'DR 30 mA', valor: t.drs, unidade: 'un', detalhe: 'circuitos com DR declarado' });
     return linhas;
@@ -336,7 +336,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     for (const q of (quant.totais.porQuadro ?? []).filter((x) => !pavimentoFiltro || x.levelId === pavimentoFiltro)) {
       linhas.push({ chave: `quadro:${q.quadroId}`, familia: 'Quadro', disciplina: 'ELETRICA', item: `Quadro ${q.nome}`, dnMm: null, quantidade: 1, unidade: 'un', detalhe: `${q.circuitos} circuito(s) · ${q.pontos} ponto(s) · ${q.eletrodutoM.toFixed(1)} m de eletroduto · ${q.condutorM.toFixed(1)} m de fio` });
       for (const d of q.porDisjuntor) {
-        linhas.push({ chave: `disjuntor:${q.quadroId}:${d.inA ?? ''}`, familia: 'Disjuntor', disciplina: 'ELETRICA', item: d.inA != null ? `Disjuntor ${d.inA} A · ${q.nome}` : `Disjuntor (In não declarado) · ${q.nome}`, dnMm: null, quantidade: d.quantidade, unidade: 'un', detalhe: 'um por circuito, pelo In declarado' });
+        linhas.push({ chave: `disjuntor:${q.quadroId}:${d.inA ?? ''}:${d.curva ?? ''}`, familia: 'Disjuntor', disciplina: 'ELETRICA', item: `Disjuntor ${d.inA != null ? `${d.inA} A` : '(In não declarado)'}${d.curva ? ` curva ${d.curva}` : ''}${d.icnKa != null ? ` · ${String(d.icnKa).replace('.', ',')} kA` : ''} · ${q.nome}`, dnMm: null, quantidade: d.quantidade, unidade: 'un', detalhe: 'um por circuito — In e curva declarados, Icn do quadro' });
       }
       if (q.drs > 0) linhas.push({ chave: `dr:${q.quadroId}`, familia: 'DR', disciplina: 'ELETRICA', item: `DR 30 mA · ${q.nome}`, dnMm: null, quantidade: q.drs, unidade: 'un', detalhe: 'circuitos com DR declarado' });
     }

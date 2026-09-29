@@ -214,6 +214,11 @@ export function HipotesesDoPreDimensionamento({
             <span>Desequilíbrio de fases tolerado, % (quadro trifásico)</span>
             <input type="number" step="1" min={0} value={hipoteses.desequilibrioMaxPct} onChange={(e) => onChange({ ...hipoteses, desequilibrioMaxPct: Number(e.target.value) || HIPOTESES_PADRAO.desequilibrioMaxPct })} aria-label="Desequilíbrio de fases tolerado" className={campo} />
           </label>
+          {/* E3.3: a Ik presumida é da CONCESSIONÁRIA — hipótese até ela informar (5.3.5.5). */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Corrente de curto presumida na entrada, kA (hipótese; 5.3.5.5)</span>
+            <input type="number" step="0.5" min={0.1} value={hipoteses.ikEntradaKa} onChange={(e) => onChange({ ...hipoteses, ikEntradaKa: Number(e.target.value) || HIPOTESES_PADRAO.ikEntradaKa })} aria-label="Corrente de curto presumida na entrada" className={campo} />
+          </label>
           {/* E3.2: a exposição a descargas é dado do LUGAR (6.3.5.2.1) — hipótese
               declarada; decide se "quadro sem DPS" é aviso, falta ou dispensa. */}
           <label className="flex items-center justify-between gap-2">

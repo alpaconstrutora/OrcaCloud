@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.74.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.75.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1996,7 +1996,8 @@ function projetar(model) {
       ligacao: q.ligacao ?? void 0,
       tensaoV: q.tensaoV ?? void 0,
       alimentadorM: q.alimentadorM ?? void 0,
-      // DPS (E3.2, 0.74.0): omitido quando não há — hash do acervo intacto.
+      // Icn (E3.3, 0.75.0) e DPS (E3.2, 0.74.0): omitidos quando não há — hash do acervo intacto.
+      icnKa: q.icnKa ?? void 0,
       dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : void 0,
       parametros: parametrosCanonicos(q.parametros)
     }),
@@ -2019,7 +2020,9 @@ function projetar(model) {
       // 13/09/2026 está assim, e o hash dele não muda por isto.
       ligacao: c.ligacao ?? void 0,
       protecaoDR: c.protecaoDR ?? void 0,
-      fase: c.fase ?? void 0
+      fase: c.fase ?? void 0,
+      // E3.3: curva do disjuntor, omitida quando não declarada.
+      curva: c.curva ?? void 0
     }),
     (x, y) => (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) || cmpStr(x.nome, y.nome)
   );
@@ -2729,6 +2732,7 @@ function modelFromCanonicalPayload(payload) {
       ligacao: q.ligacao ?? null,
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
+      icnKa: q.icnKa ?? null,
       dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : null,
       ...q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}
     });
@@ -2751,7 +2755,8 @@ function modelFromCanonicalPayload(payload) {
       secaoPeMm2: c.secaoPeMm2 ?? null,
       ligacao: c.ligacao ?? null,
       protecaoDR: c.protecaoDR ?? null,
-      fase: c.fase ?? null
+      fase: c.fase ?? null,
+      curva: c.curva ?? null
     });
   });
   for (const d of payload.drs ?? []) {
@@ -3479,7 +3484,9 @@ var POLITICA_PADRAO = {
   // legados), não circuitos marcados.
   // quant-1.22.0 (29/09/2026, E3.2): o DPS do quadro — `dps` (rótulo) no
   // quadro; `dps` (contagem) e `porDPS` (classe / In / Up) no total.
-  version: "quant-1.22.0",
+  // quant-1.23.0 (29/09/2026, E3.3): o disjuntor se compra por In, CURVA e
+  // Icn — `porDisjuntor` ganhou `curva` (declarada) e `icnKa` (do quadro).
+  version: "quant-1.23.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3505,15 +3512,19 @@ function agruparPorCondutor(trechos) {
     (a, b) => (a.secaoMm2 ?? Number.POSITIVE_INFINITY) - (b.secaoMm2 ?? Number.POSITIVE_INFINITY) || ORDEM_DO_TIPO[a.tipo] - ORDEM_DO_TIPO[b.tipo]
   );
 }
-function agruparPorDisjuntor(circuitos) {
+function agruparPorDisjuntor(circuitos, quadros = []) {
+  const icnPorQuadro = new Map(quadros.map((q) => [q.id, q.icnKa ?? null]));
   const mapa = /* @__PURE__ */ new Map();
   for (const c of circuitos) {
-    const k = String(c.disjuntorA ?? "");
-    const atual = mapa.get(k) ?? { inA: c.disjuntorA ?? null, quantidade: 0 };
+    const icnKa = icnPorQuadro.get(c.quadroId) ?? null;
+    const k = `${c.disjuntorA ?? ""}|${c.curva ?? ""}|${icnKa ?? ""}`;
+    const atual = mapa.get(k) ?? { inA: c.disjuntorA ?? null, curva: c.curva ?? null, icnKa, quantidade: 0 };
     atual.quantidade += 1;
     mapa.set(k, atual);
   }
-  return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY));
+  return [...mapa.values()].sort(
+    (a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY) || (a.curva ?? "").localeCompare(b.curva ?? "") || (a.icnKa ?? 0) - (b.icnKa ?? 0)
+  );
 }
 function agruparPorDR(drs) {
   const mapa = /* @__PURE__ */ new Map();
@@ -3552,7 +3563,7 @@ function quadrosQuantificados(model, trechos) {
       nome: q.nome,
       circuitos: circuitos.length,
       pontos,
-      porDisjuntor: agruparPorDisjuntor(circuitos),
+      porDisjuntor: agruparPorDisjuntor(circuitos, [q]),
       drs: drsDoQuadro(model, q.id).length,
       porDR: agruparPorDR(drsDoQuadro(model, q.id)),
       dps: q.dps ? rotuloDoDPS(q.dps) : null,
@@ -4233,7 +4244,7 @@ ${c.funcao}`;
       comprimentoCondutorM: porCondutor.reduce((s2, c) => s2 + c.comprimentoM, 0),
       porQuadro,
       quadros: porQuadro.length,
-      porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
+      porDisjuntor: agruparPorDisjuntor(model.circuitos ?? [], model.quadros ?? []),
       drs: drsDoModelo(model).length,
       porDR: agruparPorDR(drsDoModelo(model)),
       dps: (model.quadros ?? []).filter((q) => q.dps).length,
@@ -6361,7 +6372,7 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""} \xB7 ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, "un"]);
     for (const c of t.porCondutor ?? []) totais.push([`Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace(".", ",")} mm\xB2` : " (circuito sem se\xE7\xE3o)"} \xB7 El\xE9trica`, n2(c.comprimentoM), "m"]);
     if ((t.quadros ?? 0) > 0) totais.push(["Quadros de distribui\xE7\xE3o", t.quadros, "un"]);
-    for (const d of t.porDisjuntor ?? []) totais.push([d.inA != null ? `Disjuntor ${d.inA} A` : "Disjuntor (In n\xE3o declarado)", d.quantidade, "un"]);
+    for (const d of t.porDisjuntor ?? []) totais.push([`Disjuntor ${d.inA != null ? `${d.inA} A` : "(In n\xE3o declarado)"}${d.curva ? ` curva ${d.curva}` : ""}${d.icnKa != null ? ` \xB7 ${String(d.icnKa).replace(".", ",")} kA` : ""}`, d.quantidade, "un"]);
     if ((t.drs ?? 0) > 0) totais.push(["DR 30 mA (por circuito)", t.drs, "un"]);
     totais.push(["Rede \u2014 comprimento total", n2(t.comprimentoRedeM), "m"]);
   }

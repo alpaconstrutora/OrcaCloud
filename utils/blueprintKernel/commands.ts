@@ -28,6 +28,7 @@ import {
   CorrenteDiferencialMa,
   PolosDoDR,
   DispositivoDPS,
+  CurvaDoDisjuntor,
   type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
@@ -755,6 +756,8 @@ export type Command =
       ligacao?: LigacaoDoCircuito | null;
       tensaoV?: number | null;
       alimentadorM?: number | null;
+      /** E3.3: Icn (kA) dos disjuntores do quadro. */
+      icnKa?: number | null;
     }
   | {
       type: 'SetQuadroProps';
@@ -773,6 +776,8 @@ export type Command =
       alimentadorM?: number | null;
       /** E3.2: o DPS do quadro, inteiro; `null` tira. */
       dps?: DispositivoDPS | null;
+      /** E3.3: Icn (kA) dos disjuntores do quadro; `null` tira. */
+      icnKa?: number | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -792,6 +797,8 @@ export type Command =
       ligacao?: LigacaoDoCircuito | null;
       protecaoDR?: boolean | null;
       fase?: FaseDoCircuito | null;
+      /** E3.3: curva do disjuntor (B/C/D). */
+      curva?: CurvaDoDisjuntor | null;
     }
   | {
       type: 'SetCircuitoProps';
@@ -815,6 +822,8 @@ export type Command =
       ligacao?: LigacaoDoCircuito | null;
       protecaoDR?: boolean | null;
       fase?: FaseDoCircuito | null;
+      /** E3.3: curva do disjuntor (B/C/D); `null` volta à sugestão. */
+      curva?: CurvaDoDisjuntor | null;
     }
   /**
    * Um DISPOSITIVO DR no quadro (E3.1). `geral` protege o quadro inteiro (e
@@ -3438,6 +3447,7 @@ function aplicarSemHash(
           ligacao: command.ligacao ?? null,
           tensaoV: command.tensaoV ?? null,
           alimentadorM: command.alimentadorM ?? null,
+          icnKa: command.icnKa ?? null,
         },
       ];
       diff.created.push(id);
@@ -3459,6 +3469,7 @@ function aplicarSemHash(
       if (command.tensaoV !== undefined) q.tensaoV = command.tensaoV;
       if (command.alimentadorM !== undefined) q.alimentadorM = command.alimentadorM;
       if (command.dps !== undefined) q.dps = command.dps ? { ...command.dps } : null;
+      if (command.icnKa !== undefined) q.icnKa = command.icnKa;
       diff.updated.push(q.id);
       break;
     }
@@ -3486,6 +3497,7 @@ function aplicarSemHash(
           secaoPeMm2: command.secaoPeMm2 ?? null,
           ligacao: command.ligacao ?? null,
           protecaoDR: command.protecaoDR ?? null,
+          curva: command.curva ?? null,
           fase: command.fase ?? null,
         },
       ];
@@ -3519,6 +3531,7 @@ function aplicarSemHash(
       if (command.ligacao !== undefined) c.ligacao = command.ligacao;
       if (command.protecaoDR !== undefined) c.protecaoDR = command.protecaoDR;
       if (command.fase !== undefined) c.fase = command.fase;
+      if (command.curva !== undefined) c.curva = command.curva;
       // E3.1: mudou de quadro → sai dos DRs do quadro antigo (o DR é peça daquele quadro).
       if (command.quadroId !== undefined) tirarCircuitoDosDrs(next, c.id, c.quadroId);
       diff.updated.push(c.id);

@@ -58,6 +58,7 @@ export type CodigoDaRegra =
   | '6.2.7.1'
   | '6.2.11.1.6'
   | '6.3.5.2'
+  | '5.3.5.5'
   | 'SUGERIDAS';
 
 export interface Achado {
@@ -768,6 +769,34 @@ function regraDps(model: BlueprintModel, levelId: ObjectId | null, hip: Hipotese
   };
 }
 
+// ─── 5.3.5.5 — capacidade de interrupção ────────────────────────────────────
+//
+// O disjuntor tem de interromper a corrente de curto presumida no ponto onde
+// está (Icn ≥ Ik). A Ik é HIPÓTESE (`ikEntradaKa`, a confirmar com a
+// concessionária) e a Icn é declarada por quadro. Sem Icn declarada, aviso —
+// é dado de compra que a prancha precisa.
+function regraIcn(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
+  const achados: Achado[] = [];
+  let avaliados = 0;
+  for (const q of (model.quadros ?? []).filter((x) => !levelId || x.levelId === levelId)) {
+    avaliados++;
+    if (q.icnKa == null) {
+      achados.push({ nivel: 'AVISO', mensagem: `${q.nome}: capacidade de interrupção (Icn) dos disjuntores não declarada — Ik presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA (hipótese)`, ids: [q.id] });
+      continue;
+    }
+    if (q.icnKa < hip.ikEntradaKa) {
+      achados.push({ nivel: 'FALTA', mensagem: `${q.nome}: Icn ${String(q.icnKa).replace('.', ',')} kA abaixo da corrente de curto presumida ${String(hip.ikEntradaKa).replace('.', ',')} kA — o disjuntor não interrompe o curto (5.3.5.5)`, ids: [q.id] });
+    }
+  }
+  return {
+    codigo: '5.3.5.5',
+    titulo: `Capacidade de interrupção dos disjuntores ≥ Ik presumida (${String(hip.ikEntradaKa).replace('.', ',')} kA — hipótese, a confirmar com a concessionária)`,
+    achados,
+    naoAvaliado: [],
+    avaliados,
+  };
+}
+
 function regraQuadro(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
   const achados: Achado[] = [];
   const naoAvaliado: string[] = [];
@@ -852,6 +881,7 @@ export function conferirNbr5410(
     regraPreDim(model, levelId, hipoteses),
     regraQuadro(model, levelId, hipoteses),
     regraDps(model, levelId, hipoteses),
+    regraIcn(model, levelId, hipoteses),
     regraEletroduto(model, levelId, hipoteses),
     regraSugeridas(model, levelId),
   ];

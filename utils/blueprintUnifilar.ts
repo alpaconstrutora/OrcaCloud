@@ -48,6 +48,9 @@ export interface RamalUnifilar {
   ligacao: LigacaoDoCircuito;
   tensaoV: number | null;
   disjuntorA: number | null;
+  /** E3.3: a curva escrita ao lado do In — declarada, ou a sugerida marcada "sug.". */
+  curva: string | null;
+  curvaOrigem: 'DECLARADA' | 'SUGERIDA' | null;
   disjuntorOrigem: 'DECLARADO' | 'SUGERIDO' | null;
   secaoMm2: number | null;
   secaoOrigem: 'DECLARADA' | 'CALCULADA' | null;
@@ -80,6 +83,8 @@ export interface DiagramaUnifilar {
     drGeral: string | null;
     /** E3.2: o DPS do quadro — derivação do barramento para a terra, logo depois do geral. */
     dps: string | null;
+    /** E3.3: Icn declarada dos disjuntores do quadro (kA). */
+    icnKa: number | null;
   };
   ramais: RamalUnifilar[];
   /** Algum DR aparece (geral ou de ramal) — a legenda do símbolo só entra se ele aparece. */
@@ -121,6 +126,8 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
       tensaoV: c.tensaoV,
       disjuntorA,
       disjuntorOrigem: c.disjuntorDeclaradoA != null ? 'DECLARADO' : disjuntorA != null ? 'SUGERIDO' : null,
+      curva: c.curvaDeclarada ?? c.curvaSugerida,
+      curvaOrigem: c.curvaDeclarada ? 'DECLARADA' : 'SUGERIDA',
       secaoMm2,
       secaoOrigem: c.secaoDeclaradaMm2 != null ? 'DECLARADA' : secaoMm2 != null ? 'CALCULADA' : null,
       condutores: condutoresDoRamal(c.ligacao, secaoMm2, circuito?.secaoNeutroMm2 ?? null, circuito?.secaoPeMm2 ?? null),
@@ -152,6 +159,7 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
         tensaoV: q.tensaoV,
         entrada: {
           dps: quadro.dps ? rotuloDoDPS(quadro.dps) : null,
+          icnKa: quadro.icnKa ?? null,
           drGeral: (() => {
             const g = drsDoQuadro(model, quadro.id).find((d) => d.geral);
             return g ? rotuloDoDR(g) : null;
@@ -260,7 +268,7 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
   d.linha(xIni + 3 * k, yBus, xGeral, yBus, { espessuraMm: media, cor: COR });
   const fimGeral = disjuntor(d, xGeral, yBus, k, false, fina);
   // À DIREITA da lâmina, não em cima dela: em cima brigava com "ALIMENTAÇÃO" (captura de 15/09).
-  t(fimGeral.x + 1.5 * k, yBus - 2.2 * k, `GERAL ${e.disjuntorGeralA != null ? `${e.disjuntorGeralA} A` : '— A'}`, 2.1 * k);
+  t(fimGeral.x + 1.5 * k, yBus - 2.2 * k, `GERAL ${e.disjuntorGeralA != null ? `${e.disjuntorGeralA} A` : '— A'}${e.icnKa != null ? ` · ${fmt(e.icnKa)} kA` : ''}`, 2.1 * k);
   if (e.condutores) t(xGeral - 1 * k, yBus + 5.2 * k, e.condutores, 2 * k, COR_FRACA);
   else t(xGeral - 1 * k, yBus + 5.2 * k, 'seção —', 2 * k, COR_FRACA);
   t(
@@ -329,7 +337,8 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     y += 5 * k;
     // disjuntor do ramal
     const fim = disjuntor(d, x, y, k, true, fina);
-    t(x + 3.4 * k, y + 3.4 * k, `${r.disjuntorA != null ? `${r.disjuntorA} A` : '— A'}${r.disjuntorOrigem === 'SUGERIDO' ? ' sug.' : ''}`, 2 * k, corValor);
+    // E3.3: a curva ao lado do In — "16 A C"; a sugerida só quando o In também é declarado, marcada.
+    t(x + 3.4 * k, y + 3.4 * k, `${r.disjuntorA != null ? `${r.disjuntorA} A` : '— A'}${r.curva && r.disjuntorOrigem === 'DECLARADO' ? ` ${r.curva}${r.curvaOrigem === 'SUGERIDA' ? '*' : ''}` : ''}${r.disjuntorOrigem === 'SUGERIDO' ? ' sug.' : ''}`, 2 * k, corValor);
     y = fim.y;
     d.linha(x, y, x, y + 4 * k, { espessuraMm: media, cor: COR });
     y += 4 * k;
@@ -370,7 +379,7 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
 /** As linhas da legenda/rodapé do unifilar — só o que aparece no desenho. */
 export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string[] {
   const L: string[] = [];
-  L.push('Disjuntor: lâmina aberta no ramal (In em A). Barramento: traço grosso. Seta: segue ao circuito.');
+  L.push('Disjuntor: lâmina aberta no ramal (In em A; letra = curva B/C/D, "*" = curva sugerida). Icn (kA) ao lado do geral quando declarada. Barramento: traço grosso. Seta: segue ao circuito.');
   if (diagramas.some((d) => d.entrada.dps)) L.push('DPS: dispositivo de proteção contra surtos — derivação do barramento para a terra, logo após o geral; classe, In (kA) e Up (kV) declarados (6.3.5.2).');
   if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual — na entrada (geral do quadro) ou no ramal (individual; "grupo" = compartilhado por mais de um circuito); "In / IΔn", 30 mA para pessoas (5.1.3.2.2).');
   L.push('Condutores: "2#2,5 + T2,5" = dois carregados de 2,5 mm² e terra de 2,5 mm² (ligação FN/FF); "3#…" em FFF.');

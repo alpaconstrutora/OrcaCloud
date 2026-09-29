@@ -24,7 +24,8 @@ function casaCompleta(): BlueprintModel {
   });
   let m = applyBatch(base, [p(0, 0, 4000, 0), p(4000, 0, 4000, 4000), p(4000, 4000, 0, 4000), p(0, 4000, 0, 0)]).model;
   m = applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
-  m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600, ligacao: 'FN', tensaoV: 127, alimentadorM: 8 }).model;
+  // E3.3: a casa COMPLETA declara a Icn dos disjuntores — sem ela a emissão fica pendente (5.3.5.5).
+  m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600, ligacao: 'FN', tensaoV: 127, alimentadorM: 8, icnKa: 6 }).model;
   const quadroId = m.quadros[0].id;
   m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C1', tensaoV: 127, secaoMm2: 1.5, disjuntorA: 10, ligacao: 'FN' }).model;
   m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'C2', tensaoV: 127, secaoMm2: 2.5, disjuntorA: 20, ligacao: 'FN' }).model;
@@ -116,7 +117,7 @@ describe('hash da base e memorial', () => {
     expect(texto).toMatch(/ART nº 28027230/);
     expect(texto).toMatch(/método de instalação B1/);
     const linhaC2 = L.find((l) => l.startsWith('C2 (')) ?? '(linha do C2 não encontrada)';
-    expect(linhaC2, linhaC2).toMatch(/^C2 \(FN 127 V\): 4 ponto\(s\), 400 VA, IB 3,1 A; seção declarada 2,5 mm² \(mínima 2,5 mm²\); PE 2,5 mm² \(Tab\. 58\); disjuntor 20 A \(sugerido 10 A\)/);
+    expect(linhaC2, linhaC2).toMatch(/^C2 \(FN 127 V\): 4 ponto\(s\), 400 VA, IB 3,1 A; seção declarada 2,5 mm² \(mínima 2,5 mm²\); PE 2,5 mm² \(Tab\. 58\); disjuntor 20 A \(curva sugerida C\) \(sugerido 10 A\)/);
     expect(linhaC2).toMatch(/ATENDE\.$/);
     expect(texto).toMatch(/\[✓\] Todo ponto com potência declarada/);
     expect(texto).toMatch(/não substitui o profissional/);

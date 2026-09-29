@@ -53,7 +53,7 @@ function casa(): BlueprintModel {
 
 describe('quantitativo elétrico · quant-1.19.0', () => {
   it('a política subiu de versão — fio, quadro, disjuntor e DR entraram no payload', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.22.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.23.0');
   });
 
   it('repartirCondutores: base por ligação, excedente no primeiro, falta nos últimos — com o índice do circuito', () => {
@@ -105,11 +105,12 @@ describe('quantitativo elétrico · quant-1.19.0', () => {
     expect(qdc.nome).toBe('QDC');
     expect(qdc.circuitos).toBe(2);
     expect(qdc.pontos).toBe(3);
-    expect(qdc.porDisjuntor).toEqual([{ inA: 10, quantidade: 1 }, { inA: 16, quantidade: 1 }]);
+    // E3.3: o disjuntor se compra por In, curva e Icn — sem declaração, `null`.
+    expect(qdc.porDisjuntor).toEqual([{ inA: 10, curva: null, icnKa: null, quantidade: 1 }, { inA: 16, curva: null, icnKa: null, quantidade: 1 }]);
     expect(qdc.drs).toBe(1);
     expect(qdc.eletrodutoM).toBeCloseTo(8.5, 6);
     expect(qdc.condutorM).toBeCloseTo(37.5, 6);
-    expect(q.totais.porDisjuntor).toEqual([{ inA: 10, quantidade: 1 }, { inA: 16, quantidade: 1 }]);
+    expect(q.totais.porDisjuntor).toEqual([{ inA: 10, curva: null, icnKa: null, quantidade: 1 }, { inA: 16, curva: null, icnKa: null, quantidade: 1 }]);
     expect(q.totais.drs).toBe(1);
   });
 

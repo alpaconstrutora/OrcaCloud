@@ -271,6 +271,20 @@ export interface HipotesesEletricas {
   exposicaoARaios: ExposicaoARaios;
   /** O DPS que se sugere quando falta (catálogo/hipótese): classe II, 20 kA, Up 1,5 kV, desconexão 20 A. */
   dpsPadrao: { classe: 'I' | 'II' | 'III'; upKv: number; inKa: number; disjuntorDesconexaoA: number };
+  /**
+   * E3.3 — CORRENTE DE CURTO-CIRCUITO PRESUMIDA na entrada, kA. Hipótese, a
+   * confirmar com a concessionária (é ela quem informa a Ik no ponto de
+   * entrega): 4,5 kA é o usual residencial em rede pública de baixa tensão.
+   * O cálculo por impedância da rede fica para o backlog. Icn do disjuntor
+   * tem de ser ≥ Ik (5.3.5.5).
+   */
+  ikEntradaKa: number;
+}
+
+/** A curva sugerida (hipótese): D onde há motor/compressor (partida), C no resto. */
+export function sugerirCurva(pontos: readonly Pick<Terminal, 'tipoEletrico'>[]): 'B' | 'C' | 'D' {
+  const motor = new Set(['MOTOR_BOMBA', 'AR_CONDICIONADO', 'VENTILADOR_EXAUSTOR', 'PORTAO']);
+  return pontos.some((p) => p.tipoEletrico && motor.has(p.tipoEletrico)) ? 'D' : 'C';
 }
 
 export const EXPOSICOES_A_RAIOS = ['NAO_AVALIADA', 'EXPOSTA', 'NAO_EXPOSTA'] as const;
@@ -343,6 +357,7 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   maxCircuitosPorDR: 5,
   exposicaoARaios: 'NAO_AVALIADA',
   dpsPadrao: DPS_PADRAO,
+  ikEntradaKa: 4.5,
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────
@@ -564,6 +579,9 @@ export interface PreDimensionamentoDoCircuito {
   izDeclaradaA: number | null;
   disjuntorSugeridoA: number | null;
   disjuntorDeclaradoA: number | null;
+  /** E3.3: a curva declarada e a sugerida (C; D onde há motor — hipótese). */
+  curvaDeclarada: 'B' | 'C' | 'D' | null;
+  curvaSugerida: 'B' | 'C' | 'D';
   comprimento: ComprimentoDoCircuito | null;
   /** Queda com a seção declarada (ou, sem declarada, com a calculada). */
   quedaPct: number | null;
@@ -614,6 +632,8 @@ export function preDimensionarCircuito(
     izDeclaradaA: null,
     disjuntorSugeridoA: null,
     disjuntorDeclaradoA,
+    curvaDeclarada: circuito.curva ?? null,
+    curvaSugerida: sugerirCurva(pontos),
     comprimento: comprimentoDoCircuito(model, circuito),
     quedaPct: null,
     secaoParaQuedaMm2: null,

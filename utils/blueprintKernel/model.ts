@@ -2959,7 +2959,20 @@ export interface Quadro {
    * instalação está exposta a descargas — a exposição é hipótese de projeto.
    */
   dps?: DispositivoDPS | null;
+  /**
+   * CAPACIDADE DE INTERRUPÇÃO (Icn, kA) dos disjuntores deste quadro (E3.3,
+   * kernel 0.75.0), declarada. Um valor por quadro — os minidisjuntores de um
+   * mesmo quadro costumam ser da mesma linha (3, 4,5, 6, 10 kA); um circuito
+   * com Icn diferente é caso de nota, não de campo. A 5.3.5.5 exige Icn ≥ Ik
+   * presumida no ponto — e a Ik é hipótese (`ikEntradaKa`) até a E4 trazer a
+   * entrada. Ausente = ninguém disse.
+   */
+  icnKa?: number | null;
 }
+
+/** Curvas de disparo do minidisjuntor (NBR NM 60898): B (3–5·In), C (5–10·In), D (10–20·In). */
+export const CURVAS_DO_DISJUNTOR = ['B', 'C', 'D'] as const;
+export type CurvaDoDisjuntor = (typeof CURVAS_DO_DISJUNTOR)[number];
 
 /** As sensibilidades comerciais do DR, em mA (IEC 61008-1). 30 mA é a proteção de pessoas (5.1.3.2.2). */
 export const CORRENTES_DIFERENCIAIS_MA = [10, 30, 100, 300, 500] as const;
@@ -3063,6 +3076,11 @@ export interface Circuito {
    * há tomada em banheiro, cozinha/serviço, área externa e no chuveiro.
    */
   protecaoDR?: boolean | null;
+  /**
+   * CURVA do disjuntor DECLARADA (E3.3): B, C ou D. `null` = ninguém disse — o
+   * pré-dimensionamento sugere (C em geral, D onde há motor: hipótese).
+   */
+  curva?: CurvaDoDisjuntor | null;
   /** Em quadro trifásico, a fase (`R`, `S`, `T`) que este circuito FN ocupa. */
   // ⚠️ Desde a E3.1 (kernel 0.73.0) o DR é PEÇA do quadro (`Quadro.drs`);
   // `protecaoDR: true` segue lido como DR individual de 30 mA (legado, sem In).
@@ -5600,6 +5618,8 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (q.alimentadorM != null && (!Number.isFinite(q.alimentadorM) || q.alimentadorM < 0)) {
       throw new KernelError('BAD_BOARD_VALUE', `alimentadorM inválido no quadro ${q.id}: ${q.alimentadorM}`);
     }
+    // Icn (E3.3): finita e positiva quando declarada.
+    if (q.icnKa != null && (!Number.isFinite(q.icnKa) || q.icnKa <= 0)) throw new KernelError('BAD_BOARD_VALUE', `icnKa inválida no quadro ${q.id}: ${q.icnKa}`);
     // DPS (E3.2): classe do catálogo, números finitos e positivos quando declarados.
     if (q.dps) {
       if (!(CLASSES_DE_DPS as readonly string[]).includes(q.dps.classe)) throw new KernelError('BAD_BOARD_VALUE', `classe de DPS inválida no quadro ${q.id}: ${q.dps.classe}`);
@@ -5656,6 +5676,9 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (c.fase != null && !(FASES_DO_CIRCUITO as readonly string[]).includes(c.fase)) {
       throw new KernelError('BAD_CIRCUIT_PHASE', `Fase inválida em ${c.id}: ${c.fase}`);
+    }
+    if (c.curva != null && !(CURVAS_DO_DISJUNTOR as readonly string[]).includes(c.curva)) {
+      throw new KernelError('BAD_CIRCUIT_VALUE', `Curva inválida em ${c.id}: ${c.curva}`);
     }
   }
 

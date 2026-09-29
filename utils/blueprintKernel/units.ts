@@ -418,7 +418,14 @@
  * desconexão, declarados. Omitido no canônico quando ausente — nenhum desenho
  * muda de payload, provado antes do bump com os goldens na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.74.0';
+/**
+ * ─── 0.74.0 → 0.75.0 (29/09/2026) — CURVA E Icn DO DISJUNTOR ────────────────
+ *
+ * `Circuito.curva` (B/C/D) e `Quadro.icnKa` (E3.3 do roadmap elétrico),
+ * declarados; omitidos no canônico quando ausentes — nenhum desenho muda de
+ * payload, provado antes do bump com os goldens na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.75.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

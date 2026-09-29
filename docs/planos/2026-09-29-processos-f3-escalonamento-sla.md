@@ -100,6 +100,14 @@ Um item por arquivo. Cada item: **o que muda** · **como sei que terminou**.
 **4.1** Aplicar a migration (com OK do usuário) → `select public.fn_process_sla_sweep()` à mão → a instância `2c8d805b…` (PC-013-013-0002, etapa "Conferência Fiscal" com prazo 01/10 00:18) **ainda não** está vencida em 29/09; criar um template de teste com SLA de 0,01 h e iniciar uma instância → rodar o sweep → `notifications` ganha a linha e a instância vira `ATRASADO`; cancelar a instância de teste depois.
 - Como sei que terminou: linha em `notifications` com `type='process_sla'` e o sino do app mostrando o aviso (conferência visual do usuário).
 
+## Publicação
+
+| Data | Commit | Prova |
+|---|---|---|
+| 2026-09-29 | `7d9c12d6` (2º push; o 1º perdeu a corrida para outra frente durante os testes) | `conferir-producao.sh "Escalonar para" "Ações suspensas: processo bloqueado"` → carimbado `7d9c12d`, os dois textos presentes |
+
+Pendente: conferência visual do criador (SLA/responsável/escalonamento), do drawer (bloquear/desbloquear, "Atrasada há Xh") e das 2 notificações de teste no sino.
+
 ## Fora deste plano (F3.2 — responsável por Departamento/Cargo)
 
 Desenho para quando for feito: `process_instance_steps.responsible_type/responsible_ref_id`
@@ -119,7 +127,8 @@ antes de prometer.
 - [x] 3.1 criador de template — por etapa: SLA (h), Responsável e Escalonar para… (+ após h) com `MembroSelect` (membro sem login vinculado aparece desabilitado **com o motivo**); escalado sem SLA bloqueia o salvar com texto. Antes o criador não gravava `sla_hours` nem responsável — só a F1 semeava por migration
 - [x] 3.2 drawer — cabeçalho com motivo do bloqueio, Bloquear (campo de motivo inline; botão desabilitado diz por quê) / Desbloquear (`useConfirm`); etapa atual mostra "Prazo …" ou "Atrasada há Xh" (vermelho, §8) e "escalonada em …"; com processo bloqueado as ações da etapa somem e aparece "Ações suspensas: processo bloqueado". `check-ui-standard.sh` limpo; **não verificado no navegador**
 - [x] 3.3 lista/Kanban — `KANBAN_COLUMNS` já tinha `BLOQUEADO` e `ATRASADO` (F0); nada a mudar
-- [ ] 4.1 prova em produção — depende da aplicação da migration
+- [x] 1.1 **APLICADA no remoto em 2026-09-29** (autorizada pelo usuário): cron `process-sla-sweep` ativo (`5 * * * *`); ACL das duas funções = `postgres` + `service_role` só (sem PUBLIC/anon/authenticated — REVOKE efetivo); `select fn_process_sla_sweep()` à mão → `{atrasadas: 0, escaladas: 0}` (nenhuma etapa real vencida)
+- [x] 4.1 prova em produção (2026-09-29, 04:16 UTC) — template `[TESTE F3]` na org Alpa com etapa vencida há 1 h, responsável/escalado = `altair.rosa@…`, escalonar após 0 h → sweep gerou **2 notificações** `process_sla` ("Etapa atrasada" e "Escalonado para você"), 1 log `STEP_OVERDUE` + 1 `STEP_ESCALATED`; **segunda passada não repetiu** (idempotência); instância de teste CANCELADA e template ARQUIVADO no fim. As 2 notificações ficaram no sino de propósito, para conferência visual
 
 ## Verificação de ponta a ponta
 

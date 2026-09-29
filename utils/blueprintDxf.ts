@@ -140,6 +140,15 @@ export const CAMADAS = {
   ELETRICA: 'PLANTA-ELETRICA',
   ELETRICA_TEXTO: 'PLANTA-ELETRICA-TEXTO',
   /**
+   * E5.1 (29/09/2026): a elétrica separada em ILUMINAÇÃO e FORÇA — cada
+   * elemento numa camada só (o comum — quadro, caixa, eletroduto compartilhado
+   * — fica em PLANTA-ELETRICA). Tudo ligado = a planta unificada.
+   */
+  ELETRICA_ILUMINACAO: 'PLANTA-ELETRICA-ILUMINACAO',
+  ELETRICA_ILUMINACAO_TEXTO: 'PLANTA-ELETRICA-ILUMINACAO-TEXTO',
+  ELETRICA_FORCA: 'PLANTA-ELETRICA-FORCA',
+  ELETRICA_FORCA_TEXTO: 'PLANTA-ELETRICA-FORCA-TEXTO',
+  /**
    * HIDROSSANITÁRIO (E2.1, 28/09/2026): a rede de água (fria e quente) e a de
    * esgoto, cada uma com a camada dos rótulos (ø, i %, siglas) à parte.
    */
@@ -190,6 +199,10 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.CORTE_ESCADA]: 9,
   [CAMADAS.ELETRICA]: 2, // amarelo — a cor da elétrica no canvas
   [CAMADAS.ELETRICA_TEXTO]: 2,
+  [CAMADAS.ELETRICA_ILUMINACAO]: 30, // laranja — luz
+  [CAMADAS.ELETRICA_ILUMINACAO_TEXTO]: 30,
+  [CAMADAS.ELETRICA_FORCA]: 1, // vermelho — força
+  [CAMADAS.ELETRICA_FORCA_TEXTO]: 1,
   [CAMADAS.AGUA]: 5, // azul — a cor da água no canvas
   [CAMADAS.AGUA_TEXTO]: 5,
   [CAMADAS.ESGOTO]: 32, // marrom — a convenção de esgoto em prancha
@@ -945,18 +958,21 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
 function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): string {
   let saida = '';
   const FATOR = 50;
+  // E5.1: a camada do elemento que está sendo desenhado — `desenharEletrica` avisa a categoria.
+  let traco: string = CAMADAS.ELETRICA;
+  let rotulo: string = CAMADAS.ELETRICA_TEXTO;
   const d: Desenhista = {
     linha: (x1, y1, x2, y2) => {
-      saida += linha(CAMADAS.ELETRICA, { x: x1, y: -y1 }, { x: x2, y: -y2 });
+      saida += linha(traco, { x: x1, y: -y1 }, { x: x2, y: -y2 });
     },
     poligono: (pontos) => {
-      saida += polilinha(CAMADAS.ELETRICA, pontos.map((p) => ({ x: p.x, y: -p.y })));
+      saida += polilinha(traco, pontos.map((p) => ({ x: p.x, y: -p.y })));
     },
     texto: (x, y, t, alturaMm) => {
-      saida += texto(CAMADAS.ELETRICA_TEXTO, { x, y: -y }, t, alturaMm * FATOR);
+      saida += texto(rotulo, { x, y: -y }, t, alturaMm * FATOR);
     },
     retangulo: (x, y, w, h) => {
-      saida += polilinha(CAMADAS.ELETRICA, [
+      saida += polilinha(traco, [
         { x, y: -y },
         { x: x + w, y: -y },
         { x: x + w, y: -(y + h) },
@@ -964,7 +980,14 @@ function entidadesDeEletrica(model: BlueprintModel, hip?: HipotesesEletricas): s
       ]);
     },
   };
-  desenharEletrica(d, model, { px: (x) => x, py: (y) => -y }, FATOR);
+  desenharEletrica(d, model, { px: (x) => x, py: (y) => -y }, FATOR, {
+    aoMudarCategoria: (c) => {
+      traco = c === 'ILUMINACAO' ? CAMADAS.ELETRICA_ILUMINACAO : c === 'FORCA' ? CAMADAS.ELETRICA_FORCA : CAMADAS.ELETRICA;
+      rotulo = c === 'ILUMINACAO' ? CAMADAS.ELETRICA_ILUMINACAO_TEXTO : c === 'FORCA' ? CAMADAS.ELETRICA_FORCA_TEXTO : CAMADAS.ELETRICA_TEXTO;
+    },
+  });
+  traco = CAMADAS.ELETRICA;
+  rotulo = CAMADAS.ELETRICA_TEXTO;
 
   // Quadro de cargas e legenda, abaixo da planta, uma linha de TEXT por linha.
   const bb = boundingBoxDoModelo(model);
@@ -1121,7 +1144,7 @@ function entidadesDeCota(model: BlueprintModel): string {
  */
 export const COBERTURA_DXF = [
   'Hidrossanitário (quando pedido): tubos na largura real (bifilar), conexões, caixas e pontos em PLANTA-AGUA e PLANTA-ESGOTO; ø, i % e siglas em PLANTA-AGUA-TEXTO e PLANTA-ESGOTO-TEXTO, no tamanho de papel a 1:50. A cota do tubo não está na geometria 2D — só no IFC.',
-  'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA, rótulos (sigla · circuito, Ø, #seção, VA) em PLANTA-ELETRICA-TEXTO; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta; o diagrama unifilar (em árvore quando há hierarquia de quadros) em UNIFILAR / UNIFILAR-TEXTO, à direita da planta.',
+  'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA-ILUMINACAO (luminárias, interruptores e os eletrodutos só deles) e PLANTA-ELETRICA-FORCA (tomadas, TUE, ligação direta, equipamentos, dados, entrada) — o comum (quadros, caixas, eletroduto de circuitos dos dois tipos) em PLANTA-ELETRICA —, rótulos (sigla · circuito, Ø, #seção, VA) nas camadas -TEXTO de cada uma; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta; o diagrama unifilar (em árvore quando há hierarquia de quadros) em UNIFILAR / UNIFILAR-TEXTO, à direita da planta.',
   'Unidade: MILÍMETRO, declarada em $INSUNITS. O desenho está em 1:1 — a escala é da prancha.',
   'Paredes: sólido fechado por parede, NÃO APARADO nas junções (os retângulos se sobrepõem).',
   'Eixos: em camada própria, para reeditar as paredes.',

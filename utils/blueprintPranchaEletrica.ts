@@ -49,6 +49,7 @@ import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trec
 import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
 import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
+import { categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -219,8 +220,24 @@ function simboloDoPonto(d: Desenhista, t: Pick<Terminal, 'tipoEletrico' | 'cotaM
  * A camada elétrica por cima da planta. `px`/`py` são as MESMAS funções de
  * projeção de `desenharPlanta` — um lugar só para a escala.
  */
-export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Proj, fator = 1): void {
+export function desenharEletrica(
+  d: Desenhista,
+  model: BlueprintModel,
+  proj: Proj,
+  fator = 1,
+  /**
+   * E5.1: `recorte` desenha só a planta de ILUMINAÇÃO ou só a de TOMADAS E
+   * FORÇA (o comum entra nas duas; num eletroduto comum, só os condutores dos
+   * circuitos do recorte). `aoMudarCategoria` avisa, antes de cada elemento,
+   * a categoria dele — é por ele que o DXF troca de camada. Sem os dois, a
+   * saída é a de sempre, chamada por chamada.
+   */
+  opcoes: { recorte?: RecorteEletrico | null; aoMudarCategoria?: (c: CategoriaEletrica) => void } = {},
+): void {
   const { px, py } = proj;
+  const recorte = opcoes.recorte ?? null;
+  const categoria = (c: CategoriaEletrica) => opcoes.aoMudarCategoria?.(c);
+  const categoriaDoCircuito = recorte || opcoes.aoMudarCategoria ? categoriasDosCircuitos(model) : new Map<string, CategoriaEletrica>();
   // Tamanhos de símbolo em unidades de SAÍDA: papel (fator 1) ou mm reais a 1:50 (DXF).
   const TOMADA_MM = TOMADA_PAPEL_MM * fator;
   const LUZ_R_MM = LUZ_R_PAPEL_MM * fator;
@@ -240,6 +257,9 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
   // Eletrodutos primeiro: ficam por baixo dos símbolos.
   for (const t of model.trechos ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
+    const catDoTrecho = recorte || opcoes.aoMudarCategoria ? categoriaDoTrecho(t, categoriaDoCircuito) : 'COMUM';
+    if (!entraNoRecorte(catDoTrecho, recorte)) continue;
+    categoria(catDoTrecho);
     const a = { x: px(t.a.x), y: py(t.a.y) };
     const b = { x: px(t.b.x), y: py(t.b.y) };
     const prumada = Math.hypot(b.x - a.x, b.y - a.y) < 0.2 * k;
@@ -261,12 +281,14 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
     // vão entre grupos; número do circuito em cima do seu grupo, seção embaixo;
     // o Ø à esquerda do conjunto.
     const circuitosDoEletroduto = (t.circuitoIds ?? []).map((cid) => circuitosPorId.get(cid)).filter((c): c is NonNullable<typeof c> => !!c);
-    const lista =
+    const listaInteira =
       fiacao.get(t.id)?.lista ??
       condutoresDoEletroduto(
         t,
         circuitosDoEletroduto.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null })),
       );
+    // E5.1: num eletroduto COMUM visto num recorte, só os condutores dos circuitos daquele recorte.
+    const lista = recorte && catDoTrecho === 'COMUM' ? listaInteira.filter((c) => entraNoRecorte(c.circuitoId ? categoriaDoCircuito.get(c.circuitoId) ?? 'COMUM' : 'COMUM', recorte)) : listaInteira;
     const numerado = numerados.get(t.id) ?? null;
     if (numerado) {
       // Círculo branco com o rótulo no meio do trecho, no lugar dos traços.
@@ -320,8 +342,9 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
     d.texto(meio.x - ux * (total / 2 + 1.5 * k) + nx * 2.2 * k - 3.2 * k, meio.y - uy * (total / 2 + 1.5 * k) + ny * 2.2 * k + 0.6 * k, `Ø${t.bitolaMm}`, TEXTO_MM * 0.8, COR_FRACA);
   }
 
-  // Quadros: retângulo em escala (piso de 4 mm) com o nome.
+  // Quadros: retângulo em escala (piso de 4 mm) com o nome. Comuns às duas plantas.
   for (const q of model.quadros ?? []) {
+    categoria('COMUM');
     const m = medidasDaPeca(q, MEDIDAS_PADRAO_QUADRO);
     const cantos = cantosDaPeca(q.at, m, giroDaPeca(q)).map((p) => ({ x: px(p.x), y: py(p.y) }));
     const larg = Math.hypot(cantos[1].x - cantos[0].x, cantos[1].y - cantos[0].y);
@@ -341,6 +364,9 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
   // Pontos.
   for (const t of model.terminais ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
+    const catDoPonto = categoriaDoPonto(t.tipoEletrico);
+    if (!entraNoRecorte(catDoPonto, recorte)) continue;
+    categoria(catDoPonto);
     // A TOMADA se apoia na FACE (15/09/2026): a base do triângulo vai do
     // ponto à face (`recuoMm`, no modelo) e o centro do símbolo fica meio
     // tamanho adiante, já no papel — a mesma regra do canvas. O papel tem Y

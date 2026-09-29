@@ -1966,7 +1966,7 @@ Fecha o bloco **1** e o resto do **2**.
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 5.1 Plantas de luz e força | `TipoDePrancha` ELETRICA ganha variantes `ILUMINACAO` (luzes, interruptores, comandos e seus eletrodutos) e `TOMADAS_FORCA` (TUG, TUE, LD, dados e seus eletrodutos) além da unificada; filtro por tipo no `desenharEletrica` e nas camadas da vista (`CamadasDaPlanta` por tipo de ponto); DXF com camadas `ELETRICA-ILUMINACAO` / `ELETRICA-FORCA` | PDF sem `ILUMINACAO` sai byte a byte igual ao de hoje; harness com as duas plantas |
+| 5.1 Plantas de luz e força ✅ (PDF sem recorte provado byte a byte: 173 chamadas, mesmo hash; DXF só muda de camada) | `TipoDePrancha` ELETRICA ganha variantes `ILUMINACAO` (luzes, interruptores, comandos e seus eletrodutos) e `TOMADAS_FORCA` (TUG, TUE, LD, dados e seus eletrodutos) além da unificada; filtro por tipo no `desenharEletrica` e nas camadas da vista (`CamadasDaPlanta` por tipo de ponto); DXF com camadas `ELETRICA-ILUMINACAO` / `ELETRICA-FORCA` | PDF sem `ILUMINACAO` sai byte a byte igual ao de hoje; harness com as duas plantas |
 | 5.2 Legenda desenhada e lista de materiais na prancha | legenda com o SÍMBOLO desenhado (não só texto) na folha da planta, só dos tipos presentes; folha "Lista de materiais" com o quantitativo elétrico (0.3 + 2.3) por pavimento e por quadro | `DesenhistaDeProva.textos()` lista a legenda; PDF com a folha nova |
 | 5.3 Memorial descritivo e DOCX | `utils/blueprintMemorialEletrico.ts` gera **memorial descritivo** (blocos: objeto, normas, entrada, quadros, circuitos, proteção, condutores, eletrodutos, aterramento, quantitativos) e **memorial de cálculo** como `BlocoDoMemorial`; PDF e DOCX pelo `blueprintMemorialDocx.ts` (já existe); textos padrão editáveis por estudo (hipótese `textosDoMemorial`); a emissão com ART anexa os dois | DOCX abre no Word; memorial gerado antes da emissão (não só nela); `paraWinAnsi` aplicado |
 
@@ -3141,3 +3141,61 @@ eletroduto identificadas" ❌→✅.
 concessionária (preset com fonte e data); presets reais de padrão de entrada; fatores de demanda por
 nível; demanda por tipologia; redução do neutro trifásico > 25 mm² (herdado da E2); medidor
 "geral/serviço" como peça distinta; estabilidade do Node 24 no Windows (ferramenta).
+
+### E5.1 — Plantas de luz e força (29/09/2026) · frente `eletrico-e5` · sem bump
+
+**O que mudou**
+
+- **`utils/blueprintRecorteEletrico.ts`** (novo, puro, derivado — nada gravado): `categoriaDoPonto`
+  (luminárias e interruptor = ILUMINACAO; caixa de passagem e sem tipo = COMUM; o resto — TUG, TUE,
+  ligação direta, equipamentos, dados, campainha, espera, terra, entrada, medidor — = FORCA);
+  `categoriasDosCircuitos` (todos os pontos de luz → ILUMINACAO; algum de força → FORCA; sem ponto →
+  COMUM); `categoriaDoTrecho` (circuitos de um tipo só → aquele tipo; dos dois, ou sem circuito
+  conhecido → COMUM); `entraNoRecorte`; `idsForaDaVistaEletrica`.
+- **`desenharEletrica(d, model, proj, fator, { recorte, aoMudarCategoria })`**: `recorte` desenha só a
+  planta de ILUMINAÇÃO ou só a de TOMADAS E FORÇA — o comum (quadro, caixa, eletroduto dos dois tipos)
+  entra nas duas, e num eletroduto comum só os condutores dos circuitos do recorte; `aoMudarCategoria`
+  avisa a categoria antes de cada elemento (é por ele que o DXF troca de camada). Sem os dois, a saída
+  é a de sempre.
+- **Conjunto de pranchas**: `InclusaoNoConjunto.eletricaSeparada` ("Elétrica em duas plantas:
+  iluminação e tomadas/força", padrão falso, lido pelo sanitizador do template) → por pavimento,
+  "Iluminação — Térreo" e "Tomadas e força — Térreo" (`PranchaPlanejada.recorteEletrico`), cada uma só
+  quando o pavimento tem ponto dela; `OpcoesExportacao.recorteEletrico` leva o recorte até a planta.
+- **DXF**: camadas novas `PLANTA-ELETRICA-ILUMINACAO(-TEXTO)` (laranja) e `PLANTA-ELETRICA-FORCA(-TEXTO)`
+  (vermelha); o comum fica em `PLANTA-ELETRICA(-TEXTO)`. Cada entidade numa camada só — tudo ligado é a
+  planta unificada. A cobertura do DXF diz isso.
+- **Vista do editor**: `CamadasDaPlanta.eletricaIluminacao` / `eletricaForca` (ligadas por padrão,
+  gravadas por usuário, nos templates de vista), dois interruptores no menu de camadas ("Elétrica —
+  iluminação" · "Elétrica — tomadas e força"). O filtro entra pelo MESMO conjunto `ocultos` da fase/
+  etapa/vista — a peça some do desenho E do clique, sem tocar os blocos elétricos do canvas.
+
+**Prova de "PDF sem recorte byte a byte igual"**: antes de editar, a sequência de chamadas de desenho de
+uma planta elétrica completa (luz + interruptor + 2 TUG + ar-condicionado + caixa de passagem + 6
+eletrodutos, 3 circuitos, `desenharPlanta` com `eletrica`) foi gravada — **173 chamadas, sha256
+`6403c808…`**; depois das edições, **as mesmas 173 chamadas, o mesmo hash**. O DXF mudou só de camada:
+normalizando os nomes novos para `PLANTA-ELETRICA`, a seção ENTITIES é **idêntica** à de antes (113
+entidades em ILUMINACAO, 41 em FORCA, 46 comuns + textos).
+
+**Testes** — novo `__tests__/blueprintRecorteEletrico.test.ts` (7): categorias de ponto/circuito/
+eletroduto; **sem recorte, `{}` e a chamada antiga dão as mesmas chamadas**; iluminação sem tomada/AC,
+força sem luz/letra de comando, QDC e Ø nas duas, no tronco comum só os números dos circuitos do
+recorte, cada recorte desenha menos que a unificada; `desenharPlanta` passa o recorte; conjunto
+"Iluminação — Térreo"/"Tomadas e força — Térreo" com o recorte, a unificada sem a opção, o sanitizador
+do template; DXF com as 4 camadas e "TUG · C2" em FORCA-TEXTO, "Luz teto · C1" em ILUMINACAO-TEXTO,
+"QDC" na comum; vista: desligar luz esconde luminária, interruptor e o eletroduto só deles, e nunca o
+tronco comum, o quadro ou a caixa; padrão com as duas ligadas.
+
+**O que os testes pegaram antes de publicar**: nada no código. A fixture do teste tinha um tronco com 9
+condutores — acima do limite da E2.4, virava TRECHO NUMERADO e o "1" era o número do trecho, não o C1;
+a fixture passou a ter o tronco só de C1 + C2 e o AC com eletroduto próprio.
+
+**Harness (o "pronto quando" pedia olhar as duas plantas)**: unificada, iluminação e força renderizadas
+por SVG → Edge headless e olhadas: cada uma com o que deve e sem o que não deve; o tronco comum na de
+força aparece sem condutores porque, nessa casa, só o C1 passa DERIVADO por ele (E2.2) — coerente.
+
+**Verificação**: `tsc` ✓ · alvo 7 ✓ · suíte inteira **6.277 ✓** (6.310 = 6.277 + 33 pulados, 582
+arquivos, conta fechada) · `vite build` ✓ · `check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ ·
+sem mudança no kernel.
+
+**Efeito no benchmark**: §27/§8 "Planta de iluminação separada" ❌→✅, "Planta de tomadas e força
+separada" ❌→✅, "Camadas por tipo de ponto (vista e DXF)" ❌→✅.

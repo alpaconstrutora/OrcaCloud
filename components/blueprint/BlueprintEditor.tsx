@@ -31,6 +31,7 @@ import {
   MessageSquare,
   MessagesSquare,
   PenTool,
+  Lightbulb,
   Plug,
   Split,
   Table2,
@@ -431,6 +432,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
+import { idsForaDaVistaEletrica } from '../../utils/blueprintRecorteEletrico';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -2730,6 +2732,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** MOBILIÁRIO (E6.3): sugestão por ambiente do pavimento ativo; overlay opcional no canvas. */
   const [hipotesesDeMobiliario, setHipotesesDeMobiliario] = usePersistedState<HipotesesDeMobiliario>('blueprint:mobiliario', HIPOTESES_MOBILIARIO_PADRAO);
   const [mostrarMobiliario, setMostrarMobiliario] = usePersistedState('blueprint:mostrarMobiliario', false);
+  // E5.1: a elétrica por tipo de ponto na vista — ligadas por padrão.
+  const [mostrarEletricaIluminacao, setMostrarEletricaIluminacao] = usePersistedState('blueprint:mostrarEletricaIluminacao', true);
+  const [mostrarEletricaForca, setMostrarEletricaForca] = usePersistedState('blueprint:mostrarEletricaForca', true);
   const mobiliarioDoNivel = useMemo(() => (levelId ? mobiliarNivel(editor.model, levelId, hipotesesDeMobiliario) : []), [editor.model, levelId, hipotesesDeMobiliario]);
   const mobiliarioParaOCanvas = useMemo(
     () =>
@@ -3072,6 +3077,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         envelope: mostrarEnvelope,
         cotaAltoContraste,
         mobiliario: mostrarMobiliario,
+        eletricaIluminacao: mostrarEletricaIluminacao,
+        eletricaForca: mostrarEletricaForca,
       },
       modoDeCor,
       vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
@@ -3079,7 +3086,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       estiloPlanta,
       fase: filtroDeFase,
     }),
-    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
+    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEletricaIluminacao, mostrarEletricaForca, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
@@ -3096,6 +3103,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       setMostrarEnvelope(c.planta.envelope);
       setCotaAltoContraste(c.planta.cotaAltoContraste);
       setMostrarMobiliario(c.planta.mobiliario);
+      setMostrarEletricaIluminacao(c.planta.eletricaIluminacao);
+      setMostrarEletricaForca(c.planta.eletricaForca);
       setModoDeCor(c.modoDeCor);
       setCoresPorAmbiente(c.modoDeCor === 'AMBIENTE');
       setMostrarLaje3d(c.vista3d.laje);
@@ -3931,6 +3940,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const ocultosNoCanvas = useMemo(() => {
     // FASES DE REFORMA (E10.2): o filtro da vista esconde o que não é daquela fase.
     const daFase = idsOcultosPelaFase(editor.model, filtroDeFase);
+    // E5.1: a elétrica por tipo de ponto — some do desenho E do clique (entra pelo mesmo conjunto).
+    for (const id of idsForaDaVistaEletrica(editor.model, { iluminacao: mostrarEletricaIluminacao, forca: mostrarEletricaForca })) daFase.add(id);
     // ETAPAS (P2): o que não existe na etapa em vista.
     for (const id of vistaDaEtapaAtual?.ocultos ?? []) daFase.add(id);
     if (!vistaDePlanta) {
@@ -3942,7 +3953,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     for (const id of ocultosNoDesenho) daVista.add(id);
     for (const id of daFase) daVista.add(id);
     return daVista;
-  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual]);
+  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual, mostrarEletricaIluminacao, mostrarEletricaForca]);
   /** id → fase (só existente/a demolir), para o canvas colorir; e a fase da seleção, para os botões do ribbon. Com etapa em vista, o status é o DERIVADO dela. */
   const fasesDoDesenho = useMemo(() => vistaDaEtapaAtual?.fases ?? fasePorId(editor.model), [editor.model, vistaDaEtapaAtual]);
   const etapasDoEstudo = useMemo(() => etapasOrdenadas(editor.model), [editor.model]);
@@ -11391,6 +11402,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       alternar: () => setMostrarCircuitos((v) => !v),
                       ajuda:
                         'Escreve o circuito ao lado de cada ponto elétrico, e marca com um anel âmbar o ponto que ainda não está em circuito nenhum. É como uma prancha elétrica identifica a divisão — sem isto, saber a que circuito uma tomada pertence exige selecionar uma por uma.',
+                    },
+                    {
+                      chave: 'eletricaIluminacao',
+                      rotulo: 'Elétrica — iluminação',
+                      icone: Lightbulb,
+                      ligado: mostrarEletricaIluminacao,
+                      alternar: () => setMostrarEletricaIluminacao((v) => !v),
+                      ajuda:
+                        'Luminárias, interruptores e os eletrodutos que só os servem. Desligar deixa só a planta de tomadas e força — como a prancha separa. Quadros, caixas de passagem e eletrodutos compartilhados ficam sempre.',
+                    },
+                    {
+                      chave: 'eletricaForca',
+                      rotulo: 'Elétrica — tomadas e força',
+                      icone: Plug,
+                      ligado: mostrarEletricaForca,
+                      alternar: () => setMostrarEletricaForca((v) => !v),
+                      ajuda:
+                        'Tomadas, TUE, ligação direta, equipamentos, dados e entrada, com os eletrodutos que só os servem. Desligar deixa só a planta de iluminação. Quadros, caixas de passagem e eletrodutos compartilhados ficam sempre.',
                     },
                     {
                       chave: 'nomes',

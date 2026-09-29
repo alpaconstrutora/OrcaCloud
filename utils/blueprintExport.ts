@@ -340,6 +340,11 @@ export interface OpcoesExportacao {
    */
   eletrica?: boolean;
   /**
+   * E5.1: com `eletrica`, só a planta de ILUMINAÇÃO ou só a de TOMADAS E FORÇA.
+   * Ausente = a planta elétrica unificada, como sempre foi.
+   */
+  recorteEletrico?: RecorteEletrico | null;
+  /**
    * PRANCHA HIDROSSANITÁRIA (E2.1, 28/09/2026): desenha a rede de ÁGUA (fria e
    * quente) ou a de ESGOTO por cima da planta. Ausente = planta arquitetônica.
    */
@@ -382,6 +387,7 @@ export const AVISO_PADRAO =
 import { desenharEletrica, desenharQuadroDeCargas } from './blueprintPranchaEletrica';
 import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 import { desenharEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
+import type { RecorteEletrico } from './blueprintRecorteEletrico';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 const COR_TRACO = '#000000';
@@ -586,7 +592,7 @@ export function desenharPlanta(
 
   // A camada elétrica vem DEPOIS da arquitetura e ANTES das cotas: símbolo
   // por cima da parede, cota por cima de tudo — a ordem da prancha.
-  if (opcoes.eletrica) desenharEletrica(d, model, { px, py });
+  if (opcoes.eletrica) desenharEletrica(d, model, { px, py }, 1, opcoes.recorteEletrico ? { recorte: opcoes.recorteEletrico } : {});
   if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null, opcoes.nomesDasColunas ?? nomesDasColunas(model));
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);

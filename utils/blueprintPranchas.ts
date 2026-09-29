@@ -16,6 +16,7 @@
 import { DISCIPLINAS_DA_REDE, temRedeNoPavimento, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
 import { temEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
+import { ROTULO_DO_RECORTE, categoriaDoPonto, type RecorteEletrico } from './blueprintRecorteEletrico';
 import type { BlueprintModel, ObjectId, Point, TipoDeAmbiente } from './blueprintKernel';
 import { ESCALAS, PAPEIS, type Papel } from './blueprintExport';
 
@@ -55,6 +56,11 @@ export interface InclusaoNoConjunto {
   hidraulica?: boolean;
   /** E2.1: a planta de ESGOTO por pavimento. Ausente → falso. */
   sanitaria?: boolean;
+  /**
+   * E5.1: com `eletrica`, DUAS plantas por pavimento — iluminação e tomadas/força
+   * — no lugar da unificada. Ausente → falso (a unificada, como sempre foi).
+   */
+  eletricaSeparada?: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -76,7 +82,7 @@ export const TEMPLATE_DE_PRANCHA_PADRAO: TemplateDePrancha = {
   denominadorAmpliacao: 25,
   cotas: true,
   carimbo: { empresa: '', responsavel: '', registro: '', cliente: '', endereco: '', prefixo: 'A', camposExtras: [] },
-  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false, topografica: false, hidraulica: false, sanitaria: false },
+  incluir: { indice: true, plantas: true, cortes: true, elevacoes: true, ampliacoes: true, tabelas: true, eletrica: false, humanizada: false, topografica: false, hidraulica: false, sanitaria: false, eletricaSeparada: false },
 };
 
 export interface TemplateDePranchaSalvo {
@@ -159,6 +165,8 @@ export interface PranchaPlanejada {
   recorte?: Recorte;
   /** Só na AMPLIAÇÃO: o ambiente ampliado. */
   spaceId?: ObjectId;
+  /** E5.1: só na ELÉTRICA separada — qual das duas plantas é esta. */
+  recorteEletrico?: RecorteEletrico;
   /** Só na AMPLIAÇÃO nascida de uma VISTA DEPENDENTE (P2.17). */
   vistaDependenteId?: ObjectId;
 }
@@ -209,7 +217,15 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
     let alguma = false;
     for (const n of niveis) {
       if (!(model.terminais ?? []).some((x) => x.levelId === n.id) && !(model.quadros ?? []).some((q) => q.levelId === n.id)) continue;
-      numerar({ tipo: 'ELETRICA', titulo: `Elétrica — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
+      if (t.incluir.eletricaSeparada) {
+        // E5.1: duas plantas — luz e tomadas/força —, cada uma só quando o pavimento tem algo dela.
+        for (const recorte of ['ILUMINACAO', 'FORCA'] as const) {
+          const tem = (model.terminais ?? []).some((x) => x.levelId === n.id && x.disciplina === 'ELETRICA' && categoriaDoPonto(x.tipoEletrico) === recorte);
+          if (tem) numerar({ tipo: 'ELETRICA', titulo: `${ROTULO_DO_RECORTE[recorte]} — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id, recorteEletrico: recorte });
+        }
+      } else {
+        numerar({ tipo: 'ELETRICA', titulo: `Elétrica — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
+      }
       alguma = true;
     }
     // O quadro de cargas e o unifilar são do DESENHO inteiro: uma folha cada, depois das plantas elétricas.

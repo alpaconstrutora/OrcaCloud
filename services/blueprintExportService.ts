@@ -499,7 +499,7 @@ export function desenharConjunto(
           den = enq.escalaSugerida;
           enq = enquadrar(m, den, papel, cotas);
         }
-        desenharPlanta(d, m, comPrancha(den, p.tipo === 'HUMANIZADA' ? { humanizada: true, cotas: false, aviso: AVISO_HUMANIZADA } : { eletrica: p.tipo === 'ELETRICA' }), enq);
+        desenharPlanta(d, m, comPrancha(den, p.tipo === 'HUMANIZADA' ? { humanizada: true, cotas: false, aviso: AVISO_HUMANIZADA } : p.tipo === 'ELETRICA' && p.recorteEletrico ? { eletrica: true, recorteEletrico: p.recorteEletrico } : { eletrica: p.tipo === 'ELETRICA' }), enq);
         folhas.push({ prancha: p, denominador: den });
         break;
       }

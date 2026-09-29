@@ -32,6 +32,9 @@ export interface CamadasDaPlanta {
   envelope: boolean;
   cotaAltoContraste: boolean;
   mobiliario: boolean;
+  /** E5.1: a elétrica por tipo de ponto — luz (luminárias, interruptores) e tomadas/força. Quadros e o comum ficam sempre. */
+  eletricaIluminacao: boolean;
+  eletricaForca: boolean;
 }
 export interface Camadas3d {
   laje: boolean;
@@ -52,7 +55,7 @@ export interface ConfiguracaoDeVista {
 }
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
-  planta: { medidas: false, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false },
+  planta: { medidas: false, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false, eletricaIluminacao: true, eletricaForca: true },
   modoDeCor: 'NENHUM',
   vista3d: { laje: false, arestas: true, armadura: false, terreno: false, envelope: true },
   estilo3d: 'SOMBREADO',
@@ -107,6 +110,8 @@ const ROTULO_PLANTA: Record<keyof CamadasDaPlanta, string> = {
   envelope: 'Envelope construtivo',
   cotaAltoContraste: 'Cota em alto contraste',
   mobiliario: 'Mobiliário mínimo',
+  eletricaIluminacao: 'Elétrica — iluminação',
+  eletricaForca: 'Elétrica — tomadas e força',
 };
 const ROTULO_3D: Record<keyof Camadas3d, string> = { laje: 'Laje (3D)', arestas: 'Arestas (3D)', armadura: 'Armadura (3D)', terreno: 'Terreno (3D)', envelope: 'Envelope (3D)' };
 

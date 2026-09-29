@@ -1934,7 +1934,7 @@ Fecha o bloco **5**.
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 2.1 Comando como relação ✅ (kernel 0.71.0) | `Comando {id, letra, nome?, levelIds[]}` derivado das letras (índice), com **letra global opcional** para comando entre pavimentos (`Terminal.comandoGlobal: boolean`); painel "Comandos" no Navegador: renomear, listar interruptores e luzes, achar par de paralelo em outro andar | conferência 9.5.2.1 aceita paralelo em pavimentos diferentes quando global; goldens; teste `blueprintNbr5410Iluminacao` |
-| 2.2 Motor de esquemas de ligação | `utils/blueprintEsquemasDeLigacao.ts` puro: tabela **ESQUEMAS** (interruptor simples / 2 e 3 seções / paralelo / intermediário / luz sem interruptor / tomada / TUE / ligação direta × FN/FF/FFF → condutores F, N, R, T por TRECHO entre os pontos do comando), com fonte (NBR 5410 6.1.5 + prática de prancha); `condutoresDoTrecho(model, trecho)` passa a **derivar** fase/neutro/retorno/terra por circuito e por comando que atravessa o trecho — retorno só entre interruptor e luz; `Trecho.condutores` vira **declarado opcional** que sobrescreve (marcado na tela) | teste com sala: interruptor paralelo + 2 luzes → o trecho entre os interruptores tem 2 retornos e nenhum neutro; prancha mostra os traços certos; `blueprintCondutores.test.ts` reescrito |
+| 2.2 Motor de esquemas de ligação ✅ (regras fixas; editáveis → backlog A) | `utils/blueprintEsquemasDeLigacao.ts` puro: tabela **ESQUEMAS** (interruptor simples / 2 e 3 seções / paralelo / intermediário / luz sem interruptor / tomada / TUE / ligação direta × FN/FF/FFF → condutores F, N, R, T por TRECHO entre os pontos do comando), com fonte (NBR 5410 6.1.5 + prática de prancha); `condutoresDoTrecho(model, trecho)` passa a **derivar** fase/neutro/retorno/terra por circuito e por comando que atravessa o trecho — retorno só entre interruptor e luz; `Trecho.condutores` vira **declarado opcional** que sobrescreve (marcado na tela) | teste com sala: interruptor paralelo + 2 luzes → o trecho entre os interruptores tem 2 retornos e nenhum neutro; prancha mostra os traços certos; `blueprintCondutores.test.ts` reescrito |
 | 2.3 Seção por condutor | `SECOES_PE_TAB58` (S_PE por S_fase, NBR 5410 Tab. 58) e regra do neutro (6.2.6.2: igual à fase em FN/FF e FFF ≤ 25 mm²; redução admitida acima, hipótese); `Circuito.secaoNeutroMm2`/`secaoPeMm2` declarados opcionais; unifilar escreve "2#2,5 + N2,5 + T2,5" quando diferem; quantitativo de fio **por tipo e seção** substitui o total da 0.3 | teste Tab. 58 pontos contra o PDF; `Trecho.condutores` declarado ≠ derivado aparece em âmbar; quant bump |
 | 2.4 Fiação na planta e no quadro de cargas | rótulo por trecho com contagem por tipo; coluna "Condutores" no quadro de cargas ("2F+N+T"); ocupação do eletroduto usa a seção real de cada condutor (não mais a do 1º circuito); legenda numérica de trecho quando > N condutores (`Trecho.rotulo` impresso + tabela na folha) | harness da prancha olhado com trecho de 7 condutores; `ocupacaoDoEletrodutoCompartilhado` com seções mistas testado |
 
@@ -2476,3 +2476,65 @@ diz "sem interruptor" antes de olhar letras — dois ajustes no teste, nenhum no
 "Associação entre luminárias e comandos" 🟡→✅ (objeto derivado, visível); §6 "Criar comandos" 🟡→✅,
 "Nomear/numerar" 🟡 (a letra é o nome), "Comandar um ponto de locais diferentes" 🟡 (pareamento ✅;
 fiação de retorno é a E2.2), "Comandos atravessando pavimentos" ❌→✅.
+
+### E2.2 — Motor de esquemas de ligação e fiação derivada (29/09/2026) · frente `eletrico-e2` · sem bump
+
+**O que mudou**
+
+- **`utils/blueprintFiacao.ts`** (novo, puro) — `composicaoDaRede(model)`: a fiação de cada
+  eletroduto **DERIVADA** do esquema de cada ponto e do caminho pela rede. O esquema é o que o
+  ponto exige do quadro pela ligação do circuito: tomada/equipamento **F N T** (F-F: 2F T;
+  trifásico: 3F T); luz **sem** comando como a tomada; luz **com** comando só **N T** (a fase
+  chega por **retorno**, do interruptor); interruptor: **F** do quadro (só o primeiro da cadeia)
+  e o **R** que sai dele até a luz; **paralelo ↔ paralelo: 2 retornos** (os travellers), o
+  intermediário no meio da cadeia, e um retorno do último à luz; terra e caixa: nada. Fase,
+  neutro e terra de um circuito contam UMA vez por trecho por quantos pontos servirem (são os
+  mesmos fios); retornos somam (um fio por comando). Caminho = BFS (`caminhoEntre`, o mesmo do
+  lançamento) sobre os eletrodutos do circuito, com a laje como encontro (`fazerChave`); a cadeia
+  dos paralelos se ordena pela distância ao quadro pela rede. Cada retorno leva a letra do comando.
+- **Declarado vence, mas aparece**: `Trecho.condutores` continua; quando difere da derivação, a
+  composição sai `DECLARADO` + `divergente`, e o painel mostra "declarado 9 ≠ derivado 6 · usar
+  derivado" (`SetTrechoProps { condutores: null }`). Sem declaração ou igual: `DERIVADO`. Trecho
+  cujos pontos não têm caminho até o quadro: `BASE` (a base antiga por ligação), dito.
+- `utils/blueprintEletrodutos.ts` — o lançamento automático **deixa de declarar a contagem** (a
+  base por ligação segue servindo à bitola, como hipótese). Testes do lançador atualizados
+  (`condutores` ausente nos trechos criados/atualizados).
+- Canvas e prancha desenham a **mesma lista derivada** (base só quando o motor não alcança);
+  `ocupacaoDoTrecho` ganhou o 4º argumento (a derivação) e a conferência 6.2.11.1.6 o passa —
+  sem contagem declarada, a ocupação usa a fiação derivada por circuito; sem nenhuma das duas,
+  "não declarados nem derivados (ponto sem caminho até o quadro)".
+- `components/blueprint/PainelTrechoSelecionado.tsx` — linha "**Fiação derivada: C1 — luz: N R T
+  · C2 — TUG: F N T (6 condutores)**", ou a base com o aviso, ou a divergência com o botão;
+  o texto do campo "Condutores" passou a dizer que em branco a fiação é derivada.
+- **Não entrou (declarado)**: **seção por condutor** (neutro e PE — Tab. 58) e o **quantitativo de
+  fio por tipo** (o `quantities.ts` do kernel continua com contagem ⨯ comprimento; precisa do
+  motor no kernel ou de composição injetada) → **E2.3**; esquemas **editáveis pelo usuário**
+  (backlog A: a tabela fixa tem de se provar antes); "60 esquemas" — aqui são REGRAS por tipo ×
+  ligação × comando, não uma lista: cobrem tomada, TUE/LD/equipamentos, dados, luz com e sem
+  comando, interruptor simples/seções/paralelo/intermediário, F-N/F-F/trifásico.
+
+**Testes** — novo `__tests__/blueprintFiacao.test.ts` (7): exigência por ponto (tomada F N T,
+trifásica 3F T, luz com comando N T, interruptor primeiro F, terra/caixa nada); **casa com
+tronco, luz 'a', interruptor 'a' e tomada: tronco = F N T de cada circuito; ramal do interruptor =
+F R; ramal da luz = N R T (sem fase); tomada F N T**; luz sem interruptor = F N T; **paralelos: F
+só no primeiro, 2 travellers entre eles (passam pelo ramal da luz: N 2R T), 3 retornos no último
+ramal**; declarado 9 ≠ derivado 6 → DECLARADO/divergente; igual → DERIVADO; trecho solto → BASE
+F N T; ocupação lê a derivação (6 condutores em Ø25) e diz o motivo sem ela; resumo em texto.
+
+**O que os testes pegaram antes de publicar**: `condutoresDoEletroduto` com UM circuito e
+contagem nula devolve `[]`, com VÁRIOS devolve a base — assimetria antiga; a origem BASE passou a
+montar a base pela ligação sem depender de contagem.
+
+**Verificação**: `tsc` ✓ · alvo 132 ✓ · suíte inteira **6.209 ✓ / 0 ✗ / 33 skip** (568 arquivos) · `build` ✓ ·
+`check-ui-standard` nos 3 `.tsx` ✓ · `check-xss-sinks` ✓ · bundle da `planta-api` sem mudança
+(motor em `utils/`). **Sem harness visual** do retorno na prancha e **sem teste jsdom** da linha
+do painel — fica dito; o traçado do retorno (traço só de um lado) já era testado em
+`blueprintCondutores.test.ts`.
+
+**Efeito no benchmark**: §21 "Fase/Neutro/Terra" 🟡→✅, **"Retorno" ❌→✅**, "Condutores de
+comando" ❌→✅ (travellers), "60 esquemas" ❌→🟡 (regras por tipo × ligação × comando, não lista
+editável), "Algoritmo escolhe trajetos" ❌→🟡 (segue a rede lançada); §23 "Motor de esquemas"
+❌→✅ (fixo), "Criar/editar esquemas" ❌ (backlog A); §22 "Lançar/remover fiação" 🟡 (derivada +
+declarado que vence), "Adicionar aterramento" 🟡→✅ (terra derivado por caminho); §3/§6 "Comandar
+um ponto de locais diferentes" 🟡→✅ (fiação de paralelo); §13 "Quantidade de condutores" 🟡→✅;
+§20 "Quantidade de condutores" 🟡→✅; §52 "Ausência de esquema compatível" ❌→🟡 (trecho BASE dito).

@@ -404,9 +404,11 @@ export function planejarEletrodutos(
     const ids = [...(circuitosPorAresta.get(i) ?? [])];
     if (ids.length === 0) return;
     const cmd = novos[ar.ref.novo];
-    const { condutores, bitola } = composicao(ids);
+    // E2.2 (29/09/2026): a CONTAGEM não é mais declarada pelo lançamento — a
+    // fiação é DERIVADA dos esquemas (`blueprintFiacao.ts`), com retorno. A
+    // base por ligação continua servindo à BITOLA (ocupação), como hipótese.
+    const { bitola } = composicao(ids);
     cmd.circuitoIds = ids;
-    cmd.condutores = condutores;
     cmd.bitolaMm = Math.max(bitola, hip.bitolaMm);
   });
 
@@ -421,8 +423,8 @@ export function planejarEletrodutos(
     const faltam = [...(circuitosPorAresta.get(i) ?? [])].filter((cid) => !atuais.includes(cid));
     if (faltam.length === 0) return;
     const ids = [...atuais, ...faltam];
-    const { condutores, bitola } = composicao(ids);
-    atualizacoes.push({ type: 'SetTrechoProps', trechoId: t.id, circuitoIds: ids, condutores, bitolaMm: Math.max(bitola, t.bitolaMm) });
+    const { bitola } = composicao(ids);
+    atualizacoes.push({ type: 'SetTrechoProps', trechoId: t.id, circuitoIds: ids, bitolaMm: Math.max(bitola, t.bitolaMm) });
   });
 
   if (novos.length === 0 && atualizacoes.length === 0) {

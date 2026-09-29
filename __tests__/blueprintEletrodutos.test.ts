@@ -85,11 +85,13 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
     // O TRONCO (prumada do quadro e quadro→interruptor) carrega os DOIS circuitos: 3 (FN) + 4 (FFF) = 7 condutores.
     const prumadaDoQuadro = prumadas(plano.comandos)[0];
     expect(prumadaDoQuadro.circuitoIds).toEqual([c1, c2]);
-    expect(prumadaDoQuadro.condutores).toBe(7);
+    // E2.2: o lançamento não declara mais a contagem — a fiação é derivada (`blueprintFiacao.ts`).
+    expect(prumadaDoQuadro.condutores).toBeUndefined();
     expect(hz[0].circuitoIds).toEqual([c1, c2]);
     // A prumada do interruptor é só C1; a da TUG, só C2.
-    expect(prumadas(plano.comandos)[1]).toMatchObject({ circuitoIds: [c1], condutores: 3 });
-    expect(prumadas(plano.comandos)[2]).toMatchObject({ circuitoIds: [c2], condutores: 4 });
+    expect(prumadas(plano.comandos)[1]).toMatchObject({ circuitoIds: [c1] });
+    expect(prumadas(plano.comandos)[2]).toMatchObject({ circuitoIds: [c2] });
+    expect(prumadas(plano.comandos)[1].condutores).toBeUndefined();
     expect(plano.metrosPrevistos).toBeGreaterThan(5);
   });
 
@@ -138,7 +140,8 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
     expect(prumadas(plano.comandos).map((c) => [c.a.x, c.a.y])).toEqual([[1000, 75], [2000, 75], [5925, 3000]]);
     expect(plano.trechosAtualizados).toBe(1);
     const [atualizado] = sets(plano.comandos);
-    expect(atualizado).toMatchObject({ trechoId: comPrumada.trechos![0].id, circuitoIds: [c1, c2], condutores: 7 });
+    expect(atualizado).toMatchObject({ trechoId: comPrumada.trechos![0].id, circuitoIds: [c1, c2] });
+    expect((atualizado as { condutores?: number }).condutores).toBeUndefined();
     // Aplica e o trecho existente passa a carregar os dois.
     const depois = applyBatch(comPrumada, plano.comandos).model;
     expect(depois.trechos!.find((x) => x.id === comPrumada.trechos![0].id)!.circuitoIds).toEqual([c1, c2]);
@@ -158,7 +161,7 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
     expect(plano.pavimentos.map((p) => [p.nome, p.pontos, p.aLigar])).toEqual([['Térreo', 4, 4], ['1º', 1, 1]]);
     expect(plano.prumadasEntrePavimentos).toBe(1);
     const shaft = prumadas(plano.comandos).find((c) => c.levelId === t1 && c.a.x === 75 && c.a.y === 1000)!;
-    expect(shaft).toMatchObject({ cotaAMm: 0, cotaBMm: 2800, circuitoIds: [c1], condutores: 3 });
+    expect(shaft).toMatchObject({ cotaAMm: 0, cotaBMm: 2800, circuitoIds: [c1] });
     // No andar de cima: a prumada do ponto e um trecho no teto do quadro ao ponto.
     const noAndar = adds(plano.comandos).filter((c) => c.levelId === t1);
     expect(noAndar).toHaveLength(3);

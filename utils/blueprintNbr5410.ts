@@ -41,6 +41,7 @@ import {
   TIPOS_DE_USO_ESPECIFICO,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
+import { composicaoDaRede } from './blueprintFiacao';
 
 export type CodigoDaRegra =
   | '9.5.2.1'
@@ -682,8 +683,10 @@ function regraEletroduto(model: BlueprintModel, levelId: ObjectId | null, hip: H
   let avaliados = 0;
   const trechos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && (!levelId || t.levelId === levelId));
   const motivos = new Map<string, number>();
+  // E2.2: a fiação derivada, uma vez para a rede inteira.
+  const fiacao = composicaoDaRede(model);
   for (const t of trechos) {
-    const { ocupacao, motivo } = ocupacaoDoTrecho(model, t, hip);
+    const { ocupacao, motivo } = ocupacaoDoTrecho(model, t, hip, fiacao.get(t.id)?.lista ?? null);
     if (!ocupacao) {
       if (motivo) motivos.set(motivo, (motivos.get(motivo) ?? 0) + 1);
       continue;

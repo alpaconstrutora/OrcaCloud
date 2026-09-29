@@ -45,6 +45,7 @@ import {
 } from './blueprintRede';
 import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from './blueprintRede';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
+import { composicaoDaRede } from './blueprintFiacao';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -216,6 +217,8 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
   const circuitosPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
   const paredes = model.walls;
 
+  // E2.2: a fiação derivada de toda a rede, uma vez — a mesma lista do canvas.
+  const fiacao = composicaoDaRede(model);
   // Eletrodutos primeiro: ficam por baixo dos símbolos.
   for (const t of model.trechos ?? []) {
     if (t.disciplina !== 'ELETRICA') continue;
@@ -240,10 +243,12 @@ export function desenharEletrica(d: Desenhista, model: BlueprintModel, proj: Pro
     // vão entre grupos; número do circuito em cima do seu grupo, seção embaixo;
     // o Ø à esquerda do conjunto.
     const circuitosDoEletroduto = (t.circuitoIds ?? []).map((cid) => circuitosPorId.get(cid)).filter((c): c is NonNullable<typeof c> => !!c);
-    const lista = condutoresDoEletroduto(
-      t,
-      circuitosDoEletroduto.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null })),
-    );
+    const lista =
+      fiacao.get(t.id)?.lista ??
+      condutoresDoEletroduto(
+        t,
+        circuitosDoEletroduto.map((c) => ({ id: c.id, ligacao: c.ligacao ?? null })),
+      );
     const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
     for (const c of lista) {
       const ultimo = grupos[grupos.length - 1];

@@ -340,6 +340,7 @@ import {
   renumerarCircuitos,
   type HipotesesDeCircuitos,
 } from '../../utils/blueprintCircuitosAutomaticos';
+import { composicaoDaRede, resumoDaComposicao } from '../../utils/blueprintFiacao';
 import {
   HIPOTESES_PILARES_PADRAO,
   ROTULO_DO_ONDE,
@@ -3537,6 +3538,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
 
   const trechoSel = (editor.model.trechos ?? []).find((t) => t.id === editor.selectedId) ?? null;
+  // E2.2: a composição da rede só quando um eletroduto está selecionado (o canvas tem a sua).
+  const fiacaoDoTrechoSel = useMemo(
+    () => (trechoSel && trechoSel.disciplina === 'ELETRICA' ? composicaoDaRede(editor.model).get(trechoSel.id) ?? null : null),
+    [editor.model, trechoSel],
+  );
   const terminalSel =
     (editor.model.terminais ?? []).find((t) => t.id === editor.selectedId) ?? null;
   const quadroSel = (editor.model.quadros ?? []).find((q) => q.id === editor.selectedId) ?? null;
@@ -8181,7 +8187,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         circuitos={circuitosParaEscolher}
         ocupacao={
           trechoSel && trechoSel.disciplina === 'ELETRICA'
-            ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas)
+            ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas, fiacaoDoTrechoSel?.lista ?? null)
+            : undefined
+        }
+        // E2.2: a fiação derivada do trecho selecionado — o que a prancha desenha.
+        fiacao={
+          trechoSel && trechoSel.disciplina === 'ELETRICA' && fiacaoDoTrechoSel
+            ? {
+                resumo: resumoDaComposicao(fiacaoDoTrechoSel.lista, (id) => (id ? (editor.model.circuitos ?? []).find((c) => c.id === id)?.nome ?? '?' : 'retorno')),
+                derivados: fiacaoDoTrechoSel.derivados.length,
+                declarados: fiacaoDoTrechoSel.declarados,
+                origem: fiacaoDoTrechoSel.origem,
+                divergente: fiacaoDoTrechoSel.divergente,
+              }
             : undefined
         }
         onTrecho={(campos) =>

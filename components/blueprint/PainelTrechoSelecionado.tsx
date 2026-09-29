@@ -60,6 +60,11 @@ interface Props {
   /** Campo omitido fica como está — o painel edita uma coisa por vez. */
   /** F9: a ocupação do eletroduto, calculada por quem tem o modelo. `undefined` = não mostrar. */
   ocupacao?: { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } | null;
+  /**
+   * E2.2: a fiação DERIVADA do trecho (resumo "C1: F N 2R T"), a origem e a
+   * divergência com a contagem declarada. `undefined` = não mostrar.
+   */
+  fiacao?: { resumo: string; derivados: number; declarados: number | null; origem: 'DERIVADO' | 'DECLARADO' | 'BASE'; divergente: boolean } | null;
   onTrecho: (campos: {
     disciplina?: DisciplinaDeRede;
     cotaAMm?: number;
@@ -140,6 +145,7 @@ export default function PainelTrechoSelecionado({
   comAMesmaAssinatura,
   onTrecho,
   onTerminal,
+  fiacao,
   circuitos = [],
   onExcluir,
 }: Props) {
@@ -628,9 +634,32 @@ export default function PainelTrechoSelecionado({
               ariaLabel="Quantos condutores passam no eletroduto"
             />
             <span className="block text-[10px] text-slate-500">
-              São os traços cruzando a linha na prancha: 2 = fase e neutro, 3 = com
-              retorno, 4 = com terra. <strong>Declarado</strong>, nunca calculado.
+              São os traços cruzando a linha na prancha. <strong>Em branco, a fiação é DERIVADA</strong> dos
+              esquemas de ligação (fase, neutro, retorno, terra pelo caminho até o quadro e até o
+              interruptor); um número aqui vence a derivação — e aparece como divergência.
             </span>
+            {/* E2.2: a composição derivada, e a divergência quando o declarado vence. */}
+            {fiacao && (
+              <p
+                className={`text-[10px] ${fiacao.divergente ? 'text-amber-700' : fiacao.origem === 'BASE' ? 'text-slate-400' : 'text-slate-600'}`}
+                aria-label="Fiação derivada"
+                data-testid="fiacao-derivada"
+              >
+                {fiacao.origem === 'BASE'
+                  ? `Fiação pela base da ligação (${fiacao.resumo || 'sem circuito'}) — nenhum ponto deste trecho tem caminho até o quadro.`
+                  : `Fiação derivada: ${fiacao.resumo} (${fiacao.derivados} ${fiacao.derivados === 1 ? 'condutor' : 'condutores'})`}
+                {fiacao.divergente && fiacao.declarados != null && (
+                  <>
+                    {' · '}
+                    <span className="font-medium">declarado {fiacao.declarados} ≠ derivado {fiacao.derivados}</span>
+                    {' · '}
+                    <button type="button" onClick={() => onTrecho({ condutores: null })} className="font-medium text-blue-700 hover:underline">
+                      usar derivado
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
             {/* F9 — a taxa de ocupação (6.2.11.1.6), calculada pelo editor com a
                 seção do circuito e as tabelas de catálogo das hipóteses. */}
             {ocupacao !== undefined && (

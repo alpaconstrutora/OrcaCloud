@@ -1064,22 +1064,30 @@ export function ocupacaoDoTrecho(
   model: BlueprintModel,
   trecho: Trecho,
   hip: HipotesesEletricas = HIPOTESES_PADRAO,
+  /**
+   * E2.2: a fiação DERIVADA do trecho (`composicaoDaRede(model).get(id).lista`),
+   * quando quem chama já a tem — é ela que vale sem contagem declarada.
+   */
+  derivados?: readonly { circuitoId: string | null }[] | null,
 ): { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } {
   if (trecho.disciplina !== 'ELETRICA') return { ocupacao: null, motivo: 'não é eletroduto' };
-  if (!trecho.condutores) return { ocupacao: null, motivo: 'condutores não declarados' };
   const ids = trecho.circuitoIds ?? [];
   const circuitos = (model.circuitos ?? []).filter((c) => ids.includes(c.id));
+  // Sem contagem declarada, vale a derivada (E2.2); sem nenhuma das duas, não se avalia.
+  const porCircuitoDerivado = derivados && derivados.length > 0 && !trecho.condutores
+    ? circuitos.map((c) => ({ c, quantidade: derivados.filter((d) => d.circuitoId === c.id).length })).filter((x) => x.quantidade > 0)
+    : null;
+  if (!trecho.condutores && !porCircuitoDerivado) return { ocupacao: null, motivo: 'condutores não declarados nem derivados (ponto sem caminho até o quadro)' };
   if (circuitos.length === 0) return { ocupacao: null, motivo: 'sem circuito — a seção vem do circuito' };
   // VÁRIOS circuitos no mesmo eletroduto (15/09/2026): a seção de cada um, e
   // a ocupação é a soma das áreas de todos os condutores. Sem declaração em
   // algum, a mínima calculada dele; sem nem isso, não se avalia.
   const secoes = circuitos.map((c) => c.secaoMm2 ?? preDimensionarCircuito(model, c, hip).secaoCalculada?.secaoMm2 ?? null);
   if (secoes.some((v) => v == null)) return { ocupacao: null, motivo: 'circuito sem seção declarada nem calculável' };
-  const oc = ocupacaoDoEletrodutoCompartilhado(
-    trecho.bitolaMm,
-    condutoresPorCircuitoNoTrecho(trecho.condutores, circuitos, secoes as number[]),
-    hip,
-  );
+  const composicao = porCircuitoDerivado
+    ? porCircuitoDerivado.map((x) => ({ secaoMm2: secoes[circuitos.indexOf(x.c)] as number, quantidade: x.quantidade }))
+    : condutoresPorCircuitoNoTrecho(trecho.condutores as number, circuitos, secoes as number[]);
+  const oc = ocupacaoDoEletrodutoCompartilhado(trecho.bitolaMm, composicao, hip);
   if (!oc) return { ocupacao: null, motivo: `bitola ${trecho.bitolaMm} mm ou seção fora das tabelas` };
   return { ocupacao: oc, motivo: null };
 }

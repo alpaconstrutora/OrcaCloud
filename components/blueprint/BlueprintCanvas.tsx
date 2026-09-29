@@ -104,6 +104,7 @@ import {
   type LadoDoContorno,
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
+import { composicaoDaRede } from '../../utils/blueprintFiacao';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
@@ -1819,6 +1820,8 @@ export default function BlueprintCanvas({
     () => new Map((model.circuitos ?? []).map((c) => [c.id, { ligacao: c.ligacao ?? null }])),
     [model.circuitos],
   );
+  /** E2.2: a fiação DERIVADA de cada eletroduto (com retorno) — a mesma lista da prancha e do painel. */
+  const fiacaoDaRede = useMemo(() => composicaoDaRede(model), [model]);
 
   /** Seção declarada por circuito — é ela que vira o `#2,5` ao lado do traço. */
   const secaoPorCircuito = useMemo(
@@ -5648,10 +5651,14 @@ export default function BlueprintCanvas({
           let passo = 5 * fz; // entre condutores do mesmo circuito
           let vao = 11 * fz; // entre grupos (circuitos)
           const idsDoTrecho = circuitosDoTrecho(t);
-          const lista = condutoresDoEletroduto(
-            t,
-            idsDoTrecho.map((cid) => ({ id: cid, ligacao: ligacaoPorCircuito.get(cid)?.ligacao ?? null })),
-          );
+          // E2.2: a composição DERIVADA (fase, neutro, retorno, terra por esquema e
+          // caminho); a base por ligação só quando o motor não alcança o trecho.
+          const lista =
+            fiacaoDaRede.get(t.id)?.lista ??
+            condutoresDoEletroduto(
+              t,
+              idsDoTrecho.map((cid) => ({ id: cid, ligacao: ligacaoPorCircuito.get(cid)?.ligacao ?? null })),
+            );
           // Grupos consecutivos por circuito (retornos sem dono viram grupo próprio).
           const grupos: { circuitoId: string | null; tipos: TipoDeCondutor[] }[] = [];
           for (const c of lista) {

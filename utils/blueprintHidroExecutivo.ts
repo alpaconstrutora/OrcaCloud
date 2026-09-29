@@ -95,7 +95,7 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
     atende: sugeridos === 0,
   });
   const pressoes = temAgua ? pressoesDoModelo(model, hip.pressao) : [];
-  const marcas = marcasDeVerificacao(model, null, pressoes);
+  const marcas = marcasDeVerificacao(model, null, pressoes, hip.pluvial);
   const pontas = marcas.filter((m) => m.tipo === 'PONTA_ABERTA' && m.disciplina && (HIDRAULICAS as readonly string[]).includes(m.disciplina)).length;
   v.push({ grupo: 'DADOS', item: 'Nenhuma ponta aberta', norma: '—', exigido: '0', obtido: String(pontas), atende: pontas === 0 });
   const loucas = marcas.filter((m) => m.tipo === 'LOUCA_SEM_PONTO').length;

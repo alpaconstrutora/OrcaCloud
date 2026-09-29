@@ -288,7 +288,11 @@ describe('quantitativos · política', () => {
     // da rede), e o agrupamento passou a separar por ele — PVC DN 25 e PPR DN 25
     // eram UMA linha e são duas compras. Acréscimo de campo que também muda o
     // agrupamento: sem o bump o cache serviria a linha somada.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.17.0');
+    //
+    // 1.17.0 → 1.18.0 em 29/09/2026 (E6.2 do roadmap hidrossanitário): o trecho
+    // e a linha de compra ganharam `secaoCalha` — a calha de 150 e o tubo de 150
+    // eram UMA linha e são duas compras.
+    expect(POLITICA_PADRAO.version).toBe('quant-1.18.0');
   });
 });
 

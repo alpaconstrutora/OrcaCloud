@@ -20,6 +20,7 @@ import {
   type TipoDeInterruptor,
   type TipoDePontoHidraulico,
   type MaterialDeTubo,
+  type SecaoDeCalha,
   type PapelDoReservatorio,
   type FormaDoReservatorio,
   type LigacaoDoCircuito,
@@ -646,6 +647,9 @@ export type Command =
       condutores?: number | null;
       /** Material do cano (água fria/quente) — ver `Trecho.material`. */
       material?: MaterialDeTubo | null;
+      /** Calha (pluvial) — ver `Trecho.secaoCalha`. */
+      secaoCalha?: SecaoDeCalha | null;
+      alturaCalhaMm?: number | null;
       /** Gerado pelo lançamento automático — ver `Trecho.sugerido`. */
       sugerido?: boolean | null;
     }
@@ -666,6 +670,9 @@ export type Command =
       condutores?: number | null;
       /** Material do cano; `null` volta ao padrão da disciplina. Ausente não mexe. */
       material?: MaterialDeTubo | null;
+      /** Calha: `null` volta a tubo (e limpa a altura). Ausente não mexe. */
+      secaoCalha?: SecaoDeCalha | null;
+      alturaCalhaMm?: number | null;
       /** `false` aceita o caminho sugerido — ver `Trecho.sugerido`. */
       sugerido?: boolean | null;
     }
@@ -3211,6 +3218,8 @@ function aplicarSemHash(
               : {}),
           ...(command.condutores != null ? { condutores: command.condutores } : {}),
           ...(command.material != null ? { material: command.material } : {}),
+          ...(command.secaoCalha != null ? { secaoCalha: command.secaoCalha } : {}),
+          ...(command.alturaCalhaMm != null ? { alturaCalhaMm: assertIntegerMm(roundToMm(command.alturaCalhaMm), 'alturaCalhaMm') } : {}),
           ...(command.sugerido ? { sugerido: true } : {}),
         },
       ];
@@ -3242,6 +3251,11 @@ function aplicarSemHash(
       }
       if (command.condutores !== undefined) trecho.condutores = command.condutores;
       if (command.material !== undefined) trecho.material = command.material ?? null;
+      if (command.secaoCalha !== undefined) {
+        trecho.secaoCalha = command.secaoCalha ?? null;
+        if (command.secaoCalha !== 'RETANGULAR') trecho.alturaCalhaMm = null;
+      }
+      if (command.alturaCalhaMm !== undefined) trecho.alturaCalhaMm = command.alturaCalhaMm == null ? null : assertIntegerMm(roundToMm(command.alturaCalhaMm), 'alturaCalhaMm');
       if (command.sugerido !== undefined) trecho.sugerido = command.sugerido ? true : null;
       diff.updated.push(trecho.id);
       break;

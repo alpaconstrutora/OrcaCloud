@@ -19,6 +19,8 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   DN_VENTILACAO: 'DN da ventilação',
   ATRAVESSA_PILAR: 'Atravessa pilar',
   CRUZA_VIGA: 'Cruza viga',
+  CALHA_INSUFICIENTE: 'Calha insuficiente',
+  CALHA_DECLIVIDADE: 'Declividade da calha',
 };
 
 interface Props {

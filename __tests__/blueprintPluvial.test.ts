@@ -116,7 +116,10 @@ describe('E6.1 — a rede PLUVIAL no kernel', () => {
 describe('E6.1 — premissas do estudo', () => {
   it('a coluna gravada: cidade e intensidade nulas por padrão; texto e número voltam; período fora da norma cai para 5', () => {
     expect(hipotesesHidroDaColuna({}).pluvial).toEqual(HIPOTESES_PLUVIAIS_PADRAO);
-    expect(hipotesesHidroDaColuna({ pluvial: { cidade: 'Salvador', periodoDeRetornoAnos: 25, intensidadeMmH: 180 } }).pluvial).toEqual({ cidade: 'Salvador', periodoDeRetornoAnos: 25, intensidadeMmH: 180 });
+    expect(hipotesesHidroDaColuna({ pluvial: { cidade: 'Salvador', periodoDeRetornoAnos: 25, intensidadeMmH: 180 } }).pluvial).toEqual({ ...HIPOTESES_PLUVIAIS_PADRAO, cidade: 'Salvador', periodoDeRetornoAnos: 25, intensidadeMmH: 180 });
     expect(hipotesesHidroDaColuna({ pluvial: { cidade: 3, periodoDeRetornoAnos: 10, intensidadeMmH: 'x' } }).pluvial).toEqual(HIPOTESES_PLUVIAIS_PADRAO);
+    // E6.2: a seção e o material da calha só valem se o sistema os conhece.
+    expect(hipotesesHidroDaColuna({ pluvial: { secaoDaCalha: 'RETANGULAR', materialDaCalha: 'CERAMICA', declividadeDaCalhaPct: 1 } }).pluvial).toMatchObject({ secaoDaCalha: 'RETANGULAR', materialDaCalha: 'CERAMICA', declividadeDaCalhaPct: 1 });
+    expect(hipotesesHidroDaColuna({ pluvial: { secaoDaCalha: 'TRIANGULAR', materialDaCalha: 'OURO' } }).pluvial).toEqual(HIPOTESES_PLUVIAIS_PADRAO);
   });
 });

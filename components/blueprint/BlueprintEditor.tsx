@@ -216,7 +216,9 @@ import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../.
 import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
+import PainelCalhas from './PainelCalhas';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
+import { planejarCalhas, verificarCalhas } from '../../utils/blueprintCalhas';
 import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
@@ -7245,7 +7247,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   /** VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário): pontas abertas, DN do esgoto, louça sem ponto. */
   const pressoesDaAgua = useMemo(() => pressoesDoModelo(editor.model, hipPressao), [editor.model, hipPressao]);
-  const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua), [editor.model, pressoesDaAgua]);
+  const marcasDaRede = useMemo(() => marcasDeVerificacao(editor.model, null, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial), [editor.model, pressoesDaAgua, hidroDoEstudo.hipoteses.pluvial]);
   // MEMORIAIS HIDROSSANITÁRIOS (28/09/2026, E3.1/E3.2): com as MESMAS premissas das
   // gavetas de água, de pressão e de esgoto. A prévia (o sumário das seções) só é
   // montada com a gaveta aberta; o arquivo remonta na hora, com a data do download.
@@ -7262,6 +7264,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // ÁGUAS PLUVIAIS (29/09/2026, E6.1): a contribuição só com a gaveta aberta.
   const contribuicaoDaChuva = useMemo(
     () => (tarefaAberta === 'pluvial' ? contribuicaoPluvial(editor.model, hipotesesHidro.pluvial) : null),
+    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+  );
+  // CALHAS (29/09/2026, E6.2): o lançamento por beiral e a conferência de toda calha do desenho.
+  const planoDeCalhas = useMemo(
+    () => (tarefaAberta === 'pluvial' ? planejarCalhas(editor.model, hipotesesHidro.pluvial) : null),
+    [tarefaAberta, editor.model, hipotesesHidro.pluvial],
+  );
+  const calhasDoDesenho = useMemo(
+    () => (tarefaAberta === 'pluvial' ? verificarCalhas(editor.model, hipotesesHidro.pluvial) : []),
     [tarefaAberta, editor.model, hipotesesHidro.pluvial],
   );
   const resultadoHidro = useMemo(
@@ -13804,6 +13815,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
                 onSelecionar={selecionar}
               />
+              {planoDeCalhas && (
+                <div className="mt-4">
+                  <PainelCalhas
+                    plano={planoDeCalhas}
+                    calhas={calhasDoDesenho}
+                    hip={hipotesesHidro.pluvial}
+                    onHip={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
+                    onLancar={() => {
+                      if (planoDeCalhas.comandos.length) editor.runBatch(planoDeCalhas.comandos);
+                    }}
+                    onSelecionar={selecionar}
+                  />
+                </div>
+              )}
+              <div className="mt-4">
+                <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['PLUVIAL']} onSelecionar={selecionar} />
+              </div>
             </div>
           )}
 

@@ -816,3 +816,33 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   pendência e com Curitiba a tabela; a laje descoberta entra e a coberta não; a rede pluvial no
   kernel sem ponta aberta na caixa; a disciplina recusada no ponto errado; cores e prancha; as
   premissas gravadas) e 3 em `PainelPluvial.test.tsx`. Suíte: 545 arquivos / 6.088 testes.
+
+### E6.2 — Calhas (29/09/2026) · kernel 0.67.0 · quant-1.18.0
+
+- **Kernel 0.67.0**: `Trecho.secaoCalha` (SEMICIRCULAR/RETANGULAR) e `Trecho.alturaCalhaMm` — o
+  trecho pluvial que é calha. Na meia-cana `bitolaMm` é o diâmetro; na retangular, a largura, e a
+  altura útil é obrigatória. Só em PLUVIAL (`BAD_GUTTER`). Omitidos do canônico quando ausentes.
+  Ritual: suíte inteira em 0.66.0 (6.103 testes), depois os seis hashes, os pins e o bundle.
+- **quant-1.18.0**: o trecho e a linha de compra ganharam `secaoCalha` — a calha de 150 e o tubo de
+  150 eram uma linha e são duas compras ("metro de calha"). Legenda da prancha: "Calha meia-cana
+  ø100 mm".
+- `utils/blueprintCalhas.ts` (novo): **Manning** (NBR 10844, 5.5) — Q = 60 000·(S/n)·Rh^(2/3)·i^(1/2),
+  seção cheia; a meia-cana reproduz a **Tabela 3** da norma (130 · 236 · 384 · 829 L/min a 0,5 %,
+  dentro de 1 %, teste); rugosidade pela **Tabela 2**; **declividade mínima 0,5 %**; medidas
+  comerciais (meia-cana 100–200, retangular 100–400 com altura = metade).
+- **Lançamento** (gaveta Águas pluviais → "Lançar calhas"): uma calha por beiral de água do
+  telhado, a menor seção que leva a vazão da água, com o **bocal** (ralo pluvial) na ponta mais perto
+  da caixa de areia ou da saída pluvial — é de lá que o condutor da E6.3 desce. Relançar troca as
+  sugeridas; a água com calha confirmada fica como está. Acima da maior calha: a maior, com aviso.
+- **Verificação** de toda calha do desenho (lançada ou à mão): a vazão é a da água sob cujo beiral
+  ela corre, na proporção do comprimento (a que deságua em outra não soma a de montante —
+  simplificação declarada); marcas **CALHA_INSUFICIENTE** e **CALHA_DECLIVIDADE**; a **cabeceira**
+  (ponta alta) não é ponta aberta. As marcas recebem as premissas pluviais (`marcasDeVerificacao`,
+  4º parâmetro) — no editor e na conferência da emissão.
+- Premissas `pluvial` ganharam seção, material e declividade da calha.
+- **Pronto quando** ✔: 12 testes em `blueprintCalhas.test.ts` (Manning contra a Tabela 3; a
+  retangular; a seção comercial; a calha só na pluvial; ida e volta pelo canônico; o quantitativo e a
+  legenda separando calha de tubo; o lançamento na casa 10 × 8 m — meia-cana ø100 nos dois beirais;
+  o bocal para o lado da caixa de areia; depois de lançadas tudo atende e relançar respeita a
+  confirmada; os motivos; a ø100 que não leva a chuva de São Paulo; a calha sem caimento) e 3 em
+  `PainelCalhas.test.tsx`. Suíte: 547 arquivos / 6.103 testes.

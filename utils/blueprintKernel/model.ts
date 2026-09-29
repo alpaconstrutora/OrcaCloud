@@ -2405,6 +2405,10 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
 export const MATERIAIS_DE_TUBO = ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'] as const;
 export type MaterialDeTubo = (typeof MATERIAIS_DE_TUBO)[number];
 
+/** A SEÇÃO da calha (E6.2, kernel 0.67.0): a meia-cana e a retangular (a da platibanda). */
+export const SECOES_DE_CALHA = ['SEMICIRCULAR', 'RETANGULAR'] as const;
+export type SecaoDeCalha = (typeof SECOES_DE_CALHA)[number];
+
 /**
  * O material de quem NÃO declarou: PVC soldável na água fria, CPVC na quente —
  * o que o lançamento automático sempre supôs. Outras redes não têm material.
@@ -2483,6 +2487,14 @@ export interface Trecho {
    * quando ausente — desenho anterior não muda de hash.
    */
   material?: MaterialDeTubo | null;
+  /**
+   * CALHA (E6.2, kernel 0.67.0): o trecho pluvial que é calha, e não tubo. Na
+   * SEMICIRCULAR `bitolaMm` é o diâmetro; na RETANGULAR é a LARGURA e
+   * `alturaCalhaMm` a altura útil. Só em PLUVIAL; ausente = tubo. Omitidos do
+   * canônico quando ausentes — desenho anterior não muda de hash.
+   */
+  secaoCalha?: SecaoDeCalha | null;
+  alturaCalhaMm?: number | null;
   /**
    * Gerado pelo LANÇAMENTO AUTOMÁTICO de eletrodutos (13/09/2026) e ainda não
    * confirmado — o irmão de `Terminal.sugerida`. Desenha-se pontilhado fino;
@@ -5307,6 +5319,16 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (!(MATERIAIS_DE_TUBO as readonly string[]).includes(t.material) || (t.disciplina !== 'AGUA_FRIA' && t.disciplina !== 'AGUA_QUENTE')) {
         throw new KernelError('BAD_PIPE_MATERIAL', `Material inválido em ${t.id}: ${t.material} (${t.disciplina})`);
       }
+    }
+    // CALHA (0.67.0): só pluvial; a retangular tem altura inteira positiva e a meia-cana não tem.
+    if (t.secaoCalha != null) {
+      if (!(SECOES_DE_CALHA as readonly string[]).includes(t.secaoCalha) || t.disciplina !== 'PLUVIAL') {
+        throw new KernelError('BAD_GUTTER', `Calha inválida em ${t.id}: ${t.secaoCalha} (${t.disciplina})`);
+      }
+    }
+    const querAltura = t.secaoCalha === 'RETANGULAR';
+    if (querAltura ? !(Number.isInteger(t.alturaCalhaMm) && (t.alturaCalhaMm as number) > 0) : t.alturaCalhaMm != null) {
+      throw new KernelError('BAD_GUTTER', `Altura da calha inválida em ${t.id}: ${String(t.alturaCalhaMm)} (${t.secaoCalha ?? 'tubo'})`);
     }
   }
 

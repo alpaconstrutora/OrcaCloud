@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { blueprintHidroService } from '../services/blueprintHidroService';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
 import { PERIODOS_DE_RETORNO, type HipotesesPluviais } from '../utils/blueprintPluvial';
+import { RUGOSIDADE_DA_CALHA } from '../utils/blueprintCalhas';
+import { SECOES_DE_CALHA } from '../utils/blueprintKernel';
 
 /**
  * As PREMISSAS hidrossanitárias do ESTUDO (E3.3, 29/09/2026) — água, pressão e
@@ -40,6 +42,7 @@ function completar<T extends object>(raw: unknown, padrao: T): T {
     if (x === undefined) continue;
     if (typeof v === 'number' && typeof x === 'number' && Number.isFinite(x)) saida[k] = x;
     else if (typeof v === 'boolean' && typeof x === 'boolean') saida[k] = x;
+    else if (typeof v === 'string' && typeof x === 'string') saida[k] = x;
     else if (x === null && ANULAVEIS.has(k)) saida[k] = null;
     // Anulável com padrão nulo: o valor gravado vale se for do tipo da premissa (E6.1).
     else if (v === null && ANULAVEIS.get(k) === 'number' && typeof x === 'number' && Number.isFinite(x)) saida[k] = x;
@@ -49,10 +52,19 @@ function completar<T extends object>(raw: unknown, padrao: T): T {
 }
 
 /** O JSON gravado `{ agua, pressao, esgoto }`, completado com o padrão. */
-/** As premissas pluviais gravadas; o período de retorno só vale se for um dos da norma (1, 5, 25). */
+/**
+ * As premissas pluviais gravadas. Só vale o que a norma e o sistema conhecem:
+ * período 1/5/25, seção de calha do kernel, material da tabela de rugosidade.
+ */
 function pluvialDaColuna(raw: unknown): HipotesesPluviais {
-  const p = completar(raw, HIPOTESES_HIDRO_PADRAO.pluvial);
-  return (PERIODOS_DE_RETORNO as readonly number[]).includes(p.periodoDeRetornoAnos) ? p : { ...p, periodoDeRetornoAnos: HIPOTESES_HIDRO_PADRAO.pluvial.periodoDeRetornoAnos };
+  const padrao = HIPOTESES_HIDRO_PADRAO.pluvial;
+  const p = completar(raw, padrao);
+  return {
+    ...p,
+    periodoDeRetornoAnos: (PERIODOS_DE_RETORNO as readonly number[]).includes(p.periodoDeRetornoAnos) ? p.periodoDeRetornoAnos : padrao.periodoDeRetornoAnos,
+    secaoDaCalha: (SECOES_DE_CALHA as readonly string[]).includes(p.secaoDaCalha) ? p.secaoDaCalha : padrao.secaoDaCalha,
+    materialDaCalha: p.materialDaCalha in RUGOSIDADE_DA_CALHA ? p.materialDaCalha : padrao.materialDaCalha,
+  };
 }
 
 export function hipotesesHidroDaColuna(raw: unknown): HipotesesHidro {

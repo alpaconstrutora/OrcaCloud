@@ -253,8 +253,10 @@ export function itensDaLegendaHidro(model: BlueprintModel): ItemDaLegendaHidro[]
     if (!hidraulicas.includes(t.disciplina)) continue;
     const material = materialDoTrecho(t);
     const nomeMaterial = material ? ` · ${FICHA_DO_MATERIAL[material as MaterialDeTubo].rotulo}` : t.disciplina === 'PLUVIAL' ? ' · PVC série R (NBR 5688)' : ' · PVC esgoto (NBR 5688)';
-    const k = `${hidraulicas.indexOf(t.disciplina)}|${material ?? ''}|${String(t.bitolaMm).padStart(4, '0')}`;
-    condutos.set(k, { grupo: 'Condutos', texto: `${ROTULO_DA_DISCIPLINA[t.disciplina]}${nomeMaterial} · ø${t.bitolaMm} mm`, cor: COR_DA_DISCIPLINA[t.disciplina] });
+    // E6.2: a calha tem linha própria — a seção, e não o material do tubo.
+    const calha = t.secaoCalha ? (t.secaoCalha === 'SEMICIRCULAR' ? `Calha meia-cana ø${t.bitolaMm} mm` : `Calha retangular ${t.bitolaMm}×${t.alturaCalhaMm} mm`) : null;
+    const k = `${hidraulicas.indexOf(t.disciplina)}|${t.secaoCalha ?? ''}|${material ?? ''}|${String(t.bitolaMm).padStart(4, '0')}|${t.alturaCalhaMm ?? ''}`;
+    condutos.set(k, { grupo: 'Condutos', texto: calha ?? `${ROTULO_DA_DISCIPLINA[t.disciplina]}${nomeMaterial} · ø${t.bitolaMm} mm`, cor: COR_DA_DISCIPLINA[t.disciplina] });
   }
   const conexoes = new Set<string>();
   for (const sc of simbolosDasConexoes2D(model, null)) {

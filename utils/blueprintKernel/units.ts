@@ -354,7 +354,14 @@
  * ponta que termina dentro dela está ligada). Vocabulário novo, forma igual —
  * provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.66.0';
+/**
+ * ─── 0.66.0 → 0.67.0 (29/09/2026) — A CALHA ─────────────────────────────────
+ *
+ * `Trecho.secaoCalha` (SEMICIRCULAR/RETANGULAR) e `Trecho.alturaCalhaMm` (E6.2
+ * do roadmap hidrossanitário): o trecho pluvial que é calha. Só em PLUVIAL; a
+ * retangular exige altura. Omitidos quando ausentes — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.67.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

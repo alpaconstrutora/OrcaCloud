@@ -194,6 +194,11 @@
  *   tem instalação, então nenhuma delas ganha chave — só a versão embutida no
  *   payload mudou.
  *
+ *   0.66.0 → 0.67.0 (29/09/2026): E6.2 do roadmap hidrossanitário — o trecho
+ *   pluvial ganhou `secaoCalha` e `alturaCalhaMm` (a calha), omitidos quando
+ *   ausentes. Com a string em 0.66.0 a suíte inteira (6.103 testes) passou;
+ *   depois do bump, só os seis hashes.
+ *
  *   0.65.0 → 0.66.0 (29/09/2026): E6.1 do roadmap hidrossanitário — a
  *   disciplina PLUVIAL e os pontos RALO_PLUVIAL, CAIXA_AREIA e LIGACAO_PLUVIAL.
  *   Só vocabulário; com a string em 0.65.0 e os tipos no lugar a suíte inteira
@@ -725,17 +730,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'ed8b75488dab39757cd6b867d4f3dafa44c1ffc5581aba7fe98f00b4ca4669dd',
+    hash: '5704a1d53507fc4af9e350fe6fd37d259c30de93307359902139cb79061026dd',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'e4bd8f6e8d0b76d04c97de424ad02edd49bc5126ccdcc3b9942e2b932eeb6ae0',
+    hash: 'bb00c5c52790dbfa84f149a1fa0105a4ed9c7ab93354b190e96058ddddaea7a9',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '38172f01eef30c3b61ef15dfdf4fc26ee117df2871066dcd669cd91e3864ad9b',
+    hash: 'b69003df6e69d4dddd39328a94f5f72ca0165fec62ddb0813a79c92b3748386e',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -743,7 +748,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '39621646363fc4fe1cb0721776bdb8f4d492831b93a622f73a4e5ac1a3153abf',
+    hash: '7795fe884497d34761e8f5fed2e992162f505d38d3b3925376e24a05c5be6ddf',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -753,7 +758,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '299bd4649e6b497f7f98ddf77be3a4f4e4b1af69218dfebb679eb3cefc3314fe',
+    hash: '56dfd340f5c4828793ede37ed4f37db4bc7fbfc6d31f89315f96c155ef182016',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -764,7 +769,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '5d99f15d12a2553d67e962d2ff9527e24bd6bbbb3cb339f1595472296d38e976',
+    hash: '8fddf8aedf01c48ae0858fa4abda1ff4ca2bcdb036eaac40981b198b56ecae2a',
   },
 };
 

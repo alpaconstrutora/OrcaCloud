@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.66.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.67.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2033,6 +2033,9 @@ function projetar(model) {
       condutores: t.condutores ?? void 0,
       // E1.1 (0.63.0): só quando declarado — o padrão da disciplina não se grava.
       material: t.material ?? void 0,
+      // E6.2 (0.67.0): a calha, só quando o trecho é calha.
+      secaoCalha: t.secaoCalha ?? void 0,
+      alturaCalhaMm: t.alturaCalhaMm ?? void 0,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? true : void 0,
       parametros: parametrosCanonicos(t.parametros)
@@ -2743,6 +2746,7 @@ function modelFromCanonicalPayload(payload) {
       circuitoIds: t.circuitos && t.circuitos.length > 0 ? t.circuitos.map((k2) => idsDeCircuito[k2]) : t.circuito != null ? [idsDeCircuito[t.circuito]] : null,
       condutores: t.condutores ?? null,
       material: t.material ?? null,
+      ...t.secaoCalha ? { secaoCalha: t.secaoCalha, alturaCalhaMm: t.alturaCalhaMm ?? null } : {},
       sugerido: t.sugerido ? true : null,
       ...t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}
     });
@@ -3103,7 +3107,9 @@ var POLITICA_PADRAO = {
   // quant-1.17.0 (28/09/2026, E1.1 do roadmap hidrossanitário): o trecho e a
   // linha de compra do tubo ganharam `material` (o declarado ou o padrão da
   // disciplina) — PVC DN 25 e PPR DN 25 são compras diferentes.
-  version: "quant-1.17.0",
+  // quant-1.18.0 (29/09/2026, E6.2 do roadmap hidrossanitário): o trecho e a
+  // linha de compra ganharam `secaoCalha` — a calha de 150 não é o tubo de 150.
+  version: "quant-1.18.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3252,6 +3258,7 @@ function agruparPorBitola(trechos) {
   for (const t of trechos) {
     const chave = `${t.disciplina}
 ${t.material ?? ""}
+${t.secaoCalha ?? ""}
 ${t.bitolaMm}
 ${t.itemCode ?? ""}`;
     const atual = porBitolaMapa.get(chave);
@@ -3262,6 +3269,7 @@ ${t.itemCode ?? ""}`;
       porBitolaMapa.set(chave, {
         disciplina: t.disciplina,
         material: t.material ?? null,
+        secaoCalha: t.secaoCalha ?? null,
         bitolaMm: t.bitolaMm,
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
@@ -3270,7 +3278,7 @@ ${t.itemCode ?? ""}`;
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? "").localeCompare(y.material ?? "") || x.bitolaMm - y.bitolaMm
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? "").localeCompare(y.material ?? "") || (x.secaoCalha ?? "").localeCompare(y.secaoCalha ?? "") || x.bitolaMm - y.bitolaMm
   );
 }
 function agruparPorTerminal(terminais) {
@@ -3653,6 +3661,7 @@ ${c.funcao}`;
     return {
       trechoId: t.id,
       material: materialDoTrecho(t),
+      secaoCalha: t.secaoCalha ?? null,
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? "",

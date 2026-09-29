@@ -17,6 +17,8 @@
  */
 import { verificarVentilacao } from './blueprintVentilacao';
 import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
+import { DECLIVIDADE_MINIMA_DA_CALHA_PCT, verificarCalhas } from './blueprintCalhas';
+import { HIPOTESES_PLUVIAIS_PADRAO, type HipotesesPluviais } from './blueprintPluvial';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
 import { conexoesDerivadas, conflitosDoModelo } from './blueprintKernel';
 import { esgotoTrechoATrecho, trechosDeEsgotoSemDestino, verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
@@ -42,7 +44,10 @@ export type TipoDeMarca =
   | 'DN_VENTILACAO'
   // E5.5 — a estrutura: tubo DENTRO de pilar (erro) e tubo que cruza viga (aviso: furo a aprovar).
   | 'ATRAVESSA_PILAR'
-  | 'CRUZA_VIGA';
+  | 'CRUZA_VIGA'
+  // E6.2 — calhas: a que não leva a vazão da água e a que tem menos de 0,5 %.
+  | 'CALHA_INSUFICIENTE'
+  | 'CALHA_DECLIVIDADE';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -63,7 +68,13 @@ export interface MarcaDeVerificacao {
  * PRESSÕES (E1.3) chegam calculadas por quem tem as hipóteses do usuário — a
  * marca não pode discordar da tabela da gaveta.
  */
-export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | null = null, pressoes: readonly PressoesDaRede[] = []): MarcaDeVerificacao[] {
+export function marcasDeVerificacao(
+  model: BlueprintModel,
+  levelId: ObjectId | null = null,
+  pressoes: readonly PressoesDaRede[] = [],
+  /** E6.2: as premissas pluviais — a intensidade diz a vazão que a calha tem de levar. */
+  pluvial: HipotesesPluviais = HIPOTESES_PLUVIAIS_PADRAO,
+): MarcaDeVerificacao[] {
   const trechoPorId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
   const marcas: MarcaDeVerificacao[] = [];
 
@@ -76,6 +87,11 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
     if (t.rotulo === 'Ventilação') {
       const pontaDeCima = t.cotaAMm >= t.cotaBMm ? t.a : t.b;
       if (pontaDeCima.x === p.no.x && pontaDeCima.y === p.no.y) continue;
+    }
+    // E6.2: a ponta ALTA da calha é a cabeceira — fechada de fábrica, não é tubo solto.
+    if (t.secaoCalha) {
+      const cabeceira = t.cotaAMm >= t.cotaBMm ? t.a : t.b;
+      if (cabeceira.x === p.no.x && cabeceira.y === p.no.y) continue;
     }
     marcas.push({
       chave: `ponta|${t.id}|${p.no.x},${p.no.y}|${p.cotaMm}`,
@@ -143,6 +159,18 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
     }
   }
 
+  // E6.2: as calhas — capacidade por Manning contra a vazão da água, e a declividade mínima.
+  if ((model.trechos ?? []).some((t) => t.secaoCalha)) {
+    const um0 = (v: number) => Math.round(v).toLocaleString('pt-BR');
+    for (const c of verificarCalhas(model, pluvial)) {
+      if (!c.declividadeOk) {
+        marcas.push({ chave: `calhai|${c.trechoId}`, tipo: 'CALHA_DECLIVIDADE', levelId: c.levelId, at: aoLongo(c.trechoId, 0.3), texto: `calha a ${um1(c.declividadePct)} % < ${um1(DECLIVIDADE_MINIMA_DA_CALHA_PCT)} %`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'PLUVIAL' });
+      } else if (!c.atende) {
+        marcas.push({ chave: `calhaq|${c.trechoId}`, tipo: 'CALHA_INSUFICIENTE', levelId: c.levelId, at: aoLongo(c.trechoId, 0.5), texto: `calha leva ${um0(c.capacidadeLMin)} < ${um0(c.vazaoLMin!)} L/min`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'PLUVIAL' });
+      }
+    }
+  }
+
   for (const v of verificarDnDoEsgoto(model)) {
     const menor = v.tipo === 'MENOR';
     marcas.push({
@@ -190,13 +218,13 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
 export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disciplinas: readonly DisciplinaDeRede[]): {
   pontasAbertas: number;
   dnFora: MarcaDeVerificacao[];
-  /** E5.2/E5.4/E5.5: contrafluxo, declividade baixa, DN que diminui, sem destino, a ventilação e a estrutura. */
+  /** E5.2/E5.4/E5.5/E6.2: contrafluxo, declividade baixa, DN que diminui, sem destino, a ventilação, a estrutura e as calhas. */
   fluxo: MarcaDeVerificacao[];
 } {
   const daRede = marcas.filter((m) => m.disciplina && disciplinas.includes(m.disciplina));
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE'].includes(m.tipo)),
   };
 }

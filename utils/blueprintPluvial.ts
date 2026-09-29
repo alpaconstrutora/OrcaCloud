@@ -23,7 +23,7 @@
  *
  * Tudo derivado do modelo e das premissas do estudo; nada gravado.
  */
-import type { Agua, BlueprintModel, ObjectId, Point } from './blueprintKernel';
+import type { Agua, BlueprintModel, ObjectId, Point, SecaoDeCalha } from './blueprintKernel';
 import { pegadaEmPlanta, pointInPolygon, polygonArea } from './blueprintKernel';
 
 /** Os períodos de retorno da NBR 10844 (5.1.2), em anos. */
@@ -36,9 +36,22 @@ export interface HipotesesPluviais {
   periodoDeRetornoAnos: PeriodoDeRetorno;
   /** A intensidade informada pelo projetista, mm/h — vale sobre a tabela. `null` = usar a tabela. */
   intensidadeMmH: number | null;
+  /** E6.2: a seção das calhas lançadas. */
+  secaoDaCalha: SecaoDeCalha;
+  /** E6.2: o material da calha — a chave da rugosidade (`RUGOSIDADE_DA_CALHA`). */
+  materialDaCalha: string;
+  /** E6.2: a declividade das calhas lançadas, % (nunca abaixo de 0,5). */
+  declividadeDaCalhaPct: number;
 }
 
-export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = { cidade: null, periodoDeRetornoAnos: 5, intensidadeMmH: null };
+export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
+  cidade: null,
+  periodoDeRetornoAnos: 5,
+  intensidadeMmH: null,
+  secaoDaCalha: 'SEMICIRCULAR',
+  materialDaCalha: 'PLASTICO_METAL',
+  declividadeDaCalhaPct: 0.5,
+};
 
 /**
  * Intensidade pluviométrica (mm/h) para chuva de 5 minutos, por período de

@@ -62,6 +62,7 @@ import {
   type TipoDeInterruptor,
   type TipoDePontoHidraulico,
   type MaterialDeTubo,
+  type SecaoDeCalha,
   type PapelDoReservatorio,
   type FormaDoReservatorio,
   type LigacaoDoCircuito,
@@ -790,6 +791,9 @@ function projetar(model: BlueprintModel): {
       condutores: t.condutores ?? undefined,
       // E1.1 (0.63.0): só quando declarado — o padrão da disciplina não se grava.
       material: t.material ?? undefined,
+      // E6.2 (0.67.0): a calha, só quando o trecho é calha.
+      secaoCalha: t.secaoCalha ?? undefined,
+      alturaCalhaMm: t.alturaCalhaMm ?? undefined,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? (true as const) : undefined,
       parametros: parametrosCanonicos(t.parametros),
@@ -1462,6 +1466,9 @@ export interface CanonicalPayload {
     /** Quantos fios passam no eletroduto. Ausente sob kernel < 0.23.0. */
     condutores?: number;
     material?: string;
+    /** A calha (0.67.0). Ausentes no tubo e sob kernel < 0.67.0. */
+    secaoCalha?: string;
+    alturaCalhaMm?: number;
     /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
     sugerido?: true;
     parametros?: Parametros;
@@ -2157,6 +2164,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
             : null,
       condutores: t.condutores ?? null,
       material: (t.material as MaterialDeTubo | undefined) ?? null,
+      ...(t.secaoCalha ? { secaoCalha: t.secaoCalha as SecaoDeCalha, alturaCalhaMm: t.alturaCalhaMm ?? null } : {}),
       sugerido: t.sugerido ? true : null,
       ...(t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}),
     });

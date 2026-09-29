@@ -174,7 +174,9 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // quant-1.17.0 (28/09/2026, E1.1 do roadmap hidrossanitário): o trecho e a
   // linha de compra do tubo ganharam `material` (o declarado ou o padrão da
   // disciplina) — PVC DN 25 e PPR DN 25 são compras diferentes.
-  version: 'quant-1.17.0',
+  // quant-1.18.0 (29/09/2026, E6.2 do roadmap hidrossanitário): o trecho e a
+  // linha de compra ganharam `secaoCalha` — a calha de 150 não é o tubo de 150.
+  version: 'quant-1.18.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -619,6 +621,8 @@ export interface QuantidadeTrecho {
   itemCode: string | null;
   /** Material efetivo do cano (água fria/quente); `null` nas outras redes. */
   material: string | null;
+  /** A seção da calha (quant-1.18.0); `null` no tubo. */
+  secaoCalha: string | null;
   /** A projeção em planta. Zero na prumada. */
   comprimentoPlantaM: number;
   /** O que se compra: a distância real entre as duas pontas. */
@@ -638,6 +642,8 @@ export interface QuantidadePorBitola {
   disciplina: string;
   /** Material do cano (quant-1.17.0); `null` fora de água fria/quente. */
   material: string | null;
+  /** A calha (quant-1.18.0): calha e tubo da mesma bitola são compras diferentes. `null` = tubo. */
+  secaoCalha: string | null;
   bitolaMm: number;
   itemCode: string | null;
   comprimentoM: number;
@@ -1132,7 +1138,7 @@ function areaOcupadaNoAmbiente(s: Structural, ring: Point[]): number {
 export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): QuantidadePorBitola[] {
   const porBitolaMapa = new Map<string, QuantidadePorBitola>();
   for (const t of trechos) {
-    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
+    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.secaoCalha ?? ''}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
       atual.comprimentoM += t.comprimentoM;
@@ -1141,6 +1147,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
       porBitolaMapa.set(chave, {
         disciplina: t.disciplina,
         material: t.material ?? null,
+        secaoCalha: t.secaoCalha ?? null,
         bitolaMm: t.bitolaMm,
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
@@ -1149,7 +1156,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || x.bitolaMm - y.bitolaMm,
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || (x.secaoCalha ?? '').localeCompare(y.secaoCalha ?? '') || x.bitolaMm - y.bitolaMm,
   );
 }
 
@@ -1693,6 +1700,7 @@ export function computeQuantities(
     return {
       trechoId: t.id,
       material: materialDoTrecho(t),
+      secaoCalha: t.secaoCalha ?? null,
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? '',

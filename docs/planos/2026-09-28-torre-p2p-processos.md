@@ -219,6 +219,11 @@ Padrão único, igual ao bloco "2b" de `orderService`: `try/catch`, `console.err
 | Data | Commit em `main` | O que foi ao ar | Prova |
 |---|---|---|---|
 | 2026-09-28 | `a8390d72` (rebase sobre `aa14555a`, +15 commits de outras frentes) | Passos 1.1, 2 e 3 + `darBaixa` cobrindo `internal_transaction.paid` (função nova de `main` achada no rebase) | `conferir-producao.sh "Orquestradas" "Conduzida por Processos"` → bundle `index-B04ZSa-F.js` carimbado `a8390d7`, os dois textos presentes |
+| 2026-09-28 | `83107bb0` (sobre `a8390d72`, `main` não andou) | Passo 4 — condição por etapa, prazo por etapa, UI do criador de template; migration das colunas aplicada ANTES do push | `conferir-producao.sh "Só executa quando" "Não se aplicou"` → carimbado `83107bb`, os dois textos presentes (4ª tentativa do laço de 30 s, ~2 min após o push) |
+
+## Estado final (2026-09-28)
+
+Passos 1 a 4 implementados, testados e publicados. Pendências deixadas de propósito, todas registradas acima: verificação visual do criador de template com condição; org "Altair Pereira da Rosa" sem os templates da F2; `in`/Fornecedor só no avaliador (sem UI); o roteiro `docs/spikes/torre-p2p` fica como receita para o próximo teste real de costura.
 
 ## Fora de escopo (decidido, não esquecido)
 

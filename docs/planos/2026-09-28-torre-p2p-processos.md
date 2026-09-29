@@ -220,6 +220,7 @@ Padrão único, igual ao bloco "2b" de `orderService`: `try/catch`, `console.err
 |---|---|---|---|
 | 2026-09-28 | `a8390d72` (rebase sobre `aa14555a`, +15 commits de outras frentes) | Passos 1.1, 2 e 3 + `darBaixa` cobrindo `internal_transaction.paid` (função nova de `main` achada no rebase) | `conferir-producao.sh "Orquestradas" "Conduzida por Processos"` → bundle `index-B04ZSa-F.js` carimbado `a8390d7`, os dois textos presentes |
 | 2026-09-28 | `83107bb0` (sobre `a8390d72`, `main` não andou) | Passo 4 — condição por etapa, prazo por etapa, UI do criador de template; migration das colunas aplicada ANTES do push | `conferir-producao.sh "Só executa quando" "Não se aplicou"` → carimbado `83107bb`, os dois textos presentes (4ª tentativa do laço de 30 s, ~2 min após o push) |
+| 2026-09-29 | `ab47c12d` (3 tentativas de push — outra sessão publicava Contratos em paralelo; rebase a cada recusa) | Pendências: Fornecedor via drawer, operador "em", tabela de gargalos no padrão | `conferir-producao.sh "Escolha o fornecedor" "Gargalos por etapa"` → domínio já em `44116a5` (commit posterior de outra frente, que contém o meu), os dois textos presentes |
 
 ## Estado final (2026-09-28)
 

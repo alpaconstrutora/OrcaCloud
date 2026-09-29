@@ -411,7 +411,14 @@
  * provado antes do bump com os goldens na string antiga. `Circuito.protecaoDR`
  * continua lido como DR individual de 30 mA (legado).
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.73.0';
+/**
+ * ─── 0.73.0 → 0.74.0 (29/09/2026) — DPS NO QUADRO ──────────────────────────
+ *
+ * `Quadro.dps` (E3.2 do roadmap elétrico): classe, Up, In e disjuntor de
+ * desconexão, declarados. Omitido no canônico quando ausente — nenhum desenho
+ * muda de payload, provado antes do bump com os goldens na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.74.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

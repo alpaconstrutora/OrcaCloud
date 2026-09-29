@@ -279,7 +279,7 @@ describe('9.5.3.3 · circuito comum', () => {
 });
 
 describe('o conjunto', () => {
-  it('onze regras, sempre na mesma ordem; faltas e avisos somados', () => {
+  it('doze regras, sempre na mesma ordem; faltas e avisos somados', () => {
     let m = classificar(casa(), 0, 'Sala', 'SALA_DORMITORIO');
     m = ponto(m, ESQ.x, ESQ.y, 'TUE', { tipo: 'Chuveiro' });
     const c = conferirNbr5410(m);
@@ -299,6 +299,8 @@ describe('o conjunto', () => {
       // E0.1 (29/09/2026): a queda da origem (6.2.7.1) e as fases do quadro, que só
       // apareciam no painel do quadro, entram na conferência.
       '6.2.7.1',
+      // E3.2 (29/09/2026): DPS no quadro de entrada, conforme a exposição declarada.
+      '6.3.5.2',
       // F9 (13/09/2026): a taxa de ocupação do eletroduto.
       '6.2.11.1.6',
       'SUGERIDAS',

@@ -261,6 +261,37 @@ export interface HipotesesEletricas {
    */
   catalogoDeDrA: readonly number[];
   maxCircuitosPorDR: number;
+  /**
+   * E3.2 — a EXPOSIÇÃO da instalação a descargas atmosféricas (6.3.5.2.1: linha
+   * aérea, região com mais de 25 dias de trovoada por ano, etc.) é dado do
+   * lugar, não do desenho: declarada como hipótese. `NAO_AVALIADA` (padrão)
+   * faz do "quadro sem DPS" um AVISO; `EXPOSTA`, uma FALTA; `NAO_EXPOSTA`
+   * dispensa — e o memorial diz qual das três valeu.
+   */
+  exposicaoARaios: ExposicaoARaios;
+  /** O DPS que se sugere quando falta (catálogo/hipótese): classe II, 20 kA, Up 1,5 kV, desconexão 20 A. */
+  dpsPadrao: { classe: 'I' | 'II' | 'III'; upKv: number; inKa: number; disjuntorDesconexaoA: number };
+}
+
+export const EXPOSICOES_A_RAIOS = ['NAO_AVALIADA', 'EXPOSTA', 'NAO_EXPOSTA'] as const;
+export type ExposicaoARaios = (typeof EXPOSICOES_A_RAIOS)[number];
+export const ROTULO_DA_EXPOSICAO: Record<ExposicaoARaios, string> = {
+  NAO_AVALIADA: 'não avaliada (DPS recomendado — aviso)',
+  EXPOSTA: 'exposta — linha aérea / região de trovoadas (DPS obrigatório, 6.3.5.2.1)',
+  NAO_EXPOSTA: 'não exposta (DPS dispensado por hipótese do projetista)',
+};
+
+/**
+ * O DPS PADRÃO sugerido — hipótese de catálogo, não norma: classe II (no
+ * quadro, 6.3.5.2.2), In 20 kA (8/20 µs), Up 1,5 kV (categoria II de
+ * suportabilidade dos equipamentos em 127/220 V — Tab. 31), disjuntor de
+ * desconexão 20 A (o que os fabricantes pedem para 20 kA). Confira o catálogo.
+ */
+export const DPS_PADRAO = { classe: 'II' as const, upKv: 1.5, inKa: 20, disjuntorDesconexaoA: 20 };
+
+/** O DPS a sugerir — o padrão da hipótese, inteiro. */
+export function sugerirDPS(hip: Pick<HipotesesEletricas, 'dpsPadrao'> = HIPOTESES_PADRAO): { classe: 'I' | 'II' | 'III'; upKv: number; inKa: number; disjuntorDesconexaoA: number } {
+  return { ...hip.dpsPadrao };
 }
 
 /** A série comercial de DRs (A) — hipótese de catálogo, editável. */
@@ -310,6 +341,8 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   diametroInternoEletrodutoMm: DIAMETRO_INTERNO_ELETRODUTO_MM,
   catalogoDeDrA: SERIE_COMERCIAL_DE_DR_A,
   maxCircuitosPorDR: 5,
+  exposicaoARaios: 'NAO_AVALIADA',
+  dpsPadrao: DPS_PADRAO,
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────

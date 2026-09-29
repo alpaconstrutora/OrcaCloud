@@ -1,6 +1,6 @@
 import React from 'react';
-import type { Command, CorrenteDiferencialMa, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, PolosDoDR } from '../../utils/blueprintKernel';
-import { CORRENTES_DIFERENCIAIS_MA, LIGACOES_DO_CIRCUITO, POLOS_DO_DR, rotuloDoDR } from '../../utils/blueprintKernel';
+import type { ClasseDeDPS, Command, CorrenteDiferencialMa, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, PolosDoDR } from '../../utils/blueprintKernel';
+import { CLASSES_DE_DPS, CORRENTES_DIFERENCIAIS_MA, LIGACOES_DO_CIRCUITO, POLOS_DO_DR, rotuloDoDPS, rotuloDoDR } from '../../utils/blueprintKernel';
 import type { PreDimensionamentoDoQuadro } from '../../utils/blueprintEletricaDimensionamento';
 import type { SugestaoDeDR } from '../../utils/blueprintNbr5410';
 import { comandosDasSugestoesDeDR } from '../../utils/blueprintNbr5410';
@@ -30,12 +30,16 @@ export default function PainelQuadroAlimentador({
   sugestoesDeDR = [],
   catalogoDeDrA = [],
   onDR,
+  dps = null,
+  dpsSugerido,
+  exposicao,
+  catalogoDeDisjuntoresA = [],
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
   tensaoDeclarada: number | null;
   alimentadorM: number | null;
-  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null }) => void;
+  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null }) => void;
   /** Em quadro trifásico: a fase declarada de cada circuito FN, para o select. */
   fasesDosCircuitos: { circuitoId: string; nome: string; ligacao: LigacaoDoCircuito; fase: FaseDoCircuito | null }[];
   onFase: (circuitoId: string, fase: FaseDoCircuito | null) => void;
@@ -44,6 +48,11 @@ export default function PainelQuadroAlimentador({
   sugestoesDeDR?: SugestaoDeDR[];
   catalogoDeDrA?: readonly number[];
   onDR?: (comandos: Command[]) => void;
+  /** E3.2: o DPS declarado do quadro, o que se sugere quando falta, a exposição (hipótese) e o catálogo de disjuntores. */
+  dps?: DispositivoDPS | null;
+  dpsSugerido?: DispositivoDPS;
+  exposicao?: string;
+  catalogoDeDisjuntoresA?: readonly number[];
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
@@ -241,6 +250,62 @@ export default function PainelQuadroAlimentador({
           )}
         </div>
       )}
+
+      {/* E3.2 — DPS: declarado inteiro pelo `onQuadro({ dps })`; sem DPS, o botão
+          põe o sugerido (hipótese de catálogo, dita no title) e a exposição
+          declarada nas hipóteses aparece ao lado. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-600" aria-label={`Proteção contra surtos do quadro ${q.nome}`}>
+        <span className="font-medium text-slate-600">DPS</span>
+        {dps ? (
+          <span className="flex flex-wrap items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5">
+            <select value={dps.classe} onChange={(e) => onQuadro({ dps: { ...dps, classe: e.target.value as ClasseDeDPS } })} aria-label={`Classe do DPS do quadro ${q.nome}`} title="Classe de ensaio (IEC 61643-11): I na entrada exposta a raio direto; II no quadro; III junto ao equipamento" className={campo}>
+              {CLASSES_DE_DPS.map((c) => (
+                <option key={c} value={c}>
+                  classe {c}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-1">
+              <input type="number" min={0} step={5} value={dps.inKa ?? ''} onChange={(e) => onQuadro({ dps: { ...dps, inKa: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) } })} placeholder="In" aria-label={`Corrente nominal de descarga do DPS do quadro ${q.nome}, em kA`} className={`w-14 text-right ${campo}`} />
+              kA
+            </label>
+            <label className="flex items-center gap-1">
+              Up
+              <input type="number" min={0} step={0.1} value={dps.upKv ?? ''} onChange={(e) => onQuadro({ dps: { ...dps, upKv: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) } })} placeholder="kV" aria-label={`Nível de proteção do DPS do quadro ${q.nome}, em kV`} className={`w-14 text-right ${campo}`} />
+              kV
+            </label>
+            <label className="flex items-center gap-1" title="Disjuntor à frente do DPS, pedido pelo fabricante — o DPS em fim de vida vira curto">
+              desconexão
+              <select value={dps.disjuntorDesconexaoA ?? ''} onChange={(e) => onQuadro({ dps: { ...dps, disjuntorDesconexaoA: e.target.value === '' ? null : Number(e.target.value) } })} aria-label={`Disjuntor de desconexão do DPS do quadro ${q.nome}`} className={campo}>
+                <option value="">—</option>
+                {catalogoDeDisjuntoresA.map((a) => (
+                  <option key={a} value={a}>
+                    {a} A
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={() => onQuadro({ dps: null })} aria-label={`Remover o DPS do quadro ${q.nome}`} title="Remover o DPS" className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-red-700">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        ) : (
+          <>
+            <span className="text-slate-400">nenhum</span>
+            {dpsSugerido && (
+              <button
+                type="button"
+                onClick={() => onQuadro({ dps: { ...dpsSugerido } })}
+                className="flex items-center gap-1 rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-slate-600 hover:border-slate-400"
+                title={`Adiciona ${rotuloDoDPS(dpsSugerido)} — hipótese de catálogo (classe II no quadro, 6.3.5.2.2; Up pela categoria II da Tab. 31). Confira com o fabricante.`}
+              >
+                <Plus className="h-3.5 w-3.5" /> DPS sugerido
+              </button>
+            )}
+          </>
+        )}
+        {exposicao && <span className="text-xs text-slate-400">exposição a descargas: {exposicao}</span>}
+      </div>
 
       {faltas.map((a, i) => (
         <p key={`f${i}`} className="text-red-700">

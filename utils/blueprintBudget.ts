@@ -441,6 +441,13 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'UN',
     descricao: 'Dispositivos DR por corrente nominal, sensibilidade e polos (uma linha por combinação). Os declarados no circuito (legado) saem como "30 mA, In não declarado".',
   },
+  {
+    id: 'CONTAGEM_DPS',
+    rotulo: 'DPS (proteção contra surtos)',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Dispositivos de proteção contra surtos declarados nos quadros, por classe, In (kA) e Up (kV) — uma linha por combinação.',
+  },
 
   // ── Telhado ──────────────────────────────────────────────────────────────
   //
@@ -1058,6 +1065,20 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           valor: d.quantidade,
           formula: 'um por dispositivo DR do quadro (peça declarada ou legado do circuito)',
           variaveis: { inA: d.inA ?? 'não declarado', idnMa: d.idnMa, polos: d.polos ?? 'não declarados', quantidade: d.quantidade },
+        }));
+    }
+
+    case 'CONTAGEM_DPS': {
+      return (quant.totais.porDPS ?? [])
+        .filter((d) => d.quantidade > 0)
+        .map((d) => ({ d, rotulo: `DPS classe ${d.classe}${d.inKa != null ? ` ${String(d.inKa).replace('.', ',')} kA` : ''}${d.upKv != null ? ` Up ${String(d.upKv).replace('.', ',')} kV` : ''}` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ d, rotulo }) => ({
+          ref: `dps-${d.classe}-${d.inKa ?? 'sem-in'}-${d.upKv ?? 'sem-up'}`,
+          rotulo,
+          valor: d.quantidade,
+          formula: 'um por quadro com DPS declarado',
+          variaveis: { classe: d.classe, inKa: d.inKa ?? 'não declarado', upKv: d.upKv ?? 'não declarado', quantidade: d.quantidade },
         }));
     }
 

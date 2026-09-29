@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
-import type { BlueprintModel, Command, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
+import type { BlueprintModel, Command, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
 import { drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
 import { sugerirDRs } from '../../utils/blueprintNbr5410';
 import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
@@ -11,6 +11,8 @@ import {
   preDimensionarCircuito,
   preDimensionarQuadroCompleto,
   sugerirInDoDR,
+  sugerirDPS,
+  ROTULO_DA_EXPOSICAO,
   type HipotesesEletricas,
   type PreDimensionamentoDoCircuito,
 } from '../../utils/blueprintEletricaDimensionamento';
@@ -214,7 +216,7 @@ export default function PainelEletrica({
   /** F6: a alimentação do quadro (ligação, tensão, metros até a origem) — declarações. */
   onQuadroProps?: (
     quadroId: ObjectId,
-    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null },
+    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null },
   ) => void;
   /** F7: o projeto executivo elétrico com ART, montado por quem tem o estudo em mãos. */
   executivoSlot?: React.ReactNode;
@@ -1132,6 +1134,10 @@ export default function PainelEletrica({
                       sugestoesDeDR={sugerirDRs(model, q.quadroId, hipoteses)}
                       catalogoDeDrA={hipoteses.catalogoDeDrA}
                       onDR={onDR}
+                      dps={quadro.dps ?? null}
+                      dpsSugerido={sugerirDPS(hipoteses)}
+                      exposicao={ROTULO_DA_EXPOSICAO[hipoteses.exposicaoARaios]}
+                      catalogoDeDisjuntoresA={hipoteses.catalogoDeDisjuntoresA}
                     />
                   ) : (
                     <p className="text-sm text-gray-500">

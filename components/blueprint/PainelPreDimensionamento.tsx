@@ -7,6 +7,7 @@ import {
   type HipotesesEletricas,
   type PreDimensionamentoDoCircuito,
 } from '../../utils/blueprintEletricaDimensionamento';
+import { EXPOSICOES_A_RAIOS, ROTULO_DA_EXPOSICAO, type ExposicaoARaios } from '../../utils/blueprintEletricaDimensionamento';
 
 const ROTULO_DO_GRUPO = { ILUMINACAO: 'iluminação', TUG: 'TUG', FORCA: 'força', MOTOR: 'motores / ar-condicionado' } as const;
 /** Fator de demanda entre 0 e 1; texto vazio ou inválido mantém o atual. */
@@ -146,7 +147,7 @@ export function HipotesesDoPreDimensionamento({
     hipoteses.demanda.TUG !== 1 ||
     hipoteses.demanda.FORCA !== 1 ||
     (hipoteses.demanda.MOTOR ?? 1) !== 1;
-  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % (origem ${hipoteses.limiteQuedaTotalPct} %) · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²${demandaInformada ? ` · demanda: ${hipoteses.demanda.nome}` : ''}`;
+  const resumo = `${hipoteses.metodoDeInstalacao} · ${hipoteses.temperaturaAmbienteC} °C · ${hipoteses.circuitosAgrupados} circ./eletroduto · ρ ${String(hipoteses.rhoOhmMm2PorM).replace('.', ',')} · ΔV ≤ ${hipoteses.limiteQuedaTerminalPct} % (origem ${hipoteses.limiteQuedaTotalPct} %) · TUE ≥ ${String(hipoteses.secaoMinimaTueMm2).replace('.', ',')} mm²${demandaInformada ? ` · demanda: ${hipoteses.demanda.nome}` : ''}${hipoteses.exposicaoARaios !== 'NAO_AVALIADA' ? ` · descargas: ${hipoteses.exposicaoARaios === 'EXPOSTA' ? 'exposta' : 'não exposta'}` : ''}`;
   const campo = 'w-16 rounded border border-slate-300 px-1 py-0.5 text-sm';
   return (
     <div className="rounded-md border border-dashed border-slate-300">
@@ -212,6 +213,18 @@ export function HipotesesDoPreDimensionamento({
           <label className="flex items-center justify-between gap-2">
             <span>Desequilíbrio de fases tolerado, % (quadro trifásico)</span>
             <input type="number" step="1" min={0} value={hipoteses.desequilibrioMaxPct} onChange={(e) => onChange({ ...hipoteses, desequilibrioMaxPct: Number(e.target.value) || HIPOTESES_PADRAO.desequilibrioMaxPct })} aria-label="Desequilíbrio de fases tolerado" className={campo} />
+          </label>
+          {/* E3.2: a exposição a descargas é dado do LUGAR (6.3.5.2.1) — hipótese
+              declarada; decide se "quadro sem DPS" é aviso, falta ou dispensa. */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Exposição a descargas atmosféricas (6.3.5.2)</span>
+            <select value={hipoteses.exposicaoARaios} onChange={(e) => onChange({ ...hipoteses, exposicaoARaios: e.target.value as ExposicaoARaios })} aria-label="Exposição a descargas atmosféricas" className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm">
+              {EXPOSICOES_A_RAIOS.map((x) => (
+                <option key={x} value={x}>
+                  {ROTULO_DA_EXPOSICAO[x].split(' (')[0].split(' — ')[0]}
+                </option>
+              ))}
+            </select>
           </label>
           {/* Demanda (E0.1, 29/09/2026): a tabela é da CONCESSIONÁRIA, não da 5410 —
               por isso é um preset NOMEADO. Só dois: sem demanda (o padrão) e o que o

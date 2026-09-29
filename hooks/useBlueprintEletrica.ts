@@ -6,6 +6,7 @@ import {
   type HipotesesEletricas,
   type MetodoDeInstalacao,
 } from '../utils/blueprintEletricaDimensionamento';
+import { EXPOSICOES_A_RAIOS, type ExposicaoARaios } from '../utils/blueprintEletricaDimensionamento';
 
 /**
  * As HIPÓTESES do pré-dimensionamento elétrico do estudo (F7, 13/09/2026).
@@ -59,6 +60,9 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     // E3.1: o catálogo de DR é sempre o padrão (como o de disjuntores); o máximo por grupo é editável.
     catalogoDeDrA: HIPOTESES_PADRAO.catalogoDeDrA,
     maxCircuitosPorDR: Math.max(1, Math.floor(n(r.maxCircuitosPorDR, HIPOTESES_PADRAO.maxCircuitosPorDR))),
+    // E3.2: a exposição a raios é do lugar — gravada; o DPS padrão é catálogo, sempre o padrão.
+    exposicaoARaios: (EXPOSICOES_A_RAIOS as readonly string[]).includes(String(r.exposicaoARaios)) ? (r.exposicaoARaios as ExposicaoARaios) : HIPOTESES_PADRAO.exposicaoARaios,
+    dpsPadrao: HIPOTESES_PADRAO.dpsPadrao,
   };
 }
 

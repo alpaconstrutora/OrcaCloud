@@ -32,7 +32,7 @@ import {
   type Terminal,
   type TipoDeAmbiente,
 } from './blueprintKernel';
-import { circuitoComDR30, drDoCircuito, drsDoQuadro, rotuloDoDR, type Command } from './blueprintKernel';
+import { circuitoComDR30, drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR, type Command } from './blueprintKernel';
 import { conferirIluminacao, conferirTomadas, etiquetaDoAmbiente } from './blueprintDistribuicao';
 import {
   HIPOTESES_PADRAO,
@@ -57,6 +57,7 @@ export type CodigoDaRegra =
   | 'PRE-DIM'
   | '6.2.7.1'
   | '6.2.11.1.6'
+  | '6.3.5.2'
   | 'SUGERIDAS';
 
 export interface Achado {
@@ -735,6 +736,38 @@ function regraPreDim(model: BlueprintModel, levelId: ObjectId | null, hip: Hipot
 // que `preDimensionarQuadroCompleto` acha do QUADRO: a FALTA 6.2.7.1 e o AVISO
 // de desequilíbrio de fases. O quadro é do pavimento pelo `levelId` dele.
 
+// ─── 6.3.5.2 — DPS no quadro de entrada ─────────────────────────────────────
+//
+// A norma manda DPS quando a instalação é alimentada por linha aérea ou fica
+// em região de trovoadas (6.3.5.2.1) — dado do LUGAR, que aqui é hipótese
+// declarada (`exposicaoARaios`). Sem hierarquia de quadros (E4), TODO quadro
+// é tratado como de entrada — dito no título. A peça declarada também é
+// conferida: sem disjuntor de desconexão é aviso (o DPS em falha vira curto).
+function regraDps(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
+  const achados: Achado[] = [];
+  const naoAvaliado: string[] = [];
+  let avaliados = 0;
+  const quadros = (model.quadros ?? []).filter((x) => !levelId || x.levelId === levelId);
+  for (const q of quadros) {
+    avaliados++;
+    if (!q.dps) {
+      if (hip.exposicaoARaios === 'NAO_EXPOSTA') naoAvaliado.push(`${q.nome}: sem DPS — dispensado pela hipótese "não exposta"`);
+      else if (hip.exposicaoARaios === 'EXPOSTA') achados.push({ nivel: 'FALTA', mensagem: `${q.nome}: quadro de entrada sem DPS — instalação declarada EXPOSTA a descargas (6.3.5.2.1 exige)`, ids: [q.id] });
+      else achados.push({ nivel: 'AVISO', mensagem: `${q.nome}: quadro de entrada sem DPS — exposição a descargas não avaliada; declare a exposição nas hipóteses ou adicione o DPS (6.3.5.2)`, ids: [q.id] });
+      continue;
+    }
+    if (q.dps.disjuntorDesconexaoA == null) achados.push({ nivel: 'AVISO', mensagem: `${q.nome}: ${rotuloDoDPS(q.dps)} sem disjuntor de desconexão declarado — o fabricante exige proteção à frente do DPS`, ids: [q.id] });
+    if (q.dps.inKa == null || q.dps.upKv == null) naoAvaliado.push(`${q.nome}: ${rotuloDoDPS(q.dps)} sem In ou Up declarados — a coordenação com a suportabilidade (Tab. 31) não se avalia`);
+  }
+  return {
+    codigo: '6.3.5.2',
+    titulo: `DPS no quadro de entrada (exposição a descargas: ${hip.exposicaoARaios === 'EXPOSTA' ? 'exposta' : hip.exposicaoARaios === 'NAO_EXPOSTA' ? 'não exposta' : 'não avaliada'}; sem hierarquia, todo quadro conta como entrada)`,
+    achados,
+    naoAvaliado,
+    avaliados,
+  };
+}
+
 function regraQuadro(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
   const achados: Achado[] = [];
   const naoAvaliado: string[] = [];
@@ -818,6 +851,7 @@ export function conferirNbr5410(
     regra51322(model, levelId, hipoteses),
     regraPreDim(model, levelId, hipoteses),
     regraQuadro(model, levelId, hipoteses),
+    regraDps(model, levelId, hipoteses),
     regraEletroduto(model, levelId, hipoteses),
     regraSugeridas(model, levelId),
   ];

@@ -46,7 +46,7 @@ import {
 import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from './blueprintRede';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
 import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trechosNumerados, type ComposicaoDaRede } from './blueprintFiacao';
-import { drDoCircuito, drsDoQuadro, rotuloDoDR } from './blueprintKernel';
+import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -407,6 +407,10 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
       for (const a of c.achados.filter((x) => x.nivel === 'FALTA')) L.push(`  ${a.referencia}: ${a.mensagem}`);
     }
     for (const d of drsDoQuadro(model, q.quadroId)) L.push(`  DR ${rotuloDoDR(d)}: ${d.geral ? 'geral do quadro' : (model.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome).join(', ') || 'sem circuito'}${d.legado ? ' (declarado no circuito)' : ''}`);
+    {
+      const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
+      L.push(`  ${quadroDoModelo?.dps ? rotuloDoDPS(quadroDoModelo.dps) : 'sem DPS'}`);
+    }
     L.push(`Instalado ${Math.round(q.sInstaladaVA)} VA - demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})${q.ibA != null ? ` - alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm2, geral ${q.disjuntorGeralA ?? '-'} A` : ''}${q.quedaTotalMaxPct != null ? ` - dV total ${n1(q.quedaTotalMaxPct)} %` : ''}`);
     for (const a of q.achados) L.push(`  ${a.referencia}: ${a.mensagem}`);
   }
@@ -502,6 +506,11 @@ export function desenharQuadroDeCargas(
         `DR: ${drsDesteQuadro.map((d) => `${rotuloDoDR(d)} — ${d.geral ? 'geral' : (model.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome.replace(/\s*[—–-].*$/, '')).join(', ') || 'sem circuito'}${d.legado ? ' (no circuito)' : ''}`).join(' · ')}`,
         1.8,
       );
+    }
+    {
+      // E3.2: o DPS do quadro, ou a ausência dele — dita.
+      const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
+      linha(quadroDoModelo?.dps ? rotuloDoDPS(quadroDoModelo.dps) : 'Sem DPS declarado (6.3.5.2 — ver conferência)', 1.8, quadroDoModelo?.dps ? undefined : COR_FRACA);
     }
     linha(
       `Instalado ${Math.round(q.sInstaladaVA)} VA (luz ${Math.round(q.porGrupoVA.ILUMINACAO)} · TUG ${Math.round(q.porGrupoVA.TUG)} · força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? ` · motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}) · demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})` +

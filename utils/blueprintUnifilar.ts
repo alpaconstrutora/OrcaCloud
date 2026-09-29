@@ -38,7 +38,7 @@ import {
 } from './blueprintEletricaDimensionamento';
 import { numeroDoCircuito } from './blueprintCondutores';
 import { secaoDoPeMm2 } from './blueprintKernel';
-import { drDoCircuito, drsDoQuadro, rotuloDoDR } from './blueprintKernel';
+import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 
 export interface RamalUnifilar {
   circuitoId: string;
@@ -78,6 +78,8 @@ export interface DiagramaUnifilar {
     alimentadorM: number | null;
     /** E3.1: o DR GERAL do quadro, entre o disjuntor geral e o barramento — o rótulo ("63 A / 30 mA"). */
     drGeral: string | null;
+    /** E3.2: o DPS do quadro — derivação do barramento para a terra, logo depois do geral. */
+    dps: string | null;
   };
   ramais: RamalUnifilar[];
   /** Algum DR aparece (geral ou de ramal) — a legenda do símbolo só entra se ele aparece. */
@@ -149,6 +151,7 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
         ligacao: q.ligacao,
         tensaoV: q.tensaoV,
         entrada: {
+          dps: quadro.dps ? rotuloDoDPS(quadro.dps) : null,
           drGeral: (() => {
             const g = drsDoQuadro(model, quadro.id).find((d) => d.geral);
             return g ? rotuloDoDR(g) : null;
@@ -286,6 +289,24 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
   d.linha(xBus0, yBus, xBus1, yBus, { espessuraMm: grossa, cor: COR });
   if (n === 0) t(xBus0 + 2 * k, yBus + 6 * k, 'sem circuitos', 2 * k, COR_FRACA);
 
+  if (e.dps) {
+    // E3.2: o DPS — derivação do barramento, logo depois da entrada, para a terra.
+    const xD = xBus0 + 3 * k;
+    let yD = yBus;
+    d.linha(xD, yD, xD, yD + 4 * k, { espessuraMm: media, cor: COR });
+    yD += 4 * k;
+    d.retangulo(xD - 2.2 * k, yD, 4.4 * k, 3.2 * k, { espessuraMm: fina, cor: COR });
+    t(xD - 1.9 * k, yD + 2.3 * k, 'DPS', 1.5 * k);
+    yD += 3.2 * k;
+    d.linha(xD, yD, xD, yD + 3 * k, { espessuraMm: media, cor: COR });
+    yD += 3 * k;
+    // Terra: três traços decrescentes.
+    d.linha(xD - 2.2 * k, yD, xD + 2.2 * k, yD, { espessuraMm: fina, cor: COR });
+    d.linha(xD - 1.4 * k, yD + 0.9 * k, xD + 1.4 * k, yD + 0.9 * k, { espessuraMm: fina, cor: COR });
+    d.linha(xD - 0.6 * k, yD + 1.8 * k, xD + 0.6 * k, yD + 1.8 * k, { espessuraMm: fina, cor: COR });
+    t(xD + 3 * k, yBus + 6.5 * k, e.dps, 1.5 * k, COR_FRACA);
+  }
+
   // ── Ramais ────────────────────────────────────────────────────────────
   diagrama.ramais.forEach((r, i) => {
     const x = xBus0 + (i + 0.5) * UNIFILAR.ramalMm * k;
@@ -350,6 +371,7 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
 export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string[] {
   const L: string[] = [];
   L.push('Disjuntor: lâmina aberta no ramal (In em A). Barramento: traço grosso. Seta: segue ao circuito.');
+  if (diagramas.some((d) => d.entrada.dps)) L.push('DPS: dispositivo de proteção contra surtos — derivação do barramento para a terra, logo após o geral; classe, In (kA) e Up (kV) declarados (6.3.5.2).');
   if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual — na entrada (geral do quadro) ou no ramal (individual; "grupo" = compartilhado por mais de um circuito); "In / IΔn", 30 mA para pessoas (5.1.3.2.2).');
   L.push('Condutores: "2#2,5 + T2,5" = dois carregados de 2,5 mm² e terra de 2,5 mm² (ligação FN/FF); "3#…" em FFF.');
   if (diagramas.some((d) => d.comFases)) L.push('R / S / T sobre o ramal: fase declarada do circuito F-N no quadro trifásico — o balanceamento soma por fase.');

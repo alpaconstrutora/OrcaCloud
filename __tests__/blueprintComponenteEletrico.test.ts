@@ -24,7 +24,7 @@ function sala(): BlueprintModel {
 
 describe('componente com carga (E1.2)', () => {
   it('kernel 0.70.0; a evaporadora e o exaustor dizem que ponto elétrico pedem; a louça não', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.73.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.74.0');
     expect(CATALOGO_DE_COMPONENTES.EVAPORADORA.ligaAoPontoEletrico).toBe('AR_CONDICIONADO');
     expect(CATALOGO_DE_COMPONENTES.EXAUSTOR.ligaAoPontoEletrico).toBe('VENTILADOR_EXAUSTOR');
     expect(CATALOGO_DE_COMPONENTES.VASO.ligaAoPontoEletrico).toBeUndefined();

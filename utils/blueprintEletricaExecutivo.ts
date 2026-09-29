@@ -19,7 +19,7 @@
  * Puro: modelo, hipóteses e conferência entram; verificações e texto saem.
  */
 import { sha256, snapshotHash, stableStringify, type BlueprintModel } from './blueprintKernel';
-import { drsDoQuadro as drsDoQuadroKernel, rotuloDoDR } from './blueprintKernel';
+import { drsDoQuadro as drsDoQuadroKernel, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 import { KERNEL_VERSION } from './blueprintKernel';
 import type { ConferenciaNbr5410 } from './blueprintNbr5410';
 import type { ResponsavelTecnico } from './blueprintTopografiaExecutivo';
@@ -28,6 +28,7 @@ import {
   type HipotesesEletricas,
   type PreDimensionamentoDoQuadro,
 } from './blueprintEletricaDimensionamento';
+import { ROTULO_DA_EXPOSICAO } from './blueprintEletricaDimensionamento';
 
 export interface VerificacaoEletrica {
   /** Grupo para a tela agrupar. */
@@ -157,6 +158,7 @@ export function memorialEletrico(
   L.push(`Condutores de cobre, isolação PVC 70 °C, método de instalação ${hip.metodoDeInstalacao} (Tabela 36); temperatura ambiente ${hip.temperaturaAmbienteC} °C (Tabela 40); ${hip.circuitosAgrupados} circuito(s) por eletroduto (Tabela 42); seção mínima por uso pela Tabela 47; TUE / ligação direta ≥ ${String(hip.secaoMinimaTueMm2).replace('.', ',')} mm² (hipótese de projeto).`);
   L.push(`ρ do cobre ${String(hip.rhoOhmMm2PorM).replace('.', ',')} Ω·mm²/m; queda máxima ${hip.limiteQuedaTerminalPct} % no circuito terminal e ${hip.limiteQuedaTotalPct} % da origem (6.2.7). Disjuntores: ${hip.catalogoDeDisjuntoresA.join(', ')} A (IB ≤ In ≤ Iz, 5.3.4.1).`);
   L.push(`Demanda: ${hip.demanda.nome} — iluminação ${hip.demanda.ILUMINACAO}, TUG ${hip.demanda.TUG}, força ${hip.demanda.FORCA}, motores/AC ${hip.demanda.MOTOR ?? 1}. Desequilíbrio de fases tolerado ${hip.desequilibrioMaxPct} %.`);
+  L.push(`Exposição a descargas atmosféricas (6.3.5.2.1): ${ROTULO_DA_EXPOSICAO[hip.exposicaoARaios]}. DPS sugerido quando falta: classe ${hip.dpsPadrao.classe}, ${hip.dpsPadrao.inKa} kA, Up ${String(hip.dpsPadrao.upKv).replace('.', ',')} kV (hipótese de catálogo).`);
   L.push('');
   L.push('## 4. Quadros e circuitos');
   for (const q of r.quadros) {
@@ -170,6 +172,12 @@ export function memorialEletrico(
     const drs = drsDoQuadro(model, q.quadroId);
     if (drs.length) {
       L.push(`Proteção DR: ${drs.map((d) => `${rotuloDoDR(d)} ${d.geral ? 'geral do quadro' : `nos circuitos ${(model?.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome).join(', ') || '—'}`}${d.legado ? ' (declarado no circuito, sem In)' : ''}`).join('; ')}.`);
+    }
+    // E3.2: o DPS, ou a ausência dele com a hipótese que valeu.
+    {
+      const quadroDoModelo = model?.quadros.find((x) => x.id === q.quadroId);
+      if (quadroDoModelo?.dps) L.push(`Proteção contra surtos: ${rotuloDoDPS(quadroDoModelo.dps)}.`);
+      else if (model) L.push(`Proteção contra surtos: sem DPS declarado — exposição a descargas ${ROTULO_DA_EXPOSICAO[hip.exposicaoARaios]}.`);
     }
     for (const c of q.circuitos) {
       L.push(

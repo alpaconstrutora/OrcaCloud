@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.73.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.74.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1996,6 +1996,8 @@ function projetar(model) {
       ligacao: q.ligacao ?? void 0,
       tensaoV: q.tensaoV ?? void 0,
       alimentadorM: q.alimentadorM ?? void 0,
+      // DPS (E3.2, 0.74.0): omitido quando não há — hash do acervo intacto.
+      dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : void 0,
       parametros: parametrosCanonicos(q.parametros)
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y
@@ -2727,6 +2729,7 @@ function modelFromCanonicalPayload(payload) {
       ligacao: q.ligacao ?? null,
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
+      dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : null,
       ...q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}
     });
   });
@@ -3447,6 +3450,14 @@ function drsDoQuadro(model, quadroId) {
 function drsDoModelo(model) {
   return (model.quadros ?? []).flatMap((q) => drsDoQuadro(model, q.id));
 }
+function rotuloDoDPS(d) {
+  const f = (v) => String(v).replace(".", ",");
+  const partes = [`DPS classe ${d.classe}`];
+  if (d.inKa != null) partes.push(`${f(d.inKa)} kA`);
+  if (d.upKv != null) partes.push(`Up ${f(d.upKv)} kV`);
+  if (d.disjuntorDesconexaoA != null) partes.push(`desconex\xE3o ${f(d.disjuntorDesconexaoA)} A`);
+  return partes.join(" \xB7 ");
+}
 
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
@@ -3466,7 +3477,9 @@ var POLITICA_PADRAO = {
   // quant-1.21.0 (29/09/2026, E3.1): o DR é PEÇA — `porDR` (In / IΔn / polos)
   // no total e no quadro; `drs` passa a contar dispositivos (declarados +
   // legados), não circuitos marcados.
-  version: "quant-1.21.0",
+  // quant-1.22.0 (29/09/2026, E3.2): o DPS do quadro — `dps` (rótulo) no
+  // quadro; `dps` (contagem) e `porDPS` (classe / In / Up) no total.
+  version: "quant-1.22.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3512,6 +3525,16 @@ function agruparPorDR(drs) {
   }
   return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY) || a.idnMa - b.idnMa || (a.polos ?? 0) - (b.polos ?? 0));
 }
+function agruparPorDPS(dps) {
+  const mapa = /* @__PURE__ */ new Map();
+  for (const d of dps) {
+    const k = `${d.classe}|${d.inKa ?? ""}|${d.upKv ?? ""}`;
+    const atual = mapa.get(k) ?? { classe: d.classe, inKa: d.inKa, upKv: d.upKv, quantidade: 0 };
+    atual.quantidade += 1;
+    mapa.set(k, atual);
+  }
+  return [...mapa.values()].sort((a, b) => a.classe.localeCompare(b.classe) || (a.inKa ?? 0) - (b.inKa ?? 0));
+}
 function quadrosQuantificados(model, trechos) {
   const trechoPorId = new Map(trechos.map((t) => [t.trechoId, t]));
   return (model.quadros ?? []).map((q) => {
@@ -3532,6 +3555,7 @@ function quadrosQuantificados(model, trechos) {
       porDisjuntor: agruparPorDisjuntor(circuitos),
       drs: drsDoQuadro(model, q.id).length,
       porDR: agruparPorDR(drsDoQuadro(model, q.id)),
+      dps: q.dps ? rotuloDoDPS(q.dps) : null,
       eletrodutoM: doQuadro.reduce((s2, t) => s2 + t.comprimentoM, 0),
       condutorM: porCondutor.reduce((s2, c) => s2 + c.comprimentoM, 0),
       porCondutor
@@ -4211,7 +4235,9 @@ ${c.funcao}`;
       quadros: porQuadro.length,
       porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
       drs: drsDoModelo(model).length,
-      porDR: agruparPorDR(drsDoModelo(model))
+      porDR: agruparPorDR(drsDoModelo(model)),
+      dps: (model.quadros ?? []).filter((q) => q.dps).length,
+      porDPS: agruparPorDPS((model.quadros ?? []).map((q) => q.dps).filter((d) => !!d))
     }
   };
 }

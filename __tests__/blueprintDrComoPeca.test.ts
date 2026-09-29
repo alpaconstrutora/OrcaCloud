@@ -56,8 +56,8 @@ const regra = (m: BlueprintModel) => conferirNbr5410(m, null, HIPOTESES_PADRAO).
 
 describe('DR como peça · kernel 0.73.0', () => {
   it('versões', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.73.0');
-    expect(POLITICA_PADRAO.version).toBe('quant-1.21.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.74.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.22.0');
   });
 
   it('AddDR / SetDRProps / DeleteDR; geral não lista circuitos; circuito de outro quadro é recusado; DeleteCircuito tira o circuito do DR', () => {

@@ -27,6 +27,7 @@ import {
   type FaseDoCircuito,
   CorrenteDiferencialMa,
   PolosDoDR,
+  DispositivoDPS,
   type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
@@ -770,6 +771,8 @@ export type Command =
       ligacao?: LigacaoDoCircuito | null;
       tensaoV?: number | null;
       alimentadorM?: number | null;
+      /** E3.2: o DPS do quadro, inteiro; `null` tira. */
+      dps?: DispositivoDPS | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -3455,6 +3458,7 @@ function aplicarSemHash(
       if (command.ligacao !== undefined) q.ligacao = command.ligacao;
       if (command.tensaoV !== undefined) q.tensaoV = command.tensaoV;
       if (command.alimentadorM !== undefined) q.alimentadorM = command.alimentadorM;
+      if (command.dps !== undefined) q.dps = command.dps ? { ...command.dps } : null;
       diff.updated.push(q.id);
       break;
     }

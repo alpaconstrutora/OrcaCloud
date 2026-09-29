@@ -1945,7 +1945,7 @@ Fecha o bloco **4** e completa o **6** (fios).
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 3.1 DR como peça ✅ (kernel 0.73.0 · quant-1.21.0; legado `protecaoDR` lido igual) | `Quadro.drs[]: {id, inA, idnMa (30/100/300), polos, escopo: 'GERAL' \| circuitoIds[]}` substitui `Circuito.protecaoDR` (migração de leitura: booleano vira DR individual de 30 mA); sugestão automática: In ≥ disjuntor do grupo, 30 mA onde 5.1.3.2.2 exige; regra "circuito exigido sem DR", "DR com In < soma", "mais de N circuitos no mesmo DR (hipótese)"; unifilar e quadro de cargas mostram o DR na posição certa (geral / grupo / ramal) | goldens; `blueprintNbr5410DrEPreDim.test.ts`; legado com `protecaoDR: true` lê igual; quantitativo conta DR por In/IΔn |
-| 3.2 DPS no quadro | `Quadro.dps?: {classe (I/II), upKv, inKa, disjuntorDesconexaoA}` com sugestão (classe II, 20 kA, hipótese) e regra 6.3.5.2 "quadro de entrada sem DPS" (aviso, porque depende da exposição — declarada como hipótese `exposicaoARaios`); unifilar, quadro de cargas, quantitativo, memorial | teste: quadro sem pai e sem DPS → AVISO; com DPS → símbolo no unifilar |
+| 3.2 DPS no quadro ✅ (kernel 0.74.0 · quant-1.22.0; exposição como hipótese) | `Quadro.dps?: {classe (I/II), upKv, inKa, disjuntorDesconexaoA}` com sugestão (classe II, 20 kA, hipótese) e regra 6.3.5.2 "quadro de entrada sem DPS" (aviso, porque depende da exposição — declarada como hipótese `exposicaoARaios`); unifilar, quadro de cargas, quantitativo, memorial | teste: quadro sem pai e sem DPS → AVISO; com DPS → símbolo no unifilar |
 | 3.3 Disjuntor completo e curto simplificado | `Circuito.curva ('B' \| 'C' \| 'D')` e `Quadro.icnKa` declarados; hipótese `ikEntradaKa` (corrente de curto na entrada, padrão 4,5 kA "a confirmar com a concessionária"); regra "Icn < Ik" (FALTA) e `quadroDeCargas` com coluna Curva/Icn; **fora**: cálculo de Ik por impedância (backlog) | teste Icn 3 kA × Ik 4,5 → FALTA citando 5.3.5.5; memorial lista Icn e Ik assumido |
 
 Fecha o bloco **3**.
@@ -2727,3 +2727,56 @@ geometria) — fica dito.
 ❌→✅, "Sugestão de DR" ❌→✅ (individual 30 mA), "Conferência In do DR × proteção a montante" ❌→✅;
 §26 "DR no unifilar na posição certa" 🟡→✅; §13/§20 "Quantitativo de DR por modelo" ❌→✅; §52 "DR com
 sensibilidade errada onde a norma exige 30 mA" ❌→✅.
+
+### E3.2 — DPS no quadro (29/09/2026) · frente `eletrico-e3` · **kernel 0.73.0 → 0.74.0 · quant-1.21.0 → 1.22.0**
+
+**O que mudou**
+
+- **Kernel 0.74.0** — `Quadro.dps?: DispositivoDPS {classe I/II/III, upKv, inKa, disjuntorDesconexaoA}`
+  declarado inteiro por `SetQuadroProps { dps }` (`null` tira); canônico emite `dps` dentro do quadro
+  **só quando há** — goldens 7/7 com a string em 0.73.0. Invariantes: classe do catálogo, números
+  finitos e positivos. `rotuloDoDPS` ("DPS classe II · 20 kA · Up 1,5 kV · desconexão 20 A").
+- **A exposição a descargas é HIPÓTESE** (`hip.exposicaoARaios`: não avaliada / exposta / não exposta —
+  6.3.5.2.1 fala de linha aérea e região de trovoadas, dado do LUGAR, não do desenho). Entra no hash
+  da base elétrica (mudar invalida a emissão anterior) e é gravada na coluna de hipóteses; o DPS padrão
+  sugerido (`dpsPadrao`: classe II, 20 kA, Up 1,5 kV — categoria II da Tab. 31 —, desconexão 20 A) é
+  catálogo/hipótese, sempre o padrão, dito no código e no memorial.
+- **Regra 6.3.5.2** (`blueprintNbr5410.ts`, entre a 6.2.7.1 e a 6.2.11.1.6): quadro sem DPS → **AVISO**
+  (não avaliada), **FALTA** (exposta) ou dispensado e dito em "fora da avaliação" (não exposta); DPS sem
+  disjuntor de desconexão → AVISO; sem In/Up → não avaliado. **Sem hierarquia de quadros (E4), todo
+  quadro conta como de entrada** — está no título da regra. Entra na verificação do executivo como as
+  outras regras da norma.
+- **Unifilar** — derivação do barramento para a terra logo após o geral (caixa "DPS", símbolo de terra
+  de três traços, rótulo ao lado); rodapé explica. **Quadro de cargas** (folha, texto/DXF): linha com o
+  DPS ou "Sem DPS declarado (6.3.5.2 — ver conferência)". **Memorial**: hipótese de exposição + DPS
+  sugerido nas hipóteses; "Proteção contra surtos: …" por quadro (ou "sem DPS declarado — exposição …").
+- **Tela** — bloco Alimentação ganhou **"DPS"**: classe · In (kA) · Up (kV) · disjuntor de desconexão
+  (catálogo) · remover; sem DPS, "＋ DPS sugerido" (title diz a hipótese) e a exposição declarada ao lado.
+  Aba Hipóteses: select "Exposição a descargas atmosféricas (6.3.5.2)"; resumo cita quando não é o padrão.
+- **quant-1.22.0** — `dps` (rótulo) por quadro; `dps` (contagem) e `porDPS` (classe / In / Up) no total;
+  medida nova **`CONTAGEM_DPS`** no orçamento ("DPS classe II 20 kA Up 1,5 kV", uma linha por combinação).
+- **Não entrou (declarado)**: coordenação Up × suportabilidade do equipamento (Tab. 31) como regra
+  numérica — hoje só a ausência de In/Up é "não avaliado"; DPS de classe I na entrada aérea como exigência
+  distinta; DPS por circuito (classe III junto ao equipamento); IFC (E7). Sem hierarquia, o "quadro de
+  entrada" é todo quadro — a E4 restringe ao que não tem `quadroPaiId`.
+
+**Testes** — novo `__tests__/blueprintDpsNoQuadro.test.ts` (4): versões, gravar/tirar, canônico omite sem
+DPS e faz ida e volta idêntica (tirar devolve o payload de antes), In negativo recusado; **regra**: não
+avaliada → AVISO, exposta → FALTA citando 6.3.5.2.1, não exposta → nada + "dispensado pela hipótese",
+com DPS exposta → nada, sem desconexão → AVISO, **exposição muda o hash da base**; sugestão = padrão,
+regra na verificação do executivo (aviso não é falta), memorial cita exposição e "sem DPS declarado";
+unifilar desenha "DPS" + rótulo e só cita no rodapé quando há; texto do quadro de cargas com a linha e
+"sem DPS"; quantitativo `dps`/`porDPS`/quadro. Ordem das regras (`blueprintNbr5410Conferencia`) passa a
+doze. **17 pinos** de `KERNEL_VERSION` e **12** de `quant`.
+
+**O que os testes pegaram antes de publicar**: a regra nova mudou a lista fixa de códigos da conferência
+(teste "onze regras") — atualizado para doze, na posição em que a regra entrou. Nada no motor.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova em 0.73.0 + hashes) · alvo 77 ✓ (9 arquivos) · suíte
+inteira **6.234 ✓** (567 arquivos) · `build` ✓ · `check-ui-standard` nos 3 `.tsx` ✓ · `check-xss-sinks` ✓ ·
+bundle da `planta-api` regenerado · deploy · `GET /v1/estudos` **401/401**. **Sem harness visual** do
+unifilar com DPS (derivação a 3 mm do início do barramento; o primeiro ramal começa a 13 mm) — fica dito.
+
+**Efeito no benchmark**: §16 "DPS no quadro (classe, In, Up)" ❌→✅, "Regra 6.3.5.2 quadro de entrada
+sem DPS" ❌→✅ (com a exposição como hipótese), "Disjuntor de desconexão do DPS" ❌→✅; §26 "DPS no
+unifilar" ❌→✅; §13/§20 "Quantitativo de DPS" ❌→✅; §27 "Memorial cita exposição e DPS" ❌→✅.

@@ -7,7 +7,7 @@
  * Quando um DR declarado já cobre o circuito, a marca legada não gera peça
  * duplicada. Nada aqui grava: é índice, refeito a cada leitura.
  */
-import type { BlueprintModel, Circuito, DispositivoDR, ObjectId } from './model';
+import type { BlueprintModel, Circuito, DispositivoDPS, DispositivoDR, ObjectId } from './model';
 
 export interface DRDoQuadro extends DispositivoDR {
   quadroId: ObjectId;
@@ -56,4 +56,14 @@ export function drDoCircuito(model: BlueprintModel, circuito: Pick<Circuito, 'id
 export function circuitoComDR30(model: BlueprintModel, circuito: Pick<Circuito, 'id' | 'quadroId'>): boolean {
   const d = drDoCircuito(model, circuito);
   return d != null && d.idnMa <= 30;
+}
+
+/** "DPS classe II · 20 kA · Up 1,5 kV · desconexão 20 A" — só o que foi declarado. */
+export function rotuloDoDPS(d: DispositivoDPS): string {
+  const f = (v: number) => String(v).replace('.', ',');
+  const partes = [`DPS classe ${d.classe}`];
+  if (d.inKa != null) partes.push(`${f(d.inKa)} kA`);
+  if (d.upKv != null) partes.push(`Up ${f(d.upKv)} kV`);
+  if (d.disjuntorDesconexaoA != null) partes.push(`desconexão ${f(d.disjuntorDesconexaoA)} A`);
+  return partes.join(' · ');
 }

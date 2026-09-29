@@ -735,6 +735,8 @@ function projetar(model: BlueprintModel): {
       ligacao: q.ligacao ?? undefined,
       tensaoV: q.tensaoV ?? undefined,
       alimentadorM: q.alimentadorM ?? undefined,
+      // DPS (E3.2, 0.74.0): omitido quando não há — hash do acervo intacto.
+      dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : undefined,
       parametros: parametrosCanonicos(q.parametros),
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
@@ -1552,6 +1554,8 @@ export interface CanonicalPayload {
     ligacao?: string;
     tensaoV?: number;
     alimentadorM?: number;
+    /** DPS do quadro (E3.2). Ausente sob kernel < 0.74.0 e quando não declarado. */
+    dps?: { classe: string; upKv: number | null; inKa: number | null; disjuntorDesconexaoA: number | null };
     parametros?: Parametros;
   }[];
   /**
@@ -2150,6 +2154,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ligacao: (q.ligacao as LigacaoDoCircuito | undefined) ?? null,
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
+      dps: q.dps ? { classe: q.dps.classe as 'I' | 'II' | 'III', upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : null,
       ...(q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}),
     });
   });

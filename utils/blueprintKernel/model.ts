@@ -2952,6 +2952,13 @@ export interface Quadro {
    * 30 mA (legado) — ver `drsDoQuadro` em `protecaoDr.ts`.
    */
   drs?: DispositivoDR[] | null;
+  /**
+   * O DPS do quadro (E3.2, kernel 0.74.0) — dispositivo de proteção contra
+   * surtos, declarado: classe (I/II/III), Up, In e o disjuntor de desconexão.
+   * Ausente = nenhum. A 6.3.5.2 o pede no quadro de ENTRADA quando a
+   * instalação está exposta a descargas — a exposição é hipótese de projeto.
+   */
+  dps?: DispositivoDPS | null;
 }
 
 /** As sensibilidades comerciais do DR, em mA (IEC 61008-1). 30 mA é a proteção de pessoas (5.1.3.2.2). */
@@ -2978,6 +2985,23 @@ export interface DispositivoDR {
   polos: PolosDoDR | null;
   geral: boolean;
   circuitoIds: ObjectId[];
+}
+
+/** Classes de ensaio do DPS (IEC 61643-11): I na entrada exposta a raio direto; II no quadro; III junto ao equipamento. */
+export const CLASSES_DE_DPS = ['I', 'II', 'III'] as const;
+export type ClasseDeDPS = (typeof CLASSES_DE_DPS)[number];
+
+/**
+ * Um DPS — dispositivo de proteção contra surtos, do quadro. `upKv` é o nível
+ * de proteção (tensão residual), `inKa` a corrente nominal de descarga, e
+ * `disjuntorDesconexaoA` o disjuntor que o fabricante pede à frente do DPS.
+ * Todos DECLARADOS; `null` = ninguém disse.
+ */
+export interface DispositivoDPS {
+  classe: ClasseDeDPS;
+  upKv: number | null;
+  inKa: number | null;
+  disjuntorDesconexaoA: number | null;
 }
 
 /**
@@ -5575,6 +5599,13 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (q.alimentadorM != null && (!Number.isFinite(q.alimentadorM) || q.alimentadorM < 0)) {
       throw new KernelError('BAD_BOARD_VALUE', `alimentadorM inválido no quadro ${q.id}: ${q.alimentadorM}`);
+    }
+    // DPS (E3.2): classe do catálogo, números finitos e positivos quando declarados.
+    if (q.dps) {
+      if (!(CLASSES_DE_DPS as readonly string[]).includes(q.dps.classe)) throw new KernelError('BAD_BOARD_VALUE', `classe de DPS inválida no quadro ${q.id}: ${q.dps.classe}`);
+      for (const [k, v] of [['upKv', q.dps.upKv], ['inKa', q.dps.inKa], ['disjuntorDesconexaoA', q.dps.disjuntorDesconexaoA]] as const) {
+        if (v != null && (!Number.isFinite(v) || v <= 0)) throw new KernelError('BAD_BOARD_VALUE', `${k} inválido no DPS do quadro ${q.id}: ${v}`);
+      }
     }
     // DRs (E3.1): id único, valores do catálogo, circuitos DESTE quadro, geral sem lista.
     for (const d of q.drs ?? []) {

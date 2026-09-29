@@ -19,7 +19,7 @@ import {
   idsPrevistos,
   planejarCircuitos,
   pontosElegiveis,
-  numeroDoCircuito,
+  numeroSequencialDoCircuito,
   proximoNumeroDeCircuito,
   quadrosDoNivel,
   renumerarCircuitos,
@@ -362,9 +362,9 @@ describe('planejarCircuitos — quadro, tensão e hipóteses', () => {
     // Nome sem o prefixo não entra na conta.
     m = applyCommand(m, { type: 'AddCircuito', quadroId, nome: 'Bomba da piscina' }).model;
     expect(proximoNumeroDeCircuito(m, quadroId)).toBe(4);
-    expect(numeroDoCircuito('C3 — TUE')).toBe(3);
-    expect(numeroDoCircuito('c 12')).toBe(12);
-    expect(numeroDoCircuito('Bomba')).toBeNull();
+    expect(numeroSequencialDoCircuito('C3 — TUE')).toBe(3);
+    expect(numeroSequencialDoCircuito('c 12')).toBe(12);
+    expect(numeroSequencialDoCircuito('Bomba')).toBeNull();
   });
 
   it('renumerarCircuitos (E0.2): C1, C3, C7 — luz e "Bomba" viram C1, C2, C3 — luz, C4 — Bomba; só o que muda entra no lote', () => {

@@ -173,7 +173,7 @@ export function memorialEletrico(
   L.push('');
   L.push('## 4. Quadros e circuitos');
   for (const q of r.quadros) {
-    L.push(`### ${q.nome} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (ligação deduzida dos circuitos)' : ''}`);
+    L.push(`### ${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (ligação deduzida dos circuitos)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}${q.alimentadorOrigem === 'ELETRODUTOS' ? ` (alimentador ${n1(q.alimentadorM ?? 0)} m pelo eletroduto)` : ''}` : ' — quadro de entrada'}`);
     L.push(`Carga instalada ${Math.round(q.sInstaladaVA)} VA (iluminação ${Math.round(q.porGrupoVA.ILUMINACAO)}, TUG ${Math.round(q.porGrupoVA.TUG)}, força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? `, motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}); demandada ${Math.round(q.sDemandadaVA)} VA.`);
     if (q.ibA != null) {
       L.push(`Alimentador: IB ${n1(q.ibA)} A; seção ${mm2(q.secaoCalculada?.secaoMm2)} mm² (Iz ${q.secaoCalculada ? n1(q.secaoCalculada.izA) : '—'} A); disjuntor geral ${q.disjuntorGeralA ?? '—'} A${q.quedaAlimentadorPct != null ? `; queda no alimentador ${n1(q.quedaAlimentadorPct)} %, total até o pior ponto ${n1(q.quedaTotalMaxPct ?? 0)} %` : ''}.`);
@@ -200,6 +200,9 @@ export function memorialEletrico(
         `${c.nome} (${c.ligacao}${c.tensaoV ? ` ${c.tensaoV} V` : ''}): ${c.pontos} ponto(s), ${Math.round(c.sVA)} VA, IB ${c.ibA == null ? '—' : n1(c.ibA)} A; seção declarada ${mm2(c.secaoDeclaradaMm2)} mm² (mínima ${mm2(c.secaoCalculada?.secaoMm2)} mm²)${c.secaoPeMm2 != null ? `; PE ${mm2(c.secaoPeMm2)} mm² (${c.peDerivado ? 'Tab. 58' : 'declarado'})` : ''}${c.secaoNeutroMm2 != null && c.secaoNeutroMm2 !== (c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2) ? `; neutro ${mm2(c.secaoNeutroMm2)} mm²` : ''}; disjuntor ${c.disjuntorDeclaradoA ?? '—'} A${c.curvaDeclarada ? ` curva ${c.curvaDeclarada}` : ` (curva sugerida ${c.curvaSugerida})`} (sugerido ${c.disjuntorSugeridoA ?? '—'} A)${c.quedaPct != null && c.comprimento ? `; ΔV ${n1(c.quedaPct)} % em ${n1(c.comprimento.metros)} m ${c.comprimento.origem === 'ESTIMADO' ? '(estimado)' : '(eletrodutos)'}` : ''}. ${c.achados.some((a) => a.nivel === 'FALTA') ? 'NÃO ATENDE.' : 'ATENDE.'}`,
       );
     }
+    // E4.1: os quadros alimentados por este.
+    for (const f of q.filhos) L.push(`Alimenta ${f.nome}${f.tipo !== 'QD' ? ` (${f.tipo})` : ''}: ${Math.round(f.sDemandadaVA)} VA demandados, IB ${f.ibA == null ? '—' : n1(f.ibA)} A, alimentador ${mm2(f.secaoMm2)} mm², geral ${f.disjuntorGeralA ?? '—'} A — ${f.circuitos} circuito(s) próprios.`);
+    if (q.filhos.length) L.push(`Demanda própria ${Math.round(q.sDemandadaPropriaVA)} VA + filhos ${Math.round(q.sDemandadaVA - q.sDemandadaPropriaVA)} VA = ${Math.round(q.sDemandadaVA)} VA.`);
     L.push('');
   }
   L.push('## 5. Verificações');

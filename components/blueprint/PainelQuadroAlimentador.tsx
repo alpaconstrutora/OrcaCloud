@@ -1,6 +1,6 @@
 import React from 'react';
-import type { ClasseDeDPS, Command, CorrenteDiferencialMa, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, PolosDoDR } from '../../utils/blueprintKernel';
-import { CLASSES_DE_DPS, CORRENTES_DIFERENCIAIS_MA, LIGACOES_DO_CIRCUITO, POLOS_DO_DR, rotuloDoDPS, rotuloDoDR } from '../../utils/blueprintKernel';
+import type { ClasseDeDPS, Command, CorrenteDiferencialMa, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId, PolosDoDR, TipoDeQuadro } from '../../utils/blueprintKernel';
+import { CLASSES_DE_DPS, CORRENTES_DIFERENCIAIS_MA, LIGACOES_DO_CIRCUITO, POLOS_DO_DR, ROTULO_DO_TIPO_DE_QUADRO, TIPOS_DE_QUADRO, rotuloDoDPS, rotuloDoDR } from '../../utils/blueprintKernel';
 import type { PreDimensionamentoDoQuadro } from '../../utils/blueprintEletricaDimensionamento';
 import type { SugestaoDeDR } from '../../utils/blueprintNbr5410';
 import { comandosDasSugestoesDeDR } from '../../utils/blueprintNbr5410';
@@ -36,12 +36,15 @@ export default function PainelQuadroAlimentador({
   catalogoDeDisjuntoresA = [],
   icnKa = null,
   ikEntradaKa,
+  tipo = null,
+  quadroPaiId = null,
+  quadrosDisponiveis = [],
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
   tensaoDeclarada: number | null;
   alimentadorM: number | null;
-  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null }) => void;
+  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null }) => void;
   /** Em quadro trifásico: a fase declarada de cada circuito FN, para o select. */
   fasesDosCircuitos: { circuitoId: string; nome: string; ligacao: LigacaoDoCircuito; fase: FaseDoCircuito | null }[];
   onFase: (circuitoId: string, fase: FaseDoCircuito | null) => void;
@@ -58,6 +61,10 @@ export default function PainelQuadroAlimentador({
   /** E3.3: Icn declarada dos disjuntores do quadro e a Ik presumida (hipótese) que ela tem de cobrir. */
   icnKa?: number | null;
   ikEntradaKa?: number;
+  /** E4.1: tipo e quadro-pai declarados; os quadros que podem alimentar este (sem ele e sem os descendentes). */
+  tipo?: TipoDeQuadro | null;
+  quadroPaiId?: ObjectId | null;
+  quadrosDisponiveis?: { id: ObjectId; nome: string }[];
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
@@ -66,6 +73,25 @@ export default function PainelQuadroAlimentador({
     <div className="space-y-1 border-t border-slate-100 px-2 py-1.5 text-sm" aria-label={`Alimentador do quadro ${q.nome}`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-500">
         <span className="font-medium text-slate-600">Alimentação</span>
+        {/* E4.1: TIPO e quadro-PAI — um QD alimentado pelo QGBT vira linha no quadro de cargas dele. */}
+        <select value={tipo ?? 'QD'} onChange={(e) => onQuadro({ tipo: e.target.value === 'QD' ? null : (e.target.value as TipoDeQuadro) })} aria-label={`Tipo do quadro ${q.nome}`} title={ROTULO_DO_TIPO_DE_QUADRO[tipo ?? 'QD']} className={campo}>
+          {TIPOS_DE_QUADRO.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1" title="O quadro que ALIMENTA este. Sem pai = quadro de entrada (é onde a 6.3.5.2 pede o DPS). O alimentador passa a ser o eletroduto entre os dois, quando lançado">
+          de
+          <select value={quadroPaiId ?? ''} onChange={(e) => onQuadro({ quadroPaiId: e.target.value || null })} aria-label={`Quadro que alimenta ${q.nome}`} className={campo}>
+            <option value="">entrada (sem pai)</option>
+            {quadrosDisponiveis.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nome}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex items-center gap-1">
           <select
             value={ligacaoDeclarada ?? ''}
@@ -99,7 +125,7 @@ export default function PainelQuadroAlimentador({
             min={0}
             value={alimentadorM ?? ''}
             onChange={(e) => onQuadro({ alimentadorM: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-            placeholder="m"
+            placeholder={q.alimentadorOrigem === 'ELETRODUTOS' && q.alimentadorM != null ? `${n1(q.alimentadorM)} (eletroduto)` : 'm'}
             aria-label={`Comprimento do alimentador do quadro ${q.nome}, em metros`}
             className={`w-16 text-right ${campo}`}
           />
@@ -125,6 +151,21 @@ export default function PainelQuadroAlimentador({
         </label>
       </div>
 
+      {/* E4.1: o que este quadro alimenta — cada filho é uma linha no quadro de cargas dele. */}
+      {q.filhos.length > 0 && (
+        <p className="text-slate-600">
+          Alimenta{' '}
+          {q.filhos.map((f, i) => (
+            <span key={f.quadroId}>
+              {i > 0 && ' · '}
+              <span className={f.faltas > 0 ? 'text-red-700' : ''}>
+                {f.nome} ({va(f.sDemandadaVA)} dem.{f.ibA != null ? ` · IB ${n1(f.ibA)} A` : ''}{f.disjuntorGeralA != null ? ` · geral ${f.disjuntorGeralA} A` : ''})
+              </span>
+            </span>
+          ))}
+          {' '}— demanda própria {va(q.sDemandadaPropriaVA)}.
+        </p>
+      )}
       <p className={faltas.length > 0 ? 'text-red-700' : q.ibA == null ? 'text-slate-400' : 'text-emerald-700'}>
         {va(q.sInstaladaVA)} instalados (luz {va(q.porGrupoVA.ILUMINACAO)} · TUG {va(q.porGrupoVA.TUG)} · força {va(q.porGrupoVA.FORCA)}{q.porGrupoVA.MOTOR ? <> · motores/AC {va(q.porGrupoVA.MOTOR)}</> : null})
         {q.sDemandadaVA !== q.sInstaladaVA && <> · demandados {va(q.sDemandadaVA)} ({q.demanda.nome})</>}

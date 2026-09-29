@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
-import type { BlueprintModel, Command, CurvaDoDisjuntor, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
+import type { BlueprintModel, Command, CurvaDoDisjuntor, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId, TipoDeQuadro } from '../../utils/blueprintKernel';
 import { CURVAS_DO_DISJUNTOR, drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
 import { sugerirDRs } from '../../utils/blueprintNbr5410';
 import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
@@ -105,6 +105,8 @@ interface LinhaDeCircuito {
   quadroNome: string;
   nome: string;
   tipo: string | null;
+  /** E4.1: circuito de reserva. */
+  reserva: boolean;
   tensaoV: number | null;
   ligacao: LigacaoDoCircuito;
   /** A fase declarada (R/S/T) — só faz sentido em F-N dentro de quadro trifásico. */
@@ -144,6 +146,8 @@ const COLUNAS_DE_CIRCUITO: StandardTableColumn[] = [
   // E0.2 (29/09/2026): a DESCRIÇÃO (`Circuito.tipo`, texto livre) já existia no
   // modelo e não tinha coluna; a FASE só aparecia na aba Quadros.
   { key: 'tipo', label: 'Descrição', width: 160 },
+  // E4.1: reserva — posição prevista sem ponto; conta no quadro e no unifilar.
+  { key: 'reserva', label: 'Reserva', width: 72, align: 'center' },
   { key: 'tensaoV', label: 'Tensão (V)', width: 100, align: 'right' },
   { key: 'ligacao', label: 'Ligação', width: 124 },
   { key: 'fase', label: 'Fase', width: 64, align: 'center' },
@@ -211,6 +215,8 @@ export default function PainelEletrica({
       fase?: FaseDoCircuito | null;
       /** E3.3: curva do disjuntor; `null` volta à sugerida. */
       curva?: CurvaDoDisjuntor | null;
+      /** E4.1: circuito de reserva. */
+      reserva?: boolean | null;
     },
   ) => void;
   /**
@@ -224,7 +230,7 @@ export default function PainelEletrica({
   /** F6: a alimentação do quadro (ligação, tensão, metros até a origem) — declarações. */
   onQuadroProps?: (
     quadroId: ObjectId,
-    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null },
+    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null },
   ) => void;
   /** F7: o projeto executivo elétrico com ART, montado por quem tem o estudo em mãos. */
   executivoSlot?: React.ReactNode;
@@ -364,6 +370,7 @@ export default function PainelEletrica({
           quadroNome: q.nome,
           nome: c.nome,
           tipo: circuito?.tipo ?? null,
+          reserva: circuito?.reserva === true,
           tensaoV: c.tensaoV ?? null,
           ligacao: circuito?.ligacao ?? 'FN',
           fase: circuito?.fase ?? null,
@@ -520,6 +527,17 @@ export default function PainelEletrica({
             aria-label={`Descrição do circuito ${l.nome}`}
             title={l.tipo ?? undefined}
             className={CAMPO_NA_CELULA}
+          />
+        );
+      case 'reserva':
+        return (
+          <input
+            type="checkbox"
+            checked={l.reserva}
+            onChange={(e) => onCircuitoProps(l.circuitoId, { reserva: e.target.checked || null })}
+            aria-label={`Circuito ${l.nome} de reserva`}
+            title="Reserva: posição prevista no quadro sem ponto ligado — não é pendência de 'circuito sem pontos'"
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
         );
       case 'fase':
@@ -1119,7 +1137,8 @@ export default function PainelEletrica({
         <div className="space-y-3">
           {cargas.quadros.map((q) => {
             const quadro = quadros.find((x) => x.id === q.quadroId);
-            const pq = onQuadroProps && q.circuitos.length > 0 ? preDimensionarQuadroCompleto(model, q.quadroId, hipoteses) : null;
+            // E4.1: o pré-dim do quadro sai mesmo sem circuito próprio — um QGBT só com filhos tem demanda.
+            const pq = onQuadroProps ? preDimensionarQuadroCompleto(model, q.quadroId, hipoteses) : null;
             return (
               <section key={q.quadroId} aria-label={`Quadro ${q.nome}`} className="rounded-[10px] border border-gray-100 bg-white shadow-sm">
                 <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-2.5">
@@ -1143,9 +1162,7 @@ export default function PainelEletrica({
                   )}
                 </div>
                 <div className="px-4 py-3">
-                  {q.circuitos.length === 0 ? (
-                    <p className="text-sm text-gray-500">Sem circuitos ainda.</p>
-                  ) : pq && quadro && onQuadroProps ? (
+                  {pq && quadro && onQuadroProps ? (
                     // F6 — o QUADRO: alimentação declarada, demanda, alimentador, fases.
                     <PainelQuadroAlimentador
                       q={pq}
@@ -1167,7 +1184,21 @@ export default function PainelEletrica({
                       catalogoDeDisjuntoresA={hipoteses.catalogoDeDisjuntoresA}
                       icnKa={quadro.icnKa ?? null}
                       ikEntradaKa={hipoteses.ikEntradaKa}
+                      tipo={quadro.tipo ?? null}
+                      quadroPaiId={quadro.quadroPaiId ?? null}
+                      quadrosDisponiveis={(() => {
+                        // Quem pode alimentar este: qualquer quadro que não seja ele nem um descendente dele (senão fecha ciclo).
+                        const descendentes = new Set<ObjectId>();
+                        const pilha = [quadro.id];
+                        while (pilha.length) {
+                          const atual = pilha.pop() as ObjectId;
+                          for (const x of quadros) if (x.quadroPaiId === atual && !descendentes.has(x.id)) { descendentes.add(x.id); pilha.push(x.id); }
+                        }
+                        return quadros.filter((x) => x.id !== quadro.id && !descendentes.has(x.id)).map((x) => ({ id: x.id, nome: x.nome }));
+                      })()}
                     />
+                  ) : q.circuitos.length === 0 ? (
+                    <p className="text-sm text-gray-500">Sem circuitos ainda.</p>
                   ) : (
                     <p className="text-sm text-gray-500">
                       {q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'} · {va(q.potenciaW)}

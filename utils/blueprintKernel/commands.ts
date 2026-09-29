@@ -29,6 +29,7 @@ import {
   PolosDoDR,
   DispositivoDPS,
   CurvaDoDisjuntor,
+  TipoDeQuadro,
   type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
@@ -758,6 +759,9 @@ export type Command =
       alimentadorM?: number | null;
       /** E3.3: Icn (kA) dos disjuntores do quadro. */
       icnKa?: number | null;
+      /** E4.1: tipo (QD/QGBT/MEDICAO) e o quadro que alimenta este. */
+      tipo?: TipoDeQuadro | null;
+      quadroPaiId?: ObjectId | null;
     }
   | {
       type: 'SetQuadroProps';
@@ -778,6 +782,9 @@ export type Command =
       dps?: DispositivoDPS | null;
       /** E3.3: Icn (kA) dos disjuntores do quadro; `null` tira. */
       icnKa?: number | null;
+      /** E4.1: tipo e quadro-pai; `null` volta a QD / a quadro de entrada. Pai inexistente, ele mesmo ou ciclo são recusados. */
+      tipo?: TipoDeQuadro | null;
+      quadroPaiId?: ObjectId | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -799,6 +806,8 @@ export type Command =
       fase?: FaseDoCircuito | null;
       /** E3.3: curva do disjuntor (B/C/D). */
       curva?: CurvaDoDisjuntor | null;
+      /** E4.1: circuito de reserva (sem pontos, por desenho). */
+      reserva?: boolean | null;
     }
   | {
       type: 'SetCircuitoProps';
@@ -824,6 +833,8 @@ export type Command =
       fase?: FaseDoCircuito | null;
       /** E3.3: curva do disjuntor (B/C/D); `null` volta à sugestão. */
       curva?: CurvaDoDisjuntor | null;
+      /** E4.1: circuito de reserva. */
+      reserva?: boolean | null;
     }
   /**
    * Um DISPOSITIVO DR no quadro (E3.1). `geral` protege o quadro inteiro (e
@@ -3448,8 +3459,11 @@ function aplicarSemHash(
           tensaoV: command.tensaoV ?? null,
           alimentadorM: command.alimentadorM ?? null,
           icnKa: command.icnKa ?? null,
+          tipo: command.tipo ?? null,
+          quadroPaiId: command.quadroPaiId ?? null,
         },
       ];
+      if (command.quadroPaiId) conferirPaiDoQuadro(next, id, command.quadroPaiId);
       diff.created.push(id);
       break;
     }
@@ -3470,6 +3484,11 @@ function aplicarSemHash(
       if (command.alimentadorM !== undefined) q.alimentadorM = command.alimentadorM;
       if (command.dps !== undefined) q.dps = command.dps ? { ...command.dps } : null;
       if (command.icnKa !== undefined) q.icnKa = command.icnKa;
+      if (command.tipo !== undefined) q.tipo = command.tipo;
+      if (command.quadroPaiId !== undefined) {
+        if (command.quadroPaiId) conferirPaiDoQuadro(next, q.id, command.quadroPaiId);
+        q.quadroPaiId = command.quadroPaiId;
+      }
       diff.updated.push(q.id);
       break;
     }
@@ -3498,6 +3517,7 @@ function aplicarSemHash(
           ligacao: command.ligacao ?? null,
           protecaoDR: command.protecaoDR ?? null,
           curva: command.curva ?? null,
+          reserva: command.reserva ?? null,
           fase: command.fase ?? null,
         },
       ];
@@ -3532,6 +3552,7 @@ function aplicarSemHash(
       if (command.protecaoDR !== undefined) c.protecaoDR = command.protecaoDR;
       if (command.fase !== undefined) c.fase = command.fase;
       if (command.curva !== undefined) c.curva = command.curva;
+      if (command.reserva !== undefined) c.reserva = command.reserva;
       // E3.1: mudou de quadro → sai dos DRs do quadro antigo (o DR é peça daquele quadro).
       if (command.quadroId !== undefined) tirarCircuitoDosDrs(next, c.id, c.quadroId);
       diff.updated.push(c.id);
@@ -3664,6 +3685,8 @@ function aplicarSemHash(
       );
       next.trechos = (next.trechos ?? []).map((t) => semCircuitos(t, idsFilhos));
       next.quadros = (next.quadros ?? []).filter((q) => q.id !== quadro.id);
+      // E4.1: quem era alimentado por ele vira quadro de entrada — não some, fica dito na conferência.
+      next.quadros = next.quadros.map((q) => (q.quadroPaiId === quadro.id ? { ...q, quadroPaiId: null } : q));
       diff.deleted.push(quadro.id, ...filhos.map((c) => c.id));
       break;
     }
@@ -4931,7 +4954,7 @@ function aplicarSemHash(
       for (const q of (next.quadros ?? []).filter((q) => q.levelId === origem.id)) {
         const id = nextId(next, 'qdr');
         // E3.1: a cópia vem SEM circuitos — e sem os DRs, que os citavam.
-        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: novoNivelId, at: { ...q.at }, drs: null }];
+        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: novoNivelId, at: { ...q.at }, drs: null, quadroPaiId: null }];
         diff.created.push(id);
       }
       for (const t of (next.terminais ?? []).filter((t) => t.levelId === origem.id)) {
@@ -5109,7 +5132,7 @@ function aplicarSemHash(
       for (const q of quadrosCopiados) {
         const id = nextId(next, 'qdr');
         // E3.1: a cópia vem SEM circuitos — e sem os DRs, que os citavam.
-        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: command.levelId, at: deslocar(q.at), drs: null }];
+        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: command.levelId, at: deslocar(q.at), drs: null, quadroPaiId: null }];
         diff.created.push(id);
       }
       for (const t of terminais) {
@@ -5301,6 +5324,20 @@ function semCircuitos(t: Trecho, apagados: ReadonlySet<ObjectId>): Trecho {
   if (!ids.some((id) => apagados.has(id))) return t;
   const restantes = ids.filter((id) => !apagados.has(id));
   return { ...t, circuitoIds: restantes.length > 0 ? restantes : null };
+}
+
+/** E4.1: o pai existe, não é o próprio quadro e não fecha ciclo (subindo pelos pais até a entrada). */
+function conferirPaiDoQuadro(model: BlueprintModel, quadroId: ObjectId, paiId: ObjectId): void {
+  if (paiId === quadroId) throw new KernelError('BAD_BOARD_VALUE', 'Um quadro não pode alimentar a si mesmo');
+  const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
+  if (!porId.has(paiId)) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${paiId}`);
+  let atual: ObjectId | null = paiId;
+  const vistos = new Set<ObjectId>([quadroId]);
+  while (atual) {
+    if (vistos.has(atual)) throw new KernelError('BAD_BOARD_VALUE', `Ciclo de alimentação: ${paiId} já é alimentado por ${quadroId}`);
+    vistos.add(atual);
+    atual = porId.get(atual)?.quadroPaiId ?? null;
+  }
 }
 
 /** E3.1: os circuitos de um DR são DESTE quadro — e existem. */

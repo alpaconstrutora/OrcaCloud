@@ -737,12 +737,23 @@ function projetar(model: BlueprintModel): {
       alimentadorM: q.alimentadorM ?? undefined,
       // Icn (E3.3, 0.75.0) e DPS (E3.2, 0.74.0): omitidos quando não há — hash do acervo intacto.
       icnKa: q.icnKa ?? undefined,
+      // Hierarquia (E4.1, 0.76.0): tipo omitido quando ausente (= QD); o pai entra
+      // por índice canônico num segundo passo, depois da ordenação (abaixo).
+      tipo: q.tipo ?? undefined,
       dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : undefined,
       parametros: parametrosCanonicos(q.parametros),
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y,
   );
   const indiceDoQuadro = new Map(quadros.map((q, i) => [q.item.id, i]));
+  // E4.1: `pai` = índice canônico do quadro que alimenta este. Só depois da
+  // ordenação o índice existe; a ordem não depende dele (o serial já foi
+  // calculado), então o hash continua determinístico. Omitido sem pai.
+  for (const q of quadros) {
+    if (q.item.quadroPaiId != null && indiceDoQuadro.has(q.item.quadroPaiId)) {
+      (q.geom as { pai?: number }).pai = indiceDoQuadro.get(q.item.quadroPaiId);
+    }
+  }
 
   const circuitos = ordenar(
     model.circuitos ?? [],
@@ -763,6 +774,8 @@ function projetar(model: BlueprintModel): {
       fase: c.fase ?? undefined,
       // E3.3: curva do disjuntor, omitida quando não declarada.
       curva: c.curva ?? undefined,
+      // E4.1: reserva só quando marcada.
+      reserva: c.reserva ? (true as const) : undefined,
     }),
     (x, y) =>
       (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) ||
@@ -1559,6 +1572,9 @@ export interface CanonicalPayload {
     alimentadorM?: number;
     /** Icn dos disjuntores do quadro, kA (E3.3). Ausente sob kernel < 0.75.0 e quando não declarada. */
     icnKa?: number;
+    /** Hierarquia (E4.1). `tipo` ausente = QD; `pai` = índice canônico do quadro que alimenta. Ausentes sob kernel < 0.76.0. */
+    tipo?: string;
+    pai?: number;
     /** DPS do quadro (E3.2). Ausente sob kernel < 0.74.0 e quando não declarado. */
     dps?: { classe: string; upKv: number | null; inKa: number | null; disjuntorDesconexaoA: number | null };
     parametros?: Parametros;
@@ -1585,6 +1601,8 @@ export interface CanonicalPayload {
     fase?: string;
     /** Curva do disjuntor (E3.3). Ausente sob kernel < 0.75.0 e quando não declarada. */
     curva?: string;
+    /** Circuito de reserva (E4.1). Ausente sob kernel < 0.76.0 e quando não marcado. */
+    reserva?: boolean;
   }[];
   /**
    * Dispositivos DR (E3.1). Ausente sob kernel < 0.73.0 e quando nenhum foi
@@ -2162,9 +2180,17 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
       icnKa: q.icnKa ?? null,
+      tipo: (q.tipo as 'QD' | 'QGBT' | 'MEDICAO' | undefined) ?? null,
       dps: q.dps ? { classe: q.dps.classe as 'I' | 'II' | 'III', upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : null,
       ...(q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}),
     });
+  });
+  // E4.1: o pai por índice — segundo passo, quando todos os quadros já existem.
+  quadros.forEach((q, i) => {
+    if (q.pai == null) return;
+    const filho = model.quadros.find((x) => x.id === idsDeQuadro[i]);
+    const paiId = idsDeQuadro[q.pai];
+    if (filho && paiId && paiId !== filho.id) filho.quadroPaiId = paiId;
   });
 
   const circuitos = payload.circuitos ?? [];
@@ -2187,6 +2213,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       protecaoDR: c.protecaoDR ?? null,
       fase: (c.fase as FaseDoCircuito | undefined) ?? null,
       curva: (c.curva as 'B' | 'C' | 'D' | undefined) ?? null,
+      reserva: c.reserva ?? null,
     });
   });
 

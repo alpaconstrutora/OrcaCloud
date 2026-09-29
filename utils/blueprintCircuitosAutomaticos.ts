@@ -55,6 +55,7 @@ import {
   type TipoDePontoEletrico,
 } from './blueprintKernel';
 import { TIPOS_DE_USO_ESPECIFICO } from './blueprintEletricaDimensionamento';
+import { numeroDoCircuito } from './blueprintKernel';
 import { ambienteDoPonto, FORA_DE_AMBIENTE } from './blueprintAgrupamentoDePontos';
 import { etiquetaDoAmbiente } from './blueprintDistribuicao';
 import {
@@ -204,9 +205,15 @@ export function pavimentoDoQuadro(model: BlueprintModel, quadro: Quadro): string
 }
 
 /** O número do circuito pelo NOME: "C3", "C3 — Iluminação", "c 12" → 3, 3, 12; sem o prefixo → null. */
-export function numeroDoCircuito(nome: string): number | null {
-  const m = /^C\s*(\d+)(?!\d)/i.exec(nome.trim());
-  return m ? Number(m[1]) : null;
+/**
+ * O número SEQUENCIAL do circuito ("C12 — TUG" → 12), ou `null` quando o nome
+ * não começa com C + número. E4.1: passou a ler o mesmo regex do kernel
+ * (`numeroDoCircuito`, que devolve texto para a prancha) — antes eram dois
+ * regexes iguais em dois arquivos, a dívida anotada desde a E0.3.
+ */
+export function numeroSequencialDoCircuito(nome: string): number | null {
+  const texto = numeroDoCircuito(nome);
+  return /^\d+$/.test(texto) ? Number(texto) : null;
 }
 
 /**
@@ -223,7 +230,7 @@ export function numeroDoCircuito(nome: string): number | null {
 export function proximoNumeroDeCircuito(model: BlueprintModel, quadroId: ObjectId | null): number {
   const numeros = (model.circuitos ?? [])
     .filter((c) => !quadroId || c.quadroId === quadroId)
-    .map((c) => numeroDoCircuito(c.nome))
+    .map((c) => numeroSequencialDoCircuito(c.nome))
     .filter((n): n is number => n != null);
   return (numeros.length > 0 ? Math.max(...numeros) : 0) + 1;
 }
@@ -240,8 +247,8 @@ export function renumerarCircuitos(model: BlueprintModel, quadroId: ObjectId | n
   const quadros = quadroId ? [quadroId] : (model.quadros ?? []).map((q) => q.id);
   const comandos: Command[] = [];
   const porNumeroENome = (a: Circuito, b: Circuito) => {
-    const na = numeroDoCircuito(a.nome) ?? Number.POSITIVE_INFINITY;
-    const nb = numeroDoCircuito(b.nome) ?? Number.POSITIVE_INFINITY;
+    const na = numeroSequencialDoCircuito(a.nome) ?? Number.POSITIVE_INFINITY;
+    const nb = numeroSequencialDoCircuito(b.nome) ?? Number.POSITIVE_INFINITY;
     if (na !== nb) return na - nb;
     return a.nome.localeCompare(b.nome, 'pt-BR', { numeric: true });
   };
@@ -250,7 +257,7 @@ export function renumerarCircuitos(model: BlueprintModel, quadroId: ObjectId | n
     doQuadro.forEach((c, i) => {
       const n = i + 1;
       const nome = c.nome.trim();
-      const novo = numeroDoCircuito(nome) != null ? nome.replace(/^C\s*\d+/i, `C${n}`) : `C${n} — ${nome}`;
+      const novo = numeroSequencialDoCircuito(nome) != null ? nome.replace(/^C\s*\d+/i, `C${n}`) : `C${n} — ${nome}`;
       if (novo !== c.nome) comandos.push({ type: 'SetCircuitoProps', circuitoId: c.id, nome: novo });
     });
   }

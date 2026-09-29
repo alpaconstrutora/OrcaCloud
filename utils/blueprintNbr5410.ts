@@ -748,7 +748,8 @@ function regraDps(model: BlueprintModel, levelId: ObjectId | null, hip: Hipotese
   const achados: Achado[] = [];
   const naoAvaliado: string[] = [];
   let avaliados = 0;
-  const quadros = (model.quadros ?? []).filter((x) => !levelId || x.levelId === levelId);
+  // E4.1: "de entrada" = sem quadro-pai; um QD alimentado por QGBT não precisa do seu DPS (6.3.5.2.2 coordena na entrada).
+  const quadros = (model.quadros ?? []).filter((x) => (!levelId || x.levelId === levelId) && !x.quadroPaiId);
   for (const q of quadros) {
     avaliados++;
     if (!q.dps) {
@@ -762,7 +763,7 @@ function regraDps(model: BlueprintModel, levelId: ObjectId | null, hip: Hipotese
   }
   return {
     codigo: '6.3.5.2',
-    titulo: `DPS no quadro de entrada (exposição a descargas: ${hip.exposicaoARaios === 'EXPOSTA' ? 'exposta' : hip.exposicaoARaios === 'NAO_EXPOSTA' ? 'não exposta' : 'não avaliada'}; sem hierarquia, todo quadro conta como entrada)`,
+    titulo: `DPS no quadro de entrada (exposição a descargas: ${hip.exposicaoARaios === 'EXPOSTA' ? 'exposta' : hip.exposicaoARaios === 'NAO_EXPOSTA' ? 'não exposta' : 'não avaliada'}; só os quadros sem quadro-pai)`,
     achados,
     naoAvaliado,
     avaliados,

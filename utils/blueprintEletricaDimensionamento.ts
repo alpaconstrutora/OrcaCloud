@@ -582,6 +582,8 @@ export interface PreDimensionamentoDoCircuito {
   /** E3.3: a curva declarada e a sugerida (C; D onde há motor — hipótese). */
   curvaDeclarada: 'B' | 'C' | 'D' | null;
   curvaSugerida: 'B' | 'C' | 'D';
+  /** E4.1: circuito de reserva — conta posição, não tem ponto. */
+  reserva: boolean;
   comprimento: ComprimentoDoCircuito | null;
   /** Queda com a seção declarada (ou, sem declarada, com a calculada). */
   quedaPct: number | null;
@@ -634,6 +636,7 @@ export function preDimensionarCircuito(
     disjuntorDeclaradoA,
     curvaDeclarada: circuito.curva ?? null,
     curvaSugerida: sugerirCurva(pontos),
+    reserva: circuito.reserva === true,
     comprimento: comprimentoDoCircuito(model, circuito),
     quedaPct: null,
     secaoParaQuedaMm2: null,
@@ -649,7 +652,8 @@ export function preDimensionarCircuito(
     return base;
   }
   if (pontos.length === 0) {
-    naoAvaliado.push('circuito sem pontos');
+    // E4.1: reserva é sem pontos POR DESENHO — não é pendência.
+    naoAvaliado.push(circuito.reserva ? 'circuito de reserva (sem pontos, por desenho)' : 'circuito sem pontos');
     return base;
   }
 
@@ -850,6 +854,80 @@ export interface PreDimensionamentoDoQuadro {
   desequilibrioPct: number | null;
   achados: AchadoDoDimensionamento[];
   naoAvaliado: string[];
+  /**
+   * E4.1 — HIERARQUIA. `tipo` (QD ausente); `paiNome` do quadro que alimenta
+   * este; `filhos` = os quadros que ESTE alimenta, cada um uma linha no quadro
+   * de cargas (IB = demanda do filho). `sDemandadaVA` do quadro já SOMA os
+   * filhos; `sDemandadaPropriaVA` é só o que ele alimenta direto.
+   * `alimentadorM`: o declarado; sem ele, o eletroduto entre pai e filho
+   * (`ELETRODUTOS`); `null` = nenhum dos dois.
+   */
+  tipo: 'QD' | 'QGBT' | 'MEDICAO';
+  paiNome: string | null;
+  filhos: FilhoDoQuadro[];
+  sDemandadaPropriaVA: number;
+  alimentadorM: number | null;
+  alimentadorOrigem: 'DECLARADO' | 'ELETRODUTOS' | null;
+}
+
+/** Um quadro alimentado por este — a linha dele no quadro de cargas do pai. */
+export interface FilhoDoQuadro {
+  quadroId: string;
+  nome: string;
+  tipo: 'QD' | 'QGBT' | 'MEDICAO';
+  ligacao: LigacaoDoCircuito;
+  tensaoV: number | null;
+  sInstaladaVA: number;
+  sDemandadaVA: number;
+  ibA: number | null;
+  secaoMm2: number | null;
+  disjuntorGeralA: number | null;
+  circuitos: number;
+  faltas: number;
+}
+
+/**
+ * E4.1 — metros de eletroduto entre dois quadros, pelo caminho mais curto na
+ * rede elétrica lançada (pontas coincidentes em x, y, cota; o quadro recebe em
+ * qualquer cota). `null` sem caminho — aí o alimentador é declarado.
+ */
+export function comprimentoEntreQuadros(model: BlueprintModel, de: Pick<Quadro, 'at' | 'cotaMm'>, para: Pick<Quadro, 'at' | 'cotaMm'>): number | null {
+  const arestas = new Map<string, { para: string; metros: number }[]>();
+  const ligar = (a: string, b: string, metros: number) => arestas.set(a, [...(arestas.get(a) ?? []), { para: b, metros }]);
+  for (const t of (model.trechos ?? []).filter((x) => x.disciplina === 'ELETRICA')) {
+    const a = chaveDePonta(t.a.x, t.a.y, t.cotaAMm);
+    const b = chaveDePonta(t.b.x, t.b.y, t.cotaBMm);
+    const metros = comprimentoDoTrecho(t as Trecho) / 1000;
+    ligar(a, b, metros);
+    ligar(b, a, metros);
+  }
+  // As pontas NO quadro: as da cota dele quando existem (a prumada que sobe
+  // do quadro conta no caminho); só sem nenhuma na cota vale qualquer cota.
+  const pontasEm = (q: Pick<Quadro, 'at' | 'cotaMm'>) => {
+    const noXY = [...arestas.keys()].filter((k) => k.startsWith(`${q.at.x},${q.at.y},`));
+    const naCota = noXY.filter((k) => k === chaveDePonta(q.at.x, q.at.y, q.cotaMm));
+    return naCota.length ? naCota : noXY;
+  };
+  const partidas = pontasEm(de);
+  const chegadas = new Set(pontasEm(para));
+  if (partidas.length === 0 || chegadas.size === 0) return null;
+  // Dijkstra simples — a rede de um quadro tem dezenas de nós, não milhares.
+  const dist = new Map<string, number>(partidas.map((p) => [p, 0]));
+  const fila = [...partidas];
+  while (fila.length) {
+    fila.sort((x, y) => (dist.get(x) ?? Infinity) - (dist.get(y) ?? Infinity));
+    const no = fila.shift() as string;
+    const d = dist.get(no) ?? Infinity;
+    for (const { para: viz, metros } of arestas.get(no) ?? []) {
+      const nd = d + metros;
+      if (nd < (dist.get(viz) ?? Infinity)) {
+        dist.set(viz, nd);
+        if (!fila.includes(viz)) fila.push(viz);
+      }
+    }
+  }
+  const melhores = [...chegadas].map((c) => dist.get(c)).filter((v): v is number => v != null && Number.isFinite(v));
+  return melhores.length ? Math.min(...melhores) : null;
 }
 
 /** A ligação do quadro: a declarada; senão, trifásico se algum circuito for; senão FN. */
@@ -875,9 +953,12 @@ export function preDimensionarQuadroCompleto(
   model: BlueprintModel,
   quadroId: string,
   hip: HipotesesEletricas = HIPOTESES_PADRAO,
+  /** E4.1: os quadros acima na recursão — um ciclo (que a invariante recusa) não vira laço infinito. */
+  visitados: ReadonlySet<string> = new Set(),
 ): PreDimensionamentoDoQuadro | null {
   const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
   if (!quadro) return null;
+  const pai = quadro.quadroPaiId ? (model.quadros ?? []).find((q) => q.id === quadro.quadroPaiId) ?? null : null;
   const circuitosDoQuadro = (model.circuitos ?? []).filter((c) => c.quadroId === quadroId);
   const circuitos = preDimensionarQuadro(model, quadroId, hip);
   const achados: AchadoDoDimensionamento[] = [];
@@ -898,13 +979,44 @@ export function preDimensionarQuadroCompleto(
     porGrupoVA[g] += t.potenciaW;
   }
   if (semPotencia > 0) naoAvaliado.push(`${semPotencia} ponto(s) sem potência fora da soma do quadro`);
-  const sInstaladaVA = porGrupoVA.ILUMINACAO + porGrupoVA.TUG + porGrupoVA.FORCA + porGrupoVA.MOTOR;
+  const sInstaladaPropriaVA = porGrupoVA.ILUMINACAO + porGrupoVA.TUG + porGrupoVA.FORCA + porGrupoVA.MOTOR;
   const demanda = hip.demanda;
-  const sDemandadaVA =
+  const sDemandadaPropriaVA =
     porGrupoVA.ILUMINACAO * demanda.ILUMINACAO +
     porGrupoVA.TUG * demanda.TUG +
     porGrupoVA.FORCA * demanda.FORCA +
     porGrupoVA.MOTOR * (demanda.MOTOR ?? 1);
+
+  // E4.1: os FILHOS — cada quadro alimentado por este entra como uma carga
+  // (a demanda dele, já com os fatores) e como uma linha no quadro de cargas.
+  const proximos = new Set([...visitados, quadroId]);
+  const filhos: FilhoDoQuadro[] = (model.quadros ?? [])
+    .filter((f) => f.quadroPaiId === quadroId && !proximos.has(f.id))
+    .map((f) => {
+      const r = preDimensionarQuadroCompleto(model, f.id, hip, proximos);
+      if (!r) return null;
+      return {
+        quadroId: f.id,
+        nome: f.nome,
+        tipo: r.tipo,
+        ligacao: r.ligacao,
+        tensaoV: r.tensaoV,
+        sInstaladaVA: r.sInstaladaVA,
+        sDemandadaVA: r.sDemandadaVA,
+        ibA: r.ibA,
+        secaoMm2: r.secaoCalculada?.secaoMm2 ?? null,
+        disjuntorGeralA: r.disjuntorGeralA,
+        circuitos: r.circuitos.length,
+        faltas: r.achados.filter((a) => a.nivel === 'FALTA').length + r.circuitos.reduce((s, c) => s + c.achados.filter((a) => a.nivel === 'FALTA').length, 0),
+      };
+    })
+    .filter((f): f is FilhoDoQuadro => !!f);
+  const sInstaladaVA = sInstaladaPropriaVA + filhos.reduce((s, f) => s + f.sInstaladaVA, 0);
+  const sDemandadaVA = sDemandadaPropriaVA + filhos.reduce((s, f) => s + f.sDemandadaVA, 0);
+  // O alimentador: declarado vence; senão o eletroduto entre o pai e este quadro.
+  const alimentadorDerivadoM = pai ? comprimentoEntreQuadros(model, pai, quadro) : null;
+  const alimentadorM = quadro.alimentadorM != null && quadro.alimentadorM > 0 ? quadro.alimentadorM : alimentadorDerivadoM;
+  const alimentadorOrigem: 'DECLARADO' | 'ELETRODUTOS' | null = quadro.alimentadorM != null && quadro.alimentadorM > 0 ? 'DECLARADO' : alimentadorDerivadoM != null ? 'ELETRODUTOS' : null;
 
   const { ligacao, deduzida } = ligacaoDoQuadro(quadro, circuitosDoQuadro);
   const tensaoV = tensaoDoQuadro(quadro, circuitosDoQuadro);
@@ -930,6 +1042,12 @@ export function preDimensionarQuadroCompleto(
     desequilibrioPct: null,
     achados,
     naoAvaliado,
+    tipo: quadro.tipo ?? 'QD',
+    paiNome: pai?.nome ?? null,
+    filhos,
+    sDemandadaPropriaVA,
+    alimentadorM,
+    alimentadorOrigem,
   };
 
   if (tensaoV == null) {
@@ -940,8 +1058,8 @@ export function preDimensionarQuadroCompleto(
     base.secaoCalculada = secaoMinima(ibA, hip, ligacao, 'FORCA');
     if (base.secaoCalculada) {
       base.disjuntorGeralA = disjuntorSugeridoA(ibA, base.secaoCalculada.izA, hip.catalogoDeDisjuntoresA);
-      if (quadro.alimentadorM != null && quadro.alimentadorM > 0) {
-        const queda = quedaDeTensaoPct(ibA, quadro.alimentadorM, base.secaoCalculada.secaoMm2, tensaoV, ligacao, hip.rhoOhmMm2PorM);
+      if (alimentadorM != null && alimentadorM > 0) {
+        const queda = quedaDeTensaoPct(ibA, alimentadorM, base.secaoCalculada.secaoMm2, tensaoV, ligacao, hip.rhoOhmMm2PorM);
         base.quedaAlimentadorPct = queda;
         const piorTerminal = Math.max(0, ...circuitos.map((c) => c.quedaPct ?? 0));
         base.quedaTotalMaxPct = queda + piorTerminal;
@@ -953,7 +1071,7 @@ export function preDimensionarQuadroCompleto(
           });
         }
       } else {
-        naoAvaliado.push('comprimento do alimentador não declarado — queda da origem não calculada');
+        naoAvaliado.push(pai ? `comprimento do alimentador não declarado e sem eletroduto entre ${pai.nome} e este quadro — queda da origem não calculada` : 'comprimento do alimentador não declarado — queda da origem não calculada');
       }
     } else {
       naoAvaliado.push('IB do alimentador acima da Tabela 36 ou temperatura sem fator');

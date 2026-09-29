@@ -1954,7 +1954,7 @@ Fecha o bloco **3**.
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 4.1 Quadro com tipo e pai | `Quadro.tipo: 'QD' \| 'QGBT' \| 'MEDICAO'` e `quadroPaiId?`; **circuito alimentador derivado** (quadro filho = uma linha no quadro de cargas do pai, com IB = demanda do filho); `alimentadorM` passa a ser derivado do eletroduto entre os dois quadros quando existe, declarado quando não; `Circuito.reserva: boolean` (linha sem pontos, conta no quadro e no unifilar) | goldens; `preDimensionarQuadroCompleto` do pai soma os filhos; ciclo de pais → invariante; teste com QGBT → QD1, QD2 |
+| 4.1 Quadro com tipo e pai ✅ (kernel 0.76.0; alimentador derivado do eletroduto; `numeroDoCircuito` unificado) | `Quadro.tipo: 'QD' \| 'QGBT' \| 'MEDICAO'` e `quadroPaiId?`; **circuito alimentador derivado** (quadro filho = uma linha no quadro de cargas do pai, com IB = demanda do filho); `alimentadorM` passa a ser derivado do eletroduto entre os dois quadros quando existe, declarado quando não; `Circuito.reserva: boolean` (linha sem pontos, conta no quadro e no unifilar) | goldens; `preDimensionarQuadroCompleto` do pai soma os filhos; ciclo de pais → invariante; teste com QGBT → QD1, QD2 |
 | 4.2 Demanda e queda acumuladas | demanda do pai = Σ demanda dos filhos + cargas próprias, com **fatores por tabela nomeada** (presets por concessionária como hipótese com fonte e data — a "verdade da concessionária" continua preset, nunca embutida); queda acumulada multinível até a origem (6.2.7.1: 5 %, ou 7 % com trafo — hipótese `origemComTransformador`) | teste: QGBT→QD→C1 com quedas 1 + 2 + 2,5 → FALTA; memorial mostra a cadeia |
 | 4.3 Entrada de energia no desenho | terminal `ENTRADA_SERVICO` (poste/mureta) e `MEDIDOR` (por unidade), ligados ao quadro de MEDICAO; **preset de padrão de entrada** (tabela `PADROES_DE_ENTRADA` por concessionária: categoria × demanda → ramal, disjuntor geral, eletroduto de entrada, aterramento — cada preset com fonte e "CONFERIR na norma da concessionária"); dimensionamento do ramal = o mesmo motor de condutores com método D/B1 | teste com preset "genérico — hipótese": 12 kVA → categoria, ramal 16 mm², disjuntor 63 A; falta se demanda > categoria; goldens |
 | 4.4 Uso coletivo (A, mas destravado aqui) | medição por unidade do Empreendimento (unidades já existem em `empreendimento_*`): um MEDIDOR por unidade, demanda do condomínio = Σ unidades × fator de diversidade (hipótese nomeada) + serviço; fora: CODI por concessionária (backlog) | teste com 8 unidades; unifilar do QGBT lista os medidores |
@@ -2843,3 +2843,65 @@ cita Ik assumida e Icn" ❌→✅.
 **Etapa 3 concluída** — três fases, kernel 0.72.0 → 0.75.0, quant-1.20.0 → 1.23.0. Backlog que sai
 daqui: DR tipo A/AC/B e seletividade DR geral × grupo; coordenação Up × Tab. 31 numérica; DPS classe
 III por circuito; Ik por impedância; Icn por circuito; conversão do legado `protecaoDR` em peça.
+
+### E4.1 — Quadro com tipo e pai (29/09/2026) · frente `eletrico-e4` · **kernel 0.75.0 → 0.76.0 · sem bump de quant**
+
+**O que mudou**
+
+- **Kernel 0.76.0** — `Quadro.tipo` (QD ausente / QGBT / MEDICAO, `TIPOS_DE_QUADRO` + rótulos),
+  `Quadro.quadroPaiId` (o quadro que ALIMENTA este) e `Circuito.reserva`. `AddQuadro`/`SetQuadroProps`
+  aceitam tipo e pai (`conferirPaiDoQuadro`: pai existe, não é ele mesmo, não fecha ciclo — subindo
+  pelos pais); `DeleteQuadro` solta os filhos (viram entrada, não somem); cópia de quadro vem sem pai
+  (dito). Canônico: `tipo` omitido quando QD; **`pai` por índice canônico num SEGUNDO passo** depois da
+  ordenação (o serial de ordenação não depende dele — hash determinístico); `reserva` só quando
+  marcada. Goldens 7/7 com a string em 0.75.0. `cadeiaDeQuadros(model, id)` sobe até a entrada.
+- **O pai soma os filhos** (`preDimensionarQuadroCompleto`, recursivo com guarda de ciclo): cada
+  quadro alimentado por este vira **`filhos[]`** (demanda, IB, seção e geral do alimentador, nº de
+  circuitos, faltas) e entra na demanda do pai — `sDemandadaVA` = própria + Σ filhos;
+  `sDemandadaPropriaVA` fica à parte; `tipo`, `paiNome`. **Fatores de demanda acumulados por tabela e
+  queda multinível → E4.2** (aqui a demanda do filho já vem com os fatores do próprio filho).
+- **Alimentador derivado** — `comprimentoEntreQuadros(model, pai, filho)`: Dijkstra pelas pontas
+  coincidentes dos eletrodutos elétricos (o quadro recebe na SUA cota quando há ponta lá — a prumada
+  que sobe dele conta —, senão em qualquer cota); `alimentadorM` = declarado ?? derivado, com
+  `alimentadorOrigem` (DECLARADO / ELETRODUTOS / null) e "sem eletroduto entre X e este quadro" dito.
+- **Reserva** — circuito sem ponto por desenho: pré-dim não o trata como pendência ("circuito de
+  reserva (sem pontos, por desenho)"), unifilar escreve RESERVA, folha "(reserva)", coluna **Reserva**
+  (checkbox) no quadro de cargas.
+- **6.3.5.2** passa a pedir DPS **só nos quadros sem pai** (a E3.2 dizia "todo quadro conta como
+  entrada" até aqui). **Unifilar**: ramal "→ QD1" por filho (demanda, geral, alimentador) e "de QGBT"
+  na entrada do filho; rodapé explica. **Folha/texto/DXF** do quadro de cargas: cabeçalho com tipo e
+  "alimentado por", linha `→ filho` por quadro alimentado; **memorial**: cabeçalho, "Alimenta X: …" e
+  "própria + filhos = total". **Tela**: selects **Tipo** e **"de"** (só quadros que não fecham ciclo —
+  sem ele e sem descendentes) no bloco Alimentação; linha "Alimenta QD1 (…) — demanda própria …";
+  placeholder do alimentador mostra o derivado; o bloco do quadro aparece mesmo sem circuito próprio
+  (um QGBT só com filhos tem demanda).
+- **Dívida paga**: os dois `numeroDoCircuito` viraram um — o do kernel (texto, prancha) e
+  `numeroSequencialDoCircuito` (número | null, em `blueprintCircuitosAutomaticos`) que lê o mesmo regex.
+- **Não entrou (declarado)**: E4.2 (fatores por tabela nomeada acumulados, queda até a origem
+  multinível), E4.3 (entrada/medidor no desenho), E4.5 (unifilar em árvore); "MEDICAO" existe como tipo
+  mas o medidor por unidade é a E4.3/E4.4.
+
+**Testes** — novo `__tests__/blueprintQuadroHierarquia.test.ts` (5): kernel (tipo/pai gravam; `pai`
+por índice no canônico com ida e volta; desenho sem hierarquia não ganha chave; auto-alimentação, pai
+inexistente e ciclo recusados; re-parentar QD2 → QD1 → QGBT; apagar o pai solta os filhos); reserva
+(grava, canônico só marcado, pré-dim sem pendência, RESERVA no unifilar e no rodapé;
+`numeroSequencialDoCircuito`); **QGBT: 600 + 1.500 + 5.000 = 7.100 VA**, filhos como linhas com IB e
+geral (QD2 5.000 VA → IB 39,4 A → geral 40 A), alimentador de QD1 sem eletroduto dito, QD2 declarado
+10 m; **alimentador derivado 1,2 + 6 + 1,2 = 8,4 m** pelo L do teto (declarado 20 m vence); DPS só no
+QGBT, unifilar "→ QD1"/"→ QD2" + "de QGBT", folha com cabeçalho e linha `-> QD1 | … | 11,8`.
+Atualizados: `blueprintDpsNoQuadro` (título "só os quadros sem quadro-pai"),
+`blueprintCircuitosAutomaticos` (nome novo). **19 pinos** de `KERNEL_VERSION`.
+
+**O que os testes pegaram antes de publicar**: a regra "quadro recebe em qualquer cota" (herdada de
+`comprimentoDoCircuito`) fazia a prumada que sobe do quadro custar zero — o caminho dava 6 m em vez de
+8,4. Ajuste no motor: pontas NA COTA do quadro quando existem; qualquer cota só sem elas.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova em 0.75.0 + hashes) · alvo 90 ✓ (11 arquivos) · suíte
+inteira **6.254 ✓** (571 arquivos; a 1ª rodada reportou 570 arquivos/6.245 — rodada de novo, íntegra) · `build` ✓ · `check-ui-standard` nos 2 `.tsx` ✓ · `check-xss-sinks` ✓ ·
+bundle da `planta-api` regenerado · deploy · `GET /v1/estudos` **401/401**. **Sem harness visual** dos
+selects Tipo/"de" e do ramal "→" — fica dito.
+
+**Efeito no benchmark**: §1 "Hierarquia de quadros (QGBT → QD)" ❌→✅, "Quadro filho como carga do pai"
+❌→✅, "Alimentador entre quadros pelo eletroduto" ❌→✅ (declarado vence), "Tipo do quadro" ❌→✅,
+"Circuito de reserva" ❌→✅; §26 "Unifilar com ramal para quadro filho" ❌→🟡 (por quadro; árvore na
+E4.5); §16 "DPS só na entrada" 🟡→✅.

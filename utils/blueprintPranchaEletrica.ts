@@ -394,7 +394,7 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
   const fiacao: ComposicaoDaRede = composicaoDaRede(model);
   const quadros = (model.quadros ?? []).map((q) => preDimensionarQuadroCompleto(model, q.id, hip)).filter((q): q is NonNullable<typeof q> => !!q);
   for (const q of quadros) {
-    L.push(`${q.nome} - ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}`);
+    L.push(`${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} - ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.paiNome ? ` - alimentado por ${q.paiNome}` : ''}`);
     L.push('Circuito | Lig./V | Pts | VA | IB (A) | Secao decl./min. | Disj. decl./sug. | dV % | DR | Condutores');
     for (const c of q.circuitos) {
       const circuito = (model.circuitos ?? []).find((x) => x.id === c.circuitoId);
@@ -402,10 +402,12 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
       const dr = drDoC ? `${rotuloDoDR(drDoC)}${drDoC.geral ? ' (geral)' : drDoC.circuitoIds.length > 1 ? ' (grupo)' : ''}` : circuito?.protecaoDR === false ? 'nao' : '-';
       const cond = circuito ? condutoresDoCircuito(circuito, c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null, fiacao).texto : '-';
       L.push(
-        `${c.nome} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'}${c.curvaDeclarada ? ` ${c.curvaDeclarada}` : ''} / ${c.disjuntorSugeridoA ?? '-'} ${c.curvaSugerida} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr} | ${cond}`,
+        `${c.nome}${c.reserva ? ' (reserva)' : ''} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'}${c.curvaDeclarada ? ` ${c.curvaDeclarada}` : ''} / ${c.disjuntorSugeridoA ?? '-'} ${c.curvaSugerida} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr} | ${cond}`,
       );
       for (const a of c.achados.filter((x) => x.nivel === 'FALTA')) L.push(`  ${a.referencia}: ${a.mensagem}`);
     }
+    // E4.1: um quadro filho é uma linha — a demanda dele é carga deste.
+    for (const f of q.filhos) L.push(`-> ${f.nome} | ${f.ligacao}${f.tensaoV ? ` ${f.tensaoV}` : ''} | ${f.circuitos} circ. | ${Math.round(f.sDemandadaVA)} dem. | ${f.ibA == null ? '-' : n1(f.ibA)} | ${mm2(f.secaoMm2)} | ${f.disjuntorGeralA ?? '-'} | - | - | alimentador`);
     for (const d of drsDoQuadro(model, q.quadroId)) L.push(`  DR ${rotuloDoDR(d)}: ${d.geral ? 'geral do quadro' : (model.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome).join(', ') || 'sem circuito'}${d.legado ? ' (declarado no circuito)' : ''}`);
     {
       const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
@@ -462,7 +464,7 @@ export function desenharQuadroDeCargas(
   const col = [0, 46, 62, 74, 88, 104, 124, 142, 156, 164, 176];
   const cab = ['Circuito', 'Lig./V', 'Pts', 'VA', 'IB (A)', 'Seção decl./mín.', 'Disj. decl./sug.', 'ΔV %', 'DR', 'Fase', 'Condutores'];
   for (const q of quadros) {
-    linha(`${q.nome} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (deduzido)' : ''}`, 2.6);
+    linha(`${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (deduzido)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}` : ''}`, 2.6);
     const topoTabela = y - 1.5;
     cab.forEach((c, i) => d.texto(x0 + col[i], y, c, 1.9, COR_FRACA));
     y += 3.6;
@@ -473,7 +475,7 @@ export function desenharQuadroDeCargas(
       const falta = c.achados.some((a) => a.nivel === 'FALTA');
       const cor = falta ? '#b91c1c' : undefined;
       const cel = [
-        c.nome.slice(0, 26),
+        `${c.nome}${c.reserva ? ' (reserva)' : ''}`.slice(0, 26),
         `${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''}`,
         String(c.pontos) + (c.pontosSemPotencia ? '*' : ''),
         String(Math.round(c.sVA)),
@@ -499,6 +501,12 @@ export function desenharQuadroDeCargas(
         d.texto(x0 + 3, y, `${a.referencia}: ${a.mensagem}`, 1.6, '#b91c1c');
         y += 2.8;
       }
+    }
+    // E4.1: os quadros filhos, uma linha cada — demanda, IB, seção e geral do alimentador dele.
+    for (const f of q.filhos) {
+      const cel = [`→ ${f.nome}`.slice(0, 26), `${f.ligacao}${f.tensaoV ? ` ${f.tensaoV}` : ''}`, `${f.circuitos} circ.`, `${Math.round(f.sDemandadaVA)} dem.`, f.ibA == null ? '—' : n1(f.ibA), `${mm2(f.secaoMm2)} (alim.)`, `${f.disjuntorGeralA ?? '—'} (geral)`, '—', '—', '', 'alimentador'];
+      cel.forEach((v, i) => d.texto(x0 + col[i], y, v, 1.9, f.faltas > 0 ? '#b91c1c' : undefined));
+      y += 3.4;
     }
     d.retangulo(x0 - 1.5, topoTabela, larg - 2, y - topoTabela + 0.5, { espessuraMm: 0.2, cor: COR });
     y += 2.5;

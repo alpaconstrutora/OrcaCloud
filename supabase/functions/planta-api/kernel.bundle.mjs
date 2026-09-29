@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.75.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.76.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1998,12 +1998,20 @@ function projetar(model) {
       alimentadorM: q.alimentadorM ?? void 0,
       // Icn (E3.3, 0.75.0) e DPS (E3.2, 0.74.0): omitidos quando não há — hash do acervo intacto.
       icnKa: q.icnKa ?? void 0,
+      // Hierarquia (E4.1, 0.76.0): tipo omitido quando ausente (= QD); o pai entra
+      // por índice canônico num segundo passo, depois da ordenação (abaixo).
+      tipo: q.tipo ?? void 0,
       dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : void 0,
       parametros: parametrosCanonicos(q.parametros)
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.at.x - y.at.x || x.at.y - y.at.y
   );
   const indiceDoQuadro = new Map(quadros.map((q, i) => [q.item.id, i]));
+  for (const q of quadros) {
+    if (q.item.quadroPaiId != null && indiceDoQuadro.has(q.item.quadroPaiId)) {
+      q.geom.pai = indiceDoQuadro.get(q.item.quadroPaiId);
+    }
+  }
   const circuitos = ordenar(
     model.circuitos ?? [],
     (c) => ({
@@ -2022,7 +2030,9 @@ function projetar(model) {
       protecaoDR: c.protecaoDR ?? void 0,
       fase: c.fase ?? void 0,
       // E3.3: curva do disjuntor, omitida quando não declarada.
-      curva: c.curva ?? void 0
+      curva: c.curva ?? void 0,
+      // E4.1: reserva só quando marcada.
+      reserva: c.reserva ? true : void 0
     }),
     (x, y) => (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) || cmpStr(x.nome, y.nome)
   );
@@ -2733,9 +2743,16 @@ function modelFromCanonicalPayload(payload) {
       tensaoV: q.tensaoV ?? null,
       alimentadorM: q.alimentadorM ?? null,
       icnKa: q.icnKa ?? null,
+      tipo: q.tipo ?? null,
       dps: q.dps ? { classe: q.dps.classe, upKv: q.dps.upKv ?? null, inKa: q.dps.inKa ?? null, disjuntorDesconexaoA: q.dps.disjuntorDesconexaoA ?? null } : null,
       ...q.parametros && Object.keys(q.parametros).length > 0 ? { parametros: { ...q.parametros } } : {}
     });
+  });
+  quadros.forEach((q, i) => {
+    if (q.pai == null) return;
+    const filho = model.quadros.find((x) => x.id === idsDeQuadro[i]);
+    const paiId = idsDeQuadro[q.pai];
+    if (filho && paiId && paiId !== filho.id) filho.quadroPaiId = paiId;
   });
   const circuitos = payload.circuitos ?? [];
   const idsDeCircuito = [];
@@ -2756,7 +2773,8 @@ function modelFromCanonicalPayload(payload) {
       ligacao: c.ligacao ?? null,
       protecaoDR: c.protecaoDR ?? null,
       fase: c.fase ?? null,
-      curva: c.curva ?? null
+      curva: c.curva ?? null,
+      reserva: c.reserva ?? null
     });
   });
   for (const d of payload.drs ?? []) {

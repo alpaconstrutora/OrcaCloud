@@ -29,7 +29,7 @@ const regra = (m: BlueprintModel, hip: HipotesesEletricas = HIPOTESES_PADRAO) =>
 
 describe('DPS · kernel 0.74.0', () => {
   it('versões; SetQuadroProps grava e tira; canônico omite sem DPS e faz ida e volta com ele; valores inválidos são recusados', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.75.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.76.0');
     expect(POLITICA_PADRAO.version).toBe('quant-1.23.0');
     const m0 = casa();
     const antes = canonicalPayload(m0) as unknown as string;
@@ -54,7 +54,7 @@ describe('6.3.5.2 · exposição é hipótese', () => {
     const m = casa();
     const r0 = regra(m);
     expect(r0.achados).toEqual([expect.objectContaining({ nivel: 'AVISO', mensagem: expect.stringMatching(/QDC: quadro de entrada sem DPS — exposição a descargas não avaliada/) })]);
-    expect(r0.titulo).toMatch(/todo quadro conta como entrada/);
+    expect(r0.titulo).toMatch(/só os quadros sem quadro-pai/);
     const rE = regra(m, { ...HIPOTESES_PADRAO, exposicaoARaios: 'EXPOSTA' });
     expect(rE.achados).toEqual([expect.objectContaining({ nivel: 'FALTA', mensagem: expect.stringMatching(/EXPOSTA.*6\.3\.5\.2\.1/) })]);
     const rN = regra(m, { ...HIPOTESES_PADRAO, exposicaoARaios: 'NAO_EXPOSTA' });

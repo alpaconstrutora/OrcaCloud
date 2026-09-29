@@ -222,6 +222,12 @@
  *   seis casos tem quadro ou circuito. Com a string em 0.74.0 os sete testes
  *   passaram sem outra alteração; depois do bump, só os seis hashes.
  *
+ *   0.75.0 → 0.76.0 (29/09/2026): E4.1 do roadmap elétrico — `Quadro.tipo`,
+ *   `Quadro.quadroPaiId` (canônico `pai` por índice, segundo passo) e
+ *   `Circuito.reserva`, omitidos quando ausentes. Nenhum dos seis casos tem
+ *   quadro ou circuito. Com a string em 0.75.0 os sete testes passaram sem
+ *   outra alteração; depois do bump, só os seis hashes.
+ *
  *   0.69.0 → 0.70.0 (29/09/2026): E1.2 do roadmap elétrico — `tipoEletrico`
  *   ganhou `CAIXA_PASSAGEM` (a caixa 4×4 como terminal com medidas); a ficha do
  *   componente ganhou `ligaAoPontoEletrico` (catálogo, não payload). Só
@@ -777,17 +783,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '2a844d5fa948b532aae5268ae27ee2ba9369ee18c114da63b1ced4dcc6094806',
+    hash: '97bf88cedb9ace4dfa0fc4f45d7f76005688f1d28a70e51592b49677b48b8cb5',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '22ef8c0d1390bcc565845d32fad693a73f0110af7906b5d882fc56df95d640ea',
+    hash: 'a191142876c8cdb837f8f1b1240e7f3e4dbb17a5f1971cd7fd4c586aa7e39830',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '290333030a1bd291d83eee7fe06c22676bcf634bfb6ff4904aed0e1123ea5e31',
+    hash: '4a3e91d3cf65644b7664c4c34ec8e3a7bf148f06ef03ba7873cde7fcd5b62819',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -795,7 +801,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'a8d0ef57c69efcead0099f17c73da4854ba64458a22360e577f8505c47c8bcc1',
+    hash: '02f00b220dcc095a48e5d995e0d2284f8be7584c6c21413edb12cfad21bfc9c8',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -805,7 +811,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '53bd78fcfe346ecc21742375b6474c5b363ddb464e533ab70c2086959ed0c6e1',
+    hash: 'd612fc432dde3858eeb5a9dd155c39d297a39cbef75304cf30a13da79c8f7f53',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -816,7 +822,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '57f8627eea4e7b6929456b2d69bfb53ea59ed2d2103f0e0a71e16b639b988a3c',
+    hash: '070eab3674c9818d3a329f99d5874625acdf4d36e7db3f74bcbe39608fc7028f',
   },
 };
 

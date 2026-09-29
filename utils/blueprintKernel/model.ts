@@ -2968,6 +2968,40 @@ export interface Quadro {
    * entrada. Ausente = ninguém disse.
    */
   icnKa?: number | null;
+  /**
+   * HIERARQUIA (E4.1, kernel 0.76.0). `tipo`: QD (distribuição — o padrão,
+   * ausente = QD), QGBT (geral de baixa tensão) ou MEDICAO (medidor/entrada).
+   * `quadroPaiId`: o quadro que ALIMENTA este — o filho vira uma linha no
+   * quadro de cargas do pai (IB = demanda do filho) e o alimentador dele é o
+   * eletroduto entre os dois quando existe. Sem pai = quadro de entrada.
+   * Invariantes: pai existe, não é ele mesmo, sem ciclo.
+   */
+  tipo?: TipoDeQuadro | null;
+  quadroPaiId?: ObjectId | null;
+}
+
+export const TIPOS_DE_QUADRO = ['QD', 'QGBT', 'MEDICAO'] as const;
+export type TipoDeQuadro = (typeof TIPOS_DE_QUADRO)[number];
+export const ROTULO_DO_TIPO_DE_QUADRO: Record<TipoDeQuadro, string> = {
+  QD: 'Quadro de distribuição',
+  QGBT: 'Quadro geral de baixa tensão',
+  MEDICAO: 'Quadro de medição',
+};
+
+/** O quadro-pai de cada quadro, subindo até a entrada — vazio quando é a própria entrada. */
+export function cadeiaDeQuadros(model: BlueprintModel, quadroId: ObjectId): Quadro[] {
+  const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
+  const saida: Quadro[] = [];
+  const vistos = new Set<ObjectId>([quadroId]);
+  let atual = porId.get(quadroId)?.quadroPaiId ?? null;
+  while (atual && !vistos.has(atual)) {
+    const q = porId.get(atual);
+    if (!q) break;
+    saida.push(q);
+    vistos.add(atual);
+    atual = q.quadroPaiId ?? null;
+  }
+  return saida;
 }
 
 /** Curvas de disparo do minidisjuntor (NBR NM 60898): B (3–5·In), C (5–10·In), D (10–20·In). */
@@ -3081,6 +3115,11 @@ export interface Circuito {
    * pré-dimensionamento sugere (C em geral, D onde há motor: hipótese).
    */
   curva?: CurvaDoDisjuntor | null;
+  /**
+   * RESERVA (E4.1): circuito previsto sem ponto — conta uma posição no quadro
+   * e um ramal no unifilar, e não é "sem pontos" para a conferência.
+   */
+  reserva?: boolean | null;
   /** Em quadro trifásico, a fase (`R`, `S`, `T`) que este circuito FN ocupa. */
   // ⚠️ Desde a E3.1 (kernel 0.73.0) o DR é PEÇA do quadro (`Quadro.drs`);
   // `protecaoDR: true` segue lido como DR individual de 30 mA (legado, sem In).
@@ -5617,6 +5656,19 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (q.alimentadorM != null && (!Number.isFinite(q.alimentadorM) || q.alimentadorM < 0)) {
       throw new KernelError('BAD_BOARD_VALUE', `alimentadorM inválido no quadro ${q.id}: ${q.alimentadorM}`);
+    }
+    // Hierarquia (E4.1): tipo do catálogo; pai existe, não é ele mesmo e não fecha ciclo.
+    if (q.tipo != null && !(TIPOS_DE_QUADRO as readonly string[]).includes(q.tipo)) throw new KernelError('BAD_BOARD_VALUE', `tipo inválido no quadro ${q.id}: ${q.tipo}`);
+    if (q.quadroPaiId != null) {
+      if (q.quadroPaiId === q.id) throw new KernelError('BAD_BOARD_VALUE', `Quadro ${q.id} alimentado por ele mesmo`);
+      if (!(model.quadros ?? []).some((x) => x.id === q.quadroPaiId)) throw new KernelError('BOARD_NOT_FOUND', `Quadro ${q.id} alimentado por quadro inexistente: ${q.quadroPaiId}`);
+      const vistos = new Set<ObjectId>([q.id]);
+      let atual: ObjectId | null = q.quadroPaiId;
+      while (atual) {
+        if (vistos.has(atual)) throw new KernelError('BAD_BOARD_VALUE', `Ciclo de alimentação entre quadros passando por ${q.id}`);
+        vistos.add(atual);
+        atual = (model.quadros ?? []).find((x) => x.id === atual)?.quadroPaiId ?? null;
+      }
     }
     // Icn (E3.3): finita e positiva quando declarada.
     if (q.icnKa != null && (!Number.isFinite(q.icnKa) || q.icnKa <= 0)) throw new KernelError('BAD_BOARD_VALUE', `icnKa inválida no quadro ${q.id}: ${q.icnKa}`);

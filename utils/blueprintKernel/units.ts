@@ -425,7 +425,15 @@
  * declarados; omitidos no canônico quando ausentes — nenhum desenho muda de
  * payload, provado antes do bump com os goldens na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.75.0';
+/**
+ * ─── 0.75.0 → 0.76.0 (29/09/2026) — HIERARQUIA DE QUADROS ──────────────────
+ *
+ * `Quadro.tipo` (QD/QGBT/MEDICAO), `Quadro.quadroPaiId` (canônico: `pai` por
+ * índice, num segundo passo depois da ordenação) e `Circuito.reserva` (E4.1
+ * do roadmap elétrico). Omitidos quando ausentes — nenhum desenho muda de
+ * payload, provado antes do bump com os goldens na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.76.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

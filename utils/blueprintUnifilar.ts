@@ -51,6 +51,9 @@ export interface RamalUnifilar {
   /** E3.3: a curva escrita ao lado do In — declarada, ou a sugerida marcada "sug.". */
   curva: string | null;
   curvaOrigem: 'DECLARADA' | 'SUGERIDA' | null;
+  /** E4.1: reserva (posição sem ponto) e ramal que alimenta um QUADRO filho (o rótulo é o nome dele). */
+  reserva: boolean;
+  quadroFilho: boolean;
   disjuntorOrigem: 'DECLARADO' | 'SUGERIDO' | null;
   secaoMm2: number | null;
   secaoOrigem: 'DECLARADA' | 'CALCULADA' | null;
@@ -85,6 +88,10 @@ export interface DiagramaUnifilar {
     dps: string | null;
     /** E3.3: Icn declarada dos disjuntores do quadro (kA). */
     icnKa: number | null;
+    /** E4.1: o quadro que alimenta este (nome) — a entrada deixa de ser "ALIMENTAÇÃO" e vira "de QGBT". */
+    alimentadoPor: string | null;
+    /** E4.1: de onde veio o comprimento do alimentador. */
+    alimentadorOrigem: 'DECLARADO' | 'ELETRODUTOS' | null;
   };
   ramais: RamalUnifilar[];
   /** Algum DR aparece (geral ou de ramal) — a legenda do símbolo só entra se ele aparece. */
@@ -140,8 +147,35 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
       })(),
       fase: circuito?.fase ?? null,
       faltas: c.achados.filter((a) => a.nivel === 'FALTA').length,
+      reserva: c.reserva,
+      quadroFilho: false,
     };
   });
+}
+
+/** E4.1: os QUADROS alimentados por este, como ramais — IB e geral do filho, condutores do alimentador dele. */
+function ramaisDosFilhos(q: PreDimensionamentoDoQuadro): RamalUnifilar[] {
+  return q.filhos.map((f) => ({
+    circuitoId: f.quadroId,
+    numero: f.nome,
+    nome: f.nome,
+    ligacao: f.ligacao,
+    tensaoV: f.tensaoV,
+    disjuntorA: f.disjuntorGeralA,
+    disjuntorOrigem: f.disjuntorGeralA != null ? 'SUGERIDO' : null,
+    curva: null,
+    curvaOrigem: null,
+    secaoMm2: f.secaoMm2,
+    secaoOrigem: f.secaoMm2 != null ? 'CALCULADA' : null,
+    condutores: condutoresDoRamal(f.ligacao, f.secaoMm2),
+    cargaVA: Math.round(f.sDemandadaVA),
+    pontos: f.circuitos,
+    dr: null,
+    fase: null,
+    faltas: f.faltas,
+    reserva: false,
+    quadroFilho: true,
+  }));
 }
 
 /** Um diagrama por quadro, na ordem do modelo. Sem quadro, lista vazia. */
@@ -150,7 +184,8 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
     .map((quadro) => {
       const q = preDimensionarQuadroCompleto(model, quadro.id, hip);
       if (!q) return null;
-      const ramais = ramaisDe(model, q);
+      // E4.1: os circuitos próprios e, depois, um ramal por quadro filho.
+      const ramais = [...ramaisDe(model, q), ...ramaisDosFilhos(q)];
       const secaoEntrada = q.secaoCalculada?.secaoMm2 ?? null;
       return {
         quadroId: quadro.id,
@@ -160,6 +195,8 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
         entrada: {
           dps: quadro.dps ? rotuloDoDPS(quadro.dps) : null,
           icnKa: quadro.icnKa ?? null,
+          alimentadoPor: q.paiNome,
+          alimentadorOrigem: q.alimentadorOrigem,
           drGeral: (() => {
             const g = drsDoQuadro(model, quadro.id).find((d) => d.geral);
             return g ? rotuloDoDR(g) : null;
@@ -263,7 +300,7 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     ],
     COR,
   );
-  t(xIni, yBus - 3.2 * k, 'ALIMENTAÇÃO', 1.9 * k, COR_FRACA);
+  t(xIni, yBus - 3.2 * k, e.alimentadoPor ? `de ${e.alimentadoPor}` : 'ALIMENTAÇÃO', 1.9 * k, COR_FRACA);
   const xGeral = xIni + 14 * k;
   d.linha(xIni + 3 * k, yBus, xGeral, yBus, { espessuraMm: media, cor: COR });
   const fimGeral = disjuntor(d, xGeral, yBus, k, false, fina);
@@ -369,10 +406,17 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     );
     y += 5.5 * k;
     // rótulos: número, nome, carga
-    t(x - 2.2 * k, y, `C${r.numero}`, 2.6 * k);
-    const nome = r.nome.replace(/^C\s*\d+\s*[—–-]\s*/i, '').trim();
+    // E4.1: ramal de QUADRO filho leva o nome dele e a demanda; reserva diz RESERVA.
+    t(x - 2.2 * k, y, r.quadroFilho ? '→' : `C${r.numero}`, 2.6 * k);
+    const nome = r.quadroFilho ? r.nome : r.nome.replace(/^C\s*\d+\s*[—–-]\s*/i, '').trim();
     t(x - 11 * k, y + 3.4 * k, nome.length > 14 ? `${nome.slice(0, 13)}…` : nome, 1.8 * k, COR_FRACA);
-    t(x - 11 * k, y + 6.4 * k, `${r.cargaVA} VA · ${r.pontos} pt${r.pontos === 1 ? '' : 's'}`, 1.8 * k, COR_FRACA);
+    t(
+      x - 11 * k,
+      y + 6.4 * k,
+      r.quadroFilho ? `${r.cargaVA} VA dem. · ${r.pontos} circ.` : r.reserva ? 'RESERVA' : `${r.cargaVA} VA · ${r.pontos} pt${r.pontos === 1 ? '' : 's'}`,
+      1.8 * k,
+      COR_FRACA,
+    );
   });
 }
 
@@ -380,6 +424,8 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
 export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string[] {
   const L: string[] = [];
   L.push('Disjuntor: lâmina aberta no ramal (In em A; letra = curva B/C/D, "*" = curva sugerida). Icn (kA) ao lado do geral quando declarada. Barramento: traço grosso. Seta: segue ao circuito.');
+  if (diagramas.some((d) => d.ramais.some((r) => r.quadroFilho))) L.push('"→ nome": ramal que alimenta outro QUADRO (a demanda e o geral dele — o unifilar do filho tem os circuitos). "de X" na entrada: alimentado pelo quadro X.');
+  if (diagramas.some((d) => d.ramais.some((r) => r.reserva))) L.push('RESERVA: posição prevista sem ponto ligado — conta no quadro, não na carga.');
   if (diagramas.some((d) => d.entrada.dps)) L.push('DPS: dispositivo de proteção contra surtos — derivação do barramento para a terra, logo após o geral; classe, In (kA) e Up (kV) declarados (6.3.5.2).');
   if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual — na entrada (geral do quadro) ou no ramal (individual; "grupo" = compartilhado por mais de um circuito); "In / IΔn", 30 mA para pessoas (5.1.3.2.2).');
   L.push('Condutores: "2#2,5 + T2,5" = dois carregados de 2,5 mm² e terra de 2,5 mm² (ligação FN/FF); "3#…" em FFF.');

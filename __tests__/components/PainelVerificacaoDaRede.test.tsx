@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PainelVerificacaoDaRede from '../../components/blueprint/PainelVerificacaoDaRede';
 import type { MarcaDeVerificacao } from '../../utils/blueprintVerificacaoRede';
@@ -36,8 +36,21 @@ describe('PainelVerificacaoDaRede', () => {
     expect(onSelecionar).toHaveBeenCalledWith(['t9']);
   });
 
+  it('E5.2: contrafluxo e sem destino aparecem com o que é e o atalho para selecionar', () => {
+    const onSelecionar = vi.fn();
+    const marcas = [
+      { chave: 'fluxo|t1', tipo: 'CONTRAFLUXO' as const, levelId: 'l', at: { x: 0, y: 0 }, texto: 'contrafluxo — sobe até a caixa', severidade: 'ERRO' as const, alvoId: 't1', disciplina: 'ESGOTO' as const },
+      { chave: 'destino|t2', tipo: 'SEM_DESTINO' as const, levelId: 'l', at: { x: 0, y: 0 }, texto: 'não chega à caixa de inspeção', severidade: 'ERRO' as const, alvoId: 't2', disciplina: 'ESGOTO' as const },
+    ];
+    render(<PainelVerificacaoDaRede marcas={marcas} disciplinas={['ESGOTO']} onSelecionar={onSelecionar} />);
+    expect(screen.getByText('Contrafluxo: contrafluxo — sobe até a caixa')).toBeTruthy();
+    expect(screen.getByText('Sem destino: não chega à caixa de inspeção')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Selecionar' })[1]);
+    expect(onSelecionar).toHaveBeenCalledWith(['t2']);
+  });
+
   it('rede em ordem: uma linha só dizendo o que foi conferido', () => {
     render(<PainelVerificacaoDaRede marcas={[]} disciplinas={['ESGOTO']} onSelecionar={() => {}} />);
-    expect(screen.getByTestId('verificacao-rede-ok')).toHaveTextContent('nenhuma ponta aberta e todos os DN conferem com as UHC');
+    expect(screen.getByTestId('verificacao-rede-ok')).toHaveTextContent('nenhuma ponta aberta, todos os DN conferem com a NBR 8160 e todo trecho desce até a caixa');
   });
 });

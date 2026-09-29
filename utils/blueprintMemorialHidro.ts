@@ -357,7 +357,9 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
       cabecalho: ['Trecho', 'Papel', 'Pav.', 'Caixa', 'UHC', 'DN', 'DN mín.', 'L (m)', 'i (%)', 'i mín. (%)', 'Cota mont.', 'Cota jus.', 'Situação'],
       linhas: ordenados.map((c, i) => {
         const situacao: string[] = [];
+        if (c.contrafluxo) situacao.push('contrafluxo');
         if (c.dnAtualMm < c.dnNecessarioMm) situacao.push(`DN abaixo do exigido (${c.dnNecessarioMm})`);
+        if (c.dnMontanteMaxMm != null && c.dnAtualMm < c.dnMontanteMaxMm) situacao.push(`DN diminui (${c.dnMontanteMaxMm} a montante)`);
         if (c.declividadePct != null && c.declividadePct + 1e-9 < c.declividadeMinimaPct) situacao.push('declividade abaixo da mínima');
         if (c.tipo === 'MAIOR') situacao.push('DN acima do necessário');
         return [

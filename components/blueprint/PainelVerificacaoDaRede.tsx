@@ -15,12 +15,12 @@ interface Props {
 }
 
 export default function PainelVerificacaoDaRede({ marcas, disciplinas, onSelecionar }: Props) {
-  const { pontasAbertas, dnFora } = resumoDaVerificacao(marcas, disciplinas);
+  const { pontasAbertas, dnFora, fluxo } = resumoDaVerificacao(marcas, disciplinas);
   const idsDasPontas = [...new Set(marcas.filter((m) => m.tipo === 'PONTA_ABERTA' && m.disciplina && disciplinas.includes(m.disciplina)).map((m) => m.alvoId))];
-  if (pontasAbertas === 0 && dnFora.length === 0) {
+  if (pontasAbertas === 0 && dnFora.length === 0 && fluxo.length === 0) {
     return (
       <p className="text-xs text-slate-500" data-testid="verificacao-rede-ok">
-        Verificação: nenhuma ponta aberta{disciplinas.includes('ESGOTO') ? ' e todos os DN conferem com as UHC' : ''}.
+        Verificação: nenhuma ponta aberta{disciplinas.includes('ESGOTO') ? ', todos os DN conferem com a NBR 8160 e todo trecho desce até a caixa' : ''}.
       </p>
     );
   }
@@ -37,6 +37,16 @@ export default function PainelVerificacaoDaRede({ marcas, disciplinas, onSelecio
           </button>
         </p>
       )}
+      {fluxo.map((m) => (
+        <p key={m.chave} className="flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800">
+          <span>
+            {m.tipo === 'CONTRAFLUXO' ? 'Contrafluxo' : m.tipo === 'DECLIVIDADE_BAIXA' ? 'Declividade abaixo da mínima' : m.tipo === 'DN_DIMINUI' ? 'DN diminui a jusante' : 'Sem destino'}: {m.texto}
+          </span>
+          <button type="button" className="shrink-0 font-medium text-blue-700 hover:underline" onClick={() => onSelecionar([m.alvoId])}>
+            Selecionar
+          </button>
+        </p>
+      ))}
       {dnFora.map((m) => (
         <p
           key={m.chave}

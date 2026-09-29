@@ -543,6 +543,18 @@ export function refazerEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HI
   return { ...plano, sugeridos: 0, trechosDaRede: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
 }
 
+/**
+ * E5.2: os trechos de esgoto (fora a ventilação) que NÃO chegam a nenhuma caixa
+ * de inspeção — o esgoto deles não tem para onde ir.
+ */
+export function trechosDeEsgotoSemDestino(model: BlueprintModel): string[] {
+  const ligados = new Set(caixasDeInspecao(model).flatMap((ci) => redeDaOrigem(model, ci, 'ESGOTO')).map((t) => t.id));
+  return (model.trechos ?? [])
+    .filter((t) => t.disciplina === 'ESGOTO' && t.rotulo !== 'Ventilação' && !ligados.has(t.id))
+    .map((t) => t.id)
+    .sort();
+}
+
 // ─── VERIFICAÇÃO DO DN (28/09/2026, Etapa 0.1 do roadmap hidrossanitário) ────
 
 export interface DnForaDoNecessario {
@@ -594,6 +606,13 @@ export interface TrechoDeEsgotoCalculado extends Omit<DnForaDoNecessario, 'tipo'
   declividadeMinimaPct: number;
   /** O papel na árvore (E5.1) — decide a tabela da NBR 8160. */
   papel: PapelNoEsgoto;
+  /**
+   * E5.2: a água SOBE para chegar à caixa — a ponta de jusante (pela árvore até a
+   * CI) está mais alta que a de montante. O sentido não se grava: é o da árvore.
+   */
+  contrafluxo: boolean;
+  /** E5.2: o maior DN dos trechos que chegam à ponta de montante (sem a ventilação); `null` sem nenhum. */
+  dnMontanteMaxMm: number | null;
 }
 
 export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): TrechoDeEsgotoCalculado[] {
@@ -675,7 +694,10 @@ export function esgotoTrechoATrecho(model: BlueprintModel, hip: HipotesesDeEsgot
           const cotaMontanteMm = montanteEhA ? t.cotaAMm : t.cotaBMm;
           const cotaJusanteMm = montanteEhA ? t.cotaBMm : t.cotaAMm;
           const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+          const acima = (filhos.get(filho) ?? []).filter((x) => x.t.rotulo !== 'Ventilação').map((x) => x.t.bitolaMm);
           saida.push({
+            contrafluxo: cotaMontanteMm < cotaJusanteMm,
+            dnMontanteMaxMm: acima.length ? Math.max(...acima) : null,
             trechoId: t.id, levelId: t.levelId, meio: { x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 },
             dnAtualMm: t.bitolaMm, dnNecessarioMm: necessario, uhc: sub.uhc, tipo,
             caixaId: ci.id, rotulo: t.rotulo ?? null,

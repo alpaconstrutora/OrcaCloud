@@ -682,3 +682,25 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
 - **Pronto quando** ✔: 6 testes em `blueprintNbr8160.test.ts` (as três tabelas com os limites, o
   papel de cada trecho no sobrado, o que chega à CI é subcoletor ≥ 100, o lançamento já sai de
   acordo, subcoletor reduzido a 75 → a verificação pede 100). Suíte: 539 arquivos / 6.047 testes.
+
+### E5.2 — Fluxo e verificação em qualquer trecho (29/09/2026)
+
+- ⚠️ **Desvio do plano: sem bump.** O roadmap previa gravar o SENTIDO do fluxo no trecho (kernel).
+  Não é preciso: o sentido é o da árvore até a caixa de inspeção (`esgotoTrechoATrecho` já sabe
+  montante e jusante de cada trecho), e gravá-lo criaria uma segunda verdade que pode contradizer
+  a geometria — o contrário do "modelo único, nada guarda cópia". O trecho desenhado à mão entra
+  na mesma árvore.
+- `esgotoTrechoATrecho` ganhou `contrafluxo` (a ponta de jusante mais alta que a de montante — a
+  água teria de subir até a caixa) e `dnMontanteMaxMm` (o maior DN que chega à ponta de montante,
+  sem a ventilação). `trechosDeEsgotoSemDestino`: os trechos de esgoto (fora a ventilação) que não
+  chegam a nenhuma CI.
+- Marcas no desenho (`marcasDeVerificacao`): **CONTRAFLUXO**, **DECLIVIDADE_BAIXA** ("i 0,1 % < 1
+  %"), **DN_DIMINUI** ("DN 50 depois de 100") e **SEM_DESTINO** — todas ERRO; o canvas já escreve o
+  texto de qualquer marca. A gaveta (`PainelVerificacaoDaRede`) lista as de fluxo com "Selecionar".
+  Conferência NBR 8160: **Sentido do fluxo**, **DN não diminui a jusante**, **Todo trecho chega à
+  caixa de inspeção**. Memorial: "contrafluxo" e "DN diminui (…)" na Situação.
+- **Pronto quando** ✔: 4 testes em `blueprintFluxoDoEsgoto.test.ts` (o lançamento sai limpo; uma rede
+  à mão que SOBE até a caixa → contrafluxo e pendência; 1 mm em 2 m → declividade baixa, 20 mm →
+  atende; trecho solto → sem destino) + 1 do painel; os da verificação atualizados (o ramal do vaso
+  em DN 50 agora também "diminui depois de 100"; o trecho solto do andar também "sem destino").
+  Suíte: 540 arquivos / 6.052 testes.

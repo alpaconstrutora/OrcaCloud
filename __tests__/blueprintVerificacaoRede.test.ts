@@ -96,7 +96,9 @@ describe('o que ela aponta', () => {
     expect(v.find((x) => x.trechoId === doVaso.id)).toMatchObject({ tipo: 'MENOR', dnAtualMm: 50, dnNecessarioMm: 100, uhc: 6 });
     expect(v.find((x) => x.trechoId === doLav.id)).toMatchObject({ tipo: 'MAIOR', dnAtualMm: 100, dnNecessarioMm: 40, uhc: 1 });
     const marcas = marcasDeVerificacao(mexido);
-    expect(marcas.find((x) => x.alvoId === doVaso.id)).toMatchObject({ tipo: 'DN_MENOR', severidade: 'ERRO', texto: 'DN 50 < 100 (6 UHC)' });
+    expect(marcas.find((x) => x.alvoId === doVaso.id && x.tipo === 'DN_MENOR')).toMatchObject({ severidade: 'ERRO', texto: 'DN 50 < 100 (6 UHC)' });
+    // E5.2: e o DN diminui depois da descida do vaso (DN 100).
+    expect(marcas.find((x) => x.alvoId === doVaso.id && x.tipo === 'DN_DIMINUI')).toMatchObject({ severidade: 'ERRO', texto: 'DN 50 depois de 100' });
     expect(marcas.find((x) => x.alvoId === doLav.id)).toMatchObject({ tipo: 'DN_MAIOR', severidade: 'AVISO' });
     expect(resumoDaVerificacao(marcas, ['ESGOTO']).dnFora).toHaveLength(2);
   });
@@ -114,7 +116,8 @@ describe('o que ela aponta', () => {
     const dois = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
     const s = dois.levels[1].id;
     const mm = applyCommand(dois, { type: 'AddTrecho', levelId: s, disciplina: 'ESGOTO', a: point(0, 0), b: point(2000, 0), cotaAMm: -150, cotaBMm: -170, bitolaMm: 50 }).model;
-    expect(marcasDeVerificacao(mm, s)).toHaveLength(2);
+    // As duas pontas abertas e, desde a E5.2, "não chega à caixa de inspeção".
+    expect(marcasDeVerificacao(mm, s).map((x) => x.tipo).sort()).toEqual(['PONTA_ABERTA', 'PONTA_ABERTA', 'SEM_DESTINO']);
     expect(marcasDeVerificacao(mm, t)).toHaveLength(0);
   });
 });

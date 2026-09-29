@@ -18,12 +18,23 @@
 import { ROTULO_DA_LIMPEZA, ROTULO_DO_EXTRAVASOR } from './blueprintPecasDaCaixa';
 import type { BlueprintModel, DisciplinaDeRede, ObjectId } from './blueprintKernel';
 import { conexoesDerivadas } from './blueprintKernel';
-import { verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
+import { esgotoTrechoATrecho, trechosDeEsgotoSemDestino, verificarDnDoEsgoto } from './blueprintEsgotoAutomatico';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import type { PressoesDaRede } from './blueprintPressaoDaRede';
 
-export type TipoDeMarca = 'PONTA_ABERTA' | 'DN_MENOR' | 'DN_MAIOR' | 'LOUCA_SEM_PONTO' | 'PRESSAO_BAIXA' | 'PRESSAO_ALTA';
+export type TipoDeMarca =
+  | 'PONTA_ABERTA'
+  | 'DN_MENOR'
+  | 'DN_MAIOR'
+  | 'LOUCA_SEM_PONTO'
+  | 'PRESSAO_BAIXA'
+  | 'PRESSAO_ALTA'
+  // E5.2 — o fluxo do esgoto em QUALQUER trecho (o desenhado à mão também).
+  | 'CONTRAFLUXO'
+  | 'DECLIVIDADE_BAIXA'
+  | 'DN_DIMINUI'
+  | 'SEM_DESTINO';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -68,6 +79,28 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
       alvoId: t.id,
       disciplina: t.disciplina,
     });
+  }
+
+  // E5.2: fluxo — contrafluxo, declividade abaixo da mínima, DN que diminui a jusante.
+  const trechoPorIdE = new Map((model.trechos ?? []).map((t) => [t.id, t]));
+  const aoLongo = (id: string, f: number) => {
+    const t = trechoPorIdE.get(id)!;
+    return { x: Math.round(t.a.x + (t.b.x - t.a.x) * f), y: Math.round(t.a.y + (t.b.y - t.a.y) * f) };
+  };
+  const um1 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  for (const c of esgotoTrechoATrecho(model)) {
+    if (c.contrafluxo) {
+      marcas.push({ chave: `fluxo|${c.trechoId}`, tipo: 'CONTRAFLUXO', levelId: c.levelId, at: aoLongo(c.trechoId, 0.3), texto: 'contrafluxo — sobe até a caixa', severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'ESGOTO' });
+    } else if (c.declividadePct != null && c.declividadePct + 1e-9 < c.declividadeMinimaPct) {
+      marcas.push({ chave: `decl|${c.trechoId}`, tipo: 'DECLIVIDADE_BAIXA', levelId: c.levelId, at: aoLongo(c.trechoId, 0.3), texto: `i ${um1(c.declividadePct)} % < ${um1(c.declividadeMinimaPct)} %`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'ESGOTO' });
+    }
+    if (c.dnMontanteMaxMm != null && c.dnAtualMm < c.dnMontanteMaxMm) {
+      marcas.push({ chave: `diminui|${c.trechoId}`, tipo: 'DN_DIMINUI', levelId: c.levelId, at: aoLongo(c.trechoId, 0.7), texto: `DN ${c.dnAtualMm} depois de ${c.dnMontanteMaxMm}`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'ESGOTO' });
+    }
+  }
+  for (const id of trechosDeEsgotoSemDestino(model)) {
+    const t = trechoPorIdE.get(id)!;
+    marcas.push({ chave: `destino|${id}`, tipo: 'SEM_DESTINO', levelId: t.levelId, at: aoLongo(id, 0.5), texto: 'não chega à caixa de inspeção', severidade: 'ERRO', alvoId: id, disciplina: 'ESGOTO' });
   }
 
   for (const v of verificarDnDoEsgoto(model)) {
@@ -117,10 +150,13 @@ export function marcasDeVerificacao(model: BlueprintModel, levelId: ObjectId | n
 export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disciplinas: readonly DisciplinaDeRede[]): {
   pontasAbertas: number;
   dnFora: MarcaDeVerificacao[];
+  /** E5.2: contrafluxo, declividade baixa, DN que diminui e trecho sem destino. */
+  fluxo: MarcaDeVerificacao[];
 } {
   const daRede = marcas.filter((m) => m.disciplina && disciplinas.includes(m.disciplina));
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
+    fluxo: daRede.filter((m) => m.tipo === 'CONTRAFLUXO' || m.tipo === 'DECLIVIDADE_BAIXA' || m.tipo === 'DN_DIMINUI' || m.tipo === 'SEM_DESTINO'),
   };
 }

@@ -119,6 +119,29 @@ export const partnerService = {
     }
   },
 
+  /**
+   * Grava SÓ `settings` (hoje: `partnerPortalTabs`, as abas visíveis do portal).
+   * Não passa por `saveWorkspace` porque ele espalha o objeto inteiro — inclusive
+   * `supplier_name`, que vem do join e não é coluna.
+   */
+  async updateWorkspaceSettings(workspaceId: string, settings: Record<string, any>): Promise<PartnerWorkspace> {
+    const { data, error } = await supabase
+      .from('partner_workspaces')
+      .update({ settings, updated_at: new Date().toISOString() })
+      .eq('id', workspaceId)
+      .select('*, supplier:suppliers(name)')
+      .single();
+
+    if (error) {
+      console.error('[PARTNER SERVICE] Error updating workspace settings:', error);
+      throw error;
+    }
+    return {
+      ...data,
+      supplier_name: (data as any).supplier?.name || 'Fornecedor sem nome'
+    } as PartnerWorkspace;
+  },
+
   // O que se perde ao excluir um workspace. TODAS as tabelas filhas têm
   // ON DELETE CASCADE (partner_users, partner_conversations -> partner_messages,
   // partner_requests, partner_shared_documents, partner_shared_folders,

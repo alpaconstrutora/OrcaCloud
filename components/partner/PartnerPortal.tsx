@@ -30,7 +30,8 @@ import {
   Settings2,
   Filter,
   MoveHorizontal,
-  Building2
+  Building2,
+  EyeOff
 } from 'lucide-react';
 import { extractTokenFromFileName } from '../../utils/dmsUtils';
 import { supabase } from '../../lib/supabase';
@@ -38,6 +39,7 @@ import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
 import { reciboPagamentoPortalService, rotuloRecibo } from '../../services/reciboPagamentoPortalService';
 import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
+import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortalTabId } from '../../utils/partnerPortalTabs';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -106,6 +108,15 @@ const PARTNER_DOC_COL_WIDTHS: Record<string, number> = {
   revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
 };
 
+const TAB_ICONS: Record<PartnerPortalTabId, React.ElementType> = {
+  dashboard: LayoutDashboard,
+  conversas: MessageSquare,
+  documentos: FolderOpen,
+  contratos: FileText,
+  financeiro: DollarSign,
+  solicitacoes: ClipboardList,
+};
+
 export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken }) => {
   const isPreview = !!previewWorkspaceId;
   const isTokenMode = !!portalToken;
@@ -116,6 +127,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Dados do Parceiro
   const [partnerUser, setPartnerUser] = useState<PartnerUser | null>(null);
   const [workspace, setWorkspace] = useState<PartnerWorkspace | null>(null);
+  // Abas liberadas para o parceiro (engrenagem na visão do app). Vale nos três
+  // modos — link, parceiro logado e pré-visualização do admin, que mostra o
+  // portal como o parceiro vê. Ver utils/partnerPortalTabs.ts.
+  const enabledTabs = React.useMemo(() => enabledPartnerPortalTabs(workspace?.settings), [workspace?.settings]);
+  const semAbasHabilitadas = !!workspace && enabledTabs.length === 0;
+  const showTab = (id: PartnerPortalTabId) => !semAbasHabilitadas && activeTab === id;
+  // activeTab nasce 'dashboard' mesmo se ela estiver oculta: cai na primeira
+  // aba liberada, em vez de deixar conteúdo de aba oculta na tela.
+  useEffect(() => {
+    if (enabledTabs.length > 0 && !enabledTabs.includes(activeTab)) setActiveTab(enabledTabs[0]);
+  }, [enabledTabs, activeTab]);
 
   // Dados das abas
   const [conversations, setConversations] = useState<PartnerConversation[]>([]);
@@ -1035,54 +1057,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       <div className="flex flex-1 overflow-hidden">
         {/* Navigation Sidebar */}
         <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1.5 shrink-0">
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'dashboard' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-          >
-            <LayoutDashboard className="w-4 h-4" />
-            <span>Dashboard</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('conversas')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'conversas' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span>Conversas</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('documentos')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'documentos' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-          >
-            <FolderOpen className="w-4 h-4" />
-            <span>Documentos</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('contratos')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'contratos' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Contratos</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('financeiro')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'financeiro' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-          >
-            <DollarSign className="w-4 h-4" />
-            <span>Financeiro</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('solicitacoes')}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-              ${activeTab === 'solicitacoes' ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
-          >
-            <ClipboardList className="w-4 h-4" />
-            <span>Solicitações</span>
-          </button>
+          {enabledTabs.map((id) => {
+            const Icon = TAB_ICONS[id];
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
+                  ${activeTab === id ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
+              >
+                <Icon className="w-4 h-4" />
+                <span>{PARTNER_PORTAL_TAB_LABELS[id]}</span>
+              </button>
+            );
+          })}
         </aside>
 
         {/* Dynamic Content Pane. Casca própria (h-screen, header/aside inclusos) usada
@@ -1091,8 +1079,21 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             §20.2 é reaplicado aqui, à mão. */}
         <main className="flex-1 bg-white overflow-y-auto p-4 md:p-6 relative">
 
+          {semAbasHabilitadas && (
+            <div className="min-h-[400px] flex items-center justify-center">
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 max-w-md text-center">
+                <EyeOff className="w-9 h-9 text-gray-200 mx-auto mb-4" />
+                <h3 className="text-base font-semibold text-gray-900 mb-1.5">Portal em configuração</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">
+                  Nenhuma seção está liberada para você no momento. Fale com a construtora
+                  para liberar o acesso.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* TAB: DASHBOARD */}
-          {activeTab === 'dashboard' && (
+          {showTab('dashboard') && (
             <div className="flex flex-col gap-6">
               {/* Header Cards */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1180,7 +1181,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           )}
 
           {/* TAB: CONVERSAS */}
-          {activeTab === 'conversas' && (
+          {showTab('conversas') && (
             <div className="flex h-[calc(100vh-12rem)] bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
               {/* Canais List */}
               <div className="w-64 border-r border-gray-100 bg-gray-50 flex flex-col">
@@ -1249,7 +1250,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {/* TAB: DOCUMENTOS — mesma <DocumentsTable> da Gestão de Documentos (GED), só que
               somente-leitura e restrita aos documentos que a construtora compartilhou com este
               workspace. Fonte única de layout: qualquer ajuste na tabela do GED reflete aqui. */}
-          {activeTab === 'documentos' && (
+          {showTab('documentos') && (
             <div>
               {/* A árvore "Pastas e disciplinas" que ficava à esquerda saiu — junto
                   com a do GED (b19f216c). Pasta e disciplina são dois selects na
@@ -1436,7 +1437,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           )}
 
           {/* TAB: CONTRATOS */}
-          {activeTab === 'contratos' && detailContract && (
+          {showTab('contratos') && detailContract && (
             <div className="flex flex-col gap-6">
               <div className="flex items-center gap-3">
                 <button
@@ -1777,7 +1778,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           )}
 
           {/* TAB: CONTRATOS (lista) */}
-          {activeTab === 'contratos' && !detailContract && (
+          {showTab('contratos') && !detailContract && (
             <div className="flex flex-col gap-6">
               <h3 className="text-base font-bold text-gray-900">Seus Contratos Ativos</h3>
               <div className="flex flex-col gap-4">
@@ -1836,7 +1837,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           )}
 
           {/* TAB: FINANCEIRO */}
-          {activeTab === 'financeiro' && (
+          {showTab('financeiro') && (
             <div className="flex flex-col gap-6">
               <h3 className="text-base font-bold text-gray-900">Financeiro</h3>
 
@@ -1960,7 +1961,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           )}
 
           {/* TAB: SOLICITACOES */}
-          {activeTab === 'solicitacoes' && (
+          {showTab('solicitacoes') && (
             <div className="flex flex-col gap-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-gray-900">Solicitações de Atendimento</h3>

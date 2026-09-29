@@ -130,6 +130,7 @@ import {
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
+import { pontoEletricoDoComponente } from '../../utils/blueprintKernel';
 import { TIPOS_DE_AREA_PUBLICA, TIPOS_DE_AREA_DO_LOTEAMENTO, TIPOS_AMBIENTAIS, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
 import {
   numerarQuadra,
@@ -633,6 +634,7 @@ import {
   TOLERANCIA_ENCAIXE_MM,
   encaixarEmPecaEletrica,
 } from '../../utils/blueprintRede';
+import { MEDIDAS_PADRAO_CAIXA_DE_PASSAGEM } from '../../utils/blueprintRede';
 import {
   FICHA_DO_PONTO_HIDRAULICO,
   SIGLA_DO_PONTO_HIDRAULICO,
@@ -649,6 +651,7 @@ import {
   type HipotesesDePontos,
   type KitHidraulico,
 } from '../../utils/blueprintPontosHidraulicos';
+import { pontosEletricosDoComponente } from '../../utils/blueprintPontosHidraulicos';
 import {
   planejarAguaDoModelo,
   refazerAgua,
@@ -6444,6 +6447,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const criados = editor.run(comando);
     // O difusor/grelha (P2.2) nasce com a medida da peça, como as caixas hidráulicas.
     if (criados.length > 0 && disciplinaDeRede === 'MECANICA') editor.run({ type: 'SetTerminalProps', terminalId: criados[0], ...MEDIDAS_PADRAO_TERMINAL_MECANICO });
+    // A CAIXA DE PASSAGEM (E1.2) nasce 4×4 — quem tem outra declara no painel.
+    if (criados.length > 0 && tipoDePontoEletrico === 'CAIXA_PASSAGEM') editor.run({ type: 'SetTerminalProps', terminalId: criados[0], ...MEDIDAS_PADRAO_CAIXA_DE_PASSAGEM });
     if (criados.length > 0) selecionar(criados);
   }
 
@@ -8330,6 +8335,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onSelecionarPonto={(id) => selecionarEAbrir([id])}
         redesSemPonto={componenteSel ? pontosDaLouca(editor.model, componenteSel).map((c) => c.disciplina) : []}
         onLancarPontos={() => componenteSel && editor.runBatch(pontosDaLouca(editor.model, componenteSel))}
+        // E1.2: o EQUIPAMENTO liga-se ao ponto elétrico dele (derivado) — e lança-o quando falta.
+        pontoEletricoLigado={componenteSel ? pontoEletricoDoComponente(editor.model, componenteSel) : null}
+        onLancarPontoEletrico={() => componenteSel && editor.runBatch(pontosEletricosDoComponente(editor.model, componenteSel))}
         conjunto={
           componenteSel
             ? ehConjunto(componenteSel.tipoId)

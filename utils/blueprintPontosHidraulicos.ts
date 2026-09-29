@@ -37,6 +37,8 @@ import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { faceDaParede } from './blueprintRotaPelasParedes';
+import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
+import { potenciaPadraoVA } from './blueprintPotenciaPadrao';
 
 export type KitHidraulico = 'BANHEIRO' | 'COZINHA' | 'AREA_SERVICO';
 
@@ -354,7 +356,43 @@ export function pontosDaLouca(
     });
 }
 
-/** Os pontos das louças que ENTRARAM num comando (a peça, ou o conjunto e os filhos). */
+/**
+ * O PONTO ELÉTRICO do equipamento (E1.2, 29/09/2026) — o irmão elétrico de
+ * `pontosDaLouca`: a evaporadora inserida lança o ponto de ar-condicionado na
+ * FACE da parede atrás dela (é onde a caixa fica), com a cota usual do tipo e a
+ * potência típica (HIPÓTESE — `POTENCIA_TIPICA_DO_EQUIPAMENTO_VA`). IDEMPOTENTE:
+ * com um ponto do mesmo tipo a até 600 mm, nada nasce. Não é `sugerida`: a peça
+ * foi colocada pelo usuário. Circuito não entra aqui — é do planejador.
+ */
+export function pontosEletricosDoComponente(
+  model: BlueprintModel,
+  componente: Componente,
+): Extract<Command, { type: 'AddTerminal' }>[] {
+  const tipo = (CATALOGO_DE_COMPONENTES[componente.tipoId] as FichaDoComponente | undefined)?.ligaAoPontoEletrico;
+  if (!tipo) return [];
+  const jaTem = (model.terminais ?? []).some(
+    (t) => t.levelId === componente.levelId && t.disciplina === 'ELETRICA' && t.tipoEletrico === tipo && Math.hypot(t.at.x - componente.at.x, t.at.y - componente.at.y) <= RAIO_DA_LOUCA_MM,
+  );
+  if (jaTem) return [];
+  const alcance = Math.max(componente.larguraMm, componente.profundidadeMm) / 2 + 400;
+  const naFace = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance)?.face;
+  const ponto = naFace ?? componente.at;
+  const potencia = potenciaPadraoVA(tipo, null);
+  return [
+    {
+      type: 'AddTerminal' as const,
+      levelId: componente.levelId,
+      disciplina: 'ELETRICA',
+      tipo: ROTULO_DO_PONTO_ELETRICO[tipo],
+      at: { x: ponto.x, y: ponto.y },
+      cotaMm: COTA_USUAL_DO_PONTO_ELETRICO[tipo],
+      tipoEletrico: tipo,
+      ...(potencia != null ? { potenciaW: potencia } : {}),
+    },
+  ];
+}
+
+/** Os pontos das louças (e o ponto elétrico dos equipamentos) que ENTRARAM num comando (a peça, ou o conjunto e os filhos). */
 export function pontosDasLoucasCriadas(
   depois: BlueprintModel,
   criados: readonly string[],
@@ -365,6 +403,7 @@ export function pontosDasLoucasCriadas(
   for (const c of depois.componentes ?? []) {
     if (!ids.has(c.id)) continue;
     comandos.push(...pontosDaLouca(depois, c, hip));
+    comandos.push(...pontosEletricosDoComponente(depois, c));
   }
   return comandos;
 }

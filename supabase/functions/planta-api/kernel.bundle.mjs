@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.69.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.70.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -559,9 +559,9 @@ var CATALOGO_DE_COMPONENTES = {
   // e de casa de máquinas mínima; a folga é a de manutenção/insuflamento usual
   // dos manuais de instalação (condensadora ≥ 300 mm nas laterais/atrás).
   CONDENSADORA: { rotulo: "Condensadora (split)", familia: "CLIMATIZACAO", larguraMm: 850, profundidadeMm: 330, alturaMm: 700, simbolo: "CONDENSADORA", folgaMm: 300 },
-  EVAPORADORA: { rotulo: "Evaporadora hi-wall", familia: "CLIMATIZACAO", larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: "EVAPORADORA", cotaMm: 2200, folgaMm: 150 },
+  EVAPORADORA: { rotulo: "Evaporadora hi-wall", familia: "CLIMATIZACAO", larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: "EVAPORADORA", cotaMm: 2200, folgaMm: 150, ligaAoPontoEletrico: "AR_CONDICIONADO" },
   CASA_DE_MAQUINAS: { rotulo: "Casa de m\xE1quinas (reserva)", familia: "CLIMATIZACAO", larguraMm: 2e3, profundidadeMm: 1500, alturaMm: 2500, simbolo: "RESERVA", folgaMm: 600 },
-  EXAUSTOR: { rotulo: "Exaustor / ventila\xE7\xE3o", familia: "CLIMATIZACAO", larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: "EXAUSTOR", cotaMm: 2300, folgaMm: 100 },
+  EXAUSTOR: { rotulo: "Exaustor / ventila\xE7\xE3o", familia: "CLIMATIZACAO", larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: "EXAUSTOR", cotaMm: 2300, folgaMm: 100, ligaAoPontoEletrico: "VENTILADOR_EXAUSTOR" },
   // Conjuntos (P2.18): as medidas são a caixa envolvente dos filhos (recalculada ao inserir).
   CONJUNTO_BANHEIRO: { rotulo: "Conjunto de banheiro (vaso, lavat\xF3rio, box)", familia: "LOUCA", larguraMm: 2400, profundidadeMm: 1500, alturaMm: 2e3, simbolo: "CONJUNTO" },
   CONJUNTO_JANTAR: { rotulo: "Conjunto de jantar (mesa + 4 cadeiras)", familia: "MOBILIARIO", larguraMm: 1900, profundidadeMm: 1900, alturaMm: 900, simbolo: "CONJUNTO" },
@@ -3946,7 +3946,8 @@ var ROTULO_DO_PONTO_ELETRICO = {
   CARREGADOR_VE: "Carregador de ve\xEDculo el\xE9trico",
   CAMPAINHA: "Campainha",
   PONTO_ESPERA: "Ponto de espera (equipamento a definir)",
-  ATERRAMENTO: "Ponto de aterramento"
+  ATERRAMENTO: "Ponto de aterramento",
+  CAIXA_PASSAGEM: "Caixa de passagem (4\xD74 / octogonal)"
 };
 
 // utils/blueprintIfc.ts
@@ -4992,6 +4993,8 @@ function entidadeDoPontoEletrico(tipo) {
       return { entidade: "IFCJUNCTIONBOX", predefinido: ".USERDEFINED.", objectType: tipo };
     case "CAMPAINHA":
       return { entidade: "IFCAUDIOVISUALAPPLIANCE", predefinido: ".USERDEFINED.", objectType: tipo };
+    case "CAIXA_PASSAGEM":
+      return { entidade: "IFCJUNCTIONBOX", predefinido: ".POWER.", objectType: tipo };
   }
 }
 function entidadeDoPontoHidraulico(tipo) {

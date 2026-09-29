@@ -2219,6 +2219,10 @@ function entidadeDoPontoEletrico(
       return { entidade: 'IFCJUNCTIONBOX', predefinido: '.USERDEFINED.', objectType: tipo };
     case 'CAMPAINHA':
       return { entidade: 'IFCAUDIOVISUALAPPLIANCE', predefinido: '.USERDEFINED.', objectType: tipo };
+    case 'CAIXA_PASSAGEM':
+      // A caixa de passagem É uma IfcJunctionBox — o enum tem POWER e DATA; a
+      // caixa da elétrica de força e luz é .POWER.
+      return { entidade: 'IFCJUNCTIONBOX', predefinido: '.POWER.', objectType: tipo };
   }
 }
 

@@ -1924,7 +1924,7 @@ Fecha o bloco **6** (parcial — o fio completo depende da E2), parte do **2** e
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 1.1 Tipos de ponto que faltam ✅ (kernel 0.69.0) | `TIPOS_DE_PONTO_ELETRICO` ganha `AR_CONDICIONADO`, `MOTOR_BOMBA`, `CAMPAINHA`, `PORTAO`, `CARREGADOR_VE`, `PONTO_ESPERA`, `VENTILADOR_EXAUSTOR`, `ATERRAMENTO`, cada um com cota usual, potência padrão (hipótese nomeada — AC por BTU, VE 7,4 kW), grupo de carga (novo grupo `MOTOR` com fator próprio), uso do circuito (TUE/FORCA), símbolo NBR 5444, entidade IFC (`IfcElectricAppliance`, `IfcElectricMotor`, `IfcAudioVisualAppliance`…) e regra 9.5.3.1 quando > 10 A | goldens com os tipos novos; `blueprintPontoEletricoTipos.test.ts`; menu de inserir mostra os grupos; IFC valida no visualizador |
-| 1.2 Componente com carga | `Componente` de CLIMATIZACAO/EXAUSTOR **lança o ponto elétrico** ao ser inserido (molde: louça → ponto hidráulico, 27/09) e o ponto carrega a potência do componente; caixa `CAIXA_PASSAGEM` como terminal com medidas (4×2, 4×4, octogonal) — a tomada/interruptor já é a própria caixa | inserir evaporadora cria `AR_CONDICIONADO` na parede atrás dela; apagar o componente apaga o ponto (invariante); caixa aparece no 2D/3D/IFC/quantitativo |
+| 1.2 Componente com carga ✅ (kernel 0.70.0; caixa automática → E6.3) | `Componente` de CLIMATIZACAO/EXAUSTOR **lança o ponto elétrico** ao ser inserido (molde: louça → ponto hidráulico, 27/09) e o ponto carrega a potência do componente; caixa `CAIXA_PASSAGEM` como terminal com medidas (4×2, 4×4, octogonal) — a tomada/interruptor já é a própria caixa | inserir evaporadora cria `AR_CONDICIONADO` na parede atrás dela; apagar o componente apaga o ponto (invariante); caixa aparece no 2D/3D/IFC/quantitativo |
 | 1.3 Tensão e padrão visíveis no ponto; copiar entre pavimentos | painel do ponto mostra tensão e ligação **derivadas do circuito** e o padrão da tomada (2P+T 10 A / 20 A por potência, hipótese); `DuplicateLevel`/área de transferência aceitam terminal, trecho e quadro (com `circuitoId` remapeado ou zerado — dito na prévia) | teste: duplicar pavimento copia pontos e eletrodutos, circuitos ficam por criar; Ctrl+V de seleção elétrica funciona; goldens |
 
 Fecha o bloco **5**.
@@ -2333,3 +2333,49 @@ direta, que tem. Fica dito.
 de aterramento" ❌→✅ (ponto no desenho; dimensionamento do PE é E2.3), "Pontos para equipamentos"
 🟡→✅; §10 "Demanda por tipo de carga" 🟡 (agora 4 grupos, ainda sem tabela escalonada — E4.2);
 §30 "Pontos de aterramento" ❌→✅.
+
+### E1.2 — Componente com carga e caixa de passagem (29/09/2026) · frente `eletrico-e1` · **kernel 0.69.0 → 0.70.0**
+
+**O que mudou**
+
+- `utils/blueprintKernel/model.ts` — `FichaDoComponente.ligaAoPontoEletrico` (catálogo, não
+  payload): **EVAPORADORA → `AR_CONDICIONADO`**, **EXAUSTOR → `VENTILADOR_EXAUSTOR`**; a louça
+  não tem. `pontoEletricoDoComponente(model, c)` é a ligação DERIVADA (o terminal elétrico do
+  tipo pedido a até 600 mm), irmã de `pontoHidraulicoDoComponente`. `tipoEletrico` ganhou
+  **`CAIXA_PASSAGEM`** — infraestrutura, não carga (`TIPOS_SEM_CARGA`), com medidas, grupo
+  próprio "Elétrica — caixas" — e por isso **bump 0.70.0**, provado pelo ritual dos goldens (7/7 em
+  0.69.0; depois, só os seis hashes).
+- `utils/blueprintPontosHidraulicos.ts` — **`pontosEletricosDoComponente`**: a evaporadora
+  inserida lança o ponto de ar-condicionado na **face da parede atrás dela** (é onde a caixa
+  fica), na cota usual (2.200) e com a potência típica (HIPÓTESE, 1.400 VA); peça solta, no
+  centro. Idempotente (ponto do mesmo tipo a até 600 mm → nada). Entrou em
+  `pontosDasLoucasCriadas`, então **peça e ponto nascem no mesmo lote** — um Ctrl+Z desfaz os
+  dois, como a louça desde 27/09. Circuito não entra aqui: é do planejador.
+- `components/blueprint/PainelComponenteSelecionado.tsx` + editor — parágrafo "Ponto elétrico
+  (…): ligado — a N mm · 1.400 VA" com clique que seleciona o ponto; sem ponto, "nenhum a até
+  0,60 m · Lançar o ponto".
+- Caixa: `MEDIDAS_PADRAO_CAIXA_DE_PASSAGEM` 100 × 100 × 50 gravadas ao criar pelo menu (a 4×2 e a
+  octogonal se declaram no painel, que já edita medidas de terminal); quadrado **sem** diagonal
+  no canvas e na prancha (a diagonal é o que diz "ligação"); legenda; IFC `IfcJunctionBox
+  .POWER.`; menu no grupo novo (ícone `Square`).
+- **`planta-api` redeployada** (bundle 0.70.0): `GET /v1/estudos` sem token **401**, token falso **401**.
+- **Não entrou (declarado)**: caixa de passagem AUTOMÁTICA no lançamento de eletrodutos (a cada
+  15 m / em curva) — é a **E6.3**; MÁQUINA de lavar e GELADEIRA com ponto elétrico (são tomadas
+  TUE/TUG comuns, a distribuição automática já as cobre; ligar a peça à tomada é a E1.3/E2);
+  CONDENSADORA sem ponto (o split tem UMA alimentação, na evaporadora — a condensadora vai pela
+  interligação; dizer o contrário contaria a carga duas vezes).
+
+**Testes** — novo `__tests__/blueprintComponenteEletrico.test.ts` (5): kernel 0.70.0 e a ficha;
+**evaporadora encostada na parede lança `AR_CONDICIONADO` em (2000, 75) — a face, não o centro
+(2000, 200) —, cota 2.200, 1.400 VA**; aplicado, a peça encontra o ponto e não lança outro; peça
+solta lança no centro; vaso não lança ponto elétrico; caixa na taxonomia com tabelas, grupo,
+medidas 4×4, sem carga (grupo null, função null); IFC `IfcJunctionBox .POWER.` com medidas.
+`blueprintPontoEletricoTipos.test.ts` (20 tipos, 6 grupos); **13 pinos** de `KERNEL_VERSION`
+0.69.0 → 0.70.0 (trocados pelo script, não pelo grep).
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova + hashes) · alvo 79 ✓ · suíte inteira **6.190 ✓ / 0 ✗ / 33 skip** (565 arquivos) · `build` ✓ · `check-ui-standard` nos `.tsx` tocados ✓ · `check-xss-sinks` ✓ ·
+`planta-api` 401/401. **Sem teste jsdom do parágrafo novo do painel** e sem harness visual — fica dito.
+
+**Efeito no benchmark**: §2 "Condicionadores de ar" ✅ (agora a PEÇA gera a carga), "Exaustores" ✅;
+§7 "Caixas de passagem" ❌→✅ (como peça; a automática é E6.3); §18 "Caixas" ❌→✅; §45 "Caixas"
+❌→✅; §47 "Caixas" ❌→✅ (conta por classificação).

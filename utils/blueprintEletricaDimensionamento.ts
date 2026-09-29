@@ -201,7 +201,7 @@ export const TIPOS_DE_USO_ESPECIFICO: ReadonlySet<string> = new Set([
 ]);
 
 /** Tipos que NÃO são carga: comando e aterramento ficam fora de uso, grupo e demanda. */
-export const TIPOS_SEM_CARGA: ReadonlySet<string> = new Set(['INTERRUPTOR', 'ATERRAMENTO']);
+export const TIPOS_SEM_CARGA: ReadonlySet<string> = new Set(['INTERRUPTOR', 'ATERRAMENTO', 'CAIXA_PASSAGEM']);
 
 export function usoDoCircuito(pontos: readonly Pick<Terminal, 'tipoEletrico'>[]): UsoDoCircuito | null {
   if (pontos.length === 0) return null;

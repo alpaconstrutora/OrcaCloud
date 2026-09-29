@@ -608,6 +608,7 @@ export const ROTULO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   CAMPAINHA: 'Campainha',
   PONTO_ESPERA: 'Ponto de espera (equipamento a definir)',
   ATERRAMENTO: 'Ponto de aterramento',
+  CAIXA_PASSAGEM: 'Caixa de passagem (4×4 / octogonal)',
 };
 
 /**
@@ -645,6 +646,7 @@ export const SIGLA_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   CAMPAINHA: 'Camp',
   PONTO_ESPERA: 'Espera',
   ATERRAMENTO: 'Terra',
+  CAIXA_PASSAGEM: 'CP',
 };
 
 /**
@@ -682,6 +684,8 @@ export const GRUPO_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, string> = {
   // Campainha e aterramento não são carga de utilização: moram com os especiais.
   CAMPAINHA: 'Elétrica — especiais e dados',
   ATERRAMENTO: 'Elétrica — especiais e dados',
+  // E1.2: a caixa é infraestrutura — grupo próprio, ao lado dos eletrodutos.
+  CAIXA_PASSAGEM: 'Elétrica — caixas',
 };
 
 /**
@@ -717,6 +721,18 @@ export const COTA_USUAL_DO_PONTO_ELETRICO: Record<TipoDePontoEletrico, number> =
   PONTO_ESPERA: 300,
   // A haste/BEP fica no piso.
   ATERRAMENTO: 0,
+  // A caixa de passagem no teto (laje), onde os eletrodutos correm.
+  CAIXA_PASSAGEM: 2800,
+};
+
+/**
+ * A CAIXA DE PASSAGEM 4×4 (E1.2): 100 × 100 mm de boca e 50 mm de fundo — é o
+ * que o menu grava ao criar; a octogonal e a 4×2 se declaram no painel.
+ */
+export const MEDIDAS_PADRAO_CAIXA_DE_PASSAGEM: MedidasDaPeca = {
+  larguraMm: 100,
+  alturaMm: 100,
+  profundidadeMm: 50,
 };
 
 /**

@@ -10,6 +10,7 @@ import type { Componente, DisciplinaDeRede, FamiliaDeComponente, Terminal, TipoD
 import { CATALOGO_DE_COMPONENTES, FAMILIAS_DE_COMPONENTE, ROTULO_DA_FAMILIA_DE_COMPONENTE, TIPOS_DE_COMPONENTE } from '../../utils/blueprintKernel';
 import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
+import { ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
@@ -22,6 +23,9 @@ interface Props {
   /** As redes da louça ainda sem ponto (27/09/2026) — a peça desenhada antes de ela lançar os pontos sozinha. */
   redesSemPonto?: DisciplinaDeRede[];
   onLancarPontos?: () => void;
+  /** E1.2: o ponto ELÉTRICO ligado (derivado) e o lançamento quando falta. */
+  pontoEletricoLigado?: Terminal | null;
+  onLancarPontoEletrico?: () => void;
   /** Slot para o SeletorDeTipo (E1.1) — o editor o monta com a família COMPONENTE. */
   seletorDeTipo?: React.ReactNode;
   /** FAMÍLIAS ANINHADAS (P2.18): esta peça é um CONJUNTO (pai) ou faz parte de um (filho). */
@@ -30,7 +34,7 @@ interface Props {
 
 const m = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 
-export default function PainelComponenteSelecionado({ componente: c, pontoLigado, onProps, onExcluir, onSelecionarPonto, redesSemPonto = [], onLancarPontos, seletorDeTipo, conjunto }: Props) {
+export default function PainelComponenteSelecionado({ componente: c, pontoLigado, onProps, onExcluir, onSelecionarPonto, redesSemPonto = [], onLancarPontos, pontoEletricoLigado = null, onLancarPontoEletrico, seletorDeTipo, conjunto }: Props) {
   if (!c) return null;
   const ficha = CATALOGO_DE_COMPONENTES[c.tipoId];
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
@@ -134,6 +138,29 @@ export default function PainelComponenteSelecionado({ componente: c, pontoLigado
               <button type="button" onClick={onLancarPontos} className="font-medium text-blue-700 hover:underline" data-testid="lancar-pontos-da-louca">
                 Lançar {redesSemPonto.length === 1 ? 'o ponto' : 'os pontos'} ({redesSemPonto.map((d) => ROTULO_DA_DISCIPLINA[d].toLowerCase()).join(', ')})
               </button>
+            </>
+          )}
+        </p>
+      )}
+      {ficha.ligaAoPontoEletrico && (
+        <p className="mt-2 text-[11px] text-slate-600" data-testid="ponto-eletrico-ligado">
+          Ponto elétrico ({ROTULO_DO_PONTO_ELETRICO[ficha.ligaAoPontoEletrico]}):{' '}
+          {pontoEletricoLigado ? (
+            <button type="button" onClick={() => onSelecionarPonto?.(pontoEletricoLigado.id)} className="font-medium text-blue-700 hover:underline">
+              ligado — a {Math.round(Math.hypot(pontoEletricoLigado.at.x - c.at.x, pontoEletricoLigado.at.y - c.at.y))} mm
+              {pontoEletricoLigado.potenciaW != null ? ` · ${pontoEletricoLigado.potenciaW} VA` : ''}
+            </button>
+          ) : (
+            <>
+              <span className="text-amber-800">nenhum a até 0,60 m</span>
+              {onLancarPontoEletrico && (
+                <>
+                  {' · '}
+                  <button type="button" onClick={onLancarPontoEletrico} className="font-medium text-blue-700 hover:underline" data-testid="lancar-ponto-eletrico">
+                    Lançar o ponto
+                  </button>
+                </>
+              )}
             </>
           )}
         </p>

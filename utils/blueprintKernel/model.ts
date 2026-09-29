@@ -1641,6 +1641,13 @@ export interface FichaDoComponente {
   /** Louça/equipamento hidráulico: o tipo de ponto (NBR 5626) que a peça pede. */
   ligaAoPonto?: TipoDePontoHidraulico;
   /**
+   * EQUIPAMENTO COM CARGA (E1.2, 29/09/2026): o PONTO ELÉTRICO que a peça
+   * pede — a evaporadora tem o ponto de ar-condicionado na parede atrás dela,
+   * o exaustor o de ventilador. Derivado como o hidráulico
+   * (`pontoEletricoDoComponente`); inserir a peça lança o ponto no mesmo lote.
+   */
+  ligaAoPontoEletrico?: TipoDePontoEletrico;
+  /**
    * HVAC (E11.1): a base da peça acima do piso, mm — a evaporadora hi-wall e o
    * exaustor moram no alto. Ausente = no piso.
    */
@@ -1712,9 +1719,9 @@ export const CATALOGO_DE_COMPONENTES: Record<TipoDeComponente, FichaDoComponente
   // e de casa de máquinas mínima; a folga é a de manutenção/insuflamento usual
   // dos manuais de instalação (condensadora ≥ 300 mm nas laterais/atrás).
   CONDENSADORA: { rotulo: 'Condensadora (split)', familia: 'CLIMATIZACAO', larguraMm: 850, profundidadeMm: 330, alturaMm: 700, simbolo: 'CONDENSADORA', folgaMm: 300 },
-  EVAPORADORA: { rotulo: 'Evaporadora hi-wall', familia: 'CLIMATIZACAO', larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: 'EVAPORADORA', cotaMm: 2200, folgaMm: 150 },
+  EVAPORADORA: { rotulo: 'Evaporadora hi-wall', familia: 'CLIMATIZACAO', larguraMm: 900, profundidadeMm: 220, alturaMm: 300, simbolo: 'EVAPORADORA', cotaMm: 2200, folgaMm: 150, ligaAoPontoEletrico: 'AR_CONDICIONADO' },
   CASA_DE_MAQUINAS: { rotulo: 'Casa de máquinas (reserva)', familia: 'CLIMATIZACAO', larguraMm: 2000, profundidadeMm: 1500, alturaMm: 2500, simbolo: 'RESERVA', folgaMm: 600 },
-  EXAUSTOR: { rotulo: 'Exaustor / ventilação', familia: 'CLIMATIZACAO', larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: 'EXAUSTOR', cotaMm: 2300, folgaMm: 100 },
+  EXAUSTOR: { rotulo: 'Exaustor / ventilação', familia: 'CLIMATIZACAO', larguraMm: 400, profundidadeMm: 400, alturaMm: 400, simbolo: 'EXAUSTOR', cotaMm: 2300, folgaMm: 100, ligaAoPontoEletrico: 'VENTILADOR_EXAUSTOR' },
   // Conjuntos (P2.18): as medidas são a caixa envolvente dos filhos (recalculada ao inserir).
   CONJUNTO_BANHEIRO: { rotulo: 'Conjunto de banheiro (vaso, lavatório, box)', familia: 'LOUCA', larguraMm: 2400, profundidadeMm: 1500, alturaMm: 2000, simbolo: 'CONJUNTO' },
   CONJUNTO_JANTAR: { rotulo: 'Conjunto de jantar (mesa + 4 cadeiras)', familia: 'MOBILIARIO', larguraMm: 1900, profundidadeMm: 1900, alturaMm: 900, simbolo: 'CONJUNTO' },
@@ -2576,6 +2583,10 @@ export const TIPOS_DE_PONTO_ELETRICO = [
   // O ponto de ATERRAMENTO não é carga: não entra em circuito nem em demanda —
   // é o lugar da haste/BEP no desenho, para a E7 (aterramento) e o quantitativo.
   'ATERRAMENTO',
+  // A CAIXA DE PASSAGEM (E1.2, kernel 0.70.0): infraestrutura, não carga — a
+  // caixa 4×4 (ou octogonal) onde o eletroduto emenda ou muda de direção. Tem
+  // medidas (as da caixa), conta no quantitativo e sai no IFC como caixa.
+  'CAIXA_PASSAGEM',
 ] as const;
 
 export type TipoDePontoEletrico = (typeof TIPOS_DE_PONTO_ELETRICO)[number];
@@ -3402,6 +3413,23 @@ export function findComponente(model: BlueprintModel, id: ObjectId): Componente 
  * tipo que a ficha pede, no mesmo pavimento, a até `raioMm` do centro da peça.
  * Derivado — mover a peça ou o ponto refaz a ligação.
  */
+/**
+ * O PONTO ELÉTRICO do equipamento (E1.2): o terminal elétrico do tipo que a
+ * ficha pede, no mesmo pavimento, a até `raioMm` do centro — derivado, como o
+ * hidráulico. `null` para peça sem carga ou sem ponto ao alcance.
+ */
+export function pontoEletricoDoComponente(model: BlueprintModel, c: Componente, raioMm = 600): Terminal | null {
+  const ficha = CATALOGO_DE_COMPONENTES[c.tipoId] as FichaDoComponente | undefined;
+  if (!ficha?.ligaAoPontoEletrico) return null;
+  let melhor: { t: Terminal; d: number } | null = null;
+  for (const t of model.terminais ?? []) {
+    if (t.levelId !== c.levelId || t.disciplina !== 'ELETRICA' || t.tipoEletrico !== ficha.ligaAoPontoEletrico) continue;
+    const d = Math.hypot(t.at.x - c.at.x, t.at.y - c.at.y);
+    if (d <= raioMm && (!melhor || d < melhor.d)) melhor = { t, d };
+  }
+  return melhor?.t ?? null;
+}
+
 export function pontoHidraulicoDoComponente(model: BlueprintModel, c: Componente, raioMm = 600): Terminal | null {
   const ficha = CATALOGO_DE_COMPONENTES[c.tipoId] as FichaDoComponente | undefined;
   if (!ficha?.ligaAoPonto) return null;

@@ -194,6 +194,7 @@ function gruposDoPontoEletrico(): { titulo: string; itens: ItemComponente[] }[] 
     'Elétrica — especiais e dados': Wifi,
     'Elétrica — interruptores': ToggleLeft,
     'Elétrica — equipamentos': Fan,
+    'Elétrica — caixas': Square,
   };
   const porGrupo = new Map<string, ItemComponente[]>();
   const acrescentar = (titulo: string, item: ItemComponente) => {

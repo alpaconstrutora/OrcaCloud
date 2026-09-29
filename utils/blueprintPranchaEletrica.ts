@@ -170,6 +170,11 @@ function simboloDoPonto(d: Desenhista, t: Pick<Terminal, 'tipoEletrico' | 'cotaM
     d.linha(c.x - LD_MM / 2, c.y + LD_MM / 2, c.x + LD_MM / 2, c.y - LD_MM / 2, { espessuraMm: MEDIA, cor: COR });
     return;
   }
+  if (tipo === 'CAIXA_PASSAGEM') {
+    // A CAIXA (E1.2): quadrado SEM diagonal — a diagonal é o que diz "ligação".
+    d.retangulo(c.x - LD_MM / 2, c.y - LD_MM / 2, LD_MM, LD_MM, { espessuraMm: MEDIA, cor: COR });
+    return;
+  }
   if (tipo === 'ATERRAMENTO') {
     // O símbolo de TERRA: haste vertical e três traços decrescentes (IEC 60417-5017).
     const h = LD_MM;
@@ -359,6 +364,7 @@ export function linhasDaLegenda(model: BlueprintModel): string[] {
   if ([...TIPOS_DE_EQUIPAMENTO_ELETRICO].some((x) => f.has(x))) L.push('EQUIPAMENTO — quadrado com diagonal e a sigla ao lado: AC = ar-condicionado, Motor = motor/bomba, Vent = ventilador/exaustor, Portão, VE = carregador de veículo, Espera = equipamento a definir');
   if (f.has('CAMPAINHA')) L.push('CAMP — campainha (círculo pequeno com traço)');
   if (f.has('ATERRAMENTO')) L.push('TERRA — ponto de aterramento (haste e três traços)');
+  if (f.has('CAIXA_PASSAGEM')) L.push('CP — caixa de passagem (quadrado sem diagonal; medidas no painel da peça)');
   if (['DADOS_TELEFONE', 'DADOS_TV', 'DADOS_REDE', 'DADOS_USB'].some((x) => f.has(x))) L.push('DADOS — círculo pequeno com traço (telefone, TV, rede, USB)');
   if (f.has('ELETRODUTO')) L.push('ELETRODUTO — linha contínua = embutido na parede ou teto; Ø nominal ao lado; condutores (NBR 5444): traço reto = fase, com pé = neutro, só de um lado = retorno, com barra = terra; número do circuito em cima, seção (mm²) embaixo');
   if (f.has('ELETRODUTO_PISO')) L.push('ELETRODUTO NO PISO — linha tracejada');

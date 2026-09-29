@@ -377,7 +377,15 @@
  * do roadmap elétrico). Vocabulário novo, forma igual: nenhum desenho existente
  * muda de payload — provado antes do bump com a suíte inteira na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.69.0';
+/**
+ * ─── 0.69.0 → 0.70.0 (29/09/2026) — A CAIXA DE PASSAGEM ─────────────────────
+ *
+ * `tipoEletrico` aceita `CAIXA_PASSAGEM` (E1.2 do roadmap elétrico): a caixa
+ * 4×4/octogonal como terminal com medidas — infraestrutura, não carga. A ficha
+ * do componente ganhou `ligaAoPontoEletrico` (catálogo, não payload). Vocabulário
+ * novo, forma igual — provado antes do bump com os goldens na string antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.70.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -6104,6 +6104,23 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
 
+      // ── A CAIXA DE PASSAGEM (E1.2) — quadrado sem diagonal, nas medidas ──
+      const ehCaixaDePassagem = t.disciplina === 'ELETRICA' && t.tipoEletrico === 'CAIXA_PASSAGEM';
+      if (ehCaixaDePassagem) {
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA.ELETRICA;
+        const lado = Math.max(emTela(md.larguraMm), 8);
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.lineWidth = selecionado ? 2 : 1.5;
+        ctx.strokeStyle = cor;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.rect(c.x - lado / 2, c.y - lado / 2, lado, lado);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // ── O INTERRUPTOR — a simbologia informada em 10/09/2026 ──────────────
       //
       //   uma seção: círculo vazio, letra em cima à direita;

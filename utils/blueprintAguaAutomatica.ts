@@ -162,8 +162,8 @@ const HIDRAULICA_DA_ORIGEM: Record<'RESERVATORIO' | 'AQUECEDOR', DisciplinaDeRed
   AQUECEDOR: 'AGUA_QUENTE',
 };
 
-/** Os rótulos dos trechos de água que não são rede de distribuição (E4.2/E4.3). */
-export const FORA_DA_DISTRIBUICAO = new Set(['Alimentador', 'Extravasor', 'Limpeza']);
+/** Os rótulos dos trechos de água que não são rede de distribuição (E4.2/E4.3/E4.4). */
+export const FORA_DA_DISTRIBUICAO = new Set(['Alimentador', 'Extravasor', 'Limpeza', 'Sucção', 'Recalque']);
 
 /** As origens do desenho: caixas d'água (água fria) e aquecedores (água quente). */
 export function origensDeAgua(model: BlueprintModel): { origem: Terminal; disciplina: DisciplinaDeRede }[] {

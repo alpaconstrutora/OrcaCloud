@@ -25,6 +25,7 @@ import { planejarAgua } from '../../../utils/blueprintAguaAutomatica';
 import { planejarPecasDaCaixa } from '../../../utils/blueprintPecasDaCaixa';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador } from '../../../utils/blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO } from '../../../utils/blueprintReservacao';
+import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque } from '../../../utils/blueprintRecalque';
 import { comAjusteDePressao, pressoesDoModelo } from '../../../utils/blueprintPressaoDaRede';
 
 const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -54,6 +55,14 @@ function salaDaAgua() {
   // E4.2: `?cilindro=1` — a caixa cilíndrica; `?pecas=1` — boia, extravasor e limpeza lançados.
   if (params.get('cilindro') === '1') s = applyCommand(s, { type: 'SetTerminalProps', terminalId: s.terminais![0].id, formaReservatorio: 'CILINDRO' } as Command).model;
   if (params.get('pecas') === '1') s = applyBatch(s, planejarPecasDaCaixa(s, s.terminais![0]).comandos).model;
+  // E4.4: `?cisterna=1` — um reservatório INFERIOR lá fora, com as peças, a bomba, a sucção e o recalque.
+  if (params.get('cisterna') === '1') {
+    s = applyCommand(s, { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Cisterna', at: point(6500, 2500), cotaMm: 0, tipoHidraulico: 'RESERVATORIO', papelReservatorio: 'INFERIOR', volumeL: 1000 } as Command).model;
+    const cisterna = s.terminais![s.terminais!.length - 1];
+    s = applyCommand(s, { type: 'SetTerminalProps', terminalId: cisterna.id, larguraMm: 1200, profundidadeMm: 1200, alturaMm: 1000 } as Command).model;
+    s = applyBatch(s, planejarPecasDaCaixa(s, s.terminais!.find((x) => x.id === cisterna.id)!).comandos).model;
+    s = applyBatch(s, planejarRecalque(s, HIPOTESES_RECALQUE_PADRAO, { ...HIPOTESES_RESERVATORIO_PADRAO, populacaoDeclarada: 4 }).comandos).model;
+  }
   // E4.3: `?alimentador=1` — hidrômetro no limite do lote e o alimentador até a boia.
   if (params.get('alimentador') === '1') {
     s = applyCommand(s, { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Hidrômetro', at: point(4500, 4000), cotaMm: 600, tipoHidraulico: 'HIDROMETRO' } as Command).model;

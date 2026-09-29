@@ -76,6 +76,61 @@ const vazio = (motivo: string): PlanoDoAlimentador => ({
   desnivelM: 0, perdaDistribuidaKpa: 0, perdaLocalizadaKpa: 0, perdaNoHidrometroKpa: 0, pressaoNaBoiaKpa: 0, atende: false, avisos: [], motivo,
 });
 
+export interface PontaDeRota {
+  levelId: ObjectId;
+  a: P;
+  b: P;
+  ca: number;
+  cb: number;
+}
+
+/**
+ * A ROTA pelas paredes (E4.3; reusada pelo recalque da E4.4): de `origem`
+ * desce/sobe à `cotaDoPercurso` no pavimento dela, encosta na parede mais
+ * próxima, corre pelas paredes até a parede sob o `alvo`, sobe atravessando os
+ * pavimentos até a cota do alvo e vai até ele. `null` se o alvo está num
+ * pavimento abaixo do da origem.
+ */
+export function rotaPelasParedesAte(
+  model: BlueprintModel,
+  origem: { levelId: ObjectId; at: P; cotaMm: number },
+  cotaDoPercurso: number,
+  alvo: { levelId: ObjectId; at: P; cotaMm: number },
+): PontaDeRota[] | null {
+  const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const i0 = niveis.findIndex((l) => l.id === origem.levelId);
+  const id = niveis.findIndex((l) => l.id === alvo.levelId);
+  if (i0 < 0 || id < 0 || id < i0) return null;
+  const n0 = niveis[i0];
+  const nd = niveis[id];
+  const paredes0: Wall[] = model.walls.filter((w) => w.levelId === n0.id);
+  const pontas: PontaDeRota[] = [];
+  const add = (levelId: ObjectId, a: P, ca: number, b: P, cb: number) => {
+    if (a.x === b.x && a.y === b.y && ca === cb) return;
+    pontas.push({ levelId, a: { ...a }, b: { ...b }, ca, cb });
+  };
+  add(n0.id, origem.at, origem.cotaMm, origem.at, cotaDoPercurso);
+  const sobAChegada = encaixarNaParede(alvo.at, paredes0, 3000)?.q ?? { ...alvo.at };
+  const naParede = encaixarNaParede(origem.at, paredes0, 1e9)?.q;
+  if (naParede) {
+    add(n0.id, origem.at, cotaDoPercurso, naParede, cotaDoPercurso);
+    const arvore = arvorePelasParedes({ paredes: paredes0, raiz: naParede, pendentes: [sobAChegada], raioDeEncaixeMm: 50 });
+    for (const a of arvore.arestas) add(n0.id, a.de, cotaDoPercurso, a.para, cotaDoPercurso);
+  } else {
+    add(n0.id, origem.at, cotaDoPercurso, sobAChegada, cotaDoPercurso);
+  }
+  const pe = sobAChegada;
+  if (id === i0) {
+    add(n0.id, pe, cotaDoPercurso, pe, alvo.cotaMm);
+  } else {
+    add(n0.id, pe, cotaDoPercurso, pe, n0.defaultHeightMm);
+    for (let k = i0 + 1; k < id; k++) add(niveis[k].id, pe, 0, pe, niveis[k].defaultHeightMm);
+    add(nd.id, pe, 0, pe, alvo.cotaMm);
+  }
+  add(nd.id, pe, alvo.cotaMm, alvo.at, alvo.cotaMm);
+  return pontas;
+}
+
 export function planejarAlimentador(
   model: BlueprintModel,
   hip: HipotesesDeAlimentacao,
@@ -90,7 +145,6 @@ export function planejarAlimentador(
   if (!destino) return vazio("Não há caixa d'água no desenho para o alimentador chegar.");
 
   const nivelPorId = new Map(model.levels.map((l) => [l.id, l]));
-  const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const n0 = nivelPorId.get(entrada.levelId)!;
   const nd = nivelPorId.get(destino.levelId)!;
 
@@ -107,44 +161,9 @@ export function planejarAlimentador(
   if (!boia) avisos.push("A caixa não tem torneira de boia: o alimentador chega ao alto dela (lance as peças da caixa).");
 
   // ── A ROTA ────────────────────────────────────────────────────────────────
-  const paredes0: Wall[] = model.walls.filter((w) => w.levelId === n0.id);
-  const cotaE = hip.cotaEnterradaMm;
-  const pontas: { levelId: ObjectId; a: P; b: P; ca: number; cb: number }[] = [];
-  const add = (levelId: ObjectId, a: P, ca: number, b: P, cb: number) => {
-    if (a.x === b.x && a.y === b.y && ca === cb) return;
-    pontas.push({ levelId, a: { ...a }, b: { ...b }, ca, cb });
-  };
-  // 1. O cavalete desce à cota enterrada.
-  add(n0.id, entrada.at, entrada.cotaMm, entrada.at, cotaE);
-  // 2. Encosta na parede mais próxima; corre pelas paredes até a sob a caixa.
-  const alvoEmPlanta = alvo.at;
-  const sobAChegada = encaixarNaParede(alvoEmPlanta, paredes0, 3000)?.q ?? { ...alvoEmPlanta };
-  const naParede = encaixarNaParede(entrada.at, paredes0, 1e9)?.q;
-  let pe: P = { ...entrada.at };
-  if (naParede) {
-    add(n0.id, pe, cotaE, naParede, cotaE);
-    pe = naParede;
-    const arvore = arvorePelasParedes({ paredes: paredes0, raiz: naParede, pendentes: [sobAChegada], raioDeEncaixeMm: 50 });
-    for (const a of arvore.arestas) add(n0.id, a.de, cotaE, a.para, cotaE);
-    pe = sobAChegada;
-  } else {
-    add(n0.id, pe, cotaE, sobAChegada, cotaE);
-    pe = sobAChegada;
-  }
-  // 3. Sobe até o pavimento da caixa e à cota da boia.
-  const i0 = niveis.findIndex((l) => l.id === n0.id);
-  const id = niveis.findIndex((l) => l.id === nd.id);
-  if (id === i0) {
-    add(n0.id, pe, cotaE, pe, alvo.cotaMm);
-  } else if (id > i0) {
-    add(n0.id, pe, cotaE, pe, n0.defaultHeightMm);
-    for (let k = i0 + 1; k < id; k++) add(niveis[k].id, pe, 0, pe, niveis[k].defaultHeightMm);
-    add(nd.id, pe, 0, pe, alvo.cotaMm);
-  } else {
-    return vazio('A caixa está abaixo do pavimento do hidrômetro: o alimentador não é lançado automaticamente.');
-  }
-  // 4. Da parede até a boia.
-  add(nd.id, pe, alvo.cotaMm, alvo.at, alvo.cotaMm);
+  const rota = rotaPelasParedesAte(model, { levelId: n0.id, at: entrada.at, cotaMm: entrada.cotaMm }, hip.cotaEnterradaMm, { levelId: nd.id, at: alvo.at, cotaMm: alvo.cotaMm });
+  if (!rota) return vazio('A caixa está abaixo do pavimento do hidrômetro: o alimentador não é lançado automaticamente.');
+  const pontas = rota;
 
   // ── O DIMENSIONAMENTO ─────────────────────────────────────────────────────
   const consumoDiarioL = dimensionarReservacao(model, reservatorio).consumoDiarioL;

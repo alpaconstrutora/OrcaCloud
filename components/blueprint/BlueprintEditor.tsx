@@ -215,6 +215,8 @@ import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../.
 import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelAlimentador from './PainelAlimentador';
+import PainelRecalque from './PainelRecalque';
+import { planejarRecalque } from '../../utils/blueprintRecalque';
 import { planejarAlimentador } from '../../utils/blueprintAlimentador';
 import { planejarPecasDaCaixa } from '../../utils/blueprintPecasDaCaixa';
 import { dimensionarReservacao } from '../../utils/blueprintReservacao';
@@ -7173,6 +7175,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         : null,
     [tarefaAberta, editor.model, hidroDoEstudo.hipoteses],
   );
+  /** RECALQUE (29/09/2026, E4.4): só com reservatório INFERIOR. */
+  const planoDoRecalque = useMemo(
+    () => (tarefaAberta === 'agua' ? planejarRecalque(editor.model, hidroDoEstudo.hipoteses.recalque, hidroDoEstudo.hipoteses.reservatorio) : null),
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses],
+  );
   const dimensionamentoDaReservacao = useMemo(
     () => (tarefaAberta === 'agua' ? dimensionarReservacao(editor.model, hidroDoEstudo.hipoteses.reservatorio) : null),
     [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.reservatorio],
@@ -13990,6 +13997,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   onHip={(alimentacao) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, alimentacao })}
                   onLancar={() => {
                     if (planoDoAlimentador.comandos.length) editor.runBatch(planoDoAlimentador.comandos);
+                  }}
+                />
+              )}
+              {planoDoRecalque && (planoDoRecalque.inferiorId || planoDoRecalque.motivo) && (
+                <PainelRecalque
+                  plano={planoDoRecalque}
+                  hip={hidroDoEstudo.hipoteses.recalque}
+                  onHip={(recalque) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, recalque })}
+                  onLancar={() => {
+                    if (planoDoRecalque.comandos.length) editor.runBatch(planoDoRecalque.comandos);
                   }}
                 />
               )}

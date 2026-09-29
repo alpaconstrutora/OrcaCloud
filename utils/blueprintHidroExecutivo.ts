@@ -27,6 +27,7 @@ import { marcasDeVerificacao } from './blueprintVerificacaoRede';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
 import { dimensionarReservacao } from './blueprintReservacao';
 import { ROTULO_DO_ALIMENTADOR, planejarAlimentador } from './blueprintAlimentador';
+import { ROTULO_DA_SUCCAO, ROTULO_DO_RECALQUE, planejarRecalque } from './blueprintRecalque';
 import { memorialDeCalculoHidro, memorialDescritivoHidro, nBr, type BlocoDoMemorial, type HipotesesHidro } from './blueprintMemorialHidro';
 
 export interface VerificacaoHidro {
@@ -137,6 +138,20 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
         exigido: `≥ ${nBr(hip.alimentacao.pressaoMinimaNaBoiaKpa, 0)} kPa (rede pública ${nBr(hip.alimentacao.pressaoDaRedePublicaKpa, 0)} kPa)`,
         obtido: `${nBr(alim.pressaoNaBoiaKpa, 1)} kPa`,
         atende: alim.atende,
+      });
+    }
+    // E4.4: com inferior, o recalque lançado (bomba, sucção e recalque).
+    const rc = planejarRecalque(model, hip.recalque, hip.reservatorio);
+    if (rc.inferiorId || rc.motivo) {
+      const temBomba = (model.terminais ?? []).some((t) => t.tipoHidraulico === 'BOMBA');
+      const temRecalque = (model.trechos ?? []).some((t) => t.rotulo === ROTULO_DO_RECALQUE) && (model.trechos ?? []).some((t) => t.rotulo === ROTULO_DA_SUCCAO);
+      v.push({
+        grupo: 'NBR5626',
+        item: 'Recalque do inferior ao superior',
+        norma: 'NBR 5626',
+        exigido: 'bomba, sucção e recalque',
+        obtido: rc.motivo ?? (temBomba && temRecalque ? `bomba ${nBr(rc.motorCv, rc.motorCv < 1 ? 2 : 1)} cv, Hman ${nBr(rc.alturaManometricaM, 1)} mca` : 'não lançado'),
+        atende: !rc.motivo && temBomba && temRecalque,
       });
     }
     // E4.1: a caixa guarda ao menos o consumo dos dias de reserva.

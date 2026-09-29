@@ -635,3 +635,30 @@ vertical cobre o traçado das colunas) e anticolisão dos rótulos na planta.
   conta da pressão, rede fraca → aviso de inferior, destino inferior, relançar × confirmado, fora
   da distribuição e sem ponta aberta, coluna antiga). Harness
   `esgoto-isometrico?cena=agua&pecas=1&alimentador=1` em 3D. Suíte: 536 arquivos / 6.023 testes.
+
+### E4.4 — Recalque (29/09/2026) · fecha a Etapa 4
+
+- `utils/blueprintRecalque.ts` (novo, puro): com reservatório INFERIOR e SUPERIOR — **vazão** = consumo
+  diário em 6 h/dia (17 %/h; a NBR 5626 recomenda ≥ 15 %); **Forchheimer** D = 1,3·√Q·X^¼ → DN
+  comercial do recalque (interno ≥ D) e **um acima na sucção**; **altura manométrica** = desnível do
+  fundo do inferior à chegada no superior + perdas (Darcy-Weisbach + comprimentos equivalentes:
+  joelhos, retenção, registro, entrada/saída); **potência** γ·Q·Hman/η (η = 0,5) e o **motor
+  comercial** (0,25…10 cv). Lançamento: **bomba** do lado do inferior voltado para o superior (do
+  outro lado o recalque voltava por cima da sucção — o kernel acusou "ângulo de 0°" no nó da bomba),
+  **sucção** do fundo do inferior à bomba, **recalque** subindo na bomba e correndo pelas paredes a
+  2,20 m (`rotaPelasParedesAte`, extraída do alimentador) até a boia do superior. Sugeridos, um
+  lote; relançar não duplica a bomba. Sucção e recalque fora da distribuição.
+- Gaveta de água: bloco **Recalque** (só com inferior) — bomba em cv, m³/h e mca, Forchheimer, DN e
+  comprimentos, desnível e perdas, premissas (horas, rendimento) e "Lançar bomba e recalque".
+  Memorial: seção **Recalque**. Conferência: **Recalque do inferior ao superior** (só com inferior).
+- **Pronto quando** ✔: 7 testes em `blueprintRecalque.test.ts` (sem inferior não cobra; sem
+  superior diz; a fórmula; o sobrado com cisterna: DN 20/25, desnível 6,40 m, Hman e potência pela
+  conta, motor 0,25 cv; o lançamento contínuo até a boia, sem ponta aberta, sem aviso nos nós do
+  recalque, fora da distribuição, relançar sem duplicar; o alimentador vai à cisterna; memorial e
+  conferência). Harness `esgoto-isometrico?cena=agua&pecas=1&cisterna=1&alimentador=1` em 3D
+  ("avisos: 0"). Suíte: 537 arquivos / 6.030 testes.
+- **Backlog achado**: no sobrado lançado pelos planejadores há dois nós com "4 trechos no mesmo nó" —
+  a coluna de água que desce pelo nó do barrilete onde também desce a prumada do vaso, e o nó do TQ
+  com a descida do vaso de cima. Vem das Etapas anteriores (planejadores), não do recalque.
+
+**Etapa 4: 4 de 4 fases publicadas.**

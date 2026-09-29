@@ -29,6 +29,7 @@ import { HIPOTESES_PRESSAO_PADRAO, pressoesDoModelo, type EstadoDaPressao, type 
 import { HIPOTESES_ESGOTO_PADRAO, caixasDeInspecao, esgotoTrechoATrecho, fontesDeEsgoto, type HipotesesDeEsgoto } from './blueprintEsgotoAutomatico';
 import { colunasDoModelo, linhasDaLegendaDeColunas } from './blueprintEsquemaVertical';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
+import { HIPOTESES_RECALQUE_PADRAO, planejarRecalque, type HipotesesDeRecalque } from './blueprintRecalque';
 import { HIPOTESES_ALIMENTACAO_PADRAO, planejarAlimentador, type HipotesesDeAlimentacao } from './blueprintAlimentador';
 import { HIPOTESES_RESERVATORIO_PADRAO, dimensionarReservacao, volumeDoReservatorioL, type HipotesesDeReservatorio } from './blueprintReservacao';
 
@@ -49,6 +50,8 @@ export interface HipotesesHidro {
   reservatorio: HipotesesDeReservatorio;
   /** E4.3: pressão da rede pública, cota enterrada, velocidade e DN do alimentador. */
   alimentacao: HipotesesDeAlimentacao;
+  /** E4.4: horas de funcionamento e rendimento da bomba de recalque. */
+  recalque: HipotesesDeRecalque;
 }
 
 export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
@@ -57,6 +60,7 @@ export const HIPOTESES_HIDRO_PADRAO: HipotesesHidro = {
   esgoto: HIPOTESES_ESGOTO_PADRAO,
   reservatorio: HIPOTESES_RESERVATORIO_PADRAO,
   alimentacao: HIPOTESES_ALIMENTACAO_PADRAO,
+  recalque: HIPOTESES_RECALQUE_PADRAO,
 };
 
 export interface ContextoDoMemorial {
@@ -288,6 +292,32 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
         ],
       });
       B.push({ tipo: 'paragrafo', texto: a.atende ? 'Atende: a rede pública abastece o reservatório.' : `Não atende: ${a.avisos.find((x) => /rede pública/.test(x)) ?? 'pressão insuficiente na boia.'}` });
+    }
+  }
+
+  // ── Recalque (E4.4) — só com reservatório inferior ─────────────────────────
+  if (temAgua) {
+    const rc = planejarRecalque(model, hip.recalque, hip.reservatorio);
+    if (rc.inferiorId || rc.motivo) {
+      B.push({ tipo: 'secao', texto: 'Recalque' });
+      if (rc.motivo) B.push({ tipo: 'paragrafo', texto: rc.motivo });
+      else {
+        B.push({
+          tipo: 'tabela',
+          cabecalho: ['Grandeza', 'Valor'],
+          linhas: [
+            ['Vazão de recalque', `${nBr(rc.vazaoLs, 3)} L/s (${nBr(rc.vazaoLs * 3.6, 2)} m³/h) — consumo diário em ${nBr(hip.recalque.horasDeFuncionamento, 0)} h`],
+            ['Diâmetro de Forchheimer', `D = 1,3·√Q·X^¼ = ${nBr(rc.diametroForchheimerMm, 1)} mm`],
+            ['Recalque', `DN ${rc.dnRecalqueMm} · ${nBr(rc.comprimentoRecalqueM)} m · V ${nBr(rc.velocidadeRecalqueMs)} m/s`],
+            ['Sucção', `DN ${rc.dnSuccaoMm} · ${nBr(rc.comprimentoSuccaoM)} m`],
+            ['Desnível geométrico', `${nBr(rc.desnivelGeometricoM)} m`],
+            ['Perdas (sucção + recalque)', `${nBr(rc.perdasMca)} mca`],
+            ['Altura manométrica', `${nBr(rc.alturaManometricaM)} mca`],
+            ['Potência (η = ' + nBr(hip.recalque.rendimento, 2) + ')', `${nBr(rc.potenciaCv, 2)} cv → motor de ${nBr(rc.motorCv, rc.motorCv < 1 ? 2 : 1)} cv`],
+          ],
+        });
+        for (const a of rc.avisos) B.push({ tipo: 'paragrafo', texto: `Aviso: ${a}` });
+      }
     }
   }
 

@@ -19,6 +19,7 @@ import {
   gerarLancamentosDeCamadas,
   gerarLancamentosDeAcabamentos,
   gerarLancamentosDeGuardaCorpos,
+  gerarLancamentosDeInstalacoes,
   gerarLancamentosDeEsquadrias,
   prefixoDoEstudo,
   aplicarNoOrcamento,
@@ -245,6 +246,8 @@ export async function preverLancamentos(
   const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
   const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);
   const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
+  // E8.2: as peças hidrossanitárias com código viram linha direto (sem de-para).
+  const dasInstalacoes = gerarLancamentosDeInstalacoes(quant, itens, contexto);
 
   // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
   // diferentes. O de-para cobre o que a composição não descreve (área de piso,
@@ -255,13 +258,14 @@ export async function preverLancamentos(
   // alvenaria genérica e outra por material. A prévia mostra os dois blocos
   // separados justamente para que isso fique visível ANTES de aplicar.
   const resultado: ResultadoGeracao = {
-    entries: [...doDePara.entries, ...dasCamadas.entries, ...dosAcabamentos.entries, ...dosGuardaCorpos.entries, ...dasEsquadrias.entries],
+    entries: [...doDePara.entries, ...dasCamadas.entries, ...dosAcabamentos.entries, ...dosGuardaCorpos.entries, ...dasEsquadrias.entries, ...dasInstalacoes.entries],
     divergencias: [
       ...doDePara.divergencias,
       ...dasCamadas.divergencias,
       ...dosAcabamentos.divergencias,
       ...dosGuardaCorpos.divergencias,
       ...dasEsquadrias.divergencias,
+      ...dasInstalacoes.divergencias,
     ],
   };
 

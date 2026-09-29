@@ -229,7 +229,8 @@ vez de deixar a documentação para o fim.
 | Hunter probabilístico para água, sub-redes nomeadas além do pluvial | M/A | a NBR 5626 usa pesos; sub-rede entra só onde uma fase precisar |
 | Integração com AltoQi Cloud | N | produto de terceiro |
 | Tratamento individual: vala de infiltração e de filtração, múltiplos sumidouros, ensaio de infiltração no sistema, distâncias mínimas a divisas e poços (NBR 7229/13969) | A/M | a E7 cobre o arranjo residencial usual (tanque → filtro → um sumidouro); o resto pede dado do terreno que o desenho não tem |
-| Pluvial no ORÇAMENTO (medida de calha e de tubo pluvial no de-para SINAPI), contribuição do piso descoberto nos ralos, paredes que interceptam a chuva (5.2.2), ábaco da Figura 3 no lugar de Wyly–Eaton | A/M | a E6 fechou o projeto; o orçamento é a E8 (insumos), e as três contas pedem dado que o desenho ainda não tem |
+| COMPOSIÇÃO de vários insumos por peça (a caixa sifonada = caixa + grelha + prolongamento), com a tabela de composições no banco e os códigos SINAPI de cada uma | A | a E8.2 lança por peça o item ÚNICO do código dela; a composição pede tabela nova (migration) e códigos que precisam vir do usuário, não da memória |
+| Contribuição do piso descoberto nos ralos, paredes que interceptam a chuva (5.2.2), ábaco da Figura 3 no lugar de Wyly–Eaton | A/M | a E6 fechou o projeto; o orçamento é a E8 (insumos), e as três contas pedem dado que o desenho ainda não tem |
 | Desvio estrutural do ESGOTO, do alimentador e do recalque; contorno do pilar de canto | A | a E5.5 fez a água (onde está o grafo pelas paredes); o esgoto tem traçado próprio (junções 45°), e o pilar de canto pede rota fora do eixo — hoje ficam como marca e pendência |
 
 ## Execução
@@ -979,3 +980,27 @@ terminando no sumidouro, lançamento dimensionado, conferência e memoriais.
   aquecedor de 27 L/min, entrada acima de 20 kPa; ΔT 30 → 33 L/min; ΔT 50 passa da lista; pressão
   mínima acima da entrada; sem aquecedor; o segundo aquecedor sem pontos; conferência; memoriais;
   premissas) e 2 em `PainelAquecedor.test.tsx`. Suíte: 555 arquivos / 6.150 testes.
+
+### E8.2 — Insumo por peça (29/09/2026) · fecha a Etapa 8 e o roadmap
+
+- `gerarLancamentosDeInstalacoes` (`utils/blueprintBudget.ts`), no molde dos guarda-corpos e das
+  esquadrias: a **peça hidrossanitária com código** (`itemCode`, já editável no painel da peça) vira
+  linha de orçamento **direto, sem de-para** — ponto, caixa, registro, conexão lançada à mão, tanque,
+  sumidouro… por classificação × código, cotados em **UN** (a contagem); tubo e calha por disciplina
+  × material × seção × DN × código, cotados em **M** (o comprimento real). Unidade errada ou código
+  fora do catálogo: divergência, nenhuma linha. Sem código, a peça segue no de-para. Somado no
+  serviço do orçamento com os outros blocos (a prévia mostra separado — mapear no de-para uma medida
+  cujas peças já têm código contaria duas vezes, como nas esquadrias).
+- As **conexões deduzidas** dos encontros não são peças do modelo (não têm onde guardar código):
+  continuam no de-para, por tipo × DN.
+- De-para: medidas novas **`COMPRIMENTO_TUBO_PLUVIAL`** e **`COMPRIMENTO_CALHA`** (o backlog da E6);
+  os `COMPRIMENTO_TUBO_*` deixam a calha de fora.
+- Backlog nomeado: a **composição** de vários insumos por peça (tabela no banco + códigos SINAPI —
+  decisão do usuário).
+- ⚠️ Um `Write` do teste sobrescreveu `__tests__/blueprintBudgetInstalacoes.test.ts` (que já existia);
+  restaurado com `git checkout --`, o teste novo é `blueprintOrcamentoPorPeca.test.ts`.
+- **Pronto quando** ✔: 3 testes em `blueprintOrcamentoPorPeca.test.ts` (UN pela contagem e M pelo
+  comprimento, com os ids e grupos; unidade errada e código fora do catálogo; as medidas pluviais
+  separando tubo de calha). Suíte: 556 arquivos / 6.153 testes.
+
+**Etapa 8 fechada — e com ela as 9 etapas do roadmap hidrossanitário (E0–E8).**

@@ -31,6 +31,7 @@
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoHidraulico } from './blueprintKernel';
+import { nomeDaCalha } from './blueprintCalhas';
 import { ROTULO_DA_CONEXAO, materialPadraoDaDisciplina, type MaterialDeTubo } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
@@ -346,6 +347,21 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'INSTALACAO',
     dimensao: 'M',
     descricao: 'Metros de tubo de esgoto, uma linha por diâmetro (DN), com o caimento e as prumadas.',
+  },
+  // ÁGUAS PLUVIAIS (E8.2 do roadmap hidrossanitário): o tubo e a calha são compras diferentes.
+  {
+    id: 'COMPRIMENTO_TUBO_PLUVIAL',
+    rotulo: 'Tubulação de águas pluviais',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de condutor pluvial (vertical e horizontal), uma linha por diâmetro (DN). A calha fica na medida dela.',
+  },
+  {
+    id: 'COMPRIMENTO_CALHA',
+    rotulo: 'Calha',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de calha, uma linha por seção e medida ("Calha meia-cana ø150", "Calha retangular 200 mm").',
   },
   {
     id: 'COMPRIMENTO_ELETRODUTO',
@@ -867,9 +883,24 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
         }));
     }
 
+    case 'COMPRIMENTO_CALHA': {
+      return (quant.totais.porBitola ?? [])
+        .filter((b) => b.secaoCalha && b.comprimentoM > 0)
+        .map((b) => ({ b, rotulo: `${nomeDaCalha(b.secaoCalha!, b.bitolaMm)}${b.itemCode ? ` · ${b.itemCode}` : ''}` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ b, rotulo }) => ({
+          ref: `calha-${b.secaoCalha}-${b.bitolaMm}${b.itemCode ? `-${b.itemCode}` : ''}`,
+          rotulo,
+          valor: b.comprimentoM,
+          formula: `Σ comprimento real dos ${b.trechos} trecho(s) de calha, com o caimento`,
+          variaveis: { secao: b.secaoCalha!, larguraMm: b.bitolaMm, trechos: b.trechos, comprimentoM: b.comprimentoM },
+        }));
+    }
+
     case 'COMPRIMENTO_TUBO_AGUA_FRIA':
     case 'COMPRIMENTO_TUBO_AGUA_QUENTE':
     case 'COMPRIMENTO_TUBO_ESGOTO':
+    case 'COMPRIMENTO_TUBO_PLUVIAL':
     case 'COMPRIMENTO_ELETRODUTO':
     case 'COMPRIMENTO_DUTO': {
       const disciplina =
@@ -878,7 +909,8 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
       // O `ref` é a linha de compra (disciplina + DN + item): estável entre
       // publicações enquanto existir tubo daquele DN.
       return (quant.totais.porBitola ?? [])
-        .filter((b) => b.disciplina === disciplina && b.comprimentoM > 0)
+        // A calha (E6.2) não é tubo: tem a medida dela, `COMPRIMENTO_CALHA`.
+        .filter((b) => b.disciplina === disciplina && !b.secaoCalha && b.comprimentoM > 0)
         // E1.1: o MATERIAL entra no FIM do rótulo (o filtro que procura "Água fria
         // DN 25" continua casando) e no `ref` só quando foge do padrão da
         // disciplina — a linha de compra já lançada não muda de identidade.
@@ -1398,6 +1430,100 @@ export function gerarLancamentosDeGuardaCorpos(
         formula: dim === 'M' ? 'Σ comprimento das polilinhas' : 'Σ comprimento × altura',
         variables: { tipo: m.tipo, material: m.material, comprimentoM: m.comprimentoM, areaM2: m.areaM2, pecas: m.pecas, snapshot: ctx.snapshotId },
         result: valor,
+        justification: procedencia,
+      },
+    });
+  }
+  return { entries, divergencias };
+}
+
+/** As redes hidrossanitárias — as que a E8.2 lança por peça. */
+const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL']);
+
+/**
+ * Lançamentos por PEÇA das instalações hidrossanitárias (E8.2 do roadmap
+ * hidrossanitário) — o molde dos guarda-corpos e das esquadrias: a peça que
+ * tem o código do item (`itemCode`, no painel dela) vira linha direto, sem
+ * de-para.
+ *
+ *   - PONTO, CAIXA, REGISTRO, CONEXÃO LANÇADA À MÃO, tanque, sumidouro… (os
+ *     terminais, agrupados por classificação × código): o item é cotado por
+ *     unidade (`UN`) e leva a contagem;
+ *   - TUBO e CALHA (a linha de compra: disciplina × material × seção × DN ×
+ *     código): o item é cotado por metro (`M`) e leva o comprimento real.
+ *
+ * Outra unidade, ou código fora do catálogo, é divergência — nenhuma linha. A
+ * peça SEM código continua no de-para (`CONTAGEM_PONTOS_HIDRAULICOS`,
+ * `COMPRIMENTO_TUBO_*`, `COMPRIMENTO_CALHA`). ⚠️ Como nas esquadrias: mapear no
+ * de-para uma medida cujas peças já têm código conta duas vezes — a prévia
+ * mostra os blocos separados.
+ *
+ * As conexões DEDUZIDAS dos encontros não são peças do modelo (não têm onde
+ * guardar código): continuam no de-para, por tipo × DN.
+ */
+export function gerarLancamentosDeInstalacoes(
+  quant: Quantitativos,
+  itensPorCodigo: Map<string, SinapiItem>,
+  ctx: ContextoGeracao,
+): ResultadoGeracao {
+  const entries: BudgetEntry[] = [];
+  const divergencias: Divergencia[] = [];
+  const procedencia =
+    `Gerado das peças hidrossanitárias com código da planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, kernel ${quant.kernelVersion || '—'}.`;
+  const nomeDaRede = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
+  const conferir = (chave: string, itemCode: string, aceita: Dimensao, oQue: string): SinapiItem | null => {
+    const item = itensPorCodigo.get(itemCode);
+    if (!item) {
+      divergencias.push({ mapeamentoId: chave, medida: 'INSTALACAO', itemCode, motivo: `Item ${itemCode} não encontrado no catálogo (SINAPI nem base própria).` });
+      return null;
+    }
+    if (dimensaoDaUnidade(item.unit) !== aceita) {
+      divergencias.push({ mapeamentoId: chave, medida: 'INSTALACAO', itemCode, motivo: `${oQue} produz ${aceita}, mas o item ${itemCode} é cotado em "${item.unit}". Nenhuma linha foi gerada.` });
+      return null;
+    }
+    return item;
+  };
+  for (const t of quant.totais.porTerminal ?? []) {
+    if (!t.itemCode || !REDES_HIDROSSANITARIAS.has(t.disciplina) || t.quantidade <= 0) continue;
+    const nome = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? t.tipo) : t.tipo;
+    const chave = `instalacao:peca:${t.disciplina}:${t.classificacao ?? t.tipo}:${t.itemCode}`;
+    const item = conferir(chave, t.itemCode, 'UN', `A peça "${nome}"`);
+    if (!item) continue;
+    entries.push({
+      id: `bp:${ctx.studyId}:${chave}`,
+      sinapiItem: item,
+      quantity: t.quantidade,
+      phase: '',
+      group: `Instalações hidrossanitárias — peças · ${nomeDaRede(t.disciplina)}`,
+      discipline: 'Planta Inteligente',
+      notes: procedencia,
+      calculationMemory: {
+        formula: 'contagem das peças com este código',
+        variables: { disciplina: t.disciplina, peca: nome, quantidade: t.quantidade, snapshot: ctx.snapshotId },
+        result: t.quantidade,
+        justification: procedencia,
+      },
+    });
+  }
+  for (const b of quant.totais.porBitola ?? []) {
+    if (!b.itemCode || !REDES_HIDROSSANITARIAS.has(b.disciplina) || b.comprimentoM <= 0) continue;
+    const nome = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : `${nomeDaRede(b.disciplina)} DN ${b.bitolaMm}`;
+    const chave = `instalacao:tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.itemCode}`;
+    const item = conferir(chave, b.itemCode, 'M', `O tubo "${nome}"`);
+    if (!item) continue;
+    entries.push({
+      id: `bp:${ctx.studyId}:${chave}`,
+      sinapiItem: item,
+      quantity: b.comprimentoM,
+      phase: '',
+      group: `Instalações hidrossanitárias — ${b.secaoCalha ? 'calhas' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
+      discipline: 'Planta Inteligente',
+      notes: procedencia,
+      calculationMemory: {
+        formula: `Σ comprimento real dos ${b.trechos} trecho(s)`,
+        variables: { disciplina: b.disciplina, tubo: nome, trechos: b.trechos, comprimentoM: b.comprimentoM, snapshot: ctx.snapshotId },
+        result: b.comprimentoM,
         justification: procedencia,
       },
     });

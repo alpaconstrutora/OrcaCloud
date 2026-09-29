@@ -58,6 +58,9 @@ interface Props {
   trecho: Trecho | null;
   terminal: Terminal | null;
   /** Campo omitido fica como está — o painel edita uma coisa por vez. */
+  /** E4.3/E4.4: os quadros para ligar a entrada/medidor e as unidades para o medidor. */
+  quadrosParaEntrada?: { id: string; nome: string }[];
+  unidadesParaMedidor?: { id: string; numero: string }[];
   /** F9: a ocupação do eletroduto, calculada por quem tem o modelo. `undefined` = não mostrar. */
   ocupacao?: { ocupacao: OcupacaoDoEletroduto | null; motivo: string | null } | null;
   /**
@@ -82,6 +85,9 @@ interface Props {
     itemCode?: string | null;
     rotulo?: string | null;
     circuitoId?: string | null;
+    /** E4.3/E4.4: o quadro da entrada/medidor e a unidade que o medidor mede. */
+    quadroId?: string | null;
+    unidadeId?: string | null;
     potenciaW?: number | null;
     interruptor?: TipoDeInterruptor | null;
     comando?: string | null;
@@ -137,6 +143,8 @@ function BotaoExcluir({ rotulo, onClick }: { rotulo: string; onClick: () => void
 }
 
 export default function PainelTrechoSelecionado({
+  quadrosParaEntrada,
+  unidadesParaMedidor,
   ocupacao,
   trecho,
   terminal,
@@ -333,6 +341,47 @@ export default function PainelTrechoSelecionado({
             </>
           )}
 
+          {/* E4.3/E4.4: ENTRADA DE SERVIÇO e MEDIDOR não têm circuito — têm o QUADRO
+              a que se ligam, e o medidor tem a UNIDADE que mede. */}
+          {terminal.disciplina === 'ELETRICA' && (terminal.tipoEletrico === 'ENTRADA_SERVICO' || terminal.tipoEletrico === 'MEDIDOR') && (
+            <>
+              <label className="block">
+                <span className="text-[11px] font-medium text-slate-600">Quadro (entrada / medição)</span>
+                <select
+                  value={terminal.quadroId ?? ''}
+                  onChange={(e) => onTerminal({ quadroId: e.target.value || null })}
+                  aria-label="Quadro da entrada"
+                  className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                >
+                  <option value="">Sem quadro</option>
+                  {(quadrosParaEntrada ?? []).map((q) => (
+                    <option key={q.id} value={q.id}>
+                      {q.nome}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {terminal.tipoEletrico === 'MEDIDOR' && (
+                <label className="block">
+                  <span className="text-[11px] font-medium text-slate-600">Unidade medida</span>
+                  <select
+                    value={terminal.unidadeId ?? ''}
+                    onChange={(e) => onTerminal({ unidadeId: e.target.value || null })}
+                    aria-label="Unidade medida"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    <option value="">— (medidor geral / serviço)</option>
+                    {(unidadesParaMedidor ?? []).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.numero}
+                      </option>
+                    ))}
+                  </select>
+                  {(unidadesParaMedidor ?? []).length === 0 && <span className="mt-0.5 block text-[10px] text-slate-500">Sem unidades no Empreendimento ainda.</span>}
+                </label>
+              )}
+            </>
+          )}
           {/* ⚠️ CIRCUITO e POTÊNCIA só no ponto ELÉTRICO. Num ponto de água
               eles não significam nada, e um campo que não significa nada é um
               convite a preencher com qualquer coisa. */}

@@ -8185,6 +8185,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         trecho={trechoSel}
         terminal={terminalSel}
         circuitos={circuitosParaEscolher}
+        // E4.3/E4.4: entrada e medidor ligam-se a um quadro; o medidor mede uma unidade.
+        quadrosParaEntrada={(editor.model.quadros ?? []).map((q) => ({ id: q.id, nome: q.nome }))}
+        unidadesParaMedidor={(editor.model.unidades ?? []).map((u) => ({ id: u.id, numero: u.numero }))}
         ocupacao={
           trechoSel && trechoSel.disciplina === 'ELETRICA'
             ? ocupacaoDoTrecho(editor.model, trechoSel, hipotesesEletricas, fiacaoDoTrechoSel?.lista ?? null)

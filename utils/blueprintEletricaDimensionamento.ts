@@ -285,6 +285,14 @@ export interface HipotesesEletricas {
    */
   padraoDeEntrada: string;
   /**
+   * E4.4 — o FATOR DE DIVERSIDADE do uso coletivo (id em
+   * `FATORES_DE_DIVERSIDADE`): no quadro que alimenta quadros de UNIDADES, a
+   * demanda das unidades é Σ × fator(n). "SEM" (1,00, conservador) é o padrão;
+   * o "GENERICO" é fórmula de projeto, hipótese sem fonte normativa. O CODI de
+   * cada concessionária fica no backlog — entra como preset com fonte e data.
+   */
+  diversidade: string;
+  /**
    * E3.3 — CORRENTE DE CURTO-CIRCUITO PRESUMIDA na entrada, kA. Hipótese, a
    * confirmar com a concessionária (é ela quem informa a Ik no ponto de
    * entrega): 4,5 kA é o usual residencial em rede pública de baixa tensão.
@@ -373,7 +381,31 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   ikEntradaKa: 4.5,
   origemComTransformador: false,
   padraoDeEntrada: 'GENERICO',
+  diversidade: 'SEM',
 };
+
+/** E4.4 — presets do fator de diversidade. `fator(n)` para n unidades; 1 unidade = 1,00 sempre. */
+export interface FatorDeDiversidade {
+  id: string;
+  nome: string;
+  fonte: string | null;
+  conferir: string;
+  fator: (n: number) => number;
+}
+export const FATORES_DE_DIVERSIDADE: readonly FatorDeDiversidade[] = [
+  { id: 'SEM', nome: 'sem diversidade (1,00)', fonte: null, conferir: 'demanda do condomínio = soma das unidades; conservador', fator: () => 1 },
+  {
+    id: 'GENERICO',
+    nome: 'genérico — hipótese de projeto',
+    fonte: null,
+    // Fórmula usual de projeto para residências (cai de 1,00 em 1 unidade para ~0,55 em 100): HIPÓTESE.
+    conferir: 'fórmula 0,5 + 0,5/√n, sem fonte normativa — CONFERIR na norma da concessionária (CODI/NT)',
+    fator: (n) => (n <= 1 ? 1 : Math.round((0.5 + 0.5 / Math.sqrt(n)) * 1000) / 1000),
+  },
+];
+export function fatorDeDiversidade(id: string): FatorDeDiversidade {
+  return FATORES_DE_DIVERSIDADE.find((f) => f.id === id) ?? FATORES_DE_DIVERSIDADE[0];
+}
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────
 
@@ -926,6 +958,17 @@ export interface PreDimensionamentoDoQuadro {
   cadeia: { quadroId: string; nome: string; quedaAlimentadorPct: number | null }[];
   quedaAcumuladaPct: number | null;
   limiteQuedaEfetivoPct: number;
+  /**
+   * E4.4 — USO COLETIVO: quantos filhos atendem UNIDADES, o fator de
+   * diversidade aplicado a eles (1,00 sem preset), a demanda das unidades já
+   * com o fator e a de serviço (própria + filhos sem unidade). `sDemandadaVA`
+   * = unidades × fator + serviço. `unidade` = a que ESTE quadro atende.
+   */
+  unidade: string | null;
+  unidadesAtendidas: number;
+  fatorDeDiversidade: number;
+  sDemandadaUnidadesVA: number;
+  sDemandadaServicoVA: number;
 }
 
 /** Um quadro alimentado por este — a linha dele no quadro de cargas do pai. */
@@ -942,6 +985,8 @@ export interface FilhoDoQuadro {
   disjuntorGeralA: number | null;
   circuitos: number;
   faltas: number;
+  /** E4.4: o número da unidade que o filho atende (`null` = serviço/comum). */
+  unidade: string | null;
 }
 
 /**
@@ -1068,11 +1113,18 @@ export function preDimensionarQuadroCompleto(
         disjuntorGeralA: r.disjuntorGeralA,
         circuitos: r.circuitos.length,
         faltas: r.achados.filter((a) => a.nivel === 'FALTA').length + r.circuitos.reduce((s, c) => s + c.achados.filter((a) => a.nivel === 'FALTA').length, 0),
+        unidade: r.unidade,
       };
     })
     .filter((f): f is FilhoDoQuadro => !!f);
   const sInstaladaVA = sInstaladaPropriaVA + filhos.reduce((s, f) => s + f.sInstaladaVA, 0);
-  const sDemandadaVA = sDemandadaPropriaVA + filhos.reduce((s, f) => s + f.sDemandadaVA, 0);
+  // E4.4: os filhos que atendem UNIDADES levam o fator de diversidade; o resto é serviço.
+  const filhosDeUnidade = filhos.filter((f) => f.unidade != null);
+  const unidadesAtendidas = new Set(filhosDeUnidade.map((f) => f.unidade)).size;
+  const fator = unidadesAtendidas > 0 ? fatorDeDiversidade(hip.diversidade).fator(unidadesAtendidas) : 1;
+  const sDemandadaUnidadesVA = filhosDeUnidade.reduce((s, f) => s + f.sDemandadaVA, 0) * fator;
+  const sDemandadaServicoVA = sDemandadaPropriaVA + filhos.filter((f) => f.unidade == null).reduce((s, f) => s + f.sDemandadaVA, 0);
+  const sDemandadaVA = sDemandadaUnidadesVA + sDemandadaServicoVA;
   // O alimentador: declarado vence; senão o eletroduto entre o pai e este quadro.
   const alimentadorDerivadoM = pai ? comprimentoEntreQuadros(model, pai, quadro) : null;
   const alimentadorM = quadro.alimentadorM != null && quadro.alimentadorM > 0 ? quadro.alimentadorM : alimentadorDerivadoM;
@@ -1111,6 +1163,11 @@ export function preDimensionarQuadroCompleto(
     cadeia: [],
     quedaAcumuladaPct: null,
     limiteQuedaEfetivoPct: limiteQuedaTotalEfetivoPct(hip),
+    unidade: quadro.unidadeId ? (model.unidades ?? []).find((u) => u.id === quadro.unidadeId)?.numero ?? null : null,
+    unidadesAtendidas,
+    fatorDeDiversidade: fator,
+    sDemandadaUnidadesVA,
+    sDemandadaServicoVA,
   };
 
   if (tensaoV == null) {

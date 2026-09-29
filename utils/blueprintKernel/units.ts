@@ -441,7 +441,15 @@
  * Nenhum desenho muda de payload — provado antes do bump com os goldens na
  * string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.77.0';
+/**
+ * ─── 0.77.0 → 0.78.0 (29/09/2026) — USO COLETIVO ───────────────────────────
+ *
+ * `Quadro.unidadeId` e `Terminal.unidadeId` (MEDIDOR) — E4.4 do roadmap
+ * elétrico; canônico `unidade` por índice, omitido sem vínculo. Nenhum
+ * desenho muda de payload — provado antes do bump com os goldens na string
+ * antiga.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.78.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -9,6 +9,7 @@ import {
 } from '../../utils/blueprintEletricaDimensionamento';
 import { EXPOSICOES_A_RAIOS, ROTULO_DA_EXPOSICAO, type ExposicaoARaios } from '../../utils/blueprintEletricaDimensionamento';
 import { PADROES_DE_ENTRADA, padraoDeEntrada } from '../../utils/blueprintEntradaDeEnergia';
+import { FATORES_DE_DIVERSIDADE, fatorDeDiversidade } from '../../utils/blueprintEletricaDimensionamento';
 
 const ROTULO_DO_GRUPO = { ILUMINACAO: 'iluminação', TUG: 'TUG', FORCA: 'força', MOTOR: 'motores / ar-condicionado' } as const;
 /** Fator de demanda entre 0 e 1; texto vazio ou inválido mantém o atual. */
@@ -227,6 +228,17 @@ export function HipotesesDoPreDimensionamento({
               {PADROES_DE_ENTRADA.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.nome}
+                </option>
+              ))}
+            </select>
+          </label>
+          {/* E4.4: o fator de diversidade do uso coletivo — "sem" (1,00) é o padrão; o genérico é fórmula, hipótese. */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Fator de diversidade (uso coletivo)</span>
+            <select value={hipoteses.diversidade} onChange={(e) => onChange({ ...hipoteses, diversidade: e.target.value })} aria-label="Fator de diversidade" title={fatorDeDiversidade(hipoteses.diversidade).conferir} className="w-40 rounded border border-slate-300 px-1 py-0.5 text-sm">
+              {FATORES_DE_DIVERSIDADE.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.nome}
                 </option>
               ))}
             </select>

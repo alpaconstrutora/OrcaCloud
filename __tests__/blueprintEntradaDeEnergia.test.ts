@@ -40,7 +40,7 @@ function casa(kva: number, opts: { ligacao?: 'FN' | 'FF' | 'FFF'; comPontos?: bo
 
 describe('entrada · kernel 0.77.0', () => {
   it('os dois tipos existem com rótulo/sigla/grupo/cota; são infraestrutura (sem carga, sem fio, não são "ponto fora de circuito")', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.77.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.78.0');
     for (const t of ['ENTRADA_SERVICO', 'MEDIDOR'] as const) {
       expect(TIPOS_DE_PONTO_ELETRICO).toContain(t);
       expect(ROTULO_DO_PONTO_ELETRICO[t]).toBeTruthy();

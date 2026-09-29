@@ -715,6 +715,8 @@ export type Command =
       profundidadeMm?: number | null;
       /** E4.3: o quadro da entrada/medidor, quando já se sabe. */
       quadroId?: ObjectId | null;
+      /** E4.4: a unidade que o medidor mede. */
+      unidadeId?: ObjectId | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -727,6 +729,8 @@ export type Command =
       circuitoId?: ObjectId | null;
       /** E4.3: o quadro da entrada/medidor; `null` desliga. */
       quadroId?: ObjectId | null;
+      /** E4.4: a unidade que o medidor mede; `null` desliga. */
+      unidadeId?: ObjectId | null;
       potenciaW?: number | null;
       /** Letra do comando ("a", "b"). `null` apaga. */
       comando?: string | null;
@@ -766,6 +770,8 @@ export type Command =
       /** E4.1: tipo (QD/QGBT/MEDICAO) e o quadro que alimenta este. */
       tipo?: TipoDeQuadro | null;
       quadroPaiId?: ObjectId | null;
+      /** E4.4: a unidade que este quadro atende. */
+      unidadeId?: ObjectId | null;
     }
   | {
       type: 'SetQuadroProps';
@@ -789,6 +795,8 @@ export type Command =
       /** E4.1: tipo e quadro-pai; `null` volta a QD / a quadro de entrada. Pai inexistente, ele mesmo ou ciclo são recusados. */
       tipo?: TipoDeQuadro | null;
       quadroPaiId?: ObjectId | null;
+      /** E4.4: a unidade que este quadro atende; `null` tira. */
+      unidadeId?: ObjectId | null;
     }
   /**
    * Um CIRCUITO. Exige o quadro: circuito órfão não existe — ele é o que um
@@ -2208,6 +2216,9 @@ function aplicarSemHash(
     case 'DeleteUnidade': {
       const u = findUnidade(next, command.unidadeId);
       next.unidades = (next.unidades ?? []).filter((x) => x.id !== u.id);
+      // E4.4: quadro e medidor que a citavam ficam sem unidade — não somem.
+      next.quadros = (next.quadros ?? []).map((q) => (q.unidadeId === u.id ? { ...q, unidadeId: null } : q));
+      next.terminais = (next.terminais ?? []).map((t) => (t.unidadeId === u.id ? { ...t, unidadeId: null } : t));
       diff.deleted.push(u.id);
       break;
     }
@@ -3373,6 +3384,7 @@ function aplicarSemHash(
           comandoGlobal: command.comandoGlobal ? true : null,
           sugerida: command.sugerida ? true : null,
           ...(command.quadroId ? { quadroId: command.quadroId } : {}),
+          ...(command.unidadeId ? { unidadeId: command.unidadeId } : {}),
           ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
           ...(command.interruptor != null && command.tipoEletrico === 'INTERRUPTOR'
             ? { interruptor: command.interruptor }
@@ -3413,6 +3425,7 @@ function aplicarSemHash(
       if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;
       if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
       if (command.quadroId !== undefined) terminal.quadroId = command.quadroId;
+      if (command.unidadeId !== undefined) terminal.unidadeId = command.unidadeId;
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
@@ -3467,8 +3480,10 @@ function aplicarSemHash(
           icnKa: command.icnKa ?? null,
           tipo: command.tipo ?? null,
           quadroPaiId: command.quadroPaiId ?? null,
+          unidadeId: command.unidadeId ?? null,
         },
       ];
+      if (command.unidadeId) findUnidade(next, command.unidadeId);
       if (command.quadroPaiId) conferirPaiDoQuadro(next, id, command.quadroPaiId);
       diff.created.push(id);
       break;
@@ -3494,6 +3509,10 @@ function aplicarSemHash(
       if (command.quadroPaiId !== undefined) {
         if (command.quadroPaiId) conferirPaiDoQuadro(next, q.id, command.quadroPaiId);
         q.quadroPaiId = command.quadroPaiId;
+      }
+      if (command.unidadeId !== undefined) {
+        if (command.unidadeId) findUnidade(next, command.unidadeId);
+        q.unidadeId = command.unidadeId;
       }
       diff.updated.push(q.id);
       break;

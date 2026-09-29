@@ -972,6 +972,15 @@ function projetar(model: BlueprintModel): {
     }),
     (x, y) => cmpStr(x.numero, y.numero),
   );
+  // E4.4: `unidade` (índice canônico) no QUADRO e no MEDIDOR — segundo passo,
+  // como o `pai`: a ordem das unidades não depende disso. Omitido sem vínculo.
+  const indiceDaUnidade = new Map(unidades.map((u, i) => [u.item.id, i]));
+  for (const q of quadros) {
+    if (q.item.unidadeId != null && indiceDaUnidade.has(q.item.unidadeId)) (q.geom as { unidade?: number }).unidade = indiceDaUnidade.get(q.item.unidadeId);
+  }
+  for (const t of terminais) {
+    if (t.item.unidadeId != null && indiceDaUnidade.has(t.item.unidadeId)) (t.geom as { unidade?: number }).unidade = indiceDaUnidade.get(t.item.unidadeId);
+  }
 
   // GRUPOS (0.38.0): origem por ÍNDICE nas famílias ordenadas; instâncias com a
   // transformação. Omitidos quando não há nenhum. Ordenados por (pavimento,
@@ -1527,6 +1536,8 @@ export interface CanonicalPayload {
     circuito?: number;
     /** E4.3: índice do QUADRO a que a entrada/medidor se liga. Ausente sob kernel < 0.77.0 e sem vínculo. */
     quadro?: number;
+    /** E4.4: índice da UNIDADE que o medidor mede. Ausente sob kernel < 0.78.0 e sem vínculo. */
+    unidade?: number;
     /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
     potenciaW?: number;
     /** Letra do comando ("a", "b"). Ausente sob kernel < 0.23.0 e quando não há. */
@@ -1579,6 +1590,8 @@ export interface CanonicalPayload {
     /** Hierarquia (E4.1). `tipo` ausente = QD; `pai` = índice canônico do quadro que alimenta. Ausentes sob kernel < 0.76.0. */
     tipo?: string;
     pai?: number;
+    /** Uso coletivo (E4.4): índice canônico da unidade que o quadro atende. Ausente sob kernel < 0.78.0 e sem vínculo. */
+    unidade?: number;
     /** DPS do quadro (E3.2). Ausente sob kernel < 0.74.0 e quando não declarado. */
     dps?: { classe: string; upKv: number | null; inKa: number | null; disjuntorDesconexaoA: number | null };
     parametros?: Parametros;
@@ -2362,6 +2375,20 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       pcd: u.pcd,
       etiquetaUids: u.etiquetas.map((k) => model.labels[k]?.uid).filter((x): x is string => typeof x === 'string'),
     });
+  });
+
+  // E4.4: unidade do quadro e do medidor — depois de existirem as unidades.
+  quadros.forEach((q, i) => {
+    if (q.unidade == null) return;
+    const alvo = model.quadros.find((x) => x.id === idsDeQuadro[i]);
+    const u = model.unidades[q.unidade];
+    if (alvo && u) alvo.unidadeId = u.id;
+  });
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.unidade == null) return;
+    const alvo = model.terminais[i];
+    const u = model.unidades[t.unidade];
+    if (alvo && u) alvo.unidadeId = u.id;
   });
 
   // Grupos: DEPOIS de paredes, estruturas e etiquetas (origem por índice). As

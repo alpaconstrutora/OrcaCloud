@@ -41,12 +41,14 @@ export default function PainelQuadroAlimentador({
   quadroPaiId = null,
   quadrosDisponiveis = [],
   entrada = null,
+  unidadeId = null,
+  unidades = [],
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
   tensaoDeclarada: number | null;
   alimentadorM: number | null;
-  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null }) => void;
+  onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null; unidadeId?: ObjectId | null }) => void;
   /** Em quadro trifásico: a fase declarada de cada circuito FN, para o select. */
   fasesDosCircuitos: { circuitoId: string; nome: string; ligacao: LigacaoDoCircuito; fase: FaseDoCircuito | null }[];
   onFase: (circuitoId: string, fase: FaseDoCircuito | null) => void;
@@ -69,6 +71,9 @@ export default function PainelQuadroAlimentador({
   quadrosDisponiveis?: { id: ObjectId; nome: string }[];
   /** E4.3: a entrada de energia deste quadro (só sem pai) — categoria, ramal, geral, pontos no desenho. */
   entrada?: EntradaDoQuadro | null;
+  /** E4.4: a unidade que este quadro atende e as unidades do Empreendimento para escolher. */
+  unidadeId?: ObjectId | null;
+  unidades?: { id: ObjectId; numero: string }[];
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
@@ -96,6 +101,20 @@ export default function PainelQuadroAlimentador({
             ))}
           </select>
         </label>
+        {/* E4.4: a UNIDADE que este quadro atende — no pai, entra com o fator de diversidade. */}
+        {unidades.length > 0 && (
+          <label className="flex items-center gap-1" title="A unidade do Empreendimento que este quadro atende. No quadro que alimenta este, as unidades entram com o fator de diversidade; sem unidade é serviço/comum">
+            unid.
+            <select value={unidadeId ?? ''} onChange={(e) => onQuadro({ unidadeId: e.target.value || null })} aria-label={`Unidade atendida pelo quadro ${q.nome}`} className={campo}>
+              <option value="">— (serviço)</option>
+              {unidades.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.numero}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-1">
           <select
             value={ligacaoDeclarada ?? ''}
@@ -167,6 +186,13 @@ export default function PainelQuadroAlimentador({
           ))}
         </p>
       )}
+      {/* E4.4: uso coletivo — a conta da diversidade, com a hipótese dita. */}
+      {q.unidadesAtendidas > 0 && (
+        <p className="text-slate-600" title="Demanda das unidades = Σ das demandas dos quadros de unidade × fator de diversidade (hipótese escolhida em Hipóteses); o resto é serviço">
+          <span className="font-medium">Uso coletivo</span> {q.unidadesAtendidas} unidade(s) × fator {String(q.fatorDeDiversidade).replace('.', ',')} = {va(q.sDemandadaUnidadesVA)} + serviço {va(q.sDemandadaServicoVA)}
+          {entrada && entrada.unidadesAtendidas.length > 0 && <> · medidores: {entrada.unidadesMedidas.length}/{entrada.unidadesAtendidas.length}</>}
+        </p>
+      )}
       {/* E4.1: o que este quadro alimenta — cada filho é uma linha no quadro de cargas dele. */}
       {q.filhos.length > 0 && (
         <p className="text-slate-600">
@@ -175,7 +201,7 @@ export default function PainelQuadroAlimentador({
             <span key={f.quadroId}>
               {i > 0 && ' · '}
               <span className={f.faltas > 0 ? 'text-red-700' : ''}>
-                {f.nome} ({va(f.sDemandadaVA)} dem.{f.ibA != null ? ` · IB ${n1(f.ibA)} A` : ''}{f.disjuntorGeralA != null ? ` · geral ${f.disjuntorGeralA} A` : ''})
+                {f.nome}{f.unidade ? ` (un. ${f.unidade})` : ''} ({va(f.sDemandadaVA)} dem.{f.ibA != null ? ` · IB ${n1(f.ibA)} A` : ''}{f.disjuntorGeralA != null ? ` · geral ${f.disjuntorGeralA} A` : ''})
               </span>
             </span>
           ))}

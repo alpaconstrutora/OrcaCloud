@@ -48,6 +48,7 @@ import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDe
 import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trechosNumerados, type ComposicaoDaRede } from './blueprintFiacao';
 import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
+import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -410,7 +411,8 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
   const fiacao: ComposicaoDaRede = composicaoDaRede(model);
   const quadros = (model.quadros ?? []).map((q) => preDimensionarQuadroCompleto(model, q.id, hip)).filter((q): q is NonNullable<typeof q> => !!q);
   for (const q of quadros) {
-    L.push(`${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} - ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.paiNome ? ` - alimentado por ${q.paiNome}` : ''}`);
+    L.push(`${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''}${q.unidade ? ` - unidade ${q.unidade}` : ''} - ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.paiNome ? ` - alimentado por ${q.paiNome}` : ''}`);
+    if (q.unidadesAtendidas > 0) L.push(`  Uso coletivo: ${q.unidadesAtendidas} unidade(s) x fator ${String(q.fatorDeDiversidade).replace('.', ',')} = ${Math.round(q.sDemandadaUnidadesVA)} VA + servico ${Math.round(q.sDemandadaServicoVA)} VA (${fatorDeDiversidade(hip.diversidade).nome})`);
     L.push('Circuito | Lig./V | Pts | VA | IB (A) | Secao decl./min. | Disj. decl./sug. | dV % | DR | Condutores');
     for (const c of q.circuitos) {
       const circuito = (model.circuitos ?? []).find((x) => x.id === c.circuitoId);
@@ -423,7 +425,7 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
       for (const a of c.achados.filter((x) => x.nivel === 'FALTA')) L.push(`  ${a.referencia}: ${a.mensagem}`);
     }
     // E4.1: um quadro filho é uma linha — a demanda dele é carga deste.
-    for (const f of q.filhos) L.push(`-> ${f.nome} | ${f.ligacao}${f.tensaoV ? ` ${f.tensaoV}` : ''} | ${f.circuitos} circ. | ${Math.round(f.sDemandadaVA)} dem. | ${f.ibA == null ? '-' : n1(f.ibA)} | ${mm2(f.secaoMm2)} | ${f.disjuntorGeralA ?? '-'} | - | - | alimentador`);
+    for (const f of q.filhos) L.push(`-> ${f.nome}${f.unidade ? ` (un. ${f.unidade})` : ''} | ${f.ligacao}${f.tensaoV ? ` ${f.tensaoV}` : ''} | ${f.circuitos} circ. | ${Math.round(f.sDemandadaVA)} dem. | ${f.ibA == null ? '-' : n1(f.ibA)} | ${mm2(f.secaoMm2)} | ${f.disjuntorGeralA ?? '-'} | - | - | alimentador`);
     for (const d of drsDoQuadro(model, q.quadroId)) L.push(`  DR ${rotuloDoDR(d)}: ${d.geral ? 'geral do quadro' : (model.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome).join(', ') || 'sem circuito'}${d.legado ? ' (declarado no circuito)' : ''}`);
     {
       const quadroDoModelo = (model.quadros ?? []).find((x) => x.id === q.quadroId);
@@ -484,7 +486,8 @@ export function desenharQuadroDeCargas(
   const col = [0, 46, 62, 74, 88, 104, 124, 142, 156, 164, 176];
   const cab = ['Circuito', 'Lig./V', 'Pts', 'VA', 'IB (A)', 'Seção decl./mín.', 'Disj. decl./sug.', 'ΔV %', 'DR', 'Fase', 'Condutores'];
   for (const q of quadros) {
-    linha(`${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (deduzido)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}` : ''}`, 2.6);
+    linha(`${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''}${q.unidade ? ` — unidade ${q.unidade}` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (deduzido)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}` : ''}`, 2.6);
+    if (q.unidadesAtendidas > 0) linha(`Uso coletivo: ${q.unidadesAtendidas} unidade(s) × fator ${String(q.fatorDeDiversidade).replace('.', ',')} = ${Math.round(q.sDemandadaUnidadesVA)} VA + serviço ${Math.round(q.sDemandadaServicoVA)} VA — ${fatorDeDiversidade(hip.diversidade).nome} (${fatorDeDiversidade(hip.diversidade).conferir})`, 1.8, COR_FRACA);
     const topoTabela = y - 1.5;
     cab.forEach((c, i) => d.texto(x0 + col[i], y, c, 1.9, COR_FRACA));
     y += 3.6;
@@ -524,7 +527,7 @@ export function desenharQuadroDeCargas(
     }
     // E4.1: os quadros filhos, uma linha cada — demanda, IB, seção e geral do alimentador dele.
     for (const f of q.filhos) {
-      const cel = [`→ ${f.nome}`.slice(0, 26), `${f.ligacao}${f.tensaoV ? ` ${f.tensaoV}` : ''}`, `${f.circuitos} circ.`, `${Math.round(f.sDemandadaVA)} dem.`, f.ibA == null ? '—' : n1(f.ibA), `${mm2(f.secaoMm2)} (alim.)`, `${f.disjuntorGeralA ?? '—'} (geral)`, '—', '—', '', 'alimentador'];
+      const cel = [`→ ${f.nome}${f.unidade ? ` · un. ${f.unidade}` : ''}`.slice(0, 26), `${f.ligacao}${f.tensaoV ? ` ${f.tensaoV}` : ''}`, `${f.circuitos} circ.`, `${Math.round(f.sDemandadaVA)} dem.`, f.ibA == null ? '—' : n1(f.ibA), `${mm2(f.secaoMm2)} (alim.)`, `${f.disjuntorGeralA ?? '—'} (geral)`, '—', '—', '', 'alimentador'];
       cel.forEach((v, i) => d.texto(x0 + col[i], y, v, 1.9, f.faltas > 0 ? '#b91c1c' : undefined));
       y += 3.4;
     }

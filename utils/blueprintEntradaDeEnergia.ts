@@ -91,6 +91,9 @@ export interface EntradaDoQuadro {
   /** Os pontos de entrada e medidor LIGADOS a este quadro no desenho. */
   entradasDeServico: Terminal[];
   medidores: Terminal[];
+  /** E4.4: as unidades que este quadro atende (pelos filhos) e as que têm medidor ligado aqui. */
+  unidadesAtendidas: string[];
+  unidadesMedidas: string[];
   achados: { nivel: 'FALTA' | 'AVISO'; mensagem: string }[];
 }
 
@@ -116,6 +119,11 @@ export function entradaDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: 
   const medidores = (model.terminais ?? []).filter((t) => t.quadroId === quadroId && t.tipoEletrico === 'MEDIDOR');
   if (entradasDeServico.length === 0) achados.push({ nivel: 'AVISO', mensagem: `sem ponto de ENTRADA DE SERVIÇO ligado a ${quadro.nome} no desenho` });
   if (medidores.length === 0) achados.push({ nivel: 'AVISO', mensagem: `sem MEDIDOR ligado a ${quadro.nome} no desenho` });
+  // E4.4: uso coletivo — cada unidade atendida (filho com unidade) pede o seu medidor.
+  const unidadesAtendidas = [...new Set(r.filhos.map((f) => f.unidade).filter((u): u is string => !!u))];
+  const unidadesMedidas = new Set(medidores.map((t) => (model.unidades ?? []).find((u) => u.id === t.unidadeId)?.numero).filter((x): x is string => !!x));
+  const semMedidor = unidadesAtendidas.filter((u) => !unidadesMedidas.has(u));
+  if (semMedidor.length) achados.push({ nivel: 'AVISO', mensagem: `unidade(s) sem medidor próprio: ${semMedidor.join(', ')}` });
   return {
     quadroId,
     nome: quadro.nome,
@@ -132,6 +140,8 @@ export function entradaDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: 
     aterramentoMm2: ramalMm2 != null ? secaoDoPeMm2(ramalMm2) : null,
     entradasDeServico,
     medidores,
+    unidadesAtendidas,
+    unidadesMedidas: [...unidadesMedidas],
     achados,
   };
 }

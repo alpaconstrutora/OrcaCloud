@@ -231,7 +231,7 @@ export default function PainelEletrica({
   /** F6: a alimentação do quadro (ligação, tensão, metros até a origem) — declarações. */
   onQuadroProps?: (
     quadroId: ObjectId,
-    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null },
+    campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null; unidadeId?: ObjectId | null },
   ) => void;
   /** F7: o projeto executivo elétrico com ART, montado por quem tem o estudo em mãos. */
   executivoSlot?: React.ReactNode;
@@ -1188,6 +1188,8 @@ export default function PainelEletrica({
                       tipo={quadro.tipo ?? null}
                       quadroPaiId={quadro.quadroPaiId ?? null}
                       entrada={entradaDoQuadro(model, q.quadroId, hipoteses)}
+                      unidadeId={quadro.unidadeId ?? null}
+                      unidades={(model.unidades ?? []).map((u) => ({ id: u.id, numero: u.numero }))}
                       quadrosDisponiveis={(() => {
                         // Quem pode alimentar este: qualquer quadro que não seja ele nem um descendente dele (senão fecha ciclo).
                         const descendentes = new Set<ObjectId>();

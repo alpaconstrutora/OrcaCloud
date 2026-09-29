@@ -30,7 +30,7 @@ import {
   type HipotesesEletricas,
   type PreDimensionamentoDoQuadro,
 } from './blueprintEletricaDimensionamento';
-import { ROTULO_DA_EXPOSICAO, limiteQuedaTotalEfetivoPct } from './blueprintEletricaDimensionamento';
+import { ROTULO_DA_EXPOSICAO, fatorDeDiversidade, limiteQuedaTotalEfetivoPct } from './blueprintEletricaDimensionamento';
 
 export interface VerificacaoEletrica {
   /** Grupo para a tela agrupar. */
@@ -178,7 +178,7 @@ export function memorialEletrico(
   L.push('');
   L.push('## 4. Quadros e circuitos');
   for (const q of r.quadros) {
-    L.push(`### ${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (ligação deduzida dos circuitos)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}${q.alimentadorOrigem === 'ELETRODUTOS' ? ` (alimentador ${n1(q.alimentadorM ?? 0)} m pelo eletroduto)` : ''}` : ' — quadro de entrada'}`);
+    L.push(`### ${q.nome}${q.tipo !== 'QD' ? ` (${q.tipo})` : ''}${q.unidade ? ` — unidade ${q.unidade}` : ''} — ${q.ligacao}${q.tensaoV ? ` ${q.tensaoV} V` : ''}${q.ligacaoDeduzida ? ' (ligação deduzida dos circuitos)' : ''}${q.paiNome ? ` — alimentado por ${q.paiNome}${q.alimentadorOrigem === 'ELETRODUTOS' ? ` (alimentador ${n1(q.alimentadorM ?? 0)} m pelo eletroduto)` : ''}` : ' — quadro de entrada'}`);
     L.push(`Carga instalada ${Math.round(q.sInstaladaVA)} VA (iluminação ${Math.round(q.porGrupoVA.ILUMINACAO)}, TUG ${Math.round(q.porGrupoVA.TUG)}, força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? `, motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}); demandada ${Math.round(q.sDemandadaVA)} VA.`);
     if (q.ibA != null) {
       L.push(`Alimentador: IB ${n1(q.ibA)} A; seção ${mm2(q.secaoCalculada?.secaoMm2)} mm² (Iz ${q.secaoCalculada ? n1(q.secaoCalculada.izA) : '—'} A); disjuntor geral ${q.disjuntorGeralA ?? '—'} A${q.quedaAlimentadorPct != null ? `; queda no alimentador ${n1(q.quedaAlimentadorPct)} %, total até o pior ponto ${n1(q.quedaTotalMaxPct ?? 0)} % (limite ${n1(q.limiteQuedaEfetivoPct)} %)` : ''}.`);
@@ -214,7 +214,12 @@ export function memorialEletrico(
     }
     // E4.1: os quadros alimentados por este.
     for (const f of q.filhos) L.push(`Alimenta ${f.nome}${f.tipo !== 'QD' ? ` (${f.tipo})` : ''}: ${Math.round(f.sDemandadaVA)} VA demandados, IB ${f.ibA == null ? '—' : n1(f.ibA)} A, alimentador ${mm2(f.secaoMm2)} mm², geral ${f.disjuntorGeralA ?? '—'} A — ${f.circuitos} circuito(s) próprios.`);
-    if (q.filhos.length) L.push(`Demanda própria ${Math.round(q.sDemandadaPropriaVA)} VA + filhos ${Math.round(q.sDemandadaVA - q.sDemandadaPropriaVA)} VA = ${Math.round(q.sDemandadaVA)} VA.`);
+    if (q.filhos.length && q.unidadesAtendidas === 0) L.push(`Demanda própria ${Math.round(q.sDemandadaPropriaVA)} VA + filhos ${Math.round(q.sDemandadaVA - q.sDemandadaPropriaVA)} VA = ${Math.round(q.sDemandadaVA)} VA.`);
+    // E4.4: uso coletivo — a conta com o fator de diversidade, e a hipótese dita.
+    if (q.unidadesAtendidas > 0) {
+      const fd = fatorDeDiversidade(hip.diversidade);
+      L.push(`Uso coletivo: ${q.unidadesAtendidas} unidade(s) — Σ demandas das unidades × fator de diversidade ${String(q.fatorDeDiversidade).replace('.', ',')} (${fd.nome}) = ${Math.round(q.sDemandadaUnidadesVA)} VA; serviço/comum ${Math.round(q.sDemandadaServicoVA)} VA; total ${Math.round(q.sDemandadaVA)} VA. ${fd.conferir}.`);
+    }
     L.push('');
   }
   L.push('## 5. Verificações');

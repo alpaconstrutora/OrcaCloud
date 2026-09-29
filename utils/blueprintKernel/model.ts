@@ -2793,6 +2793,8 @@ export interface Terminal {
    * canônico quando ausente. A invariante recusa nos outros tipos.
    */
   quadroId?: ObjectId | null;
+  /** E4.4: a UNIDADE que este MEDIDOR mede. Só em MEDIDOR; a unidade tem de existir. Omitido sem vínculo. */
+  unidadeId?: ObjectId | null;
   /** Carga DECLARADA do ponto, em watts. Nunca calculada — ver `Circuito`. */
   potenciaW?: number | null;
   /**
@@ -2997,6 +2999,13 @@ export interface Quadro {
    */
   tipo?: TipoDeQuadro | null;
   quadroPaiId?: ObjectId | null;
+  /**
+   * USO COLETIVO (E4.4, kernel 0.78.0): a UNIDADE do Empreendimento que este
+   * quadro atende (o QD do apartamento 101). No pai, os filhos com unidade
+   * entram na demanda com o fator de diversidade; os sem unidade são serviço.
+   * Omitido no canônico quando ausente; a unidade tem de existir.
+   */
+  unidadeId?: ObjectId | null;
 }
 
 export const TIPOS_DE_QUADRO = ['QD', 'QGBT', 'MEDICAO'] as const;
@@ -5585,6 +5594,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (!(model.quadros ?? []).some((q) => q.id === t.quadroId)) throw new KernelError('BOARD_NOT_FOUND', `Terminal ${t.id} aponta para um quadro inexistente: ${t.quadroId}`);
       if (t.tipoEletrico !== 'ENTRADA_SERVICO' && t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não se liga a quadro — só entrada de serviço e medidor`);
     }
+    // E4.4: só o MEDIDOR mede uma unidade — e ela existe.
+    if (t.unidadeId) {
+      if (t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não mede unidade — só o medidor`);
+      if (!(model.unidades ?? []).some((u) => u.id === t.unidadeId)) throw new KernelError('BAD_UNIT', `Terminal ${t.id} aponta para unidade inexistente: ${t.unidadeId}`);
+    }
     if (t.potenciaW != null && (!Number.isFinite(t.potenciaW) || t.potenciaW < 0)) {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
     }
@@ -5694,6 +5708,8 @@ export function assertModelInvariants(model: BlueprintModel): void {
         atual = (model.quadros ?? []).find((x) => x.id === atual)?.quadroPaiId ?? null;
       }
     }
+    // Uso coletivo (E4.4): a unidade do quadro existe.
+    if (q.unidadeId && !(model.unidades ?? []).some((u) => u.id === q.unidadeId)) throw new KernelError('BAD_UNIT', `Quadro ${q.id} aponta para unidade inexistente: ${q.unidadeId}`);
     // Icn (E3.3): finita e positiva quando declarada.
     if (q.icnKa != null && (!Number.isFinite(q.icnKa) || q.icnKa <= 0)) throw new KernelError('BAD_BOARD_VALUE', `icnKa inválida no quadro ${q.id}: ${q.icnKa}`);
     // DPS (E3.2): classe do catálogo, números finitos e positivos quando declarados.

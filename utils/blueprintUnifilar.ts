@@ -54,6 +54,8 @@ export interface RamalUnifilar {
   /** E4.1: reserva (posição sem ponto) e ramal que alimenta um QUADRO filho (o rótulo é o nome dele). */
   reserva: boolean;
   quadroFilho: boolean;
+  /** E4.4: a unidade que o quadro filho atende ("101"); `null` nos demais. */
+  unidade: string | null;
   disjuntorOrigem: 'DECLARADO' | 'SUGERIDO' | null;
   secaoMm2: number | null;
   secaoOrigem: 'DECLARADA' | 'CALCULADA' | null;
@@ -100,6 +102,12 @@ export interface DiagramaUnifilar {
   comSugerido: boolean;
   /** Algum ramal tem fase declarada — a legenda R/S/T só entra se aparece. */
   comFases: boolean;
+  /**
+   * E4.4 — USO COLETIVO: os medidores ligados a este quadro (a unidade de cada
+   * um, ou "—"), e a conta da diversidade quando há unidades atendidas.
+   */
+  medidores: string[];
+  diversidade: { unidades: number; fator: number; unidadesVA: number; servicoVA: number } | null;
 }
 
 const fmt = (v: number | null | undefined) => (v == null ? '—' : String(v).replace('.', ','));
@@ -149,6 +157,7 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
       faltas: c.achados.filter((a) => a.nivel === 'FALTA').length,
       reserva: c.reserva,
       quadroFilho: false,
+      unidade: null,
     };
   });
 }
@@ -175,6 +184,7 @@ function ramaisDosFilhos(q: PreDimensionamentoDoQuadro): RamalUnifilar[] {
     faltas: f.faltas,
     reserva: false,
     quadroFilho: true,
+    unidade: f.unidade,
   }));
 }
 
@@ -213,6 +223,10 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
         comDR: ramais.some((r) => r.dr != null) || drsDoQuadro(model, quadro.id).some((d) => d.geral),
         comSugerido: ramais.some((r) => r.disjuntorOrigem === 'SUGERIDO' || r.secaoOrigem === 'CALCULADA'),
         comFases: ramais.some((r) => r.fase != null),
+        medidores: (model.terminais ?? [])
+          .filter((t) => t.tipoEletrico === 'MEDIDOR' && t.quadroId === quadro.id)
+          .map((t) => (model.unidades ?? []).find((u) => u.id === t.unidadeId)?.numero ?? '—'),
+        diversidade: q.unidadesAtendidas > 0 ? { unidades: q.unidadesAtendidas, fator: q.fatorDeDiversidade, unidadesVA: Math.round(q.sDemandadaUnidadesVA), servicoVA: Math.round(q.sDemandadaServicoVA) } : null,
       } satisfies DiagramaUnifilar;
     })
     .filter((d): d is DiagramaUnifilar => d != null);
@@ -285,6 +299,13 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
 
   // Título
   t(x0, y0 + 3.2 * k, `${diagrama.nome} — ${diagrama.ligacao}${diagrama.tensaoV ? ` ${diagrama.tensaoV} V` : ''}`, 3 * k);
+  // E4.4: a medição e a diversidade, sob o título — o QGBT do condomínio lista os medidores.
+  if (diagrama.medidores.length || diagrama.diversidade) {
+    const partes: string[] = [];
+    if (diagrama.medidores.length) partes.push(`Medição: ${diagrama.medidores.join(', ')}`);
+    if (diagrama.diversidade) partes.push(`${diagrama.diversidade.unidades} unid. × ${String(diagrama.diversidade.fator).replace('.', ',')} = ${diagrama.diversidade.unidadesVA} VA + serviço ${diagrama.diversidade.servicoVA} VA`);
+    t(x0, y0 + 6.6 * k, partes.join(' · '), 1.8 * k, COR_FRACA);
+  }
 
   const yBus = y0 + UNIFILAR.topoMm * k;
   const xIni = x0 + 2 * k;
@@ -406,14 +427,15 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     );
     y += 5.5 * k;
     // rótulos: número, nome, carga
-    // E4.1: ramal de QUADRO filho leva o nome dele e a demanda; reserva diz RESERVA.
+    // E4.1: ramal de QUADRO filho leva o nome dele e a demanda; reserva diz RESERVA. E4.4: a unidade junto.
     t(x - 2.2 * k, y, r.quadroFilho ? '→' : `C${r.numero}`, 2.6 * k);
     const nome = r.quadroFilho ? r.nome : r.nome.replace(/^C\s*\d+\s*[—–-]\s*/i, '').trim();
     t(x - 11 * k, y + 3.4 * k, nome.length > 14 ? `${nome.slice(0, 13)}…` : nome, 1.8 * k, COR_FRACA);
     t(
       x - 11 * k,
       y + 6.4 * k,
-      r.quadroFilho ? `${r.cargaVA} VA dem. · ${r.pontos} circ.` : r.reserva ? 'RESERVA' : `${r.cargaVA} VA · ${r.pontos} pt${r.pontos === 1 ? '' : 's'}`,
+      // E4.4: no filho de UNIDADE, a unidade vale mais que a contagem de circuitos.
+      r.quadroFilho ? `${r.cargaVA} VA dem. · ${r.unidade ? `un. ${r.unidade}` : `${r.pontos} circ.`}` : r.reserva ? 'RESERVA' : `${r.cargaVA} VA · ${r.pontos} pt${r.pontos === 1 ? '' : 's'}`,
       1.8 * k,
       COR_FRACA,
     );

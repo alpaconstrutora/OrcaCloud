@@ -1957,7 +1957,7 @@ Fecha o bloco **3**.
 | 4.1 Quadro com tipo e pai ✅ (kernel 0.76.0; alimentador derivado do eletroduto; `numeroDoCircuito` unificado) | `Quadro.tipo: 'QD' \| 'QGBT' \| 'MEDICAO'` e `quadroPaiId?`; **circuito alimentador derivado** (quadro filho = uma linha no quadro de cargas do pai, com IB = demanda do filho); `alimentadorM` passa a ser derivado do eletroduto entre os dois quadros quando existe, declarado quando não; `Circuito.reserva: boolean` (linha sem pontos, conta no quadro e no unifilar) | goldens; `preDimensionarQuadroCompleto` do pai soma os filhos; ciclo de pais → invariante; teste com QGBT → QD1, QD2 |
 | 4.2 Demanda e queda acumuladas ✅ (cadeia até a origem; 7 % com trafo como hipótese; fonte/data da demanda) | demanda do pai = Σ demanda dos filhos + cargas próprias, com **fatores por tabela nomeada** (presets por concessionária como hipótese com fonte e data — a "verdade da concessionária" continua preset, nunca embutida); queda acumulada multinível até a origem (6.2.7.1: 5 %, ou 7 % com trafo — hipótese `origemComTransformador`) | teste: QGBT→QD→C1 com quedas 1 + 2 + 2,5 → FALTA; memorial mostra a cadeia |
 | 4.3 Entrada de energia no desenho ✅ (kernel 0.77.0; padrão GENERICO como hipótese; ramal = maior entre categoria e Tab. 36) | terminal `ENTRADA_SERVICO` (poste/mureta) e `MEDIDOR` (por unidade), ligados ao quadro de MEDICAO; **preset de padrão de entrada** (tabela `PADROES_DE_ENTRADA` por concessionária: categoria × demanda → ramal, disjuntor geral, eletroduto de entrada, aterramento — cada preset com fonte e "CONFERIR na norma da concessionária"); dimensionamento do ramal = o mesmo motor de condutores com método D/B1 | teste com preset "genérico — hipótese": 12 kVA → categoria, ramal 16 mm², disjuntor 63 A; falta se demanda > categoria; goldens |
-| 4.4 Uso coletivo (A, mas destravado aqui) | medição por unidade do Empreendimento (unidades já existem em `empreendimento_*`): um MEDIDOR por unidade, demanda do condomínio = Σ unidades × fator de diversidade (hipótese nomeada) + serviço; fora: CODI por concessionária (backlog) | teste com 8 unidades; unifilar do QGBT lista os medidores |
+| 4.4 Uso coletivo (A, mas destravado aqui) ✅ (kernel 0.78.0; medidor por unidade; diversidade SEM/GENERICO como hipótese; CODI no backlog) | medição por unidade do Empreendimento (unidades já existem em `empreendimento_*`): um MEDIDOR por unidade, demanda do condomínio = Σ unidades × fator de diversidade (hipótese nomeada) + serviço; fora: CODI por concessionária (backlog) | teste com 8 unidades; unifilar do QGBT lista os medidores |
 | 4.5 Unifilar hierárquico e esquema vertical elétrico | unifilar em árvore (QGBT no topo, filhos abaixo, um diagrama só ou por quadro — opção); `utils/blueprintEsquemaVertical.ts` ganha a disciplina ELETRICA: pavimentos × quadros × prumadas × alimentadores, folha "ESQUEMA VERTICAL ELÉTRICO" na prancha; unifilar sai em DXF | harness da prancha olhado; `blueprintEsquemaVertical` testado com sobrado de 2 quadros; DXF abre com camada `UNIFILAR` |
 
 Fecha o bloco **1** e o resto do **2**.
@@ -3021,3 +3021,57 @@ suíte inteira **6.262 ✓** (573 arquivos) · `vite build` ✓ · `check-ui-sta
 concessionária" ❌→🟡 (estrutura + genérico como hipótese; presets reais só com fonte), "Ramal de entrada
 dimensionado" ❌→✅ (categoria × Tab. 36), "Aterramento da entrada" ❌→🟡 (seção pela Tab. 58, sem peça);
 §27 "Memorial descreve a entrada" ❌→✅; §8 "Símbolos de entrada/medidor" ❌→✅.
+
+### E4.4 — Uso coletivo (29/09/2026) · frente `eletrico-e4` · **kernel 0.77.0 → 0.78.0 · sem bump de quant**
+
+**O que mudou**
+
+- **Kernel 0.78.0** — `Quadro.unidadeId` (o QD do apartamento 101 atende a unidade 101 do Empreendimento
+  — `model.unidades` já existia) e `Terminal.unidadeId` (só no **MEDIDOR**: qual unidade ele mede).
+  Canônico `unidade` por índice canônico, num segundo passo depois da ordenação das unidades
+  (como o `pai`), omitido sem vínculo; invariantes (unidade existe; só o medidor mede); `DeleteUnidade`
+  solta quadro e medidor. Goldens 7/7 com a string em 0.77.0.
+- **Demanda do condomínio** (`preDimensionarQuadroCompleto`): os filhos com unidade são UNIDADES; os
+  sem unidade e a carga própria são SERVIÇO. `sDemandadaVA = Σ unidades × fator(n) + serviço`, com
+  `unidadesAtendidas`, `fatorDeDiversidade`, `sDemandadaUnidadesVA`, `sDemandadaServicoVA`, `unidade`
+  (a que este quadro atende) e `FilhoDoQuadro.unidade`.
+- **Fator de diversidade como preset** (`FATORES_DE_DIVERSIDADE`, `hip.diversidade`): **"SEM"** (1,00,
+  conservador — padrão) e **"GENERICO"** ("genérico — hipótese de projeto": 0,5 + 0,5/√n, fórmula usual de
+  projeto, SEM fonte normativa, com `conferir` "CONFERIR na norma da concessionária (CODI/NT)"). O CODI
+  de cada concessionária fica no backlog e entra como preset com fonte e data. Gravado na coluna de
+  hipóteses; select na aba Hipóteses.
+- **Entrada**: `entradaDoQuadro` ganhou `unidadesAtendidas`/`unidadesMedidas` e o AVISO "unidade(s) sem
+  medidor próprio: 108".
+- **Unifilar do QGBT** lista os medidores sob o título ("Medição: 101, 102, … · 8 unid. × 0,677 = 8124
+  VA + serviço 2000 VA"); o ramal do filho de unidade escreve "1500 VA dem. · un. 101". Folha/texto:
+  cabeçalho "QD 101 — unidade 101", linha "Uso coletivo: 8 unidade(s) × fator … = … + serviço … (preset)";
+  memorial: a conta e a hipótese; tela: select **unid.** no bloco Alimentação, linha "Uso coletivo …
+  medidores 8/8"; painel do ponto: **Quadro (entrada / medição)** para ES/medidor e **Unidade medida**
+  para o medidor (o editor passa quadros e unidades).
+- **Não entrou (declarado)**: CODI por concessionária (backlog — só com fonte e data); demanda por
+  tipologia de unidade (todas iguais aqui: a demanda vem do QD de cada uma, que já existe); medidor
+  "geral/serviço" como peça distinta (é o medidor sem unidade).
+
+**Testes** — novo `__tests__/blueprintUsoColetivo.test.ts` (3): condomínio de **8 unidades** (QGBT FFF com
+bomba de 2 kVA; QD por unidade com TUG de 1,5 kVA; medidor por unidade na medição): `unidadeId` no
+quadro e no medidor, canônico `unidade` com ida e volta idêntica, tomada não mede unidade, unidade
+inexistente recusada, apagar a unidade solta; **sem diversidade 8 × 1.500 + 2.000 = 14.000 VA;
+genérico 12.000 × 0,677 + 2.000**, filhos com as unidades 101–108, `fator(1) = 1`, preset desconhecido
+cai no "SEM", folha com a linha do uso coletivo e o cabeçalho da unidade, coluna gravada lê o preset;
+unifilar lista os 8 medidores e a conta, ramal "QD 101" + "1500 VA dem. · un. 101", entrada 8/8
+medidas, sem o último medidor → AVISO "unidade(s) sem medidor próprio: 108", quadro solo sem nada.
+**21 pinos** de `KERNEL_VERSION`.
+
+**O que os testes pegaram antes de publicar**: o nome do ramal do filho com "· un. 101" passava de 14
+caracteres e o unifilar o truncava ("QD 101 · un. …") — a unidade foi para a linha da carga, no lugar da
+contagem de circuitos. Nada no motor de demanda.
+
+**Verificação**: `tsc` ✓ (heap 12 GB — 4,45 GB usados; com 8 GB caiu uma vez e passou duas: a queda do
+Node não é só heap, fica anotado) · goldens 7/7 (prova em 0.77.0 + hashes) · alvo 35 ✓ (7 arquivos) ·
+suíte inteira **6.265 ✓** (574 arquivos) · `vite build` ✓ · `check-ui-standard` nos 5 `.tsx` ✓ ·
+`check-xss-sinks` ✓ · bundle da `planta-api` regenerado · deploy · `GET /v1/estudos` **401/401**.
+**Sem harness visual** — fica dito.
+
+**Efeito no benchmark**: §1 "Edificação de uso coletivo" A ❌→🟡 (medição por unidade + fator de
+diversidade como hipótese; CODI real no backlog), "Medidores" ❌→✅ (peça por unidade, ligada ao quadro
+de medição), "Demanda de edificação de uso coletivo" ❌→🟡; §26 "Unifilar do QGBT com a medição" ❌→✅.

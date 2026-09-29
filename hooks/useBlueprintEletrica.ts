@@ -7,6 +7,7 @@ import {
   type MetodoDeInstalacao,
 } from '../utils/blueprintEletricaDimensionamento';
 import { EXPOSICOES_A_RAIOS, type ExposicaoARaios } from '../utils/blueprintEletricaDimensionamento';
+import { FATORES_DE_DIVERSIDADE } from '../utils/blueprintEletricaDimensionamento';
 
 /**
  * As HIPÓTESES do pré-dimensionamento elétrico do estudo (F7, 13/09/2026).
@@ -72,6 +73,8 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     origemComTransformador: r.origemComTransformador === true,
     // E4.3: o padrão de entrada — só ids conhecidos; senão o genérico.
     padraoDeEntrada: typeof r.padraoDeEntrada === 'string' && r.padraoDeEntrada.trim() ? r.padraoDeEntrada : HIPOTESES_PADRAO.padraoDeEntrada,
+    // E4.4: o fator de diversidade — só ids conhecidos; senão "sem".
+    diversidade: FATORES_DE_DIVERSIDADE.some((f) => f.id === r.diversidade) ? (r.diversidade as string) : HIPOTESES_PADRAO.diversidade,
   };
 }
 

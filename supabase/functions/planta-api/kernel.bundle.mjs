@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.77.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.78.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2174,6 +2174,13 @@ function projetar(model) {
     }),
     (x, y) => cmpStr(x.numero, y.numero)
   );
+  const indiceDaUnidade = new Map(unidades.map((u, i) => [u.item.id, i]));
+  for (const q of quadros) {
+    if (q.item.unidadeId != null && indiceDaUnidade.has(q.item.unidadeId)) q.geom.unidade = indiceDaUnidade.get(q.item.unidadeId);
+  }
+  for (const t of terminais) {
+    if (t.item.unidadeId != null && indiceDaUnidade.has(t.item.unidadeId)) t.geom.unidade = indiceDaUnidade.get(t.item.unidadeId);
+  }
   const indiceDeParede = new Map(walls.map((w, i) => [w.item.uid, i]));
   const indiceDeEstruturaG = new Map(structures.map((s2, i) => [s2.item.uid, i]));
   const indiceDeEtiquetaG = new Map(labels.map((l, i) => [l.item.uid, i]));
@@ -2895,6 +2902,18 @@ function modelFromCanonicalPayload(payload) {
       pcd: u.pcd,
       etiquetaUids: u.etiquetas.map((k2) => model.labels[k2]?.uid).filter((x) => typeof x === "string")
     });
+  });
+  quadros.forEach((q, i) => {
+    if (q.unidade == null) return;
+    const alvo = model.quadros.find((x) => x.id === idsDeQuadro[i]);
+    const u = model.unidades[q.unidade];
+    if (alvo && u) alvo.unidadeId = u.id;
+  });
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.unidade == null) return;
+    const alvo = model.terminais[i];
+    const u = model.unidades[t.unidade];
+    if (alvo && u) alvo.unidadeId = u.id;
   });
   const gruposLidos = payload.grupos ?? [];
   let k = 0;

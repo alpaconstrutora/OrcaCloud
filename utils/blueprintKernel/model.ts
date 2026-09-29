@@ -2944,6 +2944,40 @@ export interface Quadro {
   ligacao?: LigacaoDoCircuito | null;
   tensaoV?: number | null;
   alimentadorM?: number | null;
+  /**
+   * Os DISPOSITIVOS DR do quadro (E3.1, kernel 0.73.0) — peças, não uma marca
+   * no circuito: um DR tem corrente nominal, sensibilidade, polos e um ESCOPO
+   * (geral, na entrada do quadro; ou um grupo de circuitos). Ausente = nenhum
+   * declarado. `Circuito.protecaoDR` continua sendo lido como DR individual de
+   * 30 mA (legado) — ver `drsDoQuadro` em `protecaoDr.ts`.
+   */
+  drs?: DispositivoDR[] | null;
+}
+
+/** As sensibilidades comerciais do DR, em mA (IEC 61008-1). 30 mA é a proteção de pessoas (5.1.3.2.2). */
+export const CORRENTES_DIFERENCIAIS_MA = [10, 30, 100, 300, 500] as const;
+export type CorrenteDiferencialMa = (typeof CORRENTES_DIFERENCIAIS_MA)[number];
+/** Bipolar (F-N / F-F) ou tetrapolar (trifásico). */
+export const POLOS_DO_DR = [2, 4] as const;
+export type PolosDoDR = (typeof POLOS_DO_DR)[number];
+
+/**
+ * Um DISPOSITIVO DR (diferencial-residual) do quadro.
+ *
+ * `geral` protege TODOS os circuitos do quadro (fica entre o disjuntor geral e
+ * o barramento); senão, `circuitoIds` diz quais — um só (DR individual) ou um
+ * grupo. `inA` é a corrente nominal DECLARADA (o DR não protege contra
+ * sobrecorrente: precisa de disjuntor a montante com In ≤ inA); `null` =
+ * ninguém disse. Invariantes: geral ⇒ sem circuitos; circuito citado é DESTE
+ * quadro, sem repetição.
+ */
+export interface DispositivoDR {
+  id: ObjectId;
+  inA: number | null;
+  idnMa: CorrenteDiferencialMa;
+  polos: PolosDoDR | null;
+  geral: boolean;
+  circuitoIds: ObjectId[];
 }
 
 /**
@@ -3006,6 +3040,8 @@ export interface Circuito {
    */
   protecaoDR?: boolean | null;
   /** Em quadro trifásico, a fase (`R`, `S`, `T`) que este circuito FN ocupa. */
+  // ⚠️ Desde a E3.1 (kernel 0.73.0) o DR é PEÇA do quadro (`Quadro.drs`);
+  // `protecaoDR: true` segue lido como DR individual de 30 mA (legado, sem In).
   fase?: FaseDoCircuito | null;
 }
 
@@ -5517,6 +5553,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
 
   // ── QUADROS E CIRCUITOS ───────────────────────────────────────────────────
   const idsDeQuadro = new Set<ObjectId>();
+  const idsDeDR = new Set<ObjectId>();
   for (const q of model.quadros ?? []) {
     if (idsDeQuadro.has(q.id)) throw new KernelError('DUPLICATE_ID', `Quadro duplicado: ${q.id}`);
     idsDeQuadro.add(q.id);
@@ -5538,6 +5575,21 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (q.alimentadorM != null && (!Number.isFinite(q.alimentadorM) || q.alimentadorM < 0)) {
       throw new KernelError('BAD_BOARD_VALUE', `alimentadorM inválido no quadro ${q.id}: ${q.alimentadorM}`);
+    }
+    // DRs (E3.1): id único, valores do catálogo, circuitos DESTE quadro, geral sem lista.
+    for (const d of q.drs ?? []) {
+      if (idsDeQuadro.has(d.id) || idsDeDR.has(d.id)) throw new KernelError('DUPLICATE_ID', `DR duplicado: ${d.id}`);
+      idsDeDR.add(d.id);
+      if (d.inA != null && (!Number.isFinite(d.inA) || d.inA <= 0)) throw new KernelError('BAD_BOARD_VALUE', `In inválido no DR ${d.id}: ${d.inA}`);
+      if (!(CORRENTES_DIFERENCIAIS_MA as readonly number[]).includes(d.idnMa)) throw new KernelError('BAD_BOARD_VALUE', `IΔn inválida no DR ${d.id}: ${d.idnMa}`);
+      if (d.polos != null && !(POLOS_DO_DR as readonly number[]).includes(d.polos)) throw new KernelError('BAD_BOARD_VALUE', `polos inválidos no DR ${d.id}: ${d.polos}`);
+      if (d.geral && d.circuitoIds.length > 0) throw new KernelError('BAD_BOARD_VALUE', `DR geral ${d.id} não lista circuitos`);
+      if (new Set(d.circuitoIds).size !== d.circuitoIds.length) throw new KernelError('BAD_BOARD_VALUE', `DR ${d.id} repete circuito`);
+      for (const cid of d.circuitoIds) {
+        const c = (model.circuitos ?? []).find((x) => x.id === cid);
+        if (!c) throw new KernelError('CIRCUIT_NOT_FOUND', `DR ${d.id} cita circuito inexistente: ${cid}`);
+        if (c.quadroId !== q.id) throw new KernelError('BAD_BOARD_VALUE', `DR ${d.id} do quadro ${q.id} cita circuito ${cid} de outro quadro`);
+      }
     }
   }
 

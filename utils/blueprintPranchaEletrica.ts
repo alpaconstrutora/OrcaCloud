@@ -46,6 +46,7 @@ import {
 import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from './blueprintRede';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from './blueprintCondutores';
 import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trechosNumerados, type ComposicaoDaRede } from './blueprintFiacao';
+import { drDoCircuito, drsDoQuadro, rotuloDoDR } from './blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -397,13 +398,15 @@ export function linhasDoQuadroDeCargas(model: BlueprintModel, hip: HipotesesElet
     L.push('Circuito | Lig./V | Pts | VA | IB (A) | Secao decl./min. | Disj. decl./sug. | dV % | DR | Condutores');
     for (const c of q.circuitos) {
       const circuito = (model.circuitos ?? []).find((x) => x.id === c.circuitoId);
-      const dr = circuito?.protecaoDR === true ? 'DR' : circuito?.protecaoDR === false ? 'nao' : '-';
+      const drDoC = circuito ? drDoCircuito(model, circuito) : null;
+      const dr = drDoC ? `${rotuloDoDR(drDoC)}${drDoC.geral ? ' (geral)' : drDoC.circuitoIds.length > 1 ? ' (grupo)' : ''}` : circuito?.protecaoDR === false ? 'nao' : '-';
       const cond = circuito ? condutoresDoCircuito(circuito, c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null, fiacao).texto : '-';
       L.push(
         `${c.nome} | ${c.ligacao}${c.tensaoV ? ` ${c.tensaoV}` : ''} | ${c.pontos}${c.pontosSemPotencia ? '*' : ''} | ${Math.round(c.sVA)} | ${c.ibA == null ? '-' : n1(c.ibA)} | ${mm2(c.secaoDeclaradaMm2)} / ${mm2(c.secaoCalculada?.secaoMm2)} | ${c.disjuntorDeclaradoA ?? '-'} / ${c.disjuntorSugeridoA ?? '-'} | ${c.quedaPct == null ? '-' : n1(c.quedaPct)} | ${dr} | ${cond}`,
       );
       for (const a of c.achados.filter((x) => x.nivel === 'FALTA')) L.push(`  ${a.referencia}: ${a.mensagem}`);
     }
+    for (const d of drsDoQuadro(model, q.quadroId)) L.push(`  DR ${rotuloDoDR(d)}: ${d.geral ? 'geral do quadro' : (model.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome).join(', ') || 'sem circuito'}${d.legado ? ' (declarado no circuito)' : ''}`);
     L.push(`Instalado ${Math.round(q.sInstaladaVA)} VA - demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})${q.ibA != null ? ` - alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm2, geral ${q.disjuntorGeralA ?? '-'} A` : ''}${q.quedaTotalMaxPct != null ? ` - dV total ${n1(q.quedaTotalMaxPct)} %` : ''}`);
     for (const a of q.achados) L.push(`  ${a.referencia}: ${a.mensagem}`);
   }
@@ -459,7 +462,8 @@ export function desenharQuadroDeCargas(
     y += 3.6;
     for (const c of q.circuitos) {
       const circuito = (model.circuitos ?? []).find((x) => x.id === c.circuitoId);
-      const dr = circuito?.protecaoDR === true ? 'DR' : circuito?.protecaoDR === false ? 'não' : '—';
+      const drDoC = circuito ? drDoCircuito(model, circuito) : null;
+      const dr = drDoC ? `${rotuloDoDR(drDoC)}${drDoC.geral ? ' geral' : drDoC.circuitoIds.length > 1 ? ' grupo' : ''}` : circuito?.protecaoDR === false ? 'não' : '—';
       const falta = c.achados.some((a) => a.nivel === 'FALTA');
       const cor = falta ? '#b91c1c' : undefined;
       const cel = [
@@ -491,6 +495,14 @@ export function desenharQuadroDeCargas(
     }
     d.retangulo(x0 - 1.5, topoTabela, larg - 2, y - topoTabela + 0.5, { espessuraMm: 0.2, cor: COR });
     y += 2.5;
+    // E3.1: os DRs do quadro, uma linha — geral, grupo ou individual.
+    const drsDesteQuadro = drsDoQuadro(model, q.quadroId);
+    if (drsDesteQuadro.length) {
+      linha(
+        `DR: ${drsDesteQuadro.map((d) => `${rotuloDoDR(d)} — ${d.geral ? 'geral' : (model.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome.replace(/\s*[—–-].*$/, '')).join(', ') || 'sem circuito'}${d.legado ? ' (no circuito)' : ''}`).join(' · ')}`,
+        1.8,
+      );
+    }
     linha(
       `Instalado ${Math.round(q.sInstaladaVA)} VA (luz ${Math.round(q.porGrupoVA.ILUMINACAO)} · TUG ${Math.round(q.porGrupoVA.TUG)} · força ${Math.round(q.porGrupoVA.FORCA)}${q.porGrupoVA.MOTOR ? ` · motores/AC ${Math.round(q.porGrupoVA.MOTOR)}` : ''}) · demandado ${Math.round(q.sDemandadaVA)} VA (${q.demanda.nome})` +
         (q.ibA != null ? ` · alimentador IB ${n1(q.ibA)} A, ${mm2(q.secaoCalculada?.secaoMm2)} mm², geral ${q.disjuntorGeralA ?? '—'} A` : '') +

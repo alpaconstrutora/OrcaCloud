@@ -30,6 +30,7 @@ import { sobreposicoesDoModelo } from './sobreposicao';
 import { conexoesDerivadas, type ConexaoDerivada, type TipoDeConexao } from './conexoes';
 import { composicaoDaRede } from './fiacao';
 import { secoesDosCondutores, type TipoDeCondutor } from './condutores';
+import { drsDoModelo, drsDoQuadro, type DRDoQuadro } from './protecaoDr';
 import {
   areCollinear,
   isBetween,
@@ -186,7 +187,10 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // FIAÇÃO DERIVADA (`fiacao.ts`) — fase, neutro, RETORNO e terra por tipo e
   // seção, com o neutro pela 6.2.6.2 e o PE pela Tabela 58. Antes era contagem
   // × comprimento numa seção só, sem retorno.
-  version: 'quant-1.20.0',
+  // quant-1.21.0 (29/09/2026, E3.1): o DR é PEÇA — `porDR` (In / IΔn / polos)
+  // no total e no quadro; `drs` passa a contar dispositivos (declarados +
+  // legados), não circuitos marcados.
+  version: 'quant-1.21.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -676,6 +680,14 @@ export interface QuantidadePorDisjuntor {
   quantidade: number;
 }
 
+/** DRs por corrente nominal, sensibilidade e polos (quant-1.21.0). `inA`/`polos` null = não declarados (legado). */
+export interface QuantidadePorDR {
+  inA: number | null;
+  idnMa: number;
+  polos: number | null;
+  quantidade: number;
+}
+
 /** O que um QUADRO alimenta e protege — a lista de compra do quadro (quant-1.19.0). */
 export interface QuantidadeDoQuadro {
   quadroId: string;
@@ -685,8 +697,9 @@ export interface QuantidadeDoQuadro {
   circuitos: number;
   pontos: number;
   porDisjuntor: QuantidadePorDisjuntor[];
-  /** Circuitos com DR declarado (`protecaoDR`). Vira peça na E3.1. */
+  /** Dispositivos DR do quadro (declarados como peça + legados por circuito). */
   drs: number;
+  porDR: QuantidadePorDR[];
   eletrodutoM: number;
   condutorM: number;
   porCondutor: QuantidadePorCondutor[];
@@ -905,6 +918,7 @@ export interface Quantitativos {
     quadros: number;
     porDisjuntor: QuantidadePorDisjuntor[];
     drs: number;
+    porDR: QuantidadePorDR[];
   };
 }
 
@@ -974,6 +988,18 @@ export function agruparPorDisjuntor(circuitos: readonly Circuito[]): QuantidadeP
   return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY));
 }
 
+/** DRs por (In, IΔn, polos); sem In por último. */
+export function agruparPorDR(drs: readonly DRDoQuadro[]): QuantidadePorDR[] {
+  const mapa = new Map<string, QuantidadePorDR>();
+  for (const d of drs) {
+    const k = `${d.inA ?? ''}|${d.idnMa}|${d.polos ?? ''}`;
+    const atual = mapa.get(k) ?? { inA: d.inA, idnMa: d.idnMa, polos: d.polos, quantidade: 0 };
+    atual.quantidade += 1;
+    mapa.set(k, atual);
+  }
+  return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY) || a.idnMa - b.idnMa || (a.polos ?? 0) - (b.polos ?? 0));
+}
+
 /**
  * Cada QUADRO com o que alimenta: circuitos, pontos, disjuntores por In, DRs,
  * metros de eletroduto e de fio dos circuitos dele. O eletroduto que serve a
@@ -999,7 +1025,8 @@ export function quadrosQuantificados(model: BlueprintModel, trechos: readonly Qu
       circuitos: circuitos.length,
       pontos,
       porDisjuntor: agruparPorDisjuntor(circuitos),
-      drs: circuitos.filter((c) => c.protecaoDR === true).length,
+      drs: drsDoQuadro(model, q.id).length,
+      porDR: agruparPorDR(drsDoQuadro(model, q.id)),
       eletrodutoM: doQuadro.reduce((s, t) => s + t.comprimentoM, 0),
       condutorM: porCondutor.reduce((s, c) => s + c.comprimentoM, 0),
       porCondutor,
@@ -2020,7 +2047,8 @@ export function computeQuantities(
       porQuadro,
       quadros: porQuadro.length,
       porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
-      drs: (model.circuitos ?? []).filter((c) => c.protecaoDR === true).length,
+      drs: drsDoModelo(model).length,
+      porDR: agruparPorDR(drsDoModelo(model)),
     },
   };
 }

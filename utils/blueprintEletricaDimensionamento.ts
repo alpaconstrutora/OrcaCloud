@@ -254,6 +254,21 @@ export interface HipotesesEletricas {
    */
   diametroExternoCondutorMm: readonly (readonly [number, number])[];
   diametroInternoEletrodutoMm: readonly (readonly [number, number])[];
+  /**
+   * E3.1 — CATÁLOGO de correntes nominais de DR (A), comercial, não norma; e
+   * quantos circuitos um DR de grupo pode juntar antes do AVISO (hipótese de
+   * projeto: um desarme apaga todos — a norma não fixa número).
+   */
+  catalogoDeDrA: readonly number[];
+  maxCircuitosPorDR: number;
+}
+
+/** A série comercial de DRs (A) — hipótese de catálogo, editável. */
+export const SERIE_COMERCIAL_DE_DR_A: readonly number[] = [25, 40, 63, 80, 100, 125];
+
+/** O menor In de DR do catálogo ≥ à soma das proteções a montante/jusante que ele atende; `null` acima do catálogo. */
+export function sugerirInDoDR(somaDosDisjuntoresA: number, catalogo: readonly number[] = SERIE_COMERCIAL_DE_DR_A): number | null {
+  return [...catalogo].sort((a, b) => a - b).find((x) => x >= somaDosDisjuntoresA) ?? null;
 }
 
 /** Diâmetro externo típico do condutor isolado (cobre, PVC 750 V), por seção — mm. */
@@ -293,6 +308,8 @@ export const HIPOTESES_PADRAO: HipotesesEletricas = {
   desequilibrioMaxPct: 10,
   diametroExternoCondutorMm: DIAMETRO_EXTERNO_CONDUTOR_MM,
   diametroInternoEletrodutoMm: DIAMETRO_INTERNO_ELETRODUTO_MM,
+  catalogoDeDrA: SERIE_COMERCIAL_DE_DR_A,
+  maxCircuitosPorDR: 5,
 };
 
 // ─── Corrente de projeto ───────────────────────────────────────────────────

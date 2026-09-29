@@ -1,7 +1,10 @@
 import React from 'react';
-import type { FaseDoCircuito, LigacaoDoCircuito } from '../../utils/blueprintKernel';
-import { LIGACOES_DO_CIRCUITO } from '../../utils/blueprintKernel';
+import type { Command, CorrenteDiferencialMa, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, PolosDoDR } from '../../utils/blueprintKernel';
+import { CORRENTES_DIFERENCIAIS_MA, LIGACOES_DO_CIRCUITO, POLOS_DO_DR, rotuloDoDR } from '../../utils/blueprintKernel';
 import type { PreDimensionamentoDoQuadro } from '../../utils/blueprintEletricaDimensionamento';
+import type { SugestaoDeDR } from '../../utils/blueprintNbr5410';
+import { comandosDasSugestoesDeDR } from '../../utils/blueprintNbr5410';
+import { Plus, X } from 'lucide-react';
 
 /**
  * QUADRO E ALIMENTADOR (F6, 13/09/2026) — sob a tabela de cada quadro.
@@ -23,6 +26,10 @@ export default function PainelQuadroAlimentador({
   onQuadro,
   fasesDosCircuitos,
   onFase,
+  drs = [],
+  sugestoesDeDR = [],
+  catalogoDeDrA = [],
+  onDR,
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
@@ -32,6 +39,11 @@ export default function PainelQuadroAlimentador({
   /** Em quadro trifásico: a fase declarada de cada circuito FN, para o select. */
   fasesDosCircuitos: { circuitoId: string; nome: string; ligacao: LigacaoDoCircuito; fase: FaseDoCircuito | null }[];
   onFase: (circuitoId: string, fase: FaseDoCircuito | null) => void;
+  /** E3.1: os DRs do quadro (peças + legados), o que a 5.1.3.2.2 ainda pede, o catálogo de In e quem grava. */
+  drs?: DRDoQuadro[];
+  sugestoesDeDR?: SugestaoDeDR[];
+  catalogoDeDrA?: readonly number[];
+  onDR?: (comandos: Command[]) => void;
 }) {
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
@@ -122,6 +134,111 @@ export default function PainelQuadroAlimentador({
                 </select>
               </label>
             ))}
+        </div>
+      )}
+
+      {/* E3.1 — PROTEÇÃO DR: peças do quadro. Cada campo grava; o legado
+          (marcado no circuito) aparece e diz como virar peça. Sugestões da
+          5.1.3.2.2 com "Adicionar" — sugestão, não decisão. */}
+      {(onDR || drs.length > 0) && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-slate-600" aria-label={`Proteção DR do quadro ${q.nome}`}>
+          <span className="font-medium text-slate-600">Proteção DR</span>
+          {drs.length === 0 && <span className="text-slate-400">nenhum</span>}
+          {drs.map((d) => {
+            const nomes = d.geral ? 'geral do quadro' : d.circuitoIds.map((id) => fasesDosCircuitos.find((c) => c.circuitoId === id)?.nome ?? '?').join(', ') || 'sem circuito';
+            if (d.legado || !onDR) {
+              return (
+                <span key={d.id} className="rounded bg-slate-100 px-1.5 py-0.5" title={d.legado ? 'Declarado no circuito (legado): escolha um DR na coluna DR da tabela para virar peça com In' : undefined}>
+                  DR {rotuloDoDR(d)} · {nomes}
+                  {d.legado && <span className="text-slate-400"> (no circuito)</span>}
+                </span>
+              );
+            }
+            return (
+              <span key={d.id} className="flex items-center gap-1 rounded border border-slate-200 px-1.5 py-0.5">
+                <span>DR</span>
+                <select
+                  value={d.inA ?? ''}
+                  onChange={(e) => onDR([{ type: 'SetDRProps', drId: d.id, inA: e.target.value === '' ? null : Number(e.target.value) }])}
+                  aria-label={`Corrente nominal do DR ${rotuloDoDR(d)} do quadro ${q.nome}`}
+                  title="Corrente nominal do DR (catálogo comercial — hipótese). O disjuntor à frente precisa ter In ≤ este valor"
+                  className={campo}
+                >
+                  <option value="">In —</option>
+                  {catalogoDeDrA.map((a) => (
+                    <option key={a} value={a}>
+                      {a} A
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={d.idnMa}
+                  onChange={(e) => onDR([{ type: 'SetDRProps', drId: d.id, idnMa: Number(e.target.value) as CorrenteDiferencialMa }])}
+                  aria-label={`Sensibilidade do DR ${rotuloDoDR(d)} do quadro ${q.nome}`}
+                  title="IΔn: 30 mA protege pessoas (5.1.3.2.2); 100–500 mA só contra incêndio"
+                  className={campo}
+                >
+                  {CORRENTES_DIFERENCIAIS_MA.map((ma) => (
+                    <option key={ma} value={ma}>
+                      {ma} mA
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={d.polos ?? ''}
+                  onChange={(e) => onDR([{ type: 'SetDRProps', drId: d.id, polos: e.target.value === '' ? null : (Number(e.target.value) as PolosDoDR) }])}
+                  aria-label={`Polos do DR ${rotuloDoDR(d)} do quadro ${q.nome}`}
+                  className={campo}
+                >
+                  <option value="">polos —</option>
+                  {POLOS_DO_DR.map((p) => (
+                    <option key={p} value={p}>
+                      {p}P
+                    </option>
+                  ))}
+                </select>
+                <label className="flex items-center gap-1" title="Geral: fica entre o disjuntor geral e o barramento e protege todos os circuitos do quadro">
+                  <input type="checkbox" checked={d.geral} onChange={(e) => onDR([{ type: 'SetDRProps', drId: d.id, geral: e.target.checked }])} aria-label={`DR ${rotuloDoDR(d)} geral do quadro ${q.nome}`} className="h-3.5 w-3.5 rounded border-gray-300" />
+                  geral
+                </label>
+                <span className="text-slate-500">{nomes}</span>
+                <button type="button" onClick={() => onDR([{ type: 'DeleteDR', drId: d.id }])} aria-label={`Remover DR ${rotuloDoDR(d)} do quadro ${q.nome}`} title="Remover este DR" className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-red-700">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            );
+          })}
+          {onDR && (
+            <button
+              type="button"
+              onClick={() => onDR([{ type: 'AddDR', quadroId: q.quadroId, idnMa: 30, geral: drs.length === 0 && fasesDosCircuitos.length > 0 ? false : false }])}
+              className="flex items-center gap-1 rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-slate-600 hover:border-slate-400"
+              title="Novo DR de 30 mA, sem circuito — escolha os circuitos na coluna DR da tabela, ou marque geral"
+            >
+              <Plus className="h-3.5 w-3.5" /> DR
+            </button>
+          )}
+          {onDR && sugestoesDeDR.length > 0 && (
+            <span className="flex flex-wrap items-center gap-1 text-amber-700">
+              <span>5.1.3.2.2 pede:</span>
+              {sugestoesDeDR.map((s) => (
+                <button
+                  key={s.circuitoId}
+                  type="button"
+                  onClick={() => onDR(comandosDasSugestoesDeDR([s]))}
+                  className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-50"
+                  title={`${s.motivo} — adiciona um DR individual de 30 mA${s.inA != null ? ` com In ${s.inA} A (≥ disjuntor do circuito)` : ' (In a declarar: o circuito não tem disjuntor declarado nem sugerido)'}`}
+                >
+                  {s.nome}: DR {s.inA != null ? `${s.inA} A / ` : ''}30 mA
+                </button>
+              ))}
+              {sugestoesDeDR.length > 1 && (
+                <button type="button" onClick={() => onDR(comandosDasSugestoesDeDR(sugestoesDeDR))} className="rounded bg-amber-100 px-1.5 py-0.5 font-medium hover:bg-amber-200">
+                  adicionar todos
+                </button>
+              )}
+            </span>
+          )}
         </div>
       )}
 

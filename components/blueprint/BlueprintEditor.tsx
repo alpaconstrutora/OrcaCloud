@@ -4208,7 +4208,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       hashDoDesenho: hashEletrico.desenho,
       hashDaBase: hashEletrico.base,
       emitidoEm,
-    });
+    }, editor.model); // E3.1: o modelo, para o memorial listar os DRs do quadro
     await executivoEletrico.emitir({
       topografia_id: null,
       topografia_versao: null,
@@ -8943,6 +8943,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 hipoteses={hipotesesEletricas}
                 onHipoteses={setHipotesesEletricas}
                 onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
+                // E3.1: DR como peça — um lote por gesto (criar + ligar circuito), um passo de undo.
+                onDR={(comandos) => editor.runBatch(comandos)}
                 // A CONFERÊNCIA da norma vive junto do quadro de cargas (aba
                 // própria): é a mesma leitura — o que foi declarado — vista pelas
                 // regras da NBR 5410, e o usuário pediu tudo de elétrica num só lugar.

@@ -56,6 +56,9 @@ export function hipotesesDaColuna(raw: unknown): HipotesesEletricas {
     // As tabelas de catálogo (F9) não são editadas pela tela ainda: sempre o padrão.
     diametroExternoCondutorMm: HIPOTESES_PADRAO.diametroExternoCondutorMm,
     diametroInternoEletrodutoMm: HIPOTESES_PADRAO.diametroInternoEletrodutoMm,
+    // E3.1: o catálogo de DR é sempre o padrão (como o de disjuntores); o máximo por grupo é editável.
+    catalogoDeDrA: HIPOTESES_PADRAO.catalogoDeDrA,
+    maxCircuitosPorDR: Math.max(1, Math.floor(n(r.maxCircuitosPorDR, HIPOTESES_PADRAO.maxCircuitosPorDR))),
   };
 }
 

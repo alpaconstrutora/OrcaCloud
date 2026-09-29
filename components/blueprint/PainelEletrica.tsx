@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
 import { AlertTriangle, Plus, Zap } from 'lucide-react';
-import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
+import type { BlueprintModel, Command, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId } from '../../utils/blueprintKernel';
+import { drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
+import { sugerirDRs } from '../../utils/blueprintNbr5410';
 import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   SERIE_COMERCIAL_DE_DISJUNTORES_A,
   preDimensionarCircuito,
   preDimensionarQuadroCompleto,
+  sugerirInDoDR,
   type HipotesesEletricas,
   type PreDimensionamentoDoCircuito,
 } from '../../utils/blueprintEletricaDimensionamento';
@@ -103,7 +106,11 @@ interface LinhaDeCircuito {
   ligacao: LigacaoDoCircuito;
   /** A fase declarada (R/S/T) — só faz sentido em F-N dentro de quadro trifásico. */
   fase: FaseDoCircuito | null;
-  protecaoDR: boolean;
+  /** E3.1: o DR que protege o circuito (peça, ou legado do `protecaoDR`); os DRs do quadro para o seletor. */
+  dr: DRDoQuadro | null;
+  drsDoQuadro: DRDoQuadro[];
+  /** In de DR que o catálogo sugere para um DR individual novo (≥ disjuntor declarado/sugerido). */
+  drInSugeridoA: number | null;
   disjuntorA: number | null;
   secaoMm2: number | null;
   /** E2.3: declarados; `null` = a conta da norma, que `neutroDerivadoMm2`/`peDerivadoMm2` mostram. */
@@ -134,7 +141,8 @@ const COLUNAS_DE_CIRCUITO: StandardTableColumn[] = [
   { key: 'tensaoV', label: 'Tensão (V)', width: 100, align: 'right' },
   { key: 'ligacao', label: 'Ligação', width: 124 },
   { key: 'fase', label: 'Fase', width: 64, align: 'center' },
-  { key: 'protecaoDR', label: 'DR', width: 52, align: 'center' },
+  // E3.1: o DR é PEÇA do quadro — a célula escolhe qual DR protege o circuito (ou cria um individual de 30 mA).
+  { key: 'protecaoDR', label: 'DR', width: 150 },
   { key: 'disjuntorA', label: 'Disjuntor (A)', width: 100, align: 'right' },
   { key: 'secaoMm2', label: 'Seção (mm²)', width: 100, align: 'right' },
   // E2.3: neutro e PE — em branco vale a norma (neutro = fase; PE pela Tab. 58), e a célula diz o valor.
@@ -155,6 +163,7 @@ export default function PainelEletrica({
   model,
   onAddCircuito,
   onCircuitoProps,
+  onDR,
   onSelecionar,
   onLigarAoCircuito,
   onCriarCircuitoELigar,
@@ -194,6 +203,11 @@ export default function PainelEletrica({
       fase?: FaseDoCircuito | null;
     },
   ) => void;
+  /**
+   * E3.1: grava DRs (AddDR / SetDRProps / DeleteDR) num lote — um passo de
+   * undo. Sem ele, a coluna DR cai no legado `protecaoDR` do circuito.
+   */
+  onDR?: (comandos: Command[]) => void;
   /** Hipóteses do pré-dimensionamento — ver `HipotesesEletricas`. */
   hipoteses?: HipotesesEletricas;
   onHipoteses?: (h: HipotesesEletricas) => void;
@@ -343,7 +357,13 @@ export default function PainelEletrica({
           tensaoV: c.tensaoV ?? null,
           ligacao: circuito?.ligacao ?? 'FN',
           fase: circuito?.fase ?? null,
-          protecaoDR: circuito?.protecaoDR === true,
+          dr: circuito ? drDoCircuito(model, circuito) : null,
+          drsDoQuadro: drsDoQuadro(model, q.quadroId),
+          drInSugeridoA: (() => {
+            const predim = circuito ? preDimensionarCircuito(model, circuito, hipoteses) : null;
+            const inDisj = c.disjuntorA ?? predim?.disjuntorSugeridoA ?? null;
+            return inDisj != null ? sugerirInDoDR(inDisj, hipoteses.catalogoDeDrA) : null;
+          })(),
           disjuntorA: c.disjuntorA ?? null,
           secaoMm2: c.secaoMm2 ?? null,
           secaoNeutroMm2: circuito?.secaoNeutroMm2 ?? null,
@@ -551,17 +571,56 @@ export default function PainelEletrica({
             ))}
           </select>
         );
-      case 'protecaoDR':
+      case 'protecaoDR': {
+        // E3.1: qual DR do quadro protege este circuito. "—" tira; um DR
+        // existente (não geral) inclui; "novo" cria um individual de 30 mA com
+        // In do catálogo. Geral cobre tudo e não se escolhe por circuito.
+        if (l.dr?.geral) {
+          return (
+            <span className="text-sm text-gray-700" title="DR geral do quadro — protege todos os circuitos; edite no bloco Alimentação do quadro">
+              geral · {rotuloDoDR(l.dr)}
+            </span>
+          );
+        }
+        const escolha = l.dr ? (l.dr.legado ? 'legado' : l.dr.id) : '';
+        const trocar = (v: string) => {
+          if (!onDR) {
+            // Sem quem grave a peça, vale o legado do circuito.
+            onCircuitoProps(l.circuitoId, { protecaoDR: v ? true : null });
+            return;
+          }
+          const cmds: Command[] = [];
+          if (l.dr?.legado) cmds.push({ type: 'SetCircuitoProps', circuitoId: l.circuitoId, protecaoDR: null });
+          if (l.dr && !l.dr.legado) cmds.push({ type: 'SetDRProps', drId: l.dr.id, circuitoIds: l.dr.circuitoIds.filter((x) => x !== l.circuitoId) });
+          if (v === 'novo') cmds.push({ type: 'AddDR', quadroId: l.quadroId, idnMa: 30, inA: l.drInSugeridoA, circuitoIds: [l.circuitoId] });
+          else if (v && v !== 'legado') {
+            const alvo = l.drsDoQuadro.find((d) => d.id === v);
+            if (alvo && !alvo.geral && !alvo.legado) cmds.push({ type: 'SetDRProps', drId: alvo.id, circuitoIds: [...alvo.circuitoIds.filter((x) => x !== l.circuitoId), l.circuitoId] });
+          }
+          if (cmds.length) onDR(cmds);
+        };
         return (
-          <input
-            type="checkbox"
-            checked={l.protecaoDR}
-            onChange={(e) => onCircuitoProps(l.circuitoId, { protecaoDR: e.target.checked })}
+          <select
+            value={escolha}
+            onChange={(e) => trocar(e.target.value)}
             aria-label={`Proteção DR do circuito ${l.nome}`}
-            title="Dispositivo DR de 30 mA declarado neste circuito (5.1.3.2.2)"
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
+            title={l.dr ? `${rotuloDoDR(l.dr)}${l.dr.circuitoIds.length > 1 ? ' — compartilhado' : ''}${l.dr.legado ? ' — declarado no circuito (sem In); escolha "novo" para virar peça' : ''}` : 'Sem DR. A NBR 5410 (5.1.3.2.2) exige 30 mA em banheiro, cozinha/serviço, área externa e chuveiro'}
+            className={`${CAMPO_NA_CELULA} ${l.dr ? '' : 'text-gray-500'}`}
+          >
+            <option value="">—</option>
+            {l.dr?.legado && <option value="legado">30 mA (no circuito)</option>}
+            {l.drsDoQuadro
+              .filter((d) => !d.geral && !d.legado)
+              .map((d) => (
+                <option key={d.id} value={d.id}>
+                  {rotuloDoDR(d)}
+                  {d.circuitoIds.length > (d.circuitoIds.includes(l.circuitoId) ? 1 : 0) ? ' (grupo)' : ''}
+                </option>
+              ))}
+            <option value="novo">{onDR ? `novo DR individual${l.drInSugeridoA != null ? ` ${l.drInSugeridoA} A /` : ''} 30 mA` : 'DR 30 mA (declarar no circuito)'}</option>
+          </select>
         );
+      }
       case 'disjuntorA': {
         // SELETOR com a série comercial (15/09/2026: "aba disjuntor (A), trazer
         // disjuntores 10A … 200A"), não campo livre: disjuntor é peça de
@@ -662,7 +721,7 @@ export default function PainelEletrica({
   const valorParaOrdenar = (key: string, l: LinhaDeCircuito) => {
     switch (key) {
       case 'protecaoDR':
-        return l.protecaoDR;
+        return l.dr ? rotuloDoDR(l.dr) : null;
       case 'predim':
         return l.predim?.achados.filter((a) => a.nivel === 'FALTA').length ?? null;
       default:
@@ -1069,6 +1128,10 @@ export default function PainelEletrica({
                         .filter((c) => c.quadroId === q.quadroId)
                         .map((c) => ({ circuitoId: c.id, nome: c.nome, ligacao: c.ligacao ?? 'FN', fase: c.fase ?? null }))}
                       onFase={(circuitoId, fase) => onCircuitoProps(circuitoId, { fase })}
+                      drs={drsDoQuadro(model, q.quadroId)}
+                      sugestoesDeDR={sugerirDRs(model, q.quadroId, hipoteses)}
+                      catalogoDeDrA={hipoteses.catalogoDeDrA}
+                      onDR={onDR}
                     />
                   ) : (
                     <p className="text-sm text-gray-500">

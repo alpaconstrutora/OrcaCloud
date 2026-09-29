@@ -52,10 +52,11 @@ describe('montarUnifilar — os ramais saem do quadro de cargas', () => {
     expect(d.tensaoV).toBe(127);
     expect(d.ramais).toHaveLength(2);
     const [c1, c2] = d.ramais;
-    expect(c1).toMatchObject({ numero: '1', disjuntorA: 16, disjuntorOrigem: 'DECLARADO', secaoMm2: 2.5, secaoOrigem: 'DECLARADA', dr: true, cargaVA: 1800, pontos: 3 });
+    // E3.1: `protecaoDR: true` legado vira DR individual de 30 mA sem In — e o ramal o mostra.
+    expect(c1).toMatchObject({ numero: '1', disjuntorA: 16, disjuntorOrigem: 'DECLARADO', secaoMm2: 2.5, secaoOrigem: 'DECLARADA', dr: { rotulo: '30 mA', compartilhado: false, legado: true }, cargaVA: 1800, pontos: 3 });
     expect(c1.condutores).toBe('2#2,5 + T2,5');
     // C2: 160 VA / 127 V = 1,26 A → seção mínima por uso (iluminação) 1,5; disjuntor sugerido pelo catálogo.
-    expect(c2).toMatchObject({ numero: '2', disjuntorOrigem: 'SUGERIDO', secaoMm2: 1.5, secaoOrigem: 'CALCULADA', dr: false, cargaVA: 160 });
+    expect(c2).toMatchObject({ numero: '2', disjuntorOrigem: 'SUGERIDO', secaoMm2: 1.5, secaoOrigem: 'CALCULADA', dr: null, cargaVA: 160 });
     expect(c2.disjuntorA).not.toBeNull();
     expect(c2.condutores).toBe('2#1,5 + T1,5');
     expect(d.comDR).toBe(true);

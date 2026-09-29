@@ -32,6 +32,7 @@ import {
   type Terminal,
   type TipoDeAmbiente,
 } from './blueprintKernel';
+import { circuitoComDR30, drDoCircuito, drsDoQuadro, rotuloDoDR, type Command } from './blueprintKernel';
 import { conferirIluminacao, conferirTomadas, etiquetaDoAmbiente } from './blueprintDistribuicao';
 import {
   HIPOTESES_PADRAO,
@@ -41,6 +42,7 @@ import {
   TIPOS_DE_USO_ESPECIFICO,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
+import { sugerirInDoDR } from './blueprintEletricaDimensionamento';
 import { composicaoDaRede } from './blueprintFiacao';
 
 export type CodigoDaRegra =
@@ -580,29 +582,113 @@ export function pontosQueExigemDR(
   return saida;
 }
 
-function regra51322(model: BlueprintModel, levelId: ObjectId | null): RegraConferida {
+function regra51322(model: BlueprintModel, levelId: ObjectId | null, hip: HipotesesEletricas): RegraConferida {
   const ambientes = ambientesDo(model, levelId);
   const achados: Achado[] = [];
+  const naoAvaliado: string[] = [];
   let avaliados = 0;
   for (const c of model.circuitos ?? []) {
     const exigem = pontosQueExigemDR(model, c.id, ambientes);
     if (exigem.length === 0) continue;
     avaliados++;
-    if (c.protecaoDR === true) continue;
+    // E3.1: o DR é PEÇA do quadro (`drDoCircuito`); `protecaoDR: true` legado vale como 30 mA.
+    const dr = drDoCircuito(model, c);
+    if (dr && dr.idnMa <= 30) continue;
     const motivos = [...new Set(exigem.map((x) => x.motivo))].slice(0, 3).join(', ');
+    const estado = dr
+      ? `protegido por DR de ${dr.idnMa} mA (${dr.geral ? 'geral' : 'do grupo'})`
+      : c.protecaoDR === false
+        ? 'declarado SEM DR'
+        : 'sem DR declarado';
     achados.push({
       nivel: 'FALTA',
-      mensagem: `circuito ${c.nome} ${c.protecaoDR === false ? 'declarado SEM DR' : 'sem DR declarado'} — exige DR de 30 mA (${motivos})`,
+      mensagem: `circuito ${c.nome} ${estado} — exige DR de 30 mA (${motivos})`,
       ids: exigem.map((x) => x.id),
     });
   }
+  // E3.1: a PEÇA declarada, conferida — In contra os disjuntores que ela atende, e o tamanho do grupo.
+  for (const q of (model.quadros ?? []).filter((x) => !levelId || x.levelId === levelId)) {
+    const predim = preDimensionarQuadroCompleto(model, q.id, hip);
+    for (const dr of drsDoQuadro(model, q.id)) {
+      if (dr.legado) continue;
+      const circuitos = dr.geral ? (model.circuitos ?? []).filter((c) => c.quadroId === q.id) : (model.circuitos ?? []).filter((c) => dr.circuitoIds.includes(c.id));
+      if (!dr.geral && circuitos.length === 0) {
+        achados.push({ nivel: 'AVISO', mensagem: `${q.nome}: DR ${rotuloDoDR(dr)} sem circuito — não protege nada`, ids: [q.id] });
+        continue;
+      }
+      if (dr.inA == null) {
+        naoAvaliado.push(`${q.nome}: DR ${rotuloDoDR(dr)} sem corrente nominal declarada`);
+      } else {
+        // O DR não protege contra sobrecorrente: a proteção a montante tem de ter In ≤ In do DR.
+        // Geral: o disjuntor geral (sugerido); grupo/individual: a soma dos disjuntores que ele alimenta.
+        const montante = dr.geral
+          ? (predim?.disjuntorGeralA ?? null)
+          : circuitos.reduce<number | null>((s, c) => {
+              const inA = c.disjuntorA ?? predim?.circuitos.find((x) => x.circuitoId === c.id)?.disjuntorSugeridoA ?? null;
+              return inA == null || s == null ? null : s + inA;
+            }, 0);
+        if (montante == null) naoAvaliado.push(`${q.nome}: DR ${rotuloDoDR(dr)} — disjuntor a montante não declarado nem sugerido`);
+        else if (dr.inA < montante) {
+          achados.push({
+            nivel: 'FALTA',
+            mensagem: `${q.nome}: DR ${rotuloDoDR(dr)} com In abaixo da proteção a montante (${dr.geral ? `geral ${montante} A` : `soma dos disjuntores ${montante} A`}) — o DR precisa de disjuntor de In ≤ ${dr.inA} A à frente (IEC 61008-1; 5.1.3.2.2)`,
+            ids: [q.id, ...circuitos.map((c) => c.id)],
+          });
+        }
+      }
+      if (!dr.geral && circuitos.length > hip.maxCircuitosPorDR) {
+        achados.push({ nivel: 'AVISO', mensagem: `${q.nome}: DR ${rotuloDoDR(dr)} agrupa ${circuitos.length} circuitos (hipótese: até ${hip.maxCircuitosPorDR} — um desarme apaga todos)`, ids: [q.id, ...circuitos.map((c) => c.id)] });
+      }
+    }
+  }
+  if (ambientes.some((a) => !a.tipo)) naoAvaliado.push('tomadas em ambientes sem tipo não entram');
   return {
     codigo: '5.1.3.2.2',
     titulo: 'Proteção DR (30 mA) em banheiro, cozinha/serviço, área externa e chuveiro',
     achados,
-    naoAvaliado: ambientes.some((a) => !a.tipo) ? ['tomadas em ambientes sem tipo não entram'] : [],
+    naoAvaliado,
     avaliados,
   };
+}
+
+/** Um DR que falta, com o In que o catálogo sugere. */
+export interface SugestaoDeDR {
+  quadroId: ObjectId;
+  circuitoId: ObjectId;
+  nome: string;
+  inA: number | null;
+  idnMa: 30;
+  motivo: string;
+}
+
+/**
+ * E3.1 — os DRs que a 5.1.3.2.2 exige e o quadro ainda não tem: um individual
+ * de 30 mA por circuito exigido, In do catálogo ≥ disjuntor do circuito
+ * (declarado ou sugerido). Sugestão, não decisão: quem adiciona é o projetista.
+ */
+export function sugerirDRs(model: BlueprintModel, quadroId: ObjectId, hip: HipotesesEletricas = HIPOTESES_PADRAO): SugestaoDeDR[] {
+  const ambientes = ambientesDo(model, null);
+  const predim = preDimensionarQuadroCompleto(model, quadroId, hip);
+  const saida: SugestaoDeDR[] = [];
+  for (const c of (model.circuitos ?? []).filter((x) => x.quadroId === quadroId)) {
+    const exigem = pontosQueExigemDR(model, c.id, ambientes);
+    if (exigem.length === 0 || circuitoComDR30(model, c)) continue;
+    const inDisj = c.disjuntorA ?? predim?.circuitos.find((x) => x.circuitoId === c.id)?.disjuntorSugeridoA ?? null;
+    saida.push({
+      quadroId,
+      circuitoId: c.id,
+      nome: c.nome,
+      inA: inDisj != null ? sugerirInDoDR(inDisj, hip.catalogoDeDrA) : null,
+      idnMa: 30,
+      motivo: [...new Set(exigem.map((x) => x.motivo))].slice(0, 2).join(', '),
+    });
+  }
+  return saida;
+}
+
+/** Os comandos que criam os DRs sugeridos — um lote, um passo de undo. */
+export function comandosDasSugestoesDeDR(sugestoes: readonly SugestaoDeDR[]): Command[] {
+  return sugestoes.map((s) => ({ type: 'AddDR', quadroId: s.quadroId, inA: s.inA, idnMa: 30, circuitoIds: [s.circuitoId] }));
 }
 
 // ─── Pré-dimensionamento — seção, disjuntor e queda de tensão ──────────────
@@ -729,7 +815,7 @@ export function conferirNbr5410(
     regra9531(model, levelId),
     regra9532(model, levelId),
     regra9533(model, levelId),
-    regra51322(model, levelId),
+    regra51322(model, levelId, hipoteses),
     regraPreDim(model, levelId, hipoteses),
     regraQuadro(model, levelId, hipoteses),
     regraEletroduto(model, levelId, hipoteses),

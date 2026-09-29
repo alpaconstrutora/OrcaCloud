@@ -204,6 +204,11 @@ export function HipotesesDoPreDimensionamento({
             <span>Queda máxima da origem ao pior ponto, % (6.2.7.1)</span>
             <input type="number" step="0.5" min={0} value={hipoteses.limiteQuedaTotalPct} onChange={(e) => onChange({ ...hipoteses, limiteQuedaTotalPct: Number(e.target.value) || HIPOTESES_PADRAO.limiteQuedaTotalPct })} aria-label="Limite de queda de tensão da origem" className={campo} />
           </label>
+          {/* E3.1: quantos circuitos um DR de grupo pode juntar — hipótese de projeto, não norma. */}
+          <label className="flex items-center justify-between gap-2">
+            <span>Circuitos por DR de grupo, máx. (hipótese)</span>
+            <input type="number" step="1" min={1} value={hipoteses.maxCircuitosPorDR} onChange={(e) => onChange({ ...hipoteses, maxCircuitosPorDR: Math.max(1, Number(e.target.value) || HIPOTESES_PADRAO.maxCircuitosPorDR) })} aria-label="Máximo de circuitos por DR" className={campo} />
+          </label>
           <label className="flex items-center justify-between gap-2">
             <span>Desequilíbrio de fases tolerado, % (quadro trifásico)</span>
             <input type="number" step="1" min={0} value={hipoteses.desequilibrioMaxPct} onChange={(e) => onChange({ ...hipoteses, desequilibrioMaxPct: Number(e.target.value) || HIPOTESES_PADRAO.desequilibrioMaxPct })} aria-label="Desequilíbrio de fases tolerado" className={campo} />

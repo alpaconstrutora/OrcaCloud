@@ -110,7 +110,7 @@ describe('hash da base e memorial', () => {
   it('o memorial traz responsável, hipóteses, cada circuito com IB/seção/disjuntor e a declaração', () => {
     const m = casaCompleta();
     const r = resultado(m);
-    const L = memorialEletrico(RT, HIPOTESES_PADRAO, r, { nomeDoEstudo: 'Casa', hashDoDesenho: 'd'.repeat(64), hashDaBase: 'b'.repeat(64), emitidoEm: '2026-09-13T12:00:00Z' });
+    const L = memorialEletrico(RT, HIPOTESES_PADRAO, r, { nomeDoEstudo: 'Casa', hashDoDesenho: 'd'.repeat(64), hashDaBase: 'b'.repeat(64), emitidoEm: '2026-09-13T12:00:00Z' }, m);
     const texto = L.join('\n');
     expect(texto).toMatch(/Ana Souza, Engenheira Eletricista — CREA SP 123456/);
     expect(texto).toMatch(/ART nº 28027230/);

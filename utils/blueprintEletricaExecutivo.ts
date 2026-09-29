@@ -19,6 +19,7 @@
  * Puro: modelo, hipóteses e conferência entram; verificações e texto saem.
  */
 import { sha256, snapshotHash, stableStringify, type BlueprintModel } from './blueprintKernel';
+import { drsDoQuadro as drsDoQuadroKernel, rotuloDoDR } from './blueprintKernel';
 import { KERNEL_VERSION } from './blueprintKernel';
 import type { ConferenciaNbr5410 } from './blueprintNbr5410';
 import type { ResponsavelTecnico } from './blueprintTopografiaExecutivo';
@@ -134,7 +135,10 @@ export function memorialEletrico(
   hip: HipotesesEletricas,
   r: ResultadoEletricoExecutivo,
   ctx: { nomeDoEstudo: string; hashDoDesenho: string; hashDaBase: string; emitidoEm: string },
+  /** E3.1: o modelo, para listar os DRs do quadro (peça). Sem ele, a linha não sai. */
+  model?: BlueprintModel,
 ): string[] {
+  const drsDoQuadro = (m: BlueprintModel | undefined, quadroId: string) => (m ? drsDoQuadroKernel(m, quadroId) : []);
   const L: string[] = [];
   const data = ctx.emitidoEm.slice(0, 10).split('-').reverse().join('/');
   const sigla = responsavel.conselho === 'CAU' ? 'RRT' : 'ART';
@@ -162,6 +166,11 @@ export function memorialEletrico(
       L.push(`Alimentador: IB ${n1(q.ibA)} A; seção ${mm2(q.secaoCalculada?.secaoMm2)} mm² (Iz ${q.secaoCalculada ? n1(q.secaoCalculada.izA) : '—'} A); disjuntor geral ${q.disjuntorGeralA ?? '—'} A${q.quedaAlimentadorPct != null ? `; queda no alimentador ${n1(q.quedaAlimentadorPct)} %, total até o pior ponto ${n1(q.quedaTotalMaxPct ?? 0)} %` : ''}.`);
     }
     if (q.fases) L.push(`Fases: R ${Math.round(q.fases.R)} · S ${Math.round(q.fases.S)} · T ${Math.round(q.fases.T)} VA${q.desequilibrioPct != null ? ` (desequilíbrio ${n1(q.desequilibrioPct)} %)` : ''}.`);
+    // E3.1: a proteção DR do quadro, peça a peça.
+    const drs = drsDoQuadro(model, q.quadroId);
+    if (drs.length) {
+      L.push(`Proteção DR: ${drs.map((d) => `${rotuloDoDR(d)} ${d.geral ? 'geral do quadro' : `nos circuitos ${(model?.circuitos ?? []).filter((c) => d.circuitoIds.includes(c.id)).map((c) => c.nome).join(', ') || '—'}`}${d.legado ? ' (declarado no circuito, sem In)' : ''}`).join('; ')}.`);
+    }
     for (const c of q.circuitos) {
       L.push(
         `${c.nome} (${c.ligacao}${c.tensaoV ? ` ${c.tensaoV} V` : ''}): ${c.pontos} ponto(s), ${Math.round(c.sVA)} VA, IB ${c.ibA == null ? '—' : n1(c.ibA)} A; seção declarada ${mm2(c.secaoDeclaradaMm2)} mm² (mínima ${mm2(c.secaoCalculada?.secaoMm2)} mm²)${c.secaoPeMm2 != null ? `; PE ${mm2(c.secaoPeMm2)} mm² (${c.peDerivado ? 'Tab. 58' : 'declarado'})` : ''}${c.secaoNeutroMm2 != null && c.secaoNeutroMm2 !== (c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2) ? `; neutro ${mm2(c.secaoNeutroMm2)} mm²` : ''}; disjuntor ${c.disjuntorDeclaradoA ?? '—'} A (sugerido ${c.disjuntorSugeridoA ?? '—'} A)${c.quedaPct != null && c.comprimento ? `; ΔV ${n1(c.quedaPct)} % em ${n1(c.comprimento.metros)} m ${c.comprimento.origem === 'ESTIMADO' ? '(estimado)' : '(eletrodutos)'}` : ''}. ${c.achados.some((a) => a.nivel === 'FALTA') ? 'NÃO ATENDE.' : 'ATENDE.'}`,

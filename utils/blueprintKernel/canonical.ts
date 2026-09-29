@@ -765,6 +765,21 @@ function projetar(model: BlueprintModel): {
   );
   const indiceDoCircuito = new Map(circuitos.map((c, i) => [c.item.id, i]));
 
+  // DRs (E3.1, 0.73.0): peça do QUADRO, com quadro e circuitos por ÍNDICE
+  // canônico. Chave OMITIDA quando não há nenhum — o hash do acervo não se move.
+  const drs = (model.quadros ?? [])
+    .flatMap((q) =>
+      (q.drs ?? []).map((d) => ({
+        quadro: indiceDoQuadro.get(q.id) ?? 0,
+        inA: d.inA ?? null,
+        idnMa: d.idnMa,
+        polos: d.polos ?? null,
+        geral: d.geral,
+        circuitos: [...new Set(d.circuitoIds.map((cid) => indiceDoCircuito.get(cid) ?? 0))].sort((p, r) => p - r),
+      })),
+    )
+    .sort((a, b) => a.quadro - b.quadro || Number(b.geral) - Number(a.geral) || a.idnMa - b.idnMa || (a.inA ?? 0) - (b.inA ?? 0) || cmpStr(a.circuitos.join(','), b.circuitos.join(',')));
+
   // INSTALAÇÕES. Como as escadas, a chave é OMITIDA quando não há nenhuma —
   // assim o payload e o hash de todo desenho sem instalação continuam
   // exatamente o que eram, e as goldens do acervo não se movem.
@@ -1036,6 +1051,7 @@ function projetar(model: BlueprintModel): {
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
     quadros: quadros.length ? quadros.map((q) => q.geom) : undefined,
     circuitos: circuitos.length ? circuitos.map((c) => c.geom) : undefined,
+    drs: drs.length ? drs : undefined,
     labels: labels.map((l) => l.geom),
     unidades: unidades.length ? unidades.map((u) => u.geom) : undefined,
     grupos: grupos.length ? grupos.map((g) => g.geom) : undefined,
@@ -1558,6 +1574,18 @@ export interface CanonicalPayload {
     ligacao?: string;
     protecaoDR?: boolean;
     fase?: string;
+  }[];
+  /**
+   * Dispositivos DR (E3.1). Ausente sob kernel < 0.73.0 e quando nenhum foi
+   * declarado como peça. `quadro` e `circuitos` são ÍNDICES canônicos.
+   */
+  drs?: {
+    quadro: number;
+    inA: number | null;
+    idnMa: number;
+    polos: number | null;
+    geral: boolean;
+    circuitos: number[];
   }[];
   labels: {
     level: number;
@@ -2147,6 +2175,23 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       fase: (c.fase as FaseDoCircuito | undefined) ?? null,
     });
   });
+
+  // DRs (0.73.0): DEPOIS dos circuitos — citam circuito por índice.
+  for (const d of payload.drs ?? []) {
+    const q = model.quadros.find((x) => x.id === idsDeQuadro[d.quadro]);
+    if (!q) continue;
+    q.drs = [
+      ...(q.drs ?? []),
+      {
+        id: nextId(model, 'dif'),
+        inA: d.inA ?? null,
+        idnMa: d.idnMa as 10 | 30 | 100 | 300 | 500,
+        polos: (d.polos as 2 | 4 | null | undefined) ?? null,
+        geral: d.geral,
+        circuitoIds: d.circuitos.map((i) => idsDeCircuito[i]).filter((x): x is string => !!x),
+      },
+    ];
+  }
 
   // ⚠️ Os TRECHOS vêm DEPOIS dos circuitos, e a ordem é obrigatória: desde
   // 09/09/2026 o trecho referencia o circuito por índice, e lê-lo antes deixaria

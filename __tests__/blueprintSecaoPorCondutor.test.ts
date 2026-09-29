@@ -12,8 +12,8 @@ import { condutoresDoRamal } from '../utils/blueprintUnifilar';
 
 describe('seção por condutor · a norma', () => {
   it('kernel 0.72.0 e quant-1.20.0', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.72.0');
-    expect(POLITICA_PADRAO.version).toBe('quant-1.20.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.73.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.21.0');
   });
 
   it('Tabela 58: até 16 igual à fase; 16–35 → 16; acima → metade, na nominal acima (95 → 50; 120 → 70)', () => {

@@ -38,6 +38,7 @@ import {
 } from './blueprintEletricaDimensionamento';
 import { numeroDoCircuito } from './blueprintCondutores';
 import { secaoDoPeMm2 } from './blueprintKernel';
+import { drDoCircuito, drsDoQuadro, rotuloDoDR } from './blueprintKernel';
 
 export interface RamalUnifilar {
   circuitoId: string;
@@ -54,7 +55,8 @@ export interface RamalUnifilar {
   condutores: string | null;
   cargaVA: number;
   pontos: number;
-  dr: boolean;
+  /** E3.1: o DR do ramal (individual ou de grupo) — `null` sem DR ou quando só há o geral. */
+  dr: { rotulo: string; compartilhado: boolean; legado: boolean } | null;
   /** Fase DECLARADA (R/S/T) do circuito F-N no quadro trifásico (E0.4); null fora disso. */
   fase: FaseDoCircuito | null;
   /** Quantas FALTAS o pré-dimensionamento acusa neste circuito. */
@@ -74,9 +76,11 @@ export interface DiagramaUnifilar {
     demandadaVA: number;
     instaladaVA: number;
     alimentadorM: number | null;
+    /** E3.1: o DR GERAL do quadro, entre o disjuntor geral e o barramento — o rótulo ("63 A / 30 mA"). */
+    drGeral: string | null;
   };
   ramais: RamalUnifilar[];
-  /** Algum ramal tem DR declarado — a legenda do símbolo só entra se ele aparece. */
+  /** Algum DR aparece (geral ou de ramal) — a legenda do símbolo só entra se ele aparece. */
   comDR: boolean;
   /** Ramal com valor SUGERIDO em vez de declarado — o aviso do rodapé. */
   comSugerido: boolean;
@@ -120,7 +124,11 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
       condutores: condutoresDoRamal(c.ligacao, secaoMm2, circuito?.secaoNeutroMm2 ?? null, circuito?.secaoPeMm2 ?? null),
       cargaVA: Math.round(c.sVA),
       pontos: c.pontos,
-      dr: circuito?.protecaoDR === true,
+      // E3.1: o DR do RAMAL — individual ou de grupo (o geral fica na entrada, não aqui).
+      dr: (() => {
+        const d = circuito ? drDoCircuito(model, circuito) : null;
+        return d && !d.geral ? { rotulo: rotuloDoDR(d), compartilhado: d.circuitoIds.length > 1, legado: d.legado } : null;
+      })(),
       fase: circuito?.fase ?? null,
       faltas: c.achados.filter((a) => a.nivel === 'FALTA').length,
     };
@@ -141,6 +149,10 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
         ligacao: q.ligacao,
         tensaoV: q.tensaoV,
         entrada: {
+          drGeral: (() => {
+            const g = drsDoQuadro(model, quadro.id).find((d) => d.geral);
+            return g ? rotuloDoDR(g) : null;
+          })(),
           disjuntorGeralA: q.disjuntorGeralA,
           secaoMm2: secaoEntrada,
           condutores: condutoresDoRamal(q.ligacao, secaoEntrada),
@@ -150,7 +162,7 @@ export function montarUnifilar(model: BlueprintModel, hip: HipotesesEletricas = 
           alimentadorM: quadro.alimentadorM ?? null,
         },
         ramais,
-        comDR: ramais.some((r) => r.dr),
+        comDR: ramais.some((r) => r.dr != null) || drsDoQuadro(model, quadro.id).some((d) => d.geral),
         comSugerido: ramais.some((r) => r.disjuntorOrigem === 'SUGERIDO' || r.secaoOrigem === 'CALCULADA'),
         comFases: ramais.some((r) => r.fase != null),
       } satisfies DiagramaUnifilar;
@@ -256,7 +268,17 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     COR_FRACA,
   );
   const xBus0 = x0 + UNIFILAR.entradaMm * k;
-  d.linha(fimGeral.x, yBus, xBus0, yBus, { espessuraMm: media, cor: COR });
+  if (e.drGeral) {
+    // E3.1: o DR GERAL entre o geral e o barramento — caixa "DR" com o rótulo embaixo.
+    const xDr = xBus0 - 9 * k;
+    d.linha(fimGeral.x, yBus, xDr, yBus, { espessuraMm: media, cor: COR });
+    d.retangulo(xDr, yBus - 2 * k, 6 * k, 4 * k, { espessuraMm: fina, cor: COR });
+    t(xDr + 1.1 * k, yBus + 0.9 * k, 'DR', 1.9 * k);
+    t(xDr - 2 * k, yBus - 3.2 * k, e.drGeral, 1.7 * k, COR_FRACA);
+    d.linha(xDr + 6 * k, yBus, xBus0, yBus, { espessuraMm: media, cor: COR });
+  } else {
+    d.linha(fimGeral.x, yBus, xBus0, yBus, { espessuraMm: media, cor: COR });
+  }
 
   // ── Barramento ────────────────────────────────────────────────────────
   const n = diagrama.ramais.length;
@@ -290,10 +312,11 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
     y = fim.y;
     d.linha(x, y, x, y + 4 * k, { espessuraMm: media, cor: COR });
     y += 4 * k;
-    // DR, quando declarado
+    // DR do ramal (E3.1: individual ou de grupo; o geral fica na entrada)
     if (r.dr) {
       d.retangulo(x - 3 * k, y, 6 * k, 4 * k, { espessuraMm: fina, cor: COR });
       t(x - 1.9 * k, y + 2.9 * k, 'DR', 1.9 * k);
+      t(x + 3.6 * k, y + 2.9 * k, `${r.dr.rotulo}${r.dr.compartilhado ? ' grupo' : ''}`, 1.5 * k, COR_FRACA);
       y += 4 * k;
       d.linha(x, y, x, y + 3 * k, { espessuraMm: media, cor: COR });
       y += 3 * k;
@@ -327,7 +350,7 @@ export function desenharUnifilar(d: Desenhista, diagrama: DiagramaUnifilar, x0: 
 export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string[] {
   const L: string[] = [];
   L.push('Disjuntor: lâmina aberta no ramal (In em A). Barramento: traço grosso. Seta: segue ao circuito.');
-  if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual declarado no circuito (30 mA para pessoas — 5.1.3.2.2).');
+  if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual — na entrada (geral do quadro) ou no ramal (individual; "grupo" = compartilhado por mais de um circuito); "In / IΔn", 30 mA para pessoas (5.1.3.2.2).');
   L.push('Condutores: "2#2,5 + T2,5" = dois carregados de 2,5 mm² e terra de 2,5 mm² (ligação FN/FF); "3#…" em FFF.');
   if (diagramas.some((d) => d.comFases)) L.push('R / S / T sobre o ramal: fase declarada do circuito F-N no quadro trifásico — o balanceamento soma por fase.');
   if (diagramas.some((d) => d.comSugerido)) L.push('"sug." = valor do pré-dimensionamento, ainda não declarado no quadro de cargas — declare para assumir.');

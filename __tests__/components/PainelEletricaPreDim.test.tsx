@@ -74,7 +74,8 @@ describe('PainelEletrica · pré-dimensionamento', () => {
     render(<PainelEletrica model={cena()} onCircuitoProps={onCircuitoProps} hipoteses={HIPOTESES_PADRAO} {...props} />);
     await userEvent.selectOptions(screen.getByLabelText('Ligação do circuito C1'), 'FFF');
     expect(onCircuitoProps).toHaveBeenLastCalledWith(expect.any(String), { ligacao: 'FFF' });
-    await userEvent.click(screen.getByLabelText('Proteção DR do circuito C1'));
+    // E3.1: a coluna DR virou seletor de PEÇA; sem `onDR`, "novo" cai no legado do circuito.
+    await userEvent.selectOptions(screen.getByLabelText('Proteção DR do circuito C1'), 'novo');
     expect(onCircuitoProps).toHaveBeenLastCalledWith(expect.any(String), { protecaoDR: true });
     expect(screen.getByLabelText('Tensão do circuito C1, em volts')).toHaveValue(127);
   });

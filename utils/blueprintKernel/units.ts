@@ -402,7 +402,16 @@
  * no canônico quando ausentes — nenhum desenho muda de payload, provado antes
  * do bump com os goldens na string antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.72.0';
+/**
+ * ─── 0.72.0 → 0.73.0 (29/09/2026) — DR COMO PEÇA DO QUADRO ──────────────────
+ *
+ * `Quadro.drs[]` (E3.1 do roadmap elétrico): dispositivo DR com corrente
+ * nominal, sensibilidade, polos e escopo (geral ou circuitos). No canônico é a
+ * chave `drs`, omitida quando não há nenhum — nenhum desenho muda de payload,
+ * provado antes do bump com os goldens na string antiga. `Circuito.protecaoDR`
+ * continua lido como DR individual de 30 mA (legado).
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.73.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

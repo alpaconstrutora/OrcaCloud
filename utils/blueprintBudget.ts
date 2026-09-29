@@ -439,7 +439,7 @@ export const MEDIDAS: DefinicaoMedida[] = [
     rotulo: 'Dispositivos DR',
     escopo: 'INSTALACAO',
     dimensao: 'UN',
-    descricao: 'Circuitos com DR declarado — um DR por circuito, 30 mA. Vira peça com In e escopo (grupo/geral) na E3.1.',
+    descricao: 'Dispositivos DR por corrente nominal, sensibilidade e polos (uma linha por combinação). Os declarados no circuito (legado) saem como "30 mA, In não declarado".',
   },
 
   // ── Telhado ──────────────────────────────────────────────────────────────
@@ -1047,9 +1047,18 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     }
 
     case 'CONTAGEM_DR': {
-      const n = quant.totais.drs ?? 0;
-      if (n <= 0 || !combina('DR 30 mA')) return [];
-      return [{ ref: 'dr-30ma', rotulo: 'DR 30 mA (um por circuito com DR declarado)', valor: n, formula: 'circuitos com protecaoDR', variaveis: { circuitos: n } }];
+      // E3.1: uma linha por (In, IΔn, polos) — é assim que se compra.
+      return (quant.totais.porDR ?? [])
+        .filter((d) => d.quantidade > 0)
+        .map((d) => ({ d, rotulo: `DR ${d.inA != null ? `${d.inA} A / ` : ''}${d.idnMa} mA${d.polos ? ` ${d.polos}P` : ''}${d.inA == null ? ' (In não declarado)' : ''}` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ d, rotulo }) => ({
+          ref: `dr-${d.inA ?? 'sem-in'}-${d.idnMa}-${d.polos ?? 'p'}`,
+          rotulo,
+          valor: d.quantidade,
+          formula: 'um por dispositivo DR do quadro (peça declarada ou legado do circuito)',
+          variaveis: { inA: d.inA ?? 'não declarado', idnMa: d.idnMa, polos: d.polos ?? 'não declarados', quantidade: d.quantidade },
+        }));
     }
 
     case 'CONTAGEM_PONTOS_HIDRAULICOS': {

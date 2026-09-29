@@ -25,6 +25,8 @@ import {
   type FormaDoReservatorio,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
+  CorrenteDiferencialMa,
+  PolosDoDR,
   type TipoDeAmbiente,
   type Georreferencia,
   type ObjectId,
@@ -811,6 +813,30 @@ export type Command =
       protecaoDR?: boolean | null;
       fase?: FaseDoCircuito | null;
     }
+  /**
+   * Um DISPOSITIVO DR no quadro (E3.1). `geral` protege o quadro inteiro (e
+   * não lista circuitos); senão `circuitoIds` — DESTE quadro. Padrão 30 mA.
+   */
+  | {
+      type: 'AddDR';
+      quadroId: ObjectId;
+      inA?: number | null;
+      idnMa?: CorrenteDiferencialMa;
+      polos?: PolosDoDR | null;
+      geral?: boolean;
+      circuitoIds?: ObjectId[];
+    }
+  | {
+      type: 'SetDRProps';
+      drId: ObjectId;
+      inA?: number | null;
+      idnMa?: CorrenteDiferencialMa;
+      polos?: PolosDoDR | null;
+      /** Virar geral limpa a lista; deixar de ser geral mantém a lista dada (ou vazia). */
+      geral?: boolean;
+      circuitoIds?: ObjectId[];
+    }
+  | { type: 'DeleteDR'; drId: ObjectId }
   /** Move UM vértice do percurso. Espelha `MoveAguaVertex`. */
   | { type: 'MoveEscadaVertex'; escadaId: ObjectId; index: number; to: Point }
   | { type: 'DeleteEscada'; escadaId: ObjectId }
@@ -3489,7 +3515,53 @@ function aplicarSemHash(
       if (command.ligacao !== undefined) c.ligacao = command.ligacao;
       if (command.protecaoDR !== undefined) c.protecaoDR = command.protecaoDR;
       if (command.fase !== undefined) c.fase = command.fase;
+      // E3.1: mudou de quadro → sai dos DRs do quadro antigo (o DR é peça daquele quadro).
+      if (command.quadroId !== undefined) tirarCircuitoDosDrs(next, c.id, c.quadroId);
       diff.updated.push(c.id);
+      break;
+    }
+
+    case 'AddDR': {
+      const q = (next.quadros ?? []).find((x) => x.id === command.quadroId);
+      if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${command.quadroId}`);
+      const geral = command.geral ?? false;
+      const circuitoIds = geral ? [] : [...new Set(command.circuitoIds ?? [])];
+      conferirCircuitosDoDR(next, q.id, circuitoIds);
+      const id = nextId(next, 'dif');
+      q.drs = [...(q.drs ?? []), { id, inA: command.inA ?? null, idnMa: command.idnMa ?? 30, polos: command.polos ?? null, geral, circuitoIds }];
+      diff.created.push(id);
+      diff.updated.push(q.id);
+      break;
+    }
+
+    case 'SetDRProps': {
+      const q = (next.quadros ?? []).find((x) => (x.drs ?? []).some((d) => d.id === command.drId));
+      const atual = q?.drs?.find((d) => d.id === command.drId);
+      if (!q || !atual) throw new KernelError('BOARD_NOT_FOUND', `DR não encontrado: ${command.drId}`);
+      const geral = command.geral ?? atual.geral;
+      const circuitoIds = geral ? [] : [...new Set(command.circuitoIds ?? (atual.geral ? [] : atual.circuitoIds))];
+      conferirCircuitosDoDR(next, q.id, circuitoIds);
+      const novoDR = {
+        ...atual,
+        inA: command.inA !== undefined ? command.inA : atual.inA,
+        idnMa: command.idnMa ?? atual.idnMa,
+        polos: command.polos !== undefined ? command.polos : atual.polos,
+        geral,
+        circuitoIds,
+      };
+      // Nunca em lugar: o clone do modelo compartilha o array com o anterior.
+      q.drs = (q.drs ?? []).map((d) => (d.id === atual.id ? novoDR : d));
+      diff.updated.push(atual.id, q.id);
+      break;
+    }
+
+    case 'DeleteDR': {
+      const q = (next.quadros ?? []).find((x) => (x.drs ?? []).some((d) => d.id === command.drId));
+      if (!q) throw new KernelError('BOARD_NOT_FOUND', `DR não encontrado: ${command.drId}`);
+      q.drs = (q.drs ?? []).filter((d) => d.id !== command.drId);
+      if (q.drs.length === 0) q.drs = null;
+      diff.deleted.push(command.drId);
+      diff.updated.push(q.id);
       break;
     }
 
@@ -3597,6 +3669,8 @@ function aplicarSemHash(
       // para circuito inexistente — sem esta linha, apagar um circuito com
       // eletroduto lançado falhava o comando inteiro.
       next.trechos = (next.trechos ?? []).map((t) => semCircuitos(t, new Set([command.circuitoId])));
+      // E3.1: o DR que o citava deixa de citá-lo (a peça fica — é do quadro).
+      tirarCircuitoDosDrs(next, command.circuitoId, null);
       diff.deleted.push(command.circuitoId);
       break;
     }
@@ -4839,7 +4913,8 @@ function aplicarSemHash(
       // ela é re-derivada do tipo a cada comando e duplicaria a cada sync.
       for (const q of (next.quadros ?? []).filter((q) => q.levelId === origem.id)) {
         const id = nextId(next, 'qdr');
-        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: novoNivelId, at: { ...q.at } }];
+        // E3.1: a cópia vem SEM circuitos — e sem os DRs, que os citavam.
+        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: novoNivelId, at: { ...q.at }, drs: null }];
         diff.created.push(id);
       }
       for (const t of (next.terminais ?? []).filter((t) => t.levelId === origem.id)) {
@@ -5016,7 +5091,8 @@ function aplicarSemHash(
       // colou, decidiu a posição.
       for (const q of quadrosCopiados) {
         const id = nextId(next, 'qdr');
-        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: command.levelId, at: deslocar(q.at) }];
+        // E3.1: a cópia vem SEM circuitos — e sem os DRs, que os citavam.
+        next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: command.levelId, at: deslocar(q.at), drs: null }];
         diff.created.push(id);
       }
       for (const t of terminais) {
@@ -5208,6 +5284,23 @@ function semCircuitos(t: Trecho, apagados: ReadonlySet<ObjectId>): Trecho {
   if (!ids.some((id) => apagados.has(id))) return t;
   const restantes = ids.filter((id) => !apagados.has(id));
   return { ...t, circuitoIds: restantes.length > 0 ? restantes : null };
+}
+
+/** E3.1: os circuitos de um DR são DESTE quadro — e existem. */
+function conferirCircuitosDoDR(model: BlueprintModel, quadroId: ObjectId, circuitoIds: readonly ObjectId[]): void {
+  for (const cid of circuitoIds) {
+    const c = (model.circuitos ?? []).find((x) => x.id === cid);
+    if (!c) throw new KernelError('CIRCUIT_NOT_FOUND', `Circuito não encontrado: ${cid}`);
+    if (c.quadroId !== quadroId) throw new KernelError('BAD_BOARD_VALUE', `Circuito ${cid} não é do quadro ${quadroId}`);
+  }
+}
+
+/** E3.1: tira o circuito da lista de todo DR — de todos os quadros, ou de todos menos `exceto`. */
+function tirarCircuitoDosDrs(model: BlueprintModel, circuitoId: ObjectId, exceto: ObjectId | null): void {
+  for (const q of model.quadros ?? []) {
+    if (q.id === exceto || !(q.drs ?? []).some((d) => d.circuitoIds.includes(circuitoId))) continue;
+    q.drs = (q.drs ?? []).map((d) => (d.circuitoIds.includes(circuitoId) ? { ...d, circuitoIds: d.circuitoIds.filter((x) => x !== circuitoId) } : d));
+  }
 }
 
 export function applyCommand(model: BlueprintModel, command: Command): CommandResult {

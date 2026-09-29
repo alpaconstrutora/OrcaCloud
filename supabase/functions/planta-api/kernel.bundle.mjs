@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.72.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.73.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2022,6 +2022,16 @@ function projetar(model) {
     (x, y) => (indiceDoQuadro.get(x.quadroId) ?? 0) - (indiceDoQuadro.get(y.quadroId) ?? 0) || cmpStr(x.nome, y.nome)
   );
   const indiceDoCircuito = new Map(circuitos.map((c, i) => [c.item.id, i]));
+  const drs = (model.quadros ?? []).flatMap(
+    (q) => (q.drs ?? []).map((d) => ({
+      quadro: indiceDoQuadro.get(q.id) ?? 0,
+      inA: d.inA ?? null,
+      idnMa: d.idnMa,
+      polos: d.polos ?? null,
+      geral: d.geral,
+      circuitos: [...new Set(d.circuitoIds.map((cid) => indiceDoCircuito.get(cid) ?? 0))].sort((p, r) => p - r)
+    }))
+  ).sort((a, b) => a.quadro - b.quadro || Number(b.geral) - Number(a.geral) || a.idnMa - b.idnMa || (a.inA ?? 0) - (b.inA ?? 0) || cmpStr(a.circuitos.join(","), b.circuitos.join(",")));
   const trechos = ordenar(
     model.trechos ?? [],
     (t) => ({
@@ -2226,6 +2236,7 @@ function projetar(model) {
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
     quadros: quadros.length ? quadros.map((q) => q.geom) : void 0,
     circuitos: circuitos.length ? circuitos.map((c) => c.geom) : void 0,
+    drs: drs.length ? drs : void 0,
     labels: labels.map((l) => l.geom),
     unidades: unidades.length ? unidades.map((u) => u.geom) : void 0,
     grupos: grupos.length ? grupos.map((g) => g.geom) : void 0,
@@ -2740,6 +2751,21 @@ function modelFromCanonicalPayload(payload) {
       fase: c.fase ?? null
     });
   });
+  for (const d of payload.drs ?? []) {
+    const q = model.quadros.find((x) => x.id === idsDeQuadro[d.quadro]);
+    if (!q) continue;
+    q.drs = [
+      ...q.drs ?? [],
+      {
+        id: nextId(model, "dif"),
+        inA: d.inA ?? null,
+        idnMa: d.idnMa,
+        polos: d.polos ?? null,
+        geral: d.geral,
+        circuitoIds: d.circuitos.map((i) => idsDeCircuito[i]).filter((x) => !!x)
+      }
+    ];
+  }
   const trechos = payload.trechos ?? [];
   trechos.forEach((t, i) => {
     model.trechos.push({
@@ -3407,6 +3433,21 @@ function composicaoDaRede(model) {
   return saida;
 }
 
+// utils/blueprintKernel/protecaoDr.ts
+var PREFIXO_DO_DR_LEGADO = "legado:";
+function drsDoQuadro(model, quadroId) {
+  const q = (model.quadros ?? []).find((x) => x.id === quadroId);
+  if (!q) return [];
+  const declarados = (q.drs ?? []).map((d) => ({ ...d, circuitoIds: [...d.circuitoIds], quadroId, legado: false }));
+  const temGeral = declarados.some((d) => d.geral);
+  const cobertos = new Set(declarados.flatMap((d) => d.circuitoIds));
+  const legados = (model.circuitos ?? []).filter((c) => c.quadroId === quadroId && c.protecaoDR === true && !temGeral && !cobertos.has(c.id)).map((c) => ({ id: `${PREFIXO_DO_DR_LEGADO}${c.id}`, quadroId, inA: null, idnMa: 30, polos: null, geral: false, circuitoIds: [c.id], legado: true }));
+  return [...declarados, ...legados];
+}
+function drsDoModelo(model) {
+  return (model.quadros ?? []).flatMap((q) => drsDoQuadro(model, q.id));
+}
+
 // utils/blueprintKernel/quantities.ts
 var POLITICA_PADRAO = {
   // quant-1.17.0 (28/09/2026, E1.1 do roadmap hidrossanitário): o trecho e a
@@ -3422,7 +3463,10 @@ var POLITICA_PADRAO = {
   // FIAÇÃO DERIVADA (`fiacao.ts`) — fase, neutro, RETORNO e terra por tipo e
   // seção, com o neutro pela 6.2.6.2 e o PE pela Tabela 58. Antes era contagem
   // × comprimento numa seção só, sem retorno.
-  version: "quant-1.20.0",
+  // quant-1.21.0 (29/09/2026, E3.1): o DR é PEÇA — `porDR` (In / IΔn / polos)
+  // no total e no quadro; `drs` passa a contar dispositivos (declarados +
+  // legados), não circuitos marcados.
+  version: "quant-1.21.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -3458,6 +3502,16 @@ function agruparPorDisjuntor(circuitos) {
   }
   return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY));
 }
+function agruparPorDR(drs) {
+  const mapa = /* @__PURE__ */ new Map();
+  for (const d of drs) {
+    const k = `${d.inA ?? ""}|${d.idnMa}|${d.polos ?? ""}`;
+    const atual = mapa.get(k) ?? { inA: d.inA, idnMa: d.idnMa, polos: d.polos, quantidade: 0 };
+    atual.quantidade += 1;
+    mapa.set(k, atual);
+  }
+  return [...mapa.values()].sort((a, b) => (a.inA ?? Number.POSITIVE_INFINITY) - (b.inA ?? Number.POSITIVE_INFINITY) || a.idnMa - b.idnMa || (a.polos ?? 0) - (b.polos ?? 0));
+}
 function quadrosQuantificados(model, trechos) {
   const trechoPorId = new Map(trechos.map((t) => [t.trechoId, t]));
   return (model.quadros ?? []).map((q) => {
@@ -3476,7 +3530,8 @@ function quadrosQuantificados(model, trechos) {
       circuitos: circuitos.length,
       pontos,
       porDisjuntor: agruparPorDisjuntor(circuitos),
-      drs: circuitos.filter((c) => c.protecaoDR === true).length,
+      drs: drsDoQuadro(model, q.id).length,
+      porDR: agruparPorDR(drsDoQuadro(model, q.id)),
       eletrodutoM: doQuadro.reduce((s2, t) => s2 + t.comprimentoM, 0),
       condutorM: porCondutor.reduce((s2, c) => s2 + c.comprimentoM, 0),
       porCondutor
@@ -4155,7 +4210,8 @@ ${c.funcao}`;
       porQuadro,
       quadros: porQuadro.length,
       porDisjuntor: agruparPorDisjuntor(model.circuitos ?? []),
-      drs: (model.circuitos ?? []).filter((c) => c.protecaoDR === true).length
+      drs: drsDoModelo(model).length,
+      porDR: agruparPorDR(drsDoModelo(model))
     }
   };
 }

@@ -295,7 +295,7 @@ describe('quantitativos · política', () => {
     // quant-1.19.0 (29/09/2026, E0.3 do roadmap elétrico): o eletroduto ganhou
     // `condutores`/`condutorM`/`condutoresPorSecao` e os totais ganharam fio por
     // seção, quadros, disjuntores e DR — o orçamento comprava tubo e nenhum fio.
-    expect(POLITICA_PADRAO.version).toBe('quant-1.20.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.21.0');
   });
 });
 

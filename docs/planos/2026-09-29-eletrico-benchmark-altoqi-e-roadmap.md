@@ -1944,7 +1944,7 @@ Fecha o bloco **4** e completa o **6** (fios).
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 3.1 DR como peça | `Quadro.drs[]: {id, inA, idnMa (30/100/300), polos, escopo: 'GERAL' \| circuitoIds[]}` substitui `Circuito.protecaoDR` (migração de leitura: booleano vira DR individual de 30 mA); sugestão automática: In ≥ disjuntor do grupo, 30 mA onde 5.1.3.2.2 exige; regra "circuito exigido sem DR", "DR com In < soma", "mais de N circuitos no mesmo DR (hipótese)"; unifilar e quadro de cargas mostram o DR na posição certa (geral / grupo / ramal) | goldens; `blueprintNbr5410DrEPreDim.test.ts`; legado com `protecaoDR: true` lê igual; quantitativo conta DR por In/IΔn |
+| 3.1 DR como peça ✅ (kernel 0.73.0 · quant-1.21.0; legado `protecaoDR` lido igual) | `Quadro.drs[]: {id, inA, idnMa (30/100/300), polos, escopo: 'GERAL' \| circuitoIds[]}` substitui `Circuito.protecaoDR` (migração de leitura: booleano vira DR individual de 30 mA); sugestão automática: In ≥ disjuntor do grupo, 30 mA onde 5.1.3.2.2 exige; regra "circuito exigido sem DR", "DR com In < soma", "mais de N circuitos no mesmo DR (hipótese)"; unifilar e quadro de cargas mostram o DR na posição certa (geral / grupo / ramal) | goldens; `blueprintNbr5410DrEPreDim.test.ts`; legado com `protecaoDR: true` lê igual; quantitativo conta DR por In/IΔn |
 | 3.2 DPS no quadro | `Quadro.dps?: {classe (I/II), upKv, inKa, disjuntorDesconexaoA}` com sugestão (classe II, 20 kA, hipótese) e regra 6.3.5.2 "quadro de entrada sem DPS" (aviso, porque depende da exposição — declarada como hipótese `exposicaoARaios`); unifilar, quadro de cargas, quantitativo, memorial | teste: quadro sem pai e sem DPS → AVISO; com DPS → símbolo no unifilar |
 | 3.3 Disjuntor completo e curto simplificado | `Circuito.curva ('B' \| 'C' \| 'D')` e `Quadro.icnKa` declarados; hipótese `ikEntradaKa` (corrente de curto na entrada, padrão 4,5 kA "a confirmar com a concessionária"); regra "Icn < Ik" (FALTA) e `quadroDeCargas` com coluna Curva/Icn; **fora**: cálculo de Ik por impedância (backlog) | teste Icn 3 kA × Ik 4,5 → FALTA citando 5.3.5.5; memorial lista Icn e Ik assumido |
 
@@ -2656,3 +2656,74 @@ script de edição abortou uma vez no `PainelEletrica` (âncora `default:` que n
 daqui: A) esquemas editáveis pelo usuário; B) redução do neutro no trifásico > 25 mm² (6.2.6.2.4) com o
 quadro trifásico da E4; C) unificar os dois `numeroDoCircuito` (E4.1); D) harness visual da prancha com
 trecho numerado.
+
+### E3.1 — DR como peça do quadro (29/09/2026) · frente `eletrico-e3` · **kernel 0.72.0 → 0.73.0 · quant-1.20.0 → 1.21.0**
+
+**O que mudou**
+
+- **Kernel 0.73.0** — `Quadro.drs[]: DispositivoDR {id, inA, idnMa (10/30/100/300/500), polos (2/4),
+  geral, circuitoIds}`. O DR deixa de ser marca no circuito e vira PEÇA do quadro, com escopo:
+  **geral** (entre o disjuntor geral e o barramento, protege tudo) ou **grupo/individual**
+  (`circuitoIds` — deste quadro). Comandos `AddDR` / `SetDRProps` / `DeleteDR`; `DeleteCircuito` e
+  mover circuito de quadro tiram o circuito dos DRs; cópia de quadro (`DuplicateLevel` /
+  `DuplicateEntities`) vem **sem DR** (como vem sem circuito — dito). Invariantes: id único, valores
+  do catálogo, geral sem lista, circuito citado é do próprio quadro. Canônico: chave **`drs`**
+  (quadro e circuitos por índice), **omitida sem DR** — goldens 7/7 com a string em 0.72.0.
+- **Legado lê igual** — `Circuito.protecaoDR: true` vira DR individual de 30 mA sem In
+  (`drsDoQuadro` em `blueprintKernel/protecaoDr.ts`, derivado); quando um DR declarado passa a
+  cobrir o circuito, o legado some. `drDoCircuito` = o mais específico (grupo antes do geral);
+  `circuitoComDR30`; `rotuloDoDR` ("40 A / 30 mA · 2P").
+- **5.1.3.2.2 lê a peça e CONFERE a peça** (`blueprintNbr5410.ts`): circuito exigido protegido por DR
+  de 100 mA continua FALTA ("protegido por DR de 100 mA (do grupo) — exige 30 mA"); DR com **In abaixo
+  da proteção a montante** = FALTA (grupo: soma dos disjuntores dos circuitos; geral: disjuntor geral
+  sugerido) citando IEC 61008-1; DR sem In → não avaliado; grupo com mais circuitos que
+  `hip.maxCircuitosPorDR` (5, hipótese) → AVISO; DR sem circuito → AVISO.
+- **Sugestão** — `sugerirDRs(model, quadroId, hip)`: um DR individual de 30 mA por circuito exigido
+  sem DR-30, In do catálogo `catalogoDeDrA` (25/40/63/80/100/125 — hipótese comercial) ≥ disjuntor
+  declarado ou sugerido; `comandosDasSugestoesDeDR` cria em lote. Sugestão, não decisão: quem
+  adiciona é o projetista.
+- **Unifilar** — DR geral desenhado **na entrada** (caixa entre o geral e o barramento, rótulo
+  acima); DR de ramal com rótulo e "grupo" quando compartilhado; `RamalUnifilar.dr` virou objeto
+  (`{rotulo, compartilhado, legado} | null`); rodapé explica as duas posições.
+- **Quadro de cargas** — tela: coluna DR virou **seletor de peça** ("—", DRs do quadro, "novo DR
+  individual 25 A / 30 mA" com In do catálogo; geral aparece fixo); bloco Alimentação ganhou
+  **"Proteção DR"** (In · IΔn · polos · geral · circuitos · remover · "＋ DR" · sugestões da 5.1.3.2.2
+  com "adicionar"/"adicionar todos"). Sem `onDR` (quem monta sem editor) cai no legado do circuito.
+  Folha e texto/DXF: célula DR com rótulo e escopo, linha "DR: …" por quadro; memorial: "Proteção
+  DR: …" por quadro (passa a receber `model`).
+- **quant-1.21.0** — `porDR` (In / IΔn / polos) no total e por quadro; `drs` conta dispositivos
+  (peça + legado); orçamento `CONTAGEM_DR` uma linha por combinação ("DR 40 A / 30 mA 2P", "DR 30 mA
+  (In não declarado)").
+- Hipóteses: `catalogoDeDrA` (sempre o padrão, como o de disjuntores) e `maxCircuitosPorDR` (editável
+  na aba Hipóteses; a coluna gravada sem a chave vale 5).
+- **Não entrou (declarado)**: DR tipo A/AC/B (característica de corrente) e seletividade entre DR geral
+  e de grupo (temporizado/"S") — backlog; migração que GRAVA o legado como peça (fica lido, não
+  convertido — converter é decisão de projeto: In não existe no legado); IFC do DR (E7).
+
+**Testes** — novo `__tests__/blueprintDrComoPeca.test.ts` (9): comandos (add/set/delete, geral limpa lista,
+circuito de outro quadro recusado, apagar circuito tira do DR); canônico omite sem DR, emite com índices,
+ida e volta idêntica; **legado** lê como 30 mA sem In e some quando a peça cobre; 5.1.3.2.2: banheiro sem
+DR = FALTA, **100 mA no grupo NÃO basta** e diz, 30 mA geral basta; **In 25 A < soma 30 A = FALTA**, 40 A
+passa, sem In = não avaliado, **geral 25 A × geral 50 A (chuveiro 5 kW) = FALTA**, grupo de 7 = AVISO,
+sem circuito = AVISO; sugestão 20 A → 25 A e os comandos zeram a falta; unifilar: grupo desenha "DR" em
+2 ramais + "40 A / 30 mA grupo", geral desenha 1 "DR" na entrada + "63 A / 30 mA · 2P"; quantitativo
+`porDR` = [{40,30,2P}×2, {null,30,null}×1] e o orçamento sai [2, 1]. Atualizados: Unifilar (`dr`
+objeto/`null`), PainelEletricaPreDim (coluna DR é select; "novo" sem `onDR` = legado). **16 pinos** de
+`KERNEL_VERSION` e **11** de `quant`.
+
+**O que os testes pegaram antes de publicar**: (1) eu esperava FALTA no DR geral de 25 A com 700 VA de
+carga — o geral sugerido é 10 A, e 25 passa; o teste ganhou o chuveiro de 5 kW que leva o geral a 50 A;
+(2) o rótulo do lançamento mora em `location.room`, não em `description` (o teste antigo já sabia).
+Nenhum ajuste no motor. (3) tsc: `CorrenteDiferencialMa`/`PolosDoDR` faltavam na lista explícita de
+tipos do índice do kernel; o hook que lê a coluna gravada precisava das duas hipóteses novas.
+
+**Verificação**: `tsc` ✓ · goldens 7/7 (prova em 0.72.0 + hashes) · alvo 53 ✓ (7 arquivos) · suíte
+inteira **6.230 ✓** (566 arquivos) · `build` ✓ · `check-ui-standard` nos 4 `.tsx` ✓ · `check-xss-sinks` ✓
+· bundle da `planta-api` regenerado ("bundle fresco" ✓) · deploy · `GET /v1/estudos` **401/401**. **Sem
+harness visual** do unifilar com DR geral (posição da caixa a 9 mm do barramento conferida só por
+geometria) — fica dito.
+
+**Efeito no benchmark**: §16 "DR como dispositivo (In, IΔn, polos)" ❌→✅, "DR geral × por circuito"
+❌→✅, "Sugestão de DR" ❌→✅ (individual 30 mA), "Conferência In do DR × proteção a montante" ❌→✅;
+§26 "DR no unifilar na posição certa" 🟡→✅; §13/§20 "Quantitativo de DR por modelo" ❌→✅; §52 "DR com
+sensibilidade errada onde a norma exige 30 mA" ❌→✅.

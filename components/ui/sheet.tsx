@@ -24,6 +24,10 @@ interface SheetProps {
    * seletor de fornecedor em tabela (`SupplierSelect`): tela in-flow não cabe
    * num campo de formulário, e em 672px o Nome cortava. Não é tela cheia
    * (sobra mais da metade da viewport em 1600px). Não use por conveniência.
+   * Segundo uso, também aprovado expressamente (29/09/2026): a Nova Medição de
+   * contrato (`ContractMeasurementModal`), que saiu de modal central para painel
+   * lateral — a tabela de itens tem 7 colunas e, em 672px, a descrição virava
+   * uma coluna de uma palavra.
    */
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | 'full';
   /**

@@ -939,7 +939,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white text-gray-800 overflow-hidden font-sans">
+    <div className="flex flex-col h-screen bg-white overflow-hidden font-sans">
       {isPreview && (
         <div className="h-9 bg-yellow-50 border-b border-yellow-200 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-yellow-700 uppercase tracking-wider">
           <span>Modo de Pré-visualização (Admin) — envio de mensagens e solicitações desabilitado</span>
@@ -954,7 +954,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         </div>
       )}
       {isTokenMode && (
-        <div className="h-9 bg-blue-50 border-b border-blue-200 flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-blue-700 uppercase tracking-wider">
+        <div className="h-9 bg-[#FDEDE8] border-b border-[#F3D9D1] flex items-center justify-center gap-3 shrink-0 text-xs font-bold text-[#C24428] uppercase tracking-wider">
           <span>Acesso via link público</span>
         </div>
       )}

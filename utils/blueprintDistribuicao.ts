@@ -30,6 +30,7 @@ import {
   interiorPoint,
   isBetween,
   pointInPolygon,
+  polygonArea,
   type BlueprintModel,
   type Command,
   type ObjectId,
@@ -820,6 +821,39 @@ export function proximaLetraDeComando(space: Space, terminais: readonly Terminal
 /** Interruptor à altura da mão. */
 export const COTA_USUAL_INTERRUPTOR_MM = 1100;
 
+/** E6.3: as opções da malha de luminárias (m² por luminária); `null` = uma por ambiente. */
+export const AREAS_POR_LUMINARIA_M2: readonly (number | null)[] = [null, 6, 9, 12, 16];
+
+/**
+ * E6.3 — A MALHA DE LUMINÁRIAS de um ambiente (item A do benchmark): n =
+ * ⌈área / m² por luminária⌉, em linhas × colunas proporcionais ao retângulo
+ * envolvente (colunas = arredondar √(n·L/A)), uma no centro de cada célula que
+ * cai DENTRO do ambiente (fora dos vazios). Ambiente em L perde as células de
+ * fora — a malha pode ter um pouco mais ou menos que n; sem nenhuma dentro, o
+ * ponto interior. Posições inteiras (mm), ordem linha a linha.
+ */
+export function malhaDeLuminarias(space: Space, areaPorLuminariaM2: number): Point[] {
+  const areaM2 = (Math.abs(polygonArea(space.ring)) - space.holes.reduce((s, h) => s + Math.abs(polygonArea(h)), 0)) / 1e6;
+  const n = Math.max(1, Math.ceil(areaM2 / areaPorLuminariaM2 - 1e-9));
+  if (n === 1) return [interiorPoint(space.ring, space.holes)];
+  const xs = space.ring.map((p) => p.x);
+  const ys = space.ring.map((p) => p.y);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const L = Math.max(...xs) - x0;
+  const A = Math.max(...ys) - y0;
+  const colunas = Math.max(1, Math.round(Math.sqrt((n * L) / Math.max(1, A))));
+  const linhas = Math.max(1, Math.ceil(n / colunas));
+  const pts: Point[] = [];
+  for (let j = 0; j < linhas; j++) {
+    for (let i = 0; i < colunas; i++) {
+      const p = { x: Math.round(x0 + ((i + 0.5) * L) / colunas), y: Math.round(y0 + ((j + 0.5) * A) / linhas) };
+      if (pointInPolygon(space.ring, p) && !space.holes.some((h) => pointInPolygon(h, p))) pts.push(p);
+    }
+  }
+  return pts.length > 0 ? pts : [interiorPoint(space.ring, space.holes)];
+}
+
 /**
  * Os comandos que COMPLETAM a iluminação do ambiente: a luz de teto no meio
  * do cômodo (na cota do pé-direito, com a carga MÍNIMA da norma já declarada
@@ -848,6 +882,8 @@ export function comandosDeIluminacao(
   peDireitoMm: number,
   conferencia: ConferenciaDeIluminacao,
   terminais: readonly Terminal[],
+  /** E6.3: luz de teto em MALHA — uma a cada tantos m² (hipótese); `null`/ausente = uma só, no ponto interior. */
+  areaPorLuminariaM2: number | null = null,
 ): Command[] {
   const cmds: Command[] = [];
   const dentro = terminaisDoAmbiente(space, terminais);
@@ -876,22 +912,28 @@ export function comandosDeIluminacao(
       pendentes.push(letra);
     }
   }
-  // …e a da luz de teto que vai nascer.
+  // …e a da luz de teto que vai nascer — uma, ou a MALHA por área (E6.3), todas na mesma letra.
   if (conferencia.faltaLuzDeTeto) {
     const letra = proxima();
-    cmds.push({
-      type: 'AddTerminal',
-      levelId,
-      disciplina: 'ELETRICA',
-      tipo: 'Luz de teto',
-      tipoEletrico: 'ILUMINACAO_TETO',
-      at: interiorPoint(space.ring, space.holes),
-      cotaMm: peDireitoMm,
-      comando: letra,
-      potenciaW: conferencia.minimoVA,
-      rotulo: `${conferencia.minimoVA} VA é o mínimo da norma — confira`,
-      sugerida: true,
-    });
+    const posicoes = areaPorLuminariaM2 ? malhaDeLuminarias(space, areaPorLuminariaM2) : [interiorPoint(space.ring, space.holes)];
+    const n = posicoes.length;
+    // O mínimo da norma é do CÔMODO: dividido entre as luminárias, arredondado a 10 VA para cima.
+    const cada = n === 1 ? conferencia.minimoVA : Math.ceil(conferencia.minimoVA / n / 10) * 10;
+    for (const at of posicoes) {
+      cmds.push({
+        type: 'AddTerminal',
+        levelId,
+        disciplina: 'ELETRICA',
+        tipo: 'Luz de teto',
+        tipoEletrico: 'ILUMINACAO_TETO',
+        at,
+        cotaMm: peDireitoMm,
+        comando: letra,
+        potenciaW: cada,
+        rotulo: n === 1 ? `${conferencia.minimoVA} VA é o mínimo da norma — confira` : `${conferencia.minimoVA} VA (mínimo da norma) em ${n} luminárias — confira`,
+        sugerida: true,
+      });
+    }
     pendentes.push(letra);
   }
   if (pendentes.length === 0) return cmds;

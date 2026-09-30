@@ -55,17 +55,38 @@
  *
  * Ponto SEM circuito não entra: eletroduto carrega circuito, e atribuir um
  * seria decidir por quem projeta (há "Circuitos automáticos" para isso).
+ *
+ * ─── E6.3 (29/09/2026, roadmap elétrico): ESTRUTURA, PAREDE E CAIXAS ─────────
+ *
+ *  - PILAR: o trecho do teto que atravessaria a pegada de um pilar contorna
+ *    por um canto dele (`desvioDoPilar`); sem contorno possível, segue reto e
+ *    o plano AVISA.
+ *  - VIGA: com viga de teto no pavimento, a rede corre 10 cm abaixo do fundo
+ *    da mais baixa — como o barrilete da água (E5.5) — desde que fique acima
+ *    de 2,10 m; senão fica no teto e o plano avisa do cruzamento.
+ *  - PELA PAREDE (hipótese `rotaPelaParede`): os pontos de parede ligam-se
+ *    pelo eixo das paredes (a mesma árvore da água, `arvorePelasParedes`, que
+ *    já desvia de pilar); a luz de teto continua reta, na laje.
+ *  - CAIXAS DE PASSAGEM (hipótese `caixas`, NBR 5410 6.2.11.1.7): trecho
+ *    contínuo acima de 15 m (−3 m por curva de 90°) ou com mais de 270° de
+ *    curvas ganha caixa; derivação sem ponto embaixo também. Nascem
+ *    `sugerida`, como os trechos — ver `blueprintCaixasDePassagem.ts`.
  */
 import type {
   BlueprintModel,
   Circuito,
   Command,
+  Level,
   LigacaoDoCircuito,
   ObjectId,
   Quadro,
   Terminal,
   Trecho,
 } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from './blueprintKernel';
+import { ABAIXO_DA_VIGA_MM, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { arvorePelasParedes, chaveP } from './blueprintRotaPelasParedes';
+import { REGRA_DE_CAIXAS_PADRAO, caixasDaRede, type RegraDeCaixas, type SegmentoDaRede } from './blueprintCaixasDePassagem';
 import {
   HIPOTESES_PADRAO,
   bitolaMinimaPorOcupacao,
@@ -94,13 +115,24 @@ export interface HipotesesDeEletroduto {
    * ponto em linha reta ao quadro (o leque). Ver o cabeçalho.
    */
   rotaMaximaVezes: number | null;
+  /** E6.3: os pontos de PAREDE ligam-se pelo eixo das paredes (a luz de teto segue reta, na laje). */
+  rotaPelaParede: boolean;
+  /** E6.3: caixas de passagem automáticas pela regra (NBR 5410 6.2.11.1.7); `null` = não lança. */
+  caixas: RegraDeCaixas | null;
 }
 
 export const HIPOTESES_ELETRODUTO_PADRAO: HipotesesDeEletroduto = {
   bitolaMm: 25,
   condutoresPorLigacao: { FN: 3, FF: 3, FFF: 4 },
   rotaMaximaVezes: 1.5,
+  rotaPelaParede: false,
+  caixas: REGRA_DE_CAIXAS_PADRAO,
 };
+
+/** E6.3: a rede sob a viga só desce até aqui (cota do piso, mm); abaixo disso fica no teto e o plano avisa. */
+export const COTA_MINIMA_DA_REDE_MM = 2100;
+/** E6.3: até onde um ponto de parede procura a parede para a rota pela parede, mm. */
+export const RAIO_DE_ENCAIXE_ELETRICO_MM = 600;
 
 /** As rotas máximas oferecidas na hipótese. */
 export const ROTAS_MAXIMAS = [
@@ -110,8 +142,12 @@ export const ROTAS_MAXIMAS = [
   { valor: null, rotulo: 'Sem limite (menos eletroduto)' },
 ] as const;
 
-/** Bitolas comerciais de eletroduto oferecidas na hipótese e escolhidas pela ocupação. */
-export const BITOLAS_DE_ELETRODUTO_MM = [20, 25, 32, 40] as const;
+/**
+ * Bitolas comerciais de eletroduto (PVC rígido) oferecidas na hipótese e
+ * escolhidas pela ocupação. E6.3: até 85 — antes parava em 40, e um tronco de
+ * quadro grande saía "40" mesmo com a ocupação estourada.
+ */
+export const BITOLAS_DE_ELETRODUTO_MM = [20, 25, 32, 40, 50, 60, 75, 85] as const;
 
 /** Seção assumida para o cálculo de ocupação quando o circuito não tem nem declarada nem calculável. */
 const SECAO_ASSUMIDA_MM2 = 2.5;
@@ -154,13 +190,32 @@ export interface PlanoDeEletrodutos {
   metrosPrevistos: number;
   /** Por que não há plano, quando não há. */
   motivo: string | null;
+  /** E6.3: caixas de passagem que o plano cria (sugeridas). */
+  caixas: number;
+  /** E6.3: o que o plano não resolveu sozinho (pilar sem contorno, viga baixa, trecho sem lugar para caixa). */
+  avisos: string[];
 }
 
-/** Os pontos elétricos do pavimento que ainda não pertencem a circuito nenhum. */
+/** Os pontos elétricos do pavimento que ainda não pertencem a circuito nenhum (caixa de passagem, terra etc. não contam — são infraestrutura). */
 export function pontosSemCircuito(model: BlueprintModel, levelId: string): Terminal[] {
   return (model.terminais ?? []).filter(
-    (t) => t.levelId === levelId && t.disciplina === 'ELETRICA' && t.circuitoId == null,
+    (t) => t.levelId === levelId && t.disciplina === 'ELETRICA' && t.circuitoId == null && !(t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico)),
   );
+}
+
+/**
+ * E6.3 — a COTA DA REDE no pavimento: o teto, ou 10 cm abaixo do fundo da viga
+ * de teto mais baixa (como o barrilete da água), desde que acima de 2,10 m.
+ */
+export function cotaDaRede(model: BlueprintModel, nivel: Pick<Level, 'id' | 'name' | 'defaultHeightMm'>): { cotaMm: number; aviso: string | null } {
+  const teto = nivel.defaultHeightMm;
+  const fundo = fundoDaVigaMaisBaixaMm(model, nivel.id, teto);
+  if (fundo == null) return { cotaMm: teto, aviso: null };
+  const abaixo = fundo - ABAIXO_DA_VIGA_MM;
+  if (abaixo >= COTA_MINIMA_DA_REDE_MM) {
+    return { cotaMm: abaixo, aviso: `${nivel.name}: rede a ${(abaixo / 1000).toFixed(2).replace('.', ',')} m do piso — 10 cm abaixo da viga mais baixa do teto` };
+  }
+  return { cotaMm: teto, aviso: `${nivel.name}: a viga do teto desce abaixo de ${(COTA_MINIMA_DA_REDE_MM / 1000).toFixed(2).replace('.', ',')} m — a rede ficou no teto, cruzando a viga (confira o furo com o projeto estrutural)` };
 }
 
 /** Os trechos sugeridos ainda não confirmados (no pavimento, ou em todos). */
@@ -198,6 +253,8 @@ export function planejarEletrodutos(
     comandos: [],
     metrosPrevistos: 0,
     motivo,
+    caixas: 0,
+    avisos: [],
   });
 
   const nivelDoQuadro = model.levels.find((l) => l.id === quadro.levelId);
@@ -256,8 +313,44 @@ export function planejarEletrodutos(
     mmNovos += mm;
   };
 
-  // ── O quadro no teto do próprio pavimento ────────────────────────────────
-  const tetoQ = nivelDoQuadro.defaultHeightMm;
+  // ── E6.3: a cota da rede em cada pavimento (teto, ou sob a viga) ─────────
+  const avisos: string[] = [];
+  const redeDe = new Map<ObjectId, number>();
+  for (const l of model.levels) {
+    const r = cotaDaRede(model, l);
+    redeDe.set(l.id, r.cotaMm);
+    if (r.aviso && (pontos.some((p) => p.levelId === l.id) || l.id === quadro.levelId)) avisos.push(r.aviso);
+  }
+  const rede = (levelId: ObjectId) => redeDe.get(levelId) as number;
+  /** Prumada que atravessa o pavimento inteiro na posição do quadro: piso → rede → teto (a rede é nó). */
+  const prumadaInteira = (m: Level) => {
+    const r = rede(m.id);
+    addTrecho(m.id, quadro.at, 0, quadro.at, r);
+    if (r !== m.defaultHeightMm) addTrecho(m.id, quadro.at, r, quadro.at, m.defaultHeightMm);
+  };
+
+  // ── E6.3: o trecho no teto que atravessaria pilar CONTORNA por um canto ──
+  const pegadasDoNivel = new Map<ObjectId, ReturnType<typeof pegadasDePilares>>();
+  const pegadas = (levelId: ObjectId) => {
+    if (!pegadasDoNivel.has(levelId)) pegadasDoNivel.set(levelId, pegadasDePilares(model, levelId));
+    return pegadasDoNivel.get(levelId)!;
+  };
+  let semContorno = 0;
+  /** E6.3: nós da rede sobre a caixa de um ponto de parede (pela parede: o encaixe no eixo) → a descida até ele. */
+  const sobrePonto = new Map<string, number>();
+  const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
+    const desvio = desvioDoPilar(a, b, pegadas(levelId));
+    if (desvio == null) {
+      semContorno++;
+      addTrecho(levelId, a, cota, b, cota);
+      return;
+    }
+    const caminho = [a, ...desvio, b];
+    for (let i = 1; i < caminho.length; i++) addTrecho(levelId, caminho[i - 1], cota, caminho[i], cota);
+  };
+
+  // ── O quadro na rede do próprio pavimento ────────────────────────────────
+  const tetoQ = rede(quadro.levelId);
   const noDoQuadroNoTeto = chave(quadro.levelId, quadro.at.x, quadro.at.y, tetoQ);
   const noDoQuadro = chave(quadro.levelId, quadro.at.x, quadro.at.y, quadro.cotaMm);
   if (quadro.cotaMm !== tetoQ) addTrecho(quadro.levelId, quadro.at, quadro.cotaMm, quadro.at, tetoQ);
@@ -277,20 +370,19 @@ export function planejarEletrodutos(
     if (idx > idxQ) {
       // Sobe: em cada pavimento acima do quadro até este, uma prumada piso→teto
       // na posição do quadro. O piso do primeiro é o teto do quadro (a laje).
-      for (let k = idxQ + 1; k <= idx; k++) {
-        const m = niveisPorElevacao[k];
-        addTrecho(m.id, quadro.at, 0, quadro.at, m.defaultHeightMm);
-      }
+      // E6.3: com a rede sob a viga, a prumada passa PELA cota da rede (nó) e segue ao teto.
+      if (tetoQ !== nivelDoQuadro.defaultHeightMm) addTrecho(quadro.levelId, quadro.at, tetoQ, quadro.at, nivelDoQuadro.defaultHeightMm);
+      for (let k = idxQ + 1; k < idx; k++) prumadaInteira(niveisPorElevacao[k]);
+      addTrecho(nivel.id, quadro.at, 0, quadro.at, rede(nivel.id));
     } else {
       // Desce: o quadro desce ao piso do pavimento dele (que é o teto do de
       // baixo); pavimentos intermediários ganham a prumada piso→teto.
       if (quadro.cotaMm !== 0) addTrecho(quadro.levelId, quadro.at, 0, quadro.at, quadro.cotaMm);
-      for (let k = idxQ - 1; k > idx; k--) {
-        const m = niveisPorElevacao[k];
-        addTrecho(m.id, quadro.at, 0, quadro.at, m.defaultHeightMm);
-      }
+      for (let k = idxQ - 1; k > idx; k--) prumadaInteira(niveisPorElevacao[k]);
+      // E6.3: do teto (a laje) desce à rede, quando ela corre sob a viga.
+      if (rede(nivel.id) !== nivel.defaultHeightMm) addTrecho(nivel.id, quadro.at, rede(nivel.id), quadro.at, nivel.defaultHeightMm);
     }
-    raizNoTeto.set(nivel.id, chave(nivel.id, quadro.at.x, quadro.at.y, nivel.defaultHeightMm));
+    raizNoTeto.set(nivel.id, chave(nivel.id, quadro.at.x, quadro.at.y, rede(nivel.id)));
   }
   const prumadasEntrePavimentos = novos.length - antesDasPrumadas;
 
@@ -299,7 +391,8 @@ export function planejarEletrodutos(
   /** O nó no teto de cada ponto (ligado ou a ligar), para o caminho até o quadro. */
   const noDoPonto = new Map<ObjectId, No>();
   for (const nivel of niveisComPontos) {
-    const teto = nivel.defaultHeightMm;
+    // E6.3: a cota DA REDE (teto, ou sob a viga) — o nome ficou `teto` porque é onde a rede corre.
+    const teto = rede(nivel.id);
     const doNivel = pontos.filter((p) => p.levelId === nivel.id);
     // Onde já chega eletroduto do quadro neste pavimento, em planta (qualquer cota).
     const pontasEmPlanta = new Set<string>();
@@ -337,9 +430,41 @@ export function planejarEletrodutos(
     for (const k of alcancados.keys()) rota.set(k, rotaAteOQuadro.get(k) ?? Infinity);
     rota.set(raizDoNivel, 0);
     const retaAteOQuadro = (p: { x: number; y: number }) => Math.hypot(p.x - quadro.at.x, p.y - quadro.at.y);
+    // E6.3 — PELA PAREDE: os pontos de parede (abaixo da rede) ligam-se pelo eixo
+    // das paredes; a árvore desvia de pilar. A luz de teto e quem não tem parede
+    // perto seguem retos, pendurados na árvore como antes.
+    const paredesDoNivel = model.walls.filter((w) => w.levelId === nivel.id);
+    const deParede = pendentes.filter((p) => p.cotaMm < teto);
+    const pelas = hip.rotaPelaParede && paredesDoNivel.length > 0 && deParede.length > 0
+      ? arvorePelasParedes({ paredes: paredesDoNivel, raiz: quadro.at, pendentes: deParede.map((p) => p.at), raioDeEncaixeMm: RAIO_DE_ENCAIXE_ELETRICO_MM, obstaculos: pegadas(nivel.id) })
+      : null;
+    const naParede = new Set<ObjectId>();
+    if (pelas?.raiz) {
+      if (chaveP(pelas.raiz) !== chaveP(quadro.at)) ligarNaRede(nivel.id, quadro.at, pelas.raiz, teto);
+      for (const a of pelas.arestas) addTrecho(nivel.id, a.de, teto, a.para, teto);
+      for (const p of deParede) {
+        const q = pelas.encaixe.get(chaveP(p.at));
+        if (!q) continue;
+        naParede.add(p.id);
+        sobrePonto.set(`${nivel.id}|${q.x},${q.y},${teto}`, teto - p.cotaMm + Math.hypot(p.at.x - q.x, p.at.y - q.y));
+        // Desce DENTRO da parede, no eixo, até a cota do ponto; e sai para a caixa na face.
+        addTrecho(nivel.id, q, teto, q, p.cotaMm);
+        if (chaveP(q) !== chaveP(p.at)) addTrecho(nivel.id, q, p.cotaMm, p.at, p.cotaMm);
+      }
+      // Os nós da árvore das paredes passam a ser alcançados — a rota deles é a medida pela rede.
+      const distParede = distanciasDesde(raizDoNivel, arestas);
+      for (const a of pelas.arestas) {
+        for (const v of [a.de, a.para]) {
+          const k = chave(nivel.id, v.x, v.y, teto);
+          alcancados.set(k, v);
+          rota.set(k, distParede.get(k) ?? Infinity);
+        }
+      }
+    }
     // Cada pendente sobe (ou desce) ao teto na própria posição.
     const pendentesNoTeto = new Map<No, { x: number; y: number }>();
     for (const p of pendentes) {
+      if (naParede.has(p.id)) continue;
       if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, p.cotaMm, p.at, teto);
       const k = chave(nivel.id, p.at.x, p.at.y, teto);
       if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: p.at.x, y: p.at.y });
@@ -356,7 +481,8 @@ export function planejarEletrodutos(
       pendentes: pendentesNoTeto,
       retaAteRaiz: retaAteOQuadro,
       limite: hip.rotaMaximaVezes,
-      ligar: (de, para) => addTrecho(nivel.id, de.pos, teto, para.pos, teto),
+      // E6.3: reto pelo teto, mas contornando pilar.
+      ligar: (de, para) => ligarNaRede(nivel.id, de.pos, para.pos, teto),
     });
   }
 
@@ -430,6 +556,72 @@ export function planejarEletrodutos(
   if (novos.length === 0 && atualizacoes.length === 0) {
     return vazio('todos os pontos já têm eletroduto', pavimentos, sugeridosDoQuadro, trechosDoQuadro.length);
   }
+  if (semContorno > 0) avisos.push(`${semContorno} trecho(s) atravessam pilar sem contorno possível (pilares encostados) — confira com o projeto estrutural`);
+
+  // ── E6.3: CAIXAS DE PASSAGEM, por pavimento, nos trechos novos ───────────
+  const caixasCmds: Command[] = [];
+  const partes = new Map<number, { x: number; y: number }[]>(); // índice do novo → pontos de corte
+  if (hip.caixas) {
+    const regra = hip.caixas;
+    const distDoQuadro = distanciasDesde(noDoQuadro, arestas);
+    const niveisDosNovos = [...new Set(novos.map((n) => n.levelId))];
+    for (const levelId of niveisDosNovos) {
+      const segs: SegmentoDaRede[] = [];
+      novos.forEach((n, i) => {
+        if (n.levelId === levelId) segs.push({ id: i, a: { x: n.a.x, y: n.a.y, z: n.cotaAMm }, b: { x: n.b.x, y: n.b.y, z: n.cotaBMm } });
+      });
+      redeExistente.forEach((tr, i) => {
+        if (tr.levelId === levelId) segs.push({ id: novos.length + i, a: { x: tr.a.x, y: tr.a.y, z: tr.cotaAMm }, b: { x: tr.b.x, y: tr.b.y, z: tr.cotaBMm }, fixo: true });
+      });
+      // Onde há caixa: os pontos (qualquer um do pavimento), o quadro, e as caixas que já existem.
+      const pecas = (model.terminais ?? []).filter((x) => x.levelId === levelId && x.disciplina === 'ELETRICA');
+      const quadrosDoNivel = (model.quadros ?? []).filter((q) => q.levelId === levelId);
+      const caixaEm = (p: { x: number; y: number; z: number }) => {
+        if (pecas.some((x) => x.at.x === p.x && x.at.y === p.y && x.cotaMm === p.z)) return { descidaMm: 0 };
+        if (quadrosDoNivel.some((q) => q.at.x === p.x && q.at.y === p.y && q.cotaMm === p.z)) return { descidaMm: 0 };
+        // Pela parede: o nó no eixo, no alto, sobre a caixa de um ponto.
+        const descidaNaParede = sobrePonto.get(`${levelId}|${p.x},${p.y},${p.z}`);
+        if (descidaNaParede != null) return { descidaMm: descidaNaParede };
+        // Nó sobre um ponto (a prumada dele): a caixa do ponto serve à derivação.
+        const embaixo = pecas.filter((x) => x.at.x === p.x && x.at.y === p.y && x.cotaMm < p.z).sort((u, v) => v.cotaMm - u.cotaMm)[0];
+        if (embaixo) return { descidaMm: p.z - embaixo.cotaMm };
+        // A prumada do quadro também é caixa (o próprio quadro).
+        const q = quadrosDoNivel.find((x) => x.at.x === p.x && x.at.y === p.y && x.cotaMm < p.z);
+        if (q) return { descidaMm: p.z - q.cotaMm };
+        return null;
+      };
+      // Mede do quadro para as pontas: a distância pela rede até ele ordena as fronteiras.
+      const r = caixasDaRede(segs, caixaEm, regra, (p) => distDoQuadro.get(chave(levelId, p.x, p.y, p.z)) ?? Infinity);
+      const nomeDoNivel = model.levels.find((l) => l.id === levelId)?.name ?? '';
+      for (const a of r.avisos) avisos.push(`${nomeDoNivel}: ${a}`);
+      for (const c of r.caixas) {
+        caixasCmds.push({
+          type: 'AddTerminal',
+          levelId,
+          disciplina: 'ELETRICA',
+          tipo: 'Caixa de passagem',
+          tipoEletrico: 'CAIXA_PASSAGEM',
+          at: { x: c.at.x, y: c.at.y },
+          cotaMm: c.at.z,
+          sugerida: true,
+          rotulo: c.motivo === 'DERIVACAO' ? 'derivação' : c.motivo === 'CURVAS' ? 'mais de 270° de curvas' : 'trecho acima de 15 m (−3 m por curva)',
+        });
+        if (c.segmento != null && c.segmento < novos.length) partes.set(c.segmento, [...(partes.get(c.segmento) ?? []), { x: c.at.x, y: c.at.y }]);
+      }
+    }
+  }
+  // O trecho com caixa no meio vira dois (ou mais) — mesmos circuitos e bitola.
+  const novosFinais: Command[] = [];
+  novos.forEach((n, i) => {
+    const cortes = partes.get(i);
+    if (!cortes) {
+      novosFinais.push(n);
+      return;
+    }
+    const ordenados = [...cortes].sort((p, q) => Math.hypot(p.x - n.a.x, p.y - n.a.y) - Math.hypot(q.x - n.a.x, q.y - n.a.y));
+    const nos = [n.a, ...ordenados, n.b];
+    for (let j = 1; j < nos.length; j++) novosFinais.push({ ...n, a: { x: nos[j - 1].x, y: nos[j - 1].y }, b: { x: nos[j].x, y: nos[j].y } });
+  });
 
   return {
     quadroId: quadro.id,
@@ -442,10 +634,27 @@ export function planejarEletrodutos(
     trechosAtualizados: atualizacoes.length,
     sugeridos: sugeridosDoQuadro,
     trechosDoQuadro: trechosDoQuadro.length,
-    comandos: [...novos, ...atualizacoes],
+    comandos: [...novosFinais, ...atualizacoes, ...caixasCmds],
     metrosPrevistos: Math.round(mmNovos / 100) / 10,
     motivo: null,
+    caixas: caixasCmds.length,
+    avisos,
   };
+}
+
+/**
+ * E6.3: as caixas de passagem SUGERIDAS que ficam num nó dos trechos dados —
+ * as que o lançamento criou para aquela rede. Relançar e refazer apagam junto.
+ */
+function caixasSugeridasDaRede(model: BlueprintModel, trechos: readonly Trecho[]): Terminal[] {
+  const nos = new Set<string>();
+  for (const t of trechos) {
+    nos.add(`${t.levelId}|${t.a.x},${t.a.y},${t.cotaAMm}`);
+    nos.add(`${t.levelId}|${t.b.x},${t.b.y},${t.cotaBMm}`);
+  }
+  return (model.terminais ?? []).filter(
+    (x) => x.sugerida && x.tipoEletrico === 'CAIXA_PASSAGEM' && nos.has(`${x.levelId}|${x.at.x},${x.at.y},${x.cotaMm}`),
+  );
 }
 
 /**
@@ -465,9 +674,11 @@ export function relancarEletrodutos(
   const sugeridos = (model.trechos ?? []).filter((t) => t.sugerido && (t.circuitoIds ?? []).some((cid) => ids.has(cid)));
   if (sugeridos.length === 0) return planejarEletrodutos(model, quadro, hip, hipEletricas);
   const apagados = new Set(sugeridos.map((t) => t.id));
-  const semSugeridos: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !apagados.has(t.id)) };
+  const caixas = caixasSugeridasDaRede(model, sugeridos);
+  const caixasApagadas = new Set(caixas.map((c) => c.id));
+  const semSugeridos: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !apagados.has(t.id)), terminais: (model.terminais ?? []).filter((x) => !caixasApagadas.has(x.id)) };
   const plano = planejarEletrodutos(semSugeridos, quadro, hip, hipEletricas);
-  const remocoes: Command[] = sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }));
+  const remocoes: Command[] = [...sugeridos.map((t) => ({ type: 'DeleteTrecho' as const, trechoId: t.id })), ...caixas.map((c) => ({ type: 'DeleteTerminal' as const, terminalId: c.id }))];
   return { ...plano, sugeridos: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
 }
 
@@ -487,9 +698,11 @@ export function refazerEletrodutos(
   const daRede = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).some((cid) => ids.has(cid)));
   if (daRede.length === 0) return planejarEletrodutos(model, quadro, hip, hipEletricas);
   const apagados = new Set(daRede.map((t) => t.id));
-  const semRede: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !apagados.has(t.id)) };
+  const caixas = caixasSugeridasDaRede(model, daRede);
+  const caixasApagadas = new Set(caixas.map((c) => c.id));
+  const semRede: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !apagados.has(t.id)), terminais: (model.terminais ?? []).filter((x) => !caixasApagadas.has(x.id)) };
   const plano = planejarEletrodutos(semRede, quadro, hip, hipEletricas);
-  const remocoes: Command[] = daRede.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }));
+  const remocoes: Command[] = [...daRede.map((t) => ({ type: 'DeleteTrecho' as const, trechoId: t.id })), ...caixas.map((c) => ({ type: 'DeleteTerminal' as const, terminalId: c.id }))];
   return { ...plano, sugeridos: 0, trechosDoQuadro: 0, comandos: [...remocoes, ...plano.comandos], motivo: null };
 }
 

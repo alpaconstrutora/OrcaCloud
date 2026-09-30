@@ -62,6 +62,7 @@ import {
   discretizarArco,
   anguloEmTorno,
 } from '../../utils/blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from '../../utils/blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import {
   encaixarConexao,
@@ -6499,9 +6500,13 @@ export default function BlueprintCanvas({
         // nome ("C4 — Iluminação Ambiente 4") atravessava o cômodo e caía em
         // cima do rótulo do ambiente e dos condutores (15/09/2026). O nome
         // completo está no quadro de cargas e no painel do ponto.
-        const texto = `${sigla ?? '?'} · ${circuito ? `C${numeroDoCircuito(circuito)}` : '?'}`;
+        // E6.3: INFRAESTRUTURA (caixa de passagem, terra, entrada, medidor) não tem
+        // circuito por natureza — "CP · ?" dizia "falta circuito" onde não falta
+        // nada, e a caixa automática aparece em toda rede longa.
+        const infra = !!t.tipoEletrico && TIPOS_DE_INFRAESTRUTURA_ELETRICA.has(t.tipoEletrico);
+        const texto = infra && !circuito ? `${sigla ?? '?'}` : `${sigla ?? '?'} · ${circuito ? `C${numeroDoCircuito(circuito)}` : '?'}`;
         ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-        ctx.fillStyle = sigla && circuito ? '#334155' : COR_ALERTA;
+        ctx.fillStyle = sigla && (circuito || infra) ? '#334155' : COR_ALERTA;
         if (ehInterruptor) {
           // Embaixo e à direita: em cima estão as letras das seções.
           const rInt = Math.max(raio, 7);

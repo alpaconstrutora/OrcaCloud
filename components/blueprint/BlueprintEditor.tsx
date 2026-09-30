@@ -343,6 +343,7 @@ import {
 } from '../../utils/blueprintCircuitosAutomaticos';
 import { composicaoDaRede, resumoDaComposicao } from '../../utils/blueprintFiacao';
 import { centroDeCargas, centroNaPlanta as centroDaMarca, type MarcaDoCentro } from '../../utils/blueprintCentroDeCargas';
+import { FONTE_DA_REGRA_DE_CAIXAS, REGRA_DE_CAIXAS_PADRAO } from '../../utils/blueprintCaixasDePassagem';
 import {
   HIPOTESES_PILARES_PADRAO,
   ROTULO_DO_ONDE,
@@ -672,6 +673,7 @@ import {
 import {
   ROTULO_DO_TIPO_DE_AMBIENTE,
   comandosDeIluminacao,
+  AREAS_POR_LUMINARIA_M2,
   comandosDeTomadasSugeridas,
   comandosParaCompletar,
   conferirIluminacao,
@@ -2856,6 +2858,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * e das tomadas que já existem. As de altura média (bancada, lavatório)
    * nascem a 1,30 m com o rótulo de onde levá-las.
    */
+  // E6.3 — a luz de teto em MALHA: uma a cada tantos m² (null = uma por ambiente). Preferência, persistida.
+  const [areaPorLuminaria, setAreaPorLuminaria] = usePersistedState<number | null>('blueprint:luminariasPorArea', null);
   function completarPelaNorma(spaceId: string): number {
     if (!levelId) return 0;
     const a = ambientes.find((x) => x.id === spaceId);
@@ -2891,6 +2895,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         nivel?.defaultHeightMm ?? 2800,
         a.luz,
         terminais,
+        // E6.3: luz de teto em malha por área (hipótese da tarefa), ou uma só.
+        areaPorLuminaria,
       ),
     );
     if (comandos.length === 0) return 0;
@@ -7124,9 +7130,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'blueprint:eletrodutosRotaMaxima',
     HIPOTESES_ELETRODUTO_PADRAO.rotaMaximaVezes,
   );
+  // E6.3: rota pela parede e caixas de passagem automáticas — preferências de trabalho, persistidas.
+  const [rotaPelaParede, setRotaPelaParede] = usePersistedState<boolean>('blueprint:eletrodutosPelaParede', HIPOTESES_ELETRODUTO_PADRAO.rotaPelaParede);
+  const [caixasAutomaticas, setCaixasAutomaticas] = usePersistedState<boolean>('blueprint:eletrodutosCaixas', HIPOTESES_ELETRODUTO_PADRAO.caixas != null);
   const hipotesesDeEletroduto = useMemo(
-    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima }),
-    [bitolaDeEletroduto, rotaMaxima],
+    () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null }),
+    [bitolaDeEletroduto, rotaMaxima, rotaPelaParede, caixasAutomaticas],
   );
   // POR QUADRO, todos os pavimentos (15/09/2026): a rede é uma por quadro,
   // compartilhada entre os circuitos, e atravessa a laje na posição do quadro.
@@ -7173,10 +7182,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   };
   /** Há o que lançar ou relançar em algum quadro? */
   const haOQueLancar = planosDeEletrodutos.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
+  // E6.3: as CAIXAS DE PASSAGEM sugeridas do pavimento são aceitas junto — nasceram com a rede.
+  const caixasSugeridasNoNivel = (editor.model.terminais ?? []).filter((x) => x.sugerida && x.tipoEletrico === 'CAIXA_PASSAGEM' && (!levelId || x.levelId === levelId));
   const aceitarEletrodutos = () =>
-    editor.runBatch(
-      eletrodutosSugeridosNoNivel.map((t) => ({ type: 'SetTrechoProps' as const, trechoId: t.id, sugerido: false })),
-    );
+    editor.runBatch([
+      ...eletrodutosSugeridosNoNivel.map((t) => ({ type: 'SetTrechoProps' as const, trechoId: t.id, sugerido: false })),
+      ...caixasSugeridasNoNivel.map((x) => ({ type: 'SetTerminalProps' as const, terminalId: x.id, sugerida: false })),
+    ]);
 
   /**
    * A CRIAÇÃO AUTOMÁTICA DE CIRCUITOS (14/09/2026) — ver
@@ -14471,7 +14483,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     Por pavimento, árvore de <strong>menor eletroduto</strong> com todos os pontos do quadro, em linha
                     reta, com <strong>rota limitada</strong>: nenhum ponto faz até o quadro um caminho maior que a rota
                     máxima abaixo × a linha reta — sem isso a árvore mínima encadeava pontos distantes e o cabo dava a
-                    volta na casa. Não desvia de viga nem de laje, que o desenho não conhece.
+                    volta na casa.
+                  </li>
+                  <li>
+                    <strong>Estrutura</strong>: o trecho que atravessaria um <strong>pilar</strong> contorna por um canto
+                    dele; com <strong>viga</strong> no teto, a rede corre 10 cm abaixo da mais baixa (se ficar acima de
+                    2,10 m — senão fica no teto e o plano avisa do cruzamento).
+                  </li>
+                  <li>
+                    <strong>Caixas de passagem</strong> ({FONTE_DA_REGRA_DE_CAIXAS}); e em toda derivação sem ponto
+                    embaixo. Nascem sugeridas, com a rede.
                   </li>
                   <li>
                     Condutores por circuito: FN e FF <strong>3</strong> · FFF <strong>4</strong>, somados no trecho. A{' '}
@@ -14509,6 +14530,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       </option>
                     ))}
                   </select>
+                </label>
+                <label className="mt-1.5 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={rotaPelaParede}
+                    onChange={(e) => setRotaPelaParede(e.target.checked)}
+                    aria-label="Rota pela parede"
+                    className="h-3.5 w-3.5 rounded border-slate-300"
+                  />
+                  Pontos de parede pelo eixo das paredes (a luz de teto segue reta, na laje)
+                </label>
+                <label className="mt-1.5 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={caixasAutomaticas}
+                    onChange={(e) => setCaixasAutomaticas(e.target.checked)}
+                    aria-label="Caixas de passagem automáticas"
+                    className="h-3.5 w-3.5 rounded border-slate-300"
+                  />
+                  Caixas de passagem automáticas (15 m, −3 m por curva, até 270° de curvas)
                 </label>
               </div>
 
@@ -14549,7 +14590,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                                 {plano.trechosAtualizados > 0 && (
                                   <span className="text-slate-400"> · {plano.trechosAtualizados} trecho(s) ganham circuitos</span>
                                 )}
+                                {plano.caixas > 0 && <span className="text-slate-400"> · {plano.caixas} caixa(s) de passagem</span>}
                                 {plano.motivo && !temComandos && <span className="text-slate-400"> · {plano.motivo}</span>}
+                                {plano.avisos.map((a) => (
+                                  <span key={a} className="block text-amber-700">{a}</span>
+                                ))}
                               </>
                             )}
                           </td>
@@ -15624,6 +15669,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               tomadas por cômodo.
             </p>
           ) : tarefaAberta === 'tomadas' ? (
+            <>
+            <label className="mb-3 flex items-center gap-2 text-xs text-slate-600">
+              Luz de teto que falta
+              <select
+                value={areaPorLuminaria == null ? 'uma' : String(areaPorLuminaria)}
+                onChange={(e) => setAreaPorLuminaria(e.target.value === 'uma' ? null : Number(e.target.value))}
+                aria-label="Luz de teto: uma por ambiente ou malha por área"
+                title="Completar pela norma: uma luminária no centro do ambiente, ou uma malha (linhas × colunas) com uma a cada tantos m² — o mínimo da norma (9.5.2.1.2) é dividido entre elas"
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+              >
+                {AREAS_POR_LUMINARIA_M2.map((v) => (
+                  <option key={v ?? 'uma'} value={v == null ? 'uma' : String(v)}>
+                    {v == null ? 'uma por ambiente' : `malha: 1 a cada ${v} m²`}
+                  </option>
+                ))}
+              </select>
+            </label>
             <ul className="divide-y divide-slate-100">
               {ambientes.map((a) => (
                 <li key={a.id} className="py-3 first:pt-0">
@@ -15638,6 +15700,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 </li>
               ))}
             </ul>
+            </>
           ) : null}
         </SheetPanel>
 
@@ -15747,7 +15810,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               <button
                 type="button"
                 onClick={aceitarEletrodutos}
-                disabled={eletrodutosSugeridosNoNivel.length === 0}
+                disabled={eletrodutosSugeridosNoNivel.length === 0 && caixasSugeridasNoNivel.length === 0}
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <CheckCircle2 className="h-4 w-4" />

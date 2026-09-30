@@ -1972,13 +1972,13 @@ Fecha o bloco **1** e o resto do **2**.
 
 Fecha o bloco **7** e a parte do **6** que é "lista de materiais".
 
-## Etapa 6 — Automação: fases, centro de cargas e desvio · sem bump · 3 fases
+## Etapa 6 — Automação: fases, centro de cargas e desvio · sem bump · 3 fases · **✅ CONCLUÍDA em 29/09/2026 (3 de 3)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 6.1 Balanceamento de fases ✅ (F-F grava o par pela 1ª fase, sem bump; guloso + melhoria local + menos mudanças; prévia conferida contra o quadro) | `utils/blueprintBalanceamento.ts` puro: atribuição gulosa por carga (maior circuito na fase menos carregada, FF ocupa duas), prévia com desequilíbrio antes/depois, um lote, Ctrl+Z; "Balancear" na aba Quadros | teste: 6 circuitos desiguais → desequilíbrio ≤ 10 %; `conferirPlano` |
 | 6.2 Centro de cargas ✅ (região = Σ VA·d² até +10 %, raio fechado; sugerida encaixa na parede; marca de vista que o movimento apaga; harness olhado) | `utils/blueprintCentroDeCargas.ts`: centroide ponderado por VA dos pontos do quadro (ou de todos, se o quadro não existe), região sugerida na planta (círculo tracejado), botão "Sugerir posição do quadro" que move o quadro sugerido ou cria um `sugerido` | teste com 4 pontos; canvas mostra a região; mover apaga a marca |
-| 6.3 Desvio estrutural e caixas de passagem | `planejarEletrodutos` usa `blueprintObstaculosEstruturais` (pilar +custo, viga: descer sob a viga como a água faz) e `rotaPelasParedes` como opção "pela parede" (hipótese `rotaPelaParede`); caixa de passagem automática a cada 15 m e em curva > 2 (hipótese com fonte 6.2.11.1.7); Ø comerciais até 85; distribuição de luminárias em malha por área (A) | teste: eletroduto que cruzava pilar contorna; caixas aparecem no 2D/3D/quantitativo; `blueprintEletrodutos.test.ts` |
+| 6.3 Desvio estrutural e caixas de passagem ✅ (pilar contorna, rede sob a viga, pela parede opcional, caixas 15 m/−3 m por curva/270°, Ø até 85, luminárias em malha; harness olhado) | `planejarEletrodutos` usa `blueprintObstaculosEstruturais` (pilar +custo, viga: descer sob a viga como a água faz) e `rotaPelasParedes` como opção "pela parede" (hipótese `rotaPelaParede`); caixa de passagem automática a cada 15 m e em curva > 2 (hipótese com fonte 6.2.11.1.7); Ø comerciais até 85; distribuição de luminárias em malha por área (A) | teste: eletroduto que cruzava pilar contorna; caixas aparecem no 2D/3D/quantitativo; `blueprintEletrodutos.test.ts` |
 
 Fecha os A do motor 3 e o que o usuário chamou de "quatro motores combinados".
 
@@ -3400,3 +3400,63 @@ arquivos, conta fechada, sem queda de worker) · `vite build` ✓ · `check-ui-s
 **Efeito no benchmark**: §8 Centro de cargas — "Considera coordenadas dos pontos", "Considera potência
 instalada", "Considera distribuição das cargas" e "Indica em planta a região recomendada para o quadro"
 ❌→✅.
+### E6.3 — Desvio estrutural, caixas de passagem, Ø até 85 e luminárias em malha (29/09/2026) · frente `eletrico-e6` · sem bump · **fecha a Etapa 6**
+
+**O que mudou**
+
+- **Pilar** (`desvioDoPilar`, em `blueprintObstaculosEstruturais.ts`): o trecho do teto que atravessaria a
+  pegada de um pilar passa por um canto do retângulo envolvente dele (afastado 10 cm); sem canto que
+  resolva, dois cantos; sem contorno (pilares encostados), segue reto e o plano AVISA.
+- **Viga** (`cotaDaRede`): com viga de teto no pavimento, a rede elétrica corre 10 cm abaixo do fundo da mais
+  baixa — como o barrilete da água (E5.5) — se ficar acima de 2,10 m; senão fica no teto e o plano avisa do
+  cruzamento. Prumadas entre pavimentos passam pela cota da rede (nó) e seguem ao teto.
+- **Pela parede** (hipótese `rotaPelaParede`, desligada por padrão): os pontos de PAREDE ligam-se pelo eixo
+  das paredes (a mesma `arvorePelasParedes` da água, que já desvia de pilar), descem dentro da parede e saem
+  para a caixa na face; a luz de teto e quem não tem parede a 60 cm seguem retos, na laje.
+- **Caixas de passagem** (`utils/blueprintCaixasDePassagem.ts`, novo; hipótese `caixas`, ligada por padrão,
+  fonte NBR 5410 6.2.11.1.7): trecho contínuo entre caixas (ponto, quadro, caixa, derivação) acima de 15 m —
+  menos 3 m por 90° de curva acumulada, em 3D — ganha caixa no ponto do trecho horizontal onde o limite chega
+  (ou no nó anterior, se o trecho é vertical); mais de 270° de curvas põe a caixa no nó da 4ª; derivação sem
+  ponto embaixo ganha caixa. Mede do quadro para as pontas. O trecho com caixa no meio é partido (mesmos
+  circuitos e bitola); as caixas nascem `sugerida`; relançar/refazer apagam as sugeridas junto com a rede;
+  "Aceitar" aceita as caixas do pavimento; a caixa não conta como "ponto sem circuito". O plano diz quantas
+  caixas e mostra os avisos. **Desvio do plano**: o plano pedia caixa "em curva > 2"; ficou o texto da norma
+  (até 270°, isto é, três curvas de 90°, e −3 m por curva), editável na hipótese.
+- **Ø comerciais até 85**: `BITOLAS_DE_ELETRODUTO_MM` = 20…40, 50, 60, 75, 85 (a tabela de diâmetro interno
+  já ia até 85; a escolha pela ocupação parava em 40).
+- **Luminárias em malha** (`malhaDeLuminarias`, hipótese na tarefa de tomadas, padrão "uma por ambiente"):
+  a luz de teto que falta nasce em malha — n = ⌈área / m² por luminária⌉, colunas = arred. √(n·L/A), uma no
+  centro de cada célula DENTRO do ambiente (L perde as de fora) — todas na mesma letra, com o mínimo da norma
+  (9.5.2.1.2) dividido entre elas (arredondado a 10 VA).
+- **Canvas**: caixa de passagem (e terra, entrada, medidor) sem circuito deixa de aparecer "CP · ?" em
+  alerta — infraestrutura não tem circuito por natureza.
+
+**Testes** — novo `__tests__/blueprintCaixasDePassagem.test.ts` (8): 20 m → caixa a 15; 45 m → duas; as curvas
+encurtam o limite (e sem a redução, cabe); 4 curvas → caixa no nó da 4ª; derivação sem/com ponto embaixo; a
+descida sob a derivação entra na conta; trecho com eletroduto existente intocado; vertical longo avisa.
+`__tests__/blueprintEletrodutos.test.ts` (+7): **o eletroduto que cruzava o pilar contorna** (nenhum trecho
+na pegada, o canto afastado, o circuito no desvio); viga → rede a 2,20 m e aviso, viga baixa → teto e aviso;
+**sala de 24 m → caixas em x = 10 875 e sobre a tomada, trecho partido, e elas aparecem no quantitativo, na
+lista de materiais, na legenda da planta (2D) e com medidas e cota para o 3D**; idempotente; relançar apaga e
+refaz as caixas; caixa não é ponto sem circuito; pela parede (descida no eixo, toco até a face, luz reta,
+caixas pela regra); seis FFF de 16 mm² → tronco de 75 mm. Novo `__tests__/blueprintMalhaDeLuminarias.test.ts`
+(5): malha 2 × 2 simétrica; ambiente pequeno → uma; L sem luminária fora; Completar pela norma com malha (4
+luzes, letra única, 90 VA cada, rótulo, um interruptor); sem a hipótese, igual a antes.
+
+**O que os testes pegaram antes de publicar**: a caixa dependia da DIREÇÃO em que o trecho era percorrido
+(começava pela tomada: caixa a 14,4 m do quadro em vez de 10,9) — `caixasDaRede` ganhou a prioridade pela
+distância na rede até o quadro. **O harness pegou**: "CP · ?" em alerta nas caixas automáticas.
+
+**Harness (olhado)**: `docs/spikes/eletroduto-desvio-caixas/` — `BlueprintCanvas` real, sala de 24 × 4 m,
+pilar sobre a reta do quadro à luz, plano aplicado: o eletroduto dobra no canto do pilar; duas caixas (no
+meio do trecho longo e sobre a tomada); `?parede=1`: a tomada pelo eixo da parede de baixo com caixas ao longo.
+
+**Verificação**: `tsc` ✓ · alvo 59 ✓ · suíte inteira **6.352 ✓** (6.385 = 6.352 + 33 pulados, 591 arquivos,
+conta fechada, sem queda de worker) · `vite build` ✓ · `check-ui-standard` ✓ (editor, canvas) ·
+`check-xss-sinks` ✓ · sem mudança no kernel.
+
+**Efeito no benchmark**: motor 3 (automação) — desvio de pilar e viga, rota pela parede, caixas de passagem
+automáticas, Ø até 85 e luminárias por área ❌/🟡→✅. Com a E6.1 e a E6.2, fecham-se os itens A do motor 3.
+
+**Etapa 6 concluída** (3 de 3, sem bump de kernel): balanceamento de fases, centro de cargas, e desvio
+estrutural com caixas de passagem.

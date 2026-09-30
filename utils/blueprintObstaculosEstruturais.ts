@@ -78,6 +78,51 @@ export function foraDoPilar(p: P2, w: Pick<Wall, 'a' | 'b'>, pegadas: readonly P
   return p;
 }
 
+/** Afastamento dos cantos do pilar que o eletroduto contorna (E6.3), mm. */
+export const AFASTAMENTO_DO_CONTORNO_MM = 100;
+
+/**
+ * E6.3 — O CONTORNO DO PILAR (29/09/2026, roadmap elétrico): o segmento a→b
+ * (em linha reta, na cota da rede) atravessa um pilar? Devolve os pontos de
+ * passagem que o levam por FORA — um canto do retângulo envolvente de um pilar
+ * atravessado, afastado `AFASTAMENTO_DO_CONTORNO_MM`; sem um canto que resolva,
+ * dois cantos do mesmo pilar. O mais curto; empate pela ordem dos cantos.
+ * `[]` = não atravessa (reta serve); `null` = não há contorno por cantos
+ * (pilares encostados) — quem chama avisa e segue reto.
+ */
+export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][]): P2[] | null {
+  if (fracaoDentro(a, b, pegadas) === 0) return [];
+  const livre = (p: P2, q: P2) => fracaoDentro(p, q, pegadas) === 0 && !dentroDeAlguma(pegadas, p) && !dentroDeAlguma(pegadas, q);
+  const d = (p: P2, q: P2) => Math.hypot(q.x - p.x, q.y - p.y);
+  const atravessados = pegadas.filter((g) => fracaoDentro(a, b, [g]) > 0);
+  const cantosDe = (g: readonly Point[]): P2[] => {
+    const xs = g.map((p) => p.x);
+    const ys = g.map((p) => p.y);
+    const f = AFASTAMENTO_DO_CONTORNO_MM;
+    const [x0, x1, y0, y1] = [Math.min(...xs) - f, Math.max(...xs) + f, Math.min(...ys) - f, Math.max(...ys) + f].map(Math.round);
+    return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  };
+  const cantos = atravessados.flatMap(cantosDe);
+  let melhor: { pts: P2[]; mm: number } | null = null;
+  for (const w of cantos) {
+    if (!livre(a, w) || !livre(w, b)) continue;
+    const mm = d(a, w) + d(w, b);
+    if (!melhor || mm < melhor.mm - 1e-9) melhor = { pts: [w], mm };
+  }
+  if (melhor) return melhor.pts;
+  for (const g of atravessados) {
+    const cs = cantosDe(g);
+    for (const w1 of cs) {
+      for (const w2 of cs) {
+        if (w1 === w2 || !livre(a, w1) || !livre(w1, w2) || !livre(w2, b)) continue;
+        const mm = d(a, w1) + d(w1, w2) + d(w2, b);
+        if (!melhor || mm < melhor.mm - 1e-9) melhor = { pts: [w1, w2], mm };
+      }
+    }
+  }
+  return melhor ? melhor.pts : null;
+}
+
 /**
  * O fundo da viga de teto mais baixa do pavimento (cota relativa ao piso), ou
  * `null` sem viga de teto. Viga de teto: o topo dela chega a menos de 20 cm do

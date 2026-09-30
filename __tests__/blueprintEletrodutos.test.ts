@@ -29,6 +29,12 @@ import {
   relancarEletrodutos,
 } from '../utils/blueprintEletrodutos';
 import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '../utils/blueprintEletricaDimensionamento';
+import { fracaoDentro, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
+import { BITOLAS_DE_ELETRODUTO_MM, cotaDaRede } from '../utils/blueprintEletrodutos';
+import { POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
+import { medidasDoTerminal } from '../utils/blueprintRede';
+import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
+import { materiaisEletricos } from '../utils/blueprintListaDeMateriaisEletrica';
 
 /** Sala 6 × 4; QDC a 1.600; C1 = luz de teto (a 2.800 = teto) + interruptor; C2 (FFF) = duas TUG; um ponto solto. */
 function casa() {
@@ -362,5 +368,159 @@ describe('Trecho.sugerido no kernel', () => {
     expect(semC1.trechos![0].circuitoIds).toEqual([c2]);
     const semNenhum = applyCommand(semC1, { type: 'DeleteCircuito', circuitoId: c2 }).model;
     expect(semNenhum.trechos![0].circuitoIds ?? null).toBeNull();
+  });
+});
+
+// ─── E6.3 (29/09/2026, roadmap elétrico): pilar, viga, pela parede, caixas, Ø até 85 ───
+
+/** Sala W × 4 m; QDC em (75, 1000) a 1,60 m; C1 com os pontos dados; estrutura opcional. */
+function sala(W: number, pontos: { x: number; y: number; cota: number; tipo: 'TUG' | 'ILUMINACAO_TETO' }[], estrutura: Command[] = []) {
+  const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+  const t = base.levels[0].id;
+  const p = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+  let m = applyBatch(base, [p(0, 0, W, 0), p(W, 0, W, 4000), p(W, 4000, 0, 4000), p(0, 4000, 0, 0)]).model;
+  if (estrutura.length) m = applyBatch(m, estrutura.map((c) => ({ ...c, levelId: t }) as Command)).model;
+  m = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QDC', at: point(75, 1000), cotaMm: 1600 }).model;
+  m = applyCommand(m, { type: 'AddCircuito', quadroId: m.quadros[0].id, nome: 'C1', ligacao: 'FN' }).model;
+  const c1 = m.circuitos[0].id;
+  for (const q of pontos) {
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: q.tipo, at: point(q.x, q.y), cotaMm: q.cota, tipoEletrico: q.tipo }).model;
+    m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: c1 }).model;
+  }
+  return { m, t, c1 };
+}
+const PILAR = (x: number, y: number) => ({ type: 'AddStructural', kind: 'PILAR', pontos: [{ x, y }], larguraMm: 300, profundidadeMm: 300, alturaMm: 2800 }) as unknown as Command;
+const VIGA = (baseMm: number) => ({ type: 'AddStructural', kind: 'VIGA', pontos: [{ x: 0, y: 2000 }, { x: 6000, y: 2000 }], larguraMm: 150, profundidadeMm: 0, alturaMm: 2800 - baseMm, baseMm }) as unknown as Command;
+const semCaixas = { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null };
+const caixasDoPlano = (cmds: Command[]) => cmds.filter((c): c is Extract<Command, { type: 'AddTerminal' }> => c.type === 'AddTerminal' && c.tipoEletrico === 'CAIXA_PASSAGEM');
+
+describe('E6.3 — o eletroduto desvia da estrutura', () => {
+  it('⚠️ PRONTO QUANDO: o eletroduto que cruzava o pilar CONTORNA — nenhum trecho do teto entra na pegada, e o circuito passa pelo desvio', () => {
+    const reto = sala(6000, [{ x: 5925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const antes = horizontais(planejarEletrodutos(reto.m, quadroDe(reto.m), semCaixas).comandos);
+    expect(antes).toHaveLength(1); // sem pilar: uma reta de (75, 1000) a (5925, 1000)
+
+    const comPilar = sala(6000, [{ x: 5925, y: 1000, cota: 300, tipo: 'TUG' }], [PILAR(3000, 1000)]);
+    const pegadas = pegadasDePilares(comPilar.m, comPilar.t);
+    // A reta de antes atravessaria o pilar:
+    expect(fracaoDentro({ x: 75, y: 1000 }, { x: 5925, y: 1000 }, pegadas)).toBeGreaterThan(0);
+    const plano = planejarEletrodutos(comPilar.m, quadroDe(comPilar.m), semCaixas);
+    const hz = horizontais(plano.comandos);
+    expect(hz.length).toBe(2); // por um canto do pilar
+    for (const c of hz) expect(fracaoDentro(c.a, c.b, pegadas)).toBe(0);
+    const canto = hz[0].b;
+    expect([2750, 3250]).toContain(canto.x); // o canto do pilar (300 × 300 em 3000) afastado 10 cm
+    expect([750, 1250]).toContain(canto.y);
+    for (const c of hz) expect(c.circuitoIds).toEqual([comPilar.c1]);
+    expect(plano.avisos).toEqual([]);
+  });
+
+  it('⚠️ viga de teto: a rede corre 10 cm abaixo do fundo dela (e avisa); viga baixa demais → fica no teto e avisa do cruzamento', () => {
+    const { m } = sala(6000, [{ x: 5925, y: 3000, cota: 300, tipo: 'TUG' }], [VIGA(2300)]);
+    expect(cotaDaRede(m, m.levels[0]).cotaMm).toBe(2200);
+    const plano = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    for (const c of horizontais(plano.comandos)) expect([c.cotaAMm, c.cotaBMm]).toEqual([2200, 2200]);
+    expect(prumadas(plano.comandos)[0]).toMatchObject({ cotaAMm: 1600, cotaBMm: 2200 }); // o quadro sobe só até a rede
+    expect(plano.avisos.join(' ')).toMatch(/rede a 2,20 m do piso — 10 cm abaixo da viga/);
+
+    const baixa = sala(6000, [{ x: 5925, y: 3000, cota: 300, tipo: 'TUG' }], [VIGA(2000)]).m;
+    expect(cotaDaRede(baixa, baixa.levels[0]).cotaMm).toBe(2800);
+    expect(planejarEletrodutos(baixa, quadroDe(baixa), semCaixas).avisos.join(' ')).toMatch(/cruzando a viga/);
+  });
+});
+
+describe('E6.3 — caixas de passagem no plano', () => {
+  it('⚠️ PRONTO QUANDO: sala de 24 m — o plano põe as caixas (15 m, −3 m por curva), parte o trecho, e elas aparecem no 2D, no 3D e no quantitativo', () => {
+    const { m } = sala(24000, [{ x: 23925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m));
+    const cx = caixasDoPlano(plano.comandos);
+    // Quadro sobe 1,2 m, curva (+3 m): no teto cabem 15 − 4,2 = 10,8 m → caixa em x = 75 + 10 800. Depois, 13,05 m
+    // de teto + a curva e a descida de 2,5 m passam de 15 → caixa no nó da curva, sobre a tomada.
+    expect(cx.map((c) => [c.at.x, c.at.y, c.cotaMm])).toEqual([[10875, 1000, 2800], [23925, 1000, 2800]]);
+    expect(plano.caixas).toBe(2);
+    for (const c of cx) expect(c).toMatchObject({ disciplina: 'ELETRICA', sugerida: true });
+    // O trecho do teto foi PARTIDO na caixa: dois trechos, os dois com o circuito.
+    const hz = horizontais(plano.comandos);
+    expect(hz.map((c) => [c.a.x, c.b.x])).toEqual([[75, 10875], [10875, 23925]]);
+    expect(hz.every((c) => c.circuitoIds?.length === 1)).toBe(true);
+    // 1,2 + 23,85 + 2,5 = 27,55 m — o plano arredonda a uma casa.
+    expect(plano.metrosPrevistos).toBe(27.6);
+
+    const depois = applyBatch(m, plano.comandos).model;
+    const noModelo = (depois.terminais ?? []).filter((x) => x.tipoEletrico === 'CAIXA_PASSAGEM');
+    expect(noModelo).toHaveLength(2);
+    // Quantitativo e lista de materiais:
+    const q = computeQuantities(depois, POLITICA_PADRAO);
+    expect(q.totais.porTerminal?.find((x) => x.classificacao === 'CAIXA_PASSAGEM')?.quantidade).toBe(2);
+    expect(materiaisEletricos(depois).totais.find((l) => l.item.startsWith('Caixa de passagem'))?.quantidade).toBe(2);
+    // 2D: a família entra na planta (e na legenda); 3D: a caixa tem medidas e fica na cota da rede.
+    expect(itensDaLegendaEletrica(depois).some((i) => i.familia === 'CAIXA_PASSAGEM')).toBe(true);
+    const md = medidasDoTerminal(noModelo[0]);
+    expect(md.larguraMm).toBeGreaterThan(0);
+    expect(noModelo[0].cotaMm).toBe(2800);
+    // Idempotente: aplicado, nada mais a lançar e nenhuma caixa nova.
+    const denovo = planejarEletrodutos(depois, quadroDe(depois));
+    expect(denovo.comandos).toEqual([]);
+    expect(denovo.caixas).toBe(0);
+  });
+
+  it('relançar apaga as caixas SUGERIDAS da rede junto com os trechos; sem a hipótese, nenhuma caixa', () => {
+    const { m } = sala(24000, [{ x: 23925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const depois = applyBatch(m, planejarEletrodutos(m, quadroDe(m)).comandos).model;
+    const re = relancarEletrodutos(depois, quadroDe(depois));
+    const apagadas = re.comandos.filter((c) => c.type === 'DeleteTerminal');
+    expect(apagadas).toHaveLength(2);
+    expect(caixasDoPlano(re.comandos)).toHaveLength(2); // e voltam, no lugar certo
+    const final = applyBatch(depois, re.comandos).model;
+    expect((final.terminais ?? []).filter((x) => x.tipoEletrico === 'CAIXA_PASSAGEM')).toHaveLength(2);
+    // Sem a hipótese: nada de caixa, o trecho do teto inteiro.
+    const sem = planejarEletrodutos(m, quadroDe(m), semCaixas);
+    expect(caixasDoPlano(sem.comandos)).toEqual([]);
+    expect(horizontais(sem.comandos)).toHaveLength(1);
+  });
+
+  it('a caixa não é "ponto sem circuito" (é infraestrutura)', () => {
+    const { m, t } = sala(24000, [{ x: 23925, y: 1000, cota: 300, tipo: 'TUG' }]);
+    const depois = applyBatch(m, planejarEletrodutos(m, quadroDe(m)).comandos).model;
+    expect(pontosSemCircuito(depois, t)).toEqual([]);
+  });
+});
+
+describe('E6.3 — pela parede (hipótese) e Ø comerciais até 85', () => {
+  it('⚠️ pela parede: a tomada desce DENTRO da parede, no eixo, e sai para a caixa na face; a luz de teto segue reta; o que passa de 270° de curvas ganha caixa', () => {
+    const { m, c1 } = sala(6000, [{ x: 5925, y: 3000, cota: 300, tipo: 'TUG' }, { x: 3000, y: 2000, cota: 2800, tipo: 'ILUMINACAO_TETO' }]);
+    const plano = planejarEletrodutos(m, quadroDe(m), { ...HIPOTESES_ELETRODUTO_PADRAO, rotaPelaParede: true });
+    const cmds = adds(plano.comandos);
+    // A descida no eixo da parede x = 6000, e o toco até a tomada na face.
+    expect(cmds.some((c) => c.a.x === 6000 && c.a.y === 3000 && c.b.x === 6000 && c.b.y === 3000 && c.cotaAMm === 2800 && c.cotaBMm === 300)).toBe(true);
+    expect(cmds.some((c) => c.cotaAMm === 300 && c.cotaBMm === 300 && c.a.x === 6000 && c.b.x === 5925)).toBe(true);
+    // Todo trecho horizontal no teto que chega à tomada corre sobre um eixo de parede (x ∈ {0, 6000} ou y ∈ {0, 4000})…
+    const noEixo = (p: { x: number; y: number }) => p.x === 0 || p.x === 6000 || p.y === 0 || p.y === 4000;
+    const doTeto = cmds.filter((c) => c.cotaAMm === 2800 && c.cotaBMm === 2800 && !(c.a.x === c.b.x && c.a.y === c.b.y));
+    const pelaParede = doTeto.filter((c) => noEixo(c.a) && noEixo(c.b));
+    expect(pelaParede.length).toBeGreaterThanOrEqual(2);
+    // …e a luz de teto chega por uma reta que termina nela.
+    expect(doTeto.some((c) => (c.a.x === 3000 && c.a.y === 2000) || (c.b.x === 3000 && c.b.y === 2000))).toBe(true);
+    // Todo trecho novo carrega o C1 (a rede está ligada até o quadro).
+    for (const c of cmds) expect(c.circuitoIds).toEqual([c1]);
+    // A volta pelas paredes tem mais de 270° de curvas até a tomada: caixa(s) pela regra.
+    expect(plano.caixas).toBeGreaterThan(0);
+  });
+
+  it('Ø comerciais até 85: seis circuitos trifásicos de 16 mm² no tronco pedem 75 mm (antes a lista parava em 40)', () => {
+    expect(BITOLAS_DE_ELETRODUTO_MM).toEqual([20, 25, 32, 40, 50, 60, 75, 85]);
+    const base = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = base.levels[0].id;
+    let m = applyCommand(base, { type: 'AddQuadro', levelId: t, nome: 'QGBT', at: point(0, 0), cotaMm: 1600, ligacao: 'FFF', tensaoV: 380 }).model;
+    const q = m.quadros[0].id;
+    for (let i = 0; i < 6; i++) {
+      m = applyCommand(m, { type: 'AddCircuito', quadroId: q, nome: `C${i + 1}`, ligacao: 'FFF', tensaoV: 380, secaoMm2: 16 }).model;
+      m = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUE', at: point(3000 + 500 * i, 0), cotaMm: 300, tipoEletrico: 'TUE', potenciaW: 9000 }).model;
+      m = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais[m.terminais.length - 1].id, circuitoId: m.circuitos[i].id }).model;
+    }
+    const plano = planejarEletrodutos(m, m.quadros[0], semCaixas);
+    const tronco = prumadas(plano.comandos)[0];
+    expect(tronco.circuitoIds).toHaveLength(6);
+    expect(tronco.bitolaMm).toBe(75);
   });
 });

@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, materialPadraoDaDisciplina, type MaterialDeTubo } from '../../utils/blueprintKernel';
+import { DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, materialPadraoDaDisciplina, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import {
   ROTULO_DA_DISCIPLINA,
@@ -101,6 +101,9 @@ interface Props {
     /** Papel e forma do reservatório (E4.2). `null` = SUPERIOR / PRISMA. */
     papelReservatorio?: 'SUPERIOR' | 'INFERIOR' | null;
     formaReservatorio?: 'PRISMA' | 'CILINDRO' | null;
+    /** Incêndio E1.4: fator K e posição do sprinkler. `null` = o da ficha. */
+    fatorK?: number | null;
+    posicaoSprinkler?: PosicaoDoSprinkler | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -119,6 +122,8 @@ interface Props {
    * extravasor, limpeza) e o botão que lança. `resumo` vazio = já tem tudo.
    */
   pecasDaCaixa?: { resumo: string[]; onLancar: () => void };
+  /** Incêndio E1.4: o número da peça (H-2) e se é derivado ou declarado. `undefined` = não é numerada. */
+  numeroDeIncendio?: { numero: string; origem: 'DECLARADO' | 'DERIVADO' } | null;
   comAMesmaAssinatura?: number;
   /**
    * Exclui a peça selecionada — como os painéis de parede, estrutura e escada
@@ -129,6 +134,13 @@ interface Props {
 }
 
 /** O botão de excluir dos painéis de seleção, no mesmo vocabulário dos irmãos. */
+/**
+ * Os fatores K de catálogo, L/min/bar^½ (incêndio E1.4). Valores comerciais
+ * usuais — o K de cada modelo vem do fabricante; CONFERIR no catálogo.
+ */
+const FATORES_K_COMERCIAIS = [57, 80, 115, 161, 202, 242, 363] as const;
+const ROTULO_DA_POSICAO: Record<PosicaoDoSprinkler, string> = { PENDENTE: 'Pendente', EM_PE: 'Em pé (upright)', LATERAL: 'Lateral' };
+
 function BotaoExcluir({ rotulo, onClick }: { rotulo: string; onClick: () => void }) {
   return (
     <button
@@ -156,6 +168,7 @@ export default function PainelTrechoSelecionado({
   fiacao,
   circuitos = [],
   onExcluir,
+  numeroDeIncendio,
 }: Props) {
   if (terminal) {
     return (
@@ -321,6 +334,51 @@ export default function PainelTrechoSelecionado({
                     >
                       <option value="PRISMA">Prismática</option>
                       <option value="CILINDRO">Cilíndrica</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+              {/* INCÊNDIO E1.4: o número da peça (derivado; declarar o rótulo fixa) e,
+                  no sprinkler, o fator K e a posição — o K liga vazão e pressão (Q = K·√P). */}
+              {numeroDeIncendio && (
+                <p className="text-[11px] text-slate-600" data-testid="numero-de-incendio">
+                  Número <strong>{numeroDeIncendio.numero}</strong>{' '}
+                  {numeroDeIncendio.origem === 'DERIVADO'
+                    ? '— derivado da posição; declare o rótulo da peça para fixá-lo'
+                    : '— declarado no rótulo da peça'}
+                </p>
+              )}
+              {terminal.tipoHidraulico === 'SPRINKLER' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Fator K (L/min/bar½)</span>
+                    <select
+                      value={terminal.fatorK ?? ''}
+                      onChange={(e) => onTerminal({ fatorK: e.target.value === '' ? null : Number(e.target.value) })}
+                      aria-label="Fator K do sprinkler"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">Padrão ({FICHA_DO_PONTO_HIDRAULICO.SPRINKLER.fatorK})</option>
+                      {FATORES_K_COMERCIAIS.filter((k) => k !== FICHA_DO_PONTO_HIDRAULICO.SPRINKLER.fatorK).map((k) => (
+                        <option key={k} value={k}>
+                          K {k}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Posição</span>
+                    <select
+                      value={terminal.posicaoSprinkler ?? 'PENDENTE'}
+                      onChange={(e) => onTerminal({ posicaoSprinkler: e.target.value === 'PENDENTE' ? null : (e.target.value as PosicaoDoSprinkler) })}
+                      aria-label="Posição do sprinkler"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      {POSICOES_DO_SPRINKLER.map((p) => (
+                        <option key={p} value={p}>
+                          {ROTULO_DA_POSICAO[p]}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 </div>

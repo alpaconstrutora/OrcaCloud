@@ -1590,7 +1590,7 @@ foram reabertos na frente:
 
 Fecha o **bloco 6** e os achados 1, 3 e 8. Abre o motor 1.
 
-## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **em andamento (1.1, 1.2 e 1.3 ✅ 30/09/2026, kernel 0.80.0)**
+## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **✅ CONCLUÍDA em 30/09/2026 (4 de 4; kernel 0.78.0 → 0.80.0; os kits foram para a E7.2)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1658,7 +1658,7 @@ Fecha os **A** das seções 22 e 27.
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 7.1 Extintores | Lançamento com agente, carga e capacidade extintora; classe de fogo por ambiente (cozinha, casa de máquinas, QD); proposta automática pela **distância a percorrer** (E6) e pela área por unidade extintora (NBR 12693/IT, CONFERIR) | teste: um ponto além do percurso vira marca; a proposta usa o kit extintor + placa |
-| 7.2 Sinalização (kernel 0.85.0) | `PLACA` com código e categoria (catálogo NBR 13434/IT), `alvoId` para o equipamento, variantes direcionais (frente, esquerda, direita, mudança, saída) pela rotação; proposta automática: uma por equipamento (kit) e ao longo da rota nas mudanças de direção e nas portas | goldens; teste: apagar o hidrante apaga ou marca a placa dele |
+| 7.2 Sinalização e kits (kernel 0.85.0) | **Kits** (vindos da E1.4: hidrante + placa, extintor + placa, VGA + manômetros, e o kit criado pelo projetista em tabela por organização), inseridos num lote; `PLACA` com código e categoria (catálogo NBR 13434/IT), `alvoId` para o equipamento, variantes direcionais (frente, esquerda, direita, mudança, saída) pela rotação; proposta automática: uma por equipamento (kit) e ao longo da rota nas mudanças de direção e nas portas | goldens; teste: apagar o hidrante apaga ou marca a placa dele |
 | 7.3 Iluminação de emergência | Luminária de emergência (bloco autônomo/central) com autonomia; proposta pela rota (espaçamento, escadas, mudanças de direção — NBR 10898, CONFERIR); ligação opcional a circuito da elétrica | teste de espaçamento na rota; a luminária entra no quadro de cargas quando está em circuito |
 | 7.4 Detecção e alarme (kernel 0.86.0) | Detector de fumaça/temperatura/chama por cobertura (raio e parede — NBR 17240, CONFERIR); acionador manual pelo percurso; avisador; central; **laço** como relação (molde `Circuito`), com o eletroduto roteado pelo automático da elétrica; preventivo personalizado (motor e ventilador de pressurização) | goldens; teste de cobertura; laço sem central = marca |
 
@@ -1818,4 +1818,27 @@ Entregue:
   atropelava o triângulo. A chave de fluxo virou quadrada, e um teste fixa a forma de fora.
 - **Testes:** `blueprintSimbolosIncendio.test.ts` (8) e `components/BlueprintCanvasIncendio.test.tsx`
   (3, contexto 2D falso). Suíte com 6.473 testes, conta fechada; build ok.
+
+### Etapa 1.4 — 30/09/2026 (frente `incendio-e1`, sem bump)
+
+- **Numeração derivada** (`utils/blueprintNumeracaoIncendio.ts`): H-n (hidrante simples e duplo
+  dividem a série), MG-n, RR-n, SPK-n, VGA-n, CF-n, BI-n, BJ-n e PS-n.
+  - A ordem é: pavimento de baixo para cima; na planta, de cima para baixo e da esquerda para a
+    direita. Nada é gravado, e apagar uma peça renumera as outras.
+  - O **rótulo declarado vence e reserva** o número dele; os derivados pulam por cima.
+  - O canvas escreve o número no lugar da sigla, e o painel do ponto diz se é derivado ou
+    declarado.
+- **Lacuna da E1.1 fechada:** o painel do sprinkler ganhou os campos **fator K** (comerciais 57,
+  80, 115, 161, 202, 242 e 363; CONFERIR no catálogo do fabricante) e **posição**. O vazio volta ao
+  da ficha.
+- **Cadastro de tipos:** `PropriedadesDeTerminal` leva `fatorK`/`posicaoSprinkler` **só quando
+  declarados**, para não mudar a assinatura dos tipos de ponto já salvos (teste). O resumo do tipo
+  mostra "K 115".
+- **Kits → E7.2 (desvio de escopo):** os kits do AltoQi (hidrante + placa, extintor + placa)
+  dependem da placa, que pela decisão "preventivos na E7" nasce lá. O kit de VGA vai junto, para
+  haver um mecanismo só.
+- **Testes:** `blueprintNumeracaoIncendio.test.ts` (6), `components/PainelPecaDeIncendio.test.tsx`
+  (3) e o canvas com o número (4). Suíte com 6.483 testes: 6.450 + 33 pulados. Na 1ª rodada, 33
+  testes do `BlueprintEditor.test.tsx` ficaram "pending" (não rodaram: queda de worker); na 2ª, a
+  conta fechou limpa.
 

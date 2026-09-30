@@ -154,6 +154,7 @@ const SEM_PRESSOES: readonly PressoesDaRede[] = [];
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import { simboloDeIncendio, temSimboloDeIncendio } from '../../utils/blueprintSimbolosIncendio';
+import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
@@ -1923,6 +1924,8 @@ export default function BlueprintCanvas({
   const simbolosConexoes2d = useMemo(() => simbolosDasConexoes2D(model, levelId ?? null), [model, levelId]);
   /** As MARCAS da verificação da rede (28/09/2026, E0.1) — ver `blueprintVerificacaoRede`. */
   const marcasDaRede2d = useMemo(() => marcasDeVerificacao(model, levelId ?? null, pressoesDaAgua), [model, levelId, pressoesDaAgua]);
+  /** Incêndio E1.4: H-1, SPK-3… — derivados; o rótulo declarado vence. */
+  const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(model), [model]);
   const terminaisReais = useMemo(
     () => (model.terminais ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
     [model.terminais, levelId, ocultos],
@@ -6468,7 +6471,8 @@ export default function BlueprintCanvas({
       // seco com a diagonal, ralo/caixa sifonada com a cruz, caixa d'água e
       // caixas de inspeção/gordura com o nome escrito quando cabem.
       if (t.tipoHidraulico && !selecionado && !caixaDetalhada) {
-        const sigla = SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
+        // Incêndio E1.4: a peça numerada escreve o NÚMERO (H-2), não só a sigla.
+        const sigla = numerosDeIncendio.get(t.id)?.numero ?? SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
         const meio = emTela(Math.min(md.larguraMm, md.profundidadeMm) / 2);
         ctx.save();
         ctx.strokeStyle = '#ffffff';

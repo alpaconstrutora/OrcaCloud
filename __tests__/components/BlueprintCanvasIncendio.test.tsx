@@ -77,16 +77,21 @@ describe('BlueprintCanvas · símbolos de incêndio', () => {
 
   const textos = () => chamadas.filter((c) => c.metodo === 'fillText').map((c) => c.args[0]);
 
-  it('⚠️ PRONTO QUANDO: o pressostato sai com o "P" DENTRO do símbolo e a sigla "PS" ao lado', () => {
+  it('⚠️ PRONTO QUANDO: o pressostato sai com o "P" DENTRO do símbolo e o número "PS-1" ao lado (E1.4)', () => {
     desenhar(cena([{ tipo: 'PRESSOSTATO', disciplina: 'INCENDIO' }]));
     expect(textos()).toContain('P');
-    expect(textos()).toContain('PS');
+    expect(textos()).toContain('PS-1');
   });
 
   it('a jockey sai com o "J" do símbolo; o hidrante gira o desenho no centro da peça (translate)', () => {
     desenhar(cena([{ tipo: 'BOMBA_JOCKEY', disciplina: 'INCENDIO' }, { tipo: 'HIDRANTE_SIMPLES', disciplina: 'INCENDIO' }]));
     expect(textos()).toContain('J');
     expect(chamadas.filter((c) => c.metodo === 'translate').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('E1.4: a peça numerada escreve o número (H-1, H-2), e não só a sigla', () => {
+    desenhar(cena([{ tipo: 'HIDRANTE_SIMPLES', disciplina: 'INCENDIO' }, { tipo: 'HIDRANTE_DUPLO', disciplina: 'INCENDIO' }]));
+    expect(textos()).toEqual(expect.arrayContaining(['H-1', 'H-2']));
   });
 
   it('ponto de água fria não ganha símbolo de incêndio (nenhum "P" solto)', () => {

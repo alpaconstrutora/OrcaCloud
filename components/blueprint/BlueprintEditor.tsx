@@ -221,6 +221,7 @@ import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
+import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import PainelCalhas from './PainelCalhas';
 import PainelCondutores from './PainelCondutores';
@@ -7279,6 +7280,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
   /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
   const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
+  /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
+  const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(editor.model), [editor.model]);
   const classificacaoDeIncendio = useMemo(
     () => (tarefaAberta === 'incendio' ? classificarEdificacao(editor.model, incendioDoEstudo.hipoteses.classificacao) : null),
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
@@ -8271,6 +8274,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       <PainelTrechoSelecionado
         trecho={trechoSel}
         terminal={terminalSel}
+        numeroDeIncendio={terminalSel ? numerosDeIncendio.get(terminalSel.id) ?? null : null}
         circuitos={circuitosParaEscolher}
         // E4.3/E4.4: entrada e medidor ligam-se a um quadro; o medidor mede uma unidade.
         quadrosParaEntrada={(editor.model.quadros ?? []).map((q) => ({ id: q.id, nome: q.nome }))}

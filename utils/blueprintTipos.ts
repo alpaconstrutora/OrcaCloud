@@ -56,6 +56,13 @@ export interface PropriedadesDeTerminal {
   alturaMm?: number | null;
   profundidadeMm?: number | null;
   volumeL?: number | null;
+  /**
+   * Incêndio E1.4: o fator K e a posição do sprinkler. Só entram quando
+   * DECLARADOS (undefined fora disso) — `null` entraria na assinatura e mudaria
+   * a de todo tipo de ponto já salvo.
+   */
+  fatorK?: number;
+  posicaoSprinkler?: Terminal['posicaoSprinkler'];
 }
 export interface PropriedadesDeEscada {
   familia: 'ESCADA';
@@ -123,6 +130,8 @@ export function propriedadesDoTerminal(t: Terminal): PropriedadesDeTerminal {
     alturaMm: t.alturaMm ?? null,
     profundidadeMm: t.profundidadeMm ?? null,
     volumeL: t.volumeL ?? null,
+    fatorK: t.fatorK ?? undefined,
+    posicaoSprinkler: t.posicaoSprinkler ?? undefined,
   };
 }
 export function propriedadesDaEscada(e: Escada): PropriedadesDeEscada {
@@ -165,7 +174,7 @@ export function resumoDoTipo(p: PropriedadesDoTipo): string {
         ? `${nomeDoTipoEstrutural(p.kind)} Ø${cm(p.larguraMm)} · ${m(p.alturaMm)} m`
         : `${nomeDoTipoEstrutural(p.kind)} ${cm(p.larguraMm)}×${cm(p.profundidadeMm || p.alturaMm)} · ${m(p.alturaMm)} m`;
     case 'TERMINAL':
-      return `${p.tipo}${p.potenciaW ? ` ${p.potenciaW} VA` : ''} · ${cm(p.cotaMm)} cm`;
+      return `${p.tipo}${p.potenciaW ? ` ${p.potenciaW} VA` : ''}${p.fatorK ? ` · K ${p.fatorK}` : ''} · ${cm(p.cotaMm)} cm`;
     case 'ESCADA':
       return `${p.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${m(p.larguraMm)} m${p.tipo === 'ESCADA' ? ` · espelho ${p.alvoEspelhoMm} mm` : ''}`;
     case 'TELHADO':
@@ -213,6 +222,9 @@ export function camposDoTerminal(p: PropriedadesDeTerminal) {
     alturaMm: p.alturaMm ?? null,
     profundidadeMm: p.profundidadeMm ?? null,
     volumeL: p.volumeL ?? null,
+    // O tipo SEM K aplicado a um sprinkler devolve o K da ficha — aplicar um tipo é copiar tudo.
+    fatorK: p.fatorK ?? null,
+    posicaoSprinkler: p.posicaoSprinkler ?? null,
   };
 }
 

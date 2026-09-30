@@ -1,6 +1,5 @@
 import React from 'react';
 import { LayoutGrid, List, Plus, RefreshCw, Settings2, Tag, Trash2 } from 'lucide-react';
-import type { RegraDeConciliacao } from './RulesTab';
 
 /**
  * Aba "Categorias" da Conciliação Bancária.
@@ -18,7 +17,9 @@ import type { RegraDeConciliacao } from './RulesTab';
 
 interface Props {
     uniqueCategories: string[];
-    rules: RegraDeConciliacao[];
+    /** Só `actions.category` é lido (contagem de regras por categoria). A aba Regras,
+     *  que exportava o tipo antigo, virou painel na Central em 30/09/2026. */
+    rules: Array<{ actions?: { category?: string } | null }>;
     categoriesViewMode: 'grid' | 'list';
     setCategoriesViewMode: (m: 'grid' | 'list') => void;
     isLoading: boolean;

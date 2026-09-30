@@ -1,10 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import {
     Sparkles, Zap, Check, X, RefreshCw, Settings2, ArrowLeftRight,
-    Landmark, FileText, ShieldCheck, Building2, User, AlertCircle,
+    Landmark, FileText, ShieldCheck, Building2, User, AlertCircle, ListChecks, Lightbulb,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { bankReconciliationService } from '../services/bankReconciliationService';
+import { bankReconciliationService, type ReconciliationRuleRow } from '../services/bankReconciliationService';
+import { reconciliationReprocessService, resumoDoReprocesso } from '../services/reconciliationReprocessService';
+import { reconciliationMemoryService, type ClassificationMemory } from '../services/reconciliationMemoryService';
+import { regrasSugeridasDaMemoria } from '../utils/reconciliationRules';
+import RegrasSheet, { type RegraPreenchida } from './reconciliation/RegrasSheet';
+import type { ClientOption } from './ClientSelect';
+import type { SupplierOption } from './SupplierSelect';
 import { useToast } from '../hooks/useToast';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import GroupMatchPanel from './GroupMatchPanel';
@@ -69,7 +75,14 @@ interface SmartReconciliationCenterProps {
     onConfirm: (bankTxId: string, internalTxId: string) => Promise<void> | void;
     onReject: (bankTransactionId: string) => Promise<void> | void;
     onReload: () => Promise<void> | void;
+    /** Para o painel de Regras (formulário): categorias e cadastros com id/nome. */
+    categories: string[];
+    clienteRegistros: ClientOption[];
+    credorRegistros: SupplierOption[];
 }
+
+/** Quantas "regras sugeridas" a Central mostra de uma vez. */
+const MAX_SUGERIDAS = 5;
 
 const DEFAULT_SETTINGS = {
     value_tol_abs: 50, value_tol_pct: 3, encargos_tol_pct: 0.5,
@@ -78,6 +91,7 @@ const DEFAULT_SETTINGS = {
 
 const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     organizationId, selectedAccountId, suggestions, bankTransactions, onConfirm, onReject, onReload,
+    categories, clienteRegistros, credorRegistros,
 }) => {
     // ⚠️ `localToast` PRECISA ser desenhado. A Central chamava showToast em nove
     // lugares e nunca renderizava nada: toda mensagem, de erro e de sucesso, era
@@ -101,6 +115,48 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     }, [selectedAccountId]);
 
     React.useEffect(() => { void carregarUltimaExecucao(); }, [carregarUltimaExecucao]);
+    // ── Regras (antes: aba Regras) ─────────────────────────────────────────
+    // Plano 2026-09-30-conciliacao-regras-absorvidas-pela-central. Regra é de UMA
+    // organização: a da CONTA selecionada. A `organizationId` recebida vem vazia
+    // com o topo em "Todas", então não serve para isto.
+    const [orgDaConta, setOrgDaConta] = useState<string | null>(null);
+    const [regras, setRegras] = useState<ReconciliationRuleRow[]>([]);
+    const [sugeridas, setSugeridas] = useState<ClassificationMemory[]>([]);
+    const [regrasAberto, setRegrasAberto] = useState(false);
+    const [preenchida, setPreenchida] = useState<RegraPreenchida | null>(null);
+
+    const carregarRegras = React.useCallback(async () => {
+        if (!selectedAccountId) { setOrgDaConta(null); setRegras([]); setSugeridas([]); return; }
+        try {
+            const org = await bankReconciliationService.resolverOrganizacaoDaConta(selectedAccountId, organizationId);
+            setOrgDaConta(org);
+            if (!org) { setRegras([]); setSugeridas([]); return; }
+            const [lista, candidatas] = await Promise.all([
+                bankReconciliationService.listarRegras(org),
+                reconciliationMemoryService.candidatasARegra(org, 5),
+            ]);
+            setRegras(lista);
+            setSugeridas(regrasSugeridasDaMemoria(candidatas, lista));
+        } catch (e) {
+            console.error('[Center] regras', e);
+            setRegras([]);
+            setSugeridas([]);
+        }
+    }, [selectedAccountId, organizationId]);
+
+    React.useEffect(() => { void carregarRegras(); }, [carregarRegras]);
+
+    const aceitarSugestao = (c: ClassificationMemory) => {
+        setPreenchida({
+            name: `Classificação de ${c.party_name || c.counterparty_key}`,
+            contem: c.counterparty_key,
+            category: c.category ?? '',
+            counterparty: c.party_name ?? '',
+            direcao: c.party_type === 'CLIENT' ? 'CREDIT' : c.party_type === 'SUPPLIER' ? 'DEBIT' : '',
+        });
+        setRegrasAberto(true);
+    };
+
     const [band, setBand] = useState<Band>('all');
     const [busy, setBusy] = useState<string | null>(null);
     const [reprocessing, setReprocessing] = useState(false);
@@ -174,17 +230,12 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         if (!selectedAccountId) { showToast('Selecione uma conta bancária', 'error'); return; }
         setReprocessing(true);
         try {
-            const r = await bankReconciliationService.runMatchingEngineTracked(selectedAccountId, organizationId, 'MANUAL');
+            // Memória → regras → motor (antes: só o motor; memória e regras eram outros
+            // dois botões em outros dois lugares). O toast diz de onde veio cada número,
+            // e uma etapa que falhou aparece nele — não só no console.
+            const r = await reconciliationReprocessService.reprocessarTudo(selectedAccountId, organizationId);
             await onReload();
-            // O resultado da rodada é o que o usuário precisa saber: quantas foram
-            // conciliadas sozinhas (e por quê), quantas transferências saíram do caminho,
-            // quantas sobraram para revisar. "Sugestões reprocessadas" não dizia nada.
-            const partes = [
-                r.autoApplied > 0 ? `${r.autoApplied} conciliada(s) automaticamente${r.exactUnique > 0 ? ` (${r.exactUnique} por valor exato e candidato único)` : ''}` : null,
-                r.transfersPaired > 0 ? `${r.transfersPaired} transferência(s) entre contas pareada(s)` : null,
-                `${r.suggestions} sugestão(ões) para revisar`,
-            ].filter(Boolean);
-            showToast(partes.join(' · '), 'success');
+            showToast(resumoDoReprocesso(r), r.erros.length > 0 ? 'error' : 'success');
         } catch (e) {
             // A mensagem REAL, não "Erro ao reprocessar". O texto genérico escondeu duas
             // vezes o mesmo defeito (22P02 por organização vazia): o botão parecia não
@@ -255,6 +306,14 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-button font-bold hover:border-blue-200 hover:text-blue-600 disabled:opacity-50"
                     >
                         <RefreshCw className={`w-3.5 h-3.5 ${reprocessing ? 'animate-spin' : ''}`} /> Reprocessar
+                    </button>
+                    <button
+                        onClick={() => { setPreenchida(null); setRegrasAberto(true); }}
+                        disabled={!selectedAccountId}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-button font-bold hover:border-blue-200 hover:text-blue-600 disabled:opacity-50"
+                        title={selectedAccountId ? 'Regras de classificação desta organização' : 'Selecione uma conta bancária: as regras são da organização dela'}
+                    >
+                        <ListChecks className="w-3.5 h-3.5" /> Regras ({regras.length})
                     </button>
                     <button onClick={openSettings} className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200" title="Tolerâncias">
                         <Settings2 className="w-4 h-4" />
@@ -396,6 +455,55 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Regras sugeridas pela memória: contraparte classificada ≥ 5 vezes, sem regra.
+                "Aceitar" abre o formulário preenchido — nada é criado sem revisão. */}
+            {sugeridas.length > 0 && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                        <Lightbulb className="w-4 h-4 text-amber-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Regras sugeridas</h3>
+                        <span className="text-sm text-gray-500">· contrapartes que você já classificou várias vezes do mesmo jeito</span>
+                    </div>
+                    <ul className="divide-y divide-gray-100">
+                        {sugeridas.slice(0, MAX_SUGERIDAS).map(c => (
+                            <li key={c.id} className="flex items-center gap-4 px-4 py-2.5">
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm text-gray-900 truncate" title={c.counterparty_key}>
+                                        Descrição contém "{c.counterparty_key}" → {c.category}
+                                        {c.party_name ? ` · ${c.party_name}` : ''}
+                                    </p>
+                                    <p className="text-xs text-gray-500">{c.hits} classificações iguais</p>
+                                </div>
+                                <button
+                                    onClick={() => aceitarSugestao(c)}
+                                    className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-100 hover:bg-blue-50 transition-all shrink-0"
+                                >
+                                    Revisar e criar
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                    {sugeridas.length > MAX_SUGERIDAS && (
+                        <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
+                            e mais {sugeridas.length - MAX_SUGERIDAS} — aparecem aqui conforme você cria as de cima.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <RegrasSheet
+                open={regrasAberto}
+                onClose={() => { setRegrasAberto(false); setPreenchida(null); }}
+                organizationId={orgDaConta}
+                selectedAccountId={selectedAccountId}
+                regras={regras}
+                categories={categories}
+                clienteRegistros={clienteRegistros}
+                credorRegistros={credorRegistros}
+                preenchida={preenchida}
+                onChanged={carregarRegras}
+            />
 
             {/* Conciliação agrupada (match parcial / agrupado) */}
             <GroupMatchPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />

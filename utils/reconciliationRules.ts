@@ -599,3 +599,118 @@ export function montarIndiceDeContrapartes(
         })),
     };
 }
+
+// ─── Regras de automação (texto → categoria) ───────────────────────────────
+//
+// Plano docs/planos/2026-09-30-conciliacao-regras-absorvidas-pela-central.md.
+// Os tipos abaixo são ESTRUTURAIS de propósito (zero imports, ver o topo): o
+// serviço tem os nomes oficiais (`RuleConditions` etc.) e é compatível com estes.
+
+export interface CondicaoDeRegra { field: string; type: string; value: string }
+export interface FiltrosDeRegra {
+    amount_min?: number | null; amount_max?: number | null;
+    direction?: 'DEBIT' | 'CREDIT' | null; bank_account_id?: string | null;
+}
+export interface GrupoDeCondicoes { op: 'AND' | 'OR'; items: CondicaoDeRegra[]; filters?: FiltrosDeRegra }
+export type CondicoesDeRegra = CondicaoDeRegra | CondicaoDeRegra[] | GrupoDeCondicoes;
+
+/** Status em que um movimento do extrato ainda está "cru" para uma regra. */
+const STATUS_QUE_ACEITAM_REGRA = new Set(['IMPORTED', 'NORMALIZED']);
+
+/**
+ * A TRAVA: regra só classifica movimento que ninguém classificou.
+ *
+ * Até 30/09/2026 o motor buscava também `RULE_APPLIED` (que na prática é "tem
+ * categoria": 5.554 de 5.878 foram classificados à mão ou pela memória) e
+ * gravava a categoria da regra por cima. Com o Reprocessar da Central rodando as
+ * regras a cada clique, isso apagaria classificação manual toda vez.
+ */
+export function linhaAceitaRegra(tx: { status?: string | null; category?: string | null }): boolean {
+    return STATUS_QUE_ACEITAM_REGRA.has(String(tx.status ?? '')) && !String(tx.category ?? '').trim();
+}
+
+function ehGrupo(c: CondicoesDeRegra): c is GrupoDeCondicoes {
+    return !!c && typeof c === 'object' && !Array.isArray(c) && 'items' in c;
+}
+
+function itensDe(c: CondicoesDeRegra): CondicaoDeRegra[] {
+    if (Array.isArray(c)) return c;
+    if (ehGrupo(c)) return c.items ?? [];
+    return c ? [c] : [];
+}
+
+const VERBO: Record<string, string> = {
+    contains: 'contém', equals: 'é igual a', starts_with: 'começa com', regex: 'casa o padrão',
+};
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/**
+ * Texto legível de uma condição, nos TRÊS formatos gravados (solta, array = OU,
+ * grupo com operador e filtros). A tela antiga lia só `conditions.value` e
+ * mostrava a regra E/OU com a condição vazia.
+ */
+export function descreverCondicao(c: CondicoesDeRegra): string {
+    const itens = itensDe(c);
+    const op = ehGrupo(c) && c.op === 'AND' ? ' e ' : ' ou ';
+    const partes: string[] = [];
+    if (itens.length > 0) {
+        partes.push('Descrição ' + itens.map(i => `${VERBO[i.type] ?? i.type} "${i.value}"`).join(op));
+    }
+    const f = ehGrupo(c) ? c.filters : undefined;
+    if (f?.direction) partes.push(f.direction === 'CREDIT' ? 'só entradas' : 'só saídas');
+    if (f?.amount_min != null && f?.amount_max != null) partes.push(`valor entre ${brl(f.amount_min)} e ${brl(f.amount_max)}`);
+    else if (f?.amount_min != null) partes.push(`valor a partir de ${brl(f.amount_min)}`);
+    else if (f?.amount_max != null) partes.push(`valor até ${brl(f.amount_max)}`);
+    if (f?.bank_account_id) partes.push('numa conta específica');
+    return partes.length ? partes.join(' · ') : '(sem condição)';
+}
+
+/** O que o formulário simples edita: um "contém" e a direção. */
+export interface FormularioDeCondicao { contem: string; direcao: '' | 'CREDIT' | 'DEBIT' }
+
+/**
+ * Formulário → condição gravada. Sem direção grava o formato LEGADO (condição
+ * solta), igual ao que a tela sempre gravou; com direção, o grupo com filtro.
+ */
+export function condicaoDoFormulario(f: FormularioDeCondicao): CondicoesDeRegra {
+    const item: CondicaoDeRegra = { type: 'contains', field: 'description_normalized', value: f.contem.trim() };
+    if (!f.direcao) return item;
+    return { op: 'OR', items: [item], filters: { direction: f.direcao } };
+}
+
+/**
+ * Condição gravada → formulário simples, ou `null` quando a regra é avançada
+ * demais para o formulário (mais de um item, E, faixa de valor, conta, outro
+ * operador que não "contém"). Nesse caso a tela mostra o texto legível e NÃO
+ * reescreve a condição ao salvar.
+ */
+export function formularioDaCondicao(c: CondicoesDeRegra): FormularioDeCondicao | null {
+    const itens = itensDe(c);
+    if (itens.length !== 1 || itens[0].type !== 'contains') return null;
+    const f = ehGrupo(c) ? c.filters : undefined;
+    if (f && (f.amount_min != null || f.amount_max != null || f.bank_account_id)) return null;
+    return { contem: itens[0].value ?? '', direcao: f?.direction ?? '' };
+}
+
+/** Candidata da memória de classificação (forma de `reconciliation_classification_memory`). */
+export interface CandidataDaMemoria {
+    counterparty_key: string; key_kind: 'DOCUMENTO' | 'TOKEN';
+    category: string | null; party_type: 'SUPPLIER' | 'CLIENT' | null;
+    party_name: string | null; hits: number;
+}
+
+/**
+ * Contrapartes da memória que valem virar regra e ainda não têm uma. Só `TOKEN`:
+ * a chave DOCUMENTO é CPF/CNPJ, que a memória já resolve sozinha e o texto do
+ * extrato nem sempre traz. "Já tem regra" = algum item de alguma regra existente
+ * contém o mesmo texto (sem acento/caixa), em qualquer dos três formatos.
+ */
+export function regrasSugeridasDaMemoria<T extends CandidataDaMemoria>(
+    candidatas: T[],
+    regrasExistentes: Array<{ conditions: CondicoesDeRegra }>,
+): T[] {
+    const cobertos = new Set(
+        regrasExistentes.flatMap(r => itensDe(r.conditions)).map(i => normalizeText(i.value ?? '')).filter(Boolean),
+    );
+    return candidatas.filter(c => c.key_kind === 'TOKEN' && !!c.category && !cobertos.has(normalizeText(c.counterparty_key)));
+}

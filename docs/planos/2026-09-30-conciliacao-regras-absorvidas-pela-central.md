@@ -129,8 +129,66 @@ Um item por arquivo. Cada item diz o que muda e como sei que terminou.
 
 Nenhuma. As 4 foram respondidas em 30/09 (tabela acima).
 
-## Estado
-- [ ] 1 · [ ] 2 · [ ] 3 · [ ] 4 · [ ] 5 · [ ] 6 · [ ] 7 · [ ] 8
+## Estado (30/09/2026)
+
+- [x] 1. `utils/reconciliationRules.ts`: `linhaAceitaRegra`, `descreverCondicao`,
+  `condicaoDoFormulario`/`formularioDaCondicao` e `regrasSugeridasDaMemoria`. 14 testes novos em
+  `reconciliationRules.test.ts` (36 no arquivo).
+- [x] 2. `bankReconciliationService`: trava em `applyCustomRules` (consulta
+  `IMPORTED,NORMALIZED` sem categoria + filtro em memória). De carona, o `.limit(10000)`
+  virou `fetchAllPages`: era o teto de 1.000 linhas do PostgREST (achado C1 de 05/09), então
+  a regra via só parte do extrato. Ganhou também `listarRegras`, `salvarRegra`, `excluirRegra`
+  e `simularRegraNaConta`. O `reprocessarTudo` ficou em `services/reconciliationReprocessService.ts`,
+  porque dentro do serviço daria import circular. Coberto por `reconciliationReprocess.test.ts`
+  (6 testes: ordem, falha isolada, erro do PostgREST legível, texto do toast).
+  **Prova no banco:** comparei o filtro antigo com o novo nos dados reais. "Aluguel Tanaka"
+  pegaria 10 linhas → 0 (já classificadas). Linhas com categoria DIFERENTE da regra, que o
+  filtro antigo sobrescreveria: **0 hoje**. A trava evita o estrago futuro; não havia estrago
+  presente.
+- [x] 3. `components/reconciliation/RegrasSheet.tsx` com lista, ativar/desativar (`TableSwitch`),
+  editar, excluir (`useConfirm`), formulário (contém + direção + categoria + cliente/credor por
+  drawer) e o "Testar" contra o extrato inteiro da conta, já com a trava. Regra avançada (E/OU,
+  faixa de valor) aparece legível e a condição não é reescrita ao salvar. `check-ui-standard` 0.
+- [x] 4. `SmartReconciliationCenter.tsx`: o Reprocessar chama `reprocessarTudo`, com toast por
+  fonte e erro de etapa visível. Ganhou o botão "Regras (N)" e a seção "Regras sugeridas" (até 5,
+  "Revisar e criar" abre o formulário preenchido). As regras vêm da organização da CONTA
+  (`resolverOrganizacaoDaConta`), então funciona com o topo em "Todas".
+- [x] 5. `BankReconciliation.tsx`: sai a aba `'rules'` (tipo, título, botão, render, estado e
+  handlers). A aba salva como `'rules'` abre a Central. O ⚡ da Pendentes passou a chamar o MESMO
+  `reprocessarTudo` (antes rodava regras + motor, e a Central só o motor). Ficam `rules`/`loadRules`,
+  porque a aba Categorias renomeia a categoria dentro das regras e o KPI "Regras ativas" do
+  Dashboard as conta.
+- [x] 6. `RulesTab.tsx` apagado. O tipo que a `CategoriesTab` importava dele virou tipo
+  estrutural (só `actions.category`).
+- [x] 7. `RULE_APPLIED` passa a aparecer como "Classificado".
+- [x] 8. **Aplicado em produção em 30/09**, com snapshot antes e 2 linhas em
+  `reconciliation_audit_log` (`RULE_EDIT`, `RULE_DELETE`, com o valor anterior no payload):
+  - Asaas: `conditions` virou o grupo `{op: OR, items: [contém ASAAS], filters: {direction: CREDIT}}`.
+    Linhas livres que ela pegava: **4 (todas DEBIT) → 0**. Sem isso, o primeiro Reprocessar
+    unificado confirmaria 4 pagamentos de boleto de 2023 como repasse.
+  - Waldir: excluída. A organização fica com 2 regras.
+  - ⚠️ Até esta frente ser publicada, a aba Regras ANTIGA em produção mostra a condição do Asaas
+    vazia: ela só lê `conditions.value`, e esta regra agora é um grupo. O motor antigo já entende
+    o formato (Onda 2.6), então a regra funciona certo; só a exibição fica vazia.
+
+**Correção durante a execução.** A guarda da REGRA #5 (`orgContextGuard.test.ts`) reprovou 2
+`if (!organizationId) return` no `RegrasSheet`. Eram redundantes, porque os botões só existem com
+a organização, e foram removidos: a organização passou a ir por parâmetro.
+
+**Verificação executada:**
+- `tsc` 0; `check-ui-standard` 0 nos 5 .tsx tocados; `check-xss-sinks` 0.
+- Suíte: 6.462 passaram + 33 pendentes = 6.495, 0 falhas.
+- Navegador (conta de leitura, org Alpa, conta Sicredi 1234, escritas bloqueadas = 0, erros = 0):
+  - a aba Regras sumiu; a aba salva "rules" abre na Central;
+  - "Regras (2)"; o Asaas aparece como "Descrição contém "ASAAS" · só entradas · confirma sozinha";
+  - o formulário do Asaas carrega contém/direção; o "Testar" responde "Não classificaria nenhum
+    movimento agora";
+  - "Regras sugeridas" traz 5 (Sicredi 615×, SAAE 272×, Energisa 210×, Itaú 181×, Defensoria
+    104×), e "Revisar e criar" abre o formulário preenchido.
+- **Não visto no navegador:** o clique real em Reprocessar e em Criar/Salvar/Excluir (tudo
+  escrita), coberto só pelos testes unitários.
+- ⚠️ **Cuidado com a sugestão "SICREDI":** "contém SICREDI" pode ser amplo demais, porque o nome
+  do banco aparece em muitas descrições. O "Testar" mostra o alcance antes de criar.
 
 ## Verificação
 1. `npx vitest run __tests__/reconciliationRules.test.ts`, depois a suíte completa (conta

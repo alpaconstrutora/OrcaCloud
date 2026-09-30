@@ -10,7 +10,6 @@ import {
 import ActionIconButton from './ui/ActionIconButton';
 import type { ClientOption } from './ClientSelect';
 import type { SupplierOption } from './SupplierSelect';
-import RulesTab, { RuleFormModal } from './reconciliation/RulesTab';
 import CategoriesTab from './reconciliation/CategoriesTab';
 import { LazySelect, type LazyOption } from './reconciliation/LazySelect';
 import ConciliatedTab from './reconciliation/ConciliatedTab';
@@ -47,6 +46,7 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
+import { reconciliationReprocessService, resumoDoReprocesso } from '../services/reconciliationReprocessService';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import { originIdFromRef } from '../lib/receivableRef';
@@ -57,7 +57,7 @@ import { fetchAllPages } from '../lib/supabasePaginate';
 // Rótulo de texto do plano de contas ("1.1.1 · PIS") — célula, filtro e ordenação do Extrato.
 const rotuloPlanoContas = (pc: { name: string; code?: string | null }) => (pc.code ? `${pc.code} · ${pc.name}` : pc.name);
 
-type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'rules' | 'categories' | 'close' | 'prolabore';
+type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' | 'statement' | 'pending' | 'conciliated' | 'categories' | 'close' | 'prolabore';
 
 // Título/subtítulo de tela por aba — guia §20 (toda tela com título tem que TER um título).
 const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string }> = {
@@ -68,7 +68,6 @@ const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string
     anomalies: { title: 'Anomalias', subtitle: 'Padrões incomuns identificados na conciliação.' },
     pending: { title: 'Pendentes', subtitle: 'Extrato bancário e lançamentos internos aguardando conciliação.' },
     conciliated: { title: 'Conciliados', subtitle: 'Vínculos já confirmados entre extrato e lançamentos internos.' },
-    rules: { title: 'Regras de Automação', subtitle: 'Critérios que conciliam lançamentos automaticamente.' },
     categories: { title: 'Categorias', subtitle: 'Categorias usadas para classificar lançamentos.' },
     close: { title: 'Fechamento Financeiro', subtitle: 'Feche o período após a conciliação estar completa.' },
     prolabore: { title: 'Pró-labore', subtitle: 'Lançamentos categorizados como Pró-labore no extrato — aprove, feche o mês e envie o total ao RH.' },
@@ -149,7 +148,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [conciliandoGrupo, setConciliandoGrupo] = useState(false);
     const [showImportDrawer, setShowImportDrawer] = useState(false);
     const [completudeDaConta, setCompletudeDaConta] = useState<CompletudeDaConta | null>(null);
-    const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
     const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
     const [internalTransactions, setInternalTransactions] = useState<InternalTransaction[]>([]);
@@ -218,7 +216,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [isLoading, setIsLoading] = useState(false);
     const [accountsLoading, setAccountsLoading] = useState(false);
     const [activeView, setActiveView] = useState<ReconciliationView>(
-        defaultView || (localStorage.getItem('reconciliation_active_tab') as ReconciliationView) || 'dashboard'
+        // A aba Regras saiu em 30/09/2026 (virou painel dentro da Central): quem tinha
+        // ela salva como última aba cai na Central, não numa tela vazia.
+        defaultView || (() => {
+            const salva = localStorage.getItem('reconciliation_active_tab');
+            return (salva === 'rules' ? 'center' : salva as ReconciliationView) || 'dashboard';
+        })()
     );
 
     // Ao navegar pelo menu (ex.: "Extrato Bancário" ↔ "Conciliação Bancária"), força a
@@ -264,9 +267,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) && isStatementColumnVisibleForFlow(c.key, flowFilter) ? statementResize.getWidth(c.key) : 0), 0)
         + statementResize.getWidth('actions');
 
-    const [rulesViewMode, setRulesViewMode] = useState<'grid' | 'list'>(
-        (localStorage.getItem('reconciliation_rules_view_mode') as 'grid' | 'list') || 'list'
-    );
     const [categoriesViewMode, setCategoriesViewMode] = useState<'grid' | 'list'>(
         (localStorage.getItem('reconciliation_categories_view_mode') as 'grid' | 'list') || 'grid'
     );
@@ -316,16 +316,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         automationRate: 0,
         manualMatches: 0,
         ruleApplied: 0
-    });
-    const [showRuleModal, setShowRuleModal] = useState(false);
-    const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
-    const [testeDaRegra, setTesteDaRegra] = useState<{ total: number; exemplos: string[] } | null>(null);
-    const [newRule, setNewRule] = useState({
-        name: '',
-        conditionValue: '',
-        category: '',
-        clientName: '',
-        supplierName: ''
     });
 
     // Filtros e Ordenação
@@ -839,9 +829,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     useEffect(() => { localStorage.setItem('reconciliation_end_date', endDate); }, [endDate]);
     useEffect(() => { localStorage.setItem('reconciliation_competencia', competencia); }, [competencia]);
 
-    useEffect(() => {
-        localStorage.setItem('reconciliation_rules_view_mode', rulesViewMode);
-    }, [rulesViewMode]);
 
     useEffect(() => {
         localStorage.setItem('reconciliation_categories_view_mode', categoriesViewMode);
@@ -863,7 +850,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         const fetchData = async () => {
             if (selectedAccountId) {
                 loadTransactions();
-                if (activeView === 'rules') loadRules();
                 loadStats();
                 if (activeView === 'conciliated') {
                     const { data: matchedData, error: mError } = await supabase
@@ -1425,147 +1411,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const handleEditRule = (rule: ReconciliationRule) => {
-        setEditingRuleId(rule.id);
-        const cp = rule.actions.counterparty || '';
-        const isSupplier = uniqueSuppliers.includes(cp);
-        
-        setNewRule({
-            name: rule.name,
-            conditionValue: rule.conditions.value,
-            category: rule.actions.category,
-            clientName: !isSupplier ? cp : '',
-            supplierName: isSupplier ? cp : ''
-        });
-        setShowRuleModal(true);
-    };
-
-    const handleDeleteRule = async (ruleId: string) => {
-        if (!await confirm({ title: 'Excluir esta regra?', variant: 'danger', confirmLabel: 'Excluir' })) return;
-        try {
-            const { error } = await supabase
-                .from('reconciliation_rules')
-                .delete()
-                .eq('id', ruleId);
-            if (error) throw error;
-            loadRules();
-        } catch (error) {
-            console.error('Error deleting rule:', error);
-        }
-    };
-
-    const handleCreateRule = async () => {
-        // Agora permite salvar se tiver categoria OU cliente definido
-        if (!newRule.name || !newRule.conditionValue) {
-            alert('Por favor, defina o nome da regra e o termo de busca.');
-            return;
-        }
-
-        if (!newRule.category && !newRule.clientName && !newRule.supplierName) {
-            alert('Por favor, defina pelo menos uma Categoria ou um Cliente/Credor.');
-            return;
-        }
-
-        try {
-            const rulePayload = {
-                name: newRule.name,
-                conditions: { type: 'contains', field: 'description_normalized', value: newRule.conditionValue },
-                actions: { 
-                    category: newRule.category, 
-                    counterparty: newRule.clientName || newRule.supplierName 
-                }
-            };
-
-            if (editingRuleId) {
-                const { error } = await supabase
-                    .from('reconciliation_rules')
-                    .update(rulePayload)
-                    .eq('id', editingRuleId);
-                if (error) throw error;
-            } else {
-                const orgToUse = effectiveOrgId || organizationId;
-                if (!orgToUse) throw new Error('Organização não identificada.');
-
-                const { error } = await supabase
-                    .from('reconciliation_rules')
-                    .insert({
-                        ...rulePayload,
-                        organization_id: orgToUse,
-                        priority: rules.length + 1,
-                        is_active: true
-                    });
-                if (error) throw error;
-            }
-            setShowRuleModal(false);
-            setEditingRuleId(null);
-            setNewRule({ name: '', conditionValue: '', category: '', clientName: '', supplierName: '' });
-            loadRules();
-            loadStats();
-            alert('Regra salva com sucesso!');
-        } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('Error saving rule:', error);
-            alert('Erro ao salvar regra: ' + (error.message || 'Erro de permissão ou conexão.'));
-        }
-    };
-
-    const handleApplyRulesManually = async () => {
+    /** O ⚡ da Pendentes: o MESMO Reprocessar da Central (memória → regras → motor).
+     *  Antes rodava regras + motor, e a Central só o motor — dois botões, dois
+     *  comportamentos. Plano 2026-09-30-conciliacao-regras-absorvidas-pela-central. */
+    const handleReprocessarTudo = async () => {
         if (!selectedAccountId) {
-            alert('Por favor, selecione uma conta bancária primeiro.');
+            setActionFeedback({ message: 'Selecione uma conta bancária primeiro.', type: 'error' });
+            setTimeout(() => setActionFeedback(null), 5000);
             return;
         }
-
         setIsLoading(true);
         try {
-            // A organização pode vir nula em "Todas as organizações"; o serviço resolve
-            // pela conta bancária. Bloquear aqui deixava o botão morto sem explicar.
-            const orgToUse = effectiveOrgId || organizationId;
-            const aplicadas = await bankReconciliationService.applyCustomRules(selectedAccountId, orgToUse, true);
-            const r = await bankReconciliationService.runMatchingEngineTracked(selectedAccountId, orgToUse, 'MANUAL');
+            const r = await reconciliationReprocessService.reprocessarTudo(selectedAccountId, effectiveOrgId || organizationId);
             await loadTransactions();
             await loadStats();
-            alert([
-                `${aplicadas} lançamento(s) identificado(s) por regra.`,
-                r.autoApplied > 0 ? `${r.autoApplied} conciliado(s) automaticamente${r.exactUnique > 0 ? ` (${r.exactUnique} por valor exato e candidato único)` : ''}.` : 'Nenhuma conciliação automática nesta rodada.',
-                r.transfersPaired > 0 ? `${r.transfersPaired} transferência(s) entre contas próprias pareada(s).` : null,
-                `${r.suggestions} sugestão(ões) para revisar na Central.`,
-            ].filter(Boolean).join('\n'));
-        } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('Error applying rules manually:', error);
-            alert('Erro ao aplicar regras: ' + error.message);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    const handleApplySelectedRules = async () => {
-        if (!selectedAccountId) {
-            alert('Por favor, selecione uma conta bancária primeiro.');
-            return;
-        }
-        
-        if (selectedRuleIds.size === 0) {
-            alert('Por favor, selecione ao menos uma regra para aplicar.');
-            return;
-        }
-
-        setIsLoading(true);
-        try {
-            const orgToUse = effectiveOrgId || organizationId;
-            if (!orgToUse) throw new Error('Organização não identificada.');
-
-            const ids = Array.from(selectedRuleIds) as string[];
-            await bankReconciliationService.applyCustomRules(selectedAccountId, orgToUse, true, ids);
-            await loadTransactions();
-            
-            setActionFeedback({ message: `${ids.length} regra(s) aplicada(s) com sucesso!`, type: 'success' });
-            setTimeout(() => setActionFeedback(null), 3000);
-            setSelectedRuleIds(new Set());
-        } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('Error applying selected rules:', error);
-            alert('Erro ao aplicar regras selecionadas: ' + error.message);
+            setActionFeedback({ message: resumoDoReprocesso(r), type: r.erros.length > 0 ? 'error' : 'success' });
+            setTimeout(() => setActionFeedback(null), 8000);
         } finally {
             setIsLoading(false);
         }
@@ -1995,53 +1856,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
      * fixa (item 2.6). A memória sabe o que costuma ser feito; a regra faz sozinha
      * na próxima importação, antes mesmo de alguém abrir a tela.
      */
-    const handleSugerirRegrasDaMemoria = async () => {
-        const orgId = effectiveOrgId || organizationId;
-        if (!orgId) { alert('Selecione uma organização.'); return; }
-        setIsLoading(true);
-        try {
-            const candidatas = await reconciliationMemoryService.candidatasARegra(orgId, 5);
-            const jaTemRegra = new Set(rules.map(r => JSON.stringify(r.conditions).toUpperCase()));
-            const nova = candidatas.find(c => c.key_kind === 'TOKEN' && !jaTemRegra.has(JSON.stringify({ type: 'contains', field: 'description_normalized', value: c.counterparty_key }).toUpperCase()));
-            if (!nova) {
-                alert(candidatas.length === 0
-                    ? 'Ainda não há contraparte classificada vezes suficientes (5) para virar regra. Continue classificando e volte aqui.'
-                    : 'As contrapartes com evidência suficiente já têm regra.');
-                return;
-            }
-            setNewRule(prev => ({
-                ...prev,
-                name: `Classificação de ${nova.party_name || nova.counterparty_key}`,
-                conditionValue: nova.counterparty_key,
-                category: nova.category || '',
-                supplierName: nova.party_type === 'CLIENT' ? '' : (nova.party_name || ''),
-                clientName: nova.party_type === 'CLIENT' ? (nova.party_name || '') : '',
-            }));
-            setTesteDaRegra(null);
-            setActionFeedback({
-                message: `Regra sugerida a partir de ${nova.hits} classificações de "${nova.party_name || nova.counterparty_key}". Confira e salve.`,
-                type: 'success',
-            });
-            setTimeout(() => setActionFeedback(null), 6000);
-        } catch (err: unknown) {
-            alert('Não foi possível ler a memória: ' + (err instanceof Error ? err.message : String(err)));
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
-    const handleTestarRegra = () => {
-        if (!newRule.conditionValue?.trim()) { alert('Escreva o texto que a regra deve procurar.'); return; }
-        const r = bankReconciliationService.simularRegra(
-            bankTransactions,
-            { type: 'contains', field: 'description_normalized', value: newRule.conditionValue },
-        );
-        setTesteDaRegra({
-            total: r.total,
-            exemplos: r.exemplos.map(tx =>
-                `${formatDateBR(tx.transaction_date)} · ${formatMoney(tx.amount)} · ${(tx.counterparty_name || tx.description_raw || '').slice(0, 48)}`),
-        });
-    };
 
     const handleGerarLancamentos = async (ids: string[]) => {
         if (ids.length === 0) return;
@@ -2576,41 +2391,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         />
     );
 
-    const renderRules = () => (
-        <RulesTab
-            rules={rules}
-            rulesViewMode={rulesViewMode}
-            setRulesViewMode={setRulesViewMode}
-            selectedRuleIds={selectedRuleIds}
-            setSelectedRuleIds={setSelectedRuleIds}
-            isLoading={isLoading}
-            selectedAccountId={selectedAccountId}
-            setShowRuleModal={setShowRuleModal}
-            onEditRule={handleEditRule}
-            onDeleteRule={handleDeleteRule}
-            onApplyRulesManually={handleApplyRulesManually}
-            onApplySelectedRules={handleApplySelectedRules}
-        />
-    );
-
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <RuleFormModal
-                showRuleModal={showRuleModal}
-                setShowRuleModal={setShowRuleModal}
-                editingRuleId={editingRuleId}
-                setEditingRuleId={setEditingRuleId}
-                newRule={newRule}
-                setNewRule={setNewRule}
-                testeDaRegra={testeDaRegra}
-                isLoading={isLoading}
-                uniqueCategories={uniqueCategories}
-                uniqueClients={uniqueClients}
-                uniqueSuppliers={uniqueSuppliers}
-                onCreateRule={handleCreateRule}
-                onTestarRegra={handleTestarRegra}
-                onSugerirRegrasDaMemoria={handleSugerirRegrasDaMemoria}
-            />
 
             {orgTargetModal}
 
@@ -2886,12 +2668,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         Conciliados
                     </button>
                     <button
-                        onClick={() => setActiveView('rules')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'rules' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        Regras
-                    </button>
-                    <button
                         onClick={() => setActiveView('categories')}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
@@ -3059,10 +2835,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                     {activeView === 'pending' && (
                         <button
-                            onClick={handleApplyRulesManually}
+                            onClick={handleReprocessarTudo}
                             disabled={isLoading || !selectedAccountId}
                             className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-100 transition-all disabled:opacity-50 border border-blue-100/50"
-                            title="Aplicar Regras Manualmente"
+                            title={selectedAccountId ? 'Reprocessar: memória, regras e conciliação automática (o mesmo da Central)' : 'Selecione uma conta bancária'}
                         >
                             <Zap className="w-4 h-4" />
                         </button>
@@ -3357,7 +3133,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     bankTransactions={bankTransactions as never}
                     onConfirm={handleConfirmMatch}
                     onReject={handleRejectSuggestion}
-                    onReload={async () => { await loadTransactions(); await loadStats(); }}
+                    onReload={async () => { await loadTransactions(); await loadStats(); await loadRules(); }}
+                    categories={uniqueCategories}
+                    clienteRegistros={clienteRegistros}
+                    credorRegistros={credorRegistros}
                 />
             ) : activeView === 'divergences' ? (
                 <DivergencesPanel organizationId={organizationId} onChanged={() => { loadTransactions(); loadStats(); }} />
@@ -3367,8 +3146,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 <FinancialClosePanel organizationId={organizationId} />
             ) : activeView === 'prolabore' ? (
                 <ProlaboreReconciliationPanel organizationId={organizationId} />
-            ) : activeView === 'rules' ? (
-                renderRules()
             ) : activeView === 'categories' ? (
                 renderCategories()
             ) : activeView === 'conciliated' ? (

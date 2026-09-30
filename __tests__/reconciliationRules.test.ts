@@ -203,3 +203,99 @@ describe('"Todas as organizações" não pode quebrar o motor (REGRA #5)', () =>
         expect(consultadas).toEqual(['payment_accounts', 'payment_accounts', 'payment_accounts']);
     });
 });
+
+// ─── Regras absorvidas pela Central (plano 2026-09-30) ─────────────────────
+import {
+    linhaAceitaRegra, descreverCondicao, condicaoDoFormulario, formularioDaCondicao,
+    regrasSugeridasDaMemoria, type CandidataDaMemoria,
+} from '../utils/reconciliationRules';
+
+describe('linhaAceitaRegra — regra nunca sobrescreve classificação', () => {
+    it('movimento cru e sem categoria aceita', () => {
+        expect(linhaAceitaRegra({ status: 'NORMALIZED', category: null })).toBe(true);
+        expect(linhaAceitaRegra({ status: 'IMPORTED', category: '' })).toBe(true);
+    });
+    it('categorizado à mão (RULE_APPLIED = "tem categoria") é recusado', () => {
+        expect(linhaAceitaRegra({ status: 'RULE_APPLIED', category: 'Aluguel' })).toBe(false);
+    });
+    it('NORMALIZED mas com categoria também é recusado', () => {
+        expect(linhaAceitaRegra({ status: 'NORMALIZED', category: 'Energia' })).toBe(false);
+    });
+    it('conciliado, confirmado, ignorado e transferência são recusados', () => {
+        for (const status of ['MATCHED', 'CONFIRMED', 'IGNORED', 'TRANSFER', 'LOCKED']) {
+            expect(linhaAceitaRegra({ status, category: null })).toBe(false);
+        }
+    });
+    it('categoria só com espaços conta como vazia', () => {
+        expect(linhaAceitaRegra({ status: 'NORMALIZED', category: '   ' })).toBe(true);
+    });
+});
+
+describe('descreverCondicao — os três formatos gravados ficam legíveis', () => {
+    it('condição solta (como as regras de produção)', () => {
+        expect(descreverCondicao({ type: 'contains', field: 'description_norm', value: 'REGINALDO' }))
+            .toBe('Descrição contém "REGINALDO"');
+    });
+    it('array = OU', () => {
+        expect(descreverCondicao([
+            { type: 'contains', field: 'd', value: 'IOF' },
+            { type: 'starts_with', field: 'd', value: 'TARIFA' },
+        ])).toBe('Descrição contém "IOF" ou começa com "TARIFA"');
+    });
+    it('grupo E com filtros de direção e faixa de valor', () => {
+        expect(descreverCondicao({
+            op: 'AND',
+            items: [{ type: 'contains', field: 'd', value: 'ASAAS' }, { type: 'contains', field: 'd', value: 'REPASSE' }],
+            filters: { direction: 'CREDIT', amount_min: 10, amount_max: 500 },
+        }).replace(/ /g, ' ')).toBe('Descrição contém "ASAAS" e contém "REPASSE" · só entradas · valor entre R$ 10,00 e R$ 500,00');
+    });
+    it('grupo só com filtro, sem texto', () => {
+        expect(descreverCondicao({ op: 'OR', items: [], filters: { direction: 'DEBIT' } })).toBe('só saídas');
+    });
+});
+
+describe('formulário ↔ condição', () => {
+    it('sem direção grava o formato legado (condição solta)', () => {
+        expect(condicaoDoFormulario({ contem: ' TARIFA ', direcao: '' }))
+            .toEqual({ type: 'contains', field: 'description_normalized', value: 'TARIFA' });
+    });
+    it('com direção grava grupo com filtro — e o motor casa só essa direção', () => {
+        const c = condicaoDoFormulario({ contem: 'ASAAS', direcao: 'CREDIT' });
+        expect(c).toEqual({ op: 'OR', items: [{ type: 'contains', field: 'description_normalized', value: 'ASAAS' }], filters: { direction: 'CREDIT' } });
+        const asaas = 'LIQUIDACAO BOLETO 19540550000121 ASAAS GESTAO FINANCEIRA';
+        expect(svc.evaluateRule(tx({ direction: 'CREDIT', description_normalized: asaas }), c as never)).toBe(true);
+        expect(svc.evaluateRule(tx({ direction: 'DEBIT', description_normalized: asaas }), c as never)).toBe(false);
+    });
+    it('ida e volta preserva o que o formulário edita', () => {
+        const f = { contem: 'ENERGISA', direcao: 'DEBIT' as const };
+        expect(formularioDaCondicao(condicaoDoFormulario(f))).toEqual(f);
+        expect(formularioDaCondicao({ type: 'contains', field: 'description', value: 'ASAAS' })).toEqual({ contem: 'ASAAS', direcao: '' });
+    });
+    it('regra avançada não cabe no formulário (a tela não a reescreve)', () => {
+        expect(formularioDaCondicao([{ type: 'contains', field: 'd', value: 'A' }, { type: 'contains', field: 'd', value: 'B' }])).toBeNull();
+        expect(formularioDaCondicao({ type: 'regex', field: 'd', value: 'TAR.*' })).toBeNull();
+        expect(formularioDaCondicao({ op: 'OR', items: [{ type: 'contains', field: 'd', value: 'X' }], filters: { amount_min: 5 } })).toBeNull();
+    });
+});
+
+describe('regrasSugeridasDaMemoria', () => {
+    const cand = (over: Partial<CandidataDaMemoria>): CandidataDaMemoria => ({
+        counterparty_key: 'ENERGISA', key_kind: 'TOKEN', category: 'Energia', party_type: 'SUPPLIER', party_name: 'Energisa', hits: 9, ...over,
+    });
+    it('devolve TODAS as candidatas sem regra, não só a primeira', () => {
+        const r = regrasSugeridasDaMemoria([cand({}), cand({ counterparty_key: 'SABESP', category: 'Água' })], []);
+        expect(r.map(c => c.counterparty_key)).toEqual(['ENERGISA', 'SABESP']);
+    });
+    it('filtra a que já tem regra, sem diferenciar acento e caixa, em qualquer formato', () => {
+        const regras = [
+            { conditions: { type: 'contains', field: 'd', value: 'energisa' } },
+            { conditions: { op: 'OR' as const, items: [{ type: 'contains', field: 'd', value: 'Sabésp' }], filters: { direction: 'DEBIT' as const } } },
+        ];
+        const r = regrasSugeridasDaMemoria([cand({}), cand({ counterparty_key: 'SABESP' }), cand({ counterparty_key: 'CEMIG' })], regras);
+        expect(r.map(c => c.counterparty_key)).toEqual(['CEMIG']);
+    });
+    it('chave DOCUMENTO e candidata sem categoria ficam de fora', () => {
+        const r = regrasSugeridasDaMemoria([cand({ key_kind: 'DOCUMENTO', counterparty_key: '12345678000199' }), cand({ category: null })], []);
+        expect(r).toEqual([]);
+    });
+});

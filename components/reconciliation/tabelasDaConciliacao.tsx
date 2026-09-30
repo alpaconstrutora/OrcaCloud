@@ -177,7 +177,10 @@ export const STATEMENT_TD_CLASS: Record<string, string> = {
 export const STATEMENT_STATUS_LABELS: Partial<Record<BankTransactionStatus, string>> = {
     IMPORTED: 'Importado',
     NORMALIZED: 'Normalizado',
-    RULE_APPLIED: 'Regra aplicada',
+    // `RULE_APPLIED` é gravado sempre que o movimento ganha categoria — à mão, em lote,
+    // pela memória ou por regra. Em 30/09/2026, 5.554 dos 5.878 não casavam regra
+    // nenhuma: "Regra aplicada" atribuía às regras o trabalho feito à mão.
+    RULE_APPLIED: 'Classificado',
     CONFIRMED: 'Confirmado',
     MATCHED: 'Conciliado',
     LOCKED: 'Período fechado',

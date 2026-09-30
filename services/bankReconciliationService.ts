@@ -127,6 +127,24 @@ export interface RuleConditionGroup {
 
 export type RuleConditions = RuleCondition | RuleCondition[] | RuleConditionGroup;
 
+/** Linha de `reconciliation_rules` como a tela e o serviço usam. */
+export interface ReconciliationRuleRow {
+    id: string;
+    name: string;
+    priority: number;
+    is_active: boolean;
+    organization_id: string;
+    conditions: RuleConditions;
+    actions: {
+        category?: string;
+        counterparty?: string;
+        project_id?: string;
+        cost_center_id?: string;
+        auto_confirm?: boolean;
+    };
+    created_at?: string;
+}
+
 import type { ReconciliationEngineSettings, PartyIndex } from '../utils/reconciliationRules';
 export type { ReconciliationEngineSettings, ResolvedParty, PartyIndex } from '../utils/reconciliationRules';
 
@@ -453,7 +471,17 @@ export const bankReconciliationService = {
     /**
      * Aplica regras customizadas pré-definidas pelo usuário.
      */
+    /**
+     * Aplica as regras ativas da organização da conta aos movimentos que NINGUÉM
+     * classificou (`regras.linhaAceitaRegra`: IMPORTED/NORMALIZED sem categoria).
+     *
+     * Até 30/09/2026 buscava também `RULE_APPLIED` (e `MATCHED` com reprocessAll) e
+     * gravava a categoria da regra POR CIMA — apagando classificação manual. Com o
+     * Reprocessar da Central rodando regras a cada clique, isso virou inaceitável.
+     * `reprocessAll` fica na assinatura só por compatibilidade: não reabre mais nada.
+     */
     async applyCustomRules(bankAccountId: string, organizationId?: string | null, reprocessAll: boolean = false, ruleIds?: string[]) {
+        void reprocessAll;
         // Mesma razão de runMatchingEngine: com "Todas as organizações" o seletor manda
         // nulo e a consulta de regras quebraria com 22P02. A conta é a fonte certa.
         const orgResolvida = await this.resolverOrganizacaoDaConta(bankAccountId, organizationId);
@@ -488,23 +516,28 @@ export const bankReconciliationService = {
             .eq('bank_account_id', bankAccountId)
             .is('organization_id', null);
 
-        const targetStatuses = ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED'];
-        if (reprocessAll) targetStatuses.push('MATCHED'); // Permite re-aplicar regras se solicitado
-
-        const { data: txs, error: txsError } = await supabase
-            .from('bank_transactions')
-            .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
-            .eq('bank_account_id', bankAccountId)
-            .in('status', targetStatuses)
-            .order('transaction_date', { ascending: false })
-            .limit(10000); 
+        // Paginado: o `.limit(10000)` que estava aqui devolvia no máximo 1.000 linhas
+        // (teto do PostgREST, achado C1 da avaliação de 05/09) — a regra via só parte
+        // do extrato, sem aviso.
+        const { data: brutas, error: txsError } = await fetchAllPages<BankTransaction>(() =>
+            supabase
+                .from('bank_transactions')
+                .select('id, organization_id, bank_account_id, external_id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, transaction_type, fingerprint, category, status, project_id, created_at')
+                .eq('bank_account_id', bankAccountId)
+                .in('status', ['IMPORTED', 'NORMALIZED'])
+                .or('category.is.null,category.eq.')
+                .order('transaction_date', { ascending: false })
+                .order('id', { ascending: true }) as unknown as RangeableQuery<BankTransaction>,
+        );
 
         if (txsError) {
             console.error('[ERRO] Falha ao carregar transações para regras:', txsError);
             throw txsError;
         }
 
-        if (!txs || txs.length === 0) return 0;
+        // A mesma trava de novo, em memória: a consulta é a otimização, esta é a regra.
+        const txs = brutas.filter(tx => regras.linhaAceitaRegra(tx));
+        if (txs.length === 0) return 0;
 
         // Casa tudo em memória e agrupa por REGRA: antes era um UPDATE e um INSERT de
         // auditoria POR LINHA. Três regras sobre 6.000 pendentes davam milhares de
@@ -606,6 +639,81 @@ export const bankReconciliationService = {
         if (filtros.direction && tx.direction !== filtros.direction) return false;
         if (filtros.bank_account_id && tx.bank_account_id !== filtros.bank_account_id) return false;
         return true;
+    },
+
+    /**
+     * Regras da organização (todas, ativas ou não), maior prioridade primeiro.
+     * A organização é a da CONTA selecionada — com o topo em "Todas" a informada é
+     * nula, e regra é sempre de uma organização só.
+     */
+    async listarRegras(organizationId: string): Promise<ReconciliationRuleRow[]> {
+        const { data, error } = await supabase
+            .from('reconciliation_rules')
+            .select('id, name, priority, is_active, organization_id, conditions, actions, created_at')
+            .eq('organization_id', organizationId)
+            .order('priority', { ascending: false });
+        if (error) throw error;
+        return (data ?? []) as ReconciliationRuleRow[];
+    },
+
+    /** Cria (sem `id`) ou atualiza uma regra. Nova entra ativa, com a MENOR prioridade. */
+    async salvarRegra(
+        organizationId: string,
+        regra: { id?: string | null; name: string; conditions: RuleConditions; actions: ReconciliationRuleRow['actions']; is_active?: boolean },
+    ): Promise<void> {
+        const corpo = {
+            name: regra.name, conditions: regra.conditions, actions: regra.actions,
+            ...(regra.is_active != null ? { is_active: regra.is_active } : {}),
+        };
+        if (regra.id) {
+            const { error } = await supabase.from('reconciliation_rules').update(corpo)
+                .eq('id', regra.id).eq('organization_id', organizationId);
+            if (error) throw error;
+            return;
+        }
+        const { data: ultima } = await supabase
+            .from('reconciliation_rules').select('priority')
+            .eq('organization_id', organizationId).order('priority', { ascending: true }).limit(1).maybeSingle();
+        const { error } = await supabase.from('reconciliation_rules').insert({
+            ...corpo,
+            organization_id: organizationId,
+            // Prioridade maior vence (applyCustomRules ordena desc): a regra nova não
+            // passa na frente das que já existem.
+            priority: Math.max(0, Number(ultima?.priority ?? 1) - 1),
+            is_active: regra.is_active ?? true,
+        });
+        if (error) throw error;
+    },
+
+    async excluirRegra(organizationId: string, ruleId: string): Promise<void> {
+        const { error } = await supabase.from('reconciliation_rules').delete()
+            .eq('id', ruleId).eq('organization_id', organizationId);
+        if (error) throw error;
+    },
+
+    /**
+     * "Testar" contra o extrato INTEIRO da conta, com a trava: quantos movimentos a
+     * regra classificaria agora, e quantos ela casa mas já têm classificação (esses
+     * ficam como estão). Não grava nada.
+     */
+    async simularRegraNaConta(
+        bankAccountId: string,
+        conditions: RuleConditions,
+        limiteExemplos = 5,
+    ): Promise<{ classificaria: number; jaClassificados: number; exemplos: BankTransaction[] }> {
+        const { data, error } = await fetchAllPages<BankTransaction>(() =>
+            supabase
+                .from('bank_transactions')
+                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id, category, status')
+                .eq('bank_account_id', bankAccountId)
+                .in('status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED'])
+                .order('transaction_date', { ascending: false })
+                .order('id', { ascending: true }) as unknown as RangeableQuery<BankTransaction>,
+        );
+        if (error) throw error;
+        const casados = data.filter(tx => this.evaluateRule(tx, conditions));
+        const livres = casados.filter(tx => regras.linhaAceitaRegra(tx));
+        return { classificaria: livres.length, jaClassificados: casados.length - livres.length, exemplos: livres.slice(0, limiteExemplos) };
     },
 
     /**

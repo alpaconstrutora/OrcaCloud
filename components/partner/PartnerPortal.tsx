@@ -1078,7 +1078,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             tanto por staff interno (ProfileGroup.PARTNER) quanto por acesso via link
             público — nenhum dos dois passa pelo <main> do <Layout>, então o gutter
             §20.2 é reaplicado aqui, à mão. */}
-        <main className="flex-1 bg-white overflow-y-auto p-4 md:p-6 relative">
+        {/* Financeiro usa cards brancos do PortalKit (§24): o fundo é o cinza do Portal do
+            Fornecedor (P.pageBg), senão card branco some em fundo branco. */}
+        <main className={`flex-1 ${showTab('financeiro') ? 'bg-[#F2F2F4]' : 'bg-white'} overflow-y-auto p-4 md:p-6 relative`}>
 
           {semAbasHabilitadas && (
             <div className="min-h-[400px] flex items-center justify-center">

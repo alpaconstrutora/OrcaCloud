@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.79.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.80.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -602,7 +602,7 @@ var TIPOS_DE_AREA_DO_LOTEAMENTO = ["VERDE", "INSTITUCIONAL", "VIARIO", "RESERVA"
 var TIPOS_AMBIENTAIS = ["APP", "RESERVA_LEGAL", "VEGETACAO_NATIVA", "AREA_CONSOLIDADA", "SERVIDAO", "HIDROGRAFIA"];
 var TIPOS_DE_AREA_PUBLICA = [...TIPOS_DE_AREA_DO_LOTEAMENTO, ...TIPOS_AMBIENTAIS];
 function materialPadraoDaDisciplina(d) {
-  return d === "AGUA_FRIA" ? "PVC_SOLDAVEL" : d === "AGUA_QUENTE" ? "CPVC" : null;
+  return d === "AGUA_FRIA" ? "PVC_SOLDAVEL" : d === "AGUA_QUENTE" ? "CPVC" : d === "INCENDIO" ? "ACO_GALVANIZADO" : null;
 }
 function materialDoTrecho(t) {
   return t.material ?? materialPadraoDaDisciplina(t.disciplina);
@@ -6661,6 +6661,19 @@ var ROTULO_DA_ORIGEM = {
 };
 
 // utils/blueprintHidraulicaPressao.ts
+var SCH40 = [
+  { dn: 15, internoMm: 15.8 },
+  { dn: 20, internoMm: 20.9 },
+  { dn: 25, internoMm: 26.6 },
+  { dn: 32, internoMm: 35.1 },
+  { dn: 40, internoMm: 40.9 },
+  { dn: 50, internoMm: 52.5 },
+  { dn: 65, internoMm: 62.7 },
+  { dn: 80, internoMm: 77.9 },
+  { dn: 100, internoMm: 102.3 },
+  { dn: 125, internoMm: 128.2 },
+  { dn: 150, internoMm: 154.1 }
+];
 var FICHA_DO_MATERIAL = {
   PVC_SOLDAVEL: {
     rotulo: "PVC sold\xE1vel",
@@ -6676,6 +6689,7 @@ var FICHA_DO_MATERIAL = {
       { dn: 85, internoMm: 75.6 },
       { dn: 110, internoMm: 97.8 }
     ],
+    cHazenWilliams: 150,
     fonte: "NBR 5648 (tubo PVC sold\xE1vel para \xE1gua fria); \u03B5 de tubo pl\xE1stico liso"
   },
   CPVC: {
@@ -6691,6 +6705,7 @@ var FICHA_DO_MATERIAL = {
       { dn: 73, internoMm: 62 },
       { dn: 89, internoMm: 76 }
     ],
+    cHazenWilliams: 150,
     fonte: "NBR 15884 (CPVC para \xE1gua quente); \u03B5 de tubo pl\xE1stico liso"
   },
   PPR: {
@@ -6705,6 +6720,7 @@ var FICHA_DO_MATERIAL = {
       { dn: 63, internoMm: 42 },
       { dn: 75, internoMm: 50 }
     ],
+    cHazenWilliams: 150,
     fonte: "NBR 15813 / DIN 8077 PN 20 (SDR 6); \u03B5 de tubo pl\xE1stico liso"
   },
   COBRE: {
@@ -6719,8 +6735,56 @@ var FICHA_DO_MATERIAL = {
       { dn: 54, internoMm: 52.2 },
       { dn: 66, internoMm: 64.7 }
     ],
+    cHazenWilliams: 150,
     fonte: "NBR 13206 classe E; \u03B5 de cobre trefilado"
+  },
+  // ─── Incêndio E1.2 (30/09/2026) ─────────────────────────────────────────
+  ACO_GALVANIZADO: {
+    rotulo: "A\xE7o galvanizado",
+    // ε de aço galvanizado (tabela de Moody): 0,15 mm.
+    rugosidadeMm: 0.15,
+    diametros: SCH40,
+    cHazenWilliams: 120,
+    fonte: "NBR 5580/5590 (interno SCH 40, a favor da seguran\xE7a); \u03B5 de a\xE7o galvanizado; C 120 \u2014 CONFERIR NA NORMA"
+  },
+  ACO_CARBONO: {
+    rotulo: "A\xE7o carbono SCH 40",
+    // ε de aço comercial (tabela de Moody): 0,046 mm; em serviço molhado usa-se C 120.
+    rugosidadeMm: 0.046,
+    diametros: SCH40,
+    cHazenWilliams: 120,
+    fonte: "NBR 5590 SCH 40; \u03B5 de a\xE7o comercial; C 120 \u2014 CONFERIR NA NORMA"
+  },
+  CPVC_INCENDIO: {
+    rotulo: "CPVC para sprinkler (SDR 13,5)",
+    rugosidadeMm: 15e-4,
+    diametros: [
+      { dn: 20, internoMm: 22.7 },
+      { dn: 25, internoMm: 28.4 },
+      { dn: 32, internoMm: 36 },
+      { dn: 40, internoMm: 41.1 },
+      { dn: 50, internoMm: 51.4 },
+      { dn: 65, internoMm: 62.2 },
+      { dn: 80, internoMm: 75.7 }
+    ],
+    cHazenWilliams: 150,
+    fonte: "ASTM F442 SDR 13,5 (CPVC de sprinkler, s\xF3 em risco leve); \u03B5 de pl\xE1stico liso \u2014 CONFERIR NA NORMA"
   }
+};
+var PES = 0.3048;
+var COMPRIMENTO_EQUIVALENTE_ACO_M = {
+  JOELHO_90: [2, 2, 3, 4, 5, 6, 7, 10, 12, 14].map((p) => p * PES),
+  JOELHO_45: [1, 1, 1, 2, 2, 3, 3, 4, 5, 7].map((p) => p * PES),
+  TE_PASSAGEM: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  TE_LATERAL: [4, 5, 6, 8, 10, 12, 15, 20, 25, 30].map((p) => p * PES),
+  LUVA: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  REDUCAO: [1, 1, 1, 2, 2, 3, 3, 4, 5, 7].map((p) => p * PES),
+  REGISTRO_GAVETA: [1, 1, 1, 1, 1, 1, 1, 2, 2, 3].map((p) => p * PES),
+  REGISTRO_PRESSAO: [1, 1, 1, 1, 1, 1, 1, 2, 2, 3].map((p) => p * PES),
+  REGISTRO_ESFERA: [1, 1, 1, 1, 1, 1, 1, 2, 2, 3].map((p) => p * PES),
+  VALVULA_RETENCAO: [4, 5, 7, 9, 11, 14, 16, 22, 27, 32].map((p) => p * PES),
+  ENTRADA: [1, 1, 2, 2, 3, 3, 4, 5, 6, 7].map((p) => p * PES),
+  SAIDA: [2, 2, 3, 4, 5, 6, 7, 10, 12, 14].map((p) => p * PES)
 };
 
 // utils/blueprintHidraulica.ts

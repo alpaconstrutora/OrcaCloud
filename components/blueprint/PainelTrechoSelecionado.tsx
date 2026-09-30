@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { DISCIPLINAS, MATERIAIS_DE_TUBO, materialPadraoDaDisciplina, type MaterialDeTubo } from '../../utils/blueprintKernel';
+import { DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, materialPadraoDaDisciplina, type MaterialDeTubo } from '../../utils/blueprintKernel';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import {
   ROTULO_DA_DISCIPLINA,
@@ -610,7 +610,9 @@ export default function PainelTrechoSelecionado({
         {/* MATERIAL (28/09/2026, E1.1 do roadmap hidrossanitário): só no cano de
             água, que é onde ele muda o diâmetro interno e a perda de carga. O
             vazio é o padrão da rede (PVC na fria, CPVC na quente), dito na opção. */}
-        {(trecho.disciplina === 'AGUA_FRIA' || trecho.disciplina === 'AGUA_QUENTE') && (
+        {/* Incêndio E1.2: a rede de incêndio também tem material (aço, CPVC de sprinkler) —
+            e cada rede só oferece os materiais que ela admite. */}
+        {MATERIAIS_DA_DISCIPLINA[trecho.disciplina] && (
           <label className="block">
             <span className="text-[11px] font-medium text-slate-600">Material</span>
             <select
@@ -620,7 +622,7 @@ export default function PainelTrechoSelecionado({
               className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
             >
               <option value="">Padrão da rede ({FICHA_DO_MATERIAL[materialPadraoDaDisciplina(trecho.disciplina)!].rotulo})</option>
-              {MATERIAIS_DE_TUBO.map((m) => (
+              {(MATERIAIS_DA_DISCIPLINA[trecho.disciplina] ?? []).map((m) => (
                 <option key={m} value={m}>
                   {FICHA_DO_MATERIAL[m].rotulo}
                 </option>

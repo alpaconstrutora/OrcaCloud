@@ -2414,8 +2414,28 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
  * VOCABULÁRIO mora no kernel (é dado do desenho); a física — diâmetro interno,
  * rugosidade — mora em `utils/blueprintHidraulicaPressao.ts`.
  */
-export const MATERIAIS_DE_TUBO = ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'] as const;
+export const MATERIAIS_DE_TUBO = [
+  'PVC_SOLDAVEL',
+  'CPVC',
+  'PPR',
+  'COBRE',
+  // Incêndio E1.2 (30/09/2026, kernel 0.80.0): os tubos da rede de combate.
+  'ACO_GALVANIZADO',
+  'ACO_CARBONO',
+  'CPVC_INCENDIO',
+] as const;
 export type MaterialDeTubo = (typeof MATERIAIS_DE_TUBO)[number];
+
+/**
+ * Os materiais que cada rede ADMITE (incêndio E1.2) — a invariante recusa o
+ * resto. A rede de incêndio é de metal ou de CPVC próprio para sprinkler; a
+ * água, dos plásticos e do cobre de sempre. Disciplina ausente = sem material.
+ */
+export const MATERIAIS_DA_DISCIPLINA: Partial<Record<DisciplinaDeRede, readonly MaterialDeTubo[]>> = {
+  AGUA_FRIA: ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'],
+  AGUA_QUENTE: ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'],
+  INCENDIO: ['ACO_GALVANIZADO', 'ACO_CARBONO', 'CPVC_INCENDIO', 'COBRE'],
+};
 
 /** A SEÇÃO da calha (E6.2, kernel 0.67.0): a meia-cana e a retangular (a da platibanda). */
 export const SECOES_DE_CALHA = ['SEMICIRCULAR', 'RETANGULAR'] as const;
@@ -2426,7 +2446,7 @@ export type SecaoDeCalha = (typeof SECOES_DE_CALHA)[number];
  * o que o lançamento automático sempre supôs. Outras redes não têm material.
  */
 export function materialPadraoDaDisciplina(d: DisciplinaDeRede): MaterialDeTubo | null {
-  return d === 'AGUA_FRIA' ? 'PVC_SOLDAVEL' : d === 'AGUA_QUENTE' ? 'CPVC' : null;
+  return d === 'AGUA_FRIA' ? 'PVC_SOLDAVEL' : d === 'AGUA_QUENTE' ? 'CPVC' : d === 'INCENDIO' ? 'ACO_GALVANIZADO' : null;
 }
 
 /** O material efetivo do trecho: o declarado, senão o padrão da disciplina. */
@@ -5581,7 +5601,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     if (t.material != null) {
       // Material é de CANO de água: eletroduto, esgoto e duto têm outra conversa.
-      if (!(MATERIAIS_DE_TUBO as readonly string[]).includes(t.material) || (t.disciplina !== 'AGUA_FRIA' && t.disciplina !== 'AGUA_QUENTE')) {
+      if (!(MATERIAIS_DA_DISCIPLINA[t.disciplina] ?? []).includes(t.material)) {
         throw new KernelError('BAD_PIPE_MATERIAL', `Material inválido em ${t.id}: ${t.material} (${t.disciplina})`);
       }
     }

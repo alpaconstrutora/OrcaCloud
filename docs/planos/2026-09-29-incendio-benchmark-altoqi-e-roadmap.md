@@ -1590,7 +1590,7 @@ foram reabertos na frente:
 
 Fecha o **bloco 6** e os achados 1, 3 e 8. Abre o motor 1.
 
-## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **em andamento (1.1 ✅ 30/09/2026, kernel 0.79.0)**
+## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **em andamento (1.1 ✅ e 1.2 ✅ 30/09/2026, kernel 0.80.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1777,4 +1777,23 @@ Entregue:
   versão trocados por script; `kernel.bundle.mjs` regerado.
 - **Testes:** `blueprintIncendioTipos.test.ts` (10 casos). A taxonomia hidráulica aceita os grupos
   de incêndio, e a contagem de cores distintas passou de 6 para 7.
+
+### Etapa 1.2 — 30/09/2026 (frente `incendio-e1`, kernel 0.79.0 → 0.80.0)
+
+- **Três materiais novos:** `ACO_GALVANIZADO`, `ACO_CARBONO` (SCH 40) e `CPVC_INCENDIO` (SDR 13,5).
+  - `MATERIAIS_DA_DISCIPLINA` diz o que cada rede admite, e a invariante passou a ler dele.
+  - A água segue com PVC, CPVC, PPR e cobre. O incêndio admite aço, CPVC de sprinkler e cobre.
+  - O padrão derivado do incêndio é o aço galvanizado.
+  - O painel do trecho só oferece os materiais da rede.
+- **Fichas:** todo material ganhou `cHazenWilliams` (plásticos e cobre 150, aço 120; **CONFERIR NA
+  NORMA**). O aço usa o diâmetro interno SCH 40 de DN 15 a 150, a favor da segurança em relação
+  ao galvanizado NBR 5580.
+- **Achado 2 resolvido:** `COMPRIMENTO_EQUIVALENTE_ACO_M` até DN 150.
+  - Tabela da NFPA 13 para aço C = 120, convertida de pés (**CONFERIR com a NBR 10897/13714**).
+  - A passagem direta do tê não soma perda nessa tabela.
+  - `comprimentoEquivalenteM(peca, dn, material?)` usa a tabela de aço só para aço. A água não muda
+    (prova no teste). `perdaLocalizadaMca` passa o material adiante.
+- **Ritual do bump:** goldens 7/7 em 0.79.0; depois só os seis hashes; 22 pinos; bundle regerado.
+- **Resultados:** suíte 6.463 testes (6.430 + 33 pendentes, conta fechada), build ok.
+  `blueprintIncendioMateriais.test.ts` tem 8 casos.
 

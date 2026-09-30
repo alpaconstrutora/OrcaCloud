@@ -460,7 +460,16 @@
  * `Terminal.posicaoSprinkler` (PENDENTE/EM_PE/LATERAL), omitidos do canônico
  * quando ausentes. Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.79.0';
+/**
+ * ─── 0.79.0 → 0.80.0 (30/09/2026) — OS TUBOS DA REDE DE INCÊNDIO ────────────
+ *
+ * `MATERIAIS_DE_TUBO` ganha `ACO_GALVANIZADO`, `ACO_CARBONO` e `CPVC_INCENDIO`
+ * (E1.2 do roadmap de incêndio), e `MATERIAIS_DA_DISCIPLINA` diz o que cada
+ * rede admite: a invariante passa a aceitar material na rede de INCENDIO. O
+ * padrão do incêndio é o aço galvanizado (derivado, não gravado). Vocabulário
+ * novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.80.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

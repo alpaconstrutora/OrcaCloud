@@ -38,8 +38,33 @@ export interface FichaDoMaterial {
   rugosidadeMm: number;
   /** DN comercial → diâmetro INTERNO, mm. */
   diametros: { dn: number; internoMm: number }[];
+  /**
+   * Coeficiente C de Hazen-Williams (incêndio E1.2): é a fórmula das normas de
+   * hidrantes e sprinklers. Valores usuais de tubo em serviço — CONFERIR NA
+   * NBR 10897/13714 antes de emitir.
+   */
+  cHazenWilliams: number;
   fonte: string;
 }
+
+/**
+ * Diâmetros internos da série SCH 40 (NBR 5590 / ASTM A53), DN 15…150 — o tubo
+ * de aço da rede de incêndio. O galvanizado da NBR 5580 classe média tem
+ * interno um pouco MAIOR; usar o SCH 40 fica a favor da segurança (mais perda).
+ */
+const SCH40 = [
+  { dn: 15, internoMm: 15.8 },
+  { dn: 20, internoMm: 20.9 },
+  { dn: 25, internoMm: 26.6 },
+  { dn: 32, internoMm: 35.1 },
+  { dn: 40, internoMm: 40.9 },
+  { dn: 50, internoMm: 52.5 },
+  { dn: 65, internoMm: 62.7 },
+  { dn: 80, internoMm: 77.9 },
+  { dn: 100, internoMm: 102.3 },
+  { dn: 125, internoMm: 128.2 },
+  { dn: 150, internoMm: 154.1 },
+];
 
 /**
  * Os MATERIAIS. Diâmetros internos dos catálogos usuais das normas de produto;
@@ -62,6 +87,7 @@ export const FICHA_DO_MATERIAL: Record<MaterialDeTubo, FichaDoMaterial> = {
       { dn: 85, internoMm: 75.6 },
       { dn: 110, internoMm: 97.8 },
     ],
+    cHazenWilliams: 150,
     fonte: 'NBR 5648 (tubo PVC soldável para água fria); ε de tubo plástico liso',
   },
   CPVC: {
@@ -77,6 +103,7 @@ export const FICHA_DO_MATERIAL: Record<MaterialDeTubo, FichaDoMaterial> = {
       { dn: 73, internoMm: 62 },
       { dn: 89, internoMm: 76 },
     ],
+    cHazenWilliams: 150,
     fonte: 'NBR 15884 (CPVC para água quente); ε de tubo plástico liso',
   },
   PPR: {
@@ -91,6 +118,7 @@ export const FICHA_DO_MATERIAL: Record<MaterialDeTubo, FichaDoMaterial> = {
       { dn: 63, internoMm: 42 },
       { dn: 75, internoMm: 50 },
     ],
+    cHazenWilliams: 150,
     fonte: 'NBR 15813 / DIN 8077 PN 20 (SDR 6); ε de tubo plástico liso',
   },
   COBRE: {
@@ -105,7 +133,40 @@ export const FICHA_DO_MATERIAL: Record<MaterialDeTubo, FichaDoMaterial> = {
       { dn: 54, internoMm: 52.2 },
       { dn: 66, internoMm: 64.7 },
     ],
+    cHazenWilliams: 150,
     fonte: 'NBR 13206 classe E; ε de cobre trefilado',
+  },
+  // ─── Incêndio E1.2 (30/09/2026) ─────────────────────────────────────────
+  ACO_GALVANIZADO: {
+    rotulo: 'Aço galvanizado',
+    // ε de aço galvanizado (tabela de Moody): 0,15 mm.
+    rugosidadeMm: 0.15,
+    diametros: SCH40,
+    cHazenWilliams: 120,
+    fonte: 'NBR 5580/5590 (interno SCH 40, a favor da segurança); ε de aço galvanizado; C 120 — CONFERIR NA NORMA',
+  },
+  ACO_CARBONO: {
+    rotulo: 'Aço carbono SCH 40',
+    // ε de aço comercial (tabela de Moody): 0,046 mm; em serviço molhado usa-se C 120.
+    rugosidadeMm: 0.046,
+    diametros: SCH40,
+    cHazenWilliams: 120,
+    fonte: 'NBR 5590 SCH 40; ε de aço comercial; C 120 — CONFERIR NA NORMA',
+  },
+  CPVC_INCENDIO: {
+    rotulo: 'CPVC para sprinkler (SDR 13,5)',
+    rugosidadeMm: 0.0015,
+    diametros: [
+      { dn: 20, internoMm: 22.7 },
+      { dn: 25, internoMm: 28.4 },
+      { dn: 32, internoMm: 36.0 },
+      { dn: 40, internoMm: 41.1 },
+      { dn: 50, internoMm: 51.4 },
+      { dn: 65, internoMm: 62.2 },
+      { dn: 80, internoMm: 75.7 },
+    ],
+    cHazenWilliams: 150,
+    fonte: 'ASTM F442 SDR 13,5 (CPVC de sprinkler, só em risco leve); ε de plástico liso — CONFERIR NA NORMA',
   },
 };
 
@@ -201,23 +262,61 @@ export const COMPRIMENTO_EQUIVALENTE_M: Record<PecaDePerda, number[]> = {
   SAIDA: [0.8, 0.9, 1.3, 1.4, 3.2, 3.3, 3.5],
 };
 
-/** Comprimento equivalente no DN — interpolado entre os DN da tabela (CPVC 22, 28…), extrapolado nas pontas pela reta. */
-export function comprimentoEquivalenteM(peca: PecaDePerda, dn: number): number {
-  const v = COMPRIMENTO_EQUIVALENTE_M[peca];
-  if (dn <= DN_DA_TABELA[0]) return (v[0] * dn) / DN_DA_TABELA[0];
-  for (let i = 1; i < DN_DA_TABELA.length; i++) {
-    if (dn <= DN_DA_TABELA[i]) {
-      const t = (dn - DN_DA_TABELA[i - 1]) / (DN_DA_TABELA[i] - DN_DA_TABELA[i - 1]);
+/** Os DN da tabela de comprimentos equivalentes do AÇO (incêndio E1.2), mm. */
+const DN_DA_TABELA_ACO = [20, 25, 32, 40, 50, 65, 80, 100, 125, 150];
+
+const PES = 0.3048;
+/**
+ * COMPRIMENTO EQUIVALENTE do AÇO (incêndio E1.2, achado 2 do benchmark): a
+ * tabela de PVC para no DN 75, e a rede de incêndio vai a DN 150. Valores da
+ * tabela de comprimentos equivalentes para aço SCH 40 com C = 120 (NFPA 13),
+ * convertidos de pés — CONFERIR com a NBR 10897/13714 antes de emitir. Na
+ * passagem direta do tê a NFPA não soma perda; registro de pressão não existe
+ * na rede de incêndio (usa-se o de gaveta).
+ */
+export const COMPRIMENTO_EQUIVALENTE_ACO_M: Record<PecaDePerda, number[]> = {
+  JOELHO_90: [2, 2, 3, 4, 5, 6, 7, 10, 12, 14].map((p) => p * PES),
+  JOELHO_45: [1, 1, 1, 2, 2, 3, 3, 4, 5, 7].map((p) => p * PES),
+  TE_PASSAGEM: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  TE_LATERAL: [4, 5, 6, 8, 10, 12, 15, 20, 25, 30].map((p) => p * PES),
+  LUVA: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  REDUCAO: [1, 1, 1, 2, 2, 3, 3, 4, 5, 7].map((p) => p * PES),
+  REGISTRO_GAVETA: [1, 1, 1, 1, 1, 1, 1, 2, 2, 3].map((p) => p * PES),
+  REGISTRO_PRESSAO: [1, 1, 1, 1, 1, 1, 1, 2, 2, 3].map((p) => p * PES),
+  REGISTRO_ESFERA: [1, 1, 1, 1, 1, 1, 1, 2, 2, 3].map((p) => p * PES),
+  VALVULA_RETENCAO: [4, 5, 7, 9, 11, 14, 16, 22, 27, 32].map((p) => p * PES),
+  ENTRADA: [1, 1, 2, 2, 3, 3, 4, 5, 6, 7].map((p) => p * PES),
+  SAIDA: [2, 2, 3, 4, 5, 6, 7, 10, 12, 14].map((p) => p * PES),
+};
+
+const METAL: readonly MaterialDeTubo[] = ['ACO_GALVANIZADO', 'ACO_CARBONO'];
+
+/** Interpola `v` (indexado por `dns`) no DN; fora das pontas, proporcional ao DN. */
+function interpolarPorDn(v: number[], dns: number[], dn: number): number {
+  if (dn <= dns[0]) return (v[0] * dn) / dns[0];
+  for (let i = 1; i < dns.length; i++) {
+    if (dn <= dns[i]) {
+      const t = (dn - dns[i - 1]) / (dns[i] - dns[i - 1]);
       return v[i - 1] + t * (v[i] - v[i - 1]);
     }
   }
-  const n = DN_DA_TABELA.length - 1;
-  return (v[n] * dn) / DN_DA_TABELA[n];
+  const n = dns.length - 1;
+  return (v[n] * dn) / dns[n];
+}
+
+/**
+ * Comprimento equivalente no DN — interpolado entre os DN da tabela (CPVC 22,
+ * 28…). Sem `material`, ou com material que não é aço, é a tabela de PVC (a de
+ * sempre, até DN 75); com AÇO (incêndio E1.2), a tabela de aço até DN 150.
+ */
+export function comprimentoEquivalenteM(peca: PecaDePerda, dn: number, material?: MaterialDeTubo | null): number {
+  if (material && METAL.includes(material)) return interpolarPorDn(COMPRIMENTO_EQUIVALENTE_ACO_M[peca], DN_DA_TABELA_ACO, dn);
+  return interpolarPorDn(COMPRIMENTO_EQUIVALENTE_M[peca], DN_DA_TABELA, dn);
 }
 
 /** A perda de UMA peça, mca: a perda distribuída do seu comprimento equivalente. */
 export function perdaLocalizadaMca(peca: PecaDePerda, vazaoLs: number, material: MaterialDeTubo, dn: number, viscosidade = VISCOSIDADE_20C): number {
-  return perdaDistribuida(vazaoLs, material, dn, comprimentoEquivalenteM(peca, dn), viscosidade).perdaMca;
+  return perdaDistribuida(vazaoLs, material, dn, comprimentoEquivalenteM(peca, dn, material), viscosidade).perdaMca;
 }
 
 /**

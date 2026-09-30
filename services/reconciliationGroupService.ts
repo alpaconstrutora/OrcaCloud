@@ -4,6 +4,9 @@ import { bankReconciliationService } from './bankReconciliationService';
 
 const DAY = 86_400_000;
 
+/** Folga de `findGroups` (`groupTol`), repassada à RPC ao confirmar o grupo. */
+const TOLERANCIA_DO_GRUPO = { tolerance_abs: 1, tolerance_pct: 1 };
+
 interface BankItem {
     id: string;
     transaction_date: string;
@@ -173,17 +176,18 @@ export const reconciliationGroupService = {
         return { bankToTitles, titleToBanks };
     },
 
-    /** Confirma 1 pagamento → N títulos: cria N vínculos (pagamento liquida vários títulos). */
+    /**
+     * Confirma 1 pagamento → N títulos (o pagamento liquida vários títulos).
+     * Atômico (`fn_reconcile_group`) — antes era um loop de `createMatch` que podia
+     * parar no meio. A tolerância é a MESMA de `findGroups` (máx(R$ 1, 1%)): o grupo
+     * sugerido com essa folga continua conciliável.
+     */
     async confirmBankToTitles(bankId: string, internalIds: string[]): Promise<void> {
-        for (const internalId of internalIds) {
-            await bankReconciliationService.createMatch(bankId, internalId, 'MANUAL', 100);
-        }
+        await bankReconciliationService.reconcileGroup([bankId], internalIds, 'EXACT', TOLERANCIA_DO_GRUPO);
     },
 
-    /** Confirma 1 título → N pagamentos: cria N vínculos (vários pagamentos liquidam o título). */
+    /** Confirma 1 título → N pagamentos (vários pagamentos liquidam o título). Atômico, mesma tolerância. */
     async confirmTitleToBanks(internalId: string, bankIds: string[]): Promise<void> {
-        for (const bankId of bankIds) {
-            await bankReconciliationService.createMatch(bankId, internalId, 'MANUAL', 100);
-        }
+        await bankReconciliationService.reconcileGroup(bankIds, [internalId], 'EXACT', TOLERANCIA_DO_GRUPO);
     },
 };

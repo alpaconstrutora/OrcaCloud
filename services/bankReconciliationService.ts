@@ -17,6 +17,38 @@ import {
     BankTransactionStatus,
     MatchType
 } from '../types';
+import type { ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
+
+/** Parâmetros de `fn_reconcile_group` — cada modo lê só os seus. */
+export interface ReconcileGroupParams {
+    /** ADJUSTMENT e EXCESS: categoria do título criado. */
+    category?: string | null;
+    /** EXCESS: descrição do título criado. */
+    description?: string | null;
+    /** EXCESS: credor (débito) ou cliente (crédito). O nome sempre vai; o id só
+     *  quando é cadastro de fornecedor (`supplier_id`) ou de cliente (`party_id`) —
+     *  credor colaborador não tem FK. */
+    entity_name?: string | null;
+    supplier_id?: string | null;
+    party_id?: string | null;
+    project_id?: string | null;
+    cost_center_id?: string | null;
+    /** PARTIAL: o título que é desmembrado (fica pago a parte, o saldo abre um título novo). */
+    split_internal_id?: string | null;
+    /** EXACT: folga aceita na diferença — maior entre R$ 0,01, `tolerance_abs` e
+     *  `tolerance_pct`% da maior soma. Só o painel de grupos da Central usa. */
+    tolerance_abs?: number;
+    tolerance_pct?: number;
+}
+
+export interface ReconcileGroupResult {
+    match_ids: string[];
+    /** Títulos criados já conciliados (ajuste ou excedente). */
+    created_ids: string[];
+    /** PARTIAL: o título novo, pendente, com o saldo. */
+    split_saldo_id: string | null;
+    diff: number;
+}
 
 
 /** Resumo do que o motor fez numa rodada — a Central mostra isso ao reprocessar. */
@@ -1008,6 +1040,40 @@ export const bankReconciliationService = {
         }
 
         return data as { match_id: string; payment_date: string; adjustment_id: string | null };
+    },
+
+    /**
+     * Concilia N movimentos do extrato × M lançamentos numa transação só
+     * (`fn_reconcile_group`, migration aplicar_20270929000030). `EXACT` exige as
+     * somas iguais; os outros modos resolvem a diferença antes de vincular:
+     * ADJUSTMENT (título de ajuste), EXCESS (título novo com o excedente),
+     * PARTIAL (desmembra um título e deixa o saldo em aberto), ADJUST_VALUE
+     * (muda o valor do único título). Tudo ou nada.
+     */
+    async reconcileGroup(
+        bankTxIds: string[],
+        internalTxIds: string[],
+        mode: ModoConciliacaoGrupo,
+        params: ReconcileGroupParams = {},
+    ): Promise<ReconcileGroupResult> {
+        const { data, error } = await supabase.rpc('fn_reconcile_group', {
+            p_bank_ids: bankTxIds,
+            p_internal_ids: internalTxIds,
+            p_mode: mode,
+            p_params: params,
+        });
+        if (error) throw error;
+
+        // Mesma costura P2P do createMatch: best-effort, fora da transação.
+        for (const id of internalTxIds) {
+            try {
+                await processService.triggerForTransaction(id, 'internal_transaction.paid');
+            } catch (e) {
+                console.error('[bankReconciliationService] process trigger (paid) failed:', e);
+            }
+        }
+
+        return data as ReconcileGroupResult;
     },
 
     /** Desfaz um vínculo (`fn_reconcile_unmatch`): restaura os dois lados só se não restar outro vínculo. */

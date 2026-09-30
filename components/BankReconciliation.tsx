@@ -4,7 +4,8 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X,
-    LayoutGrid, List, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain
+    LayoutGrid, List, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain,
+    Link2, Scale, Loader2
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import type { ClientOption } from './ClientSelect';
@@ -43,6 +44,9 @@ import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
+import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
+import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
+import type { ReconcileGroupParams } from '../services/bankReconciliationService';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
 import { SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects';
 import { originIdFromRef } from '../lib/receivableRef';
@@ -139,6 +143,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // Pendentes usa o MESMO padrão do Extrato (barra curta + modal). O alvo diz qual
     // dos dois lados está sendo editado, porque a aba tem duas seleções independentes.
     const [loteAlvoPendentes, setLoteAlvoPendentes] = useState<null | 'bank' | 'internal'>(null);
+    // Pendentes: "Ajustar diferença" (extrato × lançamentos não somam igual) e o
+    // Conciliar do dock em andamento. Plano 2026-09-29-conciliacao-pendentes-conciliar-e-ajustes.
+    const [ajusteAberto, setAjusteAberto] = useState(false);
+    const [conciliandoGrupo, setConciliandoGrupo] = useState(false);
     const [showImportDrawer, setShowImportDrawer] = useState(false);
     const [completudeDaConta, setCompletudeDaConta] = useState<CompletudeDaConta | null>(null);
     const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
@@ -702,6 +710,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const credorRegistros = useMemo<SupplierOption[]>(
         () => [...supplierRegistros, ...employeeRegistros],
         [supplierRegistros, employeeRegistros]
+    );
+    const fornecedorIds = useMemo(() => new Set(supplierRegistros.map(s => s.id)), [supplierRegistros]);
+
+    // Seleção dos dois lados da aba Pendentes — objetos COMPLETOS (inclusive os que
+    // o filtro esconde), porque é isso que o Conciliar vai gravar.
+    const selecaoExtrato = useMemo(
+        () => bankTransactions.filter(t => selectedBankTxIds.has(t.id)),
+        [bankTransactions, selectedBankTxIds]
+    );
+    const selecaoLancamentos = useMemo(
+        () => internalTransactions.filter(t => selectedInternalTxIds.has(t.id)),
+        [internalTransactions, selectedInternalTxIds]
+    );
+    const resumoSelecao = useMemo(
+        () => resumoDaSelecao(selecaoExtrato, selecaoLancamentos),
+        [selecaoExtrato, selecaoLancamentos]
     );
 
     const [showInternalTxModal, setShowInternalTxModal] = useState(false);
@@ -1556,6 +1580,41 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             await loadStats();
         } catch (error) {
             console.error('Error confirming match:', error);
+        }
+    };
+
+    /** Conciliar do dock (N extratos × M lançamentos) — EXACT, ou um dos ajustes
+     *  vindo do painel "Ajustar diferença". Tudo numa transação (`fn_reconcile_group`).
+     *  Erro de ajuste sobe para o painel mostrar; erro do Conciliar direto vira toast. */
+    const handleReconcileGroup = async (mode: ModoConciliacaoGrupo, params: ReconcileGroupParams = {}) => {
+        const bankIds = selecaoExtrato.map(t => t.id);
+        const internalIds = selecaoLancamentos.map(t => t.id);
+        const r = await bankReconciliationService.reconcileGroup(bankIds, internalIds, mode, params);
+        setSelectedBankTxIds(new Set());
+        setSelectedInternalTxIds(new Set());
+        setSelectedBankTxId(null);
+        await loadTransactions();
+        await loadStats();
+        const base = `${bankIds.length} do extrato × ${internalIds.length} lançamento(s) conciliados`;
+        const extra = mode === 'ADJUSTMENT' ? ' · ajuste lançado'
+            : mode === 'EXCESS' ? ' · excedente lançado'
+            : mode === 'PARTIAL' ? ` · saldo de ${formatMoney(Math.abs(r.diff))} ficou em aberto`
+            : mode === 'ADJUST_VALUE' ? ' · valor do lançamento ajustado'
+            : '';
+        setActionFeedback({ message: base + extra, type: 'success' });
+        setTimeout(() => setActionFeedback(null), 6000);
+    };
+
+    const handleConciliarSelecao = async () => {
+        if (!resumoSelecao.conciliar.habilitado || conciliandoGrupo) return;
+        setConciliandoGrupo(true);
+        try {
+            await handleReconcileGroup('EXACT');
+        } catch (err: unknown) {
+            setActionFeedback({ message: 'Não foi possível conciliar: ' + errorMessage(err, 'erro desconhecido'), type: 'error' });
+            setTimeout(() => setActionFeedback(null), 8000);
+        } finally {
+            setConciliandoGrupo(false);
         }
     };
 
@@ -3120,7 +3179,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 const totalHidden = hiddenBankCount + hiddenInternalCount;
 
                 return (
-                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw_-_2rem)] flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-max max-w-[calc(100vw_-_2rem)] flex flex-wrap justify-center items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="flex -space-x-2 shrink-0">
                             {bankCount > 0 && (
                                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center ring-2 ring-gray-900 border border-white/20" title={`${bankCount} extratos`}>
@@ -3136,7 +3195,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                         <div className="flex flex-col min-w-0">
                             <span className="text-sm font-bold whitespace-nowrap">
-                                {totalCount} item{totalCount > 1 ? 'ns' : ''} selecionado{totalCount > 1 ? 's' : ''}
+                                {totalCount} {totalCount > 1 ? 'itens' : 'item'} selecionado{totalCount > 1 ? 's' : ''}
                             </span>
                             {totalHidden > 0 && (
                                 <span className="text-xs font-bold text-gray-400 mt-0.5 flex items-center gap-1 whitespace-nowrap">
@@ -3147,6 +3206,43 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </div>
 
                         <div className="w-px h-8 bg-white/20 mx-1" />
+
+                        {/* Conciliar N×M — só na Pendentes, com algo dos DOIS lados.
+                            Somas diferentes: Conciliar desliga dizendo o motivo e
+                            "Ajustar diferença" abre as 4 saídas (painel lateral). */}
+                        {activeView === 'pending' && bankCount > 0 && internalCount > 0 && (
+                            <>
+                                <div className="flex items-center gap-3 text-xs whitespace-nowrap">
+                                    <span className="text-gray-400">Extrato <span className="text-white font-semibold">{formatMoney(resumoSelecao.totalExtrato)}</span></span>
+                                    <span className="text-gray-400">Lançamentos <span className="text-white font-semibold">{formatMoney(resumoSelecao.totalLancamentos)}</span></span>
+                                    <span className="text-gray-400">Diferença{' '}
+                                        <span className={`font-semibold ${resumoSelecao.temDiferenca ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                            {resumoSelecao.temDiferenca ? (resumoSelecao.diferenca > 0 ? '+' : '−') : ''}{formatMoney(Math.abs(resumoSelecao.diferenca))}
+                                        </span>
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={handleConciliarSelecao}
+                                    disabled={!resumoSelecao.conciliar.habilitado || conciliandoGrupo}
+                                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
+                                    title={resumoSelecao.conciliar.motivo ?? `Conciliar ${bankCount} do extrato com ${internalCount} lançamento(s)`}
+                                >
+                                    {conciliandoGrupo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
+                                    Conciliar ({bankCount}×{internalCount})
+                                </button>
+                                {resumoSelecao.temDiferenca && resumoSelecao.direcao && (
+                                    <button
+                                        onClick={() => setAjusteAberto(true)}
+                                        className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 text-gray-900 transition-colors whitespace-nowrap"
+                                        title="Diferença como ajuste, excedente vira lançamento, baixa parcial ou ajustar valor"
+                                    >
+                                        <Scale className="w-3.5 h-3.5" />
+                                        Ajustar diferença
+                                    </button>
+                                )}
+                                <div className="w-px h-8 bg-white/20 mx-1" />
+                            </>
+                        )}
 
                         {bankCount > 0 && (
                             <button
@@ -3201,6 +3297,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     </div>
                 );
             })()}
+
+            {/* Pendentes: resolver a diferença entre extrato e lançamentos selecionados */}
+            {ajusteAberto && (
+                <AjustarDiferencaSheet
+                    open={ajusteAberto}
+                    resumo={resumoSelecao}
+                    lancamentos={selecaoLancamentos}
+                    categories={uniqueCategories}
+                    clienteRegistros={clienteRegistros}
+                    credorRegistros={credorRegistros}
+                    fornecedorIds={fornecedorIds}
+                    projects={masterProjects}
+                    costCenters={masterCostCenters}
+                    onClose={() => setAjusteAberto(false)}
+                    onApply={(mode, params) => handleReconcileGroup(mode, params)}
+                />
+            )}
 
             {/* Edição em lote da aba Pendentes — o MESMO modal do Extrato, um por lado */}
             {loteAlvoPendentes === 'bank' && (

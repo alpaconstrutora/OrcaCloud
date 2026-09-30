@@ -961,7 +961,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       {/* Header */}
       <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="px-2.5 py-1 bg-orange-500 text-white rounded-lg text-xs font-black uppercase tracking-wider">
+          <div className="px-2.5 py-1 bg-[#E1553C] text-white rounded-lg text-xs font-black uppercase tracking-wider">
             Partner Portal
           </div>
           <h1 className="text-base font-bold text-gray-900 tracking-tight">
@@ -976,7 +976,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             aria-haspopup="menu"
             aria-expanded={isAccountMenuOpen}
           >
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-xs font-bold text-white">
               {(partnerUser?.name || 'P').charAt(0).toUpperCase()}
             </span>
             <span className="font-semibold text-gray-600">{partnerUser?.name} ({partnerUser?.role})</span>
@@ -987,7 +987,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
               <div className="border-b border-gray-100 px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-500 text-sm font-bold text-white">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-sm font-bold text-white">
                     {(partnerUser?.name || 'P').charAt(0).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -1065,7 +1065,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 key={id}
                 onClick={() => setActiveTab(id)}
                 className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
-                  ${activeTab === id ? 'bg-orange-500/10 border border-orange-500/20 text-orange-600 font-bold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
+                  ${activeTab === id ? 'bg-[#FDEDE8] border border-[#F3D9D1] text-[#C24428] font-semibold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
               >
                 <Icon className="w-4 h-4" />
                 <span>{PARTNER_PORTAL_TAB_LABELS[id]}</span>

@@ -8,7 +8,7 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
     Package, Pencil, Settings, Search, Lock as LockIcon,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -42,7 +42,7 @@ import ContractEvaluationModal from './ContractEvaluationModal';
 import ContractSupplyMatrixModal from './ContractSupplyMatrixModal';
 import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 // Aba Itens do contrato — planilha de itens contratados (ui_ux_guia_unificado.md §2).
@@ -81,6 +81,11 @@ const FINANCE_COLUMNS: ColumnConfig[] = [
     { key: 'status', label: 'Status', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
 ];
+// Larguras iniciais da tabela de Parcelas (Financeiro › Parcelas). Descrição é o
+// texto livre — o resto é vocabulário curto.
+const FINANCE_COL_WIDTHS: Record<string, number> = {
+    date: 130, description: 480, source: 150, status: 140, amount: 150,
+};
 
 // Só as modalidades de OBRA/suprimentos. As de locação (seguro-fiança, cessão
 // fiduciária, sem garantia) têm tela própria — Gerenciar Negociação › Garantias
@@ -265,6 +270,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     }[]>([]);
     const [loadingFinancialEntries, setLoadingFinancialEntries] = React.useState(false);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
+    // §6.1 — largura arrastável pelo divisor do cabeçalho + auto-ajuste sob comando.
+    const financeWidths = useResizableColumns(FINANCE_COL_WIDTHS, 'contractFinanceEntriesColWidths');
     // §3 — busca persistida (nunca useState simples para termo de busca)
     const [financeSearch, setFinanceSearch] = usePersistedState<string>('contractFinance:search', '');
     // Sub-abas da aba Financeiro: condições do contrato × parcelas lançadas.
@@ -2991,6 +2998,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         onToggleColumn={financeColumns.toggleColumn}
                                         onReset={financeColumns.resetColumns}
                                     />
+                                    {/* §6.1.2 — auto-ajuste SOB COMANDO; arrastar o divisor do
+                                        cabeçalho redimensiona, duplo clique restaura o padrão. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => financeWidths.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
                                 </div>
                             </div>
 
@@ -3013,7 +3030,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             ) : (
                                 <div className="overflow-auto max-h-[70vh]">
-                                    <table className="w-full text-left border-collapse">
+                                    <table
+                                        ref={financeWidths.tableRef}
+                                        className="text-left border-collapse"
+                                        style={{
+                                            tableLayout: 'fixed',
+                                            width: FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).reduce((t, c) => t + financeWidths.getWidth(c.key), 0),
+                                            minWidth: '100%',
+                                        }}
+                                    >
+                                        <colgroup>
+                                            {FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
+                                                <col key={c.key} data-col-key={c.key} style={{ width: `${financeWidths.getWidth(c.key)}px` }} />
+                                            ))}
+                                        </colgroup>
                                         <thead>
                                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                                 {FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
@@ -3026,7 +3056,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         sortDirection={financeColumns.sortDirection}
                                                         onSort={financeColumns.handleColumnSort}
                                                         className={`px-6 py-2 border-r border-gray-100 last:border-r-0 ${c.key === 'amount' ? 'text-right' : 'text-left'}`}
-                                                    />
+                                                    >
+                                                        <financeWidths.ResizeHandle colKey={c.key} />
+                                                    </SortableHeader>
                                                 ))}
                                             </tr>
                                         </thead>

@@ -1579,7 +1579,7 @@ foram reabertos na frente:
 
 ---
 
-## Etapa 0 — Premissas e classificação MG · sem bump (migration) · 4 fases
+## Etapa 0 — Premissas e classificação MG · sem bump (migration) · 4 fases · **✅ CONCLUÍDA em 30/09/2026 (4 de 4; migration a aplicar com OK)**
 
 | Fase | Entrega (o que muda) | Pronto quando (como sei que terminou) |
 |---|---|---|
@@ -1707,4 +1707,37 @@ Fecha os **blocos 8 e 9**.
 
 ## Execução
 
-_(vazio — cada fase ganha uma seção aqui quando for feita)_
+### Etapa 0 — 30/09/2026 (frente `incendio-e0`)
+
+Pedido: "sim" ao "Publico em `main` e começo a E0?". Os PDFs do CBMMG **não** estavam na pasta,
+então a E0 foi feita com a regra combinada: o que não foi transcrito sai **SEM_TABELA** (nunca
+exigido nem dispensado por palpite), e o que veio de memória sai com `rascunho: true` e o aviso
+"não use para aprovação" no topo do painel.
+
+- **0.1 Premissas do estudo.**
+  - Migration `aplicar_20270930000001_blueprint_study_incendio.sql`, **ainda não aplicada**: aplicar
+    só com o OK do usuário.
+  - `services/blueprintIncendioService.ts`, `hooks/useBlueprintIncendio.ts` e o
+    `BlueprintIncendioRow` em `types/blueprint.ts`.
+  - Sem a tabela, as premissas valem só na sessão, e o painel diz isso.
+  - Aba **Incêndio** no ribbon, com a tarefa "Classificação e exigências".
+- **0.2 Classificação** (`utils/blueprintIncendioClassificacao.ts`):
+  - a divisão declarada vence a sugerida (A-1 com 0–1 unidade, A-2 com 2 ou mais, se há ambiente
+    residencial);
+  - `alturaParaIncendio` vai do pavimento de descarga (o declarado ou o de cota mais próxima de 0)
+    ao último pavimento com ambientes, sem contar barrilete, casa de máquinas e ático;
+  - a área vem de `areaConstruidaMm2`;
+  - a carga é a da tabela (só o grupo A, 300 MJ/m²) ou a declarada.
+- **0.3 Exigências.** 16 medidas, cada uma com estado e motivo.
+  - Grupo A em MG, rascunho: A-1 fica dispensada.
+  - A-2 sempre exige saídas, sinalização e extintores.
+  - Fora do regime simplificado (> 750 m² ou > 12 m), A-2 exige também acesso de viatura,
+    segurança estrutural, iluminação e hidrantes.
+  - Todo o resto é SEM_TABELA. Os presets de outros estados existem com nome e dão tudo
+    SEM_TABELA.
+- **0.4 Anel.**
+  - `PressoesDaRede.trechosDoAnel` lista os trechos fora da árvore do BFS, com aviso no cálculo.
+  - Marca `ANEL_NAO_CALCULADO` no desenho e na gaveta de verificação, válida já para a ÁGUA.
+  - `docs/normas/incendio-mg/README.md` lista os textos esperados e o que cada um destrava.
+- **Testes:** `blueprintIncendioClassificacao.test.ts` (11), `components/PainelIncendio.test.tsx`
+  (3) e 3 casos de anel em `blueprintPressaoDaRede.test.ts`.

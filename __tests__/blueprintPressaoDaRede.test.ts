@@ -222,3 +222,44 @@ describe('E1.4 — dimensionar por pressão', () => {
     expect(r.avisos.some((a) => /hidrômetro com vazão de projeto .* acima da máxima/.test(a))).toBe(true);
   });
 });
+
+describe('Incêndio E0.4 — o anel não some calado', () => {
+  /** Caixa → desce a 0,60 → quadrado de 3 m (anel) → lavatório no canto oposto. */
+  function comAnel() {
+    const { m, t } = nivel();
+    const mm = applyBatch(m, [
+      ponto(t, 'RESERVATORIO', 0, 0, 2800),
+      af(t, 0, 0, 2800, 0, 0, 600),
+      af(t, 0, 0, 600, 3000, 0, 600),
+      af(t, 3000, 0, 600, 3000, 3000, 600),
+      af(t, 0, 0, 600, 0, 3000, 600),
+      af(t, 0, 3000, 600, 3000, 3000, 600),
+      ponto(t, 'LAVATORIO', 3000, 3000, 600),
+    ]).model;
+    return { m: mm, caixa: mm.terminais![0] };
+  }
+
+  it('rede em árvore: nenhum trecho de anel, nenhum aviso de anel', () => {
+    const { m, caixa } = simples();
+    const r = pressoesDaOrigem(m, caixa);
+    expect(r.trechosDoAnel).toEqual([]);
+    expect(r.avisos.some((a) => a.includes('anel'))).toBe(false);
+  });
+
+  it('quadrado fechado: exatamente um trecho fica fora da árvore, com aviso e marca no desenho', () => {
+    const { m, caixa } = comAnel();
+    const r = pressoesDaOrigem(m, caixa);
+    expect(r.trechosDoAnel).toHaveLength(1);
+    expect(r.trechos.map((x) => x.trechoId)).not.toContain(r.trechosDoAnel[0]);
+    expect(r.avisos.some((a) => a.startsWith('rede com anel: 1 trecho'))).toBe(true);
+    const marcas = marcasDeVerificacao(m, null, [r]).filter((x) => x.tipo === 'ANEL_NAO_CALCULADO');
+    expect(marcas.map((x) => x.alvoId)).toEqual(r.trechosDoAnel);
+    expect(marcas[0].severidade).toBe('AVISO');
+  });
+
+  it('o pressoesDoModelo leva o anel para quem desenha as marcas', () => {
+    const { m } = comAnel();
+    const [r] = pressoesDoModelo(m, HIPOTESES_PRESSAO_PADRAO);
+    expect(r.trechosDoAnel).toHaveLength(1);
+  });
+});

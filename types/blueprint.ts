@@ -172,6 +172,16 @@ export interface BlueprintHidroRow {
   updated_at: string;
 }
 
+/** `blueprint_study_incendio` — premissas de incêndio do estudo (E0.1 do roadmap de incêndio, 30/09/2026). */
+export interface BlueprintIncendioRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
  * Hipóteses da armadura esquemática de um estudo — linha de
  * `blueprint_study_armadura` (migration `aplicar_20270921000023`). Uma por

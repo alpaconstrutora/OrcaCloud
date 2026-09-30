@@ -53,7 +53,9 @@ export type TipoDeMarca =
   | 'CONDUTOR_INSUFICIENTE'
   | 'CONDUTOR_DECLIVIDADE'
   // E6.4 — a pluvial encostando no esgoto (e vice-versa): redes independentes.
-  | 'PLUVIAL_NO_ESGOTO';
+  | 'PLUVIAL_NO_ESGOTO'
+  // Incêndio E0.4 — trecho que fecha um anel: o cálculo em árvore o deixa sem vazão.
+  | 'ANEL_NAO_CALCULADO';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -234,6 +236,11 @@ export function marcasDeVerificacao(
         marcas.push({ chave: `pressao|${p.terminalId}`, tipo: 'PRESSAO_ALTA', levelId: p.levelId, at: { ...p.at }, texto: `estática ${um(p.estaticaKpa!)} kPa`, severidade: 'AVISO', alvoId: p.terminalId, disciplina: r.disciplina });
       }
     }
+    for (const id of r.trechosDoAnel ?? []) {
+      const t = trechoPorId.get(id);
+      if (!t) continue;
+      marcas.push({ chave: `anel|${id}`, tipo: 'ANEL_NAO_CALCULADO', levelId: t.levelId, at: { x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 }, texto: 'anel — fora do cálculo', severidade: 'AVISO', alvoId: id, disciplina: r.disciplina });
+    }
   }
 
   return marcas.filter((m) => !levelId || m.levelId === levelId).sort((a, b) => a.chave.localeCompare(b.chave));
@@ -250,6 +257,6 @@ export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disci
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO', 'ANEL_NAO_CALCULADO'].includes(m.tipo)),
   };
 }

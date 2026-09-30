@@ -11,7 +11,7 @@ import PainelPressoesDaAgua from '../../components/blueprint/PainelPressoesDaAgu
 import { HIPOTESES_PRESSAO_PADRAO, type PressoesDaRede } from '../../utils/blueprintPressaoDaRede';
 
 const rede: PressoesDaRede = {
-  origemId: 'cx', disciplina: 'AGUA_FRIA', trechos: [], criticoId: 'ch', motivo: null, caminhos: {}, avisos: [],
+  origemId: 'cx', disciplina: 'AGUA_FRIA', trechos: [], criticoId: 'ch', motivo: null, caminhos: {}, avisos: [], trechosDoAnel: [],
   pontos: [
     { terminalId: 'lv', levelId: 'l', at: { x: 0, y: 0 }, nome: 'Lavatório', disponivelKpa: 18.2, minimaKpa: 10, estaticaKpa: 21.6, estado: 'OK' },
     { terminalId: 'ch', levelId: 'l', at: { x: 0, y: 0 }, nome: 'Chuveiro', disponivelKpa: 5.1, minimaKpa: 10, estaticaKpa: 6.9, estado: 'INSUFICIENTE' },

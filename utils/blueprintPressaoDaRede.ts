@@ -99,6 +99,14 @@ export interface PressoesDaRede {
   caminhos: Record<ObjectId, ObjectId[]>;
   /** Avisos do cálculo (hidrômetro acima da vazão máxima…). */
   avisos: string[];
+  /**
+   * Os trechos que FECHAM UM ANEL (30/09/2026, roadmap incêndio E0.4). O cálculo
+   * é em árvore: cada nó guarda o primeiro caminho que o alcançou, e o trecho
+   * que liga dois nós já alcançados fica de fora — sem vazão e sem perda. Antes
+   * isso acontecia calado; agora o trecho é listado e vira marca no desenho. O
+   * cálculo de malha de verdade é a E2 do roadmap de incêndio.
+   */
+  trechosDoAnel: ObjectId[];
 }
 
 type P3 = [number, number, number];
@@ -147,7 +155,7 @@ export function pressoesDaOrigem(
   const rede = redeDaOrigem(model, origem, disciplina);
   const pontos = pontosDeAgua(model, origem, disciplina);
   const vazio = (motivo: string): PressoesDaRede => ({
-    origemId: origem.id, disciplina, trechos: [], criticoId: null, motivo, caminhos: {}, avisos: [],
+    origemId: origem.id, disciplina, trechos: [], criticoId: null, motivo, caminhos: {}, avisos: [], trechosDoAnel: [],
     pontos: pontos.map((p) => ({ terminalId: p.id, levelId: p.levelId, at: { ...p.at }, nome: nomeDoPonto(p), disponivelKpa: null, estaticaKpa: null, minimaKpa: minimaDe(p, hip), estado: 'NAO_AVALIADO', motivo })),
   });
   if (cargaInicialMca === null) return vazio('a rede fria não chega ao aquecedor — a pressão da quente depende dela');
@@ -184,6 +192,13 @@ export function pressoesDaOrigem(
       ordem.push(outro);
     }
   }
+
+  // ── Os trechos fora da árvore fecham anel: ficam sem vazão (E0.4) ────────
+  const daArvore = new Set([...pai.values()].map((e) => e.t.id));
+  const trechosDoAnel = rede
+    .filter((t) => !daArvore.has(t.id) && vistos.has(ponta(t, 'a')) && vistos.has(ponta(t, 'b')))
+    .map((t) => t.id)
+    .sort();
 
   // ── Peso a jusante de cada nó ────────────────────────────────────────────
   const pesoNoNo = new Map<string, number>();
@@ -287,7 +302,10 @@ export function pressoesDaOrigem(
   const avaliados = resultado.filter((r) => r.disponivelKpa != null);
   const critico = avaliados.sort((a, b) => a.disponivelKpa! - a.minimaKpa - (b.disponivelKpa! - b.minimaKpa))[0] ?? null;
   return {
-    origemId: origem.id, disciplina, trechos, criticoId: critico?.terminalId ?? null, motivo: null, caminhos, avisos,
+    origemId: origem.id, disciplina, trechos, criticoId: critico?.terminalId ?? null, motivo: null, caminhos, trechosDoAnel,
+    avisos: trechosDoAnel.length
+      ? [...avisos, `rede com anel: ${trechosDoAnel.length} trecho(s) fecham o laço e não entram no cálculo (o cálculo é em árvore) — a pressão dos pontos depois deles pode estar otimista`]
+      : avisos,
     pontos: resultado.sort((a, b) => a.nome.localeCompare(b.nome) || a.terminalId.localeCompare(b.terminalId)),
   };
 }

@@ -3053,11 +3053,12 @@ describe('BlueprintEditor · menu Exibir', () => {
 describe('BlueprintEditor · ribbon', () => {
   beforeEach(() => localStorage.clear());
 
-  it('nasce em Arquitetura, com as nove abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
+  it('nasce em Arquitetura, com as dez abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
     await montar();
     const abas = screen.getAllByRole('tab').map((t) => t.textContent);
-    // 17/09/2026: "Instalações" virou Elétrica + Hidráulica; 20/09/2026 (E11.1): Mecânica entrou com a disciplina no kernel.
-    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
+    // 17/09/2026: "Instalações" virou Elétrica + Hidráulica; 20/09/2026 (E11.1): Mecânica entrou com a disciplina no kernel;
+    // 30/09/2026 (incêndio E0): Incêndio entrou com a classificação e as exigências.
+    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Incêndio', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
     // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
     expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();

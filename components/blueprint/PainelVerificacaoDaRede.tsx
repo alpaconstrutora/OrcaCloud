@@ -24,6 +24,7 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   CONDUTOR_INSUFICIENTE: 'Condutor insuficiente',
   CONDUTOR_DECLIVIDADE: 'Declividade do condutor',
   PLUVIAL_NO_ESGOTO: 'Pluvial e esgoto misturados',
+  ANEL_NAO_CALCULADO: 'Anel fora do cálculo (em árvore)',
 };
 
 interface Props {

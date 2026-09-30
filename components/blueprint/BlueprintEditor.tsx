@@ -117,6 +117,7 @@ import {
   Zap,
   ZoomIn,
   ZoomOut,
+  Flame,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -218,6 +219,9 @@ import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../.
 import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
+import PainelIncendio from './PainelIncendio';
+import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
+import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import PainelCalhas from './PainelCalhas';
 import PainelCondutores from './PainelCondutores';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
@@ -938,6 +942,9 @@ const ABAS_DO_RIBBON = [
   // MECÂNICA (20/09/2026, roadmap E11.1): nasceu com a disciplina no kernel —
   // reservas de espaço de equipamento (climatização) e o shaft mecânico.
   { id: 'mecanica', rotulo: 'Mecânica', naVista: false },
+  // INCÊNDIO (30/09/2026, roadmap de incêndio E0): nasce com a classificação da
+  // edificação e o que o Corpo de Bombeiros exige; a rede e os preventivos vêm nas etapas seguintes.
+  { id: 'incendio', rotulo: 'Incêndio', naVista: false },
   { id: 'inserir', rotulo: 'Inserir', naVista: false },
   // Conflitos e quantitativos também se leem na elevação e no 3D.
   { id: 'analisar', rotulo: 'Analisar', naVista: true },
@@ -989,6 +996,8 @@ const ROTULO_DA_TAREFA = {
   // Águas pluviais (29/09/2026, roadmap hidrossanitário E6): contribuição de cada
   // água do telhado e laje descoberta, intensidade e vazão (NBR 10844).
   pluvial: 'Águas pluviais (NBR 10844)',
+  // INCÊNDIO (30/09/2026, E0.2/E0.3): ocupação, altura, área e carga → as medidas exigidas.
+  incendio: 'Classificação e exigências (Corpo de Bombeiros)',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7263,6 +7272,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // (`blueprint_study_hidro`) e não mais no navegador — a emissão com ART amarra o
   // hash delas. Sem a tabela, o hook segue no navegador como antes.
   const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
+  /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
+  const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
+  const classificacaoDeIncendio = useMemo(
+    () => (tarefaAberta === 'incendio' ? classificarEdificacao(editor.model, incendioDoEstudo.hipoteses.classificacao) : null),
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
+  );
+  const exigenciasDeIncendio = useMemo(() => (classificacaoDeIncendio ? exigenciasDaEdificacao(classificacaoDeIncendio) : null), [classificacaoDeIncendio]);
   const hipotesesDeAgua = hidroDoEstudo.hipoteses.agua;
   const setHipDeAguaSalvas = (agua: HipotesesDeAgua) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, agua });
   /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
@@ -10480,6 +10496,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             </GrupoDoRibbon>
           </>
         )}
+        {aba === 'incendio' && !emVista && (
+          <>
+            {/* INCÊNDIO (30/09/2026, roadmap E0): o que o prédio exige, antes de qualquer peça. */}
+            <GrupoDoRibbon rotulo="Classificação">
+              <BotaoDoRibbon
+                icone={Flame}
+                rotulo="Classificação e exigências"
+                ativo={tarefaAberta === 'incendio'}
+                onClick={() => alternarTarefa('incendio')}
+                ajuda="Ocupação, altura para incêndio, área e carga de incêndio da edificação, e as medidas de segurança que o Corpo de Bombeiros exige (preset MG, em rascunho até o texto das ITs ser conferido)"
+              />
+            </GrupoDoRibbon>
+          </>
+        )}
         {aba === 'mecanica' && !emVista && (
           <>
             {/* HVAC MÍNIMO (E11.1): o LUGAR do equipamento, não o equipamento —
@@ -13491,6 +13521,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'esgoto' && <Waves className="h-5 w-5 text-slate-700" />}
               {tarefaAberta === 'memoriaisHidro' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pluvial' && <CloudRain className="h-5 w-5 text-lime-700" />}
+              {tarefaAberta === 'incendio' && <Flame className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13548,6 +13579,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             )}
             {tarefaAberta === 'pluvial' &&
               'A chuva que o telhado e as lajes descobertas recebem: a área de contribuição de cada superfície (NBR 10844), a intensidade pluviométrica da cidade e a vazão de projeto que as calhas e os condutores vão levar. A rede pluvial é independente do esgoto.'}
+            {tarefaAberta === 'incendio' &&
+              'O que o Corpo de Bombeiros exige deste prédio: a ocupação, a altura para incêndio (do pavimento de descarga ao último ocupado), a área e a carga de incêndio saem do desenho e das premissas do estudo. Declarar um valor vence o derivado.'}
             {tarefaAberta === 'memoriaisHidro' &&
               'O memorial de cálculo e o descritivo das instalações de água e esgoto, gerados do desenho e das premissas das gavetas de água, pressão e esgoto — os mesmos números das marcas e da verificação. Só entram as seções dos sistemas que existem.'}
             {tarefaAberta === 'agua' && (
@@ -13978,6 +14011,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'incendio' && classificacaoDeIncendio && exigenciasDeIncendio && (
+            <div data-testid="tarefa-incendio">
+              <PainelIncendio
+                hip={incendioDoEstudo.hipoteses.classificacao}
+                onHip={(classificacao) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, classificacao })}
+                classificacao={classificacaoDeIncendio}
+                exigencias={exigenciasDeIncendio}
+                niveis={editor.model.levels}
+                persistenciaIndisponivel={incendioDoEstudo.persistenciaIndisponivel}
+              />
             </div>
           )}
 

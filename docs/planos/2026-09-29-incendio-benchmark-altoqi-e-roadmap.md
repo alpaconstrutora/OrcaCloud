@@ -1590,7 +1590,7 @@ foram reabertos na frente:
 
 Fecha o **bloco 6** e os achados 1, 3 e 8. Abre o motor 1.
 
-## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **em andamento (1.1 ✅ e 1.2 ✅ 30/09/2026, kernel 0.80.0)**
+## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **em andamento (1.1, 1.2 e 1.3 ✅ 30/09/2026, kernel 0.80.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1796,4 +1796,26 @@ Entregue:
 - **Ritual do bump:** goldens 7/7 em 0.79.0; depois só os seis hashes; 22 pinos; bundle regerado.
 - **Resultados:** suíte 6.463 testes (6.430 + 33 pendentes, conta fechada), build ok.
   `blueprintIncendioMateriais.test.ts` tem 8 casos.
+
+### Etapa 1.3 — 30/09/2026 (frente `incendio-e1`, sem bump)
+
+- **`utils/blueprintSimbolosIncendio.ts`** é a fonte única do símbolo 2D de cada um dos dez tipos:
+  primitivas num quadrado unitário.
+  - O canvas escala pelo zoom (mínimo de 14 px). `desenharSimboloDeIncendio(Desenhista…)` desenha
+    o mesmo símbolo em mm de papel para a prancha da E8.
+  - Essa é a separação modelo × prancha do AltoQi: o 3D mostra a peça com as medidas; 2D e prancha,
+    o símbolo técnico.
+  - São símbolos de TRABALHO. **CONFERIR** a simbologia oficial (NBR 14100 / IT do CBMMG) antes da
+    prancha de aprovação.
+- **Sprinkler:** o símbolo muda com a posição (pendente = cruz, em pé = metade cheia, lateral =
+  seta).
+- **Canvas:** a peça de incêndio desenha o símbolo, girado com a peça, no lugar da caixa cheia; a
+  sigla continua ao lado.
+- **Exibir → "Rede de incêndio":** tira trechos e peças de incêndio do 2D, do 3D e do clique, pelo
+  mesmo conjunto de ocultos da elétrica (`idsDaRedeDeIncendio`).
+- ⭐ **O harness visual (SVG → Edge headless) pegou dois defeitos que os testes não pegavam:** a
+  chave de fluxo e o sprinkler lateral eram idênticos (círculo com seta), e o "J" da jockey
+  atropelava o triângulo. A chave de fluxo virou quadrada, e um teste fixa a forma de fora.
+- **Testes:** `blueprintSimbolosIncendio.test.ts` (8) e `components/BlueprintCanvasIncendio.test.tsx`
+  (3, contexto 2D falso). Suíte com 6.473 testes, conta fechada; build ok.
 

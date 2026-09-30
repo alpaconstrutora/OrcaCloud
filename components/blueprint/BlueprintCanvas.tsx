@@ -153,6 +153,7 @@ import type { PressoesDaRede } from '../../utils/blueprintPressaoDaRede';
 const SEM_PRESSOES: readonly PressoesDaRede[] = [];
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
+import { simboloDeIncendio, temSimboloDeIncendio } from '../../utils/blueprintSimbolosIncendio';
 import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
@@ -6376,6 +6377,44 @@ export default function BlueprintCanvas({
         }
         ctx.textAlign = 'start';
         ctx.textBaseline = 'alphabetic';
+      } else if (t.disciplina === 'INCENDIO' && temSimboloDeIncendio(t.tipoHidraulico)) {
+        // ── A REDE DE INCÊNDIO (E1.3, 30/09/2026): o símbolo técnico, e não a
+        // caixa cheia. O lado é a MAIOR medida da peça (o abrigo do hidrante tem
+        // 900 mm), com mínimo de 14 px para o sprinkler de 80 mm não sumir.
+        const lado = Math.max(emTela(Math.max(md.larguraMm, md.profundidadeMm)), 14);
+        const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.translate(c.x, c.y);
+        ctx.rotate((-(giroDaPeca(t) ?? 0) * Math.PI) / 180);
+        ctx.lineWidth = selecionado ? 2.5 : 1.5;
+        ctx.strokeStyle = cor;
+        for (const pr of simboloDeIncendio(t.tipoHidraulico!, t.posicaoSprinkler)) {
+          ctx.beginPath();
+          if (pr.tipo === 'circulo') {
+            ctx.arc(pr.cx * lado, pr.cy * lado, pr.r * lado, 0, Math.PI * 2);
+            ctx.fillStyle = pr.cheio ? cor : '#ffffff';
+            ctx.fill();
+            ctx.stroke();
+          } else if (pr.tipo === 'poligono') {
+            pr.pontos.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x * lado, y * lado) : ctx.lineTo(x * lado, y * lado)));
+            ctx.closePath();
+            ctx.fillStyle = pr.cheio ? cor : '#ffffff';
+            ctx.fill();
+            ctx.stroke();
+          } else if (pr.tipo === 'linha') {
+            ctx.moveTo(pr.x1 * lado, pr.y1 * lado);
+            ctx.lineTo(pr.x2 * lado, pr.y2 * lado);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = cor;
+            ctx.font = `bold ${Math.max(8, Math.round(pr.altura * lado))}px ui-sans-serif, system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(pr.texto, pr.x * lado, pr.y * lado);
+          }
+        }
+        ctx.restore();
       } else {
         ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
         ctx.beginPath();

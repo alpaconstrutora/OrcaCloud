@@ -439,6 +439,7 @@ import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
 import { idsForaDaVistaEletrica } from '../../utils/blueprintRecorteEletrico';
+import { idsDaRedeDeIncendio } from '../../utils/blueprintSimbolosIncendio';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -2760,6 +2761,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // E5.1: a elétrica por tipo de ponto na vista — ligadas por padrão.
   const [mostrarEletricaIluminacao, setMostrarEletricaIluminacao] = usePersistedState('blueprint:mostrarEletricaIluminacao', true);
   const [mostrarEletricaForca, setMostrarEletricaForca] = usePersistedState('blueprint:mostrarEletricaForca', true);
+  // Incêndio E1.3: a rede de incêndio inteira na vista — ligada por padrão.
+  const [mostrarIncendio, setMostrarIncendio] = usePersistedState('blueprint:mostrarIncendio', true);
   const mobiliarioDoNivel = useMemo(() => (levelId ? mobiliarNivel(editor.model, levelId, hipotesesDeMobiliario) : []), [editor.model, levelId, hipotesesDeMobiliario]);
   const mobiliarioParaOCanvas = useMemo(
     () =>
@@ -3974,6 +3977,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const daFase = idsOcultosPelaFase(editor.model, filtroDeFase);
     // E5.1: a elétrica por tipo de ponto — some do desenho E do clique (entra pelo mesmo conjunto).
     for (const id of idsForaDaVistaEletrica(editor.model, { iluminacao: mostrarEletricaIluminacao, forca: mostrarEletricaForca })) daFase.add(id);
+    // Incêndio E1.3: a rede de incêndio some do desenho, do 3D e do clique pelo mesmo conjunto.
+    if (!mostrarIncendio) for (const id of idsDaRedeDeIncendio(editor.model)) daFase.add(id);
     // ETAPAS (P2): o que não existe na etapa em vista.
     for (const id of vistaDaEtapaAtual?.ocultos ?? []) daFase.add(id);
     if (!vistaDePlanta) {
@@ -3985,7 +3990,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     for (const id of ocultosNoDesenho) daVista.add(id);
     for (const id of daFase) daVista.add(id);
     return daVista;
-  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual, mostrarEletricaIluminacao, mostrarEletricaForca]);
+  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual, mostrarEletricaIluminacao, mostrarEletricaForca, mostrarIncendio]);
   /** id → fase (só existente/a demolir), para o canvas colorir; e a fase da seleção, para os botões do ribbon. Com etapa em vista, o status é o DERIVADO dela. */
   const fasesDoDesenho = useMemo(() => vistaDaEtapaAtual?.fases ?? fasePorId(editor.model), [editor.model, vistaDaEtapaAtual]);
   const etapasDoEstudo = useMemo(() => etapasOrdenadas(editor.model), [editor.model]);
@@ -11541,6 +11546,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       alternar: () => setMostrarEletricaForca((v) => !v),
                       ajuda:
                         'Tomadas, TUE, ligação direta, equipamentos, dados e entrada, com os eletrodutos que só os servem. Desligar deixa só a planta de iluminação. Quadros, caixas de passagem e eletrodutos compartilhados ficam sempre.',
+                    },
+                    {
+                      chave: 'incendio',
+                      rotulo: 'Rede de incêndio',
+                      icone: Flame,
+                      ligado: mostrarIncendio,
+                      alternar: () => setMostrarIncendio((v) => !v),
+                      ajuda:
+                        'Tubulação de incêndio, hidrantes, mangotinhos, sprinklers, VGA e bombas — no desenho e no 3D. Desligar tira a rede de combate da vista para trabalhar nas outras instalações; não apaga nada.',
                     },
                     {
                       chave: 'nomes',

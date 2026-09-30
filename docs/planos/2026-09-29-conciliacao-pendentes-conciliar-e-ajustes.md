@@ -177,3 +177,21 @@ com sidebar aberta (print).
 - `npx vitest run` completo: 6.372 passaram + 33 pendentes = 6.405, 0 falhas.
 - `tsc --noEmit` exit 0; `check-ui-standard.sh` nos 2 .tsx exit 0; `check-xss-sinks.sh` exit 0;
   `segurancaMigrations.test.ts` verde.
+
+## Pedido posterior (2026-09-30)
+
+> na aba conciliados: aplicar o toolbar acoplado a tabela + botão de ajuste de colunas
+
+- [x] `components/reconciliation/ConciliatedTab.tsx` — toolbar acoplada (§5.2): busca
+  (`usePersistedState`, sem acento, também por valor), contador "N de M vínculos", engrenagem
+  de colunas (`useTableColumns` + `ColumnConfigButton`, só em modo lista) e alternância
+  grade/lista, tudo no MESMO card da tabela. O título solto "Transações Conciliadas" e o
+  seletor de visão fora do card saíram. Colunas configuráveis (7 + Ações fixa): a lista
+  continua sendo grid CSS, com `grid-template-columns` calculado das colunas visíveis.
+  Cabeçalhos curtos ("Data"/"Valor"), nomes completos só na engrenagem. Cards da grade:
+  `rounded-[2rem]` → `rounded-[10px]` (§16).
+  Visto no navegador (org Garden, conta de leitura, escritas bloqueadas = 0): toolbar no
+  card, ocultar "Data do interno" some a coluna na hora, busca sem resultado mostra o
+  estado vazio. **§6.1 (redimensionar/autofit):** decisão = não se aplica; a lista é grid
+  de larguras fixas, não `<table>`. **Não feito:** arrastar coluna para reordenar.
+  `tsc` 0, `check-ui-standard` 0, `check-xss-sinks` 0, suíte 6.392 + 33 pend. = 6.425, 0 falhas.

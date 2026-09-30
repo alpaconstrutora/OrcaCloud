@@ -228,7 +228,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [loading, setLoading] = React.useState(true);
     const [activeTab, setActiveTab] = React.useState<ContractDetailTab>('overview_resumo');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
-    const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
+    const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingId: string | null; initial: AvulsoItem | null }>({ open: false, editingId: null, initial: null });
     const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
     const [selectedTemplate, setSelectedTemplate] = React.useState<ContractTemplate | undefined>(undefined);
     const [isMeasurementModalOpen, setIsMeasurementModalOpen] = React.useState(false);
@@ -344,6 +344,22 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         return { totalBudgeted: budgeted, totalContracted: contracted, hasDivergence: div };
     }, [items, activeBudget, contract]);
 
+    // Item do ORÇAMENTO = aponta para uma linha do orçamento da obra; todo o resto
+    // é AVULSO — mesma regra de Suprimentos › Pedidos (SupplyChainOrderForm). O
+    // avulso grava 'AVULSO' ou o próprio código em `budget_item_id`. Sem orçamento
+    // carregado não dá para cruzar, e só a marca explícita conta como avulso.
+    const ehAvulso = React.useCallback((item: ContractItem) => {
+        if (!item.budget_item_id || item.budget_item_id === 'AVULSO') return true;
+        return activeBudget.length > 0 && !activeBudget.some(b => b.id === item.budget_item_id);
+    }, [activeBudget]);
+    const itensDoOrcamento = React.useMemo(() => items.filter(i => !ehAvulso(i)), [items, ehAvulso]);
+    const itensAvulsos = React.useMemo(() => items.filter(ehAvulso), [items, ehAvulso]);
+    const abrirAvulso = (item: ContractItem | null) => setAvulsoModalConfig(item ? {
+        open: true,
+        editingId: item.id,
+        initial: { code: item.budget_item_id === 'AVULSO' ? '' : (item.budget_item_id || ''), description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unit_price },
+    } : { open: true, editingId: null, initial: null });
+
     // §6.3 — a planilha de itens ordena por qualquer coluna de valor único,
     // inclusive as derivadas do orçamento (Unit./Total (O), Economia).
     const sortedItems = React.useMemo(() => {
@@ -368,11 +384,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
         const termo = itemsSearch.trim().toLowerCase();
         const base = termo
-            ? items.filter(i =>
+            ? itensDoOrcamento.filter(i =>
                 (i.description || '').toLowerCase().includes(termo) ||
                 (i.budget_item_id || '').toLowerCase().includes(termo) ||
                 (i.unit || '').toLowerCase().includes(termo))
-            : items;
+            : itensDoOrcamento;
 
         const col = itemsColumns.sortColumn;
         if (!col) return base;
@@ -388,7 +404,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
             return String(va).localeCompare(String(vb)) * dir;
         });
-    }, [items, activeBudget, itemsSearch, itemsColumns.sortColumn, itemsColumns.sortDirection]);
+    }, [itensDoOrcamento, activeBudget, itemsSearch, itemsColumns.sortColumn, itemsColumns.sortDirection]);
 
     const vi = itemsColumns.visibleColumns;
 
@@ -843,13 +859,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
-    const handleConfirmAvulso = async (item: AvulsoItem, editingIndex: number | null) => {
+    const handleConfirmAvulso = async (item: AvulsoItem, editingId: string | null) => {
         if (!contract) return;
         try {
-            if (editingIndex !== null) {
-                // Find the avulso item by its position in the items list and update it
-                const avulsoItems = items.filter(i => i.budget_item_id === 'AVULSO');
-                const target = avulsoItems[editingIndex];
+            if (editingId !== null) {
+                // Pelo id: a busca antiga pela POSIÇÃO entre os `budget_item_id =
+                // 'AVULSO'` não achava o avulso gravado com código (ele guarda o código).
+                const target = items.find(i => i.id === editingId);
                 if (target) {
                     await contractService.updateContractItem(target.id, {
                         description: item.description,
@@ -873,7 +889,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             }
             const updatedItems = await contractService.listContractItems(contractId);
             setItems(updatedItems);
-            setAvulsoModalConfig({ open: false, editingIndex: null, initial: null });
+            setAvulsoModalConfig({ open: false, editingId: null, initial: null });
             notify('Item avulso salvo com sucesso!', 'success');
         } catch (error) {
             console.error('Erro ao salvar item avulso:', error);
@@ -1292,21 +1308,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     ))}
                 </div>
-
-                {/* §17/§19.1: ação primária compacta, única azul sólida da tela, no
-                    slot à direita do card de abas. Morava sozinha na barra §5.3
-                    abaixo, que em Resumo/Execução/Riscos/Medições… era um card
-                    inteiro só para ela. Não usar o <Button> compartilhado — a
-                    classe BASE dele herda font-black uppercase + shadow pesado. */}
-                <button
-                    onClick={() => handleSendWebhook()}
-                    disabled={loading}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
-                    title="Enviar para Automação (Make.com)"
-                >
-                    <Zap className="w-[15px] h-[15px]" />
-                    Enviar automação
-                </button>
             </div>
 
             {/* §5.3 — barra de ações do escopo da aba ativa. Só existe quando a
@@ -1317,12 +1318,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     {/* Ações da planilha de itens — escopo da aba ativa (§5.3) */}
                     {activeTab === 'items' && (
                         <>
-                            <button
-                                onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
-                            >
-                                <Package className="w-[15px] h-[15px]" /> Item avulso
-                            </button>
                             <button
                                 onClick={() => setIsBudgetPickerOpen(true)}
                                 className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0"
@@ -1422,6 +1417,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         </button>
                     )}
                 </div>
+
+                {/* §17: ação primária da aba Emissão — enviar o contrato para a
+                    automação (Make.com) é parte da emissão, ao lado de emitir o
+                    .docx; não é ação de toda aba (pedido de 2026-09-30). Não usar
+                    o <Button> compartilhado — a classe BASE dele herda font-black
+                    uppercase + shadow pesado. */}
+                {activeTab === 'emissao' && (
+                    <button
+                        onClick={() => handleSendWebhook()}
+                        disabled={loading}
+                        className="ml-auto flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
+                        title="Enviar para Automação (Make.com)"
+                    >
+                        <Zap className="w-[15px] h-[15px]" />
+                        Enviar automação
+                    </button>
+                )}
             </div>
             )}
 
@@ -1874,7 +1886,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                             </div>
 
-                            {/* §17 — secundário: a ação primária azul da tela é "Enviar automação". */}
+                            {/* Secundário: emitir o dossiê é consulta, não a ação principal do contrato. */}
                             <button
                                 type="button"
                                 onClick={handleExportReport}
@@ -2198,11 +2210,20 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     </div>
 
                     {/* §5.2 — toolbar e tabela num único card (escala compacta §16) */}
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col min-h-[500px]">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         {/* §5.2 — toolbar acoplada: busca à esquerda, controles de
                             coluna à direita. As ações da planilha moram na barra de
                             botões §5.3, acima. */}
                         <div className="p-2 border-b border-gray-100 bg-white flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex items-center gap-2 px-2 shrink-0">
+                                <Layers className="w-4 h-4 shrink-0 text-blue-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Itens do orçamento</h3>
+                                {itensDoOrcamento.length > 0 && (
+                                    <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
+                                        {itensDoOrcamento.length} {itensDoOrcamento.length === 1 ? 'item' : 'itens'}
+                                    </span>
+                                )}
+                            </div>
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
@@ -2227,13 +2248,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                         {/* §12 — empty state fora da tabela: dentro do card acoplado (§5.2)
                             vai sem moldura própria, e fora da célula não conflita com o §7 */}
-                        {items.length === 0 ? (
+                        {itensDoOrcamento.length === 0 ? (
                             <div className="text-center py-12">
                                 <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item vinculado a este contrato</h3>
-                                <p className="text-sm text-gray-500 mb-6">Importe do orçamento da obra ou cadastre um item avulso.</p>
+                                <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum item do orçamento</h3>
+                                <p className="text-sm text-gray-500 mb-6">Importe itens do orçamento da obra. Itens fora do orçamento vão em "Itens avulsos", abaixo.</p>
                                 <button onClick={() => setIsBudgetPickerOpen(true)} className="text-blue-600 text-sm font-medium hover:underline">
-                                    Adicionar primeiro item
+                                    Importar do orçamento
                                 </button>
                             </div>
                         ) : sortedItems.length === 0 ? (
@@ -2365,26 +2386,15 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             {/* §9 — coluna de ações SEMPRE visível (nada de opacity-0 group-hover) */}
                                             <td className="px-6 py-2.5 text-right">
                                                 <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    {(item.budget_item_id === 'AVULSO' || !item.budget_item_id || item.budget_item_id === item.budget_item_id) && (
-                                                        <ActionIconButton
-                                                            kind="edit"
-                                                            tone="attention"
-                                                            onClick={() => {
-                                                                // Find index among avulso items only
-                                                                const avulsoItems = items.filter(i => i.budget_item_id === 'AVULSO' || (!i.budget_item_id));
-                                                                const idx = avulsoItems.findIndex(a => a.id === item.id);
-                                                                if (idx !== -1) {
-                                                                    setAvulsoModalConfig({
-                                                                        open: true,
-                                                                        editingIndex: idx,
-                                                                        initial: { code: item.budget_item_id === 'AVULSO' ? '' : (item.budget_item_id || ''), description: item.description, unit: item.unit, quantity: item.quantity, unitPrice: item.unit_price }
-                                                                    });
-                                                                }
-                                                            }}
-                                                            title={item.budget_item_id === 'AVULSO' || !item.budget_item_id ? 'Editar Item Avulso' : 'Edição de item WBS disponível em breve'}
-                                                            disabled={item.budget_item_id !== 'AVULSO' && !!item.budget_item_id}
-                                                        />
-                                                    )}
+                                                    {/* Item do orçamento: quantidade e preço vêm da importação.
+                                                        Avulso se edita na seção "Itens avulsos", abaixo. */}
+                                                    <ActionIconButton
+                                                        kind="edit"
+                                                        tone="attention"
+                                                        onClick={() => { /* desabilitado — ver title */ }}
+                                                        title="Item importado do orçamento: edição ainda não disponível — remova e importe de novo para mudar"
+                                                        disabled
+                                                    />
                                                     <ActionIconButton kind="delete" title="Remover Item" onClick={() => handleDeleteItem(item.id)} />
                                                 </div>
                                             </td>
@@ -2393,6 +2403,80 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </tbody>
                             </table>
                         </div>
+                        )}
+                    </div>
+
+                    {/* Itens avulsos — fora do orçamento da obra. Seção própria, como em
+                        Suprimentos › Pedidos (pedido de 2026-09-30): régua acoplada
+                        §5.2 com título, contagem e a ação da seção; tabela no mesmo card. */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2 px-2">
+                                <Package className="w-4 h-4 shrink-0 text-orange-500" />
+                                <h3 className="text-sm font-semibold text-gray-900">Itens avulsos</h3>
+                                {itensAvulsos.length > 0 && (
+                                    <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
+                                        {itensAvulsos.length} {itensAvulsos.length === 1 ? 'item' : 'itens'}
+                                    </span>
+                                )}
+                            </div>
+                            {/* §17 compacto; laranja = ação desta seção, não a primária da tela (igual a Pedidos) */}
+                            <button
+                                type="button"
+                                onClick={() => abrirAvulso(null)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 shrink-0"
+                            >
+                                <Plus className="w-[15px] h-[15px]" />
+                                Item avulso
+                            </button>
+                        </div>
+                        {itensAvulsos.length === 0 ? (
+                            <div className="text-center py-12">
+                                <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                                <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item avulso</h4>
+                                <p className="text-sm text-gray-500">Use o botão acima para incluir itens que não estão no orçamento da obra.</p>
+                            </div>
+                        ) : (
+                            <div className="overflow-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <th className="px-6 py-2 border-r border-gray-100">Código</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-center">Unid.</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd.</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Preço unit.</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Total</th>
+                                            <th className="px-6 py-2 text-right text-table-header font-semibold text-gray-500">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {itensAvulsos.map(item => (
+                                            <tr key={item.id} className="hover:bg-blue-50/50 transition-colors">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                                                    {item.budget_item_id && item.budget_item_id !== 'AVULSO' ? item.budget_item_id : '—'}
+                                                </td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{item.description}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-center text-sm font-normal text-gray-600">{item.unit}</td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-normal text-gray-600">{item.quantity.toLocaleString('pt-BR')}</td>
+                                                {/* §7: valor financeiro é o único caso com font-medium */}
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                    R$ {item.unit_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800">
+                                                    R$ {item.total_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-6 py-2.5 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <ActionIconButton kind="edit" tone="attention" title="Editar item avulso" onClick={() => abrirAvulso(item)} />
+                                                        <ActionIconButton kind="delete" title="Remover item" onClick={() => handleDeleteItem(item.id)} />
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
 
@@ -3234,8 +3318,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {avulsoModalConfig.open && (
                 <AvulsoItemModal
                     initial={avulsoModalConfig.initial}
-                    onConfirm={(item) => handleConfirmAvulso(item, avulsoModalConfig.editingIndex)}
-                    onClose={() => setAvulsoModalConfig({ open: false, editingIndex: null, initial: null })}
+                    onConfirm={(item) => handleConfirmAvulso(item, avulsoModalConfig.editingId)}
+                    onClose={() => setAvulsoModalConfig({ open: false, editingId: null, initial: null })}
                 />
             )}
 

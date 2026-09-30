@@ -37,6 +37,7 @@
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, TipoDeCondutor, Trecho } from './blueprintKernel';
 import { cadeiaDeQuadros, repartirCondutores, secoesDosCondutores } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
+import { desequilibrioDasFases, somarPorFase, type CargaPorFase } from './blueprintFasesEletricas';
 
 // ─── Tabela 36 — capacidade de condução de corrente (A) ────────────────────
 //
@@ -938,11 +939,8 @@ export function limiteQuedaTotalEfetivoPct(hip: Pick<HipotesesEletricas, 'limite
   return hip.origemComTransformador ? Math.max(7, hip.limiteQuedaTotalPct) : hip.limiteQuedaTotalPct;
 }
 
-export interface CargaPorFase {
-  R: number;
-  S: number;
-  T: number;
-}
+/** E6.1: a carga por fase mora em `blueprintFasesEletricas.ts` (a convenção do F-F); reexportada aqui. */
+export type { CargaPorFase };
 
 export interface PreDimensionamentoDoQuadro {
   quadroId: string;
@@ -1261,29 +1259,15 @@ export function preDimensionarQuadroCompleto(
 
   // Balanceamento — só faz sentido em quadro trifásico.
   if (ligacao === 'FFF') {
-    const fases: CargaPorFase = { R: 0, S: 0, T: 0 };
-    const semFase: string[] = [];
-    for (const c of circuitosDoQuadro) {
-      const r = circuitos.find((x) => x.circuitoId === c.id);
-      const s = r?.sVA ?? 0;
-      const lig = c.ligacao ?? 'FN';
-      if (lig === 'FFF') {
-        fases.R += s / 3;
-        fases.S += s / 3;
-        fases.T += s / 3;
-      } else if (lig === 'FN') {
-        if (c.fase) fases[c.fase] += s;
-        else semFase.push(c.nome);
-      } else {
-        semFase.push(`${c.nome} (F-F)`);
-      }
-    }
+    // E6.1: F-F com fase entra (metade em cada fase do par) — ver `blueprintFasesEletricas.ts`.
+    const { fases, semFase } = somarPorFase(
+      circuitosDoQuadro.map((c) => ({ nome: c.nome, ligacao: c.ligacao, fase: c.fase, sVA: circuitos.find((x) => x.circuitoId === c.id)?.sVA ?? 0 })),
+    );
     base.fases = fases;
     if (semFase.length > 0) naoAvaliado.push(`fora do balanceamento (sem fase): ${semFase.join(', ')}`);
-    const valores = [fases.R, fases.S, fases.T];
-    const max = Math.max(...valores);
-    if (max > 0) {
-      base.desequilibrioPct = ((max - Math.min(...valores)) / max) * 100;
+    const deseq = desequilibrioDasFases(fases);
+    if (deseq != null) {
+      base.desequilibrioPct = deseq;
       if (base.desequilibrioPct > hip.desequilibrioMaxPct) {
         achados.push({
           nivel: 'AVISO',

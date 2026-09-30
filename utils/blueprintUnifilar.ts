@@ -29,7 +29,7 @@
  * encolhe um quadro largo para caber).
  */
 import type { Desenhista } from './blueprintExport';
-import type { BlueprintModel, FaseDoCircuito, LigacaoDoCircuito } from './blueprintKernel';
+import type { BlueprintModel, LigacaoDoCircuito } from './blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   preDimensionarQuadroCompleto,
@@ -37,6 +37,7 @@ import {
   type PreDimensionamentoDoQuadro,
 } from './blueprintEletricaDimensionamento';
 import { numeroDoCircuito } from './blueprintCondutores';
+import { rotuloDaFase } from './blueprintFasesEletricas';
 import { secaoDoPeMm2 } from './blueprintKernel';
 import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 
@@ -65,8 +66,8 @@ export interface RamalUnifilar {
   pontos: number;
   /** E3.1: o DR do ramal (individual ou de grupo) — `null` sem DR ou quando só há o geral. */
   dr: { rotulo: string; compartilhado: boolean; legado: boolean } | null;
-  /** Fase DECLARADA (R/S/T) do circuito F-N no quadro trifásico (E0.4); null fora disso. */
-  fase: FaseDoCircuito | null;
+  /** Fase DECLARADA no quadro trifásico: "R" (F-N, E0.4) ou o par "R-S" (F-F, E6.1); null fora disso. */
+  fase: string | null;
   /** Quantas FALTAS o pré-dimensionamento acusa neste circuito. */
   faltas: number;
 }
@@ -155,7 +156,8 @@ function ramaisDe(model: BlueprintModel, q: PreDimensionamentoDoQuadro): RamalUn
         const d = circuito ? drDoCircuito(model, circuito) : null;
         return d && !d.geral ? { rotulo: rotuloDoDR(d), compartilhado: d.circuitoIds.length > 1, legado: d.legado } : null;
       })(),
-      fase: circuito?.fase ?? null,
+      // E6.1: F-N "R", F-F o par "R-S"; F-F-F sem rótulo (as três fases já estão no 3#).
+      fase: (circuito?.ligacao ?? c.ligacao) === 'FFF' ? null : rotuloDaFase(circuito?.ligacao ?? c.ligacao, circuito?.fase),
       faltas: c.achados.filter((a) => a.nivel === 'FALTA').length,
       reserva: c.reserva,
       quadroFilho: false,
@@ -456,7 +458,7 @@ export function rodapeDoUnifilar(diagramas: readonly DiagramaUnifilar[]): string
   if (diagramas.some((d) => d.entrada.dps)) L.push('DPS: dispositivo de proteção contra surtos — derivação do barramento para a terra, logo após o geral; classe, In (kA) e Up (kV) declarados (6.3.5.2).');
   if (diagramas.some((d) => d.comDR)) L.push('DR: dispositivo diferencial-residual — na entrada (geral do quadro) ou no ramal (individual; "grupo" = compartilhado por mais de um circuito); "In / IΔn", 30 mA para pessoas (5.1.3.2.2).');
   L.push('Condutores: "2#2,5 + T2,5" = dois carregados de 2,5 mm² e terra de 2,5 mm² (ligação FN/FF); "3#…" em FFF.');
-  if (diagramas.some((d) => d.comFases)) L.push('R / S / T sobre o ramal: fase declarada do circuito F-N no quadro trifásico — o balanceamento soma por fase.');
+  if (diagramas.some((d) => d.comFases)) L.push('R / S / T sobre o ramal: fase declarada do circuito F-N no quadro trifásico; R-S / S-T / T-R: o par do F-F — o balanceamento soma por fase.');
   if (diagramas.some((d) => d.comSugerido)) L.push('"sug." = valor do pré-dimensionamento, ainda não declarado no quadro de cargas — declare para assumir.');
   return L;
 }

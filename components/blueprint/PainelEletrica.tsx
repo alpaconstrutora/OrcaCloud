@@ -5,7 +5,7 @@ import type { BlueprintModel, Command, CurvaDoDisjuntor, DispositivoDPS, DRDoQua
 import { CURVAS_DO_DISJUNTOR, drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
 import { sugerirDRs } from '../../utils/blueprintNbr5410';
 import { entradaDoQuadro } from '../../utils/blueprintEntradaDeEnergia';
-import { FASES_DO_CIRCUITO, LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
+import { LIGACOES_DO_CIRCUITO, SECOES_NOMINAIS_DE_CONDUTOR_MM2, composicaoDaRede, condutoresDoCircuito, quadroDeCargas, secoesDosCondutores } from '../../utils/blueprintKernel';
 import {
   HIPOTESES_PADRAO,
   SERIE_COMERCIAL_DE_DISJUNTORES_A,
@@ -25,6 +25,8 @@ import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import ActionIconButton from '../ui/ActionIconButton';
 import { pontosAPreencher } from '../../utils/blueprintPotenciaPadrao';
+import { opcoesDeFase } from '../../utils/blueprintFasesEletricas';
+import { planoDeBalanceamento } from '../../utils/blueprintBalanceamento';
 import { proximoNumeroDeCircuito, renumerarCircuitos } from '../../utils/blueprintCircuitosAutomaticos';
 import { comandosDoModelo, pendenciasDoComando } from '../../utils/blueprintComandos';
 import { ROTULO_DO_INTERRUPTOR } from '../../utils/blueprintRede';
@@ -542,25 +544,25 @@ export default function PainelEletrica({
           />
         );
       case 'fase':
-        // A fase só se declara em F-N: F-F e trifásico usam duas ou três fases.
-        return l.ligacao === 'FN' ? (
+        // F-N escolhe uma fase; F-F um PAR (E6.1 — gravado pela 1ª fase, ver `blueprintFasesEletricas.ts`); F-F-F usa as três.
+        return l.ligacao !== 'FFF' ? (
           <select
             value={l.fase ?? ''}
             onChange={(e) => onCircuitoProps(l.circuitoId, { fase: (e.target.value || null) as FaseDoCircuito | null })}
             aria-label={`Fase do circuito ${l.nome}`}
-            title="Fase do circuito F-N no quadro trifásico (R/S/T) — o balanceamento soma por fase"
+            title={l.ligacao === 'FF' ? 'Par de fases do circuito F-F no quadro trifásico — o balanceamento soma metade em cada' : 'Fase do circuito F-N no quadro trifásico (R/S/T) — o balanceamento soma por fase'}
             className={`${CAMPO_NA_CELULA} text-center`}
           >
             <option value="">—</option>
-            {FASES_DO_CIRCUITO.map((f) => (
-              <option key={f} value={f}>
-                {f}
+            {opcoesDeFase(l.ligacao).map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.rotulo}
               </option>
             ))}
           </select>
         ) : (
-          <span className="block text-center text-sm text-gray-400" title="Fase só se escolhe em circuito F-N; F-F e trifásico usam duas ou três fases">
-            —
+          <span className="block text-center text-sm text-gray-400" title="Circuito trifásico: usa as três fases (R, S e T)">
+            RST
           </span>
         );
       case 'nome':
@@ -1179,6 +1181,9 @@ export default function PainelEletrica({
                       sugestoesDeDR={sugerirDRs(model, q.quadroId, hipoteses)}
                       catalogoDeDrA={hipoteses.catalogoDeDrA}
                       onDR={onDR}
+                      // E6.1: o balanceamento é um lote como o do DR (o mesmo `runBatch`, um passo de Ctrl+Z).
+                      balanceamento={pq.fases ? planoDeBalanceamento(model, q.quadroId, hipoteses) : undefined}
+                      onBalancear={onDR}
                       dps={quadro.dps ?? null}
                       dpsSugerido={sugerirDPS(hipoteses)}
                       exposicao={ROTULO_DA_EXPOSICAO[hipoteses.exposicaoARaios]}

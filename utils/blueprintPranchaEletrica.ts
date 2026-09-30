@@ -49,6 +49,7 @@ import { composicaoDaRede, condutoresDoCircuito, linhasDosTrechosNumerados, trec
 import { drDoCircuito, drsDoQuadro, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
 import { entradaDoQuadro, rotuloDaEntrada } from './blueprintEntradaDeEnergia';
 import { fatorDeDiversidade } from './blueprintEletricaDimensionamento';
+import { rotuloDaFase } from './blueprintFasesEletricas';
 import { ROTULO_DO_RECORTE, categoriaDoPonto, categoriaDoTrecho, categoriasDosCircuitos, entraNoRecorte, type CategoriaEletrica, type RecorteEletrico } from './blueprintRecorteEletrico';
 import {
   HIPOTESES_PADRAO,
@@ -541,7 +542,8 @@ export function desenharQuadroDeCargas(
         `${c.disjuntorDeclaradoA ?? '—'}${c.curvaDeclarada ? ` ${c.curvaDeclarada}` : ''} / ${c.disjuntorSugeridoA ?? '—'} ${c.curvaSugerida}`,
         c.quedaPct == null ? '—' : `${n1(c.quedaPct)}${c.comprimento?.origem === 'ESTIMADO' ? '*' : ''}`,
         dr,
-        circuito?.fase ?? (c.ligacao === 'FN' ? '—' : ''),
+        // E6.1: F-F mostra o par (R-S), F-F-F "RST"; F-N/F-F sem fase, "—".
+        rotuloDaFase(circuito?.ligacao ?? c.ligacao, circuito?.fase) ?? '—',
         circuito ? condutoresDoCircuito(circuito, c.secaoDeclaradaMm2 ?? c.secaoCalculada?.secaoMm2 ?? null, fiacao).texto : '—',
       ];
       cel.forEach((v, i) => d.texto(x0 + col[i], y, v, 1.9, cor));

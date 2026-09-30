@@ -5,6 +5,8 @@ import type { PreDimensionamentoDoQuadro } from '../../utils/blueprintEletricaDi
 import type { SugestaoDeDR } from '../../utils/blueprintNbr5410';
 import { comandosDasSugestoesDeDR } from '../../utils/blueprintNbr5410';
 import { rotuloDaEntrada, type EntradaDoQuadro } from '../../utils/blueprintEntradaDeEnergia';
+import { opcoesDeFase } from '../../utils/blueprintFasesEletricas';
+import type { PlanoDeBalanceamento } from '../../utils/blueprintBalanceamento';
 import { Plus, X } from 'lucide-react';
 
 /**
@@ -43,13 +45,15 @@ export default function PainelQuadroAlimentador({
   entrada = null,
   unidadeId = null,
   unidades = [],
+  balanceamento,
+  onBalancear,
 }: {
   q: PreDimensionamentoDoQuadro;
   ligacaoDeclarada: LigacaoDoCircuito | null;
   tensaoDeclarada: number | null;
   alimentadorM: number | null;
   onQuadro: (campos: { ligacao?: LigacaoDoCircuito | null; tensaoV?: number | null; alimentadorM?: number | null; dps?: DispositivoDPS | null; icnKa?: number | null; tipo?: TipoDeQuadro | null; quadroPaiId?: ObjectId | null; unidadeId?: ObjectId | null }) => void;
-  /** Em quadro trifásico: a fase declarada de cada circuito FN, para o select. */
+  /** Em quadro trifásico: a fase declarada de cada circuito F-N e F-F (o F-F grava a 1ª fase do par — `blueprintFasesEletricas.ts`). */
   fasesDosCircuitos: { circuitoId: string; nome: string; ligacao: LigacaoDoCircuito; fase: FaseDoCircuito | null }[];
   onFase: (circuitoId: string, fase: FaseDoCircuito | null) => void;
   /** E3.1: os DRs do quadro (peças + legados), o que a 5.1.3.2.2 ainda pede, o catálogo de In e quem grava. */
@@ -74,7 +78,11 @@ export default function PainelQuadroAlimentador({
   /** E4.4: a unidade que este quadro atende e as unidades do Empreendimento para escolher. */
   unidadeId?: ObjectId | null;
   unidades?: { id: ObjectId; numero: string }[];
+  /** E6.1: o plano de balanceamento deste quadro (prévia) e quem aplica o lote (um passo de Ctrl+Z). */
+  balanceamento?: PlanoDeBalanceamento;
+  onBalancear?: (comandos: Command[]) => void;
 }) {
+  const [previaAberta, setPreviaAberta] = React.useState(false);
   const faltas = q.achados.filter((a) => a.nivel === 'FALTA');
   const avisos = q.achados.filter((a) => a.nivel === 'AVISO');
   const campo = 'rounded border border-slate-200 px-1.5 py-0.5 text-sm';
@@ -242,7 +250,7 @@ export default function PainelQuadroAlimentador({
             {q.desequilibrioPct != null && <> · desequilíbrio {n1(q.desequilibrioPct)} %</>}
           </span>
           {fasesDosCircuitos
-            .filter((c) => c.ligacao === 'FN')
+            .filter((c) => c.ligacao !== 'FFF')
             .map((c) => (
               <label key={c.circuitoId} className="flex items-center gap-1">
                 {c.nome}
@@ -250,15 +258,62 @@ export default function PainelQuadroAlimentador({
                   value={c.fase ?? ''}
                   onChange={(e) => onFase(c.circuitoId, (e.target.value || null) as FaseDoCircuito | null)}
                   aria-label={`Fase do circuito ${c.nome}`}
+                  title={c.ligacao === 'FF' ? 'Circuito F-F ocupa duas fases — escolha o par' : 'Fase do circuito F-N'}
                   className={campo}
                 >
                   <option value="">—</option>
-                  <option value="R">R</option>
-                  <option value="S">S</option>
-                  <option value="T">T</option>
+                  {opcoesDeFase(c.ligacao).map((o) => (
+                    <option key={o.valor} value={o.valor}>
+                      {o.rotulo}
+                    </option>
+                  ))}
                 </select>
               </label>
             ))}
+          {/* E6.1 — BALANCEAR: abre a prévia (antes → depois, quem muda); só "Aplicar" grava, num lote. */}
+          {onBalancear && balanceamento && (
+            <button
+              type="button"
+              onClick={() => setPreviaAberta((v) => !v)}
+              disabled={!balanceamento.ok}
+              aria-expanded={balanceamento.ok ? previaAberta : undefined}
+              title={balanceamento.ok ? 'Distribuir os circuitos F-N e F-F entre R, S e T — mostra a prévia antes de gravar' : balanceamento.motivo}
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            >
+              Balancear
+            </button>
+          )}
+        </div>
+      )}
+
+      {previaAberta && onBalancear && balanceamento?.ok && (
+        <div data-testid="previa-balanceamento" aria-label={`Prévia do balanceamento do quadro ${q.nome}`} className="rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-slate-700">
+          <p>
+            Desequilíbrio {balanceamento.antesPct == null ? '—' : `${n1(balanceamento.antesPct)} %`}
+            {balanceamento.semFaseAntes.length > 0 && <span className="text-slate-500"> (sem contar {balanceamento.semFaseAntes.length} sem fase)</span>}
+            {' → '}
+            <span className="font-semibold">{n1(balanceamento.depoisPct)} %</span> (limite {n1(balanceamento.limitePct)} %) · R {va(balanceamento.depois.R)} · S {va(balanceamento.depois.S)} · T {va(balanceamento.depois.T)}
+          </p>
+          <p className="text-slate-600">{balanceamento.mudancas.map((m) => `${m.nome}: ${m.de ?? '—'} → ${m.para}`).join(' · ')}</p>
+          {balanceamento.depoisPct > balanceamento.limitePct && (
+            <p className="text-amber-700">Nem o melhor arranjo cabe no limite: um circuito grande domina uma fase. Divida a carga dele ou passe-o para F-F/F-F-F.</p>
+          )}
+          <div className="mt-1 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onBalancear(balanceamento.comandos);
+                setPreviaAberta(false);
+              }}
+              title="Grava as fases num passo só — Ctrl+Z desfaz"
+              className="rounded bg-blue-600 px-2 py-0.5 font-medium text-white hover:bg-blue-700"
+            >
+              Aplicar ({balanceamento.mudancas.length} {balanceamento.mudancas.length === 1 ? 'circuito' : 'circuitos'})
+            </button>
+            <button type="button" onClick={() => setPreviaAberta(false)} className="rounded border border-slate-200 bg-white px-2 py-0.5 text-slate-600 hover:bg-slate-50">
+              Cancelar
+            </button>
+          </div>
         </div>
       )}
 

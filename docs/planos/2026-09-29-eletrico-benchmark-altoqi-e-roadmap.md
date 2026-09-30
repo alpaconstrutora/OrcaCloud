@@ -1976,7 +1976,7 @@ Fecha o bloco **7** e a parte do **6** que é "lista de materiais".
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 6.1 Balanceamento de fases | `utils/blueprintBalanceamento.ts` puro: atribuição gulosa por carga (maior circuito na fase menos carregada, FF ocupa duas), prévia com desequilíbrio antes/depois, um lote, Ctrl+Z; "Balancear" na aba Quadros | teste: 6 circuitos desiguais → desequilíbrio ≤ 10 %; `conferirPlano` |
+| 6.1 Balanceamento de fases ✅ (F-F grava o par pela 1ª fase, sem bump; guloso + melhoria local + menos mudanças; prévia conferida contra o quadro) | `utils/blueprintBalanceamento.ts` puro: atribuição gulosa por carga (maior circuito na fase menos carregada, FF ocupa duas), prévia com desequilíbrio antes/depois, um lote, Ctrl+Z; "Balancear" na aba Quadros | teste: 6 circuitos desiguais → desequilíbrio ≤ 10 %; `conferirPlano` |
 | 6.2 Centro de cargas | `utils/blueprintCentroDeCargas.ts`: centroide ponderado por VA dos pontos do quadro (ou de todos, se o quadro não existe), região sugerida na planta (círculo tracejado), botão "Sugerir posição do quadro" que move o quadro sugerido ou cria um `sugerido` | teste com 4 pontos; canvas mostra a região; mover apaga a marca |
 | 6.3 Desvio estrutural e caixas de passagem | `planejarEletrodutos` usa `blueprintObstaculosEstruturais` (pilar +custo, viga: descer sob a viga como a água faz) e `rotaPelasParedes` como opção "pela parede" (hipótese `rotaPelaParede`); caixa de passagem automática a cada 15 m e em curva > 2 (hipótese com fonte 6.2.11.1.7); Ø comerciais até 85; distribuição de luminárias em malha por área (A) | teste: eletroduto que cruzava pilar contorna; caixas aparecem no 2D/3D/quantitativo; `blueprintEletrodutos.test.ts` |
 
@@ -3305,3 +3305,49 @@ entre estudos (o texto é por estudo).
 
 **Etapa 5 concluída** (3 de 3, sem bump de kernel): plantas de luz e força, legenda desenhada e lista de
 materiais, memoriais descritivo e de cálculo em PDF/DOCX.
+### E6.1 — Balanceamento de fases (29/09/2026) · frente `eletrico-e6` · sem bump
+
+**O que mudou**
+
+- **A fase do F-F** (`utils/blueprintFasesEletricas.ts`, novo): o modelo guarda uma fase por circuito e o
+  kernel já a aceitava em qualquer ligação — sem bump, o F-F passa a ler a fase gravada como a 1ª do par no
+  sentido R → S → T → R (R = R-S, S = S-T, T = T-R; todo par de duas fases é um desses). `fasesOcupadas`,
+  `rotuloDaFase`, `opcoesDeFase`, `somarPorFase` (F-N inteira na fase, F-F metade em cada, F-F-F um terço)
+  e `desequilibrioDasFases` são a ÚNICA leitura disso — o dimensionamento do quadro passou a usá-las (o F-F
+  com fase, antes sempre "fora do balanceamento", agora soma).
+- **Balanceador** (`utils/blueprintBalanceamento.ts`, novo, puro): `balancearFases` = guloso do maior para o
+  menor circuito (a opção que deixa a menor dispersão), melhoria local (mover um ou trocar dois enquanto a
+  dispersão cair) e, entre as 6 trocas de rótulo R/S/T (que não mudam o desequilíbrio), a que mantém mais
+  circuitos onde já estavam. F-F-F entra fixo; circuito sem carga fica como está. `planoDeBalanceamento`
+  (antes/depois, quem muda, os `SetCircuitoProps { fase }`) recusa com motivo: quadro não trifásico, nenhum
+  F-N/F-F com carga, ou arranjo atual já tão bom quanto o balanceado ("nada a mudar"). `conferirPlanoDeBalanceamento`
+  aplica o lote num rascunho e confere que o QUADRO recalculado mostra exatamente o "depois" da prévia.
+- **Tela** (aba Quadros, `PainelQuadroAlimentador`): botão "Balancear" ao lado da carga por fase → prévia
+  (desequilíbrio antes → depois com o limite, R/S/T depois, "C1: — → R · …", aviso quando nem o melhor
+  arranjo cabe no limite) → "Aplicar (n circuitos)" manda o lote pelo mesmo `runBatch` do DR (um Ctrl+Z);
+  "Cancelar" fecha. Desligado, o title diz o motivo. O select de fase do F-F (na aba e na tabela de
+  circuitos) oferece o PAR; o F-F-F mostra "RST".
+- **Documentos**: o quadro de cargas mostra "R-S" no F-F e "RST" no F-F-F; o unifilar escreve o par sobre
+  o ramal F-F (F-F-F segue sem rótulo — o 3# já diz) e o rodapé explica o par.
+
+**Testes** — novo `__tests__/blueprintBalanceamento.test.ts` (15): a convenção (fases, rótulo, opções); a
+soma com F-F e o que fica fora; o quadro somando o F-F com fase; **6 circuitos desiguais sem fase →
+desequilíbrio ≤ 10 %**, lote só com `SetCircuitoProps {fase}`, conferido e sem aviso no quadro; F-F + F-N
+e três F-F iguais chegando a 0 %; F-F-F fixo; menos mudanças (só o sem fase ganha a que falta); arranjo já
+bom → nada; circuito dominante → a prévia sabe que passa do limite; recusas com motivo; determinismo;
+**propriedade em 200 quadros aleatórios** (confere sempre, conserva a carga, nunca piora quem já tinha
+fase); os rótulos no quadro de cargas e no unifilar; o lote não toca no modelo original. Novo
+`__tests__/components/PainelBalanceamento.test.tsx` (4, jsdom): prévia sem gravar e "Aplicar" com o lote
+inteiro numa chamada; "Cancelar"; desligado com motivo; o select do F-F com o par.
+
+**O que os testes pegaram antes de publicar**: só o próprio teste — um caso "F-F 4000 + três F-N 2000 → 4000
+em cada fase" era impossível (o total é 10 000); o balanceador achou o ótimo real (50 %). Trocado por casos
+com ótimo exato conhecido.
+
+**Verificação**: `tsc` ✓ · alvo 53 ✓ (novos + quadro, painel, unifilar, prancha) · suíte inteira **6.313 ✓**
+(6.346 = 6.313 + 33 pulados, 587 arquivos, conta fechada, sem queda de worker) · `vite build` ✓ ·
+`check-ui-standard` ✓ (2 arquivos) · `check-xss-sinks` ✓ · sem mudança no kernel. Sem harness visual (o
+"pronto quando" não pede; o comportamento da prévia está no teste de componente).
+
+**Efeito no benchmark**: "Balanceamento por fase" ❌→✅ (motor que atribui, com prévia e lote); "Seleção das
+fases" 🟡→✅ (F-F escolhe o par).

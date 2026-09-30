@@ -6,9 +6,12 @@ import React from 'react';
  *
  * ⚠️ Exceção deliberada ao `docs/ui_ux_guia_unificado.md` §24 — autorizada pelo
  * usuário em 2026-08-15 ("vamos abrir exceção neste caso") e estendida ao Portal
- * do Fornecedor em 2026-08-19 ("aplicar UI UX igual ao portal do investidor").
+ * do Fornecedor em 2026-08-19 ("aplicar UI UX igual ao portal do investidor"),
+ * e à aba Financeiro do Portal do Parceiro em 2026-09-30 ("aplicar o mesmo design
+ * usado no portal do fornecedor > financeiro").
  * Vale SÓ para `components/investor/portal/*` e `components/supplier/portal/*`,
- * mais os trechos recortados por `isPublicExperience` nos dois dashboards.
+ * mais os trechos recortados por `isPublicExperience` nos dois dashboards, mais
+ * `components/partner/PartnerPortalFinanceiro.tsx`.
  * Nenhuma tela interna do app usa este arquivo.
  *
  * O que diverge do guia (e só aqui): pílula de status com fundo (§8), `<thead>`

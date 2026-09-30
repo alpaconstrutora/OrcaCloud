@@ -44,6 +44,7 @@ import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import PortalMyData from '../supplier/portal/PortalMyData';
+import PartnerPortalFinanceiro from './PartnerPortalFinanceiro';
 import {
   PartnerSupplierProfile,
   EMPTY_SUPPLIER_PROFILE,
@@ -1836,128 +1837,19 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             </div>
           )}
 
-          {/* TAB: FINANCEIRO */}
+          {/* TAB: FINANCEIRO — vocabulário §24, o mesmo do Portal do Fornecedor */}
           {showTab('financeiro') && (
-            <div className="flex flex-col gap-6">
-              <h3 className="text-base font-bold text-gray-900">Financeiro</h3>
-
-              {financialsLoading ? (
-                <div className="text-center py-12 text-sm text-gray-400">Carregando...</div>
-              ) : (
-                <>
-                  {invoiceUploadError && (
-                    <div className="bg-red-50 border border-red-200 text-red-600 text-sm font-medium rounded-xl p-3">
-                      {invoiceUploadError}
-                    </div>
-                  )}
-
-                  {/* Resumo de retenção */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <div className="bg-white border border-gray-200 rounded-xl p-3">
-                      <span className="text-xs text-gray-400 uppercase font-semibold block">Retenção Acumulada</span>
-                      <span className="text-sm font-black text-gray-900">R$ {financials.retention.retained.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="bg-white border border-gray-200 rounded-xl p-3">
-                      <span className="text-xs text-gray-400 uppercase font-semibold block">Retenção Liberada</span>
-                      <span className="text-sm font-black text-gray-900">R$ {financials.retention.released.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3">
-                      <span className="text-xs text-orange-600 uppercase font-semibold block">Saldo Retido</span>
-                      <span className="text-sm font-black text-orange-700">R$ {financials.retention.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-
-                  {/* Parcelas / contas a pagar */}
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Parcelas</h4>
-                    {erroRecibo && <p className="text-sm text-red-600 mb-2">{erroRecibo}</p>}
-                    <div className="flex flex-col gap-2">
-                      {financials.installments.map((t) => {
-                        const situacao = situacaoDaParcela(t);
-                        return (
-                        <div key={t.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-gray-900 truncate">{t.description || 'Parcela do contrato'}</p>
-                            <p className="text-sm text-gray-400">Vencimento: {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString() : '-'}</p>
-                          </div>
-                          <div className="flex items-center gap-3 shrink-0">
-                            {situacao === 'PAGA' && t.recibo_numero != null && (
-                              <button
-                                type="button"
-                                onClick={() => baixarRecibo(t.id)}
-                                disabled={baixandoRecibo === t.id}
-                                title="Baixar o recibo deste pagamento"
-                                className="text-sm text-orange-500 hover:text-orange-600 font-semibold disabled:opacity-50"
-                              >
-                                {baixandoRecibo === t.id ? 'Baixando…' : `Recibo ${rotuloRecibo(t.recibo_numero)}`}
-                              </button>
-                            )}
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full
-                              ${situacao === 'PAGA' ? 'bg-green-100 text-green-700' : situacao === 'CANCELADA' ? 'bg-gray-100 text-gray-500' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {situacao === 'PAGA' ? 'Pago' : situacao === 'CANCELADA' ? 'Cancelado' : 'Pendente'}
-                            </span>
-                            <span className="text-sm font-black text-gray-900">R$ {Number(t.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                          </div>
-                        </div>
-                        );
-                      })}
-                      {financials.installments.length === 0 && (
-                        <div className="text-center py-8 text-sm text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma parcela encontrada.</div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Medições — saldo a faturar e envio de NF */}
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Medições</h4>
-                    <div className="flex flex-col gap-2">
-                      {financials.measurements.map((m) => (
-                        <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="text-xs font-bold text-gray-900">Medição Nº {m.number}</span>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full
-                              ${m.status === 'Paga' || m.status === 'Processada' ? 'bg-green-100 text-green-700' : m.status === 'Cancelada' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                              {m.status}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-500 mb-2">
-                            Período: {m.period_start ? new Date(m.period_start).toLocaleDateString() : '-'} até {m.period_end ? new Date(m.period_end).toLocaleDateString() : '-'}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
-                            <span>Bruto: R$ {Number(m.total_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            {m.invoice_url ? (
-                              <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</a>
-                            ) : isPreview ? (
-                              <span className="text-gray-300">Anexar NF disponível apenas no acesso real do parceiro</span>
-                            ) : (
-                              <label className={`flex items-center gap-1.5 font-semibold cursor-pointer ${uploadingInvoiceFor === m.id ? 'text-gray-300' : 'text-blue-600 hover:text-blue-700'}`}>
-                                <Upload className="w-3 h-3" />
-                                {uploadingInvoiceFor === m.id ? 'Enviando...' : 'Anexar NF'}
-                                <input
-                                  type="file"
-                                  className="hidden"
-                                  disabled={uploadingInvoiceFor === m.id}
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    e.target.value = '';
-                                    if (file) handleUploadInvoice(m.id, m.contract_id, file);
-                                  }}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {financials.measurements.length === 0 && (
-                        <div className="text-center py-8 text-sm text-gray-400 bg-gray-50 border border-dashed border-gray-200 rounded-xl">Nenhuma medição registrada.</div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            <PartnerPortalFinanceiro
+              financials={financials}
+              loading={financialsLoading}
+              invoiceUploadError={invoiceUploadError}
+              erroRecibo={erroRecibo}
+              baixandoRecibo={baixandoRecibo}
+              onBaixarRecibo={baixarRecibo}
+              uploadingInvoiceFor={uploadingInvoiceFor}
+              isPreview={isPreview}
+              onUploadInvoice={handleUploadInvoice}
+            />
           )}
 
           {/* TAB: SOLICITACOES */}

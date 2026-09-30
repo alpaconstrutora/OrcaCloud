@@ -2401,6 +2401,7 @@ acesso por link público (`isPublicExperience` em `InvestorDashboard.tsx` e em
 |---|---|---|
 | Investidor (desde 2026-08-15) | as 10 do módulo (Resumo, Simulador, Carteira, Financeiro, Fiscal, Oportunidades, Documentos, Comunicados, SPE, Relatórios) | `components/investor/portal/*` + trechos de `InvestorDashboard.tsx` sob `isPublicExperience` |
 | Fornecedor (desde 2026-08-19) | as 5 do módulo (Estatísticas, Lances, Cotações, Pedidos, Nota Fiscal) | `components/supplier/portal/*` + trechos de `SupplierDashboard.tsx` sob `isPublicExperience` |
+| Parceiro (desde 2026-09-30) | **só a aba Financeiro** — as demais abas do Portal do Parceiro seguem fora do §24 | `components/partner/PartnerPortalFinanceiro.tsx` (montado por `PartnerPortal.tsx`) |
 
 O kit vive em **`components/portal/PortalKit.tsx`** (era
 `components/investor/portal/PortalKit.tsx` até virar de dois portais).

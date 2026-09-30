@@ -27,6 +27,8 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { pontosAPreencher } from '../../utils/blueprintPotenciaPadrao';
 import { opcoesDeFase } from '../../utils/blueprintFasesEletricas';
 import { planoDeBalanceamento } from '../../utils/blueprintBalanceamento';
+import { centroDeCargas, comandosParaOCentro, trechosNoQuadro } from '../../utils/blueprintCentroDeCargas';
+import LinhaCentroDeCargas from './LinhaCentroDeCargas';
 import { proximoNumeroDeCircuito, renumerarCircuitos } from '../../utils/blueprintCircuitosAutomaticos';
 import { comandosDoModelo, pendenciasDoComando } from '../../utils/blueprintComandos';
 import { ROTULO_DO_INTERRUPTOR } from '../../utils/blueprintRede';
@@ -192,6 +194,8 @@ export default function PainelEletrica({
   executivoSlot,
   conferenciaSlot,
   conferenciaPendencias,
+  centroDeCargasNaPlanta = null,
+  onCentroDeCargasNaPlanta,
 }: {
   model: BlueprintModel;
   onAddCircuito: (quadroId: ObjectId, nome: string) => void;
@@ -227,6 +231,13 @@ export default function PainelEletrica({
    * undo. Sem ele, a coluna DR cai no legado `protecaoDR` do circuito.
    */
   onDR?: (comandos: Command[]) => void;
+  /**
+   * E6.2: qual centro de cargas está marcado na planta (id do quadro; 'TODOS'
+   * sem quadro; null nenhum) e quem marca/desmarca. "Levar ao centro" é um lote
+   * pelo mesmo `onDR` (o `runBatch` do editor). Sem os dois, a linha não aparece.
+   */
+  centroDeCargasNaPlanta?: ObjectId | 'TODOS' | null;
+  onCentroDeCargasNaPlanta?: (alvo: ObjectId | 'TODOS' | null) => void;
   /** Hipóteses do pré-dimensionamento — ver `HipotesesEletricas`. */
   hipoteses?: HipotesesEletricas;
   onHipoteses?: (h: HipotesesEletricas) => void;
@@ -432,12 +443,26 @@ export default function PainelEletrica({
    * com tomadas e sem quadro escondia a pendência por inteiro.
    */
   const semQuadro = cargas.quadros.length === 0;
+  const centroSemQuadro = semQuadro && onCentroDeCargasNaPlanta && onDR ? centroDeCargas(model, null) : null;
   const avisoSemQuadro = (
     <div className="space-y-1.5 rounded-[10px] border border-gray-100 bg-white p-4 shadow-sm">
       <p className="text-sm text-slate-500">
         Nenhum quadro de distribuição ainda. Use <strong>Componentes → Instalações →
         Quadro de distribuição</strong> para colocar um; os circuitos nascem dele.
       </p>
+      {/* E6.2: sem quadro, o centro de cargas de TODOS os pontos com potência — e o quadro pode nascer nele. */}
+      {semQuadro && onCentroDeCargasNaPlanta && onDR && (
+        <div className="text-sm">
+          <LinhaCentroDeCargas
+            nomeDoQuadro={null}
+            centro={centroSemQuadro}
+            naPlanta={centroDeCargasNaPlanta === 'TODOS'}
+            onMostrarNaPlanta={(v) => onCentroDeCargasNaPlanta(v ? 'TODOS' : null)}
+            comandos={centroSemQuadro ? comandosParaOCentro(model, centroSemQuadro) : []}
+            onLevar={onDR}
+          />
+        </div>
+      )}
       {cargas.pontosSemCircuito > 0 && (
         <p className="text-sm text-amber-700">
           E há <strong>{cargas.pontosSemCircuito}</strong>{' '}
@@ -1213,6 +1238,23 @@ export default function PainelEletrica({
                       {q.pontos} {q.pontos === 1 ? 'ponto' : 'pontos'} · {va(q.potenciaW)}
                     </p>
                   )}
+                  {/* E6.2 — CENTRO DE CARGAS do quadro: onde ele está, o ganho, marcar na planta, levar ao centro. */}
+                  {onCentroDeCargasNaPlanta && onDR && (() => {
+                    const c = centroDeCargas(model, q.quadroId);
+                    return (
+                      <div className="mt-2 text-sm">
+                        <LinhaCentroDeCargas
+                          nomeDoQuadro={q.nome}
+                          centro={c}
+                          naPlanta={centroDeCargasNaPlanta === q.quadroId}
+                          onMostrarNaPlanta={(v) => onCentroDeCargasNaPlanta(v ? q.quadroId : null)}
+                          comandos={c ? comandosParaOCentro(model, c) : []}
+                          trechosNoQuadro={trechosNoQuadro(model, q.quadroId)}
+                          onLevar={onDR}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               </section>
             );

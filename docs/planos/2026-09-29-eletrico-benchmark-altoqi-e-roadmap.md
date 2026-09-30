@@ -1977,7 +1977,7 @@ Fecha o bloco **7** e a parte do **6** que é "lista de materiais".
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 6.1 Balanceamento de fases ✅ (F-F grava o par pela 1ª fase, sem bump; guloso + melhoria local + menos mudanças; prévia conferida contra o quadro) | `utils/blueprintBalanceamento.ts` puro: atribuição gulosa por carga (maior circuito na fase menos carregada, FF ocupa duas), prévia com desequilíbrio antes/depois, um lote, Ctrl+Z; "Balancear" na aba Quadros | teste: 6 circuitos desiguais → desequilíbrio ≤ 10 %; `conferirPlano` |
-| 6.2 Centro de cargas | `utils/blueprintCentroDeCargas.ts`: centroide ponderado por VA dos pontos do quadro (ou de todos, se o quadro não existe), região sugerida na planta (círculo tracejado), botão "Sugerir posição do quadro" que move o quadro sugerido ou cria um `sugerido` | teste com 4 pontos; canvas mostra a região; mover apaga a marca |
+| 6.2 Centro de cargas ✅ (região = Σ VA·d² até +10 %, raio fechado; sugerida encaixa na parede; marca de vista que o movimento apaga; harness olhado) | `utils/blueprintCentroDeCargas.ts`: centroide ponderado por VA dos pontos do quadro (ou de todos, se o quadro não existe), região sugerida na planta (círculo tracejado), botão "Sugerir posição do quadro" que move o quadro sugerido ou cria um `sugerido` | teste com 4 pontos; canvas mostra a região; mover apaga a marca |
 | 6.3 Desvio estrutural e caixas de passagem | `planejarEletrodutos` usa `blueprintObstaculosEstruturais` (pilar +custo, viga: descer sob a viga como a água faz) e `rotaPelasParedes` como opção "pela parede" (hipótese `rotaPelaParede`); caixa de passagem automática a cada 15 m e em curva > 2 (hipótese com fonte 6.2.11.1.7); Ø comerciais até 85; distribuição de luminárias em malha por área (A) | teste: eletroduto que cruzava pilar contorna; caixas aparecem no 2D/3D/quantitativo; `blueprintEletrodutos.test.ts` |
 
 Fecha os A do motor 3 e o que o usuário chamou de "quatro motores combinados".
@@ -3351,3 +3351,52 @@ com ótimo exato conhecido.
 
 **Efeito no benchmark**: "Balanceamento por fase" ❌→✅ (motor que atribui, com prévia e lote); "Seleção das
 fases" 🟡→✅ (F-F escolhe o par).
+### E6.2 — Centro de cargas (29/09/2026) · frente `eletrico-e6` · sem bump
+
+**O que mudou**
+
+- **Motor** (`utils/blueprintCentroDeCargas.ts`, novo, puro): `centroDeCargas(model, quadroId | null)` =
+  baricentro dos pontos ponderado por VA (os do quadro; sem quadro, todos com potência; ponto sem potência
+  fica fora e é contado). **Região** = onde Σ VA·d² fica até 10 % acima do mínimo — raio fechado
+  √(0,10 · Σ w·|c − x|² / W), mínimo 0,3 m. **Posição sugerida** = o centro encaixado no eixo da parede
+  mais próxima do pavimento (até 3 m); sem parede, o próprio centro. Ganho dito pelo Σ VA·d (em planta).
+  `comandosParaOCentro` = `TranslateEntities` do quadro (ou `AddQuadro "QDC"` quando não há quadro, no
+  pavimento de maior carga); `trechosNoQuadro` conta os eletrodutos que não andam junto;
+  `centroNaPlanta(model, marca)` é a regra da marca: **mover o quadro apaga** (pelo botão ou arrastado,
+  1 mm basta), criar o 1º quadro apaga a de "todos".
+- **Tela** (`components/blueprint/LinhaCentroDeCargas.tsx`, novo): na aba Quadros, por quadro — pontos,
+  VA, raio da região, onde o quadro está ("na região" / "a X m, fora" / "na posição sugerida — nenhuma
+  parede passa dentro da região"), Σ VA·d atual → sugerido; "Mostrar na planta" (volta ao desenho, no
+  pavimento da marca) e "Levar o quadro ao centro" (um lote, Ctrl+Z; o title avisa dos eletrodutos a
+  relançar; desligado com motivo quando já está lá). Sem quadro, no aviso: "Criar quadro no centro".
+- **Canvas**: prop `centroDeCargas` — círculo tracejado com preenchimento leve, cruz no centro, ponto na
+  posição sugerida e o rótulo "Centro de cargas · QDC", só no pavimento dela. Marca de VISTA (não vai para
+  o modelo): o editor guarda {quadro, onde ele estava} e a descarta quando fica velha.
+
+**Testes** — novo `__tests__/blueprintCentroDeCargas.test.ts` (12): **4 pontos → baricentro ponderado**
+(não a média simples); na borda do círculo o momento quadrático é 1,10 × o do centro; raio mínimo; ponto
+sem potência fora; encaixe na parede perto / não encaixa longe; distância, fora da região e Σ VA·d à mão;
+levar ao centro = `TranslateEntities` exato, parede parada, depois nada a mover; sem quadro → `AddQuadro`;
+pavimento de maior carga; só os pontos do quadro; **mover apaga a marca** (botão, arraste de 1 mm, criar o
+1º quadro; mexer num ponto não apaga); `trechosNoQuadro`. Novo `__tests__/components/PainelCentroDeCargas.test.tsx`
+(7, jsdom): a linha com distância e ganho, marcar/desmarcar, levar (lote), sem quadro (criar), sem potência
+(diz o que fazer, sem botão), sem callback não aparece; e **o canvas desenha a região** — contexto 2D falso
+que grava as chamadas: `setLineDash([6,4])`, `arc` de volta inteira e o rótulo; noutro pavimento ou sem
+marca, nada.
+
+**O que os testes pegaram antes de publicar**: encaixar na parede pode deixar o quadro FORA da região
+(sala com carga concentrada: a parede passa a 1,33 m do centro, a região tem 0,84 m) — a tela ia dizer
+"fora da região" logo depois de "levar ao centro". Ganhou `sugeridaDentroDaRegiao`/`quadroNaSugerida` e a
+frase "na posição sugerida — nenhuma parede passa dentro da região".
+
+**Harness (olhado)**: `docs/spikes/centro-de-cargas/` monta o `BlueprintCanvas` real (sala 6 × 4 m, QDC fora,
+chuveiro de 5,5 kW num canto) — Vite numa porta própria + Edge headless. Antes: o círculo cai perto das
+cargas pesadas e o ponto sugerido na parede da direita. `?levado=1`: o QDC na parede e a marca sumiu.
+
+**Verificação**: `tsc` ✓ · alvo 32 ✓ · suíte inteira **6.332 ✓** (6.365 = 6.332 + 33 pulados, 589
+arquivos, conta fechada, sem queda de worker) · `vite build` ✓ · `check-ui-standard` ✓ (4 arquivos) ·
+`check-xss-sinks` ✓ · sem mudança no kernel.
+
+**Efeito no benchmark**: §8 Centro de cargas — "Considera coordenadas dos pontos", "Considera potência
+instalada", "Considera distribuição das cargas" e "Indica em planta a região recomendada para o quadro"
+❌→✅.

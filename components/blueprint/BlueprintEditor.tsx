@@ -342,6 +342,7 @@ import {
   type HipotesesDeCircuitos,
 } from '../../utils/blueprintCircuitosAutomaticos';
 import { composicaoDaRede, resumoDaComposicao } from '../../utils/blueprintFiacao';
+import { centroDeCargas, centroNaPlanta as centroDaMarca, type MarcaDoCentro } from '../../utils/blueprintCentroDeCargas';
 import {
   HIPOTESES_PILARES_PADRAO,
   ROTULO_DO_ONDE,
@@ -1579,6 +1580,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * e as emissões anteriores são leitura longa, não um formulário curto.
    */
   const [telaAberta, setTelaAberta] = useState<TelaDaEletrica | null>(null);
+  /**
+   * E6.2 — o CENTRO DE CARGAS marcado na planta: de qual quadro ('TODOS' sem
+   * quadro) e onde o quadro estava ao marcar. É marca de VISTA (não vai para o
+   * modelo): mover o quadro — pelo botão ou arrastando — a apaga; criar o
+   * primeiro quadro apaga a de 'TODOS'.
+   */
+  const [marcaDoCentro, setMarcaDoCentro] = useState<MarcaDoCentro | null>(null);
+  const centroNaPlanta = useMemo(() => centroDaMarca(editor.model, marcaDoCentro), [marcaDoCentro, editor.model]);
+  // A marca que ficou velha (quadro movido, apagado ou criado) sai do estado — não volta com um Ctrl+Z.
+  useEffect(() => {
+    if (marcaDoCentro && !centroNaPlanta) setMarcaDoCentro(null);
+  }, [marcaDoCentro, centroNaPlanta]);
   const alternarTela = (id: TelaDaEletrica) => setTelaAberta((t) => (t === id ? null : id));
   const tarefaAberta = emVista ? null : tarefa;
   /**
@@ -8986,6 +8999,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onQuadroProps={(quadroId, campos) => editor.run({ type: 'SetQuadroProps', quadroId, ...campos })}
                 // E3.1: DR como peça — um lote por gesto (criar + ligar circuito), um passo de undo.
                 onDR={(comandos) => editor.runBatch(comandos)}
+                // E6.2: marcar o centro de cargas volta ao desenho, no pavimento dele.
+                centroDeCargasNaPlanta={centroNaPlanta && marcaDoCentro ? marcaDoCentro.alvo : null}
+                onCentroDeCargasNaPlanta={(alvo) => {
+                  if (!alvo) {
+                    setMarcaDoCentro(null);
+                    return;
+                  }
+                  const c = centroDeCargas(editor.model, alvo === 'TODOS' ? null : alvo);
+                  if (!c) return;
+                  setMarcaDoCentro({ alvo, quadroEm: c.quadroEm });
+                  setNivelAtivoId(c.levelId);
+                  setTelaAberta(null);
+                }}
                 // A CONFERÊNCIA da norma vive junto do quadro de cargas (aba
                 // própria): é a mesma leitura — o que foi declarado — vista pelas
                 // regras da NBR 5410, e o usuário pediu tudo de elétrica num só lugar.
@@ -12549,6 +12575,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 mostrarNosDaGrade && topografia.selecionada ? { grade: topografia.selecionada.grade, cor: corDaCota } : null
               }
               curvaEmDestaque={mostrarCurvasDeNivel ? curvaEmDestaque : null}
+              centroDeCargas={centroNaPlanta}
               onClicarCurva={(indice, ponto) =>
                 setCurvaEmDestaque(indice === null ? null : { indice, ponto })
               }

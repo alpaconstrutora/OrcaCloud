@@ -1202,6 +1202,12 @@ interface Props {
   /** A curva clicada: índice em `curvasDeNivel` e o ponto do clique, para o rótulo. */
   curvaEmDestaque?: { indice: number; ponto: Point } | null;
   /**
+   * E6.2 — o CENTRO DE CARGAS marcado: a região (círculo tracejado), o centro
+   * (cruz) e a posição sugerida (ponto), só no pavimento `levelId`. Marca de
+   * VISTA, não peça: o editor a apaga quando o quadro se move.
+   */
+  centroDeCargas?: { levelId: string; centro: Point; raioMm: number; posicaoSugerida: Point; rotulo: string } | null;
+  /**
    * Clique numa curva (modo Selecionar, sem peça sob o cursor). `null` = clique
    * no vazio, que limpa o destaque como limpa a seleção.
    */
@@ -1552,6 +1558,7 @@ export default function BlueprintCanvas({
   corDaCurva = null,
   nosDaGrade = null,
   curvaEmDestaque = null,
+  centroDeCargas = null,
   onClicarCurva,
   linhasDoPerfil = null,
   linhaDoPerfilAtiva = null,
@@ -6587,6 +6594,44 @@ export default function BlueprintCanvas({
       }
     }
 
+    // E6.2 — CENTRO DE CARGAS: a região em círculo tracejado, a cruz no centro e
+    // o ponto da posição sugerida (na parede). Por cima dos quadros: é a marca
+    // que se procura. Só no pavimento dela.
+    if (centroDeCargas && (!levelId || centroDeCargas.levelId === levelId)) {
+      const c = paraTela(centroDeCargas.centro);
+      const r = Math.max(6, centroDeCargas.raioMm * vista.escala);
+      const cor = COR_DA_DISCIPLINA.ELETRICA;
+      ctx.save();
+      ctx.strokeStyle = cor;
+      ctx.fillStyle = 'rgba(234, 179, 8, 0.08)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(c.x - 6, c.y);
+      ctx.lineTo(c.x + 6, c.y);
+      ctx.moveTo(c.x, c.y - 6);
+      ctx.lineTo(c.x, c.y + 6);
+      ctx.stroke();
+      const s = paraTela(centroDeCargas.posicaoSugerida);
+      if (Math.hypot(s.x - c.x, s.y - c.y) > 2) {
+        ctx.fillStyle = cor;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#334155';
+      ctx.font = `${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(centroDeCargas.rotulo, c.x, c.y - r - 3);
+      ctx.restore();
+    }
+
     for (const e of escadasDoNivel) {
       const selecionado = selecao.has(e.id);
       const cor = selecionado ? COR_SELECIONADA : COR_ESCADA;
@@ -8710,6 +8755,7 @@ export default function BlueprintCanvas({
     corDaCurva,
     nosDaGrade,
     curvaEmDestaque,
+    centroDeCargas,
     linhasDoPerfil,
     linhaDoPerfilAtiva,
     drenagem,

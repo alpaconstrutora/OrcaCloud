@@ -311,9 +311,11 @@ describe('PainelVersoes · DXF, IFC e cotas', () => {
     // num <strong> próprio, e o resto da frase no <p>. Duas asserções, então.
     expect(await screen.findByText(/leva portas e janelas com vão/i)).toBeInTheDocument();
     expect(await screen.findByText(/^não leva$/i)).toBeInTheDocument();
-    expect(
-      await screen.findByText(/escada, forro, instalações nem armadura/i),
-    ).toBeInTheDocument();
+    // E7.1 (29/09/2026): a frase dizia "não leva escada, forro, instalações nem armadura" — e as três
+    // primeiras SAEM no IFC (IfcStair/IfcRamp, IfcCovering, as redes e a elétrica). Agora ela diz o que
+    // a cobertura do próprio arquivo declara de fora.
+    expect(await screen.findByText(/armadura, ar-condicionado, gás nem incêndio/i)).toBeInTheDocument();
+    expect(await screen.findByText(/escada, forro e as instalações/i)).toBeInTheDocument();
   });
 
   it('a tela declara que DXF e IFC saem em 1:1', async () => {

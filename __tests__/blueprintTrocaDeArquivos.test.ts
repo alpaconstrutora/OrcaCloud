@@ -343,7 +343,7 @@ describe('IFC · a cobertura É o requisito', () => {
     expect(ifc).toContain('FILE_DESCRIPTION');
     expect(ifc).toMatch(/FILE_DESCRIPTION[\s\S]*COBERTURA PARCIAL/);
     expect(ifc).toMatch(
-      new RegExp(`IFCPROJECT[\\s\\S]*${noIfcRegex('NÃO CONTÉM conexão')}`),
+      new RegExp(`IFCPROJECT[\\s\\S]*${noIfcRegex('NÃO CONTÉM registro')}`),
     );
   });
 
@@ -373,7 +373,10 @@ describe('IFC · a cobertura É o requisito', () => {
     // disciplina" deixou de ser verdade, e uma cobertura desatualizada é pior
     // que nenhuma: ela AFIRMA a ausência de algo que está no arquivo.
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM instalações/);
-    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM conexão/);
+    // ⚠️ E MUDOU de novo em 29/09/2026 (E7.1): as CONEXÕES derivadas saem desde a E0.3 (IfcPipeFitting), e
+    // "NÃO CONTÉM conexão" mentia no mesmo parágrafo que as descrevia. O que continua de fora é o REGISTRO.
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM registro/);
+    expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM conexão/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ar-condicionado/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos de parede/);

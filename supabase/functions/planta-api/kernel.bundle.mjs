@@ -657,6 +657,21 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "CONEXAO_LUVA",
   "CONEXAO_REDUCAO"
 ];
+function cadeiaDeQuadros(model, quadroId) {
+  const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
+  const saida = [];
+  const vistos = /* @__PURE__ */ new Set([quadroId]);
+  let atual = porId.get(quadroId)?.quadroPaiId ?? null;
+  while (atual && !vistos.has(atual)) {
+    const q = porId.get(atual);
+    if (!q) break;
+    saida.push(q);
+    vistos.add(atual);
+    atual = q.quadroPaiId ?? null;
+  }
+  return saida;
+}
+var FASES_DO_CIRCUITO = ["R", "S", "T"];
 function emptyModel() {
   return {
     levels: [],
@@ -3480,9 +3495,35 @@ function composicaoDaRede(model) {
   }
   return saida;
 }
+function condutoresDoCircuito(circuito, faseMm2, fiacao) {
+  const lig = circuito.ligacao ?? "FN";
+  const saida = lig === "FFF" ? "3F+T" : lig === "FF" ? "2F+T" : "F+N+T";
+  const sec = secoesDosCondutores(circuito, faseMm2);
+  const partes = [saida];
+  if (sec.faseMm2 != null) partes.push(`${mm2(sec.faseMm2)} mm\xB2`);
+  const extras = [];
+  if (lig === "FN" && sec.neutroMm2 != null && sec.neutroMm2 !== sec.faseMm2) extras.push(`N ${mm2(sec.neutroMm2)}`);
+  if (sec.peMm2 != null && sec.peMm2 !== sec.faseMm2) extras.push(`PE ${mm2(sec.peMm2)}`);
+  if (extras.length) partes.push(`(${extras.join(" \xB7 ")})`);
+  const letras = /* @__PURE__ */ new Set();
+  if (fiacao) {
+    for (const comp of fiacao.values()) for (const c of comp.lista) if (c.circuitoId === circuito.id && c.tipo === "RETORNO" && c.comando) letras.add(c.comando);
+  }
+  const comandos = letras.size;
+  if (comandos > 0) partes.push(`\xB7 ${comandos} comando${comandos > 1 ? "s" : ""}`);
+  return { texto: partes.join(" "), comandos };
+}
+function mm2(v) {
+  return String(v).replace(".", ",");
+}
 
 // utils/blueprintKernel/protecaoDr.ts
 var PREFIXO_DO_DR_LEGADO = "legado:";
+function rotuloDoDR(d) {
+  const partes = [d.inA != null ? `${String(d.inA).replace(".", ",")} A / ${d.idnMa} mA` : `${d.idnMa} mA`];
+  if (d.polos) partes.push(`${d.polos}P`);
+  return partes.join(" \xB7 ");
+}
 function drsDoQuadro(model, quadroId) {
   const q = (model.quadros ?? []).find((x) => x.id === quadroId);
   if (!q) return [];
@@ -3494,6 +3535,10 @@ function drsDoQuadro(model, quadroId) {
 }
 function drsDoModelo(model) {
   return (model.quadros ?? []).flatMap((q) => drsDoQuadro(model, q.id));
+}
+function drDoCircuito(model, circuito) {
+  const drs = drsDoQuadro(model, circuito.quadroId);
+  return drs.find((d) => !d.geral && d.circuitoIds.includes(circuito.id)) ?? drs.find((d) => d.geral) ?? null;
 }
 function rotuloDoDPS(d) {
   const f = (v) => String(v).replace(".", ",");
@@ -4313,15 +4358,6 @@ function segmentosDoEletroduto(t, peDireitoMm) {
   ];
 }
 
-// utils/blueprintDistribuicao.ts
-var ROTULO_DO_TIPO_DE_AMBIENTE = {
-  BANHEIRO: "Banheiro",
-  COZINHA_SERVICO: "Cozinha / copa / \xE1rea de servi\xE7o",
-  VARANDA: "Varanda",
-  SALA_DORMITORIO: "Sala / dormit\xF3rio",
-  OUTRO: "Outro (hall, corredor, dep\xF3sito\u2026)"
-};
-
 // utils/blueprintRede.ts
 var MEDIDAS_PADRAO_QUADRO = {
   larguraMm: 400,
@@ -4351,6 +4387,11 @@ var ROTULO_DA_DISCIPLINA = {
   MECANICA: "Mec\xE2nica",
   PLUVIAL: "\xC1guas pluviais"
 };
+function comprimentoDoTrecho(t) {
+  const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+  const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
+  return t.disciplina === "ELETRICA" ? planta + desnivel : Math.hypot(planta, desnivel);
+}
 var ROTULO_DO_PONTO_ELETRICO = {
   ILUMINACAO_TETO: "Luz de teto",
   ILUMINACAO_PAREDE: "Arandela",
@@ -4376,6 +4417,671 @@ var ROTULO_DO_PONTO_ELETRICO = {
   MEDIDOR: "Medidor de energia"
 };
 
+// utils/blueprintFasesEletricas.ts
+var SEGUINTE = { R: "S", S: "T", T: "R" };
+function fasesOcupadas(ligacao, fase) {
+  const lig = ligacao ?? "FN";
+  if (lig === "FFF") return [...FASES_DO_CIRCUITO];
+  if (!fase) return [];
+  return lig === "FF" ? [fase, SEGUINTE[fase]] : [fase];
+}
+function rotuloDaFase(ligacao, fase) {
+  const f = fasesOcupadas(ligacao, fase);
+  if (f.length === 3) return "RST";
+  return f.length ? f.join("-") : null;
+}
+function somarPorFase(itens) {
+  const fases = { R: 0, S: 0, T: 0 };
+  const semFase = [];
+  for (const it of itens) {
+    const ocupadas = fasesOcupadas(it.ligacao, it.fase);
+    if (ocupadas.length === 0) {
+      semFase.push((it.ligacao ?? "FN") === "FF" ? `${it.nome} (F-F)` : it.nome);
+      continue;
+    }
+    for (const f of ocupadas) fases[f] += it.sVA / ocupadas.length;
+  }
+  return { fases, semFase };
+}
+function desequilibrioDasFases(fases) {
+  const valores = [fases.R, fases.S, fases.T];
+  const max = Math.max(...valores);
+  return max > 0 ? (max - Math.min(...valores)) / max * 100 : null;
+}
+
+// utils/blueprintEletricaDimensionamento.ts
+var METODOS_DE_INSTALACAO = ["A1", "A2", "B1", "B2", "C", "D"];
+var TABELA_36_COBRE_PVC = [
+  [0.5, 7, 7, 7, 7, 9, 8, 9, 8, 10, 9, 12, 10],
+  [0.75, 9, 9, 9, 9, 11, 10, 11, 10, 13, 11, 15, 12],
+  [1, 11, 10, 11, 10, 14, 12, 13, 12, 15, 14, 18, 15],
+  [1.5, 14.5, 13.5, 14, 13, 17.5, 15.5, 16.5, 15, 19.5, 17.5, 22, 18],
+  [2.5, 19.5, 18, 18.5, 17.5, 24, 21, 23, 20, 27, 24, 29, 24],
+  [4, 26, 24, 25, 23, 32, 28, 30, 27, 36, 32, 38, 31],
+  [6, 34, 31, 32, 29, 41, 36, 38, 34, 46, 41, 47, 39],
+  [10, 46, 42, 43, 39, 57, 50, 52, 46, 63, 57, 63, 52],
+  [16, 61, 56, 57, 52, 76, 68, 69, 62, 85, 76, 81, 67],
+  [25, 80, 73, 75, 68, 101, 89, 90, 80, 112, 96, 104, 86],
+  [35, 99, 89, 92, 83, 125, 110, 111, 99, 138, 119, 125, 103],
+  [50, 119, 108, 110, 99, 151, 134, 133, 118, 168, 144, 148, 122],
+  [70, 151, 136, 139, 125, 192, 171, 168, 149, 213, 184, 183, 151],
+  [95, 182, 164, 167, 150, 232, 207, 201, 179, 258, 223, 216, 179],
+  [120, 210, 188, 192, 172, 269, 239, 232, 206, 299, 259, 246, 203],
+  [150, 240, 216, 219, 196, 309, 275, 265, 236, 344, 299, 278, 230],
+  [185, 273, 245, 248, 223, 353, 314, 300, 268, 392, 341, 312, 258],
+  [240, 321, 286, 291, 261, 415, 370, 351, 313, 461, 403, 361, 297],
+  [300, 367, 328, 334, 298, 477, 426, 401, 358, 530, 464, 408, 336],
+  [400, 438, 390, 398, 355, 571, 510, 477, 425, 634, 557, 478, 394],
+  [500, 502, 447, 456, 406, 656, 587, 545, 486, 729, 642, 540, 445],
+  [630, 578, 514, 526, 467, 758, 678, 626, 559, 843, 743, 614, 506],
+  [800, 669, 593, 609, 540, 881, 788, 723, 645, 978, 865, 700, 577],
+  [1e3, 767, 679, 698, 618, 1012, 906, 827, 738, 1125, 996, 792, 652]
+];
+var SECOES_NOMINAIS_MM2 = TABELA_36_COBRE_PVC.map((l) => l[0]);
+function colunaDaTabela36(metodo, condutoresCarregados2) {
+  return 1 + METODOS_DE_INSTALACAO.indexOf(metodo) * 2 + (condutoresCarregados2 === 3 ? 1 : 0);
+}
+function izDeTabelaA(secaoMm2, metodo, condutoresCarregados2) {
+  const linha = TABELA_36_COBRE_PVC.find((l) => l[0] === secaoMm2);
+  return linha ? linha[colunaDaTabela36(metodo, condutoresCarregados2)] : null;
+}
+var TABELA_40_PVC_AMBIENTE = [
+  [10, 1.22],
+  [15, 1.17],
+  [20, 1.12],
+  [25, 1.06],
+  [30, 1],
+  [35, 0.94],
+  [40, 0.87],
+  [45, 0.79],
+  [50, 0.71],
+  [55, 0.61],
+  [60, 0.5]
+];
+var TABELA_40_PVC_SOLO = [
+  [10, 1.1],
+  [15, 1.05],
+  [20, 1],
+  [25, 0.95],
+  [30, 0.89],
+  [35, 0.84],
+  [40, 0.77],
+  [45, 0.71],
+  [50, 0.63],
+  [55, 0.55],
+  [60, 0.45]
+];
+function fatorDeTemperatura(temperaturaC, metodo) {
+  const tabela = metodo === "D" ? TABELA_40_PVC_SOLO : TABELA_40_PVC_AMBIENTE;
+  for (const [t, f] of tabela) if (temperaturaC <= t) return f;
+  return null;
+}
+function fatorDeAgrupamento(numeroDeCircuitos) {
+  const n4 = Math.max(1, Math.floor(numeroDeCircuitos));
+  if (n4 <= 8) return [1, 0.8, 0.7, 0.65, 0.6, 0.57, 0.54, 0.52][n4 - 1];
+  if (n4 <= 11) return 0.5;
+  if (n4 <= 15) return 0.45;
+  if (n4 <= 19) return 0.41;
+  return 0.38;
+}
+var SECAO_MINIMA_POR_USO_MM2 = {
+  ILUMINACAO: 1.5,
+  FORCA: 2.5
+};
+function secaoMinimaPorUsoMm2(uso, hip) {
+  return uso === "TUE" ? Math.max(SECAO_MINIMA_POR_USO_MM2.FORCA, hip.secaoMinimaTueMm2) : SECAO_MINIMA_POR_USO_MM2[uso];
+}
+function secaoMinimaDaNormaMm2(uso) {
+  return uso === "ILUMINACAO" ? SECAO_MINIMA_POR_USO_MM2.ILUMINACAO : SECAO_MINIMA_POR_USO_MM2.FORCA;
+}
+var ROTULO_DO_USO = {
+  ILUMINACAO: "ilumina\xE7\xE3o",
+  FORCA: "for\xE7a (tomadas)",
+  TUE: "TUE / liga\xE7\xE3o direta"
+};
+var TIPOS_DE_USO_ESPECIFICO = /* @__PURE__ */ new Set([
+  "TUE",
+  "LIGACAO_DIRETA",
+  "AR_CONDICIONADO",
+  "MOTOR_BOMBA",
+  "VENTILADOR_EXAUSTOR",
+  "PORTAO",
+  "CARREGADOR_VE",
+  "PONTO_ESPERA"
+]);
+var TIPOS_SEM_CARGA = /* @__PURE__ */ new Set(["INTERRUPTOR", "ATERRAMENTO", "CAIXA_PASSAGEM", "ENTRADA_SERVICO", "MEDIDOR"]);
+function usoDoCircuito(pontos) {
+  if (pontos.length === 0) return null;
+  if (pontos.some((p) => p.tipoEletrico && TIPOS_DE_USO_ESPECIFICO.has(p.tipoEletrico))) return "TUE";
+  const ehForca = pontos.some(
+    (p) => p.tipoEletrico && !p.tipoEletrico.startsWith("ILUMINACAO") && !TIPOS_SEM_CARGA.has(p.tipoEletrico)
+  );
+  return ehForca ? "FORCA" : "ILUMINACAO";
+}
+function sugerirCurva(pontos) {
+  const motor = /* @__PURE__ */ new Set(["MOTOR_BOMBA", "AR_CONDICIONADO", "VENTILADOR_EXAUSTOR", "PORTAO"]);
+  return pontos.some((p) => p.tipoEletrico && motor.has(p.tipoEletrico)) ? "D" : "C";
+}
+var DPS_PADRAO = { classe: "II", upKv: 1.5, inKa: 20, disjuntorDesconexaoA: 20 };
+var SERIE_COMERCIAL_DE_DR_A = [25, 40, 63, 80, 100, 125];
+var DIAMETRO_EXTERNO_CONDUTOR_MM = [
+  [1.5, 3],
+  [2.5, 3.6],
+  [4, 4.2],
+  [6, 4.8],
+  [10, 6],
+  [16, 7.2],
+  [25, 9],
+  [35, 10.2],
+  [50, 12],
+  [70, 13.8],
+  [95, 16]
+];
+var DIAMETRO_INTERNO_ELETRODUTO_MM = [
+  [16, 13.3],
+  [20, 17.4],
+  [25, 22.4],
+  [32, 29.4],
+  [40, 36.4],
+  [50, 46.3],
+  [60, 55.7],
+  [75, 71],
+  [85, 80.9]
+];
+var SERIE_COMERCIAL_DE_DISJUNTORES_A = [10, 16, 20, 25, 32, 40, 50, 63, 73, 80, 100, 125, 160, 200];
+var HIPOTESES_PADRAO = {
+  metodoDeInstalacao: "B1",
+  temperaturaAmbienteC: 30,
+  circuitosAgrupados: 1,
+  rhoOhmMm2PorM: 0.0206,
+  limiteQuedaTerminalPct: 4,
+  catalogoDeDisjuntoresA: SERIE_COMERCIAL_DE_DISJUNTORES_A,
+  secaoMinimaTueMm2: 4,
+  demanda: { nome: "sem demanda (1,00)", ILUMINACAO: 1, TUG: 1, FORCA: 1, MOTOR: 1 },
+  limiteQuedaTotalPct: 5,
+  desequilibrioMaxPct: 10,
+  diametroExternoCondutorMm: DIAMETRO_EXTERNO_CONDUTOR_MM,
+  diametroInternoEletrodutoMm: DIAMETRO_INTERNO_ELETRODUTO_MM,
+  catalogoDeDrA: SERIE_COMERCIAL_DE_DR_A,
+  maxCircuitosPorDR: 5,
+  exposicaoARaios: "NAO_AVALIADA",
+  dpsPadrao: DPS_PADRAO,
+  ikEntradaKa: 4.5,
+  origemComTransformador: false,
+  padraoDeEntrada: "GENERICO",
+  diversidade: "SEM",
+  textosDoMemorial: {}
+};
+var FATORES_DE_DIVERSIDADE = [
+  { id: "SEM", nome: "sem diversidade (1,00)", fonte: null, conferir: "demanda do condom\xEDnio = soma das unidades; conservador", fator: () => 1 },
+  {
+    id: "GENERICO",
+    nome: "gen\xE9rico \u2014 hip\xF3tese de projeto",
+    fonte: null,
+    // Fórmula usual de projeto para residências (cai de 1,00 em 1 unidade para ~0,55 em 100): HIPÓTESE.
+    conferir: "f\xF3rmula 0,5 + 0,5/\u221An, sem fonte normativa \u2014 CONFERIR na norma da concession\xE1ria (CODI/NT)",
+    fator: (n4) => n4 <= 1 ? 1 : Math.round((0.5 + 0.5 / Math.sqrt(n4)) * 1e3) / 1e3
+  }
+];
+function fatorDeDiversidade(id) {
+  return FATORES_DE_DIVERSIDADE.find((f) => f.id === id) ?? FATORES_DE_DIVERSIDADE[0];
+}
+function condutoresCarregados(ligacao) {
+  return ligacao === "FFF" ? 3 : 2;
+}
+function correnteDeProjetoA(sVA, tensaoV, ligacao) {
+  if (tensaoV <= 0) return 0;
+  return ligacao === "FFF" ? sVA / (Math.sqrt(3) * tensaoV) : sVA / tensaoV;
+}
+function capacidadeCorrigidaA(secaoMm2, hip, ligacao) {
+  const tabela = izDeTabelaA(secaoMm2, hip.metodoDeInstalacao, condutoresCarregados(ligacao));
+  const ft = fatorDeTemperatura(hip.temperaturaAmbienteC, hip.metodoDeInstalacao);
+  if (tabela == null || ft == null) return null;
+  return tabela * ft * fatorDeAgrupamento(hip.circuitosAgrupados);
+}
+function secaoMinima(ibA, hip, ligacao, uso) {
+  const minimoPorUso = uso ? secaoMinimaPorUsoMm2(uso, hip) : 0;
+  const menorDisjuntor = [...hip.catalogoDeDisjuntoresA].sort((a, b) => a - b).find((inA) => inA >= ibA) ?? null;
+  const izNecessaria = Math.max(ibA, menorDisjuntor ?? 0);
+  for (const secao of SECOES_NOMINAIS_MM2) {
+    if (secao < minimoPorUso) continue;
+    const iz = capacidadeCorrigidaA(secao, hip, ligacao);
+    if (iz == null) return null;
+    if (iz >= izNecessaria) {
+      const menores = SECOES_NOMINAIS_MM2.filter((s2) => s2 < secao).reverse();
+      const izDa = (s2) => capacidadeCorrigidaA(s2, hip, ligacao) ?? 0;
+      const atendeTudoMenor = menores.find((s2) => izDa(s2) >= izNecessaria);
+      const atendeIbMenor = menores.find((s2) => izDa(s2) >= ibA);
+      const criterio = atendeTudoMenor != null ? "USO" : atendeIbMenor != null ? "DISJUNTOR" : "CORRENTE";
+      return { secaoMm2: secao, izA: iz, criterio };
+    }
+  }
+  return null;
+}
+function disjuntorSugeridoA(ibA, izA, catalogo) {
+  const ordenado = [...catalogo].sort((a, b) => a - b);
+  return ordenado.find((inA) => inA >= ibA && inA <= izA) ?? null;
+}
+function quedaDeTensaoPct(ibA, comprimentoM, secaoMm2, tensaoV, ligacao, rhoOhmMm2PorM) {
+  if (secaoMm2 <= 0 || tensaoV <= 0) return 0;
+  const k = ligacao === "FFF" ? Math.sqrt(3) : 2;
+  return k * rhoOhmMm2PorM * comprimentoM * ibA / (secaoMm2 * tensaoV) * 100;
+}
+var chaveDePonta = (x, y, cota) => `${x},${y},${cota}`;
+function comprimentoDoCircuito(model, circuito) {
+  const quadro = (model.quadros ?? []).find((q) => q.id === circuito.quadroId);
+  if (!quadro) return null;
+  const trechos = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuito.id));
+  const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id);
+  const arestas = /* @__PURE__ */ new Map();
+  const ligar = (de, para, metros2) => {
+    arestas.set(de, [...arestas.get(de) ?? [], { para, metros: metros2 }]);
+  };
+  for (const t of trechos) {
+    const a = chaveDePonta(t.a.x, t.a.y, t.cotaAMm);
+    const b = chaveDePonta(t.b.x, t.b.y, t.cotaBMm);
+    const metros2 = comprimentoDoTrecho(t) / 1e3;
+    ligar(a, b, metros2);
+    ligar(b, a, metros2);
+  }
+  const partidas = [...arestas.keys()].filter((k) => k.startsWith(`${quadro.at.x},${quadro.at.y},`));
+  if (partidas.length > 0) {
+    let maior = 0;
+    const visitar = (no, acumulado, visitados) => {
+      maior = Math.max(maior, acumulado);
+      for (const { para, metros: metros2 } of arestas.get(no) ?? []) {
+        if (visitados.has(para)) continue;
+        visitados.add(para);
+        visitar(para, acumulado + metros2, visitados);
+        visitados.delete(para);
+      }
+    };
+    for (const p of partidas) visitar(p, 0, /* @__PURE__ */ new Set([p]));
+    return { metros: maior, origem: "ELETRODUTOS" };
+  }
+  if (pontos.length === 0) return null;
+  const metros = Math.max(
+    ...pontos.map(
+      (p) => (Math.hypot(p.at.x - quadro.at.x, p.at.y - quadro.at.y) + Math.abs(p.cotaMm - quadro.cotaMm)) / 1e3
+    )
+  );
+  return { metros, origem: "ESTIMADO" };
+}
+var n1 = (v) => v.toFixed(1).replace(".", ",");
+var mm22 = (v) => String(v).replace(".", ",");
+function preDimensionarCircuito(model, circuito, hipDeclaradas = HIPOTESES_PADRAO) {
+  const hip = { ...hipDeclaradas, circuitosAgrupados: agrupamentoDoCircuito(model, circuito.id, hipDeclaradas) };
+  const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id && t.tipoEletrico !== "INTERRUPTOR");
+  const comPotencia = pontos.filter((t) => t.potenciaW != null);
+  const sVA = comPotencia.reduce((s2, t) => s2 + t.potenciaW, 0);
+  const ligacao = circuito.ligacao ?? "FN";
+  const tensaoV = circuito.tensaoV ?? null;
+  const uso = usoDoCircuito(pontos);
+  const achados = [];
+  const naoAvaliado = [];
+  const secaoDeclaradaMm2 = circuito.secaoMm2 ?? null;
+  const disjuntorDeclaradoA = circuito.disjuntorA ?? null;
+  const base = {
+    circuitoId: circuito.id,
+    nome: circuito.nome,
+    ligacao,
+    tensaoV,
+    sVA,
+    pontos: pontos.length,
+    pontosSemPotencia: pontos.length - comPotencia.length,
+    uso,
+    ibA: null,
+    secaoCalculada: null,
+    secaoDeclaradaMm2,
+    ...(() => {
+      const sec = secoesDosCondutores(circuito, secaoDeclaradaMm2 ?? null);
+      return { secaoNeutroMm2: sec.neutroMm2, secaoPeMm2: sec.peMm2, neutroDerivado: sec.neutroDerivado, peDerivado: sec.peDerivado };
+    })(),
+    izDeclaradaA: null,
+    disjuntorSugeridoA: null,
+    disjuntorDeclaradoA,
+    curvaDeclarada: circuito.curva ?? null,
+    curvaSugerida: sugerirCurva(pontos),
+    reserva: circuito.reserva === true,
+    comprimento: comprimentoDoCircuito(model, circuito),
+    quedaPct: null,
+    secaoParaQuedaMm2: null,
+    achados,
+    naoAvaliado
+  };
+  if (pontos.length - comPotencia.length > 0) {
+    naoAvaliado.push(`${pontos.length - comPotencia.length} ponto(s) sem pot\xEAncia \u2014 IB \xE9 um piso, n\xE3o o valor`);
+  }
+  if (tensaoV == null) {
+    naoAvaliado.push("sem tens\xE3o declarada \u2014 nada se calcula");
+    return base;
+  }
+  if (pontos.length === 0) {
+    naoAvaliado.push(circuito.reserva ? "circuito de reserva (sem pontos, por desenho)" : "circuito sem pontos");
+    return base;
+  }
+  const ibA = correnteDeProjetoA(sVA, tensaoV, ligacao);
+  base.ibA = ibA;
+  const calc = secaoMinima(ibA, hip, ligacao, uso);
+  base.secaoCalculada = calc;
+  if (secaoDeclaradaMm2 == null && calc) {
+    const sec = secoesDosCondutores(circuito, calc.secaoMm2);
+    base.secaoNeutroMm2 = sec.neutroMm2;
+    base.secaoPeMm2 = sec.peMm2;
+  }
+  if (!calc) {
+    naoAvaliado.push("IB acima da maior se\xE7\xE3o da Tabela 36 ou temperatura sem fator");
+  }
+  if (secaoDeclaradaMm2 != null) {
+    const izDecl = capacidadeCorrigidaA(secaoDeclaradaMm2, hip, ligacao);
+    base.izDeclaradaA = izDecl;
+    if (izDecl == null) {
+      naoAvaliado.push(`se\xE7\xE3o declarada ${mm22(secaoDeclaradaMm2)} mm\xB2 n\xE3o \xE9 nominal da Tabela 36`);
+    } else {
+      if (izDecl < ibA) {
+        achados.push({
+          nivel: "FALTA",
+          referencia: "6.2.6.1.2 a) / Tab. 36",
+          mensagem: `se\xE7\xE3o ${mm22(secaoDeclaradaMm2)} mm\xB2 conduz ${n1(izDecl)} A, abaixo de IB ${n1(ibA)} A${calc ? ` \u2014 m\xEDnimo ${mm22(calc.secaoMm2)} mm\xB2` : ""}`
+        });
+      }
+      if (uso) {
+        const minimoNorma = secaoMinimaDaNormaMm2(uso);
+        const minimoUso = secaoMinimaPorUsoMm2(uso, hip);
+        if (secaoDeclaradaMm2 < minimoUso) {
+          const abaixoDaNorma = secaoDeclaradaMm2 < minimoNorma;
+          achados.push({
+            nivel: abaixoDaNorma ? "FALTA" : "AVISO",
+            referencia: abaixoDaNorma ? "6.2.6.1.1 / Tab. 47" : "hip\xF3tese \xB7 TUE",
+            mensagem: `circuito de ${ROTULO_DO_USO[uso]} pede no m\xEDnimo ${mm22(minimoUso)} mm\xB2${abaixoDaNorma ? "" : " (hip\xF3tese)"}; declarado ${mm22(secaoDeclaradaMm2)}`
+          });
+        }
+      }
+    }
+  }
+  const izReferencia = base.izDeclaradaA ?? calc?.izA ?? null;
+  if (izReferencia != null) {
+    base.disjuntorSugeridoA = disjuntorSugeridoA(ibA, izReferencia, hip.catalogoDeDisjuntoresA);
+    if (base.disjuntorSugeridoA == null && calc && calc.izA !== izReferencia) {
+      base.disjuntorSugeridoA = disjuntorSugeridoA(ibA, calc.izA, hip.catalogoDeDisjuntoresA);
+    }
+    if (disjuntorDeclaradoA != null) {
+      if (disjuntorDeclaradoA < ibA) {
+        achados.push({
+          nivel: "FALTA",
+          referencia: "5.3.4.1",
+          mensagem: `disjuntor ${disjuntorDeclaradoA} A abaixo de IB ${n1(ibA)} A \u2014 desarma em uso normal`
+        });
+      } else if (disjuntorDeclaradoA > izReferencia) {
+        achados.push({
+          nivel: "FALTA",
+          referencia: "5.3.4.1",
+          mensagem: `disjuntor ${disjuntorDeclaradoA} A acima da capacidade do condutor (${n1(izReferencia)} A) \u2014 n\xE3o protege contra sobrecarga`
+        });
+      }
+    }
+  }
+  const secaoParaQueda = secaoDeclaradaMm2 ?? calc?.secaoMm2 ?? null;
+  if (base.comprimento && secaoParaQueda != null) {
+    const queda = quedaDeTensaoPct(ibA, base.comprimento.metros, secaoParaQueda, tensaoV, ligacao, hip.rhoOhmMm2PorM);
+    base.quedaPct = queda;
+    if (queda > hip.limiteQuedaTerminalPct) {
+      const atende = SECOES_NOMINAIS_MM2.find(
+        (s2) => s2 > secaoParaQueda && quedaDeTensaoPct(ibA, base.comprimento.metros, s2, tensaoV, ligacao, hip.rhoOhmMm2PorM) <= hip.limiteQuedaTerminalPct
+      );
+      base.secaoParaQuedaMm2 = atende ?? null;
+      achados.push({
+        nivel: "FALTA",
+        referencia: "6.2.7",
+        mensagem: `queda de ${n1(queda)} % em ${n1(base.comprimento.metros)} m (${base.comprimento.origem === "ESTIMADO" ? "estimado sem eletroduto" : "pelos eletrodutos"}), limite ${hip.limiteQuedaTerminalPct} %${atende ? ` \u2014 ${mm22(atende)} mm\xB2 atenderia` : ""}`
+      });
+    }
+    if (base.comprimento.origem === "ESTIMADO") {
+      naoAvaliado.push("comprimento estimado em planta \u2014 a rede do circuito n\xE3o chega ao quadro");
+    }
+  } else if (!base.comprimento) {
+    naoAvaliado.push("sem comprimento \u2014 nem eletroduto nem ponto para estimar");
+  }
+  return base;
+}
+function preDimensionarQuadro(model, quadroId, hip = HIPOTESES_PADRAO) {
+  return (model.circuitos ?? []).filter((c) => c.quadroId === quadroId).sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => preDimensionarCircuito(model, c, hip));
+}
+var TIPOS_COM_MOTOR = /* @__PURE__ */ new Set(["AR_CONDICIONADO", "MOTOR_BOMBA", "VENTILADOR_EXAUSTOR", "PORTAO"]);
+function grupoDeCarga(tipoEletrico) {
+  if (!tipoEletrico || TIPOS_SEM_CARGA.has(tipoEletrico)) return null;
+  if (tipoEletrico.startsWith("ILUMINACAO")) return "ILUMINACAO";
+  if (TIPOS_COM_MOTOR.has(tipoEletrico)) return "MOTOR";
+  if (tipoEletrico === "TUE" || tipoEletrico === "LIGACAO_DIRETA" || tipoEletrico === "CARREGADOR_VE" || tipoEletrico === "PONTO_ESPERA") return "FORCA";
+  return "TUG";
+}
+function limiteQuedaTotalEfetivoPct(hip) {
+  return hip.origemComTransformador ? Math.max(7, hip.limiteQuedaTotalPct) : hip.limiteQuedaTotalPct;
+}
+function comprimentoEntreQuadros(model, de, para) {
+  const arestas = /* @__PURE__ */ new Map();
+  const ligar = (a, b, metros) => arestas.set(a, [...arestas.get(a) ?? [], { para: b, metros }]);
+  for (const t of (model.trechos ?? []).filter((x) => x.disciplina === "ELETRICA")) {
+    const a = chaveDePonta(t.a.x, t.a.y, t.cotaAMm);
+    const b = chaveDePonta(t.b.x, t.b.y, t.cotaBMm);
+    const metros = comprimentoDoTrecho(t) / 1e3;
+    ligar(a, b, metros);
+    ligar(b, a, metros);
+  }
+  const pontasEm = (q) => {
+    const noXY = [...arestas.keys()].filter((k) => k.startsWith(`${q.at.x},${q.at.y},`));
+    const naCota = noXY.filter((k) => k === chaveDePonta(q.at.x, q.at.y, q.cotaMm));
+    return naCota.length ? naCota : noXY;
+  };
+  const partidas = pontasEm(de);
+  const chegadas = new Set(pontasEm(para));
+  if (partidas.length === 0 || chegadas.size === 0) return null;
+  const dist = new Map(partidas.map((p) => [p, 0]));
+  const fila = [...partidas];
+  while (fila.length) {
+    fila.sort((x, y) => (dist.get(x) ?? Infinity) - (dist.get(y) ?? Infinity));
+    const no = fila.shift();
+    const d = dist.get(no) ?? Infinity;
+    for (const { para: viz, metros } of arestas.get(no) ?? []) {
+      const nd = d + metros;
+      if (nd < (dist.get(viz) ?? Infinity)) {
+        dist.set(viz, nd);
+        if (!fila.includes(viz)) fila.push(viz);
+      }
+    }
+  }
+  const melhores = [...chegadas].map((c) => dist.get(c)).filter((v) => v != null && Number.isFinite(v));
+  return melhores.length ? Math.min(...melhores) : null;
+}
+function ligacaoDoQuadro(quadro, circuitos) {
+  if (quadro.ligacao) return { ligacao: quadro.ligacao, deduzida: false };
+  if (circuitos.some((c) => c.ligacao === "FFF")) return { ligacao: "FFF", deduzida: true };
+  if (circuitos.some((c) => c.ligacao === "FF")) return { ligacao: "FF", deduzida: true };
+  return { ligacao: "FN", deduzida: true };
+}
+function tensaoDoQuadro(quadro, circuitos) {
+  if (quadro.tensaoV) return quadro.tensaoV;
+  const contagem = /* @__PURE__ */ new Map();
+  for (const c of circuitos) if (c.tensaoV) contagem.set(c.tensaoV, (contagem.get(c.tensaoV) ?? 0) + 1);
+  let melhor = null;
+  let n4 = 0;
+  for (const [v, k] of contagem) if (k > n4) melhor = v, n4 = k;
+  return melhor;
+}
+function preDimensionarQuadroCompleto(model, quadroId, hip = HIPOTESES_PADRAO, visitados = /* @__PURE__ */ new Set(), comCadeia = true) {
+  const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
+  if (!quadro) return null;
+  const pai = quadro.quadroPaiId ? (model.quadros ?? []).find((q) => q.id === quadro.quadroPaiId) ?? null : null;
+  const circuitosDoQuadro = (model.circuitos ?? []).filter((c) => c.quadroId === quadroId);
+  const circuitos = preDimensionarQuadro(model, quadroId, hip);
+  const achados = [];
+  const naoAvaliado = [];
+  const porGrupoVA = { ILUMINACAO: 0, TUG: 0, FORCA: 0, MOTOR: 0 };
+  let semPotencia = 0;
+  for (const t of model.terminais ?? []) {
+    if (t.disciplina !== "ELETRICA" || !t.circuitoId) continue;
+    if (!circuitosDoQuadro.some((c) => c.id === t.circuitoId)) continue;
+    const g = grupoDeCarga(t.tipoEletrico);
+    if (!g) continue;
+    if (t.potenciaW == null) {
+      semPotencia++;
+      continue;
+    }
+    porGrupoVA[g] += t.potenciaW;
+  }
+  if (semPotencia > 0) naoAvaliado.push(`${semPotencia} ponto(s) sem pot\xEAncia fora da soma do quadro`);
+  const sInstaladaPropriaVA = porGrupoVA.ILUMINACAO + porGrupoVA.TUG + porGrupoVA.FORCA + porGrupoVA.MOTOR;
+  const demanda = hip.demanda;
+  const sDemandadaPropriaVA = porGrupoVA.ILUMINACAO * demanda.ILUMINACAO + porGrupoVA.TUG * demanda.TUG + porGrupoVA.FORCA * demanda.FORCA + porGrupoVA.MOTOR * (demanda.MOTOR ?? 1);
+  const proximos = /* @__PURE__ */ new Set([...visitados, quadroId]);
+  const filhos = (model.quadros ?? []).filter((f) => f.quadroPaiId === quadroId && !proximos.has(f.id)).map((f) => {
+    const r = preDimensionarQuadroCompleto(model, f.id, hip, proximos, false);
+    if (!r) return null;
+    return {
+      quadroId: f.id,
+      nome: f.nome,
+      tipo: r.tipo,
+      ligacao: r.ligacao,
+      tensaoV: r.tensaoV,
+      sInstaladaVA: r.sInstaladaVA,
+      sDemandadaVA: r.sDemandadaVA,
+      ibA: r.ibA,
+      secaoMm2: r.secaoCalculada?.secaoMm2 ?? null,
+      disjuntorGeralA: r.disjuntorGeralA,
+      circuitos: r.circuitos.length,
+      faltas: r.achados.filter((a) => a.nivel === "FALTA").length + r.circuitos.reduce((s2, c) => s2 + c.achados.filter((a) => a.nivel === "FALTA").length, 0),
+      unidade: r.unidade
+    };
+  }).filter((f) => !!f);
+  const sInstaladaVA = sInstaladaPropriaVA + filhos.reduce((s2, f) => s2 + f.sInstaladaVA, 0);
+  const filhosDeUnidade = filhos.filter((f) => f.unidade != null);
+  const unidadesAtendidas = new Set(filhosDeUnidade.map((f) => f.unidade)).size;
+  const fator = unidadesAtendidas > 0 ? fatorDeDiversidade(hip.diversidade).fator(unidadesAtendidas) : 1;
+  const sDemandadaUnidadesVA = filhosDeUnidade.reduce((s2, f) => s2 + f.sDemandadaVA, 0) * fator;
+  const sDemandadaServicoVA = sDemandadaPropriaVA + filhos.filter((f) => f.unidade == null).reduce((s2, f) => s2 + f.sDemandadaVA, 0);
+  const sDemandadaVA = sDemandadaUnidadesVA + sDemandadaServicoVA;
+  const alimentadorDerivadoM = pai ? comprimentoEntreQuadros(model, pai, quadro) : null;
+  const alimentadorM = quadro.alimentadorM != null && quadro.alimentadorM > 0 ? quadro.alimentadorM : alimentadorDerivadoM;
+  const alimentadorOrigem = quadro.alimentadorM != null && quadro.alimentadorM > 0 ? "DECLARADO" : alimentadorDerivadoM != null ? "ELETRODUTOS" : null;
+  const { ligacao, deduzida } = ligacaoDoQuadro(quadro, circuitosDoQuadro);
+  const tensaoV = tensaoDoQuadro(quadro, circuitosDoQuadro);
+  if (deduzida) naoAvaliado.push(`liga\xE7\xE3o do quadro n\xE3o declarada \u2014 assumida ${ligacao} pelos circuitos`);
+  const base = {
+    quadroId,
+    nome: quadro.nome,
+    circuitos,
+    porGrupoVA,
+    sInstaladaVA,
+    sDemandadaVA,
+    demanda,
+    ligacao,
+    tensaoV,
+    ligacaoDeduzida: deduzida,
+    ibA: null,
+    secaoCalculada: null,
+    disjuntorGeralA: null,
+    quedaAlimentadorPct: null,
+    quedaTotalMaxPct: null,
+    fases: null,
+    desequilibrioPct: null,
+    achados,
+    naoAvaliado,
+    tipo: quadro.tipo ?? "QD",
+    paiNome: pai?.nome ?? null,
+    filhos,
+    sDemandadaPropriaVA,
+    alimentadorM,
+    alimentadorOrigem,
+    cadeia: [],
+    quedaAcumuladaPct: null,
+    limiteQuedaEfetivoPct: limiteQuedaTotalEfetivoPct(hip),
+    unidade: quadro.unidadeId ? (model.unidades ?? []).find((u) => u.id === quadro.unidadeId)?.numero ?? null : null,
+    unidadesAtendidas,
+    fatorDeDiversidade: fator,
+    sDemandadaUnidadesVA,
+    sDemandadaServicoVA
+  };
+  if (tensaoV == null) {
+    naoAvaliado.push("sem tens\xE3o no quadro nem nos circuitos \u2014 alimentador n\xE3o calculado");
+  } else if (sDemandadaVA > 0) {
+    const ibA = correnteDeProjetoA(sDemandadaVA, tensaoV, ligacao);
+    base.ibA = ibA;
+    base.secaoCalculada = secaoMinima(ibA, hip, ligacao, "FORCA");
+    if (base.secaoCalculada) {
+      base.disjuntorGeralA = disjuntorSugeridoA(ibA, base.secaoCalculada.izA, hip.catalogoDeDisjuntoresA);
+      if (alimentadorM != null && alimentadorM > 0) {
+        const queda = quedaDeTensaoPct(ibA, alimentadorM, base.secaoCalculada.secaoMm2, tensaoV, ligacao, hip.rhoOhmMm2PorM);
+        base.quedaAlimentadorPct = queda;
+        const piorTerminal = Math.max(0, ...circuitos.map((c) => c.quedaPct ?? 0));
+        const acima = comCadeia ? cadeiaDeQuadros(model, quadroId).reverse() : [];
+        const cadeia = acima.map((p) => {
+          const r = preDimensionarQuadroCompleto(model, p.id, hip, /* @__PURE__ */ new Set(), false);
+          return { quadroId: p.id, nome: p.nome, quedaAlimentadorPct: r?.quedaAlimentadorPct ?? null };
+        });
+        cadeia.push({ quadroId, nome: quadro.nome, quedaAlimentadorPct: queda });
+        base.cadeia = cadeia;
+        const eloSemQueda = cadeia.find((e) => e.quedaAlimentadorPct == null);
+        base.quedaAcumuladaPct = eloSemQueda ? null : cadeia.reduce((s2, e) => s2 + (e.quedaAlimentadorPct ?? 0), 0);
+        const limite = base.limiteQuedaEfetivoPct;
+        if (eloSemQueda) {
+          base.quedaTotalMaxPct = queda + piorTerminal;
+          naoAvaliado.push(`queda at\xE9 a origem incompleta \u2014 ${eloSemQueda.nome} sem comprimento de alimentador; avaliado s\xF3 deste quadro para baixo`);
+          if (base.quedaTotalMaxPct > limite) {
+            achados.push({ nivel: "FALTA", referencia: "6.2.7.1", mensagem: `queda deste quadro ao pior ponto ${n1(base.quedaTotalMaxPct)} % (alimentador ${n1(queda)} % + terminal ${n1(piorTerminal)} %) j\xE1 passa do limite ${n1(limite)} %` });
+          }
+        } else {
+          base.quedaTotalMaxPct = (base.quedaAcumuladaPct ?? 0) + piorTerminal;
+          if (base.quedaTotalMaxPct > limite) {
+            const elos = cadeia.map((e) => `${e.nome} ${n1(e.quedaAlimentadorPct ?? 0)} %`).join(" + ");
+            achados.push({
+              nivel: "FALTA",
+              referencia: "6.2.7.1",
+              mensagem: `queda da origem ao pior ponto ${n1(base.quedaTotalMaxPct)} % (${elos} + terminal ${n1(piorTerminal)} %), limite ${n1(limite)} %${hip.origemComTransformador ? " (transformador pr\xF3prio)" : ""}`
+            });
+          }
+        }
+      } else {
+        naoAvaliado.push(pai ? `comprimento do alimentador n\xE3o declarado e sem eletroduto entre ${pai.nome} e este quadro \u2014 queda da origem n\xE3o calculada` : "comprimento do alimentador n\xE3o declarado \u2014 queda da origem n\xE3o calculada");
+      }
+    } else {
+      naoAvaliado.push("IB do alimentador acima da Tabela 36 ou temperatura sem fator");
+    }
+  }
+  if (ligacao === "FFF") {
+    const { fases, semFase } = somarPorFase(
+      circuitosDoQuadro.map((c) => ({ nome: c.nome, ligacao: c.ligacao, fase: c.fase, sVA: circuitos.find((x) => x.circuitoId === c.id)?.sVA ?? 0 }))
+    );
+    base.fases = fases;
+    if (semFase.length > 0) naoAvaliado.push(`fora do balanceamento (sem fase): ${semFase.join(", ")}`);
+    const deseq = desequilibrioDasFases(fases);
+    if (deseq != null) {
+      base.desequilibrioPct = deseq;
+      if (base.desequilibrioPct > hip.desequilibrioMaxPct) {
+        achados.push({
+          nivel: "AVISO",
+          referencia: "balanceamento",
+          mensagem: `fases desequilibradas em ${n1(base.desequilibrioPct)} % (R ${Math.round(fases.R)} \xB7 S ${Math.round(fases.S)} \xB7 T ${Math.round(fases.T)} VA), limite ${hip.desequilibrioMaxPct} %`
+        });
+      }
+    }
+  }
+  return base;
+}
+function agrupamentoDoCircuito(model, circuitoId, hip) {
+  const trechos = (model.trechos ?? []).filter((t) => (t.circuitoIds ?? []).includes(circuitoId));
+  if (trechos.length === 0) return hip.circuitosAgrupados;
+  return Math.max(1, ...trechos.map((t) => (t.circuitoIds ?? []).length));
+}
+
+// utils/blueprintDistribuicao.ts
+var ROTULO_DO_TIPO_DE_AMBIENTE = {
+  BANHEIRO: "Banheiro",
+  COZINHA_SERVICO: "Cozinha / copa / \xE1rea de servi\xE7o",
+  VARANDA: "Varanda",
+  SALA_DORMITORIO: "Sala / dormit\xF3rio",
+  OUTRO: "Outro (hall, corredor, dep\xF3sito\u2026)"
+};
+
 // utils/blueprintIfc.ts
 var COBERTURA_IFC = [
   "CONT\xC9M: pavimentos (IfcBuildingStorey), paredes (IfcWall \u2014 eixo, espessura e altura; com IfcMaterialLayerSetUsage quando a composi\xE7\xE3o em camadas foi declarada; IfcCurtainWall quando marcada como cortina de vidro) e ambientes (IfcSpace \u2014 contorno e \xE1rea).",
@@ -4392,7 +5098,7 @@ var COBERTURA_IFC = [
   "GEORREFER\xCANCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geom\xE9trico. IfcMapConversion + IfcProjectedCRS s\xF3 saem quando algu\xE9m informou a coordenada PROJETADA (leste, norte e o c\xF3digo do CRS) \u2014 ela NUNCA \xE9 calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso p\xF5e o modelo a centenas de quil\xF4metros do lugar com a forma perfeita.",
   "PAR\xC2METROS PERSONALIZADOS: a pe\xE7a que os carrega ganha Pset_OpuraPersonalizado com a chave de programa como nome da propriedade (n\xFAmero \u2192 IfcReal, sim/n\xE3o \u2192 IfcBoolean, texto \u2192 IfcLabel). O nome leg\xEDvel e a unidade s\xE3o da defini\xE7\xE3o na organiza\xE7\xE3o e N\xC3O viajam.",
   'APROVA\xC7\xC3O: quando a revis\xE3o foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash \u2014 \xE9 o par (o que foi aprovado, quem aprovou) que vale. Revis\xE3o que n\xE3o passou por aprova\xE7\xE3o N\xC3O menciona o assunto: dizer "n\xE3o aprovado" afirmaria que algu\xE9m olhou e recusou.',
-  "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o (IfcFlowController, tamb\xE9m como marca de lugar \u2014 IfcDistributionBoard seria o exato, e N\xC3O \xE9 usado porque ele s\xF3 existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController \xE9 o pai dele na taxonomia, e diz menos sem dizer errado) e os CIRCUITOS (IfcDistributionCircuit), com o quadro e os pontos de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege. Tens\xE3o, disjuntor e se\xE7\xE3o saem em Pset_OpuraEletrica com o sufixo Declarado: s\xE3o o que o projetista ESCOLHEU, e N\xC3O resultado de dimensionamento. Um Pset normativo diria o contr\xE1rio. N\xC3O CONT\xC9M conex\xE3o (joelho, t\xEA, luva), registro, nem dimensionamento de qualquer esp\xE9cie: bitola e cota s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de queda de tens\xE3o nem de perda de carga.",
+  "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o, tamb\xE9m como marca de lugar: no esquema IFC4 (o padr\xE3o) sai IfcFlowController \u2014 IfcDistributionBoard, o exato, n\xE3o existe no IFC4 e os leitores n\xE3o o leem \u2014; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard (.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege \u2014, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por tipo (fase, neutro, retorno, terra) e se\xE7\xE3o de condutor do circuito, SEM geometria (o cabo corre dentro do eletroduto), com o comprimento total em Qto_CableSegmentBaseQuantities \u2014 o mesmo do quantitativo. Pset_OpuraEletrica separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista escolheu (tens\xE3o, liga\xE7\xE3o, fase, disjuntor, curva, se\xE7\xE3o, DPS, Icn); _Calculada \xE9 conta do pr\xE9-dimensionamento com as hip\xF3teses do estudo (IB, demanda do quadro); _Derivados \xE9 o que o motor de fia\xE7\xE3o deriva (a composi\xE7\xE3o dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon (normativo) s\xF3 leva FATO: RatedVoltage = a tens\xE3o declarada do circuito, e HasProtectiveEarth nas tomadas de uso geral e espec\xEDfico. N\xC3O CONT\xC9M registro, nem dimensionamento hidr\xE1ulico: bitola e cota das redes de \xE1gua e esgoto s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de perda de carga.",
   "CONT\xC9M guarda-corpos e corrim\xE3os (IfcRailing .GUARDRAIL. / .HANDRAIL.): um s\xF3lido por trecho da polilinha \u2014 50 mm de espessura, na altura declarada, apoiado no piso do pavimento \u2014, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura \xE9 MARCA DE LUGAR, n\xE3o perfil: o desenho sabe onde a prote\xE7\xE3o est\xE1 e quanto mede, n\xE3o o desenho do gradil.",
   "N\xC3O CONT\xC9M ar-condicionado, g\xE1s nem inc\xEAndio.",
   "N\xC3O CONT\xC9M ARMADURA. Nenhuma barra de a\xE7o, estribo ou cobrimento \u2014 a estrutura aqui \xE9 s\xF3 a forma do concreto.",
@@ -4512,6 +5218,7 @@ function gerarIfc(model, o) {
   const data = o.data ?? /* @__PURE__ */ new Date();
   const kernelVersion = o.kernelVersion ?? KERNEL_VERSION;
   const quant = computeQuantities(model, POLITICA_PADRAO, kernelVersion);
+  const hipEl = o.hipotesesEletricas ?? HIPOTESES_PADRAO;
   const qParede = new Map(quant.paredes.map((q) => [q.wallId, q]));
   const qAbertura = new Map(quant.aberturas.map((q) => [q.openingId, q]));
   const qEstrutura = new Map(quant.estruturas.map((q) => [q.structuralId, q]));
@@ -4544,9 +5251,11 @@ function gerarIfc(model, o) {
   const area = emitir("IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)");
   const volume = emitir("IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)");
   const angulo = emitir("IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)");
+  const temEletrica = (model.circuitos ?? []).length > 0 || (model.terminais ?? []).some((x) => x.disciplina === "ELETRICA");
+  const volt = temEletrica ? emitir("IFCSIUNIT(*,.ELECTRICVOLTAGEUNIT.,$,.VOLT.)") : null;
   const moeda = o.custoPorUid?.size ? emitir("IFCMONETARYUNIT('BRL')") : null;
   const unidades = emitir(
-    `IFCUNITASSIGNMENT((${[comprimento, area, volume, angulo, moeda].filter(Boolean).join(",")}))`
+    `IFCUNITASSIGNMENT((${[comprimento, area, volume, angulo, moeda, volt].filter(Boolean).join(",")}))`
   );
   const pessoa = emitir(`IFCPERSON($,${s(o.autor ?? "ORCACLOUD")},$,$,$,$,$,$)`);
   const organizacao = emitir(`IFCORGANIZATION($,${s("ORCACLOUD")},$,$,$)`);
@@ -4568,7 +5277,8 @@ function gerarIfc(model, o) {
     dirX,
     subContexto,
     subContextoEixo,
-    origem2d
+    origem2d,
+    esquema: o.esquema ?? "IFC4"
   };
   const projeto = emitir(
     `IFCPROJECT(${guidDoEstudo("projeto")},${historico},${s(`${o.titulo} \u2014 vers\xE3o ${o.revisao}`)},${s(COBERTURA_IFC.join(" "))},$,$,$,(${contexto}),${unidades})`
@@ -4650,6 +5360,7 @@ function gerarIfc(model, o) {
     psetPersonalizado(produto, uid);
   };
   const pavimentos = [];
+  const pavimentoDoNivel = /* @__PURE__ */ new Map();
   const produtosPorPavimento = /* @__PURE__ */ new Map();
   for (const nivel of model.levels) {
     const pontoNivel = emitir(`IFCCARTESIANPOINT((0.,0.,${n(nivel.elevationMm)}))`);
@@ -4659,6 +5370,7 @@ function gerarIfc(model, o) {
       `IFCBUILDINGSTOREY(${guidDe(nivel.uid, `pav-${nivel.id}`)},${historico},${s(nivel.name)},$,$,${localNivel},$,$,.ELEMENT.,${n(nivel.elevationMm)})`
     );
     pavimentos.push(pavimento);
+    pavimentoDoNivel.set(nivel.id, pavimento);
     const produtos = [];
     produtosPorPavimento.set(nivel.id, produtos);
     const paredesDoNivel = model.walls.filter((x) => x.levelId === nivel.id);
@@ -4747,6 +5459,9 @@ function gerarIfc(model, o) {
         ...t.disciplina === "ESGOTO" && emPlanta > 0 ? [["DeclividadePct", { tipo: "IFCREAL", v: Math.round(Math.abs(t.cotaBMm - t.cotaAMm) / emPlanta * 1e4) / 100 }]] : [],
         ["Sugerido", { tipo: "IFCBOOLEAN", v: !!t.sugerido }]
       ]);
+      if (t.disciplina === "ELETRICA") {
+        for (const cid of t.circuitoIds ?? []) porCircuito.set(cid, [...porCircuito.get(cid) ?? [], produto]);
+      }
       const qt = qTrecho.get(t.id);
       if (qt) {
         emitirQto(ctx, produto, t.uid, classeDoTrecho(t.disciplina).qto, [
@@ -4816,6 +5531,15 @@ function gerarIfc(model, o) {
       if (t.circuitoId) {
         porCircuito.set(t.circuitoId, [...porCircuito.get(t.circuitoId) ?? [], produto]);
       }
+      if (t.disciplina === "ELETRICA") {
+        const cir = t.circuitoId ? (model.circuitos ?? []).find((c) => c.id === t.circuitoId) : void 0;
+        const tensao = cir?.tensaoV ?? (cir ? (model.quadros ?? []).find((q) => q.id === cir.quadroId)?.tensaoV : null) ?? null;
+        const comTerra = t.tipoEletrico === "TUG" || t.tipoEletrico === "TUE";
+        emitirPset(ctx, produto, t.uid, "Pset_ElectricalDeviceCommon", [
+          ...tensao != null ? [["RatedVoltage", { tipo: "IFCELECTRICVOLTAGEMEASURE", v: tensao }]] : [],
+          ...comTerra ? [["HasProtectiveEarth", { tipo: "IFCBOOLEAN", v: true }]] : []
+        ]);
+      }
       if (t.itemCode) {
         produtosPorCodigo.set(t.itemCode, [...produtosPorCodigo.get(t.itemCode) ?? [], produto]);
       }
@@ -4826,6 +5550,18 @@ function gerarIfc(model, o) {
       porQuadro.set(q.id, produto);
       porSistema.set("ELETRICA", [...porSistema.get("ELETRICA") ?? [], produto]);
       psetOpura(produto, q.uid, rotuloCurto(q.uid, "quadro"));
+      const pq = preDimensionarQuadroCompleto(model, q.id, hipEl);
+      const pai = q.quadroPaiId ? (model.quadros ?? []).find((x) => x.id === q.quadroPaiId) : void 0;
+      emitirPset(ctx, produto, q.uid, "Pset_OpuraEletrica", [
+        ["TipoDeQuadro", { tipo: "IFCLABEL", v: q.tipo ?? "QD" }],
+        ...q.ligacao ? [["Ligacao_Declarada", { tipo: "IFCLABEL", v: q.ligacao }]] : [],
+        ...q.tensaoV != null ? [["TensaoV_Declarada", { tipo: "IFCINTEGER", v: q.tensaoV }]] : [],
+        ...pai ? [["QuadroPai", { tipo: "IFCLABEL", v: pai.nome }]] : [],
+        ...q.dps ? [["DPS_Declarado", { tipo: "IFCLABEL", v: rotuloDoDPS(q.dps) }]] : [],
+        ...q.icnKa != null ? [["Icn_kA_Declarada", { tipo: "IFCREAL", v: q.icnKa }]] : [],
+        ...pq && pq.sDemandadaVA > 0 ? [["DemandaVA_Calculada", { tipo: "IFCREAL", v: Math.round(pq.sDemandadaVA) }]] : [],
+        ...pq?.ibA != null ? [["IB_A_Calculada", { tipo: "IFCREAL", v: Math.round(pq.ibA * 10) / 10 }]] : []
+      ]);
     }
     if (produtos.length > 0) {
       emitir(
@@ -4847,6 +5583,9 @@ function gerarIfc(model, o) {
       `IFCRELASSIGNSTOGROUP(${guid(`rel-sist-${disciplina}`)},${historico},$,$,(${membros.join(",")}),$,${sistema})`
     );
   }
+  const fiacao = (model.circuitos ?? []).length > 0 ? composicaoDaRede(model) : null;
+  const membrosCabo = [];
+  const cabosPorPavimento = /* @__PURE__ */ new Map();
   for (const c of model.circuitos ?? []) {
     const membros = [...porCircuito.get(c.id) ?? []];
     const quadro = porQuadro.get(c.quadroId);
@@ -4862,8 +5601,56 @@ function gerarIfc(model, o) {
       ...c.tipo ? [["Tipo", { tipo: "IFCLABEL", v: c.tipo }]] : [],
       ...c.tensaoV != null ? [["TensaoV", { tipo: "IFCINTEGER", v: c.tensaoV }]] : [],
       ...c.disjuntorA != null ? [["DisjuntorA_Declarado", { tipo: "IFCINTEGER", v: c.disjuntorA }]] : [],
-      ...c.secaoMm2 != null ? [["SecaoMm2_Declarada", { tipo: "IFCREAL", v: c.secaoMm2 }]] : []
+      ...c.secaoMm2 != null ? [["SecaoMm2_Declarada", { tipo: "IFCREAL", v: c.secaoMm2 }]] : [],
+      // E7.1 — o resto do que o circuito É. Declarado com sufixo; o que o motor
+      // deriva, com "_Calculado"/"_Derivado" — quem recebe sabe quem decidiu.
+      ...c.ligacao ? [["Ligacao_Declarada", { tipo: "IFCLABEL", v: c.ligacao }]] : [],
+      ...rotuloDaFase(c.ligacao, c.fase) && c.ligacao !== "FFF" ? [["Fase_Declarada", { tipo: "IFCLABEL", v: rotuloDaFase(c.ligacao, c.fase) }]] : [],
+      ...c.curva ? [["Curva_Declarada", { tipo: "IFCLABEL", v: c.curva }]] : [],
+      ...c.reserva ? [["Reserva", { tipo: "IFCBOOLEAN", v: true }]] : [],
+      ...(() => {
+        const dr = drDoCircuito(model, c);
+        return dr ? [["DR", { tipo: "IFCLABEL", v: `${rotuloDoDR(dr)}${dr.geral ? " (geral)" : dr.circuitoIds.length > 1 ? " (grupo)" : ""}` }]] : [];
+      })(),
+      ...(() => {
+        const pd = preDimensionarCircuito(model, c, hipEl);
+        const secao = c.secaoMm2 ?? pd.secaoCalculada?.secaoMm2 ?? null;
+        return [
+          ...pd.ibA != null && pd.sVA > 0 ? [["IB_A_Calculada", { tipo: "IFCREAL", v: Math.round(pd.ibA * 10) / 10 }]] : [],
+          ["Condutores_Derivados", { tipo: "IFCLABEL", v: condutoresDoCircuito(c, secao, fiacao).texto }]
+        ];
+      })()
     ]);
+    const soDesteCircuito = quant.trechos.map((qt) => ({ ...qt, condutoresPorSecao: qt.condutoresPorSecao.filter((x) => x.circuitoId === c.id) }));
+    const quadroDoCircuito = (model.quadros ?? []).find((q) => q.id === c.quadroId);
+    for (const cabo of agruparPorCondutor(soDesteCircuito)) {
+      if (!(cabo.comprimentoM > 0)) continue;
+      const sec = cabo.secaoMm2 != null ? `${String(cabo.secaoMm2).replace(".", ",")} mm\xB2` : "sem se\xE7\xE3o";
+      const semente = `${c.uid}:cabo:${cabo.tipo}:${cabo.secaoMm2 ?? "x"}`;
+      const produtoCabo = emitir(
+        `IFCCABLESEGMENT(${guidDe(uidDeterministico(semente), `cabo-${c.id}-${cabo.tipo}-${cabo.secaoMm2 ?? "x"}`)},${historico},${s(`${c.nome} \xB7 ${ROTULO_DO_CONDUTOR[cabo.tipo]} ${sec}`)},$,$,$,$,$,.CONDUCTORSEGMENT.)`
+      );
+      emitirPset(ctx, produtoCabo, uidDeterministico(semente), "Pset_OpuraEletrica", [
+        ["Circuito", { tipo: "IFCLABEL", v: c.nome }],
+        ["TipoDeCondutor", { tipo: "IFCLABEL", v: ROTULO_DO_CONDUTOR[cabo.tipo] }],
+        ...cabo.secaoMm2 != null ? [["SecaoMm2", { tipo: "IFCREAL", v: cabo.secaoMm2 }]] : []
+      ]);
+      emitirQto(ctx, produtoCabo, uidDeterministico(semente), "Qto_CableSegmentBaseQuantities", [
+        { classe: "IFCQUANTITYLENGTH", nome: "Length", valor: cabo.comprimentoM * M, formula: "\u03A3 comprimento do eletroduto \xD7 condutores deste tipo e se\xE7\xE3o do circuito" }
+      ]);
+      membrosCabo.push(produtoCabo);
+      const pav = quadroDoCircuito ? pavimentoDoNivel.get(quadroDoCircuito.levelId) : void 0;
+      if (pav) cabosPorPavimento.set(pav, [...cabosPorPavimento.get(pav) ?? [], produtoCabo]);
+    }
+    if (membrosCabo.length > 0) {
+      emitir(
+        `IFCRELASSIGNSTOGROUP(${guidDe(uidDeterministico(`${c.uid}:rel-cabos`), `rel-cabos-${c.id}`)},${historico},$,$,(${membrosCabo.join(",")}),$,${circuito})`
+      );
+      membrosCabo.length = 0;
+    }
+  }
+  for (const [pav, cabos] of cabosPorPavimento) {
+    emitir(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid(`cont-cabos-${pav}`)},${historico},${s("Cabos")},$,(${cabos.join(",")}),${pav})`);
   }
   emitirTiposDeEsquadria(aberturasEmitidas, ctx, psetOpura);
   emitirClassificacao(ctx, produtosPorCodigo, o.fonteDaClassificacao ?? "SINAPI");
@@ -4880,7 +5667,7 @@ function gerarIfc(model, o) {
 HEADER;
 FILE_DESCRIPTION((${s("ViewDefinition [CoordinationView]")},${s(`COBERTURA PARCIAL: ${COBERTURA_IFC.join(" | ")}`)}),${s("2;1")});
 FILE_NAME(${s(`${o.titulo} v${o.revisao}`)},${s(carimbo)},(${s(o.autor ?? "ORCACLOUD")}),(${s("ORCACLOUD")}),${s("OPURA Planta Inteligente")},${s("OPURA")},${s(o.hash)});
-FILE_SCHEMA((${s("IFC4")}));
+FILE_SCHEMA((${s(o.esquema ?? "IFC4")}));
 ENDSEC;
 DATA;
 `;
@@ -4916,6 +5703,7 @@ function valorIfc(v) {
     case "IFCREAL":
     case "IFCPOSITIVELENGTHMEASURE":
     case "IFCMONETARYMEASURE":
+    case "IFCELECTRICVOLTAGEMEASURE":
       return `${v.tipo}(${n(v.v)})`;
     default:
       return `${v.tipo}(${s(v.v)})`;
@@ -5631,6 +6419,14 @@ function emitirQuadro(q, ctx, localNivel) {
     `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solido}))`
   );
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
+  if (ctx.esquema === "IFC4X3") {
+    const tipo = q.tipo ?? "QD";
+    const predef = tipo === "QGBT" ? ".SWITCHBOARD." : tipo === "MEDICAO" ? ".USERDEFINED." : ".DISTRIBUTIONBOARD.";
+    const objectType = tipo === "MEDICAO" ? s("CENTRO DE MEDICAO") : "$";
+    return emitir(
+      `IFCDISTRIBUTIONBOARD(${guidDe(q.uid, `quadro-${q.id}`)},${historico},${s(q.nome)},$,${objectType},${local},${produtoForma},${s(rotuloCurto(q.uid, "quadro"))},${predef})`
+    );
+  }
   return emitir(
     `IFCFLOWCONTROLLER(${guidDe(q.uid, `quadro-${q.id}`)},${historico},${s(q.nome)},$,$,${local},${produtoForma},${s(rotuloCurto(q.uid, "quadro"))})`
   );

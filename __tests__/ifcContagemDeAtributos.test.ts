@@ -145,6 +145,10 @@ const SEM_REFERENCIA = new Set([
   // ── E a do INTERRUPTOR (10/09/2026) — `IfcSwitchingDevice.TOGGLESWITCH`,
   // medida do mesmo jeito em `ifcIdaEVoltaProprio.test.ts`.
   'IFCSWITCHINGDEVICE',
+  // ── E o CABO (E7.1, 29/09/2026) — `IfcCableSegment.CONDUCTORSEGMENT`, nove atributos, sem
+  // geometria; medido pelo web-ifc (via `ifcViewerService`) em `blueprintIfcEletricaCompleta.test.ts`,
+  // com Name e PredefinedType nos campos certos e TODA linha do arquivo lida, em IFC4 e IFC4X3.
+  'IFCCABLESEGMENT',
 ]);
 
 describe.skipIf(!TEM)('contagem de atributos · o nosso IFC contra IFC4 real', () => {

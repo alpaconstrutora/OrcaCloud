@@ -234,7 +234,10 @@ describe('escada · 3. IFC', () => {
     // contradição em vez de denunciá-la.
     // ⚠️ A frase MUDOU em 08/09/2026: as instalações passaram a sair. O que
     // continua de fora, e é o que este caso guarda, são as CONEXÕES.
-    expect(ifc).toContain(noIfc('NÃO CONTÉM conexão'));
+    // ⚠️ E MUDOU de novo em 29/09/2026 (E7.1): as CONEXÕES derivadas saem desde a E0.3 (IfcPipeFitting), e
+    // "NÃO CONTÉM conexão" mentia no mesmo parágrafo que as descrevia. O que continua de fora é o REGISTRO.
+    expect(ifc).toContain(noIfc('NÃO CONTÉM registro'));
+    expect(ifc).not.toContain(noIfc('NÃO CONTÉM conexão'));
   });
 });
 

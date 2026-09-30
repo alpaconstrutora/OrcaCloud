@@ -837,6 +837,9 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     aprovacao: o.aprovacao,
     parametrosCalculadosPorUid: o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined,
     chavesPrivadas: o.definicoesDeParametro ? chavesPrivadas(o.definicoesDeParametro) : undefined,
+    // E7.1: o esquema escolhido e as hipóteses do estudo (IB e demanda calculados no Pset elétrico).
+    esquema: o.esquemaIfc,
+    hipotesesEletricas: o.hipotesesEletricas,
   });
 
   return [

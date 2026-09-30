@@ -1986,7 +1986,7 @@ Fecha os A do motor 3 e o que o usuário chamou de "quatro motores combinados".
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
-| 7.1 IFC completo | `Pset_OpuraEletrica` ganha IB, ligação, fase, DR, DPS, curva, Icn, condutores; `IfcCableSegment` por circuito (comprimento total por seção); eletroduto entra no `IfcDistributionCircuit`; `IfcDistributionBoard` quando o schema declarado for IFC4 ADD2 (opção de exportação); `Pset_ElectricalDeviceCommon` nas peças | validação no visualizador IFC (`services/ifcViewerService`); `blueprintIfc.test.ts` |
+| 7.1 IFC completo ✅ (Psets com sufixo declarado/calculado/derivado; IfcCableSegment por seção; eletroduto no circuito; quadro IfcDistributionBoard na opção IFC4X3 — no IFC4 o web-ifc não o lê; toda linha lida pelo visualizador) | `Pset_OpuraEletrica` ganha IB, ligação, fase, DR, DPS, curva, Icn, condutores; `IfcCableSegment` por circuito (comprimento total por seção); eletroduto entra no `IfcDistributionCircuit`; `IfcDistributionBoard` quando o schema declarado for IFC4 ADD2 (opção de exportação); `Pset_ElectricalDeviceCommon` nas peças | validação no visualizador IFC (`services/ifcViewerService`); `blueprintIfc.test.ts` |
 | 7.2 Importar elétrica e clash completo | `ifcParaKernel.ts` lê `IfcOutlet`, `IfcLightFixture`, `IfcSwitchingDevice`, `IfcCableCarrierSegment` → terminais e trechos ELETRICA; clash trecho × parede/abertura (sem furo previsto) e destaque no 3D dos conflitos; filtro por pavimento na lista | importar o próprio IFC exportado devolve os mesmos pontos; `PainelConflitos` com filtro |
 
 Fecha o bloco **8**.
@@ -3460,3 +3460,53 @@ automáticas, Ø até 85 e luminárias por área ❌/🟡→✅. Com a E6.1 e a 
 
 **Etapa 6 concluída** (3 de 3, sem bump de kernel): balanceamento de fases, centro de cargas, e desvio
 estrutural com caixas de passagem.
+### E7.1 — IFC elétrico completo (29/09/2026) · frente `eletrico-e7` · sem bump
+
+**O que mudou** (`utils/blueprintIfc.ts`)
+
+- **Circuito** — `Pset_OpuraEletrica` ganhou `Ligacao_Declarada`, `Fase_Declarada` (o par no F-F, E6.1),
+  `Curva_Declarada`, `Reserva`, `DR` (peça ou legado; "(grupo)"/"(geral)"), `IB_A_Calculada` (pré-dimensionamento
+  com as hipóteses do estudo) e `Condutores_Derivados` (a mesma composição da prancha). O sufixo diz quem decidiu:
+  _Declarado = projetista, _Calculada = conta, _Derivados = motor de fiação. Nada em Pset normativo.
+- **Quadro** — `Pset_OpuraEletrica` com `TipoDeQuadro`, ligação/tensão declaradas, `QuadroPai`, `DPS_Declarado`,
+  `Icn_kA_Declarada`, `DemandaVA_Calculada`, `IB_A_Calculada`.
+- **Cabos** — um `IfcCableSegment .CONDUCTORSEGMENT.` por tipo (fase, neutro, retorno, terra) e seção de condutor
+  do circuito, sem geometria (corre dentro do eletroduto), com `Qto_CableSegmentBaseQuantities.Length` = a mesma
+  conta do quantitativo (`agruparPorCondutor` só com o fio do circuito), membro do circuito e contido no pavimento
+  do quadro.
+- **Eletroduto no circuito** — cada `IfcCableCarrierSegment` entra no `IfcDistributionCircuit` de cada circuito
+  que passa por ele.
+- **`Pset_ElectricalDeviceCommon`** nos pontos elétricos, só com FATO: `RatedVoltage` = tensão declarada do
+  circuito (ou do quadro dele) e `HasProtectiveEarth` nas TUG/TUE. A unidade VOLT entra no `IfcUnitAssignment`
+  só quando há elétrica — o arquivo sem elétrica continua idêntico.
+- **Esquema** (opção `esquema`, na exportação "Esquema do IFC"): `IFC4` (padrão, o de sempre) ou `IFC4X3` (IFC 4.3
+  ADD2) — no 4X3 o quadro sai `IfcDistributionBoard` (.DISTRIBUTIONBOARD.; QGBT .SWITCHBOARD.; centro de medição
+  USERDEFINED). **Desvio do plano**: o plano dizia "IFC4 ADD2"; a sonda mostrou que o web-ifc NÃO lê
+  `IfcDistributionBoard` num arquivo IFC4 (falha ao desserializar, como em 09/09) e lê o arquivo inteiro declarado
+  IFC4X3 — então a opção é o esquema 4X3, onde a classe existe de fato.
+- **Cobertura** do arquivo corrigida: dizia que `IfcDistributionBoard` "NÃO é usado", "nem dimensionamento de
+  qualquer espécie" e "NÃO CONTÉM conexão" — a última mentia desde a E0.3 (as `IfcPipeFitting` derivadas saem, e
+  estavam descritas no MESMO parágrafo). Quatro testes fixavam a frase falsa; passaram a fixar "NÃO CONTÉM
+  registro" (o que de fato falta) e a proibir a velha. O painel de versões dizia que o IFC "não leva escada,
+  forro, instalações nem armadura" — as três primeiras saem; agora diz "não leva armadura, ar-condicionado, gás
+  nem incêndio", o mesmo da cobertura.
+- `planta-api`: o bundle do kernel inclui o `gerarIfc` — regenerado e publicado; GET `/v1/estudos` → 401/401.
+
+**Testes** — novo `__tests__/blueprintIfcEletricaCompleta.test.ts` (8): Psets do circuito e do quadro com os
+valores e sufixos; **um `IfcCableSegment` por tipo e seção, com o Length igual ao do quantitativo**; os quatro
+eletrodutos membros do C1; `Pset_ElectricalDeviceCommon` (127 V, terra na tomada, não na luz; VOLT só com
+elétrica); IFC4 × IFC4X3 iguais linha a linha fora do esquema e da classe do quadro; e, **pelo
+`ifcViewerService` (o web-ifc do visualizador do app), TODA linha do arquivo lida em IFC4 e em IFC4X3**, cabos com
+Name e PredefinedType certos, quadro como `IfcDistributionBoard` no 4X3. Ajustados: `ifcContagemDeAtributos`
+(o `IFCCABLESEGMENT` na lista medida pelo web-ifc), os três de cobertura e o do painel.
+
+**O que os testes pegaram antes de publicar**: a sonda (web-ifc) decidiu o esquema; o `plantaApi.test.ts` pegou o
+bundle velho da API; e as frases falsas da cobertura e do painel.
+
+**Verificação**: `tsc` ✓ · alvo 89 ✓ · suíte inteira **6.360 ✓** (6.393 = 6.360 + 33 pulados, 592 arquivos, conta
+fechada na 3ª rodada — as duas primeiras perderam arquivos sem falha, a instabilidade conhecida, e não foram
+aceitas) · `vite build` ✓ · `check-ui-standard` ✓ · `check-xss-sinks` ✓ · bundle `planta-api` regenerado e
+publicado, 401/401 · sem mudança no kernel.
+
+**Efeito no benchmark**: bloco 8 BIM — IFC com DR/DPS/curva/Icn/IB/condutores, cabos por seção, eletroduto no
+circuito e quadro na classe exata (opção 4X3) ❌/🟡→✅.

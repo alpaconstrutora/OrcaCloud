@@ -187,7 +187,10 @@ describe('telhado · IFC', () => {
   it('a cobertura diz que TEM telhado, e o que continua de fora', () => {
     const texto = COBERTURA_IFC.join(' ');
     expect(texto).toMatch(/CONTÉM telhado: um IfcRoof/);
-    expect(texto).toMatch(/NÃO CONTÉM conexão/);
+    // ⚠️ E MUDOU de novo em 29/09/2026 (E7.1): as CONEXÕES derivadas saem desde a E0.3 (IfcPipeFitting), e
+    // "NÃO CONTÉM conexão" mentia no mesmo parágrafo que as descrevia. O que continua de fora é o REGISTRO.
+    expect(texto).toMatch(/NÃO CONTÉM registro/);
+    expect(texto).not.toMatch(/NÃO CONTÉM conexão/);
     expect(texto).not.toMatch(/NÃO CONTÉM telhado/);
   });
 

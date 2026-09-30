@@ -98,6 +98,9 @@ import {
   type Parametros,
 } from './blueprintKernel';
 import { contornoDaSecaoT, secaoTValida } from './blueprintKernel/secaoT';
+import { ROTULO_DO_CONDUTOR, agruparPorCondutor, composicaoDaRede, condutoresDoCircuito, drDoCircuito, rotuloDoDPS, rotuloDoDR } from './blueprintKernel';
+import { HIPOTESES_PADRAO, preDimensionarCircuito, preDimensionarQuadroCompleto, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
+import { rotuloDaFase } from './blueprintFasesEletricas';
 import { ROTULO_DO_TIPO_DE_AMBIENTE } from './blueprintDistribuicao';
 import {
   giroDaPeca,
@@ -157,17 +160,23 @@ export const COBERTURA_IFC = [
     'por unidade. A COTA é o CENTRO da peça, não a base, e o quadro NÃO tem rotação — a ' +
     'caixa é girada pelo ângulo declarado (IfcAxis2Placement3D.RefDirection); sem giro ' +
     'declarado ela sai alinhada aos eixos e o arquivo NÃO menciona direção nenhuma. ' +
-    'CONTÉM o QUADRO de distribuição (IfcFlowController, também como ' +
-    'marca de lugar — IfcDistributionBoard seria o exato, e NÃO é usado porque ele só ' +
-    'existe a partir do IFC4 ADD2 e este arquivo declara IFC4; IfcFlowController é o pai ' +
-    'dele na taxonomia, e diz menos sem dizer errado) e os CIRCUITOS ' +
-    '(IfcDistributionCircuit), com o quadro e os pontos ' +
-    'de cada circuito agrupados nele — é o que liga o disjuntor ao que ele protege. ' +
-    'Tensão, disjuntor e seção saem em Pset_OpuraEletrica com o sufixo Declarado: são ' +
-    'o que o projetista ESCOLHEU, e NÃO resultado de dimensionamento. Um Pset normativo ' +
-    'diria o contrário. NÃO CONTÉM conexão (joelho, tê, luva), registro, nem ' +
-    'dimensionamento de qualquer espécie: bitola e cota são o que alguém desenhou, e ' +
-    'não resultado de cálculo de queda de tensão nem de perda de carga.',
+    'CONTÉM o QUADRO de distribuição, também como marca de lugar: no esquema IFC4 (o ' +
+    'padrão) sai IfcFlowController — IfcDistributionBoard, o exato, não existe no IFC4 e os ' +
+    'leitores não o leem —; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard ' +
+    '(.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com ' +
+    'o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele — é o que liga o ' +
+    'disjuntor ao que ele protege —, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por ' +
+    'tipo (fase, neutro, retorno, terra) e seção de condutor do circuito, SEM geometria (o ' +
+    'cabo corre dentro do eletroduto), com o comprimento total em ' +
+    'Qto_CableSegmentBaseQuantities — o mesmo do quantitativo. Pset_OpuraEletrica separa pelo ' +
+    'SUFIXO: _Declarado/_Declarada é o que o projetista escolheu (tensão, ligação, fase, ' +
+    'disjuntor, curva, seção, DPS, Icn); _Calculada é conta do pré-dimensionamento com as ' +
+    'hipóteses do estudo (IB, demanda do quadro); _Derivados é o que o motor de fiação deriva ' +
+    '(a composição dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon ' +
+    '(normativo) só leva FATO: RatedVoltage = a tensão declarada do circuito, e HasProtectiveEarth ' +
+    'nas tomadas de uso geral e específico. NÃO CONTÉM registro, nem dimensionamento ' +
+    'hidráulico: bitola e cota das redes de água e esgoto são o que alguém desenhou, e ' +
+    'não resultado de cálculo de perda de carga.',
   'CONTÉM guarda-corpos e corrimãos (IfcRailing .GUARDRAIL. / .HANDRAIL.): um sólido por trecho da polilinha — 50 mm de espessura, na altura declarada, apoiado no piso do pavimento —, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura é MARCA DE LUGAR, não perfil: o desenho sabe onde a proteção está e quanto mede, não o desenho do gradil.',
   'NÃO CONTÉM ar-condicionado, gás nem incêndio.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
@@ -467,7 +476,9 @@ type ValorIfc =
         | 'IFCREAL'
         | 'IFCPOSITIVELENGTHMEASURE'
         /** Valor monetário. A MOEDA não vai no valor — ver `custoPorUid`. */
-        | 'IFCMONETARYMEASURE';
+        | 'IFCMONETARYMEASURE'
+        /** E7.1: tensão, em VOLT — a unidade só é declarada quando o arquivo tem elétrica. */
+        | 'IFCELECTRICVOLTAGEMEASURE';
       v: number;
     };
 
@@ -543,6 +554,17 @@ export interface OpcoesIfc {
    * Opcional: quem chama `gerarIfc` sem ele obtém o arquivo de sempre.
    */
   lodPorUid?: ReadonlyMap<string, number>;
+  /**
+   * E7.1 — O ESQUEMA declarado. `IFC4` (padrão): o arquivo de sempre, e o quadro
+   * sai `IfcFlowController`. `IFC4X3` (IFC 4.3 ADD2, ISO 16739-1:2024): o quadro
+   * sai `IfcDistributionBoard`, a classe exata — que NÃO existe no IFC4 (o
+   * web-ifc a acha e não a lê; medido em 09/09 e de novo em 29/09/2026). O resto
+   * do arquivo é o mesmo, e o web-ifc lê todas as linhas nos dois esquemas
+   * (`ifcIdaEVoltaProprio.test.ts`).
+   */
+  esquema?: 'IFC4' | 'IFC4X3';
+  /** E7.1: as hipóteses do pré-dimensionamento, para o IB e a demanda CALCULADOS no Pset elétrico. */
+  hipotesesEletricas?: HipotesesEletricas;
 }
 
 interface Ctx {
@@ -569,6 +591,8 @@ interface Ctx {
    * schema permite e o que o ecossistema aceita não são a mesma coisa.
    */
   origem2d: string;
+  /** E7.1: o esquema declarado — decide a classe do quadro. */
+  esquema: 'IFC4' | 'IFC4X3';
 }
 
 export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
@@ -593,6 +617,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 
   // ── Quantidades: UMA vez, do mesmo motor da aba Quantitativos ─────────────
   const quant = computeQuantities(model, POLITICA_PADRAO, kernelVersion);
+  const hipEl = o.hipotesesEletricas ?? HIPOTESES_PADRAO;
   const qParede = new Map(quant.paredes.map((q) => [q.wallId, q]));
   const qAbertura = new Map(quant.aberturas.map((q) => [q.openingId, q]));
   const qEstrutura = new Map(quant.estruturas.map((q) => [q.structuralId, q]));
@@ -656,13 +681,16 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const area = emitir('IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)');
   const volume = emitir('IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)');
   const angulo = emitir('IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)');
+  // E7.1: o VOLT só entra quando há elétrica — o arquivo de quem não tem continua idêntico byte a byte.
+  const temEletrica = (model.circuitos ?? []).length > 0 || (model.terminais ?? []).some((x) => x.disciplina === 'ELETRICA');
+  const volt = temEletrica ? emitir('IFCSIUNIT(*,.ELECTRICVOLTAGEUNIT.,$,.VOLT.)') : null;
   // A MOEDA só é declarada quando há custo no arquivo. `IfcMonetaryMeasure`
   // carrega apenas o número; sem esta unidade, um leitor vê "1234" e não tem
   // como saber de que moeda se trata. Declará-la sempre seria afirmar que o
   // arquivo fala de dinheiro mesmo quando não fala.
   const moeda = o.custoPorUid?.size ? emitir("IFCMONETARYUNIT('BRL')") : null;
   const unidades = emitir(
-    `IFCUNITASSIGNMENT((${[comprimento, area, volume, angulo, moeda].filter(Boolean).join(',')}))`,
+    `IFCUNITASSIGNMENT((${[comprimento, area, volume, angulo, moeda, volt].filter(Boolean).join(',')}))`,
   );
 
   const pessoa = emitir(`IFCPERSON($,${s(o.autor ?? 'ORCACLOUD')},$,$,$,$,$,$)`);
@@ -687,6 +715,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     subContexto,
     subContextoEixo,
     origem2d,
+    esquema: o.esquema ?? 'IFC4',
   };
 
   // A COBERTURA VAI NA DESCRIÇÃO DO PROJETO. É o campo que todo visualizador
@@ -814,6 +843,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
 
   // ── Pavimentos ────────────────────────────────────────────────────────────
   const pavimentos: string[] = [];
+  const pavimentoDoNivel = new Map<string, string>();
   const produtosPorPavimento = new Map<string, string[]>();
 
   for (const nivel of model.levels) {
@@ -825,6 +855,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
         `${localNivel},$,$,.ELEMENT.,${n(nivel.elevationMm)})`,
     );
     pavimentos.push(pavimento);
+    pavimentoDoNivel.set(nivel.id, pavimento);
     const produtos: string[] = [];
     produtosPorPavimento.set(nivel.id, produtos);
 
@@ -936,6 +967,10 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
           : []),
         ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!t.sugerido }],
       ]);
+      // E7.1: o ELETRODUTO entra em cada circuito que passa por ele — o circuito é o sistema dele também.
+      if (t.disciplina === 'ELETRICA') {
+        for (const cid of t.circuitoIds ?? []) porCircuito.set(cid, [...(porCircuito.get(cid) ?? []), produto]);
+      }
       const qt = qTrecho.get(t.id);
       if (qt) {
         emitirQto(ctx, produto, t.uid, classeDoTrecho(t.disciplina).qto, [
@@ -1013,6 +1048,19 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       if (t.circuitoId) {
         porCircuito.set(t.circuitoId, [...(porCircuito.get(t.circuitoId) ?? []), produto]);
       }
+      // E7.1 — `Pset_ElectricalDeviceCommon` (Pset NORMATIVO do IFC): só o que é
+      // FATO. A tensão é a DECLARADA no circuito (ou no quadro dele); a terra é a
+      // da tomada de uso geral/específico — o padrão NBR 14136 tem o pino de
+      // terra, e o circuito o leva (5410 5.1.2.2.4.2). Sem nada disso, não sai.
+      if (t.disciplina === 'ELETRICA') {
+        const cir = t.circuitoId ? (model.circuitos ?? []).find((c) => c.id === t.circuitoId) : undefined;
+        const tensao = cir?.tensaoV ?? (cir ? (model.quadros ?? []).find((q) => q.id === cir.quadroId)?.tensaoV : null) ?? null;
+        const comTerra = t.tipoEletrico === 'TUG' || t.tipoEletrico === 'TUE';
+        emitirPset(ctx, produto, t.uid, 'Pset_ElectricalDeviceCommon', [
+          ...(tensao != null ? ([['RatedVoltage', { tipo: 'IFCELECTRICVOLTAGEMEASURE', v: tensao }]] as [string, ValorIfc][]) : []),
+          ...(comTerra ? ([['HasProtectiveEarth', { tipo: 'IFCBOOLEAN', v: true }]] as [string, ValorIfc][]) : []),
+        ]);
+      }
       if (t.itemCode) {
         produtosPorCodigo.set(t.itemCode, [...(produtosPorCodigo.get(t.itemCode) ?? []), produto]);
       }
@@ -1024,6 +1072,19 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       porQuadro.set(q.id, produto);
       porSistema.set('ELETRICA', [...(porSistema.get('ELETRICA') ?? []), produto]);
       psetOpura(produto, q.uid, rotuloCurto(q.uid, 'quadro'));
+      // E7.1: o QUADRO também diz o que é — DECLARADO (sufixo) e CALCULADO (sufixo), nunca misturados.
+      const pq = preDimensionarQuadroCompleto(model, q.id, hipEl);
+      const pai = q.quadroPaiId ? (model.quadros ?? []).find((x) => x.id === q.quadroPaiId) : undefined;
+      emitirPset(ctx, produto, q.uid, 'Pset_OpuraEletrica', [
+        ['TipoDeQuadro', { tipo: 'IFCLABEL', v: q.tipo ?? 'QD' }],
+        ...(q.ligacao ? ([['Ligacao_Declarada', { tipo: 'IFCLABEL', v: q.ligacao }]] as [string, ValorIfc][]) : []),
+        ...(q.tensaoV != null ? ([['TensaoV_Declarada', { tipo: 'IFCINTEGER', v: q.tensaoV }]] as [string, ValorIfc][]) : []),
+        ...(pai ? ([['QuadroPai', { tipo: 'IFCLABEL', v: pai.nome }]] as [string, ValorIfc][]) : []),
+        ...(q.dps ? ([['DPS_Declarado', { tipo: 'IFCLABEL', v: rotuloDoDPS(q.dps) }]] as [string, ValorIfc][]) : []),
+        ...(q.icnKa != null ? ([['Icn_kA_Declarada', { tipo: 'IFCREAL', v: q.icnKa }]] as [string, ValorIfc][]) : []),
+        ...(pq && pq.sDemandadaVA > 0 ? ([['DemandaVA_Calculada', { tipo: 'IFCREAL', v: Math.round(pq.sDemandadaVA) }]] as [string, ValorIfc][]) : []),
+        ...(pq?.ibA != null ? ([['IB_A_Calculada', { tipo: 'IFCREAL', v: Math.round(pq.ibA * 10) / 10 }]] as [string, ValorIfc][]) : []),
+      ]);
     }
 
     if (produtos.length > 0) {
@@ -1071,6 +1132,9 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   // ⚠️ O QUADRO entra como membro do circuito, e não numa relação própria. É o
   // que liga o disjuntor ao que ele protege, e sem isso o circuito chegaria do
   // outro lado como um grupo de tomadas sem origem.
+  const fiacao = (model.circuitos ?? []).length > 0 ? composicaoDaRede(model) : null;
+  const membrosCabo: string[] = [];
+  const cabosPorPavimento = new Map<string, string[]>();
   for (const c of model.circuitos ?? []) {
     const membros = [...(porCircuito.get(c.id) ?? [])];
     const quadro = porQuadro.get(c.quadroId);
@@ -1103,7 +1167,63 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
       ...(c.secaoMm2 != null
         ? ([['SecaoMm2_Declarada', { tipo: 'IFCREAL', v: c.secaoMm2 }]] as [string, ValorIfc][])
         : []),
+      // E7.1 — o resto do que o circuito É. Declarado com sufixo; o que o motor
+      // deriva, com "_Calculado"/"_Derivado" — quem recebe sabe quem decidiu.
+      ...(c.ligacao ? ([['Ligacao_Declarada', { tipo: 'IFCLABEL', v: c.ligacao }]] as [string, ValorIfc][]) : []),
+      ...(rotuloDaFase(c.ligacao, c.fase) && c.ligacao !== 'FFF' ? ([['Fase_Declarada', { tipo: 'IFCLABEL', v: rotuloDaFase(c.ligacao, c.fase) as string }]] as [string, ValorIfc][]) : []),
+      ...(c.curva ? ([['Curva_Declarada', { tipo: 'IFCLABEL', v: c.curva }]] as [string, ValorIfc][]) : []),
+      ...(c.reserva ? ([['Reserva', { tipo: 'IFCBOOLEAN', v: true }]] as [string, ValorIfc][]) : []),
+      ...((() => {
+        const dr = drDoCircuito(model, c);
+        return dr ? ([['DR', { tipo: 'IFCLABEL', v: `${rotuloDoDR(dr)}${dr.geral ? ' (geral)' : dr.circuitoIds.length > 1 ? ' (grupo)' : ''}` }]] as [string, ValorIfc][]) : [];
+      })()),
+      ...((() => {
+        const pd = preDimensionarCircuito(model, c, hipEl);
+        const secao = c.secaoMm2 ?? pd.secaoCalculada?.secaoMm2 ?? null;
+        return [
+          ...(pd.ibA != null && pd.sVA > 0 ? ([['IB_A_Calculada', { tipo: 'IFCREAL', v: Math.round(pd.ibA * 10) / 10 }]] as [string, ValorIfc][]) : []),
+          ['Condutores_Derivados', { tipo: 'IFCLABEL', v: condutoresDoCircuito(c, secao, fiacao).texto }],
+        ] as [string, ValorIfc][];
+      })()),
     ]);
+    // E7.1 — os CABOS: um `IfcCableSegment` por tipo e seção de condutor do
+    // circuito (fase, neutro, retorno, terra), com o comprimento total — a MESMA
+    // conta do quantitativo (`agruparPorCondutor` sobre os trechos, só o fio
+    // deste circuito). Sem geometria: o cabo corre dentro do eletroduto, e o
+    // eletroduto já está desenhado; o que se entrega é o metro de fio. Contido no
+    // pavimento do quadro, membro do circuito.
+    const soDesteCircuito = quant.trechos.map((qt) => ({ ...qt, condutoresPorSecao: qt.condutoresPorSecao.filter((x) => x.circuitoId === c.id) }));
+    const quadroDoCircuito = (model.quadros ?? []).find((q) => q.id === c.quadroId);
+    for (const cabo of agruparPorCondutor(soDesteCircuito)) {
+      if (!(cabo.comprimentoM > 0)) continue;
+      const sec = cabo.secaoMm2 != null ? `${String(cabo.secaoMm2).replace('.', ',')} mm²` : 'sem seção';
+      const semente = `${c.uid}:cabo:${cabo.tipo}:${cabo.secaoMm2 ?? 'x'}`;
+      const produtoCabo = emitir(
+        `IFCCABLESEGMENT(${guidDe(uidDeterministico(semente), `cabo-${c.id}-${cabo.tipo}-${cabo.secaoMm2 ?? 'x'}`)},${historico},` +
+          `${s(`${c.nome} · ${ROTULO_DO_CONDUTOR[cabo.tipo]} ${sec}`)},$,$,$,$,$,.CONDUCTORSEGMENT.)`,
+      );
+      emitirPset(ctx, produtoCabo, uidDeterministico(semente), 'Pset_OpuraEletrica', [
+        ['Circuito', { tipo: 'IFCLABEL', v: c.nome }],
+        ['TipoDeCondutor', { tipo: 'IFCLABEL', v: ROTULO_DO_CONDUTOR[cabo.tipo] }],
+        ...(cabo.secaoMm2 != null ? ([['SecaoMm2', { tipo: 'IFCREAL', v: cabo.secaoMm2 }]] as [string, ValorIfc][]) : []),
+      ]);
+      emitirQto(ctx, produtoCabo, uidDeterministico(semente), 'Qto_CableSegmentBaseQuantities', [
+        { classe: 'IFCQUANTITYLENGTH', nome: 'Length', valor: cabo.comprimentoM * M, formula: 'Σ comprimento do eletroduto × condutores deste tipo e seção do circuito' },
+      ]);
+      membrosCabo.push(produtoCabo);
+      const pav = quadroDoCircuito ? pavimentoDoNivel.get(quadroDoCircuito.levelId) : undefined;
+      if (pav) cabosPorPavimento.set(pav, [...(cabosPorPavimento.get(pav) ?? []), produtoCabo]);
+    }
+    if (membrosCabo.length > 0) {
+      emitir(
+        `IFCRELASSIGNSTOGROUP(${guidDe(uidDeterministico(`${c.uid}:rel-cabos`), `rel-cabos-${c.id}`)},` +
+          `${historico},$,$,(${membrosCabo.join(',')}),$,${circuito})`,
+      );
+      membrosCabo.length = 0;
+    }
+  }
+  for (const [pav, cabos] of cabosPorPavimento) {
+    emitir(`IFCRELCONTAINEDINSPATIALSTRUCTURE(${guid(`cont-cabos-${pav}`)},${historico},${s('Cabos')},$,(${cabos.join(',')}),${pav})`);
   }
 
   emitirTiposDeEsquadria(aberturasEmitidas, ctx, psetOpura);
@@ -1145,7 +1265,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     `${s(`COBERTURA PARCIAL: ${COBERTURA_IFC.join(' | ')}`)}),${s('2;1')});\n` +
     `FILE_NAME(${s(`${o.titulo} v${o.revisao}`)},${s(carimbo)},(${s(o.autor ?? 'ORCACLOUD')}),` +
     `(${s('ORCACLOUD')}),${s('OPURA Planta Inteligente')},${s('OPURA')},${s(o.hash)});\n` +
-    `FILE_SCHEMA((${s('IFC4')}));\nENDSEC;\nDATA;\n`;
+    `FILE_SCHEMA((${s(o.esquema ?? 'IFC4')}));\nENDSEC;\nDATA;\n`;
 
   return `${cabecalho}${linhas.join('\n')}\nENDSEC;\nEND-ISO-10303-21;\n`;
 }
@@ -1216,6 +1336,7 @@ function valorIfc(v: ValorIfc): string {
     case 'IFCREAL':
     case 'IFCPOSITIVELENGTHMEASURE':
     case 'IFCMONETARYMEASURE':
+    case 'IFCELECTRICVOLTAGEMEASURE':
       return `${v.tipo}(${n(v.v)})`;
     default:
       return `${v.tipo}(${s(v.v)})`;
@@ -2501,6 +2622,18 @@ function emitirQuadro(q: Quadro, ctx: Ctx, localNivel: string): string {
   );
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
 
+  // E7.1: no IFC4X3 (4.3 ADD2) a classe EXATA existe — `IfcDistributionBoard`,
+  // nove atributos, o tipo no `PredefinedType` (QGBT = SWITCHBOARD; centro de
+  // medição não tem enum: USERDEFINED com o ObjectType dizendo).
+  if (ctx.esquema === 'IFC4X3') {
+    const tipo = q.tipo ?? 'QD';
+    const predef = tipo === 'QGBT' ? '.SWITCHBOARD.' : tipo === 'MEDICAO' ? '.USERDEFINED.' : '.DISTRIBUTIONBOARD.';
+    const objectType = tipo === 'MEDICAO' ? s('CENTRO DE MEDICAO') : '$';
+    return emitir(
+      `IFCDISTRIBUTIONBOARD(${guidDe(q.uid, `quadro-${q.id}`)},${historico},${s(q.nome)},$,${objectType},` +
+        `${local},${produtoForma},${s(rotuloCurto(q.uid, 'quadro'))},${predef})`,
+    );
+  }
   return emitir(
     `IFCFLOWCONTROLLER(${guidDe(q.uid, `quadro-${q.id}`)},${historico},${s(q.nome)},$,$,` +
       `${local},${produtoForma},${s(rotuloCurto(q.uid, 'quadro'))})`,

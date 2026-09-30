@@ -327,6 +327,8 @@ export interface OpcoesExportacao {
    * em `blueprintIfc.ts`.
    */
   custoPorUid?: ReadonlyMap<string, number>;
+  /** E7.1: o esquema do IFC — `IFC4` (padrão) ou `IFC4X3` (quadro como `IfcDistributionBoard`). Ver `OpcoesIfc.esquema`. */
+  esquemaIfc?: 'IFC4' | 'IFC4X3';
   /**
    * Hipóteses da ARMADURA esquemática do estudo (16/09/2026). Só a planilha
    * de quantitativos as usa (aba "Armadura"). Ausente = as hipóteses padrão —

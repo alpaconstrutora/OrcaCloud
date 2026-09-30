@@ -114,6 +114,8 @@ export default function PainelVersoes({
    * alguém esquecesse de olhar.
    */
   const [comCusto, setComCusto] = useState(false);
+  /** E7.1: o esquema do IFC. IFC4 é o que todo leitor abre; IFC4X3 (4.3 ADD2) põe o quadro na classe exata. */
+  const [esquemaIfc, setEsquemaIfc] = useState<'IFC4' | 'IFC4X3'>('IFC4');
   const [papelId, setPapelId] = useState('A4');
   const [paisagem, setPaisagem] = useState(false);
   const [cotas, setCotas] = useState(false);
@@ -388,6 +390,7 @@ export default function PainelVersoes({
       redesNoDxf: redesNoDxf.length ? redesNoDxf : undefined,
       hipotesesEletricas,
       armadura: hipotesesDeArmadura,
+      esquemaIfc,
       // Custo no IFC só quando explicitamente marcado nesta exportação — ver o
       // comentário da caixa, abaixo. `undefined`, e não um mapa vazio, para o
       // gerador não declarar moeda à toa.
@@ -906,13 +909,28 @@ export default function PainelVersoes({
               </label>
             )}
 
+            <label className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-600">
+              Esquema do IFC
+              <select
+                value={esquemaIfc}
+                onChange={(e) => setEsquemaIfc(e.target.value as 'IFC4' | 'IFC4X3')}
+                aria-label="Esquema do IFC"
+                title="IFC4: o que todo programa abre (o quadro sai como IfcFlowController). IFC4X3 (IFC 4.3 ADD2): o quadro sai como IfcDistributionBoard — a classe exata, que só existe no 4.3"
+                className="rounded border border-slate-200 px-1.5 py-0.5 text-[11px]"
+              >
+                <option value="IFC4">IFC4 (padrão)</option>
+                <option value="IFC4X3">IFC4X3 — quadro como IfcDistributionBoard</option>
+              </select>
+            </label>
+
             <p className="mt-1 text-[11px] text-slate-500">
               DXF e IFC saem em <strong>1:1, em milímetro real</strong> — a escala é da
               prancha, não do arquivo. Cada um vem com um <code>.txt</code> dizendo o que
               contém e o que não contém. O IFC é de <strong>coordenação</strong>: leva
               portas e janelas com vão, propriedades e quantidades, e cada elemento mantém
-              o mesmo identificador entre versões; <strong>não leva</strong> escada,
-              forro, instalações nem armadura.
+              o mesmo identificador entre versões, escada, forro e as instalações (redes,
+              pontos, quadros, circuitos e, na elétrica, os cabos por seção);{' '}
+              <strong>não leva</strong> armadura, ar-condicionado, gás nem incêndio.
             </p>
 
             {/* ── PUBLICAR NO GED ───────────────────────────────────────────

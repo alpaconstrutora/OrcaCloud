@@ -202,7 +202,7 @@ import PainelTrechoSelecionado from './PainelTrechoSelecionado';
 import PainelQuadroSelecionado from './PainelQuadroSelecionado';
 import PainelConflitos from './PainelConflitos';
 import { blueprintConflitoStatusService } from '../../services/blueprintConflitoStatusService';
-import { classificarArq, classificarMep, contarStatus, indexarAceites, type AceiteDeConflito } from '../../utils/blueprintConflitoStatus';
+import { COR_DO_CONFLITO_3D, classificarArq, classificarMep, contarStatus, indexarAceites, uidsEmConflitoAberto, type AceiteDeConflito } from '../../utils/blueprintConflitoStatus';
 import PainelEletrica from './PainelEletrica';
 import PainelAguaSelecionada from './PainelAguaSelecionada';
 import PainelEscadaSelecionada from './PainelEscadaSelecionada';
@@ -3712,11 +3712,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }, [study.project_id]);
 
   const situacao4d = useMemo(() => situacaoPorElemento(tarefas4d, data4d), [tarefas4d, data4d]);
+  // E7.2: "Destacar no 3D" da lista de conflitos — as peças dos conflitos ABERTOS em vermelho, por cima do 4D.
+  const [destacarConflitos3d, setDestacarConflitos3d] = useState(false);
   const coresPorUid = useMemo(() => {
     const m = new Map<string, string>();
     for (const [uid, s] of situacao4d) m.set(uid, COR_DO_STATUS[s.status]);
+    if (destacarConflitos3d) for (const uid of uidsEmConflitoAberto(conflitos, conflitosArq, mapaDeAceites)) m.set(uid, COR_DO_CONFLITO_3D);
     return m;
-  }, [situacao4d]);
+  }, [situacao4d, destacarConflitos3d, conflitos, conflitosArq, mapaDeAceites]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
   const subRegiaoSel = (editor.model.subRegioes ?? []).find((s) => s.id === editor.selectedId) ?? null;
@@ -16243,6 +16246,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               onSelecionar={(id) => selecionar([id])}
               onExportarBcf={exportarBcfDoEstudo}
+              destaqueNo3d={destacarConflitos3d}
+              onDestaqueNo3d={setDestacarConflitos3d}
             />
           )}
 

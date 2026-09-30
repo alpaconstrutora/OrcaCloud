@@ -82,6 +82,8 @@ vi.mock('../../services/ifcParametricoService', () => ({
     recusas: [],
     fatorParaMm: 10,
   })),
+  // E7.2: a elétrica — vazia nos casos de estrutura, para cada cenário ficar como era.
+  lerEletricaParametrica: vi.fn(async () => ({ pontos: [], eletrodutos: [], recusas: [] })),
 }));
 // Duas peças nos extremos MEDIDOS do arquivo real (Igreja Divino): a pegada
 // resultante é de 19,78 × 19,18 m, nascendo quase na origem do IFC.
@@ -167,6 +169,16 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     cenario.pecas = NOS_EXTREMOS;
     cenario.paredes = [];
     cenario.vaos = [];
+  });
+
+  it('⚠️ E7.2: se a leitura da ELÉTRICA falhar, a estrutura entra mesmo assim e a falha vira recusa com o motivo', async () => {
+    const { lerEletricaParametrica } = await import('../../services/ifcParametricoService');
+    (lerEletricaParametrica as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('malha corrompida'));
+    const { onImportar } = await abrirComArquivo();
+    expect(screen.getByText(/não foi possível ler a elétrica do arquivo: malha corrompida/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Importar 2$/ }));
+    expect(onImportar).toHaveBeenCalledTimes(1);
+    expect((onImportar.mock.calls[0][0] as { type: string }[]).filter((c) => c.type === 'AddStructural')).toHaveLength(2);
   });
 
   it('DIZ a pegada e a distância até o desenho, antes de confirmar', async () => {

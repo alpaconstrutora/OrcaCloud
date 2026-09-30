@@ -253,7 +253,11 @@ export function topicosDeConflitos(
       titulo: `${rotuloCurto(c.trechoUid, 'trecho')} encontra ${
         c.classe === 'REDE'
           ? rotuloCurto(c.outroUid, 'trecho')
-          : rotuloCurto(c.outroUid, 'structural')
+          : c.classe === 'ABERTURA'
+            ? rotuloCurto(c.outroUid, 'opening')
+            : c.classe === 'PAREDE_ESTRUTURAL'
+              ? rotuloCurto(c.outroUid, 'wall')
+              : rotuloCurto(c.outroUid, 'structural')
       }`,
       tipo: 'Clash' as const,
       status: 'Open' as const,
@@ -261,7 +265,7 @@ export function topicosDeConflitos(
       criadoEm: agora,
       descricao:
         `Interferência entre instalação e ${
-          c.classe === 'REDE' ? 'outra disciplina' : 'estrutura'
+          c.classe === 'REDE' ? 'outra disciplina' : c.classe === 'ABERTURA' ? 'vão de porta/janela' : c.classe === 'PAREDE_ESTRUTURAL' ? 'parede estrutural (rasgo não previsto)' : 'estrutura'
         }: ${como}. ` +
         'Detectado pela Planta Inteligente do ÒPURA. A geometria do trecho é o ' +
         'eixo declarado com a bitola declarada — não há detalhamento de conexão.',
@@ -298,7 +302,9 @@ export function topicosDeConflitosArquitetonicos(
                 ? `parede atravessando a reserva de espaço do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
                 : c.classe === 'RESERVA_X_COMPONENTE'
                   ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
-                  : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
+                  : c.classe === 'PONTO_X_ESTRUTURA'
+                    ? `${c.familia === 'quadro' ? 'quadro' : 'ponto'} com o centro ${c.medidaMm} mm dentro da estrutura`
+                    : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
     const topico: TopicoBcf = {
       guid: guidDoTopico(`clash:${c.pecaUid}:${c.outroUid}`),
       titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, c.outroFamilia ?? 'structural')}`,
@@ -306,7 +312,7 @@ export function topicosDeConflitosArquitetonicos(
       status: 'Open' as const,
       autor,
       criadoEm: agora,
-      descricao: `Interferência entre arquitetura e estrutura: ${como}. Detectado pela Planta Inteligente do ÒPURA.`,
+      descricao: `Interferência entre ${c.classe === 'PONTO_X_ESTRUTURA' ? 'instalação' : 'arquitetura'} e estrutura: ${como}. Detectado pela Planta Inteligente do ÒPURA.`,
       componentes: [ifcGuidDeUid(c.pecaUid), ifcGuidDeUid(c.outroUid)],
       alvo: { x: c.em.x, y: c.em.y, z: (elevacao.get(c.levelId) ?? 0) + 1000 },
     };

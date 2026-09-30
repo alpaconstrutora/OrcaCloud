@@ -12,11 +12,14 @@ import {
   caixaDasParedes,
   caixaDasPecas,
   caixaDoDesenho,
+  comandosDaEletrica,
   deslocamentoDaImportacao,
   type AncoragemIfc,
   type CaixaPlana,
+  type EletrodutoTraduzido,
   type ParedeTraduzida,
   type PecaTraduzida,
+  type PontoEletricoTraduzido,
   type VaoTraduzido,
 } from '../../utils/ifcParaKernel';
 import { listarArquivos, baixarArquivo, type ArquivoDigital } from '../../services/digitalFileService';
@@ -81,6 +84,21 @@ interface Preparado {
   soltas: number;
   pavimentos: PavimentoIfc[];
   recusas: RecusaGeometrica[];
+  /** E7.2: a elétrica do arquivo — pontos e eletrodutos, cotas absolutas. */
+  pontosEletricos: PontoEletricoTraduzido[];
+  eletrodutos: EletrodutoTraduzido[];
+}
+
+/** E7.2: a caixa em planta da elétrica que vai entrar (para a ancoragem contar a mesma história). */
+function caixaDaEletrica(pontos: PontoEletricoTraduzido[], eletrodutos: EletrodutoTraduzido[]): CaixaPlana | null {
+  const ps = [...pontos.map((p) => p.at), ...eletrodutos.flatMap((e) => [e.a, e.b])];
+  if (ps.length === 0) return null;
+  return {
+    minX: Math.min(...ps.map((p) => p.x)),
+    minY: Math.min(...ps.map((p) => p.y)),
+    maxX: Math.max(...ps.map((p) => p.x)),
+    maxY: Math.max(...ps.map((p) => p.y)),
+  };
 }
 
 /** A caixa que contém as duas, ou a única que existe. */
@@ -164,8 +182,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       setPreparado(null);
       try {
         const { obterApi } = await import('../../services/ifcViewerService');
-        const { lerPecasParametricas } = await import('../../services/ifcParametricoService');
-        const { traduzirPecas, traduzirParedes, traduzirVaos } = await import(
+        const { lerPecasParametricas, lerEletricaParametrica } = await import('../../services/ifcParametricoService');
+        const { traduzirPecas, traduzirParedes, traduzirVaos, traduzirEletrica } = await import(
           '../../utils/ifcParaKernel'
         );
         const { encostarNasFaces } = await import('../../utils/ifcEncostarParedes');
@@ -191,8 +209,20 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             encostado.paredes,
             leitura.fatorParaMm,
           );
+          // E7.2: a ELÉTRICA — pontos pelo centro da peça, eletrodutos pelas pontas do caminho.
+          // ⚠️ Protegida: se a leitura dela falhar, a estrutura entra mesmo assim e a
+          // falha aparece como recusa — a elétrica nunca trava a importação do resto.
+          let leituraEletrica: Awaited<ReturnType<typeof lerEletricaParametrica>> = { pontos: [], eletrodutos: [], recusas: [] };
+          try {
+            leituraEletrica = await lerEletricaParametrica(id);
+          } catch (e) {
+            leituraEletrica.recusas.push({ expressID: 0, classe: 'ELETRICA', nome: 'instalação elétrica', motivo: `não foi possível ler a elétrica do arquivo: ${e instanceof Error ? e.message : String(e)}` });
+          }
+          const eletrica = traduzirEletrica(leituraEletrica);
           const p: Preparado = {
             nomeArquivo,
+            pontosEletricos: eletrica.pontos,
+            eletrodutos: eletrica.eletrodutos,
             pecas: traduzido.pecas,
             paredes: encostado.paredes,
             vaos: traduzidosVaos.vaos,
@@ -204,6 +234,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
               ...traduzido.recusas,
               ...traduzidasParedes.recusas,
               ...traduzidosVaos.recusas,
+              ...leituraEletrica.recusas,
+              ...eletrica.recusas,
             ],
           };
           setPreparado(p);
@@ -243,7 +275,11 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
   // A pegada junta as DUAS famílias: ancorar só pela estrutura jogaria as
   // paredes junto com ela, mas o enquadramento contaria a história errada — e a
   // ancoragem `DESENHO` centraria pelo contorno da estrutura, não do que entra.
-  const pegada = uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar));
+  /** E7.2: a elétrica que entra, pela mesma regra de pavimento. */
+  const pontosAImportar = preparado ? preparado.pontosEletricos.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
+  const eletrodutosAImportar = preparado ? preparado.eletrodutos.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
+  const totalAImportar = aImportar.length + paredesAImportar.length + pontosAImportar.length + eletrodutosAImportar.length;
+  const pegada = uniao(uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar)), caixaDaEletrica(pontosAImportar, eletrodutosAImportar));
   const doDesenho = caixaDoDesenho(model);
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, doDesenho);
   const distanciaMm =
@@ -350,6 +386,10 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       });
     }
 
+    // E7.2 — a ELÉTRICA: pontos e eletrodutos no pavimento casado (novo inclusive, pelo `levelUid`),
+    // com a cota relativa a ele — o arquivo a traz absoluta.
+    comandos.push(...comandosDaEletrica(pontosAImportar, eletrodutosAImportar, destino, dx, dy));
+
     if (comandos.length > 0) onImportar(comandos);
     setPreparado(null);
   }
@@ -442,6 +482,12 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
               ...porTipo(preparado.pecas).map(
                 ([k, n]) => `${n} ${nomeDoTipoEstrutural(k as never).toLowerCase()}${n > 1 ? 's' : ''}`,
               ),
+              ...(preparado.pontosEletricos.length > 0
+                ? [`${preparado.pontosEletricos.length} ponto${preparado.pontosEletricos.length > 1 ? 's' : ''} elétrico${preparado.pontosEletricos.length > 1 ? 's' : ''}`]
+                : []),
+              ...(preparado.eletrodutos.length > 0
+                ? [`${preparado.eletrodutos.length} eletroduto${preparado.eletrodutos.length > 1 ? 's' : ''}`]
+                : []),
             ].join(' · ') || 'nenhuma peça legível'}
           </p>
           {preparado.encostadas > 0 && (
@@ -562,11 +608,12 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             <button
               type="button"
               onClick={importar}
-              disabled={aImportar.length + paredesAImportar.length === 0}
+              disabled={totalAImportar === 0}
+              title={totalAImportar === 0 ? 'Nada a importar: escolha o pavimento do desenho para ao menos um pavimento do arquivo (ou "Criar")' : undefined}
               className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[6px] bg-blue-600 px-2.5 text-[13px] font-medium text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-40"
             >
               <Check className="h-3.5 w-3.5" />
-              Importar {aImportar.length + paredesAImportar.length}
+              Importar {totalAImportar}
             </button>
             <button
               type="button"

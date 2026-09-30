@@ -1982,12 +1982,12 @@ Fecha o bloco **7** e a parte do **6** que é "lista de materiais".
 
 Fecha os A do motor 3 e o que o usuário chamou de "quatro motores combinados".
 
-## Etapa 7 — BIM · sem bump · 2 fases
+## Etapa 7 — BIM · sem bump · 2 fases · **✅ CONCLUÍDA em 29/09/2026 (2 de 2) — fecha o roadmap E0–E7**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
 | 7.1 IFC completo ✅ (Psets com sufixo declarado/calculado/derivado; IfcCableSegment por seção; eletroduto no circuito; quadro IfcDistributionBoard na opção IFC4X3 — no IFC4 o web-ifc não o lê; toda linha lida pelo visualizador) | `Pset_OpuraEletrica` ganha IB, ligação, fase, DR, DPS, curva, Icn, condutores; `IfcCableSegment` por circuito (comprimento total por seção); eletroduto entra no `IfcDistributionCircuit`; `IfcDistributionBoard` quando o schema declarado for IFC4 ADD2 (opção de exportação); `Pset_ElectricalDeviceCommon` nas peças | validação no visualizador IFC (`services/ifcViewerService`); `blueprintIfc.test.ts` |
-| 7.2 Importar elétrica e clash completo | `ifcParaKernel.ts` lê `IfcOutlet`, `IfcLightFixture`, `IfcSwitchingDevice`, `IfcCableCarrierSegment` → terminais e trechos ELETRICA; clash trecho × parede/abertura (sem furo previsto) e destaque no 3D dos conflitos; filtro por pavimento na lista | importar o próprio IFC exportado devolve os mesmos pontos; `PainelConflitos` com filtro |
+| 7.2 Importar elétrica e clash completo ✅ (o IFC exportado volta com os mesmos pontos e eletrodutos, lidos dos vértices; clash vão/parede estrutural/ponto × estrutura; filtro por pavimento; destaque no 3D) | `ifcParaKernel.ts` lê `IfcOutlet`, `IfcLightFixture`, `IfcSwitchingDevice`, `IfcCableCarrierSegment` → terminais e trechos ELETRICA; clash trecho × parede/abertura (sem furo previsto) e destaque no 3D dos conflitos; filtro por pavimento na lista | importar o próprio IFC exportado devolve os mesmos pontos; `PainelConflitos` com filtro |
 
 Fecha o bloco **8**.
 
@@ -3510,3 +3510,59 @@ publicado, 401/401 · sem mudança no kernel.
 
 **Efeito no benchmark**: bloco 8 BIM — IFC com DR/DPS/curva/Icn/IB/condutores, cabos por seção, eletroduto no
 circuito e quadro na classe exata (opção 4X3) ❌/🟡→✅.
+### E7.2 — Importar a elétrica e clash completo (29/09/2026) · frente `eletrico-e7` · sem bump · **fecha a Etapa 7 e o roadmap**
+
+**O que mudou**
+
+- **Leitura** (`services/ifcParametricoService.lerEletricaParametrica`): `IfcOutlet`, `IfcLightFixture`,
+  `IfcSwitchingDevice`, `IfcJunctionBox`, `IfcFlowMeter`, `IfcAudioVisualAppliance` e `IfcCableCarrierSegment`,
+  com o pavimento de cada um. ⚠️ A POSIÇÃO sai dos VÉRTICES da malha já transformados, não da translação da
+  matriz: a sonda mostrou que o web-ifc põe essa translação no CENTRO da geometria (a tomada de placement a 250
+  mm saiu a 300; o 1º sólido do eletroduto, a meio caminho). O ponto é o centro da caixa; o eletroduto, um
+  segmento por sólido (os extremos dos vértices ao longo do eixo local Z) e o diâmetro pela MEDIANA das
+  distâncias ao eixo (o máximo dava 26 em vez de 25 — a costura do polígono tira o centróide do eixo).
+- **Tradução** (`utils/ifcParaKernel.traduzirEletrica`, `tipoDoPontoIfc`, `comandosDaEletrica`): o tipo pelo
+  `ObjectType` quando ele já é do sistema (o nosso export; "INTERRUPTOR:PARALELO" traz a variante), senão pela
+  classe e pelo `PredefinedType` (POWEROUTLET → TUG, DATAOUTLET → rede, JunctionBox → caixa de passagem,
+  ENERGYMETER → medidor); os sólidos encadeados viram UM trecho (o "L" sobe e corre); recusas com motivo (sem
+  equivalente, sem geometria, sólidos que não se encadeiam). `arredondar` deixou de devolver −0.
+- **Kernel** (sem bump — não muda payload nem hash): `AddTerminal` e `AddTrecho` aceitam `levelUid`, como parede
+  e peça, para a elétrica entrar num pavimento CRIADO na mesma importação.
+- **Tela de importação**: resumo com "N pontos elétricos · M eletrodutos", mesmo casamento de pavimentos,
+  mesma ancoragem (a pegada inclui a elétrica), tudo num lote; o botão conta a elétrica e, desligado, diz por
+  quê. A leitura da elétrica é PROTEGIDA: se falhar, a estrutura entra e a falha aparece como recusa.
+- **Clash** (`conflitos.ts`, sem desmentir "cano em parede comum não é conflito"): **trecho × VÃO** (o eixo
+  dentro do vão, entre peitoril e verga — raspão na ombreira não conta) e **trecho × PAREDE ESTRUTURAL** (camada
+  ESTRUTURAL; só pedaço não vertical e abaixo do topo — a prumada no bloco e o eletroduto da laje ficam de
+  fora; o vão, quando atravessado, já diz). `conflitosArquitetonicos`: **PONTO/QUADRO × ESTRUTURA** (o centro
+  da peça dentro de pilar/viga, a medida é o quanto está dentro — adiado da E0.4). BCF nomeia vão, parede e
+  ponto e diz o que é cada um.
+- **Lista de conflitos**: filtro por **pavimento** (com a contagem de cada um; "nenhum aberto neste
+  pavimento — N em outro(s)") e **"Destacar no 3D"**: as duas peças de cada conflito ABERTO em vermelho
+  (`uidsEmConflitoAberto` → `coresPorUid` do 3D, por cima do 4D; o aceito não pinta).
+
+**Testes** — novo `__tests__/ifcImportarEletrica.test.ts` (7): **o próprio IFC exportado devolve os MESMOS
+pontos** (posição, cota, tipo, variante do interruptor) e os mesmos eletrodutos (pontas, cotas, bitola; o "L"
+volta como um trecho), pelo web-ifc do visualizador; pavimento de cada peça; o tipo por classe/Predefined;
+recusas; **o ciclo inteiro exportar → ler → traduzir → comandos → aplicar num desenho novo devolve os
+terminais e trechos GRAVADOS iguais**; `levelUid` em pavimento novo e o descarte sem destino. Novo
+`__tests__/blueprintConflitosInstalacao.test.ts` (8): vão (dentro ≈ espessura; acima da verga, ombreira e
+parede comum: nada), parede estrutural (horizontal abaixo do topo sim; teto, prumada e vão não), tomada dentro
+do pilar (medida) e na face (não), quadro na viga e abaixo dela, uids do destaque (aceito não pinta), BCF. Novo
+`__tests__/components/PainelConflitosFiltro.test.tsx` (4): classes novas com nome e explicação, **filtro por
+pavimento com contagens**, pavimento vazio, chave do 3D. `PainelImportarIfc.test.tsx`: o mock ganhou a leitura
+elétrica e (+1) a falha dela não trava a estrutura.
+
+**O que os testes pegaram antes de publicar**: a translação da matriz no centro da geometria (sonda), o
+diâmetro 26 em vez de 25, o −0 da planta, e — na suíte — o painel de importação inteiro quebrava quando a
+leitura elétrica não existia/falhava (virou leitura protegida, com teste).
+
+**Verificação**: `tsc` ✓ · alvo ✓ (importação 7, clash 8, painel de conflitos 4, painel de importação 12, clash/BCF
+existentes 58) · suíte inteira **6.380 ✓** (6.413 = 6.380 + 33 pulados, 595 arquivos, conta fechada, sem queda de worker) · `vite build` ✓ · `check-ui-standard` ✓ (3 arquivos) ·
+`check-xss-sinks` ✓ · bundle da `planta-api` regenerado e IDÊNTICO (ele só leva leitura: hash, quantitativo,
+IFC, planilha — comandos e clash não entram), sem publicação · sem mudança no kernel de payload. Sem harness
+visual do 3D: o destaque é o mapa de cores que o 3D já usa no 4D, provado pela função pura e pela ligação.
+
+**Efeito no benchmark**: bloco 8 BIM — importar a elétrica de IFC, clash com vão/parede estrutural/pontos,
+filtro por pavimento e destaque no 3D ❌/🟡→✅. **Etapa 7 concluída (2 de 2)** — com ela, as oito etapas do
+roadmap (E0–E7) estão entregues.

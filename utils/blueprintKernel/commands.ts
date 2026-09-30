@@ -636,6 +636,8 @@ export type Command =
   | {
       type: 'AddTrecho';
       levelId: ObjectId;
+      /** E7.2: idem `AddWall.levelUid` — o eletroduto importado do IFC num pavimento criado no mesmo lote. */
+      levelUid?: ElementUid;
       disciplina: DisciplinaDeRede;
       a: Point;
       b: Point;
@@ -684,6 +686,8 @@ export type Command =
   | {
       type: 'AddTerminal';
       levelId: ObjectId;
+      /** E7.2: idem `AddWall.levelUid` — o ponto importado do IFC num pavimento criado no mesmo lote. */
+      levelUid?: ElementUid;
       disciplina: DisciplinaDeRede;
       tipo: string;
       at: Point;
@@ -1387,9 +1391,9 @@ function emptyDiff(): Diff {
  * recomputado sempre. Adiantar essas duas economizaria menos de 1 s e mudaria
  * o que o lote garante.
  */
-/** P2.32: `AddWall`/`AddStructural` com `levelUid` apontam para um pavimento criado no mesmo lote; aqui vira `levelId`. */
+/** P2.32: `AddWall`/`AddStructural` (E7.2: e `AddTerminal`/`AddTrecho`) com `levelUid` apontam para um pavimento criado no mesmo lote; aqui vira `levelId`. */
 function resolverLevelUid(model: BlueprintModel, command: Command): Command {
-  if ((command.type !== 'AddWall' && command.type !== 'AddStructural') || !command.levelUid) return command;
+  if ((command.type !== 'AddWall' && command.type !== 'AddStructural' && command.type !== 'AddTerminal' && command.type !== 'AddTrecho') || !command.levelUid) return command;
   const nivel = model.levels.find((l) => l.uid === command.levelUid);
   if (!nivel) throw new KernelError('LEVEL_NOT_FOUND', `Nenhum pavimento com uid ${command.levelUid}`);
   const { levelUid: _levelUid, ...resto } = command;

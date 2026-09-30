@@ -1,4 +1,4 @@
-import { pointInPolygon, type Point } from './geom';
+import { cantosDaParede, pointInPolygon, type Point } from './geom';
 import type { BlueprintModel, ObjectId, Trecho } from './model';
 import { pegadaEmPlanta } from './sobreposicao';
 import { segmentosDoEletroduto } from './caminhoDoEletroduto';
@@ -37,6 +37,18 @@ import { segmentosDoEletroduto } from './caminhoDoEletroduto';
  * - **trecho × trecho de OUTRA disciplina**: dois canos no mesmo lugar. Da
  *   MESMA disciplina não entra — dois trechos de água fria que se encontram são
  *   uma junção, que é a rede funcionando.
+ *
+ * E7.2 (29/09/2026, roadmap elétrico) — "trecho × parede/abertura sem furo
+ * previsto", SEM desmentir a regra acima (parede comum continua de fora):
+ *
+ * - **trecho × ABERTURA**: o eixo do trecho passa DENTRO do vão de uma porta ou
+ *   janela (entre peitoril e verga) — o tubo ficaria aparente no vão, e a
+ *   esquadria não entra. Raspão não conta: a ombreira ao lado é parede.
+ * - **trecho × PAREDE ESTRUTURAL** (camada com função ESTRUTURAL): alvenaria
+ *   estrutural e parede de concreto não admitem rasgo sem previsão. Só o
+ *   pedaço NÃO vertical conta (a prumada no furo do bloco é o que a norma de
+ *   alvenaria estrutural prevê), e só o que corre ABAIXO do topo da parede —
+ *   o eletroduto da laje passa por cima dela, não por dentro.
  */
 export interface Conflito {
   trechoId: ObjectId;
@@ -44,7 +56,7 @@ export interface Conflito {
   /** O outro lado: uma peça estrutural ou outro trecho. */
   outroId: ObjectId;
   outroUid: string;
-  classe: 'ESTRUTURA' | 'REDE';
+  classe: 'ESTRUTURA' | 'REDE' | 'ABERTURA' | 'PAREDE_ESTRUTURAL';
   /**
    * Quanto do trecho corre DENTRO do outro corpo, em mm.
    *
@@ -261,6 +273,10 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       pontasNoMundo({ ...x, a: seg.a, b: seg.b, cotaAMm: seg.cotaAMm, cotaBMm: seg.cotaBMm }, elevacao.get(x.levelId) ?? 0),
     );
 
+  // E7.2: vãos e paredes estruturais.
+  const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
+  const paredesEstruturais = model.walls.filter((w) => (w.camadas ?? []).some((c) => c.funcao === 'ESTRUTURAL'));
+
   for (const t of trechos) {
     const pedacos = pedacosDe(t);
     const raio = t.bitolaMm / 2;
@@ -289,6 +305,41 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       });
     }
 
+    // ── E7.2: contra o VÃO de porta/janela (entre peitoril e verga) ──────
+    const paredesComVaoAtravessado = new Set<ObjectId>();
+    for (const o of model.openings) {
+      const w = paredePorId.get(o.wallId);
+      if (!w) continue; // o prisma do vão está em cota ABSOLUTA — o pavimento se resolve sozinho
+      const anel = anelDoVao(w, o.offsetMm, o.widthMm);
+      if (!anel) continue;
+      const ew = elevacao.get(w.levelId) ?? 0;
+      let dentro = 0;
+      for (const [A, B] of pedacos) {
+        // Raio zero: é o EIXO que tem de estar no vão — o raspão na ombreira é parede.
+        const parte = contraPrisma(A, B, 0, anel, ew + o.sillMm, ew + o.sillMm + o.heightMm);
+        if (parte) dentro += parte.dentroMm;
+      }
+      if (dentro <= 0) continue;
+      paredesComVaoAtravessado.add(w.id);
+      saida.push({ trechoId: t.id, trechoUid: t.uid, outroId: o.id, outroUid: o.uid, classe: 'ABERTURA', comprimentoDentroMm: dentro, folgaEntreEixosMm: 0 });
+    }
+
+    // ── E7.2: contra PAREDE ESTRUTURAL (rasgo não previsto) ───────────────
+    for (const w of paredesEstruturais) {
+      if (paredesComVaoAtravessado.has(w.id)) continue; // o vão já disse
+      const ew = elevacao.get(w.levelId) ?? 0;
+      const anel = cantosDaParede(w.a, w.b, w.thicknessMm);
+      let dentro = 0;
+      for (const [A, B] of pedacos) {
+        if (A.x === B.x && A.y === B.y) continue; // a prumada no furo do bloco é prevista
+        // Abaixo do topo, com o corpo do tubo inteiro: o da laje passa por cima.
+        const parte = contraPrisma(A, B, 0, anel, ew + raio, ew + w.heightMm - raio);
+        if (parte) dentro += parte.dentroMm;
+      }
+      if (dentro <= 0) continue;
+      saida.push({ trechoId: t.id, trechoUid: t.uid, outroId: w.id, outroUid: w.uid, classe: 'PAREDE_ESTRUTURAL', comprimentoDentroMm: dentro, folgaEntreEixosMm: 0 });
+    }
+
     // ── Contra OUTRA DISCIPLINA ──────────────────────────────────────────
     for (const u of trechos) {
       // `id` só cresce, então o par é visitado uma vez — e nunca contra si.
@@ -313,4 +364,14 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
     (x, y) => (x.trechoId < y.trechoId ? -1 : x.trechoId > y.trechoId ? 1 : 0) ||
       (x.outroId < y.outroId ? -1 : x.outroId > y.outroId ? 1 : 0),
   );
+}
+
+/** E7.2: o retângulo em planta do VÃO — ao longo do eixo, de `offset` a `offset + largura`, na espessura da parede. */
+function anelDoVao(w: { a: Point; b: Point; thicknessMm: number }, offsetMm: number, larguraMm: number): Point[] | null {
+  const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+  if (!(L > 0) || !(larguraMm > 0)) return null;
+  const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+  const p0 = { x: w.a.x + u.x * offsetMm, y: w.a.y + u.y * offsetMm };
+  const p1 = { x: w.a.x + u.x * (offsetMm + larguraMm), y: w.a.y + u.y * (offsetMm + larguraMm) };
+  return cantosDaParede(p0 as Point, p1 as Point, w.thicknessMm);
 }

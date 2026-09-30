@@ -33,6 +33,8 @@ export default function PainelConflitos({
   onReabrir,
   onSelecionar,
   onExportarBcf,
+  destaqueNo3d = false,
+  onDestaqueNo3d,
 }: {
   model: BlueprintModel;
   conflitos: Conflito[];
@@ -47,6 +49,9 @@ export default function PainelConflitos({
   onSelecionar?: (id: string) => void;
   /** Leva as pendências para fora, em BCF. Ausente = o botão não aparece. */
   onExportarBcf?: () => Promise<void>;
+  /** E7.2: pintar de vermelho, no 3D, as peças dos conflitos abertos. Ausente = a chave não aparece. */
+  destaqueNo3d?: boolean;
+  onDestaqueNo3d?: (v: boolean) => void;
 }) {
   const [exportando, setExportando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
@@ -58,8 +63,16 @@ export default function PainelConflitos({
   const mapa = aceites ?? new Map<string, AceiteDeConflito>();
   const arqComStatus = React.useMemo(() => classificarArq(arquitetonicos, mapa), [arquitetonicos, mapa]);
   const mepComStatus = React.useMemo(() => classificarMep(conflitos, mapa), [conflitos, mapa]);
-  const abertos = [...arqComStatus.filter((c) => c.status === 'ABERTO'), ...mepComStatus.filter((c) => c.status === 'ABERTO')];
-  const aceitos = [...arqComStatus.filter((c) => c.status === 'ACEITO'), ...mepComStatus.filter((c) => c.status === 'ACEITO')];
+  // E7.2 — FILTRO POR PAVIMENTO: o do conflito é o da peça atingida (arquitetônico) ou o do trecho (instalação).
+  const [nivelFiltro, setNivelFiltro] = React.useState('');
+  const nivelDoTrecho = React.useMemo(() => new Map((model.trechos ?? []).map((t) => [t.id, t.levelId])), [model.trechos]);
+  const nivelDo = (c: ConflitoComStatus<unknown>) =>
+    'pecaId' in (c.conflito as object) ? (c.conflito as ConflitoArquitetonico).levelId : nivelDoTrecho.get((c.conflito as Conflito).trechoId) ?? '';
+  const noFiltro = (c: ConflitoComStatus<unknown>) => !nivelFiltro || nivelDo(c) === nivelFiltro;
+  const todosAbertos = [...arqComStatus.filter((c) => c.status === 'ABERTO'), ...mepComStatus.filter((c) => c.status === 'ABERTO')];
+  const todosAceitos = [...arqComStatus.filter((c) => c.status === 'ACEITO'), ...mepComStatus.filter((c) => c.status === 'ACEITO')];
+  const abertos = todosAbertos.filter(noFiltro);
+  const aceitos = todosAceitos.filter(noFiltro);
 
   async function confirmarAceite(c: ConflitoComStatus<unknown>) {
     const invalida = validarJustificativa(justificativa);
@@ -155,7 +168,7 @@ export default function PainelConflitos({
       <p className="flex items-start gap-1.5 text-[11px] text-slate-500" data-testid="sem-conflitos">
         <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
         <span>
-          Nenhum conflito: instalação × estrutura, entre disciplinas, pilar × vão, escada × estrutura.
+          Nenhum conflito: instalação × estrutura, entre disciplinas, instalação × vão de porta/janela, instalação × parede estrutural, ponto/quadro × estrutura, pilar × vão, escada × estrutura.
           <span className="mt-0.5 block text-[10px]">
             Cano dentro de parede e pilar dentro de parede <strong>não</strong> contam — é onde eles moram.
           </span>
@@ -179,6 +192,14 @@ export default function PainelConflitos({
     if (c.familia === 'componente') {
       const p = (model.componentes ?? []).find((x) => x.id === c.pecaId);
       return p ? p.rotulo || `${CATALOGO_DE_COMPONENTES[p.tipoId]?.rotulo ?? p.tipoId} ${rotuloCurto(p.uid, 'componente')}` : c.pecaId;
+    }
+    if (c.familia === 'terminal') {
+      const t = (model.terminais ?? []).find((x) => x.id === c.pecaId);
+      return t ? `${t.tipo} ${rotuloCurto(t.uid, 'terminal')}` : c.pecaId;
+    }
+    if (c.familia === 'quadro') {
+      const q = (model.quadros ?? []).find((x) => x.id === c.pecaId);
+      return q ? `Quadro ${q.nome}` : c.pecaId;
     }
     const e = (model.stairs ?? []).find((x) => x.id === c.pecaId);
     return e ? e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${rotuloCurto(e.uid, 'stair')}` : c.pecaId;
@@ -208,7 +229,9 @@ export default function PainelConflitos({
               ? `parede atravessando a reserva do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
               : c.classe === 'RESERVA_X_COMPONENTE'
                 ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
-                : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
+                : c.classe === 'PONTO_X_ESTRUTURA'
+                  ? `o centro da peça está ${c.medidaMm} mm dentro da estrutura — a caixa não cabe no concreto`
+                  : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
 
   const nomeDoTrecho = (id: string) => {
     const t = (model.trechos ?? []).find((x) => x.id === id);
@@ -218,6 +241,14 @@ export default function PainelConflitos({
 
   const nomeDoOutro = (c: Conflito) => {
     if (c.classe === 'REDE') return nomeDoTrecho(c.outroId);
+    if (c.classe === 'ABERTURA') {
+      const o = model.openings.find((x) => x.id === c.outroId);
+      return o ? `${nomeDoTipoDeAbertura(o.kind)} ${rotuloCurto(o.uid, 'opening')}` : c.outroId;
+    }
+    if (c.classe === 'PAREDE_ESTRUTURAL') {
+      const w = model.walls.find((x) => x.id === c.outroId);
+      return w ? `Parede estrutural ${rotuloCurto(w.uid, 'wall')}` : c.outroId;
+    }
     const s = model.structures.find((x) => x.id === c.outroId);
     return s ? s.rotulo || rotuloCurto(s.uid, 'structural') : c.outroId;
   };
@@ -236,6 +267,8 @@ export default function PainelConflitos({
   const detalhe = (c: ConflitoComStatus<unknown>) => {
     if (ehArq(c)) return comoArquitetonico(c.conflito);
     const m = c.conflito as Conflito;
+    if (m.classe === 'ABERTURA') return `${(m.comprimentoDentroMm / 1000).toFixed(3)} m dentro do vão — o tubo ficaria aparente e a esquadria não entra`;
+    if (m.classe === 'PAREDE_ESTRUTURAL') return `${(m.comprimentoDentroMm / 1000).toFixed(3)} m de rasgo em parede estrutural — só com furo previsto no projeto estrutural`;
     // O número que decide o que fazer: atravessar 200 mm de viga é um furo;
     // roçar de raspão pode ser só um ajuste de cota.
     return m.comprimentoDentroMm > 0 ? `${(m.comprimentoDentroMm / 1000).toFixed(3)} m por dentro` : `de raspão — ${Math.round(m.folgaEntreEixosMm)} mm entre os eixos`;
@@ -243,12 +276,38 @@ export default function PainelConflitos({
   const alvo = (c: ConflitoComStatus<unknown>) => (ehArq(c) ? c.conflito.pecaId : (c.conflito as Conflito).trechoId);
   const data = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 
+  // E7.2: a barra do filtro por pavimento e do destaque no 3D.
+  const barra = (model.levels.length > 1 || onDestaqueNo3d) ? (
+    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600" data-testid="barra-conflitos">
+      {model.levels.length > 1 && (
+        <label className="flex items-center gap-1">
+          Pavimento
+          <select value={nivelFiltro} onChange={(e) => setNivelFiltro(e.target.value)} aria-label="Filtrar conflitos por pavimento" className="rounded border border-slate-200 px-1 py-0.5 text-[11px]">
+            <option value="">Todos ({todosAbertos.length})</option>
+            {model.levels.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name} ({todosAbertos.filter((c) => nivelDo(c) === l.id).length})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {onDestaqueNo3d && (
+        <label className="flex items-center gap-1" title="Pinta de vermelho, no 3D, as duas peças de cada conflito aberto">
+          <input type="checkbox" checked={destaqueNo3d} onChange={(e) => onDestaqueNo3d(e.target.checked)} aria-label="Destacar conflitos no 3D" className="h-3 w-3" />
+          Destacar no 3D
+        </label>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="space-y-1.5">
+      {barra}
       {abertos.length === 0 && (
         <p className="flex items-start gap-1.5 text-[11px] text-slate-500" data-testid="sem-abertos">
           <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
-          <span>Nenhum conflito aberto — {aceitos.length} aceito(s) com justificativa abaixo.</span>
+          <span>{nivelFiltro && todosAbertos.length > 0 ? `Nenhum conflito aberto neste pavimento — ${todosAbertos.length} em outro(s).` : `Nenhum conflito aberto — ${aceitos.length} aceito(s) com justificativa abaixo.`}</span>
         </p>
       )}
       {abertos.map((c) => (

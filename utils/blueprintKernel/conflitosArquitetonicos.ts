@@ -40,7 +40,7 @@
  *
  * Determinístico: ordenado por id da peça e do outro, como `conflitosDoModelo`.
  */
-import { polygonArea, type Point } from './geom';
+import { pointInPolygon, polygonArea, type Point } from './geom';
 import { fatiasDaEscada } from './escada';
 import type { BlueprintModel, Componente, ObjectId, Structural } from './model';
 import { CATALOGO_DE_COMPONENTES, FORMA_ESTRUTURAL, contornoDoComponente, pavimentosDoNucleo } from './model';
@@ -53,12 +53,13 @@ export interface ConflitoArquitetonico {
   /** A peça arquitetônica atingida. */
   pecaId: ObjectId;
   pecaUid: string;
-  familia: 'opening' | 'stair' | 'nucleo' | 'componente';
+  /** E7.2: `terminal` e `quadro` — o ponto elétrico/hidráulico e o quadro dentro da estrutura. */
+  familia: 'opening' | 'stair' | 'nucleo' | 'componente' | 'terminal' | 'quadro';
   /** A outra peça: estrutura (nas classes de estrutura), parede ou componente (E11.1). */
   outroId: ObjectId;
   outroUid: string;
   outroFamilia?: 'structural' | 'wall' | 'componente';
-  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE';
+  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE' | 'PONTO_X_ESTRUTURA';
   levelId: ObjectId;
   /**
    * O tamanho do problema, em mm: no vão, quanto do vão está tomado ao longo
@@ -222,11 +223,60 @@ export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitet
   // ── Reserva de equipamento (E11.1) ─────────────────────────────────────
   saida.push(...conflitosDeReserva(model));
 
+  // ── E7.2: PONTO e QUADRO × ESTRUTURA ────────────────────────────────────
+  // O CENTRO da peça (planta e cota) dentro do prisma de um pilar/viga/laje —
+  // a tomada que caiu dentro do pilar, o quadro embutido na viga. Adiado da E0.4
+  // ("pontos/quadros no clash → E7.2"). A medida é quanto o centro está DENTRO
+  // (distância até a face mais próxima): encostar na face não é conflito.
+  const elevacaoDe = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const pecasPontuais: { id: ObjectId; uid: string; familia: 'terminal' | 'quadro'; levelId: ObjectId; at: Point; cotaMm: number }[] = [
+    ...(model.terminais ?? []).map((t) => ({ id: t.id, uid: t.uid, familia: 'terminal' as const, levelId: t.levelId, at: t.at, cotaMm: t.cotaMm })),
+    ...(model.quadros ?? []).map((q) => ({ id: q.id, uid: q.uid, familia: 'quadro' as const, levelId: q.levelId, at: q.at, cotaMm: q.cotaMm })),
+  ];
+  for (const p of pecasPontuais) {
+    const z = (elevacaoDe.get(p.levelId) ?? 0) + p.cotaMm;
+    for (const s of model.structures) {
+      const es = (elevacaoDe.get(s.levelId) ?? 0) + s.baseMm;
+      if (z <= es || z >= es + s.alturaMm) continue;
+      const pegada = pegadaEmPlanta(s);
+      if (pegada.length < 3 || !pointInPolygon(pegada, p.at)) continue;
+      const fundo = distanciaAoContorno(pegada, p.at);
+      if (fundo < 1) continue;
+      saida.push({
+        pecaId: p.id,
+        pecaUid: p.uid,
+        familia: p.familia,
+        outroId: s.id,
+        outroUid: s.uid,
+        outroFamilia: 'structural',
+        classe: 'PONTO_X_ESTRUTURA',
+        levelId: p.levelId,
+        medidaMm: Math.round(fundo),
+        em: { x: p.at.x, y: p.at.y },
+      });
+    }
+  }
+
   return saida.sort(
     (a, b) =>
       (a.pecaId < b.pecaId ? -1 : a.pecaId > b.pecaId ? 1 : 0) ||
       (a.outroId < b.outroId ? -1 : a.outroId > b.outroId ? 1 : 0),
   );
+}
+
+/** E7.2: a menor distância de `p` até as arestas do contorno, mm. */
+function distanciaAoContorno(anel: readonly Point[], p: Point): number {
+  let d = Infinity;
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const den = dx * dx + dy * dy;
+    const t = den === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / den));
+    d = Math.min(d, Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
+  }
+  return d;
 }
 
 /** A caixa da reserva crescida da folga em todo o contorno. */

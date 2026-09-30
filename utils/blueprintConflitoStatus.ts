@@ -85,6 +85,24 @@ export function classificarArq(conflitos: readonly ConflitoArquitetonico[], acei
   return conflitos.map((c) => resolver(c, chaveDoConflitoArq(c), c.classe, c.medidaMm, aceites));
 }
 
+/** E7.2: a cor do conflito ABERTO no 3D. */
+export const COR_DO_CONFLITO_3D = '#dc2626';
+
+/**
+ * E7.2 — os uids das DUAS peças de cada conflito ABERTO (o aceito não pinta: foi
+ * decidido). É o que o 3D pinta de vermelho quando "Destacar no 3D" está ligado.
+ */
+export function uidsEmConflitoAberto(
+  mep: readonly Conflito[],
+  arq: readonly ConflitoArquitetonico[],
+  aceites: ReadonlyMap<string, AceiteDeConflito>,
+): Set<string> {
+  const s = new Set<string>();
+  for (const c of classificarMep(mep, aceites)) if (c.status === 'ABERTO') { s.add(c.conflito.trechoUid); s.add(c.conflito.outroUid); }
+  for (const c of classificarArq(arq, aceites)) if (c.status === 'ABERTO') { s.add(c.conflito.pecaUid); s.add(c.conflito.outroUid); }
+  return s;
+}
+
 export interface ContagemDeConflitos {
   abertos: number;
   aceitos: number;

@@ -35,6 +35,7 @@
 // RECUSADA em vez de virar uma viga que ninguém desenhou.
 
 import type {
+  LeituraEletrica,
   ParedeParametrica,
   PecaParametrica,
   PerfilIfc,
@@ -43,11 +44,16 @@ import type {
 import { lerSecaoT } from './ifcSecaoT';
 import { uidDeIfcGuid } from './blueprintIfc';
 import {
+  TIPOS_DE_INTERRUPTOR,
+  TIPOS_DE_PONTO_ELETRICO,
   contornoEmPlanta,
+  type TipoDeInterruptor,
+  type TipoDePontoEletrico,
   type AlinhamentoParede,
   type BlueprintModel,
   type CamadaParede,
   type StructuralKind,
+  type Command,
 } from './blueprintKernel';
 
 /** Um ponto no plano do kernel, em milímetro (ainda não arredondado). */
@@ -147,7 +153,8 @@ function paraCota(p: { X: number; Y: number; Z: number }): number {
   return p.Y * M_PARA_MM;
 }
 
-const arredondar = (p: PontoMm): PontoMm => ({ x: Math.round(p.x), y: Math.round(p.y) });
+// `+ 0` tira o −0 (o plano é −Z do mundo): −0 e 0 são o mesmo ponto, mas não o mesmo valor para quem compara.
+const arredondar = (p: PontoMm): PontoMm => ({ x: Math.round(p.x) + 0, y: Math.round(p.y) + 0 });
 const dist = (a: PontoMm, b: PontoMm) => Math.hypot(b.x - a.x, b.y - a.y);
 
 /** Os quatro cantos do perfil, em coordenadas LOCAIS (unidade de arquivo). */
@@ -685,4 +692,174 @@ export function traduzirVaos(
   }
 
   return { vaos: saida, recusas };
+}
+
+// ─── E7.2 — A ELÉTRICA: pontos e eletrodutos ────────────────────────────────
+
+/** Um ponto elétrico pronto para o kernel. Cota ABSOLUTA (mm); quem aplica desconta o pavimento. */
+export interface PontoEletricoTraduzido {
+  expressID: number;
+  nome: string;
+  pavimento: number | null;
+  at: PontoMm;
+  cotaAbsMm: number;
+  tipoEletrico: TipoDePontoEletrico;
+  interruptor: TipoDeInterruptor | null;
+}
+
+/** Um eletroduto pronto para o kernel: as duas pontas do caminho, cotas ABSOLUTAS (mm). */
+export interface EletrodutoTraduzido {
+  expressID: number;
+  nome: string;
+  pavimento: number | null;
+  a: PontoMm;
+  b: PontoMm;
+  cotaAAbsMm: number;
+  cotaBAbsMm: number;
+  bitolaMm: number;
+}
+
+/** Tolerância para dois sólidos do mesmo eletroduto se encontrarem (mm). */
+const EMENDA_MM = 5;
+
+/**
+ * O tipo do ponto: o `ObjectType` quando ele JÁ é um tipo do sistema (o nosso
+ * export escreve "TUG", "INTERRUPTOR:PARALELO"…); senão, a classe e o
+ * `PredefinedType` pelo que a norma IFC diz deles. `null` = sem equivalente.
+ */
+export function tipoDoPontoIfc(classe: string, predefinido: string | null, objectType: string | null): { tipo: TipoDePontoEletrico; interruptor: TipoDeInterruptor | null } | null {
+  const [base, variante] = (objectType ?? '').split(':');
+  const interruptor = variante && (TIPOS_DE_INTERRUPTOR as readonly string[]).includes(variante) ? (variante as TipoDeInterruptor) : null;
+  if ((TIPOS_DE_PONTO_ELETRICO as readonly string[]).includes(base)) return { tipo: base as TipoDePontoEletrico, interruptor };
+  const pd = (predefinido ?? '').replace(/\./g, '');
+  switch (classe) {
+    case 'IFCLIGHTFIXTURE':
+      return { tipo: 'ILUMINACAO_TETO', interruptor: null };
+    case 'IFCSWITCHINGDEVICE':
+      return { tipo: 'INTERRUPTOR', interruptor };
+    case 'IFCOUTLET':
+      return { tipo: pd === 'TELEPHONEOUTLET' ? 'DADOS_TELEFONE' : pd === 'AUDIOVISUALOUTLET' ? 'DADOS_TV' : pd === 'DATAOUTLET' ? 'DADOS_REDE' : 'TUG', interruptor: null };
+    case 'IFCJUNCTIONBOX':
+      // Caixa de junção de outro programa é, na obra, a caixa de passagem.
+      return { tipo: 'CAIXA_PASSAGEM', interruptor: null };
+    case 'IFCFLOWMETER':
+      return pd === 'ENERGYMETER' ? { tipo: 'MEDIDOR', interruptor: null } : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * E7.2 — traduz a elétrica lida do arquivo. O ponto entra no CENTRO da peça
+ * (em planta e em cota); o eletroduto, pelas pontas do CAMINHO — os sólidos
+ * encadeados (o "L" do nosso export são dois: sobe e corre), da primeira ponta
+ * à última. Sólidos que não se encadeiam, ponto sem tipo ou sem geometria são
+ * recusados com o motivo, nunca adivinhados.
+ */
+export function traduzirEletrica(leitura: LeituraEletrica): { pontos: PontoEletricoTraduzido[]; eletrodutos: EletrodutoTraduzido[]; recusas: RecusaDeTraducao[] } {
+  const pontos: PontoEletricoTraduzido[] = [];
+  const eletrodutos: EletrodutoTraduzido[] = [];
+  const recusas: RecusaDeTraducao[] = [];
+  for (const p of leitura.pontos) {
+    const recusar = (motivo: string) => recusas.push({ expressID: p.expressID, nome: p.nome, classe: p.classe, motivo });
+    const tipo = tipoDoPontoIfc(p.classe, p.predefinido, p.objectType);
+    if (!tipo) {
+      recusar(`${p.classe}${p.predefinido ? ` .${p.predefinido}.` : ''} não tem equivalente entre os pontos elétricos`);
+      continue;
+    }
+    if (!p.centro) {
+      recusar('o ponto não tem geometria para dizer onde está');
+      continue;
+    }
+    pontos.push({
+      expressID: p.expressID,
+      nome: p.nome,
+      pavimento: p.pavimento,
+      at: arredondar(paraPlano(p.centro)),
+      cotaAbsMm: Math.round(paraCota(p.centro)),
+      tipoEletrico: tipo.tipo,
+      interruptor: tipo.interruptor,
+    });
+  }
+  for (const e of leitura.eletrodutos) {
+    const recusar = (motivo: string) => recusas.push({ expressID: e.expressID, nome: e.nome, classe: 'IFCCABLECARRIERSEGMENT', motivo });
+    const segs = e.segmentos.map((s) => ({ de: { p: paraPlano(s.de), z: paraCota(s.de) }, para: { p: paraPlano(s.para), z: paraCota(s.para) } }));
+    let encadeado = true;
+    for (let i = 1; i < segs.length; i++) {
+      const u = segs[i - 1].para;
+      const v = segs[i].de;
+      if (Math.hypot(u.p.x - v.p.x, u.p.y - v.p.y, u.z - v.z) > EMENDA_MM) encadeado = false;
+    }
+    if (!encadeado) {
+      recusar('os sólidos do eletroduto não formam um caminho contínuo');
+      continue;
+    }
+    const ini = segs[0].de;
+    const fim = segs[segs.length - 1].para;
+    eletrodutos.push({
+      expressID: e.expressID,
+      nome: e.nome,
+      pavimento: e.pavimento,
+      a: arredondar(ini.p),
+      b: arredondar(fim.p),
+      cotaAAbsMm: Math.round(ini.z),
+      cotaBAbsMm: Math.round(fim.z),
+      bitolaMm: e.diametroM != null ? Math.max(1, Math.round(e.diametroM * M_PARA_MM)) : 25,
+    });
+  }
+  return { pontos, eletrodutos, recusas };
+}
+
+/** O pavimento de destino de uma peça importada: existente (id) ou criado no mesmo lote (uid). */
+export interface DestinoDaImportacao {
+  levelId: string;
+  levelUid?: string;
+  elevationMm: number;
+}
+
+/**
+ * E7.2 — os comandos da elétrica importada: `AddTerminal` e `AddTrecho` no
+ * pavimento casado (novo inclusive, pelo `levelUid`), com a cota RELATIVA a ele
+ * (o arquivo a traz absoluta) e o deslocamento da ancoragem. Quem não tem
+ * destino (pavimento descartado) fica de fora. Puro — o painel só chama.
+ */
+export function comandosDaEletrica(
+  pontos: readonly PontoEletricoTraduzido[],
+  eletrodutos: readonly EletrodutoTraduzido[],
+  destino: (pavimento: number) => DestinoDaImportacao | null,
+  dx = 0,
+  dy = 0,
+): Command[] {
+  const comandos: Command[] = [];
+  for (const p of pontos) {
+    const nivel = p.pavimento == null ? null : destino(p.pavimento);
+    if (!nivel) continue;
+    comandos.push({
+      type: 'AddTerminal',
+      levelId: nivel.levelId,
+      ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
+      disciplina: 'ELETRICA',
+      tipo: p.nome && p.nome !== '—' ? p.nome : p.tipoEletrico,
+      tipoEletrico: p.tipoEletrico,
+      at: { x: p.at.x + dx, y: p.at.y + dy },
+      cotaMm: p.cotaAbsMm - nivel.elevationMm,
+      ...(p.interruptor ? { interruptor: p.interruptor } : {}),
+    });
+  }
+  for (const e of eletrodutos) {
+    const nivel = e.pavimento == null ? null : destino(e.pavimento);
+    if (!nivel) continue;
+    comandos.push({
+      type: 'AddTrecho',
+      levelId: nivel.levelId,
+      ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
+      disciplina: 'ELETRICA',
+      a: { x: e.a.x + dx, y: e.a.y + dy },
+      b: { x: e.b.x + dx, y: e.b.y + dy },
+      cotaAMm: e.cotaAAbsMm - nivel.elevationMm,
+      cotaBMm: e.cotaBAbsMm - nivel.elevationMm,
+      bitolaMm: e.bitolaMm,
+    });
+  }
+  return comandos;
 }

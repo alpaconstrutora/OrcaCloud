@@ -922,3 +922,168 @@ export async function lerPecasParametricas(modeloId: number): Promise<LeituraPar
 
   return { pecas, paredes, vaos, pavimentos, recusas, fatorParaMm };
 }
+
+// ─── E7.2 — A ELÉTRICA DO ARQUIVO ────────────────────────────────────────────
+
+type P3m = { X: number; Y: number; Z: number };
+
+/** Um ponto elétrico do arquivo (tomada, luminária, interruptor, caixa, medidor…). */
+export interface PontoEletricoIfc {
+  expressID: number;
+  /** `IFCOUTLET`, `IFCLIGHTFIXTURE`, `IFCSWITCHINGDEVICE`, `IFCJUNCTIONBOX`, `IFCFLOWMETER`, `IFCAUDIOVISUALAPPLIANCE`. */
+  classe: string;
+  nome: string;
+  globalId: string;
+  objectType: string | null;
+  predefinido: string | null;
+  /**
+   * O CENTRO da peça no mundo do web-ifc (METRO, Y para cima), medido nos
+   * VÉRTICES da malha já transformados. ⚠️ Não na translação da matriz: o
+   * web-ifc a põe no centro da geometria, não na origem declarada (medido em
+   * 29/09/2026 — a tomada de placement a 250 mm saiu a 300, o centro da caixa).
+   * Os vértices não dependem dessa escolha.
+   */
+  centro: P3m | null;
+  pavimento: number | null;
+}
+
+/** Um eletroduto do arquivo: as pontas de cada sólido, na ordem, no mundo (METRO). */
+export interface EletrodutoIfc {
+  expressID: number;
+  nome: string;
+  globalId: string;
+  /** Um por sólido: do início ao fim pela direção da extrusão. O "L" do nosso export são dois. */
+  segmentos: { de: P3m; para: P3m }[];
+  /** O diâmetro externo medido na malha, em METRO; `null` sem geometria. */
+  diametroM: number | null;
+  pavimento: number | null;
+}
+
+export interface LeituraEletrica {
+  pontos: PontoEletricoIfc[];
+  eletrodutos: EletrodutoIfc[];
+  recusas: RecusaGeometrica[];
+}
+
+const CLASSES_DE_PONTO_ELETRICO = ['IFCOUTLET', 'IFCLIGHTFIXTURE', 'IFCSWITCHINGDEVICE', 'IFCJUNCTIONBOX', 'IFCFLOWMETER', 'IFCAUDIOVISUALAPPLIANCE'];
+
+/** Vértice local × matriz coluna-maior → mundo. */
+const transformar = (m: number[], x: number, y: number, z: number): P3m => ({
+  X: m[0] * x + m[4] * y + m[8] * z + m[12],
+  Y: m[1] * x + m[5] * y + m[9] * z + m[13],
+  Z: m[2] * x + m[6] * y + m[10] * z + m[14],
+});
+
+/**
+ * E7.2 — lê os pontos e os eletrodutos do arquivo. Toda posição sai dos
+ * VÉRTICES da malha (ver `PontoEletricoIfc.centro`); o eixo do eletroduto é a
+ * direção local Z do sólido (a da extrusão), e as pontas são os extremos dos
+ * vértices ao longo dele.
+ */
+export async function lerEletricaParametrica(modeloId: number): Promise<LeituraEletrica> {
+  const api = await obterApi();
+  const raiz = await tabelaDeTipos();
+
+  const pavimentoDe = new Map<number, number>();
+  const rels = api.GetLineIDsWithType(modeloId, raiz.IFCRELCONTAINEDINSPATIALSTRUCTURE as number);
+  for (let i = 0; i < rels.size(); i++) {
+    const rel = api.GetLine(modeloId, rels.get(i), true) as Record<string, unknown>;
+    const estrutura = rel.RelatingStructure as { type?: number; expressID?: number } | undefined;
+    if (!estrutura || estrutura.type !== raiz.IFCBUILDINGSTOREY) continue;
+    for (const o of (rel.RelatedElements ?? []) as { value?: number; expressID?: number }[]) {
+      const id = o?.value ?? o?.expressID;
+      if (id !== undefined && estrutura.expressID !== undefined) pavimentoDe.set(id, estrutura.expressID);
+    }
+  }
+
+  // Quem interessa: os pontos e os eletrodutos.
+  const classeDe = new Map<number, string>();
+  for (const classe of [...CLASSES_DE_PONTO_ELETRICO, 'IFCCABLECARRIERSEGMENT']) {
+    const codigo = raiz[classe] as number | undefined;
+    if (typeof codigo !== 'number') continue;
+    const ids = api.GetLineIDsWithType(modeloId, codigo);
+    for (let i = 0; i < ids.size(); i++) classeDe.set(ids.get(i), classe);
+  }
+
+  // Os vértices, no mundo, por sólido.
+  const solidos = new Map<number, { matriz: number[]; vertices: P3m[] }[]>();
+  api.StreamAllMeshes(modeloId, (malha: FlatMeshIfc) => {
+    if (!classeDe.has(malha.expressID)) return;
+    const lista: { matriz: number[]; vertices: P3m[] }[] = [];
+    for (let i = 0; i < malha.geometries.size(); i++) {
+      const posta = malha.geometries.get(i);
+      const g = api.GetGeometry(modeloId, posta.geometryExpressID);
+      const verts = api.GetVertexArray(g.GetVertexData(), g.GetVertexDataSize());
+      const m = posta.flatTransformation;
+      const vertices: P3m[] = [];
+      for (let v = 0; v < verts.length; v += 6) vertices.push(transformar(m, verts[v], verts[v + 1], verts[v + 2]));
+      lista.push({ matriz: Array.from(m), vertices });
+      g.delete?.();
+    }
+    solidos.set(malha.expressID, lista);
+  });
+
+  const pontos: PontoEletricoIfc[] = [];
+  const eletrodutos: EletrodutoIfc[] = [];
+  const recusas: RecusaGeometrica[] = [];
+  for (const [eid, classe] of [...classeDe.entries()].sort((a, b) => a[0] - b[0])) {
+    const el = api.GetLine(modeloId, eid, false) as Record<string, unknown>;
+    const nome = texto(el.Name);
+    const globalId = texto(el.GlobalId);
+    const valor = (x: unknown) => {
+      const v = (x as { value?: unknown } | undefined)?.value;
+      return v == null ? null : String(v);
+    };
+    const geos = solidos.get(eid) ?? [];
+    const todos = geos.flatMap((g) => g.vertices);
+    if (classe !== 'IFCCABLECARRIERSEGMENT') {
+      let centro: P3m | null = null;
+      if (todos.length > 0) {
+        const min = { X: Infinity, Y: Infinity, Z: Infinity };
+        const max = { X: -Infinity, Y: -Infinity, Z: -Infinity };
+        for (const p of todos) for (const k of ['X', 'Y', 'Z'] as const) {
+          min[k] = Math.min(min[k], p[k]);
+          max[k] = Math.max(max[k], p[k]);
+        }
+        centro = { X: (min.X + max.X) / 2, Y: (min.Y + max.Y) / 2, Z: (min.Z + max.Z) / 2 };
+      }
+      pontos.push({ expressID: eid, classe, nome, globalId, objectType: valor(el.ObjectType), predefinido: valor(el.PredefinedType), centro, pavimento: pavimentoDe.get(eid) ?? null });
+      continue;
+    }
+    if (geos.length === 0) {
+      recusas.push({ expressID: eid, classe, nome, motivo: 'eletroduto sem geometria' });
+      continue;
+    }
+    const segmentos: { de: P3m; para: P3m }[] = [];
+    // O RAIO pela MEDIANA das distâncias ao eixo: a costura do polígono do cilindro
+    // tira o centróide um fio do eixo, e o máximo transformava 25 mm em 26.
+    const distancias: number[] = [];
+    for (const g of geos) {
+      const ax = { X: g.matriz[8], Y: g.matriz[9], Z: g.matriz[10] };
+      const na = Math.hypot(ax.X, ax.Y, ax.Z);
+      if (!(na > 0) || g.vertices.length === 0) continue;
+      const u = { X: ax.X / na, Y: ax.Y / na, Z: ax.Z / na };
+      const n = g.vertices.length;
+      const c = g.vertices.reduce((s, p) => ({ X: s.X + p.X / n, Y: s.Y + p.Y / n, Z: s.Z + p.Z / n }), { X: 0, Y: 0, Z: 0 });
+      let smin = Infinity;
+      let smax = -Infinity;
+      for (const p of g.vertices) {
+        const s = (p.X - c.X) * u.X + (p.Y - c.Y) * u.Y + (p.Z - c.Z) * u.Z;
+        smin = Math.min(smin, s);
+        smax = Math.max(smax, s);
+        // Distância do vértice ao eixo — o raio externo.
+        const q = { X: p.X - c.X - u.X * s, Y: p.Y - c.Y - u.Y * s, Z: p.Z - c.Z - u.Z * s };
+        distancias.push(Math.hypot(q.X, q.Y, q.Z));
+      }
+      segmentos.push({ de: { X: c.X + u.X * smin, Y: c.Y + u.Y * smin, Z: c.Z + u.Z * smin }, para: { X: c.X + u.X * smax, Y: c.Y + u.Y * smax, Z: c.Z + u.Z * smax } });
+    }
+    if (segmentos.length === 0) {
+      recusas.push({ expressID: eid, classe, nome, motivo: 'eletroduto sem eixo legível' });
+      continue;
+    }
+    distancias.sort((x, y) => x - y);
+    const raio = distancias.length ? distancias[Math.floor(distancias.length / 2)] : 0;
+    eletrodutos.push({ expressID: eid, nome, globalId, segmentos, diametroM: raio > 0 ? 2 * raio : null, pavimento: pavimentoDe.get(eid) ?? null });
+  }
+  return { pontos, eletrodutos, recusas };
+}

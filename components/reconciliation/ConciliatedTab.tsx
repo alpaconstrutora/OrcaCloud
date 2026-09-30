@@ -1,11 +1,11 @@
 import React from 'react';
 import {
     ArrowRightLeft, ArrowUpDown, Briefcase, Calendar, Check, CheckCircle2, FileText,
-    LayoutGrid, Search, Table2, X,
+    LayoutGrid, MoveHorizontal, Search, Table2, X,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { formatMoney, formatDateBR } from '../ui/Format';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState } from '../ui/TableUtils';
+import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { LazySelect, type LazyOption } from './LazySelect';
 import type { BankTransaction, InternalTransaction } from '../../types';
 
@@ -48,13 +48,12 @@ export const CONCILIATED_COLUMNS: ColumnConfig[] = [
     { key: 'actions',    label: 'Ações', sortable: false },
 ];
 
-/** Largura mínima em px; as colunas de descrição crescem (1fr) e QUEBRAM o texto — sem o
- *  `minWidth` somado a linha estoura a tela em vez de rolar. */
-const LARGURA_MIN: Record<string, number> = {
-    bankDesc: 240, intDesc: 240, bankDate: 120, intDate: 120,
-    bankAmount: 140, intAmount: 140, link: 60, actions: 80,
+/** Larguras padrão em px (soma 1126: cabe ao lado da sidebar, em 1440 px de tela). O usuário arrasta a
+ *  borda do cabeçalho (duplo clique restaura) ou usa o botão de ajuste ao conteúdo (§6.1). */
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+    bankDesc: 230, bankDate: 120, bankAmount: 130, link: 96,
+    intDesc: 230, intDate: 120, intAmount: 130, actions: 70,
 };
-const EH_DESCRICAO = (k: string) => k === 'bankDesc' || k === 'intDesc';
 
 const ALINHAMENTO_CABECALHO: Record<string, string> = {
     bankDesc: '', intDesc: '',
@@ -113,9 +112,12 @@ export default function ConciliatedTab({
         const meio = colunas.orderedVisibleColumns.filter(k => k !== 'actions');
         return colunas.visibleColumns.includes('actions') ? [...meio, 'actions'] : meio;
     }, [colunas.orderedVisibleColumns, colunas.visibleColumns]);
-    const gridCols = chavesVisiveis.map(k => (EH_DESCRICAO(k) ? `minmax(${LARGURA_MIN[k]}px,1fr)` : `${LARGURA_MIN[k] ?? 140}px`)).join(' ');
-    const larguraMinima = chavesVisiveis.reduce((t, k) => t + (LARGURA_MIN[k] ?? 140), 0);
-    const bordaDireita = (idx: number) => (idx < chavesVisiveis.length - 1 ? 'border-r border-gray-100' : '');
+    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'conciliacaoConciliadosColWidths');
+    const colunasDeDados = chavesVisiveis.filter(k => k !== 'actions');
+    const temAcoes = chavesVisiveis.includes('actions');
+    // §6.1: a largura do <table> é a SOMA exata das colunas visíveis (nunca 100%); o
+    // `minWidth: 100%` + o <col /> espaçador antes de "Ações" absorvem a folga.
+    const larguraTotal = colunasDeDados.reduce((t, k) => t + cols.getWidth(k), 0) + (temAcoes ? cols.getWidth('actions') : 0);
 
     const cabecalho = (key: string) => {
         if (key === 'bankDate') {
@@ -292,6 +294,15 @@ export default function ConciliatedTab({
                                         onToggleColumn={colunas.toggleColumn}
                                         onReset={colunas.resetColumns}
                                     />
+                                    {/* Autofit sob comando explícito — nunca automático (§6.1.2).
+                                        Duplo clique no divisor segue "restaurar padrão". */}
+                                    <button
+                                        onClick={() => cols.autoFit()}
+                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                        title="Ajustar largura das colunas ao conteúdo"
+                                    >
+                                        <MoveHorizontal className="w-4 h-4" />
+                                    </button>
                                     <div className="w-px h-5 bg-gray-200 mx-0.5" />
                                 </>
                             )}
@@ -327,40 +338,56 @@ export default function ConciliatedTab({
                     </div>
                 ) : conciliatedViewMode === 'list' ? (
                     <div className="overflow-auto max-h-[70vh]">
-                        <div style={{ minWidth: larguraMinima }}>
-                            <div
-                                className="grid sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 items-center"
-                                style={{ gridTemplateColumns: gridCols }}
-                            >
-                                {chavesVisiveis.map((key, idx) => (
-                                    <div key={key} className={`px-6 py-2 whitespace-nowrap ${bordaDireita(idx)} ${ALINHAMENTO_CABECALHO[key] ?? ''}`}>
-                                        {cabecalho(key)}
-                                    </div>
+                        <table
+                            ref={cols.tableRef}
+                            className="text-left border-collapse"
+                            style={{ tableLayout: 'fixed', width: larguraTotal, minWidth: '100%' }}
+                        >
+                            <colgroup>
+                                {colunasDeDados.map(k => (
+                                    <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />
                                 ))}
-                            </div>
-                            <div className="divide-y divide-gray-50">
+                                {/* espaçador ANTES de "Ações" (§6.1.1): absorve a folga no meio */}
+                                <col />
+                                {temAcoes && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
+                            </colgroup>
+                            <thead>
+                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    {colunasDeDados.map(k => (
+                                        <th key={k} className={`relative overflow-hidden px-6 py-2 whitespace-nowrap border-r border-gray-100 font-semibold ${ALINHAMENTO_CABECALHO[k] ?? ''}`}>
+                                            {cabecalho(k)}
+                                            <cols.ResizeHandle colKey={k} />
+                                        </th>
+                                    ))}
+                                    <th aria-hidden="true" className="border-r border-gray-100" />
+                                    {temAcoes && (
+                                        <th className={`relative overflow-hidden px-6 py-2 whitespace-nowrap font-semibold ${ALINHAMENTO_CABECALHO.actions}`}>
+                                            {cabecalho('actions')}
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
                                 {visiveis.map(m => {
                                     if (!m.bank_transaction || !m.internal_transaction) return null;
                                     return (
-                                        <div
-                                            key={m.id}
-                                            className="grid hover:bg-gray-50 transition-all group items-stretch"
-                                            style={{ gridTemplateColumns: gridCols }}
-                                        >
-                                            {chavesVisiveis.map((key, idx) => (
-                                                <div
-                                                    key={key}
-                                                    className={`px-6 py-2.5 ${bordaDireita(idx)} ${layoutCelula(key)}`}
-                                                    onClick={key === 'actions' ? (e) => e.stopPropagation() : undefined}
-                                                >
-                                                    {celula(key, m)}
-                                                </div>
+                                        <tr key={m.id} className="hover:bg-gray-50 transition-all group">
+                                            {colunasDeDados.map(k => (
+                                                <td key={k} className="px-6 py-2.5 border-r border-gray-100 align-middle">
+                                                    <div className={layoutCelula(k)}>{celula(k, m)}</div>
+                                                </td>
                                             ))}
-                                        </div>
+                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                            {temAcoes && (
+                                                <td className="px-6 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
+                                                    <div className={layoutCelula('actions')}>{celula('actions', m)}</div>
+                                                </td>
+                                            )}
+                                        </tr>
                                     );
                                 })}
-                            </div>
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 lg:p-6">

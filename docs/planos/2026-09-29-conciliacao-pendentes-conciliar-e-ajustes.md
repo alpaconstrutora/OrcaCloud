@@ -195,3 +195,19 @@ com sidebar aberta (print).
   estado vazio. **§6.1 (redimensionar/autofit):** decisão = não se aplica; a lista é grid
   de larguras fixas, não `<table>`. **Não feito:** arrastar coluna para reordenar.
   `tsc` 0, `check-ui-standard` 0, `check-xss-sinks` 0, suíte 6.392 + 33 pend. = 6.425, 0 falhas.
+
+### Correção (2026-09-30): faltou o botão de ajuste de largura
+
+> faltou o botao de ajuste de largura de colunas
+
+- [x] `ConciliatedTab.tsx` — a lista deixou de ser grid CSS e virou `<table>` (§6.1): `useResizableColumns`,
+  `<colgroup>` com `data-col-key`, espaçador `<col />` antes de "Ações" (§6.1.1), `ResizeHandle` em cada
+  cabeçalho e o botão `MoveHorizontal` (autoajuste, §6.1.2) na régua, ao lado da engrenagem. Antes eu
+  tinha decidido "§6.1 não se aplica" porque era grid — a decisão estava errada: o pedido era
+  explícito e a conversão era o caminho. Larguras padrão somam 1126 px (cabem em 1440 px com sidebar).
+  Visto no navegador: padrão 230/120/130/96/230/120/130 + espaçador + 70 (tabela 1130 = container);
+  autoajuste → descrições no teto de 500 px (texto longo) e tabela passa a rolar na horizontal, como
+  nas demais telas com o botão; arrastar a borda mudou a coluna (240 → 320) com o espaçador cedendo;
+  ocultar coluna na engrenagem refaz as larguras. **Não confirmado:** duplo clique restaurando a
+  largura — o teste automatizado não o reproduziu (hook compartilhado, não tocado aqui).
+  `tsc` 0, `check-ui-standard` 0, `check-xss-sinks` 0, suíte 6.419 + 33 pend. = 6.452, 0 falhas.

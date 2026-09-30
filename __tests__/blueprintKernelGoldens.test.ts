@@ -240,6 +240,12 @@
  *   unidade. Com a string em 0.77.0 os sete testes passaram sem outra
  *   alteração; depois do bump, só os seis hashes.
  *
+ *   0.78.0 → 0.79.0 (30/09/2026): E1.1 do roadmap de incêndio — disciplina
+ *   `INCENDIO`, dez tipos de ponto hidráulico de incêndio e, no sprinkler,
+ *   `Terminal.fatorK`/`posicaoSprinkler`, omitidos quando ausentes. Nenhum dos
+ *   seis casos tem terminal. Com a string em 0.78.0 os sete testes passaram sem
+ *   outra alteração; depois do bump, só os seis hashes.
+ *
  *   0.69.0 → 0.70.0 (29/09/2026): E1.2 do roadmap elétrico — `tipoEletrico`
  *   ganhou `CAIXA_PASSAGEM` (a caixa 4×4 como terminal com medidas); a ficha do
  *   componente ganhou `ligaAoPontoEletrico` (catálogo, não payload). Só
@@ -795,17 +801,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'bb7cbd0689271589577c3c4ada6c2cc2d4c31b1e95c669912e7ee8db22f0951c',
+    hash: '6e2f55c44033bc60a577cf5bd7591003ea1d603c94c041a70af75697ee1b2e9c',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'b19ca00ca12fb69529161b4b911737a1f721b4d982e9983dc3bbfb20656b51f7',
+    hash: '7f4e7c0e8ba9d893bf924bb9d87e4a51b8ef21faf87d36474f82de18df6e5a2d',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '8c8c8033d28b7d4c993067779a90e6805197cdc5a03694be0e9782f096ab34d4',
+    hash: '4ab0ae25a34f1ecbe1356e13f2d78e501569cf1b1483c5df78d65d0e6d2c2665',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -813,7 +819,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'b1f985189c998e23d4bb7cad493612878c47b0960cba9cf96fa142ab82823dbd',
+    hash: 'c8cdcd5624c0bc0fa52464d0a2adebf7994c8a9d29e4ced84bf2ff7b9930b534',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -823,7 +829,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '20db32e66b58f3858f7f21c1878336a788778c05c66b110de9da15cd4f6a1428',
+    hash: '4ff4d36a40d9b773ac875be7f0aa6da4a8ee971c9151464708763c8e36745ab7',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -834,7 +840,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '66f1e5ecf09a04d88050b1b8e081151fe25f6edd4241460b09f571bbaa2d39a9',
+    hash: '4ba47e63c62910e6305d6fa1a660717e67e92c546087897b7b8b883019ade8a4',
   },
 };
 

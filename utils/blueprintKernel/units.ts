@@ -449,7 +449,18 @@
  * desenho muda de payload — provado antes do bump com os goldens na string
  * antiga.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.78.0';
+/**
+ * ─── 0.78.0 → 0.79.0 (30/09/2026) — A REDE DE INCÊNDIO ──────────────────────
+ *
+ * A disciplina `INCENDIO` (E1.1 do roadmap de incêndio) e os pontos dela:
+ * `HIDRANTE_SIMPLES`, `HIDRANTE_DUPLO`, `MANGOTINHO`, `HIDRANTE_RECALQUE`,
+ * `SPRINKLER`, `VGA`, `CHAVE_FLUXO`, `BOMBA_INCENDIO`, `BOMBA_JOCKEY` e
+ * `PRESSOSTATO`; gaveta, retenção, espera e conexões forçadas passam a aceitar
+ * a rede de incêndio. No sprinkler, `Terminal.fatorK` (L/min/bar^½, inteiro) e
+ * `Terminal.posicaoSprinkler` (PENDENTE/EM_PE/LATERAL), omitidos do canônico
+ * quando ausentes. Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.79.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

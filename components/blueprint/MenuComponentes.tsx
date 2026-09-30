@@ -272,6 +272,9 @@ function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[
     'Hidráulica — águas pluviais': CloudRain,
     'Hidráulica — registros e válvulas': Gauge,
     'Hidráulica — conexões': GitFork,
+    // Incêndio E1.1: a rede de combate tem família própria no menu.
+    'Incêndio — hidrantes e chuveiros': Flame,
+    'Incêndio — bombas e válvulas': Gauge,
   };
   const porGrupo = new Map<string, ItemComponente[]>();
   const acrescentar = (titulo: string, item: ItemComponente) => {
@@ -378,6 +381,10 @@ function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Mecânica — ventilação')) return 2;
   if (titulo.startsWith('Mecânica — dutos')) return 3;
   if (titulo.startsWith('Mecânica')) return 1;
+  // Incêndio (E1.1): hidrantes/chuveiros à esquerda, tubulação no meio, bombas e válvulas à direita.
+  if (titulo.startsWith('Incêndio — hidrantes')) return 1;
+  if (titulo.startsWith('Incêndio — tubulação')) return 2;
+  if (titulo.startsWith('Incêndio')) return 3;
   // Na família hidráulica o menu é só dela: consumo à esquerda, trechos +
   // reservação + esgoto no meio, registros/conexões/a classificar à direita.
   if (titulo.startsWith('Hidráulica — pontos de consumo')) return 1;
@@ -794,6 +801,21 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       },
     ],
   },
+  // ─── INCÊNDIO (30/09/2026, E1.1 do roadmap de incêndio) ────────────────────
+  {
+    titulo: 'Incêndio — tubulação',
+    itens: [
+      {
+        chave: 'REDE_INCENDIO',
+        rotulo: 'Tubulação de incêndio',
+        icone: Flame,
+        ajuda:
+          'O trecho da rede de incêndio — hidrantes, mangotinhos e sprinklers na mesma rede. ' +
+          'Nasce junto ao teto, DN 65; a coluna é o trecho vertical entre pavimentos.',
+        escolha: { tool: 'rede', disciplina: 'INCENDIO' },
+      },
+    ],
+  },
   // ─── A TAXONOMIA DO PONTO ELÉTRICO ────────────────────────────────────────
   //
   // Três grupos, informados pelo usuário em 09/09/2026, e é como um projeto
@@ -895,12 +917,13 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
  * mesmo catálogo, filtrado — e não três catálogos — para a ficha do componente
  * (`fichaDoComponente`) continuar única.
  */
-export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO' | 'MECANICA';
+export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO' | 'MECANICA' | 'INCENDIO';
 
 function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
   if (/^Elétrica/.test(tituloDoGrupo)) return 'ELETRICA';
   if (/^Hidráulica/.test(tituloDoGrupo)) return 'HIDRAULICA';
   if (/^Mecânica/.test(tituloDoGrupo)) return 'MECANICA';
+  if (/^Incêndio/.test(tituloDoGrupo)) return 'INCENDIO';
   if (/^Mobiliário/.test(tituloDoGrupo)) return 'MOBILIARIO';
   return 'CONSTRUCAO';
 }
@@ -1029,7 +1052,9 @@ export default function MenuComponentes(props: Props) {
                 ? 'Mobiliário, louças, bancadas, armários e equipamentos — o catálogo de componentes'
                 : familia === 'MECANICA'
                   ? 'Reservas de espaço de climatização e ventilação, e o shaft mecânico'
-                  : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
+                  : familia === 'INCENDIO'
+                    ? 'Rede de incêndio — tubulação, hidrantes, mangotinhos, sprinklers, VGA e bombas'
+                    : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
         }
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo

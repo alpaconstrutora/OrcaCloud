@@ -178,7 +178,8 @@ export const COBERTURA_IFC = [
     'hidráulico: bitola e cota das redes de água e esgoto são o que alguém desenhou, e ' +
     'não resultado de cálculo de perda de carga.',
   'CONTÉM guarda-corpos e corrimãos (IfcRailing .GUARDRAIL. / .HANDRAIL.): um sólido por trecho da polilinha — 50 mm de espessura, na altura declarada, apoiado no piso do pavimento —, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura é MARCA DE LUGAR, não perfil: o desenho sabe onde a proteção está e quanto mede, não o desenho do gradil.',
-  'NÃO CONTÉM ar-condicionado, gás nem incêndio.',
+  'CONTÉM a rede de incêndio desenhada (desde 30/09/2026): tubulação como IfcPipeSegment no sistema .FIREPROTECTION.; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal; VGA como IfcValve; chave de fluxo e pressostato como IfcSensor; bombas como IfcPump. NÃO CONTÉM os preventivos (extintor, sinalização, iluminação de emergência, detecção e alarme), nem cálculo hidráulico de incêndio.',
+  'NÃO CONTÉM ar-condicionado nem gás.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
@@ -2070,6 +2071,7 @@ const SISTEMA_IFC: Record<string, string> = {
   AGUA_QUENTE: '.DOMESTICHOTWATER.',
   ESGOTO: '.SEWAGE.',
   PLUVIAL: '.STORMWATER.',
+  INCENDIO: '.FIREPROTECTION.',
 };
 
 /**
@@ -2084,6 +2086,7 @@ const CLASSE_DO_TRECHO: Record<string, { entidade: string; predefinido: string; 
   AGUA_QUENTE: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   ESGOTO: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   PLUVIAL: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
+  INCENDIO: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   ELETRICA: { entidade: 'IFCCABLECARRIERSEGMENT', predefinido: '.CONDUITSEGMENT.', qto: 'Qto_CableCarrierSegmentBaseQuantities' },
   MECANICA: { entidade: 'IFCDUCTSEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_DuctSegmentBaseQuantities' },
 };
@@ -2401,6 +2404,28 @@ function entidadeDoPontoHidraulico(
     case 'RESERVATORIO':
       return { entidade: 'IFCTANK', predefinido: '.STORAGE.' };
     case 'BOMBA':
+      return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };
+    // Incêndio E1.1 (30/09/2026): IfcFireSuppressionTerminal é IFC4 de origem (nove
+    // atributos, como os demais terminais) e o enum tem os quatro: hidrante,
+    // carretel (o mangotinho), registro de recalque (BREECHINGINLET) e sprinkler.
+    case 'HIDRANTE_SIMPLES':
+    case 'HIDRANTE_DUPLO':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.FIREHYDRANT.' };
+    case 'MANGOTINHO':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.HOSEREEL.' };
+    case 'HIDRANTE_RECALQUE':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.BREECHINGINLET.' };
+    case 'SPRINKLER':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.SPRINKLER.' };
+    // A VGA não tem valor no IfcValveTypeEnum; a chave de fluxo e o pressostato são sensores.
+    case 'VGA':
+      return { entidade: 'IFCVALVE', predefinido: '.USERDEFINED.' };
+    case 'CHAVE_FLUXO':
+      return { entidade: 'IFCSENSOR', predefinido: '.FLOWSENSOR.' };
+    case 'PRESSOSTATO':
+      return { entidade: 'IFCSENSOR', predefinido: '.PRESSURESENSOR.' };
+    case 'BOMBA_INCENDIO':
+    case 'BOMBA_JOCKEY':
       return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };
     case 'AQUECEDOR':
       return { entidade: 'IFCBOILER', predefinido: '.WATER.' };

@@ -68,6 +68,9 @@ describe('taxonomia hidráulica · a lista e a ficha', () => {
         'Hidráulica — pontos de consumo',
         'Hidráulica — registros e válvulas',
         'Hidráulica — reservação',
+        // Incêndio E1.1 (30/09/2026): a rede de combate usa a mesma taxonomia, com grupos próprios.
+        'Incêndio — bombas e válvulas',
+        'Incêndio — hidrantes e chuveiros',
       ].sort(),
     );
     for (const t of ['CHUVEIRO', 'VASO_SANITARIO', 'RESERVATORIO', 'RALO_SIFONADO', 'CAIXA_INSPECAO', 'REGISTRO_GAVETA', 'CONEXAO_TE'] as const) {
@@ -80,7 +83,7 @@ describe('taxonomia hidráulica · a lista e a ficha', () => {
       const f = FICHA_DO_PONTO_HIDRAULICO[t];
       expect(ROTULO_DO_PONTO_HIDRAULICO[t], t).toBeTruthy();
       expect(SIGLA_DO_PONTO_HIDRAULICO[t], t).toBeTruthy();
-      expect(f.grupo, t).toMatch(/^Hidráulica — /);
+      expect(f.grupo, t).toMatch(/^(Hidráulica|Incêndio) — /);
       const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[t];
       expect(admitidas.length, t).toBeGreaterThan(0);
       expect(admitidas, t).not.toContain('ELETRICA');

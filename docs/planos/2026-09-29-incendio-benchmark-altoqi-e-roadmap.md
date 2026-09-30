@@ -1590,7 +1590,7 @@ foram reabertos na frente:
 
 Fecha o **bloco 6** e os achados 1, 3 e 8. Abre o motor 1.
 
-## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases
+## Etapa 1 — Modelo da disciplina · kernel bump · 4 fases · **em andamento (1.1 ✅ 30/09/2026, kernel 0.79.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1741,3 +1741,40 @@ exigido nem dispensado por palpite), e o que veio de memória sai com `rascunho:
   - `docs/normas/incendio-mg/README.md` lista os textos esperados e o que cada um destrava.
 - **Testes:** `blueprintIncendioClassificacao.test.ts` (11), `components/PainelIncendio.test.tsx`
   (3) e 3 casos de anel em `blueprintPressaoDaRede.test.ts`.
+
+### Etapa 1.1 — 30/09/2026 (frente `incendio-e1`, kernel 0.78.0 → 0.79.0)
+
+Decisões do usuário no começo da E1:
+- **"Hidráulicos agora, preventivos na E7".** Extintor, placa, luminária, detector e alarme nascem
+  na E7, com o comportamento deles. Aqui, só a rede de combate.
+- **"Uma fase por push".**
+
+Entregue:
+- **Disciplina `INCENDIO` e dez tipos de ponto** (como `tipoHidraulico`, o molde da PLUVIAL):
+  HIDRANTE_SIMPLES, HIDRANTE_DUPLO, MANGOTINHO, HIDRANTE_RECALQUE, SPRINKLER, VGA, CHAVE_FLUXO,
+  BOMBA_INCENDIO, BOMBA_JOCKEY e PRESSOSTATO.
+  - Gaveta, retenção, espera e conexões forçadas aceitam INCENDIO; o registro de pressão, não.
+  - Fichas com cota, DN e medidas **usuais** (ponto de partida, não norma), em dois grupos novos:
+    "Incêndio — hidrantes e chuveiros" e "Incêndio — bombas e válvulas".
+- **Sprinkler:** `Terminal.fatorK` (L/min/bar^½, inteiro ≤ 1000) e `Terminal.posicaoSprinkler`
+  (PENDENTE/EM_PE/LATERAL). São declarados, com a ficha dando K 80 e pendente quando ausentes, e
+  saem do canônico quando ausentes. Invariante `BAD_SPRINKLER`; trocar o tipo apaga os dois campos.
+- **Rede:** a cor é laranja-avermelhada (`#ea580c`, para não confundir com a água quente); cota
+  2600 e DN 65 são os de partida; as conexões derivadas e as pontas abertas valem para a nova rede.
+- **IFC:**
+  - hidrante, mangotinho, recalque e sprinkler viram `IfcFireSuppressionTerminal` (FIREHYDRANT,
+    HOSEREEL, BREECHINGINLET, SPRINKLER);
+  - VGA vira `IfcValve` (USERDEFINED);
+  - chave de fluxo e pressostato viram `IfcSensor` (FLOWSENSOR, PRESSURESENSOR);
+  - as bombas viram `IfcPump`;
+  - o sistema é `.FIREPROTECTION.`.
+
+  Tudo lido de volta pelo web-ifc. A frase "NÃO CONTÉM … incêndio" (achado 5) passou a dizer o que
+  o arquivo contém; o painel de versões e o teste que fixava a frase foram atualizados juntos.
+- **Tela:** o menu "Incêndio" (família própria: tubulação, hidrantes/chuveiros, bombas/válvulas)
+  entra no grupo "Rede e peças" da aba Incêndio.
+- **Ritual do bump:** goldens 7/7 ainda em 0.78.0; depois do bump, só os seis hashes; 22 pinos de
+  versão trocados por script; `kernel.bundle.mjs` regerado.
+- **Testes:** `blueprintIncendioTipos.test.ts` (10 casos). A taxonomia hidráulica aceita os grupos
+  de incêndio, e a contagem de cores distintas passou de 6 para 7.
+

@@ -145,7 +145,7 @@ export interface ConexoesDoModelo {
   pontasAbertas: PontaAberta[];
 }
 
-const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
+const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'INCENDIO'];
 /** As redes por gravidade, que chegam a CAIXAS enterradas (E6.1: a pluvial também). */
 const POR_GRAVIDADE: readonly DisciplinaDeRede[] = ['ESGOTO', 'PLUVIAL'];
 

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.78.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.79.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -655,7 +655,20 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "CONEXAO_JOELHO_45",
   "CONEXAO_TE",
   "CONEXAO_LUVA",
-  "CONEXAO_REDUCAO"
+  "CONEXAO_REDUCAO",
+  // 30/09/2026 (incêndio E1.1): a rede de combate a incêndio. Os PREVENTIVOS
+  // (extintor, placa, luminária de emergência, detector, alarme) não são pontos
+  // hidráulicos e nascem na E7, com o comportamento deles.
+  "HIDRANTE_SIMPLES",
+  "HIDRANTE_DUPLO",
+  "MANGOTINHO",
+  "HIDRANTE_RECALQUE",
+  "SPRINKLER",
+  "VGA",
+  "CHAVE_FLUXO",
+  "BOMBA_INCENDIO",
+  "BOMBA_JOCKEY",
+  "PRESSOSTATO"
 ];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
@@ -2122,6 +2135,9 @@ function projetar(model) {
       // E4.2 (0.64.0): só quando declarados — SUPERIOR e PRISMA não se gravam.
       papelReservatorio: t.papelReservatorio ?? void 0,
       formaReservatorio: t.formaReservatorio ?? void 0,
+      // Incêndio E1.1 (0.79.0): só quando declarados — o K e a posição da ficha não se gravam.
+      fatorK: t.fatorK ?? void 0,
+      posicaoSprinkler: t.posicaoSprinkler ?? void 0,
       larguraMm: t.larguraMm ?? void 0,
       alturaMm: t.alturaMm ?? void 0,
       profundidadeMm: t.profundidadeMm ?? void 0,
@@ -2864,6 +2880,8 @@ function modelFromCanonicalPayload(payload) {
       volumeL: t.volumeL ?? null,
       papelReservatorio: t.papelReservatorio ?? null,
       formaReservatorio: t.formaReservatorio ?? null,
+      fatorK: t.fatorK ?? null,
+      posicaoSprinkler: t.posicaoSprinkler ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
@@ -3066,7 +3084,7 @@ function extensaoVerticalDaCaixa(t) {
   }
   return c.cotaE === "FUNDO" ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
-var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL"];
+var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL", "INCENDIO"];
 var POR_GRAVIDADE = ["ESGOTO", "PLUVIAL"];
 function fazerChave(niveis) {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
@@ -4385,7 +4403,8 @@ var ROTULO_DA_DISCIPLINA = {
   AGUA_QUENTE: "\xC1gua quente",
   ESGOTO: "Esgoto",
   MECANICA: "Mec\xE2nica",
-  PLUVIAL: "\xC1guas pluviais"
+  PLUVIAL: "\xC1guas pluviais",
+  INCENDIO: "Inc\xEAndio"
 };
 function comprimentoDoTrecho(t) {
   const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
@@ -5100,7 +5119,8 @@ var COBERTURA_IFC = [
   'APROVA\xC7\xC3O: quando a revis\xE3o foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash \u2014 \xE9 o par (o que foi aprovado, quem aprovou) que vale. Revis\xE3o que n\xE3o passou por aprova\xE7\xE3o N\xC3O menciona o assunto: dizer "n\xE3o aprovado" afirmaria que algu\xE9m olhou e recusou.',
   "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o, tamb\xE9m como marca de lugar: no esquema IFC4 (o padr\xE3o) sai IfcFlowController \u2014 IfcDistributionBoard, o exato, n\xE3o existe no IFC4 e os leitores n\xE3o o leem \u2014; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard (.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege \u2014, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por tipo (fase, neutro, retorno, terra) e se\xE7\xE3o de condutor do circuito, SEM geometria (o cabo corre dentro do eletroduto), com o comprimento total em Qto_CableSegmentBaseQuantities \u2014 o mesmo do quantitativo. Pset_OpuraEletrica separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista escolheu (tens\xE3o, liga\xE7\xE3o, fase, disjuntor, curva, se\xE7\xE3o, DPS, Icn); _Calculada \xE9 conta do pr\xE9-dimensionamento com as hip\xF3teses do estudo (IB, demanda do quadro); _Derivados \xE9 o que o motor de fia\xE7\xE3o deriva (a composi\xE7\xE3o dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon (normativo) s\xF3 leva FATO: RatedVoltage = a tens\xE3o declarada do circuito, e HasProtectiveEarth nas tomadas de uso geral e espec\xEDfico. N\xC3O CONT\xC9M registro, nem dimensionamento hidr\xE1ulico: bitola e cota das redes de \xE1gua e esgoto s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de perda de carga.",
   "CONT\xC9M guarda-corpos e corrim\xE3os (IfcRailing .GUARDRAIL. / .HANDRAIL.): um s\xF3lido por trecho da polilinha \u2014 50 mm de espessura, na altura declarada, apoiado no piso do pavimento \u2014, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura \xE9 MARCA DE LUGAR, n\xE3o perfil: o desenho sabe onde a prote\xE7\xE3o est\xE1 e quanto mede, n\xE3o o desenho do gradil.",
-  "N\xC3O CONT\xC9M ar-condicionado, g\xE1s nem inc\xEAndio.",
+  "CONT\xC9M a rede de inc\xEAndio desenhada (desde 30/09/2026): tubula\xE7\xE3o como IfcPipeSegment no sistema .FIREPROTECTION.; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal; VGA como IfcValve; chave de fluxo e pressostato como IfcSensor; bombas como IfcPump. N\xC3O CONT\xC9M os preventivos (extintor, sinaliza\xE7\xE3o, ilumina\xE7\xE3o de emerg\xEAncia, detec\xE7\xE3o e alarme), nem c\xE1lculo hidr\xE1ulico de inc\xEAndio.",
+  "N\xC3O CONT\xC9M ar-condicionado nem g\xE1s.",
   "N\xC3O CONT\xC9M ARMADURA. Nenhuma barra de a\xE7o, estribo ou cobrimento \u2014 a estrutura aqui \xE9 s\xF3 a forma do concreto.",
   'CONT\xC9M tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de cat\xE1logo), com IfcRelDefinesByType ligando as inst\xE2ncias \u2014 inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma fam\xEDlia. O nome do tipo \xE9 o de projeto ("P1"); o item de cat\xE1logo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
@@ -6073,13 +6093,15 @@ var SISTEMA_IFC = {
   AGUA_FRIA: ".DOMESTICCOLDWATER.",
   AGUA_QUENTE: ".DOMESTICHOTWATER.",
   ESGOTO: ".SEWAGE.",
-  PLUVIAL: ".STORMWATER."
+  PLUVIAL: ".STORMWATER.",
+  INCENDIO: ".FIREPROTECTION."
 };
 var CLASSE_DO_TRECHO = {
   AGUA_FRIA: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   AGUA_QUENTE: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   ESGOTO: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   PLUVIAL: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
+  INCENDIO: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   ELETRICA: { entidade: "IFCCABLECARRIERSEGMENT", predefinido: ".CONDUITSEGMENT.", qto: "Qto_CableCarrierSegmentBaseQuantities" },
   MECANICA: { entidade: "IFCDUCTSEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_DuctSegmentBaseQuantities" }
 };
@@ -6257,6 +6279,28 @@ function entidadeDoPontoHidraulico(tipo) {
     case "RESERVATORIO":
       return { entidade: "IFCTANK", predefinido: ".STORAGE." };
     case "BOMBA":
+      return { entidade: "IFCPUMP", predefinido: ".USERDEFINED." };
+    // Incêndio E1.1 (30/09/2026): IfcFireSuppressionTerminal é IFC4 de origem (nove
+    // atributos, como os demais terminais) e o enum tem os quatro: hidrante,
+    // carretel (o mangotinho), registro de recalque (BREECHINGINLET) e sprinkler.
+    case "HIDRANTE_SIMPLES":
+    case "HIDRANTE_DUPLO":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".FIREHYDRANT." };
+    case "MANGOTINHO":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".HOSEREEL." };
+    case "HIDRANTE_RECALQUE":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".BREECHINGINLET." };
+    case "SPRINKLER":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".SPRINKLER." };
+    // A VGA não tem valor no IfcValveTypeEnum; a chave de fluxo e o pressostato são sensores.
+    case "VGA":
+      return { entidade: "IFCVALVE", predefinido: ".USERDEFINED." };
+    case "CHAVE_FLUXO":
+      return { entidade: "IFCSENSOR", predefinido: ".FLOWSENSOR." };
+    case "PRESSOSTATO":
+      return { entidade: "IFCSENSOR", predefinido: ".PRESSURESENSOR." };
+    case "BOMBA_INCENDIO":
+    case "BOMBA_JOCKEY":
       return { entidade: "IFCPUMP", predefinido: ".USERDEFINED." };
     case "AQUECEDOR":
       return { entidade: "IFCBOILER", predefinido: ".WATER." };
@@ -6686,6 +6730,8 @@ var ESGOTO = "Hidr\xE1ulica \u2014 esgoto";
 var PLUVIAL = "Hidr\xE1ulica \u2014 \xE1guas pluviais";
 var REGISTROS = "Hidr\xE1ulica \u2014 registros e v\xE1lvulas";
 var CONEXOES = "Hidr\xE1ulica \u2014 conex\xF5es";
+var COMBATE = "Inc\xEAndio \u2014 hidrantes e chuveiros";
+var CASA_DE_BOMBAS = "Inc\xEAndio \u2014 bombas e v\xE1lvulas";
 var FICHA_DO_PONTO_HIDRAULICO = {
   TORNEIRA: {
     rotulo: "Torneira",
@@ -6823,8 +6869,8 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Ponto de espera",
     sigla: "PE",
     grupo: CONSUMO,
-    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0, PLUVIAL: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
+    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0, PLUVIAL: 0, INCENDIO: 1300 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75, INCENDIO: 65 },
     pesoNbr5626: 0.3,
     uhcNbr8160: 1,
     ajuda: "Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com a hip\xF3tese de um lavat\xF3rio \u2014 peso 0,3 e 1 UHC \u2014 at\xE9 se saber o aparelho."
@@ -6994,8 +7040,8 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Registro de gaveta",
     sigla: "RG",
     grupo: REGISTROS,
-    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15 },
+    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800, INCENDIO: 2600 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, INCENDIO: 65 },
     sobreOTrecho: true,
     ajuda: "Fecha o ramal do ambiente. Insere-se SOBRE um trecho de \xE1gua \u2014 clique perto dele."
   },
@@ -7012,8 +7058,8 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "V\xE1lvula de reten\xE7\xE3o",
     sigla: "VR",
     grupo: REGISTROS,
-    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15 },
+    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800, INCENDIO: 2600 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, INCENDIO: 65 },
     sobreOTrecho: true,
     ajuda: "Impede o retorno. Insere-se sobre um trecho de \xE1gua."
   },
@@ -7049,7 +7095,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Joelho 90\xB0",
     sigla: "J90",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a um joelho de 90\xB0 neste n\xF3. As conex\xF5es dos encontros de trechos s\xE3o contadas sozinhas \u2014 s\xF3 lance \xE0 m\xE3o o que o desenho n\xE3o deduz."
@@ -7058,7 +7104,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Joelho 45\xB0",
     sigla: "J45",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a um joelho de 45\xB0 neste n\xF3."
@@ -7067,7 +7113,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "T\xEA",
     sigla: "T",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a um t\xEA neste n\xF3."
@@ -7076,7 +7122,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Luva",
     sigla: "L",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a uma luva (emenda reta) neste ponto."
@@ -7085,10 +7131,106 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     rotulo: "Redu\xE7\xE3o",
     sigla: "R",
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: "For\xE7a uma redu\xE7\xE3o (mudan\xE7a de di\xE2metro) neste ponto."
+  },
+  // ─── INCÊNDIO (30/09/2026, E1.1 do roadmap de incêndio) ───────────────────
+  // Cotas, DN e medidas são PONTOS DE PARTIDA usuais (abrigo comercial, válvula
+  // na altura de manobra), não norma: os limites da NBR 13714/10897 e da IT do
+  // CBMMG entram na E2/E3/E5 com a fonte — CONFERIR NA NORMA.
+  HIDRANTE_SIMPLES: {
+    rotulo: "Hidrante simples",
+    sigla: "H",
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 1300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 900, profundidadeMm: 170, alturaMm: 600 },
+    ajuda: "Abrigo com uma v\xE1lvula angular, mangueira e esguicho. A cota \xE9 a da v\xE1lvula (altura de manobra); as medidas s\xE3o as do abrigo."
+  },
+  HIDRANTE_DUPLO: {
+    rotulo: "Hidrante duplo",
+    sigla: "HD",
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 1300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 900, profundidadeMm: 250, alturaMm: 900 },
+    ajuda: "Abrigo com duas sa\xEDdas (duas v\xE1lvulas e duas linhas de mangueira)."
+  },
+  MANGOTINHO: {
+    rotulo: "Mangotinho",
+    sigla: "MG",
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 1300 },
+    dnMinimoMm: { INCENDIO: 25 },
+    medidasMm: { larguraMm: 700, profundidadeMm: 250, alturaMm: 700 },
+    ajuda: "Mangueira semirr\xEDgida em carretel, sempre conectada \xE0 rede \u2014 oper\xE1vel por uma pessoa."
+  },
+  HIDRANTE_RECALQUE: {
+    rotulo: "Registro de recalque (passeio)",
+    sigla: "RR",
+    grupo: COMBATE,
+    // Caixa no passeio, com a tampa no nível do piso; a cota é a da conexão.
+    cotaMm: { INCENDIO: -300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 400, profundidadeMm: 600, alturaMm: 400 },
+    ajuda: "Por onde o caminh\xE3o do Corpo de Bombeiros alimenta a rede: caixa no passeio ou registro na fachada."
+  },
+  SPRINKLER: {
+    rotulo: "Chuveiro autom\xE1tico (sprinkler)",
+    sigla: "SPK",
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 2700 },
+    dnMinimoMm: { INCENDIO: 15 },
+    medidasMm: { larguraMm: 80, profundidadeMm: 80, alturaMm: 80 },
+    fatorK: 80,
+    ajuda: 'Chuveiro autom\xE1tico: abre sozinho no calor do fogo. O fator K (padr\xE3o 80 L/min/bar^\xBD, rosca \xBD") liga vaz\xE3o e press\xE3o \u2014 Q = K\xB7\u221AP; a posi\xE7\xE3o padr\xE3o \xE9 pendente.'
+  },
+  VGA: {
+    rotulo: "V\xE1lvula de governo e alarme (VGA)",
+    sigla: "VGA",
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 1200 },
+    dnMinimoMm: { INCENDIO: 100 },
+    medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 800 },
+    ajuda: "Controla e anuncia a abertura da rede de sprinklers: todo sprinkler a jusante dela pertence a ela."
+  },
+  CHAVE_FLUXO: {
+    rotulo: "Chave de fluxo",
+    sigla: "CF",
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 2600 },
+    dnMinimoMm: { INCENDIO: 50 },
+    sobreOTrecho: true,
+    ajuda: "Sinaliza \xE1gua correndo no trecho (setor de sprinklers aberto). Insere-se sobre um trecho de inc\xEAndio."
+  },
+  BOMBA_INCENDIO: {
+    rotulo: "Bomba de inc\xEAndio (principal)",
+    sigla: "BI",
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 1e3, profundidadeMm: 500, alturaMm: 600 },
+    ajuda: "A bomba principal da rede de inc\xEAndio. A escolha pela curva (vaz\xE3o \xD7 altura manom\xE9trica) vem na E4 do roadmap."
+  },
+  BOMBA_JOCKEY: {
+    rotulo: "Bomba jockey",
+    sigla: "BJ",
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 300 },
+    dnMinimoMm: { INCENDIO: 25 },
+    medidasMm: { larguraMm: 500, profundidadeMm: 300, alturaMm: 400 },
+    ajuda: "Bomba pequena que mant\xE9m a rede pressurizada e evita a partida da principal por vazamento."
+  },
+  PRESSOSTATO: {
+    rotulo: "Pressostato",
+    sigla: "PS",
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 300 },
+    dnMinimoMm: { INCENDIO: 15 },
+    sobreOTrecho: true,
+    ajuda: "Liga a bomba quando a press\xE3o da rede cai. Insere-se sobre um trecho de inc\xEAndio, junto \xE0s bombas."
   }
 };
 var ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

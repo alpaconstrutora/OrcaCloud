@@ -25,7 +25,10 @@ export type GrupoHidraulico =
   | 'Hidráulica — esgoto'
   | 'Hidráulica — águas pluviais'
   | 'Hidráulica — registros e válvulas'
-  | 'Hidráulica — conexões';
+  | 'Hidráulica — conexões'
+  // Incêndio E1.1 (30/09/2026): a rede de combate.
+  | 'Incêndio — hidrantes e chuveiros'
+  | 'Incêndio — bombas e válvulas';
 
 export interface FichaDoPontoHidraulico {
   rotulo: string;
@@ -51,6 +54,8 @@ export interface FichaDoPontoHidraulico {
    * regra geral da NBR 5626:2020 (10 kPa) — E1.3. Ausente = a regra geral.
    */
   pressaoMinimaKpa?: number;
+  /** Fator K padrão do sprinkler, L/min/bar^½ (incêndio E1.1). `Terminal.fatorK` declarado vence. */
+  fatorK?: number;
   ajuda: string;
 }
 
@@ -60,6 +65,8 @@ const ESGOTO: GrupoHidraulico = 'Hidráulica — esgoto';
 const PLUVIAL: GrupoHidraulico = 'Hidráulica — águas pluviais';
 const REGISTROS: GrupoHidraulico = 'Hidráulica — registros e válvulas';
 const CONEXOES: GrupoHidraulico = 'Hidráulica — conexões';
+const COMBATE: GrupoHidraulico = 'Incêndio — hidrantes e chuveiros';
+const CASA_DE_BOMBAS: GrupoHidraulico = 'Incêndio — bombas e válvulas';
 
 export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPontoHidraulico> = {
   TORNEIRA: {
@@ -198,8 +205,8 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Ponto de espera',
     sigla: 'PE',
     grupo: CONSUMO,
-    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0, PLUVIAL: 0 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75 },
+    cotaMm: { AGUA_FRIA: 600, AGUA_QUENTE: 600, ESGOTO: 0, PLUVIAL: 0, INCENDIO: 1300 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, ESGOTO: 40, PLUVIAL: 75, INCENDIO: 65 },
     pesoNbr5626: 0.3,
     uhcNbr8160: 1,
     ajuda: 'Ponto tampado para uso futuro (filtro, aparelho a definir). Entra na rede com a hipótese de um lavatório — peso 0,3 e 1 UHC — até se saber o aparelho.',
@@ -369,8 +376,8 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Registro de gaveta',
     sigla: 'RG',
     grupo: REGISTROS,
-    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15 },
+    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800, INCENDIO: 2600 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, INCENDIO: 65 },
     sobreOTrecho: true,
     ajuda: 'Fecha o ramal do ambiente. Insere-se SOBRE um trecho de água — clique perto dele.',
   },
@@ -387,8 +394,8 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Válvula de retenção',
     sigla: 'VR',
     grupo: REGISTROS,
-    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800 },
-    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15 },
+    cotaMm: { AGUA_FRIA: 1800, AGUA_QUENTE: 1800, INCENDIO: 2600 },
+    dnMinimoMm: { AGUA_FRIA: 20, AGUA_QUENTE: 15, INCENDIO: 65 },
     sobreOTrecho: true,
     ajuda: 'Impede o retorno. Insere-se sobre um trecho de água.',
   },
@@ -424,7 +431,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Joelho 90°',
     sigla: 'J90',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força um joelho de 90° neste nó. As conexões dos encontros de trechos são contadas sozinhas — só lance à mão o que o desenho não deduz.',
@@ -433,7 +440,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Joelho 45°',
     sigla: 'J45',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força um joelho de 45° neste nó.',
@@ -442,7 +449,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Tê',
     sigla: 'T',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força um tê neste nó.',
@@ -451,7 +458,7 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Luva',
     sigla: 'L',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força uma luva (emenda reta) neste ponto.',
@@ -460,10 +467,106 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     rotulo: 'Redução',
     sigla: 'R',
     grupo: CONEXOES,
-    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300 },
+    cotaMm: { AGUA_FRIA: 2200, AGUA_QUENTE: 2200, ESGOTO: -150, PLUVIAL: -300, INCENDIO: 2600 },
     dnMinimoMm: {},
     sobreOTrecho: true,
     ajuda: 'Força uma redução (mudança de diâmetro) neste ponto.',
+  },
+  // ─── INCÊNDIO (30/09/2026, E1.1 do roadmap de incêndio) ───────────────────
+  // Cotas, DN e medidas são PONTOS DE PARTIDA usuais (abrigo comercial, válvula
+  // na altura de manobra), não norma: os limites da NBR 13714/10897 e da IT do
+  // CBMMG entram na E2/E3/E5 com a fonte — CONFERIR NA NORMA.
+  HIDRANTE_SIMPLES: {
+    rotulo: 'Hidrante simples',
+    sigla: 'H',
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 1300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 900, profundidadeMm: 170, alturaMm: 600 },
+    ajuda: 'Abrigo com uma válvula angular, mangueira e esguicho. A cota é a da válvula (altura de manobra); as medidas são as do abrigo.',
+  },
+  HIDRANTE_DUPLO: {
+    rotulo: 'Hidrante duplo',
+    sigla: 'HD',
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 1300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 900, profundidadeMm: 250, alturaMm: 900 },
+    ajuda: 'Abrigo com duas saídas (duas válvulas e duas linhas de mangueira).',
+  },
+  MANGOTINHO: {
+    rotulo: 'Mangotinho',
+    sigla: 'MG',
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 1300 },
+    dnMinimoMm: { INCENDIO: 25 },
+    medidasMm: { larguraMm: 700, profundidadeMm: 250, alturaMm: 700 },
+    ajuda: 'Mangueira semirrígida em carretel, sempre conectada à rede — operável por uma pessoa.',
+  },
+  HIDRANTE_RECALQUE: {
+    rotulo: 'Registro de recalque (passeio)',
+    sigla: 'RR',
+    grupo: COMBATE,
+    // Caixa no passeio, com a tampa no nível do piso; a cota é a da conexão.
+    cotaMm: { INCENDIO: -300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 400, profundidadeMm: 600, alturaMm: 400 },
+    ajuda: 'Por onde o caminhão do Corpo de Bombeiros alimenta a rede: caixa no passeio ou registro na fachada.',
+  },
+  SPRINKLER: {
+    rotulo: 'Chuveiro automático (sprinkler)',
+    sigla: 'SPK',
+    grupo: COMBATE,
+    cotaMm: { INCENDIO: 2700 },
+    dnMinimoMm: { INCENDIO: 15 },
+    medidasMm: { larguraMm: 80, profundidadeMm: 80, alturaMm: 80 },
+    fatorK: 80,
+    ajuda: 'Chuveiro automático: abre sozinho no calor do fogo. O fator K (padrão 80 L/min/bar^½, rosca ½") liga vazão e pressão — Q = K·√P; a posição padrão é pendente.',
+  },
+  VGA: {
+    rotulo: 'Válvula de governo e alarme (VGA)',
+    sigla: 'VGA',
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 1200 },
+    dnMinimoMm: { INCENDIO: 100 },
+    medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 800 },
+    ajuda: 'Controla e anuncia a abertura da rede de sprinklers: todo sprinkler a jusante dela pertence a ela.',
+  },
+  CHAVE_FLUXO: {
+    rotulo: 'Chave de fluxo',
+    sigla: 'CF',
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 2600 },
+    dnMinimoMm: { INCENDIO: 50 },
+    sobreOTrecho: true,
+    ajuda: 'Sinaliza água correndo no trecho (setor de sprinklers aberto). Insere-se sobre um trecho de incêndio.',
+  },
+  BOMBA_INCENDIO: {
+    rotulo: 'Bomba de incêndio (principal)',
+    sigla: 'BI',
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 300 },
+    dnMinimoMm: { INCENDIO: 65 },
+    medidasMm: { larguraMm: 1000, profundidadeMm: 500, alturaMm: 600 },
+    ajuda: 'A bomba principal da rede de incêndio. A escolha pela curva (vazão × altura manométrica) vem na E4 do roadmap.',
+  },
+  BOMBA_JOCKEY: {
+    rotulo: 'Bomba jockey',
+    sigla: 'BJ',
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 300 },
+    dnMinimoMm: { INCENDIO: 25 },
+    medidasMm: { larguraMm: 500, profundidadeMm: 300, alturaMm: 400 },
+    ajuda: 'Bomba pequena que mantém a rede pressurizada e evita a partida da principal por vazamento.',
+  },
+  PRESSOSTATO: {
+    rotulo: 'Pressostato',
+    sigla: 'PS',
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 300 },
+    dnMinimoMm: { INCENDIO: 15 },
+    sobreOTrecho: true,
+    ajuda: 'Liga a bomba quando a pressão da rede cai. Insere-se sobre um trecho de incêndio, junto às bombas.',
   },
 };
 

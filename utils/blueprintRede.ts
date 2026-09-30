@@ -42,6 +42,8 @@ export const COTA_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   MECANICA: 2600,
   // O condutor horizontal enterrado, a caminho da caixa de areia (E6.1).
   PLUVIAL: -300,
+  // Incêndio (E1.1): a tubulação corre aparente ou no forro, junto ao teto.
+  INCENDIO: 2600,
 };
 
 /**
@@ -57,6 +59,8 @@ export const BITOLA_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   ESGOTO: 100,
   MECANICA: 200,
   PLUVIAL: 100,
+  // O ramal do hidrante (DN 65 — 2½"); a coluna e o sprinkler ajustam.
+  INCENDIO: 65,
 };
 
 /**
@@ -78,6 +82,8 @@ export const COTA_TERMINAL_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   MECANICA: 2600,
   // Ralo e caixa de areia no piso (E6.1).
   PLUVIAL: 0,
+  // A válvula do hidrante na parede (E1.1) — ponto de partida, a ficha de cada tipo manda.
+  INCENDIO: 1300,
 };
 
 /** Quanto uma ponta de trecho pode estar longe do terminal e ainda encaixar. */
@@ -284,6 +290,8 @@ export const COR_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   MECANICA: '#0d9488',
   // Verde-limão (E6.1): mais claro que o azul da fria e o verde da mecânica, mais escuro que o amarelo.
   PLUVIAL: '#65a30d',
+  // Laranja-avermelhado (incêndio E1.1): o vermelho puro já é a água quente.
+  INCENDIO: '#ea580c',
 };
 
 /**
@@ -331,6 +339,7 @@ export const NOME_DO_TRECHO: Record<DisciplinaDeRede, string> = {
   ESGOTO: 'Tubulação de esgoto',
   MECANICA: 'Duto',
   PLUVIAL: 'Tubulação de águas pluviais',
+  INCENDIO: 'Tubulação de incêndio',
 };
 
 export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
@@ -340,6 +349,7 @@ export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   ESGOTO: 'Esgoto',
   MECANICA: 'Mecânica',
   PLUVIAL: 'Águas pluviais',
+  INCENDIO: 'Incêndio',
 };
 
 /** O comprimento REAL do trecho, em mm — em três dimensões. Ver `Trecho`. */

@@ -65,6 +65,7 @@ import {
   type SecaoDeCalha,
   type PapelDoReservatorio,
   type FormaDoReservatorio,
+  type PosicaoDoSprinkler,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -873,6 +874,9 @@ function projetar(model: BlueprintModel): {
       // E4.2 (0.64.0): só quando declarados — SUPERIOR e PRISMA não se gravam.
       papelReservatorio: t.papelReservatorio ?? undefined,
       formaReservatorio: t.formaReservatorio ?? undefined,
+      // Incêndio E1.1 (0.79.0): só quando declarados — o K e a posição da ficha não se gravam.
+      fatorK: t.fatorK ?? undefined,
+      posicaoSprinkler: t.posicaoSprinkler ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -1557,6 +1561,9 @@ export interface CanonicalPayload {
     /** Papel e forma do reservatório. Ausentes sob kernel < 0.64.0 e quando não declarados. */
     papelReservatorio?: string;
     formaReservatorio?: string;
+    /** Fator K e posição do sprinkler. Ausentes sob kernel < 0.79.0 e quando não declarados. */
+    fatorK?: number;
+    posicaoSprinkler?: string;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
     larguraMm?: number;
     alturaMm?: number;
@@ -2311,6 +2318,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       volumeL: t.volumeL ?? null,
       papelReservatorio: (t.papelReservatorio as PapelDoReservatorio | undefined) ?? null,
       formaReservatorio: (t.formaReservatorio as FormaDoReservatorio | undefined) ?? null,
+      fatorK: t.fatorK ?? null,
+      posicaoSprinkler: (t.posicaoSprinkler as PosicaoDoSprinkler | undefined) ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

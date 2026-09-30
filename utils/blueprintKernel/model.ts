@@ -2359,7 +2359,7 @@ export function nomeDoTipoDeNucleo(tipo: TipoDeNucleo): string {
  * ficam de fora só porque ninguém os pediu ainda. Acrescentar um valor é
  * acrescentar um valor — não é mexer no modelo.
  */
-export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA' | 'PLUVIAL';
+export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA' | 'PLUVIAL' | 'INCENDIO';
 
 /** As disciplinas, em lista — para os invariantes recusarem valor inventado. */
 export const DISCIPLINAS: DisciplinaDeRede[] = [
@@ -2373,6 +2373,9 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
   // PLUVIAL (29/09/2026, roadmap hidrossanitário E6.1): calhas, condutores e
   // caixas de areia — a água da chuva, rede independente do esgoto (NBR 10844).
   'PLUVIAL',
+  // INCÊNDIO (30/09/2026, roadmap de incêndio E1.1): a rede de combate — hidrantes,
+  // mangotinhos, sprinklers, VGA, bombas — num sistema só (a rede combinada é a mesma rede).
+  'INCENDIO',
 ];
 
 /**
@@ -2696,6 +2699,19 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'CONEXAO_TE',
   'CONEXAO_LUVA',
   'CONEXAO_REDUCAO',
+  // 30/09/2026 (incêndio E1.1): a rede de combate a incêndio. Os PREVENTIVOS
+  // (extintor, placa, luminária de emergência, detector, alarme) não são pontos
+  // hidráulicos e nascem na E7, com o comportamento deles.
+  'HIDRANTE_SIMPLES',
+  'HIDRANTE_DUPLO',
+  'MANGOTINHO',
+  'HIDRANTE_RECALQUE',
+  'SPRINKLER',
+  'VGA',
+  'CHAVE_FLUXO',
+  'BOMBA_INCENDIO',
+  'BOMBA_JOCKEY',
+  'PRESSOSTATO',
 ] as const;
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -2706,13 +2722,24 @@ export type PapelDoReservatorio = (typeof PAPEIS_DO_RESERVATORIO)[number];
 /** A forma do reservatório (E4.2). */
 export const FORMAS_DO_RESERVATORIO = ['PRISMA', 'CILINDRO'] as const;
 export type FormaDoReservatorio = (typeof FORMAS_DO_RESERVATORIO)[number];
+/**
+ * A POSIÇÃO do sprinkler (incêndio E1.1): pendente (defletor para baixo, sob o
+ * forro), em pé (upright, sobre a tubulação aparente) e lateral (na parede).
+ */
+export const POSICOES_DO_SPRINKLER = ['PENDENTE', 'EM_PE', 'LATERAL'] as const;
+export type PosicaoDoSprinkler = (typeof POSICOES_DO_SPRINKLER)[number];
+/** Fator K do sprinkler em L/min/bar^½ — inteiro; o padrão da ficha vale quando ausente. */
+export const FATOR_K_MAXIMO = 1000;
 
 const AF_AQ: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE'];
 const AF_AQ_ESG: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
 const ESG: DisciplinaDeRede[] = ['ESGOTO'];
 const PLU: DisciplinaDeRede[] = ['PLUVIAL'];
 // A espera e as conexões forçadas servem a qualquer rede de tubo — a pluvial também (E6.1).
-const TUBOS: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
+const TUBOS: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'INCENDIO'];
+const INC: DisciplinaDeRede[] = ['INCENDIO'];
+// Gaveta e retenção também são peças da rede de incêndio (sucção, recalque, colunas).
+const AF_AQ_INC: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'INCENDIO'];
 
 /** Em que disciplinas cada tipo hidráulico pode existir — a invariante recusa o resto. */
 export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, DisciplinaDeRede[]> = {
@@ -2751,9 +2778,9 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   FILTRO_ANAEROBIO: ESG,
   SUMIDOURO: ESG,
   CAIXA_GORDURA: ESG,
-  REGISTRO_GAVETA: AF_AQ,
+  REGISTRO_GAVETA: AF_AQ_INC,
   REGISTRO_PRESSAO: AF_AQ,
-  VALVULA_RETENCAO: AF_AQ,
+  VALVULA_RETENCAO: AF_AQ_INC,
   REGISTRO_ESFERA: AF_AQ,
   VRP: AF_AQ,
   HIDROMETRO: ['AGUA_FRIA'],
@@ -2762,6 +2789,16 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   CONEXAO_TE: TUBOS,
   CONEXAO_LUVA: TUBOS,
   CONEXAO_REDUCAO: TUBOS,
+  HIDRANTE_SIMPLES: INC,
+  HIDRANTE_DUPLO: INC,
+  MANGOTINHO: INC,
+  HIDRANTE_RECALQUE: INC,
+  SPRINKLER: INC,
+  VGA: INC,
+  CHAVE_FLUXO: INC,
+  BOMBA_INCENDIO: INC,
+  BOMBA_JOCKEY: INC,
+  PRESSOSTATO: INC,
 };
 
 export interface Terminal {
@@ -2866,6 +2903,14 @@ export interface Terminal {
    * profundidade × altura; CILINDRO, o diâmetro = largura. Ausente = PRISMA.
    */
   formaReservatorio?: FormaDoReservatorio | null;
+  /**
+   * SPRINKLER (incêndio E1.1, 30/09/2026) — só em `SPRINKLER`. O fator K
+   * declarado (L/min/bar^½, inteiro) e a posição. Ausentes = os da ficha (K 80,
+   * pendente); omitidos do canônico quando ausentes. É o K que liga vazão e
+   * pressão: Q = K·√P.
+   */
+  fatorK?: number | null;
+  posicaoSprinkler?: PosicaoDoSprinkler | null;
   /**
    * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
    *
@@ -5666,6 +5711,18 @@ export function assertModelInvariants(model: BlueprintModel): void {
       }
       if (t.formaReservatorio != null && !(FORMAS_DO_RESERVATORIO as readonly string[]).includes(t.formaReservatorio)) {
         throw new KernelError('BAD_RESERVOIR', `Forma de reservatório inválida em ${t.id}: ${t.formaReservatorio}`);
+      }
+    }
+    // Sprinkler (incêndio E1.1): K e posição só no sprinkler, e só do vocabulário.
+    if (t.fatorK != null || t.posicaoSprinkler != null) {
+      if (t.tipoHidraulico !== 'SPRINKLER') {
+        throw new KernelError('BAD_SPRINKLER', `Terminal ${t.id} não é sprinkler e não pode ter fator K nem posição`);
+      }
+      if (t.fatorK != null && (!Number.isInteger(t.fatorK) || t.fatorK <= 0 || t.fatorK > FATOR_K_MAXIMO)) {
+        throw new KernelError('BAD_SPRINKLER', `Fator K inválido em ${t.id}: ${t.fatorK}`);
+      }
+      if (t.posicaoSprinkler != null && !(POSICOES_DO_SPRINKLER as readonly string[]).includes(t.posicaoSprinkler)) {
+        throw new KernelError('BAD_SPRINKLER', `Posição de sprinkler inválida em ${t.id}: ${t.posicaoSprinkler}`);
       }
     }
   }

@@ -23,6 +23,7 @@ import {
   type SecaoDeCalha,
   type PapelDoReservatorio,
   type FormaDoReservatorio,
+  type PosicaoDoSprinkler,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   CorrenteDiferencialMa,
@@ -713,6 +714,9 @@ export type Command =
       /** Papel e forma (E4.2) — só em `RESERVATORIO`; ignorados nos demais. */
       papelReservatorio?: PapelDoReservatorio | null;
       formaReservatorio?: FormaDoReservatorio | null;
+      /** Fator K e posição (incêndio E1.1) — só em `SPRINKLER`; ignorados nos demais. */
+      fatorK?: number | null;
+      posicaoSprinkler?: PosicaoDoSprinkler | null;
       /** Medidas já conhecidas ao criar (E7.1: o tanque séptico dimensionado). Ausentes = as da família. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -752,6 +756,9 @@ export type Command =
       /** Papel e forma do reservatório (E4.2). `null` volta ao padrão (SUPERIOR, PRISMA). */
       papelReservatorio?: PapelDoReservatorio | null;
       formaReservatorio?: FormaDoReservatorio | null;
+      /** Fator K e posição do sprinkler (incêndio E1.1). `null` volta ao da ficha. */
+      fatorK?: number | null;
+      posicaoSprinkler?: PosicaoDoSprinkler | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -3400,6 +3407,8 @@ function aplicarSemHash(
             : {}),
           ...(command.papelReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { papelReservatorio: command.papelReservatorio } : {}),
           ...(command.formaReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { formaReservatorio: command.formaReservatorio } : {}),
+          ...(command.fatorK != null && command.tipoHidraulico === 'SPRINKLER' ? { fatorK: Math.round(command.fatorK) } : {}),
+          ...(command.posicaoSprinkler != null && command.tipoHidraulico === 'SPRINKLER' ? { posicaoSprinkler: command.posicaoSprinkler } : {}),
         },
       ];
       // E7.1: as medidas, só quando informadas — a chave ausente é o estado de todo terminal anterior.
@@ -3454,6 +3463,13 @@ function aplicarSemHash(
         if (terminal.volumeL != null) terminal.volumeL = null;
         if (terminal.papelReservatorio != null) terminal.papelReservatorio = null;
         if (terminal.formaReservatorio != null) terminal.formaReservatorio = null;
+      }
+      if (command.fatorK !== undefined) terminal.fatorK = command.fatorK == null ? null : Math.round(command.fatorK);
+      if (command.posicaoSprinkler !== undefined) terminal.posicaoSprinkler = command.posicaoSprinkler ?? null;
+      // Deixar de ser sprinkler leva K e posição juntos — a invariante recusaria.
+      if (terminal.tipoHidraulico !== 'SPRINKLER') {
+        if (terminal.fatorK != null) terminal.fatorK = null;
+        if (terminal.posicaoSprinkler != null) terminal.posicaoSprinkler = null;
       }
       aplicarMedidas(terminal, command);
       diff.updated.push(terminal.id);

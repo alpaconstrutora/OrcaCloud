@@ -929,8 +929,9 @@ export default function PainelVersoes({
               contém e o que não contém. O IFC é de <strong>coordenação</strong>: leva
               portas e janelas com vão, propriedades e quantidades, e cada elemento mantém
               o mesmo identificador entre versões, escada, forro e as instalações (redes,
-              pontos, quadros, circuitos e, na elétrica, os cabos por seção);{' '}
-              <strong>não leva</strong> armadura, ar-condicionado, gás nem incêndio.
+              pontos, quadros, circuitos e, na elétrica, os cabos por seção, inclusive a
+              rede de incêndio);{' '}
+              <strong>não leva</strong> armadura, ar-condicionado, gás nem os preventivos de incêndio.
             </p>
 
             {/* ── PUBLICAR NO GED ───────────────────────────────────────────

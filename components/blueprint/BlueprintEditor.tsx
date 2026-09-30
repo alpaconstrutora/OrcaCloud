@@ -10498,6 +10498,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         )}
         {aba === 'incendio' && !emVista && (
           <>
+            {/* INCÊNDIO E1.1 (30/09/2026): a rede de combate — tubulação e peças. */}
+            <GrupoDoRibbon rotulo="Rede e peças">
+              <MenuComponentes
+                tool={editor.tool}
+                tipoAbertura={tipoAbertura}
+                tipoEstrutural={tipoEstrutural}
+                tipoCirculacao={tipoCirculacao}
+                tipoDeNucleo={tipoDeNucleo}
+                disciplinaDoNucleo={disciplinaDoNucleo}
+                tipoDeVaga={tipoDeVaga}
+                tipoDeComponente={tipoDeComponente}
+                disciplinaDeRede={disciplinaDeRede}
+                tipoDePontoEletrico={tipoDePontoEletrico}
+                tipoDeInterruptor={tipoDeInterruptor}
+                tipoDePontoHidraulico={tipoDePontoHidraulico}
+                familia="INCENDIO"
+                rotulo="Incêndio"
+                onEscolher={escolherComponente}
+              />
+            </GrupoDoRibbon>
             {/* INCÊNDIO (30/09/2026, roadmap E0): o que o prédio exige, antes de qualquer peça. */}
             <GrupoDoRibbon rotulo="Classificação">
               <BotaoDoRibbon

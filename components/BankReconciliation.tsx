@@ -1489,15 +1489,36 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         }
     };
 
-    const handleConfirmMatch = async (bankTxId: string, internalTxId?: string) => {
+    /** Concilia (ou confirma sem título). Devolve se deu certo — quem precisa (a Central)
+     *  transforma `false` em erro; os botões da Pendentes só disparam. */
+    const handleConfirmMatch = async (bankTxId: string, internalTxId?: string): Promise<boolean> => {
         try {
             const orgToUse = effectiveOrgId || organizationId;
             await bankReconciliationService.confirmTransaction(bankTxId, internalTxId, orgToUse || undefined);
+            // §22: atualiza o estado local em vez de recarregar a conta inteira. Até
+            // 01/10/2026 cada clique recarregava ~5.700 extratos + lançamentos + projetos +
+            // sugestões (5–15 s na Sicredi), e "Conciliar alta confiança" fazia isso UMA VEZ
+            // POR PAR. A conciliação em si leva 5–370 ms no banco (medido).
+            const novoStatus: BankTransactionStatus = internalTxId ? 'MATCHED' : 'CONFIRMED';
+            setBankTransactions(prev => (activeView === 'statement' || !internalTxId)
+                // Extrato mostra todos os status, e "confirmar sem título" (CONFIRMED) continua
+                // pendente de vínculo: a linha fica, só muda o status.
+                ? prev.map(t => (t.id === bankTxId ? { ...t, status: novoStatus } : t))
+                : prev.filter(t => t.id !== bankTxId));
+            if (internalTxId) setInternalTransactions(prev => prev.filter(t => t.id !== internalTxId));
+            // Sugestões que apontavam para o extrato OU para o título já usado somem.
+            setSuggestions(prev => prev.filter(s =>
+                s.bank_transaction_id !== bankTxId && (!internalTxId || s.candidate_internal_transaction_id !== internalTxId)));
+            setSelectedBankTxIds(prev => { if (!prev.has(bankTxId)) return prev; const n = new Set(prev); n.delete(bankTxId); return n; });
+            if (internalTxId) setSelectedInternalTxIds(prev => { if (!prev.has(internalTxId)) return prev; const n = new Set(prev); n.delete(internalTxId); return n; });
             setSelectedBankTxId(null);
-            await loadTransactions();
-            await loadStats();
+            void loadStats(); // contadores em segundo plano: não seguram o clique
+            return true;
         } catch (error) {
             console.error('Error confirming match:', error);
+            setActionFeedback({ message: 'Não foi possível conciliar: ' + errorMessage(error, 'erro desconhecido'), type: 'error' });
+            setTimeout(() => setActionFeedback(null), 8000);
+            return false;
         }
     };
 
@@ -3188,7 +3209,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     selectedAccountId={selectedAccountId}
                     suggestions={suggestions as never}
                     bankTransactions={bankTransactions as never}
-                    onConfirm={handleConfirmMatch}
+                    onConfirm={async (b, i) => { if (!(await handleConfirmMatch(b, i))) throw new Error('Não foi possível conciliar.'); }}
                     onReject={handleRejectSuggestion}
                     onReload={async () => { await loadTransactions(); await loadStats(); await loadRules(); }}
                     categories={uniqueCategories}

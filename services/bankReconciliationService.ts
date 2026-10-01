@@ -1170,6 +1170,9 @@ export const bankReconciliationService = {
         // aqui (a baixa manual dispara o mesmo evento em payableService). Fora
         // da transação da RPC de propósito — o motor é best-effort e não pode
         // desfazer uma conciliação já gravada.
+        // Continua com `await` de propósito: o contrato do P2P (processosEventosP2P.test.ts) é
+        // "quando createMatch termina, o evento já saiu". Custa ~2 leituras; o que deixava o
+        // clique lento era a recarga da conta inteira, tirada em handleConfirmMatch.
         try {
             await processService.triggerForTransaction(internalTxId, 'internal_transaction.paid');
         } catch (e) {
@@ -1274,8 +1277,10 @@ export const bankReconciliationService = {
     async confirmTransaction(bankTxId: string, internalTxId?: string, organizationId?: string, note?: string) {
         if (internalTxId) {
             await this.createMatch(bankTxId, internalTxId, 'MANUAL', 100);
-            // Aprende a associação extrato→contraparte para reconhecer nos próximos matches
-            if (organizationId) await this.learnAliasFromMatch(bankTxId, internalTxId, organizationId);
+            // Aprende a associação extrato→contraparte para reconhecer nos próximos matches.
+            // Sem `await`: é melhor-esforço (já engole o próprio erro) e eram 3 leituras + 1
+            // gravação segurando cada clique de "Conciliar".
+            if (organizationId) void this.learnAliasFromMatch(bankTxId, internalTxId, organizationId);
             return;
         }
 

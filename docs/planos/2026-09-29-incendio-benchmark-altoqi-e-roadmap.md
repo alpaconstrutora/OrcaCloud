@@ -1664,7 +1664,7 @@ Fecha os **A** das seções 22 e 27.
 
 Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
-## Etapa 8 — Documentação · sem bump · 4 fases · **em andamento (8.1, 8.2 e 8.3 ✅ 01/10/2026)**
+## Etapa 8 — Documentação · sem bump · 4 fases · **✅ concluída 01/10/2026 (8.1–8.4)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2568,4 +2568,55 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   E8.1 e da E8.2 ganharam a folha nova. Suíte com 6.730 testes: 6.697 + 33 pulados. Na 1ª e na 2ª
   rodada o worker do `BlueprintEditor.test.tsx` caiu (pending); sozinho ele dá 193/193, e na 3ª
   rodada a suíte inteira fechou. Build ok.
+
+### Etapa 8.4 — 01/10/2026 (frente `incendio-e8`, sem bump, 1 migration)
+
+- **`utils/blueprintIncendioExecutivo.ts`:**
+  - **`analisesDeIncendio`:** classificação e exigências (E0), cálculo hidráulico e bomba
+    (`calculoDoEstudo`), saídas, rota de fuga, extintores, sinalização, iluminação e alarme. Roda
+    UMA vez e os três documentos leem dela; são as mesmas funções das gavetas.
+  - **`memorialDeCalculoIncendio`:**
+    - classificação e as medidas exigidas, com fonte e o aviso de rascunho;
+    - premissas hidráulicas e a planilha de pressões (resumo, trechos com o caminho crítico e
+      peças), que entra IGUAL à da E8.2, como o teste confere;
+    - critério dos sprinklers, bomba (projeto, operação, 150 %, shutoff, NPSH, pressostatos) e
+      reserva técnica;
+    - saídas (população, larguras, escadas), percurso de fuga por ambiente, extintores, iluminação,
+      sinalização, detecção e alarme.
+    - Cada seção só aparece se o sistema existe ou é exigido.
+  - **`memorialDescritivoIncendio`:** objeto, normas, sistemas com as peças do desenho (extintores
+    por agente e capacidade, placas por código), tubulação por material × DN com o comprimento, as
+    **medidas exigidas que o desenho não modela** (acesso de viatura, brigada, compartimentação…)
+    "a cargo do responsável", e execução e ensaios.
+  - **`verificacoesIncendio`:**
+    - responsável e ART, ocupação definida, regulamento com tabela;
+    - cada medida exigida que o desenho modela tem de ter peça lançada;
+    - **toda a conferência da gaveta de cálculo** (`conferenciaDeIncendio`, com a reserva técnica),
+      e o teste confere que é a MESMA;
+    - larguras e proteção das escadas, percurso, extintores (alcance e capacidade), sinalização,
+      iluminação e alarme.
+    - Itens NÃO AVALIADOS (sistema que não há) não entram.
+  - **`hashDaBaseIncendio`** (desenho + premissas) e **`memorialExecutivoIncendio`** (capa:
+    responsável, base, verificações, declaração, e os dois memoriais).
+    - ⚠️ As tabelas CONFERIR NA NORMA/IT **não bloqueiam a emissão**: a DECLARAÇÃO diz que o
+      responsável as conferiu no texto vigente e projetou as medidas que o desenho não modela.
+      Bloquear deixaria a emissão inutilizável até o texto das ITs ser colado, e quem emite é o
+      responsável.
+- **Tela:** aba Incêndio → **Documentos → "Memoriais e ART"**. Os memoriais vêm em PDF/DOCX no
+  `PainelMemoriaisHidro`, com textos próprios. A emissão usa o `PainelHidroExecutivo`,
+  parametrizado com `textos` (rótulos dos grupos, conferência, disciplina, testId); o hidro segue
+  igual. Na disciplina `INCENDIO`, o fluxo de `useBlueprintProjetoExecutivo` é o mesmo.
+- **Migration `aplicar_20271001000030_blueprint_incendio_executivo.sql`:** o CHECK de
+  `blueprint_study_projeto_executivo.disciplina` passa a aceitar `INCENDIO`. Aplicada com o OK do
+  usuário em 01/10/2026 (`db query -f`) e conferida no `pg_constraint`. A tabela tinha 0 linhas.
+- ⚠️ **PDF:** o "₂" de CO₂ virava "?" no WinAnsi, e `paraWinAnsi` agora troca por "2". O teste
+  confere que nenhum caractere do memorial descritivo vira "?". Conferido também no PDF real da
+  emissão (128 kB).
+- **Testes:**
+  - `blueprintIncendioExecutivo.test.ts` (8): a planilha igual à da tela, nenhuma seção hidráulica
+    sem rede, o descritivo com as peças e o comprimento por DN, a medida não modelada, a
+    conferência igual à da gaveta, a ocupação pendente, o hash e a capa com ida e volta em texto;
+  - `PainelHidroExecutivo.test.tsx` (+1, o painel com os textos de incêndio).
+  - Suíte com 6.739 testes: 6.706 + 33 pulados (na 1ª rodada o worker caiu; a 2ª fechou). Build
+    ok.
 

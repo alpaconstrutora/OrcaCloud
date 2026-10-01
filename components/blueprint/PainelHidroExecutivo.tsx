@@ -2,7 +2,7 @@ import React from 'react';
 import { Check } from 'lucide-react';
 import type { BlueprintProjetoExecutivoRow } from '../../types/blueprint';
 import type { EmissaoExecutiva, ResponsavelTecnico } from '../../utils/blueprintTopografiaExecutivo';
-import type { ResultadoHidroExecutivo, VerificacaoHidro } from '../../utils/blueprintHidroExecutivo';
+import type { VerificacaoHidro } from '../../utils/blueprintHidroExecutivo';
 import type { FormatoDoMemorial } from './PainelMemoriaisHidro';
 
 /**
@@ -14,10 +14,20 @@ import type { FormatoDoMemorial } from './PainelMemoriaisHidro';
  *
  * O software não emite projeto — quem emite é o responsável técnico.
  */
+/** Incêndio E8.4: o mesmo painel serve à emissão de incêndio — a verificação é a mesma forma, o grupo muda. */
+interface VerificacaoNoPainel {
+  grupo: string;
+  item: string;
+  norma: string;
+  exigido: string;
+  obtido: string;
+  atende: boolean;
+}
+
 export interface HidroExecutivoNoPainel {
   responsavel: ResponsavelTecnico;
   onResponsavel: (patch: Partial<ResponsavelTecnico>) => void;
-  resultado: ResultadoHidroExecutivo | null;
+  resultado: { verificacoes: VerificacaoNoPainel[]; podeEmitir: boolean; pendencias: string[] } | null;
   emitidos: BlueprintProjetoExecutivoRow[];
   emissaoValida: EmissaoExecutiva | null;
   hashDaBaseAtual: string;
@@ -26,6 +36,16 @@ export interface HidroExecutivoNoPainel {
   erro: string | null;
   onBaixarMemorial: (row: BlueprintProjetoExecutivoRow, formato: FormatoDoMemorial) => void;
   persistenciaIndisponivel: boolean;
+}
+
+/** Incêndio E8.4: os textos que mudam por disciplina — o padrão é o hidrossanitário. */
+export interface TextosDoExecutivo {
+  rotuloDoGrupo: Record<string, string>;
+  /** "a conferência (NBR 5626 e 8160)". */
+  conferencia: string;
+  /** "hidrossanitário" — no botão. */
+  disciplina: string;
+  testId: string;
 }
 
 const ROTULO_DO_GRUPO: Record<VerificacaoHidro['grupo'], string> = {
@@ -53,11 +73,13 @@ function CampoTexto({ rotulo, valor, onMudar, placeholder }: { rotulo: string; v
   );
 }
 
-export default function PainelHidroExecutivo({ e }: { e: HidroExecutivoNoPainel }) {
+const TEXTOS_HIDRO: TextosDoExecutivo = { rotuloDoGrupo: ROTULO_DO_GRUPO, conferencia: 'a conferência (NBR 5626 e 8160)', disciplina: 'hidrossanitário', testId: 'hidro-executivo' };
+
+export default function PainelHidroExecutivo({ e, textos = TEXTOS_HIDRO }: { e: HidroExecutivoNoPainel; textos?: TextosDoExecutivo }) {
   const r = e.responsavel;
   const res = e.resultado;
   const sigla = r.conselho === 'CAU' ? 'RRT' : 'ART';
-  const grupos = res ? ([...new Set(res.verificacoes.map((v) => v.grupo))] as VerificacaoHidro['grupo'][]) : [];
+  const grupos = res ? [...new Set(res.verificacoes.map((v) => v.grupo))] : [];
   const dataBr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
   const motivoDoBotao = !res
     ? 'Calculando as verificações…'
@@ -68,10 +90,10 @@ export default function PainelHidroExecutivo({ e }: { e: HidroExecutivoNoPainel 
         : undefined;
 
   return (
-    <div className="rounded-[10px] border border-slate-200 bg-white p-3" data-testid="hidro-executivo">
+    <div className="rounded-[10px] border border-slate-200 bg-white p-3" data-testid={textos.testId}>
       <p className="text-sm font-semibold text-slate-800">Emissão do projeto executivo ({sigla})</p>
       <p className="mt-0.5 text-xs text-slate-500">
-        A emissão é do responsável técnico. O programa reúne a conferência (NBR 5626 e 8160), registra a emissão com os dois
+        A emissão é do responsável técnico. O programa reúne {textos.conferencia}, registra a emissão com os dois
         memoriais e a amarra ao hash do desenho e das premissas.
       </p>
 
@@ -117,7 +139,7 @@ export default function PainelHidroExecutivo({ e }: { e: HidroExecutivoNoPainel 
             <ul className="mt-2 space-y-1" data-testid="hidro-verificacoes">
               {grupos.map((g) => (
                 <li key={g}>
-                  <p className="text-sm font-medium text-slate-600">{ROTULO_DO_GRUPO[g]}</p>
+                  <p className="text-sm font-medium text-slate-600">{textos.rotuloDoGrupo[g] ?? g}</p>
                   <ul className="space-y-0.5">
                     {res.verificacoes
                       .filter((v) => v.grupo === g)
@@ -143,7 +165,7 @@ export default function PainelHidroExecutivo({ e }: { e: HidroExecutivoNoPainel 
             className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <Check className="h-3.5 w-3.5" />
-            {e.emitindo ? 'Emitindo…' : `Emitir projeto executivo hidrossanitário (${sigla})`}
+            {e.emitindo ? 'Emitindo…' : `Emitir projeto executivo ${textos.disciplina} (${sigla})`}
           </button>
           {res && !res.podeEmitir && (
             <p className="mt-1 text-sm text-slate-500">

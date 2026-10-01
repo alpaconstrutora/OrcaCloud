@@ -218,6 +218,15 @@ import PainelMemoriaisHidro, { type FormatoDoMemorial, type QualMemorial } from 
 import { blocosDasLinhas, linhasDoMemorial, memorialDeCalculoHidro, memorialDescritivoHidro, type HipotesesHidro } from '../../utils/blueprintMemorialHidro';
 import { hashDaBaseHidro, memorialExecutivoHidro, verificacoesHidro } from '../../utils/blueprintHidroExecutivo';
 import PainelHidroExecutivo from './PainelHidroExecutivo';
+import {
+  ROTULO_DO_GRUPO_DE_INCENDIO,
+  analisesDeIncendio,
+  hashDaBaseIncendio,
+  memorialDeCalculoIncendio,
+  memorialDescritivoIncendio,
+  memorialExecutivoIncendio,
+  verificacoesIncendio,
+} from '../../utils/blueprintIncendioExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
@@ -1032,6 +1041,8 @@ const ROTULO_DA_TAREFA = {
   incendioRede: 'Rede de hidrantes automática',
   // INCÊNDIO E3.3 (30/09/2026): todo ambiente ao alcance de um hidrante (mangueira + jato pelas portas).
   incendioCobertura: 'Cobertura dos hidrantes',
+  // INCÊNDIO E8.4 (01/10/2026): memorial de cálculo e descritivo, e a emissão com ART.
+  memoriaisIncendio: 'Memoriais de incêndio e emissão (ART)',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7650,6 +7661,73 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     },
     [editor.model, hipotesesHidro, study.name],
   );
+  // INCÊNDIO E8.4 (01/10/2026): os memoriais e a emissão com ART — as análises (cálculo
+  // hidráulico incluso) UMA vez, só com a gaveta aberta; o arquivo remonta na hora.
+  const hipotesesDeIncendioDoEstudo = incendioDoEstudo.hipoteses;
+  const analisesDoMemorialDeIncendio = useMemo(
+    () => (tarefaAberta === 'memoriaisIncendio' ? analisesDeIncendio(editor.model, hipotesesDeIncendioDoEstudo) : null),
+    [tarefaAberta, editor.model, hipotesesDeIncendioDoEstudo],
+  );
+  const previaDosMemoriaisIncendio = useMemo(() => {
+    if (!analisesDoMemorialDeIncendio) return null;
+    const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
+    return {
+      calculo: memorialDeCalculoIncendio(editor.model, hipotesesDeIncendioDoEstudo, ctx, analisesDoMemorialDeIncendio),
+      descritivo: memorialDescritivoIncendio(editor.model, hipotesesDeIncendioDoEstudo, ctx, analisesDoMemorialDeIncendio),
+    };
+  }, [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, study.name]);
+  const executivoIncendio = useBlueprintProjetoExecutivo(study.id, study.organization_id, 'INCENDIO');
+  const resultadoIncendio = useMemo(
+    () => (analisesDoMemorialDeIncendio ? verificacoesIncendio(editor.model, hipotesesDeIncendioDoEstudo, executivoIncendio.responsavel, analisesDoMemorialDeIncendio) : null),
+    [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, executivoIncendio.responsavel],
+  );
+  const hashIncendio = useMemo(
+    () => (tarefaAberta === 'memoriaisIncendio' ? hashDaBaseIncendio(editor.model, hipotesesDeIncendioDoEstudo) : null),
+    [tarefaAberta, editor.model, hipotesesDeIncendioDoEstudo],
+  );
+  const emissaoIncendioValida = useMemo<EmissaoExecutiva | null>(() => {
+    const row = hashIncendio && executivoIncendio.emitidos.find((r) => r.hash_da_base === hashIncendio.base && r.emitido_em);
+    if (!row) return null;
+    return { artNumero: row.responsavel.artNumero, responsavel: row.responsavel.nome, conselho: row.responsavel.conselho, registro: row.responsavel.registro, emitidoEm: row.emitido_em! };
+  }, [executivoIncendio.emitidos, hashIncendio]);
+  const emitirIncendio = useCallback(async () => {
+    if (!resultadoIncendio?.podeEmitir || !hashIncendio || !analisesDoMemorialDeIncendio) return;
+    const emitidoEm = new Date().toISOString();
+    const blocos = memorialExecutivoIncendio(
+      editor.model,
+      hipotesesDeIncendioDoEstudo,
+      executivoIncendio.responsavel,
+      resultadoIncendio,
+      { nomeDoEstudo: study.name, hashDoDesenho: hashIncendio.desenho, hashDaBase: hashIncendio.base, emitidoEm },
+      analisesDoMemorialDeIncendio,
+    );
+    await executivoIncendio.emitir({
+      topografia_id: null,
+      topografia_versao: null,
+      topografia_hash: null,
+      hash_da_base: hashIncendio.base,
+      verificacoes: resultadoIncendio.verificacoes,
+      memorial: linhasDoMemorial(blocos).join('\n'),
+      emitido_em: emitidoEm,
+    });
+  }, [resultadoIncendio, hashIncendio, analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, executivoIncendio, study.name]);
+  const baixarMemorialEmitidoIncendio = useCallback(
+    async (row: BlueprintProjetoExecutivoRow, formato: FormatoDoMemorial) => {
+      const nome = `${study.name} - projeto de incêndio ${row.responsavel.conselho === 'CAU' ? 'RRT' : 'ART'} ${row.responsavel.artNumero}`;
+      baixarArtefatos(await artefatosDoMemorial(blocosDasLinhas((row.memorial ?? '').split('\n')), nome, nome, formato));
+    },
+    [study.name],
+  );
+  const baixarMemorialIncendio = useCallback(
+    async (qual: QualMemorial, formato: FormatoDoMemorial) => {
+      const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
+      const a = analisesDoMemorialDeIncendio ?? analisesDeIncendio(editor.model, hipotesesDeIncendioDoEstudo);
+      const blocos = qual === 'calculo' ? memorialDeCalculoIncendio(editor.model, hipotesesDeIncendioDoEstudo, ctx, a) : memorialDescritivoIncendio(editor.model, hipotesesDeIncendioDoEstudo, ctx, a);
+      const titulo = `${study.name} — memorial ${qual === 'calculo' ? 'de cálculo' : 'descritivo'} de incêndio`;
+      baixarArtefatos(await artefatosDoMemorial(blocos, titulo, titulo, formato));
+    },
+    [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, study.name],
+  );
   const lancarEsgoto = () => {
     const comandos = planoDeEsgoto.comandos.length > 0
       ? planoDeEsgoto.comandos
@@ -10755,6 +10833,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Ocupação, altura para incêndio, área e carga de incêndio da edificação, e as medidas de segurança que o Corpo de Bombeiros exige (preset MG, em rascunho até o texto das ITs ser conferido)"
               />
             </GrupoDoRibbon>
+            {/* INCÊNDIO E8.4 (01/10/2026): os memoriais e a emissão com ART. */}
+            <GrupoDoRibbon rotulo="Documentos">
+              <BotaoDoRibbon
+                icone={FileText}
+                rotulo="Memoriais e ART"
+                ativo={tarefaAberta === 'memoriaisIncendio'}
+                onClick={() => alternarTarefa('memoriaisIncendio')}
+                ajuda="Memorial de cálculo e descritivo de incêndio (PDF/DOCX), derivados do desenho e das premissas, e a emissão do projeto com ART — só com todas as verificações atendidas"
+              />
+            </GrupoDoRibbon>
           </>
         )}
         {aba === 'mecanica' && !emVista && (
@@ -13785,6 +13873,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'incendioCalculo' && <Gauge className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioRede' && <GitFork className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioCobertura' && <Scan className="h-5 w-5 text-red-700" />}
+              {tarefaAberta === 'memoriaisIncendio' && <FileText className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13850,6 +13939,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'A rede de incêndio desenhada, calculada a partir da bomba: os hidrantes mais desfavoráveis abrem juntos, e sai a vazão e a carga que a bomba tem de dar, com a pressão em cada hidrante e a planilha dos trechos. As premissas são do estudo.'}
             {tarefaAberta === 'incendio' &&
               'O que o Corpo de Bombeiros exige deste prédio: a ocupação, a altura para incêndio (do pavimento de descarga ao último ocupado), a área e a carga de incêndio saem do desenho e das premissas do estudo. Declarar um valor vence o derivado.'}
+            {tarefaAberta === 'memoriaisIncendio' &&
+              'O memorial de cálculo e o descritivo de segurança contra incêndio — classificação e exigências, planilha de pressões, bomba, reserva, saídas, rota de fuga e preventivos —, gerados do desenho e das premissas do estudo, os mesmos números das gavetas. A emissão com ART só habilita com todas as verificações atendidas.'}
             {tarefaAberta === 'memoriaisHidro' &&
               'O memorial de cálculo e o descritivo das instalações de água e esgoto, gerados do desenho e das premissas das gavetas de água, pressão e esgoto — os mesmos números das marcas e da verificação. Só entram as seções dos sistemas que existem.'}
             {tarefaAberta === 'agua' && (
@@ -14547,6 +14638,39 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               <div className="mt-4">
                 <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['PLUVIAL']} onSelecionar={selecionar} />
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'memoriaisIncendio' && previaDosMemoriaisIncendio && (
+            <div className="space-y-3">
+              <PainelMemoriaisHidro
+                calculo={previaDosMemoriaisIncendio.calculo}
+                descritivo={previaDosMemoriaisIncendio.descritivo}
+                onBaixar={baixarMemorialIncendio}
+                textos={{
+                  calculo: 'Classificação e exigências, premissas, planilha de pressões com o caminho crítico, sprinklers, bomba, reserva técnica, saídas, rota de fuga e preventivos.',
+                  descritivo: 'Objeto, normas, sistemas com as peças do desenho, materiais, medidas a cargo do responsável e ensaios.',
+                  vazio: 'Sem dados de incêndio no desenho.',
+                  tituloVazio: 'Sem dados de incêndio no desenho',
+                  testId: 'memoriais-incendio',
+                }}
+              />
+              <PainelHidroExecutivo
+                textos={{ rotuloDoGrupo: ROTULO_DO_GRUPO_DE_INCENDIO, conferencia: 'a conferência (regulamento do CBMMG, NBR 13714, 10897, 9077 e preventivos)', disciplina: 'de incêndio', testId: 'incendio-executivo' }}
+                e={{
+                  responsavel: executivoIncendio.responsavel,
+                  onResponsavel: executivoIncendio.setResponsavel,
+                  resultado: resultadoIncendio,
+                  emitidos: executivoIncendio.emitidos,
+                  emissaoValida: emissaoIncendioValida,
+                  hashDaBaseAtual: hashIncendio?.base ?? '',
+                  onEmitir: () => void emitirIncendio(),
+                  emitindo: executivoIncendio.emitindo,
+                  erro: executivoIncendio.erro,
+                  onBaixarMemorial: (row, formato) => void baixarMemorialEmitidoIncendio(row, formato),
+                  persistenciaIndisponivel: executivoIncendio.persistenciaIndisponivel,
+                }}
+              />
             </div>
           )}
 

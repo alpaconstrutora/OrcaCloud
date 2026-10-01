@@ -31,6 +31,8 @@ export function paraWinAnsi(s: string): string {
     .replace(/ρ/g, 'rho')
     .replace(/≤/g, '<=')
     .replace(/≥/g, '>=')
+    // E8.4 (incêndio): CO₂ do extintor.
+    .replace(/₂/g, '2')
     .replace(/[^\u0000-ÿ–—‘’“”•…€]/g, '?');
 }
 

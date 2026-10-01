@@ -10,6 +10,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import PainelHidroExecutivo, { type HidroExecutivoNoPainel } from '../../components/blueprint/PainelHidroExecutivo';
 import type { BlueprintProjetoExecutivoRow } from '../../types/blueprint';
 import type { ResultadoHidroExecutivo } from '../../utils/blueprintHidroExecutivo';
+import { ROTULO_DO_GRUPO_DE_INCENDIO } from '../../utils/blueprintIncendioExecutivo';
 
 const ana = { nome: 'Ana', titulo: 'Engenheira Civil', conselho: 'CREA' as const, registro: '5069', artNumero: '2802', artData: '2026-09-29' };
 const ok: ResultadoHidroExecutivo = {
@@ -38,6 +39,19 @@ const props = (extra: Partial<HidroExecutivoNoPainel> = {}): HidroExecutivoNoPai
 });
 
 describe('PainelHidroExecutivo (E3.3)', () => {
+  it('incêndio (E8.4): o mesmo painel com os textos e os grupos de incêndio', () => {
+    const resultado = { verificacoes: [{ grupo: 'SAIDAS', item: 'Percurso de fuga de todos os ambientes', norma: 'NBR 9077', exigido: '≤ 30 m', obtido: '1 acima', atende: false }], podeEmitir: false, pendencias: ['x'] };
+    render(
+      <PainelHidroExecutivo
+        e={props({ resultado })}
+        textos={{ rotuloDoGrupo: ROTULO_DO_GRUPO_DE_INCENDIO, conferencia: 'a conferência de incêndio', disciplina: 'de incêndio', testId: 'incendio-executivo' }}
+      />,
+    );
+    expect(screen.getByTestId('incendio-executivo')).toBeTruthy();
+    expect(screen.getByText('Saídas e rota de fuga — NBR 9077')).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Emitir projeto executivo de incêndio \(ART\)/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('com pendência: botão desligado com o motivo e o ✗ no grupo da NBR 5626', () => {
     render(<PainelHidroExecutivo e={props({ resultado: pendente })} />);
     const botao = screen.getByRole('button', { name: /Emitir projeto executivo hidrossanitário \(ART\)/ }) as HTMLButtonElement;

@@ -30,7 +30,7 @@ describe('PainelExtintoresIncendio', () => {
   it('os longe demais do pior para o melhor; a classe que falta; a capacidade fraca; o pavimento sem extintor', async () => {
     const onSelecionar = vi.fn();
     render(<PainelExtintoresIncendio analise={analise} hip={HE} onHip={vi.fn()} onSelecionar={onSelecionar} nomeDe={() => 'EXT-1'} proposta={{ quantos: 2, motivo: null, semCobertura: [], onPropor: vi.fn() }} />);
-    expect(screen.getByTestId('extintores-incendio').textContent).toContain('Risco médio (carga de incêndio média) · até 20 m');
+    expect(screen.getByTestId('extintores-incendio').textContent).toContain('Risco médio (carga de incêndio média) · a distância a percorrer vai pela classe do fogo do ambiente (A 20 m · B 15 m · C 20 m)');
     const linhas = screen.getByTestId('extintores-longe').textContent!;
     expect(linhas.indexOf('Cozinha')).toBeLessThan(linhas.indexOf('Sala 9'));
     expect(linhas).toContain('sem extintor da classe');

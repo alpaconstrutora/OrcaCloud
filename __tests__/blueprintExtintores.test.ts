@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, canonicalPayload, capacidadeExtintoraValida, emptyModel, modelFromCanonicalPayload, parseCanonicalPayload, point, pointInPolygon, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { HIPOTESES_EXTINTORES_PADRAO as HE, analisarExtintores, classesDoAmbiente, lerCapacidade, proporExtintores } from '../utils/blueprintExtintores';
+import { HIPOTESES_EXTINTORES_PADRAO as HE, analisarExtintores, classesDoAmbiente, lerCapacidade, proporExtintores, limiteDaClasse } from '../utils/blueprintExtintores';
 
 /**
  * Corredor de 60 × 2 m (y 0–2) com 10 salas de 6 × 6 m em cima, porta de cada
@@ -69,19 +69,22 @@ describe('E7.1 · a regra', () => {
     expect(lerCapacidade('2-A:20-B:C')).toEqual({ A: 2, B: 20, C: true });
   });
 
-  it('⚠️ PRONTO QUANDO: um extintor ABC na ponta do corredor cobre as salas perto (risco médio, 20 m) e a do fundo vira FALTA com a distância', () => {
+  it('⚠️ PRONTO QUANDO: um extintor ABC na ponta do corredor cobre as salas perto (risco médio: A 20 m, B 15 m — IT 16) e a do fundo vira FALTA com a distância', () => {
     const m = ext(andar(), 1000, 1000, { agenteExtintor: 'PQS_ABC', cargaExtintorKg: 4, capacidadeExtintora: '3-A:40-B:C' });
     const a = analisarExtintores(m, 'MEDIA', HE);
-    expect(a.distanciaMaximaM).toBe(20);
+    expect(a.distanciaMaximaM).toBe(15); // o menor entre as classes: B, 15 m
     const amb = (n: string) => a.ambientes.find((x) => x.rotulo === n)!;
     expect(amb('Cozinha').atende).toBe(true);
     expect(amb('Casa de máquinas').atende).toBe(false);
     // Pelo corredor e pela porta — mais que os 54 m em linha reta até a parede do fundo.
     expect(amb('Casa de máquinas').distanciaM!).toBeGreaterThan(54);
     expect(a.extintores[0].capacidadeAtende).toBe(true);
-    // Risco baixo: 25 m — cobre mais salas.
-    const baixo = analisarExtintores(m, 'BAIXA', HE);
-    expect(baixo.ambientes.filter((x) => x.atende).length).toBeGreaterThan(a.ambientes.filter((x) => x.atende).length);
+    // IT 16, risco ALTO: o extintor mais forte (4-A:80-B) alcança mais (A 20 m, B 15 m) que o de 3-A:40-B (15 e 10 m).
+    expect([limiteDaClasse('A', 'ALTO', lerCapacidade('3-A:40-B:C')), limiteDaClasse('A', 'ALTO', lerCapacidade('4-A:80-B:C'))]).toEqual([15, 20]);
+    expect([limiteDaClasse('B', 'ALTO', lerCapacidade('3-A:40-B:C')), limiteDaClasse('B', 'ALTO', lerCapacidade('4-A:80-B:C'))]).toEqual([10, 15]);
+    // Abaixo da mínima do risco não é unidade extintora da classe (não conta para a distância).
+    expect(limiteDaClasse('A', 'MEDIO', lerCapacidade('2-A:20-B:C'))).toBeNull();
+    expect(limiteDaClasse('C', 'MEDIO', lerCapacidade('2-A'))).toBeNull();
   });
 
   it('o extintor de água não cobre a cozinha (B) nem a casa de máquinas (C); a capacidade abaixo da mínima é dita', () => {

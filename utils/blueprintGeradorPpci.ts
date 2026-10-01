@@ -127,7 +127,12 @@ export function conferirDasPremissas(hip: HipotesesIncendio, it17: { sistema: Si
           ...(hip.saidas.construtiva == null ? ['Características construtivas (X/Y/Z, IT 08 Tabela 3) não declaradas — a Tabela 5 usou X, o mais restritivo'] : []),
         ]
       : [`Percurso máximo de fuga${hip.saidas.percursoMaximoM != null ? ` declarado: ${um(hip.saidas.percursoMaximoM, 0)} m` : ': da tabela da ocupação'} (NBR 9077 / IT)`]),
-    `Distância máxima até o extintor${hip.extintores.distanciaMaximaM != null ? ` declarada: ${um(hip.extintores.distanciaMaximaM, 0)} m` : ': do risco'} (NBR 12693 / IT)`,
+    // D1.2: em MG a distância é a da IT 16 por classe — só a declarada (que a substitui) fica para conferir.
+    ...(hip.classificacao.preset === 'MG_CBMMG'
+      ? hip.extintores.distanciaMaximaM != null
+        ? [`Distância até o extintor declarada: ${um(hip.extintores.distanciaMaximaM, 0)} m — no lugar das Tabelas 4 a 6 da IT 16`]
+        : []
+      : [`Distância máxima até o extintor${hip.extintores.distanciaMaximaM != null ? ` declarada: ${um(hip.extintores.distanciaMaximaM, 0)} m` : ': do risco'} (NBR 12693 / IT)`]),
     `Espaçamento das luminárias de emergência${hip.iluminacao.espacamentoMaximoM != null ? ` declarado: ${um(hip.iluminacao.espacamentoMaximoM, 1)} m` : ': o padrão'} (NBR 10898)`,
     'Afastamento de 30 cm entre sprinkler e luminária (NBR 10897)',
   ];

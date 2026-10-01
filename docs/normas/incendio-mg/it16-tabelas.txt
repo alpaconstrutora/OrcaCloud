@@ -1,0 +1,49 @@
+// TRANSCRIÇÃO da IT 16 do CBMMG (Sistema de Proteção por Extintores de Incêndio, 3ª ed., alterada pela Portaria 69/2022) — Tabelas 1 a 6, lidas pela IMAGEM das pp. 6–8 em 01/10/2026, e os itens do texto usados. Fonte da verdade do teste `incendioExtintoresMG.test.ts`.
+
+// TABELA 1 — Capacidade extintora mínima de extintor portátil
+T1 Água | 2-A
+T1 Espuma Mecânica | 2-A: 10-B
+T1 Dióxido de Carbono | 5-B:C
+T1 Pó BC | 20-B:C
+T1 Pó ABC | 2-A: 20-B:C
+T1 Compostos Halogenados | 5-B:C
+
+// TABELA 2 — Capacidade extintora mínima de extintor sobre rodas
+T2 Água | 6-A
+T2 Espuma mecânica | 6-A: 40-B
+T2 Dióxido de carbono | 10-B:C
+T2 Pó BC | 80-B:C
+T2 Pó ABC | 6-A; 80-B:C
+
+// TABELA 3 — Risco pela carga de incêndio (IT 09): Baixo até 300 MJ/m²; Médio acima de 300 até 1200; Alto acima de 1200.
+
+// TABELA 4 — Classe A: risco | capacidade extintora mínima | distância máxima a ser percorrida
+T4 Baixo | 2-A | 20
+T4 Médio | 3-A | 20
+T4 Alto | 3-A | 15
+T4 Alto | 4-A | 20
+
+// TABELA 5 — Classe B: risco | capacidade extintora mínima | distância máxima
+T5 Baixo | 20-B | 15
+T5 Médio | 40-B | 15
+T5 Alto | 40-B | 10
+T5 Alto | 80-B | 15
+
+// TABELA 6 — Classes C, D e K: classe | distância máxima
+T6 C | 20
+T6 D | 20
+T6 K | 15
+
+// ITENS DO TEXTO usados:
+// 4.11 Distância máxima a ser percorrida: distância máxima REAL, do ponto de fixação do extintor a qualquer ponto da área protegida.
+// 5.2.2.2 Alça a no máximo 1,60 m do piso; parte inferior a no mínimo 20 cm do piso acabado.
+// 5.2.2.3 Os extintores não devem ser instalados em escadas.
+// 5.2.2.5 O extintor ABC pode substituir qualquer extintor de classes específicas A, B e C.
+// 5.2.2.8 Uma unidade extintora = um extintor (não se somam dois, exceto espuma mecânica).
+// 5.2.2.9 No mínimo um extintor a não mais de 10 m da porta de acesso da entrada principal da edificação, entrada do pavimento ou do espaço.
+// 5.2.2.10 Locais fechados (salas elétricas, geradores…): o extintor do lado de fora, próximo à entrada.
+// 5.2.2.11 Riscos especiais (casa de bombas, de máquinas, de força, gerador, transformador…): extintor próprio; o da proteção geral substitui se a até 5 m.
+// 5.2.3.3 Extintor sobre rodas: 1,5 × a distância do portátil.
+// 6.2.1 Cada pavimento: no mínimo uma unidade de pó ABC, ou duas (uma A e uma BC), dentro da distância e da capacidade.
+// 6.2.1.2 Em garagens e em edificações sem brigada de incêndio, é obrigatório o pó ABC.
+// 6.2.3.2 Garagens e estacionamentos DESCOBERTOS com hidrantes protegendo a área: 60 m.

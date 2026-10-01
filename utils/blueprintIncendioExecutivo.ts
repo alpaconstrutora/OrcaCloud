@@ -42,7 +42,7 @@ import { criterioDaReserva, type CalculoDeIncendio } from './blueprintCalculoInc
 import { ROTULO_DO_RISCO } from './blueprintSprinklersIncendio';
 import { ROTULO_DA_PROTECAO, analisarSaidas, type AnaliseDeSaidas } from './blueprintSaidasIncendio';
 import { percursoDeFuga, type PercursoDeFuga } from './blueprintRotaDeFuga';
-import { ROTULO_DO_AGENTE, analisarExtintores, type AnaliseDeExtintores } from './blueprintExtintores';
+import { ROTULO_DO_AGENTE, analisarExtintores, limiteDaClasse, type AnaliseDeExtintores } from './blueprintExtintores';
 import { analisarSinalizacao, type AnaliseDeSinalizacao } from './blueprintSinalizacao';
 import { analisarIluminacao, type AnaliseDeIluminacao } from './blueprintIluminacaoEmergencia';
 import { analisarAlarme, type AnaliseDeAlarme } from './blueprintDeteccaoAlarme';
@@ -311,7 +311,7 @@ export function memorialDeCalculoIncendio(model: BlueprintModel, hip: HipotesesI
   if (ex.ambientes.length || ex.extintores.length) {
     B.push(
       { tipo: 'secao', texto: 'Extintores' },
-      { tipo: 'paragrafo', texto: `Risco ${ex.risco.toLowerCase()} (${ex.motivoDoRisco}); distância máxima a percorrer ${um(ex.distanciaMaximaM, 0)} m. Fonte: ${ex.fonte}.` },
+      { tipo: 'paragrafo', texto: `Risco ${ex.risco.toLowerCase()} (${ex.motivoDoRisco}); distância máxima a percorrer pela classe do fogo — A ${um(limiteDaClasse('A', ex.risco, null) ?? 0, 0)} m, B ${um(limiteDaClasse('B', ex.risco, null) ?? 0, 0)} m, C ${um(limiteDaClasse('C', ex.risco, null) ?? 0, 0)} m — e um extintor a até 10 m da entrada de cada pavimento. Fonte: ${ex.fonte}.` },
       {
         tipo: 'tabela',
         cabecalho: ['Ambiente', 'Pavimento', 'Classes', 'Pior distância (m)', 'Situação'],
@@ -597,9 +597,14 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
   // ── Preventivos ───────────────────────────────────────────────────────────
   if (exigida('EXTINTORES') || a.extintores.extintores.length) {
     const fora = a.extintores.ambientes.filter((x) => !x.atende);
-    v.push({ grupo: 'PREVENTIVOS', item: 'Extintor ao alcance em todo ambiente', norma: 'NBR 12693 · IT do CBMMG', exigido: `≤ ${um(a.extintores.distanciaMaximaM, 0)} m a percorrer, classe do ambiente`, obtido: fora.length ? `${fora.length} ambiente(s) fora` : 'todos', atende: fora.length === 0 && a.extintores.pavimentosSemExtintor.length === 0 });
+    v.push({ grupo: 'PREVENTIVOS', item: 'Extintor ao alcance em todo ambiente', norma: 'IT 16 do CBMMG · Tabelas 4 a 6', exigido: 'a distância da classe de cada ambiente (A 20 m · B 15 m · C 20 m; no risco alto, pela capacidade)', obtido: fora.length ? `${fora.length} ambiente(s) fora` : 'todos', atende: fora.length === 0 && a.extintores.pavimentosSemExtintor.length === 0 });
     const capacidade = a.extintores.extintores.filter((x) => x.capacidadeAtende === false);
-    v.push({ grupo: 'PREVENTIVOS', item: 'Capacidade extintora', norma: 'NBR 12693', exigido: `mínima do risco ${a.extintores.risco.toLowerCase()}`, obtido: capacidade.length ? `${capacidade.length} abaixo` : 'todas', atende: capacidade.length === 0 });
+    v.push({ grupo: 'PREVENTIVOS', item: 'Capacidade extintora', norma: 'IT 16 do CBMMG · Tabelas 4 e 5', exigido: `mínima do risco ${a.extintores.risco.toLowerCase()}`, obtido: capacidade.length ? `${capacidade.length} abaixo` : 'todas', atende: capacidade.length === 0 });
+    // D1.2: a entrada (5.2.2.9) e o pó ABC por pavimento (6.2.1).
+    const longe = a.extintores.entradasLonge ?? [];
+    v.push({ grupo: 'PREVENTIVOS', item: 'Extintor junto da entrada de cada pavimento', norma: 'IT 16 do CBMMG · 5.2.2.9', exigido: '≤ 10 m da porta de entrada (ou da chegada da escada)', obtido: longe.length ? longe.map((x) => `${x.nome}${x.distanciaM != null ? ` (${um(x.distanciaM, 1)} m)` : ''}`).join(', ') : 'todos', atende: longe.length === 0 });
+    const semABC = a.extintores.pavimentosSemABC ?? [];
+    if (semABC.length) v.push({ grupo: 'PREVENTIVOS', item: 'Unidade de pó ABC (ou A + BC) por pavimento', norma: 'IT 16 do CBMMG · 6.2.1', exigido: 'em todo pavimento', obtido: `faltam em ${semABC.map((x) => x.nome).join(', ')}`, atende: false });
   }
   if (exigida('SINALIZACAO') || conta(['PLACA'])) {
     const faltas = a.sinalizacao.equipamentosSemPlaca.length + a.sinalizacao.pontosDaRota.filter((p) => !p.coberto).length + a.sinalizacao.placasSemCodigo.length;

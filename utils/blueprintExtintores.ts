@@ -10,16 +10,19 @@
  * risco. A PROPOSTA automática cobre o que falta (gulosa: a posição que cobre
  * mais pares ambiente × classe primeiro), num lote só.
  *
- * ⚠️ NORMA (CONFERIR NA IT de extintores do CBMMG / NBR 12693): distâncias 25,
- * 20 e 15 m (risco baixo, médio e alto) e capacidades mínimas 2-A/20-B,
- * 3-A/40-B e 4-A/80-B transcritas de memória.
+ * NORMA: desde a D1.2 (01/10/2026), a IT 16 do CBMMG (transcrição em
+ * `docs/normas/incendio-mg/it16-tabelas.txt`): a distância máxima é POR CLASSE de fogo
+ * (Tabelas 4, 5 e 6 — A 20 m, B 15 m, C 20 m; no risco alto, o extintor mais forte alcança mais),
+ * a capacidade mínima pelo risco, um extintor a até 10 m da entrada do pavimento (5.2.2.9) e uma
+ * unidade de pó ABC (ou A + BC) por pavimento (6.2.1). O rascunho de memória (25/20/15 m por
+ * risco) foi trocado.
  */
 import { pointInPolygon, type AgenteExtintor, type BlueprintModel, type Command, type ObjectId, type Point, type Space, type Terminal } from './blueprintKernel';
 import { construirGrafoEspacial } from './blueprintGrafoEspacial';
 import { usoDoNome } from './blueprintPrograma';
 import { caminhoDentro, candidatosDoAmbiente } from './blueprintRotaDeFuga';
 
-export const FONTE_EXTINTORES = 'IT de extintores do CBMMG / NBR 12693 — CONFERIR NA IT (transcrito de memória)';
+export const FONTE_EXTINTORES = 'IT 16 do CBMMG (Portaria 69/2022), Tabelas 4 a 6';
 
 export type ClasseDeFogo = 'A' | 'B' | 'C';
 export const CLASSES_DO_AGENTE: Record<AgenteExtintor, readonly ClasseDeFogo[]> = {
@@ -32,12 +35,45 @@ export const CLASSES_DO_AGENTE: Record<AgenteExtintor, readonly ClasseDeFogo[]> 
 export const ROTULO_DO_AGENTE: Record<AgenteExtintor, string> = { AGUA: 'Água', ESPUMA: 'Espuma', PQS_BC: 'Pó BC', PQS_ABC: 'Pó ABC', CO2: 'CO₂' };
 
 export type RiscoDeExtintor = 'BAIXO' | 'MEDIO' | 'ALTO';
-/** Distância máxima a percorrer, m, e capacidade mínima por unidade — CONFERIR NA IT. */
-export const TABELA_DO_RISCO_DE_EXTINTOR: Record<RiscoDeExtintor, { distanciaM: number; minimaA: number; minimaB: number }> = {
-  BAIXO: { distanciaM: 25, minimaA: 2, minimaB: 20 },
-  MEDIO: { distanciaM: 20, minimaA: 3, minimaB: 40 },
-  ALTO: { distanciaM: 15, minimaA: 4, minimaB: 80 },
+/**
+ * IT 16, Tabelas 4 (classe A) e 5 (classe B): por risco, as linhas capacidade mínima → distância
+ * máxima a percorrer (m). No risco ALTO há duas: o extintor mais forte alcança mais longe.
+ */
+export const TABELA_4_IT16: Record<RiscoDeExtintor, readonly { capacidade: number; distanciaM: number }[]> = {
+  BAIXO: [{ capacidade: 2, distanciaM: 20 }],
+  MEDIO: [{ capacidade: 3, distanciaM: 20 }],
+  ALTO: [{ capacidade: 3, distanciaM: 15 }, { capacidade: 4, distanciaM: 20 }],
 };
+export const TABELA_5_IT16: Record<RiscoDeExtintor, readonly { capacidade: number; distanciaM: number }[]> = {
+  BAIXO: [{ capacidade: 20, distanciaM: 15 }],
+  MEDIO: [{ capacidade: 40, distanciaM: 15 }],
+  ALTO: [{ capacidade: 40, distanciaM: 10 }, { capacidade: 80, distanciaM: 15 }],
+};
+/** IT 16, Tabela 6: classe C (e D), 20 m; K, 15 m. */
+export const DISTANCIA_CLASSE_C_M = 20;
+/** IT 16, 5.2.2.9: um extintor a até 10 m da porta de entrada da edificação ou do pavimento. */
+export const DISTANCIA_DA_ENTRADA_M = 10;
+
+/** A mínima do risco (a 1ª linha de cada tabela) — o que a proposta lança e o que conta como unidade. */
+export const TABELA_DO_RISCO_DE_EXTINTOR: Record<RiscoDeExtintor, { minimaA: number; minimaB: number }> = {
+  BAIXO: { minimaA: TABELA_4_IT16.BAIXO[0].capacidade, minimaB: TABELA_5_IT16.BAIXO[0].capacidade },
+  MEDIO: { minimaA: TABELA_4_IT16.MEDIO[0].capacidade, minimaB: TABELA_5_IT16.MEDIO[0].capacidade },
+  ALTO: { minimaA: TABELA_4_IT16.ALTO[0].capacidade, minimaB: TABELA_5_IT16.ALTO[0].capacidade },
+};
+
+/**
+ * Até onde o extintor de capacidade `cap` protege a classe `c` no `risco`, m — a maior distância
+ * das linhas que a capacidade alcança. `null` = abaixo da mínima: não é unidade extintora dessa
+ * classe. Capacidade não declarada conta como a mínima (a análise acusa a falta de declaração).
+ */
+export function limiteDaClasse(c: ClasseDeFogo, risco: RiscoDeExtintor, cap: { A: number | null; B: number | null; C: boolean } | null): number | null {
+  if (c === 'C') return cap && !cap.C ? null : DISTANCIA_CLASSE_C_M;
+  const linhas = c === 'A' ? TABELA_4_IT16[risco] : TABELA_5_IT16[risco];
+  if (!cap) return linhas[0].distanciaM;
+  const valor = c === 'A' ? cap.A : cap.B;
+  const ok = linhas.filter((l) => (valor ?? 0) >= l.capacidade);
+  return ok.length ? Math.max(...ok.map((l) => l.distanciaM)) : null;
+}
 
 // ─── Premissas ───────────────────────────────────────────────────────────────
 
@@ -216,22 +252,6 @@ export function distanciaDoPonto(rede: ReturnType<typeof redeDoPavimento>, s: Sp
   return melhor;
 }
 
-/** A pior distância do ambiente às origens: o máximo, entre os pontos de cobertura, do menor caminho. */
-function piorDistancia(rede: ReturnType<typeof redeDoPavimento>, s: Space, origens: { ponto: Point; space: Space }[], dist: Map<string, number>): number {
-  let pior = 0;
-  for (const c of pontosDeCobertura(s)) {
-    let melhor = Infinity;
-    for (const o of origens) if (o.space.id === s.id) melhor = Math.min(melhor, caminhoDentro(s, c, o.ponto)?.mm ?? Infinity);
-    for (const p of rede.portais.get(s.id) ?? []) {
-      const d = dist.get(p.chave);
-      if (d == null) continue;
-      melhor = Math.min(melhor, (caminhoDentro(s, c, p.ponto)?.mm ?? Infinity) + d);
-    }
-    pior = Math.max(pior, melhor);
-  }
-  return pior;
-}
-
 // ─── A análise ───────────────────────────────────────────────────────────────
 
 export interface AmbienteDoExtintor {
@@ -242,6 +262,8 @@ export interface AmbienteDoExtintor {
   motivo: string;
   /** A pior distância até um extintor de cada classe pedida, m; `null` = não há extintor dessa classe no pavimento. */
   distanciaM: number | null;
+  /** D1.2: o limite da IT 16 que vale para o ambiente — o menor entre as classes, com a capacidade mínima. */
+  limiteM?: number;
   atende: boolean;
 }
 
@@ -263,6 +285,10 @@ export interface AnaliseDeExtintores {
   extintores: ExtintorConferido[];
   /** Pavimentos ocupados sem nenhum extintor. */
   pavimentosSemExtintor: { levelId: ObjectId; nome: string }[];
+  /** D1.2 (IT 16, 6.2.1): pavimentos com extintor mas sem uma unidade de pó ABC (nem A + BC). */
+  pavimentosSemABC: { levelId: ObjectId; nome: string }[];
+  /** D1.2 (IT 16, 5.2.2.9): pavimentos sem extintor a até 10 m da entrada (porta para fora ou chegada da escada). */
+  entradasLonge: { levelId: ObjectId; nome: string; distanciaM: number | null }[];
   pendencias: string[];
   fonte: string;
 }
@@ -277,36 +303,96 @@ export function riscoDoExtintor(nivelDeCarga: 'BAIXA' | 'MEDIA' | 'ALTA' | null)
   return { risco: 'MEDIO', motivo: 'carga de incêndio não definida — usado o risco médio' };
 }
 
+/** As ENTRADAS do pavimento (5.2.2.9): as portas para fora; sem elas, a chegada de cada escada. */
+export function entradasDoPavimento(model: BlueprintModel, levelId: ObjectId, rede: ReturnType<typeof redeDoPavimento>): { ponto: Point; space: Space }[] {
+  const porId = new Map(rede.espacos.map((s) => [s.id, s]));
+  const portas = construirGrafoEspacial(model, levelId)
+    .saidas.map((a) => ({ ponto: a.ponto, space: porId.get(a.de)! }))
+    .filter((x) => !!x.space);
+  if (portas.length) return portas;
+  const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm || a.id.localeCompare(b.id));
+  const out: { ponto: Point; space: Space }[] = [];
+  for (const e of model.stairs ?? []) {
+    const i = niveis.findIndex((l) => l.id === e.levelId);
+    const j = e.ateLevelId ? niveis.findIndex((l) => l.id === e.ateLevelId) : i + 1;
+    const servidos = niveis.slice(i, Math.max(i, Math.min(j, niveis.length - 1)) + 1).map((l) => l.id);
+    if (!servidos.includes(levelId)) continue;
+    const boca = levelId === e.levelId ? e.pontos[0] : e.pontos[e.pontos.length - 1];
+    const space = rede.espacos.find((x) => pointInPolygon(x.ring, boca));
+    if (space) out.push({ ponto: boca, space });
+  }
+  return out;
+}
+
+/** Os extintores do pavimento que são unidade da classe `c`, agrupados pelo alcance (m) que a IT 16 lhes dá. */
+function gruposDaClasse(doNivel: { t: Terminal; space: Space }[], c: ClasseDeFogo, risco: RiscoDeExtintor, declaradaM: number | null): Map<number, { ponto: Point; space: Space }[]> {
+  const grupos = new Map<number, { ponto: Point; space: Space }[]>();
+  for (const x of doNivel) {
+    // Sem agente: "a declarar", vale só para A (como antes).
+    const classes = x.t.agenteExtintor ? CLASSES_DO_AGENTE[x.t.agenteExtintor] : (['A'] as const);
+    if (!(classes as readonly string[]).includes(c)) continue;
+    const lim = declaradaM ?? limiteDaClasse(c, risco, lerCapacidade(x.t.capacidadeExtintora));
+    if (lim == null) continue; // abaixo da mínima do risco: não é unidade dessa classe
+    grupos.set(lim, [...(grupos.get(lim) ?? []), { ponto: x.t.at, space: x.space }]);
+  }
+  return grupos;
+}
+
 export function analisarExtintores(model: BlueprintModel, nivelDeCarga: 'BAIXA' | 'MEDIA' | 'ALTA' | null, hip: HipotesesDeExtintores): AnaliseDeExtintores {
   const { risco, motivo: motivoDoRisco } = riscoDoExtintor(nivelDeCarga);
   const linha = TABELA_DO_RISCO_DE_EXTINTOR[risco];
-  const distanciaMaximaM = hip.distanciaMaximaM ?? linha.distanciaM;
+  const declaradaM = hip.distanciaMaximaM;
+  // O limite de cada classe com a capacidade MÍNIMA do risco (o que a proposta lança).
+  const minimo = { A: linha.minimaA, B: linha.minimaB, C: true };
+  const limiteMinimo = (c: ClasseDeFogo) => declaradaM ?? limiteDaClasse(c, risco, minimo)!;
+  const distanciaMaximaM = declaradaM ?? Math.min(limiteMinimo('A'), limiteMinimo('B'), limiteMinimo('C'));
   const pendencias: string[] = [];
   if (!nivelDeCarga) pendencias.push(motivoDoRisco);
   const extintores = (model.terminais ?? []).filter(ehExtintor);
   const ambientes: AmbienteDoExtintor[] = [];
+  const entradasLonge: AnaliseDeExtintores['entradasLonge'] = [];
   for (const l of model.levels) {
     const rede = redeDoPavimento(model, l.id);
     if (!rede.espacos.length) continue;
     const doNivel = extintores
       .map((t) => ({ t, space: rede.espacos.find((s) => pointInPolygon(s.ring, t.at)) ?? null }))
       .filter((x): x is { t: Terminal; space: Space } => !!x.space);
-    // Uma rede de distâncias por classe — o extintor só conta para as classes do agente (sem agente: "a declarar", vale A).
-    const porClasse = new Map<ClasseDeFogo, { origens: { ponto: Point; space: Space }[]; dist: Map<string, number> }>();
+    // Por classe, os grupos de extintores com o mesmo alcance, e a rede de distâncias de cada grupo.
+    const porClasse = new Map<ClasseDeFogo, { limiteMm: number; origens: { ponto: Point; space: Space }[]; dist: Map<string, number> }[]>();
     for (const c of ['A', 'B', 'C'] as const) {
-      const origens = doNivel.filter((x) => (x.t.agenteExtintor ? CLASSES_DO_AGENTE[x.t.agenteExtintor].includes(c) : c === 'A')).map((x) => ({ ponto: x.t.at, space: x.space }));
-      porClasse.set(c, { origens, dist: distanciasAosPortais(rede, origens) });
+      porClasse.set(c, [...gruposDaClasse(doNivel, c, risco, declaradaM)].map(([lim, origens]) => ({ limiteMm: lim * 1000, origens, dist: distanciasAosPortais(rede, origens) })));
     }
     rede.espacos.forEach((s, i) => {
       const { classes, motivo } = classesDoAmbiente(model, s);
       let pior = 0;
+      let folgaPior = -Infinity;
       for (const c of classes) {
-        const r = porClasse.get(c)!;
-        pior = Math.max(pior, r.origens.length ? piorDistancia(rede, s, r.origens, r.dist) : Infinity);
+        const grupos = porClasse.get(c)!;
+        for (const p of pontosDeCobertura(s)) {
+          let d = Infinity;
+          let folga = Infinity;
+          for (const g of grupos) {
+            const x = distanciaDoPonto(rede, s, p, g.origens, g.dist);
+            d = Math.min(d, x);
+            folga = Math.min(folga, x - g.limiteMm);
+          }
+          pior = Math.max(pior, d);
+          folgaPior = Math.max(folgaPior, folga);
+        }
       }
       const distanciaM = Number.isFinite(pior) ? pior / 1000 : null;
-      ambientes.push({ spaceId: s.id, levelId: l.id, rotulo: s.name || `Ambiente ${i + 1} (${l.name})`, classes, motivo, distanciaM, atende: distanciaM != null && distanciaM <= distanciaMaximaM + 1e-9 });
+      const limiteM = classes.length ? Math.min(...classes.map(limiteMinimo)) : distanciaMaximaM;
+      ambientes.push({ spaceId: s.id, levelId: l.id, rotulo: s.name || `Ambiente ${i + 1} (${l.name})`, classes, motivo, distanciaM, limiteM, atende: classes.length === 0 || folgaPior <= 1e-6 });
     });
+    // 5.2.2.9: algum extintor (de qualquer classe) a até 10 m de uma entrada do pavimento.
+    const ocupado = model.spaces.some((x) => x.levelId === l.id);
+    const entradas = entradasDoPavimento(model, l.id, rede);
+    if (ocupado && entradas.length) {
+      const todos = doNivel.map((x) => ({ ponto: x.t.at, space: x.space }));
+      const dist = distanciasAosPortais(rede, todos);
+      const melhor = todos.length ? Math.min(...entradas.map((e) => distanciaDoPonto(rede, e.space, e.ponto, todos, dist))) : Infinity;
+      if (!(melhor <= DISTANCIA_DA_ENTRADA_M * 1000 + 1e-6)) entradasLonge.push({ levelId: l.id, nome: l.name, distanciaM: Number.isFinite(melhor) ? melhor / 1000 : null });
+    }
   }
   const conferidos: ExtintorConferido[] = extintores.map((t) => {
     const classes = t.agenteExtintor ? CLASSES_DO_AGENTE[t.agenteExtintor] : [];
@@ -315,10 +401,21 @@ export function analisarExtintores(model: BlueprintModel, nivelDeCarga: 'BAIXA' 
     return { terminalId: t.id, agente: t.agenteExtintor ?? null, classes, capacidade: t.capacidadeExtintora ?? null, capacidadeAtende };
   });
   if (extintores.some((t) => !t.agenteExtintor)) pendencias.push('há extintor sem agente declarado — conta só para a classe A');
+  if (extintores.some((t) => t.agenteExtintor && t.agenteExtintor !== 'PQS_ABC')) pendencias.push('IT 16, 6.2.1.2: em garagens e em edificações sem brigada de incêndio, o extintor tem de ser de pó ABC — confira onde há outro agente');
   const ocupados = new Set(model.spaces.map((s) => s.levelId));
   const comExtintor = new Set(extintores.map((t) => t.levelId));
   const pavimentosSemExtintor = model.levels.filter((l) => ocupados.has(l.id) && !comExtintor.has(l.id)).map((l) => ({ levelId: l.id, nome: l.name }));
-  return { risco, motivoDoRisco, distanciaMaximaM, ambientes, extintores: conferidos, pavimentosSemExtintor, pendencias, fonte: FONTE_EXTINTORES };
+  // 6.2.1: uma unidade de pó ABC, ou duas (uma A e uma BC), por pavimento.
+  const pavimentosSemABC = model.levels
+    .filter((l) => comExtintor.has(l.id))
+    .filter((l) => {
+      const ag = extintores.filter((t) => t.levelId === l.id).map((t) => t.agenteExtintor);
+      const temA = ag.some((a) => a && CLASSES_DO_AGENTE[a].includes('A'));
+      const temBC = ag.some((a) => a && CLASSES_DO_AGENTE[a].includes('B') && CLASSES_DO_AGENTE[a].includes('C'));
+      return !ag.includes('PQS_ABC') && !(temA && temBC);
+    })
+    .map((l) => ({ levelId: l.id, nome: l.name }));
+  return { risco, motivoDoRisco, distanciaMaximaM, ambientes, extintores: conferidos, pavimentosSemExtintor, pavimentosSemABC, entradasLonge, pendencias, fonte: FONTE_EXTINTORES };
 }
 
 // ─── A proposta ──────────────────────────────────────────────────────────────
@@ -357,11 +454,18 @@ export function capacidadeDoRisco(hip: HipotesesDeExtintores, risco: RiscoDeExti
 export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtintores, hip: HipotesesDeExtintores): PropostaDeExtintores {
   const classesDoPadrao = CLASSES_DO_AGENTE[hip.agentePadrao];
   const faltam = analise.ambientes.filter((a) => !a.atende);
-  if (!faltam.length) return { comandos: [], pontos: [], semCobertura: [], motivo: 'todos os ambientes já estão cobertos' };
-  const limiteMm = analise.distanciaMaximaM * 1000;
+  // D1.2 (IT 16, 5.2.2.9): o pavimento com a entrada longe de extintor também pede um.
+  const entradas = new Set((analise.entradasLonge ?? []).map((e) => e.levelId));
+  if (!faltam.length && !entradas.size) return { comandos: [], pontos: [], semCobertura: [], motivo: 'todos os ambientes já estão cobertos' };
+  // D1.2: o alcance é POR CLASSE e pela capacidade (IT 16, Tabelas 4 a 6) — o do extintor lançado
+  // (a capacidade mínima do risco) e, nos existentes, o da capacidade de cada um.
+  const { capacidade, carga } = capacidadeDoRisco(hip, analise.risco);
+  const capProposta = lerCapacidade(capacidade);
+  const alcanceMm = (classes: readonly ClasseDeFogo[], cap: ReturnType<typeof lerCapacidade>) =>
+    hip.distanciaMaximaM != null ? hip.distanciaMaximaM * 1000 : Math.min(...classes.map((c) => (limiteDaClasse(c, analise.risco, cap) ?? 0) * 1000));
   const pontos: { levelId: ObjectId; at: Point }[] = [];
   const semCobertura: string[] = [];
-  for (const levelId of [...new Set(faltam.map((a) => a.levelId))]) {
+  for (const levelId of [...new Set([...faltam.map((a) => a.levelId), ...entradas])]) {
     const rede = redeDoPavimento(model, levelId);
     const porId = new Map(rede.espacos.map((s) => [s.id, s]));
     // As que faltam, e só nas classes que o extintor padrão combate.
@@ -422,23 +526,31 @@ export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtint
       .map((t) => ({ t, ponto: t.at, space: rede.espacos.find((s) => pointInPolygon(s.ring, t.at)) }))
       .filter((x): x is { t: Terminal; ponto: Point; space: Space } => !!x.space);
     const classesDaSala = new Map(alvo.map((a) => [a.spaceId, a.classes]));
-    const distPorConjunto = new Map<string, { origens: { ponto: Point; space: Space }[]; dist: Map<string, number> }>();
+    // Os existentes que combatem todas as classes da sala, agrupados pelo alcance que a capacidade lhes dá.
+    const gruposPorConjunto = new Map<string, { limiteMm: number; origens: { ponto: Point; space: Space }[]; dist: Map<string, number> }[]>();
     for (const [k, u] of unidades) {
       const precisa = classesDaSala.get(u.spaceId) ?? ['A'];
       const chave = [...precisa].sort().join('');
-      let r = distPorConjunto.get(chave);
-      if (!r) {
-        const origens = existentesDoNivel.filter((x) => precisa.every((c) => (classesDoExistente(x.t) as readonly string[]).includes(c))).map((x) => ({ ponto: x.ponto, space: x.space }));
-        r = { origens, dist: distanciasAosPortais(rede, origens) };
-        distPorConjunto.set(chave, r);
+      let grupos = gruposPorConjunto.get(chave);
+      if (!grupos) {
+        const porLimite = new Map<number, { ponto: Point; space: Space }[]>();
+        for (const x of existentesDoNivel) {
+          if (!precisa.every((c) => (classesDoExistente(x.t) as readonly string[]).includes(c))) continue;
+          const lim = alcanceMm(precisa, lerCapacidade(x.t.capacidadeExtintora));
+          if (lim > 0) porLimite.set(lim, [...(porLimite.get(lim) ?? []), { ponto: x.ponto, space: x.space }]);
+        }
+        grupos = [...porLimite].map(([limiteMm, origens]) => ({ limiteMm, origens, dist: distanciasAosPortais(rede, origens) }));
+        gruposPorConjunto.set(chave, grupos);
       }
-      if (r.origens.length && distanciaDoPonto(rede, porId.get(u.spaceId)!, u.ponto, r.origens, r.dist) <= limiteMm + 1e-6) unidades.delete(k);
+      if (grupos.some((g) => distanciaDoPonto(rede, porId.get(u.spaceId)!, u.ponto, g.origens, g.dist) <= g.limiteMm + 1e-6)) unidades.delete(k);
     }
+    // O alcance do extintor LANÇADO em cada sala pendente: o menor entre as classes dela.
+    const alcanceDaSala = new Map([...pendentes].map((id) => [id, alcanceMm(classesDaSala.get(id) ?? ['A'], capProposta)]));
     const cobre = new Map<number, Set<string>>();
     candidatas.forEach((c, i) => {
       const dist = distanciasAosPortais(rede, [c]);
       const set = new Set<string>();
-      for (const [k, u] of unidades) if (distanciaDoPonto(rede, porId.get(u.spaceId)!, u.ponto, [c], dist) <= limiteMm + 1e-6) set.add(k);
+      for (const [k, u] of unidades) if (distanciaDoPonto(rede, porId.get(u.spaceId)!, u.ponto, [c], dist) <= (alcanceDaSala.get(u.spaceId) ?? 0) + 1e-6) set.add(k);
       cobre.set(i, set);
     });
     while (unidades.size) {
@@ -454,12 +566,28 @@ export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtint
       for (const k of cobre.get(melhor)!) unidades.delete(k);
     }
     for (const id of new Set([...unidades.values()].map((u) => u.spaceId))) semCobertura.push(`${porId.get(id)?.name || id}: nenhuma posição cobre (ambiente sem porta, ou maior que o alcance)`);
+    // D1.2 (IT 16, 5.2.2.9): um extintor a até 10 m da entrada do pavimento — se nem os existentes nem
+    // os lançados agora chegam, um junto da entrada (meio metro para dentro, rumo ao centro do ambiente).
+    const doPavimento = [...existentesDoNivel.map((x) => ({ ponto: x.ponto, space: x.space })), ...pontos.filter((p) => p.levelId === levelId).map((p) => ({ ponto: p.at, space: rede.espacos.find((x) => pointInPolygon(x.ring, p.at))! })).filter((x) => !!x.space)];
+    const ents = entradasDoPavimento(model, levelId, rede);
+    if (ents.length && model.spaces.some((x) => x.levelId === levelId)) {
+      const dist = distanciasAosPortais(rede, doPavimento);
+      const perto = doPavimento.length && ents.some((e) => distanciaDoPonto(rede, e.space, e.ponto, doPavimento, dist) <= DISTANCIA_DA_ENTRADA_M * 1000 + 1e-6);
+      if (!perto) {
+        const e = ents[0];
+        const c0 = candidatosDoAmbiente(e.space).centro;
+        const d = Math.hypot(c0.x - e.ponto.x, c0.y - e.ponto.y) || 1;
+        const k = Math.min(500, d) / d;
+        const q = { x: Math.round(e.ponto.x + (c0.x - e.ponto.x) * k), y: Math.round(e.ponto.y + (c0.y - e.ponto.y) * k) };
+        if (comFolga(e.space, q)) pontos.push({ levelId, at: q });
+        else semCobertura.push(`${e.space.name || 'Entrada'}: sem lugar para o extintor junto da entrada (IT 16, 5.2.2.9)`);
+      }
+    }
   }
   // ⚠️ A1: a capacidade lançada é a que a ANÁLISE aceita no risco. O padrão (2-A:20-B:C) abaixo da
   // mínima do risco (médio: 3-A, 40-B) era lançado e reprovado pela própria análise. Subindo a
   // capacidade, a carga declarada do padrão deixa de valer (a carga de um 3-A é do fabricante) e
   // a peça sai sem ela.
-  const { capacidade, carga } = capacidadeDoRisco(hip, analise.risco);
   const comandos = pontos.map(
     (p) =>
       ({

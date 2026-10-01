@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { AGENTES_EXTINTORES, type AgenteExtintor, type ObjectId } from '../../utils/blueprintKernel';
-import { ROTULO_DO_AGENTE, type AnaliseDeExtintores, type HipotesesDeExtintores } from '../../utils/blueprintExtintores';
+import { ROTULO_DO_AGENTE, type AnaliseDeExtintores, type HipotesesDeExtintores, limiteDaClasse } from '../../utils/blueprintExtintores';
 
 interface Props {
   analise: AnaliseDeExtintores;
@@ -30,7 +30,9 @@ export default function PainelExtintoresIncendio({ analise: a, hip, onHip, onSel
       <div>
         <h4 className="text-xs font-semibold text-slate-700">Extintores</h4>
         <p className="text-[11px] text-slate-500">
-          Risco {ROTULO_DO_RISCO[a.risco]} ({a.motivoDoRisco}) · até {n(a.distanciaMaximaM, 0)} m a percorrer até um extintor da classe do ambiente — {a.fonte}.
+          Risco {ROTULO_DO_RISCO[a.risco]} ({a.motivoDoRisco}) · a distância a percorrer vai pela classe do fogo do ambiente (A{' '}
+          {n(limiteDaClasse('A', a.risco, null) ?? 0, 0)} m · B {n(limiteDaClasse('B', a.risco, null) ?? 0, 0)} m · C{' '}
+          {n(limiteDaClasse('C', a.risco, null) ?? 0, 0)} m), e um extintor a até 10 m da entrada de cada pavimento — {a.fonte}.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs text-slate-600 sm:grid-cols-2">
@@ -63,7 +65,12 @@ export default function PainelExtintoresIncendio({ analise: a, hip, onHip, onSel
         </label>
       </div>
 
-      {[...a.pendencias, ...a.pavimentosSemExtintor.map((p) => `${p.nome}: nenhum extintor no pavimento`)].map((p) => (
+      {[
+        ...a.pendencias,
+        ...a.pavimentosSemExtintor.map((p) => `${p.nome}: nenhum extintor no pavimento`),
+        ...(a.entradasLonge ?? []).map((p) => `${p.nome}: nenhum extintor a até 10 m da entrada (IT 16, 5.2.2.9)${p.distanciaM != null ? ` — o mais perto a ${n(p.distanciaM)} m` : ''}`),
+        ...(a.pavimentosSemABC ?? []).map((p) => `${p.nome}: sem unidade de pó ABC (nem A + BC) no pavimento (IT 16, 6.2.1)`),
+      ].map((p) => (
         <p key={p} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
           {p}
         </p>

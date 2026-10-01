@@ -382,7 +382,15 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
       - 5.12: recalque dos chuveiros a 0,60–1,00 m na fachada; em caixa no passeio, só se a
         fachada for impossível (5.12.2) — a conferência diz;
       - 5.9, 5.19, 5.22 no memorial descritivo;
-    - [ ] IT 16 (extintores), IT 15 (sinalização), IT 13 (iluminação), IT 14 (alarme);
+    - [x] IT 16 (extintores) — `blueprintExtintores.ts`, transcrição `it16-tabelas.txt`:
+      - a distância é POR CLASSE (Tabelas 4 a 6): A 20 m, B 15 m, C 20 m; no risco alto, o
+        extintor mais forte alcança mais (4-A: 20 m; 80-B: 15 m) — o rascunho tinha 25/20/15 m
+        por risco; abaixo da mínima do risco, o extintor não conta como unidade da classe;
+      - 5.2.2.9: um extintor a até 10 m da entrada do pavimento (porta para fora ou chegada da
+        escada) — análise e proposta (a proposta põe um junto da entrada; a lei A1 segue fechando);
+      - 6.2.1: unidade de pó ABC (ou A + BC) por pavimento; 6.2.1.2 (ABC em garagem e sem
+        brigada) como aviso;
+    - [ ] IT 15 (sinalização), IT 13 (iluminação), IT 14 (alarme);
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

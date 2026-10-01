@@ -1622,7 +1622,7 @@ Fecha o **bloco 2**.
 
 Fecha a parte de hidrante do **bloco 4** (§19).
 
-## Etapa 4 — Bombeamento · kernel bump · 3 fases
+## Etapa 4 — Bombeamento · kernel bump · 3 fases · **em andamento (4.1 ✅ 01/10/2026, kernel 0.82.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1988,4 +1988,28 @@ cálculo da 2.3.
   no centro de cada ambiente fora do alcance (com a tarefa aberta) e "Propor hidrantes".
 - **Testes:** `blueprintCoberturaIncendio.test.ts` (5) e o painel (3). Suíte com 6.570 testes
   (6.536 + 33 pulados + 1, corrigida e reconferida isolada). Build ok.
+
+### Etapa 4.1 — 01/10/2026 (frente `incendio-e4`, kernel 0.81.0 → 0.82.0)
+
+Os campos novos da bomba e da jockey (que o roadmap previa na 4.1 e na 4.3) entraram juntos, para
+haver um bump só.
+
+- **Kernel:**
+  - `Terminal.curvaBomba`: pontos {vazão L/min, altura mm}, inteiros, ≥ 3, com vazão crescente e
+    altura que não sobe.
+  - `Terminal.npshrMm`.
+  - Na jockey, `Terminal.bombaPrincipalId`. No canônico ele vai **por índice** (`principal`), num
+    segundo passo depois da ordenação, como o `pai` dos quadros.
+  - Invariante `BAD_PUMP`. `limparBombasOrfas` roda no fim de todo comando: apagar a principal (ou
+    trocar o tipo dela) solta a jockey, em vez de quebrar a invariante.
+- **Cadastro de bombas = o tipo salvo da organização.** `PropriedadesDeTerminal` leva a curva e o
+  NPSH só quando declarados (a assinatura dos tipos antigos fica intacta), e o resumo do tipo diz
+  "curva N pontos". Fabricante e modelo vão no nome do tipo e nos parâmetros. Nenhuma tabela nova.
+- **Tela** (`CamposDaBombaDeIncendio`, no painel do ponto):
+  - a curva numa tabela (+ ponto), aplicada num passo só. O botão diz por que está desligado, com
+    a mesma validação do kernel (`curvaDigitada`).
+  - "Tirar a curva", o NPSH em m e, na jockey, a principal.
+- **Ritual do bump:** 7/7 em 0.81.0; depois os seis hashes; 22 pinos; bundle regerado.
+- **Testes:** `blueprintBombaIncendio.test.ts` (5) e `components/CamposDaBombaDeIncendio.test.tsx`
+  (4). Suíte com 6.579 testes: 6.546 + 33 pulados. Build ok.
 

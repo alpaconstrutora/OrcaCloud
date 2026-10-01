@@ -56,7 +56,7 @@ const regra = (m: BlueprintModel) => conferirNbr5410(m, null, HIPOTESES_PADRAO).
 
 describe('DR como peça · kernel 0.73.0', () => {
   it('versões', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.81.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.82.0');
     expect(POLITICA_PADRAO.version).toBe('quant-1.23.0');
   });
 

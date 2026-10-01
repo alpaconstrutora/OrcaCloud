@@ -8315,6 +8315,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         trecho={trechoSel}
         terminal={terminalSel}
         numeroDeIncendio={terminalSel ? numerosDeIncendio.get(terminalSel.id) ?? null : null}
+        bombasPrincipais={(editor.model.terminais ?? []).filter((t) => t.tipoHidraulico === 'BOMBA_INCENDIO').map((t) => ({ id: t.id, nome: numerosDeIncendio.get(t.id)?.numero ?? t.tipo }))}
         circuitos={circuitosParaEscolher}
         // E4.3/E4.4: entrada e medidor ligam-se a um quadro; o medidor mede uma unidade.
         quadrosParaEntrada={(editor.model.quadros ?? []).map((q) => ({ id: q.id, nome: q.nome }))}

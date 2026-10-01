@@ -24,6 +24,7 @@ import {
   type PapelDoReservatorio,
   type FormaDoReservatorio,
   type PosicaoDoSprinkler,
+  type PontoDaCurvaDaBomba,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   CorrenteDiferencialMa,
@@ -110,6 +111,7 @@ import {
   limparRestricoesOrfas,
   findUnidade,
   limparEtiquetasOrfasDasUnidades,
+  limparBombasOrfas,
   findGrupo,
   findNucleo,
   type TipoDeNucleo,
@@ -719,6 +721,10 @@ export type Command =
       posicaoSprinkler?: PosicaoDoSprinkler | null;
       /** Reserva de incêndio (E3.2) — só na caixa de água fria; ignorada nas demais. */
       volumeRtiL?: number | null;
+      /** Bomba de incêndio (E4.1): curva, NPSH requerido e, na jockey, a principal. */
+      curvaBomba?: PontoDaCurvaDaBomba[] | null;
+      npshrMm?: number | null;
+      bombaPrincipalId?: ObjectId | null;
       /** Medidas já conhecidas ao criar (E7.1: o tanque séptico dimensionado). Ausentes = as da família. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -763,6 +769,10 @@ export type Command =
       posicaoSprinkler?: PosicaoDoSprinkler | null;
       /** Reserva de incêndio na caixa de água fria (E3.2). `null` apaga. */
       volumeRtiL?: number | null;
+      /** Bomba de incêndio (E4.1). `null` apaga. */
+      curvaBomba?: PontoDaCurvaDaBomba[] | null;
+      npshrMm?: number | null;
+      bombaPrincipalId?: ObjectId | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -3414,6 +3424,9 @@ function aplicarSemHash(
           ...(command.fatorK != null && command.tipoHidraulico === 'SPRINKLER' ? { fatorK: Math.round(command.fatorK) } : {}),
           ...(command.posicaoSprinkler != null && command.tipoHidraulico === 'SPRINKLER' ? { posicaoSprinkler: command.posicaoSprinkler } : {}),
           ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
+          ...(command.curvaBomba != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { curvaBomba: curvaInteira(command.curvaBomba) } : {}),
+          ...(command.npshrMm != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { npshrMm: Math.round(command.npshrMm) } : {}),
+          ...(command.bombaPrincipalId != null && command.tipoHidraulico === 'BOMBA_JOCKEY' ? { bombaPrincipalId: command.bombaPrincipalId } : {}),
         },
       ];
       // E7.1: as medidas, só quando informadas — a chave ausente é o estado de todo terminal anterior.
@@ -3472,6 +3485,15 @@ function aplicarSemHash(
       if (command.fatorK !== undefined) terminal.fatorK = command.fatorK == null ? null : Math.round(command.fatorK);
       if (command.posicaoSprinkler !== undefined) terminal.posicaoSprinkler = command.posicaoSprinkler ?? null;
       if (command.volumeRtiL !== undefined) terminal.volumeRtiL = command.volumeRtiL == null ? null : Math.round(command.volumeRtiL);
+      if (command.curvaBomba !== undefined) terminal.curvaBomba = command.curvaBomba == null ? null : curvaInteira(command.curvaBomba);
+      if (command.npshrMm !== undefined) terminal.npshrMm = command.npshrMm == null ? null : Math.round(command.npshrMm);
+      if (command.bombaPrincipalId !== undefined) terminal.bombaPrincipalId = command.bombaPrincipalId ?? null;
+      // Deixar de ser bomba leva curva, NPSH e principal juntos — a invariante recusaria.
+      if (terminal.tipoHidraulico !== 'BOMBA_INCENDIO' && terminal.tipoHidraulico !== 'BOMBA_JOCKEY') {
+        if (terminal.curvaBomba != null) terminal.curvaBomba = null;
+        if (terminal.npshrMm != null) terminal.npshrMm = null;
+      }
+      if (terminal.tipoHidraulico !== 'BOMBA_JOCKEY' && terminal.bombaPrincipalId != null) terminal.bombaPrincipalId = null;
       // Deixar de ser caixa de água fria leva a RTI junto — a invariante recusaria.
       if ((terminal.tipoHidraulico !== 'RESERVATORIO' || terminal.disciplina !== 'AGUA_FRIA') && terminal.volumeRtiL != null) terminal.volumeRtiL = null;
       // Deixar de ser sprinkler leva K e posição juntos — a invariante recusaria.
@@ -5224,6 +5246,7 @@ function aplicarSemHash(
   diff.deleted.push(...limparRestricoesOrfas(next));
   // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
   diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
+  diff.updated.push(...limparBombasOrfas(next));
   // PAREDE CURVA (P2.12): faceta que saiu do círculo perde o metadado.
   retirarArcosDesfeitos(next, diff);
   // FAMÍLIAS ANINHADAS (P2.18): filho cujo conjunto sumiu fica solto.
@@ -5410,6 +5433,11 @@ function tirarCircuitoDosDrs(model: BlueprintModel, circuitoId: ObjectId, exceto
     if (q.id === exceto || !(q.drs ?? []).some((d) => d.circuitoIds.includes(circuitoId))) continue;
     q.drs = (q.drs ?? []).map((d) => (d.circuitoIds.includes(circuitoId) ? { ...d, circuitoIds: d.circuitoIds.filter((x) => x !== circuitoId) } : d));
   }
+}
+
+/** A curva da bomba em inteiros (o kernel só guarda inteiros), na ordem dada. */
+function curvaInteira(c: readonly PontoDaCurvaDaBomba[]): PontoDaCurvaDaBomba[] {
+  return c.map((p) => ({ vazaoLmin: Math.round(p.vazaoLmin), alturaMm: Math.round(p.alturaMm) }));
 }
 
 export function applyCommand(model: BlueprintModel, command: Command): CommandResult {

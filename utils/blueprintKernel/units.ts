@@ -478,7 +478,17 @@
  * de incêndio), inteiro, ≤ `volumeL`, omitido do canônico quando ausente.
  * Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.81.0';
+/**
+ * ─── 0.81.0 → 0.82.0 (30/09/2026) — A BOMBA DE INCÊNDIO ─────────────────────
+ *
+ * Nas bombas de incêndio (E4.1 do roadmap de incêndio): `Terminal.curvaBomba`
+ * (pontos [L/min, mm] com vazão crescente e altura que não sobe, ≥ 3) e
+ * `Terminal.npshrMm`; na jockey, `Terminal.bombaPrincipalId` — no canônico por
+ * ÍNDICE (`principal`), num segundo passo, e limpa quando a principal some
+ * (`limparBombasOrfas`). Tudo omitido quando ausente. Vocabulário novo, forma
+ * igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.82.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

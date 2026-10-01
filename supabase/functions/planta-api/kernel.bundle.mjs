@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.81.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.82.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2140,6 +2140,9 @@ function projetar(model) {
       posicaoSprinkler: t.posicaoSprinkler ?? void 0,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? void 0,
+      // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
+      curvaBomba: t.curvaBomba ? t.curvaBomba.map((p) => [p.vazaoLmin, p.alturaMm]) : void 0,
+      npshrMm: t.npshrMm ?? void 0,
       larguraMm: t.larguraMm ?? void 0,
       alturaMm: t.alturaMm ?? void 0,
       profundidadeMm: t.profundidadeMm ?? void 0,
@@ -2213,6 +2216,10 @@ function projetar(model) {
   }
   for (const t of terminais) {
     if (t.item.unidadeId != null && indiceDaUnidade.has(t.item.unidadeId)) t.geom.unidade = indiceDaUnidade.get(t.item.unidadeId);
+  }
+  const indiceDoTerminal = new Map(terminais.map((t, i) => [t.item.id, i]));
+  for (const t of terminais) {
+    if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) t.geom.principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
   }
   const indiceDeParede = new Map(walls.map((w, i) => [w.item.uid, i]));
   const indiceDeEstruturaG = new Map(structures.map((s2, i) => [s2.item.uid, i]));
@@ -2885,6 +2892,8 @@ function modelFromCanonicalPayload(payload) {
       fatorK: t.fatorK ?? null,
       posicaoSprinkler: t.posicaoSprinkler ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
+      curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
+      npshrMm: t.npshrMm ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
@@ -2950,6 +2959,12 @@ function modelFromCanonicalPayload(payload) {
     const alvo = model.terminais[i];
     const u = model.unidades[t.unidade];
     if (alvo && u) alvo.unidadeId = u.id;
+  });
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.principal == null) return;
+    const alvo = model.terminais[i];
+    const p = model.terminais[t.principal];
+    if (alvo && p && p.id !== alvo.id) alvo.bombaPrincipalId = p.id;
   });
   const gruposLidos = payload.grupos ?? [];
   let k = 0;

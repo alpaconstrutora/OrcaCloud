@@ -12,6 +12,7 @@ import {
 import { padraoDaTomada } from '../../utils/blueprintRede';
 import { CampoMedida } from './PainelParedeSelecionada';
 import CamposDeDimensao from './CamposDeDimensao';
+import CamposDaBombaDeIncendio from './CamposDaBombaDeIncendio';
 import {
   GRUPO_DO_PONTO_ELETRICO,
   MEDIDAS_PADRAO_TERMINAL,
@@ -105,6 +106,10 @@ interface Props {
     fatorK?: number | null;
     /** Incêndio E3.2: a reserva de incêndio na caixa de água fria. `null` apaga. */
     volumeRtiL?: number | null;
+    /** Incêndio E4.1: curva, NPSH requerido e principal da jockey. */
+    curvaBomba?: { vazaoLmin: number; alturaMm: number }[] | null;
+    npshrMm?: number | null;
+    bombaPrincipalId?: string | null;
     posicaoSprinkler?: PosicaoDoSprinkler | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
@@ -124,6 +129,8 @@ interface Props {
    * extravasor, limpeza) e o botão que lança. `resumo` vazio = já tem tudo.
    */
   pecasDaCaixa?: { resumo: string[]; onLancar: () => void };
+  /** Incêndio E4.1: as bombas principais do desenho, para a jockey escolher a sua. */
+  bombasPrincipais?: { id: string; nome: string }[];
   /** Incêndio E1.4: o número da peça (H-2) e se é derivado ou declarado. `undefined` = não é numerada. */
   numeroDeIncendio?: { numero: string; origem: 'DECLARADO' | 'DERIVADO' } | null;
   comAMesmaAssinatura?: number;
@@ -171,6 +178,7 @@ export default function PainelTrechoSelecionado({
   circuitos = [],
   onExcluir,
   numeroDeIncendio,
+  bombasPrincipais = [],
 }: Props) {
   if (terminal) {
     return (
@@ -374,6 +382,9 @@ export default function PainelTrechoSelecionado({
                     ? '— derivado da posição; declare o rótulo da peça para fixá-lo'
                     : '— declarado no rótulo da peça'}
                 </p>
+              )}
+              {(terminal.tipoHidraulico === 'BOMBA_INCENDIO' || terminal.tipoHidraulico === 'BOMBA_JOCKEY') && (
+                <CamposDaBombaDeIncendio terminal={terminal} principais={bombasPrincipais.filter((b) => b.id !== terminal.id)} onBomba={(c) => onTerminal(c)} />
               )}
               {terminal.tipoHidraulico === 'SPRINKLER' && (
                 <div className="grid grid-cols-2 gap-2">

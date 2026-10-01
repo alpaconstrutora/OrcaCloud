@@ -879,6 +879,9 @@ function projetar(model: BlueprintModel): {
       posicaoSprinkler: t.posicaoSprinkler ?? undefined,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? undefined,
+      // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
+      curvaBomba: t.curvaBomba ? t.curvaBomba.map((p) => [p.vazaoLmin, p.alturaMm] as [number, number]) : undefined,
+      npshrMm: t.npshrMm ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -986,6 +989,11 @@ function projetar(model: BlueprintModel): {
   }
   for (const t of terminais) {
     if (t.item.unidadeId != null && indiceDaUnidade.has(t.item.unidadeId)) (t.geom as { unidade?: number }).unidade = indiceDaUnidade.get(t.item.unidadeId);
+  }
+  // Incêndio E4.1: a principal da jockey por ÍNDICE na lista de terminais — segundo passo.
+  const indiceDoTerminal = new Map(terminais.map((t, i) => [t.item.id, i]));
+  for (const t of terminais) {
+    if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) (t.geom as { principal?: number }).principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
   }
 
   // GRUPOS (0.38.0): origem por ÍNDICE nas famílias ordenadas; instâncias com a
@@ -1568,6 +1576,10 @@ export interface CanonicalPayload {
     posicaoSprinkler?: string;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
+    /** Curva Q×H [L/min, mm], NPSH requerido e a principal da jockey (índice). Ausentes sob kernel < 0.82.0. */
+    curvaBomba?: [number, number][];
+    npshrMm?: number;
+    principal?: number;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
     larguraMm?: number;
     alturaMm?: number;
@@ -2325,6 +2337,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       fatorK: t.fatorK ?? null,
       posicaoSprinkler: (t.posicaoSprinkler as PosicaoDoSprinkler | undefined) ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
+      curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
+      npshrMm: t.npshrMm ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
@@ -2403,6 +2417,13 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     const alvo = model.terminais[i];
     const u = model.unidades[t.unidade];
     if (alvo && u) alvo.unidadeId = u.id;
+  });
+  // Incêndio E4.1: a principal da jockey, por índice — depois de existirem todos os terminais.
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.principal == null) return;
+    const alvo = model.terminais[i];
+    const p = model.terminais[t.principal];
+    if (alvo && p && p.id !== alvo.id) alvo.bombaPrincipalId = p.id;
   });
 
   // Grupos: DEPOIS de paredes, estruturas e etiquetas (origem por índice). As

@@ -2750,6 +2750,16 @@ export const POSICOES_DO_SPRINKLER = ['PENDENTE', 'EM_PE', 'LATERAL'] as const;
 export type PosicaoDoSprinkler = (typeof POSICOES_DO_SPRINKLER)[number];
 /** Fator K do sprinkler em L/min/bar^½ — inteiro; o padrão da ficha vale quando ausente. */
 export const FATOR_K_MAXIMO = 1000;
+/**
+ * Um PONTO DA CURVA da bomba (incêndio E4.1): vazão em L/min e altura
+ * manométrica em mm de coluna d'água, inteiros (o kernel só guarda inteiros).
+ */
+export interface PontoDaCurvaDaBomba {
+  vazaoLmin: number;
+  alturaMm: number;
+}
+/** Quantos pontos a curva da bomba precisa, no mínimo (para interpolar com sentido). */
+export const PONTOS_MINIMOS_DA_CURVA = 3;
 
 const AF_AQ: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE'];
 const AF_AQ_ESG: DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO'];
@@ -2940,6 +2950,20 @@ export interface Terminal {
    * o volume dela inteiro é RTI. Omitido do canônico quando ausente.
    */
   volumeRtiL?: number | null;
+  /**
+   * BOMBA DE INCÊNDIO (E4.1, 30/09/2026) — só em `BOMBA_INCENDIO` e
+   * `BOMBA_JOCKEY`. A CURVA Q×H declarada (do catálogo do fabricante, ou do tipo
+   * salvo da organização): vazão crescente, altura que não sobe. O NPSH
+   * requerido, mm. Omitidos do canônico quando ausentes.
+   */
+  curvaBomba?: PontoDaCurvaDaBomba[] | null;
+  npshrMm?: number | null;
+  /**
+   * Só na `BOMBA_JOCKEY`: a bomba PRINCIPAL que ela protege (o id de um
+   * `BOMBA_INCENDIO`). No canônico vai por ÍNDICE (`principal`), num segundo
+   * passo. Apagar a principal limpa a ligação (`limparBombasOrfas`).
+   */
+  bombaPrincipalId?: ObjectId | null;
   /**
    * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
    *
@@ -3623,6 +3647,19 @@ export function unidadeDaEtiqueta(model: BlueprintModel, labelUid: ElementUid): 
  * cômodo da unidade sem cada `Delete*` ter de lembrar. A unidade FICA, mesmo
  * vazia — sumir com ela em silêncio esconderia o que a reforma fez.
  */
+/** Incêndio E4.1: a jockey cuja principal sumiu (ou deixou de ser bomba) perde a ligação. */
+export function limparBombasOrfas(model: BlueprintModel): ObjectId[] {
+  const principais = new Set((model.terminais ?? []).filter((t) => t.tipoHidraulico === 'BOMBA_INCENDIO').map((t) => t.id));
+  const tocadas: ObjectId[] = [];
+  for (const t of model.terminais ?? []) {
+    if (t.bombaPrincipalId != null && !principais.has(t.bombaPrincipalId)) {
+      t.bombaPrincipalId = null;
+      tocadas.push(t.id);
+    }
+  }
+  return tocadas;
+}
+
 export function limparEtiquetasOrfasDasUnidades(model: BlueprintModel): ObjectId[] {
   const vivas = new Set((model.labels ?? []).map((l) => l.uid));
   const tocadas: ObjectId[] = [];
@@ -5740,6 +5777,39 @@ export function assertModelInvariants(model: BlueprintModel): void {
       }
       if (t.formaReservatorio != null && !(FORMAS_DO_RESERVATORIO as readonly string[]).includes(t.formaReservatorio)) {
         throw new KernelError('BAD_RESERVOIR', `Forma de reservatório inválida em ${t.id}: ${t.formaReservatorio}`);
+      }
+    }
+    // Bomba (incêndio E4.1): curva e NPSH só nas bombas de incêndio; principal só na jockey.
+    if (t.curvaBomba != null || t.npshrMm != null) {
+      if (t.tipoHidraulico !== 'BOMBA_INCENDIO' && t.tipoHidraulico !== 'BOMBA_JOCKEY') {
+        throw new KernelError('BAD_PUMP', `Terminal ${t.id} não é bomba de incêndio e não pode ter curva nem NPSH`);
+      }
+      if (t.npshrMm != null && (!Number.isInteger(t.npshrMm) || t.npshrMm <= 0)) {
+        throw new KernelError('BAD_PUMP', `NPSH requerido inválido em ${t.id}: ${t.npshrMm}`);
+      }
+      if (t.curvaBomba != null) {
+        const c = t.curvaBomba;
+        if (!Array.isArray(c) || c.length < PONTOS_MINIMOS_DA_CURVA) {
+          throw new KernelError('BAD_PUMP', `A curva da bomba ${t.id} precisa de ${PONTOS_MINIMOS_DA_CURVA} pontos ou mais`);
+        }
+        for (let i = 0; i < c.length; i++) {
+          const p = c[i];
+          if (!Number.isInteger(p.vazaoLmin) || p.vazaoLmin < 0 || !Number.isInteger(p.alturaMm) || p.alturaMm <= 0) {
+            throw new KernelError('BAD_PUMP', `Ponto ${i + 1} da curva da bomba ${t.id} inválido`);
+          }
+          if (i > 0 && (p.vazaoLmin <= c[i - 1].vazaoLmin || p.alturaMm > c[i - 1].alturaMm)) {
+            throw new KernelError('BAD_PUMP', `A curva da bomba ${t.id} tem de ter vazão crescente e altura que não sobe (ponto ${i + 1})`);
+          }
+        }
+      }
+    }
+    if (t.bombaPrincipalId != null) {
+      if (t.tipoHidraulico !== 'BOMBA_JOCKEY') {
+        throw new KernelError('BAD_PUMP', `Só a bomba jockey tem bomba principal (${t.id})`);
+      }
+      const p = (model.terminais ?? []).find((x) => x.id === t.bombaPrincipalId);
+      if (!p || p.tipoHidraulico !== 'BOMBA_INCENDIO') {
+        throw new KernelError('BAD_PUMP', `A principal da jockey ${t.id} não é uma bomba de incêndio`);
       }
     }
     // RTI (incêndio E3.2): só na caixa de água fria, inteira, positiva e dentro do volume.

@@ -1360,6 +1360,8 @@ interface Props {
   onAddAreaPublica?: (pontos: Point[]) => void;
   /** INCÊNDIO (E5.2): fecha o contorno da área de operação dos sprinklers. */
   onAddAreaDeOperacao?: (pontos: Point[]) => void;
+  /** INCÊNDIO (E6.3): as rotas de fuga DERIVADAS, um pedaço por pavimento; vermelho = acima do percurso máximo. */
+  rotasDeFuga?: readonly { levelId: string; pontos: Point[]; falta: boolean }[] | null;
   onAddVia?: (eixo: Point[]) => void;
   /** Move a ponta de um limite. Espelha `onMoveVertex`. */
   onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
@@ -1530,6 +1532,7 @@ export default function BlueprintCanvas({
   onAddLote,
   onAddAreaPublica,
   onAddAreaDeOperacao,
+  rotasDeFuga,
   onAddVia,
   onMoveBoundaryVertex,
   limiteEmDestaque = null,
@@ -4579,6 +4582,35 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, `${areaEmM2(a.pontos).toFixed(1).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#9a3412', Math.round(10 * fz));
         }
       });
+
+      // INCÊNDIO (E6.3): as rotas de fuga — tracejadas, com a seta no fim (o sentido da fuga). As que
+      // estouram o limite vão POR CIMA: o pedaço do térreo de uma rota vermelha que vem de cima corre
+      // junto das verdes do térreo, e desenhado antes delas sumia (o harness `rota-de-fuga` pegou).
+      for (const r of [...(rotasDeFuga ?? [])].sort((x, y) => Number(x.falta) - Number(y.falta))) {
+        if (r.pontos.length < 2 || (levelId && r.levelId !== levelId)) continue;
+        const pts = r.pontos.map(paraTela);
+        const cor = r.falta ? '#dc2626' : '#16a34a';
+        ctx.save();
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 5]);
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const a = pts[pts.length - 2];
+        const b = pts[pts.length - 1];
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        ctx.fillStyle = cor;
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(b.x - 10 * Math.cos(ang - 0.4), b.y - 10 * Math.sin(ang - 0.4));
+        ctx.lineTo(b.x - 10 * Math.cos(ang + 0.4), b.y - 10 * Math.sin(ang + 0.4));
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
 
       for (const q of model.quadras ?? []) {
         if (q.pontos.length < 3 || ocultos.has(q.id)) continue;

@@ -53,13 +53,15 @@ export interface HipotesesDeSaidas {
   pessoasPorDormitorio: number;
   /** Declarado vence a tabela da divisão. `null` = da tabela. */
   areaPorPessoaM2: number | null;
+  /** E6.3: o percurso máximo até a saída, m — declarado vence a tabela (`null`). */
+  percursoMaximoM: number | null;
 }
-export const HIPOTESES_SAIDAS_PADRAO: HipotesesDeSaidas = { pessoasPorDormitorio: 2, areaPorPessoaM2: null };
+export const HIPOTESES_SAIDAS_PADRAO: HipotesesDeSaidas = { pessoasPorDormitorio: 2, areaPorPessoaM2: null, percursoMaximoM: null };
 
 export function hipotesesDeSaidasDaColuna(raw: unknown): HipotesesDeSaidas {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const pos = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : null);
-  return { pessoasPorDormitorio: pos(r.pessoasPorDormitorio) ?? HIPOTESES_SAIDAS_PADRAO.pessoasPorDormitorio, areaPorPessoaM2: pos(r.areaPorPessoaM2) };
+  return { pessoasPorDormitorio: pos(r.pessoasPorDormitorio) ?? HIPOTESES_SAIDAS_PADRAO.pessoasPorDormitorio, areaPorPessoaM2: pos(r.areaPorPessoaM2), percursoMaximoM: pos(r.percursoMaximoM) };
 }
 
 // ─── Unidades de passagem ────────────────────────────────────────────────────

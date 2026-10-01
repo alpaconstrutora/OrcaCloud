@@ -68,3 +68,30 @@ describe('PainelSaidasIncendio › proteção das escadas (E6.2)', () => {
   });
 });
 
+describe('PainelSaidasIncendio › percurso até a saída (E6.3)', () => {
+  it('do mais longo para o mais curto, vermelho acima do limite, "sem saída" sem caminho; o limite declarado e as rotas na planta gravam', () => {
+    const onHip = vi.fn();
+    const onLigar = vi.fn();
+    const percurso = {
+      limiteM: 30,
+      motivo: 'grupo A, sem chuveiros automáticos',
+      fonte: 'CONFERIR NA IT',
+      pendencias: [],
+      maisLonga: null,
+      ambientes: [
+        { spaceId: 's1', levelId: 't', rotulo: 'Hall térreo', origem: { x: 0, y: 0 }, distanciaM: 12.06, rota: [], pelaEscada: false, atende: true },
+        { spaceId: 's2', levelId: 'p', rotulo: 'Hall 3º', origem: { x: 0, y: 0 }, distanciaM: 41.5, rota: [], pelaEscada: true, atende: false },
+        { spaceId: 's3', levelId: 'p', rotulo: 'Depósito', origem: { x: 0, y: 0 }, distanciaM: null, rota: [], pelaEscada: false, atende: false },
+      ],
+    };
+    render(<PainelSaidasIncendio analise={analise} hip={HS} onHip={onHip} onSelecionar={vi.fn()} percurso={percurso} rotasNaPlanta={{ ligado: true, onLigar }} />);
+    const linhas = within(screen.getByTestId('saidas-percurso')).getAllByRole('row').map((r) => r.textContent);
+    expect(linhas).toEqual(['Depósitosem saída', 'Hall 3º · pela escada41,5 m', 'Hall térreo12,1 m']);
+    expect(screen.getByTestId('saidas-percurso').textContent).toContain('Limite 30 m (grupo A, sem chuveiros automáticos)');
+    fireEvent.change(screen.getByLabelText('Percurso máximo (m)'), { target: { value: '45' } });
+    expect(onHip).toHaveBeenLastCalledWith({ ...HS, percursoMaximoM: 45 });
+    fireEvent.click(screen.getByLabelText('Mostrar as rotas na planta'));
+    expect(onLigar).toHaveBeenCalledWith(false);
+  });
+});
+

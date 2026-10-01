@@ -1643,7 +1643,7 @@ Fecha o **bloco 4**.
 
 Fecha o **bloco 3**.
 
-## Etapa 6 — Saídas e rota de fuga (vai além) · kernel bump · 3 fases · **em andamento (6.1 e 6.2 ✅ 01/10/2026; kernel 0.83.0 → 0.84.0)**
+## Etapa 6 — Saídas e rota de fuga (vai além) · kernel bump · 3 fases · **✅ CONCLUÍDA em 01/10/2026 (3 de 3; kernel 0.83.0 → 0.84.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2283,4 +2283,35 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   fora de ambiente) e mais 1 no painel. Suíte com 6.666 testes: 6.633 + 33 pulados. Build ok.
 - **Fica para a E7.2:** o antipânico (a marca existe; a regra de quando se exige depende da IT) e a
   placa de saída.
+
+### Etapa 6.3 — 01/10/2026 (frente `incendio-e6`, sem bump) — fecha a E6
+
+- **`utils/blueprintRotaDeFuga.ts`, `percursoDeFuga`:** um grafo de vários pavimentos.
+  - **Nós:** as portas de cada pavimento e as "bocas" das escadas (o começo do eixo na partida, o fim
+    na chegada, e em cada pavimento de uma multiandares).
+  - **Arestas:** os pares de nós do mesmo ambiente, pela distância POR DENTRO dele; os lances, pelo
+    comprimento inclinado (√(horizontal² + desnível²)); e a porta → exterior.
+  - **Saída:** só conta a porta para o exterior do pavimento de DESCARGA (a da varanda lá em cima não
+    é saída).
+  - **Busca:** Dijkstra a partir do exterior.
+- **Contornar paredes (`caminhoDentro`):** reto quando o segmento cabe no ambiente; senão, pelo grafo
+  de visibilidade dos vértices do contorno (o L passa pelo canto de dentro).
+- **Ponto mais desfavorável:** cada canto recuado 40 cm para dentro, e o centro. Vale o que fica mais
+  longe da saída, e a rota parte dele.
+- **Limite (`limiteDoPercursoM`, CONFERIR NA IT):** 30 m sem chuveiros e 45 m com, nos grupos
+  A/B/D/E/F/H; 40/55 em C/G/I/J. O "com" liga sozinho quando o desenho tem sprinkler. O percurso
+  máximo declarado (`hipoteses.saidas.percursoMaximoM`) vence a tabela.
+- **Rota:** é uma polilinha DERIVADA por pavimento, com o lance desenhado no pavimento de baixo, pelo
+  eixo da escada. Na planta (tarefa Incêndio) sai tracejada com a seta no fim: verde atende, vermelha
+  estoura o limite. As vermelhas vão POR CIMA. O harness `rota-de-fuga` mostrou o pedaço do térreo
+  de uma rota vermelha que desce do 1º sumindo sob as verdes do térreo, que correm junto.
+- **Tela:** "Percurso até a saída" no painel de saídas: os 8 maiores, do mais longo para o mais curto,
+  em vermelho acima do limite, "sem saída" sem caminho e "pela escada". Há o campo do percurso máximo e
+  "Rotas na planta" liga/desliga.
+- **Testes:** `blueprintRotaDeFuga.test.ts` (6: L pelo canto; sobrado com a rota de cima pela escada
+  até a porta da rua; origem no canto oposto; prédio de 4 pavimentos somando lances e FALTA com o
+  comprimento; sem porta da rua ninguém sai; limites) e mais 1 no painel. Suíte com 6.673 testes:
+  6.640 + 33 pulados. Build ok.
+
+**Fecha os A das seções 22 e 27** (motor que calcula a rota de fuga; população e saídas).
 

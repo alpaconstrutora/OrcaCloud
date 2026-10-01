@@ -236,6 +236,8 @@ import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/bluep
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
 import { proporAreaDeOperacao } from '../../utils/blueprintAreaDeOperacao';
 import { analisarSaidas } from '../../utils/blueprintSaidasIncendio';
+import { percursoDeFuga } from '../../utils/blueprintRotaDeFuga';
+import { pavimentoDeDescarga } from '../../utils/blueprintIncendioClassificacao';
 import PainelSaidasIncendio from './PainelSaidasIncendio';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
@@ -7318,6 +7320,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
   );
   const exigenciasDeIncendio = useMemo(() => (classificacaoDeIncendio ? exigenciasDaEdificacao(classificacaoDeIncendio) : null), [classificacaoDeIncendio]);
+  /** E6.3: o percurso de fuga de cada ambiente (derivado) e se as rotas aparecem na planta. */
+  const [rotasDeFugaNaPlanta, setRotasDeFugaNaPlanta] = useState(true);
+  const percursoDeIncendio = useMemo(
+    () =>
+      classificacaoDeIncendio
+        ? percursoDeFuga(
+            editor.model,
+            classificacaoDeIncendio.divisao.valor?.trim().charAt(0).toUpperCase() || null,
+            pavimentoDeDescarga(editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId)?.id ?? null,
+            incendioDoEstudo.hipoteses.saidas.percursoMaximoM,
+          )
+        : null,
+    [classificacaoDeIncendio, editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId, incendioDoEstudo.hipoteses.saidas.percursoMaximoM],
+  );
+  const rotasDeFugaDoCanvas = useMemo(
+    () => (percursoDeIncendio && rotasDeFugaNaPlanta ? percursoDeIncendio.ambientes.flatMap((a) => a.rota.map((r) => ({ ...r, falta: a.atende === false }))) : null),
+    [percursoDeIncendio, rotasDeFugaNaPlanta],
+  );
   /** E6.1: saídas de emergência — população e largura das escadas, corredores e descarga. */
   const saidasDeIncendio = useMemo(
     () =>
@@ -12873,6 +12893,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddVia={adicionarVia}
               onAddAreaPublica={adicionarAreaPublica}
               onAddAreaDeOperacao={adicionarAreaDeOperacao}
+              rotasDeFuga={tarefaAberta === 'incendio' ? rotasDeFugaDoCanvas : null}
               vagas={vagasDoNivelAtivo}
               tipoDeVaga={tipoDeVaga}
               onAddVaga={adicionarVaga}
@@ -14354,6 +14375,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     onHip={(saidas) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, saidas })}
                     onSelecionar={selecionar}
                     onProtecao={(escadaId, protecao) => editor.run({ type: 'SetEscadaProps', escadaId, protecao })}
+                    percurso={percursoDeIncendio}
+                    rotasNaPlanta={{ ligado: rotasDeFugaNaPlanta, onLigar: setRotasDeFugaNaPlanta }}
                     onCortaFogo={(ids) =>
                       editor.runBatch(
                         ids.map((openingId) => {

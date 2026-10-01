@@ -7,6 +7,7 @@
 import React from 'react';
 import { PROTECOES_DE_ESCADA, type ObjectId, type ProtecaoDaEscada } from '../../utils/blueprintKernel';
 import { ROTULO_DA_PROTECAO, type AnaliseDeSaidas, type HipotesesDeSaidas } from '../../utils/blueprintSaidasIncendio';
+import type { PercursoDeFuga } from '../../utils/blueprintRotaDeFuga';
 
 interface Props {
   analise: AnaliseDeSaidas;
@@ -17,6 +18,9 @@ interface Props {
   onProtecao?: (escadaId: ObjectId, p: ProtecaoDaEscada | null) => void;
   /** E6.2: marcar as portas como corta-fogo (um lote). */
   onCortaFogo?: (openingIds: ObjectId[]) => void;
+  /** E6.3: o percurso de fuga de cada ambiente, e a rota desenhada na planta. */
+  percurso?: PercursoDeFuga | null;
+  rotasNaPlanta?: { ligado: boolean; onLigar: (v: boolean) => void };
 }
 
 const n = (v: number, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -24,7 +28,7 @@ const m = (mm: number) => `${n(mm / 1000, 2)} m`;
 const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums';
 const ROTULO_DO_TIPO = { ESCADA: 'Escada', CORREDOR: 'Corredor', DESCARGA: 'Descarga' } as const;
 
-export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecionar, onProtecao, onCortaFogo }: Props) {
+export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecionar, onProtecao, onCortaFogo, percurso, rotasNaPlanta }: Props) {
   const falta = a.itens.filter((i) => !i.atende);
   return (
     <div className="space-y-3" data-testid="saidas-incendio">
@@ -172,6 +176,67 @@ export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecio
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {percurso && (
+        <div data-testid="saidas-percurso">
+          <div className="flex items-center justify-between gap-2">
+            <h5 className="text-xs font-semibold text-slate-700">Percurso até a saída</h5>
+            {rotasNaPlanta && (
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input type="checkbox" checked={rotasNaPlanta.ligado} onChange={(e) => rotasNaPlanta.onLigar(e.target.checked)} aria-label="Mostrar as rotas na planta" />
+                <span>Rotas na planta</span>
+              </label>
+            )}
+          </div>
+          <div className="mt-1 grid grid-cols-1 gap-x-4 text-xs text-slate-600 sm:grid-cols-2">
+            <label className="flex items-center justify-between gap-2">
+              <span>
+                Percurso máximo <span className="text-slate-400">(m · vazio = tabela)</span>
+              </span>
+              <input
+                type="number"
+                min={0}
+                step={5}
+                value={hip.percursoMaximoM ?? ''}
+                placeholder={String(percurso.limiteM)}
+                onChange={(e) => {
+                  if (e.target.value === '') return onHip({ ...hip, percursoMaximoM: null });
+                  const x = Number(e.target.value);
+                  if (Number.isFinite(x) && x > 0) onHip({ ...hip, percursoMaximoM: x });
+                }}
+                aria-label="Percurso máximo (m)"
+                className={campo}
+              />
+            </label>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            Limite {n(percurso.limiteM)} m ({percurso.motivo}) — {percurso.fonte}. Do ponto mais desfavorável do ambiente, pelas portas e escadas, até uma porta para fora no pavimento de descarga.
+          </p>
+          {percurso.pendencias.map((p) => (
+            <p key={p} className="mt-1 text-xs text-amber-800">{p}</p>
+          ))}
+          <table className="mt-1 w-full text-xs">
+            <tbody>
+              {[...percurso.ambientes]
+                .sort((x, y) => (y.distanciaM ?? Infinity) - (x.distanciaM ?? Infinity))
+                .slice(0, 8)
+                .map((r) => (
+                  <tr key={r.spaceId} className="border-b border-slate-100 text-slate-700">
+                    <td className="py-1.5 pr-2">
+                      <button type="button" className="text-left text-blue-700 hover:underline" onClick={() => onSelecionar([r.spaceId])}>
+                        {r.rotulo}
+                      </button>
+                      {r.pelaEscada && <span className="text-slate-400"> · pela escada</span>}
+                    </td>
+                    <td className={`py-1.5 text-right tabular-nums ${r.atende ? 'text-emerald-700' : 'font-semibold text-red-700'}`}>
+                      {r.distanciaM == null ? 'sem saída' : `${n(r.distanciaM, 1)} m`}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
       )}
 

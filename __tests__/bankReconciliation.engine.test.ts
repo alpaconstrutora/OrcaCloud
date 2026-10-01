@@ -238,3 +238,97 @@ describe('3.2 afinidade de conta bancária no score', () => {
         expect(r.reasons.some(r2 => r2.includes('Conta bancária'))).toBe(false);
     });
 });
+
+// ─── Regra do usuário (01/10/2026): contraparte diferente = confiança zero ───
+import * as regrasPuras from '../utils/reconciliationRules';
+
+describe('scoreCandidate — fornecedor/credor/beneficiário diferente zera a confiança', () => {
+    const s = regrasPuras.AJUSTES_PADRAO;
+    // o caso do print: 88% "Valor exato · Data dentro de 5d · Documento encontrado no extrato"
+    const extratoJesler = {
+        amount: 600, direction: 'DEBIT', transaction_date: '2025-08-05',
+        description_raw: 'PAGAMENTO PIX PIX DEB 08702610000149 JESLER KENDY RAFAEL MEMO REF 18848193201',
+        description_normalized: 'PAGAMENTO PIX PIX DEB 08702610000149 JESLER KENDY RAFAEL MEMO REF 18848193201',
+        counterparty_name: 'JESLER KENDY RAFAEL',
+    };
+    const tituloDebora = {
+        amount: 600, transaction_date: '2025-08-10', due_date: '2025-08-10',
+        description: 'Fatura Contrato CTS-010-036-0001 (49) - agosto de 2025',
+        entity_name: 'Débora Cristina Duarte',
+    };
+
+    it('o caso do print: mesmo valor, data próxima, nomes diferentes → 0', () => {
+        const r = regrasPuras.scoreCandidate(extratoJesler, tituloDebora, s);
+        expect(r.score).toBe(0);
+        expect(r.reasons.join(' ')).toMatch(/diferente/);
+    });
+
+    it('e por isso NÃO vira sugestão no plano', () => {
+        const plano = regrasPuras.planMatching(
+            [{ id: 'b1', ...extratoJesler }],
+            [{ id: 't1', direction: 'DEBIT', ...tituloDebora }],
+            s, { docIndex: new Map(), aliases: [] },
+        );
+        expect(plano.suggestionRows).toEqual([]);
+        expect(plano.autoMatches).toEqual([]);
+    });
+
+    it('mesmo nome dos dois lados continua pontuando', () => {
+        const r = regrasPuras.scoreCandidate({ ...extratoJesler, counterparty_name: 'DEBORA CRISTINA DUARTE' }, tituloDebora, s);
+        expect(r.score).toBeGreaterThan(40);
+    });
+
+    it('extrato que não nomeia ninguém não zera (não há contradição)', () => {
+        const r = regrasPuras.scoreCandidate(
+            { amount: 600, direction: 'DEBIT', transaction_date: '2025-08-10', description_normalized: 'INT PAG TIT BANCO 001', counterparty_name: '' },
+            tituloDebora, s);
+        expect(r.score).toBeGreaterThan(0);
+    });
+
+    it('mesmo CADASTRO reconhecido (CNPJ/PIX) vence o nome do texto (fantasia × razão social)', () => {
+        const r = regrasPuras.scoreCandidate(
+            { ...extratoJesler, counterparty_name: 'LOJA FANTASIA XPTO' },
+            { ...tituloDebora, entity_name: 'Razao Social Ltda', party_id: 'forn-1' },
+            s,
+            { party_id: 'forn-1', party_type: 'SUPPLIER', party_name: 'Razao Social Ltda', via: 'CNPJ' },
+        );
+        expect(r.score).toBeGreaterThan(40);
+        expect(r.reasons.join(' ')).toMatch(/Mesmo fornecedor/);
+    });
+});
+
+describe('documentMatches — número inteiro, não pedaço de outro número', () => {
+    it('o caso do print: "0001" dentro do CNPJ não é documento', () => {
+        expect(regrasPuras.documentMatches('Fatura Contrato CTS-010-036-0001 (49) - agosto de 2025',
+            'PAGAMENTO PIX PIX DEB 08702610000149 JESLER KENDY RAFAEL MEMO REF 18848193201')).toBe(false);
+    });
+    it('zeros à esquerda continuam casando (o caso que já era verde)', () => {
+        expect(regrasPuras.documentMatches('NF 4521 Materiais', 'PAGTO BOLETO 000004521 FORNEC')).toBe(true);
+    });
+    it('NF dentro de um número maior não casa mais', () => {
+        expect(regrasPuras.documentMatches('NF 4521', 'REF 18845213201')).toBe(false);
+    });
+    it('ano não é documento', () => {
+        expect(regrasPuras.documentMatches('Aluguel agosto de 2025', 'PIX 2025 PAGAMENTO')).toBe(false);
+    });
+    it('número de NF solto no extrato casa', () => {
+        expect(regrasPuras.documentMatches('NF 98765 Cimento', 'PIX ENVIADO NF 98765 CIMENTOS SA')).toBe(true);
+    });
+});
+
+describe('a regra do zero usa o FAVORECIDO identificado, não a descrição livre', () => {
+    const s = regrasPuras.AJUSTES_PADRAO;
+    it('descrição que diz a finalidade ("ALUGUEL GALPAO") não zera um par correto', () => {
+        const r = regrasPuras.scoreCandidate(
+            { amount: 2200, direction: 'DEBIT', transaction_date: '2026-08-05', description_normalized: 'PIX ENVIADO ALUGUEL GALPAO 14' },
+            { amount: 2200, transaction_date: '2026-08-05', description: 'Aluguel Galpão 14 - parcela 08/2026', party_name: 'Imobiliária Centro' }, s);
+        expect(r.score).toBeGreaterThanOrEqual(55);
+    });
+    it('favorecido identificado e diferente zera, mesmo com a descrição livre neutra', () => {
+        const r = regrasPuras.scoreCandidate(
+            { amount: 2200, direction: 'DEBIT', transaction_date: '2026-08-05', description_normalized: 'PIX ENVIADO ALUGUEL GALPAO 14', counterparty_name: 'Fulano de Tal Souza' },
+            { amount: 2200, transaction_date: '2026-08-05', description: 'Aluguel Galpão 14', party_name: 'Imobiliária Centro' }, s);
+        expect(r.score).toBe(0);
+        expect(r.reasons[0]).toMatch(/Fulano de Tal Souza.*Imobiliária Centro/);
+    });
+});

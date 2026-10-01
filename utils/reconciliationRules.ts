@@ -125,11 +125,21 @@ export function computeInterestExpectation(
 
 /** Procura um nº de documento (NF) da transação interna dentro da descrição do extrato. */
 export function documentMatches(internalDesc: string, bankText: string): boolean {
-    const tokens = (internalDesc || '').match(/\d{4,8}/g) || [];
+    // O número do título tem de aparecer INTEIRO no extrato — como um número próprio, não
+    // como pedaço de outro. Até 01/10/2026 bastava estar contido nos dígitos do extrato:
+    // "CTS-010-036-0001" casava com o CNPJ 0870261**0001**49 e dava +40 ("Documento
+    // encontrado") a um PIX para outra pessoa. Zeros à esquerda não contam dos dois lados
+    // ("NF 4521" × "BOLETO 000004521" continua casando). Número com menos de 3 dígitos
+    // úteis ("0001" → "1") e ano (1990–2099) não identificam documento nenhum.
+    const semZeros = (t: string) => t.replace(/^0+/, '');
+    const ehAno = (t: string) => /^(19|20)\d{2}$/.test(t);
+    const tokens = ((internalDesc || '').match(/\d{4,8}/g) || [])
+        .filter(t => !ehAno(t))
+        .map(semZeros)
+        .filter(t => t.length >= 3);
     if (tokens.length === 0) return false;
-    const bankDigits = (bankText || '').replace(/\D/g, '');
-    if (!bankDigits) return false;
-    return tokens.some(t => bankDigits.includes(t));
+    const numerosDoExtrato = new Set(((bankText || '').match(/\d+/g) || []).map(semZeros));
+    return tokens.some(t => numerosDoExtrato.has(t));
 }
 
 /**
@@ -180,6 +190,28 @@ export function scoreCandidate(
     s: ReconciliationEngineSettings,
     resolved?: ResolvedParty | null,
 ): { score: number; reasons: string[] } {
+    // ── Contrapartes que se contradizem: confiança ZERO ──
+    //
+    // Regra do usuário (01/10/2026), com print: título de "Débora Cristina Duarte" ×
+    // PIX para "JESLER KENDY RAFAEL" saía com 88% (valor exato + data + "documento").
+    // "Não adianta ser mesma data, mesmo valor se fornecedor/credor/beneficiário for
+    // diferente." Antes o nome diferente só deixava de somar; agora zera, e o par nem
+    // vira sugestão (fica abaixo do mínimo).
+    //
+    // Só vale quando o extrato tem o favorecido/pagador IDENTIFICADO (`counterparty_name`) —
+    // não a descrição livre. A descrição costuma dizer O QUE foi pago, não PARA QUEM:
+    // "PIX ENVIADO ALUGUEL GALPAO 14" × "Imobiliária Centro" e "PAGTO FOLHA 07 2026" ×
+    // "Colaborador A" são pares CORRETOS da produção que a descrição zeraria (o teste
+    // "pares reais anonimizados" pegou isso na primeira versão desta regra).
+    // Exceção: o extrato foi reconhecido (CNPJ/PIX/alias) como o MESMO cadastro do título —
+    // aí o nome pode ser fantasia × razão social, e o cadastro manda.
+    const mesmoCadastro = !!(resolved?.party_id && c.party_id && resolved.party_id === c.party_id);
+    const nomeNoExtrato = (bTx.counterparty_name || '').trim();
+    const nomeNoTitulo = c.party_name || c.entity_name;
+    if (nomeNoExtrato && !mesmoCadastro && contrapartesDiscordam(nomeNoExtrato, nomeNoTitulo)) {
+        return { score: 0, reasons: [`Fornecedor/cliente diferente: extrato de "${nomeNoExtrato}", título de "${nomeNoTitulo}"`] };
+    }
+
     const reasons: string[] = [];
     let score = 0;
     const fmt = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;

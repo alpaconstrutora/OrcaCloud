@@ -119,6 +119,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // Organizações do usuário — "Atende também: todas" da conta resolve para elas (nunca NULL).
     const userOrganizations = useStore(s => s.organizations);
     const categoriesLoadedForOrg = useRef<string | null>(null);
+    // Contador de chamadas de loadTransactions: a resposta de uma chamada ANTIGA (conta
+    // trocada no meio do carregamento) não grava estado. Antes, a conta anterior chegava
+    // depois e sobrescrevia a nova. Plano 2026-09-30-conciliacao-carregamento-sugestoes.
+    const loadSeqRef = useRef(0);
     const [accounts, setAccounts] = useState<PaymentAccount[]>([]);
     const [selectedBankTxIds, setSelectedBankTxIds] = useState<Set<string>>(new Set());
     // Âncora do Shift+clique no Extrato (guia §10.1) — só avança em clique sem Shift.
@@ -1237,6 +1241,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     const loadTransactions = async () => {
         if (!selectedAccountId) return;
+        const seq = ++loadSeqRef.current;
+        const vigente = () => seq === loadSeqRef.current;
         setIsLoading(true);
         try {
             // Datas efetivas: competência tem precedência sobre início/fim manual
@@ -1317,6 +1323,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     : Promise.resolve({ data: [] as Array<{ id: string; name: string; settings: any }> })
             ]);
 
+            if (!vigente()) return;
             const { data: bTxs, error: bError } = bankResult;
             if (bError) throw bError;
             setBankTransactions(bTxs || []);
@@ -1367,27 +1374,38 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setInternalTransactions(finalITxs);
             void loadOriginCodes(finalITxs);
 
-            // Load Suggestions for pending transactions in batches to avoid URL length limits
+            // Sugestões numa consulta SÓ por conta (antes: lotes de 100 extratos, todos em
+            // paralelo — 58 a 64 requisições na Alpa, ~16 s cada, colado no corte de 20 s;
+            // lote com erro sumia em silêncio e a Central mostrava 0 com 741 no banco).
+            // O extrato embutido `!inner` aplica os MESMOS recortes da lista de extratos
+            // (conta, status pendente, período). Só as colunas que Central e Pendentes usam.
+            // Ordem por confiança desc: `topSuggestionByBankTxId` pega a primeira por extrato.
             if (isPendingView && bTxs && bTxs.length > 0) {
-                const bTxIds = bTxs.map(t => t.id);
-                const batchSize = 100;
-                const batches: string[][] = [];
-                for (let i = 0; i < bTxIds.length; i += batchSize) {
-                    batches.push(bTxIds.slice(i, i + batchSize));
-                }
-
-                const batchResults = await Promise.all(batches.map(batch =>
-                    supabase
+                const { data: sugs, error: sError } = await fetchAllPages<ReconciliationSuggestion>(() => {
+                    let q = supabase
                         .from('reconciliation_suggestions')
-                        .select('*, candidate_internal_transaction:candidate_internal_transaction_id(*)')
-                        .in('bank_transaction_id', batch)
-                        .order('confidence', { ascending: false })
-                ));
-
-                const allSuggestions = batchResults
-                    .filter(r => !r.error && r.data)
-                    .flatMap(r => r.data as ReconciliationSuggestion[]);
-                setSuggestions(allSuggestions);
+                        .select(
+                            'id, bank_transaction_id, candidate_internal_transaction_id, confidence, reason, created_at, '
+                            + 'bank_transaction:bank_transaction_id!inner(bank_account_id, status, transaction_date), '
+                            + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
+                        )
+                        .eq('bank_transaction.bank_account_id', selectedAccountId)
+                        .in('bank_transaction.status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
+                    if (effStart) q = q.gte('bank_transaction.transaction_date', effStart);
+                    if (effEnd)   q = q.lte('bank_transaction.transaction_date', effEnd);
+                    return q.order('confidence', { ascending: false }).order('id', { ascending: true }) as never;
+                });
+                if (!vigente()) return;
+                if (sError) {
+                    console.error('Error loading suggestions:', sError);
+                    setActionFeedback({ message: 'Não foi possível carregar as sugestões: ' + errorMessage(sError, 'erro desconhecido'), type: 'error' });
+                    setTimeout(() => setActionFeedback(null), 8000);
+                }
+                setSuggestions(sugs ?? []);
+            } else if (isPendingView) {
+                // Sem extrato pendente nesta conta/período: sem sugestão. Antes a lista da
+                // conta ANTERIOR ficava na tela.
+                setSuggestions([]);
             }
 
             if (activeView === 'conciliated') {
@@ -1397,6 +1415,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     .eq('bank_transaction.bank_account_id', selectedAccountId)
                     .order('created_at', { ascending: false });
                 
+                if (!vigente()) return;
                 if (!mError && matchedData) {
                     const validMatches = matchedData.filter(m => m.bank_transaction);
                     setMatches(validMatches);
@@ -1406,8 +1425,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
         } catch (error) {
             console.error('Error loading transactions:', error);
+            // Visível, não só no console: com o banco ocupado o carregamento estoura o
+            // corte de 20 s, e a tela vazia parecia "não há nada pendente".
+            if (vigente()) {
+                setActionFeedback({ message: 'Não foi possível carregar o extrato desta conta: ' + errorMessage(error, 'erro desconhecido'), type: 'error' });
+                setTimeout(() => setActionFeedback(null), 8000);
+            }
         } finally {
-            setIsLoading(false);
+            if (vigente()) setIsLoading(false);
         }
     };
 

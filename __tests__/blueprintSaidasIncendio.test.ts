@@ -1,7 +1,8 @@
 /**
  * INCÊNDIO E6.1 (01/10/2026): saídas de emergência — população por pavimento,
  * unidades de passagem e a largura das escadas, corredores e descarga contra o
- * desenho. As tabelas são CONFERIR NA IT; os testes fixam a CADEIA.
+ * desenho. Desde a D1.2, as tabelas são as da IT 08 do CBMMG (célula a célula em
+ * `incendioSaidasMG.test.ts`); aqui se fixa a CADEIA.
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
@@ -9,12 +10,12 @@ import { HIPOTESES_SAIDAS_PADRAO as HS, analisarSaidas, hipotesesDeSaidasDaColun
 import { HIPOTESES_INCENDIO_PADRAO, hipotesesIncendioDaColuna } from '../utils/blueprintIncendioClassificacao';
 
 describe('E6.1 · unidades de passagem', () => {
-  it('N = ⌈P ÷ C⌉ × 0,55 m, com 2 unidades no mínimo em escada e acesso e 1 em porta', () => {
-    expect(larguraExigida(8, 'A', 'escada')).toEqual({ unidades: 2, larguraMm: 1100 });
-    expect(larguraExigida(100, 'A', 'escada')).toEqual({ unidades: 3, larguraMm: 1650 }); // 100 ÷ 45
-    expect(larguraExigida(200, 'C', 'escada')).toEqual({ unidades: 3, larguraMm: 1650 }); // 200 ÷ 75
-    expect(larguraExigida(8, 'A', 'porta')).toEqual({ unidades: 1, larguraMm: 550 });
-    expect(larguraExigida(45, 'A', 'escada').unidades).toBe(2); // exatamente a capacidade não sobe
+  it('N = ⌈P ÷ C⌉ × 0,55 m, com 2 unidades no mínimo em escada e acesso; a porta pela luz da 5.5.4.3', () => {
+    expect(larguraExigida(8, 'A-2', 'escada')).toEqual({ unidades: 2, larguraMm: 1100 });
+    expect(larguraExigida(100, 'A-2', 'escada')).toEqual({ unidades: 3, larguraMm: 1650 }); // 100 ÷ 45
+    expect(larguraExigida(200, 'C-1', 'escada')).toEqual({ unidades: 4, larguraMm: 2200 }); // 200 ÷ 60 (IT 08, Tabela 4)
+    expect(larguraExigida(8, 'A-2', 'porta')).toEqual({ unidades: 1, larguraMm: 800 }); // 0,80 m para 1 UP
+    expect(larguraExigida(45, 'A-2', 'escada').unidades).toBe(2); // exatamente a capacidade não sobe
   });
 
   it('as premissas: só número positivo entra; o estudo traz o grupo', () => {
@@ -74,16 +75,16 @@ describe('E6.1 · o pavimento-tipo', () => {
     // Paredes de 15 cm no EIXO a 0 e a 1,20 m: o vão livre é 1,20 − 2 × 0,075 = 1,05 m < 1,10 m — FALTA.
     expect(c).toMatchObject({ desenhadaMm: 1050, exigidaMm: 1100, atende: false });
     const d = a.itens.find((i) => i.tipo === 'DESCARGA')!;
-    expect(d).toMatchObject({ desenhadaMm: 900, exigidaMm: 550, pavimentoCritico: 'Tipo', atende: true });
+    expect(d).toMatchObject({ desenhadaMm: 900, exigidaMm: 800, pavimentoCritico: 'Tipo', atende: true }); // porta de 1 UP: luz de 0,80 m
   });
 
-  it('comércio (C): a população sai da área (1 pessoa por 5 m²) e a escada pede mais unidades', () => {
+  it('comércio (C): a população sai da área SEM a circulação (1 pessoa por 3 m², nota E) e a escada pede mais unidades (60 por UP)', () => {
     const { m } = predio(1200);
     const a = analisarSaidas(m, 'C-1', HS);
     const tipo = a.populacao.find((p) => p.nome === 'Tipo')!;
-    const area = m.spaces.filter((s) => s.levelId === m.levels[1].id).reduce((t, s) => t + s.areaMm2, 0) / 1e6;
-    expect(tipo).toMatchObject({ origem: 'AREA', pessoas: Math.ceil(area / 5) });
-    expect(a.itens.find((i) => i.tipo === 'ESCADA')!.unidades).toBe(Math.max(2, Math.ceil(tipo.pessoas / 75)));
+    const area = m.spaces.filter((s) => s.levelId === m.levels[1].id && s.name !== 'Circulação').reduce((t, s) => t + s.areaMm2, 0) / 1e6;
+    expect(tipo).toMatchObject({ origem: 'AREA', pessoas: Math.ceil(area / 3 - 1e-9) });
+    expect(a.itens.find((i) => i.tipo === 'ESCADA')!.unidades).toBe(Math.max(2, Math.ceil(tipo.pessoas / 60)));
     // m² por pessoa declarado vence a tabela.
     expect(analisarSaidas(m, 'C-1', { ...HS, areaPorPessoaM2: 1 }).populacao.find((p) => p.nome === 'Tipo')!.pessoas).toBe(Math.ceil(area));
   });

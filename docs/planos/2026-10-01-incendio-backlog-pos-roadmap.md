@@ -358,8 +358,22 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
       - fica para depois: 5.8.8 (pressão no esguicho ≤ 3× a do mais desfavorável; ≤ 50 mca sem
         brigada intermediária) pede o cenário do hidrante MAIS FAVORÁVEL, que o cálculo não monta
         hoje; e a distância no mesmo ambiente é em linha reta (a mangueira, no L, contorna o canto);
-    - [ ] IT 08 (saídas), IT 18 (chuveiros), IT 16 (extintores), IT 15 (sinalização), IT 13
-      (iluminação), IT 14 (alarme);
+    - [x] IT 08 (saídas) — `blueprintIncendioSaidasMG.ts`, transcrição em
+      `docs/normas/incendio-mg/it08-tabelas.txt` (relida pelo teste):
+      - população e capacidade por DIVISÃO (Tabela 4), com a área sem sanitários, escadas e
+        corredores (nota E) e a sala como dormitório até 2 dormitórios (nota C);
+      - mínimo de 3 UP na H-2 e H-3 (5.4.2.1); a porta pela luz da 5.5.4.3 (0,80 m para 1 UP);
+      - tipo de escada e NÚMERO de saídas pela Tabela 6 (com a nota F);
+      - percurso pela Tabela 5 POR AMBIENTE (X/Y/Z, térreo × demais, uma × mais saídas, detecção,
+        chuveiros, −30% sem leiaute, +50% com controle de fumaça), medido até o LOCAL SEGURO — o
+        exterior ou a escada (5.5.2.1); na A-2, da porta da unidade (5.5.2.2: dentro da unidade
+        não se mede). A rota desenhada continua indo até a rua (iluminação e sinalização usam);
+      - premissas novas no painel de saídas: características construtivas (não declarada = X, o
+        mais restritivo, e o relatório pede), sem leiaute, controle de fumaça;
+      - o rascunho ERRAVA: C era 5 m²/pessoa (é 3), a escada de C/D/E era 75 por UP (é 60), a porta
+        de 1 UP era 0,55 m (é 0,80), H-1 a 8 m pedia EP (é NE), o percurso era um número por grupo;
+    - [ ] IT 18 (chuveiros), IT 16 (extintores), IT 15 (sinalização), IT 13 (iluminação),
+      IT 14 (alarme);
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

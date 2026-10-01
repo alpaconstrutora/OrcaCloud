@@ -1,0 +1,118 @@
+// TRANSCRIÇÃO da IT 08 do CBMMG (Saídas de Emergência em Edificações, 2ª ed., alterada pela Portaria 69/2022) — Tabelas 3, 4, 5 e 6, lidas pela IMAGEM das pp. 34, 35, 37 e 38 (a Tabela 6 ampliada) em 01/10/2026. Fonte da verdade do teste `incendioSaidasMG.test.ts`.
+
+// TABELA 4 — Dados para o dimensionamento das saídas (p. 35)
+// divisões | população | capacidade da U. de passagem: acesso e descargas | escadas e rampas | portas
+T4 A-1, A-2 | Duas pessoas por dormitório (C) | 60 | 45 | 100
+T4 A-3 | Duas pessoas por dormitório e uma pessoa por 4 m² de área de alojamento (D) | 60 | 45 | 100
+T4 B-1, B-2 | Uma pessoa por 15,0 m² de área (E) (G) | 60 | 45 | 100
+T4 C-1, C-2, C-3 | Uma pessoa por 3,0 m² de área (E) (J) | 100 | 60 | 100
+T4 D-1, D-2, D-3, D-4 | Uma pessoa por 7,0 m² de área (E) (K) | 100 | 60 | 100
+T4 E-1, E-2, E-3, E-4 | Uma pessoa por 1,50 m² de área de sala de aula (F) | 100 | 60 | 100
+T4 E-5, E-6 | Uma pessoa por 1,50 m² de área de sala de aula (F) | 30 | 22 | 30
+T4 F-1, F-10 | Uma pessoa por 3,0 m² de área | 100 | 75 | 100
+T4 F-2, F-5, F-8, F-9, F-11 | Uma pessoa por m² de área (E) (G) | 100 | 75 | 100
+T4 F-3, F-6, F-7 | Duas pessoas por m² de área (E) (G) (1:0,5 m²) | 100 | 75 | 100
+T4 F-4 | Uma pessoa por 3,0 m² de área | 100 | 75 | 100
+T4 G-1 | Uma pessoa por 40 vagas de veículo | 100 | 60 | 100
+T4 G-2, G-3, G-4, G-5 | Uma pessoa por 20 m² de área (E) | 100 | 60 | 100
+T4 H-1, H-6 | Uma pessoa por 7 m² de área (E) | 60 | 45 | 100
+T4 H-2 | Duas pessoas por dormitório (C) e uma pessoa por 4 m² de área de alojamento (E) | 30 | 22 | 30
+T4 H-3 | Uma pessoa e meia por leito + uma pessoa por 7,0 m² de área de ambulatório (H) | 30 | 22 | 30
+T4 H-4 | Uma pessoa por 7,0 m² de área (E) (K) (L) | 100 | 60 | 100
+T4 H-5 | + (I) (M) | 60 | 45 | 100
+T4 I-1, I-2, I-3 | Uma pessoa por 10,0 m² de área | 100 | 60 | 100
+T4 J-1, J-2, J-3, J-4 | Uma pessoa por 30,0 m² de área (J) | 100 | 60 | 100
+T4 L-1 | Uma pessoa por 3,0 m² de área | 100 | 60 | 100
+T4 L-2, L-3 | Uma pessoa por 10,0 m² de área | 100 | 60 | 100
+T4 M-1, M-6 | + (I) | 100 | 75 | 100
+T4 M-3, M-7 | Uma pessoa por 10,0 m² de área | 100 | 60 | 100
+T4 M-4 | Uma pessoa por 4,0 m² de área | 60 | 45 | 100
+T4 M-5 | + (I) | + | + | +
+T4 M-8 | + (I) | + | + | +
+// Notas usadas (p. 35–36):
+// (C) Em apartamentos de até dois dormitórios, a sala deve ser considerada como dormitório; em apartamentos maiores (três e mais dormitórios), as salas de costura, gabinetes e outras dependências que possam ser usadas como dormitórios (inclusive para empregadas) são considerados como tais. Em apartamentos mínimos, sem divisões em planta, considera-se uma pessoa para cada 6,0 m² de área de pavimento.
+// (D) Alojamento = dormitório coletivo, com mais de 10,0 m².
+// (E) Por "Área" entende-se a "Área do pavimento" que abriga a população em foco, exceto as áreas de sanitários, escadas, rampas e corredores; quando discriminado o tipo de área (por ex.: área do alojamento), é a área útil interna da dependência em questão.
+// (G) As cozinhas e suas áreas de apoio, nas ocupações F-6, F-8 e F-11, têm sua ocupação admitida como no grupo D, isto é, uma pessoa por 7,0 m² de área.
+// (I) O símbolo "+" indica necessidade de consultar normas e regulamentos específicos (não cobertos por esta Instrução Técnica).
+// (N) As edificações poderão apresentar coeficientes superiores ao previsto, desde que observado o limite de 2 pessoas por m².
+
+// TABELA 3 — Características construtivas (p. 34)
+// X: sem TRRF e sem compartimentação vertical completa. Y: apenas uma das duas. Z: TRRF e compartimentação vertical completa.
+// Nota b) Edificações térreas serão classificadas, no mínimo, com o código "Y".
+
+// TABELA 5 — Distâncias máximas horizontais de caminhamento (p. 37), m
+// tipo | ocupação | pavimento | sem chuveiros: saída única (detecção sem, com) | mais de uma saída (sem, com) | com chuveiros: saída única (sem, com) | mais de uma saída (sem, com)
+T5 X | Qualquer | Térreo | 35 50 | 45 65 | 50 70 | 65 85
+T5 X | Qualquer | Demais | 25 40 | 35 50 | 40 55 | 50 65
+T5 Y | Qualquer | Térreo | 45 65 | 60 75 | 65 85 | 75 95
+T5 Y | Qualquer | Demais | 35 50 | 45 60 | 50 65 | 60 75
+T5 Z | C, D, E, F, G-3, G-4, G-5, H, I, L e M | Térreo | 65 85 | 75 95 | 85 100 | 95 110
+T5 Z | C, D, E, F, G-3, G-4, G-5, H, I, L e M | Demais | 50 65 | 60 75 | 65 80 | 75 90
+T5 Z | A, B, G-1, G-2 e J | Térreo | 70 90 | 85 100 | 90 105 | 100 120
+T5 Z | A, B, G-1, G-2 e J | Demais | 55 70 | 65 80 | 70 85 | 80 95
+// Notas: a) sem leiaute definido em planta (salão aberto, sala de eventos, escritório panorâmico), as distâncias são reduzidas em 30% (também 5.5.2.3);
+//        b) com a medida "Controle de Fumaça", admite-se acrescentar 50%.
+// 5.5.2.1 o local seguro é o espaço livre exterior, a área de refúgio ou a escada (comum, protegida ou à prova de fumaça).
+// 5.5.2.2 contadas do ponto mais distante; nos edifícios de apartamentos (A-2), da porta de entrada das unidades autônomas.
+
+// TABELA 6 — Número de saídas e tipos de escada (p. 38), por faixa: H<=12 | 12<H<=30 | 30<H<=54 | H>54 → "nº tipo" ("-" não se aplica; "+" consultar norma específica)
+T6 A-2 | 1 NE | 1 EP | 1 PF | 1 PF
+T6 A-3 | 1 NE | 1 EP | 2 PF | 2 PF
+T6 B-1 | 1 NE | 1 PF | 2 PF | 2 PF
+T6 B-2 | 1 NE | 1 PF | 2 PF | 2 PF
+T6 C-1 | 1 NE | 1 EP | 2 EP | 2 EP
+T6 C-2 | 1 NE | 1 EP | 2 PF | 2 PF
+T6 C-3 | 1 NE | 2 PF | 2 PF | 2 PF
+T6 D | 1 NE | 1 EP | 1 PF | 1 PF
+T6 E-1 | 1 NE | 1 EP | 2 PF | 2 PF
+T6 E-2 | 1 NE | 1 EP | 2 PF | 2 PF
+T6 E-3 | 1 NE | 1 EP | 2 PF | 2 PF
+T6 E-4 | 1 NE | 1 EP | 3 PF | 3 PF
+T6 E-5 | 1 NE | 1 EP | 2 PF | 2 PF
+T6 E-6 | 2 NE | 2 EP | 2 PF | 2 PF
+T6 F-1 | 1 NE | 2 EP | 2 PF | 2 PF
+T6 F-2 | 1 NE | 2 PF | 2 PF | 2 PF
+T6 F-3 | 2 NE | 2 NE | 2 PF | 2 PF
+T6 F-4 | 2 NE | + + | + + | + +
+T6 F-5 | 2 NE | 2 PF | 2 PF | 2 PF
+T6 F-6 | 2 NE | 2 PF | 2 PF | 2 PF
+T6 F-7 | 2 NE | - - | - - | - -
+T6 F-8 | 1 NE | 2 PF | 2 PF | 2 PF
+T6 F-9 | 2 NE | 2 EP | 2 PF | 2 PF
+T6 F-10 | 1 NE | 2 EP | 2 PF | 2 PF
+T6 F-11 | 2 NE | 2 EP | 2 PF | 2 PF
+T6 G-1 | 1 NE | 1 NE | 1 EP | 1 EP
+T6 G-2 | 1 NE | 1 EP | 1 EP | 1 EP
+T6 G-3 | 1 NE | 1 PF | 1 PF | 1 PF
+T6 G-4 | 1 NE | 1 EP | 1 PF | 1 PF
+T6 G-5 | 1 NE | 1 NE | - - | - -
+T6 H-1 | 1 NE | 1 EP | - - | - -
+T6 H-2 | 1 NE | 1 PF | 1 PF | 1 PF
+T6 H-3 | 2 NE | 2 PF | 2 PF | 2 PF
+T6 H-4 | 2 NE | 2 EP | 2 PF | 2 PF
+T6 H-5 | 2 NE | + + | + + | + +
+T6 H-6 | 1 NE | 1 PF | 1 PF | 1 PF
+T6 I-1 | 2 NE | 2 EP | 2 EP | 2 EP
+T6 I-2 | 2 NE | 2 EP | 2 PF | 2 PF
+T6 I-3 | 2 NE | 2 PF | 2 PF | 2 PF
+T6 J | 1 NE | 1 NE | 1 NE | 1 NE
+T6 L-1 | 1 - | - - | - - | - -
+T6 L-2 | 2 NE | 2 PF | 3 PF | 3 PF
+T6 L-3 | 2 NE | 2 PF | 3 PF | 3 PF
+T6 M-1 | 1 NE | + + | + + | + +
+T6 M-2 | 2 EP | 2 PF | 3 PF | 3 PF
+T6 M-3 | 2 NE | 2 PF | 2 PF | 2 PF
+T6 M-4 | 1 NE | 1 NE | 1 NE | 1 NE
+T6 M-5 | + + | + + | + + | + +
+T6 M-8 | + + | + + | + + | + +
+// Notas (p. 39): NE não enclausurada; EP enclausurada protegida; PF à prova de fumaça.
+// (D) H-2 e H-3: até 12 m, havendo mais de uma saída, uma deve ser rampa; acima de 12 m, elevador de emergência e áreas de refúgio.
+// (E) Com 2 ou mais escadas de segurança, uma pode ser do tipo Aberta Externa (5.7.14).
+// (F) A quantidade mínima de saídas pode ser desconsiderada, EXCETO nas divisões F-6, H-2 e H-3, desde que a edificação tenha até 36,0 m de altura e atenda à distância máxima (Tabela 5) e às unidades de passagem (Tabela 4).
+// (G) O número de saídas depende também do cálculo da população e das distâncias.
+
+// TEXTO usado como regra:
+// 5.4.1.2 N = P / C (arredondado para o inteiro maior). 5.4.2.1 larguras mínimas: a) 1,10 m (2 UP de 55 cm) em geral;
+//   b) 1,65 m (3 UP) para escadas, acessos e descarga nas divisões H-2 e H-3; c) 1,65 m para as rampas da H-2; d) 2,20 m (4 UP) para as rampas da H-3.
+// 5.5.4.3 luz das portas: 0,80 m (N ≤ 1); 1,0 m (1 < N ≤ 2); 1,5 m em duas folhas (2 < N ≤ 3); 2,0 m em duas folhas (3 < N ≤ 4).

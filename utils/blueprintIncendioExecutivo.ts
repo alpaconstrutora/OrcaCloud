@@ -47,6 +47,7 @@ import { analisarSinalizacao, type AnaliseDeSinalizacao } from './blueprintSinal
 import { analisarIluminacao, type AnaliseDeIluminacao } from './blueprintIluminacaoEmergencia';
 import { analisarAlarme, type AnaliseDeAlarme } from './blueprintDeteccaoAlarme';
 import { analisarAntipanico } from './blueprintAntipanico';
+import { criteriosDoPercursoMG } from './blueprintIncendioSaidasMG';
 
 // ─── As análises, uma vez ────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ export function analisesDeIncendio(model: BlueprintModel, hip: HipotesesIncendio
   const exigida = (id: MedidaDeSeguranca) => exigencias.medidas.some((x) => x.medida === id && x.estado === 'EXIGIDA');
   const descarga = pavimentoDeDescarga(model, hip.classificacao.pisoDeDescargaLevelId)?.id ?? null;
   const grupo = classificacao.divisao.valor?.trim().charAt(0).toUpperCase() || null;
-  const percurso = percursoDeFuga(model, grupo, descarga, hip.saidas.percursoMaximoM);
+  const percurso = percursoDeFuga(model, grupo, descarga, hip.saidas.percursoMaximoM, criteriosDoPercursoMG(classificacao.preset, classificacao.divisao.valor, hip.saidas));
   const temRede = (model.trechos ?? []).some((t) => t.disciplina === 'INCENDIO');
   const doEstudo = temRede ? calculoDoEstudo(model, hip) : null;
   return {
@@ -286,13 +287,21 @@ export function memorialDeCalculoIncendio(model: BlueprintModel, hip: HipotesesI
       { tipo: 'secao', texto: 'Percurso de fuga' },
       {
         tipo: 'paragrafo',
-        texto: `Limite: ${um(pc.limiteM, 0)} m (${pc.motivo}). Mais longo: ${pc.maisLonga?.distanciaM != null ? `${um(pc.maisLonga.distanciaM, 1)} m (${pc.maisLonga.rotulo}, ${nivel(pc.maisLonga.levelId)})` : '—'}. ${naoAtendem.length ? `${naoAtendem.length} ambiente(s) acima do limite.` : 'Todos os ambientes dentro do limite.'}`,
+        texto: pc.ambientes.some((r) => r.limiteM != null)
+          ? `Distância horizontal de caminhamento até o local seguro (exterior ou escada — IT 08, 5.5.2), contra o limite da Tabela 5 de cada ambiente. ${naoAtendem.length ? `${naoAtendem.length} ambiente(s) acima do limite.` : 'Todos os ambientes dentro do limite.'}`
+          : `Limite: ${um(pc.limiteM, 0)} m (${pc.motivo}). Mais longo: ${pc.maisLonga?.distanciaM != null ? `${um(pc.maisLonga.distanciaM, 1)} m (${pc.maisLonga.rotulo}, ${nivel(pc.maisLonga.levelId)})` : '—'}. ${naoAtendem.length ? `${naoAtendem.length} ambiente(s) acima do limite.` : 'Todos os ambientes dentro do limite.'}`,
       },
-      {
-        tipo: 'tabela',
-        cabecalho: ['Ambiente', 'Pavimento', 'Distância (m)', 'Pela escada', 'Situação'],
-        linhas: pc.ambientes.map((r) => [r.rotulo, nivel(r.levelId), r.distanciaM != null ? nBr(r.distanciaM, 1) : 'sem caminho', r.pelaEscada ? 'sim' : 'não', simNao(r.atende)]),
-      },
+      pc.ambientes.some((r) => r.limiteM != null)
+        ? {
+            tipo: 'tabela',
+            cabecalho: ['Ambiente', 'Pavimento', 'Caminhamento (m)', 'Limite (m)', 'Situação'],
+            linhas: pc.ambientes.map((r) => [r.rotulo, nivel(r.levelId), r.caminhamentoM != null ? nBr(r.caminhamentoM, 1) : r.atende === null ? 'não se mede' : 'sem caminho', r.limiteM != null ? nBr(r.limiteM, 1) : '—', simNao(r.atende)]),
+          }
+        : {
+            tipo: 'tabela',
+            cabecalho: ['Ambiente', 'Pavimento', 'Distância (m)', 'Pela escada', 'Situação'],
+            linhas: pc.ambientes.map((r) => [r.rotulo, nivel(r.levelId), r.distanciaM != null ? nBr(r.distanciaM, 1) : 'sem caminho', r.pelaEscada ? 'sim' : 'não', simNao(r.atende)]),
+          },
     );
   }
 
@@ -543,11 +552,11 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
 
   // ── Saídas e rota ─────────────────────────────────────────────────────────
   for (const i of a.saidas.itens) {
-    v.push({ grupo: 'SAIDAS', item: `Largura — ${i.rotulo}`, norma: 'NBR 9077 · IT do CBMMG', exigido: `≥ ${nBr(i.exigidaMm / 1000)} m (${i.unidades} UP)`, obtido: `${nBr(i.desenhadaMm / 1000)} m`, atende: i.atende });
+    v.push({ grupo: 'SAIDAS', item: `Largura — ${i.rotulo}`, norma: 'IT 08 do CBMMG · Tabela 4', exigido: `≥ ${nBr(i.exigidaMm / 1000)} m (${i.unidades} UP)`, obtido: `${nBr(i.desenhadaMm / 1000)} m`, atende: i.atende });
   }
   for (const e of a.saidas.protecao) {
     if (e.atende === null) continue;
-    v.push({ grupo: 'SAIDAS', item: `Proteção da escada — ${e.rotulo}`, norma: 'NBR 9077 · IT do CBMMG', exigido: e.exigida ? ROTULO_DA_PROTECAO[e.exigida] : '—', obtido: e.declarada ? ROTULO_DA_PROTECAO[e.declarada] : 'não declarada', atende: e.atende });
+    v.push({ grupo: 'SAIDAS', item: `Proteção da escada — ${e.rotulo}`, norma: 'IT 08 do CBMMG · Tabela 6', exigido: e.exigida ? ROTULO_DA_PROTECAO[e.exigida] : '—', obtido: e.declarada ? ROTULO_DA_PROTECAO[e.declarada] : 'não declarada', atende: e.atende });
   }
   // F5: a barra antipânico nas portas por onde a rota passa (regra CONFERIR NA IT).
   const portas = analisarAntipanico(model, a.percurso, a.saidas).filter((p) => p.exigida);
@@ -555,9 +564,27 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
     const sem = portas.filter((p) => !p.tem);
     v.push({ grupo: 'SAIDAS', item: 'Barra antipânico nas portas da rota', norma: 'NBR 11785 · IT do CBMMG — CONFERIR', exigido: `${portas.length} porta(s): ${portas[0].motivo}`, obtido: sem.length ? `${sem.length} sem a barra` : 'todas com a barra', atende: sem.length === 0 });
   }
+  // D1.2: o número de saídas da Tabela 6 (a nota F dispensa — `null` — se o resto atende).
+  const ns = a.saidas.numeroDeSaidas;
+  if (ns && ns.atende !== null) {
+    v.push({ grupo: 'SAIDAS', item: `Número de ${ns.oQue}`, norma: 'IT 08 do CBMMG · Tabela 6', exigido: `≥ ${ns.exigidas} — ${ns.motivo}`, obtido: String(ns.desenhadas), atende: ns.atende });
+  }
   const longas = a.percurso.ambientes.filter((r) => r.atende === false);
   if (a.percurso.ambientes.length) {
-    v.push({ grupo: 'SAIDAS', item: 'Percurso de fuga de todos os ambientes', norma: 'NBR 9077 · IT do CBMMG', exigido: `≤ ${um(a.percurso.limiteM, 0)} m`, obtido: longas.length ? `${longas.length} acima (pior ${longas[0].rotulo})` : `pior ${a.percurso.maisLonga?.distanciaM != null ? `${um(a.percurso.maisLonga.distanciaM, 1)} m` : '—'}`, atende: longas.length === 0 });
+    // D1.2: em MG o limite é por ambiente (Tabela 5) e a distância é o caminhamento até o local seguro.
+    const porAmbiente = a.percurso.ambientes.some((r) => r.limiteM != null);
+    const dist = (r: (typeof a.percurso.ambientes)[number]) => (porAmbiente ? r.caminhamentoM : r.distanciaM);
+    const pior = a.percurso.maisLonga;
+    v.push({
+      grupo: 'SAIDAS',
+      item: 'Percurso de fuga de todos os ambientes',
+      norma: porAmbiente ? 'IT 08 do CBMMG · Tabela 5' : 'NBR 9077 · IT do CBMMG',
+      exigido: porAmbiente ? `≤ o limite de cada ambiente (menor: ${um(a.percurso.limiteM, 0)} m)` : `≤ ${um(a.percurso.limiteM, 0)} m`,
+      obtido: longas.length
+        ? `${longas.length} acima (pior ${longas[0].rotulo}${porAmbiente && longas[0].caminhamentoM != null ? `: ${um(longas[0].caminhamentoM, 1)} m > ${um(longas[0].limiteM ?? 0, 0)} m` : ''})`
+        : `pior ${pior && dist(pior) != null ? `${um(dist(pior)!, 1)} m` : '—'}`,
+      atende: longas.length === 0,
+    });
   }
 
   // ── Preventivos ───────────────────────────────────────────────────────────

@@ -36,6 +36,7 @@ import { percursoDeFuga } from './blueprintRotaDeFuga';
 import { analisarExtintores, proporExtintores } from './blueprintExtintores';
 import { analisarSinalizacao, proporSinalizacao } from './blueprintSinalizacao';
 import { kitDaPeca } from './blueprintKitsIncendio';
+import { criteriosDoPercursoMG } from './blueprintIncendioSaidasMG';
 import { desenhoPrefereMangotinho, divergenciasDaIT17, sistemaDeHidrantesMG, temSistema, type SistemaDeHidrantesMG } from './blueprintIncendioHidrantesMG';
 import { proporEletrodutoDoLaco } from './blueprintLacoDeAlarme';
 import { analisarAntipanico, proporAntipanico } from './blueprintAntipanico';
@@ -119,7 +120,13 @@ export function conferirDasPremissas(hip: HipotesesIncendio, it17: { sistema: Si
   return [
     ...hidrantes,
     `Sprinklers: densidade, área de operação e área por sprinkler da tabela do risco (NBR 10897)`,
-    `Percurso máximo de fuga${hip.saidas.percursoMaximoM != null ? ` declarado: ${um(hip.saidas.percursoMaximoM, 0)} m` : ': da tabela da ocupação'} (NBR 9077 / IT)`,
+    // D1.2: em MG o percurso é o da Tabela 5 da IT 08 — sobra só o que o desenho não sabe.
+    ...(hip.classificacao.preset === 'MG_CBMMG'
+      ? [
+          ...(hip.saidas.percursoMaximoM != null ? [`Percurso máximo de fuga declarado: ${um(hip.saidas.percursoMaximoM, 0)} m — no lugar da Tabela 5 da IT 08`] : []),
+          ...(hip.saidas.construtiva == null ? ['Características construtivas (X/Y/Z, IT 08 Tabela 3) não declaradas — a Tabela 5 usou X, o mais restritivo'] : []),
+        ]
+      : [`Percurso máximo de fuga${hip.saidas.percursoMaximoM != null ? ` declarado: ${um(hip.saidas.percursoMaximoM, 0)} m` : ': da tabela da ocupação'} (NBR 9077 / IT)`]),
     `Distância máxima até o extintor${hip.extintores.distanciaMaximaM != null ? ` declarada: ${um(hip.extintores.distanciaMaximaM, 0)} m` : ': do risco'} (NBR 12693 / IT)`,
     `Espaçamento das luminárias de emergência${hip.iluminacao.espacamentoMaximoM != null ? ` declarado: ${um(hip.iluminacao.espacamentoMaximoM, 1)} m` : ': o padrão'} (NBR 10898)`,
     'Afastamento de 30 cm entre sprinkler e luminária (NBR 10897)',
@@ -264,7 +271,9 @@ export function gerarPpci(
   } else etapa('AREA_DE_OPERACAO', 'Área de operação (a mais desfavorável)', exigida('CHUVEIROS_AUTOMATICOS') ? 'NADA_A_FAZER' : 'NAO_EXIGIDA', 0);
 
   // ── Sinalização, iluminação, detecção e alarme (pela rota) ────────────────
-  const percurso = () => percursoDeFuga(m, grupo, descarga, hip.saidas.percursoMaximoM);
+  // D1.2: em MG, o limite é o da Tabela 5 da IT 08, por ambiente.
+  const criteriosDoPercurso = criteriosDoPercursoMG(classificacao.preset, classificacao.divisao.valor, hip.saidas);
+  const percurso = () => percursoDeFuga(m, grupo, descarga, hip.saidas.percursoMaximoM, criteriosDoPercurso);
   if (exigida('SINALIZACAO')) {
     const n = aplicar(proporSinalizacao(m, analisarSinalizacao(m, percurso(), descarga)));
     etapa('SINALIZACAO', 'Sinalização da rota e dos equipamentos', 'LANCOU', n);

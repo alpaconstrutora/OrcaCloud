@@ -29,6 +29,9 @@ const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-x
 const ROTULO_DO_TIPO = { ESCADA: 'Escada', CORREDOR: 'Corredor', DESCARGA: 'Descarga' } as const;
 
 export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecionar, onProtecao, onCortaFogo, percurso, rotasNaPlanta }: Props) {
+  // D1.2: em MG o limite vale por ambiente (IT 08, Tabela 5) e a distância é o caminhamento até o local seguro.
+  const porAmbiente = !!percurso?.ambientes.some((r) => r.limiteM != null);
+  const folga = (r: { caminhamentoM?: number | null; limiteM?: number }) => (r.caminhamentoM != null && r.limiteM != null ? r.caminhamentoM - r.limiteM : r.caminhamentoM === null ? Infinity : -Infinity);
   const falta = a.itens.filter((i) => !i.atende);
   return (
     <div className="space-y-3" data-testid="saidas-incendio">
@@ -128,6 +131,14 @@ export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecio
           </tbody>
         </table>
       )}
+      {a.numeroDeSaidas && (
+        <p
+          className={`text-xs ${a.numeroDeSaidas.atende === false ? 'font-semibold text-red-700' : a.numeroDeSaidas.atende ? 'text-slate-700' : 'text-amber-800'}`}
+          data-testid="saidas-numero"
+        >
+          Número de {a.numeroDeSaidas.oQue}: {a.numeroDeSaidas.desenhadas} de {a.numeroDeSaidas.exigidas} — {a.numeroDeSaidas.motivo}
+        </p>
+      )}
       {a.protecao.length > 0 && (
         <div data-testid="saidas-protecao">
           <h5 className="mb-1 text-xs font-semibold text-slate-700">Proteção das escadas</h5>
@@ -210,9 +221,36 @@ export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecio
                 className={campo}
               />
             </label>
+            {/* D1.2: as entradas da Tabela 5 da IT 08 que o desenho não sabe. */}
+            <label className="flex items-center justify-between gap-2">
+              <span>
+                Características construtivas <span className="text-slate-400">(IT 08, Tabela 3)</span>
+              </span>
+              <select
+                value={hip.construtiva ?? ''}
+                onChange={(e) => onHip({ ...hip, construtiva: e.target.value === 'X' || e.target.value === 'Y' || e.target.value === 'Z' ? e.target.value : null })}
+                aria-label="Características construtivas"
+                className={campo}
+              >
+                <option value="">não declarada (usa X)</option>
+                <option value="X">X — sem TRRF e sem compartimentação vertical</option>
+                <option value="Y">Y — só uma das duas</option>
+                <option value="Z">Z — TRRF e compartimentação vertical</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={hip.semLeiaute} onChange={(e) => onHip({ ...hip, semLeiaute: e.target.checked })} aria-label="Rotas sem leiaute definido em planta" />
+              <span>Sem leiaute definido em planta (−30%)</span>
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={hip.controleDeFumaca} onChange={(e) => onHip({ ...hip, controleDeFumaca: e.target.checked })} aria-label="Edificação com controle de fumaça" />
+              <span>Com controle de fumaça (+50%)</span>
+            </label>
           </div>
           <p className="mt-1 text-[11px] text-slate-500">
-            Limite {n(percurso.limiteM)} m ({percurso.motivo}) — {percurso.fonte}. Do ponto mais desfavorável do ambiente, pelas portas e escadas, até uma porta para fora no pavimento de descarga.
+            {porAmbiente
+              ? `Limite da Tabela 5 por ambiente (o menor: ${n(percurso.limiteM)} m) — ${percurso.fonte}. Caminhamento do ponto mais desfavorável até o local seguro: a escada ou, no pavimento de descarga, a porta para fora.`
+              : `Limite ${n(percurso.limiteM)} m (${percurso.motivo}) — ${percurso.fonte}. Do ponto mais desfavorável do ambiente, pelas portas e escadas, até uma porta para fora no pavimento de descarga.`}
           </p>
           {percurso.pendencias.map((p) => (
             <p key={p} className="mt-1 text-xs text-amber-800">{p}</p>
@@ -220,7 +258,7 @@ export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecio
           <table className="mt-1 w-full text-xs">
             <tbody>
               {[...percurso.ambientes]
-                .sort((x, y) => (y.distanciaM ?? Infinity) - (x.distanciaM ?? Infinity))
+                .sort((x, y) => (porAmbiente ? folga(y) - folga(x) : (y.distanciaM ?? Infinity) - (x.distanciaM ?? Infinity)))
                 .slice(0, 8)
                 .map((r) => (
                   <tr key={r.spaceId} className="border-b border-slate-100 text-slate-700">
@@ -230,8 +268,16 @@ export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecio
                       </button>
                       {r.pelaEscada && <span className="text-slate-400"> · pela escada</span>}
                     </td>
-                    <td className={`py-1.5 text-right tabular-nums ${r.atende ? 'text-emerald-700' : 'font-semibold text-red-700'}`}>
-                      {r.distanciaM == null ? 'sem saída' : `${n(r.distanciaM, 1)} m`}
+                    <td className={`py-1.5 text-right tabular-nums ${r.atende === false ? 'font-semibold text-red-700' : r.atende ? 'text-emerald-700' : 'text-slate-400'}`}>
+                      {porAmbiente
+                        ? r.atende === null
+                          ? 'na unidade (A-2)'
+                          : r.caminhamentoM == null
+                            ? 'sem saída'
+                            : `${n(r.caminhamentoM, 1)} / ${n(r.limiteM ?? 0)} m`
+                        : r.distanciaM == null
+                          ? 'sem saída'
+                          : `${n(r.distanciaM, 1)} m`}
                     </td>
                   </tr>
                 ))}

@@ -22,6 +22,7 @@ const analise: AnaliseDeSaidas = {
     { tipo: 'DESCARGA', alvoId: 't', rotulo: 'Saídas para o exterior (Térreo)', pessoas: 8, pavimentoCritico: 'Tipo', unidades: 1, exigidaMm: 550, desenhadaMm: 900, atende: true },
   ],
   protecao: [{ escadaId: 'e1', rotulo: 'E1', exigida: 'EP', motivo: 'altura 20 m entre 12 e 30 m — CONFERIR NA IT', declarada: 'NE', atende: false, portasSemCortaFogo: ['o1', 'o2'], semCaixa: false }],
+  numeroDeSaidas: null,
   pendencias: ['o pavimento de descarga (Térreo) não tem porta para o exterior'],
   fonte: FONTE_SAIDAS,
 };
@@ -95,3 +96,24 @@ describe('PainelSaidasIncendio › percurso até a saída (E6.3)', () => {
   });
 });
 
+describe('PainelSaidasIncendio › IT 08 (D1.2)', () => {
+  const percurso = { limiteM: 50, motivo: 'por ambiente', ambientes: [], maisLonga: null, pendencias: [], fonte: 'IT 08 do CBMMG (Portaria 69/2022), Tabela 5 e 5.5.2' };
+
+  it('o número de saídas da Tabela 6 aparece, em vermelho quando falta', () => {
+    render(<PainelSaidasIncendio analise={{ ...analise, numeroDeSaidas: { exigidas: 2, desenhadas: 1, oQue: 'escadas', atende: false, motivo: 'C-3, altura 20 m (12 < H ≤ 30 m): 2 saída(s), escada PF' } }} hip={HS} onHip={vi.fn()} onSelecionar={vi.fn()} />);
+    const n = screen.getByTestId('saidas-numero');
+    expect(n).toHaveTextContent('Número de escadas: 1 de 2');
+    expect(n.className).toMatch(/text-red-700/);
+  });
+
+  it('as entradas da Tabela 5 que o desenho não sabe gravam: tipo construtivo, sem leiaute, controle de fumaça', () => {
+    const onHip = vi.fn();
+    render(<PainelSaidasIncendio analise={analise} hip={HS} onHip={onHip} onSelecionar={vi.fn()} percurso={percurso} />);
+    fireEvent.change(screen.getByLabelText('Características construtivas'), { target: { value: 'Z' } });
+    expect(onHip).toHaveBeenLastCalledWith({ ...HS, construtiva: 'Z' });
+    fireEvent.click(screen.getByLabelText('Rotas sem leiaute definido em planta'));
+    expect(onHip).toHaveBeenLastCalledWith({ ...HS, semLeiaute: true });
+    fireEvent.click(screen.getByLabelText('Edificação com controle de fumaça'));
+    expect(onHip).toHaveBeenLastCalledWith({ ...HS, controleDeFumaca: true });
+  });
+});

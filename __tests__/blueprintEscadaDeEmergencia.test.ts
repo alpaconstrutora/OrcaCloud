@@ -59,12 +59,13 @@ describe('E6.2 · o kernel (0.84.0)', () => {
 });
 
 describe('E6.2 · a regra', () => {
-  it('a proteção exigida pela altura: até 12 m NE, até 30 m EP, acima PF; na saúde, 6 e 12 m', () => {
-    expect(protecaoExigida('A', 12).protecao).toBe('NE');
-    expect(protecaoExigida('A', 12.01).protecao).toBe('EP');
-    expect(protecaoExigida('A', 30).protecao).toBe('EP');
-    expect(protecaoExigida('A', 31).protecao).toBe('PF');
-    expect(protecaoExigida('H', 8).protecao).toBe('EP');
+  it('a proteção exigida pela IT 08 (Tabela 6), por divisão e altura: A-2 NE até 12 m, EP até 30, PF acima; H-1 a 8 m é NE', () => {
+    expect(protecaoExigida('A-2', 12).protecao).toBe('NE');
+    expect(protecaoExigida('A-2', 12.01).protecao).toBe('EP');
+    expect(protecaoExigida('A-2', 30).protecao).toBe('EP');
+    expect(protecaoExigida('A-2', 31).protecao).toBe('PF');
+    expect(protecaoExigida('H-1', 8).protecao).toBe('NE'); // o rascunho de memória dava EP
+    expect(protecaoExigida('B-1', 20).protecao).toBe('PF');
   });
 
   it('⚠️ PRONTO QUANDO: com 20 m, a escada não declarada fica sem avaliar; NE não basta; EP atende — e as portas da caixa pedem corta-fogo', () => {

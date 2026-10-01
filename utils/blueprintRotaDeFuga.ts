@@ -15,11 +15,17 @@
  * por dentro dele), lances de escada (comprimento inclinado) e porta de saída →
  * exterior. Dijkstra a partir do exterior.
  *
- * ⚠️ NORMA (CONFERIR NA IT de saídas do CBMMG / NBR 9077): o limite do percurso
- * por divisão, com e sem chuveiros automáticos, foi transcrito de memória.
+ * NORMA: com os critérios da IT 08 do CBMMG (D1.2, `criterios`), o limite é o da Tabela 5 POR
+ * AMBIENTE (térreo × demais, uma × mais saídas, detecção, chuveiros, tipo X/Y/Z) e a distância que
+ * se compara é o CAMINHAMENTO até o local seguro — o exterior ou a ESCADA (5.5.2.1) —, não a rota
+ * inteira até a rua. Nos edifícios de apartamentos (A-2) ela conta da porta da unidade (5.5.2.2):
+ * os ambientes de dentro das unidades não são medidos; o corredor comum, sim. Sem critérios, o
+ * limite antigo por grupo (de memória, CONFERIR).
  */
 import { pointInPolygon, type BlueprintModel, type Escada, type ObjectId, type Point, type Space } from './blueprintKernel';
 import { construirGrafoEspacial } from './blueprintGrafoEspacial';
+import { usoDoNome } from './blueprintPrograma';
+import { FONTE_IT08_MG, limiteDaTabela5, type CriteriosDoPercursoMG } from './blueprintIncendioSaidasMG';
 
 export const FONTE_PERCURSO = 'IT de saídas de emergência do CBMMG / NBR 9077 — CONFERIR NA IT (transcrito de memória)';
 
@@ -130,6 +136,14 @@ export interface RotaDoAmbiente {
   /** Passa por escada? */
   pelaEscada: boolean;
   atende: boolean | null;
+  /**
+   * D1.2 (IT 08): a distância horizontal de caminhamento até o LOCAL SEGURO (exterior ou escada),
+   * m — a que a Tabela 5 limita. `null` = sem caminho, ou não se mede (dentro da unidade, A-2).
+   */
+  caminhamentoM?: number | null;
+  /** D1.2: o limite da Tabela 5 para ESTE ambiente, e o porquê. */
+  limiteM?: number;
+  motivoDoLimite?: string;
 }
 
 export interface PercursoDeFuga {
@@ -146,8 +160,16 @@ export interface PercursoDeFuga {
  * Os percursos de fuga de todos os ambientes. `descargaLevelId` = o pavimento
  * de descarga (o da classificação); `percursoMaximoM` declarado vence a tabela.
  */
-export function percursoDeFuga(model: BlueprintModel, grupo: string | null, descargaLevelId: ObjectId | null, percursoMaximoM: number | null = null): PercursoDeFuga {
+export function percursoDeFuga(
+  model: BlueprintModel,
+  grupo: string | null,
+  descargaLevelId: ObjectId | null,
+  percursoMaximoM: number | null = null,
+  /** D1.2: os critérios da Tabela 5 da IT 08 (MG). `null` = o limite antigo por grupo. */
+  criterios: CriteriosDoPercursoMG | null = null,
+): PercursoDeFuga {
   const comSprinklers = (model.terminais ?? []).some((t) => t.tipoHidraulico === 'SPRINKLER');
+  const comDeteccao = (model.terminais ?? []).some((t) => t.tipoHidraulico === 'DETECTOR_FUMACA' || t.tipoHidraulico === 'DETECTOR_TEMPERATURA' || t.tipoHidraulico === 'DETECTOR_CHAMA');
   const { limiteM, motivo } = limiteDoPercursoM(grupo, comSprinklers, percursoMaximoM);
   const pendencias: string[] = [];
   const grafos = new Map(model.levels.map((l) => [l.id, construirGrafoEspacial(model, l.id)]));
@@ -202,23 +224,51 @@ export function percursoDeFuga(model: BlueprintModel, grupo: string | null, desc
   }
 
   // Dijkstra a partir do exterior.
-  const dist = new Map<string, number>([[SAIDA, 0]]);
-  const via = new Map<string, Aresta>();
-  const feitos = new Set<string>();
-  for (;;) {
-    let u: string | null = null;
-    for (const [k, v] of dist) if (!feitos.has(k) && (u === null || v < dist.get(u)!)) u = k;
-    if (u === null) break;
-    feitos.add(u);
-    for (const a of adj.get(u) ?? []) {
-      const nd = dist.get(u)! + a.mm;
-      if (nd < (dist.get(a.para) ?? Infinity)) {
-        dist.set(a.para, nd);
-        // A aresta de VOLTA (de a.para para u), que é o sentido da fuga.
-        via.set(a.para, (adj.get(a.para) ?? []).find((x) => x.para === u && Math.abs(x.mm - a.mm) < 1e-6)!);
+  const menorCaminho = (grafo: Map<string, Aresta[]>) => {
+    const dist = new Map<string, number>([[SAIDA, 0]]);
+    const via = new Map<string, Aresta>();
+    const feitos = new Set<string>();
+    for (;;) {
+      let u: string | null = null;
+      for (const [k, v] of dist) if (!feitos.has(k) && (u === null || v < dist.get(u)!)) u = k;
+      if (u === null) break;
+      feitos.add(u);
+      for (const a of grafo.get(u) ?? []) {
+        const nd = dist.get(u)! + a.mm;
+        if (nd < (dist.get(a.para) ?? Infinity)) {
+          dist.set(a.para, nd);
+          // A aresta de VOLTA (de a.para para u), que é o sentido da fuga.
+          via.set(a.para, (grafo.get(a.para) ?? []).find((x) => x.para === u && Math.abs(x.mm - a.mm) < 1e-6)!);
+        }
       }
     }
+    return { dist, via };
+  };
+  const { dist, via } = menorCaminho(adj);
+  // D1.2: o LOCAL SEGURO da IT 08 (5.5.2.1) — fora do pavimento de descarga, a boca da escada já é
+  // a chegada: um segundo Dijkstra com a escada ligada ao exterior por 0 mm.
+  const adjSeguro = new Map([...adj].map(([k, v]) => [k, [...v]]));
+  const escadasPorNivel = new Map<ObjectId, Set<ObjectId>>();
+  for (const e of model.stairs ?? []) {
+    for (const levelId of pavimentosDaEscada(model, e)) {
+      escadasPorNivel.set(levelId, new Set([...(escadasPorNivel.get(levelId) ?? []), e.id]));
+      if (levelId === descargaLevelId) continue;
+      const chave = `escada:${e.id}:${levelId}`;
+      adjSeguro.set(chave, [...(adjSeguro.get(chave) ?? []), { para: SAIDA, mm: 0, pedacos: [] }]);
+      adjSeguro.set(SAIDA, [...(adjSeguro.get(SAIDA) ?? []), { para: chave, mm: 0, pedacos: [] }]);
+    }
   }
+  const seguro = criterios ? menorCaminho(adjSeguro).dist : null;
+  const saidasDaDescarga = descargaLevelId ? (grafos.get(descargaLevelId)?.saidas.length ?? 0) : 0;
+  const ocupados = new Set(model.spaces.map((s) => s.levelId));
+  const edificacaoTerrea = ocupados.size <= 1;
+  const DENTRO_DA_UNIDADE = new Set(['SALA', 'COZINHA', 'DORMITORIO', 'SUITE', 'BANHEIRO', 'LAVABO', 'AREA_DE_SERVICO', 'VARANDA']);
+  const limiteDoAmbiente = (s: Space) => {
+    if (!criterios || percursoMaximoM != null) return { limiteM, motivo };
+    const terreo = s.levelId === descargaLevelId;
+    const maisDeUmaSaida = terreo ? saidasDaDescarga >= 2 : (escadasPorNivel.get(s.levelId)?.size ?? 0) >= 2;
+    return limiteDaTabela5(criterios, { terreo, maisDeUmaSaida, deteccao: comDeteccao, chuveiros: comSprinklers, edificacaoTerrea });
+  };
 
   const caminhoAteASaida = (chave: string) => {
     const pedacos: Aresta['pedacos'] = [];
@@ -247,7 +297,26 @@ export function percursoDeFuga(model: BlueprintModel, grupo: string | null, desc
       }
       if (melhor && (!pior || melhor.mm > pior.mm)) pior = { origem: c, ...melhor };
     }
-    if (!pior) return { spaceId: s.id, levelId: s.levelId, rotulo, origem: centro, distanciaM: null, rota: [], pelaEscada: false, atende: false };
+    const lim = limiteDoAmbiente(s);
+    // D1.2: o caminhamento até o local seguro, do ponto mais desfavorável (A-2: dentro da unidade não se mede).
+    let caminhamentoM: number | null = null;
+    const naUnidade = criterios?.divisao === 'A-2' && DENTRO_DA_UNIDADE.has(usoDoNome(s.name) ?? '');
+    if (seguro && !naUnidade) {
+      let piorSeguro: number | null = null;
+      for (const c of candidatos) {
+        let melhor: number | null = null;
+        for (const p of portais) {
+          const dp = seguro.get(p.chave);
+          if (dp == null) continue;
+          const cam = caminhoDentro(s, c, p.ponto);
+          if (cam && (melhor == null || cam.mm + dp < melhor)) melhor = cam.mm + dp;
+        }
+        if (melhor != null && (piorSeguro == null || melhor > piorSeguro)) piorSeguro = melhor;
+      }
+      caminhamentoM = piorSeguro != null ? piorSeguro / 1000 : null;
+    }
+    const extras = criterios ? { caminhamentoM, limiteM: lim.limiteM, motivoDoLimite: naUnidade ? 'A-2: conta da porta da unidade (5.5.2.2) — o corredor comum é que se mede' : lim.motivo } : {};
+    if (!pior) return { spaceId: s.id, levelId: s.levelId, rotulo, origem: centro, distanciaM: null, rota: [], pelaEscada: false, atende: naUnidade ? null : false, ...extras };
     const { pedacos, pelaEscada } = caminhoAteASaida(pior.portal.chave);
     // Junta os pedaços consecutivos do mesmo pavimento numa polilinha só.
     const rota: RotaDoAmbiente['rota'] = [];
@@ -257,11 +326,20 @@ export function percursoDeFuga(model: BlueprintModel, grupo: string | null, desc
       else rota.push({ levelId: p.levelId, pontos: p.pontos.map((q) => ({ x: Math.round(q.x), y: Math.round(q.y) })) });
     }
     const distanciaM = pior.mm / 1000;
-    return { spaceId: s.id, levelId: s.levelId, rotulo, origem: { x: Math.round(pior.origem.x), y: Math.round(pior.origem.y) }, distanciaM, rota, pelaEscada, atende: distanciaM <= limiteM + 1e-9 };
+    const atende = !criterios ? distanciaM <= limiteM + 1e-9 : naUnidade ? null : caminhamentoM != null && caminhamentoM <= lim.limiteM + 1e-9;
+    return { spaceId: s.id, levelId: s.levelId, rotulo, origem: { x: Math.round(pior.origem.x), y: Math.round(pior.origem.y) }, distanciaM, rota, pelaEscada, atende, ...extras };
   });
   const comRota = ambientes.filter((a) => a.distanciaM != null);
   const maisLonga = comRota.length ? comRota.reduce((a, b) => (b.distanciaM! > a.distanciaM! ? b : a)) : null;
   const semRota = ambientes.filter((a) => a.distanciaM == null);
   if (semRota.length) pendencias.push(`${semRota.length} ambiente(s) sem caminho até uma saída (porta, escada ou porta para fora na descarga faltando)`);
+  if (criterios && percursoMaximoM == null) {
+    // D1.2: o limite vale por ambiente; no topo, o menor deles — e a "mais longa" é a de menor folga.
+    const medidos = ambientes.filter((a) => a.caminhamentoM != null && a.limiteM != null);
+    const pior = medidos.length ? medidos.reduce((a, b) => (b.caminhamentoM! - b.limiteM! > a.caminhamentoM! - a.limiteM! ? b : a)) : null;
+    if (criterios.construtiva == null) pendencias.push('características construtivas (X/Y/Z, IT 08 Tabela 3) não declaradas — a Tabela 5 usou X, o mais restritivo');
+    const menor = medidos.length ? Math.min(...medidos.map((a) => a.limiteM!)) : limiteDaTabela5(criterios, { terreo: false, maisDeUmaSaida: false, deteccao: comDeteccao, chuveiros: comSprinklers, edificacaoTerrea }).limiteM;
+    return { limiteM: menor, motivo: `por ambiente — ${FONTE_IT08_MG}, Tabela 5`, ambientes, maisLonga: pior, pendencias, fonte: `${FONTE_IT08_MG}, Tabela 5 e 5.5.2` };
+  }
   return { limiteM, motivo, ambientes, maisLonga, pendencias, fonte: FONTE_PERCURSO };
 }

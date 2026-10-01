@@ -239,6 +239,7 @@ import { coberturaDosHidrantes, marcasDaCobertura, proporHidrantes } from '../..
 import { conferirPlanoDaRede, planejarRedeDeHidrantes } from '../../utils/blueprintRedeDeHidrantes';
 import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { reservaDeTabelaDoEstudo } from '../../utils/blueprintPlanilhaDePressoes';
+import { criteriosDoPercursoMG } from '../../utils/blueprintIncendioSaidasMG';
 import { FONTE_IT17_MG, desenhoPrefereMangotinho, divergenciasDaIT17, premissasDaIT17, sistemaDeHidrantesMG } from '../../utils/blueprintIncendioHidrantesMG';
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
@@ -7387,9 +7388,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             classificacaoDeIncendio.divisao.valor?.trim().charAt(0).toUpperCase() || null,
             pavimentoDeDescarga(editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId)?.id ?? null,
             incendioDoEstudo.hipoteses.saidas.percursoMaximoM,
+            criteriosDoPercursoMG(classificacaoDeIncendio.preset, classificacaoDeIncendio.divisao.valor, incendioDoEstudo.hipoteses.saidas),
           )
         : null,
-    [classificacaoDeIncendio, editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId, incendioDoEstudo.hipoteses.saidas.percursoMaximoM],
+    [classificacaoDeIncendio, editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId, incendioDoEstudo.hipoteses.saidas],
   );
   const rotasDeFugaDoCanvas = useMemo(
     () => (percursoDeIncendio && rotasDeFugaNaPlanta ? percursoDeIncendio.ambientes.flatMap((a) => a.rota.map((r) => ({ ...r, falta: a.atende === false }))) : null),

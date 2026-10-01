@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
-import { chaveDaContraparte, camposAAplicar, normalizarTexto } from '../services/reconciliationMemoryService';
+import { chaveDaContraparte, camposAAplicar, normalizarTexto, semReferenciasMortas } from '../services/reconciliationMemoryService';
 
 describe('chaveDaContraparte — documento é identidade forte', () => {
     it('acha o CNPJ no texto bruto do extrato', () => {
@@ -110,5 +110,36 @@ describe('normalizarTexto', () => {
     it('é a mesma régua do motor de conciliação', () => {
         expect(normalizarTexto('Construção  Sul-Minas Ltda.')).toBe('CONSTRUCAO SUL MINAS LTDA');
         expect(normalizarTexto('')).toBe('');
+    });
+});
+
+describe('semReferenciasMortas — centro de custo/obra excluídos depois de aprendidos', () => {
+    const centros = new Set(['cc-vivo']);
+    const obras = new Set(['obra-viva']);
+
+    it('mantém o que existe', () => {
+        const r = semReferenciasMortas({ cost_center_id: 'cc-vivo', project_id: 'obra-viva', category: 'Energia' }, centros, obras);
+        expect(r.descartados).toBe(0);
+        expect(r.memoria).toEqual({ cost_center_id: 'cc-vivo', project_id: 'obra-viva', category: 'Energia' });
+    });
+
+    it('tira só o campo morto — categoria continua (o caso 23503 de 01/10/2026)', () => {
+        const r = semReferenciasMortas({ cost_center_id: 'cc-excluido', project_id: 'obra-viva', category: 'Energia' }, centros, obras);
+        expect(r.descartados).toBe(1);
+        expect(r.memoria).toEqual({ cost_center_id: null, project_id: 'obra-viva', category: 'Energia' });
+        // e o patch resultante não leva o centro de custo morto para o UPDATE
+        expect(camposAAplicar({}, { ...r.memoria, party_name: null })).toEqual({ category: 'Energia', project_id: 'obra-viva' });
+    });
+
+    it('obra excluída também sai; vazio não conta como morto', () => {
+        expect(semReferenciasMortas({ cost_center_id: null, project_id: 'obra-apagada' }, centros, obras))
+            .toEqual({ memoria: { cost_center_id: null, project_id: null }, descartados: 1 });
+        expect(semReferenciasMortas({ cost_center_id: '', project_id: undefined }, centros, obras).descartados).toBe(0);
+    });
+
+    it('não altera o objeto original', () => {
+        const original = { cost_center_id: 'cc-excluido', project_id: null };
+        semReferenciasMortas(original, centros, obras);
+        expect(original.cost_center_id).toBe('cc-excluido');
     });
 });

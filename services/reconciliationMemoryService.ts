@@ -104,6 +104,26 @@ export function camposAAplicar(
     return patch;
 }
 
+/**
+ * Tira da memória as referências que não existem mais: centro de custo e obra
+ * excluídos DEPOIS de a memória aprendê-los. `reconciliation_classification_memory`
+ * não tem chave estrangeira, mas `bank_transactions` tem — e um único id morto
+ * derrubava o lote inteiro com 23503 (01/10/2026: 16 centros de custo excluídos na
+ * memória da org "Altair Pereira da Rosa" e "falhou na memória" no Reprocessar).
+ * Só o CAMPO morto sai; categoria e contraparte continuam valendo.
+ */
+export function semReferenciasMortas<T extends { cost_center_id?: string | null; project_id?: string | null }>(
+    memoria: T,
+    centrosValidos: ReadonlySet<string>,
+    obrasValidas: ReadonlySet<string>,
+): { memoria: T; descartados: number } {
+    let descartados = 0;
+    const limpa = { ...memoria };
+    if (limpa.cost_center_id && !centrosValidos.has(limpa.cost_center_id)) { limpa.cost_center_id = null; descartados++; }
+    if (limpa.project_id && !obrasValidas.has(limpa.project_id)) { limpa.project_id = null; descartados++; }
+    return { memoria: limpa, descartados };
+}
+
 export const reconciliationMemoryService = {
     /** Carrega a memória inteira da organização, indexada pela chave. */
     async carregar(organizationId: string): Promise<Map<string, ClassificationMemory>> {
@@ -185,7 +205,7 @@ export const reconciliationMemoryService = {
         bankAccountId: string,
         organizationId: string | null | undefined,
         opcoes: { minimoHits?: number; somenteSemCategoria?: boolean } = {},
-    ): Promise<{ analisados: number; aplicados: number; campos: number }> {
+    ): Promise<{ analisados: number; aplicados: number; campos: number; referenciasMortas?: number }> {
         // Com "Todas as organizações" o seletor manda nulo, e `.eq()` de coluna uuid
         // com nulo quebra (22P02). A conta bancária pertence a uma organização só.
         const orgId = await bankReconciliationService.resolverOrganizacaoDaConta(bankAccountId, organizationId);
@@ -194,6 +214,25 @@ export const reconciliationMemoryService = {
         const minimoHits = opcoes.minimoHits ?? 2;
         const memoria = await this.carregar(orgId);
         if (memoria.size === 0) return { analisados: 0, aplicados: 0, campos: 0 };
+
+        // Quais centros de custo e obras citados pela memória ainda existem — ver
+        // `semReferenciasMortas`. Consulta pelos ids citados, não pela tabela inteira.
+        const idsCentro = [...new Set([...memoria.values()].map(m => m.cost_center_id).filter((v): v is string => !!v))];
+        const idsObra = [...new Set([...memoria.values()].map(m => m.project_id).filter((v): v is string => !!v))];
+        const [centros, obras] = await Promise.all([
+            idsCentro.length ? supabase.from('cost_centers_v2').select('id').in('id', idsCentro) : Promise.resolve({ data: [] as { id: string }[], error: null }),
+            idsObra.length ? supabase.from('projects').select('id').in('id', idsObra) : Promise.resolve({ data: [] as { id: string }[], error: null }),
+        ]);
+        if (centros.error) throw centros.error;
+        if (obras.error) throw obras.error;
+        const centrosValidos = new Set((centros.data ?? []).map(c => c.id));
+        const obrasValidas = new Set((obras.data ?? []).map(o => o.id));
+        let referenciasMortas = 0;
+        for (const [chave, m] of memoria) {
+            const r = semReferenciasMortas(m, centrosValidos, obrasValidas);
+            if (r.descartados) { memoria.set(chave, r.memoria); referenciasMortas += r.descartados; }
+        }
+        if (referenciasMortas) console.warn(`[Memória] ${referenciasMortas} referência(s) a centro de custo/obra excluídos ignorada(s)`);
 
         type Mov = {
             id: string; category: string | null; project_id: string | null; cost_center_id: string | null;
@@ -245,7 +284,7 @@ export const reconciliationMemoryService = {
             }
         }
 
-        return { analisados: (movimentos ?? []).length, aplicados, campos };
+        return { analisados: (movimentos ?? []).length, aplicados, campos, referenciasMortas };
     },
 
     /** Contrapartes com evidência suficiente para virarem regra fixa (item 2.6). */

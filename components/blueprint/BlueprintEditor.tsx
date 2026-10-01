@@ -220,6 +220,8 @@ import PainelHidroExecutivo from './PainelHidroExecutivo';
 import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
+import PainelCalculoIncendio from './PainelCalculoIncendio';
+import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
@@ -1000,6 +1002,8 @@ const ROTULO_DA_TAREFA = {
   pluvial: 'Águas pluviais (NBR 10844)',
   // INCÊNDIO (30/09/2026, E0.2/E0.3): ocupação, altura, área e carga → as medidas exigidas.
   incendio: 'Classificação e exigências (Corpo de Bombeiros)',
+  // INCÊNDIO E2.3 (30/09/2026): o cálculo hidráulico — bomba, hidrantes abertos, trechos.
+  incendioCalculo: 'Cálculo hidráulico de incêndio',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7287,6 +7291,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
   );
   const exigenciasDeIncendio = useMemo(() => (classificacaoDeIncendio ? exigenciasDaEdificacao(classificacaoDeIncendio) : null), [classificacaoDeIncendio]);
+  /** E2.3: o cálculo hidráulico — só com a tarefa aberta (é bisseção por hidrante). */
+  const calculoHidraulicoDeIncendio = useMemo(
+    () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+  );
+  const ajusteDeDnDeIncendio = useMemo(
+    () => (calculoHidraulicoDeIncendio?.cenario ? ajustarDnDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
+    [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+  );
   const hipotesesDeAgua = hidroDoEstudo.hipoteses.agua;
   const setHipDeAguaSalvas = (agua: HipotesesDeAgua) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, agua });
   /** PRESSÃO NOS PONTOS (28/09/2026, E1.3): hipóteses do usuário, cálculo derivado do modelo. */
@@ -10527,6 +10540,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onEscolher={escolherComponente}
               />
             </GrupoDoRibbon>
+            {/* INCÊNDIO E2.3 (30/09/2026): o cálculo hidráulico da rede. */}
+            <GrupoDoRibbon rotulo="Cálculo">
+              <BotaoDoRibbon
+                icone={Gauge}
+                rotulo="Cálculo hidráulico"
+                ativo={tarefaAberta === 'incendioCalculo'}
+                onClick={() => alternarTarefa('incendioCalculo')}
+                ajuda="Hidrantes mais desfavoráveis abertos juntos, o ponto de equilíbrio, a vazão e a carga que a bomba tem de dar, e a planilha dos trechos (Hazen-Williams, universal ou Fair-Whipple-Hsiao; resolve anel e malha)"
+              />
+            </GrupoDoRibbon>
             {/* INCÊNDIO (30/09/2026, roadmap E0): o que o prédio exige, antes de qualquer peça. */}
             <GrupoDoRibbon rotulo="Classificação">
               <BotaoDoRibbon
@@ -13560,6 +13583,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'memoriaisHidro' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pluvial' && <CloudRain className="h-5 w-5 text-lime-700" />}
               {tarefaAberta === 'incendio' && <Flame className="h-5 w-5 text-red-700" />}
+              {tarefaAberta === 'incendioCalculo' && <Gauge className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13617,6 +13641,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             )}
             {tarefaAberta === 'pluvial' &&
               'A chuva que o telhado e as lajes descobertas recebem: a área de contribuição de cada superfície (NBR 10844), a intensidade pluviométrica da cidade e a vazão de projeto que as calhas e os condutores vão levar. A rede pluvial é independente do esgoto.'}
+            {tarefaAberta === 'incendioCalculo' &&
+              'A rede de incêndio desenhada, calculada a partir da bomba: os hidrantes mais desfavoráveis abrem juntos, e sai a vazão e a carga que a bomba tem de dar, com a pressão em cada hidrante e a planilha dos trechos. As premissas são do estudo.'}
             {tarefaAberta === 'incendio' &&
               'O que o Corpo de Bombeiros exige deste prédio: a ocupação, a altura para incêndio (do pavimento de descarga ao último ocupado), a área e a carga de incêndio saem do desenho e das premissas do estudo. Declarar um valor vence o derivado.'}
             {tarefaAberta === 'memoriaisHidro' &&
@@ -14049,6 +14075,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'incendioCalculo' && calculoHidraulicoDeIncendio && (
+            <div data-testid="tarefa-incendio-calculo">
+              <PainelCalculoIncendio
+                hip={incendioDoEstudo.hipoteses.hidraulica}
+                onHip={(hidraulica) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, hidraulica })}
+                calculo={calculoHidraulicoDeIncendio}
+                nomeDe={(id) => numerosDeIncendio.get(id)?.numero ?? (editor.model.terminais ?? []).find((t) => t.id === id)?.tipo ?? id}
+                onSelecionar={selecionar}
+                ajusteDeDn={{
+                  alterados: ajusteDeDnDeIncendio?.alterados ?? 0,
+                  onAjustar: () => {
+                    if (ajusteDeDnDeIncendio?.comandos.length) editor.runBatch(ajusteDeDnDeIncendio.comandos);
+                  },
+                }}
+              />
             </div>
           )}
 

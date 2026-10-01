@@ -1601,7 +1601,7 @@ Fecha o **bloco 6** e os achados 1, 3 e 8. Abre o motor 1.
 
 Fecha o **bloco 1**.
 
-## Etapa 2 — Motor hidráulico · sem bump · 4 fases
+## Etapa 2 — Motor hidráulico · sem bump · 4 fases · **em andamento (2.1, 2.2 e 2.3 ✅ 30/09/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1841,4 +1841,42 @@ Entregue:
   (3) e o canvas com o número (4). Suíte com 6.483 testes: 6.450 + 33 pulados. Na 1ª rodada, 33
   testes do `BlueprintEditor.test.tsx` ficaram "pending" (não rodaram: queda de worker); na 2ª, a
   conta fechou limpa.
+
+### Etapa 2.1 + 2.2 + 2.3 — 30/09/2026 (frente `incendio-e2`, sem bump, um push)
+
+As três foram juntas porque fórmula e solver são motor puro, sem tela: só ficam visíveis com o
+cálculo da 2.3.
+
+- **2.1 Fórmulas** (`utils/blueprintHidraulicaIncendio.ts`): Hazen-Williams, universal (a mesma
+  `perdaDistribuida` da água) e Fair-Whipple-Hsiao (aço × plástico/cobre), sempre pelo diâmetro
+  interno do material.
+  - ⭐ A Hazen-Williams foi conferida por uma prova **independente**: a forma americana da NFPA 13
+    (psi/pé, gpm, polegadas) bate até a 2ª casa.
+- **2.2 Solver de malha** (`resolverRede`): método do gradiente (Todini-Pilati, o do EPANET),
+  Newton sobre cargas e vazões ao mesmo tempo, com eliminação de Gauss densa.
+  - O **emissor** (Q = K·√P) é um elo até a atmosfera, e o ponto de equilíbrio sai do próprio
+    solver.
+  - Nó sem caminho até a fonte fica isolado, sem tornar a matriz singular.
+  - Provas: anel simétrico divide ao meio; no anel assimétrico, as perdas se igualam e a razão das
+    vazões é 4^(1/1,852); a grelha 3×3 conserva vazão em todo nó.
+- **2.3 Cálculo** (`utils/blueprintCalculoIncendio.ts`):
+  - **Rede:** a fonte é a `BOMBA_INCENDIO`; a cota do nó vem da ponta do tubo (não da chave da laje).
+    O comprimento equivalente soma joelho, tê (lateral para o ramal perpendicular, passagem dividida
+    entre os colineares), gaveta, retenção e chave de fluxo, e a VGA conta como retenção (hipótese).
+  - **Hidrante aberto:** mangueira (Hazen-Williams, C da mangueira) mais esguicho com
+    K = Qmín/√Pmín.
+  - **Sprinkler:** o K dele.
+  - **Carga necessária:** bisseção até 600 m.
+  - **Mais desfavoráveis:** a carga de cada hidrante sozinho; os N maiores abrem juntos.
+  - **Também:** estática nos hidrantes para a pressão máxima, papel do trecho
+    (geral/coluna/ramal/sub-ramal/anel) pela árvore de menor caminho, e DN automático pela velocidade
+    (um lote, Ctrl+Z).
+- **Premissas:** o grupo `hidraulica` em `blueprint_study_incendio`, sem migration (JSONB). Os
+  padrões são **CONFERIR**: hidrante 300 L/min a 300 kPa no esguicho, mangueira 30 m Ø 40, 2
+  simultâneos, mangotinho 100 L/min, sprinkler 50 kPa, máxima 1000 kPa, 5 m/s.
+- **Tela:** Incêndio → Cálculo → "Cálculo hidráulico" (`PainelCalculoIncendio`).
+- **Sonda dos números** (galpão de 30 m, 2 hidrantes): carga de 47,2 m = 30,6 (esguicho) + 11,9
+  (mangueira, conferido à mão) + 3,8 (tubos) + 1,0 (desnível). Equilíbrio: 300,0 × 304,9 L/min.
+- **Testes:** 13 (fórmulas/solver) + 12 (cálculo) + 4 (painel). Suíte com 6.512 testes: 6.479 + 33
+  pulados, 0 pendentes. Build ok.
 

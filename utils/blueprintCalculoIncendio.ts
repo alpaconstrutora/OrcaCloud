@@ -1,0 +1,489 @@
+/**
+ * O CÁLCULO DA REDE DE INCÊNDIO (30/09/2026, E2.3 do roadmap de incêndio):
+ * o desenho vira a rede do solver (`blueprintHidraulicaIncendio.resolverRede`)
+ * e dela saem os números que o AltoQi entrega — os hidrantes mais
+ * desfavoráveis, os N simultâneos abertos, o ponto de equilíbrio, a carga que a
+ * bomba tem de dar, a vazão, a pressão e a velocidade em cada trecho.
+ *
+ * Tudo DERIVADO: nada aqui é gravado. As premissas (vazão e pressão mínimas,
+ * mangueira, simultaneidade) são do ESTUDO (`blueprint_study_incendio`).
+ *
+ * ⚠️ NORMA. Os valores-padrão são PONTOS DE PARTIDA e estão marcados CONFERIR:
+ * a vazão por tipo de sistema e a simultaneidade vêm da NBR 13714 e da IT do
+ * CBMMG, cujo texto ainda não está no repositório. A pressão máxima de 1000 kPa
+ * e a velocidade de 5 m/s são os limites usuais da NBR 13714 — CONFERIR.
+ *
+ * Como a peça entra na rede:
+ *  - FONTE: a bomba de incêndio (`BOMBA_INCENDIO`), com carga = cota + a carga
+ *    que se procura. Sem bomba não há o que calcular (a RTI por gravidade é a E3).
+ *  - HIDRANTE e MANGOTINHO abertos: a MANGUEIRA (Hazen-Williams com C da
+ *    mangueira) até o ESGUICHO, e o esguicho como EMISSOR, com K = Qmín/√Pmín —
+ *    o bocal que dá exatamente a vazão mínima na pressão mínima.
+ *  - SPRINKLER aberto: emissor com o K dele (`Terminal.fatorK` ou o da ficha).
+ *  - CONEXÕES derivadas (joelho, tê): comprimento equivalente somado aos tubos;
+ *    no tê, a saída LATERAL vai para o ramal perpendicular e a passagem se
+ *    divide entre os dois colineares. Registro e retenção sobre o trecho somam
+ *    no trecho; a VGA, como retenção (hipótese, CONFERIR o catálogo).
+ */
+import {
+  applyBatch,
+  conexoesDerivadas,
+  materialDoTrecho,
+  type BlueprintModel,
+  type Command,
+  type MaterialDeTubo,
+  type ObjectId,
+  type Terminal,
+  type Trecho,
+} from './blueprintKernel';
+import { comprimentoMm, fazerChave } from './blueprintGrafoDeRede';
+import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { FICHA_DO_MATERIAL, comprimentoEquivalenteM, type PecaDePerda } from './blueprintHidraulicaPressao';
+import {
+  KPA_POR_MCA_INC,
+  eloDeEmissor,
+  eloDeTubo,
+  kInternoDoEmissor,
+  perdaNoTubo,
+  perdaUnitaria,
+  resolverRede,
+  type EloHidraulico,
+  type FormulaDePerda,
+  type NoHidraulico,
+} from './blueprintHidraulicaIncendio';
+
+// ─── Premissas ───────────────────────────────────────────────────────────────
+
+export interface HipotesesHidraulicasDeIncendio {
+  formula: FormulaDePerda;
+  /** Quantos hidrantes (ou mangotinhos) funcionam ao mesmo tempo — CONFERIR NA IT. */
+  hidrantesSimultaneos: number;
+  /** Hidrante: vazão e pressão mínimas no ESGUICHO mais desfavorável — CONFERIR NA NBR 13714/IT. */
+  vazaoMinimaHidranteLmin: number;
+  pressaoMinimaHidranteKpa: number;
+  comprimentoMangueiraHidranteM: number;
+  diametroMangueiraHidranteMm: number;
+  /** Mangotinho: idem. */
+  vazaoMinimaMangotinhoLmin: number;
+  pressaoMinimaMangotinhoKpa: number;
+  comprimentoMangueiraMangotinhoM: number;
+  diametroMangueiraMangotinhoMm: number;
+  /** C de Hazen-Williams da mangueira (revestida). */
+  cMangueira: number;
+  /** Sprinkler: pressão mínima no bico (a densidade é a E5). */
+  pressaoMinimaSprinklerKpa: number;
+  /** Limites da rede. */
+  pressaoMaximaKpa: number;
+  velocidadeMaxMs: number;
+}
+
+export const HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO: HipotesesHidraulicasDeIncendio = {
+  formula: 'HAZEN_WILLIAMS',
+  hidrantesSimultaneos: 2,
+  vazaoMinimaHidranteLmin: 300,
+  pressaoMinimaHidranteKpa: 300,
+  comprimentoMangueiraHidranteM: 30,
+  diametroMangueiraHidranteMm: 40,
+  vazaoMinimaMangotinhoLmin: 100,
+  pressaoMinimaMangotinhoKpa: 300,
+  comprimentoMangueiraMangotinhoM: 30,
+  diametroMangueiraMangotinhoMm: 25,
+  cMangueira: 140,
+  pressaoMinimaSprinklerKpa: 50,
+  pressaoMaximaKpa: 1000,
+  velocidadeMaxMs: 5,
+};
+
+/** As premissas gravadas, completadas com o padrão — só entra número finito e positivo. */
+export function hipotesesHidraulicasDaColuna(raw: unknown): HipotesesHidraulicasDeIncendio {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const p = HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO;
+  const saida = { ...p } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(p)) {
+    const x = r[k];
+    if (typeof v === 'number' && typeof x === 'number' && Number.isFinite(x) && x > 0) saida[k] = x;
+  }
+  if (r.formula === 'HAZEN_WILLIAMS' || r.formula === 'UNIVERSAL' || r.formula === 'FAIR_WHIPPLE_HSIAO') saida.formula = r.formula;
+  saida.hidrantesSimultaneos = Math.max(1, Math.round(saida.hidrantesSimultaneos as number));
+  return saida as unknown as HipotesesHidraulicasDeIncendio;
+}
+
+// ─── Montagem da rede ────────────────────────────────────────────────────────
+
+const HIDRANTES: readonly string[] = ['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO'];
+const ehDeCombate = (t: Terminal) => t.disciplina === 'INCENDIO' && !!t.tipoHidraulico && HIDRANTES.includes(t.tipoHidraulico);
+const ehSprinkler = (t: Terminal) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'SPRINKLER';
+
+/** O tubo da rede, com o comprimento equivalente das peças já somado. */
+export interface TuboDaRede {
+  trecho: Trecho;
+  material: MaterialDeTubo;
+  de: string;
+  para: string;
+  lM: number;
+  leqM: number;
+}
+
+export interface RedeDeIncendio {
+  tubos: TuboDaRede[];
+  /** Cota de cada nó (m), tirada da PONTA do tubo — não da chave da laje, que erra a espessura dela. */
+  cota: Map<string, number>;
+  /** O nó de cada terminal de incêndio que encosta na rede. */
+  noDoTerminal: Map<ObjectId, string>;
+  /** Só os que consomem água (hidrante, mangotinho, sprinkler) — o papel do trecho conta estes. */
+  consumidores: Map<ObjectId, string>;
+  fonte: Terminal | null;
+  noDaFonte: string | null;
+}
+
+const ROTULO_DA_PECA: Partial<Record<string, PecaDePerda>> = { JOELHO_90: 'JOELHO_90', JOELHO_45: 'JOELHO_45', REDUCAO: 'REDUCAO', LUVA: 'LUVA' };
+
+function sobreOTrecho(term: Terminal, t: Trecho): boolean {
+  if (term.levelId !== t.levelId) return false;
+  const dx = t.b.x - t.a.x;
+  const dy = t.b.y - t.a.y;
+  const c2 = dx * dx + dy * dy;
+  const u = c2 === 0 ? 0 : Math.max(0, Math.min(1, ((term.at.x - t.a.x) * dx + (term.at.y - t.a.y) * dy) / c2));
+  return Math.hypot(term.at.x - (t.a.x + u * dx), term.at.y - (t.a.y + u * dy)) <= 1.5;
+}
+
+/** A rede de incêndio do desenho, pronta para o solver. */
+export function redeDeIncendio(model: BlueprintModel): RedeDeIncendio {
+  const chave = fazerChave(model.levels);
+  const elev = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const cota = new Map<string, number>();
+  const tubos: TuboDaRede[] = [];
+  const trechos = (model.trechos ?? []).filter((t) => t.disciplina === 'INCENDIO');
+  for (const t of trechos) {
+    const de = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm);
+    const para = chave(t.levelId, t.b.x, t.b.y, t.cotaBMm);
+    if (!cota.has(de)) cota.set(de, ((elev.get(t.levelId) ?? 0) + t.cotaAMm) / 1000);
+    if (!cota.has(para)) cota.set(para, ((elev.get(t.levelId) ?? 0) + t.cotaBMm) / 1000);
+    tubos.push({ trecho: t, material: materialDoTrecho(t) ?? 'ACO_GALVANIZADO', de, para, lM: comprimentoMm(t) / 1000, leqM: 0 });
+  }
+  const porId = new Map(tubos.map((x) => [x.trecho.id, x]));
+  const somar = (trechoId: ObjectId, peca: PecaDePerda, fracao = 1) => {
+    const x = porId.get(trechoId);
+    if (x) x.leqM += fracao * comprimentoEquivalenteM(peca, x.trecho.bitolaMm, x.material);
+  };
+
+  // Conexões derivadas.
+  for (const c of conexoesDerivadas(model).conexoes.filter((x) => x.disciplina === 'INCENDIO')) {
+    const p = ROTULO_DA_PECA[c.tipo];
+    if (p) {
+      for (const id of c.trechoIds) somar(id, p, 1 / c.trechoIds.length);
+      continue;
+    }
+    // Tê, junção, cruzeta: quem tem um colinear OPOSTO é passagem; o resto é saída lateral.
+    const ramais = c.ramais ?? [];
+    for (const r of ramais) {
+      const passagem = ramais.some((o) => o !== r && r.u[0] * o.u[0] + r.u[1] * o.u[1] + r.u[2] * o.u[2] < -0.98);
+      somar(r.trechoId, passagem ? 'TE_PASSAGEM' : 'TE_LATERAL', passagem ? 0.5 : 1);
+    }
+  }
+
+  // Peças sobre o trecho e a VGA no nó.
+  const terminais = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico);
+  for (const pc of terminais) {
+    const tipo = pc.tipoHidraulico!;
+    const peca: PecaDePerda | null = tipo === 'REGISTRO_GAVETA' || tipo === 'CHAVE_FLUXO' ? 'REGISTRO_GAVETA' : tipo === 'VALVULA_RETENCAO' ? 'VALVULA_RETENCAO' : null;
+    if (peca) for (const x of tubos) if (sobreOTrecho(pc, x.trecho)) somar(x.trecho.id, peca);
+  }
+
+  const noDoTerminal = new Map<ObjectId, string>();
+  for (const t of terminais) {
+    const k = chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+    if (cota.has(k)) noDoTerminal.set(t.id, k);
+  }
+  for (const vga of terminais.filter((t) => t.tipoHidraulico === 'VGA')) {
+    const k = noDoTerminal.get(vga.id);
+    if (!k) continue;
+    const tocam = tubos.filter((x) => x.de === k || x.para === k);
+    for (const x of tocam) somar(x.trecho.id, 'VALVULA_RETENCAO', 1 / tocam.length);
+  }
+
+  const fonte = terminais.find((t) => t.tipoHidraulico === 'BOMBA_INCENDIO' && noDoTerminal.has(t.id)) ?? null;
+  const consumidores = new Map([...noDoTerminal].filter(([id]) => {
+    const t = terminais.find((x) => x.id === id)!;
+    return ehDeCombate(t) || ehSprinkler(t);
+  }));
+  return { tubos, cota, noDoTerminal, consumidores, fonte, noDaFonte: fonte ? noDoTerminal.get(fonte.id)! : null };
+}
+
+// ─── Um cenário com a carga dada ─────────────────────────────────────────────
+
+export interface TerminalCalculado {
+  terminalId: ObjectId;
+  tipo: string;
+  vazaoLmin: number;
+  /** Pressão no nó da rede (a válvula do hidrante; o bico do sprinkler), kPa. */
+  pressaoNoKpa: number;
+  /** Pressão no esguicho (hidrante/mangotinho), kPa; no sprinkler = a do nó. */
+  pressaoNoBicoKpa: number;
+  exigidoLmin: number | null;
+  exigidoKpa: number | null;
+  atende: boolean;
+}
+
+export interface TrechoDoCalculo {
+  trechoId: ObjectId;
+  vazaoLmin: number;
+  velocidadeMs: number;
+  perdaMca: number;
+  lM: number;
+  leqM: number;
+  dn: number;
+  material: MaterialDeTubo;
+  pressaoDeKpa: number;
+  pressaoParaKpa: number;
+}
+
+export interface CenarioCalculado {
+  convergiu: boolean;
+  motivo: string | null;
+  cargaNaFonteM: number;
+  vazaoNaFonteLmin: number;
+  terminais: TerminalCalculado[];
+  trechos: TrechoDoCalculo[];
+}
+
+const exigencias = (t: Terminal, hip: HipotesesHidraulicasDeIncendio) => {
+  if (t.tipoHidraulico === 'MANGOTINHO')
+    return { q: hip.vazaoMinimaMangotinhoLmin, p: hip.pressaoMinimaMangotinhoKpa, l: hip.comprimentoMangueiraMangotinhoM, d: hip.diametroMangueiraMangotinhoMm };
+  return { q: hip.vazaoMinimaHidranteLmin, p: hip.pressaoMinimaHidranteKpa, l: hip.comprimentoMangueiraHidranteM, d: hip.diametroMangueiraHidranteMm };
+};
+
+/** Perda na mangueira por Hazen-Williams com o C e o diâmetro dela. */
+const jDaMangueira = (dMm: number, c: number) => (q: number) => {
+  const D = dMm / 1000;
+  const k = 10.67 / (Math.pow(c, 1.852) * Math.pow(D, 4.87));
+  const Q = Math.abs(q);
+  return { j: k * Math.pow(Q, 1.852), dj: 1.852 * k * Math.pow(Q, 0.852) };
+};
+
+/** Resolve a rede com os terminais `abertos` e a fonte na carga dada (m acima da bomba). */
+export function calcularCenario(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio, abertos: readonly ObjectId[], cargaNaFonteM: number, rede = redeDeIncendio(model)): CenarioCalculado {
+  const vazio = (motivo: string): CenarioCalculado => ({ convergiu: false, motivo, cargaNaFonteM, vazaoNaFonteLmin: 0, terminais: [], trechos: [] });
+  if (!rede.fonte || !rede.noDaFonte) return vazio('sem bomba de incêndio ligada à rede — é ela a origem do cálculo');
+  const nos: NoHidraulico[] = [...rede.cota].map(([id, z]) => ({ id, zM: z, ...(id === rede.noDaFonte ? { cargaFixaM: z + cargaNaFonteM } : {}) }));
+  const elos: EloHidraulico[] = rede.tubos.map((x) =>
+    eloDeTubo(x.trecho.id, x.de, x.para, (q) => perdaUnitaria(hip.formula, x.material, x.trecho.bitolaMm, q), x.lM + x.leqM),
+  );
+  const porId = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+  const abertosNaRede = abertos.map((id) => porId.get(id)).filter((t): t is Terminal => !!t && rede.noDoTerminal.has(t.id));
+  for (const t of abertosNaRede) {
+    const no = rede.noDoTerminal.get(t.id)!;
+    const z = rede.cota.get(no)!;
+    if (ehSprinkler(t)) {
+      const k = t.fatorK ?? FICHA_DO_PONTO_HIDRAULICO.SPRINKLER.fatorK ?? 80;
+      nos.push({ id: `atm:${t.id}`, zM: z, cargaFixaM: z });
+      elos.push(eloDeEmissor(`emissor:${t.id}`, no, `atm:${t.id}`, kInternoDoEmissor(k)));
+    } else if (ehDeCombate(t)) {
+      const ex = exigencias(t, hip);
+      const kBocal = ex.q / Math.sqrt(ex.p / 100);
+      nos.push({ id: `esg:${t.id}`, zM: z }, { id: `atm:${t.id}`, zM: z, cargaFixaM: z });
+      elos.push(eloDeTubo(`mangueira:${t.id}`, no, `esg:${t.id}`, jDaMangueira(ex.d, hip.cMangueira), ex.l));
+      elos.push(eloDeEmissor(`emissor:${t.id}`, `esg:${t.id}`, `atm:${t.id}`, kInternoDoEmissor(kBocal)));
+    }
+  }
+  const s = resolverRede(nos, elos);
+  if (!s.convergiu) return vazio(s.motivo ?? 'o cálculo não convergiu');
+  const pressao = (no: string) => ((s.carga.get(no) ?? 0) - (rede.cota.get(no) ?? 0)) * KPA_POR_MCA_INC;
+  const terminais: TerminalCalculado[] = abertosNaRede.map((t) => {
+    const no = rede.noDoTerminal.get(t.id)!;
+    const q = (s.vazao.get(`emissor:${t.id}`) ?? 0) * 60000;
+    if (ehSprinkler(t)) {
+      const p = pressao(no);
+      return { terminalId: t.id, tipo: t.tipoHidraulico!, vazaoLmin: q, pressaoNoKpa: p, pressaoNoBicoKpa: p, exigidoLmin: null, exigidoKpa: hip.pressaoMinimaSprinklerKpa, atende: p >= hip.pressaoMinimaSprinklerKpa - 1e-6 };
+    }
+    const ex = exigencias(t, hip);
+    const zEsg = rede.cota.get(no)!;
+    const pBico = ((s.carga.get(`esg:${t.id}`) ?? 0) - zEsg) * KPA_POR_MCA_INC;
+    return { terminalId: t.id, tipo: t.tipoHidraulico!, vazaoLmin: q, pressaoNoKpa: pressao(no), pressaoNoBicoKpa: pBico, exigidoLmin: ex.q, exigidoKpa: ex.p, atende: q >= ex.q * (1 - 1e-6) };
+  });
+  const trechos: TrechoDoCalculo[] = rede.tubos
+    .filter((x) => s.vazao.has(x.trecho.id))
+    .map((x) => {
+      const q = s.vazao.get(x.trecho.id)!;
+      const r = perdaNoTubo(hip.formula, x.material, x.trecho.bitolaMm, q, x.lM + x.leqM);
+      return { trechoId: x.trecho.id, vazaoLmin: Math.abs(q) * 60000, velocidadeMs: r.velocidadeMs, perdaMca: r.hfMca, lM: x.lM, leqM: x.leqM, dn: x.trecho.bitolaMm, material: x.material, pressaoDeKpa: pressao(x.de), pressaoParaKpa: pressao(x.para) };
+    });
+  const vazaoNaFonteLmin = terminais.reduce((a, t) => a + t.vazaoLmin, 0);
+  return { convergiu: true, motivo: null, cargaNaFonteM: cargaNaFonteM, vazaoNaFonteLmin, terminais, trechos };
+}
+
+// ─── A carga que a bomba tem de dar ──────────────────────────────────────────
+
+const CARGA_MAXIMA_M = 600;
+
+/** A folga do pior terminal aberto: ≥ 0 = todos atendem. Razão, para comparar vazão e pressão. */
+function folga(c: CenarioCalculado): number {
+  if (!c.convergiu || c.terminais.length === 0) return -Infinity;
+  return Math.min(...c.terminais.map((t) => (t.exigidoLmin != null ? t.vazaoLmin / t.exigidoLmin - 1 : t.pressaoNoBicoKpa / (t.exigidoKpa ?? 1) - 1)));
+}
+
+/**
+ * A MENOR carga na fonte (m acima da bomba) com que todos os `abertos` atendem —
+ * por bisseção (a rede é monotônica na carga). `null` se nem 600 m bastam.
+ */
+export function cargaNecessaria(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio, abertos: readonly ObjectId[], rede = redeDeIncendio(model)): { cargaM: number; cenario: CenarioCalculado } | null {
+  const alto = calcularCenario(model, hip, abertos, CARGA_MAXIMA_M, rede);
+  if (folga(alto) < 0) return null;
+  let lo = 0;
+  let hi = CARGA_MAXIMA_M;
+  for (let i = 0; i < 60 && hi - lo > 0.005; i++) {
+    const m = (lo + hi) / 2;
+    if (folga(calcularCenario(model, hip, abertos, m, rede)) >= 0) hi = m;
+    else lo = m;
+  }
+  return { cargaM: hi, cenario: calcularCenario(model, hip, abertos, hi, rede) };
+}
+
+// ─── O cálculo completo ──────────────────────────────────────────────────────
+
+export type PapelDoTrecho = 'GERAL' | 'COLUNA' | 'RAMAL' | 'SUB_RAMAL' | 'ANEL';
+export const ROTULO_DO_PAPEL: Record<PapelDoTrecho, string> = { GERAL: 'Geral', COLUNA: 'Coluna', RAMAL: 'Ramal', SUB_RAMAL: 'Sub-ramal', ANEL: 'Anel' };
+
+export interface CalculoDeIncendio {
+  motivo: string | null;
+  /** Hidrantes e mangotinhos ligados à rede, do mais ao menos desfavorável (carga que cada um sozinho exige). */
+  desfavoraveis: { terminalId: ObjectId; cargaM: number | null }[];
+  /** Os N simultâneos abertos no cálculo. */
+  abertos: ObjectId[];
+  cargaNecessariaM: number | null;
+  cenario: CenarioCalculado | null;
+  /** Terminais de incêndio fora da rede da bomba (sem tubo chegando neles). */
+  desligados: ObjectId[];
+  papel: Map<ObjectId, PapelDoTrecho>;
+  /** Pressão ESTÁTICA (sem vazão) com a carga de projeto, por hidrante: a verificação dos demais. */
+  estaticaKpa: Map<ObjectId, number>;
+}
+
+/** O papel de cada trecho, pela árvore de menor caminho a partir da fonte. */
+export function papelDosTrechos(rede: RedeDeIncendio): Map<ObjectId, PapelDoTrecho> {
+  const papel = new Map<ObjectId, PapelDoTrecho>();
+  if (!rede.noDaFonte) return papel;
+  const adj = new Map<string, TuboDaRede[]>();
+  for (const x of rede.tubos) {
+    adj.set(x.de, [...(adj.get(x.de) ?? []), x]);
+    adj.set(x.para, [...(adj.get(x.para) ?? []), x]);
+  }
+  // Dijkstra pelo comprimento.
+  const dist = new Map<string, number>([[rede.noDaFonte, 0]]);
+  const pai = new Map<string, TuboDaRede>();
+  const abertos = new Set([rede.noDaFonte]);
+  while (abertos.size) {
+    let u = '';
+    let du = Infinity;
+    for (const a of abertos) if ((dist.get(a) ?? Infinity) < du) (u = a, du = dist.get(a)!);
+    abertos.delete(u);
+    for (const x of adj.get(u) ?? []) {
+      const v = x.de === u ? x.para : x.de;
+      const nd = du + x.lM;
+      if (nd < (dist.get(v) ?? Infinity)) {
+        dist.set(v, nd);
+        pai.set(v, x);
+        abertos.add(v);
+      }
+    }
+  }
+  const naArvore = new Set([...pai.values()].map((x) => x.trecho.id));
+  // Terminais a jusante de cada tubo da árvore.
+  const terminaisNoNo = new Map<string, number>();
+  for (const [, no] of rede.consumidores) terminaisNoNo.set(no, (terminaisNoNo.get(no) ?? 0) + 1);
+  const ordem = [...dist.keys()].sort((a, b) => dist.get(b)! - dist.get(a)!);
+  const aJusante = new Map<string, number>();
+  for (const no of ordem) {
+    const total = (aJusante.get(no) ?? 0) + (terminaisNoNo.get(no) ?? 0);
+    aJusante.set(no, total);
+    const x = pai.get(no);
+    if (x) {
+      const cima = x.de === no ? x.para : x.de;
+      aJusante.set(cima, (aJusante.get(cima) ?? 0) + total);
+    }
+  }
+  const filhos = new Map<string, number>();
+  for (const [no, x] of pai) {
+    const cima = x.de === no ? x.para : x.de;
+    filhos.set(cima, (filhos.get(cima) ?? 0) + 1);
+  }
+  for (const x of rede.tubos) {
+    if (!naArvore.has(x.trecho.id)) {
+      papel.set(x.trecho.id, 'ANEL');
+      continue;
+    }
+    const vertical = x.trecho.a.x === x.trecho.b.x && x.trecho.a.y === x.trecho.b.y;
+    const baixo = pai.get(x.para) === x ? x.para : x.de;
+    const n = aJusante.get(baixo) ?? 0;
+    // GERAL: da fonte até a primeira bifurcação.
+    let geral = true;
+    for (let no = x.de === baixo ? x.para : x.de; no !== rede.noDaFonte; ) {
+      if ((filhos.get(no) ?? 0) > 1) {
+        geral = false;
+        break;
+      }
+      const p = pai.get(no);
+      if (!p) break;
+      no = p.de === no ? p.para : p.de;
+    }
+    // A bifurcação NA bomba também conta: dois tubos saindo dela não são "o geral".
+    if ((filhos.get(rede.noDaFonte) ?? 0) > 1) geral = false;
+    papel.set(x.trecho.id, vertical ? 'COLUNA' : geral && (filhos.get(baixo) ?? 0) !== 0 ? 'GERAL' : n <= 1 ? 'SUB_RAMAL' : 'RAMAL');
+  }
+  return papel;
+}
+
+/**
+ * O cálculo do AltoQi para a rede de hidrantes: cada hidrante sozinho dá a
+ * carga que exigiria; os N mais exigentes são os mais DESFAVORÁVEIS e abrem
+ * juntos; a carga necessária é a menor com que todos eles atendem, e o
+ * resultado dela já traz o ponto de equilíbrio (os outros abertos recebem mais).
+ */
+export function calculoDeIncendio(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio): CalculoDeIncendio {
+  const rede = redeDeIncendio(model);
+  const combate = (model.terminais ?? []).filter(ehDeCombate);
+  const desligados = (model.terminais ?? []).filter((t) => (ehDeCombate(t) || ehSprinkler(t)) && !rede.noDoTerminal.has(t.id)).map((t) => t.id);
+  const papel = papelDosTrechos(rede);
+  const base: CalculoDeIncendio = { motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map() };
+  if (!rede.fonte) return { ...base, motivo: 'sem bomba de incêndio ligada à rede — lance a bomba e ligue-a à tubulação' };
+  const naRede = combate.filter((t) => rede.noDoTerminal.has(t.id));
+  if (naRede.length === 0) return { ...base, motivo: 'nenhum hidrante ou mangotinho ligado à rede' };
+  const desfavoraveis = naRede
+    .map((t) => ({ terminalId: t.id, cargaM: cargaNecessaria(model, hip, [t.id], rede)?.cargaM ?? null }))
+    .sort((a, b) => (b.cargaM ?? Infinity) - (a.cargaM ?? Infinity) || a.terminalId.localeCompare(b.terminalId));
+  const abertos = desfavoraveis.slice(0, Math.min(hip.hidrantesSimultaneos, desfavoraveis.length)).map((d) => d.terminalId);
+  const r = cargaNecessaria(model, hip, abertos, rede);
+  if (!r) return { ...base, desfavoraveis, abertos, motivo: `nem ${CARGA_MAXIMA_M} m de carga na bomba atendem os hidrantes abertos — a rede está subdimensionada` };
+  const zFonte = rede.cota.get(rede.noDaFonte!)!;
+  const estaticaKpa = new Map(naRede.map((t) => [t.id, (zFonte + r.cargaM - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
+  return { ...base, desfavoraveis, abertos, cargaNecessariaM: r.cargaM, cenario: r.cenario, estaticaKpa };
+}
+
+// ─── DN automático ───────────────────────────────────────────────────────────
+
+/**
+ * Sobe o DN dos trechos com velocidade acima da máxima, um DN comercial por vez,
+ * e recalcula — até nenhum passar ou 8 rodadas. Devolve os comandos (um lote,
+ * desfazível) e quantos trechos mudaram.
+ */
+export function ajustarDnDeIncendio(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio): { comandos: Command[]; alterados: number; motivo: string | null } {
+  let m = model;
+  const novoDn = new Map<ObjectId, number>();
+  for (let rodada = 0; rodada < 8; rodada++) {
+    const c = calculoDeIncendio(m, hip);
+    if (!c.cenario) return { comandos: [], alterados: 0, motivo: c.motivo };
+    const rapidos = c.cenario.trechos.filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9);
+    if (rapidos.length === 0) break;
+    const lote: Command[] = [];
+    for (const t of rapidos) {
+      const prox = FICHA_DO_MATERIAL[t.material].diametros.map((d) => d.dn).find((dn) => dn > t.dn);
+      if (prox == null) continue;
+      novoDn.set(t.trechoId, prox);
+      lote.push({ type: 'SetTrechoProps', trechoId: t.trechoId, bitolaMm: prox } as Command);
+    }
+    if (lote.length === 0) break;
+    m = applyBatch(m, lote).model;
+  }
+  const comandos = [...novoDn].map(([trechoId, bitolaMm]) => ({ type: 'SetTrechoProps', trechoId, bitolaMm }) as Command);
+  return { comandos, alterados: comandos.length, motivo: null };
+}

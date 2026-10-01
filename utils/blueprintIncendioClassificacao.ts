@@ -24,6 +24,7 @@
  */
 import { areaConstruidaMm2, type BlueprintModel, type Level } from './blueprintKernel';
 import { usoDoNome } from './blueprintPrograma';
+import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO, hipotesesHidraulicasDaColuna, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -125,10 +126,13 @@ export interface HipotesesDeClassificacao {
 /** As premissas de incêndio do estudo (`blueprint_study_incendio.hipoteses`). Cresce por grupo a cada etapa. */
 export interface HipotesesIncendio {
   classificacao: HipotesesDeClassificacao;
+  /** E2.3 (30/09/2026): fórmula, simultaneidade, vazões/pressões mínimas, mangueira, limites. */
+  hidraulica: HipotesesHidraulicasDeIncendio;
 }
 
 export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
   classificacao: { preset: 'MG_CBMMG', divisao: null, alturaDeclaradaM: null, pisoDeDescargaLevelId: null, cargaDeclaradaMJm2: null },
+  hidraulica: HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO,
 };
 
 const numeroOuNulo = (x: unknown, min: number): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= min ? x : null);
@@ -146,6 +150,7 @@ export function hipotesesIncendioDaColuna(raw: unknown): HipotesesIncendio {
       pisoDeDescargaLevelId: typeof c.pisoDeDescargaLevelId === 'string' && c.pisoDeDescargaLevelId ? c.pisoDeDescargaLevelId : null,
       cargaDeclaradaMJm2: numeroOuNulo(c.cargaDeclaradaMJm2, 0),
     },
+    hidraulica: hipotesesHidraulicasDaColuna(r.hidraulica),
   };
 }
 

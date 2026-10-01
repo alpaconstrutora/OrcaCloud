@@ -4,6 +4,7 @@ import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKe
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
 import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
 import { ROTULO_DO_AGENTE } from '../../utils/blueprintExtintores';
+import { CATALOGO_DE_PLACAS } from '../../utils/blueprintSinalizacao';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import {
   ROTULO_DA_DISCIPLINA,
@@ -116,6 +117,8 @@ interface Props {
     agenteExtintor?: AgenteExtintor | null;
     cargaExtintorKg?: number | null;
     capacidadeExtintora?: string | null;
+    /** Incêndio E7.2: o código da placa. `null` apaga. */
+    codigoPlaca?: string | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -126,6 +129,8 @@ interface Props {
    * ligação (E1.3) vêm do circuito ou do quadro dele — o ponto não as tem, e
    * o painel as mostra DERIVADAS, com o padrão da tomada (NBR 14136).
    */
+  /** Incêndio E7.2: o nome do equipamento que a placa sinaliza (EXT-2, H-1). */
+  nomeDoAlvo?: (id: string) => string;
   circuitos?: { id: string; nome: string; quadroNome: string; tensaoV?: number | null; ligacao?: 'FN' | 'FF' | 'FFF' | null }[];
   /** TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo salvo para este ponto. */
   onAplicarTipoDoTerminal?: (propriedades: PropriedadesDeTerminal) => void;
@@ -183,6 +188,7 @@ export default function PainelTrechoSelecionado({
   circuitos = [],
   onExcluir,
   numeroDeIncendio,
+  nomeDoAlvo,
   bombasPrincipais = [],
 }: Props) {
   if (terminal) {
@@ -390,6 +396,34 @@ export default function PainelTrechoSelecionado({
               )}
               {(terminal.tipoHidraulico === 'BOMBA_INCENDIO' || terminal.tipoHidraulico === 'BOMBA_JOCKEY') && (
                 <CamposDaBombaDeIncendio terminal={terminal} principais={bombasPrincipais.filter((b) => b.id !== terminal.id)} onBomba={(c) => onTerminal(c)} />
+              )}
+              {terminal.tipoHidraulico === 'PLACA' && (
+                <div className="space-y-1" data-testid="campos-da-placa">
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Código (NBR 13434)</span>
+                    <select
+                      value={terminal.codigoPlaca ?? ''}
+                      onChange={(e) => onTerminal({ codigoPlaca: e.target.value || null })}
+                      aria-label="Código da placa"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">A declarar</option>
+                      {Object.entries(CATALOGO_DE_PLACAS).map(([cod, p]) => (
+                        <option key={cod} value={cod}>
+                          {cod} — {p.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {terminal.codigoPlaca && CATALOGO_DE_PLACAS[terminal.codigoPlaca]?.categoria === 'EQUIPAMENTO' && (
+                    <p className={`text-[11px] ${terminal.alvoId ? 'text-slate-500' : 'text-red-700'}`} data-testid="alvo-da-placa">
+                      {terminal.alvoId ? `Sinaliza ${nomeDoAlvo?.(terminal.alvoId) ?? terminal.alvoId}.` : 'Sem equipamento: o que ela sinalizava foi apagado.'}
+                    </p>
+                  )}
+                  {terminal.codigoPlaca && CATALOGO_DE_PLACAS[terminal.codigoPlaca]?.categoria === 'ORIENTACAO' && (
+                    <p className="text-[11px] text-slate-500">A seta aponta a rotação da peça.</p>
+                  )}
+                </div>
               )}
               {terminal.tipoHidraulico === 'EXTINTOR' && (
                 <div className="grid grid-cols-3 gap-2" data-testid="campos-do-extintor">

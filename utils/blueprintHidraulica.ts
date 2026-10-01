@@ -582,6 +582,16 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 200, profundidadeMm: 200, alturaMm: 600 },
     ajuda: 'Extintor portátil: o agente (água, espuma, pó BC/ABC, CO₂), a carga e a capacidade extintora ficam no painel da peça. Não liga em tubo; a distância a percorrer até ele é conferida na tarefa Incêndio.',
   },
+  PLACA: {
+    rotulo: 'Placa de sinalização',
+    sigla: 'PL',
+    grupo: PREVENTIVOS,
+    // A base da placa a 1,80 m do piso (CONFERIR NA IT de sinalização).
+    cotaMm: { INCENDIO: 1800 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 300, profundidadeMm: 20, alturaMm: 200 },
+    ajuda: 'Placa de sinalização (NBR 13434): de equipamento (aponta para o extintor ou o hidrante dela) ou de rota de fuga (a direção é a rotação da peça). O código fica no painel da peça.',
+  },
 };
 
 export const ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

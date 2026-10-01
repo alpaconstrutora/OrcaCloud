@@ -65,3 +65,15 @@ describe('PainelTrechoSelecionado › extintor (E7.1)', () => {
   });
 });
 
+describe('PainelTrechoSelecionado › placa (E7.2)', () => {
+  it('o código do catálogo; a placa de equipamento diz o que sinaliza — ou que o equipamento foi apagado', async () => {
+    const onTerminal = vi.fn();
+    const { rerender } = render(<PainelTrechoSelecionado trecho={null} terminal={ponto('PLACA', { codigoPlaca: 'E5', alvoId: 'x1' })} onTrecho={() => {}} onTerminal={onTerminal} nomeDoAlvo={() => 'EXT-2'} />);
+    expect(screen.getByTestId('alvo-da-placa').textContent).toBe('Sinaliza EXT-2.');
+    await userEvent.setup().selectOptions(screen.getByLabelText('Código da placa'), 'S12');
+    expect(onTerminal).toHaveBeenLastCalledWith({ codigoPlaca: 'S12' });
+    rerender(<PainelTrechoSelecionado trecho={null} terminal={ponto('PLACA', { codigoPlaca: 'E5', alvoId: null })} onTrecho={() => {}} onTerminal={onTerminal} nomeDoAlvo={() => 'EXT-2'} />);
+    expect(screen.getByTestId('alvo-da-placa').textContent).toBe('Sem equipamento: o que ela sinalizava foi apagado.');
+  });
+});
+

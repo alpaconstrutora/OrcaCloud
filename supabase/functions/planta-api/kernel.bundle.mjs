@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.85.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.86.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -673,7 +673,10 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   // porque são terminais da disciplina INCENDIO (menu, numeração, símbolo,
   // quantitativo e IFC já sabem tratar um tipo daqui) — mas NÃO ligam em tubo:
   // o cálculo da rede só olha os tipos que conhece.
-  "EXTINTOR"
+  "EXTINTOR",
+  // 01/10/2026 (incêndio E7.2, 0.86.0): a placa de sinalização — de equipamento
+  // (aponta para ele) ou de rota de fuga (a direção é a rotação da peça).
+  "PLACA"
 ];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
@@ -2163,6 +2166,8 @@ function projetar(model) {
       agenteExtintor: t.agenteExtintor ?? void 0,
       cargaExtintorKg: t.cargaExtintorKg ?? void 0,
       capacidadeExtintora: t.capacidadeExtintora ?? void 0,
+      // Incêndio E7.2 (0.86.0): o código da placa, só quando declarado; o alvo vai por índice (segundo passo).
+      codigoPlaca: t.codigoPlaca ?? void 0,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? void 0,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -2245,6 +2250,7 @@ function projetar(model) {
   const indiceDoTerminal = new Map(terminais.map((t, i) => [t.item.id, i]));
   for (const t of terminais) {
     if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) t.geom.principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
+    if (t.item.alvoId != null && indiceDoTerminal.has(t.item.alvoId)) t.geom.alvo = indiceDoTerminal.get(t.item.alvoId);
   }
   const indiceDeParede = new Map(walls.map((w, i) => [w.item.uid, i]));
   const indiceDeEstruturaG = new Map(structures.map((s2, i) => [s2.item.uid, i]));
@@ -2936,6 +2942,7 @@ function modelFromCanonicalPayload(payload) {
       agenteExtintor: t.agenteExtintor ?? null,
       cargaExtintorKg: t.cargaExtintorKg ?? null,
       capacidadeExtintora: t.capacidadeExtintora ?? null,
+      codigoPlaca: t.codigoPlaca ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -3010,6 +3017,12 @@ function modelFromCanonicalPayload(payload) {
     const alvo = model.terminais[i];
     const p = model.terminais[t.principal];
     if (alvo && p && p.id !== alvo.id) alvo.bombaPrincipalId = p.id;
+  });
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.alvo == null) return;
+    const placa = model.terminais[i];
+    const e = model.terminais[t.alvo];
+    if (placa && e && e.id !== placa.id) placa.alvoId = e.id;
   });
   const gruposLidos = payload.grupos ?? [];
   let k = 0;
@@ -6365,6 +6378,9 @@ function entidadeDoPontoHidraulico(tipo) {
     // E7.1: o enum de IfcFireSuppressionTerminal não tem extintor — USERDEFINED, e o ObjectType diz.
     case "EXTINTOR":
       return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".USERDEFINED." };
+    // E7.2: o IFC4 não tem placa com tipo predefinido (IfcSign é IFC4X3 — fica para a E9.3); USERDEFINED.
+    case "PLACA":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".USERDEFINED." };
     case "BOMBA_INCENDIO":
     case "BOMBA_JOCKEY":
       return { entidade: "IFCPUMP", predefinido: ".USERDEFINED." };
@@ -7373,6 +7389,16 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: {},
     medidasMm: { larguraMm: 200, profundidadeMm: 200, alturaMm: 600 },
     ajuda: "Extintor port\xE1til: o agente (\xE1gua, espuma, p\xF3 BC/ABC, CO\u2082), a carga e a capacidade extintora ficam no painel da pe\xE7a. N\xE3o liga em tubo; a dist\xE2ncia a percorrer at\xE9 ele \xE9 conferida na tarefa Inc\xEAndio."
+  },
+  PLACA: {
+    rotulo: "Placa de sinaliza\xE7\xE3o",
+    sigla: "PL",
+    grupo: PREVENTIVOS,
+    // A base da placa a 1,80 m do piso (CONFERIR NA IT de sinalização).
+    cotaMm: { INCENDIO: 1800 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 300, profundidadeMm: 20, alturaMm: 200 },
+    ajuda: "Placa de sinaliza\xE7\xE3o (NBR 13434): de equipamento (aponta para o extintor ou o hidrante dela) ou de rota de fuga (a dire\xE7\xE3o \xE9 a rota\xE7\xE3o da pe\xE7a). O c\xF3digo fica no painel da pe\xE7a."
   }
 };
 var ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

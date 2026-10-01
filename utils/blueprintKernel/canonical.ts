@@ -900,6 +900,8 @@ function projetar(model: BlueprintModel): {
       agenteExtintor: t.agenteExtintor ?? undefined,
       cargaExtintorKg: t.cargaExtintorKg ?? undefined,
       capacidadeExtintora: t.capacidadeExtintora ?? undefined,
+      // Incêndio E7.2 (0.86.0): o código da placa, só quando declarado; o alvo vai por índice (segundo passo).
+      codigoPlaca: t.codigoPlaca ?? undefined,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? undefined,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -1017,6 +1019,8 @@ function projetar(model: BlueprintModel): {
   const indiceDoTerminal = new Map(terminais.map((t, i) => [t.item.id, i]));
   for (const t of terminais) {
     if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) (t.geom as { principal?: number }).principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
+    // Incêndio E7.2: o equipamento da placa, idem.
+    if (t.item.alvoId != null && indiceDoTerminal.has(t.item.alvoId)) (t.geom as { alvo?: number }).alvo = indiceDoTerminal.get(t.item.alvoId);
   }
 
   // GRUPOS (0.38.0): origem por ÍNDICE nas famílias ordenadas; instâncias com a
@@ -1611,6 +1615,9 @@ export interface CanonicalPayload {
     agenteExtintor?: string;
     cargaExtintorKg?: number;
     capacidadeExtintora?: string;
+    /** Placa: o código e o equipamento (índice). Ausentes sob kernel < 0.86.0 e quando não declarados. */
+    codigoPlaca?: string;
+    alvo?: number;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
     /** Curva Q×H [L/min, mm], NPSH requerido e a principal da jockey (índice). Ausentes sob kernel < 0.82.0. */
@@ -2392,6 +2399,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       agenteExtintor: (t.agenteExtintor as AgenteExtintor | undefined) ?? null,
       cargaExtintorKg: t.cargaExtintorKg ?? null,
       capacidadeExtintora: t.capacidadeExtintora ?? null,
+      codigoPlaca: t.codigoPlaca ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -2480,6 +2488,13 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     const alvo = model.terminais[i];
     const p = model.terminais[t.principal];
     if (alvo && p && p.id !== alvo.id) alvo.bombaPrincipalId = p.id;
+  });
+  // Incêndio E7.2: o equipamento da placa, por índice — idem.
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.alvo == null) return;
+    const placa = model.terminais[i];
+    const e = model.terminais[t.alvo];
+    if (placa && e && e.id !== placa.id) placa.alvoId = e.id;
   });
 
   // Grupos: DEPOIS de paredes, estruturas e etiquetas (origem por índice). As

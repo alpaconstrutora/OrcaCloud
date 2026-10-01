@@ -1653,7 +1653,7 @@ Fecha o **bloco 3**.
 
 Fecha os **A** das seções 22 e 27.
 
-## Etapa 7 — Preventivos · kernel bump · 4 fases · **em andamento (7.1 ✅ 01/10/2026; kernel 0.84.0 → 0.85.0)**
+## Etapa 7 — Preventivos · kernel bump · 4 fases · **em andamento (7.1 e 7.2 ✅ 01/10/2026; kernel 0.84.0 → 0.86.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2361,4 +2361,41 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
 - **Testes:** `blueprintExtintores.test.ts` (9), os dois painéis (3) e a taxonomia, que ganhou o grupo
   dos preventivos. Suíte com 6.685 testes, todos passando, incluindo os 33 pulados de propósito.
   Build ok.
+
+### Etapa 7.2 — 01/10/2026 (frente `incendio-e7`, kernel 0.86.0)
+
+- **Kernel 0.86.0:**
+  - **Tipo `PLACA`** (grupo preventivos, base a 1,80 m, CONFERIR). Só nele: `codigoPlaca` (letra(s) +
+    número, ex. E5, S12) e `alvoId`, o equipamento de incêndio que ela sinaliza. O alvo não pode ser
+    outra placa.
+  - **Canônico:** o alvo vai por ÍNDICE (`alvo`), num segundo passo, como a principal da jockey.
+  - **Equipamento apagado:** a placa perde o alvo (`limparPlacasOrfas`). Só o alvo que SUMIU é limpo;
+    o que existe mas é inválido fica para a invariante recusar. O teste pegou: a limpeza apagava em
+    silêncio uma placa apontando para si mesma.
+  - **`AddTerminal` aceita `rotacaoGraus`:** a placa de rota nasce apontando. A rotação só era
+    aplicada quando havia medidas, e o teste da seta pegou isso também.
+  - Ritual do bump: goldens 7/7 em 0.85.0, 6 hashes, 22 pinos. Bundle da planta-api regerado.
+- **`utils/blueprintSinalizacao.ts` (CONFERIR NA NBR 13434 / IT):**
+  - **Catálogo:** E5 extintor, E7 mangotinho, E8 hidrante, E9 recalque, S3 rota (seta) e S12 saída.
+  - **Placa de equipamento:** extintor, hidrante, mangotinho e recalque pedem a deles. Contam como
+    pendência o equipamento sem placa, a placa sem equipamento e a placa sem código.
+  - **Placa de rota:** nas rotas da E6.3, em cada mudança de direção ≥ 30° vai a seta virada para o
+    trecho seguinte; no fim da rota no pavimento de descarga, "saída" a 2,20 m. Pontos a menos de
+    1,5 m são a mesma placa. A dobra de 14° no canto da caixa não pede placa; a de 70° na porta da
+    caixa, sim.
+  - **Kit (`comPlacas`):** os equipamentos e a placa de cada um num lote só. Os ids que o lote cria
+    são previstos aplicando-o numa cópia, e a previsão é conferida, como no `conferirPlano`. A
+    proposta de extintores passou a lançar o kit.
+- ⚠️ **O harness `sinalizacao` (canvas real, porta 3169) pegou:** a placa no mesmo ponto do equipamento
+  escondia o símbolo dele, e os números se sobrepunham (EXT-1 sobre PL-2). Agora ela se desenha 40 cm
+  ao lado, para dentro do ambiente e com folga das paredes.
+- **Tela:**
+  - **Painel da peça:** o código da placa pelo catálogo e o que ela sinaliza (ou "sem equipamento: foi
+    apagado").
+  - **Painel "Sinalização"** na tarefa Incêndio: o que falta, selecionável, e "Propor N placa(s)".
+- **Fica para depois (backlog nomeado):** o kit da VGA com os manômetros (precisa do tipo manômetro)
+  e os kits criados pelo projetista, guardados por organização (precisam de uma tabela nova, ou seja,
+  de migration, que só se aplica com o OK do usuário).
+- **Testes:** `blueprintSinalizacao.test.ts` (6) e 3 de tela. Suíte com 6.694 testes: 6.661 + 33
+  pulados. Build ok.
 

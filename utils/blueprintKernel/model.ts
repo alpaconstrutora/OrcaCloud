@@ -2797,6 +2797,9 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   // quantitativo e IFC já sabem tratar um tipo daqui) — mas NÃO ligam em tubo:
   // o cálculo da rede só olha os tipos que conhece.
   'EXTINTOR',
+  // 01/10/2026 (incêndio E7.2, 0.86.0): a placa de sinalização — de equipamento
+  // (aponta para ele) ou de rota de fuga (a direção é a rotação da peça).
+  'PLACA',
 ] as const;
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -2896,7 +2899,11 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   BOMBA_JOCKEY: INC,
   PRESSOSTATO: INC,
   EXTINTOR: INC,
+  PLACA: INC,
 };
+
+/** INCÊNDIO (0.86.0, E7.2): o código da placa — letra(s) + número (E5, S12). O catálogo mora em `blueprintSinalizacao`. */
+export const PADRAO_DO_CODIGO_DE_PLACA = /^[A-Z]{1,2}\d{1,2}$/;
 
 /**
  * INCÊNDIO (0.85.0, E7.1): o agente do extintor. As classes de fogo que cada
@@ -3034,6 +3041,15 @@ export interface Terminal {
   agenteExtintor?: AgenteExtintor | null;
   cargaExtintorKg?: number | null;
   capacidadeExtintora?: string | null;
+  /**
+   * PLACA (incêndio E7.2, 0.86.0) — só em `PLACA`: o código (NBR 13434, "E5",
+   * "S12") e o EQUIPAMENTO que ela sinaliza (outro terminal de incêndio). No
+   * canônico o alvo vai por ÍNDICE (`alvo`), num segundo passo; apagar o
+   * equipamento deixa a placa sem alvo (`limparPlacasOrfas`) — a conferência
+   * marca. A direção da placa de rota é a `rotacaoGraus`.
+   */
+  codigoPlaca?: string | null;
+  alvoId?: ObjectId | null;
   /**
    * RESERVA TÉCNICA DE INCÊNDIO (incêndio E3.2, 30/09/2026) — só na caixa de
    * ÁGUA FRIA compartilhada: os litros do volume dela que ficam para o incêndio
@@ -3744,6 +3760,20 @@ export function unidadeDaEtiqueta(model: BlueprintModel, labelUid: ElementUid): 
  * cômodo da unidade sem cada `Delete*` ter de lembrar. A unidade FICA, mesmo
  * vazia — sumir com ela em silêncio esconderia o que a reforma fez.
  */
+/** Incêndio E7.2: a placa cujo equipamento sumiu perde o alvo (e a conferência diz "placa sem equipamento"). */
+export function limparPlacasOrfas(model: BlueprintModel): ObjectId[] {
+  // Só o alvo que SUMIU é limpo; o alvo que existe mas é inválido (outra placa) fica para a invariante recusar.
+  const ids = new Set((model.terminais ?? []).map((t) => t.id));
+  const tocadas: ObjectId[] = [];
+  for (const t of model.terminais ?? []) {
+    if (t.alvoId != null && !ids.has(t.alvoId)) {
+      t.alvoId = null;
+      tocadas.push(t.id);
+    }
+  }
+  return tocadas;
+}
+
 /** Incêndio E4.1: a jockey cuja principal sumiu (ou deixou de ser bomba) perde a ligação. */
 export function limparBombasOrfas(model: BlueprintModel): ObjectId[] {
   const principais = new Set((model.terminais ?? []).filter((t) => t.tipoHidraulico === 'BOMBA_INCENDIO').map((t) => t.id));
@@ -5949,6 +5979,15 @@ export function assertModelInvariants(model: BlueprintModel): void {
       }
       if (t.posicaoSprinkler != null && !(POSICOES_DO_SPRINKLER as readonly string[]).includes(t.posicaoSprinkler)) {
         throw new KernelError('BAD_SPRINKLER', `Posição de sprinkler inválida em ${t.id}: ${t.posicaoSprinkler}`);
+      }
+    }
+    // Placa (incêndio E7.2): código e alvo só na placa; o alvo é um terminal de incêndio que não é placa.
+    if (t.codigoPlaca != null || t.alvoId != null) {
+      if (t.tipoHidraulico !== 'PLACA') throw new KernelError('BAD_SIGN', `Terminal ${t.id} não é placa e não pode ter código nem alvo`);
+      if (t.codigoPlaca != null && !PADRAO_DO_CODIGO_DE_PLACA.test(t.codigoPlaca)) throw new KernelError('BAD_SIGN', `Código de placa inválido em ${t.id}: ${t.codigoPlaca}`);
+      if (t.alvoId != null) {
+        const alvo = (model.terminais ?? []).find((x) => x.id === t.alvoId);
+        if (!alvo || alvo.disciplina !== 'INCENDIO' || alvo.tipoHidraulico === 'PLACA') throw new KernelError('BAD_SIGN', `O alvo da placa ${t.id} não é um equipamento de incêndio`);
       }
     }
     // Extintor (incêndio E7.1): agente, carga e capacidade só no extintor, e só válidos.

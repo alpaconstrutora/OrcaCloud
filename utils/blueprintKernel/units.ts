@@ -516,7 +516,17 @@
  * `cargaExtintorKg` e `capacidadeExtintora` ("2-A:20-B:C"). Omitidos do
  * canônico quando ausentes. Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.85.0';
+/**
+ * ─── 0.85.0 → 0.86.0 (01/10/2026) — A PLACA DE SINALIZAÇÃO ──────────────────
+ *
+ * Nos preventivos de incêndio (E7.2 do roadmap de incêndio): o tipo `PLACA` e,
+ * só nele, `Terminal.codigoPlaca` (NBR 13434: "E5", "S12") e `alvoId` (o
+ * equipamento sinalizado) — no canônico por ÍNDICE (`alvo`), num segundo passo;
+ * apagar o equipamento deixa a placa sem alvo (`limparPlacasOrfas`). A direção
+ * da placa de rota é a `rotacaoGraus`. Omitidos quando ausentes. Vocabulário
+ * novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.86.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

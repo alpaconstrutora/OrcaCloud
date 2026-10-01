@@ -240,6 +240,8 @@ import { percursoDeFuga } from '../../utils/blueprintRotaDeFuga';
 import { pavimentoDeDescarga } from '../../utils/blueprintIncendioClassificacao';
 import PainelSaidasIncendio from './PainelSaidasIncendio';
 import PainelExtintoresIncendio from './PainelExtintoresIncendio';
+import PainelSinalizacaoIncendio from './PainelSinalizacaoIncendio';
+import { analisarSinalizacao, comPlacas, proporSinalizacao } from '../../utils/blueprintSinalizacao';
 import { analisarExtintores, proporExtintores } from '../../utils/blueprintExtintores';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
@@ -7349,6 +7351,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (extintoresDeIncendio ? proporExtintores(editor.model, extintoresDeIncendio, incendioDoEstudo.hipoteses.extintores) : null),
     [extintoresDeIncendio, editor.model, incendioDoEstudo.hipoteses.extintores],
   );
+  /** E7.2: a sinalização — equipamentos e rota de fuga — e a proposta (derivadas). */
+  const sinalizacaoDeIncendio = useMemo(
+    () =>
+      classificacaoDeIncendio
+        ? analisarSinalizacao(editor.model, percursoDeIncendio, pavimentoDeDescarga(editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId)?.id ?? null)
+        : null,
+    [classificacaoDeIncendio, editor.model, percursoDeIncendio, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId],
+  );
+  const propostaDeSinalizacao = useMemo(() => (sinalizacaoDeIncendio ? proporSinalizacao(editor.model, sinalizacaoDeIncendio) : []), [sinalizacaoDeIncendio, editor.model]);
   /** E6.1: saídas de emergência — população e largura das escadas, corredores e descarga. */
   const saidasDeIncendio = useMemo(
     () =>
@@ -8429,6 +8440,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         trecho={trechoSel}
         terminal={terminalSel}
         numeroDeIncendio={terminalSel ? numerosDeIncendio.get(terminalSel.id) ?? null : null}
+        nomeDoAlvo={(id) => numerosDeIncendio.get(id)?.numero ?? id}
         bombasPrincipais={(editor.model.terminais ?? []).filter((t) => t.tipoHidraulico === 'BOMBA_INCENDIO').map((t) => ({ id: t.id, nome: numerosDeIncendio.get(t.id)?.numero ?? t.tipo }))}
         circuitos={circuitosParaEscolher}
         // E4.3/E4.4: entrada e medidor ligam-se a um quadro; o medidor mede uma unidade.
@@ -14413,7 +14425,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       semCobertura: propostaDeExtintores.semCobertura,
                       onPropor: () => {
                         if (!propostaDeExtintores.comandos.length) return;
-                        const criados = editor.runBatch(propostaDeExtintores.comandos);
+                        // E7.2: o KIT — cada extintor com a placa dele, no mesmo lote.
+                        const criados = editor.runBatch(comPlacas(editor.model, propostaDeExtintores.comandos));
+                        if (criados?.length) selecionar(criados);
+                      },
+                    }}
+                  />
+                </div>
+              )}
+              {sinalizacaoDeIncendio && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <PainelSinalizacaoIncendio
+                    analise={sinalizacaoDeIncendio}
+                    onSelecionar={selecionar}
+                    proposta={{
+                      quantas: propostaDeSinalizacao.length,
+                      onPropor: () => {
+                        if (!propostaDeSinalizacao.length) return;
+                        const criados = editor.runBatch(propostaDeSinalizacao);
                         if (criados?.length) selecionar(criados);
                       },
                     }}

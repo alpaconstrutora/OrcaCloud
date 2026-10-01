@@ -121,6 +121,7 @@ import {
   findUnidade,
   limparEtiquetasOrfasDasUnidades,
   limparBombasOrfas,
+  limparPlacasOrfas,
   findGrupo,
   findNucleo,
   type TipoDeNucleo,
@@ -742,6 +743,9 @@ export type Command =
       agenteExtintor?: AgenteExtintor | null;
       cargaExtintorKg?: number | null;
       capacidadeExtintora?: string | null;
+      /** Placa (incêndio E7.2) — só em `PLACA`: o código e o equipamento. `null` apaga. */
+      codigoPlaca?: string | null;
+      alvoId?: ObjectId | null;
       /** Reserva de incêndio (E3.2) — só na caixa de água fria; ignorada nas demais. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1): curva, NPSH requerido e, na jockey, a principal. */
@@ -752,6 +756,8 @@ export type Command =
       larguraMm?: number | null;
       alturaMm?: number | null;
       profundidadeMm?: number | null;
+      /** Incêndio E7.2: o giro em planta já na criação (a placa de rota nasce apontando). */
+      rotacaoGraus?: number | null;
       /** E4.3: o quadro da entrada/medidor, quando já se sabe. */
       quadroId?: ObjectId | null;
       /** E4.4: a unidade que o medidor mede. */
@@ -794,6 +800,9 @@ export type Command =
       agenteExtintor?: AgenteExtintor | null;
       cargaExtintorKg?: number | null;
       capacidadeExtintora?: string | null;
+      /** Placa (incêndio E7.2) — só em `PLACA`: o código e o equipamento. `null` apaga. */
+      codigoPlaca?: string | null;
+      alvoId?: ObjectId | null;
       /** Reserva de incêndio na caixa de água fria (E3.2). `null` apaga. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1). `null` apaga. */
@@ -3504,6 +3513,8 @@ function aplicarSemHash(
           ...(command.agenteExtintor != null && command.tipoHidraulico === 'EXTINTOR' ? { agenteExtintor: command.agenteExtintor } : {}),
           ...(command.cargaExtintorKg != null && command.tipoHidraulico === 'EXTINTOR' ? { cargaExtintorKg: command.cargaExtintorKg } : {}),
           ...(command.capacidadeExtintora != null && command.tipoHidraulico === 'EXTINTOR' ? { capacidadeExtintora: command.capacidadeExtintora.trim().toUpperCase() } : {}),
+          ...(command.codigoPlaca != null && command.tipoHidraulico === 'PLACA' ? { codigoPlaca: command.codigoPlaca.trim().toUpperCase() } : {}),
+          ...(command.alvoId != null && command.tipoHidraulico === 'PLACA' ? { alvoId: command.alvoId } : {}),
           ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
           ...(command.curvaBomba != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { curvaBomba: curvaInteira(command.curvaBomba) } : {}),
           ...(command.npshrMm != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { npshrMm: Math.round(command.npshrMm) } : {}),
@@ -3511,9 +3522,9 @@ function aplicarSemHash(
         },
       ];
       // E7.1: as medidas, só quando informadas — a chave ausente é o estado de todo terminal anterior.
-      if (command.larguraMm != null || command.alturaMm != null || command.profundidadeMm != null) {
+      if (command.larguraMm != null || command.alturaMm != null || command.profundidadeMm != null || command.rotacaoGraus != null) {
         const criado = next.terminais[next.terminais.length - 1];
-        aplicarMedidas(criado, { larguraMm: command.larguraMm ?? undefined, alturaMm: command.alturaMm ?? undefined, profundidadeMm: command.profundidadeMm ?? undefined });
+        aplicarMedidas(criado, { larguraMm: command.larguraMm ?? undefined, alturaMm: command.alturaMm ?? undefined, profundidadeMm: command.profundidadeMm ?? undefined, rotacaoGraus: command.rotacaoGraus ?? undefined });
       }
       diff.created.push(id);
       break;
@@ -3568,6 +3579,13 @@ function aplicarSemHash(
       if (command.agenteExtintor !== undefined) terminal.agenteExtintor = command.agenteExtintor ?? null;
       if (command.cargaExtintorKg !== undefined) terminal.cargaExtintorKg = command.cargaExtintorKg ?? null;
       if (command.capacidadeExtintora !== undefined) terminal.capacidadeExtintora = command.capacidadeExtintora?.trim().toUpperCase() || null;
+      if (command.codigoPlaca !== undefined) terminal.codigoPlaca = command.codigoPlaca?.trim().toUpperCase() || null;
+      if (command.alvoId !== undefined) terminal.alvoId = command.alvoId ?? null;
+      // Deixar de ser placa leva código e alvo juntos — a invariante recusaria.
+      if (terminal.tipoHidraulico !== 'PLACA') {
+        if (terminal.codigoPlaca != null) terminal.codigoPlaca = null;
+        if (terminal.alvoId != null) terminal.alvoId = null;
+      }
       if (command.volumeRtiL !== undefined) terminal.volumeRtiL = command.volumeRtiL == null ? null : Math.round(command.volumeRtiL);
       if (command.curvaBomba !== undefined) terminal.curvaBomba = command.curvaBomba == null ? null : curvaInteira(command.curvaBomba);
       if (command.npshrMm !== undefined) terminal.npshrMm = command.npshrMm == null ? null : Math.round(command.npshrMm);
@@ -5356,6 +5374,7 @@ function aplicarSemHash(
   // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
   diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
   diff.updated.push(...limparBombasOrfas(next));
+  diff.updated.push(...limparPlacasOrfas(next));
   // PAREDE CURVA (P2.12): faceta que saiu do círculo perde o metadado.
   retirarArcosDesfeitos(next, diff);
   // FAMÍLIAS ANINHADAS (P2.18): filho cujo conjunto sumiu fica solto.

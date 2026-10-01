@@ -2427,6 +2427,9 @@ function entidadeDoPontoHidraulico(
     // E7.1: o enum de IfcFireSuppressionTerminal não tem extintor — USERDEFINED, e o ObjectType diz.
     case 'EXTINTOR':
       return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.USERDEFINED.' };
+    // E7.2: o IFC4 não tem placa com tipo predefinido (IfcSign é IFC4X3 — fica para a E9.3); USERDEFINED.
+    case 'PLACA':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.USERDEFINED.' };
     case 'BOMBA_INCENDIO':
     case 'BOMBA_JOCKEY':
       return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };

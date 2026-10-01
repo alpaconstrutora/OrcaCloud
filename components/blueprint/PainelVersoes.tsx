@@ -66,7 +66,10 @@ export default function PainelVersoes({
   hipotesesEletricas,
   hipotesesDeArmadura,
   pranchasIniciais,
+  hipotesesDeIncendio,
 }: {
+  /** E8.1: as premissas de incêndio do estudo — o quadro-resumo da folha de legenda de incêndio sai delas. */
+  hipotesesDeIncendio?: import('../../utils/blueprintIncendioClassificacao').HipotesesIncendio;
   study: BlueprintStudy;
   /**
    * Pranchas já marcadas ao abrir (17/09/2026): o botão "Exportar a vista
@@ -388,6 +391,9 @@ export default function PainelVersoes({
       eletrica: comEletrica || undefined,
       // E2.1: idem para as redes hidrossanitárias (camadas PLANTA-AGUA / PLANTA-ESGOTO).
       redesNoDxf: redesNoDxf.length ? redesNoDxf : undefined,
+      // E8.1: a camada de incêndio no DXF quando a prancha "Incêndio" está marcada; e as premissas, para o quadro-resumo.
+      incendioNoDxf: pranchas.includes('incendio') || undefined,
+      hipotesesDeIncendio,
       hipotesesEletricas,
       armadura: hipotesesDeArmadura,
       esquemaIfc,
@@ -471,6 +477,7 @@ export default function PainelVersoes({
     { id: 'eletrica', rotulo: 'Elétrica' },
     // E2.1: a planta com a rede de água / de esgoto + a folha de legenda hidrossanitária.
     { id: 'hidraulica', rotulo: 'Hidráulica' },
+    { id: 'incendio', rotulo: 'Incêndio' },
     { id: 'sanitaria', rotulo: 'Esgoto' },
     { id: 'frente', rotulo: 'Frente' },
     { id: 'fundos', rotulo: 'Fundos' },
@@ -488,7 +495,7 @@ export default function PainelVersoes({
       return PRANCHAS.map((p) => p.id).filter((p) => proximo.includes(p));
     });
   const elevacoesSelecionadas = pranchas.filter(
-    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada' | 'hidraulica' | 'sanitaria'> => !ehPlantaDaPrancha(p),
+    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada' | 'hidraulica' | 'sanitaria' | 'incendio'> => !ehPlantaDaPrancha(p),
   );
   /** As "plantas" (técnica, humanizada, elétrica, hidráulica, esgoto) dependem da escala caber. */
   const comPlanta = pranchas.some(ehPlantaDaPrancha);

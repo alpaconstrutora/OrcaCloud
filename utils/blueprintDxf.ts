@@ -31,6 +31,7 @@
  * O eixo vai junto, em camada própria: é dele que se reeditam as paredes.
  */
 
+import { desenharIncendio } from './blueprintPranchaIncendio';
 import { nomesDasColunas } from './blueprintEsquemaVertical';
 import { desenharHidrossanitaria, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { type Anotacao,
@@ -154,6 +155,9 @@ export const CAMADAS = {
    */
   AGUA: 'PLANTA-AGUA',
   AGUA_TEXTO: 'PLANTA-AGUA-TEXTO',
+  /** E8.1: a rede e as peças de incêndio, e os números/DN. */
+  INCENDIO: 'PLANTA-INCENDIO',
+  INCENDIO_TEXTO: 'PLANTA-INCENDIO-TEXTO',
   ESGOTO: 'PLANTA-ESGOTO',
   ESGOTO_TEXTO: 'PLANTA-ESGOTO-TEXTO',
   /**
@@ -205,6 +209,8 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ELETRICA_FORCA_TEXTO]: 1,
   [CAMADAS.AGUA]: 5, // azul — a cor da água no canvas
   [CAMADAS.AGUA_TEXTO]: 5,
+  [CAMADAS.INCENDIO]: 30,
+  [CAMADAS.INCENDIO_TEXTO]: 30,
   [CAMADAS.ESGOTO]: 32, // marrom — a convenção de esgoto em prancha
   [CAMADAS.ESGOTO_TEXTO]: 32,
   [CAMADAS.UNIFILAR]: 7,
@@ -520,6 +526,8 @@ export interface OpcoesDxf {
   hipotesesEletricas?: HipotesesEletricas;
   /** E2.1: as redes hidrossanitárias a desenhar, cada uma nas suas camadas `PLANTA-AGUA*` / `PLANTA-ESGOTO*`. */
   redes?: RedeDaPrancha[];
+  /** E8.1: o incêndio inteiro (rede, hidrantes, sprinklers, preventivo) em `PLANTA-INCENDIO*`. */
+  incendio?: boolean;
 }
 
 /**
@@ -906,6 +914,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   dxf += entidadesDeEscada(model);
   if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas);
   for (const rede of o.redes ?? []) dxf += entidadesDaRedeHidro(model, rede);
+  if (o.incendio) dxf += entidadesDeIncendio(model);
 
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
@@ -1070,6 +1079,29 @@ function entidadesDaRedeHidro(model: BlueprintModel, rede: RedeDaPrancha): strin
     },
   };
   desenharHidrossanitaria(d, model, { px: (x) => x / FATOR, py: (y) => -y / FATOR }, rede, FATOR, null, nomesDasColunas(model));
+  return saida;
+}
+
+/** E8.1: o incêndio pelo MESMO desenho da prancha, num Desenhista que escreve DXF (o molde da rede hidro). */
+function entidadesDeIncendio(model: BlueprintModel): string {
+  let saida = '';
+  const FATOR = 50;
+  const real = (x: number, y: number) => ({ x: x * FATOR, y: -y * FATOR });
+  const d: Desenhista = {
+    linha: (x1, y1, x2, y2) => {
+      saida += linha(CAMADAS.INCENDIO, real(x1, y1), real(x2, y2));
+    },
+    poligono: (pontos) => {
+      saida += polilinha(CAMADAS.INCENDIO, pontos.map((p) => real(p.x, p.y)));
+    },
+    texto: (x, y, t, alturaMm) => {
+      saida += texto(CAMADAS.INCENDIO_TEXTO, real(x, y), t, alturaMm * FATOR);
+    },
+    retangulo: (x, y, w, h) => {
+      saida += polilinha(CAMADAS.INCENDIO, [real(x, y), real(x + w, y), real(x + w, y + h), real(x, y + h)]);
+    },
+  };
+  desenharIncendio(d, model, { px: (x) => x / FATOR, py: (y) => -y / FATOR }, 'TODAS', FATOR, null);
   return saida;
 }
 

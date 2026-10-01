@@ -13083,6 +13083,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 // clicado noutra vista: o estado inicial é lido uma vez só.
                 key={pranchaParaExportar?.join('|') ?? 'versoes'}
                 pranchasIniciais={pranchaParaExportar}
+                hipotesesDeIncendio={incendioDoEstudo.hipoteses}
                 study={study}
                 custoPorUid={custoPorUid}
                 hipotesesEletricas={hipotesesEletricas}

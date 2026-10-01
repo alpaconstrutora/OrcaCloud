@@ -24,6 +24,8 @@
  * os dois a carregar condicional do outro.
  */
 
+import { desenharIncendio, desenharLegendaDeIncendio } from './blueprintPranchaIncendio';
+import { classificarEdificacao, exigenciasDaEdificacao } from './blueprintIncendioClassificacao';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
 import { desenharIsometricos, isometricosDoModelo } from './blueprintIsometricoPrancha';
@@ -354,6 +356,21 @@ export interface OpcoesExportacao {
   /** E2.1: as redes hidrossanitárias que vão como camadas no DXF (a aba Versões marca pelas pranchas). */
   redesNoDxf?: RedeDaPrancha[];
   /**
+   * PRANCHA DE INCÊNDIO (E8.1, 01/10/2026): a família de incêndio por cima da
+   * planta (hidrantes, sprinklers, preventivo — ou todas, na prancha avulsa).
+   */
+  incendio?: import('./blueprintPranchaIncendio').RecorteDeIncendio;
+  /** E8.1: a numeração de incêndio do desenho INTEIRO (o pavimento recortado numeraria de novo). */
+  numerosDeIncendio?: ReadonlyMap<string, { numero: string }>;
+  /** E8.1: a camada de incêndio no DXF (PLANTA-INCENDIO*). */
+  incendioNoDxf?: boolean;
+  /**
+   * E8.1: as premissas de incêndio do ESTUDO — a folha de legenda monta com
+   * elas a classificação e o quadro-resumo das medidas (E0). Ausentes = o
+   * quadro diz que a classificação não foi informada.
+   */
+  hipotesesDeIncendio?: import('./blueprintIncendioClassificacao').HipotesesIncendio;
+  /**
    * E2.3: o nome de cada coluna (AF-1, TQ-1 · CV-1) calculado no desenho
    * INTEIRO — a planta de um pavimento recebe o modelo recortado, e numerar
    * nele daria "AF-1" a colunas diferentes em pranchas diferentes.
@@ -616,6 +633,7 @@ export function desenharPlanta(
     }
   }
   if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null, opcoes.nomesDasColunas ?? nomesDasColunas(model));
+  if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio);
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
@@ -985,6 +1003,25 @@ export function desenharFolhaDeDetalhesHidro(
     const { deFora } = desenharIsometricos(d, isos, x0, yIso + 4, enq.utilLarguraMm, livre);
     if (deFora > 0) d.texto(x0 + 40, yIso, `+${deFora} isométrico(s) não couberam nesta folha — use um papel maior.`, 2.0, '#b91c1c');
   }
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA DE LEGENDA DE INCÊNDIO (E8.1, 01/10/2026): o quadro-resumo das
+ * medidas de segurança (classificação + exigências da E0, das premissas do
+ * estudo) e a legenda dos símbolos com a quantidade.
+ */
+export function desenharFolhaDeIncendio(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const y0 = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) + 6;
+  d.texto(x0, y0, 'SEGURANÇA CONTRA INCÊNDIO — QUADRO-RESUMO E LEGENDA', 3.2);
+  const quadro = opcoes.hipotesesDeIncendio
+    ? (() => {
+        const classificacao = classificarEdificacao(model, opcoes.hipotesesDeIncendio!.classificacao);
+        return { classificacao, exigencias: exigenciasDaEdificacao(classificacao) };
+      })()
+    : null;
+  desenharLegendaDeIncendio(d, model, x0, y0 + 9, enq.utilLarguraMm, quadro);
   desenharCarimbo(d, opcoes, enq);
 }
 

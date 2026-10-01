@@ -13,6 +13,9 @@
  * template é da ORGANIZAÇÃO (JSONB sanitizado em `templateDePranchaDaColuna`),
  * como o template de vista (E8.2) e o tipo de parede.
  */
+import { temIncendioNoPavimento, type FamiliaDeIncendio } from './blueprintPranchaIncendio';
+
+const ROTULO_CURTO_DA_FAMILIA: Record<FamiliaDeIncendio, string> = { HIDRANTES: 'hidrantes', SPRINKLERS: 'sprinklers', PREVENTIVO: 'preventivo' };
 import { DISCIPLINAS_DA_REDE, temRedeNoPavimento, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { colunasDoModelo } from './blueprintEsquemaVertical';
 import { temEsquemaVerticalEletrico } from './blueprintEsquemaVerticalEletrico';
@@ -61,6 +64,8 @@ export interface InclusaoNoConjunto {
    * — no lugar da unificada. Ausente → falso (a unificada, como sempre foi).
    */
   eletricaSeparada?: boolean;
+  /** E8.1 (incêndio): as plantas de hidrantes, sprinklers e preventivo por pavimento + a folha de legenda e quadro-resumo. Ausente → falso. */
+  incendio?: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -150,7 +155,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -167,6 +172,8 @@ export interface PranchaPlanejada {
   spaceId?: ObjectId;
   /** E5.1: só na ELÉTRICA separada — qual das duas plantas é esta. */
   recorteEletrico?: RecorteEletrico;
+  /** E8.1: só na de INCÊNDIO — qual família. */
+  familiaDeIncendio?: FamiliaDeIncendio;
   /** Só na AMPLIAÇÃO nascida de uma VISTA DEPENDENTE (P2.17). */
   vistaDependenteId?: ObjectId;
 }
@@ -260,6 +267,18 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
     // E2.3: o esquema vertical, quando há coluna das redes pedidas.
     const redes = redesDoTemplate(t);
     if (alguma && temColunaDasRedes(model, redes)) numerar({ tipo: 'ESQUEMA_HIDRO', titulo: 'Esquema vertical hidrossanitário', denominador: 0 });
+  }
+  // INCÊNDIO (E8.1, 01/10/2026): por pavimento, as famílias que ele TEM, e a folha de legenda/quadro-resumo.
+  if (t.incluir.incendio) {
+    let alguma = false;
+    for (const familia of ['HIDRANTES', 'SPRINKLERS', 'PREVENTIVO'] as const) {
+      for (const n of niveis) {
+        if (!temIncendioNoPavimento(model, n.id, familia)) continue;
+        numerar({ tipo: 'INCENDIO', titulo: `Incêndio — ${ROTULO_CURTO_DA_FAMILIA[familia]} — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id, familiaDeIncendio: familia });
+        alguma = true;
+      }
+    }
+    if (alguma) numerar({ tipo: 'LEGENDA_INCENDIO', titulo: 'Incêndio — quadro-resumo e legenda', denominador: 0 });
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });

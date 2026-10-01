@@ -1664,7 +1664,7 @@ Fecha os **A** das seções 22 e 27.
 
 Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
-## Etapa 8 — Documentação · sem bump · 4 fases
+## Etapa 8 — Documentação · sem bump · 4 fases · **em andamento (8.1 ✅ 01/10/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2468,4 +2468,32 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   pulados. Build ok.
 
 **Fecha o bloco 5** (preventivos) e os A das seções 20, 21, 23, 24 e 25.
+
+### Etapa 8.1 — 01/10/2026 (frente `incendio-e8`, sem bump)
+
+- **`utils/blueprintPranchaIncendio.ts`:**
+  - **Três famílias por pavimento:** HIDRANTES (rede, hidrantes, mangotinho, recalque, bombas,
+    pressostato, caixa), SPRINKLERS (rede, sprinklers, VGA, chave de fluxo) e PREVENTIVO
+    (extintores, placas com o código, luminárias, detecção, alarme, personalizado).
+  - **Desenho:** a tubulação com o DN (bifilar quando cabe), a coluna como círculo, o símbolo técnico
+    de prancha em escala (mínimo de 2,6 mm) e o número do desenho INTEIRO (H-1, SPK-3, EXT-2), não o
+    do pavimento recortado.
+- **Conjunto de pranchas** (opção "Incêndio" no template, `incluir.incendio`):
+  - por família e por pavimento, só as que o pavimento TEM;
+  - no fim, a folha "Incêndio — quadro-resumo e legenda" (tipos `INCENDIO`/`LEGENDA_INCENDIO`).
+  - **Quadro-resumo:** classificação e as medidas de segurança da E0, com exigência e motivo, no
+    formato do CBMMG. Sai das premissas do estudo, que o painel Versões agora recebe. Sem elas, a
+    folha diz que a classificação não foi informada.
+  - **Legenda:** por família, só o que existe, com a quantidade.
+- **Prancha avulsa "Incêndio"** no painel Versões (PDF/PNG): as três famílias numa folha.
+- **DXF:** camadas `PLANTA-INCENDIO` e `PLANTA-INCENDIO-TEXTO`, pelo MESMO desenho da prancha.
+- ⚠️ **O harness `docs/spikes/prancha-incendio`** (o conjunto em canvas, `?folha=`, porta 3172) pegou
+  uma folha a mais: o pavimento só com tubo ia para a de hidrantes "para a coluna não sumir", mas o
+  tubo era dos sprinklers dele, e saía uma folha de hidrantes só com a rede dos sprinklers. Agora essa
+  regra vale só sem sprinkler no pavimento. O conjunto de prova tem 5 folhas: hidrantes do térreo,
+  sprinklers do 1º, preventivo de cada pavimento e o quadro.
+- **Testes:** `blueprintPranchaIncendio.test.ts` (6: famílias por pavimento, folha só com a família
+  dela e o DN, quadro-resumo com e sem premissas, legenda, prancha avulsa, DXF). Na DXF, a tabela de
+  camadas declara todas, então o teste confere as ENTIDADES. Suíte com 6.715 testes: 6.682 + 33
+  pulados. Build ok.
 

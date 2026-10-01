@@ -7,6 +7,7 @@
 // uma vez contra a interface. Aqui só se traduz "milímetro de papel" para o que
 // cada destino entende — pixel no canvas, ponto no PDF.
 
+import { numeracaoDeIncendio } from '../utils/blueprintNumeracaoIncendio';
 import { colunasDoModelo, nomesDasColunas } from '../utils/blueprintEsquemaVertical';
 import { DISCIPLINAS_DA_REDE, type RedeDaPrancha } from '../utils/blueprintPranchaHidro';
 import { jsPDF } from 'jspdf';
@@ -14,6 +15,7 @@ import {
   AVISO_PADRAO,
   desenharElevacao,
   desenharFolhaDeDetalhesHidro,
+  desenharFolhaDeIncendio,
   desenharFolhaDoEsquemaVertical,
   desenharFolhaDoEsquemaVerticalEletrico,
   desenharFolhaDaListaDeMateriaisEletrica,
@@ -80,6 +82,8 @@ export type PranchaExport =
   | 'hidraulica'
   /** E2.1: a planta com a rede de ESGOTO + a folha de legenda hidrossanitária. */
   | 'sanitaria'
+  /** E8.1: a planta com o INCÊNDIO inteiro (hidrantes, sprinklers e preventivo numa folha). */
+  | 'incendio'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -104,6 +108,7 @@ const ROTULO_FIXO: Record<string, string> = {
   humanizada: 'Planta humanizada',
   hidraulica: 'Planta hidráulica',
   sanitaria: 'Planta de esgoto',
+  incendio: 'Planta de incêndio',
   frente: 'Elevação frente',
   fundos: 'Elevação fundos',
   'lateral-esq': 'Elevação lateral esquerda',
@@ -121,7 +126,7 @@ function opcoesDaHumanizada(p: PranchaExport): Partial<OpcoesExportacao> {
 
 /** As pranchas que SÃO a planta (com ou sem uma camada por cima) — não têm projeção de elevação. */
 export function ehPlantaDaPrancha(p: PranchaExport): boolean {
-  return p === 'planta' || p === 'eletrica' || p === 'humanizada' || p === 'hidraulica' || p === 'sanitaria';
+  return p === 'planta' || p === 'eletrica' || p === 'humanizada' || p === 'hidraulica' || p === 'sanitaria' || p === 'incendio';
 }
 
 /** O que cada planta põe por cima da arquitetura (elétrica, rede hidrossanitária, humanizada). */
@@ -129,6 +134,7 @@ function opcoesDaCamada(p: PranchaExport): Partial<OpcoesExportacao> {
   return {
     eletrica: p === 'eletrica',
     hidrossanitaria: p === 'hidraulica' ? 'AGUA' : p === 'sanitaria' ? 'ESGOTO' : undefined,
+    incendio: p === 'incendio' ? 'TODAS' : undefined,
     ...opcoesDaHumanizada(p),
   };
 }
@@ -482,6 +488,8 @@ export function desenharConjunto(
   const folhas: { prancha: PranchaPlanejada; denominador: number }[] = [];
   // E2.3: as colunas numeradas no desenho INTEIRO — cada planta de pavimento recebe o recorte.
   const colunasDoDesenho = nomesDasColunas(model);
+  // E8.1: idem para os números de incêndio (H-1, SPK-3).
+  const numerosDoDesenho = numeracaoDeIncendio(model);
   pranchas.forEach((p, i) => {
     const d = novaFolha(i);
     const comPrancha = (denominador: number, extra: Partial<OpcoesExportacao> = {}): OpcoesExportacao => ({ ...base, ...extra, denominador, prancha: { numero: p.numero, total: pranchas.length, titulo: p.titulo } });
@@ -519,6 +527,25 @@ export function desenharConjunto(
         }
         desenharPlanta(d, m, comPrancha(den, { hidrossanitaria: p.tipo === 'HIDRAULICA' ? 'AGUA' : 'ESGOTO', nomesDasColunas: colunasDoDesenho }), enq);
         folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      // INCÊNDIO (E8.1): a planta do pavimento com a família por cima; a numeração é a do desenho inteiro.
+      case 'INCENDIO': {
+        const m = modeloDoPavimento(model, p.levelId!);
+        let enq = enquadrar(m, p.denominador, papel, template.cotas);
+        let den = p.denominador;
+        if (!enq.cabe && enq.escalaSugerida) {
+          den = enq.escalaSugerida;
+          enq = enquadrar(m, den, papel, template.cotas);
+        }
+        desenharPlanta(d, m, comPrancha(den, { incendio: p.familiaDeIncendio, numerosDeIncendio: numerosDoDesenho }), enq);
+        folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'LEGENDA_INCENDIO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDeIncendio(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
         break;
       }
       case 'DETALHES_HIDRO': {
@@ -787,6 +814,7 @@ export function montarDxf(
     eletrica: o.eletrica,
     hipotesesEletricas: o.hipotesesEletricas,
     redes: o.redesNoDxf,
+    incendio: o.incendioNoDxf,
     // Elevação e corte saem no MESMO fluxo de blocos à direita da planta: numa
     // prancha os dois são vistas, e separá-los em duas faixas só faria o
     // arquivo ter dois espaçamentos diferentes para a mesma coisa.

@@ -72,7 +72,9 @@ export function planejarRedeDeHidrantes(model: BlueprintModel, hip: HipotesesDaR
   // A fonte: a bomba, senão a caixa só de incêndio (E3.2, gravidade — a coluna DESCE dela).
   const bomba =
     (model.terminais ?? []).find((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'BOMBA_INCENDIO') ??
-    (model.terminais ?? []).find((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'RESERVATORIO');
+    (model.terminais ?? []).find((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'RESERVATORIO') ??
+    // Fase B (D-3): a caixa de água fria com parcela de incêndio, por gravidade.
+    (model.terminais ?? []).find((t) => t.disciplina === 'AGUA_FRIA' && t.tipoHidraulico === 'RESERVATORIO' && (t.volumeRtiL ?? 0) > 0);
   if (!bomba) return vazio('lance a bomba de incêndio (ou a caixa de incêndio) primeiro — a rede parte dela');
   const hidrantes = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico && COMBATE.has(t.tipoHidraulico));
   if (hidrantes.length === 0) return vazio('nenhum hidrante ou mangotinho no desenho');

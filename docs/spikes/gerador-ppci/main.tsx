@@ -39,6 +39,8 @@ const semBomba = new URLSearchParams(location.search).get('semBomba') === '1';
 const ORIGINAL = predio(!semBomba);
 
 function App() {
+  const [arranjo, setArranjo] = useState<{ alimentacao: 'BOMBA' | 'GRAVIDADE'; reserva: 'PROPRIA' | 'PARCELA' }>({ alimentacao: 'BOMBA', reserva: 'PROPRIA' });
+  const hip = { ...H, bombeamento: { ...H.bombeamento, ...arranjo } };
   const [plano, setPlano] = useState<PlanoDoPpci | null>(() => gerarPpci(ORIGINAL, H));
   const [lancado, setLancado] = useState<string | null>(null);
   return (
@@ -47,11 +49,12 @@ function App() {
         g={{
           plano,
           gerando: false,
-          onGerar: () => setPlano(gerarPpci(ORIGINAL, H)),
+          onGerar: () => setPlano(gerarPpci(ORIGINAL, hip)),
           prova: plano ? conferirPlanoDoPpci(ORIGINAL, plano) : null,
           onLancar: () => { setLancado(`${plano!.criados.length} peça(s) e trecho(s) lançados num lote — Ctrl+Z desfaz tudo.`); setPlano(null); },
           lancado,
           onBaixar: () => undefined,
+          arranjo: { ...arranjo, bombasNoCatalogo: 0, onMudar: (p) => { setArranjo({ ...arranjo, ...p }); setPlano(null); } },
         }}
       />
     </div>

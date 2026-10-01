@@ -101,8 +101,12 @@ export interface HipotesesDoBombeamento {
   /** E4.3: o diferencial dos pressostatos, kPa — parada → partida da jockey, e jockey → principal (NFPA 20: 70 e 35). CONFERIR. */
   diferencialJockeyKpa: number;
   diferencialPrincipalKpa: number;
+  /** Fase B (plano pós-roadmap, D-3): a rede é alimentada pela bomba ou por gravidade (caixa elevada). */
+  alimentacao: 'BOMBA' | 'GRAVIDADE';
+  /** Fase B (D-3): a reserva técnica num reservatório só de incêndio, ou como parcela da caixa de água fria. */
+  reserva: 'PROPRIA' | 'PARCELA';
 }
-export const HIPOTESES_BOMBEAMENTO_PADRAO: HipotesesDoBombeamento = { altitudeM: 0, perdaNaSuccaoM: 1, diferencialJockeyKpa: 70, diferencialPrincipalKpa: 35 };
+export const HIPOTESES_BOMBEAMENTO_PADRAO: HipotesesDoBombeamento = { altitudeM: 0, perdaNaSuccaoM: 1, diferencialJockeyKpa: 70, diferencialPrincipalKpa: 35, alimentacao: 'BOMBA', reserva: 'PROPRIA' };
 
 export function hipotesesDoBombeamentoDaColuna(raw: unknown): HipotesesDoBombeamento {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -113,6 +117,8 @@ export function hipotesesDoBombeamentoDaColuna(raw: unknown): HipotesesDoBombeam
     perdaNaSuccaoM: ok(r.perdaNaSuccaoM) ? r.perdaNaSuccaoM : p.perdaNaSuccaoM,
     diferencialJockeyKpa: ok(r.diferencialJockeyKpa) && r.diferencialJockeyKpa > 0 ? r.diferencialJockeyKpa : p.diferencialJockeyKpa,
     diferencialPrincipalKpa: ok(r.diferencialPrincipalKpa) && r.diferencialPrincipalKpa > 0 ? r.diferencialPrincipalKpa : p.diferencialPrincipalKpa,
+    alimentacao: r.alimentacao === 'GRAVIDADE' ? 'GRAVIDADE' : p.alimentacao,
+    reserva: r.reserva === 'PARCELA' ? 'PARCELA' : p.reserva,
   };
 }
 

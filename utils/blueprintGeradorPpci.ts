@@ -47,11 +47,13 @@ import { ajustarDnDeIncendio } from './blueprintCalculoIncendio';
 import { MEDIDAS_NAO_MODELADAS, ROTULO_DO_GRUPO_DE_INCENDIO, analisesDeIncendio, verificacoesIncendio } from './blueprintIncendioExecutivo';
 import { RESPONSAVEL_VAZIO } from './blueprintTopografiaExecutivo';
 import type { BlocoDoMemorial } from './blueprintMemorialHidro';
+import { ROTULO_DA_ALIMENTACAO, ROTULO_DO_ARRANJO, proporFonte, proporRecalque, proporReserva } from './blueprintCasaDeBombas';
+import type { BombaCandidata } from './blueprintBombeamentoIncendio';
 
 export type SituacaoDaEtapa = 'LANCOU' | 'NADA_A_FAZER' | 'NAO_EXIGIDA' | 'NAO_RODOU';
 
 export interface EtapaDoPpci {
-  id: 'EXTINTORES' | 'HIDRANTES' | 'SPRINKLERS' | 'REDE' | 'DN' | 'AREA_DE_OPERACAO' | 'SINALIZACAO' | 'ILUMINACAO' | 'ALARME';
+  id: 'EXTINTORES' | 'HIDRANTES' | 'SPRINKLERS' | 'FONTE' | 'REDE' | 'RECALQUE' | 'DN' | 'RESERVA' | 'AREA_DE_OPERACAO' | 'SINALIZACAO' | 'ILUMINACAO' | 'ALARME';
   rotulo: string;
   situacao: SituacaoDaEtapa;
   /** Comandos que a etapa pôs no lote. */
@@ -107,7 +109,12 @@ export function conferirDasPremissas(hip: HipotesesIncendio): string[] {
   ];
 }
 
-export function gerarPpci(original: BlueprintModel, hip: HipotesesIncendio): PlanoDoPpci {
+export function gerarPpci(
+  original: BlueprintModel,
+  hip: HipotesesIncendio,
+  /** Fase B: as bombas de incêndio do catálogo da organização (com curva) — escolhe a que atende o ponto de projeto. */
+  catalogo: readonly BombaCandidata[] = [],
+): PlanoDoPpci {
   let m = original;
   const comandos: Command[] = [];
   const criados: ObjectId[] = [];
@@ -182,6 +189,16 @@ export function gerarPpci(original: BlueprintModel, hip: HipotesesIncendio): Pla
     }
   } else etapa('SPRINKLERS', 'Sprinklers por ambiente e traçado', 'NAO_EXIGIDA', 0);
 
+  // ── Fase B · 1: a FONTE — casa de bombas (bomba, jockey, pressostatos) ou caixa elevada ──
+  const temCombate = (m.terminais ?? []).some((t) => t.disciplina === 'INCENDIO' && (t.tipoHidraulico === 'HIDRANTE_SIMPLES' || t.tipoHidraulico === 'HIDRANTE_DUPLO' || t.tipoHidraulico === 'MANGOTINHO' || t.tipoHidraulico === 'SPRINKLER'));
+  const rotuloDaFonte = `Fonte: ${ROTULO_DA_ALIMENTACAO[hip.bombeamento.alimentacao].toLowerCase()} · ${ROTULO_DO_ARRANJO[hip.bombeamento.reserva].toLowerCase()}`;
+  if (temCombate) {
+    const f = proporFonte(m, hip);
+    const n = aplicar(f.comandos);
+    for (const p of f.pendencias) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: p });
+    etapa('FONTE', rotuloDaFonte, f.pendencias.length && n === 0 ? 'NAO_RODOU' : 'LANCOU', n, f.pendencias[0] ?? null);
+  } else etapa('FONTE', rotuloDaFonte, 'NAO_EXIGIDA', 0);
+
   // ── Rede de hidrantes ─────────────────────────────────────────────────────
   const temHidrante = (m.terminais ?? []).some((t) => t.disciplina === 'INCENDIO' && (t.tipoHidraulico === 'HIDRANTE_SIMPLES' || t.tipoHidraulico === 'HIDRANTE_DUPLO' || t.tipoHidraulico === 'MANGOTINHO'));
   if (temHidrante) {
@@ -191,6 +208,14 @@ export function gerarPpci(original: BlueprintModel, hip: HipotesesIncendio): Pla
     etapa('REDE', 'Rede de hidrantes (geral, colunas, ramais)', plano.motivo ? 'NAO_RODOU' : 'LANCOU', n, plano.motivo);
   } else etapa('REDE', 'Rede de hidrantes (geral, colunas, ramais)', exigida('HIDRANTES') ? 'NAO_RODOU' : 'NAO_EXIGIDA', 0, exigida('HIDRANTES') ? 'nenhum hidrante no desenho' : null);
 
+  // ── Fase B · 2: o REGISTRO DE RECALQUE, ligado à rede ─────────────────────
+  if (exigida('HIDRANTES') && (m.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) {
+    const rc = proporRecalque(m, hip);
+    const n = aplicar(rc.comandos);
+    for (const p of rc.pendencias) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: p });
+    etapa('RECALQUE', 'Registro de recalque no passeio', rc.pendencias.length && n === 0 ? 'NAO_RODOU' : 'LANCOU', n, rc.pendencias[0] ?? null);
+  } else etapa('RECALQUE', 'Registro de recalque no passeio', exigida('HIDRANTES') ? 'NAO_RODOU' : 'NAO_EXIGIDA', 0, exigida('HIDRANTES') ? 'sem rede de incêndio' : null);
+
   // ── DN automático pelo cálculo ────────────────────────────────────────────
   if ((m.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) {
     const dn = ajustarDnDeIncendio(m, hip.hidraulica, exigida('CHUVEIROS_AUTOMATICOS') ? criterio : null);
@@ -198,6 +223,14 @@ export function gerarPpci(original: BlueprintModel, hip: HipotesesIncendio): Pla
     if (dn.motivo && n === 0) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `DN automático: ${dn.motivo}.` });
     etapa('DN', 'DN pelo cálculo hidráulico', 'LANCOU', n, dn.motivo);
   } else etapa('DN', 'DN pelo cálculo hidráulico', 'NAO_RODOU', 0, 'sem rede de incêndio');
+
+  // ── Fase B · 3: o VOLUME da reserva técnica (e a curva da bomba, se o catálogo tem) ──
+  if ((m.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) {
+    const rv = proporReserva(m, hip, catalogo);
+    const n = aplicar(rv.comandos);
+    for (const p of rv.pendencias) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: p });
+    etapa('RESERVA', 'Reserva técnica (volume) e curva da bomba', 'LANCOU', n, rv.pendencias[0] ?? null);
+  } else etapa('RESERVA', 'Reserva técnica (volume) e curva da bomba', 'NAO_RODOU', 0, 'sem rede de incêndio');
 
   // ── Área de operação (sprinklers) ─────────────────────────────────────────
   if (exigida('CHUVEIROS_AUTOMATICOS') && (m.terminais ?? []).some((t) => t.tipoHidraulico === 'SPRINKLER') && (m.areasDeOperacao ?? []).length === 0 && criterio.risco) {
@@ -229,14 +262,8 @@ export function gerarPpci(original: BlueprintModel, hip: HipotesesIncendio): Pla
     etapa('ALARME', 'Detecção e alarme (laço e central)', 'LANCOU', n);
   } else etapa('ALARME', 'Detecção e alarme (laço e central)', 'NAO_EXIGIDA', 0);
 
-  // ── O que ele não decide ──────────────────────────────────────────────────
-  const tem = (tipo: string) => (m.terminais ?? []).some((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === tipo);
-  if ((m.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) {
-    if (!tem('BOMBA_INCENDIO') && !(m.terminais ?? []).some((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'RESERVATORIO')) {
-      pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Bomba de incêndio: a escolha é pela curva do catálogo (gaveta de cálculo) — o gerador não lança bomba.' });
-    }
-    pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Reserva técnica: o volume exigido sai do cálculo; o reservatório (e a parcela de incêndio) é decisão do projeto.' });
-  }
+  // (Fase B: bomba, jockey, pressostatos, recalque e reserva agora são propostos — o que cada passo
+  // não resolveu entrou acima como "não decide", com o motivo.)
 
   // ── Conflitos que a proposta criou ────────────────────────────────────────
   const novos = new Set(criados);

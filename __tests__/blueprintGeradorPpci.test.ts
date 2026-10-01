@@ -81,7 +81,16 @@ describe('E10 · o gerador de PPCI de ponta a ponta (8 pavimentos)', () => {
     const conferir = plano.pendencias.filter((p) => p.grupo === 'CONFERIR').map((p) => p.texto);
     for (const t of conferirDasPremissas(H)) expect(conferir).toContain(t);
     expect(conferir.some((t) => /Saídas de emergência.*transcrito de memória/.test(t))).toBe(true);
-    expect(plano.pendencias.some((p) => p.grupo === 'NAO_DECIDIDO' && /Reserva técnica/.test(p.texto))).toBe(true);
+    // Fase B: a bomba sem curva (catálogo vazio) é o que ele não decide — dito com o ponto de projeto.
+    expect(plano.pendencias.some((p) => p.grupo === 'NAO_DECIDIDO' && /curva a escolher — ponto de projeto \d+ L\/min/.test(p.texto))).toBe(true);
+  });
+
+  it('⚠️ PRONTO QUANDO (Fase B4): jockey, pressostatos, recalque e reserva lançados — só falta o que o modelo de prova não tem (o percurso, sem escada)', () => {
+    const tipos = (plano.resultado.terminais ?? []).map((t) => t.tipoHidraulico);
+    for (const t of ['BOMBA_JOCKEY', 'PRESSOSTATO', 'HIDRANTE_RECALQUE', 'RESERVATORIO']) expect(tipos, t).toContain(t);
+    expect(plano.pendencias.filter((p) => p.grupo === 'VERIFICACAO').map((p) => p.texto)).toEqual([
+      expect.stringMatching(/^Saídas e rota de fuga — NBR 9077 — Percurso de fuga de todos os ambientes/),
+    ]);
   });
 });
 

@@ -7443,7 +7443,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   useEffect(() => {
     // O catálogo de bombas carrega quando o cálculo abre (uma vez por abertura).
-    if (tarefaAberta === 'incendioCalculo') recarregarCatalogoDeTipos();
+    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci') recarregarCatalogoDeTipos();
   }, [tarefaAberta, recarregarCatalogoDeTipos]);
   /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
   const planoDaRedeDeHidrantes = useMemo(
@@ -7734,12 +7734,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // Um tique para o "Gerando…" aparecer antes da conta síncrona.
     setTimeout(() => {
       try {
-        setPlanoPpci(gerarPpci(editor.model, incendioDoEstudo.hipoteses));
+        // Fase B: o catálogo de bombas da organização — escolhe a que atende o ponto de projeto.
+        setPlanoPpci(gerarPpci(editor.model, incendioDoEstudo.hipoteses, bombasDoCatalogo));
       } finally {
         setGerandoPpci(false);
       }
     }, 0);
-  }, [editor.model, incendioDoEstudo.hipoteses]);
+  }, [editor.model, incendioDoEstudo.hipoteses, bombasDoCatalogo]);
   const provaPpci = useMemo(() => (planoPpci && tarefaAberta === 'incendioPpci' ? conferirPlanoDoPpci(editor.model, planoPpci) : null), [planoPpci, tarefaAberta, editor.model]);
   const lancarPpci = useCallback(() => {
     if (!planoPpci || !provaPpci?.ok) return;
@@ -14702,6 +14703,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onLancar: lancarPpci,
                 lancado: lancadoPpci,
                 onBaixar: (f) => void baixarRelatorioPpci(f),
+                arranjo: {
+                  alimentacao: incendioDoEstudo.hipoteses.bombeamento.alimentacao,
+                  reserva: incendioDoEstudo.hipoteses.bombeamento.reserva,
+                  bombasNoCatalogo: bombasDoCatalogo.length,
+                  onMudar: (patch) => {
+                    incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, bombeamento: { ...incendioDoEstudo.hipoteses.bombeamento, ...patch } });
+                    // A prévia antiga passa a mentir assim que a premissa muda.
+                    setPlanoPpci(null);
+                  },
+                },
               }}
             />
           )}

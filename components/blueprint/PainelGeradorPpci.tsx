@@ -6,6 +6,7 @@
 import React from 'react';
 import { FileDown, Wand2 } from 'lucide-react';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type PlanoDoPpci, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
+import { ROTULO_DA_ALIMENTACAO, ROTULO_DO_ARRANJO, type AlimentacaoDaRede, type ArranjoDaReserva } from '../../utils/blueprintCasaDeBombas';
 
 const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
   LANCOU: 'text-emerald-700',
@@ -26,6 +27,14 @@ export interface GeradorPpciNoPainel {
   /** O que aconteceu no último lançamento. */
   lancado: string | null;
   onBaixar: (formato: 'pdf' | 'docx') => void;
+  /** Fase B (D-3): o arranjo da fonte e da reserva — premissas do estudo. */
+  arranjo?: {
+    alimentacao: AlimentacaoDaRede;
+    reserva: ArranjoDaReserva;
+    /** Quantas bombas de incêndio com curva o catálogo da organização tem (0 = a bomba entra sem curva). */
+    bombasNoCatalogo: number;
+    onMudar: (patch: { alimentacao?: AlimentacaoDaRede; reserva?: ArranjoDaReserva }) => void;
+  };
 }
 
 export default function PainelGeradorPpci({ g }: { g: GeradorPpciNoPainel }) {
@@ -34,6 +43,37 @@ export default function PainelGeradorPpci({ g }: { g: GeradorPpciNoPainel }) {
   const [aberto, setAberto] = React.useState<GrupoDaPendencia | null>('VERIFICACAO');
   return (
     <div className="space-y-3" data-testid="gerador-ppci">
+      {g.arranjo && (
+        <div className="grid grid-cols-1 gap-1.5 text-xs text-slate-600" data-testid="ppci-arranjo">
+          <label className="flex items-center justify-between gap-2">
+            <span>Alimentação da rede</span>
+            <select value={g.arranjo.alimentacao} onChange={(e) => g.arranjo!.onMudar({ alimentacao: e.target.value as AlimentacaoDaRede })} aria-label="Alimentação da rede" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+              {(['BOMBA', 'GRAVIDADE'] as const).map((x) => (
+                <option key={x} value={x}>
+                  {ROTULO_DA_ALIMENTACAO[x]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center justify-between gap-2">
+            <span>Reserva técnica</span>
+            <select value={g.arranjo.reserva} onChange={(e) => g.arranjo!.onMudar({ reserva: e.target.value as ArranjoDaReserva })} aria-label="Reserva técnica" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+              {(['PROPRIA', 'PARCELA'] as const).map((x) => (
+                <option key={x} value={x}>
+                  {ROTULO_DO_ARRANJO[x]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {g.arranjo.alimentacao === 'BOMBA' && (
+            <p className="text-[11px] text-slate-500">
+              {g.arranjo.bombasNoCatalogo
+                ? `${g.arranjo.bombasNoCatalogo} bomba(s) de incêndio no catálogo — o gerador escolhe a que atende o ponto de projeto.`
+                : 'Nenhuma bomba de incêndio no catálogo: a bomba entra sem curva, e o relatório diz o ponto de projeto.'}
+            </p>
+          )}
+        </div>
+      )}
       <button
         type="button"
         onClick={g.onGerar}

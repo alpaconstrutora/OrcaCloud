@@ -210,6 +210,13 @@ export function redeDeIncendio(model: BlueprintModel): RedeDeIncendio {
     const k = chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
     if (cota.has(k)) noDoTerminal.set(t.id, k);
   }
+  // Fase B (plano pós-roadmap, D-3 "parcela + gravidade"): a caixa de água fria COM parcela de
+  // incêndio (`volumeRtiL`) ligada à rede é fonte por gravidade, como a caixa só de incêndio.
+  const compartilhadas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA' && (t.volumeRtiL ?? 0) > 0);
+  for (const t of compartilhadas) {
+    const k = chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+    if (cota.has(k)) noDoTerminal.set(t.id, k);
+  }
   for (const vga of terminais.filter((t) => t.tipoHidraulico === 'VGA')) {
     const k = noDoTerminal.get(vga.id);
     if (!k) continue;
@@ -219,11 +226,12 @@ export function redeDeIncendio(model: BlueprintModel): RedeDeIncendio {
 
   // A bomba manda; sem ela, a caixa SÓ de incêndio é a fonte por gravidade (E3.2).
   const bomba = terminais.find((t) => t.tipoHidraulico === 'BOMBA_INCENDIO' && noDoTerminal.has(t.id)) ?? null;
-  const caixa = terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO' && noDoTerminal.has(t.id)) ?? null;
+  const caixa = terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO' && noDoTerminal.has(t.id)) ?? compartilhadas.find((t) => noDoTerminal.has(t.id)) ?? null;
   const fonte = bomba ?? caixa;
   const consumidores = new Map([...noDoTerminal].filter(([id]) => {
-    const t = terminais.find((x) => x.id === id)!;
-    return ehDeCombate(t) || ehSprinkler(t);
+    // A caixa de água fria com parcela de incêndio (Fase B) está no mapa de nós, mas não é peça de incêndio.
+    const t = terminais.find((x) => x.id === id);
+    return !!t && (ehDeCombate(t) || ehSprinkler(t));
   }));
   return { tubos, cota, noDoTerminal, consumidores, fonte, noDaFonte: fonte ? noDoTerminal.get(fonte.id)! : null, tipoDaFonte: bomba ? 'BOMBA' : caixa ? 'GRAVIDADE' : null };
 }

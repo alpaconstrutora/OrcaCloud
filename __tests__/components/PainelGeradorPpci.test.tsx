@@ -50,6 +50,16 @@ describe('PainelGeradorPpci (E10)', () => {
     expect(e.onBaixar).toHaveBeenCalledWith('pdf');
   });
 
+  it('Fase B: o arranjo da fonte e da reserva — mudar chama onMudar; sem bomba no catálogo, diz que entra sem curva', () => {
+    const onMudar = vi.fn();
+    render(<PainelGeradorPpci g={g({ arranjo: { alimentacao: 'BOMBA', reserva: 'PROPRIA', bombasNoCatalogo: 0, onMudar } })} />);
+    fireEvent.change(screen.getByLabelText('Alimentação da rede'), { target: { value: 'GRAVIDADE' } });
+    expect(onMudar).toHaveBeenCalledWith({ alimentacao: 'GRAVIDADE' });
+    fireEvent.change(screen.getByLabelText('Reserva técnica'), { target: { value: 'PARCELA' } });
+    expect(onMudar).toHaveBeenCalledWith({ reserva: 'PARCELA' });
+    expect(screen.getByText(/Nenhuma bomba de incêndio no catálogo: a bomba entra sem curva/)).toBeTruthy();
+  });
+
   it('desenho mudado depois da prévia: lançar fica desligado dizendo por quê', () => {
     render(<PainelGeradorPpci g={g({ prova: { ok: false, motivo: 'o desenho mudou desde a prévia — gere de novo' } })} />);
     const b = screen.getByRole('button', { name: /Lançar tudo/ }) as HTMLButtonElement;

@@ -282,7 +282,36 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
     incêndio.
   - Suíte com 6.826 testes: 6.793 + 33 pulados (a 1ª rodada caiu no worker). Build ok (a 1ª
     tentativa foi a queda do Node 24; a 2ª passou).
-- [ ] B1 · B2 · B3 · B4 (dependem de D-1, D-2, D-3)
+- [x] **Fase B — 4 de 4** (01/10/2026, frente `incendio-fase-b`, sem migration). As premissas novas
+  `bombeamento.alimentacao`/`.reserva` ficam no JSONB do estudo, e o banco antigo lê o padrão.
+  - [x] B1 — `utils/blueprintCasaDeBombas.ts · proporFonte`:
+    - **Com bomba:** no ambiente "Casa de bombas" (ou junto da bomba já lançada) entram a principal,
+      a jockey LIGADA a ela (trecho + `bombaPrincipalId`) e um pressostato por bomba SOBRE o
+      barrilete. A reserva própria entra ao lado, ligada pela sucção.
+    - **Sem lugar:** o relatório pede (D-1).
+    - **Sem catálogo:** a bomba entra sem curva e o relatório diz o ponto de projeto (D-2). Com
+      catálogo, `proporReserva` escolhe a que atende (`bombasQueAtendem`) e aplica a curva.
+    - **Gravidade:** a caixa elevada própria vai no ambiente "Reservatório / Caixa d'água /
+      Barrilete" do pavimento mais alto.
+    - ⚠️ Os tubos da casa de bombas NÃO nascem sugeridos: o relançamento da rede os apagaria.
+  - [x] B2 — `proporRecalque`: 1 m para fora da porta da rua do pavimento de descarga, a −0,30 m,
+    ligado ao nó da rede mais perto.
+  - [x] B3 — `proporReserva`, nos **quatro arranjos** (D-3):
+    - o volume exigido (vazão × autonomia) no módulo comercial acima (até 5.000 L de 500 em 500,
+      depois de 1.000 em 1.000; convenção, CONFERIR com o fornecedor);
+    - na parcela, a caixa CRESCE para manter o consumo que já tinha.
+    - O cálculo e a rede de hidrantes passaram a reconhecer a caixa de água fria COM parcela de
+      incêndio como fonte por gravidade.
+    - ⚠️ A parcela provisória (posta para a caixa virar fonte antes do cálculo) comia o consumo; o
+      teste pegou, e agora ela soma à caixa.
+  - [x] B4 — o gerador encadeia sprinklers → **fonte** → rede → **recalque** → DN → **reserva e
+    curva**.
+    - No teste de 8 pavimentos, a lista de faltas ficou **só com o percurso** (o modelo de prova não
+      tem escada).
+    - Os 4 arranjos atendem a reserva e "toda peça recebe água".
+    - Gerar de novo não lança peça.
+    - A gaveta ganhou os seletores de alimentação e reserva e o aviso do catálogo.
+  - Suíte com 6.841 testes: 6.808 + 33 pulados. Build ok.
 - [x] **C1** (01/10/2026, frente `incendio-fase-c`):
   - **Leitura:** `lerIncendioParametrico` traz o `Pset_OpuraIncendio` de cada peça, numa varredura
     só das `IfcRelDefinesByProperties`.

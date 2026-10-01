@@ -7,7 +7,7 @@
 import React from 'react';
 import type { ObjectId } from '../../utils/blueprintKernel';
 import { FORMULAS_DE_PERDA, ROTULO_DA_FORMULA, type FormulaDePerda } from '../../utils/blueprintHidraulicaIncendio';
-import { ROTULO_DO_PAPEL, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from '../../utils/blueprintCalculoIncendio';
+import { ROTULO_DO_PAPEL, criterioDaReserva, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import type { EstadoDaConferencia, ItemDaConferencia } from '../../utils/blueprintConferenciaIncendio';
 import { DISTANCIA_AO_TETO_PADRAO_MM, RISCOS_DE_SPRINKLER, ROTULO_DO_RISCO, TABELA_DO_RISCO, type CriterioDeSprinklers, type HipotesesDeSprinklers, type RiscoDeSprinkler } from '../../utils/blueprintSprinklersIncendio';
@@ -408,11 +408,7 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
           {c.rti.exigidaL != null && (
             <p className="text-xs text-slate-700" data-testid="calculo-incendio-rti">
               Reserva técnica: {n(c.rti.exigidaL, 0)} L exigidos (
-              {c.rti.porTabela
-                ? c.sistema === 'HIDRANTES' || c.rti.exigidaL === c.rti.porTabela.litros
-                  ? `IT 17, Tabela 4 — ${c.rti.porTabela.descricao}`
-                  : `${n(cen.vazaoNaFonteLmin, 0)} L/min × ${c.rti.autonomiaMin} min, acima dos ${n(c.rti.porTabela.litros, 0)} L da Tabela 4`
-                : `${n(cen.vazaoNaFonteLmin, 0)} L/min × ${c.rti.autonomiaMin} min`}
+              {criterioDaReserva(c)}
               ) · {n(c.rti.disponivelL, 0)} L desenhados{' '}
               <span className={c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'text-emerald-700' : 'font-semibold text-red-700'}>
                 {c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? '— atende' : `— faltam ${n(c.rti.exigidaL - c.rti.disponivelL, 0)} L`}

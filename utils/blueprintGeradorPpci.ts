@@ -119,7 +119,7 @@ export function conferirDasPremissas(hip: HipotesesIncendio, it17: { sistema: Si
       ];
   return [
     ...hidrantes,
-    `Sprinklers: densidade, área de operação e área por sprinkler da tabela do risco (NBR 10897)`,
+    `Sprinklers: densidade, área de operação e área por sprinkler da tabela do risco (NBR 10897, adotada pela IT 18 do CBMMG, 5.2 — a NBR não está entre os textos fornecidos)`,
     // D1.2: em MG o percurso é o da Tabela 5 da IT 08 — sobra só o que o desenho não sabe.
     ...(hip.classificacao.preset === 'MG_CBMMG'
       ? [

@@ -372,8 +372,17 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
         mais restritivo, e o relatório pede), sem leiaute, controle de fumaça;
       - o rascunho ERRAVA: C era 5 m²/pessoa (é 3), a escada de C/D/E era 75 por UP (é 60), a porta
         de 1 UP era 0,55 m (é 0,80), H-1 a 8 m pedia EP (é NE), o percurso era um número por grupo;
-    - [ ] IT 18 (chuveiros), IT 16 (extintores), IT 15 (sinalização), IT 13 (iluminação),
-      IT 14 (alarme);
+    - [x] IT 18 (chuveiros) — a IT ADOTA a NBR 10897 para risco, área de operação e tabelas
+      (5.2); a NBR não está entre os textos fornecidos, e esses valores seguem CONFERIR. O que a
+      IT acrescenta (`blueprintIncendioChuveirosMG.ts`, transcrição `it18-itens.txt`):
+      - 5.11: com hidrantes e chuveiros, as reservas SE SOMAM (Tabela 4 da IT 17 + vazão ×
+        duração dos chuveiros) — corrige o "maior dos dois" da publicação da IT 17;
+      - 5.13: hidrante depois da VGA é FALTA na conferência (mangotinho: admitido se protege outra
+        área — fica para o responsável);
+      - 5.12: recalque dos chuveiros a 0,60–1,00 m na fachada; em caixa no passeio, só se a
+        fachada for impossível (5.12.2) — a conferência diz;
+      - 5.9, 5.19, 5.22 no memorial descritivo;
+    - [ ] IT 16 (extintores), IT 15 (sinalização), IT 13 (iluminação), IT 14 (alarme);
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

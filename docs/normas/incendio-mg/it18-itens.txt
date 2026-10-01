@@ -1,0 +1,21 @@
+// TRANSCRIÇÃO dos itens da IT 18 do CBMMG (Sistema de Chuveiros Automáticos, 1ª ed.) usados no motor — lidos do texto em 01/10/2026.
+// A IT 18 adota a NBR 10897 (2.2): "A classificação do risco, área de operação, tabelas e demais parâmetros técnicos deverão seguir os critérios contidos nas normas técnicas" (5.2). A NBR 10897 NÃO está entre os textos fornecidos: densidade, área de operação, área por chuveiro e duração seguem CONFERIR NA NBR 10897.
+5.4 Onde houver exigência de chuveiros, salvo compartimentação entre as ocupações, deve-se atender a toda área da edificação (podendo deixar espaços ocultos, conforme a NBR 10897).
+5.6 A área de aplicação deve ser sempre considerada como a área do piso.
+5.7 Não é permitida a falta de chuveiros pela simples presença de equipamentos elétricos (protegê-los com anteparos não combustíveis).
+5.8 Ocupação mista: a reserva é calculada pela vazão do risco mais grave e pelo tempo de funcionamento do risco predominante.
+5.9 Com estoque de mercadorias: distância livre mínima do defletor ao topo do estoque de 456,0 mm (standard) e 916,0 mm (especiais).
+5.11 Hidrantes e mangotinhos com chuveiros: garantidas as vazões e pressões mínimas, SOMADAS as reservas efetivas de água.
+5.12 O hidrante de recalque dos chuveiros: duas entradas de água de 63 mm, com adaptadores de engate rápido (anexo B).
+5.12.1 Em prédios comerciais, preferencialmente na fachada principal ou muro de divisa com a rua, a 0,60 m (mínimo) e 1,00 m (máximo) do piso.
+5.12.2 Se comprovadamente impossível, dentro de caixa de alvenaria com tampa metálica (anexo A).
+5.12.4 Rede comum para chuveiros e hidrantes, com franco e fácil acesso aos hidrantes externos: estes podem substituir o hidrante de recalque.
+5.13 Hidrantes e mangotinhos ligados às tubulações principais ANTES das válvulas de governo e alarme (operam com os chuveiros em manutenção); admite-se mangotinho após a VGA se proteger área diferente da dos chuveiros.
+5.14 Uma só VGA e reserva efetiva acima do pavimento mais elevado: a VGA pode ser substituída por válvula de retenção na expedição da bomba e chave de fluxo para o alarme.
+5.17 O gongo hidráulico pode ser substituído por alarme elétrico ligado ao alarme da edificação (circuito supervisionado).
+5.19 Não são aceitas placas de orifício para balanceamento.
+5.20 Redução de pressão: válvulas redutoras aprovadas para incêndio.
+5.21 Reservatório elevado: tomada de consumo lateral; as de fundo, para os chuveiros.
+5.22 A bomba opera com a capacidade nominal em até 30 segundos após a partida.
+5.23 Bombas preferencialmente afogadas (sucção positiva).
+5.25 Conexão de ensaio (dreno) conforme a NBR 10897.

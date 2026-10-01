@@ -13,9 +13,10 @@
  * E a CONFERÊNCIA, em três estados + "não avaliada", com a norma de cada item
  * (molde: `blueprintHidroExecutivo.verificacoesHidro`).
  */
+import { itensDaIT18 } from './blueprintIncendioChuveirosMG';
 import type { BlueprintModel, ObjectId } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { redeDeIncendio, type CalculoDeIncendio, type CenarioCalculado, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
+import { redeDeIncendio, type CalculoDeIncendio, type CenarioCalculado, type HipotesesHidraulicasDeIncendio, criterioDaReserva } from './blueprintCalculoIncendio';
 import { ROTULO_DO_RISCO } from './blueprintSprinklersIncendio';
 import { metodoDasTabelas, vgasDaRede } from './blueprintRedeDeSprinklers';
 import type { MarcaDeVerificacao } from './blueprintVerificacaoRede';
@@ -312,12 +313,7 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
   itens.push({
     grupo: 'CBMMG',
     item: 'Reserva técnica de incêndio',
-    exigido:
-      c.rti.exigidaL == null
-        ? `vazão × ${c.rti.autonomiaMin} min — CONFERIR NA IT`
-        : c.rti.porTabela && c.rti.exigidaL === c.rti.porTabela.litros
-          ? `≥ ${litros(c.rti.exigidaL)} (IT 17 do CBMMG, Tabela 4 — ${c.rti.porTabela.descricao})`
-          : `≥ ${litros(c.rti.exigidaL)} (${um(c.cenario?.vazaoNaFonteLmin ?? 0, 0)} L/min × ${c.rti.autonomiaMin} min${c.rti.porTabela ? `, acima dos ${litros(c.rti.porTabela.litros)} da IT 17` : ' — CONFERIR NA IT'})`,
+    exigido: c.rti.exigidaL == null ? `vazão × ${c.rti.autonomiaMin} min — CONFERIR NA IT` : `≥ ${litros(c.rti.exigidaL)} (${criterioDaReserva(c)}${c.rti.porTabela ? '' : ' — CONFERIR NA IT'})`,
     obtido: c.rti.disponivelL > 0 ? `${litros(c.rti.disponivelL)} desenhados` : 'nenhuma reserva desenhada',
     estado: c.rti.exigidaL == null ? 'NAO_AVALIADO' : c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'ATENDE' : 'FALTA',
     alvos: c.rti.caixas,
@@ -336,5 +332,7 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
       alvos: [t.id],
     });
   }
+  // D1.2: o que a IT 18 do CBMMG acrescenta à NBR 10897 (hidrantes antes da VGA; recalque dos chuveiros).
+  itens.push(...itensDaIT18(model));
   return itens;
 }

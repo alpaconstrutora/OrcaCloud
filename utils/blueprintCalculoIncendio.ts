@@ -435,9 +435,17 @@ export interface CalculoDeIncendio {
   /**
    * E3.2: a reserva técnica — exigida e a desenhada. Exigida = vazão × autonomia do sistema que
    * governa; D1.2: com a reserva de TABELA (MG: IT 17, Tabela 4) ela é o volume da tabela — e, se
-   * os sprinklers entram, o maior entre a tabela e a vazão × duração deles.
+   * há sprinklers, a SOMA da tabela com a reserva deles, vazão × duração (IT 18 do CBMMG, 5.11).
    */
-  rti: { exigidaL: number | null; autonomiaMin: number; porTabela: ReservaDeTabela | null; disponivelL: number; caixas: ObjectId[] };
+  rti: {
+    exigidaL: number | null;
+    autonomiaMin: number;
+    porTabela: ReservaDeTabela | null;
+    /** D1.2 (IT 18 do CBMMG, 5.11): com a tabela, as parcelas que SE SOMAM — hidrantes (tabela) e chuveiros (vazão × duração). */
+    parcelas?: { hidrantesL: number; chuveirosL: number };
+    disponivelL: number;
+    caixas: ObjectId[];
+  };
   /** E5.1: as premissas EFETIVAS (com a vazão mínima por sprinkler do critério) — a bomba usa estas. */
   hip: HipotesesHidraulicasDeIncendio;
   criterio: CriterioDeSprinklers | null;
@@ -654,9 +662,12 @@ export function calculoDeIncendio(
   const carga = base.porGravidade ? 0 : g.cargaNecessariaM!;
   const estaticaKpa = new Map([...naRede, ...spkNaRede].map((t) => [t.id, (zFonte + carga - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
   const porVazao = g.cenario.vazaoNaFonteLmin * g.autonomiaMin;
-  // D1.2: com a tabela, hidrante sozinho = o volume da tabela; com sprinklers, o maior dos dois.
-  const exigidaL = reservaDeTabela ? (sistema === 'HIDRANTES' ? reservaDeTabela.litros : Math.max(reservaDeTabela.litros, porVazao)) : porVazao;
-  return { ...comum, estaticaKpa, rti: { ...base.rti, autonomiaMin: g.autonomiaMin, exigidaL } };
+  if (!reservaDeTabela) return { ...comum, estaticaKpa, rti: { ...base.rti, autonomiaMin: g.autonomiaMin, exigidaL: porVazao } };
+  // D1.2: com a tabela (MG), a reserva dos hidrantes é o volume da IT 17; a dos chuveiros, a vazão
+  // da área de operação × a duração (NBR 10897) — e as duas SE SOMAM (IT 18 do CBMMG, 5.11).
+  const hidrantesL = naRede.length ? reservaDeTabela.litros : 0;
+  const chuveirosL = sprinklers?.cenario ? sprinklers.cenario.vazaoNaFonteLmin * sprinklers.autonomiaMin : 0;
+  return { ...comum, estaticaKpa, rti: { ...base.rti, autonomiaMin: g.autonomiaMin, exigidaL: hidrantesL + chuveirosL, parcelas: { hidrantesL, chuveirosL } } };
 }
 
 // ─── DN automático ───────────────────────────────────────────────────────────
@@ -686,4 +697,15 @@ export function ajustarDnDeIncendio(model: BlueprintModel, hip: HipotesesHidraul
   }
   const comandos = [...novoDn].map(([trechoId, bitolaMm]) => ({ type: 'SetTrechoProps', trechoId, bitolaMm }) as Command);
   return { comandos, alterados: comandos.length, motivo: null };
+}
+
+/** D1.2: o CRITÉRIO da reserva exigida, em uma frase — a tela, a conferência e o memorial dizem o mesmo. */
+export function criterioDaReserva(c: Pick<CalculoDeIncendio, 'rti' | 'cenario'>): string {
+  const L = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;
+  const r = c.rti;
+  if (!r.porTabela) return c.cenario ? `${Math.round(c.cenario.vazaoNaFonteLmin).toLocaleString('pt-BR')} L/min × ${r.autonomiaMin} min` : `vazão × ${r.autonomiaMin} min`;
+  const p = r.parcelas;
+  if (p && p.chuveirosL > 0 && p.hidrantesL > 0) return `hidrantes ${L(p.hidrantesL)} (IT 17, Tabela 4) + chuveiros ${L(p.chuveirosL)} (vazão × duração) — somadas, IT 18 do CBMMG, 5.11`;
+  if (p && p.chuveirosL > 0) return `chuveiros: vazão × duração (${L(p.chuveirosL)})`;
+  return `IT 17 do CBMMG, Tabela 4 — ${r.porTabela.descricao}`;
 }

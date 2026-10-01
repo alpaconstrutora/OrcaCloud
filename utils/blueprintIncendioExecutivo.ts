@@ -38,7 +38,7 @@ import { ROTULO_DA_FORMULA } from './blueprintHidraulicaIncendio';
 import { calculoDoEstudo, planilhaDePressoes } from './blueprintPlanilhaDePressoes';
 import { conferenciaDeIncendio } from './blueprintConferenciaIncendio';
 import { pressurizacaoDaRede, type AnaliseDaBomba } from './blueprintBombeamentoIncendio';
-import type { CalculoDeIncendio } from './blueprintCalculoIncendio';
+import { criterioDaReserva, type CalculoDeIncendio } from './blueprintCalculoIncendio';
 import { ROTULO_DO_RISCO } from './blueprintSprinklersIncendio';
 import { ROTULO_DA_PROTECAO, analisarSaidas, type AnaliseDeSaidas } from './blueprintSaidasIncendio';
 import { percursoDeFuga, type PercursoDeFuga } from './blueprintRotaDeFuga';
@@ -48,6 +48,7 @@ import { analisarIluminacao, type AnaliseDeIluminacao } from './blueprintIlumina
 import { analisarAlarme, type AnaliseDeAlarme } from './blueprintDeteccaoAlarme';
 import { analisarAntipanico } from './blueprintAntipanico';
 import { criteriosDoPercursoMG } from './blueprintIncendioSaidasMG';
+import { DEFLETOR_AO_ESTOQUE_MM } from './blueprintIncendioChuveirosMG';
 
 // ─── As análises, uma vez ────────────────────────────────────────────────────
 
@@ -246,7 +247,7 @@ export function memorialDeCalculoIncendio(model: BlueprintModel, hip: HipotesesI
       {
         tipo: 'tabela',
         cabecalho: ['Exigida', 'Critério', 'Disponível no desenho', 'Situação'],
-        linhas: [[rti.exigidaL != null ? `${um(rti.exigidaL, 0)} L` : '—', rti.porTabela && rti.exigidaL === rti.porTabela.litros ? `IT 17, Tabela 4 — ${rti.porTabela.descricao}` : `vazão × ${um(rti.autonomiaMin, 0)} min`, `${um(rti.disponivelL, 0)} L em ${rti.caixas.length} reservatório(s)`, rti.exigidaL == null ? 'Não avaliado' : rti.disponivelL + 1e-6 >= rti.exigidaL ? 'Atende' : 'Não atende']],
+        linhas: [[rti.exigidaL != null ? `${um(rti.exigidaL, 0)} L` : '—', criterioDaReserva(a.calculo), `${um(rti.disponivelL, 0)} L em ${rti.caixas.length} reservatório(s)`, rti.exigidaL == null ? 'Não avaliado' : rti.disponivelL + 1e-6 >= rti.exigidaL ? 'Atende' : 'Não atende']],
       },
     );
   }
@@ -388,15 +389,21 @@ export function memorialDescritivoIncendio(model: BlueprintModel, hip: Hipoteses
     );
   }
   const spk = conta(['SPRINKLER']);
-  if (spk) sistemas.push(`Chuveiros automáticos: ${spk} sprinkler(s), ${conta(['VGA'])} válvula(s) de governo e alarme e ${conta(['CHAVE_FLUXO'])} chave(s) de fluxo.`);
+  if (spk) {
+    sistemas.push(`Chuveiros automáticos: ${spk} sprinkler(s), ${conta(['VGA'])} válvula(s) de governo e alarme e ${conta(['CHAVE_FLUXO'])} chave(s) de fluxo.`);
+    // D1.2: o que a IT 18 do CBMMG acrescenta à NBR 10897 e o desenho não modela.
+    sistemas.push(
+      `Conforme a IT 18 do CBMMG: hidrantes e mangotinhos ligados antes das válvulas de governo e alarme (5.13); com estoque, ${DEFLETOR_AO_ESTOQUE_MM.standard} mm livres do defletor ao topo (${DEFLETOR_AO_ESTOQUE_MM.especial} mm nos chuveiros especiais — 5.9); sem placas de orifício para balanceamento (5.19); a bomba na capacidade nominal em até 30 s após a partida (5.22).`,
+    );
+  }
   const bi = conta(['BOMBA_INCENDIO']);
   const bj = conta(['BOMBA_JOCKEY']);
   if (bi || bj) sistemas.push(`Bombeamento: ${bi} bomba(s) principal(is), ${bj} jockey e ${conta(['PRESSOSTATO'])} pressostato(s), com partida automática pela queda de pressão da rede.`);
   if (a.calculo) {
     const r = a.calculo.rti;
     sistemas.push(
-      r.porTabela && r.exigidaL === r.porTabela.litros
-        ? `Reserva técnica de incêndio: ${um(r.disponivelL, 0)} L no desenho, para os ${um(r.porTabela.litros, 0)} L da IT 17 do CBMMG (Tabela 4: ${r.porTabela.descricao}).`
+      r.porTabela && r.exigidaL != null
+        ? `Reserva técnica de incêndio: ${um(r.disponivelL, 0)} L no desenho, para os ${um(r.exigidaL, 0)} L exigidos (${criterioDaReserva(a.calculo)}).`
         : `Reserva técnica de incêndio: ${um(r.disponivelL, 0)} L no desenho, para ${um(r.autonomiaMin, 0)} min de funcionamento.`,
     );
   }

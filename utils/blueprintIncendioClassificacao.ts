@@ -6,16 +6,17 @@
  * incêndio → as MEDIDAS DE SEGURANÇA que o Corpo de Bombeiros exige. Puro: lê
  * o desenho e as premissas do estudo, não grava nada.
  *
- * ⚠️ NORMA. O preset que nasce é o de MINAS GERAIS (Decreto estadual + ITs do
- * CBMMG), escolhido pelo usuário. O texto do Decreto e das ITs NÃO estava no
- * repositório quando isto foi escrito. Por isso:
- *  - a estrutura (grupos A–M, faixas de altura, níveis de carga) é a
- *    classificação comum aos regulamentos estaduais brasileiros, e cada tabela
- *    diz `CONFERIR NA IT`;
- *  - onde a regra de uma medida não foi transcrita, o resultado é
- *    `SEM_TABELA` — nunca "exigida" nem "dispensada" por palpite;
- *  - o que foi transcrito de memória sai com `rascunho: true`, e a tela diz que
- *    não serve para aprovação até o texto ser conferido.
+ * ⚠️ NORMA. O preset é o de MINAS GERAIS, escolhido pelo usuário. Desde a D1 (01/10/2026)
+ * vem do TEXTO das ITs do CBMMG fornecido pelo usuário, conferido página a página:
+ *  - as exigências: IT 01 (10ª ed., Portaria 84/2026), Anexo A, Tabelas 1 a 18
+ *    (`blueprintIncendioTabelasMG.ts` + `blueprintIncendioExigenciasMG.ts`);
+ *  - os tipos por altura: IT 08, Tabela 1; o risco pela carga: IT 09, item 5.10;
+ *    a carga do grupo A: IT 09, Tabela A.1.
+ *  - onde o texto não cobre (divisão fora das tabelas, Tabela 17 sem grade, G-3 acima de
+ *    12 m), o resultado é `SEM_TABELA` — nunca "exigida" nem "dispensada" por palpite;
+ *  - onde a nota depende do que o desenho não sabe (população, condomínio com arruamento
+ *    interno), o resultado é `CONDICIONAL`, com a condição escrita;
+ *  - `rascunho: true` sobra só para o que vier de memória (nenhuma linha de MG hoje).
  *
  * A ALTURA aqui é a do regulamento de incêndio: do piso do pavimento de
  * DESCARGA ao piso do último pavimento ocupado. Não é a `altura` das regras de
@@ -31,6 +32,8 @@ import { HIPOTESES_SPRINKLERS_PADRAO, hipotesesDeSprinklersDaColuna, type Hipote
 import { HIPOTESES_SAIDAS_PADRAO, hipotesesDeSaidasDaColuna, type HipotesesDeSaidas } from './blueprintSaidasIncendio';
 import { HIPOTESES_EXTINTORES_PADRAO, hipotesesDeExtintoresDaColuna, type HipotesesDeExtintores } from './blueprintExtintores';
 import { HIPOTESES_ILUMINACAO_PADRAO, hipotesesDeIluminacaoDaColuna, type HipotesesDeIluminacao } from './blueprintIluminacaoEmergencia';
+import { exigenciaMG } from './blueprintIncendioExigenciasMG';
+import { FONTE_IT01_MG } from './blueprintIncendioTabelasMG';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -46,14 +49,14 @@ export const ROTULO_DO_PRESET: Record<PresetDeBombeiros, string> = {
   RJ_CBMERJ: 'Rio de Janeiro — CBMERJ',
 };
 
-/** Só MG tem tabela (rascunho). Os outros existem com nome e sem números — decisão do usuário (30/09/2026). */
+/** Só MG tem tabela (D1: texto do CBMMG). Os outros existem com nome e sem números — decisão do usuário (30/09/2026). */
 export const PRESETS_COM_TABELA: readonly PresetDeBombeiros[] = ['MG_CBMMG'];
 
-export const FONTE_MG = 'Decreto estadual de MG e ITs do CBMMG — CONFERIR NA IT (transcrito de memória)';
+export const FONTE_MG = FONTE_IT01_MG;
 
 // ─── Ocupação ────────────────────────────────────────────────────────────────
 
-/** Os grupos de ocupação (classificação comum aos regulamentos estaduais) — CONFERIR NA IT. */
+/** Os grupos de ocupação — os títulos das Tabelas 1 a 18 do Anexo A da IT 01 do CBMMG. */
 export const GRUPOS_DE_OCUPACAO = [
   { grupo: 'A', nome: 'Residencial' },
   { grupo: 'B', nome: 'Serviço de hospedagem' },
@@ -63,17 +66,17 @@ export const GRUPOS_DE_OCUPACAO = [
   { grupo: 'F', nome: 'Local de reunião de público' },
   { grupo: 'G', nome: 'Serviço automotivo e assemelhados' },
   { grupo: 'H', nome: 'Serviço de saúde e institucional' },
-  { grupo: 'I', nome: 'Industrial' },
+  { grupo: 'I', nome: 'Indústria' },
   { grupo: 'J', nome: 'Depósito' },
   { grupo: 'L', nome: 'Explosivos' },
   { grupo: 'M', nome: 'Especial' },
 ] as const;
 
 /**
- * As divisões TRANSCRITAS, com a carga de incêndio específica (MJ/m²). Só o
- * grupo A — o residencial da incorporadora. As demais divisões podem ser
- * DECLARADAS ("C-2"), mas a carga delas tem de ser declarada também.
- * CONFERIR NA IT (carga de incêndio).
+ * As divisões com a carga de incêndio específica (MJ/m²) transcrita da IT 09, Tabela A.1:
+ * só o grupo A — casas (A-1), edifícios de apartamentos (A-2), alojamentos, internatos e
+ * pensionatos (A-3), todos 300 MJ/m². As demais divisões podem ser DECLARADAS ("C-2"), mas a
+ * carga delas tem de ser declarada também (a Tabela A.1 vai por ATIVIDADE, não por divisão).
  */
 export const DIVISOES_TRANSCRITAS: Record<string, { nome: string; cargaMJm2: number }> = {
   'A-1': { nome: 'Habitação unifamiliar', cargaMJm2: 300 },
@@ -94,14 +97,12 @@ export function normalizarDivisao(texto: string | null | undefined): string | nu
 
 // ─── Faixas de altura e níveis de carga ──────────────────────────────────────
 
-/** Tipo da edificação pela altura (m) — faixas comuns aos regulamentos; CONFERIR NA IT. */
+/** Tipo da edificação pela altura (m) — IT 08 do CBMMG, Tabela 1 (as mesmas faixas das colunas da IT 01). */
 export const FAIXAS_DE_ALTURA = [
-  { tipo: 'I', nome: 'Edificação térrea', ateM: 0 },
-  { tipo: 'II', nome: 'Edificação baixa', ateM: 6 },
-  { tipo: 'III', nome: 'Edificação de baixa-média altura', ateM: 12 },
-  { tipo: 'IV', nome: 'Edificação de média altura', ateM: 23 },
-  { tipo: 'V', nome: 'Edificação mediamente alta', ateM: 30 },
-  { tipo: 'VI', nome: 'Edificação alta', ateM: Infinity },
+  { tipo: 'I', nome: 'Edificação baixa', ateM: 12 },
+  { tipo: 'II', nome: 'Edificação de média altura', ateM: 30 },
+  { tipo: 'III', nome: 'Edificação mediamente alta', ateM: 54 },
+  { tipo: 'IV', nome: 'Edificação alta', ateM: Infinity },
 ] as const;
 export type TipoPorAltura = (typeof FAIXAS_DE_ALTURA)[number]['tipo'];
 
@@ -109,7 +110,7 @@ export function tipoPorAltura(alturaM: number): (typeof FAIXAS_DE_ALTURA)[number
   return FAIXAS_DE_ALTURA.find((f) => alturaM <= f.ateM + 1e-9) ?? FAIXAS_DE_ALTURA[FAIXAS_DE_ALTURA.length - 1];
 }
 
-/** Nível de risco pela carga de incêndio (MJ/m²) — CONFERIR NA IT. */
+/** Nível de risco pela carga de incêndio (MJ/m²) — IT 09 do CBMMG, item 5.10. */
 export type NivelDeCarga = 'BAIXA' | 'MEDIA' | 'ALTA';
 export function nivelDeCarga(q: number): NivelDeCarga {
   return q <= 300 ? 'BAIXA' : q <= 1200 ? 'MEDIA' : 'ALTA';
@@ -300,6 +301,7 @@ export const MEDIDAS_DE_SEGURANCA = [
   { id: 'COMPARTIMENTACAO_VERTICAL', nome: 'Compartimentação vertical' },
   { id: 'CONTROLE_MATERIAIS_ACABAMENTO', nome: 'Controle de materiais de acabamento' },
   { id: 'SAIDAS_EMERGENCIA', nome: 'Saídas de emergência' },
+  { id: 'PLANO_INTERVENCAO', nome: 'Plano de intervenção de incêndio' },
   { id: 'ELEVADOR_EMERGENCIA', nome: 'Elevador de emergência' },
   { id: 'CONTROLE_FUMACA', nome: 'Controle de fumaça' },
   { id: 'BRIGADA', nome: 'Brigada de incêndio' },
@@ -313,7 +315,8 @@ export const MEDIDAS_DE_SEGURANCA = [
 ] as const;
 export type MedidaDeSeguranca = (typeof MEDIDAS_DE_SEGURANCA)[number]['id'];
 
-export type EstadoDaExigencia = 'EXIGIDA' | 'DISPENSADA' | 'SEM_TABELA';
+/** CONDICIONAL (D1): assinalada, mas a nota depende do que o desenho não sabe (população…) — a condição vai no motivo. */
+export type EstadoDaExigencia = 'EXIGIDA' | 'DISPENSADA' | 'CONDICIONAL' | 'SEM_TABELA';
 
 export interface ExigenciaDaMedida {
   medida: MedidaDeSeguranca;
@@ -328,39 +331,11 @@ export interface ExigenciaDaMedida {
 
 export interface ExigenciasDaEdificacao {
   preset: PresetDeBombeiros;
-  /** O preset tem alguma tabela? (só MG, e em rascunho). */
+  /** O preset tem alguma tabela? (só MG — D1: texto do CBMMG). */
   temTabela: boolean;
   /** Alguma linha veio de memória? A tela põe o aviso de "não usar para aprovação". */
   temRascunho: boolean;
   medidas: ExigenciaDaMedida[];
-}
-
-/** Área e altura que separam o regime simplificado (limites comuns aos regulamentos) — CONFERIR NA IT. */
-export const LIMITE_SIMPLIFICADO = { areaM2: 750, alturaM: 12 } as const;
-
-/**
- * RASCUNHO do grupo A em MG: só as medidas cuja exigência é a mesma em todo
- * regulamento estadual para o residencial multifamiliar. O resto fica SEM_TABELA.
- */
-function exigenciaDoGrupoA(
-  medida: MedidaDeSeguranca,
-  divisao: string,
-  c: ClassificacaoDaEdificacao,
-): { estado: EstadoDaExigencia; motivo: string } | null {
-  if (divisao === 'A-1') {
-    return { estado: 'DISPENSADA', motivo: 'habitação unifamiliar fica fora do regulamento de segurança contra incêndio' };
-  }
-  const simplificado = c.areaTotalM2 <= LIMITE_SIMPLIFICADO.areaM2 && c.altura.valorM <= LIMITE_SIMPLIFICADO.alturaM;
-  const regime = simplificado
-    ? `área ≤ ${LIMITE_SIMPLIFICADO.areaM2} m² e altura ≤ ${LIMITE_SIMPLIFICADO.alturaM} m`
-    : `área > ${LIMITE_SIMPLIFICADO.areaM2} m² ou altura > ${LIMITE_SIMPLIFICADO.alturaM} m`;
-  const sempre: MedidaDeSeguranca[] = ['SAIDAS_EMERGENCIA', 'SINALIZACAO', 'EXTINTORES'];
-  const foraDoSimplificado: MedidaDeSeguranca[] = ['ACESSO_VIATURA', 'SEGURANCA_ESTRUTURAL', 'ILUMINACAO_EMERGENCIA', 'HIDRANTES'];
-  if (sempre.includes(medida)) return { estado: 'EXIGIDA', motivo: `${divisao} — exigida em qualquer porte` };
-  if (foraDoSimplificado.includes(medida)) {
-    return simplificado ? null : { estado: 'EXIGIDA', motivo: `${divisao} com ${regime}` };
-  }
-  return null;
 }
 
 export function exigenciasDaEdificacao(c: ClassificacaoDaEdificacao): ExigenciasDaEdificacao {
@@ -369,9 +344,8 @@ export function exigenciasDaEdificacao(c: ClassificacaoDaEdificacao): Exigencias
   const medidas = MEDIDAS_DE_SEGURANCA.map(({ id, nome }): ExigenciaDaMedida => {
     if (!temTabela) return { medida: id, nome, estado: 'SEM_TABELA', motivo: `${ROTULO_DO_PRESET[c.preset]}: preset sem tabela — cole o texto do regulamento`, fonte: null, rascunho: false };
     if (!divisao) return { medida: id, nome, estado: 'SEM_TABELA', motivo: 'sem divisão de ocupação — declare-a', fonte: null, rascunho: false };
-    const r = divisao.startsWith('A-') ? exigenciaDoGrupoA(id, divisao, c) : null;
-    if (!r) return { medida: id, nome, estado: 'SEM_TABELA', motivo: `regra da divisão ${divisao} para esta medida não transcrita — conferir na IT`, fonte: FONTE_MG, rascunho: false };
-    return { medida: id, nome, ...r, fonte: FONTE_MG, rascunho: true };
+    // D1: a IT 01 do CBMMG, conferida — `rascunho: false`.
+    return { medida: id, nome, ...exigenciaMG(id, divisao, c), rascunho: false };
   });
   return { preset: c.preset, temTabela, temRascunho: medidas.some((m) => m.rascunho), medidas };
 }

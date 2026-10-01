@@ -211,7 +211,7 @@ export function desenharLegendaDeIncendio(d: Desenhista, model: BlueprintModel, 
     y += 1.5;
     d.linha(x0, y, x0 + larguraMm, y, { espessuraMm: FINA, cor: COR_FRACA });
     y += 3.5;
-    const ROTULO = { EXIGIDA: 'Exigida', DISPENSADA: 'Dispensada', SEM_TABELA: 'Sem tabela' } as const;
+    const ROTULO = { EXIGIDA: 'Exigida', DISPENSADA: 'Dispensada', CONDICIONAL: 'Condicional', SEM_TABELA: 'Sem tabela' } as const;
     for (const m of quadro.exigencias.medidas) {
       d.texto(colMedida, y, m.nome, TEXTO_MM, COR_TEXTO);
       d.texto(colEstado, y, ROTULO[m.estado], TEXTO_MM, m.estado === 'EXIGIDA' ? COR : COR_FRACA);

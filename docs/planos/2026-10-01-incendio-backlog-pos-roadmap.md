@@ -77,7 +77,7 @@ Sessão `c6b98893-3359-47d8-854f-f618a31c7b1e` · 01/10/2026, logo depois da E10
 | 01/10/2026 | D-1 Casa de bombas sem lugar no desenho | **O relatório pede.** O gerador não posiciona a casa de bombas; diz que falta o lugar. |
 | 01/10/2026 | D-2 Sem bomba no catálogo | **Lança a bomba** "de projeto", com o ponto Q × H e sem curva. O relatório diz "curva a escolher". |
 | 01/10/2026 | D-3 Arranjo da reserva técnica | **Os dois**: reservatório próprio OU parcela da caixa de água fria, por gravidade OU com bomba. É premissa do estudo, e cada arranjo é suportado e testado. |
-| 01/10/2026 | D-4 PDFs do CBMMG | **Envio depois.** D1 fica bloqueada até eles chegarem (registrado aqui e na memória). |
+| 01/10/2026 | D-4 PDFs do CBMMG | **Envio depois.** D1 fica bloqueada até eles chegarem (registrado aqui e na memória). **Chegaram no mesmo dia:** as 45 ITs, em `C:\D\ORÇACLOUD\Instruções Técnicas`. |
 | 01/10/2026 | D-5 Estados | **Só MG agora.** Os demais estados ficam para depois (registrado; D2 fora do escopo atual). |
 | 01/10/2026 | D-6 Credencial de teste | `agente-leitura@alpaconstrutora.com.br` (perfil Membro). A senha **não** é registrada (decisão de 05/08: pedir a cada sessão). ⚠️ Pela mesma decisão, esse usuário é **só de leitura**, e o teste de E1 GRAVA (cria estudo, aplica num orçamento de obra, apaga). **Confirmar com o usuário antes de rodar E1**, e qual obra de prova usar. |
 | 01/10/2026 | D-7 Backlog anterior | **Entra** — vira a Fase F. |
@@ -244,7 +244,7 @@ com o "pronto quando" provado em teste.
 ## Decisões em aberto
 
 Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
-- **D1:** aguarda os PDFs do CBMMG.
+- **D1:** desbloqueada (PDFs entregues em 01/10); em execução por partes (D1.1 → D1.2 …).
 - **D2:** adiada por decisão do usuário.
 - **E1:** aguarda confirmar a escrita com o usuário de leitura e a obra de prova.
 
@@ -321,7 +321,28 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
     - `_Derivado` e `_Calculada` ficam de fora.
   - **Prova:** a ida e volta pelo web-ifc dá `porTerminal` por especificação IGUAL ao original.
   - Suíte com 6.828 testes: 6.795 + 33 pulados. Build ok.
-- [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)
+- [ ] **D1 — em partes** (frente `incendio-d1`) · D2 (⏸ adiada — só MG agora)
+  - [x] D1.1 — as EXIGÊNCIAS pela IT 01 (10ª ed., Portaria 84/2026), Anexo A, Tabelas 1 a 18:
+    - lidas pela IMAGEM de cada página (o texto do PDF embaralha as colunas) e transcritas em
+      `docs/normas/incendio-mg/it01-anexo-a-tabelas.txt`;
+    - o teste relê esse texto e confere `blueprintIncendioTabelasMG.ts` célula a célula (24 blocos,
+      325 linhas);
+    - as notas viram regras (`blueprintIncendioExigenciasMG.ts`):
+      - área, divisão e "térrea" são avaliadas;
+      - população, condomínio com arruamento interno e risco do evento ficam no estado novo
+        **CONDICIONAL**, com a condição escrita — o gerador não lança; o relatório põe em
+        NAO_DECIDIDO;
+    - também: A-1 isenta (A.4.1 a); iluminação na térrea ≤ 200 m² (A.4.5); "Plano de intervenção"
+      entrou como medida (fora do desenho); tipos por altura da IT 08, Tabela 1 (eram 6 de
+      memória — são 4); risco pela carga da IT 09, item 5.10 (conferido, igual);
+    - **o rascunho de memória estava errado** em pontos que mudam projeto:
+      - o corte era "750 m² / 12 m", e são as faixas de altura 12 / 30 / 54 m;
+      - hidrante no A-2 de até 12 m só acima de 1.200 m²;
+      - alarme no A-2 só acima de 30 m;
+    - o gerador não traz mais "transcrito de memória" (teste do E10 atualizado);
+  - [ ] D1.2 — os parâmetros de cada medida: IT 08 (saídas), IT 17 (hidrantes), IT 18
+    (chuveiros), IT 16 (extintores), IT 15 (sinalização), IT 13 (iluminação), IT 14 (alarme);
+  - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):
   - [x] **Kernel 0.89.0** (um bump para os dois tipos novos; goldens 7/7 antes, 6 hashes e 22 pinos

@@ -80,7 +80,8 @@ describe('E10 · o gerador de PPCI de ponta a ponta (8 pavimentos)', () => {
   it('⚠️ PRONTO QUANDO: o relatório lista cada CONFERIR ainda aberto e o que o gerador não decide', () => {
     const conferir = plano.pendencias.filter((p) => p.grupo === 'CONFERIR').map((p) => p.texto);
     for (const t of conferirDasPremissas(H)) expect(conferir).toContain(t);
-    expect(conferir.some((t) => /Saídas de emergência.*transcrito de memória/.test(t))).toBe(true);
+    // D1: as exigências vêm da IT 01 do CBMMG conferida — nenhuma linha "transcrita de memória" no relatório.
+    expect(conferir.some((t) => /transcrito de memória/.test(t))).toBe(false);
     // Fase B: a bomba sem curva (catálogo vazio) é o que ele não decide — dito com o ponto de projeto.
     expect(plano.pendencias.some((p) => p.grupo === 'NAO_DECIDIDO' && /curva a escolher — ponto de projeto \d+ L\/min/.test(p.texto))).toBe(true);
   });

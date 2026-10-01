@@ -37,11 +37,12 @@ function montar(c = classificacao(), hip: HipotesesDeClassificacao = HIPOTESES_I
 }
 
 describe('PainelIncendio', () => {
-  it('A-2 acima de 12 m: aviso de rascunho, hidrantes exigidos, alarme "Sem tabela"', () => {
+  it('A-2 acima de 12 m (D1: IT 01 do CBMMG): sem aviso de rascunho, hidrantes exigidos com a fonte, alarme dispensado', () => {
     montar();
-    expect(screen.getByTestId('incendio-rascunho')).toHaveTextContent('não use para aprovação');
+    expect(screen.queryByTestId('incendio-rascunho')).toBeNull();
     expect(screen.getByTestId('incendio-medida-HIDRANTES')).toHaveTextContent('Exigida');
-    expect(screen.getByTestId('incendio-medida-ALARME')).toHaveTextContent('Sem tabela');
+    expect(screen.getByTestId('incendio-medida-HIDRANTES')).toHaveTextContent('IT 01 do CBMMG');
+    expect(screen.getByTestId('incendio-medida-ALARME')).toHaveTextContent('Dispensada');
     expect(screen.getByTestId('incendio-classificacao')).toHaveTextContent('sugerida pelos ambientes');
   });
 

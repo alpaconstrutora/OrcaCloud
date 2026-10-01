@@ -142,6 +142,8 @@ export function gerarPpci(
   if (!classificacao.divisao.valor) pendencias.push({ grupo: 'PREMISSA', texto: 'Ocupação (divisão) não definida — sem ela as exigências não saem da tabela.' });
   for (const x of exigencias.medidas) {
     if (x.estado === 'SEM_TABELA') pendencias.push({ grupo: 'CONFERIR', texto: `${x.nome}: ${x.motivo}` });
+    // D1: a nota da IT 01 depende do que o desenho não sabe — o gerador não lança; o responsável decide.
+    else if (x.estado === 'CONDICIONAL') pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `${x.nome}: ${x.motivo} — não lançada; declare a condição ou lance à mão.` });
     else if (x.rascunho) pendencias.push({ grupo: 'CONFERIR', texto: `${x.nome} (${x.estado === 'EXIGIDA' ? 'exigida' : 'dispensada'}): transcrito de memória — ${x.fonte ?? 'conferir na IT'}` });
     if (x.estado === 'EXIGIDA' && MEDIDAS_NAO_MODELADAS.includes(x.medida)) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `${x.nome}: exigida e fora do desenho — projeto do responsável.` });
   }

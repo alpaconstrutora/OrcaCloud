@@ -1,0 +1,477 @@
+// TRANSCRIÇÃO da IT 01 do CBMMG (10ª ed., Portaria 84/2026), Anexo A, Tabelas 1 a 18 — lida pela IMAGEM de cada página (pp. 28–45) em 01/10/2026. Fonte da verdade do teste `incendioExigenciasMG.test.ts`.
+// colunas padrão: H<=12 | 12<H<=30 | 30<H<=54 | H>54
+// AV=Acesso viaturas SE=Seg estrutural CH=Compart horiz CV=Compart vert SA=Saídas PI=Plano intervenção
+// BR=Brigada IL=Iluminação DE=Detecção AL=Alarme SI=Sinalização EX=Extintores HI=Hidrantes CA=Chuveiros
+// CM=Controle materiais acabamento CF=Controle fumaça
+
+T1 p28 A  [A-2,A-3]
+AV X1 X X X
+SE - X X X
+CV - - X X
+SA X X X X
+BR - - - X
+IL X X X X
+AL - - X X
+SI X X X X
+EX X X X X
+HI X3 X X X
+CM X2 X X X
+N1 Exigido quando a área total for superior a 1200 m² e para condomínios com arruamento interno, independente da área.
+N2 Exigida nos salões de festas e auditórios com previsão de população superior a 200 pessoas.
+N3 Exigido quando a área total for superior a 1200 m².
+
+T2 p29 B [B-1,B-2]
+AV X8 X X X
+SE - X X X
+CH - X3 X X
+CV - X4 X X
+SA X X X X
+PI - - X X
+BR - X X X
+IL X5 X X X
+DE - - X6 X6
+AL X1,7 X7 X7 X7
+SI X5 X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM X2 X X X
+CF - - - X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigida nos salões de festas e auditórios com previsão de população superior a 200 pessoas.
+N3 Pode ser substituída por chuveiros automáticos.
+N4 Pode ser substituída por chuveiros automáticos, exceto para as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N5 Estão isentos os motéis que não possuam corredores internos cobertos.
+N6 Os detectores de incêndio devem ser instalados inclusive nos quartos.
+N7 Os acionadores manuais devem ser instalados nos corredores.
+N8 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+
+T3 p30 C [C-1,C-2,C-3]  (nota 8 nas divisões)
+AV X7 X X X
+SE X2 X X X
+CH X2,5 X5 X X
+CV - X6 X X
+SA X X X X
+PI X3 X X X
+BR X3 X X X
+IL X X X X
+DE X4 X X X
+AL X3 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - X9 X X
+CM X3 X X X
+CF X4 X3 X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando área total for superior a 930 m².
+N3 Quando área total do Grupo C for superior a 2.000m².
+N4 Somente para divisão C-3 que possuir divisão F-5, F-6 ou F-11 com população superior a 500 pessoas. A medida poderá ser projetada somente na área destinada ao grupo F.
+N5 Pode ser substituída por chuveiros automáticos.
+N6 Pode ser substituída por chuveiros automáticos, exceto para as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N7 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N8 A área de armazenamento de mercadorias, no salão de vendas, com altura de armazenamento superior a 3,70m (Atacado/Atacarejo) será classificada como depósito, resultando na classificação de ocupação mista (C/J) para a edificação.
+N9 Somente para divisão C-3 que possui divisão F-5, F-6 ou F-11. A medida poderá ser projetada somente na área destinada ao grupo F.
+
+T4 p31 D [D-1,D-2,D-3,D-4]
+AV X5 X X X
+SE - X X X
+CH - X2 X X
+CV - X3 X X
+SA X X X X
+PI - - X X
+BR - X X X
+IL X X X X
+DE - - X X
+AL X4 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM X6 X X X
+CF - - - X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Pode ser substituída por chuveiros automáticos.
+N3 Pode ser substituída por chuveiros automáticos, exceto para as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N4 Quando a área total for superior a 2.000m².
+N5 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N6 Exigida nos auditórios com previsão de população superior a 200 pessoas.
+
+T5 p32 E [E-1,E-2,E-3,E-4,E-5,E-6]
+AV X5 X X X
+SE - X X X
+CV - X2 X X
+SA X X X X
+PI - - X X
+BR X4 X X X
+IL X X X X   (nota 6 no nome da medida)
+DE - - X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM X3 X X X
+CF - - - X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Pode ser substituída por chuveiros automáticos, exceto para as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N3 Exigida nos auditórios com previsão de população superior a 200 pessoas.
+N4 Exigido para as divisões E-1 a E-4 com área total superior a 930 m² e para as divisões E-5 e E-6, independentemente da área total.
+N5 Exigido quando área total for superior a 930 m² e nos condomínios e Campus com arruamento interno, independentemente da área.
+N6 Isenta no interior das salas de aula com capacidade até 50 pessoas das divisões E-1 a E-4.
+
+T6 p33 F [F-1,F-2,F-3,F-4,F-8,F-9,F-10]
+AV X8 X X X
+SE X5 X X X
+CV - X3,4 X4 X4
+SA X X X X
+PI X1,6 X X X
+BR X2 X X X
+IL X X X X
+DE X1,7 X7 X X
+AL X1 X X X
+SI X X X X
+EX X X X X   (nota 9 no nome da medida)
+HI X1 X X X  (nota 9 no nome da medida)
+CA - - X X
+CM X2 X X X
+CF - - - X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Somente quando o local comportar população superior a 200 pessoas.
+N3 Pode ser substituída por chuveiros automáticos, exceto para as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N4 Para a divisão F-3, a compartimentação vertical será considerada para as fachadas e selagens dos shafts e dutos de instalações.
+N5 Exigido quando a área total for superior a 930 m².
+N6 Somente para divisão F-3.
+N7 Somente para divisão F-1.
+N8 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N9 Para os estádios da divisão F-3, deverão ser instalados em locais com acesso privativo.
+
+T7 p34 F [F-5,F-6,F-11]
+AV X5 X X X
+SE X3 X X X
+CV - X X X
+SA X X X X
+PI X4 X X X
+BR X2,6 X X X
+IL X X X X
+DE X1,4 X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - X X X
+CM X2 X X X
+CF X3,4 X4 X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Somente quando o local comportar população superior a 200 pessoas.
+N3 Exigido quando a área total for superior a 930 m².
+N4 Somente quando houver lotação superior a 500 pessoas.
+N5 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N6 Quando se tratar de F-6 e o local comportar população superior a 100 pessoas.
+
+T8 p35 F [F-7]  COLUNA ÚNICA (sem faixa de altura); nota 3 no título "Medidas"; nota 4 na divisão
+SA X
+PI X1
+BR X1
+IL X1,5
+SI X
+EX X
+CM X2
+N1 Somente para eventos classificados a partir de risco médio (observando critérios da IT 33).
+N2 Aplicável às estruturas provisórias destinadas a receber público.
+N3 Para eventos temporários, além das medidas estipuladas nesta Tabela, devem ser atendidas as exigências complementares previstas em instrução técnica específica.
+N4 A altura máxima para construções provisórias com previsão de público é de 6,0 m. Estruturas com altura superior serão submetidas a apreciação de Corpo Técnico para definição das medidas de segurança.
+N5 Exigida também para eventos de risco baixo em que haja delimitação por barreiras.
+
+T9 p36 G [G-1,G-2]  (nota 5 nas divisões)
+AV X4 X X X
+SE X3 X X X
+CV - - X X
+SA X X X X
+BR - - X X
+IL X X X X
+AL - X2 X2 X2
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM - - X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Para a divisão G-1, pode haver apenas um acionador manual por pavimento, no máximo a 10 m da saída de Emergência.
+N3 Exigido quando a área total for superior a 930 m².
+N4 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N5 Pátios de apreensão/depósito de veículos serão classificados como da ocupação J.
+
+T10a p37 G [G-3]  COLUNA ÚNICA H<=12 (acima: tabela não cobre)
+AV X5
+SE -
+CH -
+CV -
+SA X
+BR X1
+IL X
+DE -
+AL X1
+SI X
+EX X
+HI X1
+CA -
+CM -
+T10b p37 G [G-4]  colunas padrão
+AV X5 X X X
+SE X2 X X X
+CH - X3 X X
+CV - X4 X X
+SA X X X X
+BR X1 X X X
+IL X X X X
+DE - - X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM - X X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando área total for superior a 930 m².
+N3 Pode ser substituída por chuveiros automáticos.
+N4 Pode ser substituída por chuveiros automáticos, exceto para as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N5 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+
+T11 p38 G [G-5]
+AV X4 X X X
+SE X2 X X X
+CV - - X X
+SA X X X X
+PI X3 X X X
+BR X1 X X X
+IL X X X X
+DE - X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CM X1 X X X
+CA - - X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando a área total for superior a 930 m².
+N3 Somente quando a área total for superior a 5.000 m².
+N4 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+
+T12a p39 H [H-1]   (notas 1–7 compartilhadas com T12b)
+AV X6 X X X
+SE - X X X
+CV - - X3 X
+SA X X X X
+PI - - - -
+BR - X X X
+IL X X X X
+DE - - - X
+AL - X X X
+SI X X X X
+EX X X X X  (nota 7 no nome da medida)
+HI X1 X X X (nota 7 no nome da medida)
+CA - - - X
+CM - X X X
+CF - - - X
+T12b p39 H [H-2,H-5] (nota 4 nas divisões)
+AV X6 X X X
+SE X2 X X X
+CV - - X X
+SA X X X X
+PI X1 X X X
+BR X X X X
+IL X X X X
+DE - X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM X X X X
+CF - X5 X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando a área total for superior a 930 m².
+N3 Pode ser substituída por chuveiros automáticos, exceto as compartimentações das fachadas e selagens dos shafts e dutos de instalações.
+N4 Para todas as edificações da divisão H-5, além das medidas estipuladas nesta Tabela, devem ser atendidas as exigências complementares previstas na IT 42, as quais também poderão ser adotadas nos hospitais psiquiátricos e reformatórios, pertencentes à divisão H-2.
+N5 Exceto para prisões em geral.
+N6 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N7 Para a divisão H-5 e para os hospitais psiquiátricos, reformatórios e locais para tratamento de dependentes químicos da divisão H-2, deverão ser instalados em locais com acesso privativo.
+
+T13a p40 H [H-3]
+AV X5 X X X
+SE X2 X X X
+CH - X4 X X
+CV - - X X
+SA X X X X
+PI X1 X X X
+BR X X X X
+IL X X X X
+DE - X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X X
+CM X X X X
+CF - X X X
+T13b p40 H [H-4,H-6]
+AV X5 X X X
+SE - X X X
+CH - - - -
+CV - - X X
+SA X X X X
+PI - - X X
+BR - X X X
+IL X X X X
+DE - - X X
+AL - X X X
+SI X X X X
+EX X X X X
+HI X1,6 X X X
+CA - - X X
+CM X3 X X X
+CF - - - X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando a área total for superior a 930 m².
+N3 Exigido nos auditórios com previsão de população superior a 200 pessoas.
+N4 Pode ser substituída por chuveiros automáticos.
+N5 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N6 Isenta nos quartéis do Corpo de Bombeiros Militar onde haja prontidão de incêndio em atividade ininterrupta (24h) e hidrante público nas adjacências da Unidade.
+
+T14a p41 I [I-1,I-2]
+AV X8 X X X
+SE X2,7 X X X
+CH X5,6 X5 X X
+CV - X5,7 X X
+SA X X X X
+PI - X7 X X
+BR X3 X X X
+IL X X X X
+DE - X7 X7 X
+AL X3,7 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - - X7 X7
+CM - X X X
+CF - - - X
+T14b p41 I [I-3]
+AV X8 X X X
+SE X2 X X X
+CH X2,5 X X X
+CV - X X X
+SA X X X X
+PI X1 X X X
+BR X1 X X X
+IL X X X X
+DE - X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA - X X X
+CM X4 X X X
+CF - X X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando a área total for superior a 930 m².
+N3 Exigido quando a área total for superior a 2.000m².
+N4 Exigido quando a área total for superior a 5.000m².
+N5 Pode ser substituída por chuveiros automáticos.
+N6 Exceto para edificações térreas ou com área total inferior a 930m².
+N7 Somente para a divisão I-2.
+N8 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+
+T15a p42 J [J-1,J-2]
+AV X9 X X X
+SE - X X X
+CH X2,3,7 X3,7 X3,7 X3
+CV - - X X
+SA X X X X
+PI - - X X
+BR X3,5 X3 X3 X3
+IL X X X X
+DE - - X3 X3
+AL X3,5 X X X
+SI X X X X
+EX X8 X8 X8 X8
+HI X1 X X X
+CA - - - X3
+CM - X3 X3 X3
+CF - - - X3
+T15b p42 J [J-3,J-4]
+AV X9 X X X
+SE X2 X X X
+CH X2,7 X X X
+CV - X X X
+SA X X X X
+PI X1 X X X
+BR X1 X X X
+IL X X X X
+DE X1,4 X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1 X X X
+CA X6 X X X
+CM - X X X
+CF - X X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Exigido quando a área total for superior a 930 m².
+N3 Somente para divisão J-2.
+N4 Somente para divisão J-4.
+N5 Quando a área total for superior a 2.000m².
+N6 Apenas para divisão J-4. A medida deverá ser exigida quando a área utilizada como depósito for superior a 3.000 m², independente de compartimentação, e poderá ser instalada apenas nessa área. Quando projetada em toda a edificação, substituirá a medida compartimentação horizontal.
+N7 Pode ser substituída por chuveiros automáticos, devendo ser projetada em toda a edificação.
+N8 Para a divisão J-1, não será exigida a cobertura por extintores nos locais destinados exclusivamente ao armazenamento de materiais incombustíveis, desde que não embalados.
+N9 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+
+T16a p43 L [L-1]  COLUNA ÚNICA (sem faixa de altura); nota 4 na divisão
+AV X
+SA X
+PI -
+BR X
+IL X1
+AL -
+SI X
+EX X
+CM X
+T16b p43 L [L-2,L-3] COLUNA ÚNICA; nota 4 na divisão
+AV X
+SA X
+PI X
+BR X
+IL X1,2
+AL X1
+SI X
+EX X3
+CM X
+N1 Somente quando a área total for igual ou maior que 200 m².
+N2 Luminárias à prova de explosão.
+N3 Devem ficar localizados externamente à edificação, exceção às demais áreas com risco de incêndio que não disponham de materiais explosivos.
+N4 As edificações do grupo L deverão atender à instrução técnica específica e às prescrições normativas do Exército Brasileiro e da Polícia Civil do Estado de Minas Gerais.
+
+T17 p44 M [M-1,M-2,M-4..M-8]  SEM GRADE: remete a normas/ITs (M-1 túneis NBR 15661/15981; M-2 IT23/IT24/NBR 17505 + alarme/brigada/acesso se houver sistema hidráulico; M-4..M-8 = medidas do uso específico; silos IT 43; agronegócio IT 44)
+
+T18 p45 M [M-3]
+AV X4 X X X
+SE X1 X X X
+CH X1 X X X
+CV - X X X
+SA X X X X
+PI - X X X
+BR X1 X X X
+IL X X X X
+DE - X X X
+AL X1 X X X
+SI X X X X
+EX X X X X
+HI X1,5 X5 X5 X5
+CA - X2 X2 X2
+CM X1 X X X
+CF - - X X
+N1 Exigido quando a área total for superior a 930 m², exceto para as construções concluídas até 01 de julho de 2005, onde será considerada, para fins de exigência, área total superior a 1.200m².
+N2 Pode ser substituído por sistema de gases, através de supressão total do ambiente.
+N3 Para as subestações elétricas de sistemas de geração, transmissão e distribuição de energia, devem ser observados, também, os critérios da IT 30.
+N4 Exigido quando a área total for superior a 930 m² e para condomínios com arruamento interno, independentemente da área.
+N5 Dispensada em centrais de distribuição ou transmissão de energia elétrica e em subestações elétricas, exceto quando a IT 30 determinar.

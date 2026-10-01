@@ -105,12 +105,13 @@ const nomeDoNivel = (model: BlueprintModel) => {
   const m = new Map(model.levels.map((l) => [l.id, l.name]));
   return (id: string) => m.get(id) ?? '—';
 };
-const ROTULO_DA_EXIGENCIA = { EXIGIDA: 'Exigida', DISPENSADA: 'Dispensada', SEM_TABELA: 'Sem tabela' } as const;
+const ROTULO_DA_EXIGENCIA = { EXIGIDA: 'Exigida', DISPENSADA: 'Dispensada', CONDICIONAL: 'Condicional', SEM_TABELA: 'Sem tabela' } as const;
 const simNao = (b: boolean | null) => (b === null ? 'Não avaliado' : b ? 'Atende' : 'Não atende');
 
 /** As medidas que o desenho NÃO modela — ficam a cargo do responsável (memorial e capa dizem). */
 export const MEDIDAS_NAO_MODELADAS: readonly MedidaDeSeguranca[] = [
   'ACESSO_VIATURA',
+  'PLANO_INTERVENCAO',
   'SEGURANCA_ESTRUTURAL',
   'COMPARTIMENTACAO_HORIZONTAL',
   'COMPARTIMENTACAO_VERTICAL',

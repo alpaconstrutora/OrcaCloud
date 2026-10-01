@@ -44,6 +44,7 @@ const ORIGEM: Record<string, string> = {
 const ESTADO: Record<EstadoDaExigencia, { rotulo: string; cor: string }> = {
   EXIGIDA: { rotulo: 'Exigida', cor: 'bg-red-50 text-red-700 border-red-200' },
   DISPENSADA: { rotulo: 'Dispensada', cor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  CONDICIONAL: { rotulo: 'Condicional', cor: 'bg-amber-50 text-amber-800 border-amber-200' },
   SEM_TABELA: { rotulo: 'Sem tabela', cor: 'bg-slate-50 text-slate-600 border-slate-200' },
 };
 
@@ -201,7 +202,10 @@ export default function PainelIncendio({ hip, onHip, classificacao: c, exigencia
                   <span className={`inline-block whitespace-nowrap rounded border px-1.5 py-0.5 ${ESTADO[m.estado].cor}`}>{ESTADO[m.estado].rotulo}</span>
                   {m.rascunho && <span className="ml-1 whitespace-nowrap text-[11px] text-red-700">rascunho</span>}
                 </td>
-                <td className="py-1.5 text-slate-600">{m.motivo}</td>
+                <td className="py-1.5 text-slate-600">
+                  {m.motivo}
+                  {m.fonte && <span className="block text-[11px] text-slate-400">{m.fonte}</span>}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -332,3 +332,59 @@ describe('a regra do zero usa o FAVORECIDO identificado, não a descrição livr
         expect(r.reasons[0]).toMatch(/Fulano de Tal Souza.*Imobiliária Centro/);
     });
 });
+
+// ─── Pedido do usuário (01/10/2026): categorias fora da conciliação ───
+describe('foraDaConciliacao — categorias que a organização tirou da conciliação', () => {
+    const { foraDaConciliacao } = regrasPuras;
+
+    it('compara sem acento, sem caixa e sem espaço nas pontas', () => {
+        expect(foraDaConciliacao('Movimentação', ['movimentacao'])).toBe(true);
+        expect(foraDaConciliacao('MOVIMENTACAO ', [' Movimentação'])).toBe(true);
+    });
+
+    it('categoria vazia NUNCA é excluída (é a que mais precisa de conciliação)', () => {
+        expect(foraDaConciliacao(null, ['Movimentação', ''])).toBe(false);
+        expect(foraDaConciliacao('  ', ['Movimentação'])).toBe(false);
+    });
+
+    it('lista vazia ou ausente não exclui nada', () => {
+        expect(foraDaConciliacao('Movimentação', [])).toBe(false);
+        expect(foraDaConciliacao('Movimentação', undefined)).toBe(false);
+    });
+
+    it('outra categoria não é excluída', () => {
+        expect(foraDaConciliacao('Aluguel', ['Movimentação'])).toBe(false);
+    });
+});
+
+describe('planMatching — extrato de categoria excluída não vira sugestão nem conciliação', () => {
+    const extrato = (id: string, category: string | null) => ({
+        id, amount: 1500, direction: 'DEBIT', transaction_date: '2025-08-05',
+        description_normalized: 'PIX ENVIADO', counterparty_name: '', category,
+    });
+    const titulo = { id: 't1', amount: 1500, direction: 'DEBIT', transaction_date: '2025-08-05', description: 'Pagamento', entity_name: '' };
+    const indice = { docIndex: new Map(), aliases: [] };
+
+    it('sem lista: o par exato e único concilia sozinho', () => {
+        const plano = regrasPuras.planMatching([extrato('b1', 'Movimentação')], [titulo], regrasPuras.AJUSTES_PADRAO, indice);
+        expect(plano.autoMatches.map(m => m.bankId)).toEqual(['b1']);
+    });
+
+    it('com "Movimentação" na lista: o mesmo par some do plano', () => {
+        const s = regrasPuras.montarAjustes(null, { excluded_categories: ['movimentacao'] });
+        const plano = regrasPuras.planMatching([extrato('b1', 'Movimentação')], [titulo], s, indice);
+        expect(plano.autoMatches).toEqual([]);
+        expect(plano.suggestionRows).toEqual([]);
+    });
+
+    it('extrato sem categoria continua concorrendo com a lista ligada', () => {
+        const s = regrasPuras.montarAjustes(null, { excluded_categories: ['Movimentação'] });
+        const plano = regrasPuras.planMatching([extrato('b1', 'Movimentação'), extrato('b2', null)], [titulo], s, indice);
+        expect(plano.autoMatches.map(m => m.bankId)).toEqual(['b2']);
+    });
+
+    it('montarAjustes: padrão [] e descarta itens em branco', () => {
+        expect(regrasPuras.montarAjustes(null, null).excluded_categories).toEqual([]);
+        expect(regrasPuras.montarAjustes(null, { excluded_categories: ['', ' ', 'X'] }).excluded_categories).toEqual(['X']);
+    });
+});

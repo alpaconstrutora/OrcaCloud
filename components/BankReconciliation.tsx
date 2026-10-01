@@ -46,6 +46,7 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
+import { foraDaConciliacao } from '../utils/reconciliationRules';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
 import { reconciliationReprocessService, resumoDoReprocesso } from '../services/reconciliationReprocessService';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
@@ -1357,7 +1358,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             const t0Carga = Date.now();
             const tempos: Record<string, number> = {};
             const medir = <R,>(etapa: string, pr: Promise<R>) => pr.finally(() => { tempos[etapa] = Date.now() - t0Carga; });
-            const [bankResult, iTxResult, projResult, sugResult] = await Promise.all([
+            // Categorias fora da conciliação (painel Regras da Central): na Pendentes e na
+            // Central o extrato delas some da lista, com as sugestões dele. No Extrato fica.
+            // A lista é da organização da CONTA, como as regras e as tolerâncias.
+            const recortaCategorias = activeView === 'pending' || activeView === 'center';
+            const orgDaContaSelecionada = accounts.find(a => a.id === selectedAccountId)?.organization_id || null;
+            const [bankResult, iTxResult, projResult, sugResult, categoriasExcluidas] = await Promise.all([
                 medir('extratos', fetchAllPages<BankTransaction>(buildBankQuery as never)),
                 medir('lançamentos', fetchAllPages<InternalTransaction>(buildITxQuery as never)),
                 // --- PONTE COMERCIAL --- só relevante na aba Pendentes
@@ -1370,6 +1376,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         })
                     : Promise.resolve({ data: [] as Array<{ id: string; name: string; settings: any }> }),
                 isPendingView ? medir('sugestões', buscarSugestoes()) : Promise.resolve(null),
+                (recortaCategorias && orgDaContaSelecionada)
+                    // Falha ao ler a lista não derruba a carga: sem ela, nada é escondido.
+                    ? bankReconciliationService.lerCategoriasExcluidas(orgDaContaSelecionada).catch(e => {
+                        console.error('[loadTransactions] categorias excluídas', e);
+                        return [] as string[];
+                    })
+                    : Promise.resolve([] as string[]),
             ]);
 
             if (!vigente()) return;
@@ -1378,9 +1391,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 (e as Error & { code?: string }).code = (err as { code?: string } | null)?.code;
                 return e;
             };
-            const { data: bTxs, error: bError } = bankResult;
+            const { data: bTxsDaConta, error: bError } = bankResult;
             if (bError) throw etapaFalhou('extratos', bError);
-            setBankTransactions(bTxs || []);
+            const bTxs = categoriasExcluidas.length
+                ? (bTxsDaConta || []).filter(t => !foraDaConciliacao(t.category, categoriasExcluidas))
+                : (bTxsDaConta || []);
+            setBankTransactions(bTxs);
 
             const { data: iTxs, error: iError } = iTxResult;
             if (iError) throw etapaFalhou('lançamentos', iError);
@@ -1437,7 +1453,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     setActionFeedback({ message: `Não foi possível carregar as sugestões (${((tempos['sugestões'] ?? 0) / 1000).toFixed(1)} s): ` + errorMessage(sugResult.error, 'erro desconhecido'), type: 'error' });
                     setTimeout(() => setActionFeedback(null), 8000);
                 }
-                setSuggestions(bTxs && bTxs.length > 0 ? (sugResult.data ?? []) : []);
+                // Só as sugestões de extratos que ficaram na lista (as de categoria excluída
+                // somem já, sem esperar o próximo Reprocessar apagá-las no banco).
+                const idsNaLista = new Set(bTxs.map(t => t.id));
+                setSuggestions((sugResult.data ?? []).filter(s => idsNaLista.has(s.bank_transaction_id)));
             }
 
             if (activeView === 'conciliated') {

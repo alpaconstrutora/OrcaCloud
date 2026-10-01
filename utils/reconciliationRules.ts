@@ -31,6 +31,12 @@ export interface ReconciliationEngineSettings {
     date_window_days: number;
     auto_threshold: number;
     suggestion_min: number;
+    /**
+     * Categorias de extrato fora da conciliação (painel Regras da Central), ex.:
+     * "Movimentação". Opcional no tipo porque quem monta à mão (testes) pode omitir;
+     * `montarAjustes` sempre preenche.
+     */
+    excluded_categories?: string[];
 }
 
 /** Contraparte reconhecida no texto do extrato. */
@@ -52,6 +58,25 @@ export interface PartyIndex {
     // a FK aponta apenas para `clients` —, e exigi-lo aqui era o motivo de a base ter
     // dois aliases e nenhum de fornecedor, com 73% do extrato sendo débito.
     aliases: { token: string; party_id?: string | null; party_type: 'SUPPLIER' | 'CLIENT'; party_name?: string | null; hit: number }[];
+}
+
+/** Categoria comparável: sem acento, sem caixa, sem espaço nas pontas. */
+function chaveDeCategoria(categoria: string | null | undefined): string {
+    return (categoria || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/**
+ * O extrato está numa categoria que a organização tirou da conciliação?
+ *
+ * Pedido do usuário (01/10/2026): "todos os lançamentos no extrato cuja categoria =
+ * movimentacao não entra na conciliação". Comparação sem acento e sem caixa
+ * ("Movimentação" = "movimentacao"), a mesma da `fn_reconciliation_divergences`.
+ * Extrato sem categoria NUNCA é excluído: é justamente o que mais precisa de conciliação.
+ */
+export function foraDaConciliacao(categoria: string | null | undefined, excluidas: readonly string[] | null | undefined): boolean {
+    const chave = chaveDeCategoria(categoria);
+    if (!chave || !excluidas?.length) return false;
+    return excluidas.some(e => chaveDeCategoria(e) === chave);
 }
 
 /**
@@ -425,6 +450,7 @@ export interface BankRowParaPlano {
     id: string; transaction_date: string; amount: number; direction: string;
     description_raw?: string; description_normalized?: string;
     counterparty_name?: string; bank_account_id?: string;
+    category?: string | null;
 }
 
 /** O que o plano precisa saber de um título interno pendente. */
@@ -456,13 +482,17 @@ export interface PlanoDeConciliacao {
 }
 
 export function planMatching(
-    bankTxs: BankRowParaPlano[],
+    bankTxsTodos: BankRowParaPlano[],
     candidatesAll: TituloParaPlano[],
     settings: ReconciliationEngineSettings,
     partyIndex: PartyIndex,
 ): PlanoDeConciliacao {
     const AUTO_THRESHOLD = settings.auto_threshold;
     const MIN_SUGGESTION = settings.suggestion_min;
+    // Categorias fora da conciliação: o extrato não vira sugestão nem conciliação
+    // automática. Quem chama continua passando TODOS os ids para `fn_replace_suggestions`,
+    // e assim as sugestões antigas desses extratos somem no próximo Reprocessar.
+    const bankTxs = bankTxsTodos.filter(b => !foraDaConciliacao(b.category, settings.excluded_categories));
 
     // 2) Casa em memória (sem ida ao banco por transação)
     const autoMatches: { bankId: string; internalId: string; score: number; reason: string }[] = [];
@@ -558,6 +588,7 @@ export const AJUSTES_PADRAO: ReconciliationEngineSettings = {
     fine_percent: 2, interest_percent_month: 1,
     value_tol_abs: 50, value_tol_pct: 3, encargos_tol_pct: 0.5,
     date_window_days: 10, auto_threshold: 100, suggestion_min: 40,
+    excluded_categories: [],
 };
 
 /**
@@ -571,7 +602,8 @@ export const AJUSTES_PADRAO: ReconciliationEngineSettings = {
  */
 export function montarAjustes(
     asaas?: { fine_percent?: number | null; interest_percent_month?: number | null } | null,
-    rs?: Partial<Record<keyof ReconciliationEngineSettings, number | null>> | null,
+    rs?: (Partial<Record<Exclude<keyof ReconciliationEngineSettings, 'excluded_categories'>, number | null>>
+        & { excluded_categories?: string[] | null }) | null,
 ): ReconciliationEngineSettings {
     return {
         fine_percent:           asaas?.fine_percent ?? AJUSTES_PADRAO.fine_percent,
@@ -582,6 +614,7 @@ export function montarAjustes(
         date_window_days:       rs?.date_window_days ?? AJUSTES_PADRAO.date_window_days,
         auto_threshold:         rs?.auto_threshold ?? AJUSTES_PADRAO.auto_threshold,
         suggestion_min:         rs?.suggestion_min ?? AJUSTES_PADRAO.suggestion_min,
+        excluded_categories:    (rs?.excluded_categories ?? []).filter(c => !!c?.trim()),
     };
 }
 

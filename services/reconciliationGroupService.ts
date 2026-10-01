@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import { bankReconciliationService } from './bankReconciliationService';
+import { foraDaConciliacao } from '../utils/reconciliationRules';
 
 const DAY = 86_400_000;
 
@@ -95,24 +96,30 @@ export const reconciliationGroupService = {
      */
     async findGroups(bankAccountId: string, organizationId: string): Promise<GroupSuggestions> {
         // Paginado: `.limit(2000)` aqui era teto silencioso de 1000 linhas (PostgREST).
-        const [{ data: bankTxs, error: bankErr }, { data: titles, error: titleErr }] = await Promise.all([
-            fetchAllPages<BankItem>(() => supabase.from('bank_transactions')
-                .select('id, transaction_date, amount, direction, description_normalized, description_raw, counterparty_name')
+        const [{ data: bankTxs, error: bankErr }, { data: titles, error: titleErr }, excluidas] = await Promise.all([
+            fetchAllPages<BankItem & { category?: string | null }>(() => supabase.from('bank_transactions')
+                .select('id, transaction_date, amount, direction, description_normalized, description_raw, counterparty_name, category')
                 .eq('bank_account_id', bankAccountId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
                 .order('transaction_date', { ascending: true })
-                .order('id', { ascending: true }) as unknown as RangeableQuery<BankItem>),
+                .order('id', { ascending: true }) as unknown as RangeableQuery<BankItem & { category?: string | null }>),
             fetchAllPages<TitleItem>(() => supabase.from('internal_transactions')
                 .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name')
                 .eq('organization_id', organizationId)
                 .eq('status', 'PENDING')
                 .order('transaction_date', { ascending: true })
                 .order('id', { ascending: true }) as unknown as RangeableQuery<TitleItem>),
+            // Falha ao ler a lista não derruba os agrupamentos: sem ela, nada é excluído.
+            bankReconciliationService.lerCategoriasExcluidas(organizationId).catch(e => {
+                console.error('[findGroups] categorias excluídas', e);
+                return [] as string[];
+            }),
         ]);
         if (bankErr) throw bankErr;
         if (titleErr) throw titleErr;
 
-        const banks = bankTxs || [];
+        // Categorias fora da conciliação (painel Regras): o extrato não entra em agrupamento.
+        const banks = (bankTxs || []).filter(b => !foraDaConciliacao(b.category, excluidas));
         const allTitles = titles || [];
 
         const bankToTitles: BankToTitlesGroup[] = [];

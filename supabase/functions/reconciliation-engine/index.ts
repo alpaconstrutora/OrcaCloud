@@ -64,7 +64,7 @@ async function carregarAjustes(servico: SupabaseLike, orgId: string): Promise<Re
     try {
         const [{ data: asaas }, { data: rs }] = await Promise.all([
             servico.from('asaas_charge_config').select('fine_percent, interest_percent_month').eq('organization_id', orgId).maybeSingle(),
-            servico.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min').eq('organization_id', orgId).maybeSingle(),
+            servico.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min, excluded_categories').eq('organization_id', orgId).maybeSingle(),
         ]);
         return montarAjustes(asaas, rs);
     } catch {
@@ -229,7 +229,7 @@ serve(async (req: Request) => {
         // zero de verdade.
         const movimentos = await todasAsPaginas<BankRowParaPlano>(
             (de, ate) => servico.from('bank_transactions')
-                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id')
+                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id, category')
                 .eq('bank_account_id', contaId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
                 .order('transaction_date', { ascending: true }).order('id', { ascending: true })

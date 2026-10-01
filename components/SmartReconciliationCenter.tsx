@@ -546,6 +546,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 credorRegistros={credorRegistros}
                 preenchida={preenchida}
                 onChanged={carregarRegras}
+                onCategoriasExcluidasMudaram={onReload}
             />
 
             {/* Conciliação agrupada (1 pagamento → N títulos e vice-versa) */}

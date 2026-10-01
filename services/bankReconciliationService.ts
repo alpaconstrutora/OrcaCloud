@@ -646,6 +646,31 @@ export const bankReconciliationService = {
     },
 
     /**
+     * Categorias de extrato que a organização tirou da conciliação (painel Regras da
+     * Central), ex.: "Movimentação". Saem das sugestões, dos agrupamentos, das
+     * divergências e da Pendentes; continuam no Extrato e nas transferências entre contas.
+     * Erro de leitura SOBE: o painel não pode gravar por cima de uma lista que não leu.
+     */
+    async lerCategoriasExcluidas(organizationId: string): Promise<string[]> {
+        const { data, error } = await supabase
+            .from('reconciliation_settings')
+            .select('excluded_categories')
+            .eq('organization_id', organizationId)
+            .maybeSingle();
+        if (error) throw error;
+        return ((data as { excluded_categories?: string[] | null } | null)?.excluded_categories ?? []).filter(c => !!c?.trim());
+    },
+
+    /** Grava SÓ a lista (as tolerâncias da mesma linha ficam como estão). */
+    async salvarCategoriasExcluidas(organizationId: string, categorias: string[]): Promise<void> {
+        const limpa = Array.from(new Set(categorias.map(c => c.trim()).filter(Boolean)));
+        const { error } = await supabase
+            .from('reconciliation_settings')
+            .upsert({ organization_id: organizationId, excluded_categories: limpa, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' });
+        if (error) throw error;
+    },
+
+    /**
      * Regras da organização (todas, ativas ou não), maior prioridade primeiro.
      * A organização é a da CONTA selecionada — com o topo em "Todas" a informada é
      * nula, e regra é sempre de uma organização só.
@@ -768,7 +793,7 @@ export const bankReconciliationService = {
         try {
             const [{ data: asaas }, { data: rs }] = await Promise.all([
                 supabase.from('asaas_charge_config').select('fine_percent, interest_percent_month').eq('organization_id', organizationId).maybeSingle(),
-                supabase.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min').eq('organization_id', organizationId).maybeSingle(),
+                supabase.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min, excluded_categories').eq('organization_id', organizationId).maybeSingle(),
             ]);
             // A MISTURA com os padrões vive em `reconciliationRules`, não aqui: o padrão é
             // decisão (`auto_threshold: 100` separa "concilia sozinho" de "só sugere"), e
@@ -1021,7 +1046,7 @@ export const bankReconciliationService = {
         const [{ data: bankTxs, error: bankErr }, partyIndex] = await Promise.all([
             fetchAllPages<BankRow>(() => supabase
                 .from('bank_transactions')
-                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id')
+                .select('id, transaction_date, amount, direction, description_raw, description_normalized, counterparty_name, bank_account_id, category')
                 .eq('bank_account_id', bankAccountId)
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
                 .order('transaction_date', { ascending: true })

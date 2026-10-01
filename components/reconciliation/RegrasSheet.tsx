@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Loader2, Plus, Search, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowLeft, Loader2, Plus, Search, ShieldCheck, X } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -43,6 +43,9 @@ interface Props {
     /** Quando vem preenchida, o painel abre direto no formulário de regra nova. */
     preenchida?: RegraPreenchida | null;
     onChanged: () => Promise<void> | void;
+    /** Chamado ao FECHAR o painel se a lista "fora da conciliação" mudou: a Central
+     *  recarrega para a Pendentes e os cartões refletirem a lista. */
+    onCategoriasExcluidasMudaram?: () => Promise<void> | void;
 }
 
 interface Formulario {
@@ -68,7 +71,7 @@ const field = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] tex
 
 const RegrasSheet: React.FC<Props> = ({
     open, onClose, organizationId, selectedAccountId, regras, categories,
-    clienteRegistros, credorRegistros, preenchida, onChanged,
+    clienteRegistros, credorRegistros, preenchida, onChanged, onCategoriasExcluidasMudaram,
 }) => {
     const confirm = useConfirm();
     const [form, setForm] = useState<Formulario | null>(null);
@@ -76,6 +79,50 @@ const RegrasSheet: React.FC<Props> = ({
     const [erro, setErro] = useState<string | null>(null);
     const [teste, setTeste] = useState<{ classificaria: number; jaClassificados: number; exemplos: string[] } | null>(null);
     const [testando, setTestando] = useState(false);
+
+    // ── Categorias fora da conciliação (pedido de 01/10/2026: "Movimentação") ──
+    // `null` = ainda não leu (ou a leitura falhou): sem lista lida, não deixa gravar —
+    // gravaria por cima do que está no banco.
+    const [excluidas, setExcluidas] = useState<string[] | null>(null);
+    const [gravandoExcluidas, setGravandoExcluidas] = useState(false);
+    const excluidasMudaram = useRef(false);
+
+    async function carregarExcluidas(org: string) {
+        setExcluidas(null);
+        try {
+            setExcluidas(await bankReconciliationService.lerCategoriasExcluidas(org));
+        } catch (e) {
+            setErro('Não foi possível ler as categorias fora da conciliação: '
+                + (e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)));
+        }
+    }
+
+    useEffect(() => {
+        if (open && organizationId) void carregarExcluidas(organizationId);
+    }, [open, organizationId]);
+
+    async function gravarExcluidas(org: string, lista: string[]) {
+        setGravandoExcluidas(true);
+        setErro(null);
+        try {
+            await bankReconciliationService.salvarCategoriasExcluidas(org, lista);
+            setExcluidas(lista);
+            excluidasMudaram.current = true;
+        } catch (e) {
+            setErro('Não foi possível salvar as categorias fora da conciliação: '
+                + (e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)));
+        } finally {
+            setGravandoExcluidas(false);
+        }
+    }
+
+    const fechar = () => {
+        if (excluidasMudaram.current) {
+            excluidasMudaram.current = false;
+            void onCategoriasExcluidasMudaram?.();
+        }
+        onClose();
+    };
 
     // Abriu: com sugestão, vai direto ao formulário preenchido; sem, mostra a lista.
     useEffect(() => {
@@ -189,8 +236,8 @@ const RegrasSheet: React.FC<Props> = ({
     const ehCliente = form?.direcao === 'CREDIT' || (!!idDoCliente && !idDoCredor);
 
     return (
-        <Sheet open={open} onClose={onClose} size="lg" dirty={!!form && !salvando}>
-            <SheetHeader onClose={onClose}>
+        <Sheet open={open} onClose={fechar} size="lg" dirty={!!form && !salvando}>
+            <SheetHeader onClose={fechar}>
                 <div className="flex items-center gap-2">
                     {form && (
                         <button onClick={() => { setForm(null); setTeste(null); setErro(null); }} className="p-1 -ml-1 rounded-[6px] text-gray-400 hover:text-gray-700 hover:bg-gray-100" title="Voltar à lista">
@@ -216,6 +263,51 @@ const RegrasSheet: React.FC<Props> = ({
 
                 {!organizationId && (
                     <p className="text-sm text-gray-500">Selecione uma conta bancária: as regras são da organização dela.</p>
+                )}
+
+                {organizationId && !form && (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <h3 className="text-sm font-semibold text-gray-900">Categorias fora da conciliação</h3>
+                            {gravandoExcluidas && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+                        </div>
+                        <p className="text-sm text-gray-600">
+                            Extratos destas categorias não geram sugestão e não entram em agrupamentos, divergências
+                            nem na aba Pendentes. Continuam no Extrato e nas transferências entre contas.
+                        </p>
+                        {excluidas === null ? (
+                            <p className="text-sm text-gray-500">Carregando…</p>
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {excluidas.map(c => (
+                                    <span key={c} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-[6px] bg-gray-100 text-sm text-gray-800">
+                                        {c}
+                                        <button
+                                            type="button"
+                                            onClick={() => gravarExcluidas(organizationId, excluidas.filter(x => x !== c))}
+                                            disabled={gravandoExcluidas}
+                                            title={`Voltar "${c}" para a conciliação`}
+                                            className="p-0.5 rounded-[4px] text-gray-400 hover:text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </span>
+                                ))}
+                                <select
+                                    aria-label="Adicionar categoria fora da conciliação"
+                                    value=""
+                                    onChange={e => { if (e.target.value) void gravarExcluidas(organizationId, [...excluidas, e.target.value]); }}
+                                    disabled={gravandoExcluidas}
+                                    title={gravandoExcluidas ? 'Salvando a lista…' : undefined}
+                                    className={field.replace('w-full ', 'w-56 ')}
+                                >
+                                    <option value="">Adicionar categoria…</option>
+                                    {categories.filter(c => !excluidas.some(x => x.toLowerCase() === c.toLowerCase()))
+                                        .map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {organizationId && !form && (

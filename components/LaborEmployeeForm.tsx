@@ -308,6 +308,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             notify('CPF inválido. Verifique os dígitos informados.');
             return;
         }
+        if (!(isEditing ? form.org_id : form.org_id || orgId)) { notify('Selecione a organização.'); return; }
         setSaving(true);
         const cleanedForm = { ...form };
         const dateFields: (keyof Employee)[] = ['hire_date', 'birth_date', 'rg_issue_date', 'ctps_issue_date', 'cnh_validade'];
@@ -318,10 +319,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             }
         });
 
-        // FKs: string vazia não é UUID válido — o Postgres devolve 22P02.
-        const uuidFields: (keyof Employee)[] = ['cost_center_id', 'plano_de_contas_id'];
-        uuidFields.forEach(field => {
-            if (cleanedForm[field] === '') {
+        // FKs: string vazia não é UUID válido — o Postgres devolve 22P02. Todo
+        // campo `*_id` entra, não uma lista: `empresa_id` nasce '' quando a org
+        // não tem exatamente uma empresa e ficou de fora da lista antiga.
+        (Object.keys(cleanedForm) as (keyof Employee)[]).forEach(field => {
+            if (String(field).endsWith('_id') && cleanedForm[field] === '') {
                 (cleanedForm as any)[field] = null;
             }
         });

@@ -3301,7 +3301,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             const useAcoplada = activeView === 'statement' || (activeView === 'pending' && pendentesViewMode === 'list');
                             const StatementCardWrapper: React.ElementType = useAcoplada ? 'div' : React.Fragment;
                             const wrapperProps = useAcoplada
-                                ? { className: 'bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden' }
+                                // `overflow-clip`, não `overflow-hidden`: corta os cantos igual, mas não vira
+                                // contêiner de rolagem — com `hidden` o rodapé `sticky` do Extrato grudava
+                                // no card (que não rola) em vez de no pé da tela.
+                                ? { className: 'bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-clip' }
                                 : {};
                             return (
                         <StatementCardWrapper {...wrapperProps}>
@@ -3673,8 +3676,14 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         </table>
                                         </div>
                                         {/* Rodapé de paginação (§6.7) — o carregamento traz o período
-                                            inteiro; aqui só se navega sobre o que já está em memória. */}
-                                        <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+                                            inteiro; aqui só se navega sobre o que já está em memória.
+                                            Sempre visível (pedido de 01/10/2026): `sticky bottom-0` no pé da
+                                            área que rola, com fundo opaco para as linhas não aparecerem por trás. O
+                                            `bottom` negativo é o padding do <main> (p-4 / md:p-6): sem ele o rodapé
+                                            parava 24 px acima do pé da tela e as linhas passavam por baixo.
+                                            Com linha marcada o dock de seleção ocupa o pé da tela, e o rodapé
+                                            some até desmarcar (escolha do usuário, 01/10/2026). */}
+                                        <div className={`sticky -bottom-4 md:-bottom-6 z-20 bg-white ${selectedBankTxIds.size > 0 ? 'hidden' : 'flex'} items-center justify-between gap-4 px-6 py-3 border-t border-gray-100 text-sm text-gray-500`}>
                                             <div className="flex items-center gap-2">
                                                 <span>
                                                     {sortedBankTransactions.length === 0

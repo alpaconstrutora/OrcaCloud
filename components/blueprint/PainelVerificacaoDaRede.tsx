@@ -25,6 +25,12 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   CONDUTOR_DECLIVIDADE: 'Declividade do condutor',
   PLUVIAL_NO_ESGOTO: 'Pluvial e esgoto misturados',
   ANEL_NAO_CALCULADO: 'Anel fora do cálculo (em árvore)',
+  INCENDIO_FORA_DA_REDE: 'Peça fora da rede',
+  INCENDIO_SEM_BOMBA: 'Sem entrada de água (sem bomba)',
+  INCENDIO_DN_PECA: 'Peça maior que o tubo',
+  INCENDIO_VELOCIDADE: 'Velocidade acima da máxima',
+  INCENDIO_PRESSAO_ALTA: 'Pressão acima da máxima',
+  INCENDIO_NAO_ATENDE: 'Hidrante não atende',
 };
 
 interface Props {

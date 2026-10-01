@@ -26,6 +26,7 @@ import { esgotoTrechoATrecho, trechosDeEsgotoSemDestino, verificarDnDoEsgoto } f
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import type { PressoesDaRede } from './blueprintPressaoDaRede';
+import { marcasDoLancamentoDeIncendio } from './blueprintConferenciaIncendio';
 
 export type TipoDeMarca =
   | 'PONTA_ABERTA'
@@ -55,7 +56,14 @@ export type TipoDeMarca =
   // E6.4 — a pluvial encostando no esgoto (e vice-versa): redes independentes.
   | 'PLUVIAL_NO_ESGOTO'
   // Incêndio E0.4 — trecho que fecha um anel: o cálculo em árvore o deixa sem vazão.
-  | 'ANEL_NAO_CALCULADO';
+  | 'ANEL_NAO_CALCULADO'
+  // Incêndio E2.4 — o diagnóstico do lançamento (sempre) e o do cálculo (com a tarefa aberta).
+  | 'INCENDIO_FORA_DA_REDE'
+  | 'INCENDIO_SEM_BOMBA'
+  | 'INCENDIO_DN_PECA'
+  | 'INCENDIO_VELOCIDADE'
+  | 'INCENDIO_PRESSAO_ALTA'
+  | 'INCENDIO_NAO_ATENDE';
 
 export interface MarcaDeVerificacao {
   chave: string;
@@ -151,7 +159,8 @@ export function marcasDeVerificacao(
   }
 
   // E5.5: tubo hidrossanitário contra a estrutura (o raspão — eixo por fora — não conta).
-  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO');
+  // Incêndio E2.4: a tubulação de incêndio contra viga e pilar também (o "tubulação × viga" do AltoQi).
+  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO' || t.disciplina === 'INCENDIO');
   const estruturaPorId = new Map((model.structures ?? []).map((x) => [x.id, x]));
   if (hidraulicos.length > 0 && estruturaPorId.size > 0) {
     for (const c of conflitosDoModelo({ ...model, trechos: hidraulicos })) {
@@ -191,6 +200,9 @@ export function marcasDeVerificacao(
       }
     }
   }
+
+  // Incêndio E2.4: o diagnóstico do lançamento — peça fora da rede, rede sem bomba, peça maior que o tubo.
+  marcas.push(...marcasDoLancamentoDeIncendio(model));
 
   // E6.4: redes independentes — a pluvial não entra no esgoto, nem o esgoto na pluvial.
   for (const x of misturasPluvialEsgoto(model)) {
@@ -257,6 +269,6 @@ export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disci
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO', 'ANEL_NAO_CALCULADO'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO', 'ANEL_NAO_CALCULADO', 'INCENDIO_FORA_DA_REDE', 'INCENDIO_SEM_BOMBA', 'INCENDIO_DN_PECA', 'INCENDIO_VELOCIDADE', 'INCENDIO_PRESSAO_ALTA', 'INCENDIO_NAO_ATENDE'].includes(m.tipo)),
   };
 }

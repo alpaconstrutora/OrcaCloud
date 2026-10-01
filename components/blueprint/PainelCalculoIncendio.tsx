@@ -9,6 +9,7 @@ import type { ObjectId } from '../../utils/blueprintKernel';
 import { FORMULAS_DE_PERDA, ROTULO_DA_FORMULA, type FormulaDePerda } from '../../utils/blueprintHidraulicaIncendio';
 import { ROTULO_DO_PAPEL, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
+import type { EstadoDaConferencia, ItemDaConferencia } from '../../utils/blueprintConferenciaIncendio';
 
 interface Props {
   hip: HipotesesHidraulicasDeIncendio;
@@ -19,7 +20,15 @@ interface Props {
   onSelecionar: (ids: string[]) => void;
   /** Quantos trechos o ajuste de DN mudaria, e o gatilho. */
   ajusteDeDn: { alterados: number; onAjustar: () => void };
+  /** E2.4: a conferência em três estados + "não avaliada". Ausente = não mostrar. */
+  conferencia?: ItemDaConferencia[];
 }
+
+const ESTADO: Record<EstadoDaConferencia, { rotulo: string; cor: string }> = {
+  ATENDE: { rotulo: 'Atende', cor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  FALTA: { rotulo: 'Falta', cor: 'bg-red-50 text-red-700 border-red-200' },
+  NAO_AVALIADO: { rotulo: 'Não avaliado', cor: 'bg-slate-50 text-slate-600 border-slate-200' },
+};
 
 const campo = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums';
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -46,7 +55,7 @@ function Numero({ rotulo, valor, onValor, passo, unidade }: { rotulo: string; va
   );
 }
 
-export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, onSelecionar, ajusteDeDn }: Props) {
+export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, onSelecionar, ajusteDeDn, conferencia }: Props) {
   const set = <K extends keyof HipotesesHidraulicasDeIncendio>(k: K) => (v: HipotesesHidraulicasDeIncendio[K]) => onHip({ ...hip, [k]: v });
   const cen = c.cenario;
   const acimaDaMaxima = [...c.estaticaKpa].filter(([, p]) => p > hip.pressaoMaximaKpa);
@@ -197,6 +206,36 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
             </tbody>
           </table>
         </>
+      )}
+
+      {conferencia && conferencia.length > 0 && (
+        <div>
+          <h4 className="mb-1 text-xs font-semibold text-slate-700">Conferência</h4>
+          <table className="w-full text-xs" data-testid="calculo-incendio-conferencia">
+            <tbody>
+              {conferencia.map((i) => (
+                <tr key={`${i.grupo}|${i.item}`} className="border-b border-slate-100 align-top text-slate-700">
+                  <td className="py-1.5 pr-2">
+                    <span className="text-slate-400">{i.grupo} · </span>
+                    {i.alvos.length > 0 ? (
+                      <button type="button" className="text-left text-blue-700 hover:underline" onClick={() => onSelecionar(i.alvos)}>
+                        {i.item}
+                      </button>
+                    ) : (
+                      i.item
+                    )}
+                    <div className="text-[11px] text-slate-500">
+                      exigido {i.exigido} · obtido {i.obtido}
+                    </div>
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <span className={`inline-block whitespace-nowrap rounded border px-1.5 py-0.5 ${ESTADO[i.estado].cor}`}>{ESTADO[i.estado].rotulo}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <p className="text-xs text-slate-500">

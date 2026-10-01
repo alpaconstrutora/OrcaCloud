@@ -146,11 +146,12 @@ import {
   rotuloDoTrecho2D,
   simbolosDasConexoes2D,
 } from '../../utils/blueprintIsometrico';
-import { marcasDeVerificacao } from '../../utils/blueprintVerificacaoRede';
+import { marcasDeVerificacao, type MarcaDeVerificacao } from '../../utils/blueprintVerificacaoRede';
 import type { PressoesDaRede } from '../../utils/blueprintPressaoDaRede';
 
 /** Referência estável para o padrão (um `[]` literal no parâmetro refaria as marcas a cada render). */
 const SEM_PRESSOES: readonly PressoesDaRede[] = [];
+const SEM_MARCAS: readonly MarcaDeVerificacao[] = [];
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import { simboloDeIncendio, temSimboloDeIncendio } from '../../utils/blueprintSimbolosIncendio';
@@ -992,6 +993,8 @@ interface Props {
   pontasSoltas?: PontaSoltaCanvas[];
   /** PRESSÕES da água (E1.3) — as marcas de pressão no desenho. Calculadas por quem tem as hipóteses. */
   pressoesDaAgua?: readonly PressoesDaRede[];
+  /** Incêndio E2.4: as marcas que só o CÁLCULO dá (velocidade, pressão máxima, hidrante que não atende). */
+  marcasDoCalculo?: readonly MarcaDeVerificacao[];
   /**
    * A primeira ponta já escolhida na ferramenta Juntar. Sai preenchida e noutra
    * cor: é o "mudou de cor" que confirma o clique.
@@ -1502,6 +1505,7 @@ export default function BlueprintCanvas({
   vaoEmDestaque = null,
   pontasSoltas = [],
   pressoesDaAgua = SEM_PRESSOES,
+  marcasDoCalculo = SEM_MARCAS,
   pontaEmJuncao = null,
   onEscolherPontaJuncao,
   onJuntarPontas,
@@ -1923,7 +1927,10 @@ export default function BlueprintCanvas({
   /** As CONEXÕES da planta (27/09/2026, "os tubos e conexoes devem ser detalhados") — ver `blueprintIsometrico`. */
   const simbolosConexoes2d = useMemo(() => simbolosDasConexoes2D(model, levelId ?? null), [model, levelId]);
   /** As MARCAS da verificação da rede (28/09/2026, E0.1) — ver `blueprintVerificacaoRede`. */
-  const marcasDaRede2d = useMemo(() => marcasDeVerificacao(model, levelId ?? null, pressoesDaAgua), [model, levelId, pressoesDaAgua]);
+  const marcasDaRede2d = useMemo(
+    () => [...marcasDeVerificacao(model, levelId ?? null, pressoesDaAgua), ...marcasDoCalculo.filter((m) => !levelId || m.levelId === levelId)],
+    [model, levelId, pressoesDaAgua, marcasDoCalculo],
+  );
   /** Incêndio E1.4: H-1, SPK-3… — derivados; o rótulo declarado vence. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(model), [model]);
   const terminaisReais = useMemo(

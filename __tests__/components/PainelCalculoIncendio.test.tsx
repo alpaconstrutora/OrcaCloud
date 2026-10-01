@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event';
 import PainelCalculoIncendio from '../../components/blueprint/PainelCalculoIncendio';
 import { applyBatch, applyCommand, emptyModel, point, type Command } from '../../utils/blueprintKernel';
 import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO as HIP, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
+import { conferenciaDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 
 function modelo(semBomba = false) {
   const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -44,6 +45,20 @@ describe('PainelCalculoIncendio', () => {
     render(<PainelCalculoIncendio hip={HIP} onHip={vi.fn()} calculo={c} nomeDe={(id) => id} onSelecionar={vi.fn()} ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }} />);
     expect(screen.getByTestId('calculo-incendio-motivo').textContent).toMatch(/sem bomba/);
     expect(screen.queryByTestId('calculo-incendio-trechos')).toBeNull();
+  });
+
+  it('E2.4: a conferência aparece com os três estados, e o item que falta seleciona as peças', async () => {
+    const m = modelo();
+    const hip = { ...HIP, pressaoMaximaKpa: 300 };
+    const c = calculoDeIncendio(m, hip);
+    const onSelecionar = vi.fn();
+    render(<PainelCalculoIncendio hip={hip} onHip={vi.fn()} calculo={c} nomeDe={() => 'H-1'} onSelecionar={onSelecionar} ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }} conferencia={conferenciaDeIncendio(m, c, hip)} />);
+    const t = screen.getByTestId('calculo-incendio-conferencia');
+    expect(t.textContent).toContain('Atende');
+    expect(t.textContent).toContain('Falta');
+    expect(t.textContent).toContain('Não avaliado');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Pressão estática nos hidrantes' }));
+    expect(onSelecionar).toHaveBeenCalledWith([m.terminais!.find((x) => x.tipoHidraulico === 'HIDRANTE_SIMPLES')!.id]);
   });
 
   it('trocar a fórmula grava a premissa', async () => {

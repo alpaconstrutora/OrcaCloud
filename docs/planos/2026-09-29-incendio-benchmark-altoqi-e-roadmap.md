@@ -1601,7 +1601,7 @@ Fecha o **bloco 6** e os achados 1, 3 e 8. Abre o motor 1.
 
 Fecha o **bloco 1**.
 
-## Etapa 2 — Motor hidráulico · sem bump · 4 fases · **em andamento (2.1, 2.2 e 2.3 ✅ 30/09/2026)**
+## Etapa 2 — Motor hidráulico · sem bump · 4 fases · **✅ CONCLUÍDA em 30/09/2026 (4 de 4, sem bump)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1879,4 +1879,30 @@ cálculo da 2.3.
   (mangueira, conferido à mão) + 3,8 (tubos) + 1,0 (desnível). Equilíbrio: 300,0 × 304,9 L/min.
 - **Testes:** 13 (fórmulas/solver) + 12 (cálculo) + 4 (painel). Suíte com 6.512 testes: 6.479 + 33
   pulados, 0 pendentes. Build ok.
+
+### Etapa 2.4 — 30/09/2026 (frente `incendio-e2`, sem bump)
+
+- **Diagnóstico do lançamento** (`utils/blueprintConferenciaIncendio.ts`): barato e sempre ligado,
+  entra em `marcasDeVerificacao`.
+  - `INCENDIO_FORA_DA_REDE`: peça de nó sem tubo chegando.
+  - `INCENDIO_SEM_BOMBA`: uma marca por pedaço de rede com consumidor que não chega à bomba (a
+    "falta de fluxo de entrada").
+  - `INCENDIO_DN_PECA`: tubo abaixo do DN mínimo da peça (a "peça subdimensionada").
+  - A tubulação de incêndio entrou no filtro de estrutura: `ATRAVESSA_PILAR` e `CRUZA_VIGA` (o
+    "tubulação × viga" do AltoQi).
+  - A ponta aberta já vinha das conexões derivadas.
+- **Diagnóstico do cálculo**, só com a tarefa aberta (é bisseção por hidrante):
+  `INCENDIO_VELOCIDADE`, `INCENDIO_PRESSAO_ALTA` (estática) e `INCENDIO_NAO_ATENDE`. O canvas
+  ganhou a prop `marcasDoCalculo`.
+- **Conferência** em três estados + "não avaliado", com o grupo (NBR 13714 / CBMMG / Lançamento):
+  bomba ligada, toda peça recebe água, DN das peças, vazão dos N mais desfavoráveis, velocidade,
+  pressão estática, simultaneidade e RTI (não avaliada até a E3.2).
+  - Sem bomba, o cálculo fica NÃO AVALIADO; nunca aparece "atende" por omissão (teste).
+  - O item que falta seleciona as peças.
+- **Tela:** o painel do cálculo ganhou a conferência e a lista "Verificação da rede" de incêndio.
+- **Fica para depois:** "peça contra o sentido do fluxo" (retenção/VGA). O ponto não tem direção
+  declarada; entra quando a bomba ganhar sucção/recalque na E4. "Peça superdimensionada" também
+  ficou de fora: não há critério de norma à mão.
+- **Testes:** `blueprintConferenciaIncendio.test.ts` (9) e o painel (5). Suíte com 6.544 testes:
+  6.511 + 33 pulados, 0 pendentes. Build ok.
 

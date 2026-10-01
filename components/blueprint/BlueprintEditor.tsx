@@ -222,6 +222,7 @@ import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
 import PainelCalculoIncendio from './PainelCalculoIncendio';
 import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
+import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
@@ -7296,6 +7297,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica],
   );
+  /** E2.4: as marcas do cálculo (velocidade, pressão máxima, não atende) — no desenho só com a tarefa aberta. */
+  const marcasDoCalculoIncendio = useMemo(
+    () => (calculoHidraulicoDeIncendio ? marcasDoCalculoDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica) : []),
+    [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+  );
   const ajusteDeDnDeIncendio = useMemo(
     () => (calculoHidraulicoDeIncendio?.cenario ? ajustarDnDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
     [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
@@ -12563,6 +12569,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           ) : (
             <BlueprintCanvas
               pressoesDaAgua={pressoesDaAgua}
+              marcasDoCalculo={marcasDoCalculoIncendio}
               encaixesAtivos={encaixesAtivos}
               mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos}
               model={editor.model}
@@ -14092,7 +14099,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     if (ajusteDeDnDeIncendio?.comandos.length) editor.runBatch(ajusteDeDnDeIncendio.comandos);
                   },
                 }}
+                conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica)}
               />
+              <div className="mt-4">
+                <PainelVerificacaoDaRede marcas={[...marcasDaRede, ...marcasDoCalculoIncendio]} disciplinas={['INCENDIO']} onSelecionar={selecionar} />
+              </div>
             </div>
           )}
 

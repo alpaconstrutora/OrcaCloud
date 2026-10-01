@@ -30,6 +30,11 @@ const fetchWithTimeout: typeof fetch = (input, init) => {
         .finally(() => clearTimeout(timer));
 };
 
+/** Para chamadas que precisam de corte de tempo PRÓPRIO, fora dos 20 s do client
+ *  global — hoje só o motor de conciliação na Edge (26–61 s na Alpa). */
+export const SUPABASE_URL: string = supabaseUrl;
+export const SUPABASE_ANON_KEY: string = supabaseAnonKey;
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     global: { fetch: fetchWithTimeout },
 });

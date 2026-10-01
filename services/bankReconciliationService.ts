@@ -1,4 +1,8 @@
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { decidirAposMotorServidor, MOTOR_JA_RODANDO, type ResultadoDaChamada } from '../utils/motorServidor';
+
+/** Corte da chamada ao motor na Edge — ela leva 26–61 s na Alpa; o teto da Edge é de minutos. */
+const MOTOR_TIMEOUT_MS = 180_000;
 // As decisões (o que casa com o quê) moram num módulo SEM dependências, para que o
 // servidor possa rodar exatamente as mesmas regras — item 3.3 do plano. O serviço
 // cuida do banco; `utils/reconciliationRules` cuida do julgamento.
@@ -879,39 +883,64 @@ export const bankReconciliationService = {
         // Ela registra a própria execução em `reconciliation_runs`, então NÃO se abre
         // registro aqui antes de tentar — duas linhas para a mesma rodada seriam pior do
         // que nenhuma.
-        try {
-            const { data, error } = await supabase.functions.invoke('reconciliation-engine', {
-                body: { bank_account_id: bankAccountId, trigger },
-            });
-            if (error) throw error;
-            const r = data as Record<string, number>;
-            return {
-                autoApplied: r.auto_matched ?? 0,
-                suggestions: r.suggestions ?? 0,
-                exactUnique: r.exact_unique ?? 0,
-                transfersPaired: r.transfers_paired ?? 0,
-                bankRowsScanned: r.bank_rows_scanned ?? 0,
-                titleRowsScanned: r.title_rows_scanned ?? 0,
-            };
-        } catch (e) {
-            // Cair para o navegador é DEGRADAÇÃO, não plano B silencioso: se a function
-            // estiver fora do ar, é melhor conciliar mais devagar do que não conciliar.
-            // O aviso fica no console para que "por que demorou?" tenha resposta.
-            console.warn('[Motor] servidor indisponível, rodando no navegador:', e);
+        // A chamada sai do client global de propósito: ele corta em 20 s, e na Alpa a Edge
+        // leva 26–61 s. Cortada, ela caía no `catch` abaixo e rodava o motor DE NOVO no
+        // navegador, com a Edge ainda trabalhando — dois motores na mesma conta (01/10/2026).
+        // Agora: corte próprio de 3 min, e só cai para o navegador quando o servidor NÃO
+        // está rodando (`decidirAposMotorServidor`, utils/motorServidor.ts).
+        {
+            let resultado: ResultadoDaChamada;
+            try {
+                const { data: sessao } = await supabase.auth.getSession();
+                const resp = await fetch(`${SUPABASE_URL}/functions/v1/reconciliation-engine`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        apikey: SUPABASE_ANON_KEY,
+                        Authorization: `Bearer ${sessao.session?.access_token ?? SUPABASE_ANON_KEY}`,
+                    },
+                    body: JSON.stringify({ bank_account_id: bankAccountId, trigger }),
+                    signal: AbortSignal.timeout(MOTOR_TIMEOUT_MS),
+                });
+                resultado = { tipo: 'resposta', status: resp.status, corpo: await resp.json().catch(() => null) };
+            } catch (e) {
+                const nome = (e as { name?: string })?.name;
+                resultado = nome === 'TimeoutError' || nome === 'AbortError'
+                    ? { tipo: 'cortada' }
+                    : { tipo: 'sem_rede', mensagem: e instanceof Error ? e.message : String(e) };
+            }
+            const decisao = decidirAposMotorServidor(resultado);
+            if (decisao.acao === 'erro') throw new Error(decisao.mensagem);
+            if (decisao.acao === 'usar') {
+                const r = decisao.corpo;
+                return {
+                    autoApplied: r.auto_matched ?? 0,
+                    suggestions: r.suggestions ?? 0,
+                    exactUnique: r.exact_unique ?? 0,
+                    transfersPaired: r.transfers_paired ?? 0,
+                    bankRowsScanned: r.bank_rows_scanned ?? 0,
+                    titleRowsScanned: r.title_rows_scanned ?? 0,
+                };
+            }
+            // Cair para o navegador é DEGRADAÇÃO, não plano B silencioso: só quando o
+            // servidor não está rodando. O aviso fica no console para "por que demorou?".
+            console.warn('[Motor] rodando no navegador —', decisao.motivo);
         }
 
         const inicio = Date.now();
         let runId: string | null = null;
-        try {
-            const { data } = await supabase
+        {
+            const { data, error } = await supabase
                 .from('reconciliation_runs')
                 .insert({ organization_id: orgId, bank_account_id: bankAccountId, trigger, status: 'RUNNING' })
                 .select('id')
                 .single();
+            // Índice único `uq_reconciliation_runs_uma_rodando_por_conta`: outra execução
+            // (servidor ou outra aba) está rodando nesta conta — não roda uma segunda.
+            if (error?.code === '23505') throw new Error(MOTOR_JA_RODANDO);
+            // Outro erro de registro continua não impedindo de conciliar.
+            if (error) console.warn('[Motor] início da execução não registrado:', error);
             runId = data?.id ?? null;
-        } catch (e) {
-            // Não poder registrar não pode impedir de conciliar.
-            console.warn('[Motor] início da execução não registrado:', e);
         }
 
         try {
@@ -1027,12 +1056,12 @@ export const bankReconciliationService = {
             regras.planMatching(bankTxs, candidatesAll, settings, partyIndex);
 
         // 3) Grava em lote: limpa sugestões antigas e insere as novas (poucas requisições)
+        //    Numa transação só (`fn_replace_suggestions`): antes era apagar todas em lotes e
+        //    só depois regravar — cair no meio deixava a conta sem sugestão.
         const allBankIds = bankTxs.map(b => b.id);
-        for (let i = 0; i < allBankIds.length; i += 100) {
-            await supabase.from('reconciliation_suggestions').delete().in('bank_transaction_id', allBankIds.slice(i, i + 100));
-        }
-        for (let i = 0; i < suggestionRows.length; i += 200) {
-            await supabase.from('reconciliation_suggestions').insert(suggestionRows.slice(i, i + 200));
+        {
+            const { error: erroSug } = await supabase.rpc('fn_replace_suggestions', { p_bank_ids: allBankIds, p_rows: suggestionRows });
+            if (erroSug) throw erroSug;
         }
 
         // 3.5) Carimba a contraparte reconhecida no extrato (mudança de reclassificação,

@@ -106,16 +106,6 @@ async function carregarContrapartes(servico: SupabaseLike, orgId: string): Promi
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-    let corpo: { bank_account_id?: string; trigger?: string };
-    try {
-        corpo = await req.json();
-    } catch {
-        return json({ error: 'Corpo inválido.' }, 400);
-    }
-
-    const contaId = corpo.bank_account_id;
-    if (!contaId) return json({ error: 'bank_account_id é obrigatório.' }, 400);
-
     // ── Quem está chamando, ANTES de tocar no banco ──────────────────────────
     //
     // A ordem aqui é regra, não estilo. Enquanto a busca da conta vinha primeiro,
@@ -137,6 +127,19 @@ serve(async (req: Request) => {
         const usuario = await exigirUsuario(req);
         if (!usuario.ok) return respostaDeErro(usuario, corsHeaders);
     }
+
+    // O corpo só é lido DEPOIS da credencial (01/10/2026): antes, `curl -d '{}'` sem
+    // cabeçalho recebia 400 "bank_account_id é obrigatório" em vez de 401 — não vazava
+    // dado, mas a prova da REGRA #7 (pergunta 3) é exatamente essa chamada.
+    let corpo: { bank_account_id?: string; trigger?: string };
+    try {
+        corpo = await req.json();
+    } catch {
+        return json({ error: 'Corpo inválido.' }, 400);
+    }
+
+    const contaId = corpo.bank_account_id;
+    if (!contaId) return json({ error: 'bank_account_id é obrigatório.' }, 400);
 
     const url = Deno.env.get('SUPABASE_URL')!;
     const servico = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
@@ -173,13 +176,31 @@ serve(async (req: Request) => {
     const orgId = conta.organization_id;
     const inicio = Date.now();
 
+    // ── Uma execução por conta (plano 2026-10-01-conciliacao-motor-duplicado) ──
+    //
+    // Até 01/10/2026 o navegador desistia desta chamada aos 20 s (a Alpa leva 26–61 s),
+    // rodava o motor de novo no navegador, e eram DOIS motores na mesma conta —
+    // timeouts de 8 s e execuções presas em RUNNING. A trava é o índice único parcial
+    // `uq_reconciliation_runs_uma_rodando_por_conta`: quem registra depois recebe 23505.
+    // Antes de registrar, a RUNNING desta conta com mais de 10 min é dada como morta
+    // (função derrubada não chega a gravar FAILED) — senão ela travaria a conta para sempre.
+    await servico.from('reconciliation_runs').update({
+        status: 'FAILED', error_code: 'INTERRUPTED',
+        error_message: 'Interrompida: ficou sem resposta por mais de 10 minutos (execução concorrente ou função derrubada).',
+        finished_at: new Date().toISOString(),
+    }).eq('bank_account_id', contaId).eq('status', 'RUNNING').lt('started_at', new Date(Date.now() - 10 * 60_000).toISOString());
+
     let runId: string | null = null;
-    try {
-        const { data: run } = await servico.from('reconciliation_runs')
+    {
+        const { data: run, error: erroRun } = await servico.from('reconciliation_runs')
             .insert({ organization_id: orgId, bank_account_id: contaId, trigger: gatilho, status: 'RUNNING', created_by: quemPediu })
             .select('id').single();
+        if (erroRun?.code === '23505') {
+            return json({ error: 'Já há uma execução do motor rodando nesta conta. Aguarde ela terminar.', code: 'ALREADY_RUNNING' }, 409);
+        }
+        // Outro erro de registro continua não impedindo de conciliar (era assim antes).
         runId = run?.id ?? null;
-    } catch { /* registro é melhor-esforço; não pode impedir de conciliar */ }
+    }
 
     try {
         // ── 1. Transferências entre contas da própria organização ──
@@ -244,15 +265,14 @@ serve(async (req: Request) => {
         const partyIndex = await carregarContrapartes(servico, orgId);
         const plano = planMatching(movimentos, titulos, settings, partyIndex);
 
-        // 2.a) Sugestões: apaga as da conta e regrava. Em lotes, porque o PostgREST tem
-        //      limite de tamanho de requisição e a lista chega a centenas de linhas.
+        // 2.a) Sugestões: troca numa transação só (`fn_replace_suggestions`). Antes era
+        //      apagar TODAS as da conta em lotes e só depois regravar — se a função caísse
+        //      no meio, a conta ficava sem sugestão até o próximo Reprocessar.
         const idsDoExtrato = movimentos.map(m => m.id);
-        for (let i = 0; i < idsDoExtrato.length; i += 100) {
-            await servico.from('reconciliation_suggestions').delete().in('bank_transaction_id', idsDoExtrato.slice(i, i + 100));
-        }
-        for (let i = 0; i < plano.suggestionRows.length; i += 200) {
-            await servico.from('reconciliation_suggestions').insert(plano.suggestionRows.slice(i, i + 200));
-        }
+        const { error: erroSug } = await servico.rpc('fn_replace_suggestions', {
+            p_bank_ids: idsDoExtrato, p_rows: plano.suggestionRows,
+        });
+        if (erroSug) throw erroSug;
 
         // 2.b) Carimba no extrato a contraparte reconhecida por CNPJ/PIX/alias.
         for (const [nome, ids] of plano.partyUpdates) {

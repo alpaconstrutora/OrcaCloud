@@ -34,6 +34,7 @@ import { HIPOTESES_EXTINTORES_PADRAO, hipotesesDeExtintoresDaColuna, type Hipote
 import { HIPOTESES_ILUMINACAO_PADRAO, hipotesesDeIluminacaoDaColuna, type HipotesesDeIluminacao } from './blueprintIluminacaoEmergencia';
 import { exigenciaMG } from './blueprintIncendioExigenciasMG';
 import { FONTE_IT01_MG } from './blueprintIncendioTabelasMG';
+import { ATIVIDADES_IT09, type AtividadeIT09 } from './blueprintIncendioAtividadesMG';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -95,6 +96,17 @@ export function normalizarDivisao(texto: string | null | undefined): string | nu
   return DIVISAO_VALIDA.test(d) ? d : null;
 }
 
+// ─── Atividades (IT 09, Tabela A.1) ──────────────────────────────────────────
+
+/** O rótulo da atividade: "descrição (divisão)" — a mesma descrição aparece no comércio e na indústria. */
+export function rotuloDaAtividade(a: AtividadeIT09): string {
+  return `${a[0]} (${a[1]})`;
+}
+const ATIVIDADE_POR_ROTULO = new Map(ATIVIDADES_IT09.map((a) => [rotuloDaAtividade(a), a]));
+export function atividadeDoRotulo(rotulo: string | null | undefined): AtividadeIT09 | null {
+  return rotulo ? (ATIVIDADE_POR_ROTULO.get(rotulo) ?? null) : null;
+}
+
 // ─── Faixas de altura e níveis de carga ──────────────────────────────────────
 
 /** Tipo da edificação pela altura (m) — IT 08 do CBMMG, Tabela 1 (as mesmas faixas das colunas da IT 01). */
@@ -128,6 +140,11 @@ export interface HipotesesDeClassificacao {
   pisoDeDescargaLevelId: string | null;
   /** Carga de incêndio declarada (MJ/m²). `null` = a da tabela da divisão. */
   cargaDeclaradaMJm2: number | null;
+  /**
+   * D1.3: a ATIVIDADE da IT 09 (Tabela A.1), pelo rótulo "descrição (divisão)" — dá a divisão
+   * (quando não declarada) e a carga (quando não declarada). `null` = não escolhida.
+   */
+  atividade?: string | null;
 }
 
 /** As premissas de incêndio do estudo (`blueprint_study_incendio.hipoteses`). Cresce por grupo a cada etapa. */
@@ -150,7 +167,7 @@ export interface HipotesesIncendio {
 }
 
 export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
-  classificacao: { preset: 'MG_CBMMG', divisao: null, alturaDeclaradaM: null, pisoDeDescargaLevelId: null, cargaDeclaradaMJm2: null },
+  classificacao: { preset: 'MG_CBMMG', divisao: null, alturaDeclaradaM: null, pisoDeDescargaLevelId: null, cargaDeclaradaMJm2: null, atividade: null },
   hidraulica: HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO,
   rede: HIPOTESES_REDE_DE_HIDRANTES_PADRAO,
   bombeamento: HIPOTESES_BOMBEAMENTO_PADRAO,
@@ -174,6 +191,7 @@ export function hipotesesIncendioDaColuna(raw: unknown): HipotesesIncendio {
       alturaDeclaradaM: numeroOuNulo(c.alturaDeclaradaM, 0),
       pisoDeDescargaLevelId: typeof c.pisoDeDescargaLevelId === 'string' && c.pisoDeDescargaLevelId ? c.pisoDeDescargaLevelId : null,
       cargaDeclaradaMJm2: numeroOuNulo(c.cargaDeclaradaMJm2, 0),
+      atividade: typeof c.atividade === 'string' && atividadeDoRotulo(c.atividade) ? c.atividade : null,
     },
     hidraulica: hipotesesHidraulicasDaColuna(r.hidraulica),
     rede: hipotesesDaRedeDaColuna(r.rede),
@@ -192,6 +210,8 @@ export type Origem = 'DECLARADA' | 'SUGERIDA' | 'DERIVADA' | 'TABELA' | 'SEM';
 export interface ClassificacaoDaEdificacao {
   preset: PresetDeBombeiros;
   divisao: { valor: string | null; origem: Origem; motivo: string };
+  /** D1.3: a atividade da IT 09 (rótulo), quando escolhida e encontrada. */
+  atividade?: string | null;
   grupo: { grupo: string; nome: string } | null;
   altura: { valorM: number; origem: Origem; descarga: string | null; ultimo: string | null };
   tipoPorAltura: (typeof FAIXAS_DE_ALTURA)[number];
@@ -244,11 +264,16 @@ export function divisaoSugerida(model: BlueprintModel): { divisao: string | null
 export function classificarEdificacao(model: BlueprintModel, hip: HipotesesDeClassificacao): ClassificacaoDaEdificacao {
   const pendencias: string[] = [];
 
-  // Divisão: declarada vence a sugerida.
+  // Divisão: declarada vence a da atividade (IT 09), que vence a sugerida pelos ambientes.
   const sugerida = divisaoSugerida(model);
+  const atividade = atividadeDoRotulo(hip.atividade);
+  if (hip.atividade && !atividade) pendencias.push(`A atividade "${hip.atividade}" não está na Tabela A.1 da IT 09 — escolha de novo.`);
+  if (atividade && hip.divisao && hip.divisao !== atividade[1]) pendencias.push(`A atividade "${atividade[0]}" é da divisão ${atividade[1]} na IT 09, mas a divisão declarada é ${hip.divisao}.`);
   const divisao = hip.divisao
     ? { valor: hip.divisao, origem: 'DECLARADA' as const, motivo: 'declarada nas premissas' }
-    : sugerida.divisao
+    : atividade
+      ? { valor: atividade[1], origem: 'TABELA' as const, motivo: `da atividade "${atividade[0]}" — IT 09 do CBMMG, Tabela A.1` }
+      : sugerida.divisao
       ? { valor: sugerida.divisao, origem: 'SUGERIDA' as const, motivo: sugerida.motivo }
       : { valor: null, origem: 'SEM' as const, motivo: sugerida.motivo };
   if (!divisao.valor) pendencias.push('Declare a divisão de ocupação (ex.: A-2).');
@@ -268,18 +293,20 @@ export function classificarEdificacao(model: BlueprintModel, hip: HipotesesDeCla
   const areaPorPavimento = niveisOrdenados(model).map((l) => ({ levelId: l.id, nome: l.name, areaM2: areaConstruidaMm2(model, l) / 1e6 }));
   const areaTotalM2 = areaPorPavimento.reduce((s, p) => s + p.areaM2, 0);
 
-  // Carga de incêndio: declarada vence a tabela.
-  const daTabela = divisao.valor ? DIVISOES_TRANSCRITAS[divisao.valor]?.cargaMJm2 : undefined;
+  // Carga de incêndio: declarada vence a da atividade (IT 09, Tabela A.1), que vence a da divisão (grupo A).
+  if (atividade && atividade[2] == null && hip.cargaDeclaradaMJm2 == null) pendencias.push(`A carga da atividade "${atividade[0]}" segue "${atividade[3] ?? 'outro anexo'}" da IT 09 — declare-a (MJ/m²).`);
+  const daTabela = atividade && atividade[2] != null ? atividade[2] : atividade ? undefined : divisao.valor ? DIVISOES_TRANSCRITAS[divisao.valor]?.cargaMJm2 : undefined;
   const carga = hip.cargaDeclaradaMJm2 != null
     ? { valorMJm2: hip.cargaDeclaradaMJm2, origem: 'DECLARADA' as const }
     : daTabela != null
       ? { valorMJm2: daTabela, origem: 'TABELA' as const }
       : { valorMJm2: null, origem: 'SEM' as const };
-  if (carga.valorMJm2 == null && divisao.valor) pendencias.push(`A carga de incêndio da divisão ${divisao.valor} não foi transcrita: declare-a (MJ/m²).`);
+  if (carga.valorMJm2 == null && divisao.valor && !atividade) pendencias.push(`A carga de incêndio da divisão ${divisao.valor} sai da ATIVIDADE (IT 09, Tabela A.1): escolha-a, ou declare a carga (MJ/m²).`);
 
   return {
     preset: hip.preset,
     divisao,
+    atividade: atividade ? rotuloDaAtividade(atividade) : null,
     grupo,
     altura,
     tipoPorAltura: tipoPorAltura(altura.valorM),

@@ -414,7 +414,15 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
         aberto (só a escada chega) ficava sem acionador. Agora o centro do ambiente também é
         candidato;
   - D1.2 fechada: IT 17, 08, 18, 16, 15, 13, 14 publicadas (uma por push).
-  - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
+  - [x] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES: 605 linhas lidas pela grade do
+    PDF (a contagem de cada página bate com os códigos de divisão do texto; pp. 6, 13, 17 e 21
+    conferidas linha a linha pela imagem), em `docs/normas/incendio-mg/it09-tabela-a1.tsv`;
+    `blueprintIncendioAtividadesMG.ts` é gerado dele. A premissa `atividade` ("descrição
+    (divisão)" — 4 descrições existem no comércio e na indústria) dá a divisão e a carga quando
+    não declaradas; carga que remete aos Anexos B/C pede declaração; divisão declarada diferente
+    da da atividade vira pendência. No painel: campo de busca com as 605 atividades.
+- **D1 FECHADA** (D1.1 exigências, D1.2 as sete ITs, D1.3 atividades). Seguem CONFERIR só os
+  valores das NBR 10897, 10898 e 17240, que as ITs adotam e não estão entre os textos.
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):
   - [x] **Kernel 0.89.0** (um bump para os dois tipos novos; goldens 7/7 antes, 6 hashes e 22 pinos

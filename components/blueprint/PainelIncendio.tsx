@@ -9,6 +9,7 @@
  */
 import React from 'react';
 import type { Level } from '../../utils/blueprintKernel';
+import { ATIVIDADES_IT09 } from '../../utils/blueprintIncendioAtividadesMG';
 import {
   PRESETS_DE_BOMBEIROS,
   ROTULO_DO_PRESET,
@@ -18,6 +19,8 @@ import {
   type ExigenciasDaEdificacao,
   type HipotesesDeClassificacao,
   type PresetDeBombeiros,
+  atividadeDoRotulo,
+  rotuloDaAtividade,
 } from '../../utils/blueprintIncendioClassificacao';
 
 interface Props {
@@ -37,7 +40,7 @@ const ORIGEM: Record<string, string> = {
   DECLARADA: 'declarada',
   SUGERIDA: 'sugerida pelos ambientes',
   DERIVADA: 'derivada dos pavimentos',
-  TABELA: 'tabela da divisão',
+  TABELA: 'tabela da IT 09',
   SEM: 'sem valor',
 };
 
@@ -69,6 +72,9 @@ function CampoNumero({ valor, onValor, rotulo, placeholder, passo }: { valor: nu
 
 export default function PainelIncendio({ hip, onHip, classificacao: c, exigencias: e, niveis, persistenciaIndisponivel }: Props) {
   const [divisaoDigitada, setDivisaoDigitada] = React.useState(hip.divisao ?? '');
+  const [atividadeDigitada, setAtividadeDigitada] = React.useState(hip.atividade ?? '');
+  React.useEffect(() => setAtividadeDigitada(hip.atividade ?? ''), [hip.atividade]);
+  const atividadeInvalida = atividadeDigitada.trim() !== '' && !atividadeDoRotulo(atividadeDigitada);
   React.useEffect(() => setDivisaoDigitada(hip.divisao ?? ''), [hip.divisao]);
   const divisaoInvalida = divisaoDigitada.trim() !== '' && normalizarDivisao(divisaoDigitada) == null;
 
@@ -94,6 +100,30 @@ export default function PainelIncendio({ hip, onHip, classificacao: c, exigencia
               <option key={p} value={p}>{ROTULO_DO_PRESET[p]}</option>
             ))}
           </select>
+        </label>
+        {/* D1.3: a atividade da IT 09 (Tabela A.1) dá a divisão e a carga de incêndio. */}
+        <label className="flex min-w-0 items-center gap-1.5">
+          Atividade
+          <input
+            type="text"
+            list="incendio-atividades-it09"
+            value={atividadeDigitada}
+            placeholder="busque na Tabela A.1 da IT 09"
+            onChange={(ev) => {
+              const v = ev.target.value;
+              setAtividadeDigitada(v);
+              if (v.trim() === '') onHip({ ...hip, atividade: null });
+              else if (atividadeDoRotulo(v)) onHip({ ...hip, atividade: v });
+            }}
+            aria-label="Atividade da edificação (IT 09, Tabela A.1)"
+            aria-invalid={atividadeInvalida}
+            className={`w-64 min-w-0 ${campo} ${atividadeInvalida ? 'border-red-400' : ''}`}
+          />
+          <datalist id="incendio-atividades-it09">
+            {ATIVIDADES_IT09.map((a) => (
+              <option key={rotuloDaAtividade(a)} value={rotuloDaAtividade(a)} />
+            ))}
+          </datalist>
         </label>
         <label className="flex items-center gap-1.5">
           Divisão
@@ -214,8 +244,9 @@ export default function PainelIncendio({ hip, onHip, classificacao: c, exigencia
 
       <p className="text-xs text-slate-500">
         A altura é a do regulamento de incêndio: do piso do pavimento de descarga ao piso do último pavimento com ambientes
-        (barrilete, casa de máquinas e ático não contam). "Sem tabela" quer dizer que a regra ainda não foi transcrita:
-        nunca é "dispensada".
+        (barrilete, casa de máquinas e ático não contam). A divisão e a carga saem da atividade (IT 09, Tabela A.1) quando
+        não declaradas. "Sem tabela" é o que o texto da IT 01 não cobre (divisão fora das tabelas, G-3 acima de 12 m,
+        Tabela 17): nunca é "dispensada".
       </p>
     </div>
   );

@@ -40,7 +40,7 @@ describe('premissas gravadas', () => {
   it('coluna vazia = padrão MG; tipo errado vira padrão; divisão é normalizada', () => {
     expect(hipotesesIncendioDaColuna(null)).toEqual(HIPOTESES_INCENDIO_PADRAO);
     const h = hipotesesIncendioDaColuna({ classificacao: { preset: 'XX', divisao: ' a2 ', alturaDeclaradaM: 'alto', cargaDeclaradaMJm2: -5, pisoDeDescargaLevelId: 7 } });
-    expect(h.classificacao).toEqual({ preset: 'MG_CBMMG', divisao: 'A-2', alturaDeclaradaM: null, pisoDeDescargaLevelId: null, cargaDeclaradaMJm2: null });
+    expect(h.classificacao).toEqual({ preset: 'MG_CBMMG', divisao: 'A-2', alturaDeclaradaM: null, pisoDeDescargaLevelId: null, cargaDeclaradaMJm2: null, atividade: null });
     expect(normalizarDivisao('Z-2')).toBeNull();
     expect(normalizarDivisao('c-12')).toBe('C-12');
   });

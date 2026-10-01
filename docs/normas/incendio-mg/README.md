@@ -23,13 +23,13 @@ extraído do PDF embaralha as colunas das tabelas.
 | IT 08 (Portaria 69/2022), Tabelas 3 a 6 + 5.4.2, 5.5.2 e 5.5.4.3 → [`it08-tabelas.txt`](it08-tabelas.txt) | `utils/blueprintIncendioSaidasMG.ts`: população e capacidade por divisão, mínimo de UP, luz das portas, escada e número de saídas, percurso até o local seguro | `__tests__/incendioSaidasMG.test.ts` relê o `.txt` |
 | IT 09, item 5.10 — risco pela carga (≤ 300 · ≤ 1.200 · acima, MJ/m²) | `nivelDeCarga` | idem |
 | IT 09, Tabela A.1 — carga do grupo A (300 MJ/m²) | `DIVISOES_TRANSCRITAS` | idem |
+| IT 09 (Portaria 61/2020), Tabela A.1 inteira — 605 atividades → [`it09-tabela-a1.tsv`](it09-tabela-a1.tsv) | `utils/blueprintIncendioAtividadesMG.ts` (gerado do `.tsv`); a premissa `atividade` dá a divisão e a carga | `__tests__/incendioAtividadesMG.test.ts` confere linha a linha |
 | IT 17 (Portaria 70/2022), Tabelas 2 e 4 + itens 5.3 a 5.18 → [`it17-tabelas.txt`](it17-tabelas.txt) | `utils/blueprintIncendioHidrantesMG.ts`: tipo de sistema e reserva pela Tabela 4, vazões e mangueiras pela Tabela 2, jato fora da cobertura (5.8.2) | `__tests__/incendioHidrantesMG.test.ts` relê o `.txt` |
 
 ## Ainda por transcrever (as constantes seguem marcadas `CONFERIR` no código)
 
 | Texto | Destrava |
 |---|---|
-| IT 09, Tabela A.1 inteira (cerca de 600 atividades → divisão + carga) | escolher a ATIVIDADE em vez de declarar divisão e carga |
 | NBR 10897 (adotada pela IT 18) — chuveiros automáticos | E5: risco, densidade, área de operação, duração |
 | NBR 10898 (adotada pela IT 13) — iluminação de emergência | E7.3: autonomia mínima |
 | NBR 17240 (a IT 14 remete a ela) — detecção | E7.4: raios dos detectores e cone de chama |

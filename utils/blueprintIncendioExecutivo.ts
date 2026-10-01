@@ -143,6 +143,8 @@ function secaoDaClassificacao(a: AnalisesDeIncendio): BlocoDoMemorial[] {
       cabecalho: ['Item', 'Valor', 'Origem'],
       linhas: [
         ['Regulamento', ROTULO_DO_PRESET[c.preset], '—'],
+        // D1.3: a atividade da IT 09 (Tabela A.1), quando escolhida.
+        ...(c.atividade ? [['Atividade', c.atividade, 'IT 09 do CBMMG, Tabela A.1']] : []),
         ['Ocupação (divisão)', c.divisao.valor ? `${c.divisao.valor}${c.grupo ? ` — ${c.grupo.nome}` : ''}` : 'não definida', c.divisao.motivo],
         ['Altura para incêndio', `${um(c.altura.valorM, 2)} m — tipo ${c.tipoPorAltura.tipo} (${c.tipoPorAltura.nome})`, c.altura.descarga && c.altura.ultimo ? `de ${c.altura.descarga} a ${c.altura.ultimo}` : c.altura.origem],
         ['Área construída', `${um(c.areaTotalM2, 2)} m² em ${c.pavimentos} pavimento(s)`, 'do desenho'],

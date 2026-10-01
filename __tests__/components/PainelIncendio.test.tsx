@@ -46,6 +46,19 @@ describe('PainelIncendio', () => {
     expect(screen.getByTestId('incendio-classificacao')).toHaveTextContent('sugerida pelos ambientes');
   });
 
+  it('D1.3: a atividade da IT 09 grava pelo rótulo; texto que não é atividade avisa e não grava; vazio limpa', () => {
+    const onHip = montar();
+    const campo = screen.getByLabelText('Atividade da edificação (IT 09, Tabela A.1)');
+    fireEvent.change(campo, { target: { value: 'Quartéis (H-4)' } });
+    expect(onHip).toHaveBeenLastCalledWith(expect.objectContaining({ atividade: 'Quartéis (H-4)' }));
+    onHip.mockClear();
+    fireEvent.change(campo, { target: { value: 'Quart' } });
+    expect(onHip).not.toHaveBeenCalled();
+    expect(campo).toHaveAttribute('aria-invalid', 'true');
+    fireEvent.change(campo, { target: { value: '' } });
+    expect(onHip).toHaveBeenLastCalledWith(expect.objectContaining({ atividade: null }));
+  });
+
   it('divisão válida grava normalizada; inválida avisa e não grava', () => {
     const onHip = montar();
     const campo = screen.getByLabelText(/Divisão de ocupação declarada/);

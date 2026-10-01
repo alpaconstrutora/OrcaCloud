@@ -54,6 +54,34 @@ visual, registrado em `2026-09-30-conciliacao-central-migracao-visual.md` › Ac
 - **Não visto:** a aba Pendentes, que também usa as sugestões ("Conciliar Agora" na linha). Os
   campos usados lá (`id`, `description` do título) estão na consulta nova.
 
+## Pedido posterior (01/10/2026)
+
+> conferir a aba Pendentes
+
+### O que a conferência achou e o que mudou
+
+- Na Pendentes, a consulta nova **saía depois** dos extratos, enquanto a tabela desenhava ~7.300
+  linhas (dos 15 s aos 56 s de navegador ocupado, medido). O corte de 20 s do cliente estourava
+  antes de a resposta ser processada (`Error loading suggestions: AbortError`), e a Pendentes
+  ficava sem sugestões. **A versão antiga sofre o mesmo** (medido: 0 sugestões na Pendentes).
+  O navegador sem tela também travou duas vezes ("Page crashed") nessa situação.
+- **Correção:** a consulta de sugestões entrou no mesmo `Promise.all` de extratos e lançamentos.
+  Ela não depende da lista de extratos (filtra por conta no banco), então chega antes do desenho
+  pesado, e as gravações de estado saem juntas numa renderização só.
+
+**Medido depois (navegador, conta de leitura, escritas bloqueadas = 0):**
+- Pendentes, Alpa: **340 linhas de sugestão** (= banco), todas com a descrição do título e o
+  botão "Conciliar Agora"; 1 requisição em 1,0 s; sem erro; sem travar.
+- Central, Alpa: 340 cartões, "Conciliar alta confiança (37)". Nessa rodada a consulta levou
+  **11,2 s**, porque agora disputa o banco com extratos e lançamentos (antes, sozinha, 1,4 s).
+  Fica abaixo do corte de 20 s, mas vale observar.
+- Troca de conta no meio (Alpa → Garden): ficou a Garden (1 cartão, Regras (0)).
+- `tsc` 0, `check-ui-standard` 0, suíte 6.529 + 33 = 6.562, exit 0.
+
+**Fora do escopo, registrado:** a Pendentes desenha todas as ~5.700 linhas de extrato de uma vez,
+sem virtualização nem paginação. É o que ocupa o navegador por ~40 s e encosta a memória da página
+em ~860 MB. Merece frente própria.
+
 ## Verificação
 `tsc`, `check-ui-standard`, suíte completa (conta fechando), navegador com escritas
 bloqueadas, contando requisições e tempo.

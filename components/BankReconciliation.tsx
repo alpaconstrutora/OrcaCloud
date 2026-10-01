@@ -1308,9 +1308,33 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             const orgForProj = effectiveOrgId || organizationId;
 
+            // Sugestões numa consulta SÓ por conta (antes: lotes de 100 extratos, todos em
+            // paralelo — 58 a 64 requisições na Alpa, ~16 s cada, colado no corte de 20 s;
+            // lote com erro sumia em silêncio e a Central mostrava 0 com 741 no banco).
+            // O extrato embutido `!inner` aplica os MESMOS recortes da lista de extratos
+            // (conta, status pendente, período), então NÃO depende da lista já carregada —
+            // e por isso vai no Promise.all abaixo, junto com extratos e lançamentos.
+            // Pedida depois (como era), ela ficava em voo enquanto a Pendentes desenhava
+            // ~7.300 linhas (~40 s de navegador ocupado) e estourava o corte de 20 s.
+            // Ordem por confiança desc: `topSuggestionByBankTxId` pega a primeira por extrato.
+            const buscarSugestoes = () => fetchAllPages<ReconciliationSuggestion>(() => {
+                let q = supabase
+                    .from('reconciliation_suggestions')
+                    .select(
+                        'id, bank_transaction_id, candidate_internal_transaction_id, confidence, reason, created_at, '
+                        + 'bank_transaction:bank_transaction_id!inner(bank_account_id, status, transaction_date), '
+                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
+                    )
+                    .eq('bank_transaction.bank_account_id', selectedAccountId)
+                    .in('bank_transaction.status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
+                if (effStart) q = q.gte('bank_transaction.transaction_date', effStart);
+                if (effEnd)   q = q.lte('bank_transaction.transaction_date', effEnd);
+                return q.order('confidence', { ascending: false }).order('id', { ascending: true }) as never;
+            });
+
             // Dispara em paralelo tudo que não depende uma da outra (supabase-js resolve com
             // { error } em vez de rejeitar, então uma falha aqui não derruba o Promise.all).
-            const [bankResult, iTxResult, projResult] = await Promise.all([
+            const [bankResult, iTxResult, projResult, sugResult] = await Promise.all([
                 fetchAllPages<BankTransaction>(buildBankQuery as never),
                 fetchAllPages<InternalTransaction>(buildITxQuery as never),
                 // --- PONTE COMERCIAL --- só relevante na aba Pendentes
@@ -1320,7 +1344,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             console.error('Erro na varredura total de projetos:', err);
                             return { data: [] as Array<{ id: string; name: string; settings: any }> };
                         })
-                    : Promise.resolve({ data: [] as Array<{ id: string; name: string; settings: any }> })
+                    : Promise.resolve({ data: [] as Array<{ id: string; name: string; settings: any }> }),
+                isPendingView ? buscarSugestoes() : Promise.resolve(null),
             ]);
 
             if (!vigente()) return;
@@ -1374,38 +1399,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             setInternalTransactions(finalITxs);
             void loadOriginCodes(finalITxs);
 
-            // Sugestões numa consulta SÓ por conta (antes: lotes de 100 extratos, todos em
-            // paralelo — 58 a 64 requisições na Alpa, ~16 s cada, colado no corte de 20 s;
-            // lote com erro sumia em silêncio e a Central mostrava 0 com 741 no banco).
-            // O extrato embutido `!inner` aplica os MESMOS recortes da lista de extratos
-            // (conta, status pendente, período). Só as colunas que Central e Pendentes usam.
-            // Ordem por confiança desc: `topSuggestionByBankTxId` pega a primeira por extrato.
-            if (isPendingView && bTxs && bTxs.length > 0) {
-                const { data: sugs, error: sError } = await fetchAllPages<ReconciliationSuggestion>(() => {
-                    let q = supabase
-                        .from('reconciliation_suggestions')
-                        .select(
-                            'id, bank_transaction_id, candidate_internal_transaction_id, confidence, reason, created_at, '
-                            + 'bank_transaction:bank_transaction_id!inner(bank_account_id, status, transaction_date), '
-                            + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
-                        )
-                        .eq('bank_transaction.bank_account_id', selectedAccountId)
-                        .in('bank_transaction.status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
-                    if (effStart) q = q.gte('bank_transaction.transaction_date', effStart);
-                    if (effEnd)   q = q.lte('bank_transaction.transaction_date', effEnd);
-                    return q.order('confidence', { ascending: false }).order('id', { ascending: true }) as never;
-                });
-                if (!vigente()) return;
-                if (sError) {
-                    console.error('Error loading suggestions:', sError);
-                    setActionFeedback({ message: 'Não foi possível carregar as sugestões: ' + errorMessage(sError, 'erro desconhecido'), type: 'error' });
+            // Sugestões (buscadas no Promise.all acima). Erro aparece, não some; sem extrato
+            // pendente nesta conta/período, zera (antes ficava a lista da conta ANTERIOR).
+            if (sugResult) {
+                if (sugResult.error) {
+                    console.error('Error loading suggestions:', sugResult.error);
+                    setActionFeedback({ message: 'Não foi possível carregar as sugestões: ' + errorMessage(sugResult.error, 'erro desconhecido'), type: 'error' });
                     setTimeout(() => setActionFeedback(null), 8000);
                 }
-                setSuggestions(sugs ?? []);
-            } else if (isPendingView) {
-                // Sem extrato pendente nesta conta/período: sem sugestão. Antes a lista da
-                // conta ANTERIOR ficava na tela.
-                setSuggestions([]);
+                setSuggestions(bTxs && bTxs.length > 0 ? (sugResult.data ?? []) : []);
             }
 
             if (activeView === 'conciliated') {

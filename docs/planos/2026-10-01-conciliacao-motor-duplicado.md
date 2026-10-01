@@ -75,9 +75,10 @@ e escolheu "Investigar o motor que estoura".
   `tsc` 0. Suíte: 6.567 passaram, 0 falharam. 19 testes do `BlueprintEditor.test.tsx` ficaram
   inacabados na hora do relatório (instabilidade conhecida do vitest aqui); isolado, ele passa:
   193/193.
-- [ ] **Prova ponta a ponta:** um Reprocessar real na Sicredi da Alpa, conferindo em
-  `reconciliation_runs` que sai UMA execução e que ela fecha (DONE/FAILED, não RUNNING). É escrita:
-  o usuário clica.
+- [x] **Prova ponta a ponta (01/10/2026, 12:53 UTC):** Reprocessar real na Sicredi da Alpa, clicado
+  pelo usuário ("funcionou"). Em `reconciliation_runs`: **uma** execução, DONE em **2,8 s** (antes
+  26–61 s), 5.709 extratos × 686 títulos, 741 sugestões; 0 RUNNING. As sugestões da conta seguem lá
+  (763 no total, 741 de extratos pendentes).
 
 ## Verificação
 Testes, `tsc`, `segurancaMigrations`, estado do banco depois da migration, `curl` 401 na Edge

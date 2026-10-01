@@ -1612,7 +1612,7 @@ Fecha o **bloco 1**.
 
 Fecha o **bloco 2**.
 
-## Etapa 3 — Hidrantes e reserva · kernel bump · 3 fases
+## Etapa 3 — Hidrantes e reserva · kernel bump · 3 fases · **em andamento (3.1 ✅ 30/09/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1905,4 +1905,29 @@ cálculo da 2.3.
   ficou de fora: não há critério de norma à mão.
 - **Testes:** `blueprintConferenciaIncendio.test.ts` (9) e o painel (5). Suíte com 6.544 testes:
   6.511 + 33 pulados, 0 pendentes. Build ok.
+
+### Etapa 3.1 — 30/09/2026 (frente `incendio-e3`, sem bump)
+
+- **`utils/blueprintRedeDeHidrantes.ts`** monta bomba → geral → colunas → ramais → hidrantes.
+  - Os hidrantes a até `raioDaColunaMm` em planta formam um grupo, e cada grupo vira **uma coluna**
+    (30 cm ao lado, para não sobrepor a descida). A coluna sobe da cota do ramal no pavimento da
+    bomba até o último pavimento com hidrante, partida em 0 / cota do ramal / teto em cada
+    pavimento, porque o kernel liga trecho a trecho pelas pontas e atravessa a laje pela chave.
+  - Em cada pavimento, um ramal no forro vai da coluna até sobre o hidrante e desce à válvula.
+  - O geral sobe da bomba e corre num tronco partido em cada x de coluna, com um braço por x (sem
+    tubo sobreposto).
+  - Tudo nasce `sugerido`. Relançar apaga os sugeridos anteriores no mesmo lote, e o hidrante já
+    ligado por tubo confirmado não é religado.
+  - Hidrante abaixo do pavimento da bomba gera um motivo dito na tela (a coluna sobe da bomba).
+- **`conferirPlanoDaRede`** aplica o lote numa cópia e prova que todo hidrante chega à bomba. O
+  botão Lançar fica desligado, com o motivo, se não chegar.
+- **Prova de ponta a ponta:** num prédio de 5 andares, a rede lançada se calcula pela E2, e o
+  hidrante mais desfavorável é o do último andar.
+- **Premissas:** o grupo `rede` no estudo (cota do ramal 2600, raio da coluna 2000, DN 65), sem
+  migration.
+- **Tela:** Incêndio → Automático → "Rede de hidrantes", com Lançar/Relançar e "Aceitar a rede".
+- **Conferência:** "Registro de recalque ligado à rede" (CBMMG, CONFERIR). A posição automática dele
+  depende do limite do lote (passeio) e ficou para depois.
+- **Testes:** planejador (6), painel (4) e o recalque na conferência (1). Suíte com 6.555 testes:
+  6.522 + 33 pulados, 0 pendentes. Build ok.
 

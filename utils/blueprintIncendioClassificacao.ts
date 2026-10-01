@@ -25,6 +25,7 @@
 import { areaConstruidaMm2, type BlueprintModel, type Level } from './blueprintKernel';
 import { usoDoNome } from './blueprintPrograma';
 import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO, hipotesesHidraulicasDaColuna, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
+import { HIPOTESES_REDE_DE_HIDRANTES_PADRAO, hipotesesDaRedeDaColuna, type HipotesesDaRedeDeHidrantes } from './blueprintRedeDeHidrantes';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -128,11 +129,14 @@ export interface HipotesesIncendio {
   classificacao: HipotesesDeClassificacao;
   /** E2.3 (30/09/2026): fórmula, simultaneidade, vazões/pressões mínimas, mangueira, limites. */
   hidraulica: HipotesesHidraulicasDeIncendio;
+  /** E3.1 (30/09/2026): cota do ramal, raio da coluna e DN de partida da rede automática. */
+  rede: HipotesesDaRedeDeHidrantes;
 }
 
 export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
   classificacao: { preset: 'MG_CBMMG', divisao: null, alturaDeclaradaM: null, pisoDeDescargaLevelId: null, cargaDeclaradaMJm2: null },
   hidraulica: HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO,
+  rede: HIPOTESES_REDE_DE_HIDRANTES_PADRAO,
 };
 
 const numeroOuNulo = (x: unknown, min: number): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= min ? x : null);
@@ -151,6 +155,7 @@ export function hipotesesIncendioDaColuna(raw: unknown): HipotesesIncendio {
       cargaDeclaradaMJm2: numeroOuNulo(c.cargaDeclaradaMJm2, 0),
     },
     hidraulica: hipotesesHidraulicasDaColuna(r.hidraulica),
+    rede: hipotesesDaRedeDaColuna(r.rede),
   };
 }
 

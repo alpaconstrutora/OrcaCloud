@@ -87,6 +87,15 @@ describe('E2.4 · diagnóstico do cálculo e conferência', () => {
     expect(itens.find((i) => i.item === 'Reserva técnica de incêndio')!.estado).toBe('NAO_AVALIADO');
   });
 
+  it('E3.1: registro de recalque — falta sem ele; atende quando ligado à rede', () => {
+    const m = rede();
+    const item = (x: BlueprintModel) => conferenciaDeIncendio(x, calculoDeIncendio(x, HIP), HIP).find((i) => i.item === 'Registro de recalque ligado à rede')!;
+    expect(item(m).estado).toBe('FALTA');
+    const l = m.levels[0].id;
+    const comRR = applyBatch(m, [t(l, 0, 300, 0, -300), p(l, 'HIDRANTE_RECALQUE', 0, -300)]).model;
+    expect(item(comRR).estado).toBe('ATENDE');
+  });
+
   it('sem bomba: a bomba FALTA e o resto do cálculo fica NÃO AVALIADO — nunca "atende" por omissão', () => {
     const m = rede({ semBomba: true });
     const itens = conferenciaDeIncendio(m, calculoDeIncendio(m, HIP), HIP);

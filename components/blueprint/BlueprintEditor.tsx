@@ -118,6 +118,7 @@ import {
   ZoomIn,
   ZoomOut,
   Flame,
+  GitFork,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -221,6 +222,8 @@ import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
 import PainelCalculoIncendio from './PainelCalculoIncendio';
+import PainelRedeDeHidrantes from './PainelRedeDeHidrantes';
+import { conferirPlanoDaRede, planejarRedeDeHidrantes } from '../../utils/blueprintRedeDeHidrantes';
 import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
@@ -1005,6 +1008,8 @@ const ROTULO_DA_TAREFA = {
   incendio: 'Classificação e exigências (Corpo de Bombeiros)',
   // INCÊNDIO E2.3 (30/09/2026): o cálculo hidráulico — bomba, hidrantes abertos, trechos.
   incendioCalculo: 'Cálculo hidráulico de incêndio',
+  // INCÊNDIO E3.1 (30/09/2026): bomba → geral → colunas → ramais → hidrantes, sugerida.
+  incendioRede: 'Rede de hidrantes automática',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7297,6 +7302,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica],
   );
+  /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
+  const planoDaRedeDeHidrantes = useMemo(
+    () => (tarefaAberta === 'incendioRede' ? planejarRedeDeHidrantes(editor.model, incendioDoEstudo.hipoteses.rede) : null),
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.rede],
+  );
+  const provaDaRedeDeHidrantes = useMemo(() => (planoDaRedeDeHidrantes ? conferirPlanoDaRede(editor.model, planoDaRedeDeHidrantes) : null), [planoDaRedeDeHidrantes, editor.model]);
   /** E2.4: as marcas do cálculo (velocidade, pressão máxima, não atende) — no desenho só com a tarefa aberta. */
   const marcasDoCalculoIncendio = useMemo(
     () => (calculoHidraulicoDeIncendio ? marcasDoCalculoDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica) : []),
@@ -10546,6 +10557,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onEscolher={escolherComponente}
               />
             </GrupoDoRibbon>
+            {/* INCÊNDIO E3.1 (30/09/2026): a rede de hidrantes lançada pelo sistema. */}
+            <GrupoDoRibbon rotulo="Automático">
+              <BotaoDoRibbon
+                icone={GitFork}
+                rotulo="Rede de hidrantes"
+                ativo={tarefaAberta === 'incendioRede'}
+                onClick={() => alternarTarefa('incendioRede')}
+                ajuda="Da bomba aos hidrantes: geral, uma coluna por grupo de hidrantes empilhados (atravessando as lajes) e um ramal no forro até cada válvula — sugerida, num lote, Ctrl+Z desfaz"
+              />
+            </GrupoDoRibbon>
             {/* INCÊNDIO E2.3 (30/09/2026): o cálculo hidráulico da rede. */}
             <GrupoDoRibbon rotulo="Cálculo">
               <BotaoDoRibbon
@@ -13591,6 +13612,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'pluvial' && <CloudRain className="h-5 w-5 text-lime-700" />}
               {tarefaAberta === 'incendio' && <Flame className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioCalculo' && <Gauge className="h-5 w-5 text-red-700" />}
+              {tarefaAberta === 'incendioRede' && <GitFork className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13648,6 +13670,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             )}
             {tarefaAberta === 'pluvial' &&
               'A chuva que o telhado e as lajes descobertas recebem: a área de contribuição de cada superfície (NBR 10844), a intensidade pluviométrica da cidade e a vazão de projeto que as calhas e os condutores vão levar. A rede pluvial é independente do esgoto.'}
+            {tarefaAberta === 'incendioRede' &&
+              'A rede de combate lançada pelo sistema: da bomba sobe o geral, cada grupo de hidrantes empilhados vira uma coluna que atravessa as lajes, e um ramal no forro desce até cada válvula. Nasce sugerida (tracejada); relançar refaz o que ainda é sugerido.'}
             {tarefaAberta === 'incendioCalculo' &&
               'A rede de incêndio desenhada, calculada a partir da bomba: os hidrantes mais desfavoráveis abrem juntos, e sai a vazão e a carga que a bomba tem de dar, com a pressão em cada hidrante e a planilha dos trechos. As premissas são do estudo.'}
             {tarefaAberta === 'incendio' &&
@@ -14082,6 +14106,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'incendioRede' && planoDaRedeDeHidrantes && (
+            <div data-testid="tarefa-incendio-rede">
+              <PainelRedeDeHidrantes
+                hip={incendioDoEstudo.hipoteses.rede}
+                onHip={(rede) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, rede })}
+                plano={planoDaRedeDeHidrantes}
+                prova={provaDaRedeDeHidrantes}
+                sugeridos={(editor.model.trechos ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.sugerido).map((t) => t.id)}
+                onLancar={() => {
+                  if (planoDaRedeDeHidrantes.comandos.length) editor.runBatch(planoDaRedeDeHidrantes.comandos);
+                }}
+                onAceitar={(ids) => editor.runBatch(ids.map((trechoId) => ({ type: 'SetTrechoProps', trechoId, sugerido: false }) as Command))}
+                onSelecionar={selecionar}
+              />
             </div>
           )}
 

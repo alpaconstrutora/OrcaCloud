@@ -154,6 +154,18 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
     estado: semCalculo ? 'NAO_AVALIADO' : 'ATENDE',
     alvos: [],
   });
+  // E3.1: o registro de recalque — por onde o caminhão do Corpo de Bombeiros alimenta a rede.
+  const recalques = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'HIDRANTE_RECALQUE');
+  const rede = recalques.length ? redeDeIncendio(model) : null;
+  const ligados = recalques.filter((t) => rede!.noDoTerminal.has(t.id));
+  itens.push({
+    grupo: 'CBMMG',
+    item: 'Registro de recalque ligado à rede',
+    exigido: 'no passeio, ligado à rede — CONFERIR NA IT',
+    obtido: recalques.length === 0 ? 'não há' : ligados.length ? 'ligado' : 'lançado, mas fora da rede',
+    estado: !temRede ? 'NAO_AVALIADO' : ligados.length ? 'ATENDE' : 'FALTA',
+    alvos: recalques.filter((t) => !ligados.includes(t)).map((t) => t.id),
+  });
   itens.push({ grupo: 'CBMMG', item: 'Reserva técnica de incêndio', exigido: 'volume pela IT', obtido: 'a RTI entra na E3.2 do roadmap', estado: 'NAO_AVALIADO', alvos: [] });
   return itens;
 }

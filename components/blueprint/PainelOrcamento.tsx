@@ -4,6 +4,7 @@ import type { BlueprintStudy } from '../../types/blueprint';
 import { MEDIDAS, MEDIDA_POR_ID, type MapeamentoOrcamento } from '../../utils/blueprintBudget';
 import { ROTULO_DO_ESTADO, termoDeBuscaDaMedida } from '../../utils/blueprintCoberturaOrcamento';
 import DatabasePickerModal from '../DatabasePickerModal';
+import PainelComposicoesDePeca from './PainelComposicoesDePeca';
 import {
   listObrasDaOrganizacao,
   listSnapshots,
@@ -67,6 +68,13 @@ export default function PainelOrcamento({
    */
   const [destinoFechado, setDestinoFechado] = useState<boolean | null>(null);
   const [escolhida, setEscolhida] = useState('');
+  /** E9.2: quantas composições por peça a organização tem — elas também geram linhas sem de-para. */
+  const [composicoes, setComposicoes] = useState(0);
+  const invalidarPrevia = useCallback(() => {
+    // A prévia antiga passa a mentir assim que a composição muda — como no de-para.
+    setPrevia(null);
+    onPrevia?.(null);
+  }, [onPrevia]);
 
   const recarregar = useCallback(async () => {
     setCarregando(true);
@@ -387,12 +395,16 @@ export default function PainelOrcamento({
         </div>
       </div>
 
+      {/* ── Composição por peça (E9.2) ─────────────────────────────────────── */}
+      <PainelComposicoesDePeca organizationId={study.organization_id} onMudou={invalidarPrevia} onContagem={setComposicoes} />
+
       {/* ── Prévia ─────────────────────────────────────────────────────────── */}
       <div className="px-4 py-3">
         <button
           type="button"
           onClick={() => void prever()}
-          disabled={ocupado || mapeamentos.length === 0}
+          disabled={ocupado || (mapeamentos.length === 0 && composicoes === 0)}
+          title={ocupado ? 'Aguarde: calculando' : mapeamentos.length === 0 && composicoes === 0 ? 'Sem de-para nem composição por peça, não há o que prever' : undefined}
           className="w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
         >
           {ocupado ? 'Calculando…' : 'Ver prévia da versão publicada'}

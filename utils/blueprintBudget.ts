@@ -1604,10 +1604,68 @@ const grupoDaRede = (d: string) => (d === 'ELETRICA' ? 'elétricas' : d === 'INC
  * As conexões DEDUZIDAS dos encontros não são peças do modelo (não têm onde
  * guardar código): continuam no de-para, por tipo × DN.
  */
+// ─── E9.2 (incêndio): COMPOSIÇÃO POR PEÇA ────────────────────────────────────
+
+/** Um item da composição: o código do catálogo e a quantidade POR PEÇA, na unidade do item. */
+export interface ItemDaComposicao {
+  codigo: string;
+  quantidade: number;
+  descricao?: string | null;
+}
+
+/**
+ * A composição de uma peça (`blueprint_composicoes_de_peca`, por organização):
+ * disciplina + tipo (+ especificação da quant-1.24.0, opcional) → N itens.
+ */
+export interface ComposicaoDePeca {
+  id: string;
+  disciplina: string;
+  tipo: string;
+  /** `null` = vale para qualquer especificação; a específica vence a genérica. */
+  especificacao: string | null;
+  itens: ItemDaComposicao[];
+  active?: boolean;
+}
+
+/** A composição que vale para uma linha do quantitativo — a da especificação, senão a genérica. */
+export function composicaoDaPeca(
+  t: { disciplina: string; classificacao: string | null; tipo: string; especificacao?: string | null },
+  composicoes: readonly ComposicaoDePeca[],
+): ComposicaoDePeca | null {
+  const tipo = t.classificacao ?? t.tipo;
+  const candidatas = composicoes.filter((c) => c.active !== false && c.disciplina === t.disciplina && c.tipo === tipo);
+  return candidatas.find((c) => c.especificacao != null && c.especificacao === (t.especificacao ?? null)) ?? candidatas.find((c) => c.especificacao == null) ?? null;
+}
+
+/**
+ * TODOS os códigos que o orçamento vai procurar no catálogo — camadas,
+ * acabamentos, guarda-corpos, esquadrias, peças e tubos de instalação e os
+ * itens das composições.
+ *
+ * ⚠️ E9.2: a prévia buscava só os de camada/acabamento/guarda-corpo (e o
+ * de-para). Peça, tubo e esquadria com código caíam todos em "Item não
+ * encontrado no catálogo" — os testes passavam o mapa pronto e não viam.
+ */
+export function codigosDoQuantitativo(quant: Quantitativos, composicoes: readonly ComposicaoDePeca[] = []): string[] {
+  const t = quant.totais;
+  const codigos = [
+    ...(t.porMaterial ?? []).map((m) => m.itemCode),
+    ...(t.porAcabamento ?? []).map((m) => m.itemCode),
+    ...(t.porGuardaCorpo ?? []).map((m) => m.itemCode),
+    ...(t.porEsquadria ?? []).map((m) => m.itemCode),
+    ...(t.porTerminal ?? []).map((m) => m.itemCode),
+    ...(t.porBitola ?? []).map((m) => m.itemCode),
+    ...composicoes.filter((c) => c.active !== false).flatMap((c) => c.itens.map((i) => i.codigo)),
+  ];
+  return [...new Set(codigos.map((c) => (c ?? '').trim()).filter((c) => c !== ''))];
+}
+
 export function gerarLancamentosDeInstalacoes(
   quant: Quantitativos,
   itensPorCodigo: Map<string, SinapiItem>,
   ctx: ContextoGeracao,
+  /** E9.2: as composições da organização — expandem a peça SEM código próprio. */
+  composicoes: readonly ComposicaoDePeca[] = [],
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -1628,7 +1686,43 @@ export function gerarLancamentosDeInstalacoes(
     return item;
   };
   for (const t of quant.totais.porTerminal ?? []) {
-    if (!t.itemCode || !REDES_HIDROSSANITARIAS.has(t.disciplina) || t.quantidade <= 0) continue;
+    if (!REDES_HIDROSSANITARIAS.has(t.disciplina) || t.quantidade <= 0) continue;
+    if (!t.itemCode) {
+      // E9.2: sem código próprio, a COMPOSIÇÃO da peça (se a organização tem uma) — uma linha por
+      // item, na unidade do item: peças × quantidade por peça. A peça COM código fica com a linha
+      // dela (a decisão da instância vence; somar as duas contaria duas vezes).
+      const comp = composicaoDaPeca(t, composicoes);
+      if (!comp) continue;
+      const base = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[t.classificacao as TipoDePontoEletrico] ?? t.tipo) : t.tipo;
+      const peca = t.especificacao ? `${base} (${t.especificacao})` : base;
+      for (const it of comp.itens) {
+        const codigo = (it.codigo ?? '').trim();
+        if (!codigo || !(it.quantidade > 0)) continue;
+        const chave = `instalacao:composicao:${t.disciplina}:${t.classificacao ?? t.tipo}:${t.especificacao ? `${t.especificacao}:` : ''}${codigo}`;
+        const item = itensPorCodigo.get(codigo);
+        if (!item) {
+          divergencias.push({ mapeamentoId: chave, medida: 'INSTALACAO', itemCode: codigo, motivo: `Item ${codigo} da composição de "${peca}" não encontrado no catálogo (SINAPI nem base própria).` });
+          continue;
+        }
+        const quantidade = t.quantidade * it.quantidade;
+        entries.push({
+          id: `bp:${ctx.studyId}:${chave}`,
+          sinapiItem: item,
+          quantity: quantidade,
+          phase: '',
+          group: `Instalações ${grupoDaRede(t.disciplina)} — composições · ${nomeDaRede(t.disciplina)}`,
+          discipline: 'Planta Inteligente',
+          notes: procedencia,
+          calculationMemory: {
+            formula: `${t.quantidade} peça(s) × ${it.quantidade} ${item.unit} por peça (composição de "${peca}")`,
+            variables: { disciplina: t.disciplina, peca, pecas: t.quantidade, porPeca: it.quantidade, item: it.descricao ?? codigo, snapshot: ctx.snapshotId },
+            result: quantidade,
+            justification: procedencia,
+          },
+        });
+      }
+      continue;
+    }
     const base = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[t.classificacao as TipoDePontoEletrico] ?? t.tipo) : t.tipo;
     // quant-1.24.0: a especificação separa compras do mesmo tipo — e a chave também (senão dois ids iguais).
     // ⚠️ Sem especificação, a chave fica IGUAL à de antes: o id do lançamento já gravado nos

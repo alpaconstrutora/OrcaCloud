@@ -1675,7 +1675,7 @@ Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
 Fecha o **bloco 7**.
 
-## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **em andamento (9.1 ✅ 01/10/2026)**
+## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **em andamento (9.1 e 9.2 ✅ 01/10/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2655,4 +2655,53 @@ Pedido: "ok" à E9.
     antigo, a lista, a aba, a folha e o conjunto;
   - as listas fixas da E8 ganharam a folha nova.
   - Suíte com 6.744 testes: 6.711 + 33 pulados. Build ok.
+
+### Etapa 9.2 — 01/10/2026 (frente `incendio-e9`, sem bump, 1 migration)
+
+Pedido: "Fazer a E9.2 agora" (migration e prova autorizadas).
+
+- **Migration `aplicar_20271001000040_blueprint_composicoes_de_peca.sql`**, aplicada e conferida
+  (tabela 1, RLS 1, 4 políticas, 0 grants para anon):
+  - tabela da ORGANIZAÇÃO: disciplina + tipo + especificação opcional (a da 9.1) → `itens` JSONB
+    `[{codigo, quantidade por peça, descricao}]`;
+  - índice único por (org, disciplina, tipo, especificação) e gatilho de `updated_at`;
+  - RLS no molde de `blueprint_element_types`.
+  - **Prova da RLS** num `DO` que termina em exceção, para tudo ser desfeito: o membro grava e lê
+    (1), a organização alheia é recusada (`42501`) e sem login não se vê nada (0). A tabela ficou
+    com 0 linhas.
+- **`utils/blueprintBudget.ts`:**
+  - **`composicaoDaPeca`:** a composição com especificação vence a genérica; as inativas e as de
+    outra rede não contam.
+  - **`gerarLancamentosDeInstalacoes(…, composicoes)`:** a peça SEM código próprio vira uma linha
+    por item, com peças × quantidade por peça, na unidade do item. O id é estável:
+    `instalacao:composicao:<rede>:<tipo>:[<espec>:]<código>`. O grupo é "Instalações de incêndio —
+    composições · Incêndio", e o item fora do catálogo é divergência. A peça COM código fica com a
+    sua linha, porque somar as duas contaria duas vezes.
+  - Fecha também o backlog do hidro (caixa sifonada = caixa + grelha + prolongamento): a tabela
+    serve a qualquer rede.
+- ⚠️ **Defeito achado no caminho:** `preverLancamentos` só pedia ao catálogo os códigos do de-para,
+  das camadas, dos acabamentos e dos guarda-corpos.
+  - Toda **peça, tubo e esquadria com código** caía em "Item não encontrado no catálogo", e a linha
+    não saía. Isso valia em produção desde a E8.2 do hidro.
+  - Os testes não viam porque passam o mapa de itens pronto.
+  - Agora **`codigosDoQuantitativo`** junta todos os códigos, os das composições inclusive.
+  - `blueprintPreviaComposicao.test.ts` roda o `preverLancamentos` real, com o banco simulado e um
+    catálogo que só responde ao que lhe é PEDIDO.
+- **Tela:** **`PainelComposicoesDePeca`** no painel de Orçamento, logo abaixo do de-para.
+  - Lista as composições e permite apagar.
+  - O formulário pede rede, tipo (os próprios da rede primeiro; o ponto de espera genérico vai para
+    o fim), especificação opcional e itens (código, quantidade, descrição).
+  - Salvar fica desligado dizendo por quê, e mudar uma composição invalida a prévia.
+  - "Ver prévia" passa a valer também com composição cadastrada, e desligado diz o motivo.
+- **Pronto quando — onde a prova ficou:**
+  - O hidrante lança as 7 linhas (abrigo, válvula, 2 mangueiras, esguicho, adaptador, chave, placa;
+    × 2 hidrantes) pelo caminho do serviço de prévia, com a composição vinda do serviço da tabela.
+  - O banco real foi provado na RLS. A gravação num orçamento de obra real NÃO foi exercitada: o
+    teste de integração com o Supabase real precisa de credencial (`BLUEPRINT_E2E`).
+- **Testes:**
+  - `blueprintComposicaoDePeca.test.ts` (7);
+  - `blueprintPreviaComposicao.test.ts` (2);
+  - `components/PainelComposicoesDePeca.test.tsx` (3);
+  - `PainelOrcamento.test.tsx` com o serviço novo simulado.
+  - Suíte com 6.755 testes: 6.722 + 33 pulados. Build ok.
 

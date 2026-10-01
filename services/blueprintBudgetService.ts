@@ -7,6 +7,7 @@
 // banco. Foi assim que o erro que interessa (unidade incompatível) ficou coberto
 // por teste sem precisar de rede.
 
+import { listarComposicoes } from './blueprintComposicaoService';
 import { coberturaDoOrcamento, type Cobertura } from '../utils/blueprintCoberturaOrcamento';
 import { medirSubRegioes } from '../utils/blueprintSubRegioes';
 import { supabase } from '../lib/supabase';
@@ -23,6 +24,8 @@ import {
   gerarLancamentosDeEsquadrias,
   prefixoDoEstudo,
   aplicarNoOrcamento,
+  codigosDoQuantitativo,
+  type ComposicaoDePeca,
   type ContextoGeracao,
   type MapeamentoOrcamento,
   type MapeamentoResolvido,
@@ -201,19 +204,22 @@ export async function preverLancamentos(
   const quant = computeQuantities(model, policy, snapshot.kernel_version);
 
   const mapeamentos = await listMappings(snapshot.organization_id);
+  // E9.2: as composições por peça da organização do estudo. Sem a tabela (migration
+  // ausente) o orçamento segue sem elas — dito no console, nunca em silêncio.
+  let composicoes: ComposicaoDePeca[] = [];
+  try {
+    composicoes = await listarComposicoes(snapshot.organization_id);
+  } catch (e) {
+    console.warn('[composição por peça] orçamento sem composições (persistência indisponível):', e);
+  }
 
-  // Os códigos das CAMADAS entram na mesma resolução dos códigos do de-para: é o
-  // mesmo espaço de códigos (SINAPI + base própria), e uma segunda ida ao
-  // catálogo só duplicaria a consulta e a chance de as duas divergirem.
-  const codigosDeCamada = [
-    ...(quant.totais.porMaterial ?? []).map((m) => m.itemCode),
-    // Acabamentos (E7.2): mesmo espaço de códigos, mesma resolução.
-    ...(quant.totais.porAcabamento ?? []).map((m) => m.itemCode),
-    ...(quant.totais.porGuardaCorpo ?? []).map((m) => m.itemCode),
-  ].filter((c) => c !== '');
+  // Todos os códigos do quantitativo (camadas, acabamentos, guarda-corpos, esquadrias, peças e
+  // tubos) e das composições entram na mesma resolução dos do de-para: é o mesmo espaço de
+  // códigos (SINAPI + base própria). ⚠️ E9.2: peça, tubo e esquadria ficavam de fora e caíam
+  // todos em "não encontrado no catálogo".
   const itens = await resolverItens([
     ...mapeamentos.map((m) => m.item_code),
-    ...codigosDeCamada,
+    ...codigosDoQuantitativo(quant, composicoes),
   ], snapshot.organization_id);
 
   const resolvidos: MapeamentoResolvido[] = mapeamentos.map((m) => ({
@@ -247,7 +253,7 @@ export async function preverLancamentos(
   const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);
   const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
   // E8.2: as peças hidrossanitárias com código viram linha direto (sem de-para).
-  const dasInstalacoes = gerarLancamentosDeInstalacoes(quant, itens, contexto);
+  const dasInstalacoes = gerarLancamentosDeInstalacoes(quant, itens, contexto, composicoes);
 
   // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
   // diferentes. O de-para cobre o que a composição não descreve (área de piso,

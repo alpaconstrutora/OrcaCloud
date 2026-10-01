@@ -54,6 +54,13 @@ vi.mock('../../services/blueprintBudgetService', () => ({
   orcamentoFechado: (...a: unknown[]) => orcamentoFechado(...a),
 }));
 
+// E9.2: o cadastro de composição por peça mora no painel; aqui ele começa vazio.
+vi.mock('../../services/blueprintComposicaoService', () => ({
+  listarComposicoes: vi.fn().mockResolvedValue([]),
+  salvarComposicao: vi.fn(),
+  apagarComposicao: vi.fn(),
+}));
+
 vi.mock('../../services/blueprintService', () => ({
   listSnapshots: (...a: unknown[]) => listSnapshots(...a),
   listObrasDaOrganizacao: (...a: unknown[]) => listObrasDaOrganizacao(...a),

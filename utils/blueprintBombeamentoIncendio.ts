@@ -98,13 +98,22 @@ export interface HipotesesDoBombeamento {
   altitudeM: number;
   /** Perda na tubulação de sucção, m — sem a sucção desenhada, é premissa. CONFERIR. */
   perdaNaSuccaoM: number;
+  /** E4.3: o diferencial dos pressostatos, kPa — parada → partida da jockey, e jockey → principal (NFPA 20: 70 e 35). CONFERIR. */
+  diferencialJockeyKpa: number;
+  diferencialPrincipalKpa: number;
 }
-export const HIPOTESES_BOMBEAMENTO_PADRAO: HipotesesDoBombeamento = { altitudeM: 0, perdaNaSuccaoM: 1 };
+export const HIPOTESES_BOMBEAMENTO_PADRAO: HipotesesDoBombeamento = { altitudeM: 0, perdaNaSuccaoM: 1, diferencialJockeyKpa: 70, diferencialPrincipalKpa: 35 };
 
 export function hipotesesDoBombeamentoDaColuna(raw: unknown): HipotesesDoBombeamento {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const ok = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0;
-  return { altitudeM: ok(r.altitudeM) ? r.altitudeM : HIPOTESES_BOMBEAMENTO_PADRAO.altitudeM, perdaNaSuccaoM: ok(r.perdaNaSuccaoM) ? r.perdaNaSuccaoM : HIPOTESES_BOMBEAMENTO_PADRAO.perdaNaSuccaoM };
+  const p = HIPOTESES_BOMBEAMENTO_PADRAO;
+  return {
+    altitudeM: ok(r.altitudeM) ? r.altitudeM : p.altitudeM,
+    perdaNaSuccaoM: ok(r.perdaNaSuccaoM) ? r.perdaNaSuccaoM : p.perdaNaSuccaoM,
+    diferencialJockeyKpa: ok(r.diferencialJockeyKpa) && r.diferencialJockeyKpa > 0 ? r.diferencialJockeyKpa : p.diferencialJockeyKpa,
+    diferencialPrincipalKpa: ok(r.diferencialPrincipalKpa) && r.diferencialPrincipalKpa > 0 ? r.diferencialPrincipalKpa : p.diferencialPrincipalKpa,
+  };
 }
 
 /** Pressão atmosférica em mca pela altitude (aproximação usual: −1,2 m a cada 1000 m … ≈ 10,33 − 0,0012·alt). */
@@ -186,3 +195,57 @@ export function bombasQueAtendem(candidatas: readonly BombaCandidata[], projeto:
     .map((x) => ({ candidata: x.candidata, folgaM: x.h - projeto.alturaM }))
     .sort((a, b) => a.folgaM - b.folgaM || a.candidata.nome.localeCompare(b.candidata.nome));
 }
+
+// ─── E4.3: a jockey e os pressostatos ────────────────────────────────────────
+
+export interface PressurizacaoDaRede {
+  /** A jockey ligada à principal, se há. */
+  jockeyId: ObjectId | null;
+  /** Pressostatos de incêndio na rede (um por bomba, no mínimo). */
+  pressostatos: number;
+  /** Os ajustes, no recalque da bomba, kPa — derivados do shutoff da principal. `null` sem a curva dela. */
+  ajustes: { paradaJockeyKpa: number; partidaJockeyKpa: number; partidaPrincipalKpa: number } | null;
+  /** A jockey alcança a pressão de parada? (o shutoff dela ≥ a parada) `null` sem curva. */
+  jockeyAlcancaParada: boolean | null;
+  /**
+   * Com a rede parada na pressão de partida da principal, o hidrante mais ALTO
+   * ainda tem pressão? (senão a rede esvazia lá em cima antes de a bomba partir)
+   */
+  topoPressurizado: { pressaoKpa: number; atende: boolean } | null;
+}
+
+/**
+ * Os ajustes dos pressostatos e a jockey (esquema da NFPA 20, CONFERIR NA IT):
+ * a jockey para no shutoff da principal; parte `diferencialJockeyKpa` abaixo; a
+ * principal parte `diferencialPrincipalKpa` abaixo da partida da jockey.
+ */
+export function pressurizacaoDaRede(model: BlueprintModel, hb: HipotesesDoBombeamento, c: CalculoDeIncendio): PressurizacaoDaRede | null {
+  const rede = redeDeIncendio(model);
+  if (rede.tipoDaFonte !== 'BOMBA' || !rede.fonte) return null;
+  const principal = rede.fonte;
+  const jockey = (model.terminais ?? []).find((t) => t.tipoHidraulico === 'BOMBA_JOCKEY' && t.bombaPrincipalId === principal.id) ?? null;
+  const pressostatos = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'PRESSOSTATO').length;
+  const so = principal.curvaBomba ? shutoffM(principal.curvaBomba) : null;
+  const ajustes = so != null
+    ? (() => {
+        const paradaJockeyKpa = so * 9.80665;
+        const partidaJockeyKpa = paradaJockeyKpa - hb.diferencialJockeyKpa;
+        return { paradaJockeyKpa, partidaJockeyKpa, partidaPrincipalKpa: partidaJockeyKpa - hb.diferencialPrincipalKpa };
+      })()
+    : null;
+  const soJockey = jockey?.curvaBomba ? shutoffM(jockey.curvaBomba) : null;
+  const zBomba = rede.cota.get(rede.noDaFonte!)!;
+  const hidrantes = [...c.estaticaKpa.keys()];
+  const zTopo = hidrantes.length ? Math.max(...hidrantes.map((id) => rede.cota.get(rede.noDoTerminal.get(id)!)!)) : null;
+  return {
+    jockeyId: jockey?.id ?? null,
+    pressostatos,
+    ajustes,
+    jockeyAlcancaParada: ajustes && soJockey != null ? soJockey * 9.80665 + 1e-6 >= ajustes.paradaJockeyKpa : null,
+    topoPressurizado: ajustes && zTopo != null ? (() => {
+      const pressaoKpa = ajustes.partidaPrincipalKpa - (zTopo - zBomba) * 9.80665;
+      return { pressaoKpa, atende: pressaoKpa > 0 };
+    })() : null,
+  };
+}
+

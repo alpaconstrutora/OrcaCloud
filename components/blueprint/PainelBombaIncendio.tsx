@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Scatter, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
-import type { AnaliseDaBomba, BombaCandidata, HipotesesDoBombeamento } from '../../utils/blueprintBombeamentoIncendio';
+import type { AnaliseDaBomba, BombaCandidata, HipotesesDoBombeamento, PressurizacaoDaRede } from '../../utils/blueprintBombeamentoIncendio';
 import { alturaDaBombaM } from '../../utils/blueprintBombeamentoIncendio';
 import type { PontoDaCurvaDaBomba } from '../../utils/blueprintKernel';
 
@@ -19,6 +19,9 @@ interface Props {
   candidatas: { candidata: BombaCandidata; folgaM: number }[];
   onAplicar: (c: BombaCandidata) => void;
   onSelecionarBomba: () => void;
+  /** E4.3: a jockey e os ajustes dos pressostatos. Ausente = não mostrar. */
+  pressurizacao?: PressurizacaoDaRede | null;
+  onSelecionar?: (ids: string[]) => void;
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -36,7 +39,7 @@ function Sim({ ok, rotulo, detalhe }: { ok: boolean | null; rotulo: string; deta
   );
 }
 
-export default function PainelBombaIncendio({ analise: a, curva, hb, onHb, candidatas, onAplicar, onSelecionarBomba }: Props) {
+export default function PainelBombaIncendio({ analise: a, curva, hb, onHb, candidatas, onAplicar, onSelecionarBomba, pressurizacao: pz, onSelecionar }: Props) {
   const pontosDaBomba = curva?.map((p) => ({ vazaoLmin: p.vazaoLmin, bomba: p.alturaMm / 1000 })) ?? [];
   const pontosDoSistema = a.curvaDoSistema.map((p) => ({ vazaoLmin: Math.max(0, p.vazaoLmin), sistema: p.alturaM }));
   const xMax = Math.max(...pontosDaBomba.map((p) => p.vazaoLmin), ...pontosDoSistema.map((p) => p.vazaoLmin), a.projeto?.vazaoLmin ?? 0, 10);
@@ -127,6 +130,63 @@ export default function PainelBombaIncendio({ analise: a, curva, hb, onHb, candi
           <input type="number" min={0} step={0.1} value={hb.perdaNaSuccaoM} onChange={(e) => { const x = Number(e.target.value); if (Number.isFinite(x) && x >= 0) onHb({ ...hb, perdaNaSuccaoM: x }); }} aria-label="Perda na sucção (m)" className={campo} />
         </label>
       </div>
+
+      {pz && (
+        <div data-testid="bomba-pressurizacao">
+          <h4 className="mb-1 text-xs font-semibold text-slate-700">Jockey e pressostatos</h4>
+          <p className="text-xs text-slate-600">
+            {pz.jockeyId ? (
+              <>
+                Jockey{' '}
+                <button type="button" className="text-blue-700 hover:underline" onClick={() => onSelecionar?.([pz.jockeyId!])}>
+                  ligada à principal
+                </button>
+                .
+              </>
+            ) : (
+              <span className="text-red-700">Não há jockey ligada a esta bomba — lance a bomba jockey e escolha a principal no painel dela.</span>
+            )}{' '}
+            {pz.pressostatos} pressostato(s) na rede.
+          </p>
+          {pz.ajustes ? (
+            <table className="mt-1 w-full text-xs" data-testid="bomba-ajustes">
+              <tbody>
+                {[
+                  ['Parada da jockey', pz.ajustes.paradaJockeyKpa],
+                  ['Partida da jockey', pz.ajustes.partidaJockeyKpa],
+                  ['Partida da principal', pz.ajustes.partidaPrincipalKpa],
+                ].map(([r, v]) => (
+                  <tr key={r as string} className="border-b border-slate-100 text-slate-700">
+                    <td className="py-1 pr-2">{r}</td>
+                    <td className="py-1 text-right tabular-nums">
+                      {n(v as number, 0)} kPa <span className="text-slate-400">({n((v as number) / 9.80665)} mca)</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-xs text-slate-500">Os ajustes saem do shutoff da principal: declare a curva dela (com o ponto de vazão zero).</p>
+          )}
+          <ul className="mt-1 space-y-1">
+            {pz.jockeyAlcancaParada != null && <Sim ok={pz.jockeyAlcancaParada} rotulo="Jockey alcança a parada" detalhe="o shutoff da jockey cobre a pressão de parada" />}
+            {pz.topoPressurizado && (
+              <Sim ok={pz.topoPressurizado.atende} rotulo="Hidrante mais alto pressurizado" detalhe={`${n(pz.topoPressurizado.pressaoKpa, 0)} kPa com a rede na partida da principal`} />
+            )}
+          </ul>
+          <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs text-slate-600 sm:grid-cols-2">
+            <label className="flex items-center justify-between gap-2">
+              <span>Diferencial da jockey (kPa)</span>
+              <input type="number" min={1} step={5} value={hb.diferencialJockeyKpa} onChange={(e) => { const x = Number(e.target.value); if (Number.isFinite(x) && x > 0) onHb({ ...hb, diferencialJockeyKpa: x }); }} aria-label="Diferencial da jockey (kPa)" className={campo} />
+            </label>
+            <label className="flex items-center justify-between gap-2">
+              <span>Diferencial da principal (kPa)</span>
+              <input type="number" min={1} step={5} value={hb.diferencialPrincipalKpa} onChange={(e) => { const x = Number(e.target.value); if (Number.isFinite(x) && x > 0) onHb({ ...hb, diferencialPrincipalKpa: x }); }} aria-label="Diferencial da principal (kPa)" className={campo} />
+            </label>
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">Esquema da NFPA 20 (a jockey para no shutoff da principal) — CONFERIR NA IT.</p>
+        </div>
+      )}
 
       <div>
         <h4 className="mb-1 text-xs font-semibold text-slate-700">Bombas cadastradas que atendem</h4>

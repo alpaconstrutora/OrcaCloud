@@ -45,3 +45,24 @@ describe('PainelBombaIncendio', () => {
     expect(onAplicar).toHaveBeenCalledWith(cand);
   });
 });
+
+describe('PainelBombaIncendio › jockey e pressostatos (E4.3)', () => {
+  it('sem jockey: o aviso; com ajustes: a tabela em kPa e mca', () => {
+    render(
+      <PainelBombaIncendio
+        analise={base}
+        curva={CURVA}
+        hb={HB}
+        onHb={vi.fn()}
+        candidatas={[]}
+        onAplicar={vi.fn()}
+        onSelecionarBomba={vi.fn()}
+        pressurizacao={{ jockeyId: null, pressostatos: 1, ajustes: { paradaJockeyKpa: 686.5, partidaJockeyKpa: 616.5, partidaPrincipalKpa: 581.5 }, jockeyAlcancaParada: null, topoPressurizado: { pressaoKpa: 571.7, atende: true } }}
+      />,
+    );
+    const s = screen.getByTestId('bomba-pressurizacao').textContent!;
+    expect(s).toContain('Não há jockey ligada a esta bomba');
+    expect(screen.getByTestId('bomba-ajustes').textContent).toContain('Parada da jockey687 kPa');
+    expect(s).toContain('Hidrante mais alto pressurizado');
+  });
+});

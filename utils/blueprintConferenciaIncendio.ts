@@ -17,7 +17,7 @@ import type { BlueprintModel, ObjectId } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { redeDeIncendio, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
 import type { MarcaDeVerificacao } from './blueprintVerificacaoRede';
-import type { AnaliseDaBomba } from './blueprintBombeamentoIncendio';
+import type { AnaliseDaBomba, PressurizacaoDaRede } from './blueprintBombeamentoIncendio';
 
 /** As peças que precisam estar NA rede (as sobre o trecho vivem no meio do tubo). */
 const PECAS_DE_NO = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'VGA', 'BOMBA_INCENDIO', 'BOMBA_JOCKEY', 'RESERVATORIO']);
@@ -107,7 +107,7 @@ export interface ItemDaConferencia {
 }
 
 /** A conferência da rede de hidrantes — o que o cálculo, as marcas e as premissas dizem juntos. */
-export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendio, hip: HipotesesHidraulicasDeIncendio, bomba: AnaliseDaBomba | null = null): ItemDaConferencia[] {
+export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendio, hip: HipotesesHidraulicasDeIncendio, bomba: AnaliseDaBomba | null = null, pressurizacao: PressurizacaoDaRede | null = null): ItemDaConferencia[] {
   const um = (v: number, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
   const lanc = marcasDoLancamentoDeIncendio(model);
   const itens: ItemDaConferencia[] = [];
@@ -181,6 +181,14 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
     });
     if (bomba.shutoff) itens.push({ grupo: 'NBR 13714', item: 'Shutoff da bomba dentro da pressão máxima', exigido: `≤ ${um(hip.pressaoMaximaKpa, 0)} kPa no hidrante mais baixo`, obtido: `${um(bomba.shutoff.estaticaMaximaKpa, 0)} kPa`, estado: est(bomba.shutoff.atende), alvos: [bomba.terminalId] });
     if (bomba.npsh) itens.push({ grupo: 'NBR 13714', item: 'NPSH disponível ≥ requerido', exigido: bomba.npsh.requeridoM == null ? 'NPSH requerido do catálogo' : `≥ ${um(bomba.npsh.requeridoM, 2)} m`, obtido: `${um(bomba.npsh.disponivelM, 2)} m disponíveis`, estado: est(bomba.npsh.atende), alvos: [bomba.terminalId] });
+  }
+  // E4.3: a jockey e os pressostatos (só quando a fonte é bomba).
+  if (pressurizacao) {
+    const est = (x: boolean | null): EstadoDaConferencia => (x == null ? 'NAO_AVALIADO' : x ? 'ATENDE' : 'FALTA');
+    itens.push({ grupo: 'CBMMG', item: 'Bomba jockey ligada à principal', exigido: 'pressurização da rede — CONFERIR NA IT', obtido: pressurizacao.jockeyId ? 'ligada' : 'não há jockey ligada à principal', estado: pressurizacao.jockeyId ? 'ATENDE' : 'FALTA', alvos: bomba ? [bomba.terminalId] : [] });
+    itens.push({ grupo: 'CBMMG', item: 'Pressostatos (um por bomba)', exigido: pressurizacao.jockeyId ? '≥ 2' : '≥ 1', obtido: `${pressurizacao.pressostatos} na rede`, estado: pressurizacao.pressostatos >= (pressurizacao.jockeyId ? 2 : 1) ? 'ATENDE' : 'FALTA', alvos: [] });
+    if (pressurizacao.jockeyId) itens.push({ grupo: 'CBMMG', item: 'Jockey alcança a pressão de parada', exigido: pressurizacao.ajustes ? `shutoff da jockey ≥ ${um(pressurizacao.ajustes.paradaJockeyKpa, 0)} kPa` : 'curva da principal', obtido: pressurizacao.jockeyAlcancaParada == null ? 'sem curva da jockey ou da principal' : pressurizacao.jockeyAlcancaParada ? 'alcança' : 'não alcança', estado: est(pressurizacao.jockeyAlcancaParada), alvos: [pressurizacao.jockeyId] });
+    if (pressurizacao.topoPressurizado) itens.push({ grupo: 'CBMMG', item: 'Rede pressurizada no hidrante mais alto', exigido: 'pressão > 0 com a rede na partida da principal', obtido: `${um(pressurizacao.topoPressurizado.pressaoKpa, 0)} kPa`, estado: est(pressurizacao.topoPressurizado.atende), alvos: [] });
   }
   // E3.2: a RTI — vazão do cálculo × autonomia, contra a reserva desenhada.
   const litros = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;

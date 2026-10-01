@@ -223,7 +223,7 @@ import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
 import PainelCalculoIncendio from './PainelCalculoIncendio';
 import PainelBombaIncendio from './PainelBombaIncendio';
-import { analisarBomba, bombasQueAtendem, type BombaCandidata } from '../../utils/blueprintBombeamentoIncendio';
+import { analisarBomba, bombasQueAtendem, pressurizacaoDaRede, type BombaCandidata } from '../../utils/blueprintBombeamentoIncendio';
 import PainelRedeDeHidrantes from './PainelRedeDeHidrantes';
 import PainelCoberturaIncendio from './PainelCoberturaIncendio';
 import { coberturaDosHidrantes, marcasDaCobertura, proporHidrantes } from '../../utils/blueprintCoberturaIncendio';
@@ -7313,6 +7313,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (calculoHidraulicoDeIncendio ? analisarBomba(editor.model, incendioDoEstudo.hipoteses.hidraulica, incendioDoEstudo.hipoteses.bombeamento, calculoHidraulicoDeIncendio) : null),
     [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica, incendioDoEstudo.hipoteses.bombeamento],
   );
+  /** E4.3: jockey e pressostatos — derivados do shutoff da principal. */
+  const pressurizacaoDeIncendio = useMemo(
+    () => (calculoHidraulicoDeIncendio ? pressurizacaoDaRede(editor.model, incendioDoEstudo.hipoteses.bombeamento, calculoHidraulicoDeIncendio) : null),
+    [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.bombeamento],
+  );
   const bombasDoCatalogo = useMemo<BombaCandidata[]>(
     () =>
       tiposDoCatalogo
@@ -14202,7 +14207,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     if (ajusteDeDnDeIncendio?.comandos.length) editor.runBatch(ajusteDeDnDeIncendio.comandos);
                   },
                 }}
-                conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica, analiseDaBombaDeIncendio)}
+                conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica, analiseDaBombaDeIncendio, pressurizacaoDeIncendio)}
               />
               {analiseDaBombaDeIncendio && (
                 <div className="mt-4">
@@ -14218,6 +14223,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       editor.run({ type: 'SetTerminalProps', terminalId: analiseDaBombaDeIncendio.terminalId, tipo: c.nome, curvaBomba: c.curva, npshrMm: npshr } as Command);
                     }}
                     onSelecionarBomba={() => selecionar([analiseDaBombaDeIncendio.terminalId])}
+                    pressurizacao={pressurizacaoDeIncendio}
+                    onSelecionar={selecionar}
                   />
                 </div>
               )}

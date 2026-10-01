@@ -1622,7 +1622,7 @@ Fecha o **bloco 2**.
 
 Fecha a parte de hidrante do **bloco 4** (§19).
 
-## Etapa 4 — Bombeamento · kernel bump · 3 fases · **em andamento (4.1 e 4.2 ✅ 01/10/2026, kernel 0.82.0)**
+## Etapa 4 — Bombeamento · kernel bump · 3 fases · **✅ CONCLUÍDA 01/10/2026 (4.1, 4.2 e 4.3; kernel 0.81.0 → 0.82.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2051,4 +2051,24 @@ haver um bump só.
   `Number(v ?? 0)`).
 - **Testes:** `blueprintBombeamentoIncendio.test.ts` (10) e o painel (3). Suíte com 6.591 testes:
   6.558 + 33 pulados. Build ok.
+
+### Etapa 4.3 — 01/10/2026 (frente `incendio-e4`, sem bump) — fecha a E4
+
+- **`pressurizacaoDaRede`** (`utils/blueprintBombeamentoIncendio.ts`): a jockey é a `BOMBA_JOCKEY`
+  com `bombaPrincipalId` igual à bomba da fonte. Os pressostatos são contados na rede.
+  - **Ajustes**, no recalque, derivados do shutoff da principal (esquema da NFPA 20, CONFERIR NA
+    IT): a jockey para no shutoff; parte `diferencialJockeyKpa` abaixo (70 kPa); a principal parte
+    `diferencialPrincipalKpa` abaixo disso (35 kPa). Os dois diferenciais são hipóteses editáveis.
+    Conferido à mão: shutoff de 70 m → parada 686 kPa, partida da jockey 616, da principal 581.
+  - **A jockey alcança a parada?** O shutoff dela ≥ a pressão de parada.
+  - **Hidrante mais alto pressurizado?** Com a rede na partida da principal, a pressão no hidrante
+    mais alto continua > 0. Senão a rede esvazia lá em cima antes de a bomba partir.
+  - Sem a curva da principal, não há ajustes (o painel diz o que fazer). A gravidade não tem
+    pressurização: a função devolve `null`.
+- **Conferência:** "Bomba jockey ligada à principal", "Pressostatos (um por bomba)" (≥ 2 com
+  jockey), "Jockey alcança a pressão de parada" e "Rede pressurizada no hidrante mais alto".
+- **Tela:** seção "Jockey e pressostatos" no `PainelBombaIncendio`: ajustes em kPa e mca, os dois
+  diferenciais e a jockey clicável (seleciona no desenho).
+- **Testes:** `blueprintPressurizacaoIncendio.test.ts` (5) e mais um caso no painel. Suíte com 6.597
+  testes: 6.564 + 33 pulados. Build ok.
 

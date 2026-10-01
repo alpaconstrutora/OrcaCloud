@@ -43,6 +43,7 @@ import AnomaliesPanel from './AnomaliesPanel';
 import SmartReconciliationCenter from './SmartReconciliationCenter';
 import ProlaboreReconciliationPanel from './ProlaboreReconciliationPanel';
 import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
+import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
@@ -503,6 +504,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         });
     }, [internalTransactions, internalSortOrder, internalSortField, internalSearch, internalCategoryFilter, internalEntityFilter, flowFilter]);
 
+
     const sortedMatches = useMemo(() => {
         let filtered = [...matches];
         if (flowFilter !== 'ALL') {
@@ -746,6 +748,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [startDate, setStartDate] = useState<string>(() => localStorage.getItem('reconciliation_start_date') || '');
     const [endDate, setEndDate] = useState<string>(() => localStorage.getItem('reconciliation_end_date') || '');
     const [competencia, setCompetencia] = useState<string>(() => localStorage.getItem('reconciliation_competencia') || '');
+
+    // Pendentes: paginação em memória das DUAS listas (guia §6.7). Antes desenhava os
+    // ~5.700 extratos de uma vez — ~40 s de navegador ocupado, ~860 MB na página, e o
+    // que estivesse em voo estourava o corte de 20 s. "Selecionar todos" vira da página.
+    // Dock, lote e totais seguem sobre a seleção inteira (os ids, não a página).
+    const recortePendentes = [selectedAccountId, competencia, startDate, endDate, flowFilter];
+    const pendBank = usePaginacaoEmMemoria(
+        sortedBankTransactions, 'conciliacaoPendentes:extrato:pageSize',
+        [...recortePendentes, bankSearch, bankCategoryFilter, bankCounterpartyFilter, bankSortField, bankSortOrder],
+    );
+    const pendInternal = usePaginacaoEmMemoria(
+        sortedInternalTransactions, 'conciliacaoPendentes:lancamentos:pageSize',
+        [...recortePendentes, internalSearch, internalCategoryFilter, internalEntityFilter, internalSortField, internalSortOrder],
+    );
     const [selectedBankTxId, setSelectedBankTxId] = useState<string | null>(null);
 
     // Determina a organização efetiva (da prop ou da conta selecionada)
@@ -3652,7 +3668,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             ) : pendentesViewMode === 'grid' ? (
                                 <div className="grid grid-cols-1 gap-4">
-                                    {sortedBankTransactions.map(tx => (
+                                    {pendBank.pageRows.map(tx => (
                                         <div key={tx.id} className="group relative">
                                             <div
                                                 onClick={() => setSelectedBankTxId(selectedBankTxId === tx.id ? null : tx.id)}
@@ -3810,13 +3826,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         <input
                                                             type="checkbox"
                                                             className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            checked={sortedBankTransactions.length > 0 && sortedBankTransactions.every(tx => selectedBankTxIds.has(tx.id))}
+                                                            checked={pendBank.pageRows.length > 0 && pendBank.pageRows.every(tx => selectedBankTxIds.has(tx.id))}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
-                                                                    setSelectedBankTxIds(new Set([...selectedBankTxIds, ...sortedBankTransactions.map(tx => tx.id)]));
+                                                                    setSelectedBankTxIds(new Set([...selectedBankTxIds, ...pendBank.pageRows.map(tx => tx.id)]));
                                                                 } else {
                                                                     const next = new Set(selectedBankTxIds);
-                                                                    sortedBankTransactions.forEach(tx => next.delete(tx.id));
+                                                                    pendBank.pageRows.forEach(tx => next.delete(tx.id));
                                                                     setSelectedBankTxIds(next);
                                                                 }
                                                             }}
@@ -3849,7 +3865,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {sortedBankTransactions.map(tx => {
+                                                {pendBank.pageRows.map(tx => {
                                                     const suggestion = topSuggestionByBankTxId.get(tx.id);
                                                     const cand = suggestion?.candidate_internal_transaction;
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
@@ -3959,6 +3975,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </div>
                                 </div>
                             )}
+                        {activeView === 'pending' && (
+                            <RodapePaginacao {...pendBank} rotulo="extratos" compacto />
+                        )}
                         </div>
                         </StatementCardWrapper>
                             );
@@ -3985,23 +4004,23 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     {pendentesViewMode === 'grid' && (
                                         <button 
                                             onClick={() => {
-                                                const allSelected = sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id));
+                                                const allSelected = pendInternal.pageRows.length > 0 && pendInternal.pageRows.every(tx => selectedInternalTxIds.has(tx.id));
                                                 if (allSelected) {
                                                     const next = new Set(selectedInternalTxIds);
-                                                    sortedInternalTransactions.forEach(tx => next.delete(tx.id));
+                                                    pendInternal.pageRows.forEach(tx => next.delete(tx.id));
                                                     setSelectedInternalTxIds(next);
                                                 } else {
-                                                    setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
+                                                    setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...pendInternal.pageRows.map(tx => tx.id)]));
                                                 }
                                             }}
                                             className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-[13px] font-medium transition-all ${
-                                                sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))
+                                                pendInternal.pageRows.length > 0 && pendInternal.pageRows.every(tx => selectedInternalTxIds.has(tx.id))
                                                     ? 'bg-emerald-600 text-white'
                                                     : 'bg-white text-emerald-600 border border-emerald-100 hover:bg-emerald-50'
                                             }`}
                                         >
                                             <CheckCircle2 className="w-3 h-3" />
-                                            {sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id)) ? 'Todos Selecionados' : 'Selecionar Tudo'}
+                                            {pendInternal.pageRows.length > 0 && pendInternal.pageRows.every(tx => selectedInternalTxIds.has(tx.id)) ? 'Todos Selecionados' : 'Selecionar Tudo'}
                                         </button>
                                     )}
                                     <div className="relative">
@@ -4148,7 +4167,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             ) : pendentesViewMode === 'grid' ? (
                                 <div className="grid grid-cols-1 gap-4">
-                                    {sortedInternalTransactions.map(tx => (
+                                    {pendInternal.pageRows.map(tx => (
                                         <div key={tx.id} className={`p-5 bg-white rounded-[2rem] border transition-all group hover:shadow-lg relative overflow-hidden ${selectedInternalTxIds.has(tx.id) ? 'border-emerald-500 ring-2 ring-emerald-500/10 shadow-xl scale-[1.02]' : 'border-gray-100 shadow-sm'}`}>
                                             <div className="absolute top-4 left-4 z-20">
                                                 <input
@@ -4272,13 +4291,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         <input
                                                             type="checkbox"
                                                             className="w-3.5 h-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                                                            checked={sortedInternalTransactions.length > 0 && sortedInternalTransactions.every(tx => selectedInternalTxIds.has(tx.id))}
+                                                            checked={pendInternal.pageRows.length > 0 && pendInternal.pageRows.every(tx => selectedInternalTxIds.has(tx.id))}
                                                             onChange={(e) => {
                                                                 if (e.target.checked) {
-                                                                    setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...sortedInternalTransactions.map(tx => tx.id)]));
+                                                                    setSelectedInternalTxIds(new Set([...selectedInternalTxIds, ...pendInternal.pageRows.map(tx => tx.id)]));
                                                                 } else {
                                                                     const next = new Set(selectedInternalTxIds);
-                                                                    sortedInternalTransactions.forEach(tx => next.delete(tx.id));
+                                                                    pendInternal.pageRows.forEach(tx => next.delete(tx.id));
                                                                     setSelectedInternalTxIds(next);
                                                                 }
                                                             }}
@@ -4330,7 +4349,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {sortedInternalTransactions.map(tx => {
+                                                {pendInternal.pageRows.map(tx => {
                                                     const cellPad = pendentesCompact ? 'py-1' : 'py-2.5';
                                                     const pendingInternalCtx: PendingInternalRowCtx = {
                                                         getSourceMeta, getOriginLink, goToOrigin, txCode, displayTitle, displayPartyName, displayDate,
@@ -4392,6 +4411,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     </div>
                                 </div>
                             )}
+                            <RodapePaginacao {...pendInternal} rotulo="lançamentos" compacto />
                         </div>
                         </div>
                     </div>

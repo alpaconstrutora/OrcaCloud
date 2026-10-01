@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CostCenterSelect from './CostCenterSelect';
+import { errorMessage } from '../hooks/useOrgContext';
 import {
     Landmark, FileWarning, Scale, RefreshCw, Search, MoveHorizontal, ChevronDown,
     Plus, CheckCircle2, Undo2, RotateCcw, ArrowDownLeft, ArrowUpRight, Link2, AlertCircle,
@@ -316,7 +317,13 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
             setData(await divergenceService.getDivergences(organizationId));
         } catch (e) {
             console.error('[DivergencesPanel]', e);
-            showToast('Erro ao carregar divergências', 'error');
+            // A mensagem REAL, não só "Erro ao carregar". Em 30/09/2026 o genérico escondia
+            // um statement timeout (57014): a RPC levava 3 s na Alpa e, com o banco ocupado,
+            // passava do limite de 8 s da role authenticated.
+            const code = (e as { code?: string } | null)?.code;
+            showToast(code === '57014'
+                ? 'As divergências demoraram demais para carregar (o banco está ocupado). Tente de novo em instantes.'
+                : `Erro ao carregar divergências: ${errorMessage(e, 'erro desconhecido')}`, 'error');
         } finally {
             setLoading(false);
         }

@@ -20,8 +20,19 @@ m = applyBatch(m, m.walls.filter((x) => (x.levelId === tipo && x.a.y === 1200 &&
 m = applyBatch(m, m.spaces.filter((s) => s.levelId === tipo).map((s) => ({ type: 'NameSpace', spaceId: s.id, name: Math.min(...s.ring.map((p) => p.y)) < 1000 ? 'Circulação' : `Dormitório ${Math.round(Math.min(...s.ring.map((p) => p.x)) / 5000) + 1}` }) as Command)).model;
 m = applyCommand(m, { type: 'AddEscada', levelId: t, pontos: [point(17000, 3000), point(17000, 8000)], larguraMm: 900, rotulo: 'E1' } as Command).model;
 
+// E6.2: a altura de 20 m pede escada enclausurada protegida — a escada E1 está solta no térreo (sem caixa).
 function App() {
   const [hip, setHip] = useState(HIPOTESES_SAIDAS_PADRAO);
-  return <PainelSaidasIncendio analise={analisarSaidas(m, 'A-2', hip)} hip={hip} onHip={setHip} onSelecionar={() => {}} />;
+  const [modelo, setModelo] = useState(m);
+  return (
+    <PainelSaidasIncendio
+      analise={analisarSaidas(modelo, 'A-2', hip, null, 20)}
+      hip={hip}
+      onHip={setHip}
+      onSelecionar={() => {}}
+      onProtecao={(escadaId, protecao) => setModelo((x) => applyCommand(x, { type: 'SetEscadaProps', escadaId, protecao } as Command).model)}
+      onCortaFogo={(ids) => setModelo((x) => applyBatch(x, ids.map((openingId) => ({ type: 'SetOpeningEmergencia', openingId, marcas: ['CORTA_FOGO'] }) as Command)).model)}
+    />
+  );
 }
 createRoot(document.getElementById('raiz')!).render(<App />);

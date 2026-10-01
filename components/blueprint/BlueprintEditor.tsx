@@ -7322,7 +7322,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const saidasDeIncendio = useMemo(
     () =>
       classificacaoDeIncendio
-        ? analisarSaidas(editor.model, classificacaoDeIncendio.divisao.valor, incendioDoEstudo.hipoteses.saidas, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId)
+        ? analisarSaidas(
+            editor.model,
+            classificacaoDeIncendio.divisao.valor,
+            incendioDoEstudo.hipoteses.saidas,
+            incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId,
+            classificacaoDeIncendio.altura.valorM,
+          )
         : null,
     [classificacaoDeIncendio, editor.model, incendioDoEstudo.hipoteses.saidas, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId],
   );
@@ -14347,6 +14353,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     hip={incendioDoEstudo.hipoteses.saidas}
                     onHip={(saidas) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, saidas })}
                     onSelecionar={selecionar}
+                    onProtecao={(escadaId, protecao) => editor.run({ type: 'SetEscadaProps', escadaId, protecao })}
+                    onCortaFogo={(ids) =>
+                      editor.runBatch(
+                        ids.map((openingId) => {
+                          const o = editor.model.openings.find((x) => x.id === openingId);
+                          return { type: 'SetOpeningEmergencia', openingId, marcas: [...(o?.emergencia ?? []), 'CORTA_FOGO'] };
+                        }),
+                      )
+                    }
                   />
                 </div>
               )}

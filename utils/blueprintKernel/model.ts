@@ -558,6 +558,8 @@ export interface Opening {
    * canônico, para que o hash delas não mude. Ver `Esquadria`.
    */
   esquadria?: Esquadria;
+  /** INCÊNDIO (0.84.0): saída de emergência, corta-fogo, antipânico. Ver `MARCAS_DE_EMERGENCIA`. */
+  emergencia?: MarcaDeEmergencia[];
 }
 
 /**
@@ -1497,6 +1499,24 @@ export interface Corte {
  */
 export type TipoCirculacao = 'ESCADA' | 'RAMPA';
 
+/**
+ * INCÊNDIO (0.84.0, E6.2): a PROTEÇÃO da escada de emergência — não
+ * enclausurada (NE), enclausurada protegida (EP), à prova de fumaça (PF) ou
+ * pressurizada. Em ordem crescente de proteção: a que se exige pela altura
+ * (`blueprintSaidasIncendio`) é atendida pela mesma ou por uma acima. Ausente =
+ * não declarada (a conferência diz).
+ */
+export const PROTECOES_DE_ESCADA = ['NE', 'EP', 'PF', 'PRESSURIZADA'] as const;
+export type ProtecaoDaEscada = (typeof PROTECOES_DE_ESCADA)[number];
+
+/**
+ * INCÊNDIO (0.84.0, E6.2): as marcas de emergência de uma porta — SAÍDA de
+ * emergência, CORTA_FOGO (PCF) e ANTIPÂNICO (barra). Lista sem repetição, na
+ * ordem de `MARCAS_DE_EMERGENCIA`; ausente = nenhuma (nunca lista vazia).
+ */
+export const MARCAS_DE_EMERGENCIA = ['SAIDA', 'CORTA_FOGO', 'ANTIPANICO'] as const;
+export type MarcaDeEmergencia = (typeof MARCAS_DE_EMERGENCIA)[number];
+
 export interface Escada {
   id: ObjectId;
   /** Identidade persistente — ver `identity.ts`. Fora do hash. */
@@ -1541,6 +1561,8 @@ export interface Escada {
    * cota e a escada fura toda laje entre os dois.
    */
   ateLevelId?: ObjectId | null;
+  /** INCÊNDIO (0.84.0): a proteção da escada de emergência. Ver `PROTECOES_DE_ESCADA`. */
+  protecao?: ProtecaoDaEscada;
 }
 
 /**
@@ -3531,6 +3553,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     openings: model.openings.map((o) => ({
       ...o,
       ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}),
+      ...(o.emergencia ? { emergencia: [...o.emergencia] } : {}),
     })),
     boundaries: model.boundaries.map((b) => ({ ...b, a: { ...b.a }, b: { ...b.b } })),
     // `pontos` é copiado ponto a ponto, não por referência: um `...s` cru
@@ -5283,6 +5306,15 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
   }
 
+  // INCÊNDIO (0.84.0): proteção da escada da lista; marcas da porta da lista, sem repetição, na ordem, nunca vazia.
+  for (const e of model.stairs ?? []) {
+    if (e.protecao !== undefined && !(PROTECOES_DE_ESCADA as readonly string[]).includes(e.protecao)) throw new KernelError('BAD_STAIR_PROTECTION', `Escada ${e.id}: proteção desconhecida ${String(e.protecao)}`);
+  }
+  for (const o of model.openings) {
+    if (o.emergencia === undefined) continue;
+    const ordem = o.emergencia.map((x) => (MARCAS_DE_EMERGENCIA as readonly string[]).indexOf(x));
+    if (o.emergencia.length === 0 || ordem.some((k, i) => k < 0 || (i > 0 && k <= ordem[i - 1]))) throw new KernelError('BAD_EMERGENCY_MARKS', `Abertura ${o.id}: marcas de emergência inválidas ${JSON.stringify(o.emergencia)}`);
+  }
   // Escada multiandares: a chegada declarada existe e está ACIMA da partida.
   for (const e of model.stairs ?? []) {
     if (e.ateLevelId) {

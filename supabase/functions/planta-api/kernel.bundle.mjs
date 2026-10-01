@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.83.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.84.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1696,6 +1696,8 @@ function projetar(model) {
       // a um, e `descricao` ENTRA pela razão escrita nas camadas: é o que o
       // usuário lê ao reabrir, e o payload é o único lugar onde ela sobrevive.
       esquadria: o.esquadria ? { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } : void 0,
+      // INCÊNDIO (0.84.0): só quando há — a disciplina de `esquadria`.
+      emergencia: o.emergencia?.length ? [...o.emergencia] : void 0,
       parametros: parametrosCanonicos(o.parametros)
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm
@@ -1819,7 +1821,9 @@ function projetar(model) {
       rotulo: e.rotulo ?? null,
       parametros: parametrosCanonicos(e.parametros),
       // Escada multiandares (0.39.0): chegada por índice; ausente = próximo acima.
-      ate: e.ateLevelId && model.levels.some((l) => l.id === e.ateLevelId) ? nivel(e.ateLevelId) : void 0
+      ate: e.ateLevelId && model.levels.some((l) => l.id === e.ateLevelId) ? nivel(e.ateLevelId) : void 0,
+      // INCÊNDIO (0.84.0): a proteção, só quando declarada.
+      protecao: e.protecao
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y
   );
@@ -2470,6 +2474,7 @@ function modelFromCanonicalPayload(payload) {
       ...refDeEtapa(o.etapa),
       ...refDeDemolicao(o.demolidaEm),
       ...o.esquadria ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } } : {},
+      ...o.emergencia?.length ? { emergencia: [...o.emergencia] } : {},
       ...o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}
     });
   });
@@ -2584,7 +2589,8 @@ function modelFromCanonicalPayload(payload) {
       alvoEspelhoMm: e.alvoEspelhoMm,
       rotulo: e.rotulo,
       ...e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {},
-      ...e.ate !== void 0 && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {}
+      ...e.ate !== void 0 && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {},
+      ...e.protecao ? { protecao: e.protecao } : {}
     });
   });
   const vagas = payload.vagas ?? [];

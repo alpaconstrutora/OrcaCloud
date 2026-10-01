@@ -1643,7 +1643,7 @@ Fecha o **bloco 4**.
 
 Fecha o **bloco 3**.
 
-## Etapa 6 — Saídas e rota de fuga (vai além) · kernel bump · 3 fases · **em andamento (6.1 ✅ 01/10/2026, sem bump)**
+## Etapa 6 — Saídas e rota de fuga (vai além) · kernel bump · 3 fases · **em andamento (6.1 e 6.2 ✅ 01/10/2026; kernel 0.83.0 → 0.84.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2255,4 +2255,32 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
 - **Testes:** `blueprintSaidasIncendio.test.ts` (6: unidades, premissas, escada estreita no
   pavimento-tipo, corredor livre e descarga, comércio pela área, pendências) e
   `PainelSaidasIncendio.test.tsx` (2). Suíte com 6.657 testes: 6.624 + 33 pulados. Build ok.
+
+### Etapa 6.2 — 01/10/2026 (frente `incendio-e6`, kernel 0.84.0)
+
+- **Kernel 0.84.0:**
+  - `Escada.protecao`: NE, EP, PF ou PRESSURIZADA; `null` no `SetEscadaProps` volta a não declarada.
+  - `Opening.emergencia`: SAIDA, CORTA_FOGO, ANTIPANICO. O comando `SetOpeningEmergencia` normaliza
+    (sem repetição, na ordem da lista); a lista vazia some.
+  - Invariantes `BAD_STAIR_PROTECTION`/`BAD_EMERGENCY_MARKS`. Os dois campos são omitidos do canônico
+    quando ausentes.
+  - Ritual do bump: goldens 7/7 em 0.83.0, 6 hashes, 22 pinos. Bundle da planta-api regerado.
+- **Regra (`protecaoExigida`, CONFERIR NA IT):** pela altura da E0, até 12 m não enclausurada, até
+  30 m enclausurada protegida, acima à prova de fumaça; na saúde, 6 e 12 m. A pressurizada vale como
+  PF. A declarada atende quando é a mesma ou acima; não declarada fica "não avaliada" com "declare a
+  proteção".
+- **Portas da caixa:** com EP/PF exigida, em cada pavimento que a escada serve, as portas da CAIXA
+  sem corta-fogo viram pendência. Há um botão "Marcar corta-fogo" (um lote).
+  - **Caixa:** é o ambiente fechado próprio da escada, com "escada"/"caixa" no nome ou até 40 m².
+  - ⚠️ **O harness `saidas-incendio` pegou:** bastava "conter a escada", e com ela solta num salão o
+    salão inteiro virava a caixa, cobrando corta-fogo na porta da rua. Agora, sem caixa própria, a
+    análise diz que a escada não está enclausurada.
+- **Tela:** "Proteção das escadas" no painel de saídas mostra, por escada, a seleção da proteção, a
+  exigida com o motivo (em vermelho quando a declarada não basta), "sem caixa" e as portas da caixa
+  sem corta-fogo, que dá para selecionar ou marcar.
+- **Testes:** `blueprintEscadaDeEmergencia.test.ts` (8: proteção e marcas no kernel, canônico, regra
+  por altura, escada de 20 m com as duas portas da caixa, NE sem cobrança, salão sem caixa, escada
+  fora de ambiente) e mais 1 no painel. Suíte com 6.666 testes: 6.633 + 33 pulados. Build ok.
+- **Fica para a E7.2:** o antipânico (a marca existe; a regra de quando se exige depende da IT) e a
+  placa de saída.
 

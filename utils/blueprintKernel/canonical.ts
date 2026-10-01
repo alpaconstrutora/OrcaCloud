@@ -298,6 +298,8 @@ function projetar(model: BlueprintModel): {
       esquadria: o.esquadria
         ? { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao }
         : undefined,
+      // INCÊNDIO (0.84.0): só quando há — a disciplina de `esquadria`.
+      emergencia: o.emergencia?.length ? [...o.emergencia] : undefined,
       parametros: parametrosCanonicos(o.parametros),
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm,
@@ -476,6 +478,8 @@ function projetar(model: BlueprintModel): {
       parametros: parametrosCanonicos(e.parametros),
       // Escada multiandares (0.39.0): chegada por índice; ausente = próximo acima.
       ate: e.ateLevelId && model.levels.some((l) => l.id === e.ateLevelId) ? nivel(e.ateLevelId) : undefined,
+      // INCÊNDIO (0.84.0): a proteção, só quando declarada.
+      protecao: e.protecao,
     }),
     (x, y) =>
       nivel(x.levelId) - nivel(y.levelId) ||
@@ -1328,6 +1332,8 @@ export interface CanonicalPayload {
     embutida?: boolean;
     /** Ausente em payload sob kernel < 0.15.0 e em abertura sem tipo. */
     esquadria?: { nome: string; itemCode: string; descricao: string };
+    /** INCÊNDIO. Ausente sob kernel < 0.84.0 e em porta sem marca. */
+    emergencia?: ('SAIDA' | 'CORTA_FOGO' | 'ANTIPANICO')[];
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
     /** ETAPAS (0.57.0): índices em `etapas`. */
@@ -1431,6 +1437,8 @@ export interface CanonicalPayload {
     parametros?: Parametros;
     /** Chegada declarada (índice). Ausente sob kernel < 0.39.0 e quando é o próximo acima. */
     ate?: number;
+    /** INCÊNDIO. Ausente sob kernel < 0.84.0 e em escada sem proteção declarada. */
+    protecao?: 'NE' | 'EP' | 'PF' | 'PRESSURIZADA';
   }[];
   /** Vagas de garagem. Ausente sob kernel < 0.40.0 e em desenho sem nenhuma. */
   vagas?: {
@@ -1859,6 +1867,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(o.esquadria
         ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } }
         : {}),
+      ...(o.emergencia?.length ? { emergencia: [...o.emergencia] } : {}),
       ...(o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}),
     });
   });
@@ -1995,6 +2004,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotulo: e.rotulo,
       ...(e.parametros && Object.keys(e.parametros).length > 0 ? { parametros: { ...e.parametros } } : {}),
       ...(e.ate !== undefined && levelIds[e.ate] ? { ateLevelId: levelIds[e.ate] } : {}),
+      ...(e.protecao ? { protecao: e.protecao } : {}),
     });
   });
 

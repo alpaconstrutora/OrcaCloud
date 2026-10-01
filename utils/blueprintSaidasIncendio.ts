@@ -18,7 +18,7 @@
  * 9077): as tabelas de população e de capacidade da unidade de passagem abaixo
  * foram transcritas de memória.
  */
-import type { BlueprintModel, Escada, ObjectId, Space, Wall } from './blueprintKernel';
+import { pointInPolygon, type BlueprintModel, type Escada, type ObjectId, type ProtecaoDaEscada, type Space, type Wall } from './blueprintKernel';
 import { usoDoNome } from './blueprintPrograma';
 import { construirGrafoEspacial, ehCorredor } from './blueprintGrafoEspacial';
 
@@ -100,10 +100,27 @@ export interface ItemDeSaida {
   atende: boolean;
 }
 
+/** E6.2: a proteção da escada — exigida pela altura × declarada, e as portas da caixa sem corta-fogo. */
+export interface ProtecaoConferida {
+  escadaId: ObjectId;
+  rotulo: string;
+  exigida: ProtecaoDaEscada | null;
+  motivo: string;
+  declarada: ProtecaoDaEscada | null;
+  /** `null` = não avaliada (sem altura, ou proteção não declarada). */
+  atende: boolean | null;
+  /** EP/PF/pressurizada exigida: as portas da caixa da escada que não são corta-fogo. */
+  portasSemCortaFogo: ObjectId[];
+  /** A escada não está dentro de um ambiente fechado (a caixa) em algum pavimento que serve. */
+  semCaixa: boolean;
+}
+
 export interface AnaliseDeSaidas {
   grupo: string | null;
   populacao: PopulacaoDoPavimento[];
   itens: ItemDeSaida[];
+  /** E6.2: uma linha por escada. */
+  protecao: ProtecaoConferida[];
   /** O que faltou para analisar. */
   pendencias: string[];
   fonte: string;
@@ -142,7 +159,37 @@ function pavimentosDaEscada(model: BlueprintModel, e: Escada): ObjectId[] {
   return niveis.slice(i, Math.max(i, Math.min(j, niveis.length - 1)) + 1).map((l) => l.id);
 }
 
-export function analisarSaidas(model: BlueprintModel, divisao: string | null, hip: HipotesesDeSaidas, pisoDeDescargaLevelId: string | null = null): AnaliseDeSaidas {
+// ─── Proteção da escada (E6.2) ───────────────────────────────────────────────
+
+/** Até onde um ambiente sem "escada" no nome ainda é a caixa da escada, mm² (40 m²). */
+const AREA_MAXIMA_DA_CAIXA_MM2 = 40e6;
+
+/** Ordem de proteção: pressurizada vale como à prova de fumaça. */
+export const NIVEL_DA_PROTECAO: Record<ProtecaoDaEscada, number> = { NE: 0, EP: 1, PF: 2, PRESSURIZADA: 2 };
+export const ROTULO_DA_PROTECAO: Record<ProtecaoDaEscada, string> = { NE: 'Não enclausurada', EP: 'Enclausurada protegida', PF: 'À prova de fumaça', PRESSURIZADA: 'Pressurizada' };
+
+/**
+ * A proteção exigida pela altura da edificação (a da E0: piso de descarga →
+ * último pavimento ocupado). Até 12 m não enclausurada, até 30 m enclausurada
+ * protegida, acima à prova de fumaça; na saúde (H) os degraus caem para 6 e
+ * 12 m. CONFERIR NA IT (transcrito de memória; a tabela real varia por divisão).
+ */
+export function protecaoExigida(grupo: string | null, alturaM: number): { protecao: ProtecaoDaEscada; motivo: string } {
+  const [a, b] = grupo === 'H' ? [6, 12] : [12, 30];
+  const fmt = (x: number) => x.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  if (alturaM <= a) return { protecao: 'NE', motivo: `altura ${fmt(alturaM)} m ≤ ${a} m` };
+  if (alturaM <= b) return { protecao: 'EP', motivo: `altura ${fmt(alturaM)} m entre ${a} e ${b} m` };
+  return { protecao: 'PF', motivo: `altura ${fmt(alturaM)} m > ${b} m` };
+}
+
+export function analisarSaidas(
+  model: BlueprintModel,
+  divisao: string | null,
+  hip: HipotesesDeSaidas,
+  pisoDeDescargaLevelId: string | null = null,
+  /** E6.2: a altura da edificação para incêndio (a da classificação); `null` = proteção não avaliada. */
+  alturaM: number | null = null,
+): AnaliseDeSaidas {
   const grupo = divisao?.trim().charAt(0).toUpperCase() || null;
   const pendencias: string[] = [];
   if (!grupo) pendencias.push('sem a divisão da edificação — declare-a na classificação (a população e a capacidade dependem dela)');
@@ -205,5 +252,42 @@ export function analisarSaidas(model: BlueprintModel, divisao: string | null, hi
     }
   }
   if ((model.stairs ?? []).length === 0 && model.levels.length > 1) pendencias.push('o prédio tem mais de um pavimento e nenhuma escada desenhada');
-  return { grupo, populacao, itens, pendencias, fonte: FONTE_SAIDAS };
+
+  // E6.2: a proteção de cada escada, e as portas da caixa dela quando a caixa tem de ser fechada.
+  const protecao: ProtecaoConferida[] = (model.stairs ?? []).map((e, i) => {
+    const ex = alturaM != null ? protecaoExigida(grupo, alturaM) : null;
+    const declarada = e.protecao ?? null;
+    const atende = ex && declarada ? NIVEL_DA_PROTECAO[declarada] >= NIVEL_DA_PROTECAO[ex.protecao] : null;
+    let portasSemCortaFogo: ObjectId[] = [];
+    let semCaixa = false;
+    if (ex && ex.protecao !== 'NE') {
+      for (const levelId of pavimentosDaEscada(model, e)) {
+        // A CAIXA é o ambiente fechado PRÓPRIO da escada: "escada"/"caixa" no nome, ou pequeno (até 40 m²).
+        // ⚠️ Não basta conter a escada: solta num salão, o salão inteiro virava "a caixa" e a porta da
+        // rua era cobrada como corta-fogo — o harness `saidas-incendio` pegou.
+        const caixa = model.spaces.find((s) => s.levelId === levelId && pointInPolygon(s.ring, e.pontos[0]) && (/escada|caixa/i.test(s.name ?? '') || s.areaMm2 <= AREA_MAXIMA_DA_CAIXA_MM2));
+        if (!caixa) {
+          semCaixa = true;
+          continue;
+        }
+        const g = construirGrafoEspacial(model, levelId);
+        const daCaixa = g.arestas.filter((a) => a.openingId && (a.de === caixa.id || a.para === caixa.id));
+        for (const a of daCaixa) {
+          const o = model.openings.find((x) => x.id === a.openingId);
+          if (o && !o.emergencia?.includes('CORTA_FOGO') && !portasSemCortaFogo.includes(o.id)) portasSemCortaFogo.push(o.id);
+        }
+      }
+    }
+    return {
+      escadaId: e.id,
+      rotulo: e.rotulo || `Escada ${i + 1}`,
+      exigida: ex?.protecao ?? null,
+      motivo: ex ? `${ex.motivo} — CONFERIR NA IT` : 'sem a altura da edificação',
+      declarada,
+      atende,
+      portasSemCortaFogo,
+      semCaixa,
+    };
+  });
+  return { grupo, populacao, itens, protecao, pendencias, fonte: FONTE_SAIDAS };
 }

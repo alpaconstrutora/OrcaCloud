@@ -62,6 +62,10 @@ import {
   findVia,
   findAreaPublica,
   findAreaDeOperacao,
+  PROTECOES_DE_ESCADA,
+  MARCAS_DE_EMERGENCIA,
+  type ProtecaoDaEscada,
+  type MarcaDeEmergencia,
   RISCOS_DE_SPRINKLER,
   MAX_NOME_DE_AREA_DE_OPERACAO,
   type RiscoDeSprinkler,
@@ -482,6 +486,8 @@ export type Command =
       larguraMm?: number;
       alvoEspelhoMm?: number;
       rotulo?: string | null;
+      /** INCÊNDIO (0.84.0). */
+      protecao?: ProtecaoDaEscada | null;
     }
   | {
       type: 'SetEscadaProps';
@@ -492,7 +498,11 @@ export type Command =
       rotulo?: string | null;
       /** Escada multiandares (E2.4): `null` volta ao próximo pavimento acima. */
       ateLevelId?: ObjectId | null;
+      /** INCÊNDIO (0.84.0): `null` = não declarada. */
+      protecao?: ProtecaoDaEscada | null;
     }
+  /** INCÊNDIO (0.84.0): as marcas de emergência da porta; `[]` = nenhuma. A ordem e a repetição não importam. */
+  | { type: 'SetOpeningEmergencia'; openingId: ObjectId; marcas: MarcaDeEmergencia[] }
   /**
    * NÚCLEO VERTICAL (E2.4): shaft ou elevador, polígono em planta que atravessa
    * de `levelId` a `ateLevelId` (ausente = o mais alto). Ver `Nucleo`.
@@ -3344,6 +3354,7 @@ function aplicarSemHash(
           larguraMm: assertIntegerMm(roundToMm(command.larguraMm ?? 1200), 'larguraMm'),
           alvoEspelhoMm: assertIntegerMm(roundToMm(command.alvoEspelhoMm ?? 175), 'alvoEspelhoMm'),
           rotulo: command.rotulo?.trim() || null,
+          ...(command.protecao != null ? { protecao: protecaoValida(command.protecao) } : {}),
         },
       ];
       diff.created.push(id);
@@ -3754,6 +3765,10 @@ function aplicarSemHash(
         if (command.ateLevelId) findLevel(next, command.ateLevelId);
         escada.ateLevelId = command.ateLevelId || undefined;
         if (escada.ateLevelId === undefined) delete escada.ateLevelId;
+      }
+      if (command.protecao !== undefined) {
+        if (command.protecao === null) delete escada.protecao;
+        else escada.protecao = protecaoValida(command.protecao);
       }
       diff.updated.push(escada.id);
       break;
@@ -4661,6 +4676,18 @@ function aplicarSemHash(
       break;
     }
 
+    case 'SetOpeningEmergencia': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      for (const m of command.marcas) if (!MARCAS_DE_EMERGENCIA.includes(m)) throw new KernelError('BAD_EMERGENCY_MARKS', `Marca desconhecida: ${String(m)}`);
+      // Normaliza: sem repetição, na ordem da lista; vazia = some.
+      const marcas = MARCAS_DE_EMERGENCIA.filter((m) => command.marcas.includes(m));
+      if (marcas.length) opening.emergencia = marcas;
+      else delete opening.emergencia;
+      diff.updated.push(opening.id);
+      break;
+    }
+
     case 'SetOpeningEsquadria': {
       const opening = next.openings.find((o) => o.id === command.openingId);
       if (!opening) {
@@ -5518,6 +5545,12 @@ export function applyCommand(model: BlueprintModel, command: Command): CommandRe
  * unidade, e arredondar na borda (e nao no calculo) e o que faz duas sessoes
  * que desenham o mesmo gesto produzirem o mesmo hash. Ver `roundToMm`.
  */
+/** INCÊNDIO (0.84.0): a proteção da escada tem de ser uma da lista. */
+function protecaoValida(p: ProtecaoDaEscada): ProtecaoDaEscada {
+  if (!PROTECOES_DE_ESCADA.includes(p)) throw new KernelError('BAD_STAIR_PROTECTION', `Proteção de escada desconhecida: ${String(p)}`);
+  return p;
+}
+
 function paraPontoMm(p: Point, i: number): Point {
   return { x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) };
 }

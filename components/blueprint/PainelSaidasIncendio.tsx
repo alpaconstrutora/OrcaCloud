@@ -5,14 +5,18 @@
  * (`blueprintSaidasIncendio`); só as premissas gravam.
  */
 import React from 'react';
-import type { ObjectId } from '../../utils/blueprintKernel';
-import type { AnaliseDeSaidas, HipotesesDeSaidas } from '../../utils/blueprintSaidasIncendio';
+import { PROTECOES_DE_ESCADA, type ObjectId, type ProtecaoDaEscada } from '../../utils/blueprintKernel';
+import { ROTULO_DA_PROTECAO, type AnaliseDeSaidas, type HipotesesDeSaidas } from '../../utils/blueprintSaidasIncendio';
 
 interface Props {
   analise: AnaliseDeSaidas;
   hip: HipotesesDeSaidas;
   onHip: (h: HipotesesDeSaidas) => void;
   onSelecionar: (ids: ObjectId[]) => void;
+  /** E6.2: declarar a proteção da escada (`null` = não declarada). */
+  onProtecao?: (escadaId: ObjectId, p: ProtecaoDaEscada | null) => void;
+  /** E6.2: marcar as portas como corta-fogo (um lote). */
+  onCortaFogo?: (openingIds: ObjectId[]) => void;
 }
 
 const n = (v: number, casas = 0) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -20,7 +24,7 @@ const m = (mm: number) => `${n(mm / 1000, 2)} m`;
 const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums';
 const ROTULO_DO_TIPO = { ESCADA: 'Escada', CORREDOR: 'Corredor', DESCARGA: 'Descarga' } as const;
 
-export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecionar }: Props) {
+export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecionar, onProtecao, onCortaFogo }: Props) {
   const falta = a.itens.filter((i) => !i.atende);
   return (
     <div className="space-y-3" data-testid="saidas-incendio">
@@ -120,6 +124,57 @@ export default function PainelSaidasIncendio({ analise: a, hip, onHip, onSelecio
           </tbody>
         </table>
       )}
+      {a.protecao.length > 0 && (
+        <div data-testid="saidas-protecao">
+          <h5 className="mb-1 text-xs font-semibold text-slate-700">Proteção das escadas</h5>
+          <ul className="space-y-2">
+            {a.protecao.map((p) => (
+              <li key={p.escadaId} className="text-xs text-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" className="text-left text-blue-700 hover:underline" onClick={() => onSelecionar([p.escadaId])}>
+                    {p.rotulo}
+                  </button>
+                  <select
+                    value={p.declarada ?? ''}
+                    disabled={!onProtecao}
+                    onChange={(e) => onProtecao?.(p.escadaId, (e.target.value || null) as ProtecaoDaEscada | null)}
+                    aria-label={`Proteção da ${p.rotulo}`}
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                  >
+                    <option value="">Não declarada</option>
+                    {PROTECOES_DE_ESCADA.map((x) => (
+                      <option key={x} value={x}>{ROTULO_DA_PROTECAO[x]}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={`text-[11px] ${p.atende === false ? 'font-semibold text-red-700' : 'text-slate-500'}`}>
+                  {p.exigida ? `Exigida: ${ROTULO_DA_PROTECAO[p.exigida].toLowerCase()} (${p.motivo})` : `Exigida: ${p.motivo}`}
+                  {p.atende === false && ' — a declarada não basta'}
+                  {p.atende === null && p.exigida && ' — declare a proteção'}
+                </div>
+                {p.semCaixa && <div className="text-[11px] text-red-700">A escada não está numa caixa própria em algum pavimento (ambiente fechado só dela: "escada" no nome, ou até 40 m²).</div>}
+                {p.portasSemCortaFogo.length > 0 && (
+                  <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-red-700">
+                    <button type="button" className="text-left hover:underline" onClick={() => onSelecionar(p.portasSemCortaFogo)}>
+                      {p.portasSemCortaFogo.length} porta(s) da caixa sem corta-fogo
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!onCortaFogo}
+                      onClick={() => onCortaFogo?.(p.portasSemCortaFogo)}
+                      className="shrink-0 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Marca as portas como corta-fogo — um passo de desfazer"
+                    >
+                      Marcar corta-fogo
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {falta.length > 0 && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800" data-testid="saidas-falta">
           {falta.length} saída(s) mais estreita(s) que o exigido.

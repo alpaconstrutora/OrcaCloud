@@ -498,7 +498,16 @@
  * índice e omitida quando não há; some com o pavimento. `RISCOS_DE_SPRINKLER`
  * passou a morar no kernel. Coleção nova, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.83.0';
+/**
+ * ─── 0.83.0 → 0.84.0 (01/10/2026) — ESCADA E PORTA DE EMERGÊNCIA ────────────
+ *
+ * Nas saídas de emergência (E6.2 do roadmap de incêndio): `Escada.protecao`
+ * (NE, EP, PF, PRESSURIZADA) e `Opening.emergencia` (SAIDA, CORTA_FOGO,
+ * ANTIPANICO — sem repetição, na ordem da lista, nunca vazia; comando
+ * `SetOpeningEmergencia`). Os dois omitidos do canônico quando ausentes.
+ * Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.84.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

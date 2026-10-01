@@ -59,9 +59,13 @@ export interface HipotesesDeSprinklers {
   densidadeLminM2: number | null;
   areaDeOperacaoM2: number | null;
   areaPorSprinklerM2: number | null;
+  /** E5.3: do defletor ao teto, mm — `null` = 150 (faixa usual 25–300 do spray padrão, CONFERIR NA NORMA). */
+  distanciaAoTetoMm: number | null;
 }
 
-export const HIPOTESES_SPRINKLERS_PADRAO: HipotesesDeSprinklers = { risco: null, densidadeLminM2: null, areaDeOperacaoM2: null, areaPorSprinklerM2: null };
+export const HIPOTESES_SPRINKLERS_PADRAO: HipotesesDeSprinklers = { risco: null, densidadeLminM2: null, areaDeOperacaoM2: null, areaPorSprinklerM2: null, distanciaAoTetoMm: null };
+/** E5.3: o padrão da distância do defletor ao teto, mm — CONFERIR NA NORMA. */
+export const DISTANCIA_AO_TETO_PADRAO_MM = 150;
 
 const positivoOuNulo = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : null);
 
@@ -72,6 +76,7 @@ export function hipotesesDeSprinklersDaColuna(raw: unknown): HipotesesDeSprinkle
     densidadeLminM2: positivoOuNulo(r.densidadeLminM2),
     areaDeOperacaoM2: positivoOuNulo(r.areaDeOperacaoM2),
     areaPorSprinklerM2: positivoOuNulo(r.areaPorSprinklerM2),
+    distanciaAoTetoMm: positivoOuNulo(r.distanciaAoTetoMm),
   };
 }
 

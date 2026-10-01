@@ -1632,7 +1632,7 @@ Fecha a parte de hidrante do **bloco 4** (§19).
 
 Fecha o **bloco 4**.
 
-## Etapa 5 — Sprinklers · kernel bump · 4 fases · **em andamento (5.1 e 5.2 ✅ 01/10/2026; kernel 0.82.0 → 0.83.0)**
+## Etapa 5 — Sprinklers · kernel bump · 4 fases · **em andamento (5.1, 5.2 e 5.3 ✅ 01/10/2026; kernel 0.82.0 → 0.83.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2155,4 +2155,36 @@ haver um bump só.
 - **Testes:** `blueprintAreaDeOperacao.test.ts` (11: entidade, canônico, pavimento, cálculo por área,
   risco da área, duas áreas, salão em L, ambiente inteiro) e mais 1 no painel. Suíte com 6.626 testes:
   6.593 + 33 pulados. Build ok.
+
+### Etapa 5.3 — 01/10/2026 (frente `incendio-e5`, sem bump)
+
+- **`utils/blueprintDistribuicaoSprinklers.ts`:** o ambiente vira ramais paralelos com sprinklers a
+  espaçamento regular.
+  - **Malha:** no referencial do ramal, o retângulo envolvente é dividido em células iguais. Cada
+    célula tem su × sv ≤ a área máxima por sprinkler (do critério da E5.1), e su, sv ≤ o espaçamento
+    máximo do risco. Do sprinkler à parede fica meio espaçamento.
+  - **Ponto de cada célula:** a célula que toca o ambiente leva um sprinkler, no centro, ou, se o
+    centro cai fora, no ponto interior da parte de dentro. Assim o canto interno do L não perde
+    cobertura.
+  - **Viga:** o sprinkler sob viga anda através do ramal, de 10 em 10 cm, até meio espaçamento.
+  - **Cota:** a do defletor é o pé-direito menos a distância ao teto, uma premissa nova
+    (`hipoteses.sprinklers.distanciaAoTetoMm`, padrão 150 mm).
+  - **Norma (spray padrão, CONFERIR):** espaçamento máximo de 4,6 m (leve e ordinário) e 3,7 m
+    (extraordinário), mínimos de 1,8 m entre sprinklers e de 10 cm até a parede.
+- **Alternativas:** sentido dos ramais (x/y) × espaçamento (máximo no ramal / malha quadrada), sem
+  repetidas, ordenadas da que tem menos sprinklers para a que tem mais; no empate, a de ramais mais
+  curtos. "Lançar" é um lote só (um Ctrl+Z). Os tubos são a E5.4.
+  - O teste do ordinário pegou o meu cálculo à mão: eu esperava 9 como melhor, mas com ramais em y
+    dá 8 (4 × 3 m = 12 m² ≤ 12,1). É exatamente por isso que as alternativas existem.
+- **Tela:** `DistribuicaoDeSprinklers` na seção de sprinklers do cálculo. A seção agora aparece mesmo
+  sem sprinkler no desenho, porque é onde se lançam os primeiros. Mostra o ambiente do pavimento, as
+  alternativas LADO A LADO (desenho em SVG com o ambiente, os ramais e os sprinklers; contagem;
+  espaçamentos; m² por sprinkler; comprimento dos ramais; deslocados por viga) e "Lançar N
+  sprinklers", desligado com o motivo. Há também o campo "Defletor até o teto".
+- **Harness `docs/spikes/distribuir-sprinklers`** (porta 3164): o salão em L com risco ordinário 1
+  mostrou 4 alternativas (39 a 45 sprinklers), todas cobrindo o L. O botão quebrava em duas linhas e
+  ficou sem quebra.
+- **Testes:** `blueprintDistribuicaoSprinklers.test.ts` (7: retângulo com cobertura total e 2+
+  alternativas, ordinário, extraordinário, L sem buraco nem sprinkler fora, viga, lote, sem risco)
+  e `DistribuicaoDeSprinklers.test.tsx` (2). Suíte com 6.640 testes: 6.607 + 33 pulados. Build ok.
 

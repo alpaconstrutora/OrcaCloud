@@ -235,6 +235,7 @@ import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
 import { proporAreaDeOperacao } from '../../utils/blueprintAreaDeOperacao';
+import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import PainelCalhas from './PainelCalhas';
 import PainelCondutores from './PainelCondutores';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
@@ -7367,6 +7368,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (calculoHidraulicoDeIncendio ? marcasDoCalculoDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica) : []),
     [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
   );
+  /** E5.3: o ambiente escolhido para a distribuição automática, e o plano dele (derivado; grava só no "Lançar"). */
+  const [ambienteDosSprinklers, setAmbienteDosSprinklers] = useState<string | null>(null);
+  const planoDeSprinklers = useMemo(
+    () =>
+      ambienteDosSprinklers && criterioDeSprinklersDoEstudo
+        ? distribuirSprinklers(editor.model, ambienteDosSprinklers, criterioDeSprinklersDoEstudo, incendioDoEstudo.hipoteses.sprinklers)
+        : null,
+    [ambienteDosSprinklers, criterioDeSprinklersDoEstudo, editor.model, incendioDoEstudo.hipoteses.sprinklers],
+  );
   /** E5.2: a área de operação proposta na região mais desfavorável (derivada; vira comando só no clique). */
   const propostaDeAreaDeOperacao = useMemo(
     () => (criterioDeSprinklersDoEstudo ? proporAreaDeOperacao(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
@@ -14234,7 +14244,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 }}
                 conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica, analiseDaBombaDeIncendio, pressurizacaoDeIncendio)}
                 sprinklers={
-                  criterioDeSprinklersDoEstudo && (editor.model.terminais ?? []).some((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'SPRINKLER')
+                  criterioDeSprinklersDoEstudo
                     ? {
                         hs: incendioDoEstudo.hipoteses.sprinklers,
                         onHs: (sprinklers) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, sprinklers }),
@@ -14253,6 +14263,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                           },
                           onRisco: (areaId, risco) => editor.run({ type: 'SetAreaDeOperacaoProps', areaId, risco }),
                           onApagar: (areaId) => editor.run({ type: 'DeleteAreaDeOperacao', areaId }),
+                        },
+                        distribuicao: {
+                          ambientes: editor.model.spaces
+                            .filter((s) => s.levelId === levelId)
+                            .map((s, i) => ({ id: s.id, nome: s.name ?? `Ambiente ${i + 1}`, areaM2: s.areaMm2 / 1e6 })),
+                          spaceId: ambienteDosSprinklers,
+                          onSpace: setAmbienteDosSprinklers,
+                          contorno: editor.model.spaces.find((s) => s.id === ambienteDosSprinklers)?.ring ?? null,
+                          plano: planoDeSprinklers,
+                          onLancar: (alt) => {
+                            if (!planoDeSprinklers) return;
+                            const criados = editor.runBatch(comandosDaDistribuicao(planoDeSprinklers, alt));
+                            if (criados?.length) selecionar(criados);
+                          },
                         },
                       }
                     : undefined

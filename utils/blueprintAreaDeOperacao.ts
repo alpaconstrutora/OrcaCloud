@@ -24,7 +24,7 @@ const ehSprinkler = (t: Terminal) => t.disciplina === 'INCENDIO' && t.tipoHidrau
 // ─── A proposta automática ───────────────────────────────────────────────────
 
 /** Sutherland-Hodgman: o polígono `sujeito` (pode ser côncavo) recortado pelo `corte` CONVEXO anti-horário. */
-function recortar(sujeito: Point[], corte: Point[]): Point[] {
+export function recortar(sujeito: Point[], corte: Point[]): Point[] {
   let saida = sujeito;
   for (let i = 0; i < corte.length && saida.length; i++) {
     const a = corte[i];

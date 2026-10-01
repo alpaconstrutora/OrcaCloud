@@ -10,7 +10,8 @@ import { FORMULAS_DE_PERDA, ROTULO_DA_FORMULA, type FormulaDePerda } from '../..
 import { ROTULO_DO_PAPEL, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import type { EstadoDaConferencia, ItemDaConferencia } from '../../utils/blueprintConferenciaIncendio';
-import { RISCOS_DE_SPRINKLER, ROTULO_DO_RISCO, TABELA_DO_RISCO, type CriterioDeSprinklers, type HipotesesDeSprinklers, type RiscoDeSprinkler } from '../../utils/blueprintSprinklersIncendio';
+import { DISTANCIA_AO_TETO_PADRAO_MM, RISCOS_DE_SPRINKLER, ROTULO_DO_RISCO, TABELA_DO_RISCO, type CriterioDeSprinklers, type HipotesesDeSprinklers, type RiscoDeSprinkler } from '../../utils/blueprintSprinklersIncendio';
+import DistribuicaoDeSprinklers, { type PropsDaDistribuicao } from './DistribuicaoDeSprinklers';
 
 interface Props {
   hip: HipotesesHidraulicasDeIncendio;
@@ -24,7 +25,7 @@ interface Props {
   /** E2.4: a conferência em três estados + "não avaliada". Ausente = não mostrar. */
   conferencia?: ItemDaConferencia[];
   /** E5.1: o critério dos sprinklers (risco → densidade × área). Ausente = não mostrar. */
-  sprinklers?: { hs: HipotesesDeSprinklers; onHs: (h: HipotesesDeSprinklers) => void; criterio: CriterioDeSprinklers; areas?: AcoesDasAreas };
+  sprinklers?: { hs: HipotesesDeSprinklers; onHs: (h: HipotesesDeSprinklers) => void; criterio: CriterioDeSprinklers; areas?: AcoesDasAreas; distribuicao?: PropsDaDistribuicao };
 }
 
 /** E5.2: as Áreas de Operação desenhadas e o que se faz com elas. */
@@ -65,7 +66,7 @@ function Opcional({ rotulo, valor, tabela, onValor, passo, unidade }: { rotulo: 
 }
 
 /** E5.1: risco, densidade e área — e o que sai deles. */
-function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
+function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, distribuicao, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
   const linha = cr.risco ? TABELA_DO_RISCO[cr.risco.valor] : null;
   const s = c.porSistema.sprinklers;
   return (
@@ -89,6 +90,7 @@ function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, calculo: c, nomeDe, 
         <Opcional rotulo="Densidade" unidade="L/min/m²" passo={0.1} valor={hs.densidadeLminM2} tabela={linha?.densidadeLminM2 ?? null} onValor={(v) => onHs({ ...hs, densidadeLminM2: v })} />
         <Opcional rotulo="Área de operação" unidade="m²" passo={1} valor={hs.areaDeOperacaoM2} tabela={linha?.areaDeOperacaoM2 ?? null} onValor={(v) => onHs({ ...hs, areaDeOperacaoM2: v })} />
         <Opcional rotulo="Área por sprinkler" unidade="m²" passo={0.1} valor={hs.areaPorSprinklerM2} tabela={linha?.areaMaxPorSprinklerM2 ?? null} onValor={(v) => onHs({ ...hs, areaPorSprinklerM2: v })} />
+        <Opcional rotulo="Defletor até o teto" unidade="mm" passo={25} valor={hs.distanciaAoTetoMm} tabela={DISTANCIA_AO_TETO_PADRAO_MM} onValor={(v) => onHs({ ...hs, distanciaAoTetoMm: v })} />
       </div>
       {cr.risco ? (
         <>
@@ -140,6 +142,7 @@ function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, calculo: c, nomeDe, 
           )}
         </p>
       )}
+      {distribuicao && <DistribuicaoDeSprinklers {...distribuicao} />}
       {areas && <AreasDeOperacao areas={areas} calculo={c} onSelecionar={onSelecionar} />}
       <p className="mt-1 text-[11px] text-slate-500">
         NBR 10897, método hidráulico — CONFERIR NA NORMA. Sem Área de Operação desenhada, abrem os N sprinklers mais desfavoráveis.

@@ -428,7 +428,13 @@ export function memorialDescritivoIncendio(model: BlueprintModel, hip: Hipoteses
   const ac = conta(['ACIONADOR_MANUAL']);
   const av = conta(['AVISADOR']);
   const ce = conta(['CENTRAL_ALARME']);
-  if (det || ac || av || ce) sistemas.push(`Detecção e alarme: ${det} detector(es), ${ac} acionador(es) manual(is), ${av} avisador(es) e ${ce} central(is).`);
+  if (det || ac || av || ce) {
+    sistemas.push(`Detecção e alarme: ${det} detector(es), ${ac} acionador(es) manual(is), ${av} avisador(es) e ${ce} central(is).`);
+    // D1.2: o que a IT 14 do CBMMG fixa e o desenho não modela.
+    sistemas.push(
+      'Conforme a IT 14 do CBMMG: duas fontes de alimentação, a auxiliar com autonomia de 24 h em supervisão e 15 min em alarme (5.3); central em local de fácil acesso e monitorado 24 h, com 1,0 m² livre à frente (5.6, 5.6.6); alarme geral audível em toda a edificação (5.7); acionadores a 0,90–1,35 m, um por pavimento, a até 30 m de qualquer ponto (5.8, 5.10, 5.11); detectores também nos entreforros e entrepisos com instalações combustíveis (5.13); proteção da fiação contra o calor por 60 min (5.17).',
+    );
+  }
   const escadas = a.saidas.protecao.length;
   if (escadas) sistemas.push(`Saídas de emergência: ${escadas} escada(s) — ${a.saidas.protecao.map((e) => `${e.rotulo} ${e.declarada ? ROTULO_DA_PROTECAO[e.declarada].toLowerCase() : '(proteção não declarada)'}`).join('; ')}.`);
   B.push({ tipo: 'secao', texto: 'Sistemas' });
@@ -623,7 +629,12 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
   if (a.alarme.deteccaoExigida || a.alarme.alarmeExigido) {
     const al = a.alarme;
     const faltas = al.ambientes.filter((x) => !x.atende).length + al.longeDoAcionador.length + al.pavimentosSemAvisador.length + (al.semCentral ? 1 : 0) + al.foraDoLaco.length;
-    v.push({ grupo: 'PREVENTIVOS', item: 'Detecção e alarme', norma: 'NBR 17240', exigido: 'cobertura, acionador a ≤ 30 m, avisador por pavimento, central e laço', obtido: faltas ? `${faltas} falta(s)` : 'completo', atende: faltas === 0 });
+    v.push({ grupo: 'PREVENTIVOS', item: 'Detecção e alarme', norma: 'IT 14 do CBMMG · NBR 17240', exigido: 'cobertura, acionador a ≤ 30 m, avisador por pavimento, central e laço', obtido: faltas ? `${faltas} falta(s)` : 'completo', atende: faltas === 0 });
+    // D1.2 (IT 14): um acionador por pavimento (5.11) e as alturas (5.10, 5.6.3).
+    const semAcionador = al.pavimentosSemAcionador ?? [];
+    if (semAcionador.length) v.push({ grupo: 'PREVENTIVOS', item: 'Acionador manual em cada pavimento', norma: 'IT 14 do CBMMG · 5.11', exigido: 'pelo menos um por pavimento', obtido: `falta em ${semAcionador.map((x) => x.nome).join(', ')}`, atende: false });
+    const fora = al.foraDaAltura ?? [];
+    if (fora.length) v.push({ grupo: 'PREVENTIVOS', item: 'Altura do acionador e da central', norma: 'IT 14 do CBMMG · 5.10 e 5.6.3', exigido: 'acionador a 0,90–1,35 m; central a 1,40–1,60 m (em pé) ou 0,90–1,20 m (sentado)', obtido: `${fora.length} fora da altura`, atende: false });
   }
 
   const pendencias = v.filter((x) => !x.atende).map((x) => `${x.item}: ${x.obtido}`);

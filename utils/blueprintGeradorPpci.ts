@@ -303,6 +303,8 @@ export function gerarPpci(
     // F3: o eletroduto do laço (central → dispositivos, e a prumada).
     n += aplicar(proporEletrodutoDoLaco(m));
     etapa('ALARME', 'Detecção e alarme (laço, central e eletroduto)', 'LANCOU', n);
+    // D1.2 (IT 14, 5.7.3): na F-6 (casa de show, boate…) o avisador tem de ser também VISUAL.
+    if (classificacao.divisao.valor === 'F-6' && exigida('ALARME')) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Alarme: na F-6 os avisadores têm de ser também visuais (IT 14 do CBMMG, 5.7.3) — especifique os avisadores audiovisuais.' });
   } else etapa('ALARME', 'Detecção e alarme (laço, central e eletroduto)', 'NAO_EXIGIDA', 0);
 
   // ── F5: a barra antipânico nas portas da rota ─────────────────────────────

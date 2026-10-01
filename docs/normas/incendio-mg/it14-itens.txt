@@ -1,0 +1,15 @@
+// TRANSCRIÇÃO dos itens da IT 14 do CBMMG (Sistemas de Detecção e Alarme de Incêndio) usados no motor — lidos do texto em 01/10/2026. Fonte da verdade do teste `incendioAlarmeMG.test.ts`.
+5.3 Duas fontes de alimentação; a auxiliar (baterias, no-break ou gerador) com autonomia mínima de 24 horas em supervisão e 15 minutos em alarme.
+5.6 A central, o repetidor e o sinóptico em áreas de fácil acesso (salas de controle, de segurança, portaria ou entrada); monitorada 24 horas (5.6.1: repetidor junto à entrada, recomendado).
+5.6.3 A interface de operação da central entre 1,40 m e 1,60 m do piso acabado (em pé); para operadores sentados, entre 0,90 m e 1,20 m.
+5.6.6 Espaço livre mínimo de 1,0 m² em frente à central.
+5.7 A central aciona o alarme geral, audível em toda a edificação (5.7.1: pré-alarme em reunião de público, com retardo de no máximo 2 minutos).
+5.7.2 Onde houver detecção, são obrigatórios os acionadores manuais (exceto nas áreas de concentração de público da F-6).
+5.7.3 Na F-6 com alarme exigido, também avisadores visuais.
+5.8 A distância máxima a ser percorrida, de qualquer ponto da área protegida até o acionador manual mais próximo, não pode ser superior a 30 metros.
+5.9 Acionadores preferencialmente nas áreas comuns de acesso/circulação, perto dos pontos de fuga ou dos equipamentos de combate.
+5.10 Os acionadores manuais devem ser instalados a uma altura entre 0,90 m e 1,35 m do piso acabado.
+5.11 Nas edificações com mais de um pavimento, pelo menos um acionador manual em cada pavimento (mezanino dispensado se coberto pelo do piso principal).
+5.13 Com detecção exigida, detectores também nos entreforros e entrepisos que contenham instalações com materiais combustíveis.
+5.17 Os elementos de proteção contra calor da fiação com resistência mínima de 60 minutos.
+5.21 Os parâmetros e valores de referência devem ter por base a NBR 17240. (A NBR 17240 NÃO está entre os textos fornecidos: raios e cone dos detectores seguem CONFERIR NA NBR 17240.)

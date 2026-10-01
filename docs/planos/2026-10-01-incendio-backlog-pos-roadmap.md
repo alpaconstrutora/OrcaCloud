@@ -405,7 +405,15 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
       - ⚠️ corrigido junto: a publicação da IT 15 fazia as placas de 15 m e a isenção do térreo
         valerem também para a ILUMINAÇÃO (que reaproveita os pontos da rota) — a placa de 15 m não
         é ponto de luminária, e a isenção da placa não isenta a luz; teste de regressão;
-    - [ ] IT 14 (alarme);
+    - [x] IT 14 (alarme) — `it14-itens.txt`: 30 m até o acionador (5.8, já era o padrão), um
+      acionador por pavimento (5.11), acionador a 0,90–1,35 m (5.10) e central a 1,40–1,60 m em
+      pé ou 0,90–1,20 m sentado (5.6.3) — as cotas da proposta já estavam dentro; F-6 pede
+      avisador visual (5.7.3, pendência do gerador); 5.3/5.13/5.17 no memorial. Os raios dos
+      detectores vêm da NBR 17240 (5.21), que não veio: seguem CONFERIR;
+      - ⚠️ defeito achado: o acionador só tinha candidato ao lado de PORTA — pavimento em salão
+        aberto (só a escada chega) ficava sem acionador. Agora o centro do ambiente também é
+        candidato;
+  - D1.2 fechada: IT 17, 08, 18, 16, 15, 13, 14 publicadas (uma por push).
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

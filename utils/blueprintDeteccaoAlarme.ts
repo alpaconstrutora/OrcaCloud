@@ -15,8 +15,10 @@
  * junto da saída, já com o laço (os ids que o lote cria são previstos e
  * conferidos), num lote só.
  *
- * ⚠️ NORMA (CONFERIR NA NBR 17240 e na IT de alarme do CBMMG): raios de 6,3 e
- * 4,2 m e 30 m até o acionador, transcritos de memória.
+ * NORMA: a IT 14 do CBMMG (transcrição `docs/normas/incendio-mg/it14-itens.txt`) fixa os 30 m até
+ * o acionador (5.8), um acionador por pavimento (5.11), o acionador a 0,90–1,35 m (5.10) e a central
+ * a 1,40–1,60 m em pé ou 0,90–1,20 m sentado (5.6.3). Os parâmetros dos detectores seguem a NBR
+ * 17240 (5.21) — os raios de 6,3 e 4,2 m e o cone de chama seguem CONFERIR NA NBR 17240.
  */
 import { applyBatch, pointInPolygon, type BlueprintModel, type Command, type ObjectId, type Point, type Space, type Terminal } from './blueprintKernel';
 import { usoDoNome } from './blueprintPrograma';
@@ -24,8 +26,13 @@ import { construirGrafoEspacial } from './blueprintGrafoEspacial';
 import { distanciaABorda, distanciaDoPonto, distanciasAosPortais, pontosDeCobertura, redeDoPavimento } from './blueprintExtintores';
 import { candidatosDoAmbiente } from './blueprintRotaDeFuga';
 
-export const FONTE_ALARME = 'NBR 17240 e IT de alarme do CBMMG — CONFERIR (transcrito de memória)';
+export const FONTE_ALARME = 'IT 14 do CBMMG (5.6.3, 5.8, 5.10, 5.11) e NBR 17240 (detectores — CONFERIR)';
+/** NBR 17240 (a IT 14, 5.21, remete a ela) — CONFERIR NA NBR 17240. */
 export const RAIO_DO_DETECTOR_MM = { DETECTOR_FUMACA: 6300, DETECTOR_TEMPERATURA: 4200 } as const;
+/** IT 14, 5.10: o acionador manual entre 0,90 e 1,35 m do piso. */
+export const ALTURA_DO_ACIONADOR_MM = { min: 900, max: 1350 } as const;
+/** IT 14, 5.6.3: a interface da central entre 1,40 e 1,60 m (em pé) ou 0,90 e 1,20 m (sentado). */
+export const ALTURAS_DA_CENTRAL_MM = [{ min: 1400, max: 1600 }, { min: 900, max: 1200 }] as const;
 /**
  * F4 (pós-roadmap, 0.89.0): o detector de CHAMA vê um CONE à frente — a rotação da peça é o eixo.
  * Alcance e abertura CONFERIR NA NBR 17240 / fabricante (o cone real depende da chama de referência).
@@ -51,6 +58,7 @@ export function detectorCobre(d: { at: Point; tipo: string; rotacaoGraus?: numbe
   const raio = RAIO_DO_DETECTOR_MM[d.tipo as keyof typeof RAIO_DO_DETECTOR_MM];
   return raio != null && dist <= raio + 1e-6;
 }
+/** IT 14, 5.8: de qualquer ponto até o acionador mais próximo, no máximo 30 m. */
 export const DISTANCIA_ATE_ACIONADOR_MM = 30000;
 
 const SEM_DETECCAO = new Set(['BANHEIRO', 'LAVABO']);
@@ -86,6 +94,10 @@ export interface AnaliseDeAlarme {
   /** Ambientes cujo pior ponto fica a mais de 30 m de um acionador (m; `null` = nenhum acionador no pavimento). */
   longeDoAcionador: { spaceId: ObjectId; rotulo: string; distanciaM: number | null }[];
   pavimentosSemAvisador: { levelId: ObjectId; nome: string }[];
+  /** D1.2 (IT 14, 5.11): pavimentos ocupados sem acionador manual (com alarme exigido ou sistema lançado). */
+  pavimentosSemAcionador?: { levelId: ObjectId; nome: string }[];
+  /** D1.2 (IT 14, 5.10 e 5.6.3): acionadores e centrais fora da altura. */
+  foraDaAltura?: ObjectId[];
   semCentral: boolean;
   foraDoLaco: ObjectId[];
   fonte: string;
@@ -131,7 +143,21 @@ export function analisarAlarme(model: BlueprintModel, deteccaoExigida: boolean, 
   const comAvisador = new Set(ts.filter((t) => ehTipo(t, ['AVISADOR'])).map((t) => t.levelId));
   const exigeAvisador = (id: ObjectId) => comDispositivo.has(id) || (alarmeExigido && model.spaces.some((s) => s.levelId === id));
   const pavimentosSemAvisador = model.levels.filter((l) => exigeAvisador(l.id) && !comAvisador.has(l.id)).map((l) => ({ levelId: l.id, nome: l.name }));
+  // IT 14, 5.11: um acionador por pavimento ocupado.
+  const comAcionador = new Set(acionadores.map((t) => t.levelId));
+  const pavimentosSemAcionador =
+    alarmeExigido || acionadores.length
+      ? model.levels.filter((l) => model.spaces.some((s) => s.levelId === l.id) && !comAcionador.has(l.id)).map((l) => ({ levelId: l.id, nome: l.name }))
+      : [];
+  // IT 14, 5.10 e 5.6.3: as alturas.
+  const dentro = (v: number, f: { min: number; max: number }) => v >= f.min - 1e-6 && v <= f.max + 1e-6;
+  const foraDaAltura = [
+    ...acionadores.filter((t) => !dentro(t.cotaMm, ALTURA_DO_ACIONADOR_MM)),
+    ...centrais.filter((t) => !ALTURAS_DA_CENTRAL_MM.some((f) => dentro(t.cotaMm, f))),
+  ].map((t) => t.id);
   return {
+    pavimentosSemAcionador,
+    foraDaAltura,
     deteccaoExigida,
     alarmeExigido,
     ambientes,
@@ -251,6 +277,11 @@ export function proporAlarme(model: BlueprintModel, a: AnaliseDeAlarme): Command
     }
     const candidatas: { ponto: Point; space: Space }[] = [];
     for (const s of rede.espacos) {
+      // D1.2 (IT 14, 5.11): também o centro do ambiente — o salão aberto sem porta interna (onde só
+      // chega a escada) não tinha candidato, e o pavimento ficava sem acionador.
+      const c0 = candidatosDoAmbiente(s).centro;
+      const centro = { x: Math.round(c0.x), y: Math.round(c0.y) };
+      if (pointInPolygon(s.ring, centro) && distanciaABorda(s, centro) >= 150) candidatas.push({ ponto: centro, space: s });
       for (const pt of rede.portais.get(s.id) ?? []) {
         for (const [dx, dy] of [[600, 400], [-600, 400], [600, -400], [-600, -400], [400, 600], [-400, 600], [400, -600], [-400, -600]]) {
           const q = { x: Math.round(pt.ponto.x + dx), y: Math.round(pt.ponto.y + dy) };

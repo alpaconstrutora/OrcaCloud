@@ -8345,7 +8345,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             : undefined
         }
         pecasDaCaixa={
-          terminalSel?.tipoHidraulico === 'RESERVATORIO'
+          terminalSel?.tipoHidraulico === 'RESERVATORIO' && terminalSel.disciplina === 'AGUA_FRIA'
             ? (() => {
                 // E4.2: boia, extravasor e limpeza — um lote, sugeridos, um Ctrl+Z.
                 const plano = planejarPecasDaCaixa(editor.model, terminalSel);

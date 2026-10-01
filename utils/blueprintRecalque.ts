@@ -83,7 +83,7 @@ const comprimento = (pontas: PontaDeRota[]) => pontas.reduce((s, p) => s + Math.
 
 export function planejarRecalque(model: BlueprintModel, hip: HipotesesDeRecalque, reservatorio: HipotesesDeReservatorio): PlanoDoRecalque {
   const terminais = model.terminais ?? [];
-  const caixas = terminais.filter((t) => t.tipoHidraulico === 'RESERVATORIO');
+  const caixas = terminais.filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA');
   const inferior = caixas.find((c) => c.papelReservatorio === 'INFERIOR');
   const superior = caixas.find((c) => c.papelReservatorio !== 'INFERIOR');
   if (!inferior) return vazio(null); // sem inferior não há recalque — e não é pendência

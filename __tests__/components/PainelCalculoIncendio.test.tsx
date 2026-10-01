@@ -56,7 +56,6 @@ describe('PainelCalculoIncendio', () => {
     const t = screen.getByTestId('calculo-incendio-conferencia');
     expect(t.textContent).toContain('Atende');
     expect(t.textContent).toContain('Falta');
-    expect(t.textContent).toContain('Não avaliado');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Pressão estática nos hidrantes' }));
     expect(onSelecionar).toHaveBeenCalledWith([m.terminais!.find((x) => x.tipoHidraulico === 'HIDRANTE_SIMPLES')!.id]);
   });

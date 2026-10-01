@@ -2779,7 +2779,8 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   VALVULA_DESCARGA: ['AGUA_FRIA'],
   // A espera é ponto para o futuro, em qualquer rede.
   PONTO_ESPERA: TUBOS,
-  RESERVATORIO: ['AGUA_FRIA'],
+  // Incêndio E3.2: também a caixa SÓ de incêndio (a RTI exclusiva, fonte por gravidade).
+  RESERVATORIO: ['AGUA_FRIA', 'INCENDIO'],
   BOMBA: ['AGUA_FRIA'],
   // O aquecedor é ALIMENTADO pela água fria e é a ORIGEM da rede quente.
   AQUECEDOR: AF_AQ,
@@ -2931,6 +2932,14 @@ export interface Terminal {
    */
   fatorK?: number | null;
   posicaoSprinkler?: PosicaoDoSprinkler | null;
+  /**
+   * RESERVA TÉCNICA DE INCÊNDIO (incêndio E3.2, 30/09/2026) — só na caixa de
+   * ÁGUA FRIA compartilhada: os litros do volume dela que ficam para o incêndio
+   * (a saída de consumo fica acima deles). Inteiro, positivo, ≤ `volumeL` quando
+   * declarado. A caixa SÓ de incêndio (`disciplina: 'INCENDIO'`) não usa isto:
+   * o volume dela inteiro é RTI. Omitido do canônico quando ausente.
+   */
+  volumeRtiL?: number | null;
   /**
    * O ponto foi GERADO pelo sistema e ainda não foi tocado por ninguém.
    *
@@ -5731,6 +5740,15 @@ export function assertModelInvariants(model: BlueprintModel): void {
       }
       if (t.formaReservatorio != null && !(FORMAS_DO_RESERVATORIO as readonly string[]).includes(t.formaReservatorio)) {
         throw new KernelError('BAD_RESERVOIR', `Forma de reservatório inválida em ${t.id}: ${t.formaReservatorio}`);
+      }
+    }
+    // RTI (incêndio E3.2): só na caixa de água fria, inteira, positiva e dentro do volume.
+    if (t.volumeRtiL != null) {
+      if (t.tipoHidraulico !== 'RESERVATORIO' || t.disciplina !== 'AGUA_FRIA') {
+        throw new KernelError('BAD_RTI', `Terminal ${t.id} não é caixa de água fria e não pode ter reserva de incêndio`);
+      }
+      if (!Number.isInteger(t.volumeRtiL) || t.volumeRtiL <= 0 || (t.volumeL != null && t.volumeRtiL > t.volumeL)) {
+        throw new KernelError('BAD_RTI', `Reserva de incêndio inválida em ${t.id}: ${t.volumeRtiL} L`);
       }
     }
     // Sprinkler (incêndio E1.1): K e posição só no sprinkler, e só do vocabulário.

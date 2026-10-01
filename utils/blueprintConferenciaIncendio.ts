@@ -19,7 +19,7 @@ import { redeDeIncendio, type CalculoDeIncendio, type HipotesesHidraulicasDeInce
 import type { MarcaDeVerificacao } from './blueprintVerificacaoRede';
 
 /** As peças que precisam estar NA rede (as sobre o trecho vivem no meio do tubo). */
-const PECAS_DE_NO = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'VGA', 'BOMBA_INCENDIO', 'BOMBA_JOCKEY']);
+const PECAS_DE_NO = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'VGA', 'BOMBA_INCENDIO', 'BOMBA_JOCKEY', 'RESERVATORIO']);
 const CONSUMIDORAS = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'SPRINKLER']);
 
 /** O diagnóstico do lançamento — sem cálculo. */
@@ -53,7 +53,7 @@ export function marcasDoLancamentoDeIncendio(model: BlueprintModel): MarcaDeVeri
     const fila = [no];
     jaMarcado.add(no);
     while (fila.length) for (const v of adj.get(fila.pop()!) ?? []) if (!jaMarcado.has(v)) (jaMarcado.add(v), fila.push(v));
-    marcas.push({ chave: `incsemfonte|${t.id}`, tipo: 'INCENDIO_SEM_BOMBA', levelId: t.levelId, at: { ...t.at }, texto: 'sem entrada de água — a rede não chega à bomba', severidade: 'ERRO', alvoId: t.id, disciplina: 'INCENDIO' });
+    marcas.push({ chave: `incsemfonte|${t.id}`, tipo: 'INCENDIO_SEM_BOMBA', levelId: t.levelId, at: { ...t.at }, texto: 'sem entrada de água — a rede não chega à bomba nem à caixa de incêndio', severidade: 'ERRO', alvoId: t.id, disciplina: 'INCENDIO' });
   }
   // Peça maior que o tubo: algum tubo que chega nela abaixo do DN mínimo da ficha.
   for (const t of pecas) {
@@ -113,7 +113,8 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
   const temRede = (model.trechos ?? []).some((t) => t.disciplina === 'INCENDIO');
   const semCalculo = !c.cenario;
 
-  itens.push({ grupo: 'Lançamento', item: 'Bomba de incêndio ligada à rede', exigido: 'a origem do cálculo', obtido: c.motivo?.startsWith('sem bomba') ? 'não há' : 'ligada', estado: c.motivo?.startsWith('sem bomba') ? 'FALTA' : 'ATENDE', alvos: [] });
+  const semFonte = !!c.motivo?.startsWith('sem bomba');
+  itens.push({ grupo: 'Lançamento', item: 'Fonte ligada à rede (bomba ou caixa de incêndio)', exigido: 'a origem do cálculo', obtido: semFonte ? 'não há' : c.porGravidade ? 'caixa de incêndio (gravidade)' : 'bomba', estado: semFonte ? 'FALTA' : 'ATENDE', alvos: [] });
   const fora = lanc.filter((m) => m.tipo === 'INCENDIO_FORA_DA_REDE' || m.tipo === 'INCENDIO_SEM_BOMBA');
   itens.push({ grupo: 'Lançamento', item: 'Toda peça recebe água da bomba', exigido: 'nenhuma peça isolada', obtido: fora.length ? `${fora.length} fora` : 'todas', estado: !temRede ? 'NAO_AVALIADO' : fora.length ? 'FALTA' : 'ATENDE', alvos: fora.map((m) => m.alvoId) });
   const finos = lanc.filter((m) => m.tipo === 'INCENDIO_DN_PECA');
@@ -166,6 +167,29 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
     estado: !temRede ? 'NAO_AVALIADO' : ligados.length ? 'ATENDE' : 'FALTA',
     alvos: recalques.filter((t) => !ligados.includes(t)).map((t) => t.id),
   });
-  itens.push({ grupo: 'CBMMG', item: 'Reserva técnica de incêndio', exigido: 'volume pela IT', obtido: 'a RTI entra na E3.2 do roadmap', estado: 'NAO_AVALIADO', alvos: [] });
+  // E3.2: a RTI — vazão do cálculo × autonomia, contra a reserva desenhada.
+  const litros = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;
+  itens.push({
+    grupo: 'CBMMG',
+    item: 'Reserva técnica de incêndio',
+    exigido: c.rti.exigidaL != null ? `≥ ${litros(c.rti.exigidaL)} (${um(c.cenario?.vazaoNaFonteLmin ?? 0, 0)} L/min × ${hip.autonomiaMin} min — CONFERIR NA IT)` : `vazão × ${hip.autonomiaMin} min — CONFERIR NA IT`,
+    obtido: c.rti.disponivelL > 0 ? `${litros(c.rti.disponivelL)} desenhados` : 'nenhuma reserva desenhada',
+    estado: c.rti.exigidaL == null ? 'NAO_AVALIADO' : c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'ATENDE' : 'FALTA',
+    alvos: c.rti.caixas,
+  });
+  // A saída de consumo da caixa compartilhada acima da RTI: o desenho não guarda a altura da tomada.
+  const compartilhadas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA' && (t.volumeRtiL ?? 0) > 0);
+  for (const t of compartilhadas) {
+    const area = t.larguraMm && t.profundidadeMm ? (t.larguraMm * t.profundidadeMm) / 1e6 : null;
+    const alturaCm = area ? (t.volumeRtiL! / 1000 / area) * 100 : null;
+    itens.push({
+      grupo: 'CBMMG',
+      item: 'Saída de consumo acima da reserva de incêndio',
+      exigido: alturaCm != null ? `tomada de consumo ≥ ${um(alturaCm, 0)} cm acima do fundo` : 'tomada de consumo acima da RTI',
+      obtido: 'o desenho não guarda a altura da tomada — confira na caixa',
+      estado: 'NAO_AVALIADO',
+      alvos: [t.id],
+    });
+  }
   return itens;
 }

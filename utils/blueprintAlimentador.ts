@@ -140,7 +140,7 @@ export function planejarAlimentador(
   const terminais = model.terminais ?? [];
   const entrada = [...terminais].filter((t) => t.tipoHidraulico === 'HIDROMETRO' && t.disciplina === 'AGUA_FRIA').sort((a, b) => a.id.localeCompare(b.id))[0];
   if (!entrada) return vazio('Coloque o hidrômetro (a entrada de água) no desenho — no cavalete, no limite do lote.');
-  const caixas = terminais.filter((t) => t.tipoHidraulico === 'RESERVATORIO');
+  const caixas = terminais.filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA');
   const destino = caixas.find((c) => c.papelReservatorio === 'INFERIOR') ?? caixas.find((c) => c.papelReservatorio !== 'INFERIOR');
   if (!destino) return vazio("Não há caixa d'água no desenho para o alimentador chegar.");
 

@@ -469,7 +469,16 @@
  * padrão do incêndio é o aço galvanizado (derivado, não gravado). Vocabulário
  * novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.80.0';
+/**
+ * ─── 0.80.0 → 0.81.0 (30/09/2026) — A RESERVA TÉCNICA DE INCÊNDIO ───────────
+ *
+ * `RESERVATORIO` passa a existir na rede de `INCENDIO` (a caixa só de incêndio,
+ * fonte por gravidade sem bomba), e a caixa de ÁGUA FRIA ganha
+ * `Terminal.volumeRtiL` — os litros reservados para o incêndio (E3.2 do roadmap
+ * de incêndio), inteiro, ≤ `volumeL`, omitido do canônico quando ausente.
+ * Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.81.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

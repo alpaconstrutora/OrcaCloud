@@ -36,7 +36,7 @@ const regra9521 = (m: BlueprintModel, levelId: string | null = null) => conferir
 
 describe('comandos · o índice derivado', () => {
   it('kernel 0.71.0; a mesma letra em pavimentos diferentes são DOIS comandos; global junta os pavimentos', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.80.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.81.0');
     const { m: m0, t, p1 } = sobrado();
     let m = luz(m0, t, 3000, 2000, 'a');
     m = interruptor(m, t, 200, 1000, 'a');

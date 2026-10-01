@@ -103,6 +103,8 @@ interface Props {
     formaReservatorio?: 'PRISMA' | 'CILINDRO' | null;
     /** Incêndio E1.4: fator K e posição do sprinkler. `null` = o da ficha. */
     fatorK?: number | null;
+    /** Incêndio E3.2: a reserva de incêndio na caixa de água fria. `null` apaga. */
+    volumeRtiL?: number | null;
     posicaoSprinkler?: PosicaoDoSprinkler | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
@@ -290,6 +292,31 @@ export default function PainelTrechoSelecionado({
                     className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
                   />
                 </label>
+              )}
+              {/* INCÊNDIO E3.2: a RTI dentro da caixa de água fria compartilhada — o consumo
+                  conta só o volume acima dela, e a rede de incêndio a cobra na conferência. */}
+              {terminal.tipoHidraulico === 'RESERVATORIO' && terminal.disciplina === 'AGUA_FRIA' && (
+                <label className="block">
+                  <span className="text-[11px] font-medium text-slate-600">Reserva de incêndio (L)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={500}
+                    value={terminal.volumeRtiL ?? ''}
+                    placeholder="nenhuma"
+                    onChange={(e) => {
+                      const v = Math.round(Number(e.target.value));
+                      onTerminal({ volumeRtiL: e.target.value === '' || !(v > 0) ? null : terminal.volumeL != null ? Math.min(v, terminal.volumeL) : v });
+                    }}
+                    aria-label="Reserva técnica de incêndio na caixa, em litros"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                  />
+                </label>
+              )}
+              {terminal.tipoHidraulico === 'RESERVATORIO' && terminal.disciplina === 'INCENDIO' && (
+                <p className="text-[11px] text-slate-500" data-testid="caixa-de-incendio">
+                  Caixa só de incêndio: o volume inteiro é reserva técnica, e sem bomba ela é a fonte por gravidade.
+                </p>
               )}
               {terminal.tipoHidraulico === 'RESERVATORIO' && pecasDaCaixa && (
                 <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600" data-testid="pecas-da-caixa">

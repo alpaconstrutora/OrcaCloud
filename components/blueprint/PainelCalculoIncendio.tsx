@@ -87,6 +87,7 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
         <Numero rotulo="Mangotinho — pressão no esguicho" unidade="kPa" passo={10} valor={hip.pressaoMinimaMangotinhoKpa} onValor={set('pressaoMinimaMangotinhoKpa')} />
         <Numero rotulo="Pressão máxima na rede" unidade="kPa" passo={50} valor={hip.pressaoMaximaKpa} onValor={set('pressaoMaximaKpa')} />
         <Numero rotulo="Sprinkler — pressão mínima" unidade="kPa" passo={5} valor={hip.pressaoMinimaSprinklerKpa} onValor={set('pressaoMinimaSprinklerKpa')} />
+        <Numero rotulo="Autonomia da reserva" unidade="min" passo={5} valor={hip.autonomiaMin} onValor={set('autonomiaMin')} />
       </div>
 
       {c.motivo && (
@@ -103,13 +104,33 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
         </p>
       )}
 
-      {cen && c.cargaNecessariaM != null && (
+      {cen && (c.porGravidade || c.cargaNecessariaM != null) && (
         <>
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800" data-testid="calculo-incendio-bomba">
-            A bomba precisa dar <strong className="tabular-nums">{n(cen.vazaoNaFonteLmin, 0)} L/min</strong> a{' '}
-            <strong className="tabular-nums">{n(c.cargaNecessariaM, 1)} mca</strong> ({n(c.cargaNecessariaM * 9.80665, 0)} kPa) acima dela, com{' '}
-            {c.abertos.length} hidrante(s) aberto(s) — os mais desfavoráveis.
-          </p>
+          {c.porGravidade ? (
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800" data-testid="calculo-incendio-gravidade">
+              Por gravidade, a caixa de incêndio entrega <strong className="tabular-nums">{n(cen.vazaoNaFonteLmin, 0)} L/min</strong> com{' '}
+              {c.abertos.length} hidrante(s) aberto(s).{' '}
+              {cen.terminais.every((t) => t.atende)
+                ? 'Atende.'
+                : c.cargaNecessariaM == null
+                  ? 'Nem uma caixa muito mais alta atenderia — a rede precisa de bomba.'
+                  : `Não atende: a água teria de estar ${n(c.cargaNecessariaM, 1)} m acima do fundo da caixa — subir a caixa ou pôr bomba.`}
+            </p>
+          ) : (
+            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800" data-testid="calculo-incendio-bomba">
+              A bomba precisa dar <strong className="tabular-nums">{n(cen.vazaoNaFonteLmin, 0)} L/min</strong> a{' '}
+              <strong className="tabular-nums">{n(c.cargaNecessariaM ?? 0, 1)} mca</strong> ({n((c.cargaNecessariaM ?? 0) * 9.80665, 0)} kPa) acima dela, com{' '}
+              {c.abertos.length} hidrante(s) aberto(s) — os mais desfavoráveis.
+            </p>
+          )}
+          {c.rti.exigidaL != null && (
+            <p className="text-xs text-slate-700" data-testid="calculo-incendio-rti">
+              Reserva técnica: {n(c.rti.exigidaL, 0)} L exigidos ({n(cen.vazaoNaFonteLmin, 0)} L/min × {hip.autonomiaMin} min) · {n(c.rti.disponivelL, 0)} L desenhados{' '}
+              <span className={c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'text-emerald-700' : 'font-semibold text-red-700'}>
+                {c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? '— atende' : `— faltam ${n(c.rti.exigidaL - c.rti.disponivelL, 0)} L`}
+              </span>
+            </p>
+          )}
 
           <table className="w-full text-xs" data-testid="calculo-incendio-abertos">
             <thead>

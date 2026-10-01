@@ -32,6 +32,7 @@ import {
   cotaUsualDoPontoHidraulico,
   ehPontoDeConsumo,
   ehSobreOTrecho,
+  grupoDoPontoNaDisciplina,
   projetarNoTrecho,
   tiposHidraulicosDa,
 } from '../utils/blueprintHidraulica';
@@ -170,7 +171,9 @@ describe('taxonomia hidráulica · o inventário', () => {
       for (const d of DISCIPLINAS_DO_PONTO_HIDRAULICO[t]) {
         const linha = linhas(comPonto(d, t))[0];
         expect(linha.chave, `${t} em ${d}`).toBe(`PONTO_${d}_${t}`);
-        expect(fichaDoComponente(linha.chave)?.grupo, `${t} em ${d}`).toBe(GRUPO_DO_PONTO_HIDRAULICO[t]);
+        // Incêndio E3.2: a peça de água usada na rede de incêndio vai para o grupo de incêndio.
+        expect(fichaDoComponente(linha.chave)?.grupo, `${t} em ${d}`).toBe(grupoDoPontoNaDisciplina(t, d));
+        if (d !== 'INCENDIO') expect(grupoDoPontoNaDisciplina(t, d)).toBe(GRUPO_DO_PONTO_HIDRAULICO[t]);
       }
     }
   });

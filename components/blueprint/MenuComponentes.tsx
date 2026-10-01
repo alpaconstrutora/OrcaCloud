@@ -88,7 +88,7 @@ import {
   ROTULO_DO_INTERRUPTOR,
   ROTULO_DO_PONTO_ELETRICO,
 } from '../../utils/blueprintRede';
-import { FICHA_DO_PONTO_HIDRAULICO, GRUPO_HIDRAULICO_A_CLASSIFICAR, ehSobreOTrecho } from '../../utils/blueprintHidraulica';
+import { grupoDoPontoNaDisciplina, FICHA_DO_PONTO_HIDRAULICO, GRUPO_HIDRAULICO_A_CLASSIFICAR, ehSobreOTrecho } from '../../utils/blueprintHidraulica';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
 
 /**
@@ -296,11 +296,22 @@ function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[
       });
       continue;
     }
+    // Incêndio E3.2: o tipo de água que também vale na rede de incêndio (a caixa, a
+    // espera) aparece no MENU DE INCÊNDIO, com nome próprio — e não como uma terceira
+    // variante "· incêndio" no menu da hidráulica.
+    const daAgua = disciplinas.filter((d) => d !== 'INCENDIO');
     for (const d of disciplinas) {
       const cota = ficha.cotaMm[d];
-      acrescentar(ficha.grupo, {
+      const paraOIncendio = d === 'INCENDIO' && !ficha.grupo.startsWith('Incêndio');
+      acrescentar(grupoDoPontoNaDisciplina(t, d), {
         chave: `PONTO_${d}_${t}`,
-        rotulo: disciplinas.length > 1 ? `${ficha.rotulo} · ${ROTULO_DA_DISCIPLINA[d].toLowerCase()}` : ficha.rotulo,
+        rotulo: paraOIncendio
+          ? t === 'RESERVATORIO'
+            ? 'Caixa de incêndio (RTI)'
+            : `${ficha.rotulo} · incêndio`
+          : daAgua.length > 1
+            ? `${ficha.rotulo} · ${ROTULO_DA_DISCIPLINA[d].toLowerCase()}`
+            : ficha.rotulo,
         icone: d === 'ESGOTO' ? Waves : d === 'AGUA_QUENTE' ? Flame : (ICONE[ficha.grupo] ?? Droplet),
         ajuda: `${ficha.ajuda}${cota != null ? ` Cota usual ${cota} mm, ajustável no painel.` : ''}`,
         escolha: { tool: 'terminal', disciplina: d, tipoHidraulico: t },

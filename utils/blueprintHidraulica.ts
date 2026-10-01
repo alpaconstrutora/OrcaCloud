@@ -216,8 +216,9 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     sigla: 'CX',
     grupo: RESERVA,
     // A cota é a do FUNDO da caixa: é de onde a rede sai.
-    cotaMm: { AGUA_FRIA: 2800 },
-    dnMinimoMm: { AGUA_FRIA: 25 },
+    // Incêndio E3.2: a caixa SÓ de incêndio também — o fundo dela é a fonte por gravidade.
+    cotaMm: { AGUA_FRIA: 2800, INCENDIO: 2800 },
+    dnMinimoMm: { AGUA_FRIA: 25, INCENDIO: 65 },
     medidasMm: { larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 },
     volumeL: 1000,
     ajuda: "Reservatório superior. A cota é a do fundo; o volume, em litros, é o da caixa comercial. É de onde a água fria automática parte.",
@@ -579,6 +580,19 @@ export const SIGLA_DO_PONTO_HIDRAULICO = Object.fromEntries(
 export const GRUPO_DO_PONTO_HIDRAULICO = Object.fromEntries(
   TIPOS_DE_PONTO_HIDRAULICO.map((t) => [t, FICHA_DO_PONTO_HIDRAULICO[t].grupo]),
 ) as Record<TipoDePontoHidraulico, GrupoHidraulico>;
+
+/**
+ * O grupo do ponto NA DISCIPLINA (incêndio E3.2): o tipo de água que também vale
+ * na rede de incêndio (a caixa, a espera) vai para o grupo de incêndio quando é
+ * de incêndio — no menu e no inventário, pela mesma regra. Registro e conexão
+ * (sobre o trecho) ficam no grupo da ficha.
+ */
+export function grupoDoPontoNaDisciplina(t: TipoDePontoHidraulico, d: DisciplinaDeRede): GrupoHidraulico {
+  const f = FICHA_DO_PONTO_HIDRAULICO[t];
+  // A peça SOBRE O TRECHO tem um item só: a disciplina vem do tubo, o grupo é o da ficha.
+  if (f.sobreOTrecho) return f.grupo;
+  return d === 'INCENDIO' && !f.grupo.startsWith('Incêndio') ? 'Incêndio — bombas e válvulas' : f.grupo;
+}
 
 /** O grupo do ponto hidráulico SEM classificação — visível, como "a classificar" elétrico. */
 export const GRUPO_HIDRAULICO_A_CLASSIFICAR = 'Hidráulica — a classificar';

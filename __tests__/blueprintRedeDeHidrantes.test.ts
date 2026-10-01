@@ -73,14 +73,16 @@ describe('E3.1 · rede de hidrantes automática', () => {
     expect(plano.comandos).toEqual([]);
   });
 
-  it('sem bomba, ou hidrante abaixo da bomba: o motivo diz o que fazer', () => {
+  it('sem fonte: o motivo diz o que fazer; hidrante ABAIXO da bomba: a coluna desce até ele (E3.2)', () => {
     let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
     m = applyCommand(m, peca(m.levels[0].id, 'HIDRANTE_SIMPLES', 0, 0, 1300)).model;
-    expect(planejarRedeDeHidrantes(m).motivo).toMatch(/bomba de incêndio primeiro/);
+    expect(planejarRedeDeHidrantes(m).motivo).toMatch(/lance a bomba de incêndio \(ou a caixa de incêndio\) primeiro/);
     let n = applyCommand(emptyModel(), { type: 'AddLevel', name: 'S', elevationMm: -2900, defaultHeightMm: 2800 }).model;
     n = applyCommand(n, { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const [sub, ter] = [...n.levels].sort((a, b) => a.elevationMm - b.elevationMm);
     n = applyBatch(n, [peca(ter.id, 'BOMBA_INCENDIO', 0, 0, 300), peca(sub.id, 'HIDRANTE_SIMPLES', 5000, 0, 1300)]).model;
-    expect(planejarRedeDeHidrantes(n).motivo).toMatch(/abaixo do pavimento da bomba/);
+    const plano = planejarRedeDeHidrantes(n);
+    expect(plano.motivo).toBeNull();
+    expect(conferirPlanoDaRede(n, plano)).toEqual({ ok: true });
   });
 });

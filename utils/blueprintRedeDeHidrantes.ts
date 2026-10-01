@@ -46,7 +46,7 @@ export interface ColunaDoPlano {
   x: number;
   y: number;
   hidranteIds: ObjectId[];
-  /** Do pavimento da bomba ao último com hidrante. */
+  /** Do pavimento da fonte ao hidrante mais longe dela (para cima ou para baixo). */
   pavimentos: number;
 }
 
@@ -69,8 +69,11 @@ export function planejarRedeDeHidrantes(model: BlueprintModel, hip: HipotesesDaR
   const vazio = (motivo: string): PlanoDaRedeDeHidrantes => ({ motivo, colunas: [], aLigar: [], jaLigados: [], apagados: 0, comandos: [], metros: 0 });
   const sugeridos = (model.trechos ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.sugerido);
   const semSugeridos: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !(t.disciplina === 'INCENDIO' && t.sugerido)) };
-  const bomba = (model.terminais ?? []).find((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'BOMBA_INCENDIO');
-  if (!bomba) return vazio('lance a bomba de incêndio primeiro — a rede parte dela');
+  // A fonte: a bomba, senão a caixa só de incêndio (E3.2, gravidade — a coluna DESCE dela).
+  const bomba =
+    (model.terminais ?? []).find((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'BOMBA_INCENDIO') ??
+    (model.terminais ?? []).find((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'RESERVATORIO');
+  if (!bomba) return vazio('lance a bomba de incêndio (ou a caixa de incêndio) primeiro — a rede parte dela');
   const hidrantes = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico && COMBATE.has(t.tipoHidraulico));
   if (hidrantes.length === 0) return vazio('nenhum hidrante ou mangotinho no desenho');
 
@@ -95,8 +98,6 @@ export function planejarRedeDeHidrantes(model: BlueprintModel, hip: HipotesesDaR
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm || a.id.localeCompare(b.id));
   const idx = new Map(niveis.map((l, i) => [l.id, i]));
   const i0 = idx.get(bomba.levelId)!;
-  const abaixo = aLigar.filter((h) => idx.get(h.levelId)! < i0);
-  if (abaixo.length) return vazio(`${abaixo.length} hidrante(s) abaixo do pavimento da bomba — a coluna sobe da bomba; mova a bomba para o pavimento mais baixo`);
 
   // Grupos por proximidade em planta (união-busca).
   const pai = aLigar.map((_, i) => i);
@@ -121,14 +122,17 @@ export function planejarRedeDeHidrantes(model: BlueprintModel, hip: HipotesesDaR
   for (const membros of [...grupos.values()].sort((a, b) => a[0].id.localeCompare(b[0].id))) {
     const cx = Math.round(membros.reduce((s, h) => s + h.at.x, 0) / membros.length) + DESVIO_DA_COLUNA_MM;
     const cy = Math.round(membros.reduce((s, h) => s + h.at.y, 0) / membros.length);
-    const topo = Math.max(...membros.map((h) => idx.get(h.levelId)!));
-    // A coluna, pavimento a pavimento, partida nas cotas onde algo encosta.
-    for (let k = i0; k <= topo; k++) {
+    // A coluna vai do pavimento da fonte ao hidrante mais longe dela — para cima (bomba)
+    // ou para baixo (caixa no alto) —, partida nas cotas onde algo encosta.
+    const niveisDoGrupo = membros.map((h) => idx.get(h.levelId)!);
+    const baixo = Math.min(i0, ...niveisDoGrupo);
+    const topo = Math.max(i0, ...niveisDoGrupo);
+    for (let k = baixo; k <= topo; k++) {
       const nivel = niveis[k];
       const cotas = new Set<number>([cr]);
-      if (k > i0) cotas.add(0);
+      if (k > baixo) cotas.add(0);
       if (k < topo) cotas.add(nivel.defaultHeightMm);
-      const ordenadas = [...cotas].sort((a, b) => a - b).filter((c) => (k === i0 ? c >= cr : true));
+      const ordenadas = [...cotas].sort((a, b) => a - b).filter((c) => (k === baixo ? c >= cr : true) && (k === topo ? c <= cr : true));
       for (let q = 0; q + 1 < ordenadas.length; q++) add(nivel.id, cx, cy, ordenadas[q], cx, cy, ordenadas[q + 1]);
     }
     // Os ramais: da coluna, no forro, até sobre o hidrante; e a descida até a válvula.
@@ -136,7 +140,7 @@ export function planejarRedeDeHidrantes(model: BlueprintModel, hip: HipotesesDaR
       add(h.levelId, cx, cy, cr, h.at.x, h.at.y, cr);
       add(h.levelId, h.at.x, h.at.y, cr, h.at.x, h.at.y, h.cotaMm);
     }
-    colunas.push({ x: cx, y: cy, hidranteIds: membros.map((h) => h.id), pavimentos: topo - i0 + 1 });
+    colunas.push({ x: cx, y: cy, hidranteIds: membros.map((h) => h.id), pavimentos: topo - baixo + 1 });
   }
 
   // O geral: sobe da bomba e corre em y = y da bomba, partido em cada x; um braço por x.

@@ -75,6 +75,8 @@ export interface HipotesesHidraulicasDeIncendio {
   /** Limites da rede. */
   pressaoMaximaKpa: number;
   velocidadeMaxMs: number;
+  /** E3.2: tempo de funcionamento que a RTI tem de garantir, min — CONFERIR NA IT. */
+  autonomiaMin: number;
 }
 
 export const HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO: HipotesesHidraulicasDeIncendio = {
@@ -92,6 +94,7 @@ export const HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO: HipotesesHidraulicasDeIncend
   pressaoMinimaSprinklerKpa: 50,
   pressaoMaximaKpa: 1000,
   velocidadeMaxMs: 5,
+  autonomiaMin: 60,
 };
 
 /** As premissas gravadas, completadas com o padrão — só entra número finito e positivo. */
@@ -134,6 +137,8 @@ export interface RedeDeIncendio {
   consumidores: Map<ObjectId, string>;
   fonte: Terminal | null;
   noDaFonte: string | null;
+  /** E3.2: a bomba (carga a calcular) ou a caixa de incêndio (gravidade: a carga é a cota do fundo). */
+  tipoDaFonte: 'BOMBA' | 'GRAVIDADE' | null;
 }
 
 const ROTULO_DA_PECA: Partial<Record<string, PecaDePerda>> = { JOELHO_90: 'JOELHO_90', JOELHO_45: 'JOELHO_45', REDUCAO: 'REDUCAO', LUVA: 'LUVA' };
@@ -202,12 +207,15 @@ export function redeDeIncendio(model: BlueprintModel): RedeDeIncendio {
     for (const x of tocam) somar(x.trecho.id, 'VALVULA_RETENCAO', 1 / tocam.length);
   }
 
-  const fonte = terminais.find((t) => t.tipoHidraulico === 'BOMBA_INCENDIO' && noDoTerminal.has(t.id)) ?? null;
+  // A bomba manda; sem ela, a caixa SÓ de incêndio é a fonte por gravidade (E3.2).
+  const bomba = terminais.find((t) => t.tipoHidraulico === 'BOMBA_INCENDIO' && noDoTerminal.has(t.id)) ?? null;
+  const caixa = terminais.find((t) => t.tipoHidraulico === 'RESERVATORIO' && noDoTerminal.has(t.id)) ?? null;
+  const fonte = bomba ?? caixa;
   const consumidores = new Map([...noDoTerminal].filter(([id]) => {
     const t = terminais.find((x) => x.id === id)!;
     return ehDeCombate(t) || ehSprinkler(t);
   }));
-  return { tubos, cota, noDoTerminal, consumidores, fonte, noDaFonte: fonte ? noDoTerminal.get(fonte.id)! : null };
+  return { tubos, cota, noDoTerminal, consumidores, fonte, noDaFonte: fonte ? noDoTerminal.get(fonte.id)! : null, tipoDaFonte: bomba ? 'BOMBA' : caixa ? 'GRAVIDADE' : null };
 }
 
 // ─── Um cenário com a carga dada ─────────────────────────────────────────────
@@ -264,7 +272,7 @@ const jDaMangueira = (dMm: number, c: number) => (q: number) => {
 /** Resolve a rede com os terminais `abertos` e a fonte na carga dada (m acima da bomba). */
 export function calcularCenario(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio, abertos: readonly ObjectId[], cargaNaFonteM: number, rede = redeDeIncendio(model)): CenarioCalculado {
   const vazio = (motivo: string): CenarioCalculado => ({ convergiu: false, motivo, cargaNaFonteM, vazaoNaFonteLmin: 0, terminais: [], trechos: [] });
-  if (!rede.fonte || !rede.noDaFonte) return vazio('sem bomba de incêndio ligada à rede — é ela a origem do cálculo');
+  if (!rede.fonte || !rede.noDaFonte) return vazio('sem bomba de incêndio nem caixa de incêndio ligada à rede — é ela a origem do cálculo');
   const nos: NoHidraulico[] = [...rede.cota].map(([id, z]) => ({ id, zM: z, ...(id === rede.noDaFonte ? { cargaFixaM: z + cargaNaFonteM } : {}) }));
   const elos: EloHidraulico[] = rede.tubos.map((x) =>
     eloDeTubo(x.trecho.id, x.de, x.para, (q) => perdaUnitaria(hip.formula, x.material, x.trecho.bitolaMm, q), x.lM + x.leqM),
@@ -357,6 +365,26 @@ export interface CalculoDeIncendio {
   papel: Map<ObjectId, PapelDoTrecho>;
   /** Pressão ESTÁTICA (sem vazão) com a carga de projeto, por hidrante: a verificação dos demais. */
   estaticaKpa: Map<ObjectId, number>;
+  /**
+   * E3.2: por GRAVIDADE (caixa de incêndio sem bomba) a carga não se escolhe —
+   * é a cota do fundo. Aí `cargaNecessariaM` diz quanto ACIMA do fundo a água
+   * teria de estar, e o cenário é o que a caixa entrega de fato.
+   */
+  porGravidade: boolean;
+  /** E3.2: a reserva técnica — exigida (vazão × autonomia) e a desenhada. */
+  rti: { exigidaL: number | null; disponivelL: number; caixas: ObjectId[] };
+}
+
+/** A RTI desenhada: a reserva das caixas de água fria compartilhadas + o volume das caixas só de incêndio. */
+export function rtiDoDesenho(model: BlueprintModel): { disponivelL: number; caixas: ObjectId[] } {
+  const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && ((t.disciplina === 'AGUA_FRIA' && (t.volumeRtiL ?? 0) > 0) || t.disciplina === 'INCENDIO'));
+  const volume = (t: Terminal) => {
+    if (t.disciplina === 'AGUA_FRIA') return t.volumeRtiL ?? 0;
+    if (t.volumeL != null && t.volumeL > 0) return t.volumeL;
+    if (t.larguraMm && t.profundidadeMm && t.alturaMm) return Math.round((t.larguraMm * t.profundidadeMm * t.alturaMm) / 1e6);
+    return 0;
+  };
+  return { disponivelL: caixas.reduce((s, t) => s + volume(t), 0), caixas: caixas.map((t) => t.id) };
 }
 
 /** O papel de cada trecho, pela árvore de menor caminho a partir da fonte. */
@@ -444,8 +472,9 @@ export function calculoDeIncendio(model: BlueprintModel, hip: HipotesesHidraulic
   const combate = (model.terminais ?? []).filter(ehDeCombate);
   const desligados = (model.terminais ?? []).filter((t) => (ehDeCombate(t) || ehSprinkler(t)) && !rede.noDoTerminal.has(t.id)).map((t) => t.id);
   const papel = papelDosTrechos(rede);
-  const base: CalculoDeIncendio = { motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map() };
-  if (!rede.fonte) return { ...base, motivo: 'sem bomba de incêndio ligada à rede — lance a bomba e ligue-a à tubulação' };
+  const rtiDesenhada = rtiDoDesenho(model);
+  const base: CalculoDeIncendio = { motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map(), porGravidade: rede.tipoDaFonte === 'GRAVIDADE', rti: { exigidaL: null, ...rtiDesenhada } };
+  if (!rede.fonte) return { ...base, motivo: 'sem bomba de incêndio nem caixa de incêndio ligada à rede — lance uma das duas e ligue-a à tubulação' };
   const naRede = combate.filter((t) => rede.noDoTerminal.has(t.id));
   if (naRede.length === 0) return { ...base, motivo: 'nenhum hidrante ou mangotinho ligado à rede' };
   const desfavoraveis = naRede
@@ -453,10 +482,17 @@ export function calculoDeIncendio(model: BlueprintModel, hip: HipotesesHidraulic
     .sort((a, b) => (b.cargaM ?? Infinity) - (a.cargaM ?? Infinity) || a.terminalId.localeCompare(b.terminalId));
   const abertos = desfavoraveis.slice(0, Math.min(hip.hidrantesSimultaneos, desfavoraveis.length)).map((d) => d.terminalId);
   const r = cargaNecessaria(model, hip, abertos, rede);
-  if (!r) return { ...base, desfavoraveis, abertos, motivo: `nem ${CARGA_MAXIMA_M} m de carga na bomba atendem os hidrantes abertos — a rede está subdimensionada` };
   const zFonte = rede.cota.get(rede.noDaFonte!)!;
+  if (base.porGravidade) {
+    // A caixa entrega o que a cota dela dá: o cenário é com carga ZERO acima do fundo.
+    const cenario = calcularCenario(model, hip, abertos, 0, rede);
+    if (!cenario.convergiu) return { ...base, desfavoraveis, abertos, motivo: cenario.motivo };
+    const estaticaKpa = new Map(naRede.map((t) => [t.id, (zFonte - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
+    return { ...base, desfavoraveis, abertos, cargaNecessariaM: r?.cargaM ?? null, cenario, estaticaKpa, rti: { ...base.rti, exigidaL: cenario.vazaoNaFonteLmin * hip.autonomiaMin } };
+  }
+  if (!r) return { ...base, desfavoraveis, abertos, motivo: `nem ${CARGA_MAXIMA_M} m de carga na bomba atendem os hidrantes abertos — a rede está subdimensionada` };
   const estaticaKpa = new Map(naRede.map((t) => [t.id, (zFonte + r.cargaM - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
-  return { ...base, desfavoraveis, abertos, cargaNecessariaM: r.cargaM, cenario: r.cenario, estaticaKpa };
+  return { ...base, desfavoraveis, abertos, cargaNecessariaM: r.cargaM, cenario: r.cenario, estaticaKpa, rti: { ...base.rti, exigidaL: r.cenario.vazaoNaFonteLmin * hip.autonomiaMin } };
 }
 
 // ─── DN automático ───────────────────────────────────────────────────────────

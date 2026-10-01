@@ -1612,7 +1612,7 @@ Fecha o **bloco 1**.
 
 Fecha o **bloco 2**.
 
-## Etapa 3 — Hidrantes e reserva · kernel bump · 3 fases · **em andamento (3.1 ✅ 30/09/2026)**
+## Etapa 3 — Hidrantes e reserva · kernel bump · 3 fases · **em andamento (3.1 e 3.2 ✅ 30/09/2026, kernel 0.81.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1930,4 +1930,39 @@ cálculo da 2.3.
   depende do limite do lote (passeio) e ficou para depois.
 - **Testes:** planejador (6), painel (4) e o recalque na conferência (1). Suíte com 6.555 testes:
   6.522 + 33 pulados, 0 pendentes. Build ok.
+
+### Etapa 3.2 — 30/09/2026 (frente `incendio-e3`, kernel 0.80.0 → 0.81.0)
+
+**Achado 4 decidido: as duas formas.**
+
+- **Caixa compartilhada:** `Terminal.volumeRtiL` na caixa de ÁGUA FRIA (os litros reservados ao
+  incêndio). É inteiro e ≤ `volumeL`; a invariante `BAD_RTI` aceita só na caixa de água fria, e o
+  campo sai do canônico quando ausente.
+  - A reservação da água conta só o volume acima da RTI.
+  - Um item da conferência pede a tomada de consumo X cm acima do fundo (X = V_RTI / área da base),
+    como NÃO AVALIADO, porque o desenho não guarda a altura da tomada.
+- **Caixa só de incêndio:** `RESERVATORIO` passou a existir na rede de `INCENDIO`, e o volume dela
+  inteiro é RTI.
+  - Sem bomba, ela é a **fonte por gravidade**: a carga é a cota do fundo. O cálculo diz o que a
+    caixa entrega e, se não atende, quantos metros acima a água teria de estar.
+  - A rede automática agora **desce** da caixa no alto (a coluna vai da fonte ao hidrante mais
+    longe, para cima ou para baixo). O motivo antigo "hidrante abaixo da bomba" deixou de existir.
+- **O lado da água ignora a caixa de incêndio:** alimentador, recalque, memorial, reservação e
+  peças da caixa (boia, extravasor) olham só a caixa de água fria.
+- **Menu:** a caixa de incêndio aparece no menu de Incêndio como "Caixa de incêndio (RTI)", e não
+  como variante no menu da Hidráulica.
+  - Regra única em `grupoDoPontoNaDisciplina`, usada pelo menu e pelo inventário. As peças sobre o
+    trecho ficam no grupo da ficha.
+  - Quem pegou isso foi o teste do menu Hidráulica.
+- **RTI exigida** = vazão na fonte × autonomia (premissa `autonomiaMin` 60 min, **CONFERIR NA IT**).
+  A desenhada é a soma das reservas compartilhadas e das caixas de incêndio. A conferência sai em
+  ATENDE/FALTA; sem cálculo, NÃO AVALIADO.
+- **Tela:** "Reserva de incêndio (L)" no painel da caixa d'água. O painel do cálculo ganhou a
+  autonomia, a linha da RTI e a mensagem de gravidade.
+- **Ritual do bump:** goldens 7/7 em 0.80.0; depois os seis hashes; 22 pinos; bundle regerado. O
+  script `bump.py` do scratchpad automatizou os dois passos.
+- **Testes:** `blueprintRtiIncendio.test.ts` (6) e a conferência com RTI (1). Suíte com 6.562
+  testes: 6.529 + 33 pulados. Na 1ª rodada, 110 testes do `BlueprintEditor.test.tsx` ficaram
+  "pending" (worker caído); o arquivo sozinho passou 193/193, e na 2ª rodada da suíte a conta
+  fechou limpa.
 

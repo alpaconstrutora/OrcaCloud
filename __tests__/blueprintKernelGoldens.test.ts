@@ -246,6 +246,11 @@
  *   seis casos tem terminal. Com a string em 0.78.0 os sete testes passaram sem
  *   outra alteração; depois do bump, só os seis hashes.
  *
+ *   0.80.0 → 0.81.0 (30/09/2026): E3.2 do roadmap de incêndio — `RESERVATORIO`
+ *   na rede de incêndio e `Terminal.volumeRtiL` na caixa de água fria, omitido
+ *   quando ausente. Nenhum dos seis casos tem terminal. Com a string em 0.80.0
+ *   os sete testes passaram sem outra alteração; depois do bump, só os seis hashes.
+ *
  *   0.79.0 → 0.80.0 (30/09/2026): E1.2 do roadmap de incêndio — três materiais
  *   de tubo novos e `MATERIAIS_DA_DISCIPLINA` na invariante. Nenhum dos seis
  *   casos tem trecho. Com a string em 0.79.0 os sete testes passaram sem outra
@@ -806,17 +811,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '0eab06a783fa6500d6c1e0fe864fb7ac1cc25311209b14f41239f6058ea869f9',
+    hash: 'ef743f20ba9601becfc41830fc04cb342be6a86ce806ceef31afcba9dce1b740',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '71b1317be8fb92f23d0be1b0c6729cbd7ffdaa459da396d36399f71e808fabb4',
+    hash: 'f15f591a1e0c4f8172f1a002895ecc6fb33d82759ef88f79b32088f13fc2a7cf',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '50d7fbcd777b65eb03a01711c8df7e6613dbcdc8bc85a5f6ecd7bc6dfdb17d45',
+    hash: '482586b3192220050c02c470c2f188273c4d25d53d0d31dd531120e1e23d5334',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -824,7 +829,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'b419607b1b25c3ef931b3344a68aa98aad44b21144f215950e8c6080c734261e',
+    hash: '2fe6f9a9be5ef0d98e26b7a7375792d5855c423ac988dec2bee175cfb5500bfb',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -834,7 +839,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '93d14ba3495abc44246f5536e5f37d9d8110802d0124b61bda22d4f441f7be60',
+    hash: 'd9453c914d5aa96eedc5a0e785d8c4285e9a4a6f2736c818fcbb7d738382d14d',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -845,7 +850,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'fb03797397f3c8d9dc0a95078d83a7fbf140bca518514da57889d7490a0bada6',
+    hash: '4567907dd5eb82514fc824ec6fc36662fc8cb5f6c1035be42b748966cf851a1f',
   },
 };
 

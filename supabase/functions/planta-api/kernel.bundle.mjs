@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.80.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.81.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2138,6 +2138,8 @@ function projetar(model) {
       // Incêndio E1.1 (0.79.0): só quando declarados — o K e a posição da ficha não se gravam.
       fatorK: t.fatorK ?? void 0,
       posicaoSprinkler: t.posicaoSprinkler ?? void 0,
+      // Incêndio E3.2 (0.81.0): só quando declarada.
+      volumeRtiL: t.volumeRtiL ?? void 0,
       larguraMm: t.larguraMm ?? void 0,
       alturaMm: t.alturaMm ?? void 0,
       profundidadeMm: t.profundidadeMm ?? void 0,
@@ -2882,6 +2884,7 @@ function modelFromCanonicalPayload(payload) {
       formaReservatorio: t.formaReservatorio ?? null,
       fatorK: t.fatorK ?? null,
       posicaoSprinkler: t.posicaoSprinkler ?? null,
+      volumeRtiL: t.volumeRtiL ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,
@@ -6944,8 +6947,9 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     sigla: "CX",
     grupo: RESERVA,
     // A cota é a do FUNDO da caixa: é de onde a rede sai.
-    cotaMm: { AGUA_FRIA: 2800 },
-    dnMinimoMm: { AGUA_FRIA: 25 },
+    // Incêndio E3.2: a caixa SÓ de incêndio também — o fundo dela é a fonte por gravidade.
+    cotaMm: { AGUA_FRIA: 2800, INCENDIO: 2800 },
+    dnMinimoMm: { AGUA_FRIA: 25, INCENDIO: 65 },
     medidasMm: { larguraMm: 1200, profundidadeMm: 1200, alturaMm: 800 },
     volumeL: 1e3,
     ajuda: "Reservat\xF3rio superior. A cota \xE9 a do fundo; o volume, em litros, \xE9 o da caixa comercial. \xC9 de onde a \xE1gua fria autom\xE1tica parte."

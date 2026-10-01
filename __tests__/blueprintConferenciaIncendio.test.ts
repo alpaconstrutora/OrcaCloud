@@ -79,12 +79,26 @@ describe('E2.4 · diagnóstico do cálculo e conferência', () => {
     expect(conferenciaDeIncendio(m, c, hip).find((i) => i.item === 'Pressão estática nos hidrantes')!.estado).toBe('FALTA');
   });
 
-  it('rede sã: vazão ATENDE, bomba ATENDE, e a RTI fica NÃO AVALIADA (é a E3)', () => {
+  it('rede sã: vazão ATENDE, fonte ATENDE; sem reserva desenhada a RTI FALTA (E3.2)', () => {
     const m = rede();
     const itens = conferenciaDeIncendio(m, calculoDeIncendio(m, HIP), HIP);
     expect(itens.find((i) => i.item.startsWith('Vazão no esguicho'))!.estado).toBe('ATENDE');
-    expect(itens.find((i) => i.item === 'Bomba de incêndio ligada à rede')!.estado).toBe('ATENDE');
-    expect(itens.find((i) => i.item === 'Reserva técnica de incêndio')!.estado).toBe('NAO_AVALIADO');
+    expect(itens.find((i) => i.item === 'Fonte ligada à rede (bomba ou caixa de incêndio)')!.estado).toBe('ATENDE');
+    expect(itens.find((i) => i.item === 'Reserva técnica de incêndio')!.estado).toBe('FALTA');
+  });
+
+  it('E3.2: RTI na caixa de água fria compartilhada — atende com volume suficiente, e pede a saída de consumo acima dela', () => {
+    const m = rede();
+    const l = m.levels[0].id;
+    const comCaixa = applyBatch(m, [
+      { type: 'AddTerminal', levelId: l, disciplina: 'AGUA_FRIA', tipo: 'CX', at: point(0, 9000), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 30000, volumeRtiL: 20000, larguraMm: 4000, profundidadeMm: 2500, alturaMm: 3000 } as Command,
+    ]).model;
+    const itens = conferenciaDeIncendio(comCaixa, calculoDeIncendio(comCaixa, HIP), HIP);
+    expect(itens.find((i) => i.item === 'Reserva técnica de incêndio')!.estado).toBe('ATENDE');
+    const saida = itens.find((i) => i.item === 'Saída de consumo acima da reserva de incêndio')!;
+    // 20 m³ numa base de 4 × 2,5 m = 2 m de lâmina.
+    expect(saida.exigido).toBe('tomada de consumo ≥ 200 cm acima do fundo');
+    expect(saida.estado).toBe('NAO_AVALIADO');
   });
 
   it('E3.1: registro de recalque — falta sem ele; atende quando ligado à rede', () => {
@@ -99,7 +113,7 @@ describe('E2.4 · diagnóstico do cálculo e conferência', () => {
   it('sem bomba: a bomba FALTA e o resto do cálculo fica NÃO AVALIADO — nunca "atende" por omissão', () => {
     const m = rede({ semBomba: true });
     const itens = conferenciaDeIncendio(m, calculoDeIncendio(m, HIP), HIP);
-    expect(itens.find((i) => i.item === 'Bomba de incêndio ligada à rede')!.estado).toBe('FALTA');
+    expect(itens.find((i) => i.item === 'Fonte ligada à rede (bomba ou caixa de incêndio)')!.estado).toBe('FALTA');
     expect(itens.find((i) => i.item.startsWith('Vazão no esguicho'))!.estado).toBe('NAO_AVALIADO');
     expect(itens.find((i) => i.item === 'Velocidade da água nos trechos')!.estado).toBe('NAO_AVALIADO');
   });

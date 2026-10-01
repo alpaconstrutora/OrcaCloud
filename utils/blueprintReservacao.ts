@@ -132,11 +132,16 @@ export function dimensionarReservacao(
   const populacao = populacaoDoModelo(model, hip);
   const consumoDiarioL = populacao.pessoas * hip.perCapitaLDia;
   const volumeNecessarioL = consumoDiarioL * hip.diasDeReserva;
-  const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO');
+  // Incêndio E3.2: a caixa SÓ de incêndio não é reservação de consumo.
+  const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA');
   const temInferior = caixas.some((c) => inferiores.has(c.id));
   const inferiorNecessarioL = temInferior ? volumeNecessarioL * hip.fracaoInferior : 0;
   const superiorNecessarioL = volumeNecessarioL - inferiorNecessarioL;
-  const reservatorios = caixas.map((t) => ({ terminalId: t.id, levelId: t.levelId, volumeL: volumeDoReservatorioL(t) }));
+  // Incêndio E3.2: na caixa compartilhada, o consumo só conta o volume ACIMA da reserva de incêndio.
+  const reservatorios = caixas.map((t) => {
+    const v = volumeDoReservatorioL(t);
+    return { terminalId: t.id, levelId: t.levelId, volumeL: v == null ? null : Math.max(0, v - (t.volumeRtiL ?? 0)) };
+  });
   const declaradoL = reservatorios.reduce((s, r) => s + (r.volumeL ?? 0), 0);
   let situacao: SituacaoDaReservacao;
   let texto: string;

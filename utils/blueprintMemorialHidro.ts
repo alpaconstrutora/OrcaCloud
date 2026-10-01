@@ -263,7 +263,7 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
     }
     linhas.push(['Caixa comercial sugerida', r.volumeSugeridoL ? `${nBr(r.volumeSugeridoL, 0)} L` : '—'], ['Volume no desenho', `${nBr(r.declaradoL, 0)} L`]);
     B.push({ tipo: 'tabela', cabecalho: ['Grandeza', 'Valor'], linhas });
-    const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO');
+    const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA');
     if (caixas.length) {
       B.push({
         tipo: 'tabela',

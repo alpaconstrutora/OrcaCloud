@@ -717,6 +717,8 @@ export type Command =
       /** Fator K e posição (incêndio E1.1) — só em `SPRINKLER`; ignorados nos demais. */
       fatorK?: number | null;
       posicaoSprinkler?: PosicaoDoSprinkler | null;
+      /** Reserva de incêndio (E3.2) — só na caixa de água fria; ignorada nas demais. */
+      volumeRtiL?: number | null;
       /** Medidas já conhecidas ao criar (E7.1: o tanque séptico dimensionado). Ausentes = as da família. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -759,6 +761,8 @@ export type Command =
       /** Fator K e posição do sprinkler (incêndio E1.1). `null` volta ao da ficha. */
       fatorK?: number | null;
       posicaoSprinkler?: PosicaoDoSprinkler | null;
+      /** Reserva de incêndio na caixa de água fria (E3.2). `null` apaga. */
+      volumeRtiL?: number | null;
       /** Medidas em mm. `null` volta ao padrão da família; ausente não mexe. */
       larguraMm?: number | null;
       alturaMm?: number | null;
@@ -3409,6 +3413,7 @@ function aplicarSemHash(
           ...(command.formaReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { formaReservatorio: command.formaReservatorio } : {}),
           ...(command.fatorK != null && command.tipoHidraulico === 'SPRINKLER' ? { fatorK: Math.round(command.fatorK) } : {}),
           ...(command.posicaoSprinkler != null && command.tipoHidraulico === 'SPRINKLER' ? { posicaoSprinkler: command.posicaoSprinkler } : {}),
+          ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
         },
       ];
       // E7.1: as medidas, só quando informadas — a chave ausente é o estado de todo terminal anterior.
@@ -3466,6 +3471,9 @@ function aplicarSemHash(
       }
       if (command.fatorK !== undefined) terminal.fatorK = command.fatorK == null ? null : Math.round(command.fatorK);
       if (command.posicaoSprinkler !== undefined) terminal.posicaoSprinkler = command.posicaoSprinkler ?? null;
+      if (command.volumeRtiL !== undefined) terminal.volumeRtiL = command.volumeRtiL == null ? null : Math.round(command.volumeRtiL);
+      // Deixar de ser caixa de água fria leva a RTI junto — a invariante recusaria.
+      if ((terminal.tipoHidraulico !== 'RESERVATORIO' || terminal.disciplina !== 'AGUA_FRIA') && terminal.volumeRtiL != null) terminal.volumeRtiL = null;
       // Deixar de ser sprinkler leva K e posição juntos — a invariante recusaria.
       if (terminal.tipoHidraulico !== 'SPRINKLER') {
         if (terminal.fatorK != null) terminal.fatorK = null;

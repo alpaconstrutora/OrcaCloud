@@ -877,6 +877,8 @@ function projetar(model: BlueprintModel): {
       // Incêndio E1.1 (0.79.0): só quando declarados — o K e a posição da ficha não se gravam.
       fatorK: t.fatorK ?? undefined,
       posicaoSprinkler: t.posicaoSprinkler ?? undefined,
+      // Incêndio E3.2 (0.81.0): só quando declarada.
+      volumeRtiL: t.volumeRtiL ?? undefined,
       larguraMm: t.larguraMm ?? undefined,
       alturaMm: t.alturaMm ?? undefined,
       profundidadeMm: t.profundidadeMm ?? undefined,
@@ -1564,6 +1566,8 @@ export interface CanonicalPayload {
     /** Fator K e posição do sprinkler. Ausentes sob kernel < 0.79.0 e quando não declarados. */
     fatorK?: number;
     posicaoSprinkler?: string;
+    /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
+    volumeRtiL?: number;
     /** Medidas em mm. Ausentes sob kernel < 0.20.0 e quando não declaradas. */
     larguraMm?: number;
     alturaMm?: number;
@@ -2320,6 +2324,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       formaReservatorio: (t.formaReservatorio as FormaDoReservatorio | undefined) ?? null,
       fatorK: t.fatorK ?? null,
       posicaoSprinkler: (t.posicaoSprinkler as PosicaoDoSprinkler | undefined) ?? null,
+      volumeRtiL: t.volumeRtiL ?? null,
       larguraMm: t.larguraMm ?? null,
       alturaMm: t.alturaMm ?? null,
       profundidadeMm: t.profundidadeMm ?? null,

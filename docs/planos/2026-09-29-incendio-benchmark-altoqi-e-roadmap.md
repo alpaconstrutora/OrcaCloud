@@ -1675,7 +1675,7 @@ Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
 Fecha o **bloco 7**.
 
-## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **em andamento (9.1, 9.2 e 9.3 ✅ 01/10/2026)**
+## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **✅ concluída 01/10/2026 (9.1–9.4)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2745,4 +2745,28 @@ Pedido: "Fazer a E9.2 agora" (migration e prova autorizadas).
     `IfcSign` no IFC4X3; o reconhecimento sem o nosso ObjectType; o Pset; a cobertura;
   - `PainelImportarIfc.test.tsx` (+1, a falha do incêndio não trava a estrutura).
   - Suíte com 6.774 testes: 6.741 + 33 pulados. Build ok.
+
+### Etapa 9.4 — 01/10/2026 (frente `incendio-e9`, sem bump)
+
+- **Onde entrou:** em `conflitosArquitetonicos` (kernel). O tipo dele já é centrado em PEÇA
+  (`pecaId`/`outroId`, família `terminal`) e já alimenta a lista, o BCF, os aceites e o destaque 3D
+  por uid. O `Conflito` do MEP carrega `trechoId`, e usá-lo para duas peças seria um campo mentindo o
+  nome.
+- **`SPRINKLER_X_OBSTRUCAO`:** sprinkler a menos de `AFASTAMENTO_SPRINKLER_OBSTRUCAO_MM` (300 mm, em
+  planta, **CONFERIR NA NBR 10897**) de uma luminária, comum ou de emergência, os dois junto ao teto
+  (|Δcota| ≤ 500 mm), no mesmo pavimento. A medida é quanto falta para o afastamento.
+- **`PECA_X_PORTA`:** hidrante, mangotinho ou extintor dentro da faixa de passagem de uma porta: o vão
+  ao longo do eixo e, através dele, a espessura mais o giro da folha (a largura do vão). A porta de
+  correr não gira; janela não é passagem. A medida é quanto a peça está dentro da faixa.
+- **Peça × peça genérica ficou de fora de propósito:** o kit do banheiro põe AF, AQ e esgoto no
+  mesmo ponto, e a lista viraria ruído.
+- **Painel e BCF:** o outro lado ganhou nome (a luminária, a porta) e as duas classes ganharam
+  explicação. O filtro por pavimento, que já existia, separa os conflitos.
+- **Testes:**
+  - `blueprintClashIncendio.test.ts` (6): o "pronto quando" do sprinkler a 10 cm de uma luminária;
+    afastado, na parede e em outro pavimento não acusam; a luminária de emergência; o hidrante no
+    giro (e não ao lado do batente); a porta de correr e a janela; o BCF e os uids do 3D;
+  - `PainelConflitosFiltro.test.tsx` (+1, os dois nomes, o motivo e o filtro por pavimento).
+  - Goldens do kernel 7/7 (o clash é derivado; o modelo e o hash não mudam). O bundle da planta-api
+    não mudou. Suíte com 6.781 testes: 6.748 + 33 pulados. Build ok.
 

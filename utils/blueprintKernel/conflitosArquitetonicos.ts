@@ -38,6 +38,19 @@
  *   colado na condensadora não deixa trocar calor nem consertar. Só as peças de
  *   climatização acusam: mobiliário encostado em mobiliário é a vida.
  *
+ * - **E9.4 (incêndio, 01/10/2026) — peça × peça e peça × porta:**
+ *   - `SPRINKLER_X_OBSTRUCAO`: sprinkler a menos de `AFASTAMENTO_SPRINKLER_OBSTRUCAO_MM`
+ *     (em planta) de uma luminária (comum ou de emergência), os dois junto ao
+ *     teto (diferença de cota ≤ `FAIXA_DO_TETO_MM`) — a luminária faz sombra no
+ *     jato. Valor CONFERIR NA NBR 10897 (a regra completa de obstrução depende da
+ *     altura e da largura do obstáculo).
+ *   - `PECA_X_PORTA`: hidrante, mangotinho ou extintor dentro da FAIXA DE
+ *     PASSAGEM de uma porta — o vão mais o giro da folha para os dois lados, da
+ *     soleira à verga. O abrigo aberto bloqueia a saída; o extintor no vão some
+ *     atrás da folha.
+ *   Peça × peça GENÉRICA não entra: o kit do banheiro põe água fria, quente e
+ *   esgoto no MESMO ponto de propósito, e a lista viraria ruído.
+ *
  * Determinístico: ordenado por id da peça e do outro, como `conflitosDoModelo`.
  */
 import { pointInPolygon, polygonArea, type Point } from './geom';
@@ -48,6 +61,12 @@ import { faixaDaEstruturaNaParede, pegadaEmPlanta, recorteComum } from './sobrep
 
 /** Altura livre mínima sobre o degrau — NBR 9077, 4.6.2. */
 export const ALTURA_LIVRE_MIN_MM = 2100;
+/** E9.4: afastamento mínimo em planta entre o sprinkler e uma luminária — CONFERIR NA NBR 10897. */
+export const AFASTAMENTO_SPRINKLER_OBSTRUCAO_MM = 300;
+/** E9.4: "os dois junto ao teto" — diferença de cota até isto. */
+export const FAIXA_DO_TETO_MM = 500;
+/** E9.4: as peças de incêndio que não podem ficar na passagem da porta. */
+const PECAS_FORA_DA_PORTA = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'EXTINTOR']);
 
 export interface ConflitoArquitetonico {
   /** A peça arquitetônica atingida. */
@@ -58,8 +77,8 @@ export interface ConflitoArquitetonico {
   /** A outra peça: estrutura (nas classes de estrutura), parede ou componente (E11.1). */
   outroId: ObjectId;
   outroUid: string;
-  outroFamilia?: 'structural' | 'wall' | 'componente';
-  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE' | 'PONTO_X_ESTRUTURA';
+  outroFamilia?: 'structural' | 'wall' | 'componente' | 'terminal' | 'opening';
+  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE' | 'PONTO_X_ESTRUTURA' | 'SPRINKLER_X_OBSTRUCAO' | 'PECA_X_PORTA';
   levelId: ObjectId;
   /**
    * O tamanho do problema, em mm: no vão, quanto do vão está tomado ao longo
@@ -253,6 +272,68 @@ export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitet
         levelId: p.levelId,
         medidaMm: Math.round(fundo),
         em: { x: p.at.x, y: p.at.y },
+      });
+    }
+  }
+
+  // ── E9.4: SPRINKLER × LUMINÁRIA (obstrução do jato) ─────────────────────
+  const terminais = model.terminais ?? [];
+  const ehLuminaria = (t: (typeof terminais)[number]) =>
+    (t.disciplina === 'ELETRICA' && !!t.tipoEletrico && t.tipoEletrico.startsWith('ILUMINACAO')) || t.tipoHidraulico === 'LUMINARIA_EMERGENCIA';
+  const luminarias = terminais.filter(ehLuminaria);
+  for (const spk of terminais.filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'SPRINKLER')) {
+    const zs = (elevacaoDe.get(spk.levelId) ?? 0) + spk.cotaMm;
+    for (const l of luminarias) {
+      if (l.levelId !== spk.levelId) continue;
+      const zl = (elevacaoDe.get(l.levelId) ?? 0) + l.cotaMm;
+      if (Math.abs(zs - zl) > FAIXA_DO_TETO_MM) continue;
+      const d = Math.hypot(spk.at.x - l.at.x, spk.at.y - l.at.y);
+      if (d >= AFASTAMENTO_SPRINKLER_OBSTRUCAO_MM) continue;
+      saida.push({
+        pecaId: spk.id,
+        pecaUid: spk.uid,
+        familia: 'terminal',
+        outroId: l.id,
+        outroUid: l.uid,
+        outroFamilia: 'terminal',
+        classe: 'SPRINKLER_X_OBSTRUCAO',
+        levelId: spk.levelId,
+        // O tamanho do problema: quanto FALTA para o afastamento mínimo.
+        medidaMm: Math.round(AFASTAMENTO_SPRINKLER_OBSTRUCAO_MM - d),
+        em: { x: Math.round((spk.at.x + l.at.x) / 2), y: Math.round((spk.at.y + l.at.y) / 2) },
+      });
+    }
+  }
+
+  // ── E9.4: HIDRANTE / MANGOTINHO / EXTINTOR × PORTA ──────────────────────
+  for (const t of terminais.filter((x) => x.disciplina === 'INCENDIO' && x.tipoHidraulico && PECAS_FORA_DA_PORTA.has(x.tipoHidraulico))) {
+    for (const o of model.openings) {
+      if (o.kind !== 'door' && o.kind !== 'sliding' && o.kind !== 'passage') continue;
+      const w = paredePorId.get(o.wallId);
+      if (!w || w.levelId !== t.levelId) continue;
+      if (t.cotaMm < o.sillMm || t.cotaMm > o.sillMm + o.heightMm) continue;
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      if (!(L > 0)) continue;
+      const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+      // Coordenadas da peça no referencial da parede: ao longo (s) e através (n) do eixo.
+      const s = (t.at.x - w.a.x) * u.x + (t.at.y - w.a.y) * u.y;
+      const n = Math.abs(-(t.at.x - w.a.x) * u.y + (t.at.y - w.a.y) * u.x);
+      // A faixa: o vão ao longo do eixo; através, a espessura e o giro da folha (a largura do vão) — a de correr não gira.
+      const giro = o.kind === 'door' ? o.widthMm : 0;
+      const dentroAoLongo = Math.min(s - o.offsetMm, o.offsetMm + o.widthMm - s);
+      const dentroAtraves = w.thicknessMm / 2 + giro - n;
+      if (dentroAoLongo <= 0 || dentroAtraves <= 0) continue;
+      saida.push({
+        pecaId: t.id,
+        pecaUid: t.uid,
+        familia: 'terminal',
+        outroId: o.id,
+        outroUid: o.uid,
+        outroFamilia: 'opening',
+        classe: 'PECA_X_PORTA',
+        levelId: t.levelId,
+        medidaMm: Math.round(Math.min(dentroAoLongo, dentroAtraves)),
+        em: { x: Math.round(t.at.x), y: Math.round(t.at.y) },
       });
     }
   }

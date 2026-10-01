@@ -204,7 +204,16 @@ export default function PainelConflitos({
     const e = (model.stairs ?? []).find((x) => x.id === c.pecaId);
     return e ? e.rotulo || `${e.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${rotuloCurto(e.uid, 'stair')}` : c.pecaId;
   };
-  const nomeDaEstrutura = (id: string, familia?: 'structural' | 'wall' | 'componente') => {
+  const nomeDaEstrutura = (id: string, familia?: ConflitoArquitetonico['outroFamilia']) => {
+    // E9.4: o outro lado pode ser uma peça (a luminária na frente do sprinkler) ou uma porta.
+    if (familia === 'terminal') {
+      const t = (model.terminais ?? []).find((x) => x.id === id);
+      return t ? `${t.tipo} ${rotuloCurto(t.uid, 'terminal')}` : id;
+    }
+    if (familia === 'opening') {
+      const o = model.openings.find((x) => x.id === id);
+      return o ? `${nomeDoTipoDeAbertura(o.kind)} ${rotuloCurto(o.uid, 'opening')}` : id;
+    }
     if (familia === 'wall') {
       const w = model.walls.find((x) => x.id === id);
       return w ? `Parede ${rotuloCurto(w.uid, 'wall')}` : id;
@@ -231,7 +240,11 @@ export default function PainelConflitos({
                 ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
                 : c.classe === 'PONTO_X_ESTRUTURA'
                   ? `o centro da peça está ${c.medidaMm} mm dentro da estrutura — a caixa não cabe no concreto`
-                  : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
+                  : c.classe === 'SPRINKLER_X_OBSTRUCAO'
+                    ? `luminária a menos de 30 cm do sprinkler (faltam ${c.medidaMm} mm) — faz sombra no jato (CONFERIR NA NBR 10897)`
+                    : c.classe === 'PECA_X_PORTA'
+                      ? `peça de incêndio ${c.medidaMm} mm dentro da passagem da porta — o abrigo aberto ou a folha bloqueiam`
+                      : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
 
   const nomeDoTrecho = (id: string) => {
     const t = (model.trechos ?? []).find((x) => x.id === id);

@@ -46,6 +46,22 @@ describe('PainelConflitos · filtro por pavimento e destaque no 3D (E7.2)', () =
     expect(linhas[0].textContent).toMatch(/TUG/);
   });
 
+  it('E9.4: sprinkler × luminária e hidrante × porta aparecem com os dois nomes e o motivo, e o filtro por pavimento os separa', async () => {
+    let m = cena();
+    const [t0, t1] = m.levels.map((l) => l.id);
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t1, disciplina: 'INCENDIO', tipo: 'Sprinkler', tipoHidraulico: 'SPRINKLER', at: point(3000, 3000), cotaMm: 2700 } as Command).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t1, disciplina: 'ELETRICA', tipo: 'Luz', tipoEletrico: 'ILUMINACAO_TETO', at: point(3100, 3000), cotaMm: 2800 } as Command).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: t0, disciplina: 'INCENDIO', tipo: 'Hidrante', tipoHidraulico: 'HIDRANTE_SIMPLES', at: point(2450, 500), cotaMm: 1300 } as Command).model;
+    montar(m);
+    const texto = screen.getAllByTestId('conflito-aberto').map((l) => l.textContent).join(' | ');
+    expect(texto).toMatch(/Sprinkler .* encontra Luz .*luminária a menos de 30 cm do sprinkler/);
+    expect(texto).toMatch(/Hidrante .* encontra Porta .*dentro da passagem da porta/);
+    await userEvent.selectOptions(screen.getByLabelText('Filtrar conflitos por pavimento'), t1);
+    const doSuperior = screen.getAllByTestId('conflito-aberto').map((l) => l.textContent).join(' | ');
+    expect(doSuperior).toMatch(/Sprinkler/);
+    expect(doSuperior).not.toMatch(/Hidrante/);
+  });
+
   it('pavimento sem conflito diz que os abertos estão em outro', async () => {
     let m = cena();
     m = applyCommand(m, { type: 'AddLevel', name: 'Cobertura', elevationMm: 6000, defaultHeightMm: 2800 }).model;

@@ -304,7 +304,11 @@ export function topicosDeConflitosArquitetonicos(
                   ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
                   : c.classe === 'PONTO_X_ESTRUTURA'
                     ? `${c.familia === 'quadro' ? 'quadro' : 'ponto'} com o centro ${c.medidaMm} mm dentro da estrutura`
-                    : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
+                    : c.classe === 'SPRINKLER_X_OBSTRUCAO'
+                      ? `luminária a menos de 30 cm do sprinkler (faltam ${c.medidaMm} mm; CONFERIR NA NBR 10897)`
+                      : c.classe === 'PECA_X_PORTA'
+                        ? `peça de incêndio ${c.medidaMm} mm dentro da passagem da porta`
+                        : `faltam ${c.medidaMm} mm para a altura livre de 2,10 m sobre o degrau (NBR 9077)`;
     const topico: TopicoBcf = {
       guid: guidDoTopico(`clash:${c.pecaUid}:${c.outroUid}`),
       titulo: `${rotuloCurto(c.pecaUid, c.familia)} encontra ${rotuloCurto(c.outroUid, c.outroFamilia ?? 'structural')}`,
@@ -312,7 +316,7 @@ export function topicosDeConflitosArquitetonicos(
       status: 'Open' as const,
       autor,
       criadoEm: agora,
-      descricao: `Interferência entre ${c.classe === 'PONTO_X_ESTRUTURA' ? 'instalação' : 'arquitetura'} e estrutura: ${como}. Detectado pela Planta Inteligente do ÒPURA.`,
+      descricao: `Interferência entre ${c.classe === 'SPRINKLER_X_OBSTRUCAO' ? 'sprinkler e luminária' : c.classe === 'PECA_X_PORTA' ? 'incêndio e porta' : `${c.classe === 'PONTO_X_ESTRUTURA' ? 'instalação' : 'arquitetura'} e estrutura`}: ${como}. Detectado pela Planta Inteligente do ÒPURA.`,
       componentes: [ifcGuidDeUid(c.pecaUid), ifcGuidDeUid(c.outroUid)],
       alvo: { x: c.em.x, y: c.em.y, z: (elevacao.get(c.levelId) ?? 0) + 1000 },
     };

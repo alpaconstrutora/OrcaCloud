@@ -136,3 +136,46 @@ describe('PainelCalculoIncendio › áreas de operação (E5.2)', () => {
   });
 });
 
+describe('PainelCalculoIncendio › tabelas e demanda combinada (E5.4)', () => {
+  it('o método das tabelas diz quantos trechos estão abaixo e ajusta; a demanda combinada grava nas premissas', async () => {
+    const onHs = vi.fn();
+    const onAjustar = vi.fn();
+    const criterio = criterioDeSprinklers(HS, 'A-2');
+    render(
+      <PainelCalculoIncendio
+        hip={HIP}
+        onHip={vi.fn()}
+        calculo={calculoDeIncendio(comSprinklers(), HIP, criterio)}
+        nomeDe={() => 'SPK-1'}
+        onSelecionar={vi.fn()}
+        ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }}
+        sprinklers={{ hs: HS, onHs, criterio, tabelas: { aplicavel: true, motivo: null, abaixo: 2, onAjustar } }}
+      />,
+    );
+    expect(screen.getByTestId('sprinklers-tabelas').textContent).toContain('2 trecho(s) abaixo do DN da tabela');
+    const u = userEvent.setup();
+    await u.click(screen.getByRole('button', { name: 'Ajustar DN pelas tabelas' }));
+    expect(onAjustar).toHaveBeenCalled();
+    await u.click(screen.getByLabelText('Demanda combinada'));
+    expect(onHs).toHaveBeenLastCalledWith({ ...HS, demandaCombinada: false });
+  });
+
+  it('na grelha, o ajuste pelas tabelas fica desligado com o motivo', () => {
+    const criterio = criterioDeSprinklers(HS, 'A-2');
+    render(
+      <PainelCalculoIncendio
+        hip={HIP}
+        onHip={vi.fn()}
+        calculo={calculoDeIncendio(comSprinklers(), HIP, criterio)}
+        nomeDe={() => 'SPK-1'}
+        onSelecionar={vi.fn()}
+        ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }}
+        sprinklers={{ hs: HS, onHs: vi.fn(), criterio, tabelas: { aplicavel: false, motivo: 'a rede tem laço (grelha ou malha) — vale o cálculo hidráulico', abaixo: 0, onAjustar: vi.fn() } }}
+      />,
+    );
+    const b = screen.getByRole('button', { name: 'Ajustar DN pelas tabelas' });
+    expect(b).toBeDisabled();
+    expect(b.getAttribute('title')).toMatch(/laço/);
+  });
+});
+

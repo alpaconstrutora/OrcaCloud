@@ -25,7 +25,15 @@ interface Props {
   /** E2.4: a conferência em três estados + "não avaliada". Ausente = não mostrar. */
   conferencia?: ItemDaConferencia[];
   /** E5.1: o critério dos sprinklers (risco → densidade × área). Ausente = não mostrar. */
-  sprinklers?: { hs: HipotesesDeSprinklers; onHs: (h: HipotesesDeSprinklers) => void; criterio: CriterioDeSprinklers; areas?: AcoesDasAreas; distribuicao?: PropsDaDistribuicao };
+  sprinklers?: {
+    hs: HipotesesDeSprinklers;
+    onHs: (h: HipotesesDeSprinklers) => void;
+    criterio: CriterioDeSprinklers;
+    areas?: AcoesDasAreas;
+    distribuicao?: PropsDaDistribuicao;
+    /** E5.4: o método das tabelas sobre a rede desenhada — quantos trechos abaixo, e o ajuste. */
+    tabelas?: { aplicavel: boolean; motivo: string | null; abaixo: number; onAjustar: () => void };
+  };
 }
 
 /** E5.2: as Áreas de Operação desenhadas e o que se faz com elas. */
@@ -66,7 +74,7 @@ function Opcional({ rotulo, valor, tabela, onValor, passo, unidade }: { rotulo: 
 }
 
 /** E5.1: risco, densidade e área — e o que sai deles. */
-function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, distribuicao, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
+function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, distribuicao, tabelas, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
   const linha = cr.risco ? TABELA_DO_RISCO[cr.risco.valor] : null;
   const s = c.porSistema.sprinklers;
   return (
@@ -141,6 +149,27 @@ function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, distribuicao, calcul
             <span className="text-red-700">{s.motivo ?? 'Sem cálculo dos sprinklers.'}</span>
           )}
         </p>
+      )}
+      <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+        <input type="checkbox" checked={hs.demandaCombinada} onChange={(e) => onHs({ ...hs, demandaCombinada: e.target.checked })} aria-label="Demanda combinada" />
+        <span>Demanda combinada: a área de operação e os hidrantes abrem juntos na bomba (CONFERIR NA IT)</span>
+      </label>
+      {tabelas && (
+        <div className="mt-2 flex items-center justify-between gap-2" data-testid="sprinklers-tabelas">
+          <span className="text-xs text-slate-600">
+            Método das tabelas:{' '}
+            {!tabelas.aplicavel ? tabelas.motivo : tabelas.abaixo ? <span className="font-semibold text-red-700">{tabelas.abaixo} trecho(s) abaixo do DN da tabela</span> : 'todos os trechos no DN da tabela'}
+          </span>
+          <button
+            type="button"
+            onClick={tabelas.onAjustar}
+            disabled={!tabelas.aplicavel || tabelas.abaixo === 0}
+            title={!tabelas.aplicavel ? (tabelas.motivo ?? '') : tabelas.abaixo === 0 ? 'nenhum trecho abaixo da tabela' : 'Sobe ao DN da tabela — um passo de desfazer'}
+            className="shrink-0 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Ajustar DN pelas tabelas
+          </button>
+        </div>
       )}
       {distribuicao && <DistribuicaoDeSprinklers {...distribuicao} />}
       {areas && <AreasDeOperacao areas={areas} calculo={c} onSelecionar={onSelecionar} />}
@@ -268,7 +297,7 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
   const set = <K extends keyof HipotesesHidraulicasDeIncendio>(k: K) => (v: HipotesesHidraulicasDeIncendio[K]) => onHip({ ...hip, [k]: v });
   const cen = c.cenario;
   const acimaDaMaxima = [...c.estaticaKpa].filter(([, p]) => p > hip.pressaoMaximaKpa);
-  const quem = c.sistema === 'SPRINKLERS' ? 'sprinkler(s)' : 'hidrante(s)';
+  const quem = c.sistema === 'COMBINADO' ? 'ponto(s) — sprinklers e hidrantes —' : c.sistema === 'SPRINKLERS' ? 'sprinkler(s)' : 'hidrante(s)';
   const doisSistemas = !!c.porSistema.hidrantes && !!c.porSistema.sprinklers;
   const motivoDoAjuste = !cen ? 'sem cálculo — veja o aviso acima' : ajusteDeDn.alterados === 0 ? `nenhum trecho passa de ${n(hip.velocidadeMaxMs)} m/s` : null;
 
@@ -334,7 +363,10 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
               A bomba precisa dar <strong className="tabular-nums">{n(cen.vazaoNaFonteLmin, 0)} L/min</strong> a{' '}
               <strong className="tabular-nums">{n(c.cargaNecessariaM ?? 0, 1)} mca</strong> ({n((c.cargaNecessariaM ?? 0) * 9.80665, 0)} kPa) acima dela, com{' '}
               {c.abertos.length} {quem} aberto(s) — os mais desfavoráveis.
-              {doisSistemas && ` Governa a bomba: ${c.sistema === 'SPRINKLERS' ? 'os sprinklers' : 'os hidrantes'} (maior vazão × altura).`}
+              {doisSistemas &&
+                (c.sistema === 'COMBINADO'
+                  ? ' Demanda combinada: a área de operação e os hidrantes abertos juntos.'
+                  : ` Governa a bomba: ${c.sistema === 'SPRINKLERS' ? 'os sprinklers' : 'os hidrantes'} (maior vazão × altura).`)}
             </p>
           )}
           {c.rti.exigidaL != null && (

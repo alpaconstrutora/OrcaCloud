@@ -17,6 +17,7 @@ import type { BlueprintModel, ObjectId } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { redeDeIncendio, type CalculoDeIncendio, type CenarioCalculado, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
 import { ROTULO_DO_RISCO } from './blueprintSprinklersIncendio';
+import { metodoDasTabelas, vgasDaRede } from './blueprintRedeDeSprinklers';
 import type { MarcaDeVerificacao } from './blueprintVerificacaoRede';
 import type { AnaliseDaBomba, PressurizacaoDaRede } from './blueprintBombeamentoIncendio';
 
@@ -102,7 +103,7 @@ export type EstadoDaConferencia = 'ATENDE' | 'FALTA' | 'NAO_AVALIADO';
 
 /** Os cenários de projeto de cada sistema calculado (E5.1). */
 export function cenariosDoCalculo(c: CalculoDeIncendio): CenarioCalculado[] {
-  const lista = [c.porSistema.hidrantes?.cenario, c.porSistema.sprinklers?.cenario].filter((x): x is CenarioCalculado => !!x);
+  const lista = [c.porSistema.hidrantes?.cenario, c.porSistema.sprinklers?.cenario, c.porSistema.combinado?.cenario].filter((x): x is CenarioCalculado => !!x);
   return lista.length ? lista : c.cenario ? [c.cenario] : [];
 }
 
@@ -177,6 +178,41 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
         alvos: [],
       });
     }
+  }
+  // E5.4: a demanda somada, o método das tabelas e a VGA.
+  const comb = c.porSistema.combinado;
+  if (comb) {
+    const nao = comb.cenario?.terminais.filter((t) => !t.atende) ?? [];
+    itens.push({
+      grupo: 'NBR 10897',
+      item: 'Demanda combinada (área de operação + hidrantes)',
+      exigido: 'os sprinklers da área e os hidrantes simultâneos abertos juntos — CONFERIR NA IT',
+      obtido: comb.cenario ? `${um(comb.cenario.vazaoNaFonteLmin, 0)} L/min a ${um(comb.cargaNecessariaM ?? 0)} mca na fonte` : (comb.motivo ?? '—'),
+      estado: !comb.cenario ? 'FALTA' : nao.length ? 'FALTA' : 'ATENDE',
+      alvos: nao.map((t) => t.terminalId),
+    });
+  }
+  if (s) {
+    const risco = cr?.risco?.valor ?? null;
+    const mt = metodoDasTabelas(model, risco);
+    const abaixo = mt.trechos.filter((t) => t.atende === false);
+    itens.push({
+      grupo: 'NBR 10897',
+      item: 'DN pelo método das tabelas',
+      exigido: 'DN pelo número de sprinklers a jusante — CONFERIR NA NORMA',
+      obtido: !mt.aplicavel ? (mt.motivo ?? '—') : abaixo.length ? `${abaixo.length} trecho(s) abaixo da tabela` : `${mt.trechos.length} trecho(s) conferidos`,
+      estado: !mt.aplicavel ? 'NAO_AVALIADO' : abaixo.length ? 'FALTA' : 'ATENDE',
+      alvos: abaixo.map((t) => t.trechoId),
+    });
+    const v = vgasDaRede(model);
+    itens.push({
+      grupo: 'NBR 10897',
+      item: 'Sprinklers a jusante de VGA',
+      exigido: 'todo sprinkler protegido por uma válvula de governo e alarme',
+      obtido: `${v.vgas.length} VGA(s) · ${v.semVga.length} sprinkler(s) sem VGA`,
+      estado: v.semVga.length ? 'FALTA' : 'ATENDE',
+      alvos: v.semVga,
+    });
   }
   // E5.2: cada Área de Operação desenhada tem de ter, no mínimo, a área do critério dela.
   c.areas.forEach((x, i) => {

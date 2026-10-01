@@ -126,9 +126,10 @@ describe('E5.1 · o cálculo com sprinklers', () => {
     expect(area.estado).toBe('FALTA');
   });
 
-  it('hidrante e sprinklers na mesma rede: cada um tem o seu cenário; governa o de maior vazão × altura', () => {
+  it('hidrante e sprinklers na mesma rede, SEM demanda combinada: cada um tem o seu cenário; governa o de maior vazão × altura', () => {
     const m = ramal(true);
-    const c = calculoDeIncendio(m, HIP, criterioDeSprinklers({ ...HS, risco: 'LEVE' }, null));
+    const c = calculoDeIncendio(m, HIP, criterioDeSprinklers({ ...HS, risco: 'LEVE', demandaCombinada: false }, null));
+    expect(c.porSistema.combinado).toBeNull();
     const h = c.porSistema.hidrantes!;
     const s = c.porSistema.sprinklers!;
     expect(h.cenario && s.cenario).toBeTruthy();

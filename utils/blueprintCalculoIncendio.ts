@@ -372,7 +372,7 @@ export function cargaNecessaria(model: BlueprintModel, hip: HipotesesHidraulicas
 export type PapelDoTrecho = 'GERAL' | 'COLUNA' | 'RAMAL' | 'SUB_RAMAL' | 'ANEL';
 export const ROTULO_DO_PAPEL: Record<PapelDoTrecho, string> = { GERAL: 'Geral', COLUNA: 'Coluna', RAMAL: 'Ramal', SUB_RAMAL: 'Sub-ramal', ANEL: 'Anel' };
 
-export type SistemaDeIncendio = 'HIDRANTES' | 'SPRINKLERS';
+export type SistemaDeIncendio = 'HIDRANTES' | 'SPRINKLERS' | 'COMBINADO';
 
 /** O cenário de projeto de UM sistema (E5.1). */
 export interface ResultadoDoSistema {
@@ -423,7 +423,8 @@ export interface CalculoDeIncendio {
   criterio: CriterioDeSprinklers | null;
   /** E5.1: o sistema que governa a bomba — `cenario`, `abertos` e `cargaNecessariaM` acima são dele. */
   sistema: SistemaDeIncendio | null;
-  porSistema: { hidrantes: ResultadoDoSistema | null; sprinklers: ResultadoDoSistema | null };
+  /** E5.4: `combinado` = os sprinklers da área e os hidrantes abertos JUNTOS (a demanda somada). */
+  porSistema: { hidrantes: ResultadoDoSistema | null; sprinklers: ResultadoDoSistema | null; combinado: ResultadoDoSistema | null };
   /** E5.2: uma linha por Área de Operação desenhada; vazio = os N mais desfavoráveis (E5.1). */
   areas: ResultadoDaArea[];
 }
@@ -539,7 +540,7 @@ export function calculoDeIncendio(model: BlueprintModel, hipDoEstudo: HipotesesH
   const base: CalculoDeIncendio = {
     motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map(),
     porGravidade: rede.tipoDaFonte === 'GRAVIDADE', rti: { exigidaL: null, autonomiaMin: hip.autonomiaMin, ...rtiDesenhada },
-    hip, criterio, sistema: null, porSistema: { hidrantes: null, sprinklers: null }, areas: [],
+    hip, criterio, sistema: null, porSistema: { hidrantes: null, sprinklers: null, combinado: null }, areas: [],
   };
   if (!rede.fonte) return { ...base, motivo: 'sem bomba de incêndio nem caixa de incêndio ligada à rede — lance uma das duas e ligue-a à tubulação' };
   const naRede = terminais.filter((t) => ehDeCombate(t) && rede.noDoTerminal.has(t.id));
@@ -606,9 +607,19 @@ export function calculoDeIncendio(model: BlueprintModel, hipDoEstudo: HipotesesH
     }
   }
 
-  const pares: [SistemaDeIncendio, ResultadoDoSistema | null][] = [['HIDRANTES', hidrantes], ['SPRINKLERS', sprinklers]];
+  // E5.4: a demanda SOMADA — a área de operação e os hidrantes abertos juntos, com as exigências dos dois.
+  let combinado: ResultadoDoSistema | null = null;
+  if (hidrantes?.abertos.length && sprinklers?.abertos.length && (criterio?.hipoteses.demandaCombinada ?? true)) {
+    const h = sprinklers.hip ?? hip;
+    combinado = {
+      ...resolver([...sprinklers.abertos, ...hidrantes.abertos], Math.max(sprinklers.autonomiaMin, hidrantes.autonomiaMin), 'sprinklers e hidrantes', h),
+      ...(sprinklers.criterio ? { criterio: sprinklers.criterio } : {}),
+      hip: h,
+    };
+  }
+  const pares: [SistemaDeIncendio, ResultadoDoSistema | null][] = [['HIDRANTES', hidrantes], ['SPRINKLERS', sprinklers], ['COMBINADO', combinado]];
   const candidatos = pares.filter((x): x is [SistemaDeIncendio, ResultadoDoSistema] => !!x[1] && x[1].abertos.length > 0);
-  const porSistema = { hidrantes, sprinklers };
+  const porSistema = { hidrantes, sprinklers, combinado };
   if (candidatos.length === 0) return { ...base, desfavoraveis, porSistema, areas, motivo: sprinklers?.motivo ?? 'nada a calcular' };
   const [sistema, g] = candidatos.reduce((a, b) => (peso(b[1]) > peso(a[1]) ? b : a));
   const comum: CalculoDeIncendio = { ...base, hip: g.hip ?? hip, desfavoraveis, porSistema, areas, sistema, abertos: g.abertos, cargaNecessariaM: g.cargaNecessariaM, cenario: g.cenario, motivo: g.motivo };

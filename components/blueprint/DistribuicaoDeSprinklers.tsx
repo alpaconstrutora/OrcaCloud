@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import type { ObjectId, Point } from '../../utils/blueprintKernel';
 import type { AlternativaDeDistribuicao, PlanoDeSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
+import { ROTULO_DO_TRACADO, type TipoDeTracado } from '../../utils/blueprintRedeDeSprinklers';
 
 export interface PropsDaDistribuicao {
   ambientes: { id: ObjectId; nome: string; areaM2: number }[];
@@ -16,7 +17,8 @@ export interface PropsDaDistribuicao {
   /** O contorno do ambiente escolhido, para o desenho das alternativas. */
   contorno: Point[] | null;
   plano: PlanoDeSprinklers | null;
-  onLancar: (alt: AlternativaDeDistribuicao) => void;
+  /** E5.4: `tracado` = a tubulação junto (espinha pela ponta/centro ou grelha); `null` = só os sprinklers. */
+  onLancar: (alt: AlternativaDeDistribuicao, tracado: TipoDeTracado | null) => void;
 }
 
 const n = (v: number, casas = 1) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -47,6 +49,7 @@ function Miniatura({ contorno, alt }: { contorno: Point[]; alt: AlternativaDeDis
 
 export default function DistribuicaoDeSprinklers({ ambientes, spaceId, onSpace, contorno, plano, onLancar }: PropsDaDistribuicao) {
   const [chave, setChave] = useState<string | null>(null);
+  const [tracado, setTracado] = useState<TipoDeTracado | ''>('PONTA');
   const alts = plano?.alternativas ?? [];
   const escolhida = alts.find((a) => a.chave === chave) ?? alts[0] ?? null;
   const motivo = !spaceId ? 'escolha o ambiente' : plano?.motivo ?? (escolhida ? null : 'sem alternativa');
@@ -101,6 +104,16 @@ export default function DistribuicaoDeSprinklers({ ambientes, spaceId, onSpace, 
           })}
         </div>
       )}
+      <label className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-600">
+        <span>Tubulação</span>
+        <select value={tracado} onChange={(e) => setTracado(e.target.value as TipoDeTracado | '')} aria-label="Tubulação dos sprinklers" className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs">
+          <option value="">Só os sprinklers</option>
+          {(Object.keys(ROTULO_DO_TRACADO) as TipoDeTracado[]).map((t) => (
+            <option key={t} value={t}>{ROTULO_DO_TRACADO[t]}</option>
+          ))}
+        </select>
+      </label>
+      {tracado && <p className="mt-1 text-[11px] text-slate-500">O geral liga ao nó mais próximo da rede de incêndio do pavimento; DN pelo método das tabelas (na grelha, ponto de partida — ajuste pelo cálculo).</p>}
       <div className="mt-2 flex items-center justify-between gap-2">
         <span className="text-[11px] text-slate-500">
           {plano && !plano.motivo ? `Defletor a ${n(plano.cotaMm / 1000, 2)} m do piso.` : ''} Espaçamentos do spray padrão — CONFERIR NA NORMA.
@@ -109,7 +122,7 @@ export default function DistribuicaoDeSprinklers({ ambientes, spaceId, onSpace, 
           type="button"
           disabled={!!motivo}
           title={motivo ?? 'Um lote só — Ctrl+Z desfaz'}
-          onClick={() => escolhida && onLancar(escolhida)}
+          onClick={() => escolhida && onLancar(escolhida, tracado || null)}
           className="shrink-0 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {escolhida && !motivo ? `Lançar ${escolhida.contagem} sprinklers` : 'Lançar sprinklers'}

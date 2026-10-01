@@ -61,9 +61,15 @@ export interface HipotesesDeSprinklers {
   areaPorSprinklerM2: number | null;
   /** E5.3: do defletor ao teto, mm — `null` = 150 (faixa usual 25–300 do spray padrão, CONFERIR NA NORMA). */
   distanciaAoTetoMm: number | null;
+  /**
+   * E5.4: com hidrantes e sprinklers na mesma rede, a área de operação e os
+   * hidrantes simultâneos abrem JUNTOS no cálculo da bomba (a demanda somada).
+   * `false` = cada sistema sozinho, governa o maior. CONFERIR NA IT.
+   */
+  demandaCombinada: boolean;
 }
 
-export const HIPOTESES_SPRINKLERS_PADRAO: HipotesesDeSprinklers = { risco: null, densidadeLminM2: null, areaDeOperacaoM2: null, areaPorSprinklerM2: null, distanciaAoTetoMm: null };
+export const HIPOTESES_SPRINKLERS_PADRAO: HipotesesDeSprinklers = { risco: null, densidadeLminM2: null, areaDeOperacaoM2: null, areaPorSprinklerM2: null, distanciaAoTetoMm: null, demandaCombinada: true };
 /** E5.3: o padrão da distância do defletor ao teto, mm — CONFERIR NA NORMA. */
 export const DISTANCIA_AO_TETO_PADRAO_MM = 150;
 
@@ -77,6 +83,7 @@ export function hipotesesDeSprinklersDaColuna(raw: unknown): HipotesesDeSprinkle
     areaDeOperacaoM2: positivoOuNulo(r.areaDeOperacaoM2),
     areaPorSprinklerM2: positivoOuNulo(r.areaPorSprinklerM2),
     distanciaAoTetoMm: positivoOuNulo(r.distanciaAoTetoMm),
+    demandaCombinada: typeof r.demandaCombinada === 'boolean' ? r.demandaCombinada : true,
   };
 }
 

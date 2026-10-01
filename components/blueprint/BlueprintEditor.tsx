@@ -236,6 +236,7 @@ import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/bluep
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
 import { proporAreaDeOperacao } from '../../utils/blueprintAreaDeOperacao';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
+import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
 import PainelCalhas from './PainelCalhas';
 import PainelCondutores from './PainelCondutores';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
@@ -7377,6 +7378,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         : null,
     [ambienteDosSprinklers, criterioDeSprinklersDoEstudo, editor.model, incendioDoEstudo.hipoteses.sprinklers],
   );
+  /** E5.4: o método das tabelas sobre a rede desenhada (derivado; o ajuste vira lote só no clique). */
+  const tabelasDeSprinklers = useMemo(() => {
+    if (!criterioDeSprinklersDoEstudo) return null;
+    const mt = metodoDasTabelas(editor.model, criterioDeSprinklersDoEstudo.risco?.valor ?? null);
+    const lote = ajustarDnPelasTabelas(mt);
+    return { aplicavel: mt.aplicavel, motivo: mt.motivo, abaixo: lote.length, lote };
+  }, [criterioDeSprinklersDoEstudo, editor.model]);
   /** E5.2: a área de operação proposta na região mais desfavorável (derivada; vira comando só no clique). */
   const propostaDeAreaDeOperacao = useMemo(
     () => (criterioDeSprinklersDoEstudo ? proporAreaDeOperacao(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
@@ -14272,12 +14280,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                           onSpace: setAmbienteDosSprinklers,
                           contorno: editor.model.spaces.find((s) => s.id === ambienteDosSprinklers)?.ring ?? null,
                           plano: planoDeSprinklers,
-                          onLancar: (alt) => {
+                          onLancar: (alt, tracado) => {
                             if (!planoDeSprinklers) return;
-                            const criados = editor.runBatch(comandosDaDistribuicao(planoDeSprinklers, alt));
+                            const risco = criterioDeSprinklersDoEstudo.risco?.valor;
+                            const tubos = tracado && risco ? tracarRedeDeSprinklers(editor.model, planoDeSprinklers, alt, tracado, risco).comandos : [];
+                            const criados = editor.runBatch([...comandosDaDistribuicao(planoDeSprinklers, alt), ...tubos]);
                             if (criados?.length) selecionar(criados);
                           },
                         },
+                        tabelas: tabelasDeSprinklers
+                          ? { ...tabelasDeSprinklers, onAjustar: () => tabelasDeSprinklers.lote.length && editor.runBatch(tabelasDeSprinklers.lote) }
+                          : undefined,
                       }
                     : undefined
                 }

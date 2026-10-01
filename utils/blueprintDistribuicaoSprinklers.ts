@@ -53,6 +53,8 @@ export interface AlternativaDeDistribuicao {
   pontos: Point[];
   /** Os ramais, sprinkler a sprinkler (só a geometria; os tubos são a E5.4). */
   ramais: { a: Point; b: Point }[];
+  /** E5.4: os sprinklers de cada ramal, na ordem ao longo dele — o traçado parte daqui. */
+  linhas: Point[][];
   contagem: number;
   comprimentoDosRamaisM: number;
   /** Quantos andaram para sair de baixo de viga. */
@@ -158,6 +160,7 @@ function alternativa(ring: Point[], holes: Point[][], vigas: Point[][], sentido:
     areaPorSprinklerM2: (su * sv) / 1e6,
     pontos,
     ramais,
+    linhas: linhas.map((l) => l.map(volta)),
     contagem: pontos.length,
     comprimentoDosRamaisM,
     deslocadosPorViga: deslocados,

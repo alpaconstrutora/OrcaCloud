@@ -1632,7 +1632,7 @@ Fecha a parte de hidrante do **bloco 4** (§19).
 
 Fecha o **bloco 4**.
 
-## Etapa 5 — Sprinklers · kernel bump · 4 fases · **em andamento (5.1, 5.2 e 5.3 ✅ 01/10/2026; kernel 0.82.0 → 0.83.0)**
+## Etapa 5 — Sprinklers · kernel bump · 4 fases · **✅ CONCLUÍDA em 01/10/2026 (4 de 4; kernel 0.82.0 → 0.83.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2187,4 +2187,40 @@ haver um bump só.
 - **Testes:** `blueprintDistribuicaoSprinklers.test.ts` (7: retângulo com cobertura total e 2+
   alternativas, ordinário, extraordinário, L sem buraco nem sprinkler fora, viga, lote, sem risco)
   e `DistribuicaoDeSprinklers.test.tsx` (2). Suíte com 6.640 testes: 6.607 + 33 pulados. Build ok.
+
+### Etapa 5.4 — 01/10/2026 (frente `incendio-e5`, sem bump) — fecha a E5
+
+- **Traçado (`utils/blueprintRedeDeSprinklers.ts`, `tracarRedeDeSprinklers`):** parte dos ramais da
+  alternativa da E5.3 (`linhas`, os sprinklers de cada ramal em ordem).
+  - **Espinha pela PONTA:** subgeral a ¼ de espaçamento (até 50 cm) antes do 1º sprinkler.
+  - **Espinha pelo CENTRO:** o subgeral passa entre os dois sprinklers do meio do ramal mais longo.
+  - **GRELHA:** subgeral nas duas pontas; os ramais fecham laços.
+  - **Geral:** liga o subgeral, em L, ao nó MAIS PRÓXIMO da rede de incêndio do pavimento, contando a
+    diferença de cota. Sem isso, na prumada (dois nós no mesmo x,y) ele desceria por cima do tubo que
+    já existe; achado ao escrever o teste. Sem rede no pavimento, ele diz para ligar à mão.
+  - **DN:** pelo método das tabelas na árvore planejada. Na grelha é ponto de partida, e o DN final é
+    o do cálculo.
+  - O botão "Lançar" leva os sprinklers E os tubos num lote só (um Ctrl+Z). A tubulação é escolhida
+    na distribuição: só os sprinklers, ponta, centro ou grelha.
+- **Método das tabelas (`metodoDasTabelas`):** o DN exigido pelo número de sprinklers a jusante na
+  árvore a partir da fonte, contra o desenhado. Fica "não avaliado" com laço (grelha/malha) e no risco
+  extraordinário, que exige o cálculo. A tabela é a de aço do método das tabelas (pipe schedule da
+  NFPA 13), CONFERIR NA NORMA. Tem um botão "Ajustar DN pelas tabelas" (um lote).
+- **VGA (`vgasDaRede`):** os sprinklers a jusante de cada VGA são DERIVADOS: os que a rede só alcança
+  passando por ela. Sprinkler sem VGA vira FALTA na conferência.
+- **Demanda combinada (premissa `demandaCombinada`, padrão sim, CONFERIR NA IT):**
+  - com hidrantes e sprinklers na mesma rede, a área de operação e os hidrantes simultâneos abrem
+    JUNTOS, cada um com a sua exigência;
+  - esse cenário governa a bomba, e a RTI é a vazão somada × a maior duração;
+  - desligada, volta o "governa o maior" da E5.1. Item novo na conferência.
+- **Harness `docs/spikes/tracado-sprinklers`** (canvas real, porta 3165, `?t=PONTA|CENTRO|GRELHA`):
+  a espinha e a grelha no salão de 12 × 8 m. O geral chega na prumada da bomba, com DN 25 nos
+  ramais, 32 no subgeral e 50 no geral, e a grelha fecha pelo subgeral da direita.
+- **Testes:** `blueprintRedeDeSprinklers.test.ts` (8: tabela, espinha pela ponta e pelo centro com
+  todo sprinkler na rede e o cálculo fechando, grelha fechando no solver com laço e tabelas "não
+  vale", sem rede, VGA, demanda somada), o caso da E5.1 refeito sem a demanda combinada, e 3 de tela.
+  Suíte com 6.649 testes: 6.616 + 33 pulados. Build ok.
+
+**Fecha o bloco 3** (sprinklers): risco e densidade, Área de Operação, distribuição com alternativas,
+traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
 

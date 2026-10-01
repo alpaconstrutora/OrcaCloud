@@ -41,6 +41,10 @@ describe('DistribuicaoDeSprinklers', () => {
     const u = userEvent.setup();
     await u.click(screen.getByTestId('alternativa-X|QUADRADO'));
     await u.click(screen.getByRole('button', { name: 'Lançar 12 sprinklers' }));
-    expect(onLancar).toHaveBeenCalledWith(plano.alternativas.find((a) => a.chave === 'X|QUADRADO'));
+    // A tubulação vem junto, em espinha pela ponta, a menos que se escolha outra.
+    expect(onLancar).toHaveBeenLastCalledWith(plano.alternativas.find((a) => a.chave === 'X|QUADRADO'), 'PONTA');
+    await u.selectOptions(screen.getByLabelText('Tubulação dos sprinklers'), '');
+    await u.click(screen.getByRole('button', { name: 'Lançar 12 sprinklers' }));
+    expect(onLancar).toHaveBeenLastCalledWith(plano.alternativas.find((a) => a.chave === 'X|QUADRADO'), null);
   });
 });

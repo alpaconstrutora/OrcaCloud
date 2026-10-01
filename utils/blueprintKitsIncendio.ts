@@ -11,6 +11,9 @@
  *    iluminação do local (ponto elétrico de iluminação, `POTENCIA_DA_LUMINARIA_W`)
  *    — os circuitos automáticos e o quadro de cargas passam a contá-la.
  *
+ *  - F2: os KITS DA ORGANIZAÇÃO (`blueprintKitsDeInsercao.ts`) da peça inserida, somados ao
+ *    kit padrão — e as peças deles também ganham a placa que pedirem.
+ *
  * O DRENO da VGA não entra como peça: seria um ramal sem destino — a verificação o
  * acusaria como ponta aberta. Ele continua no detalhe típico (E8.3).
  *
@@ -20,6 +23,7 @@
 import type { BlueprintModel, Command, Point, Terminal, Trecho } from './blueprintKernel';
 import { applyBatch } from './blueprintKernel';
 import { comPlacas } from './blueprintSinalizacao';
+import { comandosDoKit, kitsDaPeca, type KitDeInsercao } from './blueprintKitsDeInsercao';
 
 /** Distâncias do kit da VGA ao longo do tubo, mm: manômetro e, no de montante, o registro de bloqueio. */
 const DO_MANOMETRO_MM = 300;
@@ -86,9 +90,10 @@ function kitDaVga(m: BlueprintModel, v: Terminal): Command[] {
  * O lote da peça com o kit dela: placas (de quem pede placa) e, de cada VGA criada, os
  * manômetros e o registro. Os ids são previstos aplicando numa cópia (como `comPlacas`).
  */
-export function kitDaPeca(model: BlueprintModel, comandos: Command[]): { comandos: Command[]; aviso: string | null } {
+export function kitDaPeca(model: BlueprintModel, comandos: Command[], kits: readonly KitDeInsercao[] = []): { comandos: Command[]; aviso: string | null } {
   if (!comandos.length) return { comandos, aviso: null };
-  const comPlaca = comPlacas(model, comandos);
+  const daOrg = kitsDaOrganizacao(model, comandos, kits);
+  const comPlaca = comPlacas(model, [...comandos, ...daOrg.comandos]);
   let r;
   try {
     r = applyBatch(model, comPlaca);
@@ -100,8 +105,39 @@ export function kitDaPeca(model: BlueprintModel, comandos: Command[]): { comando
   const novasLuminarias = new Set((r.model.terminais ?? []).filter((t) => !antes.has(t.id) && ehLuminaria(t)).map((t) => t.id));
   const extras = [...vgas.flatMap((v) => kitDaVga(r.model, v)), ...(novasLuminarias.size ? alimentacaoDasLuminarias(r.model, novasLuminarias) : [])];
   const semRede = vgas.filter((v) => !kitDaVga(r.model, v).length);
-  return {
-    comandos: [...comPlaca, ...extras],
-    aviso: semRede.length ? 'VGA fora da rede: os manômetros e o registro do kit entram quando ela estiver na ponta de um tubo de incêndio.' : null,
-  };
+  const avisos = [
+    daOrg.aviso,
+    semRede.length ? 'VGA fora da rede: os manômetros e o registro do kit entram quando ela estiver na ponta de um tubo de incêndio.' : null,
+  ].filter((a): a is string => !!a);
+  return { comandos: [...comPlaca, ...extras], aviso: avisos.length ? avisos.join(' ') : null };
+}
+
+/**
+ * F2: as peças dos kits da organização em volta de cada peça que `comandos` cria (a peça do kit
+ * não dispara kit — não há recursão). O kit que o kernel recusa (fora do pavimento, campo
+ * inválido) fica de fora inteiro, e o aviso diz qual.
+ */
+function kitsDaOrganizacao(model: BlueprintModel, comandos: Command[], kits: readonly KitDeInsercao[]): { comandos: Command[]; aviso: string | null } {
+  if (!kits.length) return { comandos: [], aviso: null };
+  let r;
+  try {
+    r = applyBatch(model, comandos);
+  } catch {
+    return { comandos: [], aviso: null };
+  }
+  const antes = new Set((model.terminais ?? []).map((t) => t.id));
+  const lote: Command[] = [];
+  const recusados: string[] = [];
+  for (const p of (r.model.terminais ?? []).filter((t) => !antes.has(t.id))) {
+    for (const kit of kitsDaPeca(p, kits)) {
+      const doKit = comandosDoKit(p, kit);
+      try {
+        applyBatch(model, [...comandos, ...lote, ...doKit]);
+        lote.push(...doKit);
+      } catch {
+        recusados.push(kit.nome);
+      }
+    }
+  }
+  return { comandos: lote, aviso: recusados.length ? `Kit da organização não inserido (o desenho o recusou): ${[...new Set(recusados)].join(', ')}.` : null };
 }

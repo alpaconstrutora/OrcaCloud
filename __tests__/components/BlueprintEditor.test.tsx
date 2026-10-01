@@ -267,6 +267,11 @@ vi.mock('../../services/plantaIaService', () => ({
   pedirMudancasAIa: (...a: unknown[]) => pedirMudancasAIa(...(a as [])),
 }));
 
+vi.mock('../../services/blueprintKitService', () => ({
+  listarKits: vi.fn(async () => []),
+  salvarKit: vi.fn(),
+  apagarKit: vi.fn(),
+}));
 vi.mock('../../services/blueprintBudgetService', () => ({
   listMappings: vi.fn(async () => []),
   saveMapping: vi.fn(async () => ({})),

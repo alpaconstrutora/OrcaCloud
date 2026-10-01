@@ -242,6 +242,9 @@ import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/bl
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
+import PainelKitsDeInsercao from './PainelKitsDeInsercao';
+import { listarKits } from '../../services/blueprintKitService';
+import type { KitDeInsercao } from '../../utils/blueprintKitsDeInsercao';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
@@ -1049,6 +1052,8 @@ const ROTULO_DA_TAREFA = {
   memoriaisIncendio: 'Memoriais de incêndio e emissão (ART)',
   // INCÊNDIO E10 (01/10/2026): o gerador de PPCI — todos os motores num lote, com o relatório.
   incendioPpci: 'Gerador de PPCI',
+  // INCÊNDIO F2 (01/10/2026): a peça principal + N peças com deslocamento, da organização.
+  kitsDeInsercao: 'Kits de inserção da organização',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -1501,6 +1506,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * amarra o hash delas, então têm de ser do estudo.
    */
   const eletricaDoEstudo = useBlueprintEletrica(study.id, study.organization_id);
+  // F2 (incêndio pós-roadmap): os kits de inserção da organização DO ESTUDO (REGRA #5 — a planta é
+  // dela). Falha ao carregar = sem kit da organização (o kit padrão continua); o painel mostra o erro.
+  const [kitsDaOrg, setKitsDaOrg] = useState<KitDeInsercao[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    listarKits(study.organization_id)
+      .then((l) => vivo && setKitsDaOrg(l))
+      .catch(() => vivo && setKitsDaOrg([]));
+    return () => {
+      vivo = false;
+    };
+  }, [study.organization_id]);
   const hipotesesEletricas = eletricaDoEstudo.hipoteses;
   const setHipotesesEletricas = eletricaDoEstudo.setHipoteses;
   /**
@@ -6562,9 +6579,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       };
       // F1 (incêndio pós-roadmap): a peça de incêndio entra com o KIT dela num lote só — a placa do
       // equipamento e, na VGA, os manômetros e o registro de bloqueio. Um Ctrl+Z desfaz tudo.
+      // F2: e com os kits da organização da peça, de qualquer disciplina.
       let lote: Command[] = [comando];
-      if (disciplina === 'INCENDIO') {
-        const kit = kitDaPeca(editor.model, [comando]);
+      if (disciplina === 'INCENDIO' || kitsDaOrg.length > 0) {
+        const kit = kitDaPeca(editor.model, [comando], kitsDaOrg);
         lote = kit.comandos;
         if (kit.aviso) setAvisoColar(kit.aviso);
       }
@@ -6598,7 +6616,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       tipoEletrico: disciplinaDeRede === 'ELETRICA' ? tipoDePontoEletrico : null,
       interruptor: tipoDePontoEletrico === 'INTERRUPTOR' ? tipoDeInterruptor : null,
     }]);
-    const criados = editor.run(comando);
+    // F2 (incêndio pós-roadmap): o kit da organização da peça, no mesmo lote (um Ctrl+Z).
+    const comKit = kitsDaOrg.length > 0 ? kitDaPeca(editor.model, [comando], kitsDaOrg) : null;
+    if (comKit?.aviso) setAvisoColar(comKit.aviso);
+    const criados = comKit && comKit.comandos.length > 1 ? editor.runBatch(comKit.comandos) : editor.run(comando);
     // O difusor/grelha (P2.2) nasce com a medida da peça, como as caixas hidráulicas.
     if (criados.length > 0 && disciplinaDeRede === 'MECANICA') editor.run({ type: 'SetTerminalProps', terminalId: criados[0], ...MEDIDAS_PADRAO_TERMINAL_MECANICO });
     // A CAIXA DE PASSAGEM (E1.2) nasce 4×4 — quem tem outra declara no painel.
@@ -10883,6 +10904,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Ocupação, altura para incêndio, área e carga de incêndio da edificação, e as medidas de segurança que o Corpo de Bombeiros exige (preset MG, em rascunho até o texto das ITs ser conferido)"
               />
             </GrupoDoRibbon>
+            {/* INCÊNDIO F2 (01/10/2026): os kits de inserção da organização. */}
+            <GrupoDoRibbon rotulo="Kits">
+              <BotaoDoRibbon
+                icone={Boxes}
+                rotulo="Kits de inserção"
+                ativo={tarefaAberta === 'kitsDeInsercao'}
+                onClick={() => alternarTarefa('kitsDeInsercao')}
+                ajuda="Salve um arranjo do desenho (o hidrante com o extintor ao lado, por exemplo) como kit da organização: inserir a peça principal traz as outras no mesmo lote, giradas com ela"
+              />
+            </GrupoDoRibbon>
             {/* INCÊNDIO E10 (01/10/2026): o gerador de PPCI — todos os motores num lote. */}
             <GrupoDoRibbon rotulo="Gerador">
               <BotaoDoRibbon
@@ -14735,6 +14766,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 },
               }}
             />
+          )}
+
+          {tarefaAberta === 'kitsDeInsercao' && (
+            <PainelKitsDeInsercao organizationId={study.organization_id} model={editor.model} selecionados={editor.selectedIds} onKits={setKitsDaOrg} />
           )}
 
           {tarefaAberta === 'memoriaisIncendio' && previaDosMemoriaisIncendio && (

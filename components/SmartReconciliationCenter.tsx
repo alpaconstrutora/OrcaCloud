@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-    Sparkles, Zap, Check, X, RefreshCw, Settings2, ArrowLeftRight,
+    Zap, Check, X, RefreshCw, Settings2, ArrowLeftRight, Loader2,
     Landmark, FileText, ShieldCheck, Building2, User, AlertCircle, ListChecks, Lightbulb,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -12,9 +12,10 @@ import RegrasSheet, { type RegraPreenchida } from './reconciliation/RegrasSheet'
 import type { ClientOption } from './ClientSelect';
 import type { SupplierOption } from './SupplierSelect';
 import { useToast } from '../hooks/useToast';
-import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { FilterPopover } from './ui/FilterPopover';
+import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
-import Button from './ui/Button';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 
 interface CandidateTx {
@@ -61,10 +62,11 @@ function bandOf(conf: number): Exclude<Band, 'all'> {
     if (conf >= MID) return 'mid';
     return 'low';
 }
-const BAND_STYLE: Record<Exclude<Band, 'all'>, { label: string; chip: string }> = {
-    high: { label: 'Alta confiança', chip: 'bg-emerald-50 text-emerald-700' },
-    mid:  { label: 'Média confiança', chip: 'bg-amber-50 text-amber-700' },
-    low:  { label: 'Baixa confiança', chip: 'bg-gray-100 text-gray-500' },
+// §8: status é texto colorido — sem pílula, fundo nem caixa alta.
+const BAND_STYLE: Record<Exclude<Band, 'all'>, { label: string; text: string }> = {
+    high: { label: 'Alta confiança', text: 'text-emerald-700' },
+    mid:  { label: 'Média confiança', text: 'text-amber-700' },
+    low:  { label: 'Baixa confiança', text: 'text-gray-500' },
 };
 
 interface SmartReconciliationCenterProps {
@@ -98,6 +100,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     // jogada fora. Foi por isso que o usuário clicou em Reprocessar e a tela ficou
     // muda enquanto o console mostrava 22P02 — guia §13.
     const { localToast, showToast } = useToast();
+    const confirmar = useConfirm();
 
     /** Última execução do motor nesta conta. Responde "rodou? quando? deu erro?" —
      *  a pergunta que em 06/09/2026 só o banco de dados sabia responder. */
@@ -216,8 +219,19 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             showToast('Sugestões descartadas', 'success');
         });
 
-    const confirmAllHigh = () =>
-        run('bulk', async () => {
+    const confirmAllHigh = async () => {
+        const n = bestPerBank.filter(({ sug }) => sug.confidence >= HIGH).length;
+        if (n === 0) return;
+        // Concilia tudo de uma vez: antes era sem confirmação — um clique errado
+        // gravava dezenas de vínculos (desfazer é um por um, em Conciliados).
+        const ok = await confirmar({
+            title: `Conciliar ${n} sugestão(ões) de alta confiança?`,
+            message: `Cada movimento do extrato é vinculado ao seu melhor candidato (score ≥ ${HIGH}%). Para desfazer, use a aba Conciliados, vínculo por vínculo.`,
+            variant: 'warning',
+            confirmLabel: `Conciliar ${n}`,
+        });
+        if (!ok) return;
+        return run('bulk', async () => {
             const highs = bestPerBank.filter(({ sug }) => sug.confidence >= HIGH);
             for (const { sug } of highs) {
                 await onConfirm(sug.bank_transaction_id, sug.candidate_internal_transaction_id!);
@@ -225,6 +239,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             showToast(`${highs.length} conciliação(ões) de alta confiança aplicadas`, 'success');
             await onReload();
         });
+    };
 
     const reprocess = async () => {
         if (!selectedAccountId) { showToast('Selecione uma conta bancária', 'error'); return; }
@@ -252,30 +267,41 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         }
     };
 
+    // Tolerância é da organização da CONTA (a mesma das Regras). Com o topo em "Todas"
+    // a `organizationId` recebida vem vazia: a leitura quebrava (22P02) e caía no padrão
+    // sem avisar, e salvar falhava. Erro de leitura agora aparece.
     const openSettings = async () => {
+        if (!orgDaConta) return;
         try {
-            const { data } = await supabase
+            const { data, error } = await supabase
                 .from('reconciliation_settings')
                 .select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min')
-                .eq('organization_id', organizationId)
+                .eq('organization_id', orgDaConta)
                 .maybeSingle();
+            if (error) throw error;
             setSettings(data ? { ...DEFAULT_SETTINGS, ...data } : DEFAULT_SETTINGS);
-        } catch { setSettings(DEFAULT_SETTINGS); }
+        } catch (e) {
+            console.error('[Center] openSettings', e);
+            setSettings(DEFAULT_SETTINGS);
+            showToast('Não foi possível ler as tolerâncias salvas — mostrando os valores padrão', 'error');
+        }
         setShowSettings(true);
     };
 
     const saveSettings = async () => {
+        if (!orgDaConta) return;
         setSavingSettings(true);
         try {
             const { error } = await supabase
                 .from('reconciliation_settings')
-                .upsert({ organization_id: organizationId, ...settings, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' });
+                .upsert({ organization_id: orgDaConta, ...settings, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' });
             if (error) throw error;
             showToast('Configuração salva (aplica no próximo reprocesso)', 'success');
             setShowSettings(false);
         } catch (e) {
             console.error('[Center] saveSettings', e);
-            showToast('Erro ao salvar configuração', 'error');
+            const err = e as { message?: string; code?: string };
+            showToast(`Erro ao salvar as tolerâncias: ${err?.message ?? String(e)}${err?.code ? ` (${err.code})` : ''}`, 'error');
         } finally {
             setSavingSettings(false);
         }
@@ -284,180 +310,185 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     const setNum = (k: keyof typeof settings) => (e: React.ChangeEvent<HTMLInputElement>) =>
         setSettings(s => ({ ...s, [k]: Number(e.target.value) }));
 
+    const semConta = 'Selecione uma conta bancária: regras e tolerâncias são da organização dela';
+    const label = 'text-xs font-semibold text-slate-500';
+
     return (
-        <div className="space-y-4 min-h-[500px]">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Central Inteligente
-                </h4>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={confirmAllHigh}
-                        disabled={busy === 'bulk' || counts.high === 0}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-button font-black hover:bg-emerald-700 disabled:opacity-40"
-                    >
-                        <ShieldCheck className="w-3.5 h-3.5" /> Conciliar alta confiança ({counts.high})
-                    </button>
-                    <button
-                        onClick={reprocess}
-                        disabled={reprocessing || !selectedAccountId}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-button font-bold hover:border-blue-200 hover:text-blue-600 disabled:opacity-50"
-                    >
-                        <RefreshCw className={`w-3.5 h-3.5 ${reprocessing ? 'animate-spin' : ''}`} /> Reprocessar
-                    </button>
-                    <button
-                        onClick={() => { setPreenchida(null); setRegrasAberto(true); }}
-                        disabled={!selectedAccountId}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-button font-bold hover:border-blue-200 hover:text-blue-600 disabled:opacity-50"
-                        title={selectedAccountId ? 'Regras de classificação desta organização' : 'Selecione uma conta bancária: as regras são da organização dela'}
-                    >
-                        <ListChecks className="w-3.5 h-3.5" /> Regras ({regras.length})
-                    </button>
-                    <button onClick={openSettings} className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200" title="Tolerâncias">
-                        <Settings2 className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
-            {/* "Rodou?" passa a ser respondido pela tela, não pelo banco de dados. */}
-            {ultimaExecucao && (
-                <p className={`text-sm px-1 ${ultimaExecucao.status === 'FAILED' ? 'text-red-600' : 'text-gray-500'}`}>
-                    {ultimaExecucao.status === 'FAILED' ? (
-                        <>
-                            A última execução, em {formatDate(ultimaExecucao.started_at)}, <strong className="font-semibold">falhou</strong>
-                            {ultimaExecucao.error_message ? `: ${ultimaExecucao.error_message}` : '.'}
-                        </>
-                    ) : ultimaExecucao.status === 'RUNNING' ? (
-                        <>Uma execução iniciada em {formatDate(ultimaExecucao.started_at)} não terminou.</>
-                    ) : (
-                        <>
-                            Última execução em {formatDate(ultimaExecucao.started_at)}
-                            {ultimaExecucao.trigger === 'IMPORT' ? ', após importar extrato' : ''}:{' '}
-                            {ultimaExecucao.auto_matched} conciliada(s) sozinha(s), {ultimaExecucao.transfers_paired} transferência(s),{' '}
-                            {ultimaExecucao.suggestions} sugestão(ões).
-                        </>
-                    )}
-                </p>
-            )}
-
-            {/* Filtro por banda (exceção) */}
-            <div className="flex flex-wrap items-center gap-2 px-1">
-                {([
-                    ['all', `Todas (${bestPerBank.length})`],
-                    ['high', `Alta (${counts.high})`],
-                    ['mid', `Média (${counts.mid})`],
-                    ['low', `Baixa (${counts.low})`],
-                ] as [Band, string][]).map(([b, label]) => (
-                    <button
-                        key={b}
-                        onClick={() => setBand(b)}
-                        className={`px-3 py-1.5 rounded-lg text-button font-black transition-all ${band === b ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
-                    >
-                        {label}
-                    </button>
-                ))}
-                <span className="text-xs text-gray-400 font-medium ml-1">Valide as exceções — as de alta confiança podem ir em lote.</span>
-            </div>
-
-            {/* Cards de revisão lado-a-lado */}
-            <div className="space-y-3">
-                {visible.map(({ sug, alt }) => {
-                    const cand = sug.candidate_internal_transaction;
-                    const bank = bankMap.get(sug.bank_transaction_id);
-                    const bnd = bandOf(sug.confidence);
-                    const reasons = (sug.reason || '').split(' · ').filter(Boolean);
-                    const candParty = partyInfo(cand?.entity_name || cand?.party_name, cand?.party_type, bank?.direction);
-                    const bankParty = bank?.counterparty_name
-                        ? { label: bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido', name: bank.counterparty_name }
-                        : null;
-                    return (
-                        <div key={sug.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-0">
-                                {/* Sistema */}
-                                <div className="p-4 border-b lg:border-b-0 lg:border-r border-gray-50">
-                                    <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
-                                        <FileText className="w-3.5 h-3.5" /> Sistema
-                                    </div>
-                                    <p className="text-sm font-bold text-gray-800 truncate" title={cand?.description}>{cand?.description || '—'}</p>
-                                    {candParty && (
-                                        <p className={`text-xs font-bold flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-600' : 'text-indigo-600'}`} title={`${candParty.label}: ${candParty.name}`}>
-                                            {candParty.isClient ? <User className="w-3 h-3 flex-shrink-0" /> : <Building2 className="w-3 h-3 flex-shrink-0" />}
-                                            <span className="truncate">{candParty.label}: {candParty.name}</span>
-                                        </p>
+        <div className="space-y-6 min-h-[500px]">
+            {/* Sugestões — §5.2: toolbar e lista no MESMO card. O <h1> "Central de
+                Conciliação" do pai já diz onde o usuário está (§18): sem título repetido. */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-2 border-b border-gray-100 bg-white">
+                    <div className="flex flex-col lg:flex-row gap-2.5 lg:items-center">
+                        <div className="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
+                            <FilterPopover<Band>
+                                label="Confiança"
+                                value={band}
+                                onChange={setBand}
+                                allValue="all"
+                                options={[
+                                    { value: 'all', label: `Todas (${bestPerBank.length})` },
+                                    { value: 'high', label: `Alta (${counts.high})` },
+                                    { value: 'mid', label: `Média (${counts.mid})` },
+                                    { value: 'low', label: `Baixa (${counts.low})` },
+                                ]}
+                            />
+                            {/* "Rodou?" respondido pela tela, não pelo banco de dados. */}
+                            {ultimaExecucao && (
+                                <p className={`text-sm min-w-0 ${ultimaExecucao.status === 'FAILED' ? 'text-red-600' : 'text-gray-500'}`}>
+                                    {ultimaExecucao.status === 'FAILED' ? (
+                                        <>
+                                            A última execução, em {formatDate(ultimaExecucao.started_at)}, <span className="font-semibold">falhou</span>
+                                            {ultimaExecucao.error_message ? `: ${ultimaExecucao.error_message}` : '.'}
+                                        </>
+                                    ) : ultimaExecucao.status === 'RUNNING' ? (
+                                        <>Uma execução iniciada em {formatDate(ultimaExecucao.started_at)} não terminou.</>
+                                    ) : (
+                                        <>
+                                            Última execução em {formatDate(ultimaExecucao.started_at)}
+                                            {ultimaExecucao.trigger === 'IMPORT' ? ', após importar extrato' : ''}:{' '}
+                                            {ultimaExecucao.auto_matched} conciliada(s) sozinha(s), {ultimaExecucao.transfers_paired} transferência(s),{' '}
+                                            {ultimaExecucao.suggestions} sugestão(ões).
+                                        </>
                                     )}
-                                    <p className="text-xs text-gray-400 font-medium">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
-                                    <p className="text-sm font-black text-gray-900 tabular-nums mt-1">{formatBRL(cand?.amount)}</p>
-                                </div>
-
-                                {/* Centro: score + motivos */}
-                                <div className="px-4 py-3 flex flex-col items-center justify-center gap-1.5 bg-gradient-to-b from-purple-50/40 to-indigo-50/40 min-w-[200px]">
-                                    <ArrowLeftRight className="w-4 h-4 text-purple-400" />
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black ${BAND_STYLE[bnd].chip}`}>{sug.confidence}% · {BAND_STYLE[bnd].label}</span>
-                                    <div className="flex flex-wrap gap-1 justify-center mt-1">
-                                        {reasons.slice(0, 4).map((r, i) => (
-                                            <span key={i} className="text-[9px] font-semibold text-gray-500 bg-white border border-gray-100 rounded-full px-2 py-0.5" title={r}>
-                                                {r.length > 38 ? r.slice(0, 38) + '…' : r}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Extrato */}
-                                <div className="p-4 border-t lg:border-t-0 lg:border-l border-gray-50">
-                                    <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1">
-                                        <Landmark className="w-3.5 h-3.5" /> Extrato
-                                    </div>
-                                    <p className="text-sm font-bold text-gray-800 truncate" title={bank?.description_raw}>{bank?.description_normalized || bank?.description_raw || '—'}</p>
-                                    {bankParty && (
-                                        <p className="text-xs font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>
-                                            <Building2 className="w-3 h-3 flex-shrink-0" />
-                                            <span className="truncate">{bankParty.label}: {bankParty.name}</span>
-                                        </p>
-                                    )}
-                                    <p className="text-xs text-gray-400 font-medium">{bank ? formatDate(bank.transaction_date) : '—'}</p>
-                                    <p className={`text-sm font-black tabular-nums mt-1 ${bank?.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>{formatBRL(bank?.amount)}</p>
-                                </div>
-                            </div>
-
-                            {/* Ações */}
-                            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-t border-gray-50 bg-gray-50/40">
-                                <span className="text-xs text-gray-400 font-medium">
-                                    {alt > 0 ? `+${alt} candidato(s) alternativo(s)` : 'Melhor candidato'}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => reject(sug)}
-                                        disabled={busy === sug.id}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-button font-bold hover:bg-gray-200 disabled:opacity-50"
-                                    >
-                                        <X className="w-3.5 h-3.5" /> Descartar
-                                    </button>
-                                    <button
-                                        onClick={() => confirm(sug)}
-                                        disabled={busy === sug.id}
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-button font-black hover:bg-purple-700 disabled:opacity-50"
-                                    >
-                                        <Check className="w-3.5 h-3.5" /> Conciliar
-                                    </button>
-                                </div>
-                            </div>
+                                </p>
+                            )}
                         </div>
-                    );
-                })}
 
-                {visible.length === 0 && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-12 text-center">
-                        <Zap className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                        <p className="text-sm font-bold text-gray-400">Nenhuma sugestão nesta faixa.</p>
-                        <p className="text-xs text-gray-400 mt-1">Importe um extrato ou clique em “Reprocessar” para gerar sugestões.</p>
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                                onClick={reprocess}
+                                disabled={reprocessing || !selectedAccountId}
+                                title={selectedAccountId ? 'Memória, regras e conciliação automática, nesta ordem' : 'Selecione uma conta bancária'}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+                            >
+                                <RefreshCw className={`w-[15px] h-[15px] ${reprocessing ? 'animate-spin' : ''}`} />
+                                Reprocessar
+                            </button>
+                            <button
+                                onClick={() => { setPreenchida(null); setRegrasAberto(true); }}
+                                disabled={!selectedAccountId}
+                                title={selectedAccountId ? 'Regras de classificação desta organização' : semConta}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+                            >
+                                <ListChecks className="w-[15px] h-[15px]" />
+                                Regras ({regras.length})
+                            </button>
+                            <button
+                                onClick={openSettings}
+                                disabled={!orgDaConta}
+                                title={orgDaConta ? 'Tolerâncias da conciliação' : semConta}
+                                className="h-9 w-9 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
+                            >
+                                <Settings2 className="w-4 h-4" />
+                            </button>
+                            <div className="hidden lg:block w-px h-6 bg-gray-200" />
+                            {/* §17 — a única ação azul sólida da tela */}
+                            <button
+                                onClick={confirmAllHigh}
+                                disabled={busy === 'bulk' || counts.high === 0}
+                                title={counts.high === 0 ? 'Nenhuma sugestão de alta confiança agora' : `Conciliar as ${counts.high} sugestões com score ≥ ${HIGH}%`}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {busy === 'bulk' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ShieldCheck className="w-[15px] h-[15px]" />}
+                                Conciliar alta confiança ({counts.high})
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {visible.length === 0 ? (
+                    <div className="text-center py-12">
+                        <Zap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma sugestão {band === 'all' ? 'para revisar' : 'nesta faixa'}</h3>
+                        <p className="text-sm text-gray-500">Importe um extrato ou clique em Reprocessar para gerar sugestões.</p>
+                    </div>
+                ) : (
+                    <div className="p-4 space-y-3 bg-gray-50/40">
+                        {visible.map(({ sug, alt }) => {
+                            const cand = sug.candidate_internal_transaction;
+                            const bank = bankMap.get(sug.bank_transaction_id);
+                            const bnd = bandOf(sug.confidence);
+                            const reasons = (sug.reason || '').split(' · ').filter(Boolean);
+                            const candParty = partyInfo(cand?.entity_name || cand?.party_name, cand?.party_type, bank?.direction);
+                            const bankParty = bank?.counterparty_name
+                                ? { label: bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido', name: bank.counterparty_name }
+                                : null;
+                            return (
+                                <div key={sug.id} className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(200px,auto)_1fr]">
+                                        {/* Sistema */}
+                                        <div className="p-4 border-b lg:border-b-0 lg:border-r border-gray-100 min-w-0">
+                                            <p className={`${label} flex items-center gap-1.5 mb-1`}><FileText className="w-3.5 h-3.5" /> Sistema</p>
+                                            <p className="text-sm font-medium text-gray-900 truncate" title={cand?.description}>{cand?.description || '—'}</p>
+                                            {candParty && (
+                                                <p className={`text-sm flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-700' : 'text-indigo-700'}`} title={`${candParty.label}: ${candParty.name}`}>
+                                                    {candParty.isClient ? <User className="w-3.5 h-3.5 flex-shrink-0" /> : <Building2 className="w-3.5 h-3.5 flex-shrink-0" />}
+                                                    <span className="truncate">{candParty.label}: {candParty.name}</span>
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-gray-500 mt-0.5">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
+                                            <p className="text-sm font-semibold text-gray-900 tabular-nums mt-1">{formatBRL(cand?.amount)}</p>
+                                        </div>
+
+                                        {/* Centro: score + motivos — texto, sem pílula (§8) */}
+                                        <div className="px-4 py-3 flex flex-col items-center justify-center gap-1 text-center border-b lg:border-b-0 border-gray-100">
+                                            <ArrowLeftRight className="w-4 h-4 text-gray-400" />
+                                            <p className={`text-sm font-semibold ${BAND_STYLE[bnd].text}`}>{sug.confidence}% · {BAND_STYLE[bnd].label}</p>
+                                            {reasons.length > 0 && (
+                                                <p className="text-xs text-gray-500 max-w-[260px]" title={reasons.join(' · ')}>
+                                                    {reasons.slice(0, 4).join(' · ')}{reasons.length > 4 ? ` · +${reasons.length - 4}` : ''}
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* Extrato */}
+                                        <div className="p-4 lg:border-l border-gray-100 min-w-0">
+                                            <p className={`${label} flex items-center gap-1.5 mb-1`}><Landmark className="w-3.5 h-3.5" /> Extrato</p>
+                                            <p className="text-sm font-medium text-gray-900 truncate" title={bank?.description_raw}>{bank?.description_normalized || bank?.description_raw || '—'}</p>
+                                            {bankParty && (
+                                                <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>
+                                                    <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                                    <span className="truncate">{bankParty.label}: {bankParty.name}</span>
+                                                </p>
+                                            )}
+                                            <p className="text-xs text-gray-500 mt-0.5">{bank ? formatDate(bank.transaction_date) : '—'}</p>
+                                            <p className={`text-sm font-semibold tabular-nums mt-1 ${bank?.direction === 'CREDIT' ? 'text-emerald-700' : 'text-red-600'}`}>{formatBRL(bank?.amount)}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Ações — compactas; Conciliar em contorno para não competir com a primária (§17) */}
+                                    <div className="flex items-center justify-between gap-2 px-4 py-2 border-t border-gray-100">
+                                        <span className="text-xs text-gray-500">
+                                            {alt > 0 ? `+${alt} candidato(s) alternativo(s)` : 'Melhor candidato'}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => reject(sug)}
+                                                disabled={busy === sug.id}
+                                                title="Descarta todas as sugestões deste movimento (voltam no próximo Reprocessar)"
+                                                className="flex items-center gap-1 h-8 px-3 rounded-[6px] text-[13px] font-medium text-gray-600 hover:bg-gray-100 transition-all disabled:opacity-50"
+                                            >
+                                                <X className="w-3.5 h-3.5" /> Descartar
+                                            </button>
+                                            <button
+                                                onClick={() => confirm(sug)}
+                                                disabled={busy === sug.id}
+                                                className="flex items-center gap-1 h-8 px-3 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-200 hover:bg-blue-50 transition-all disabled:opacity-50"
+                                            >
+                                                {busy === sug.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Conciliar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>
 
             {/* Regras sugeridas pela memória: contraparte classificada ≥ 5 vezes, sem regra.
-                "Aceitar" abre o formulário preenchido — nada é criado sem revisão. */}
+                "Revisar e criar" abre o formulário preenchido — nada é criado sem revisão. */}
             {sugeridas.length > 0 && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
@@ -505,42 +536,65 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 onChanged={carregarRegras}
             />
 
-            {/* Conciliação agrupada (match parcial / agrupado) */}
+            {/* Conciliação agrupada (1 pagamento → N títulos e vice-versa) */}
             <GroupMatchPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
 
-            {/* Modal de tolerâncias */}
-            <Modal open={showSettings} onClose={() => setShowSettings(false)} size="md">
-                <ModalHeader
-                    title="Tolerâncias da conciliação"
-                    description="Ajustes do motor de score. Aplicam ao reprocessar / próxima importação."
-                    icon={<div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center"><Settings2 className="w-5 h-5 text-blue-600" /></div>}
-                    onClose={() => setShowSettings(false)}
-                />
-                <ModalBody className="grid grid-cols-2 gap-4">
-                    {([
-                        ['value_tol_abs', 'Tolerância valor (R$)'],
-                        ['value_tol_pct', 'Tolerância valor (%)'],
-                        ['encargos_tol_pct', 'Folga encargos (%)'],
-                        ['date_window_days', 'Janela de data (dias)'],
-                        ['auto_threshold', 'Score auto-conciliação'],
-                        ['suggestion_min', 'Score mínimo sugestão'],
-                    ] as [keyof typeof settings, string][]).map(([k, label]) => (
-                        <div key={k}>
-                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{label}</label>
-                            <input
-                                type="number"
-                                value={settings[k]}
-                                onChange={setNum(k)}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
+            {/* Tolerâncias — painel lateral (REGRA #4), malha §30 */}
+            <Sheet open={showSettings} onClose={() => setShowSettings(false)} size="md">
+                <SheetHeader onClose={() => setShowSettings(false)}>
+                    <SheetTitle>Tolerâncias da conciliação</SheetTitle>
+                    <SheetDescription>Ajustes do motor de score desta organização. Valem no próximo Reprocessar e na próxima importação.</SheetDescription>
+                </SheetHeader>
+                <SheetPanel className="p-6 space-y-8">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <h3 className="text-sm font-semibold text-gray-900">Valor e data</h3>
                         </div>
-                    ))}
-                </ModalBody>
-                <ModalFooter>
-                    <button onClick={() => setShowSettings(false)} className="px-4 py-2 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100">Cancelar</button>
-                    <Button onClick={saveSettings} disabled={savingSettings}>Salvar</Button>
-                </ModalFooter>
-            </Modal>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            {([
+                                ['value_tol_abs', 'Tolerância de valor (R$)'],
+                                ['value_tol_pct', 'Tolerância de valor (%)'],
+                                ['encargos_tol_pct', 'Folga para encargos (%)'],
+                                ['date_window_days', 'Janela de data (dias)'],
+                            ] as [keyof typeof settings, string][]).map(([k, texto]) => (
+                                <div key={k} className="space-y-1.5">
+                                    <label htmlFor={`tol-${k}`} className={label}>{texto}</label>
+                                    <input id={`tol-${k}`} type="number" value={settings[k]} onChange={setNum(k)} disabled={savingSettings}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                            <h3 className="text-sm font-semibold text-gray-900">Score</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            {([
+                                ['auto_threshold', 'Score para conciliar sozinho'],
+                                ['suggestion_min', 'Score mínimo para sugerir'],
+                            ] as [keyof typeof settings, string][]).map(([k, texto]) => (
+                                <div key={k} className="space-y-1.5">
+                                    <label htmlFor={`tol-${k}`} className={label}>{texto}</label>
+                                    <input id={`tol-${k}`} type="number" value={settings[k]} onChange={setNum(k)} disabled={savingSettings}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </SheetPanel>
+                <SheetFooter>
+                    <button onClick={() => setShowSettings(false)} disabled={savingSettings}
+                        className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] transition-all disabled:opacity-50">
+                        Cancelar
+                    </button>
+                    <button onClick={saveSettings} disabled={savingSettings || !orgDaConta}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                        {savingSettings && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
+                        Salvar tolerâncias
+                    </button>
+                </SheetFooter>
+            </Sheet>
 
             {localToast && (
                 <div

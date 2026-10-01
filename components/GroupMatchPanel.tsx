@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Layers, Split, Check, RefreshCw, Landmark, FileText, Building2 } from 'lucide-react';
+import { Layers, Split, Check, RefreshCw, Landmark, FileText, Building2, Loader2 } from 'lucide-react';
 import { reconciliationGroupService } from '../services/reconciliationGroupService';
+import { bankReconciliationService } from '../services/bankReconciliationService';
 import type { GroupSuggestions } from '../services/reconciliationGroupService';
 import { useToast } from '../hooks/useToast';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
@@ -22,13 +23,23 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
 
+    const [erro, setErro] = useState<string | null>(null);
+
+    // A organização é a da CONTA. Antes: `if (!organizationId) return` — com o topo
+    // em "Todas" a prop vem vazia e o painel sumia sem aviso (REGRA #5). E o erro de
+    // carga ia só para o console; agora aparece no painel.
     const load = useCallback(async () => {
-        if (!organizationId || !selectedAccountId) { setData(null); return; }
+        if (!selectedAccountId) { setData(null); return; }
         setLoading(true);
+        setErro(null);
         try {
-            setData(await reconciliationGroupService.findGroups(selectedAccountId, organizationId));
+            const org = await bankReconciliationService.resolverOrganizacaoDaConta(selectedAccountId, organizationId);
+            if (!org) throw new Error('Não foi possível identificar a organização desta conta bancária.');
+            setData(await reconciliationGroupService.findGroups(selectedAccountId, org));
         } catch (e) {
             console.error('[GroupMatchPanel]', e);
+            setData(null);
+            setErro(e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e));
         } finally {
             setLoading(false);
         }
@@ -45,7 +56,8 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
             await onReload();
         } catch (e) {
             console.error('[GroupMatchPanel] confirm', e);
-            showToast('Erro ao conciliar grupo', 'error');
+            const err = e as { message?: string; code?: string };
+            showToast(`Erro ao conciliar o grupo: ${err?.message ?? String(e)}${err?.code ? ` (${err.code})` : ''}`, 'error');
         } finally {
             setBusy(null);
         }
@@ -54,125 +66,145 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
     const total = (data?.bankToTitles.length ?? 0) + (data?.titleToBanks.length ?? 0);
     if (!selectedAccountId) return null;
 
+    const label = 'text-xs font-semibold text-slate-500';
+    const botao = 'flex items-center gap-1 h-8 px-3 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-200 hover:bg-blue-50 transition-all disabled:opacity-50';
+
     return (
-        <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-between px-1">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Layers className="w-4 h-4" />
-                    Agrupamentos sugeridos
-                    {total > 0 && <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{total}</span>}
-                </h4>
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            {/* Título de seção — mesmo vocabulário de "Regras sugeridas" (§21/§30) */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+                <Layers className="w-4 h-4 text-gray-500" />
+                <h3 className="text-sm font-semibold text-gray-900">Agrupamentos sugeridos</h3>
+                <span className="text-sm text-gray-500">
+                    · {loading ? 'calculando…' : total === 0 ? 'nenhum agrupamento provável' : `${total} ${total === 1 ? 'grupo' : 'grupos'}`}
+                </span>
                 <button
                     onClick={load}
                     disabled={loading}
-                    className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-50"
+                    className="ml-auto h-8 w-8 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
                     title="Recalcular"
                 >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
             </div>
 
-            {total === 0 && !loading && (
-                <p className="px-1 text-xs text-gray-400 font-medium">Nenhum agrupamento provável encontrado.</p>
+            {erro && (
+                <p className="px-4 py-3 text-sm text-red-600 border-b border-gray-100">Não foi possível calcular os agrupamentos: {erro}</p>
             )}
 
-            {/* 1 pagamento → N títulos */}
-            {(data?.bankToTitles ?? []).map((g, i) => (
-                <div key={`b2t-${g.bank.id}-${i}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50/40 border-b border-gray-50">
-                        <Layers className="w-3.5 h-3.5 text-indigo-500" />
-                        <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Um pagamento liquida vários títulos</span>
-                    </div>
-                    <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4">
-                        <div>
-                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> Extrato</div>
-                            <p className="text-sm font-bold text-gray-800 truncate">{g.bank.description_normalized || g.bank.description_raw}</p>
-                            {g.bank.counterparty_name && (
-                                <p className="text-xs font-bold text-gray-600 flex items-center gap-1 mt-0.5" title={g.bank.counterparty_name}>
-                                    <Building2 className="w-3 h-3 flex-shrink-0" /><span className="truncate">{g.bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {g.bank.counterparty_name}</span>
+            {total > 0 && (
+                <div className="p-4 space-y-3 bg-gray-50/40">
+                    {/* 1 pagamento → N títulos */}
+                    {(data?.bankToTitles ?? []).map((g, i) => {
+                        const chave = `b2t-${g.bank.id}-${i}`;
+                        return (
+                            <div key={chave} className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                                <p className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 text-sm font-medium text-gray-700">
+                                    <Layers className="w-3.5 h-3.5 text-indigo-500" />
+                                    Um pagamento liquida vários títulos
                                 </p>
-                            )}
-                            <p className="text-xs text-gray-400 font-medium">{formatDate(g.bank.transaction_date)}</p>
-                            <p className={`text-base font-black tabular-nums mt-1 ${g.bank.direction === 'CREDIT' ? 'text-emerald-600' : 'text-red-600'}`}>{formatBRL(g.bank.amount)}</p>
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> {g.titles.length} títulos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
-                            <div className="space-y-1.5">
-                                {g.titles.map(t => (
-                                    <div key={t.id} className="flex items-start justify-between text-sm gap-2">
-                                        <div className="min-w-0">
-                                            <p className="text-gray-700 truncate">{t.description || t.entity_name || t.party_name || 'Título'}</p>
-                                            <p className="text-xs text-gray-400 truncate">
-                                                {partyOf(t) ? <span className="text-indigo-500 font-bold">{partyOf(t)!.label}: {partyOf(t)!.name} · </span> : ''}
-                                                {formatDate(t.due_date || t.transaction_date)}
+                                <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-x-6 gap-y-4">
+                                    <div className="min-w-0">
+                                        <p className={`${label} flex items-center gap-1.5 mb-1`}><Landmark className="w-3.5 h-3.5" /> Extrato</p>
+                                        <p className="text-sm font-medium text-gray-900 truncate" title={g.bank.description_normalized || g.bank.description_raw}>{g.bank.description_normalized || g.bank.description_raw}</p>
+                                        {g.bank.counterparty_name && (
+                                            <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5" title={g.bank.counterparty_name}>
+                                                <Building2 className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">{g.bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {g.bank.counterparty_name}</span>
                                             </p>
-                                        </div>
-                                        <span className="tabular-nums font-bold text-gray-900 flex-shrink-0">{formatBRL(t.amount)}</span>
+                                        )}
+                                        <p className="text-xs text-gray-500 mt-0.5">{formatDate(g.bank.transaction_date)}</p>
+                                        <p className={`text-sm font-semibold tabular-nums mt-1 ${g.bank.direction === 'CREDIT' ? 'text-emerald-700' : 'text-red-600'}`}>{formatBRL(g.bank.amount)}</p>
                                     </div>
-                                ))}
+                                    <div className="min-w-0">
+                                        <p className={`${label} flex items-center gap-1.5 mb-1`}>
+                                            <FileText className="w-3.5 h-3.5" /> {g.titles.length} títulos · soma {formatBRL(g.total)}
+                                            {Math.abs(g.diff) > 0.01 && <span className="text-amber-700"> (diferença {formatBRL(Math.abs(g.diff))})</span>}
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            {g.titles.map(t => (
+                                                <div key={t.id} className="flex items-start justify-between text-sm gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-gray-900 truncate" title={t.description || t.entity_name || t.party_name || 'Título'}>{t.description || t.entity_name || t.party_name || 'Título'}</p>
+                                                        <p className="text-xs text-gray-500 truncate">
+                                                            {partyOf(t) ? <span className="text-indigo-700">{partyOf(t)!.label}: {partyOf(t)!.name} · </span> : ''}
+                                                            {formatDate(t.due_date || t.transaction_date)}
+                                                        </p>
+                                                    </div>
+                                                    <span className="tabular-nums font-medium text-gray-900 flex-shrink-0">{formatBRL(t.amount)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end px-4 py-2 border-t border-gray-100">
+                                    <button
+                                        onClick={() => run(chave, () => reconciliationGroupService.confirmBankToTitles(g.bank.id, g.titles.map(t => t.id)))}
+                                        disabled={busy === chave}
+                                        className={botao}
+                                    >
+                                        {busy === chave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Conciliar grupo
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div className="flex justify-end px-4 py-2.5 border-t border-gray-50 bg-gray-50/40">
-                        <button
-                            onClick={() => run(`b2t-${g.bank.id}-${i}`, () => reconciliationGroupService.confirmBankToTitles(g.bank.id, g.titles.map(t => t.id)))}
-                            disabled={busy === `b2t-${g.bank.id}-${i}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-button font-black hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                            <Check className="w-3.5 h-3.5" /> Conciliar grupo
-                        </button>
-                    </div>
-                </div>
-            ))}
+                        );
+                    })}
 
-            {/* 1 título → N pagamentos */}
-            {(data?.titleToBanks ?? []).map((g, i) => (
-                <div key={`t2b-${g.title.id}-${i}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-purple-50/40 border-b border-gray-50">
-                        <Split className="w-3.5 h-3.5 text-purple-500" />
-                        <span className="text-xs font-black text-purple-600 uppercase tracking-widest">Vários pagamentos liquidam um título</span>
-                    </div>
-                    <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-4">
-                        <div>
-                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><FileText className="w-3.5 h-3.5" /> Título</div>
-                            <p className="text-sm font-bold text-gray-800 truncate">{g.title.description || g.title.entity_name || g.title.party_name || 'Título'}</p>
-                            {partyOf(g.title) && (
-                                <p className="text-xs font-bold text-indigo-600 flex items-center gap-1 mt-0.5" title={partyOf(g.title)!.name}>
-                                    <Building2 className="w-3 h-3 flex-shrink-0" /><span className="truncate">{partyOf(g.title)!.label}: {partyOf(g.title)!.name}</span>
+                    {/* 1 título → N pagamentos */}
+                    {(data?.titleToBanks ?? []).map((g, i) => {
+                        const chave = `t2b-${g.title.id}-${i}`;
+                        return (
+                            <div key={chave} className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
+                                <p className="flex items-center gap-2 px-4 py-2 border-b border-gray-100 text-sm font-medium text-gray-700">
+                                    <Split className="w-3.5 h-3.5 text-purple-500" />
+                                    Vários pagamentos liquidam um título
                                 </p>
-                            )}
-                            <p className="text-xs text-gray-400 font-medium">venc. {formatDate(g.title.due_date || g.title.transaction_date)}</p>
-                            <p className="text-base font-black tabular-nums mt-1 text-gray-900">{formatBRL(g.title.amount)}</p>
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-1"><Landmark className="w-3.5 h-3.5" /> {g.banks.length} pagamentos · soma {formatBRL(g.total)}{Math.abs(g.diff) > 0.01 && <span className="text-amber-500"> (dif {formatBRL(Math.abs(g.diff))})</span>}</div>
-                            <div className="space-y-1.5">
-                                {g.banks.map(b => (
-                                    <div key={b.id} className="flex items-start justify-between text-sm gap-2">
-                                        <div className="min-w-0">
-                                            <p className="text-gray-700 truncate">{b.description_normalized || b.description_raw}</p>
-                                            <p className="text-xs text-gray-400 truncate">
-                                                {b.counterparty_name ? <span className="text-gray-600 font-bold">{b.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {b.counterparty_name} · </span> : ''}
-                                                {formatDate(b.transaction_date)}
+                                <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-x-6 gap-y-4">
+                                    <div className="min-w-0">
+                                        <p className={`${label} flex items-center gap-1.5 mb-1`}><FileText className="w-3.5 h-3.5" /> Título</p>
+                                        <p className="text-sm font-medium text-gray-900 truncate" title={g.title.description || g.title.entity_name || g.title.party_name || 'Título'}>{g.title.description || g.title.entity_name || g.title.party_name || 'Título'}</p>
+                                        {partyOf(g.title) && (
+                                            <p className="text-sm text-indigo-700 flex items-center gap-1 mt-0.5" title={partyOf(g.title)!.name}>
+                                                <Building2 className="w-3.5 h-3.5 flex-shrink-0" /><span className="truncate">{partyOf(g.title)!.label}: {partyOf(g.title)!.name}</span>
                                             </p>
-                                        </div>
-                                        <span className="tabular-nums font-bold text-gray-900 flex-shrink-0">{formatBRL(b.amount)}</span>
+                                        )}
+                                        <p className="text-xs text-gray-500 mt-0.5">venc. {formatDate(g.title.due_date || g.title.transaction_date)}</p>
+                                        <p className="text-sm font-semibold tabular-nums mt-1 text-gray-900">{formatBRL(g.title.amount)}</p>
                                     </div>
-                                ))}
+                                    <div className="min-w-0">
+                                        <p className={`${label} flex items-center gap-1.5 mb-1`}>
+                                            <Landmark className="w-3.5 h-3.5" /> {g.banks.length} pagamentos · soma {formatBRL(g.total)}
+                                            {Math.abs(g.diff) > 0.01 && <span className="text-amber-700"> (diferença {formatBRL(Math.abs(g.diff))})</span>}
+                                        </p>
+                                        <div className="space-y-1.5">
+                                            {g.banks.map(b => (
+                                                <div key={b.id} className="flex items-start justify-between text-sm gap-2">
+                                                    <div className="min-w-0">
+                                                        <p className="text-gray-900 truncate" title={b.description_normalized || b.description_raw}>{b.description_normalized || b.description_raw}</p>
+                                                        <p className="text-xs text-gray-500 truncate">
+                                                            {b.counterparty_name ? <span className="text-gray-700">{b.direction === 'CREDIT' ? 'Pagador' : 'Favorecido'}: {b.counterparty_name} · </span> : ''}
+                                                            {formatDate(b.transaction_date)}
+                                                        </p>
+                                                    </div>
+                                                    <span className="tabular-nums font-medium text-gray-900 flex-shrink-0">{formatBRL(b.amount)}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end px-4 py-2 border-t border-gray-100">
+                                    <button
+                                        onClick={() => run(chave, () => reconciliationGroupService.confirmTitleToBanks(g.title.id, g.banks.map(b => b.id)))}
+                                        disabled={busy === chave}
+                                        className={botao}
+                                    >
+                                        {busy === chave ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Conciliar grupo
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    <div className="flex justify-end px-4 py-2.5 border-t border-gray-50 bg-gray-50/40">
-                        <button
-                            onClick={() => run(`t2b-${g.title.id}-${i}`, () => reconciliationGroupService.confirmTitleToBanks(g.title.id, g.banks.map(b => b.id)))}
-                            disabled={busy === `t2b-${g.title.id}-${i}`}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-button font-black hover:bg-purple-700 disabled:opacity-50"
-                        >
-                            <Check className="w-3.5 h-3.5" /> Conciliar grupo
-                        </button>
-                    </div>
+                        );
+                    })}
                 </div>
-            ))}
+            )}
         </div>
     );
 };

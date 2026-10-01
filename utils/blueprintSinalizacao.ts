@@ -99,7 +99,17 @@ const d2 = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
  * máximo 15 m pela rota (6.1.3 b). Sem repetir. A rota do térreo curta (< 15 m), reta e sem escada
  * não pede orientação (6.1.3.5: a saída se vê de onde se está).
  */
-export function pontosDeSinalizacaoDaRota(percurso: PercursoDeFuga, descargaLevelId: ObjectId | null): Omit<PontoDeSinalizacao, 'coberto'>[] {
+export function pontosDeSinalizacaoDaRota(
+  percurso: PercursoDeFuga,
+  descargaLevelId: ObjectId | null,
+  /**
+   * A regra da IT 15 inteira (padrão): as placas a cada 15 m e a isenção do térreo curto. A
+   * iluminação reaproveita só as CURVAS e a SAÍDA (`{ regraDaIT15: false }`) — a placa a cada 15 m
+   * não é ponto de luminária, e a isenção da placa não isenta a luz.
+   */
+  opcoes: { regraDaIT15?: boolean } = {},
+): Omit<PontoDeSinalizacao, 'coberto'>[] {
+  const daIT15 = opcoes.regraDaIT15 ?? true;
   const pontos: Omit<PontoDeSinalizacao, 'coberto'>[] = [];
   const somar = (p: Omit<PontoDeSinalizacao, 'coberto'>) => {
     if (!pontos.some((q) => q.levelId === p.levelId && d2(q.at, p.at) < RAIO_DA_MESMA_PLACA_MM)) pontos.push(p);
@@ -117,7 +127,7 @@ export function pontosDeSinalizacaoDaRota(percurso: PercursoDeFuga, descargaLeve
       a.rota[0].levelId === descargaLevelId &&
       (a.distanciaM ?? Infinity) < DISTANCIA_MAXIMA_ATE_A_PLACA_MM / 1000 &&
       a.rota[0].pontos.every((_, i, ps) => i === 0 || i === ps.length - 1 || giroEm(ps, i) < CURVA_MINIMA_GRAUS);
-    if (curto) continue;
+    if (curto && daIT15) continue;
     a.rota.forEach((r, ir) => {
       const ps = r.pontos;
       // As placas da rota, em distância percorrida (mm) a partir do começo do trecho.
@@ -138,6 +148,7 @@ export function pontosDeSinalizacaoDaRota(percurso: PercursoDeFuga, descargaLeve
       // 6.1.3 b: entre o começo (ou uma placa) e a placa seguinte (ou o fim), no máximo 15 m — se não, uma
       // placa 15 m antes da seguinte, e assim para trás. O fim de um trecho que não é a saída (a boca da
       // escada) conta como placa: a escada tem a sua sinalização (6.1.3 c).
+      if (!daIT15) return;
       const total = acumulado[acumulado.length - 1];
       const paradas = [0, ...marcas.map((m) => m.s), total];
       for (let k = paradas.length - 1; k > 0; k--) {

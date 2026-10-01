@@ -12,16 +12,23 @@
  * das rotas (cada luminária nova meio espaçamento ADIANTE do primeiro ponto
  * descoberto, para cobrir para trás e para a frente), num lote só.
  *
- * ⚠️ NORMA (CONFERIR NA NBR 10898): espaçamento máximo de 15 m e autonomia
- * mínima de 60 min, transcritos de memória.
+ * NORMA: a IT 13 do CBMMG (transcrição `docs/normas/incendio-mg/it13-itens.txt`) fixa os 15 m
+ * entre pontos de aclaramento (5.4) e, abaixo de 2,5 m, a luminária em até 30 V — ou, no circuito
+ * comum, DR de 30 mA com disjuntor de 10 A (5.5 e 5.5.1). Ela ADOTA a NBR 10898 (2.2) no resto: a
+ * autonomia de 60 min segue CONFERIR NA NBR 10898 (não está entre os textos fornecidos).
  */
 import type { BlueprintModel, Command, Escada, ObjectId, Point } from './blueprintKernel';
 import type { PercursoDeFuga } from './blueprintRotaDeFuga';
 import { pontosDeSinalizacaoDaRota } from './blueprintSinalizacao';
 
-export const FONTE_ILUMINACAO = 'NBR 10898 — CONFERIR NA NORMA (transcrito de memória)';
+export const FONTE_ILUMINACAO = 'IT 13 do CBMMG (5.4 e 5.5) e NBR 10898 (adotada) — autonomia CONFERIR NA NBR 10898';
+/** IT 13, 5.4: 15 m entre dois pontos de aclaramento. */
 export const ESPACAMENTO_MAXIMO_PADRAO_M = 15;
+/** NBR 10898 (adotada pela IT 13, 2.2) — CONFERIR NA NBR 10898. */
 export const AUTONOMIA_MINIMA_MIN = 60;
+/** IT 13, 5.5: abaixo desta altura a luminária é de até 30 V — ou DR 30 mA + disjuntor 10 A (5.5.1). */
+export const ALTURA_DA_BAIXA_TENSAO_MM = 2500;
+export const DISJUNTOR_MAXIMO_DA_LUMINARIA_A = 10;
 export const COTA_DA_LUMINARIA_MM = 2200;
 /** Ponto obrigatório atendido por luminária a até isto, mm. */
 const RAIO_DO_PONTO_OBRIGATORIO_MM = 2000;
@@ -57,6 +64,13 @@ export interface AnaliseDeIluminacao {
   trechosSemLuz: { levelId: ObjectId; at: Point }[];
   /** Luminárias com autonomia abaixo da mínima. */
   autonomiaCurta: ObjectId[];
+  /**
+   * D1.2 (IT 13, 5.5/5.5.1): luminárias abaixo de 2,5 m alimentadas pelo circuito comum SEM DR de
+   * 30 mA ou com disjuntor acima de 10 A — e as que nem têm o ponto de alimentação desenhado (a
+   * de 30 V autônoma não precisa; o responsável confere).
+   */
+  tensaoSemProtecao?: ObjectId[];
+  semAlimentacao?: ObjectId[];
   fonte: string;
 }
 
@@ -101,7 +115,8 @@ function pontosObrigatorios(model: BlueprintModel, percurso: PercursoDeFuga, des
   const somar = (p: Omit<PontoObrigatorio, 'coberto'>) => {
     if (!lista.some((q) => q.levelId === p.levelId && d2(q.at, p.at) < RAIO_DA_MESMA_MM)) lista.push(p);
   };
-  for (const p of pontosDeSinalizacaoDaRota(percurso, descargaLevelId)) somar({ levelId: p.levelId, at: p.at, tipo: p.codigo === 'S12' ? 'SAIDA' : 'MUDANCA' });
+  // As curvas e a saída da rota (sem as placas de 15 m da IT 15, nem a isenção do térreo curto).
+  for (const p of pontosDeSinalizacaoDaRota(percurso, descargaLevelId, { regraDaIT15: false })) somar({ levelId: p.levelId, at: p.at, tipo: p.codigo === 'S12' ? 'SAIDA' : 'MUDANCA' });
   for (const b of bocasDasEscadas(model)) somar({ levelId: b.levelId, at: { x: Math.round(b.at.x), y: Math.round(b.at.y) }, tipo: 'ESCADA' });
   return lista;
 }
@@ -122,7 +137,22 @@ export function analisarIluminacao(model: BlueprintModel, percurso: PercursoDeFu
     }
   }
   const autonomiaCurta = lums.filter((l) => (l.autonomiaMin ?? AUTONOMIA_MINIMA_MIN) < AUTONOMIA_MINIMA_MIN).map((l) => l.id);
-  return { espacamentoM, luminarias: lums.length, pontosObrigatorios: obrig, trechosSemLuz, autonomiaCurta, fonte: FONTE_ILUMINACAO };
+  // IT 13, 5.5 / 5.5.1: abaixo de 2,5 m, até 30 V — ou, no circuito comum, DR 30 mA e disjuntor de 10 A.
+  const eletricos = (model.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA');
+  const circuitos = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
+  const tensaoSemProtecao: ObjectId[] = [];
+  const semAlimentacao: ObjectId[] = [];
+  for (const l of lums.filter((x) => x.cotaMm < ALTURA_DA_BAIXA_TENSAO_MM)) {
+    const ponto = eletricos.find((e) => e.levelId === l.levelId && d2(e.at, l.at) < 50);
+    if (!ponto) {
+      semAlimentacao.push(l.id);
+      continue;
+    }
+    const c = ponto.circuitoId ? circuitos.get(ponto.circuitoId) : undefined;
+    if (!c) continue; // ainda sem circuito: os circuitos automáticos decidem; a conferência elétrica cobra
+    if (c.protecaoDR !== true || (c.disjuntorA != null && c.disjuntorA > DISJUNTOR_MAXIMO_DA_LUMINARIA_A)) tensaoSemProtecao.push(l.id);
+  }
+  return { espacamentoM, luminarias: lums.length, pontosObrigatorios: obrig, trechosSemLuz, autonomiaCurta, tensaoSemProtecao, semAlimentacao, fonte: FONTE_ILUMINACAO };
 }
 
 /** A proposta: os pontos obrigatórios descobertos e o preenchimento das rotas — um lote. */

@@ -398,7 +398,14 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
       - placas novas: VGA (E11), acionador (E2), avisador (E1) — o gerador as lança no kit;
       - na rota, além das curvas e da saída, uma placa a no máximo 15 m de qualquer ponto
         (6.1.3 b); o térreo de percurso curto e reto fica isento (6.1.3.5);
-    - [ ] IT 13 (iluminação), IT 14 (alarme);
+    - [x] IT 13 (iluminação) — a IT ADOTA a NBR 10898 (2.2; autonomia segue CONFERIR); o que
+      ela fixa (`it13-itens.txt`): 15 m entre pontos de aclaramento (5.4, já era o padrão) e,
+      abaixo de 2,5 m, luminária de 30 V — ou DR 30 mA + disjuntor de 10 A no circuito comum
+      (5.5/5.5.1) — conferido no circuito do ponto de alimentação (F6);
+      - ⚠️ corrigido junto: a publicação da IT 15 fazia as placas de 15 m e a isenção do térreo
+        valerem também para a ILUMINAÇÃO (que reaproveita os pontos da rota) — a placa de 15 m não
+        é ponto de luminária, e a isenção da placa não isenta a luz; teste de regressão;
+    - [ ] IT 14 (alarme);
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

@@ -21,7 +21,8 @@ const ROTULO = { MUDANCA: 'mudança(s) de direção', SAIDA: 'saída(s)', ESCADA
 export default function PainelIluminacaoIncendio({ analise: a, hip, onHip, onSelecionar, proposta }: Props) {
   const faltam = a.pontosObrigatorios.filter((p) => !p.coberto);
   const porTipo = (['SAIDA', 'MUDANCA', 'ESCADA'] as const).map((t) => [t, faltam.filter((p) => p.tipo === t).length] as const).filter(([, n]) => n > 0);
-  const ok = !faltam.length && !a.trechosSemLuz.length && !a.autonomiaCurta.length;
+  const semProtecao = a.tensaoSemProtecao ?? [];
+  const ok = !faltam.length && !a.trechosSemLuz.length && !a.autonomiaCurta.length && !semProtecao.length;
   return (
     <div className="space-y-2" data-testid="iluminacao-incendio">
       <div>
@@ -65,6 +66,13 @@ export default function PainelIluminacaoIncendio({ analise: a, hip, onHip, onSel
             <li>
               <button type="button" className="text-left hover:underline" onClick={() => onSelecionar(a.autonomiaCurta)}>
                 {a.autonomiaCurta.length} luminária(s) com autonomia abaixo de 60 min
+              </button>
+            </li>
+          )}
+          {semProtecao.length > 0 && (
+            <li>
+              <button type="button" className="text-left hover:underline" onClick={() => onSelecionar(semProtecao)}>
+                {semProtecao.length} luminária(s) abaixo de 2,5 m em circuito sem DR de 30 mA ou com disjuntor acima de 10 A (IT 13, 5.5)
               </button>
             </li>
           )}

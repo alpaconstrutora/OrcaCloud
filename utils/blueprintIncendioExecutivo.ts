@@ -613,7 +613,12 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
   }
   if (exigida('ILUMINACAO_EMERGENCIA') || a.iluminacao.luminarias) {
     const faltas = a.iluminacao.pontosObrigatorios.filter((p) => !p.coberto).length + a.iluminacao.trechosSemLuz.length + a.iluminacao.autonomiaCurta.length;
-    v.push({ grupo: 'PREVENTIVOS', item: 'Iluminação de emergência ao longo das rotas', norma: 'NBR 10898', exigido: `espaçamento ≤ ${um(a.iluminacao.espacamentoM, 1)} m e pontos obrigatórios`, obtido: faltas ? `${faltas} falta(s)` : 'completa', atende: faltas === 0 });
+    v.push({ grupo: 'PREVENTIVOS', item: 'Iluminação de emergência ao longo das rotas', norma: 'IT 13 do CBMMG (5.4) · NBR 10898', exigido: `espaçamento ≤ ${um(a.iluminacao.espacamentoM, 1)} m e pontos obrigatórios`, obtido: faltas ? `${faltas} falta(s)` : 'completa', atende: faltas === 0 });
+    // D1.2 (IT 13, 5.5/5.5.1): abaixo de 2,5 m, até 30 V — ou DR 30 mA e disjuntor de 10 A no circuito comum.
+    const semProtecao = a.iluminacao.tensaoSemProtecao ?? [];
+    if (semProtecao.length) {
+      v.push({ grupo: 'PREVENTIVOS', item: 'Luminárias abaixo de 2,5 m: 30 V, ou DR 30 mA e disjuntor de 10 A', norma: 'IT 13 do CBMMG · 5.5', exigido: 'luminária de até 30 V, ou o circuito com DR de 30 mA e disjuntor de até 10 A', obtido: `${semProtecao.length} luminária(s) em circuito sem DR declarado ou com disjuntor acima de 10 A`, atende: false });
+    }
   }
   if (a.alarme.deteccaoExigida || a.alarme.alarmeExigido) {
     const al = a.alarme;

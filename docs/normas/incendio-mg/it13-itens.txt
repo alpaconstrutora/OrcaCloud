@@ -1,0 +1,8 @@
+// TRANSCRIÇÃO dos itens da IT 13 do CBMMG (Iluminação de Emergência) usados no motor — lidos do texto em 01/10/2026. Fonte da verdade do teste `incendioIluminacaoMG.test.ts`.
+2.2 Adota-se a NBR 10898 – Sistema de iluminação de emergência, naquilo que não contrariar o disposto nesta Instrução Técnica. (A NBR 10898 NÃO está entre os textos fornecidos: a autonomia mínima segue CONFERIR NA NBR 10898.)
+5.1.3 Grupo motogerador em local confinado: compartimento resistente ao fogo por 2 horas, acesso por PCF (P90).
+5.2 Fonte centralizada e comandos em local não acessível ao público, sem risco de incêndio, ventilado.
+5.3 Instalação aparente: tubulação e caixas metálicas ou de PVC rígido antichama (NBR 6150).
+5.4 A distância máxima entre dois pontos de iluminação de aclaramento deve ser de 15 m ponto a ponto (outro distanciamento, se atender à NBR 10898 — 5.4.1).
+5.5 As luminárias de aclaramento instaladas a menos de 2,5 m de altura e as de balizamento devem ter tensão máxima de alimentação de 30 volts.
+5.5.1 Na impossibilidade de reduzir a tensão, pode ser utilizado um interruptor diferencial de 30 mA com disjuntor termomagnético de 10 A.

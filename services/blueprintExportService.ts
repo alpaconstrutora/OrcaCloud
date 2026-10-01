@@ -7,6 +7,8 @@
 // uma vez contra a interface. Aqui só se traduz "milímetro de papel" para o que
 // cada destino entende — pixel no canvas, ponto no PDF.
 
+import { abaDaPlanilhaDePressoes, calculoDoEstudo, caminhoCritico, planilhaDePressoes } from '../utils/blueprintPlanilhaDePressoes';
+import { paraWinAnsi } from './blueprintMemorialHidroService';
 import { numeracaoDeIncendio } from '../utils/blueprintNumeracaoIncendio';
 import { colunasDoModelo, nomesDasColunas } from '../utils/blueprintEsquemaVertical';
 import { DISCIPLINAS_DA_REDE, type RedeDaPrancha } from '../utils/blueprintPranchaHidro';
@@ -16,6 +18,7 @@ import {
   desenharElevacao,
   desenharFolhaDeDetalhesHidro,
   desenharFolhaDeIncendio,
+  desenharFolhaDePressoesDeIncendio,
   desenharFolhaDoEsquemaVertical,
   desenharFolhaDoEsquemaVerticalEletrico,
   desenharFolhaDaListaDeMateriaisEletrica,
@@ -288,7 +291,8 @@ class DesenhistaPdf implements Desenhista {
     this.doc.setTextColor(cor);
     // pt = mm × 72/25.4. jsPDF mede fonte em pontos mesmo com o doc em mm.
     this.doc.setFontSize(alturaMm * 2.834);
-    this.doc.text(texto, x, y);
+    // E8.2: as fontes-padrão do jsPDF são WinAnsi — ≥, →, √ viravam lixo em qualquer prancha.
+    this.doc.text(paraWinAnsi(texto), x, y);
   }
 
   retangulo(x: number, y: number, w: number, h: number, e: EstiloTraco): void {
@@ -490,6 +494,12 @@ export function desenharConjunto(
   const colunasDoDesenho = nomesDasColunas(model);
   // E8.1: idem para os números de incêndio (H-1, SPK-3).
   const numerosDoDesenho = numeracaoDeIncendio(model);
+  // E8.2: o caminho crítico, calculado UMA vez (o cálculo é caro) e só se alguma planta de rede pedir.
+  let caminhoCache: string[] | null = null;
+  const caminhoDoDesenho = () => {
+    if (caminhoCache === null) caminhoCache = o.hipotesesDeIncendio ? caminhoCritico(model, calculoDoEstudo(model, o.hipotesesDeIncendio).calculo).trechos : [];
+    return caminhoCache;
+  };
   pranchas.forEach((p, i) => {
     const d = novaFolha(i);
     const comPrancha = (denominador: number, extra: Partial<OpcoesExportacao> = {}): OpcoesExportacao => ({ ...base, ...extra, denominador, prancha: { numero: p.numero, total: pranchas.length, titulo: p.titulo } });
@@ -538,8 +548,16 @@ export function desenharConjunto(
           den = enq.escalaSugerida;
           enq = enquadrar(m, den, papel, template.cotas);
         }
-        desenharPlanta(d, m, comPrancha(den, { incendio: p.familiaDeIncendio, numerosDeIncendio: numerosDoDesenho }), enq);
+        // E8.2: o caminho crítico destacado nas de rede (hidrantes e sprinklers).
+        const caminho = p.familiaDeIncendio === 'PREVENTIVO' ? undefined : caminhoDoDesenho();
+        desenharPlanta(d, m, comPrancha(den, { incendio: p.familiaDeIncendio, numerosDeIncendio: numerosDoDesenho, caminhoCriticoDeIncendio: caminho }), enq);
         folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'PRESSOES_INCENDIO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDePressoesDeIncendio(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
         break;
       }
       case 'LEGENDA_INCENDIO': {
@@ -976,6 +994,10 @@ export function montarQuantitativoXlsx(
     armaduraDoModelo(model, quant, o.armadura ?? HIPOTESES_ARMADURA_PADRAO),
     linhasDeParametros(model, o.definicoesDeParametro ? parametrosCalculadosDoModelo(model, o.definicoesDeParametro) : undefined, o.definicoesDeParametro ? chavesPrivadas(o.definicoesDeParametro) : undefined),
   );
+  // E8.2: a planilha de pressões de incêndio, quando há rede e as premissas do estudo vieram.
+  if (o.hipotesesDeIncendio && (model.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) {
+    abas.push(abaDaPlanilhaDePressoes(planilhaDePressoes(model, calculoDoEstudo(model, o.hipotesesDeIncendio).calculo)));
+  }
 
   const wb = XLSX.utils.book_new();
   for (const aba of abas) {

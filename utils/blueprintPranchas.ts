@@ -155,7 +155,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -279,6 +279,8 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
       }
     }
     if (alguma) numerar({ tipo: 'LEGENDA_INCENDIO', titulo: 'Incêndio — quadro-resumo e legenda', denominador: 0 });
+    // E8.2: a planilha de pressões, quando há rede para calcular.
+    if ((model.trechos ?? []).some((x) => x.disciplina === 'INCENDIO')) numerar({ tipo: 'PRESSOES_INCENDIO', titulo: 'Incêndio — planilha de pressões e curva da bomba', denominador: 0 });
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });

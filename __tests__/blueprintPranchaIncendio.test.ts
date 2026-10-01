@@ -55,6 +55,8 @@ describe('E8.1 · o conjunto', () => {
       'Incêndio — preventivo — Térreo',
       'Incêndio — preventivo — 1º',
       'Incêndio — quadro-resumo e legenda',
+      // E8.2: a planilha de pressões, porque há rede.
+      'Incêndio — planilha de pressões e curva da bomba',
     ]);
     // Sem a opção, nenhuma.
     expect(planejarConjunto(m, so({})).some((p) => p.tipo === 'INCENDIO')).toBe(false);

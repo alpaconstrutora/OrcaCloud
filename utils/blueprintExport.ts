@@ -24,6 +24,7 @@
  * os dois a carregar condicional do outro.
  */
 
+import { calculoDoEstudo, desenharFolhaDePressoes } from './blueprintPlanilhaDePressoes';
 import { desenharIncendio, desenharLegendaDeIncendio } from './blueprintPranchaIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from './blueprintIncendioClassificacao';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
@@ -364,6 +365,8 @@ export interface OpcoesExportacao {
   numerosDeIncendio?: ReadonlyMap<string, { numero: string }>;
   /** E8.1: a camada de incêndio no DXF (PLANTA-INCENDIO*). */
   incendioNoDxf?: boolean;
+  /** E8.2: os trechos do caminho crítico, destacados na planta de incêndio. */
+  caminhoCriticoDeIncendio?: readonly string[];
   /**
    * E8.1: as premissas de incêndio do ESTUDO — a folha de legenda monta com
    * elas a classificação e o quadro-resumo das medidas (E0). Ausentes = o
@@ -633,7 +636,7 @@ export function desenharPlanta(
     }
   }
   if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null, opcoes.nomesDasColunas ?? nomesDasColunas(model));
-  if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio);
+  if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio, new Set(opcoes.caminhoCriticoDeIncendio ?? []));
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
@@ -1022,6 +1025,20 @@ export function desenharFolhaDeIncendio(d: Desenhista, model: BlueprintModel, op
       })()
     : null;
   desenharLegendaDeIncendio(d, model, x0, y0 + 9, enq.utilLarguraMm, quadro);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/** E8.2: a folha da PLANILHA DE PRESSÕES — tabela dos trechos e das peças e a curva da bomba. */
+export function desenharFolhaDePressoesDeIncendio(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const y0 = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) + 6;
+  if (!opcoes.hipotesesDeIncendio) {
+    d.texto(x0, y0, 'PLANILHA DE PRESSÕES — INCÊNDIO', 3.2);
+    d.texto(x0, y0 + 8, 'Premissas de incêndio do estudo não informadas — o cálculo precisa delas.', 2.2, '#b91c1c');
+  } else {
+    const { calculo, bomba } = calculoDoEstudo(model, opcoes.hipotesesDeIncendio);
+    desenharFolhaDePressoes(d, model, calculo, bomba, x0, y0, enq.utilLarguraMm, enq.utilAlturaMm - 12);
+  }
   desenharCarimbo(d, opcoes, enq);
 }
 

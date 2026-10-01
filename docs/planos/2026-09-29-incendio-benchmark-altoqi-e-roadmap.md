@@ -1664,7 +1664,7 @@ Fecha os **A** das seções 22 e 27.
 
 Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
-## Etapa 8 — Documentação · sem bump · 4 fases · **em andamento (8.1 ✅ 01/10/2026)**
+## Etapa 8 — Documentação · sem bump · 4 fases · **em andamento (8.1 e 8.2 ✅ 01/10/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2496,4 +2496,35 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   dela e o DN, quadro-resumo com e sem premissas, legenda, prancha avulsa, DXF). Na DXF, a tabela de
   camadas declara todas, então o teste confere as ENTIDADES. Suíte com 6.715 testes: 6.682 + 33
   pulados. Build ok.
+
+### Etapa 8.2 — 01/10/2026 (frente `incendio-e8`, sem bump)
+
+- **`utils/blueprintPlanilhaDePressoes.ts`:**
+  - **`calculoDoEstudo`:** o MESMO cálculo da tela (critério dos sprinklers pela divisão da E0) a
+    partir das premissas do estudo.
+  - **`caminhoCritico`:** os trechos da fonte até a peça aberta de MENOR folga. É a peça do solver, e
+    o teste confere que, no galpão da E2, é o hidrante do fundo, pelos 4 trechos na ordem.
+  - **`planilhaDePressoes`:** o resumo (sistema que governa, vazão, altura manométrica, fórmula) e os
+    trechos com o caminho crítico primeiro (marcado *), cada um com papel, DN, material, L, Leq, Q,
+    V, J, hf e P nas duas pontas. Vêm também as peças abertas com Q, P no nó, P no bico, o exigido e
+    a situação.
+- **Papel:**
+  - **Folha "Incêndio — planilha de pressões e curva da bomba":** vai no conjunto quando há rede. Traz
+    as tabelas (cortadas com aviso quando não cabem; a íntegra vai no XLSX) e, com bomba e curva, o
+    gráfico da curva da bomba × a do sistema com os pontos de projeto e de operação.
+  - **Plantas de hidrantes e sprinklers:** o caminho crítico em vermelho por baixo do tubo.
+- **XLSX:** aba "Incêndio — pressões" no quantitativo, quando há rede e as premissas.
+- ⚠️ **PDF e WinAnsi:** o `DesenhistaPdf` passou a mandar todo texto pelo `paraWinAnsi`. As fontes do
+  jsPDF são WinAnsi, e "→", "≥" e "√" viravam lixo em QUALQUER prancha; antes só o memorial
+  convertia.
+  - Prova no PDF REAL: o conjunto do galpão gerado pelo `montarConjuntoPdf` tem 227 textos, nenhum
+    "?", e a seta saiu "->". Os números batem com a E4: projeto 605 L/min a 47,2 m, operação 644
+    L/min a 53,2 m.
+- **Harness `prancha-incendio`** (`?folha=5`): a folha com a demanda combinada governando (758 L/min a
+  46,3 mca) e o gráfico com as curvas se cruzando no ponto de operação.
+  - Na 1ª passada a folha disse "sem planilha" com o motivo, porque a rede do 1º do modelo de prova
+    não estava ligada à prumada. Era o modelo de prova, e a folha agiu certo; a prumada foi ligada até
+    a laje.
+- **Testes:** `blueprintPlanilhaDePressoes.test.ts` (6) e o conjunto da E8.1, que agora tem a folha a
+  mais. Suíte com 6.721 testes: 6.688 + 33 pulados. Build ok.
 

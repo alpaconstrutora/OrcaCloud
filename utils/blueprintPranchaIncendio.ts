@@ -64,6 +64,8 @@ const MEDIA = 0.35;
 const LARGURA_MINIMA_BIFILAR_MM = 0.8;
 /** O símbolo no papel: a maior medida da peça na escala, nunca menor que isto. */
 const LADO_MINIMO_DO_SIMBOLO_MM = 2.6;
+/** E8.2: o caminho crítico na planta. */
+export const COR_DO_CAMINHO_CRITICO = '#dc2626';
 
 const daFamilia = (tipo: TipoDePontoHidraulico | null | undefined, r: RecorteDeIncendio) => !!tipo && !!FAMILIA_DO_TIPO[tipo] && (r === 'TODAS' || FAMILIA_DO_TIPO[tipo] === r);
 
@@ -92,6 +94,8 @@ export function desenharIncendio(
   denominador: number,
   levelId: ObjectId | null,
   numeros: ReadonlyMap<ObjectId, { numero: string }> = numeracaoDeIncendio(model),
+  /** E8.2: os trechos do CAMINHO CRÍTICO (fonte → peça mais desfavorável), em destaque. */
+  destaque: ReadonlySet<ObjectId> = new Set(),
 ): void {
   const { px, py } = proj;
   if (recorte === 'TODAS' || COM_REDE.includes(recorte)) {
@@ -108,6 +112,10 @@ export function desenharIncendio(
         continue;
       }
       const largura = t.bitolaMm / denominador;
+      if (destaque.has(t.id)) {
+        // O caminho crítico: um traço grosso vermelho por baixo do tubo.
+        d.linha(a.x, a.y, b.x, b.y, { espessuraMm: Math.max(largura, 0.8) + 0.8, cor: COR_DO_CAMINHO_CRITICO });
+      }
       if (largura >= LARGURA_MINIMA_BIFILAR_MM) {
         const dx = b.x - a.x;
         const dy = b.y - a.y;

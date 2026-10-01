@@ -6,6 +6,18 @@
 
 Sessão `c6b98893-3359-47d8-854f-f618a31c7b1e` · 01/10/2026, logo depois da E10 (e8f37182).
 
+**Respostas às decisões em aberto (01/10/2026, mesma sessão), literais:**
+
+> 1. relatorio pede
+> 2. lança a bomba
+> 3. os dois
+> 4. envio depois. salve.
+> 5. MG. salve para atualizar os demais estados posteriormente
+> 6. agente-leitura@alpaconstrutora.com.br; Senha = [omitida — não se registra senha]
+> 7. entra
+>
+> Posso publicar o plano e começar pela fase A? sim
+
 "Os backlogs" é a lista do relatório final do roadmap
 (`2026-09-29-incendio-benchmark-altoqi-e-roadmap.md`, seção da E10):
 - motor de bomba e de reserva técnica;
@@ -62,12 +74,19 @@ Sessão `c6b98893-3359-47d8-854f-f618a31c7b1e` · 01/10/2026, logo depois da E10
 
 | Data | Pergunta | Resposta |
 |---|---|---|
-| — | (abertas — ver "Decisões em aberto" no fim) | — |
+| 01/10/2026 | D-1 Casa de bombas sem lugar no desenho | **O relatório pede.** O gerador não posiciona a casa de bombas; diz que falta o lugar. |
+| 01/10/2026 | D-2 Sem bomba no catálogo | **Lança a bomba** "de projeto", com o ponto Q × H e sem curva. O relatório diz "curva a escolher". |
+| 01/10/2026 | D-3 Arranjo da reserva técnica | **Os dois**: reservatório próprio OU parcela da caixa de água fria, por gravidade OU com bomba. É premissa do estudo, e cada arranjo é suportado e testado. |
+| 01/10/2026 | D-4 PDFs do CBMMG | **Envio depois.** D1 fica bloqueada até eles chegarem (registrado aqui e na memória). |
+| 01/10/2026 | D-5 Estados | **Só MG agora.** Os demais estados ficam para depois (registrado; D2 fora do escopo atual). |
+| 01/10/2026 | D-6 Credencial de teste | `agente-leitura@alpaconstrutora.com.br` (perfil Membro). A senha **não** é registrada (decisão de 05/08: pedir a cada sessão). ⚠️ Pela mesma decisão, esse usuário é **só de leitura**, e o teste de E1 GRAVA (cria estudo, aplica num orçamento de obra, apaga). **Confirmar com o usuário antes de rodar E1**, e qual obra de prova usar. |
+| 01/10/2026 | D-7 Backlog anterior | **Entra** — vira a Fase F. |
+| 01/10/2026 | Publicar o plano e começar a Fase A | **Sim.** |
 
 ## Plano
 
-Ordem: **A** (correção, sem dependência) → **C** (independente) → **B** (depende de decisões) →
-**D** (depende de documentos) → **E** (depende de credencial). Uma fase por push, ritual completo,
+Ordem: **A** (correção, sem dependência) → **C** (independente) → **B** (decisões tomadas) →
+**F** (backlog anterior) → **D1** (quando os PDFs chegarem) → **E** (depois de confirmar a escrita). Uma fase por push, ritual completo,
 com o "pronto quando" provado em teste.
 
 ### Fase A — "A proposta zera a própria análise" (o defeito, como classe)
@@ -124,13 +143,16 @@ com o "pronto quando" provado em teste.
 ### Fase B — Casa de bombas e reserva técnica (o que o gerador hoje "não decide")
 
 - **B1 · Bomba principal, jockey e pressostatos**
-  - **O que muda:** `proporCasaDeBombas` lança, no local decidido (D-1):
+  - **O que muda:** `proporCasaDeBombas` lança, no lugar que o DESENHO disser (ambiente chamado
+    "casa de bombas" ou bomba já lançada). Sem lugar, **não posiciona**: o relatório pede (D-1).
+    Lança:
     - a bomba principal com o **ponto de projeto** (Q × H do cálculo);
     - a jockey;
     - um pressostato por bomba no barrilete;
     - o trecho que liga a casa de bombas à rede.
   - Com bomba no catálogo da organização, escolhe pela curva (`bombasQueAtendem`, a de menor folga
-    positiva). Sem catálogo, a bomba entra **sem curva** e o relatório diz "curva a escolher" (D-2).
+    positiva). Sem catálogo, **a bomba entra assim mesmo**, sem curva, com o ponto de projeto, e o
+    relatório diz "curva a escolher" (D-2).
   - Conferir também se a tela de tipos já cadastra a curva (`curvaBomba`) e, se não, acrescentar.
   - **Pronto quando:** no prédio de 8 pavimentos do teste da E10, "Bomba jockey ligada",
     "Pressostatos" e (com catálogo) "Bomba atende o ponto de projeto" saem da lista de faltas.
@@ -140,9 +162,11 @@ com o "pronto quando" provado em teste.
   - **Pronto quando:** "Registro de recalque ligado à rede" sai da lista de faltas.
 - **B3 · Reserva técnica**
   - **O que muda:** o volume exigido (vazão × autonomia do cálculo), arredondado para o módulo
-    comercial acima, no arranjo decidido (D-3): reservatório próprio de incêndio, ou a parcela
-    `volumeRtiL` da caixa de água fria.
-  - **Pronto quando:** "Reserva técnica de incêndio" sai da lista de faltas.
+    comercial acima, nos **dois arranjos** (D-3), escolhidos por premissa do estudo:
+    - reservatório próprio de incêndio, ou a parcela `volumeRtiL` da caixa de água fria;
+    - por gravidade (a caixa elevada como fonte) ou com bomba.
+  - **Pronto quando:** "Reserva técnica de incêndio" sai da lista de faltas nos quatro arranjos
+    (próprio/parcela × gravidade/bomba), um teste cada.
 - **B4 · O gerador chama B1–B3**
   - **O que muda:** as pendências "O gerador não decide" de bomba e reserva saem do relatório e dão
     lugar às decisões que ainda forem do projeto (por exemplo, "curva a escolher").
@@ -168,7 +192,8 @@ com o "pronto quando" provado em teste.
     tabela).
   - **Pronto quando:** um teste por tabela transcrita confere linhas contra o texto. O gerador não
     traz CONFERIR das linhas conferidas, e o "SEM_TABELA" só sobra no que o texto não cobre.
-- **D2 · Presets SP, BA, PR, MT, RJ**
+- **D2 · Presets SP, BA, PR, MT, RJ** — ⏸ **adiado** por decisão do usuário (D-5: "MG. salve para
+  atualizar os demais estados posteriormente").
   - **O que muda:** a estrutura existe desde a E0.3; cada estado é um preset preenchido do
     regulamento DELE, um por frente.
   - **Pronto quando:** por estado, as mesmas provas de D1.
@@ -184,26 +209,44 @@ com o "pronto quando" provado em teste.
     não fica no banco.
   - **Bloqueado** até haver credencial de teste (D-6).
 
-## Fora deste plano (backlog anterior, nomeado nas etapas E1–E7 — confirmar se entra)
+### Fase F — O backlog anterior (nomeado nas etapas E1–E7; entrou por D-7)
 
-Kit VGA + manômetros · kits de inserção por organização (migration) · eletroduto do laço de
-alarme pela elétrica · detector de chama · antipânico (IT) · luminária de emergência em circuito
-elétrico.
+- **F1 · Kit VGA + manômetros**
+  - **O que muda:** a VGA inserida ou proposta traz os dois manômetros (montante e jusante) e o
+    dreno, no lote dela, como o kit hidrante + placa.
+  - **Pronto quando:** inserir a VGA cria as peças do kit num lote só (um Ctrl+Z), e o detalhe
+    típico da E8.3 as conta.
+- **F2 · Kits de inserção por organização** (migration — mostrar o SQL antes de aplicar)
+  - **O que muda:** tabela da organização no molde de `blueprint_element_types`: um kit é uma peça
+    e N peças com deslocamento. A paleta mostra os kits da organização.
+  - **Pronto quando:** RLS provada como na E9.2 (membro grava e lê, outra organização é recusada,
+    sem login não se vê nada); um kit cadastrado é inserido num lote só.
+- **F3 · Eletroduto do laço de alarme pela elétrica**
+  - **O que muda:** o laço (`centralAlarmeId`) ganha caminho físico: eletroduto da disciplina
+    elétrica ligando central → dispositivos, pelo traçado automático da elétrica.
+  - **Pronto quando:** o quantitativo conta o eletroduto do laço, e o 3D/corte o mostram.
+- **F4 · Detector de chama**
+  - **O que muda:** tipo novo (`DETECTOR_CHAMA`, bump do kernel com o ritual dos goldens), com
+    ficha, símbolo, IFC `IfcSensor .FLAMESENSOR.` e cobertura por cone (CONFERIR NA NBR 17240).
+  - **Pronto quando:** goldens 7/7 na versão nova; ida e volta IFC; a análise de detecção o
+    reconhece.
+- **F5 · Antipânico**
+  - **O que muda:** `Opening` ganha "barra antipânico". A análise de saídas exige-a nas portas da
+    rota pela ocupação/população (valor CONFERIR NA IT até D1), e a proposta a marca.
+  - **Pronto quando:** a porta da rota sem barra vira falta na conferência e a proposta a resolve
+    (a lei de A1).
+- **F6 · Luminária de emergência em circuito elétrico**
+  - **O que muda:** a luminária de emergência entra no circuito de iluminação (tomada da bateria) e
+    o quadro de cargas a conta.
+  - **Pronto quando:** os circuitos automáticos a incluem, e o quadro de cargas e o unifilar a
+    mostram.
 
 ## Decisões em aberto
 
-- **D-1:** onde fica a casa de bombas quando o desenho não diz?
-  - opção (a): ambiente com nome "casa de bombas" se existir, senão o pavimento de descarga junto
-    ao reservatório;
-  - opção (b): o gerador não posiciona e o relatório pede.
-- **D-2:** sem bomba no catálogo, lançar a bomba "de projeto" sem curva (com o ponto Q × H) ou
-  exigir o cadastro antes?
-- **D-3:** reserva técnica em reservatório próprio de incêndio ou como parcela da caixa de água
-  fria? Por gravidade ou com bomba?
-- **D-4:** os PDFs do Decreto e das ITs do CBMMG vigentes. Sem eles, D1 não começa.
-- **D-5:** quais estados entram e os textos de cada um.
-- **D-6:** credencial de um usuário de teste para E1.
-- **D-7:** o backlog anterior ("Fora deste plano") entra?
+Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
+- **D1:** aguarda os PDFs do CBMMG.
+- **D2:** adiada por decisão do usuário.
+- **E1:** aguarda confirmar a escrita com o usuário de leitura e a obra de prova.
 
 ## Estado
 
@@ -212,8 +255,9 @@ elétrico.
 - [ ] A1 · A2 · A3 · A4 · A5 · A6
 - [ ] B1 · B2 · B3 · B4 (dependem de D-1, D-2, D-3)
 - [ ] C1
-- [ ] D1 (depende de D-4) · D2 (depende de D-5)
-- [ ] E1 (depende de D-6)
+- [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)
+- [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
+- [ ] F1 · F2 · F3 · F4 · F5 · F6
 
 ## Verificação
 

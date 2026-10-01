@@ -17,6 +17,7 @@ extraído do PDF embaralha as colunas das tabelas.
 | IT 08, Tabela 1 — tipos por altura (I ≤ 12 · II ≤ 30 · III ≤ 54 · IV acima) | `FAIXAS_DE_ALTURA` | `blueprintIncendioClassificacao.test.ts` |
 | IT 09, item 5.10 — risco pela carga (≤ 300 · ≤ 1.200 · acima, MJ/m²) | `nivelDeCarga` | idem |
 | IT 09, Tabela A.1 — carga do grupo A (300 MJ/m²) | `DIVISOES_TRANSCRITAS` | idem |
+| IT 17 (Portaria 70/2022), Tabelas 2 e 4 + itens 5.3 a 5.18 → [`it17-tabelas.txt`](it17-tabelas.txt) | `utils/blueprintIncendioHidrantesMG.ts`: tipo de sistema e reserva pela Tabela 4, vazões e mangueiras pela Tabela 2, jato fora da cobertura (5.8.2) | `__tests__/incendioHidrantesMG.test.ts` relê o `.txt` |
 
 ## Ainda por transcrever (as constantes seguem marcadas `CONFERIR` no código)
 
@@ -24,7 +25,6 @@ extraído do PDF embaralha as colunas das tabelas.
 |---|---|
 | IT 09, Tabela A.1 inteira (cerca de 600 atividades → divisão + carga) | escolher a ATIVIDADE em vez de declarar divisão e carga |
 | IT 08 — saídas de emergência | E6: população, unidades de passagem, percurso, tipo de escada |
-| IT 17 — hidrantes e mangotinhos | E2/E3: vazões, pressões, simultaneidade, RTI |
 | IT 18 — chuveiros automáticos | E5: risco, densidade, área de operação |
 | IT 16 — extintores | E7.1 |
 | IT 15 — sinalização | E7.2 |

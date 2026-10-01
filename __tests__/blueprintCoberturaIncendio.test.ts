@@ -4,7 +4,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO as HIP } from '../utils/blueprintCalculoIncendio';
+import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO } from '../utils/blueprintCalculoIncendio';
+
+/**
+ * A mecânica é provada com o jato DECLARADO de 10 m (premissa editável). O padrão, desde a D1.2,
+ * é 0 — a IT 17 do CBMMG (5.8.2) desconsidera o jato; o último caso prova o padrão.
+ */
+const HIP = { ...HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO, alcanceDoJatoM: 10 };
 import { coberturaDosHidrantes, proporHidrantes } from '../utils/blueprintCoberturaIncendio';
 
 /**
@@ -76,5 +82,13 @@ describe('E3.3 · cobertura por alcance', () => {
     const p = proporHidrantes(m, hip);
     expect(p.comandos.length).toBeGreaterThan(1);
     expect(coberturaDosHidrantes(applyBatch(m, p.comandos).model, hip).descobertos).toEqual([]);
+  });
+
+  it('D1.2 · o padrão (IT 17, 5.8.2): o alcance é só a mangueira — sem o jato', () => {
+    const { m } = corredor();
+    const c = coberturaDosHidrantes(m, HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO);
+    expect(c.alcanceHidranteM).toBe(HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO.comprimentoMangueiraHidranteM);
+    const comJato = coberturaDosHidrantes(m, HIP);
+    expect(c.descobertos.length).toBeGreaterThan(comJato.descobertos.length);
   });
 });

@@ -312,7 +312,12 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
   itens.push({
     grupo: 'CBMMG',
     item: 'Reserva técnica de incêndio',
-    exigido: c.rti.exigidaL != null ? `≥ ${litros(c.rti.exigidaL)} (${um(c.cenario?.vazaoNaFonteLmin ?? 0, 0)} L/min × ${c.rti.autonomiaMin} min — CONFERIR NA IT)` : `vazão × ${c.rti.autonomiaMin} min — CONFERIR NA IT`,
+    exigido:
+      c.rti.exigidaL == null
+        ? `vazão × ${c.rti.autonomiaMin} min — CONFERIR NA IT`
+        : c.rti.porTabela && c.rti.exigidaL === c.rti.porTabela.litros
+          ? `≥ ${litros(c.rti.exigidaL)} (IT 17 do CBMMG, Tabela 4 — ${c.rti.porTabela.descricao})`
+          : `≥ ${litros(c.rti.exigidaL)} (${um(c.cenario?.vazaoNaFonteLmin ?? 0, 0)} L/min × ${c.rti.autonomiaMin} min${c.rti.porTabela ? `, acima dos ${litros(c.rti.porTabela.litros)} da IT 17` : ' — CONFERIR NA IT'})`,
     obtido: c.rti.disponivelL > 0 ? `${litros(c.rti.disponivelL)} desenhados` : 'nenhuma reserva desenhada',
     estado: c.rti.exigidaL == null ? 'NAO_AVALIADO' : c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'ATENDE' : 'FALTA',
     alvos: c.rti.caixas,

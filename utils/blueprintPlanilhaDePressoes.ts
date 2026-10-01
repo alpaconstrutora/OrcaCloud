@@ -14,17 +14,26 @@
  */
 import type { BlueprintModel, ObjectId } from './blueprintKernel';
 import type { Desenhista } from './blueprintExport';
-import { ROTULO_DO_PAPEL, calculoDeIncendio, redeDeIncendio, type CalculoDeIncendio } from './blueprintCalculoIncendio';
+import { ROTULO_DO_PAPEL, calculoDeIncendio, redeDeIncendio, type CalculoDeIncendio, type ReservaDeTabela } from './blueprintCalculoIncendio';
+import { desenhoPrefereMangotinho, sistemaDeHidrantesMG } from './blueprintIncendioHidrantesMG';
 import { analisarBomba, type AnaliseDaBomba } from './blueprintBombeamentoIncendio';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import { criterioDeSprinklers } from './blueprintSprinklersIncendio';
-import { classificarEdificacao, type HipotesesIncendio } from './blueprintIncendioClassificacao';
+import { classificarEdificacao, type ClassificacaoDaEdificacao, type HipotesesIncendio } from './blueprintIncendioClassificacao';
 import { numeracaoDeIncendio } from './blueprintNumeracaoIncendio';
+
+/** D1.2: a reserva de tabela do regulamento — MG: IT 17, Tabela 4 (pelo que o desenho lançou: só mangotinho = tipo 1). */
+export function reservaDeTabelaDoEstudo(model: BlueprintModel, c: ClassificacaoDaEdificacao): ReservaDeTabela | null {
+  if (c.preset !== 'MG_CBMMG') return null;
+  const s = sistemaDeHidrantesMG(c, desenhoPrefereMangotinho(model));
+  return 'tipo' in s ? { litros: s.reservaM3 * 1000, descricao: s.motivo, fonte: s.fonte } : null;
+}
 
 /** O cálculo com as premissas do estudo — o mesmo que a tela faz (critério dos sprinklers pela divisão). */
 export function calculoDoEstudo(model: BlueprintModel, hip: HipotesesIncendio): { calculo: CalculoDeIncendio; bomba: AnaliseDaBomba | null } {
-  const divisao = classificarEdificacao(model, hip.classificacao).divisao.valor;
-  const calculo = calculoDeIncendio(model, hip.hidraulica, criterioDeSprinklers(hip.sprinklers, divisao));
+  const classificacao = classificarEdificacao(model, hip.classificacao);
+  const divisao = classificacao.divisao.valor;
+  const calculo = calculoDeIncendio(model, hip.hidraulica, criterioDeSprinklers(hip.sprinklers, divisao), reservaDeTabelaDoEstudo(model, classificacao));
   return { calculo, bomba: calculo.cenario ? analisarBomba(model, calculo.hip, hip.bombeamento, calculo) : null };
 }
 

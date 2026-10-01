@@ -36,6 +36,7 @@ import { percursoDeFuga } from './blueprintRotaDeFuga';
 import { analisarExtintores, proporExtintores } from './blueprintExtintores';
 import { analisarSinalizacao, proporSinalizacao } from './blueprintSinalizacao';
 import { kitDaPeca } from './blueprintKitsIncendio';
+import { desenhoPrefereMangotinho, divergenciasDaIT17, sistemaDeHidrantesMG, temSistema, type SistemaDeHidrantesMG } from './blueprintIncendioHidrantesMG';
 import { proporEletrodutoDoLaco } from './blueprintLacoDeAlarme';
 import { analisarAntipanico, proporAntipanico } from './blueprintAntipanico';
 import { analisarSaidas } from './blueprintSaidasIncendio';
@@ -95,16 +96,28 @@ export const ROTULO_DA_PENDENCIA: Record<GrupoDaPendencia, string> = {
 
 const um = (v: number, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 
-/** Os valores de norma EM USO, marcados CONFERIR desde as etapas que os introduziram. */
-export function conferirDasPremissas(hip: HipotesesIncendio): string[] {
+/**
+ * Os valores de norma EM USO, marcados CONFERIR desde as etapas que os introduziram.
+ * D1.2: com o sistema da IT 17 do CBMMG (`it17`), os de hidrante deixam de ser "CONFERIR": sobra
+ * só o que DIVERGE da IT 17, e a pressão no esguicho (que a IT não fixa — é do catálogo).
+ */
+export function conferirDasPremissas(hip: HipotesesIncendio, it17: { sistema: SistemaDeHidrantesMG; grupo: string | null; divisao: string | null } | null = null): string[] {
   const h = hip.hidraulica;
+  const hidrantes = it17
+    ? [
+        ...divergenciasDaIT17(it17.sistema, it17.grupo, it17.divisao, h).map((d) => `${d} (IT 17 do CBMMG)`),
+        `Pressão no esguicho: ${um(h.pressaoMinimaHidranteKpa, 0)} kPa no hidrante e ${um(h.pressaoMinimaMangotinhoKpa, 0)} kPa no mangotinho — a IT 17 não a fixa; confira com o catálogo do esguicho`,
+      ]
+    : [
+        `Hidrantes simultâneos: ${h.hidrantesSimultaneos} (IT do CBMMG)`,
+        `Hidrante: ${um(h.vazaoMinimaHidranteLmin, 0)} L/min e ${um(h.pressaoMinimaHidranteKpa, 0)} kPa no esguicho mais desfavorável (NBR 13714 / IT)`,
+        `Mangotinho: ${um(h.vazaoMinimaMangotinhoLmin, 0)} L/min e ${um(h.pressaoMinimaMangotinhoKpa, 0)} kPa (NBR 13714 / IT)`,
+        `Mangueira de ${um(h.comprimentoMangueiraHidranteM, 0)} m e jato de ${um(h.alcanceDoJatoM, 0)} m para a cobertura (IT)`,
+        `Autonomia da reserva técnica: ${um(h.autonomiaMin, 0)} min (IT)`,
+        `Pressão máxima ${um(h.pressaoMaximaKpa, 0)} kPa e velocidade máxima ${um(h.velocidadeMaxMs, 1)} m/s (NBR 13714)`,
+      ];
   return [
-    `Hidrantes simultâneos: ${h.hidrantesSimultaneos} (IT do CBMMG)`,
-    `Hidrante: ${um(h.vazaoMinimaHidranteLmin, 0)} L/min e ${um(h.pressaoMinimaHidranteKpa, 0)} kPa no esguicho mais desfavorável (NBR 13714 / IT)`,
-    `Mangotinho: ${um(h.vazaoMinimaMangotinhoLmin, 0)} L/min e ${um(h.pressaoMinimaMangotinhoKpa, 0)} kPa (NBR 13714 / IT)`,
-    `Mangueira de ${um(h.comprimentoMangueiraHidranteM, 0)} m e jato de ${um(h.alcanceDoJatoM, 0)} m para a cobertura (IT)`,
-    `Autonomia da reserva técnica: ${um(h.autonomiaMin, 0)} min (IT)`,
-    `Pressão máxima ${um(h.pressaoMaximaKpa, 0)} kPa e velocidade máxima ${um(h.velocidadeMaxMs, 1)} m/s (NBR 13714)`,
+    ...hidrantes,
     `Sprinklers: densidade, área de operação e área por sprinkler da tabela do risco (NBR 10897)`,
     `Percurso máximo de fuga${hip.saidas.percursoMaximoM != null ? ` declarado: ${um(hip.saidas.percursoMaximoM, 0)} m` : ': da tabela da ocupação'} (NBR 9077 / IT)`,
     `Distância máxima até o extintor${hip.extintores.distanciaMaximaM != null ? ` declarada: ${um(hip.extintores.distanciaMaximaM, 0)} m` : ': do risco'} (NBR 12693 / IT)`,
@@ -147,7 +160,11 @@ export function gerarPpci(
     else if (x.rascunho) pendencias.push({ grupo: 'CONFERIR', texto: `${x.nome} (${x.estado === 'EXIGIDA' ? 'exigida' : 'dispensada'}): transcrito de memória — ${x.fonte ?? 'conferir na IT'}` });
     if (x.estado === 'EXIGIDA' && MEDIDAS_NAO_MODELADAS.includes(x.medida)) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `${x.nome}: exigida e fora do desenho — projeto do responsável.` });
   }
-  for (const t of conferirDasPremissas(hip)) pendencias.push({ grupo: 'CONFERIR', texto: t });
+  // D1.2: em MG, o sistema da IT 17 (Tabela 4) — as premissas de hidrante passam a ser conferidas contra ele.
+  const sistemaIT17 = classificacao.preset === 'MG_CBMMG' ? sistemaDeHidrantesMG(classificacao, desenhoPrefereMangotinho(m)) : null;
+  const it17 = temSistema(sistemaIT17) ? { sistema: sistemaIT17, grupo: classificacao.grupo?.grupo ?? null, divisao: classificacao.divisao.valor } : null;
+  if (sistemaIT17 && !temSistema(sistemaIT17) && exigida('HIDRANTES')) pendencias.push({ grupo: 'CONFERIR', texto: `Hidrantes (IT 17, Tabela 4): ${sistemaIT17.motivo}` });
+  for (const t of conferirDasPremissas(hip, it17)) pendencias.push({ grupo: 'CONFERIR', texto: t });
   const descarga = pavimentoDeDescarga(m, hip.classificacao.pisoDeDescargaLevelId)?.id ?? null;
   const grupo = classificacao.divisao.valor?.trim().charAt(0).toUpperCase() || null;
 

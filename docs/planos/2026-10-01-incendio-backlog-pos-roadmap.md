@@ -340,8 +340,26 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
       - hidrante no A-2 de até 12 m só acima de 1.200 m²;
       - alarme no A-2 só acima de 30 m;
     - o gerador não traz mais "transcrito de memória" (teste do E10 atualizado);
-  - [ ] D1.2 — os parâmetros de cada medida: IT 08 (saídas), IT 17 (hidrantes), IT 18
-    (chuveiros), IT 16 (extintores), IT 15 (sinalização), IT 13 (iluminação), IT 14 (alarme);
+  - [ ] D1.2 — os parâmetros de cada medida, uma IT por publicação:
+    - [x] IT 17 (hidrantes) — `blueprintIncendioHidrantesMG.ts`, transcrição em
+      `docs/normas/incendio-mg/it17-tabelas.txt` (relida pelo teste):
+      - o TIPO do sistema e a RESERVA saem da Tabela 4 (área × divisão × carga); a reserva
+        exigida no cálculo passa a ser o VOLUME DA TABELA (5.9.2), não vazão × autonomia (com
+        sprinklers, o maior dos dois);
+      - a Tabela 2 dá vazão, mangueira e esguicho; o grupo A no mangotinho é 80 LPM;
+      - a cobertura desconsidera o jato (5.8.2): o padrão `alcanceDoJatoM` foi de 10 m para 0;
+      - a IT não fixa pressão no esguicho: a do hidrante sai do requinte (fórmula do orifício,
+        Cd 0,98 — física, conferir com o catálogo);
+      - no painel de cálculo: o sistema da IT 17, o que diverge nas premissas e o botão "Usar os
+        valores da IT 17"; o gerador só acusa o que diverge;
+      - **a lei A1 pegou um defeito** que o jato escondia: o salão em L de 30 m (um ambiente só)
+        recebia UM candidato (a face do centro) e ficava sem solução. Agora todo ambiente com
+        ponto descoberto oferece os pontos amostrados como candidatos (antes, só os corredores);
+      - fica para depois: 5.8.8 (pressão no esguicho ≤ 3× a do mais desfavorável; ≤ 50 mca sem
+        brigada intermediária) pede o cenário do hidrante MAIS FAVORÁVEL, que o cálculo não monta
+        hoje; e a distância no mesmo ambiente é em linha reta (a mangueira, no L, contorna o canto);
+    - [ ] IT 08 (saídas), IT 18 (chuveiros), IT 16 (extintores), IT 15 (sinalização), IT 13
+      (iluminação), IT 14 (alarme);
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

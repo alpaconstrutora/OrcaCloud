@@ -1,0 +1,45 @@
+// TRANSCRIÇÃO da IT 17 do CBMMG (Sistema de Hidrantes e Mangotinhos, 1ª ed., alterada pela Portaria 70/2022) — Tabelas 2 e 4, lidas pela IMAGEM das pp. 16 e 17 em 01/10/2026. Fonte da verdade do teste `incendioHidrantesMG.test.ts`.
+
+// TABELA 2 — Tipos de Sistema de Proteção por Hidrantes ou Mangotinhos (p. 16)
+// tipo | sistema | esguicho | mangueira Ø (mm) | comprimento máximo (m) | expedições | vazão mínima ao hidrante mais desfavorável (LPM, por saída)
+T2 1 | Mangotinho | Jato regulável | 25 ou 32 | 45 (nota 1) | Simples | 100 (nota 2)
+T2 2 | Hidrante | Jato compacto Ø 13 mm ou regulável | 40 | 30 (nota 3) | Simples | 125
+T2 3 | Hidrante | Jato compacto Ø 16 mm ou regulável | 40 | 30 | Simples | 250
+T2 4 | Hidrante | Jato compacto Ø 19 mm ou regulável | 40 ou 65 | 30 | Simples | 400
+T2 5 | Hidrante | Jato compacto Ø 25 mm ou regulável | 65 | 30 | Duplo | 650
+T2N * as vazões correspondem a cada saída.
+T2N 1 acima de 30 m de comprimento de mangueiras semirrígidas é obrigatório o uso de carretéis axiais.
+T2N 2 para edificações do Grupo A, será adotada a vazão mínima de 80 LPM.
+T2N 3 para as edificações A-2 e A-3, poderá ser utilizado 45 m de mangueiras, caso o trajeto real a percorrer pelo operador ultrapasse 30 m.
+
+// TABELA 4 — Tipo de Sistema e Volume de Reserva de Incêndio mínima (m³) (p. 17)
+// Colunas (Grupo/Divisão). A coluna 1 tem DUAS subcolunas (tipo 1 ou tipo 2, à escolha).
+C1 A-2, A-3, C-1, D-2, E-1, E-2, E-3, E-4, E-6, F-2, F-3, F-4, F-8, G-1, G-2, G-3, H-1, H-2, H-3, H-5, H-6, I-1, J-1 e J-2 ---- Carga Incêndio até 300MJ/m²: D-1, D-3, D-4, F-1, F-10, F-11, G-4 e M-3
+C2 B-1, B-2, C-3, E-5, F-5, F-6, F-7, F-9 e H-4 ---- Carga Incêndio>300MJ/m²: D-1, D-3, D-4, F-11 e G-4 ---- Carga Incêndio acima de 300 até 800MJ/m²: C-2, F-10, I-2, J-3 e M-3
+C3 G-5, L-1 e M-1 ---- Carga Incêndio >800MJ/m²: C-2, F-10, I-2, J-3 e M-3 ---- Carga Incêndio >300 MJ/m²: F-1
+C4 I-3, J-4, L-2 e L-3
+// área (m²)        | C1 tipo 1 | C1 tipo 2 | C2       | C3       | C4
+T4 Até 3.000        | 1 6       | 2 8       | 3 12     | 3 20     | 3 20
+T4 3.001 a 6.000    | 1 8       | 2 12      | 3 18     | 4 20     | 4 30
+T4 6.001 a 10.000   | 1 12      | 2 16      | 3 25     | 4 30     | 5 50
+T4 10.001 a 15.000  | 1 16      | 2 20      | 3 30     | 5 45     | 5 80
+T4 15.001 a 30.000  | 1 25      | 2 35      | 3 40     | 5 50     | 5 110
+T4 Acima de 30.000  | 1 35      | 2 47      | 3 60     | 5 90     | 5 140
+T4N 1 R.I. Reserva de Incêndio;
+T4N 2 Para a divisão M-2, adotar o item 5.18.1 desta IT;
+T4N 3 Para as divisões M-5 e M-8, consultar IT específica.
+
+// ITENS DO TEXTO usados como premissa (IT 17):
+// 5.7.1 a) tomada a não mais de 10,0 m das portas externas, escadas e/ou acesso principal; d) de 1,0 a 1,5 m do piso.
+// 5.8.2 cobertura pelo trajeto real da mangueira, DESCONSIDERANDO o alcance do jato; tipo 5: dois esguichos.
+// 5.8.3 A-2 e A-3: até 45 m de mangueira quando o trajeto real passar de 30 m.
+// 5.8.4 uso simultâneo dos DOIS jatos mais desfavoráveis, para qualquer tipo.
+// 5.8.8 pressão dinâmica no esguicho ≤ 3× a do mais desfavorável; sem brigada de nível intermediário, ≤ 50 mca.
+// 5.8.9 recomenda-se pressão máxima de trabalho ≤ 100 mca (1.000 kPa) em qualquer ponto.
+// 5.8.11 velocidade na sucção ≤ 2 m/s (sucção negativa) ou ≤ 3 m/s (positiva). 5.8.12 velocidade máxima na tubulação 5 m/s.
+// 5.8.14 equilíbrio de pressão nos pontos de cálculo: ± 0,50 mca (5,0 kPa).
+// 5.9.2 o volume da reserva de incêndio é o da Tabela 4. 5.9.8 subdivisão em unidades mínimas de 3 m³.
+// 5.12.1 alcance do jato compacto ≥ 8,0 m (jato paralelo ao solo).
+// 5.16.1 tubulação ≥ DN65; 5.16.2 tipos 1 e 2: DN50 (aço galvanizado) / DN54 (cobre).
+// 5.18.6 ensaio hidrostático: 1,5 × a pressão máxima de trabalho, mínimo 1.500 kPa, por 2 horas.
+// 5.3.2 vazão do sistema acima de 1.000 LPM: o recalque ganha um registro de recalque adicional (como em 5.3.1).

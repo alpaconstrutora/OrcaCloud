@@ -215,14 +215,17 @@ export function proporHidrantes(model: BlueprintModel, hip: HipotesesHidraulicas
     const circulacao = new Set(g.nos.filter((n) => n.circulacao).map((n) => n.spaceId));
     // Candidatos: a face da parede mais próxima do centro de cada ambiente, e os
     // pontos testados da circulação (para o corredor longo, que pede mais de um).
+    // D1.2: e os de todo ambiente que ainda tem ponto descoberto — sem o jato (IT 17, 5.8.2) um
+    // salão em L de 30 m não cabe num hidrante só na face do centro (a lei A1 pegou).
+    const comFalta = new Set([...faltam].map((k) => k.split('#')[0]));
     const posicoes: { at: Point; circulacao: boolean }[] = [];
     for (const s of espacos) {
       const f = faceDaParede(centroDoAmbiente(s), paredes, 1e9);
       const at = (f?.face && paraDentro(s, f.face)) ?? paraDentro(s, centroDoAmbiente(s));
       if (at) posicoes.push({ at, circulacao: circulacao.has(s.id) });
-      if (circulacao.has(s.id)) for (const q of pontosPorAmbiente.get(s.id)!) {
+      if (circulacao.has(s.id) || comFalta.has(s.id)) for (const q of pontosPorAmbiente.get(s.id)!) {
         const dentro = paraDentro(s, q, 300);
-        if (dentro) posicoes.push({ at: dentro, circulacao: true });
+        if (dentro) posicoes.push({ at: dentro, circulacao: circulacao.has(s.id) });
       }
     }
     const candidatos = posicoes.map((p) => {

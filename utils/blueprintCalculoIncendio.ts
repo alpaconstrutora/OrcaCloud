@@ -55,6 +55,14 @@ import {
 
 // ─── Premissas ───────────────────────────────────────────────────────────────
 
+/** D1.2: a reserva de incêndio dada por TABELA do regulamento (MG: IT 17, Tabela 4), em litros. */
+export interface ReservaDeTabela {
+  litros: number;
+  /** "tipo 2, reserva de 8 m³" — o porquê, para a tela e o memorial. */
+  descricao: string;
+  fonte: string;
+}
+
 export interface HipotesesHidraulicasDeIncendio {
   formula: FormulaDePerda;
   /** Quantos hidrantes (ou mangotinhos) funcionam ao mesmo tempo — CONFERIR NA IT. */
@@ -84,7 +92,7 @@ export interface HipotesesHidraulicasDeIncendio {
   velocidadeMaxMs: number;
   /** E3.2: tempo de funcionamento que a RTI tem de garantir, min — CONFERIR NA IT. */
   autonomiaMin: number;
-  /** E3.3: o jato além da mangueira, para a cobertura por alcance, m — CONFERIR NA IT. */
+  /** E3.3: o jato além da mangueira, para a cobertura por alcance, m. D1.2: a IT 17 do CBMMG (5.8.2) o DESCONSIDERA — padrão 0. */
   alcanceDoJatoM: number;
 }
 
@@ -104,7 +112,7 @@ export const HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO: HipotesesHidraulicasDeIncend
   pressaoMaximaKpa: 1000,
   velocidadeMaxMs: 5,
   autonomiaMin: 60,
-  alcanceDoJatoM: 10,
+  alcanceDoJatoM: 0,
 };
 
 /** As premissas gravadas, completadas com o padrão — só entra número finito e positivo. */
@@ -424,8 +432,12 @@ export interface CalculoDeIncendio {
    * teria de estar, e o cenário é o que a caixa entrega de fato.
    */
   porGravidade: boolean;
-  /** E3.2: a reserva técnica — exigida (vazão × autonomia do sistema que governa) e a desenhada. */
-  rti: { exigidaL: number | null; autonomiaMin: number; disponivelL: number; caixas: ObjectId[] };
+  /**
+   * E3.2: a reserva técnica — exigida e a desenhada. Exigida = vazão × autonomia do sistema que
+   * governa; D1.2: com a reserva de TABELA (MG: IT 17, Tabela 4) ela é o volume da tabela — e, se
+   * os sprinklers entram, o maior entre a tabela e a vazão × duração deles.
+   */
+  rti: { exigidaL: number | null; autonomiaMin: number; porTabela: ReservaDeTabela | null; disponivelL: number; caixas: ObjectId[] };
   /** E5.1: as premissas EFETIVAS (com a vazão mínima por sprinkler do critério) — a bomba usa estas. */
   hip: HipotesesHidraulicasDeIncendio;
   criterio: CriterioDeSprinklers | null;
@@ -538,7 +550,13 @@ export function papelDosTrechos(rede: RedeDeIncendio): Map<ObjectId, PapelDoTrec
  * para a tela dizer o porquê. A demanda SOMADA (sprinkler + mangueiras na mesma
  * bomba) é a E5.4.
  */
-export function calculoDeIncendio(model: BlueprintModel, hipDoEstudo: HipotesesHidraulicasDeIncendio, criterio: CriterioDeSprinklers | null = null): CalculoDeIncendio {
+export function calculoDeIncendio(
+  model: BlueprintModel,
+  hipDoEstudo: HipotesesHidraulicasDeIncendio,
+  criterio: CriterioDeSprinklers | null = null,
+  /** D1.2: a reserva de tabela do regulamento (MG: IT 17, Tabela 4) — `calculoDoEstudo` a passa. */
+  reservaDeTabela: ReservaDeTabela | null = null,
+): CalculoDeIncendio {
   const hip: HipotesesHidraulicasDeIncendio = criterio?.vazaoPorSprinklerLmin != null ? { ...hipDoEstudo, vazaoMinimaSprinklerLmin: criterio.vazaoPorSprinklerLmin } : hipDoEstudo;
   const rede = redeDeIncendio(model);
   const terminais = model.terminais ?? [];
@@ -547,7 +565,7 @@ export function calculoDeIncendio(model: BlueprintModel, hipDoEstudo: HipotesesH
   const rtiDesenhada = rtiDoDesenho(model);
   const base: CalculoDeIncendio = {
     motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map(),
-    porGravidade: rede.tipoDaFonte === 'GRAVIDADE', rti: { exigidaL: null, autonomiaMin: hip.autonomiaMin, ...rtiDesenhada },
+    porGravidade: rede.tipoDaFonte === 'GRAVIDADE', rti: { exigidaL: reservaDeTabela?.litros ?? null, autonomiaMin: hip.autonomiaMin, porTabela: reservaDeTabela, ...rtiDesenhada },
     hip, criterio, sistema: null, porSistema: { hidrantes: null, sprinklers: null, combinado: null }, areas: [],
   };
   if (!rede.fonte) return { ...base, motivo: 'sem bomba de incêndio nem caixa de incêndio ligada à rede — lance uma das duas e ligue-a à tubulação' };
@@ -635,7 +653,10 @@ export function calculoDeIncendio(model: BlueprintModel, hipDoEstudo: HipotesesH
   const zFonte = rede.cota.get(rede.noDaFonte!)!;
   const carga = base.porGravidade ? 0 : g.cargaNecessariaM!;
   const estaticaKpa = new Map([...naRede, ...spkNaRede].map((t) => [t.id, (zFonte + carga - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
-  return { ...comum, estaticaKpa, rti: { ...base.rti, autonomiaMin: g.autonomiaMin, exigidaL: g.cenario.vazaoNaFonteLmin * g.autonomiaMin } };
+  const porVazao = g.cenario.vazaoNaFonteLmin * g.autonomiaMin;
+  // D1.2: com a tabela, hidrante sozinho = o volume da tabela; com sprinklers, o maior dos dois.
+  const exigidaL = reservaDeTabela ? (sistema === 'HIDRANTES' ? reservaDeTabela.litros : Math.max(reservaDeTabela.litros, porVazao)) : porVazao;
+  return { ...comum, estaticaKpa, rti: { ...base.rti, autonomiaMin: g.autonomiaMin, exigidaL } };
 }
 
 // ─── DN automático ───────────────────────────────────────────────────────────

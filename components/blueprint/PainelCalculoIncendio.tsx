@@ -22,6 +22,11 @@ interface Props {
   onSelecionar: (ids: string[]) => void;
   /** Quantos trechos o ajuste de DN mudaria, e o gatilho. */
   ajusteDeDn: { alterados: number; onAjustar: () => void };
+  /**
+   * D1.2: o sistema que a IT 17 do CBMMG pede (tipo e reserva da Tabela 4), o que nas premissas
+   * diverge dela, e o botão que aplica os valores da IT. `null`/ausente = preset sem tabela.
+   */
+  it17?: { descricao: string; fonte: string; divergencias: string[]; onAplicar: (() => void) | null } | null;
   /** E2.4: a conferência em três estados + "não avaliada". Ausente = não mostrar. */
   conferencia?: ItemDaConferencia[];
   /** E5.1: o critério dos sprinklers (risco → densidade × área). Ausente = não mostrar. */
@@ -293,7 +298,7 @@ function Numero({ rotulo, valor, onValor, passo, unidade }: { rotulo: string; va
   );
 }
 
-export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, onSelecionar, ajusteDeDn, conferencia, sprinklers }: Props) {
+export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, onSelecionar, ajusteDeDn, conferencia, sprinklers, it17 }: Props) {
   const set = <K extends keyof HipotesesHidraulicasDeIncendio>(k: K) => (v: HipotesesHidraulicasDeIncendio[K]) => onHip({ ...hip, [k]: v });
   const cen = c.cenario;
   const acimaDaMaxima = [...c.estaticaKpa].filter(([, p]) => p > hip.pressaoMaximaKpa);
@@ -303,10 +308,41 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
 
   return (
     <div className="space-y-3" data-testid="calculo-incendio">
-      <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
-        Vazões, pressões, simultaneidade e mangueira são <strong>pontos de partida</strong> — CONFERIR na NBR 13714 e na IT
-        do CBMMG antes de emitir.
-      </p>
+      {it17 ? (
+        <div className="space-y-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" data-testid="calculo-incendio-it17">
+          <p>
+            <strong>IT 17 do CBMMG:</strong> {it17.descricao}
+            <span className="block text-[11px] text-slate-400">{it17.fonte}</span>
+          </p>
+          {it17.divergencias.length > 0 ? (
+            <ul className="list-disc space-y-0.5 pl-4 text-amber-800">
+              {it17.divergencias.map((d) => (
+                <li key={d}>{d}</li>
+              ))}
+            </ul>
+          ) : (
+            it17.onAplicar && <p className="text-emerald-700">As premissas seguem a IT 17.</p>
+          )}
+          <p className="text-[11px] text-slate-500">
+            A IT 17 não fixa pressão mínima: vale a vazão da Tabela 2 no esguicho e o jato de 8 m (5.12.1). A pressão do hidrante sai do requinte
+            (orifício) — confira com o catálogo do esguicho; a do mangotinho, regulável, é do catálogo.
+          </p>
+          <button
+            type="button"
+            onClick={() => it17.onAplicar?.()}
+            disabled={!it17.onAplicar || it17.divergencias.length === 0}
+            title={!it17.onAplicar ? 'A Tabela 4 da IT 17 não decide o sistema desta edificação — veja o motivo acima' : it17.divergencias.length === 0 ? 'As premissas já seguem a IT 17' : undefined}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            Usar os valores da IT 17
+          </button>
+        </div>
+      ) : (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+          Vazões, pressões, simultaneidade e mangueira são <strong>pontos de partida</strong> — CONFERIR na NBR 13714 e no regulamento
+          do estado antes de emitir.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs text-slate-600 sm:grid-cols-2">
         <label className="flex items-center justify-between gap-2 sm:col-span-2">
@@ -371,7 +407,13 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
           )}
           {c.rti.exigidaL != null && (
             <p className="text-xs text-slate-700" data-testid="calculo-incendio-rti">
-              Reserva técnica: {n(c.rti.exigidaL, 0)} L exigidos ({n(cen.vazaoNaFonteLmin, 0)} L/min × {c.rti.autonomiaMin} min) · {n(c.rti.disponivelL, 0)} L desenhados{' '}
+              Reserva técnica: {n(c.rti.exigidaL, 0)} L exigidos (
+              {c.rti.porTabela
+                ? c.sistema === 'HIDRANTES' || c.rti.exigidaL === c.rti.porTabela.litros
+                  ? `IT 17, Tabela 4 — ${c.rti.porTabela.descricao}`
+                  : `${n(cen.vazaoNaFonteLmin, 0)} L/min × ${c.rti.autonomiaMin} min, acima dos ${n(c.rti.porTabela.litros, 0)} L da Tabela 4`
+                : `${n(cen.vazaoNaFonteLmin, 0)} L/min × ${c.rti.autonomiaMin} min`}
+              ) · {n(c.rti.disponivelL, 0)} L desenhados{' '}
               <span className={c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'text-emerald-700' : 'font-semibold text-red-700'}>
                 {c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? '— atende' : `— faltam ${n(c.rti.exigidaL - c.rti.disponivelL, 0)} L`}
               </span>

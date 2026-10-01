@@ -79,7 +79,11 @@ describe('E10 · o gerador de PPCI de ponta a ponta (8 pavimentos)', () => {
 
   it('⚠️ PRONTO QUANDO: o relatório lista cada CONFERIR ainda aberto e o que o gerador não decide', () => {
     const conferir = plano.pendencias.filter((p) => p.grupo === 'CONFERIR').map((p) => p.texto);
-    for (const t of conferirDasPremissas(H)) expect(conferir).toContain(t);
+    // D1.2: em MG, as premissas de hidrante são conferidas contra a IT 17 — o padrão segue a IT,
+    // então só sobra a pressão no esguicho (que a IT não fixa); o resto da lista continua.
+    expect(conferir.some((t) => /Hidrantes simultâneos/.test(t))).toBe(false);
+    expect(conferir.some((t) => /Pressão no esguicho: .*a IT 17 não a fixa/.test(t))).toBe(true);
+    for (const t of conferirDasPremissas(H).filter((x) => /Sprinklers|Percurso|extintor|luminárias|sprinkler e luminária/.test(x))) expect(conferir).toContain(t);
     // D1: as exigências vêm da IT 01 do CBMMG conferida — nenhuma linha "transcrita de memória" no relatório.
     expect(conferir.some((t) => /transcrito de memória/.test(t))).toBe(false);
     // Fase B: a bomba sem curva (catálogo vazio) é o que ele não decide — dito com o ponto de projeto.

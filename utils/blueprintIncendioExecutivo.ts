@@ -244,8 +244,8 @@ export function memorialDeCalculoIncendio(model: BlueprintModel, hip: HipotesesI
       { tipo: 'secao', texto: 'Reserva técnica de incêndio' },
       {
         tipo: 'tabela',
-        cabecalho: ['Exigida', 'Autonomia', 'Disponível no desenho', 'Situação'],
-        linhas: [[rti.exigidaL != null ? `${um(rti.exigidaL, 0)} L` : '—', `${um(rti.autonomiaMin, 0)} min`, `${um(rti.disponivelL, 0)} L em ${rti.caixas.length} reservatório(s)`, rti.exigidaL == null ? 'Não avaliado' : rti.disponivelL + 1e-6 >= rti.exigidaL ? 'Atende' : 'Não atende']],
+        cabecalho: ['Exigida', 'Critério', 'Disponível no desenho', 'Situação'],
+        linhas: [[rti.exigidaL != null ? `${um(rti.exigidaL, 0)} L` : '—', rti.porTabela && rti.exigidaL === rti.porTabela.litros ? `IT 17, Tabela 4 — ${rti.porTabela.descricao}` : `vazão × ${um(rti.autonomiaMin, 0)} min`, `${um(rti.disponivelL, 0)} L em ${rti.caixas.length} reservatório(s)`, rti.exigidaL == null ? 'Não avaliado' : rti.disponivelL + 1e-6 >= rti.exigidaL ? 'Atende' : 'Não atende']],
       },
     );
   }
@@ -383,7 +383,14 @@ export function memorialDescritivoIncendio(model: BlueprintModel, hip: Hipoteses
   const bi = conta(['BOMBA_INCENDIO']);
   const bj = conta(['BOMBA_JOCKEY']);
   if (bi || bj) sistemas.push(`Bombeamento: ${bi} bomba(s) principal(is), ${bj} jockey e ${conta(['PRESSOSTATO'])} pressostato(s), com partida automática pela queda de pressão da rede.`);
-  if (a.calculo) sistemas.push(`Reserva técnica de incêndio: ${um(a.calculo.rti.disponivelL, 0)} L no desenho, para ${um(a.calculo.rti.autonomiaMin, 0)} min de funcionamento.`);
+  if (a.calculo) {
+    const r = a.calculo.rti;
+    sistemas.push(
+      r.porTabela && r.exigidaL === r.porTabela.litros
+        ? `Reserva técnica de incêndio: ${um(r.disponivelL, 0)} L no desenho, para os ${um(r.porTabela.litros, 0)} L da IT 17 do CBMMG (Tabela 4: ${r.porTabela.descricao}).`
+        : `Reserva técnica de incêndio: ${um(r.disponivelL, 0)} L no desenho, para ${um(r.autonomiaMin, 0)} min de funcionamento.`,
+    );
+  }
   const ext = pecasDoTipo(model, ['EXTINTOR']);
   if (ext.length) {
     const porAgente = new Map<string, number>();

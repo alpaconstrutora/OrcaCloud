@@ -61,6 +61,26 @@ describe('PainelCalculoIncendio', () => {
     expect(onSelecionar).toHaveBeenCalledWith([m.terminais!.find((x) => x.tipoHidraulico === 'HIDRANTE_SIMPLES')!.id]);
   });
 
+  it('D1.2: o bloco da IT 17 — sistema, divergências; o botão aplica, e desliga dizendo por quê', async () => {
+    const onAplicar = vi.fn();
+    const c = calculoDeIncendio(modelo(), HIP);
+    const { rerender } = render(
+      <PainelCalculoIncendio hip={HIP} onHip={vi.fn()} calculo={c} nomeDe={() => 'H-1'} onSelecionar={vi.fn()} ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }}
+        it17={{ descricao: 'A-2, área total até 3.000 m²: tipo 2 (hidrante), reserva de 8 m³', fonte: 'IT 17 do CBMMG (Portaria 70/2022), Tabela 4 (coluna 1) e Tabela 2', divergencias: ['Jato de 10 m somado à cobertura — a IT 17 desconsidera o alcance do jato (5.8.2)'], onAplicar }} />,
+    );
+    const bloco = screen.getByTestId('calculo-incendio-it17');
+    expect(bloco).toHaveTextContent('tipo 2 (hidrante), reserva de 8 m³');
+    expect(bloco).toHaveTextContent('5.8.2');
+    await userEvent.click(screen.getByRole('button', { name: 'Usar os valores da IT 17' }));
+    expect(onAplicar).toHaveBeenCalled();
+    rerender(
+      <PainelCalculoIncendio hip={HIP} onHip={vi.fn()} calculo={c} nomeDe={() => 'H-1'} onSelecionar={vi.fn()} ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }}
+        it17={{ descricao: 'C-2 não consta na Tabela 4', fonte: 'IT 17', divergencias: [], onAplicar: null }} />,
+    );
+    expect(screen.getByRole('button', { name: 'Usar os valores da IT 17' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Usar os valores da IT 17' })).toHaveAttribute('title', expect.stringMatching(/não decide/));
+  });
+
   it('trocar a fórmula grava a premissa', async () => {
     const onHip = vi.fn();
     render(<PainelCalculoIncendio hip={HIP} onHip={onHip} calculo={calculoDeIncendio(modelo(), HIP)} nomeDe={() => 'H-1'} onSelecionar={vi.fn()} ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }} />);

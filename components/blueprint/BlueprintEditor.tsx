@@ -238,6 +238,8 @@ import PainelCoberturaIncendio from './PainelCoberturaIncendio';
 import { coberturaDosHidrantes, marcasDaCobertura, proporHidrantes } from '../../utils/blueprintCoberturaIncendio';
 import { conferirPlanoDaRede, planejarRedeDeHidrantes } from '../../utils/blueprintRedeDeHidrantes';
 import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
+import { reservaDeTabelaDoEstudo } from '../../utils/blueprintPlanilhaDePressoes';
+import { FONTE_IT17_MG, desenhoPrefereMangotinho, divergenciasDaIT17, premissasDaIT17, sistemaDeHidrantesMG } from '../../utils/blueprintIncendioHidrantesMG';
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
@@ -7450,10 +7452,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         : null,
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.sprinklers, incendioDoEstudo.hipoteses.classificacao],
   );
-  const calculoHidraulicoDeIncendio = useMemo(
-    () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
-    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo],
+  /** D1.2: a classificação para o cálculo — a reserva de tabela (MG: IT 17, Tabela 4) e o sistema da IT 17. */
+  const classificacaoDoCalculo = useMemo(
+    () => (tarefaAberta === 'incendioCalculo' ? classificarEdificacao(editor.model, incendioDoEstudo.hipoteses.classificacao) : null),
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
   );
+  const calculoHidraulicoDeIncendio = useMemo(
+    () =>
+      classificacaoDoCalculo
+        ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo, reservaDeTabelaDoEstudo(editor.model, classificacaoDoCalculo))
+        : null,
+    [classificacaoDoCalculo, editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo],
+  );
+  /** D1.2: o sistema que a IT 17 pede, o que nas premissas diverge dela e o "usar os valores da IT 17". */
+  const it17DoCalculo = useMemo(() => {
+    const c = classificacaoDoCalculo;
+    if (!c || c.preset !== 'MG_CBMMG') return null;
+    const s = sistemaDeHidrantesMG(c, desenhoPrefereMangotinho(editor.model));
+    if (!('tipo' in s)) return { descricao: s.motivo, fonte: FONTE_IT17_MG, divergencias: [] as string[], premissas: null };
+    const hip = incendioDoEstudo.hipoteses.hidraulica;
+    const grupo = c.grupo?.grupo ?? null;
+    return { descricao: s.motivo, fonte: s.fonte, divergencias: divergenciasDaIT17(s, grupo, c.divisao.valor, hip), premissas: premissasDaIT17(s, grupo, hip) };
+  }, [classificacaoDoCalculo, editor.model, incendioDoEstudo.hipoteses.hidraulica]);
   /** E4.2: a bomba contra a rede — análise derivada; as candidatas vêm do catálogo de tipos da organização. */
   const analiseDaBombaDeIncendio = useMemo(
     () => (calculoHidraulicoDeIncendio ? analisarBomba(editor.model, incendioDoEstudo.hipoteses.hidraulica, incendioDoEstudo.hipoteses.bombeamento, calculoHidraulicoDeIncendio) : null),
@@ -14518,6 +14538,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   },
                 }}
                 conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica, analiseDaBombaDeIncendio, pressurizacaoDeIncendio)}
+                it17={
+                  it17DoCalculo
+                    ? {
+                        descricao: it17DoCalculo.descricao,
+                        fonte: it17DoCalculo.fonte,
+                        divergencias: it17DoCalculo.divergencias,
+                        onAplicar: it17DoCalculo.premissas
+                          ? () => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, hidraulica: it17DoCalculo.premissas! })
+                          : null,
+                      }
+                    : null
+                }
                 sprinklers={
                   criterioDeSprinklersDoEstudo
                     ? {

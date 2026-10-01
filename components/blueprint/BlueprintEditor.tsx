@@ -222,6 +222,8 @@ import PainelReservacao from './PainelReservacao';
 import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
 import PainelCalculoIncendio from './PainelCalculoIncendio';
+import PainelBombaIncendio from './PainelBombaIncendio';
+import { analisarBomba, bombasQueAtendem, type BombaCandidata } from '../../utils/blueprintBombeamentoIncendio';
 import PainelRedeDeHidrantes from './PainelRedeDeHidrantes';
 import PainelCoberturaIncendio from './PainelCoberturaIncendio';
 import { coberturaDosHidrantes, marcasDaCobertura, proporHidrantes } from '../../utils/blueprintCoberturaIncendio';
@@ -7306,6 +7308,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica],
   );
+  /** E4.2: a bomba contra a rede — análise derivada; as candidatas vêm do catálogo de tipos da organização. */
+  const analiseDaBombaDeIncendio = useMemo(
+    () => (calculoHidraulicoDeIncendio ? analisarBomba(editor.model, incendioDoEstudo.hipoteses.hidraulica, incendioDoEstudo.hipoteses.bombeamento, calculoHidraulicoDeIncendio) : null),
+    [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica, incendioDoEstudo.hipoteses.bombeamento],
+  );
+  const bombasDoCatalogo = useMemo<BombaCandidata[]>(
+    () =>
+      tiposDoCatalogo
+        .filter((t) => t.active && t.familia === 'TERMINAL')
+        .map((t) => ({ t, p: t.propriedades as { tipoHidraulico?: string; curvaBomba?: { vazaoLmin: number; alturaMm: number }[] } }))
+        .filter(({ p }) => p.tipoHidraulico === 'BOMBA_INCENDIO' && (p.curvaBomba?.length ?? 0) >= 3)
+        .map(({ t, p }) => ({ id: t.id, nome: t.nome, curva: p.curvaBomba! })),
+    [tiposDoCatalogo],
+  );
+  useEffect(() => {
+    // O catálogo de bombas carrega quando o cálculo abre (uma vez por abertura).
+    if (tarefaAberta === 'incendioCalculo') recarregarCatalogoDeTipos();
+  }, [tarefaAberta, recarregarCatalogoDeTipos]);
   /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
   const planoDaRedeDeHidrantes = useMemo(
     () => (tarefaAberta === 'incendioRede' ? planejarRedeDeHidrantes(editor.model, incendioDoEstudo.hipoteses.rede) : null),
@@ -14182,8 +14202,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     if (ajusteDeDnDeIncendio?.comandos.length) editor.runBatch(ajusteDeDnDeIncendio.comandos);
                   },
                 }}
-                conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica)}
+                conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica, analiseDaBombaDeIncendio)}
               />
+              {analiseDaBombaDeIncendio && (
+                <div className="mt-4">
+                  <PainelBombaIncendio
+                    analise={analiseDaBombaDeIncendio}
+                    curva={(editor.model.terminais ?? []).find((t) => t.id === analiseDaBombaDeIncendio.terminalId)?.curvaBomba ?? null}
+                    hb={incendioDoEstudo.hipoteses.bombeamento}
+                    onHb={(bombeamento) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, bombeamento })}
+                    candidatas={analiseDaBombaDeIncendio.projeto ? bombasQueAtendem(bombasDoCatalogo, analiseDaBombaDeIncendio.projeto) : []}
+                    onAplicar={(c) => {
+                      // Só a curva, o NPSH e o nome: a cota e a posição da bomba no desenho não mudam.
+                      const npshr = (tiposDoCatalogo.find((t) => t.id === c.id)?.propriedades as { npshrMm?: number } | undefined)?.npshrMm ?? null;
+                      editor.run({ type: 'SetTerminalProps', terminalId: analiseDaBombaDeIncendio.terminalId, tipo: c.nome, curvaBomba: c.curva, npshrMm: npshr } as Command);
+                    }}
+                    onSelecionarBomba={() => selecionar([analiseDaBombaDeIncendio.terminalId])}
+                  />
+                </div>
+              )}
               <div className="mt-4">
                 <PainelVerificacaoDaRede marcas={[...marcasDaRede, ...marcasDoCalculoIncendio]} disciplinas={['INCENDIO']} onSelecionar={selecionar} />
               </div>

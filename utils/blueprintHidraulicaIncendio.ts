@@ -134,9 +134,22 @@ export function eloDeTubo(id: string, de: string, para: string, j: (q: number) =
   };
 }
 
-/** Elo de emissor (sprinkler, esguicho): h = (Q/k)·|Q/k|, k interno. */
+/**
+ * A resistência do emissor ao fluxo AO CONTRÁRIO (m por m³/s): esguicho e
+ * sprinkler não puxam água da atmosfera. Sem isto, com a carga abaixo da cota do
+ * bico, o solver dava vazão NEGATIVA no esguicho (−84 L/min no galpão de prova,
+ * pego pela curva do sistema da E4.2).
+ */
+const RESISTENCIA_AO_CONTRARIO = 1e7;
+
+/** Elo de emissor (sprinkler, esguicho): h = (Q/k)², k interno, só para fora — para dentro, retenção. */
 export function eloDeEmissor(id: string, de: string, para: string, kInterno: number): EloHidraulico {
-  return { id, de, para, perda: (q) => ({ h: (q / kInterno) * Math.abs(q / kInterno), dh: (2 * Math.abs(q)) / (kInterno * kInterno) }) };
+  return {
+    id,
+    de,
+    para,
+    perda: (q) => (q >= 0 ? { h: (q / kInterno) ** 2, dh: (2 * q) / (kInterno * kInterno) } : { h: q * RESISTENCIA_AO_CONTRARIO, dh: RESISTENCIA_AO_CONTRARIO }),
+  };
 }
 
 /** Eliminação de Gauss com pivô parcial; `null` se singular. */

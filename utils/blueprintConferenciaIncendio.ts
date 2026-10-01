@@ -17,6 +17,7 @@ import type { BlueprintModel, ObjectId } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { redeDeIncendio, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
 import type { MarcaDeVerificacao } from './blueprintVerificacaoRede';
+import type { AnaliseDaBomba } from './blueprintBombeamentoIncendio';
 
 /** As peças que precisam estar NA rede (as sobre o trecho vivem no meio do tubo). */
 const PECAS_DE_NO = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'VGA', 'BOMBA_INCENDIO', 'BOMBA_JOCKEY', 'RESERVATORIO']);
@@ -106,7 +107,7 @@ export interface ItemDaConferencia {
 }
 
 /** A conferência da rede de hidrantes — o que o cálculo, as marcas e as premissas dizem juntos. */
-export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendio, hip: HipotesesHidraulicasDeIncendio): ItemDaConferencia[] {
+export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendio, hip: HipotesesHidraulicasDeIncendio, bomba: AnaliseDaBomba | null = null): ItemDaConferencia[] {
   const um = (v: number, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
   const lanc = marcasDoLancamentoDeIncendio(model);
   const itens: ItemDaConferencia[] = [];
@@ -167,6 +168,20 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
     estado: !temRede ? 'NAO_AVALIADO' : ligados.length ? 'ATENDE' : 'FALTA',
     alvos: recalques.filter((t) => !ligados.includes(t)).map((t) => t.id),
   });
+  // E4.2: a bomba contra o ponto de projeto, o shutoff e o NPSH (só quando a fonte é bomba).
+  if (bomba) {
+    const est = (x: boolean | null): EstadoDaConferencia => (x == null ? 'NAO_AVALIADO' : x ? 'ATENDE' : 'FALTA');
+    itens.push({
+      grupo: 'NBR 13714',
+      item: 'Bomba atende o ponto de projeto',
+      exigido: bomba.projeto ? `${um(bomba.projeto.vazaoLmin, 0)} L/min a ${um(bomba.projeto.alturaM)} m` : '—',
+      obtido: !bomba.temCurva ? 'bomba sem curva declarada' : bomba.alturaNaVazaoDeProjetoM == null ? 'fora da faixa da curva' : `${um(bomba.alturaNaVazaoDeProjetoM)} m na vazão de projeto`,
+      estado: est(bomba.atendeProjeto),
+      alvos: [bomba.terminalId],
+    });
+    if (bomba.shutoff) itens.push({ grupo: 'NBR 13714', item: 'Shutoff da bomba dentro da pressão máxima', exigido: `≤ ${um(hip.pressaoMaximaKpa, 0)} kPa no hidrante mais baixo`, obtido: `${um(bomba.shutoff.estaticaMaximaKpa, 0)} kPa`, estado: est(bomba.shutoff.atende), alvos: [bomba.terminalId] });
+    if (bomba.npsh) itens.push({ grupo: 'NBR 13714', item: 'NPSH disponível ≥ requerido', exigido: bomba.npsh.requeridoM == null ? 'NPSH requerido do catálogo' : `≥ ${um(bomba.npsh.requeridoM, 2)} m`, obtido: `${um(bomba.npsh.disponivelM, 2)} m disponíveis`, estado: est(bomba.npsh.atende), alvos: [bomba.terminalId] });
+  }
   // E3.2: a RTI — vazão do cálculo × autonomia, contra a reserva desenhada.
   const litros = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;
   itens.push({

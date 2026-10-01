@@ -1622,7 +1622,7 @@ Fecha o **bloco 2**.
 
 Fecha a parte de hidrante do **bloco 4** (§19).
 
-## Etapa 4 — Bombeamento · kernel bump · 3 fases · **em andamento (4.1 ✅ 01/10/2026, kernel 0.82.0)**
+## Etapa 4 — Bombeamento · kernel bump · 3 fases · **em andamento (4.1 e 4.2 ✅ 01/10/2026, kernel 0.82.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2012,4 +2012,43 @@ haver um bump só.
 - **Ritual do bump:** 7/7 em 0.81.0; depois os seis hashes; 22 pinos; bundle regerado.
 - **Testes:** `blueprintBombaIncendio.test.ts` (5) e `components/CamposDaBombaDeIncendio.test.tsx`
   (4). Suíte com 6.579 testes: 6.546 + 33 pulados. Build ok.
+
+### Etapa 4.2 — 01/10/2026 (frente `incendio-e4`, sem bump)
+
+- **`utils/blueprintBombeamentoIncendio.ts`:**
+  - **Curva da bomba:** interpolada em linha reta e nunca extrapolada. Fora da faixa do catálogo,
+    "fora da curva".
+  - **Curva do sistema:** sai do mesmo solver da E2, com os N mais desfavoráveis abertos e a carga
+    variando.
+  - **Ponto de operação:** o cruzamento das duas curvas, por bisseção (a bomba cai, o sistema sobe,
+    o cruzamento é único). Diz se os hidrantes atendem ali.
+  - **Ponto de projeto:** a carga necessária da E2.
+  - **Análise:** 150 % da vazão ≥ 65 % da carga (NFPA 20, CONFERIR); o shutoff leva a estática do
+    hidrante mais baixo contra a pressão máxima.
+  - **NPSH disponível:** Patm pela altitude − pv (0,24) + (fundo da caixa de RTI mais baixa − eixo
+    da bomba) − perda na sucção. Sem caixa, a água fica na cota da bomba.
+- **Seleção:** `bombasQueAtendem` filtra as bombas cadastradas (tipos da organização com curva) que
+  passam por cima do ponto de projeto, da menor folga para a maior. "Aplicar" copia **só** a curva,
+  o NPSH e o nome; a cota e a posição da bomba no desenho não mudam.
+- ⚠️ **Defeito do solver da E2 achado e corrigido:** o emissor (esguicho/sprinkler) deixava fluxo
+  NEGATIVO. Com carga zero e o hidrante acima da bomba, entravam −84 L/min pelo esguicho. Quem
+  pegou foi a curva do sistema. O emissor agora tem retenção (resistência enorme ao contrário), e o
+  resíduo numérico (centésimos de L/min) é tratado como zero. Os 50 testes da E2/E3 continuaram
+  verdes.
+- **Tela:** `PainelBombaIncendio`, abaixo do cálculo, com o gráfico da §28 (recharts): bomba em azul,
+  sistema em cinza, projeto e operação como pontos, legenda em HTML e texto quando falta a curva,
+  nunca gráfico zerado. Também mostra as verificações, a altitude, a perda na sucção e as
+  candidatas.
+  - O catálogo de tipos carrega quando o cálculo abre.
+  - A conferência ganhou "bomba atende o ponto de projeto", "shutoff" e "NPSH".
+- ⭐ **Harness visual `docs/spikes/bomba-incendio`** (porta 3161 + Edge). Ele mostrou as curvas se
+  cruzando onde o ponto de operação diz. Também pegou o ponto de operação faltando na legenda, que
+  foi acrescentado.
+  - ⚠️ Lição do harness: o Vite com a pasta do spike como raiz precisa de `--config vite.config.ts`
+    E de um CSS com `@source "../../../components/blueprint"`. Sem isso, o Tailwind v4 não gera as
+    classes dos componentes, e a tela sai crua.
+- **Typecheck:** os formatadores do tooltip do recharts aceitam `undefined` (corrigido com
+  `Number(v ?? 0)`).
+- **Testes:** `blueprintBombeamentoIncendio.test.ts` (10) e o painel (3). Suíte com 6.591 testes:
+  6.558 + 33 pulados. Build ok.
 

@@ -894,7 +894,10 @@ export function tipoDoPontoDeIncendioIfc(classe: string, predefinido: string | n
     case 'IFCALARM':
       return pd === 'MANUALPULLBOX' ? 'ACIONADOR_MANUAL' : pd === 'SIREN' || pd === 'BELL' || pd === 'LIGHT' ? 'AVISADOR' : null;
     case 'IFCSENSOR':
-      return pd === 'SMOKESENSOR' ? 'DETECTOR_FUMACA' : pd === 'HEATSENSOR' ? 'DETECTOR_TEMPERATURA' : pd === 'FLOWSENSOR' ? 'CHAVE_FLUXO' : pd === 'PRESSURESENSOR' ? 'PRESSOSTATO' : null;
+      return pd === 'SMOKESENSOR' ? 'DETECTOR_FUMACA' : pd === 'HEATSENSOR' ? 'DETECTOR_TEMPERATURA' : pd === 'FIRESENSOR' ? 'DETECTOR_CHAMA' : pd === 'FLOWSENSOR' ? 'CHAVE_FLUXO' : pd === 'PRESSURESENSOR' ? 'PRESSOSTATO' : null;
+    case 'IFCFLOWINSTRUMENT':
+      // Só chega aqui o instrumento do sistema de incêndio (o leitor filtra).
+      return pd === 'PRESSUREGAUGE' ? 'MANOMETRO' : null;
     case 'IFCLIGHTFIXTURE':
       return pd === 'SECURITYLIGHTING' ? 'LUMINARIA_EMERGENCIA' : null;
     case 'IFCSIGN':

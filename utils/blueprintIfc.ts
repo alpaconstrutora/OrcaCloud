@@ -2474,6 +2474,12 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCSENSOR', predefinido: '.SMOKESENSOR.' };
     case 'DETECTOR_TEMPERATURA':
       return { entidade: 'IFCSENSOR', predefinido: '.HEATSENSOR.' };
+    // Fase F (0.89.0): o enum do IFC4 não tem "chama" — FIRESENSOR é o detector de fogo;
+    // o manômetro é instrumento de vazão/pressão.
+    case 'DETECTOR_CHAMA':
+      return { entidade: 'IFCSENSOR', predefinido: '.FIRESENSOR.' };
+    case 'MANOMETRO':
+      return { entidade: 'IFCFLOWINSTRUMENT', predefinido: '.PRESSUREGAUGE.' };
     case 'ACIONADOR_MANUAL':
       return { entidade: 'IFCALARM', predefinido: '.MANUALPULLBOX.' };
     case 'AVISADOR':

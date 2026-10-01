@@ -404,7 +404,7 @@ export default function PainelTrechoSelecionado({
               {(terminal.tipoHidraulico === 'BOMBA_INCENDIO' || terminal.tipoHidraulico === 'BOMBA_JOCKEY') && (
                 <CamposDaBombaDeIncendio terminal={terminal} principais={bombasPrincipais.filter((b) => b.id !== terminal.id)} onBomba={(c) => onTerminal(c)} />
               )}
-              {terminal.tipoHidraulico && ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR'].includes(terminal.tipoHidraulico) && (
+              {terminal.tipoHidraulico && ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA', 'ACIONADOR_MANUAL', 'AVISADOR'].includes(terminal.tipoHidraulico) && (
                 <label className="block" data-testid="campos-do-laco">
                   <span className="text-[11px] font-medium text-slate-600">Laço (central)</span>
                   <select

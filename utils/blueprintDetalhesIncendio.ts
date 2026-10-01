@@ -256,6 +256,8 @@ export function desenharDetalheDaVga(d: Desenhista, model: BlueprintModel, x: nu
     '5 · Dreno e teste, com registro',
     '6 · Manômetro a jusante',
     chaves ? `Chave de fluxo: ${chaves} no desenho` : 'Chave de fluxo: nenhuma no desenho',
+    // F1: os manômetros do kit (os da VGA e o do barrilete).
+    `Manômetros: ${pecas(model, ['MANOMETRO']).length} no desenho`,
   ]);
 }
 

@@ -323,7 +323,31 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
   - Suíte com 6.828 testes: 6.795 + 33 pulados. Build ok.
 - [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
-- [ ] F1 · F2 · F3 · F4 · F5 · F6
+- [ ] **Fase F — 2 de 6** (frente `incendio-fase-f`):
+  - [x] **Kernel 0.89.0** (um bump para os dois tipos novos; goldens 7/7 antes, 6 hashes e 22 pinos
+    depois; bundle da planta-api regenerado): `MANOMETRO` (sobre o trecho) e `DETECTOR_CHAMA` (do
+    laço). Cada um tem ficha, símbolo, numeração (MN, DC), família da prancha, IFC
+    (`IfcFlowInstrument .PRESSUREGAUGE.` / `IfcSensor .FIRESENSOR.` — o IFC4 não tem
+    "FLAMESENSOR") e a importação de volta. O antipânico (F5) NÃO precisou de bump: a marca
+    `ANTIPANICO` da porta existe desde a 0.84.0.
+  - [x] F1 — `utils/blueprintKitsIncendio.ts · kitDaPeca`:
+    - a placa do equipamento e, na VGA, o manômetro de montante, o de jusante (a 30 cm) e o
+      registro de bloqueio (a 60 cm), sobre os tubos que chegam nela, num lote só;
+    - a VGA fora da rede ganha o aviso;
+    - a inserção à mão no editor usa o MESMO kit (o hidrante à mão agora vem com a placa);
+    - a casa de bombas ganha o manômetro do barrilete, e o detalhe típico da VGA conta os
+      manômetros.
+    - **Desvio, dito:** o dreno da VGA NÃO entra como peça (seria uma ponta aberta que a
+      verificação acusaria); fica no detalhe típico.
+  - [x] F4 — detector de chama:
+    - cobertura por CONE (`detectorCobre`: alcance de 15 m, abertura de 90°, CONFERIR NA NBR 17240 /
+      fabricante), a MESMA função na análise e na proposta;
+    - a sala com "inflamáveis / combustível / diesel / gerador" no nome pede o de chama;
+    - a proposta o põe nas quinas, olhando para o centro.
+    - ⚠️ **A lei da Fase A pegou um defeito do alarme:** os detectores lançados criavam o laço no
+      pavimento, e o avisador que o laço exige só vinha na 2ª proposta. Agora vem no mesmo lote.
+  - Suíte com 6.853 testes: 6.820 + 33 pulados. Build ok.
+  - [ ] F2 · F3 · F5 · F6
 
 ## Verificação
 

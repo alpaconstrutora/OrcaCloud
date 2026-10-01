@@ -53,6 +53,8 @@ export const TIPOS_COM_SIMBOLO_DE_INCENDIO: readonly TipoDePontoHidraulico[] = [
   'LUMINARIA_EMERGENCIA',
   'DETECTOR_FUMACA',
   'DETECTOR_TEMPERATURA',
+  'DETECTOR_CHAMA',
+  'MANOMETRO',
   'ACIONADOR_MANUAL',
   'AVISADOR',
   'CENTRAL_ALARME',
@@ -110,6 +112,11 @@ export function simboloDeIncendio(tipo: TipoDePontoHidraulico, posicao?: Posicao
       return [circulo(0.5), texto('F')];
     case 'DETECTOR_TEMPERATURA':
       return [circulo(0.5), texto('T')];
+    // Fase F: o de chama (o cone que ele vê, aberto para a frente) e o manômetro (o mostrador com o ponteiro).
+    case 'DETECTOR_CHAMA':
+      return [circulo(0.3), texto('C'), { tipo: 'poligono', pontos: [[0.3, 0], [0.5, -0.4], [0.5, 0.4]], cheio: false }];
+    case 'MANOMETRO':
+      return [circulo(0.5), { tipo: 'poligono', pontos: [[0, 0], [0.32, -0.22], [0.05, 0.05]], cheio: true }];
     case 'ACIONADOR_MANUAL':
       // A botoeira: quadrado com o botão cheio.
       return [quadrado(), circulo(0.2, true)];

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.88.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.89.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -687,7 +687,11 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "ACIONADOR_MANUAL",
   "AVISADOR",
   "CENTRAL_ALARME",
-  "PREVENTIVO_PERSONALIZADO"
+  "PREVENTIVO_PERSONALIZADO",
+  // 01/10/2026 (incêndio pós-roadmap, Fase F, 0.89.0): o MANÔMETRO (o kit da VGA e da casa de
+  // bombas — sobre o trecho) e o DETECTOR DE CHAMA (do laço, cobertura por cone).
+  "MANOMETRO",
+  "DETECTOR_CHAMA"
 ];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
@@ -4509,6 +4513,8 @@ var PREFIXO_DA_NUMERACAO = {
   LUMINARIA_EMERGENCIA: "LE",
   DETECTOR_FUMACA: "DF",
   DETECTOR_TEMPERATURA: "DT",
+  DETECTOR_CHAMA: "DC",
+  MANOMETRO: "MN",
   ACIONADOR_MANUAL: "AM",
   AVISADOR: "AV",
   CENTRAL_ALARME: "CA",
@@ -6506,6 +6512,12 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCSENSOR", predefinido: ".SMOKESENSOR." };
     case "DETECTOR_TEMPERATURA":
       return { entidade: "IFCSENSOR", predefinido: ".HEATSENSOR." };
+    // Fase F (0.89.0): o enum do IFC4 não tem "chama" — FIRESENSOR é o detector de fogo;
+    // o manômetro é instrumento de vazão/pressão.
+    case "DETECTOR_CHAMA":
+      return { entidade: "IFCSENSOR", predefinido: ".FIRESENSOR." };
+    case "MANOMETRO":
+      return { entidade: "IFCFLOWINSTRUMENT", predefinido: ".PRESSUREGAUGE." };
     case "ACIONADOR_MANUAL":
       return { entidade: "IFCALARM", predefinido: ".MANUALPULLBOX." };
     case "AVISADOR":
@@ -7552,6 +7564,26 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: {},
     medidasMm: { larguraMm: 100, profundidadeMm: 100, alturaMm: 60 },
     ajuda: "Detector pontual de fuma\xE7a, no teto. Entra no la\xE7o de uma central (painel da pe\xE7a); a cobertura \xE9 conferida na tarefa Inc\xEAndio."
+  },
+  // Fase F (pós-roadmap, 0.89.0): o detector de chama — óptico, na parede, olhando para o risco.
+  DETECTOR_CHAMA: {
+    rotulo: "Detector de chama",
+    sigla: "DC",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 2500 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 120, profundidadeMm: 100, alturaMm: 120 },
+    ajuda: "Detector \xF3ptico de chama (dep\xF3sito de inflam\xE1veis, gerador, casa de m\xE1quinas com combust\xEDvel): v\xEA um CONE \xE0 frente \u2014 a rota\xE7\xE3o da pe\xE7a \xE9 a dire\xE7\xE3o. Alcance e abertura CONFERIR NA NBR 17240 / fabricante."
+  },
+  // Fase F (pós-roadmap, 0.89.0): o manômetro — no kit da VGA (montante e jusante) e na casa de bombas.
+  MANOMETRO: {
+    rotulo: "Man\xF4metro",
+    sigla: "MN",
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 1500 },
+    dnMinimoMm: { INCENDIO: 15 },
+    sobreOTrecho: true,
+    ajuda: "Mostra a press\xE3o no trecho (antes e depois da VGA, no barrilete das bombas). Insere-se sobre um trecho de inc\xEAndio."
   },
   DETECTOR_TEMPERATURA: {
     rotulo: "Detector de temperatura",

@@ -89,6 +89,8 @@ const CENARIOS: [string, () => BlueprintModel][] = [
   ['centro em meio milímetro (salas de 6,001 m)', () => corredorESalas(4, 6001)],
   ['ambiente em L', () => salaoEmL()],
   ['L estreito (braço de 3 m)', () => lEstreito()],
+  // F4: o depósito de inflamáveis pede detector de CHAMA (cone).
+  ['depósito de inflamáveis (detector de chama)', () => nomear(corredorESalas(), (s) => (s.name === 'Sala 3' ? 'Depósito de inflamáveis' : s.name ?? ''))],
 ];
 
 /** Onde parte do ambiente NÃO tem solução: a 2ª proposta tem de sair vazia mesmo assim. */

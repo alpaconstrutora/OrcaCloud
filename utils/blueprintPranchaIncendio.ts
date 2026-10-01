@@ -46,6 +46,9 @@ export const FAMILIA_DO_TIPO: Partial<Record<TipoDePontoHidraulico, FamiliaDeInc
   LUMINARIA_EMERGENCIA: 'PREVENTIVO',
   DETECTOR_FUMACA: 'PREVENTIVO',
   DETECTOR_TEMPERATURA: 'PREVENTIVO',
+  DETECTOR_CHAMA: 'PREVENTIVO',
+  // O manômetro vai com a VGA (o kit dela) — e o da casa de bombas aparece na mesma família.
+  MANOMETRO: 'SPRINKLERS',
   ACIONADOR_MANUAL: 'PREVENTIVO',
   AVISADOR: 'PREVENTIVO',
   CENTRAL_ALARME: 'PREVENTIVO',

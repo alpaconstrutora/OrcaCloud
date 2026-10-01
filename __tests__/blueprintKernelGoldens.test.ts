@@ -251,6 +251,11 @@
  *   casos tem terminal. Com a string em 0.85.0 os sete testes passaram sem
  *   outra alteração; depois do bump, só os seis hashes.
  *
+ *   0.88.0 → 0.89.0 (01/10/2026): Fase F do plano pós-roadmap de incêndio — os
+ *   tipos MANOMETRO e DETECTOR_CHAMA. Nenhum dos seis casos tem terminal. Com a
+ *   string em 0.88.0 os sete testes passaram sem outra alteração; depois do bump,
+ *   só os seis hashes.
+ *
  *   0.87.0 → 0.88.0 (01/10/2026): E7.4 do roadmap de incêndio — os tipos de
  *   detecção e alarme e a central do laço (por índice), omitida quando ausente.
  *   Nenhum dos seis casos tem terminal. Com a string em 0.87.0 os sete testes
@@ -846,17 +851,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '0147747c18b64d1f2aefd3fde77301ee4860e30d0f6033b2f59a0f7e76fd4e45',
+    hash: '945e0a53e82b34ca722a48ff8366b6b0a5a29918a68ef25295edb756485752d4',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '0ba07310188aac523c836f3c31d02160dae3ea832938db61dc33a9879cd539e5',
+    hash: 'e06ea098ed621e65eb52481ee5e5f9e16670a28c6af2e9d131f394132a3b1e94',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'fa59500978875891ef84f1e992b69a277cfecf6f2f276f3d1954933c33370144',
+    hash: 'cf54eb58991b1cb7611c3788948de3be3732ca48e277274db7a3df0652c2853e',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -864,7 +869,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'e8a565f36245d64052e558beac9255e976341d1f6ec5642303cfa03034361a05',
+    hash: '1bf51cc906ef08c8d6ab1f8e303125496c4fe3dde4d1434a912b2bcea7fc9413',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -874,7 +879,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'cc4726a0332d380437f787f04f3b8d7d2ddf57aa54f0384a96a6b83375fcc126',
+    hash: '371f3c5175daae76b9fc850b4aba0431217c44b377c7d9acbff74a2be7379bd2',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -885,7 +890,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'dff7f8102c8b262333ed3d672143ea39a4cb122ceca518d20fcabd29496f88c5',
+    hash: 'c52aa96cfbff724f4d8204a9238c6b6e43ad0811faefa62f723b2cea402dbd27',
   },
 };
 

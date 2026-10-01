@@ -986,12 +986,12 @@ const transformar = (m: number[], x: number, y: number, z: number): P3m => ({
  * luminária de segurança). Bomba, válvula e sensor de vazão/pressão FORA do
  * sistema de incêndio são da água: ficam de fora, não adivinhados.
  */
-const CLASSES_DE_PONTO_DE_INCENDIO = ['IFCFIRESUPPRESSIONTERMINAL', 'IFCALARM', 'IFCSENSOR', 'IFCPUMP', 'IFCVALVE', 'IFCLIGHTFIXTURE', 'IFCCONTROLLER', 'IFCSIGN'];
+const CLASSES_DE_PONTO_DE_INCENDIO = ['IFCFIRESUPPRESSIONTERMINAL', 'IFCALARM', 'IFCSENSOR', 'IFCPUMP', 'IFCVALVE', 'IFCLIGHTFIXTURE', 'IFCCONTROLLER', 'IFCSIGN', 'IFCFLOWINSTRUMENT'];
 export function eDeIncendio(classe: string, predefinido: string | null, noSistemaDeIncendio: boolean): boolean {
   if (noSistemaDeIncendio) return true;
   const pd = (predefinido ?? '').replace(/\./g, '');
   if (classe === 'IFCFIRESUPPRESSIONTERMINAL' || classe === 'IFCALARM') return true;
-  if (classe === 'IFCSENSOR') return pd === 'SMOKESENSOR' || pd === 'HEATSENSOR';
+  if (classe === 'IFCSENSOR') return pd === 'SMOKESENSOR' || pd === 'HEATSENSOR' || pd === 'FIRESENSOR';
   if (classe === 'IFCLIGHTFIXTURE') return pd === 'SECURITYLIGHTING';
   return false;
 }

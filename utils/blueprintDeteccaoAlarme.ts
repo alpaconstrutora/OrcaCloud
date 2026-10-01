@@ -26,18 +26,46 @@ import { candidatosDoAmbiente } from './blueprintRotaDeFuga';
 
 export const FONTE_ALARME = 'NBR 17240 e IT de alarme do CBMMG — CONFERIR (transcrito de memória)';
 export const RAIO_DO_DETECTOR_MM = { DETECTOR_FUMACA: 6300, DETECTOR_TEMPERATURA: 4200 } as const;
+/**
+ * F4 (pós-roadmap, 0.89.0): o detector de CHAMA vê um CONE à frente — a rotação da peça é o eixo.
+ * Alcance e abertura CONFERIR NA NBR 17240 / fabricante (o cone real depende da chama de referência).
+ */
+export const CONE_DO_DETECTOR_DE_CHAMA = { alcanceMm: 15000, aberturaGraus: 90 } as const;
+type TipoDeDetector = 'DETECTOR_FUMACA' | 'DETECTOR_TEMPERATURA' | 'DETECTOR_CHAMA';
+
+/**
+ * O detector `d` (posição, tipo e rotação) cobre o ponto `p`? Círculo no de fumaça/temperatura,
+ * cone no de chama. A MESMA função na análise e na proposta (a lei da Fase A).
+ */
+export function detectorCobre(d: { at: Point; tipo: string; rotacaoGraus?: number | null }, p: Point): boolean {
+  const dx = p.x - d.at.x;
+  const dy = p.y - d.at.y;
+  const dist = Math.hypot(dx, dy);
+  if (d.tipo === 'DETECTOR_CHAMA') {
+    if (dist > CONE_DO_DETECTOR_DE_CHAMA.alcanceMm + 1e-6) return false;
+    if (dist < 1) return true;
+    const eixo = ((d.rotacaoGraus ?? 0) * Math.PI) / 180;
+    const cos = (dx * Math.cos(eixo) + dy * Math.sin(eixo)) / dist;
+    return cos >= Math.cos(((CONE_DO_DETECTOR_DE_CHAMA.aberturaGraus / 2) * Math.PI) / 180) - 1e-9;
+  }
+  const raio = RAIO_DO_DETECTOR_MM[d.tipo as keyof typeof RAIO_DO_DETECTOR_MM];
+  return raio != null && dist <= raio + 1e-6;
+}
 export const DISTANCIA_ATE_ACIONADOR_MM = 30000;
 
 const SEM_DETECCAO = new Set(['BANHEIRO', 'LAVABO']);
 const PEDE_TEMPERATURA = /garagem|estacionamento/i;
+/** F4: onde a chama vem antes da fumaça (líquido inflamável, combustível, gerador) — CONFERIR NA NBR 17240. */
+const PEDE_CHAMA = /inflam[aá]ve|combust[ií]ve|diesel|gerador/i;
 const ehTipo = (t: Terminal, tipos: readonly string[]) => t.disciplina === 'INCENDIO' && !!t.tipoHidraulico && tipos.includes(t.tipoHidraulico);
-const DO_LACO = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR'] as const;
-const DETECTORES = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA'] as const;
+const DO_LACO = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA', 'ACIONADOR_MANUAL', 'AVISADOR'] as const;
+const DETECTORES = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA'] as const;
 
 /** O detector que o ambiente pede, ou `null` (banheiro, lavabo). */
-export function detectorDoAmbiente(s: Space): 'DETECTOR_FUMACA' | 'DETECTOR_TEMPERATURA' | null {
+export function detectorDoAmbiente(s: Space): TipoDeDetector | null {
   const u = usoDoNome(s.name);
   if (u && SEM_DETECCAO.has(u)) return null;
+  if (PEDE_CHAMA.test(s.name ?? '')) return 'DETECTOR_CHAMA';
   return u === 'COZINHA' || PEDE_TEMPERATURA.test(s.name ?? '') ? 'DETECTOR_TEMPERATURA' : 'DETECTOR_FUMACA';
 }
 
@@ -45,7 +73,7 @@ export interface AmbienteDetectado {
   spaceId: ObjectId;
   levelId: ObjectId;
   rotulo: string;
-  detector: 'DETECTOR_FUMACA' | 'DETECTOR_TEMPERATURA';
+  detector: TipoDeDetector;
   /** Pontos do ambiente fora do raio de qualquer detector dele. */
   descobertos: number;
   atende: boolean;
@@ -77,7 +105,7 @@ export function analisarAlarme(model: BlueprintModel, deteccaoExigida: boolean, 
       const tipo = detectorDoAmbiente(s);
       if (!tipo) return;
       const dele = detectores.filter((d) => d.levelId === s.levelId && pointInPolygon(s.ring, d.at));
-      const descobertos = pontosDeCobertura(s).filter((p) => !dele.some((d) => Math.hypot(d.at.x - p.x, d.at.y - p.y) <= RAIO_DO_DETECTOR_MM[d.tipoHidraulico as keyof typeof RAIO_DO_DETECTOR_MM] + 1e-6)).length;
+      const descobertos = pontosDeCobertura(s).filter((p) => !dele.some((d) => detectorCobre({ at: d.at, tipo: d.tipoHidraulico!, rotacaoGraus: d.rotacaoGraus }, p))).length;
       ambientes.push({ spaceId: s.id, levelId: s.levelId, rotulo: s.name || `Ambiente ${i + 1}`, detector: tipo, descobertos, atende: descobertos === 0 });
     });
   }
@@ -170,31 +198,34 @@ export function proporAlarme(model: BlueprintModel, a: AnaliseDeAlarme): Command
   // entrava INTEIRA a cada clique; no L estreito ela não cobria, e cada clique empilhava outra.
   for (const amb of a.ambientes.filter((x) => !x.atende)) {
     const s = model.spaces.find((x) => x.id === amb.spaceId)!;
-    const raio = RAIO_DO_DETECTOR_MM[amb.detector];
-    const cobreP = (d: Point, p: Point) => Math.hypot(d.x - p.x, d.y - p.y) <= raio + 1e-6;
     const existentes = (model.terminais ?? []).filter((t) => ehTipo(t, DETECTORES) && t.levelId === s.levelId && pointInPolygon(s.ring, t.at));
-    const doTipoExistente = (t: (typeof existentes)[number], p: Point) => Math.hypot(t.at.x - p.x, t.at.y - p.y) <= RAIO_DO_DETECTOR_MM[t.tipoHidraulico as keyof typeof RAIO_DO_DETECTOR_MM] + 1e-6;
-    let faltam = pontosDeCobertura(s).filter((p) => !existentes.some((t) => doTipoExistente(t, p)));
+    let faltam = pontosDeCobertura(s).filter((p) => !existentes.some((t) => detectorCobre({ at: t.at, tipo: t.tipoHidraulico!, rotacaoGraus: t.rotacaoGraus }, p)));
     const c0 = candidatosDoAmbiente(s).centro;
     const paraDentro = (p: Point): Point => {
       const d = Math.hypot(c0.x - p.x, c0.y - p.y) || 1;
       const k = Math.min(300, d) / d;
       return { x: Math.round(p.x + (c0.x - p.x) * k), y: Math.round(p.y + (c0.y - p.y) * k) };
     };
-    const candidatas = [...malhaDeDetectores(s, raio), ...faltam.map(paraDentro)]
+    // Candidatas: a malha (no de chama, os cantos do ambiente, olhando para o centro — o cone
+    // cobre o ambiente a partir da quina) e os próprios pontos descobertos puxados para dentro.
+    const chama = amb.detector === 'DETECTOR_CHAMA';
+    const rumoAoCentro = (p: Point) => Math.round((Math.atan2(c0.y - p.y, c0.x - p.x) * 180) / Math.PI);
+    const bases = chama ? [...s.ring.map(paraDentro), ...faltam.map(paraDentro)] : [...malhaDeDetectores(s, RAIO_DO_DETECTOR_MM[amb.detector as keyof typeof RAIO_DO_DETECTOR_MM]), ...faltam.map(paraDentro)];
+    const candidatas = bases
       .map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }))
-      .filter((p) => pointInPolygon(s.ring, p));
+      .filter((p) => pointInPolygon(s.ring, p))
+      .map((p) => ({ at: p, tipo: amb.detector as string, rotacaoGraus: chama ? rumoAoCentro(p) : null }));
     while (faltam.length) {
-      let melhor: Point | null = null;
+      let melhor: (typeof candidatas)[number] | null = null;
       let n = 0;
       for (const c of candidatas) {
-        const k = faltam.filter((p) => cobreP(c, p)).length;
+        const k = faltam.filter((p) => detectorCobre(c, p)).length;
         if (k > n) (melhor = c, n = k);
       }
       if (!melhor) break; // o que nenhuma posição cobre fica dito na análise, não relançado
-      lote.push(novo(amb.levelId, amb.detector, melhor, 2700, laco));
+      lote.push(novo(amb.levelId, amb.detector, melhor.at, chama ? 2500 : 2700, { ...laco, ...(melhor.rotacaoGraus != null ? { rotacaoGraus: melhor.rotacaoGraus } : {}) }));
       const m = melhor;
-      faltam = faltam.filter((p) => !cobreP(m, p));
+      faltam = faltam.filter((p) => !detectorCobre(m, p));
     }
   }
   // Acionadores: gulosa sobre a cobertura de 30 m, candidatos ao lado das portas.
@@ -247,7 +278,16 @@ export function proporAlarme(model: BlueprintModel, a: AnaliseDeAlarme): Command
     }
   }
   // Avisadores: um por pavimento que não tem, no centro do maior ambiente.
-  for (const p of a.pavimentosSemAvisador) {
+  // ⚠️ F4 (a lei da Fase A pegou): os detectores/acionadores que ESTE lote lança criam o laço no
+  // pavimento, e o laço exige avisador — antes ele só vinha na 2ª proposta.
+  const comAvisador = new Set((model.terminais ?? []).filter((t) => ehTipo(t, ['AVISADOR'])).map((t) => t.levelId));
+  const doLote = lote.filter((c) => c.type === 'AddTerminal' && (DO_LACO as readonly string[]).includes((c as { tipoHidraulico?: string }).tipoHidraulico ?? '')).map((c) => (c as { levelId: ObjectId }).levelId);
+  const pedemAvisador = [...a.pavimentosSemAvisador];
+  for (const id of new Set(doLote)) {
+    if (comAvisador.has(id) || pedemAvisador.some((x) => x.levelId === id)) continue;
+    pedemAvisador.push({ levelId: id, nome: model.levels.find((l) => l.id === id)?.name ?? id });
+  }
+  for (const p of pedemAvisador) {
     const s = model.spaces.filter((x) => x.levelId === p.levelId).sort((x, y) => y.areaMm2 - x.areaMm2)[0];
     if (s) lote.push(novo(p.levelId, 'AVISADOR', candidatosDoAmbiente(s).centro, 2200, laco));
   }

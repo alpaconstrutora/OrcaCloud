@@ -543,7 +543,15 @@
  * passo; apagar a central solta o laço (`limparLacosOrfos`). Omitido quando
  * ausente. Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.88.0';
+/**
+ * ─── 0.88.0 → 0.89.0 (01/10/2026) — MANÔMETRO E DETECTOR DE CHAMA ───────────
+ *
+ * Incêndio pós-roadmap, Fase F (plano `2026-10-01-incendio-backlog-pos-roadmap.md`):
+ * os tipos `MANOMETRO` (sobre o trecho — o kit da VGA e da casa de bombas) e
+ * `DETECTOR_CHAMA` (do laço de alarme, `TIPOS_DO_LACO_DE_ALARME`; cobertura por
+ * cone pela rotação da peça). Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.89.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

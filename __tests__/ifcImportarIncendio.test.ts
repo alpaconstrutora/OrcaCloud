@@ -12,7 +12,8 @@ import { comandosDoIncendio, especificacaoDoPset, tipoDoPontoDeIncendioIfc, trad
 import { KERNEL_VERSION, POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
 import { eDeIncendio } from '../services/ifcParametricoService';
 
-const PECAS = ['HIDRANTE_SIMPLES', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'BOMBA_INCENDIO', 'EXTINTOR', 'PLACA', 'LUMINARIA_EMERGENCIA', 'DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR', 'CENTRAL_ALARME'];
+// F4/F1 (0.89.0): o detector de chama (IfcSensor .FIRESENSOR.) e o manômetro (IfcFlowInstrument .PRESSUREGAUGE.).
+const PECAS = ['HIDRANTE_SIMPLES', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'BOMBA_INCENDIO', 'EXTINTOR', 'PLACA', 'LUMINARIA_EMERGENCIA', 'DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA', 'MANOMETRO', 'ACIONADOR_MANUAL', 'AVISADOR', 'CENTRAL_ALARME'];
 
 /** Dois pavimentos: no de cima, uma peça de cada tipo de incêndio e um tubo; no térreo, água (torneira e tubo) e uma luz comum. */
 function predio(): BlueprintModel {

@@ -257,6 +257,7 @@ import PainelAlarmeIncendio from './PainelAlarmeIncendio';
 import { analisarAlarme, proporAlarme } from '../../utils/blueprintDeteccaoAlarme';
 import { analisarIluminacao, proporIluminacao } from '../../utils/blueprintIluminacaoEmergencia';
 import { analisarSinalizacao, comPlacas, proporSinalizacao } from '../../utils/blueprintSinalizacao';
+import { kitDaPeca } from '../../utils/blueprintKitsIncendio';
 import { analisarExtintores, proporExtintores } from '../../utils/blueprintExtintores';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
@@ -6548,7 +6549,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         ponto = melhor.ponto;
         cotaMm = melhor.cotaMm;
       }
-      const criados = editor.run({
+      const comando: Command = {
         type: 'AddTerminal',
         levelId,
         disciplina,
@@ -6557,7 +6558,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         cotaMm,
         tipoHidraulico: tipoDePontoHidraulico,
         volumeL: ficha.volumeL ?? null,
-      });
+      };
+      // F1 (incêndio pós-roadmap): a peça de incêndio entra com o KIT dela num lote só — a placa do
+      // equipamento e, na VGA, os manômetros e o registro de bloqueio. Um Ctrl+Z desfaz tudo.
+      let lote: Command[] = [comando];
+      if (disciplina === 'INCENDIO') {
+        const kit = kitDaPeca(editor.model, [comando]);
+        lote = kit.comandos;
+        if (kit.aviso) setAvisoColar(kit.aviso);
+      }
+      const criados = lote.length > 1 ? editor.runBatch(lote) : editor.run(comando);
       // As medidas padrão da ficha (caixa d'água, caixas, hidrômetro) entram
       // num segundo comando do mesmo lote: `AddTerminal` não as recebe.
       if (criados.length > 0 && ficha.medidasMm) {

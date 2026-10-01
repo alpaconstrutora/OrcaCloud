@@ -135,6 +135,10 @@ export function proporFonte(model: BlueprintModel, hip: HipotesesIncendio): Prop
   const pressostatos = (m.terminais ?? []).filter((t) => ehDoTipo(t, 'PRESSOSTATO')).length;
   const faltam = Math.max(0, bombas - pressostatos);
   aplicar(Array.from({ length: faltam }, (_, k) => peca(principal!.levelId, 'PRESSOSTATO', { x: principal!.at.x + ((k + 1) * PASSO_NA_CASA_MM) / (faltam + 1), y: principal!.at.y }, principal!.cotaMm)));
+  // F1: o manômetro do barrilete, sobre o tubo da jockey (quando foi este passo que o lançou).
+  if (!temJockey && !(m.terminais ?? []).some((t) => ehDoTipo(t, 'MANOMETRO') && t.levelId === principal!.levelId)) {
+    aplicar([peca(principal.levelId, 'MANOMETRO', { x: principal.at.x + Math.round(PASSO_NA_CASA_MM / 6), y: principal.at.y }, principal.cotaMm)]);
+  }
   // A reserva PRÓPRIA da bomba: o reservatório de incêndio ao lado da casa de bombas, ligado pela
   // sucção (volume no passo 3).
   if (reserva === 'PROPRIA' && !(m.terminais ?? []).some((t) => ehDoTipo(t, 'RESERVATORIO'))) {

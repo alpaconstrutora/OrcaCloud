@@ -398,7 +398,7 @@ export function memorialDescritivoIncendio(model: BlueprintModel, hip: Hipoteses
   }
   const lum = pecasDoTipo(model, ['LUMINARIA_EMERGENCIA']);
   if (lum.length) sistemas.push(`Iluminação de emergência: ${lum.length} luminária(s) autônoma(s) ao longo das rotas de fuga.`);
-  const det = conta(['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA']);
+  const det = conta(['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA']);
   const ac = conta(['ACIONADOR_MANUAL']);
   const av = conta(['AVISADOR']);
   const ce = conta(['CENTRAL_ALARME']);
@@ -513,7 +513,7 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
     ['EXTINTORES', 'Extintores', ['EXTINTOR']],
     ['SINALIZACAO', 'Sinalização de emergência', ['PLACA']],
     ['ILUMINACAO_EMERGENCIA', 'Iluminação de emergência', ['LUMINARIA_EMERGENCIA']],
-    ['DETECCAO', 'Detectores', ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA']],
+    ['DETECCAO', 'Detectores', ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA']],
     ['ALARME', 'Acionadores e avisadores', ['ACIONADOR_MANUAL', 'AVISADOR']],
   ];
   for (const [medida, rotulo, tipos] of presenca) {

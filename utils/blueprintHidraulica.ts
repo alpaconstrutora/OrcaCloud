@@ -612,6 +612,26 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 100, profundidadeMm: 100, alturaMm: 60 },
     ajuda: 'Detector pontual de fumaça, no teto. Entra no laço de uma central (painel da peça); a cobertura é conferida na tarefa Incêndio.',
   },
+  // Fase F (pós-roadmap, 0.89.0): o detector de chama — óptico, na parede, olhando para o risco.
+  DETECTOR_CHAMA: {
+    rotulo: 'Detector de chama',
+    sigla: 'DC',
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 2500 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 120, profundidadeMm: 100, alturaMm: 120 },
+    ajuda: 'Detector óptico de chama (depósito de inflamáveis, gerador, casa de máquinas com combustível): vê um CONE à frente — a rotação da peça é a direção. Alcance e abertura CONFERIR NA NBR 17240 / fabricante.',
+  },
+  // Fase F (pós-roadmap, 0.89.0): o manômetro — no kit da VGA (montante e jusante) e na casa de bombas.
+  MANOMETRO: {
+    rotulo: 'Manômetro',
+    sigla: 'MN',
+    grupo: CASA_DE_BOMBAS,
+    cotaMm: { INCENDIO: 1500 },
+    dnMinimoMm: { INCENDIO: 15 },
+    sobreOTrecho: true,
+    ajuda: 'Mostra a pressão no trecho (antes e depois da VGA, no barrilete das bombas). Insere-se sobre um trecho de incêndio.',
+  },
   DETECTOR_TEMPERATURA: {
     rotulo: 'Detector de temperatura',
     sigla: 'DT',

@@ -2811,6 +2811,10 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'AVISADOR',
   'CENTRAL_ALARME',
   'PREVENTIVO_PERSONALIZADO',
+  // 01/10/2026 (incêndio pós-roadmap, Fase F, 0.89.0): o MANÔMETRO (o kit da VGA e da casa de
+  // bombas — sobre o trecho) e o DETECTOR DE CHAMA (do laço, cobertura por cone).
+  'MANOMETRO',
+  'DETECTOR_CHAMA',
 ] as const;
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -2914,6 +2918,8 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   LUMINARIA_EMERGENCIA: INC,
   DETECTOR_FUMACA: INC,
   DETECTOR_TEMPERATURA: INC,
+  MANOMETRO: INC,
+  DETECTOR_CHAMA: INC,
   ACIONADOR_MANUAL: INC,
   AVISADOR: INC,
   CENTRAL_ALARME: INC,
@@ -2921,7 +2927,7 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
 };
 
 /** INCÊNDIO (0.88.0, E7.4): os tipos que entram no LAÇO de uma central de alarme. */
-export const TIPOS_DO_LACO_DE_ALARME: readonly string[] = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR'];
+export const TIPOS_DO_LACO_DE_ALARME: readonly string[] = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'DETECTOR_CHAMA', 'ACIONADOR_MANUAL', 'AVISADOR'];
 
 /** INCÊNDIO (0.86.0, E7.2): o código da placa — letra(s) + número (E5, S12). O catálogo mora em `blueprintSinalizacao`. */
 export const PADRAO_DO_CODIGO_DE_PLACA = /^[A-Z]{1,2}\d{1,2}$/;

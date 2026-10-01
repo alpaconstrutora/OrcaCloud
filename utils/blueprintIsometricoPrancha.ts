@@ -47,7 +47,7 @@ export interface IsometricoDePrancha {
   nos: { p: P3; disciplina: DisciplinaDeRede; tipo: TipoDeConexao }[];
 }
 
-const ROTULO_DA_REDE: Record<RedeDaPrancha, string> = { AGUA: 'Água', ESGOTO: 'Esgoto' };
+export const ROTULO_DA_REDE: Record<RedeDaPrancha, string> = { AGUA: 'Água', ESGOTO: 'Esgoto', INCENDIO: 'Incêndio' };
 
 function caixaDoAnel(ring: Point[], folga: number): Caixa {
   const xs = ring.map((p) => p.x);

@@ -19,6 +19,7 @@ import {
   desenharFolhaDeDetalhesHidro,
   desenharFolhaDeIncendio,
   desenharFolhaDePressoesDeIncendio,
+  desenharFolhaDeDetalhesDeIncendio,
   desenharFolhaDoEsquemaVertical,
   desenharFolhaDoEsquemaVerticalEletrico,
   desenharFolhaDaListaDeMateriaisEletrica,
@@ -458,7 +459,7 @@ export function exportarPranchasPdf(
     else if (materiais) desenharFolhaDaListaDeMateriaisEletrica(desenhista, model, oPagina, enq);
     else if (legendaHidro) desenharFolhaDeDetalhesHidro(desenhista, model, { ...oPagina, denominador: 0 }, enq);
     else if (esquemaHidro) desenharFolhaDoEsquemaVertical(desenhista, model, { ...oPagina, denominador: 0 }, enq, redesDasPranchas(pranchas));
-    else if (proj) desenharElevacao(desenhista, proj, { ...oPagina, instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 }, enq);
+    else if (proj) desenharElevacao(desenhista, proj, { ...oPagina, instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 || pranchas.includes('incendio') }, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
   });
 
@@ -554,6 +555,12 @@ export function desenharConjunto(
         folhas.push({ prancha: p, denominador: den });
         break;
       }
+      case 'DETALHES_INCENDIO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDeDetalhesDeIncendio(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
       case 'PRESSOES_INCENDIO': {
         const enq = enquadrar(model, template.denominadorPlanta, papel, false);
         desenharFolhaDePressoesDeIncendio(d, model, comPrancha(0), enq);
@@ -605,7 +612,7 @@ export function desenharConjunto(
           enq = enquadrarElevacao(proj, den, papel);
         }
         // E2.4: com prancha hidrossanitária no conjunto, o corte sai com a rede.
-        desenharElevacao(d, proj, comPrancha(den, { instalacoesNoCorte: redesDoTemplate(template).length > 0 }), enq);
+        desenharElevacao(d, proj, comPrancha(den, { instalacoesNoCorte: redesDoTemplate(template).length > 0 || !!template.incluir.incendio }), enq);
         folhas.push({ prancha: p, denominador: den });
         break;
       }
@@ -771,7 +778,7 @@ export function exportarPranchasPng(
     } else {
       const enq = enquadrarElevacao(proj!, o.denominador, o.papel);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [], instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 }, enq);
+      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [], instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 || pranchas.includes('incendio') }, enq);
     }
 
     // `corte:abc` no nome do arquivo NAO desce no Windows: dois-pontos e

@@ -35,6 +35,7 @@
  */
 
 import { segmentosDoEletroduto } from './blueprintRede';
+import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
   distanciaAoAnelComAresta,
   pontoAtrasDeMuro,
@@ -60,6 +61,7 @@ import {
   type Structural,
   type Wall,
   type Trecho,
+  type TipoDePontoHidraulico,
 } from './blueprintKernel';
 import {
   projetarElevacao,
@@ -206,6 +208,12 @@ export interface ProjecaoCorte {
   estruturas: EstruturaElevacao[];
   telhados: AguaElevacao[];
   escadas: EscadaElevacao[];
+  /**
+   * E8.3 (incêndio): as peças de incêndio ATRÁS do plano — hidrante, sprinkler,
+   * VGA, bomba, extintor… —, no `u` e na cota absoluta. A prancha desenha o
+   * abrigo nas medidas dele e o resto como marca com a sigla.
+   */
+  pecasDeIncendio?: { terminalId: ObjectId; tipo: TipoDePontoHidraulico; u: number; v: number; larguraMm: number | null; alturaMm: number | null }[];
   /** Instalações ATRÁS do plano — as que ele atravessa vão em `cortados`. */
   redes: TrechoElevacao[];
   linhaDoSolo: { uMin: number; uMax: number; v: number };
@@ -522,6 +530,17 @@ export function projetarCorte(
     // está atrás dele. Um trecho nos dois lugares apareceria duas vezes: uma
     // como face cortada e outra como linha, no mesmo ponto.
     redes: (vista.redes ?? []).filter((r) => !idsCortados.has(r.trechoId)),
+    pecasDeIncendio: (model.terminais ?? [])
+      .filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico && vista.levelIds.includes(t.levelId))
+      .filter((t) => (t.at.x - origem.x) * base.d.x + (t.at.y - origem.y) * base.d.y >= -1)
+      .map((t) => ({
+        terminalId: t.id,
+        tipo: t.tipoHidraulico!,
+        u: t.at.x * base.u.x + t.at.y * base.u.y,
+        v: (model.levels.find((l) => l.id === t.levelId)?.elevationMm ?? 0) + t.cotaMm,
+        larguraMm: t.larguraMm ?? FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].medidasMm?.larguraMm ?? null,
+        alturaMm: t.alturaMm ?? FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].medidasMm?.alturaMm ?? null,
+      })),
     linhaDoSolo: vista.linhaDoSolo,
     bbox: vista.bbox,
   };

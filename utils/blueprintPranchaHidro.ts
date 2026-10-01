@@ -23,7 +23,8 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import { COR_DO_CONTORNO_DA_PECA, corDaConexao, pegadaDaCaixa2D, pegadaDoReservatorio2D, rotuloDoTrecho2D, simbolosDasConexoes2D } from './blueprintIsometrico';
 
-export type RedeDaPrancha = 'AGUA' | 'ESGOTO';
+/** E8.3 (incêndio): INCENDIO entra para o esquema vertical e o isométrico — a planta dela é a de `blueprintPranchaIncendio`. */
+export type RedeDaPrancha = 'AGUA' | 'ESGOTO' | 'INCENDIO';
 type P = { x: number; y: number };
 type Proj = { px: (x: number) => number; py: (y: number) => number };
 
@@ -39,6 +40,7 @@ export const DISCIPLINAS_DA_REDE: Record<RedeDaPrancha, DisciplinaDeRede[]> = {
   AGUA: ['AGUA_FRIA', 'AGUA_QUENTE'],
   // A prancha sanitária leva também as águas pluviais (E6.1) — redes separadas, cores separadas.
   ESGOTO: ['ESGOTO', 'PLUVIAL'],
+  INCENDIO: ['INCENDIO'],
 };
 
 /** A chave da posição de uma COLUNA (E2.3) — a mesma na planta e no esquema vertical. */

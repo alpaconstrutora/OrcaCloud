@@ -1664,7 +1664,7 @@ Fecha os **A** das seções 22 e 27.
 
 Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
-## Etapa 8 — Documentação · sem bump · 4 fases · **em andamento (8.1 e 8.2 ✅ 01/10/2026)**
+## Etapa 8 — Documentação · sem bump · 4 fases · **em andamento (8.1, 8.2 e 8.3 ✅ 01/10/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2527,4 +2527,45 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
     a laje.
 - **Testes:** `blueprintPlanilhaDePressoes.test.ts` (6) e o conjunto da E8.1, que agora tem a folha a
   mais. Suíte com 6.721 testes: 6.688 + 33 pulados. Build ok.
+
+### Etapa 8.3 — 01/10/2026 (frente `incendio-e8`, sem bump)
+
+- **A rede de incêndio entrou nas peças de prancha que já existiam.** `RedeDaPrancha` ganhou
+  `INCENDIO` (`DISCIPLINAS_DA_REDE.INCENDIO = ['INCENDIO']`). A planta dela continua sendo a de
+  `blueprintPranchaIncendio` (E8.1).
+- **Esquema vertical:** a coluna de incêndio sai como **CI-n** (sigla nova `CI`, depois de AF/AQ/TQ),
+  e na legenda aparece como "Coluna de incêndio". A descida ao hidrante (ou ao sprinkler) é ramal,
+  como a da água.
+  - ⚠️ **O harness pegou:** o recalque que sai da BOMBA e não chega ao teto era descartado como
+    "descida ao ponto", porque terminava na cota da bomba, e a CI-1 começava a 2,60 m. A bomba
+    (principal e jockey) é a ORIGEM da coluna, não um ponto de consumo; hoje a coluna nasce nela.
+- **`utils/blueprintDetalhesIncendio.ts`:**
+  - **`isometricoDeIncendio`:** o isométrico da REDE INTEIRA, em todos os pavimentos e na cota
+    absoluta, e não por ambiente molhado como o do hidro. Mostra as peças da rede com o número do
+    desenho (H-1, SPK-2, VGA-1, BI-1). Com mais de 30 sprinklers eles saem sem rótulo, e o título
+    avisa.
+  - **Detalhes típicos paramétricos**, só do que o desenho tem:
+    - **abrigo de hidrante/mangotinho** em vista, com as medidas do terminal ou da ficha, a válvula
+      na cota dela com o DN do tubo e a mangueira das premissas;
+    - **VGA** em esquema, numerado de 1 a 6 (bloqueio, manômetros, VGA, câmara de retardo e gongo,
+      dreno), com o DN do tubo que passa por ela (no meio do tubo também) e as chaves de fluxo;
+    - **casa de bombas** em esquema (RTI, sucção, BI e BJ com retenção e registro, barrilete,
+      pressostato, manômetro), com as contagens.
+  - Os detalhes são "sem escala", e as medidas e alturas exigidas estão marcadas **CONFERIR NA IT do
+    CBMMG**.
+- **Folha nova "Incêndio — isométrico, esquema vertical e detalhes"** (`DETALHES_INCENDIO`): vai no
+  conjunto depois da de pressões, quando há rede. Em cima ficam o isométrico e o esquema vertical da
+  CI; embaixo, os detalhes lado a lado.
+- **Corte:** o tubo de incêndio já saía (todas as disciplinas, na cor delas), mas nenhuma peça
+  aparecia. Agora `ProjecaoCorte.pecasDeIncendio` traz as peças ATRÁS do plano. O abrigo e a bomba
+  saem nas medidas deles, o resto como marca, sempre com a sigla. As instalações no corte também
+  ligam quando o conjunto (ou a prancha avulsa) tem incêndio.
+- **Harness `prancha-incendio`** (`?folha=6`): a folha com o isométrico do prédio de prova, a CI-1 de
+  0,30 m até o 1º e os três detalhes. O modelo de prova ganhou jockey e pressostato.
+- **Testes:** `blueprintDetalhesIncendio.test.ts` (9: CI-1 nos dois andares e a descida que não é
+  coluna, o recalque da bomba, o esquema só com a CI, o isométrico na cota absoluta, sprinklers sem
+  rótulo, os detalhes pelo que existe, a folha, o conjunto e as peças no corte). As listas fixas da
+  E8.1 e da E8.2 ganharam a folha nova. Suíte com 6.730 testes: 6.697 + 33 pulados. Na 1ª e na 2ª
+  rodada o worker do `BlueprintEditor.test.tsx` caiu (pending); sozinho ele dá 193/193, e na 3ª
+  rodada a suíte inteira fechou. Build ok.
 

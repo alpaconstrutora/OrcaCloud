@@ -24,12 +24,14 @@
  * os dois a carregar condicional do outro.
  */
 
+import { desenharDetalhesDeIncendio, detalhesDoModelo, isometricoDeIncendio } from './blueprintDetalhesIncendio';
 import { calculoDoEstudo, desenharFolhaDePressoes } from './blueprintPlanilhaDePressoes';
 import { desenharIncendio, desenharLegendaDeIncendio } from './blueprintPranchaIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from './blueprintIncendioClassificacao';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
-import { desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
-import { desenharIsometricos, isometricosDoModelo } from './blueprintIsometricoPrancha';
+import { colunasDoModelo, desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
+import { desenharIsometrico, desenharIsometricos, isometricosDoModelo } from './blueprintIsometricoPrancha';
+import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
@@ -1028,6 +1030,30 @@ export function desenharFolhaDeIncendio(d: Desenhista, model: BlueprintModel, op
   desenharCarimbo(d, opcoes, enq);
 }
 
+/**
+ * E8.3: a FOLHA DE DETALHES DE INCÊNDIO — o isométrico da rede inteira, o
+ * esquema vertical das colunas de incêndio (CI-n) e, embaixo, os detalhes
+ * típicos do que o desenho tem (abrigo, VGA, casa de bombas).
+ */
+export function desenharFolhaDeDetalhesDeIncendio(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  const w = enq.utilLarguraMm;
+  d.texto(x0, topo + 6, 'INCÊNDIO — ISOMÉTRICO, ESQUEMA VERTICAL E DETALHES', 3.2);
+  const temDetalhe = detalhesDoModelo(model).length > 0;
+  const alturaUtil = enq.utilAlturaMm - 12;
+  const alturaDosDetalhes = temDetalhe ? Math.min(78, alturaUtil * 0.42) : 0;
+  const alturaDeCima = alturaUtil - alturaDosDetalhes - (temDetalhe ? 4 : 0);
+  const iso = isometricoDeIncendio(model);
+  const temColuna = colunasDoModelo(model).some((c) => c.disciplina === 'INCENDIO');
+  const larguraDoIso = temColuna ? w * 0.55 : w;
+  if (iso) desenharIsometrico(d, iso, x0, topo + 10, larguraDoIso - 3, alturaDeCima);
+  else d.texto(x0, topo + 14, 'Sem tubulação de incêndio no desenho.', 2.2, '#555555');
+  if (temColuna) desenharEsquemaVertical(d, model, ['INCENDIO'], x0 + larguraDoIso + 2, topo + 10, w - larguraDoIso - 2, alturaDeCima);
+  if (temDetalhe) desenharDetalhesDeIncendio(d, model, opcoes.hipotesesDeIncendio?.hidraulica, x0, topo + 10 + alturaDeCima + 4, w, alturaDosDetalhes);
+  desenharCarimbo(d, opcoes, enq);
+}
+
 /** E8.2: a folha da PLANILHA DE PRESSÕES — tabela dos trechos e das peças e a curva da bomba. */
 export function desenharFolhaDePressoesDeIncendio(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
   const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
@@ -1293,6 +1319,22 @@ export function desenharElevacao(
         const f = Math.min(s + 1.6, n);
         d.linha(a.x + ((b.x - a.x) * s) / n, a.y + ((b.y - a.y) * s) / n, a.x + ((b.x - a.x) * f) / n, a.y + ((b.y - a.y) * f) / n, { espessuraMm: 0.35, cor });
       }
+    }
+    // E8.3: as peças de incêndio atrás do plano — o abrigo (e a bomba) nas medidas, o resto
+    // como marca; a sigla ao lado. O tubo sozinho não diz onde está o hidrante.
+    const cor = COR_DA_DISCIPLINA.INCENDIO;
+    for (const p of projecao.pecasDeIncendio ?? []) {
+      const c = { x: px(p.u), y: py(p.v) };
+      const ficha = FICHA_DO_PONTO_HIDRAULICO[p.tipo];
+      const lw = p.larguraMm ? Math.abs(px(p.u + p.larguraMm / 2) - px(p.u - p.larguraMm / 2)) : 0;
+      const lh = p.alturaMm ? Math.abs(py(p.v + p.alturaMm / 2) - py(p.v - p.alturaMm / 2)) : 0;
+      if (lw >= 1.5 && lh >= 1.5) d.retangulo(c.x - lw / 2, c.y - lh / 2, lw, lh, { espessuraMm: 0.3, cor });
+      else {
+        const r = 0.7;
+        const pts = Array.from({ length: 12 }, (_, i) => ({ x: c.x + r * Math.cos((i / 12) * Math.PI * 2), y: c.y + r * Math.sin((i / 12) * Math.PI * 2) }));
+        d.poligono(pts, cor);
+      }
+      d.texto(c.x + Math.max(lw / 2, 0.7) + 0.6, c.y - 0.6, ficha.sigla, 1.6, cor);
     }
   }
 

@@ -24,10 +24,12 @@ import type { Desenhista } from './blueprintExport';
 import { COR_DA_DISCIPLINA, ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import { DISCIPLINAS_DA_REDE, chaveDaColuna, type RedeDaPrancha } from './blueprintPranchaHidro';
 
-export type SiglaDaColuna = 'AF' | 'AQ' | 'TQ';
+/** E8.3: CI = coluna de incêndio (hidrantes e sprinklers). */
+export type SiglaDaColuna = 'AF' | 'AQ' | 'TQ' | 'CI';
 
-const SIGLA: Partial<Record<DisciplinaDeRede, SiglaDaColuna>> = { AGUA_FRIA: 'AF', AGUA_QUENTE: 'AQ', ESGOTO: 'TQ' };
-const ORDEM: SiglaDaColuna[] = ['AF', 'AQ', 'TQ'];
+const SIGLA: Partial<Record<DisciplinaDeRede, SiglaDaColuna>> = { AGUA_FRIA: 'AF', AGUA_QUENTE: 'AQ', ESGOTO: 'TQ', INCENDIO: 'CI' };
+const ORDEM: SiglaDaColuna[] = ['AF', 'AQ', 'TQ', 'CI'];
+const ORIGENS_DA_COLUNA_DE_INCENDIO = new Set<string>(['BOMBA_INCENDIO', 'BOMBA_JOCKEY']);
 /**
  * Até onde a vertical ainda é a descida de um ponto: o ponto fica na FACE da
  * parede e a descida no EIXO (parede de até 30 cm). Coluna de verdade nunca
@@ -67,7 +69,9 @@ export function colunasDoModelo(model: BlueprintModel): ColunaHidro[] {
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const ordemDoNivel = new Map([...model.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l, i) => [l.id, i]));
   const grupos = new Map<string, { disciplina: DisciplinaDeRede; x: number; y: number; segmentos: SegmentoDaColuna[] }>();
-  const pontos = (model.terminais ?? []).filter((t) => t.tipoHidraulico);
+  // E8.3: a BOMBA de incêndio é a origem da coluna (o recalque sobe dela), não um ponto de consumo —
+  // o tubo que sai dela até o teto é coluna, não "descida ao ponto".
+  const pontos = (model.terminais ?? []).filter((t) => t.tipoHidraulico && !(t.disciplina === 'INCENDIO' && ORIGENS_DA_COLUNA_DE_INCENDIO.has(t.tipoHidraulico)));
   const teto = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
   for (const t of model.trechos ?? []) {
     if (!SIGLA[t.disciplina] || Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) >= 1 || t.cotaAMm === t.cotaBMm) continue;
@@ -75,7 +79,8 @@ export function colunasDoModelo(model: BlueprintModel): ColunaHidro[] {
     // Exceções: no esgoto, o que o planejador chamou de TQ ou de ventilação; na água, o que
     // chega ao teto ou ao piso do pavimento (a coluna que desce direto até o vaso do térreo
     // é coluna — atravessa a laje).
-    const ds = t.disciplina === 'ESGOTO' ? ['ESGOTO'] : ['AGUA_FRIA', 'AGUA_QUENTE'];
+    // E8.3: no incêndio, a descida ao hidrante (ou ao sprinkler) é ramal, como a da água.
+    const ds = t.disciplina === 'ESGOTO' ? ['ESGOTO'] : t.disciplina === 'INCENDIO' ? ['INCENDIO'] : ['AGUA_FRIA', 'AGUA_QUENTE'];
     const alto = Math.max(t.cotaAMm, t.cotaBMm);
     const baixo = Math.min(t.cotaAMm, t.cotaBMm);
     const daColuna =
@@ -129,7 +134,7 @@ export function linhasDaLegendaDeColunas(model: BlueprintModel, colunas: ColunaH
     const tubo = c.segmentos.filter((s) => !s.ventilacao);
     const dns = [...new Set(tubo.map((s) => s.bitolaMm))].sort((a, b) => b - a);
     const trecho = c.niveis.length > 1 ? `${nome.get(c.niveis[0])} → ${nome.get(c.niveis[c.niveis.length - 1])}` : nome.get(c.niveis[0]) ?? '';
-    const papel = c.sigla === 'TQ' ? 'Tubo de queda' : ROTULO_DA_DISCIPLINA[c.disciplina];
+    const papel = c.sigla === 'TQ' ? 'Tubo de queda' : c.sigla === 'CI' ? 'Coluna de incêndio' : ROTULO_DA_DISCIPLINA[c.disciplina];
     if (tubo.length) linhas.push(`${c.nome} — ${papel} · ø${dns.join('/')} mm · ${trecho}`);
     const vent = c.segmentos.filter((s) => s.ventilacao);
     if (c.nomeDaVentilacao && vent.length) {
@@ -246,7 +251,7 @@ export function desenharEsquemaVertical(d: Desenhista, model: BlueprintModel, re
   }
   yl += 2;
   d.linha(xl, yl, xl + 8, yl, { espessuraMm: 0.45, cor: COR });
-  d.texto(xl + 10, yl + 0.6, 'tubo (água / esgoto)', TEXTO_MM, COR_FRACA);
+  d.texto(xl + 10, yl + 0.6, 'tubo', TEXTO_MM, COR_FRACA);
   yl += 3.6;
   tracejado(d, xl + 4, yl - 1.8, yl + 1.8, 0.4, COR);
   d.texto(xl + 10, yl + 0.6, 'ventilação', TEXTO_MM, COR_FRACA);

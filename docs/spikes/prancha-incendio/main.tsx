@@ -2,7 +2,7 @@
  * HARNESS VISUAL das PRANCHAS DE INCÊNDIO (E8.1, 01/10/2026): o MESMO
  * `desenharConjunto` do PDF, folha a folha, num `Desenhista` de canvas (o do
  * PNG do app). Térreo com bomba, coluna, hidrantes e extintor; 1º com
- * sprinklers e placa. `?folha=0..5` (a última é a planilha de pressões, E8.2).
+ * sprinklers e placa. `?folha=0..6` (5 = planilha de pressões, E8.2; 6 = isométrico, esquema vertical e detalhes, E8.3).
  */
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../../../utils/blueprintKernel';
 import { type Desenhista, type EstiloTraco, PAPEIS, orientar } from '../../../utils/blueprintExport';
@@ -64,6 +64,9 @@ function predio(): BlueprintModel {
     ...paredes(s),
     p(t, 'BOMBA_INCENDIO', 1000, 1000, 300, { curvaBomba: [{ vazaoLmin: 0, alturaMm: 70000 }, { vazaoLmin: 600, alturaMm: 55000 }, { vazaoLmin: 1200, alturaMm: 30000 }] }),
     tr(t, 1000, 1000, 1000, 1000, 300, 2600),
+    // E8.3: a jockey e o pressostato, para o detalhe da casa de bombas.
+    p(t, 'BOMBA_JOCKEY', 2000, 1500, 300),
+    p(t, 'PRESSOSTATO', 1500, 1000, 300),
     // A prumada sobe até a laje (3 m = o piso do 1º): é ali que a rede dos sprinklers do 1º começa.
     tr(t, 1000, 1000, 1000, 1000, 2600, 3000),
     tr(t, 1000, 1000, 9000, 1000, 2600, 2600),

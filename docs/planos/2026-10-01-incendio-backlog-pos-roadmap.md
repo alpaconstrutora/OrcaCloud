@@ -323,7 +323,7 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
   - Suíte com 6.828 testes: 6.795 + 33 pulados. Build ok.
 - [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
-- [ ] **Fase F — 5 de 6** (frente `incendio-fase-f`):
+- [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):
   - [x] **Kernel 0.89.0** (um bump para os dois tipos novos; goldens 7/7 antes, 6 hashes e 22 pinos
     depois; bundle da planta-api regenerado): `MANOMETRO` (sobre o trecho) e `DETECTOR_CHAMA` (do
     laço). Cada um tem ficha, símbolo, numeração (MN, DC), família da prancha, IFC
@@ -366,7 +366,23 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
     CONFERIR com o fabricante), e os circuitos automáticos o põem num circuito de ILUMINAÇÃO, sem
     regra nova no motor elétrico. Vale na gaveta de iluminação e no gerador.
   - Suíte com 6.857 testes: 6.824 + 33 pulados. Build ok.
-  - [ ] F2 — kits por organização (migration: o SQL é mostrado ao usuário antes de aplicar).
+  - [x] F2 — kits de inserção da organização:
+    - migration `aplicar_20271001000060_blueprint_kits_de_insercao.sql`. Nasceu como 050, colidiu
+      com outra frente e foi renomeada ANTES de aplicar. Aplicada em 01/10 (o atraso foi o incidente
+      de latência da Supabase). Conferência: tabela=1, com_rls=1, policies=4, anon_grants=0;
+    - RLS provada como na E9.2: o membro grava e lê (1); outra organização recusada (42501); sem
+      login vê 0; `anon` recusado (42501). A prova foi desfeita, e a tabela ficou vazia;
+    - `utils/blueprintKitsDeInsercao.ts`:
+      - `itensDoKit` não confia no JSONB: só passam as props da lista, nunca id de outra peça;
+      - também tem `comandosDoKit` (gira com a peça) e `kitDaSelecao`;
+    - `kitDaPeca(model, comandos, kits)` soma os kits da organização ao kit padrão:
+      - as peças do kit também ganham a placa;
+      - kit recusado pelo kernel fica de fora inteiro, com aviso;
+      - não há recursão;
+    - aba Incêndio → "Kits de inserção" (`PainelKitsDeInsercao`): lista, "salvar a seleção como
+      kit" (a 1ª selecionada é a principal) e apagar. A inserção à mão (hidráulica, incêndio e
+      elétrica) usa os kits;
+    - suíte com 6.874 testes: 6.841 + 33 pulados. Build ok.
 
 ## Verificação
 

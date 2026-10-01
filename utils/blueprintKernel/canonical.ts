@@ -67,6 +67,7 @@ import {
   type PapelDoReservatorio,
   type FormaDoReservatorio,
   type PosicaoDoSprinkler,
+  type AgenteExtintor,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
   type TipoDeAmbiente,
@@ -895,6 +896,10 @@ function projetar(model: BlueprintModel): {
       // Incêndio E1.1 (0.79.0): só quando declarados — o K e a posição da ficha não se gravam.
       fatorK: t.fatorK ?? undefined,
       posicaoSprinkler: t.posicaoSprinkler ?? undefined,
+      // Incêndio E7.1 (0.85.0): o extintor, só quando declarado.
+      agenteExtintor: t.agenteExtintor ?? undefined,
+      cargaExtintorKg: t.cargaExtintorKg ?? undefined,
+      capacidadeExtintora: t.capacidadeExtintora ?? undefined,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? undefined,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -1602,6 +1607,10 @@ export interface CanonicalPayload {
     /** Fator K e posição do sprinkler. Ausentes sob kernel < 0.79.0 e quando não declarados. */
     fatorK?: number;
     posicaoSprinkler?: string;
+    /** Extintor. Ausentes sob kernel < 0.85.0 e quando não declarados. */
+    agenteExtintor?: string;
+    cargaExtintorKg?: number;
+    capacidadeExtintora?: string;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
     /** Curva Q×H [L/min, mm], NPSH requerido e a principal da jockey (índice). Ausentes sob kernel < 0.82.0. */
@@ -2380,6 +2389,9 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       formaReservatorio: (t.formaReservatorio as FormaDoReservatorio | undefined) ?? null,
       fatorK: t.fatorK ?? null,
       posicaoSprinkler: (t.posicaoSprinkler as PosicaoDoSprinkler | undefined) ?? null,
+      agenteExtintor: (t.agenteExtintor as AgenteExtintor | undefined) ?? null,
+      cargaExtintorKg: t.cargaExtintorKg ?? null,
+      capacidadeExtintora: t.capacidadeExtintora ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,

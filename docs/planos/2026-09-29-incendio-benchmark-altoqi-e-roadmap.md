@@ -1653,7 +1653,7 @@ Fecha o **bloco 3**.
 
 Fecha os **A** das seções 22 e 27.
 
-## Etapa 7 — Preventivos · kernel bump · 4 fases
+## Etapa 7 — Preventivos · kernel bump · 4 fases · **em andamento (7.1 ✅ 01/10/2026; kernel 0.84.0 → 0.85.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2314,4 +2314,51 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   6.640 + 33 pulados. Build ok.
 
 **Fecha os A das seções 22 e 27** (motor que calcula a rota de fuga; população e saídas).
+
+### Etapa 7.1 — 01/10/2026 (frente `incendio-e7`, kernel 0.85.0)
+
+- ⚠️ **Desvio do roadmap: a 7.1 também sobe o kernel.** O extintor não existia (pela decisão
+  "preventivos na E7"), e vocabulário novo leva bump, como em todas as etapas. A sequência fica 0.85.0
+  (7.1 extintor), 0.86.0 (7.2 placa e kits) e 0.87.0 (7.4 detecção e alarme).
+- **Kernel 0.85.0:**
+  - O tipo `EXTINTOR` entra na lista de pontos da disciplina INCENDIO, no grupo novo "Incêndio —
+    preventivos". Não liga em tubo, e a marca "fora da rede" só olha uma lista fechada de tipos.
+  - Só nele: `agenteExtintor` (água, espuma, pó BC, pó ABC, CO₂), `cargaExtintorKg` e
+    `capacidadeExtintora` ("2-A:20-B:C", com A, B, C nessa ordem, validada por
+    `capacidadeExtintoraValida` e gravada em maiúsculas). Trocar de tipo leva os três.
+  - Omitidos do canônico quando ausentes. Ritual: goldens 7/7 em 0.84.0, 6 hashes, 22 pinos. Bundle da
+    planta-api regerado.
+- **Ficha, símbolo, número e IFC:** a cota é a da alça, 1,60 m, CONFERIR. O símbolo é um triângulo com
+  o cilindro. A numeração é EXT-n. O IFC é `IfcFireSuppressionTerminal` USERDEFINED, porque o enum
+  não tem extintor.
+- **Regra (`utils/blueprintExtintores.ts`, CONFERIR NA IT de extintores / NBR 12693):**
+  - **Classes por ambiente:** A sempre; B na cozinha e na garagem; C onde há quadro elétrico ou nome de
+    casa de máquinas, subestação, gerador ou medidores.
+  - **Risco:** sai do nível da carga de incêndio da E0 (sem carga, o médio, com pendência). Dá a
+    distância a percorrer: 25, 20 ou 15 m.
+  - **Cobertura:** do ponto mais desfavorável de cada ambiente, pelo menor caminho no pavimento
+    (portas, contornando paredes, o motor da E6.3), até um extintor cujo agente combata cada classe
+    pedida. O extintor sem agente conta só para A.
+  - **Capacidade mínima** nas classes do agente: 2-A/20-B, 3-A/40-B e 4-A/80-B. Também aparece o
+    pavimento ocupado sem nenhum extintor.
+- ⚠️ **Dois achados na cobertura:**
+  - **O ponto entre dois extintores:** só cantos e centro não pegam o pior ponto de um corredor de
+    60 m com extintores a 10 e 50 m, que fica no meio. A cobertura passou a valer numa malha a cada
+    3 m, além de cantos e centro; um teste fixa o limite exato nos 20 m.
+  - **Corredor longo:** a proposta cobria por ambiente inteiro e o corredor ficava sem cobertura. Agora
+    cobre ponto a ponto, descontando o que os extintores existentes já cobrem.
+- ⚠️ **O harness `extintores` (canvas real, porta 3168) pegou extintor no vão da porta:** o candidato
+  "30 cm ao lado da porta" ainda caía dentro da porta de 90 cm e no eixo da parede. Agora a posição é
+  ao lado do batente (meia porta + 30 cm) e 40 cm para dentro, com 15 cm de folga de qualquer parede;
+  o teste confere a folga.
+- **Proposta:** gulosa, a posição que cobre mais pontos primeiro, com o extintor padrão das premissas
+  (pó ABC 4 kg 2-A:20-B:C). Diz o que não dá para cobrir. É um lote só.
+- **Tela:**
+  - **Painel da peça:** agente, carga e capacidade; a capacidade inválida é recusada no blur.
+  - **Painel "Extintores"** na tarefa Incêndio: risco e distância, os ambientes longe demais do pior
+    para o melhor (com a classe e o motivo), a capacidade fraca, o pavimento sem extintor, a distância
+    e o agente da proposta, e "Propor N extintor(es)", desligado com o motivo.
+- **Testes:** `blueprintExtintores.test.ts` (9), os dois painéis (3) e a taxonomia, que ganhou o grupo
+  dos preventivos. Suíte com 6.685 testes, todos passando, incluindo os 33 pulados de propósito.
+  Build ok.
 

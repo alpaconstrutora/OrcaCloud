@@ -507,7 +507,16 @@
  * `SetOpeningEmergencia`). Os dois omitidos do canônico quando ausentes.
  * Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.84.0';
+/**
+ * ─── 0.84.0 → 0.85.0 (01/10/2026) — O EXTINTOR ──────────────────────────────
+ *
+ * Nos preventivos de incêndio (E7.1 do roadmap de incêndio): o tipo `EXTINTOR`
+ * na lista de pontos da disciplina INCENDIO (não liga em tubo) e, só nele,
+ * `Terminal.agenteExtintor` (AGUA, ESPUMA, PQS_BC, PQS_ABC, CO2),
+ * `cargaExtintorKg` e `capacidadeExtintora` ("2-A:20-B:C"). Omitidos do
+ * canônico quando ausentes. Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.85.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

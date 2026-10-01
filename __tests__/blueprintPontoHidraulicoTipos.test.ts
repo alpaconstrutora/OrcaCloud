@@ -72,6 +72,8 @@ describe('taxonomia hidráulica · a lista e a ficha', () => {
         // Incêndio E1.1 (30/09/2026): a rede de combate usa a mesma taxonomia, com grupos próprios.
         'Incêndio — bombas e válvulas',
         'Incêndio — hidrantes e chuveiros',
+        // Incêndio E7.1 (01/10/2026): os preventivos (extintor) — não ligam em tubo.
+        'Incêndio — preventivos',
       ].sort(),
     );
     for (const t of ['CHUVEIRO', 'VASO_SANITARIO', 'RESERVATORIO', 'RALO_SIFONADO', 'CAIXA_INSPECAO', 'REGISTRO_GAVETA', 'CONEXAO_TE'] as const) {

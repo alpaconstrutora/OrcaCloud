@@ -75,6 +75,24 @@ export function caminhoDentro(s: Space, a: Point, b: Point): { mm: number; ponto
   return { mm: dist[1], pontos };
 }
 
+/**
+ * Os pontos onde pode estar o "mais desfavorável" do ambiente: cada canto
+ * recuado 40 cm para dentro, e o centro do retângulo envolvente (quando cai
+ * dentro). A rota de fuga (E6.3) e o extintor (E7.1) partem daqui.
+ */
+export function candidatosDoAmbiente(s: Space): { candidatos: Point[]; centro: Point } {
+  const candidatos: Point[] = [];
+  for (const v of s.ring) {
+    const q = [[400, 400], [-400, 400], [400, -400], [-400, -400]].map(([dx, dy]) => ({ x: v.x + dx, y: v.y + dy })).find((p) => dentro(s, p));
+    if (q) candidatos.push(q);
+  }
+  const xs = s.ring.map((p) => p.x);
+  const ys = s.ring.map((p) => p.y);
+  const centro = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  if (dentro(s, centro)) candidatos.push(centro);
+  return { candidatos, centro };
+}
+
 // ─── O grafo de vários pavimentos ────────────────────────────────────────────
 
 interface Portal {
@@ -217,16 +235,7 @@ export function percursoDeFuga(model: BlueprintModel, grupo: string | null, desc
   const ambientes: RotaDoAmbiente[] = model.spaces.map((s, idx) => {
     const portais = portaisDoAmbiente.get(s.id) ?? [];
     const rotulo = s.name || `Ambiente ${idx + 1}`;
-    // Candidatos: os cantos recuados 40 cm para dentro, e o centro.
-    const candidatos: Point[] = [];
-    for (const v of s.ring) {
-      const q = [[400, 400], [-400, 400], [400, -400], [-400, -400]].map(([dx, dy]) => ({ x: v.x + dx, y: v.y + dy })).find((p) => dentro(s, p));
-      if (q) candidatos.push(q);
-    }
-    const xs = s.ring.map((p) => p.x);
-    const ys = s.ring.map((p) => p.y);
-    const centro = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
-    if (dentro(s, centro)) candidatos.push(centro);
+    const { candidatos, centro } = candidatosDoAmbiente(s);
     let pior: { origem: Point; mm: number; portal: Portal; dentro: Point[] } | null = null;
     for (const c of candidatos) {
       let melhor: { mm: number; portal: Portal; dentro: Point[] } | null = null;

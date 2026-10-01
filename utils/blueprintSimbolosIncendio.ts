@@ -47,6 +47,8 @@ export function idsDaRedeDeIncendio(model: BlueprintModel): string[] {
 export const TIPOS_COM_SIMBOLO_DE_INCENDIO: readonly TipoDePontoHidraulico[] = [
   'HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER',
   'VGA', 'CHAVE_FLUXO', 'BOMBA_INCENDIO', 'BOMBA_JOCKEY', 'PRESSOSTATO',
+  // E7.1: os preventivos.
+  'EXTINTOR',
 ];
 
 export function temSimboloDeIncendio(tipo: TipoDePontoHidraulico | null | undefined): tipo is TipoDePontoHidraulico {
@@ -92,6 +94,9 @@ export function simboloDeIncendio(tipo: TipoDePontoHidraulico, posicao?: Posicao
       return [circulo(0.5), { tipo: 'poligono', pontos: [[0.02, -0.2], [0.34, 0], [0.02, 0.2]], cheio: true }, texto('J', 0.34, -0.2, 0)];
     case 'PRESSOSTATO':
       return [circulo(0.5), texto('P')];
+    case 'EXTINTOR':
+      // O triângulo do extintor, com o cilindro (círculo cheio) dentro.
+      return [{ tipo: 'poligono', pontos: [[0, -0.5], [0.5, 0.5], [-0.5, 0.5]], cheio: false }, circulo(0.14, true)];
     default:
       return [];
   }

@@ -34,7 +34,7 @@ const regra = (m: BlueprintModel, hip = HIPOTESES_PADRAO) => conferirNbr5410(m, 
 
 describe('curva e Icn · kernel 0.75.0', () => {
   it('versões; curva e Icn gravam e tiram; canônico omite sem eles e faz ida e volta; valores inválidos recusados', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.84.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.85.0');
     expect(POLITICA_PADRAO.version).toBe('quant-1.23.0');
     const m0 = casa();
     const antes = canonicalPayload(m0) as unknown as string;

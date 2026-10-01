@@ -24,6 +24,7 @@ import {
   type PapelDoReservatorio,
   type FormaDoReservatorio,
   type PosicaoDoSprinkler,
+  type AgenteExtintor,
   type PontoDaCurvaDaBomba,
   type LigacaoDoCircuito,
   type FaseDoCircuito,
@@ -737,6 +738,10 @@ export type Command =
       /** Fator K e posição (incêndio E1.1) — só em `SPRINKLER`; ignorados nos demais. */
       fatorK?: number | null;
       posicaoSprinkler?: PosicaoDoSprinkler | null;
+      /** Extintor (incêndio E7.1) — só em `EXTINTOR`. `null` apaga. */
+      agenteExtintor?: AgenteExtintor | null;
+      cargaExtintorKg?: number | null;
+      capacidadeExtintora?: string | null;
       /** Reserva de incêndio (E3.2) — só na caixa de água fria; ignorada nas demais. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1): curva, NPSH requerido e, na jockey, a principal. */
@@ -785,6 +790,10 @@ export type Command =
       /** Fator K e posição do sprinkler (incêndio E1.1). `null` volta ao da ficha. */
       fatorK?: number | null;
       posicaoSprinkler?: PosicaoDoSprinkler | null;
+      /** Extintor (incêndio E7.1) — só em `EXTINTOR`. `null` apaga. */
+      agenteExtintor?: AgenteExtintor | null;
+      cargaExtintorKg?: number | null;
+      capacidadeExtintora?: string | null;
       /** Reserva de incêndio na caixa de água fria (E3.2). `null` apaga. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1). `null` apaga. */
@@ -3492,6 +3501,9 @@ function aplicarSemHash(
           ...(command.formaReservatorio != null && command.tipoHidraulico === 'RESERVATORIO' ? { formaReservatorio: command.formaReservatorio } : {}),
           ...(command.fatorK != null && command.tipoHidraulico === 'SPRINKLER' ? { fatorK: Math.round(command.fatorK) } : {}),
           ...(command.posicaoSprinkler != null && command.tipoHidraulico === 'SPRINKLER' ? { posicaoSprinkler: command.posicaoSprinkler } : {}),
+          ...(command.agenteExtintor != null && command.tipoHidraulico === 'EXTINTOR' ? { agenteExtintor: command.agenteExtintor } : {}),
+          ...(command.cargaExtintorKg != null && command.tipoHidraulico === 'EXTINTOR' ? { cargaExtintorKg: command.cargaExtintorKg } : {}),
+          ...(command.capacidadeExtintora != null && command.tipoHidraulico === 'EXTINTOR' ? { capacidadeExtintora: command.capacidadeExtintora.trim().toUpperCase() } : {}),
           ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
           ...(command.curvaBomba != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { curvaBomba: curvaInteira(command.curvaBomba) } : {}),
           ...(command.npshrMm != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { npshrMm: Math.round(command.npshrMm) } : {}),
@@ -3553,6 +3565,9 @@ function aplicarSemHash(
       }
       if (command.fatorK !== undefined) terminal.fatorK = command.fatorK == null ? null : Math.round(command.fatorK);
       if (command.posicaoSprinkler !== undefined) terminal.posicaoSprinkler = command.posicaoSprinkler ?? null;
+      if (command.agenteExtintor !== undefined) terminal.agenteExtintor = command.agenteExtintor ?? null;
+      if (command.cargaExtintorKg !== undefined) terminal.cargaExtintorKg = command.cargaExtintorKg ?? null;
+      if (command.capacidadeExtintora !== undefined) terminal.capacidadeExtintora = command.capacidadeExtintora?.trim().toUpperCase() || null;
       if (command.volumeRtiL !== undefined) terminal.volumeRtiL = command.volumeRtiL == null ? null : Math.round(command.volumeRtiL);
       if (command.curvaBomba !== undefined) terminal.curvaBomba = command.curvaBomba == null ? null : curvaInteira(command.curvaBomba);
       if (command.npshrMm !== undefined) terminal.npshrMm = command.npshrMm == null ? null : Math.round(command.npshrMm);
@@ -3565,6 +3580,12 @@ function aplicarSemHash(
       if (terminal.tipoHidraulico !== 'BOMBA_JOCKEY' && terminal.bombaPrincipalId != null) terminal.bombaPrincipalId = null;
       // Deixar de ser caixa de água fria leva a RTI junto — a invariante recusaria.
       if ((terminal.tipoHidraulico !== 'RESERVATORIO' || terminal.disciplina !== 'AGUA_FRIA') && terminal.volumeRtiL != null) terminal.volumeRtiL = null;
+      // Deixar de ser extintor leva agente, carga e capacidade juntos — a invariante recusaria.
+      if (terminal.tipoHidraulico !== 'EXTINTOR') {
+        if (terminal.agenteExtintor != null) terminal.agenteExtintor = null;
+        if (terminal.cargaExtintorKg != null) terminal.cargaExtintorKg = null;
+        if (terminal.capacidadeExtintora != null) terminal.capacidadeExtintora = null;
+      }
       // Deixar de ser sprinkler leva K e posição juntos — a invariante recusaria.
       if (terminal.tipoHidraulico !== 'SPRINKLER') {
         if (terminal.fatorK != null) terminal.fatorK = null;

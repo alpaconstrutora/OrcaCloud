@@ -2,7 +2,8 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, materialPadraoDaDisciplina, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
+import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
+import { ROTULO_DO_AGENTE } from '../../utils/blueprintExtintores';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import {
   ROTULO_DA_DISCIPLINA,
@@ -111,6 +112,10 @@ interface Props {
     npshrMm?: number | null;
     bombaPrincipalId?: string | null;
     posicaoSprinkler?: PosicaoDoSprinkler | null;
+    /** Incêndio E7.1: o extintor. `null` apaga. */
+    agenteExtintor?: AgenteExtintor | null;
+    cargaExtintorKg?: number | null;
+    capacidadeExtintora?: string | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -385,6 +390,58 @@ export default function PainelTrechoSelecionado({
               )}
               {(terminal.tipoHidraulico === 'BOMBA_INCENDIO' || terminal.tipoHidraulico === 'BOMBA_JOCKEY') && (
                 <CamposDaBombaDeIncendio terminal={terminal} principais={bombasPrincipais.filter((b) => b.id !== terminal.id)} onBomba={(c) => onTerminal(c)} />
+              )}
+              {terminal.tipoHidraulico === 'EXTINTOR' && (
+                <div className="grid grid-cols-3 gap-2" data-testid="campos-do-extintor">
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Agente</span>
+                    <select
+                      value={terminal.agenteExtintor ?? ''}
+                      onChange={(e) => onTerminal({ agenteExtintor: (e.target.value || null) as AgenteExtintor | null })}
+                      aria-label="Agente do extintor"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">A declarar</option>
+                      {AGENTES_EXTINTORES.map((x) => (
+                        <option key={x} value={x}>{ROTULO_DO_AGENTE[x]}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Carga (kg/L)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={terminal.cargaExtintorKg ?? ''}
+                      onChange={(e) => {
+                        if (e.target.value === '') return onTerminal({ cargaExtintorKg: null });
+                        const x = Number(e.target.value);
+                        if (Number.isFinite(x) && x > 0) onTerminal({ cargaExtintorKg: x });
+                      }}
+                      aria-label="Carga do extintor"
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] font-medium text-slate-600">Capacidade</span>
+                    <input
+                      type="text"
+                      defaultValue={terminal.capacidadeExtintora ?? ''}
+                      key={terminal.id + (terminal.capacidadeExtintora ?? '')}
+                      placeholder="2-A:20-B:C"
+                      onBlur={(e) => {
+                        const v = e.target.value.trim().toUpperCase();
+                        if (v === '') onTerminal({ capacidadeExtintora: null });
+                        else if (capacidadeExtintoraValida(v)) onTerminal({ capacidadeExtintora: v });
+                        else e.target.value = terminal.capacidadeExtintora ?? '';
+                      }}
+                      aria-label="Capacidade extintora"
+                      title='Como no extintor: "2-A:20-B:C" (A, B, C nessa ordem)'
+                      className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    />
+                  </label>
+                </div>
               )}
               {terminal.tipoHidraulico === 'SPRINKLER' && (
                 <div className="grid grid-cols-2 gap-2">

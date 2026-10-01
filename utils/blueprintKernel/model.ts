@@ -2792,6 +2792,11 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'BOMBA_INCENDIO',
   'BOMBA_JOCKEY',
   'PRESSOSTATO',
+  // 01/10/2026 (incêndio E7.1, 0.85.0): os PREVENTIVOS entram na mesma lista
+  // porque são terminais da disciplina INCENDIO (menu, numeração, símbolo,
+  // quantitativo e IFC já sabem tratar um tipo daqui) — mas NÃO ligam em tubo:
+  // o cálculo da rede só olha os tipos que conhece.
+  'EXTINTOR',
 ] as const;
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -2890,7 +2895,26 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   BOMBA_INCENDIO: INC,
   BOMBA_JOCKEY: INC,
   PRESSOSTATO: INC,
+  EXTINTOR: INC,
 };
+
+/**
+ * INCÊNDIO (0.85.0, E7.1): o agente do extintor. As classes de fogo que cada
+ * um combate são derivadas (`blueprintExtintores`), não gravadas.
+ */
+export const AGENTES_EXTINTORES = ['AGUA', 'ESPUMA', 'PQS_BC', 'PQS_ABC', 'CO2'] as const;
+export type AgenteExtintor = (typeof AGENTES_EXTINTORES)[number];
+
+/**
+ * A capacidade extintora como se escreve no extintor: "2-A:20-B:C", "20-B:C",
+ * "2-A". Partes na ordem A, B, C, cada uma no máximo uma vez.
+ */
+export function capacidadeExtintoraValida(s: string): boolean {
+  const partes = s.split(':');
+  if (!s || partes.some((p) => !p)) return false;
+  const ordem = partes.map((p) => (/^[1-9]\d{0,2}-A$/.test(p) ? 0 : /^[1-9]\d{0,3}-B$/.test(p) ? 1 : p === 'C' ? 2 : -1));
+  return ordem.every((k, i) => k >= 0 && (i === 0 || k > ordem[i - 1]));
+}
 
 export interface Terminal {
   id: ObjectId;
@@ -3002,6 +3026,14 @@ export interface Terminal {
    */
   fatorK?: number | null;
   posicaoSprinkler?: PosicaoDoSprinkler | null;
+  /**
+   * EXTINTOR (incêndio E7.1, 0.85.0) — só em `EXTINTOR`: o agente, a carga
+   * (kg ou L, positiva) e a capacidade extintora ("2-A:20-B:C"). Omitidos do
+   * canônico quando ausentes; o extintor sem agente é "a declarar".
+   */
+  agenteExtintor?: AgenteExtintor | null;
+  cargaExtintorKg?: number | null;
+  capacidadeExtintora?: string | null;
   /**
    * RESERVA TÉCNICA DE INCÊNDIO (incêndio E3.2, 30/09/2026) — só na caixa de
    * ÁGUA FRIA compartilhada: os litros do volume dela que ficam para o incêndio
@@ -5918,6 +5950,13 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (t.posicaoSprinkler != null && !(POSICOES_DO_SPRINKLER as readonly string[]).includes(t.posicaoSprinkler)) {
         throw new KernelError('BAD_SPRINKLER', `Posição de sprinkler inválida em ${t.id}: ${t.posicaoSprinkler}`);
       }
+    }
+    // Extintor (incêndio E7.1): agente, carga e capacidade só no extintor, e só válidos.
+    if (t.agenteExtintor != null || t.cargaExtintorKg != null || t.capacidadeExtintora != null) {
+      if (t.tipoHidraulico !== 'EXTINTOR') throw new KernelError('BAD_EXTINGUISHER', `Terminal ${t.id} não é extintor e não pode ter agente, carga nem capacidade`);
+      if (t.agenteExtintor != null && !(AGENTES_EXTINTORES as readonly string[]).includes(t.agenteExtintor)) throw new KernelError('BAD_EXTINGUISHER', `Agente inválido em ${t.id}: ${t.agenteExtintor}`);
+      if (t.cargaExtintorKg != null && (!Number.isFinite(t.cargaExtintorKg) || t.cargaExtintorKg <= 0 || t.cargaExtintorKg > 200)) throw new KernelError('BAD_EXTINGUISHER', `Carga inválida em ${t.id}: ${t.cargaExtintorKg}`);
+      if (t.capacidadeExtintora != null && !capacidadeExtintoraValida(t.capacidadeExtintora)) throw new KernelError('BAD_EXTINGUISHER', `Capacidade extintora inválida em ${t.id}: ${t.capacidadeExtintora}`);
     }
   }
 

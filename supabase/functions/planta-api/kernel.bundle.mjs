@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.84.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.85.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -668,7 +668,12 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "CHAVE_FLUXO",
   "BOMBA_INCENDIO",
   "BOMBA_JOCKEY",
-  "PRESSOSTATO"
+  "PRESSOSTATO",
+  // 01/10/2026 (incêndio E7.1, 0.85.0): os PREVENTIVOS entram na mesma lista
+  // porque são terminais da disciplina INCENDIO (menu, numeração, símbolo,
+  // quantitativo e IFC já sabem tratar um tipo daqui) — mas NÃO ligam em tubo:
+  // o cálculo da rede só olha os tipos que conhece.
+  "EXTINTOR"
 ];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
@@ -2154,6 +2159,10 @@ function projetar(model) {
       // Incêndio E1.1 (0.79.0): só quando declarados — o K e a posição da ficha não se gravam.
       fatorK: t.fatorK ?? void 0,
       posicaoSprinkler: t.posicaoSprinkler ?? void 0,
+      // Incêndio E7.1 (0.85.0): o extintor, só quando declarado.
+      agenteExtintor: t.agenteExtintor ?? void 0,
+      cargaExtintorKg: t.cargaExtintorKg ?? void 0,
+      capacidadeExtintora: t.capacidadeExtintora ?? void 0,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? void 0,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -2924,6 +2933,9 @@ function modelFromCanonicalPayload(payload) {
       formaReservatorio: t.formaReservatorio ?? null,
       fatorK: t.fatorK ?? null,
       posicaoSprinkler: t.posicaoSprinkler ?? null,
+      agenteExtintor: t.agenteExtintor ?? null,
+      cargaExtintorKg: t.cargaExtintorKg ?? null,
+      capacidadeExtintora: t.capacidadeExtintora ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -6350,6 +6362,9 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCSENSOR", predefinido: ".FLOWSENSOR." };
     case "PRESSOSTATO":
       return { entidade: "IFCSENSOR", predefinido: ".PRESSURESENSOR." };
+    // E7.1: o enum de IfcFireSuppressionTerminal não tem extintor — USERDEFINED, e o ObjectType diz.
+    case "EXTINTOR":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".USERDEFINED." };
     case "BOMBA_INCENDIO":
     case "BOMBA_JOCKEY":
       return { entidade: "IFCPUMP", predefinido: ".USERDEFINED." };
@@ -6847,6 +6862,7 @@ var REGISTROS = "Hidr\xE1ulica \u2014 registros e v\xE1lvulas";
 var CONEXOES = "Hidr\xE1ulica \u2014 conex\xF5es";
 var COMBATE = "Inc\xEAndio \u2014 hidrantes e chuveiros";
 var CASA_DE_BOMBAS = "Inc\xEAndio \u2014 bombas e v\xE1lvulas";
+var PREVENTIVOS = "Inc\xEAndio \u2014 preventivos";
 var FICHA_DO_PONTO_HIDRAULICO = {
   TORNEIRA: {
     rotulo: "Torneira",
@@ -7347,6 +7363,16 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: { INCENDIO: 15 },
     sobreOTrecho: true,
     ajuda: "Liga a bomba quando a press\xE3o da rede cai. Insere-se sobre um trecho de inc\xEAndio, junto \xE0s bombas."
+  },
+  EXTINTOR: {
+    rotulo: "Extintor",
+    sigla: "EXT",
+    grupo: PREVENTIVOS,
+    // A cota é a da ALÇA — até 1,60 m do piso (CONFERIR NA IT).
+    cotaMm: { INCENDIO: 1600 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 200, profundidadeMm: 200, alturaMm: 600 },
+    ajuda: "Extintor port\xE1til: o agente (\xE1gua, espuma, p\xF3 BC/ABC, CO\u2082), a carga e a capacidade extintora ficam no painel da pe\xE7a. N\xE3o liga em tubo; a dist\xE2ncia a percorrer at\xE9 ele \xE9 conferida na tarefa Inc\xEAndio."
   }
 };
 var ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

@@ -2424,6 +2424,9 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCSENSOR', predefinido: '.FLOWSENSOR.' };
     case 'PRESSOSTATO':
       return { entidade: 'IFCSENSOR', predefinido: '.PRESSURESENSOR.' };
+    // E7.1: o enum de IfcFireSuppressionTerminal não tem extintor — USERDEFINED, e o ObjectType diz.
+    case 'EXTINTOR':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.USERDEFINED.' };
     case 'BOMBA_INCENDIO':
     case 'BOMBA_JOCKEY':
       return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };

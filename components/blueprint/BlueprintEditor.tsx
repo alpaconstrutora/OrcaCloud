@@ -239,6 +239,8 @@ import { analisarSaidas } from '../../utils/blueprintSaidasIncendio';
 import { percursoDeFuga } from '../../utils/blueprintRotaDeFuga';
 import { pavimentoDeDescarga } from '../../utils/blueprintIncendioClassificacao';
 import PainelSaidasIncendio from './PainelSaidasIncendio';
+import PainelExtintoresIncendio from './PainelExtintoresIncendio';
+import { analisarExtintores, proporExtintores } from '../../utils/blueprintExtintores';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
 import PainelCalhas from './PainelCalhas';
@@ -7338,6 +7340,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (percursoDeIncendio && rotasDeFugaNaPlanta ? percursoDeIncendio.ambientes.flatMap((a) => a.rota.map((r) => ({ ...r, falta: a.atende === false }))) : null),
     [percursoDeIncendio, rotasDeFugaNaPlanta],
   );
+  /** E7.1: extintores — cobertura pela distância a percorrer e a proposta (derivadas). */
+  const extintoresDeIncendio = useMemo(
+    () => (classificacaoDeIncendio ? analisarExtintores(editor.model, classificacaoDeIncendio.carga.nivel, incendioDoEstudo.hipoteses.extintores) : null),
+    [classificacaoDeIncendio, editor.model, incendioDoEstudo.hipoteses.extintores],
+  );
+  const propostaDeExtintores = useMemo(
+    () => (extintoresDeIncendio ? proporExtintores(editor.model, extintoresDeIncendio, incendioDoEstudo.hipoteses.extintores) : null),
+    [extintoresDeIncendio, editor.model, incendioDoEstudo.hipoteses.extintores],
+  );
   /** E6.1: saídas de emergência — população e largura das escadas, corredores e descarga. */
   const saidasDeIncendio = useMemo(
     () =>
@@ -14385,6 +14396,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                         }),
                       )
                     }
+                  />
+                </div>
+              )}
+              {extintoresDeIncendio && propostaDeExtintores && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <PainelExtintoresIncendio
+                    analise={extintoresDeIncendio}
+                    hip={incendioDoEstudo.hipoteses.extintores}
+                    onHip={(extintores) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, extintores })}
+                    onSelecionar={selecionar}
+                    nomeDe={(id) => numerosDeIncendio.get(id)?.numero ?? id}
+                    proposta={{
+                      quantos: propostaDeExtintores.comandos.length,
+                      motivo: propostaDeExtintores.motivo,
+                      semCobertura: propostaDeExtintores.semCobertura,
+                      onPropor: () => {
+                        if (!propostaDeExtintores.comandos.length) return;
+                        const criados = editor.runBatch(propostaDeExtintores.comandos);
+                        if (criados?.length) selecionar(criados);
+                      },
+                    }}
                   />
                 </div>
               )}

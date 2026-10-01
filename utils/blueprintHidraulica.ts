@@ -28,7 +28,9 @@ export type GrupoHidraulico =
   | 'Hidráulica — conexões'
   // Incêndio E1.1 (30/09/2026): a rede de combate.
   | 'Incêndio — hidrantes e chuveiros'
-  | 'Incêndio — bombas e válvulas';
+  | 'Incêndio — bombas e válvulas'
+  // Incêndio E7.1 (01/10/2026): os preventivos — não ligam em tubo.
+  | 'Incêndio — preventivos';
 
 export interface FichaDoPontoHidraulico {
   rotulo: string;
@@ -67,6 +69,7 @@ const REGISTROS: GrupoHidraulico = 'Hidráulica — registros e válvulas';
 const CONEXOES: GrupoHidraulico = 'Hidráulica — conexões';
 const COMBATE: GrupoHidraulico = 'Incêndio — hidrantes e chuveiros';
 const CASA_DE_BOMBAS: GrupoHidraulico = 'Incêndio — bombas e válvulas';
+const PREVENTIVOS: GrupoHidraulico = 'Incêndio — preventivos';
 
 export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPontoHidraulico> = {
   TORNEIRA: {
@@ -568,6 +571,16 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     dnMinimoMm: { INCENDIO: 15 },
     sobreOTrecho: true,
     ajuda: 'Liga a bomba quando a pressão da rede cai. Insere-se sobre um trecho de incêndio, junto às bombas.',
+  },
+  EXTINTOR: {
+    rotulo: 'Extintor',
+    sigla: 'EXT',
+    grupo: PREVENTIVOS,
+    // A cota é a da ALÇA — até 1,60 m do piso (CONFERIR NA IT).
+    cotaMm: { INCENDIO: 1600 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 200, profundidadeMm: 200, alturaMm: 600 },
+    ajuda: 'Extintor portátil: o agente (água, espuma, pó BC/ABC, CO₂), a carga e a capacidade extintora ficam no painel da peça. Não liga em tubo; a distância a percorrer até ele é conferida na tarefa Incêndio.',
   },
 };
 

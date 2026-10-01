@@ -6,7 +6,7 @@
  */
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PainelTrechoSelecionado from '../../components/blueprint/PainelTrechoSelecionado';
 import type { Terminal, Trecho } from '../../utils/blueprintKernel';
@@ -43,3 +43,25 @@ describe('PainelTrechoSelecionado › peça de incêndio', () => {
     ]);
   });
 });
+
+describe('PainelTrechoSelecionado › extintor (E7.1)', () => {
+  it('agente, carga e capacidade: o agente "a declarar" é null; a capacidade vai maiúscula e a inválida é recusada', async () => {
+    const onTerminal = vi.fn();
+    render(<PainelTrechoSelecionado trecho={null} terminal={ponto('EXTINTOR', { cotaMm: 1600 })} onTrecho={() => {}} onTerminal={onTerminal} />);
+    expect(screen.getByTestId('campos-do-extintor')).toBeInTheDocument();
+    await userEvent.setup().selectOptions(screen.getByLabelText('Agente do extintor'), 'CO2');
+    expect(onTerminal).toHaveBeenLastCalledWith({ agenteExtintor: 'CO2' });
+    fireEvent.change(screen.getByLabelText('Carga do extintor'), { target: { value: '6' } });
+    expect(onTerminal).toHaveBeenLastCalledWith({ cargaExtintorKg: 6 });
+    const cap = screen.getByLabelText('Capacidade extintora') as HTMLInputElement;
+    fireEvent.change(cap, { target: { value: '5-b:c' } });
+    fireEvent.blur(cap);
+    expect(onTerminal).toHaveBeenLastCalledWith({ capacidadeExtintora: '5-B:C' });
+    onTerminal.mockClear();
+    fireEvent.change(cap, { target: { value: 'C:2-A' } });
+    fireEvent.blur(cap);
+    expect(onTerminal).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Fator K do sprinkler')).toBeNull();
+  });
+});
+

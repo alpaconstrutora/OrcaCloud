@@ -24,6 +24,7 @@ export const PREFIXO_DA_NUMERACAO: Partial<Record<TipoDePontoHidraulico, string>
   BOMBA_INCENDIO: 'BI',
   BOMBA_JOCKEY: 'BJ',
   PRESSOSTATO: 'PS',
+  EXTINTOR: 'EXT',
 };
 
 export interface NumeroDaPeca {

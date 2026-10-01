@@ -1675,7 +1675,7 @@ Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
 Fecha o **bloco 7**.
 
-## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases
+## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **em andamento (9.1 ✅ 01/10/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2619,4 +2619,40 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   - `PainelHidroExecutivo.test.tsx` (+1, o painel com os textos de incêndio).
   - Suíte com 6.739 testes: 6.706 + 33 pulados (na 1ª rodada o worker caiu; a 2ª fechou). Build
     ok.
+
+### Etapa 9.1 — 01/10/2026 (frente `incendio-e9`, quant-1.23.0 → 1.24.0, sem bump de kernel)
+
+Pedido: "ok" à E9.
+
+- **O quantitativo já contava o incêndio de forma genérica:** tubos por material × DN, peças por
+  tipo, conexões e o recorte por pavimento. O que faltava era a COMPRA: o extintor de pó ABC 4 kg e
+  o de CO₂ 6 kg somavam numa linha só, e as placas S12 e E5 também.
+  - **`especificacaoDoTerminal`** (kernel, `quantities.ts`) junta só o que a peça DECLARA:
+    - extintor: agente · carga · capacidade;
+    - placa: o código;
+    - sprinkler: K · posição;
+    - luminária de emergência: a autonomia.
+  - Ela entra na chave do `porTerminal` e no campo novo `especificacao`, o que levou o quantitativo a
+    **quant-1.24.0**. Os 14 testes que fixam a versão foram acompanhando.
+- **Orçamento:** `INCENDIO` entra nas redes de `gerarLancamentosDeInstalacoes`. Tubo e peça de
+  incêndio com código viram linha nos grupos "Instalações de incêndio — peças/tubos · Incêndio", e
+  a especificação entra no nome e na chave.
+  - ⚠️ **O teste do hidro pegou:** a chave nova mudava o id de TODO lançamento por peça já gravado
+    (`…:CAIXA_SIFONADA::89707`), e regerar um orçamento antigo duplicaria as linhas. Sem
+    especificação, a chave agora é a de antes, e o teste do hidrante confere o id antigo.
+- **`utils/blueprintListaDeMateriaisIncendio.ts`** (molde da lista elétrica):
+  - tubulação por material × DN com código, conexões por tipo × DN e peças por grupo da ficha
+    (combate, casa de bombas, preventivos) com a especificação legível (agente pelo nome, "pendente");
+  - por pavimento, o tubo pelo comprimento REAL do quantitativo e as peças.
+  - Sai na **folha "Lista de materiais — incêndio"** (`MATERIAIS_INCENDIO`, a última do conjunto de
+    incêndio) e na **aba XLSX "Incêndio — materiais"**, do mesmo `quant` das outras abas.
+- **planta-api:** o `kernel.bundle.mjs` foi regenerado, porque a API devolve o `computeQuantities`.
+- **Harness `prancha-incendio`** (`?folha=7`): a lista do prédio de prova (aço galvanizado DN 50/65,
+  cruzeta, joelho, redução, hidrantes, sprinklers, bombas, VGA e preventivos), conferida na foto.
+- **Testes:**
+  - `blueprintListaDeMateriaisIncendio.test.ts` (5): extintores ABC × CO₂ em duas linhas, placas por
+    código, sprinkler K80, a especificação só do declarado, o orçamento sem colisão de id e com o id
+    antigo, a lista, a aba, a folha e o conjunto;
+  - as listas fixas da E8 ganharam a folha nova.
+  - Suíte com 6.744 testes: 6.711 + 33 pulados. Build ok.
 

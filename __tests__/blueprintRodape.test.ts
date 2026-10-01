@@ -52,7 +52,7 @@ describe('rodapé como elemento (P2.21)', () => {
   it('comandos e invariantes; quantitativo soma os trechos quando existem (senão o derivado); orçamento por trecho; canônico ida e volta com a etiqueta por índice', () => {
     const { m, t } = casa();
     const qSem = computeQuantities(m, POLITICA_PADRAO, KERNEL_VERSION);
-    expect(POLITICA_PADRAO.version).toBe('quant-1.23.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.24.0');
     expect(qSem.totais.origemDoRodape).toBe('DERIVADO');
     expect(qSem.totais.comprimentoRodapeM).toBeCloseTo(13.1, 3); // Sala 14 − 0,9; Garagem declarou sem rodapé
     // Trechos: um à mão de 2 m com 70 mm e os 5 do gerador.

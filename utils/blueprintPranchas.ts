@@ -13,6 +13,7 @@
  * template é da ORGANIZAÇÃO (JSONB sanitizado em `templateDePranchaDaColuna`),
  * como o template de vista (E8.2) e o tipo de parede.
  */
+import { temMateriaisDeIncendio } from './blueprintListaDeMateriaisIncendio';
 import { temIncendioNoPavimento, type FamiliaDeIncendio } from './blueprintPranchaIncendio';
 
 const ROTULO_CURTO_DA_FAMILIA: Record<FamiliaDeIncendio, string> = { HIDRANTES: 'hidrantes', SPRINKLERS: 'sprinklers', PREVENTIVO: 'preventivo' };
@@ -155,7 +156,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO' | 'DETALHES_INCENDIO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO' | 'DETALHES_INCENDIO' | 'MATERIAIS_INCENDIO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -285,6 +286,8 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
       // E8.3: isométrico da rede, esquema vertical das colunas e detalhes típicos.
       numerar({ tipo: 'DETALHES_INCENDIO', titulo: 'Incêndio — isométrico, esquema vertical e detalhes', denominador: 0 });
     }
+    // E9.1: a lista de materiais de incêndio, quando há tubo ou peça.
+    if (temMateriaisDeIncendio(model)) numerar({ tipo: 'MATERIAIS_INCENDIO', titulo: 'Lista de materiais — incêndio', denominador: 0 });
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });

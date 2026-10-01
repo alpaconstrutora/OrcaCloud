@@ -2,7 +2,7 @@
  * HARNESS VISUAL das PRANCHAS DE INCÊNDIO (E8.1, 01/10/2026): o MESMO
  * `desenharConjunto` do PDF, folha a folha, num `Desenhista` de canvas (o do
  * PNG do app). Térreo com bomba, coluna, hidrantes e extintor; 1º com
- * sprinklers e placa. `?folha=0..6` (5 = planilha de pressões, E8.2; 6 = isométrico, esquema vertical e detalhes, E8.3).
+ * sprinklers e placa. `?folha=0..7` (5 = planilha de pressões, E8.2; 6 = isométrico, esquema vertical e detalhes, E8.3; 7 = lista de materiais, E9.1).
  */
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../../../utils/blueprintKernel';
 import { type Desenhista, type EstiloTraco, PAPEIS, orientar } from '../../../utils/blueprintExport';

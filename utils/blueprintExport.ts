@@ -24,6 +24,7 @@
  * os dois a carregar condicional do outro.
  */
 
+import { desenharListaDeMateriaisIncendio } from './blueprintListaDeMateriaisIncendio';
 import { desenharDetalhesDeIncendio, detalhesDoModelo, isometricoDeIncendio } from './blueprintDetalhesIncendio';
 import { calculoDoEstudo, desenharFolhaDePressoes } from './blueprintPlanilhaDePressoes';
 import { desenharIncendio, desenharLegendaDeIncendio } from './blueprintPranchaIncendio';
@@ -963,6 +964,18 @@ export function desenharFolhaDaListaDeMateriaisEletrica(
   const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
   d.texto(x0, topo + 6, 'LISTA DE MATERIAIS — ELÉTRICA', 3.2);
   desenharListaDeMateriaisEletrica(d, model, x0, topo + 12, enq.utilLarguraMm, enq.utilAlturaMm - 14);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA DA LISTA DE MATERIAIS DE INCÊNDIO (E9.1, 01/10/2026): tubos, conexões
+ * e peças por especificação, no total e por pavimento, com o carimbo.
+ */
+export function desenharFolhaDaListaDeMateriaisIncendio(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  d.texto(x0, topo + 6, 'LISTA DE MATERIAIS — INCÊNDIO', 3.2);
+  desenharListaDeMateriaisIncendio(d, model, x0, topo + 12, enq.utilLarguraMm, enq.utilAlturaMm - 14);
   desenharCarimbo(d, opcoes, enq);
 }
 

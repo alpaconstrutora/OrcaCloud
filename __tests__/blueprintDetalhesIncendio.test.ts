@@ -134,7 +134,7 @@ describe('E8.3 · detalhes típicos e a folha', () => {
 
   it('o conjunto ganha a folha de detalhes depois da de pressões', () => {
     const t = { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, indice: false, plantas: false, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false, incendio: true } };
-    expect(planejarConjunto(predio(), t).map((p) => p.tipo).slice(-3)).toEqual(['LEGENDA_INCENDIO', 'PRESSOES_INCENDIO', 'DETALHES_INCENDIO']);
+    expect(planejarConjunto(predio(), t).map((p) => p.tipo).slice(-4)).toEqual(['LEGENDA_INCENDIO', 'PRESSOES_INCENDIO', 'DETALHES_INCENDIO', 'MATERIAIS_INCENDIO']);
   });
 });
 

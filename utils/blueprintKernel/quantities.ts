@@ -195,7 +195,12 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // quadro; `dps` (contagem) e `porDPS` (classe / In / Up) no total.
   // quant-1.23.0 (29/09/2026, E3.3): o disjuntor se compra por In, CURVA e
   // Icn — `porDisjuntor` ganhou `curva` (declarada) e `icnKa` (do quadro).
-  version: 'quant-1.23.0',
+  // quant-1.24.0 (01/10/2026, E9.1 do roadmap de incêndio): a peça se compra
+  // pela ESPECIFICAÇÃO — `porTerminal` ganhou `especificacao` (extintor por
+  // agente × carga × capacidade, placa pelo código, sprinkler por K × posição,
+  // luminária de emergência pela autonomia) e ela entra na chave do grupo. Antes
+  // o extintor de pó ABC 4 kg e o de CO₂ 6 kg somavam numa linha só.
+  version: 'quant-1.24.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -765,6 +770,11 @@ export interface QuantidadePorTerminal {
   tipo: string;
   /** `tipoHidraulico` ou `tipoEletrico` quando classificado; `null` no texto livre. */
   classificacao: string | null;
+  /**
+   * quant-1.24.0: o que distingue a COMPRA dentro do tipo (ver
+   * `especificacaoDoTerminal`); `null` quando a peça não declara nada disso.
+   */
+  especificacao: string | null;
   itemCode: string | null;
   quantidade: number;
 }
@@ -1394,11 +1404,30 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
   );
 }
 
+/**
+ * quant-1.24.0 (E9.1 do roadmap de incêndio): o que faz duas peças do MESMO
+ * tipo serem compras diferentes — só o DECLARADO (o padrão da ficha mora fora
+ * do kernel). Extintor: agente · carga · capacidade; placa: o código;
+ * sprinkler: K · posição; luminária de emergência: a autonomia.
+ */
+export function especificacaoDoTerminal(t: Terminal): string | null {
+  const partes: string[] = [];
+  if (t.agenteExtintor) partes.push(t.agenteExtintor);
+  if (t.cargaExtintorKg != null) partes.push(`${String(t.cargaExtintorKg).replace('.', ',')} kg`);
+  if (t.capacidadeExtintora) partes.push(t.capacidadeExtintora);
+  if (t.codigoPlaca) partes.push(t.codigoPlaca);
+  if (t.fatorK != null) partes.push(`K${t.fatorK}`);
+  if (t.posicaoSprinkler) partes.push(t.posicaoSprinkler);
+  if (t.autonomiaMin != null) partes.push(`${t.autonomiaMin} min`);
+  return partes.length ? partes.join(' · ') : null;
+}
+
 export function agruparPorTerminal(terminais: readonly Terminal[]): QuantidadePorTerminal[] {
   const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
   for (const t of terminais) {
     const classificacao = t.tipoHidraulico ?? t.tipoEletrico ?? null;
-    const chave = `${t.disciplina}\n${classificacao ?? t.tipo}\n${t.itemCode ?? ''}`;
+    const especificacao = especificacaoDoTerminal(t);
+    const chave = `${t.disciplina}\n${classificacao ?? t.tipo}\n${especificacao ?? ''}\n${t.itemCode ?? ''}`;
     const atual = porTerminalMapa.get(chave);
     if (atual) atual.quantidade += 1;
     else {
@@ -1406,13 +1435,14 @@ export function agruparPorTerminal(terminais: readonly Terminal[]): QuantidadePo
         disciplina: t.disciplina,
         tipo: t.tipo,
         classificacao,
+        especificacao,
         itemCode: t.itemCode ?? null,
         quantidade: 1,
       });
     }
   }
   return [...porTerminalMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo),
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || x.tipo.localeCompare(y.tipo) || (x.especificacao ?? '').localeCompare(y.especificacao ?? ''),
   );
 }
 

@@ -100,6 +100,6 @@ describe('E8.2 · no papel', () => {
   it('o conjunto ganha a folha de pressões quando há rede de incêndio', () => {
     const t = { ...TEMPLATE_DE_PRANCHA_PADRAO, incluir: { ...TEMPLATE_DE_PRANCHA_PADRAO.incluir, indice: false, plantas: false, cortes: false, elevacoes: false, ampliacoes: false, tabelas: false, incendio: true } };
     // E8.3: a de detalhes vem depois dela.
-    expect(planejarConjunto(galpao(), t).map((p) => p.tipo).slice(-3)).toEqual(['LEGENDA_INCENDIO', 'PRESSOES_INCENDIO', 'DETALHES_INCENDIO']);
+    expect(planejarConjunto(galpao(), t).map((p) => p.tipo).slice(-4)).toEqual(['LEGENDA_INCENDIO', 'PRESSOES_INCENDIO', 'DETALHES_INCENDIO', 'MATERIAIS_INCENDIO']);
   });
 });

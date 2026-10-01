@@ -7,6 +7,7 @@
 // uma vez contra a interface. Aqui só se traduz "milímetro de papel" para o que
 // cada destino entende — pixel no canvas, ponto no PDF.
 
+import { abaDaListaDeMateriaisIncendio, materiaisDeIncendio, temMateriaisDeIncendio } from '../utils/blueprintListaDeMateriaisIncendio';
 import { abaDaPlanilhaDePressoes, calculoDoEstudo, caminhoCritico, planilhaDePressoes } from '../utils/blueprintPlanilhaDePressoes';
 import { paraWinAnsi } from './blueprintMemorialHidroService';
 import { numeracaoDeIncendio } from '../utils/blueprintNumeracaoIncendio';
@@ -20,6 +21,7 @@ import {
   desenharFolhaDeIncendio,
   desenharFolhaDePressoesDeIncendio,
   desenharFolhaDeDetalhesDeIncendio,
+  desenharFolhaDaListaDeMateriaisIncendio,
   desenharFolhaDoEsquemaVertical,
   desenharFolhaDoEsquemaVerticalEletrico,
   desenharFolhaDaListaDeMateriaisEletrica,
@@ -555,6 +557,12 @@ export function desenharConjunto(
         folhas.push({ prancha: p, denominador: den });
         break;
       }
+      case 'MATERIAIS_INCENDIO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDaListaDeMateriaisIncendio(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
       case 'DETALHES_INCENDIO': {
         const enq = enquadrar(model, template.denominadorPlanta, papel, false);
         desenharFolhaDeDetalhesDeIncendio(d, model, comPrancha(0), enq);
@@ -1005,6 +1013,8 @@ export function montarQuantitativoXlsx(
   if (o.hipotesesDeIncendio && (model.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) {
     abas.push(abaDaPlanilhaDePressoes(planilhaDePressoes(model, calculoDoEstudo(model, o.hipotesesDeIncendio).calculo)));
   }
+  // E9.1: a lista de materiais de incêndio — do MESMO quantitativo das outras abas.
+  if (temMateriaisDeIncendio(model)) abas.push(abaDaListaDeMateriaisIncendio(materiaisDeIncendio(model, quant)));
 
   const wb = XLSX.utils.book_new();
   for (const aba of abas) {

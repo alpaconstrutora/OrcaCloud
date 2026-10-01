@@ -1579,7 +1579,9 @@ export function gerarLancamentosDeGuardaCorpos(
  * hidro) e, desde a E0.3 do roadmap elétrico (29/09/2026), a ELÉTRICA —
  * ponto com código vira linha UN, eletroduto com código vira linha M.
  */
-const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'ELETRICA']);
+// E9.1 (incêndio): INCENDIO entra — tubo e peça de incêndio com código viram linha do orçamento.
+const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'ELETRICA', 'INCENDIO']);
+const grupoDaRede = (d: string) => (d === 'ELETRICA' ? 'elétricas' : d === 'INCENDIO' ? 'de incêndio' : 'hidrossanitárias');
 
 /**
  * Lançamentos por PEÇA das instalações hidrossanitárias (E8.2 do roadmap
@@ -1627,8 +1629,12 @@ export function gerarLancamentosDeInstalacoes(
   };
   for (const t of quant.totais.porTerminal ?? []) {
     if (!t.itemCode || !REDES_HIDROSSANITARIAS.has(t.disciplina) || t.quantidade <= 0) continue;
-    const nome = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[t.classificacao as TipoDePontoEletrico] ?? t.tipo) : t.tipo;
-    const chave = `instalacao:peca:${t.disciplina}:${t.classificacao ?? t.tipo}:${t.itemCode}`;
+    const base = t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[t.classificacao as TipoDePontoEletrico] ?? t.tipo) : t.tipo;
+    // quant-1.24.0: a especificação separa compras do mesmo tipo — e a chave também (senão dois ids iguais).
+    // ⚠️ Sem especificação, a chave fica IGUAL à de antes: o id do lançamento já gravado nos
+    // orçamentos não pode mudar (regerar duplicaria a linha).
+    const nome = t.especificacao ? `${base} (${t.especificacao})` : base;
+    const chave = `instalacao:peca:${t.disciplina}:${t.classificacao ?? t.tipo}:${t.especificacao ? `${t.especificacao}:` : ''}${t.itemCode}`;
     const item = conferir(chave, t.itemCode, 'UN', `A peça "${nome}"`);
     if (!item) continue;
     entries.push({
@@ -1636,7 +1642,7 @@ export function gerarLancamentosDeInstalacoes(
       sinapiItem: item,
       quantity: t.quantidade,
       phase: '',
-      group: `Instalações ${t.disciplina === 'ELETRICA' ? 'elétricas' : 'hidrossanitárias'} — peças · ${nomeDaRede(t.disciplina)}`,
+      group: `Instalações ${grupoDaRede(t.disciplina)} — peças · ${nomeDaRede(t.disciplina)}`,
       discipline: 'Planta Inteligente',
       notes: procedencia,
       calculationMemory: {
@@ -1658,7 +1664,7 @@ export function gerarLancamentosDeInstalacoes(
       sinapiItem: item,
       quantity: b.comprimentoM,
       phase: '',
-      group: b.disciplina === 'ELETRICA' ? 'Instalações elétricas — eletrodutos' : `Instalações hidrossanitárias — ${b.secaoCalha ? 'calhas' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
+      group: b.disciplina === 'ELETRICA' ? 'Instalações elétricas — eletrodutos' : `Instalações ${grupoDaRede(b.disciplina)} — ${b.secaoCalha ? 'calhas' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
       discipline: 'Planta Inteligente',
       notes: procedencia,
       calculationMemory: {

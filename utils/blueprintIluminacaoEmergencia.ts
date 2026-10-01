@@ -25,6 +25,8 @@ export const AUTONOMIA_MINIMA_MIN = 60;
 export const COTA_DA_LUMINARIA_MM = 2200;
 /** Ponto obrigatório atendido por luminária a até isto, mm. */
 const RAIO_DO_PONTO_OBRIGATORIO_MM = 2000;
+/** Folga para dentro do raio ao posicionar (o arredondamento a mm não pode jogar a luminária fora). */
+const FOLGA_DO_RAIO_MM = 100;
 const PASSO_DA_AMOSTRA_MM = 1000;
 const RAIO_DA_MESMA_MM = 1500;
 
@@ -136,7 +138,10 @@ export function proporIluminacao(model: BlueprintModel, percurso: PercursoDeFuga
       const L = r.pontos.slice(1).reduce((t, q, i) => t + d2(r.pontos[i], q), 0);
       for (const am of amostrar(r.pontos, PASSO_DA_AMOSTRA_MM)) {
         if (perto(r.levelId, am.at, R)) continue;
-        const q = noArco(r.pontos, Math.min(am.s + R, L));
+        // ⚠️ E10 (o gerador de PPCI pegou): a luminária EXATAMENTE a R do ponto descoberto, com a
+        // coordenada arredondada, caía a 7.500,27 mm — fora do raio. A análise seguia acusando e cada
+        // nova proposta empilhava outra no MESMO lugar. A folga de 10 cm a põe dentro.
+        const q = noArco(r.pontos, Math.min(am.s + R - FOLGA_DO_RAIO_MM, L));
         novas.push({ levelId: r.levelId, at: { x: Math.round(q.x), y: Math.round(q.y) } });
       }
     }

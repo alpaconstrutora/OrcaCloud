@@ -1686,7 +1686,7 @@ Fecha o **bloco 7**.
 
 Fecha os **blocos 8 e 9**.
 
-## Etapa 10 — Gerador de PPCI (vai além) · sem bump · 2 fases
+## Etapa 10 — Gerador de PPCI (vai além) · sem bump · 2 fases · **✅ concluída 01/10/2026**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2769,4 +2769,60 @@ Pedido: "Fazer a E9.2 agora" (migration e prova autorizadas).
   - `PainelConflitosFiltro.test.tsx` (+1, os dois nomes, o motivo e o filtro por pavimento).
   - Goldens do kernel 7/7 (o clash é derivado; o modelo e o hash não mudam). O bundle da planta-api
     não mudou. Suíte com 6.781 testes: 6.748 + 33 pulados. Build ok.
+
+### Etapa 10 — 01/10/2026 (frente `incendio-e10`, sem bump) — o roadmap E0–E10 está fechado
+
+Pedido: "ok" à E10.
+
+- **10.1 — `utils/blueprintGeradorPpci.ts` (`gerarPpci`)**
+  - **A ordem das etapas:** classificação e exigências → percurso de fuga (só leitura) → extintores
+    com placa → hidrantes pela cobertura, com placa → sprinklers por ambiente e traçado → rede de
+    hidrantes → DN pelo cálculo → área de operação → sinalização → iluminação → detecção e alarme →
+    conferência do resultado.
+  - Cada etapa propõe sobre a cópia JÁ com as anteriores. Os ids do kernel são determinísticos
+    (`seq` por prefixo), então o lote reaplicado no original cria os mesmos ids.
+  - A etapa de medida NÃO EXIGIDA não roda, e sem ocupação nada é lançado por palpite.
+  - **`conferirPlanoDoPpci`** é a trava antes de gravar: o desenho mudado depois da prévia é recusado
+    com "gere de novo".
+  - **Tela:** aba Incêndio → **Gerador → "Gerar PPCI"** (`PainelGeradorPpci`).
+    - A prévia roda no CLIQUE, não ao abrir a gaveta.
+    - Mostra cada etapa com a situação (lança · N / nada a fazer / não exigida / não rodou).
+    - "Lançar tudo (N comandos) — um Ctrl+Z desfaz" é **um** `runBatch`.
+- **10.2 — O relatório.** O que o gerador não decidiu, por grupo:
+  - premissa faltando;
+  - **cada CONFERIR em uso**: as linhas de exigência transcritas de memória ou sem tabela, e os
+    valores de norma das premissas;
+  - **o que ele não decide**: bomba (escolha pela curva do catálogo), reserva técnica e medida
+    exigida que o desenho não modela;
+  - ambiente sem solução, conflito que a proposta criou;
+  - **cada verificação que ainda FALTA** no resultado. É a conferência da emissão (E8.4), menos o
+    responsável.
+  - Sai na gaveta e em PDF/DOCX (`relatorioDoPpci`, no formato dos memoriais).
+- **Prova de ponta a ponta** (`blueprintGeradorPpci.test.ts`, 7 testes):
+  - **O prédio:** 8 pavimentos de 20 × 12 m, corredor, 4 salas por andar, bomba no térreo, ocupação
+    A-2.
+  - **O que o gerador lançou:** extintores (16), hidrantes (16), rede (33), sinalização (5) e
+    iluminação (9), 79 comandos num lote. Extintor e hidrante em todos os pavimentos; a rede chega a
+    eles.
+  - **O lote:** reaplicado dá o MESMO hash da prévia.
+  - **O relatório:** traz a **lista exata** das verificações em falta (o teste a compara com a
+    conferência do resultado) e cada CONFERIR das premissas. As 5 que ficam: recalque, jockey,
+    pressostato, reserva técnica e percurso (o modelo de prova não tem escada). Todas são decisão
+    de projeto, e o relatório diz isso.
+  - **Os casos de borda:** sem bomba, a rede não roda e o relatório diz por quê; sem ocupação, é
+    premissa faltando e o lote fica vazio.
+- ⚠️ **O gerador pegou um defeito da E7.3.** A proposta de iluminação punha a luminária EXATAMENTE a
+  7,5 m (o raio) do trecho descoberto; com a coordenada arredondada, ela caía a 7.500,27 mm, FORA do
+  raio. A análise seguia acusando "4 faltas", e cada nova proposta empilhava outra luminária no
+  MESMO lugar (3 em (2961, 4281)). Agora há uma folga de 10 cm (`FOLGA_DO_RAIO_MM`), e o teste
+  confere a rota iluminada e nenhuma luminária duplicada.
+- **Harness `docs/spikes/gerador-ppci`** (porta 3173; `?semBomba=1`): a gaveta com o plano REAL do
+  prédio de 8 pavimentos, conferida na foto.
+- **Testes:** `blueprintGeradorPpci.test.ts` (7) e `components/PainelGeradorPpci.test.tsx` (3).
+  Suíte com 6.791 testes: 6.758 + 33 pulados. Build ok.
+- **O que fica em backlog:**
+  - motor de bomba e de reserva técnica, a partir do catálogo de bombas da organização;
+  - lançar o recalque e o pressostato junto da bomba;
+  - os presets dos outros estados;
+  - o texto das ITs do CBMMG, que tira os "CONFERIR".
 

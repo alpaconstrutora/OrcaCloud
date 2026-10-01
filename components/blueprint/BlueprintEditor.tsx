@@ -240,6 +240,8 @@ import { conferirPlanoDaRede, planejarRedeDeHidrantes } from '../../utils/bluepr
 import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
+import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
+import PainelGeradorPpci from './PainelGeradorPpci';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
@@ -1043,6 +1045,8 @@ const ROTULO_DA_TAREFA = {
   incendioCobertura: 'Cobertura dos hidrantes',
   // INCÊNDIO E8.4 (01/10/2026): memorial de cálculo e descritivo, e a emissão com ART.
   memoriaisIncendio: 'Memoriais de incêndio e emissão (ART)',
+  // INCÊNDIO E10 (01/10/2026): o gerador de PPCI — todos os motores num lote, com o relatório.
+  incendioPpci: 'Gerador de PPCI',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7718,6 +7722,40 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     },
     [study.name],
   );
+  // INCÊNDIO E10 (01/10/2026): o GERADOR DE PPCI. A prévia é calculada no CLIQUE (roda todos os
+  // motores e o cálculo hidráulico), não ao abrir a gaveta; a trava confere que o lote recria os
+  // mesmos ids no desenho de agora antes de gravar.
+  const [planoPpci, setPlanoPpci] = useState<PlanoDoPpci | null>(null);
+  const [gerandoPpci, setGerandoPpci] = useState(false);
+  const [lancadoPpci, setLancadoPpci] = useState<string | null>(null);
+  const gerarPrevisaoPpci = useCallback(() => {
+    setGerandoPpci(true);
+    setLancadoPpci(null);
+    // Um tique para o "Gerando…" aparecer antes da conta síncrona.
+    setTimeout(() => {
+      try {
+        setPlanoPpci(gerarPpci(editor.model, incendioDoEstudo.hipoteses));
+      } finally {
+        setGerandoPpci(false);
+      }
+    }, 0);
+  }, [editor.model, incendioDoEstudo.hipoteses]);
+  const provaPpci = useMemo(() => (planoPpci && tarefaAberta === 'incendioPpci' ? conferirPlanoDoPpci(editor.model, planoPpci) : null), [planoPpci, tarefaAberta, editor.model]);
+  const lancarPpci = useCallback(() => {
+    if (!planoPpci || !provaPpci?.ok) return;
+    const criados = editor.runBatch(planoPpci.comandos);
+    const faltam = planoPpci.pendencias.filter((p) => p.grupo === 'VERIFICACAO').length;
+    setLancadoPpci(`${criados.length} peça(s) e trecho(s) lançados num lote — Ctrl+Z desfaz tudo. ${faltam ? `${faltam} verificação(ões) ainda em falta (ver o relatório).` : 'Nenhuma verificação em falta.'}`);
+    setPlanoPpci(null);
+  }, [planoPpci, provaPpci, editor]);
+  const baixarRelatorioPpci = useCallback(
+    async (formato: FormatoDoMemorial) => {
+      if (!planoPpci) return;
+      const titulo = `${study.name} — gerador de PPCI (relatório)`;
+      baixarArtefatos(await artefatosDoMemorial(relatorioDoPpci(planoPpci, { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() }), titulo, titulo, formato));
+    },
+    [planoPpci, study.name],
+  );
   const baixarMemorialIncendio = useCallback(
     async (qual: QualMemorial, formato: FormatoDoMemorial) => {
       const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() };
@@ -10833,6 +10871,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Ocupação, altura para incêndio, área e carga de incêndio da edificação, e as medidas de segurança que o Corpo de Bombeiros exige (preset MG, em rascunho até o texto das ITs ser conferido)"
               />
             </GrupoDoRibbon>
+            {/* INCÊNDIO E10 (01/10/2026): o gerador de PPCI — todos os motores num lote. */}
+            <GrupoDoRibbon rotulo="Gerador">
+              <BotaoDoRibbon
+                icone={Wand2}
+                rotulo="Gerar PPCI"
+                ativo={tarefaAberta === 'incendioPpci'}
+                onClick={() => alternarTarefa('incendioPpci')}
+                ajuda="Classificação → extintores → hidrantes → sprinklers → rede → DN → sinalização → iluminação → alarme, numa prévia e num lote só (um Ctrl+Z), com o relatório do que ficou de fora: premissa faltando, CONFERIR, bomba e reserva, verificações em falta"
+              />
+            </GrupoDoRibbon>
             {/* INCÊNDIO E8.4 (01/10/2026): os memoriais e a emissão com ART. */}
             <GrupoDoRibbon rotulo="Documentos">
               <BotaoDoRibbon
@@ -13874,6 +13922,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'incendioRede' && <GitFork className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioCobertura' && <Scan className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'memoriaisIncendio' && <FileText className="h-5 w-5 text-red-700" />}
+              {tarefaAberta === 'incendioPpci' && <Wand2 className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13939,6 +13988,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'A rede de incêndio desenhada, calculada a partir da bomba: os hidrantes mais desfavoráveis abrem juntos, e sai a vazão e a carga que a bomba tem de dar, com a pressão em cada hidrante e a planilha dos trechos. As premissas são do estudo.'}
             {tarefaAberta === 'incendio' &&
               'O que o Corpo de Bombeiros exige deste prédio: a ocupação, a altura para incêndio (do pavimento de descarga ao último ocupado), a área e a carga de incêndio saem do desenho e das premissas do estudo. Declarar um valor vence o derivado.'}
+            {tarefaAberta === 'incendioPpci' &&
+              'Encadeia os motores de incêndio a partir da classificação: só as medidas EXIGIDAS, cada uma sobre o resultado da anterior, numa prévia e num lote só. O relatório diz o que o gerador não decidiu — premissa faltando, valor de norma a conferir, bomba e reserva, ambiente sem solução — e cada verificação que ainda falta.'}
             {tarefaAberta === 'memoriaisIncendio' &&
               'O memorial de cálculo e o descritivo de segurança contra incêndio — classificação e exigências, planilha de pressões, bomba, reserva, saídas, rota de fuga e preventivos —, gerados do desenho e das premissas do estudo, os mesmos números das gavetas. A emissão com ART só habilita com todas as verificações atendidas.'}
             {tarefaAberta === 'memoriaisHidro' &&
@@ -14639,6 +14690,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 <PainelVerificacaoDaRede marcas={marcasDaRede} disciplinas={['PLUVIAL']} onSelecionar={selecionar} />
               </div>
             </div>
+          )}
+
+          {tarefaAberta === 'incendioPpci' && (
+            <PainelGeradorPpci
+              g={{
+                plano: planoPpci,
+                gerando: gerandoPpci,
+                onGerar: gerarPrevisaoPpci,
+                prova: provaPpci,
+                onLancar: lancarPpci,
+                lancado: lancadoPpci,
+                onBaixar: (f) => void baixarRelatorioPpci(f),
+              }}
+            />
           )}
 
           {tarefaAberta === 'memoriaisIncendio' && previaDosMemoriaisIncendio && (

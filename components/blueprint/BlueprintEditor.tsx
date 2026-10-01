@@ -234,6 +234,7 @@ import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
+import { proporAreaDeOperacao } from '../../utils/blueprintAreaDeOperacao';
 import PainelCalhas from './PainelCalhas';
 import PainelCondutores from './PainelCondutores';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
@@ -1147,6 +1148,7 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   lote: 'Lote',
   via: 'Via',
   'area-publica': 'Área pública',
+  'area-operacao': 'Área de operação',
 };
 
 /**
@@ -6202,6 +6204,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     }
   }
 
+  /** E5.2: fecha o contorno da área de operação dos sprinklers. */
+  function adicionarAreaDeOperacao(pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({ type: 'AddAreaDeOperacao', levelId, pontos });
+    if (criados.length > 0) selecionar(criados);
+    editor.setTool('selecionar');
+  }
+
   function adicionarAreaPublica(pontos: Point[]) {
     if (!levelId) return;
     const criados = editor.run({ type: 'AddAreaPublica', levelId, tipo: tipoDeAreaPublica, pontos });
@@ -7356,6 +7366,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const marcasDoCalculoIncendio = useMemo(
     () => (calculoHidraulicoDeIncendio ? marcasDoCalculoDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica) : []),
     [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+  );
+  /** E5.2: a área de operação proposta na região mais desfavorável (derivada; vira comando só no clique). */
+  const propostaDeAreaDeOperacao = useMemo(
+    () => (criterioDeSprinklersDoEstudo ? proporAreaDeOperacao(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
+    [criterioDeSprinklersDoEstudo, editor.model, incendioDoEstudo.hipoteses.hidraulica],
   );
   const ajusteDeDnDeIncendio = useMemo(
     () => (calculoHidraulicoDeIncendio?.cenario ? ajustarDnDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
@@ -12823,6 +12838,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddLote={adicionarLote}
               onAddVia={adicionarVia}
               onAddAreaPublica={adicionarAreaPublica}
+              onAddAreaDeOperacao={adicionarAreaDeOperacao}
               vagas={vagasDoNivelAtivo}
               tipoDeVaga={tipoDeVaga}
               onAddVaga={adicionarVaga}
@@ -14223,6 +14239,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                         hs: incendioDoEstudo.hipoteses.sprinklers,
                         onHs: (sprinklers) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, sprinklers }),
                         criterio: criterioDeSprinklersDoEstudo,
+                        areas: {
+                          lista: (editor.model.areasDeOperacao ?? []).map((a, i) => ({ id: a.id, nome: a.nome ?? `AO-${i + 1}`, risco: a.risco ?? null })),
+                          onDesenhar: () => editor.setTool('area-operacao'),
+                          proposta: {
+                            motivo: propostaDeAreaDeOperacao?.motivo ?? null,
+                            areaM2: propostaDeAreaDeOperacao?.areaM2 ?? 0,
+                            onPropor: () => {
+                              if (!propostaDeAreaDeOperacao?.comandos.length) return;
+                              const criados = editor.runBatch(propostaDeAreaDeOperacao.comandos);
+                              if (criados?.length) selecionar(criados);
+                            },
+                          },
+                          onRisco: (areaId, risco) => editor.run({ type: 'SetAreaDeOperacaoProps', areaId, risco }),
+                          onApagar: (areaId) => editor.run({ type: 'DeleteAreaDeOperacao', areaId }),
+                        },
                       }
                     : undefined
                 }

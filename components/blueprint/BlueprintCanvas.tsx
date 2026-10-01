@@ -230,6 +230,8 @@ const COR_CAMADA_PAREDE: Record<FuncaoCamada, string> = {
  */
 const LIMIAR_CAMADAS_PX = 12;
 const COR_PREVIA = '#2563eb';
+/** INCÊNDIO (E5.2): o preenchimento da área de operação dos sprinklers (o traço é laranja-escuro). */
+const COR_DA_AREA_DE_OPERACAO = '#fdba74';
 
 /** Uma peça PROPOSTA por um lançamento automático (pilar, viga, laje) — só desenho, sem clique. */
 export type PecaPrevistaNoCanvas = PecaPrevista;
@@ -1356,6 +1358,8 @@ interface Props {
   onAddQuadra?: (pontos: Point[]) => void;
   onAddLote?: (pontos: Point[]) => void;
   onAddAreaPublica?: (pontos: Point[]) => void;
+  /** INCÊNDIO (E5.2): fecha o contorno da área de operação dos sprinklers. */
+  onAddAreaDeOperacao?: (pontos: Point[]) => void;
   onAddVia?: (eixo: Point[]) => void;
   /** Move a ponta de um limite. Espelha `onMoveVertex`. */
   onMoveBoundaryVertex?: (boundaryId: string, end: 'a' | 'b', to: Point) => void;
@@ -1525,6 +1529,7 @@ export default function BlueprintCanvas({
   onAddQuadra,
   onAddLote,
   onAddAreaPublica,
+  onAddAreaDeOperacao,
   onAddVia,
   onMoveBoundaryVertex,
   limiteEmDestaque = null,
@@ -4549,6 +4554,32 @@ export default function BlueprintCanvas({
         }
       }
 
+      // INCÊNDIO (E5.2): a área de operação dos sprinklers — tracejada, com o nome e a área.
+      (model.areasDeOperacao ?? []).forEach((a, i) => {
+        if (a.pontos.length < 3 || ocultos.has(a.id) || (levelId && a.levelId !== levelId)) return;
+        const pts = a.pontos.map(paraTela);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fillStyle = COR_DA_AREA_DE_OPERACAO;
+        ctx.globalAlpha = 0.25;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = selecao.has(a.id) ? COR_SELECIONADA : '#c2410c';
+        ctx.lineWidth = selecao.has(a.id) ? 2.5 : 1.5;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.restore();
+        if (mostrarRotulos) {
+          // O centroide de um contorno em L cai FORA dele: o rótulo vai a um ponto interior.
+          const t = paraTela(interiorPoint(a.pontos));
+          escreverRotulo(ctx, a.nome ?? `AO-${i + 1}`, t.x, t.y - 7, '#9a3412', Math.round(11 * fz));
+          escreverRotulo(ctx, `${areaEmM2(a.pontos).toFixed(1).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#9a3412', Math.round(10 * fz));
+        }
+      });
+
       for (const q of model.quadras ?? []) {
         if (q.pontos.length < 3 || ocultos.has(q.id)) continue;
         const pts = q.pontos.map(paraTela);
@@ -4621,7 +4652,7 @@ export default function BlueprintCanvas({
       // Previa do loteamento em curso: poligono para quadra/lote/area publica,
       // e a CAIXA da via (nao so o eixo) enquanto se traca a rua -- e a largura
       // que diz se a rua cabe entre as quadras.
-      if ((tool === 'quadra' || tool === 'lote' || tool === 'area-publica') && anelDoLoteamento.length > 0 && cursor) {
+      if ((tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao') && anelDoLoteamento.length > 0 && cursor) {
         const pts = [...anelDoLoteamento, cursor].map(paraTela);
         ctx.save();
         ctx.beginPath();
@@ -4629,7 +4660,7 @@ export default function BlueprintCanvas({
         for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
         ctx.closePath();
         if (pts.length >= 3) {
-          ctx.fillStyle = tool === 'area-publica' ? FICHA_DA_AREA_PUBLICA.VERDE.cor : '#e2e8f0';
+          ctx.fillStyle = tool === 'area-publica' ? FICHA_DA_AREA_PUBLICA.VERDE.cor : tool === 'area-operacao' ? COR_DA_AREA_DE_OPERACAO : '#e2e8f0';
           ctx.globalAlpha = 0.4;
           ctx.fill();
           ctx.globalAlpha = 1;
@@ -9273,7 +9304,7 @@ export default function BlueprintCanvas({
     }
 
     // LOTEAMENTO (B1): quadra, lote e area publica seguem o gesto da sub-regiao.
-    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica') {
+    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao') {
       let alvo = capturarTracado(paraMundo(px, py));
       const anterior = anelDoLoteamento[anelDoLoteamento.length - 1] ?? null;
       if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
@@ -9672,12 +9703,13 @@ export default function BlueprintCanvas({
     // como a sub-regiao. A VIA nao: ela e polilinha aberta, e termina no duplo
     // clique ou ao clicar de novo no ultimo vertice -- fechar um eixo de rua no
     // primeiro ponto faria uma rua que volta em si mesma.
-    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica') {
+    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao') {
       let ponto = capturarTracado(mundo);
       const fecha = anelDoLoteamento.length >= 3 && Math.hypot(anelDoLoteamento[0].x - ponto.x, anelDoLoteamento[0].y - ponto.y) < SNAP_PX / vista.escala;
       if (fecha) {
         if (tool === 'quadra') onAddQuadra?.(anelDoLoteamento);
         else if (tool === 'lote') onAddLote?.(anelDoLoteamento);
+        else if (tool === 'area-operacao') onAddAreaDeOperacao?.(anelDoLoteamento);
         else onAddAreaPublica?.(anelDoLoteamento);
         setAnelDoLoteamento([]);
         return;
@@ -10638,16 +10670,18 @@ export default function BlueprintCanvas({
             ? pontoRodape
               ? 'Clique no FIM do trecho de rodapé · Esc cancela'
               : 'Clique no INÍCIO do trecho de rodapé, ao pé da parede'
-          : tool === 'quadra' || tool === 'lote' || tool === 'area-publica'
+          : tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao'
             ? anelDoLoteamento.length >= 3
-              ? `Clique no pr\u00f3ximo v\u00e9rtice \u00b7 volte ao 1\u00ba para fechar ${tool === 'quadra' ? 'a quadra' : tool === 'lote' ? 'o lote' : 'a \u00e1rea p\u00fablica'} \u00b7 Esc cancela`
+              ? `Clique no pr\u00f3ximo v\u00e9rtice \u00b7 volte ao 1\u00ba para fechar ${tool === 'quadra' ? 'a quadra' : tool === 'lote' ? 'o lote' : tool === 'area-operacao' ? 'a \u00e1rea de opera\u00e7\u00e3o' : 'a \u00e1rea p\u00fablica'} \u00b7 Esc cancela`
               : anelDoLoteamento.length > 0
                 ? 'Clique nos v\u00e9rtices \u00b7 Esc cancela'
                 : tool === 'quadra'
                   ? 'Clique no 1\u00ba v\u00e9rtice da QUADRA (nome na barra)'
                   : tool === 'lote'
                     ? 'Clique no 1\u00ba v\u00e9rtice do LOTE (quadra e n\u00famero na barra)'
-                    : 'Clique no 1\u00ba v\u00e9rtice da \u00c1REA P\u00daBLICA (tipo na barra)'
+                    : tool === 'area-operacao'
+                      ? 'Clique no 1\u00ba v\u00e9rtice da \u00c1REA DE OPERA\u00c7\u00c3O dos sprinklers (lados em 90\u00b0 = ret\u00e2ngulo)'
+                      : 'Clique no 1\u00ba v\u00e9rtice da \u00c1REA P\u00daBLICA (tipo na barra)'
           : tool === 'via'
             ? eixoEmCurso.length >= 1
               ? 'Clique no pr\u00f3ximo v\u00e9rtice do EIXO \u00b7 clique de novo no \u00faltimo para terminar \u00b7 Esc cancela'

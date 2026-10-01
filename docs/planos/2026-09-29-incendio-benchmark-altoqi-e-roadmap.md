@@ -1632,7 +1632,7 @@ Fecha a parte de hidrante do **bloco 4** (§19).
 
 Fecha o **bloco 4**.
 
-## Etapa 5 — Sprinklers · kernel bump · 4 fases · **em andamento (5.1 ✅ 01/10/2026, sem bump)**
+## Etapa 5 — Sprinklers · kernel bump · 4 fases · **em andamento (5.1 e 5.2 ✅ 01/10/2026; kernel 0.82.0 → 0.83.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2111,4 +2111,48 @@ haver um bump só.
   "Hidrantes mais desfavoráveis" e some sem hidrante.
 - **Testes:** `blueprintSprinklersIncendio.test.ts` (11; inclui "mudar o risco muda a vazão exigida na
   bomba") e mais 2 no painel. Suíte com 6.610 testes: 6.577 + 33 pulados. Build ok.
+
+### Etapa 5.2 — 01/10/2026 (frente `incendio-e5`, kernel 0.83.0)
+
+- **Kernel 0.83.0 — `model.areasDeOperacao`:**
+  - **Entidade:** contorno (≥ 3 vértices inteiros), com risco próprio e nome opcionais.
+  - **Comandos:** `Add`/`SetAreaDeOperacaoProps`/`DeleteAreaDeOperacao`. `risco: null` volta ao risco
+    do estudo.
+  - **Invariante:** `BAD_OPERATION_AREA`.
+  - **Canônico:** pavimento por índice, omitida quando não há; ida e volta preserva o uid.
+  - A área some com o pavimento (`RemoveLevel`). `RISCOS_DE_SPRINKLER` passou a morar no kernel.
+  - Ritual do bump: goldens 7/7 em 0.82.0, 6 hashes, 22 pinos. Bundle da planta-api regerado.
+- **Derivado (`blueprintSprinklersIncendio`/`blueprintAreaDeOperacao`):**
+  - os sprinklers da área são os do mesmo pavimento com o ponto dentro (a borda conta);
+  - o critério da área é o risco dela, se declarado, senão o do estudo; as outras premissas vêm do
+    estudo.
+- **Cálculo:** com área desenhada, cada área abre os sprinklers DELA, com o critério dela, e governa a
+  de maior Q × H. Sem área, vale a escolha da E5.1 (os N mais desfavoráveis). `c.areas` traz uma linha
+  por área; `c.hip` é o da área que governa (a bomba usa este).
+- **Conferência:** "Área de operação AO-n: tamanho" compara a área desenhada com a exigida pelo risco
+  dela e diz quantos sprinklers há dentro.
+- **Proposta automática (`proporAreaDeOperacao`):**
+  - **Âncora:** o sprinkler mais desfavorável (aberto sozinho, mesma carga).
+  - **Forma:** retângulo 1,2√A × A/(1,2√A), com o lado maior na direção do ramal dele (NBR 10897 /
+    NFPA 13, CONFERIR), nas quatro posições em volta dele.
+  - **Ambiente:** cada posição cresce até a parte DENTRO do ambiente fechar a área. Ambiente menor que
+    a área exigida = o ambiente inteiro.
+  - **Escolha:** vence a mais COMPACTA (área ÷ retângulo envolvente) e, no empate, a que cresceu menos.
+  - É um comando só, então um Ctrl+Z desfaz.
+- ⚠️ **O harness `docs/spikes/area-operacao`** (canvas real, porta 3163) pegou a proposta, que fechava
+  os 139 m² dentro do L mas era uma tira de 3,8 m na perna estreita virando uma faixa fina de 28 m ao
+  longo da perna larga. As quatro posições crescem quase empatadas, e vencia a de crescimento
+  minimamente menor. A compacidade veio antes do crescimento. Agora a área é a perna estreita INTEIRA
+  na largura (as duas colunas de sprinklers), com 139,0 m². O teste fixa isso. O rótulo do centroide
+  caía fora do contorno em L e foi para `interiorPoint`.
+- **Tela:**
+  - **Ferramenta `area-operacao`:** polígono, que fecha no 1º vértice; lados em 90° fazem o
+    retângulo. Tracejado laranja, com nome e m².
+  - **Painel do cálculo:** lista das áreas com a desenhada / a exigida, os sprinklers dentro, o risco
+    próprio e "Apagar".
+  - **Botões:** "Desenhar" e "Propor na região mais desfavorável". O segundo fica desligado com o
+    motivo no título e no texto.
+- **Testes:** `blueprintAreaDeOperacao.test.ts` (11: entidade, canônico, pavimento, cálculo por área,
+  risco da área, duas áreas, salão em L, ambiente inteiro) e mais 1 no painel. Suíte com 6.626 testes:
+  6.593 + 33 pulados. Build ok.
 

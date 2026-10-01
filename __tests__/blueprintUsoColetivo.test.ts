@@ -43,7 +43,7 @@ const GENERICO: HipotesesEletricas = { ...HIPOTESES_PADRAO, diversidade: 'GENERI
 
 describe('uso coletivo · kernel 0.78.0', () => {
   it('unidadeId no quadro e no medidor; canônico `unidade` por índice com ida e volta; só medidor mede; unidade inexistente recusada; apagar a unidade solta', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.82.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.83.0');
     const { m } = condominio();
     expect(m.quadros[1].unidadeId).toBe(m.unidades[0].id);
     const medidores = m.terminais.filter((t) => t.tipoEletrico === 'MEDIDOR');

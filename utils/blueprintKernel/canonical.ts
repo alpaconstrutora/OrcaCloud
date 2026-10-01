@@ -52,6 +52,7 @@ import {
   type TipoDeLote,
   type TipoDeLimite,
   type TipoDeAreaPublica,
+  type RiscoDeSprinkler,
   type ObjectId,
   type BlueprintModel,
   type BoundaryKind,
@@ -659,6 +660,19 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo),
   );
 
+  // ÁREAS DE OPERAÇÃO (0.83.0): pavimento por índice, contorno, risco e nome quando há. Omitidas quando não há.
+  const areasDeOperacao = ordenar(
+    model.areasDeOperacao ?? [],
+    (a) => ({
+      level: nivel(a.levelId),
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...(a.risco !== undefined ? { risco: a.risco } : {}),
+      ...(a.nome !== undefined ? { nome: a.nome } : {}),
+      parametros: parametrosCanonicos(a.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome ?? '', y.nome ?? ''),
+  );
+
   // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
@@ -1089,6 +1103,7 @@ function projetar(model: BlueprintModel): {
     lotes: lotes.length ? lotes.map((l) => l.geom) : undefined,
     vias: vias.length ? vias.map((v) => v.geom) : undefined,
     areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : undefined,
+    areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : undefined,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -1130,6 +1145,7 @@ function projetar(model: BlueprintModel): {
     lotes: lotes.map((l) => l.item.uid ?? null),
     vias: vias.map((v) => v.item.uid ?? null),
     areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
+    ...(areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {}),
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -1224,6 +1240,8 @@ export interface IdentidadeCanonica {
   lotes?: (ElementUid | null)[];
   vias?: (ElementUid | null)[];
   areasPublicas?: (ElementUid | null)[];
+  /** Ausente sob kernel < 0.83.0 e em desenho sem nenhuma. */
+  areasDeOperacao?: (ElementUid | null)[];
   rodapes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
@@ -1473,6 +1491,8 @@ export interface CanonicalPayload {
   lotes?: { level: number; quadra: number | null; numero: string; pontos: { x: number; y: number }[]; testadaIndex: number | null; tipo: TipoDeLote; parametros?: Parametros }[];
   vias?: { level: number; nome: string; eixo: { x: number; y: number }[]; larguraMm: number; calcadaMm: number; parametros?: Parametros }[];
   areasPublicas?: { level: number; tipo: TipoDeAreaPublica; nome: string | null; pontos: { x: number; y: number }[]; parametros?: Parametros }[];
+  /** INCÊNDIO. Ausente sob kernel < 0.83.0 e em desenho sem nenhuma. */
+  areasDeOperacao?: { level: number; pontos: { x: number; y: number }[]; risco?: RiscoDeSprinkler; nome?: string; parametros?: Parametros }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
   vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
@@ -2134,6 +2154,20 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       tipo: a.tipo,
       nome: a.nome,
       pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
+    });
+  });
+
+  const operacaoPayload = payload.areasDeOperacao ?? [];
+  operacaoPayload.forEach((a, i) => {
+    if (!levelIds[a.level]) return;
+    (model.areasDeOperacao ??= []).push({
+      id: nextId(model, 'aop'),
+      uid: uidDe('areasDeOperacao', i, operacaoPayload.length),
+      levelId: levelIds[a.level],
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...(a.risco !== undefined ? { risco: a.risco } : {}),
+      ...(a.nome !== undefined ? { nome: a.nome } : {}),
       ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
     });
   });

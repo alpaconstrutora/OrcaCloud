@@ -2202,6 +2202,38 @@ export interface AreaPublica {
 }
 
 /**
+ * INCÊNDIO — as classes de risco dos sprinklers (0.83.0, E5.2): a lista mora no
+ * kernel porque a Área de Operação pode declarar a sua. O que cada classe exige
+ * (densidade, área, duração) é tabela de NORMA e mora em
+ * `utils/blueprintSprinklersIncendio.ts`.
+ */
+export const RISCOS_DE_SPRINKLER = ['LEVE', 'ORDINARIO_1', 'ORDINARIO_2', 'EXTRA_1', 'EXTRA_2'] as const;
+export type RiscoDeSprinkler = (typeof RISCOS_DE_SPRINKLER)[number];
+
+export const MAX_NOME_DE_AREA_DE_OPERACAO = 60;
+
+/**
+ * ÁREA DE OPERAÇÃO DOS SPRINKLERS (0.83.0, E5.2 do roadmap de incêndio).
+ *
+ * A região em que os sprinklers abrem JUNTOS no cálculo (NBR 10897, método
+ * hidráulico). Só o contorno é declarado: os sprinklers dela são DERIVADOS
+ * (os do mesmo pavimento com o ponto dentro do contorno), a vazão exigida sai
+ * da densidade × área do risco. Retangular ou poligonal — é sempre um contorno.
+ */
+export interface AreaDeOperacao {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  levelId: ObjectId;
+  /** Contorno em planta, mm inteiros, >= 3 vértices. */
+  pontos: Point[];
+  /** O risco desta área; ausente = o do estudo. */
+  risco?: RiscoDeSprinkler;
+  /** "Depósito do subsolo"; ausente = numerada na tela. */
+  nome?: string;
+}
+
+/**
  * VÉRTICE NOMEADO DO TERRENO (0.59.0).
  *
  * O memorial descritivo não fala em "lado 3": fala em "do vértice P2 ao P3". O
@@ -2277,6 +2309,12 @@ export function findVia(model: BlueprintModel, id: ObjectId): Via {
 export function findAreaPublica(model: BlueprintModel, id: ObjectId): AreaPublica {
   const a = (model.areasPublicas ?? []).find((x) => x.id === id);
   if (!a) throw new KernelError('PUBLIC_AREA_NOT_FOUND', `Área pública inexistente: ${id}`);
+  return a;
+}
+
+export function findAreaDeOperacao(model: BlueprintModel, id: ObjectId): AreaDeOperacao {
+  const a = (model.areasDeOperacao ?? []).find((x) => x.id === id);
+  if (!a) throw new KernelError('OPERATION_AREA_NOT_FOUND', `Área de operação inexistente: ${id}`);
   return a;
 }
 
@@ -3319,6 +3357,8 @@ export interface BlueprintModel {
   vias: Via[];
   /** LOTEAMENTO (0.58.0) - areas publicas e nao edificaveis. Ver `AreaPublica`. */
   areasPublicas: AreaPublica[];
+  /** INCÊNDIO (0.83.0) - áreas de operação dos sprinklers. Ver `AreaDeOperacao`. */
+  areasDeOperacao?: AreaDeOperacao[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -3445,6 +3485,7 @@ export function emptyModel(): BlueprintModel {
     lotes: [],
     vias: [],
     areasPublicas: [],
+    areasDeOperacao: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -3524,6 +3565,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     lotes: (model.lotes ?? []).map((l) => ({ ...l, pontos: l.pontos.map((p) => ({ ...p })), ...(l.parametros ? { parametros: { ...l.parametros } } : {}) })),
     vias: (model.vias ?? []).map((v) => ({ ...v, eixo: v.eixo.map((p) => ({ ...p })), ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     areasPublicas: (model.areasPublicas ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
+    areasDeOperacao: (model.areasDeOperacao ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -4708,6 +4750,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Lote', model.lotes ?? []],
     ['Via', model.vias ?? []],
     ['Área pública', model.areasPublicas ?? []],
+    ['Área de operação', model.areasDeOperacao ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -5425,6 +5468,17 @@ export function assertModelInvariants(model: BlueprintModel): void {
       assertIntegerMm(p.y, `${a.id}.pontos[${i}].y`);
     });
     if (a.nome != null && (typeof a.nome !== 'string' || a.nome.length > MAX_NOME_DE_AREA_PUBLICA)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: nome maior que ${MAX_NOME_DE_AREA_PUBLICA} caracteres`);
+  }
+  // ÁREA DE OPERAÇÃO (0.83.0): pavimento vivo, >= 3 vértices inteiros, risco da lista, nome curto e aparado.
+  for (const a of model.areasDeOperacao ?? []) {
+    if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: pavimento inexistente`);
+    if (!Array.isArray(a.pontos) || a.pontos.length < 3) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: o contorno precisa de pelo menos 3 vértices`);
+    a.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${a.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${a.id}.pontos[${i}].y`);
+    });
+    if (a.risco !== undefined && !(RISCOS_DE_SPRINKLER as readonly string[]).includes(a.risco)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: risco desconhecido ${String(a.risco)}`);
+    if (a.nome !== undefined && (typeof a.nome !== 'string' || a.nome.trim() !== a.nome || a.nome.length === 0 || a.nome.length > MAX_NOME_DE_AREA_DE_OPERACAO)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: nome vazio, com espaço nas pontas ou maior que ${MAX_NOME_DE_AREA_DE_OPERACAO}`);
   }
   // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
   for (const v of model.vistasDependentes ?? []) {

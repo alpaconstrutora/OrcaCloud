@@ -24,7 +24,17 @@ interface Props {
   /** E2.4: a conferência em três estados + "não avaliada". Ausente = não mostrar. */
   conferencia?: ItemDaConferencia[];
   /** E5.1: o critério dos sprinklers (risco → densidade × área). Ausente = não mostrar. */
-  sprinklers?: { hs: HipotesesDeSprinklers; onHs: (h: HipotesesDeSprinklers) => void; criterio: CriterioDeSprinklers };
+  sprinklers?: { hs: HipotesesDeSprinklers; onHs: (h: HipotesesDeSprinklers) => void; criterio: CriterioDeSprinklers; areas?: AcoesDasAreas };
+}
+
+/** E5.2: as Áreas de Operação desenhadas e o que se faz com elas. */
+export interface AcoesDasAreas {
+  lista: { id: ObjectId; nome: string; risco: RiscoDeSprinkler | null }[];
+  onDesenhar: () => void;
+  /** A proposta na região mais desfavorável; `motivo` = por que não há. */
+  proposta: { motivo: string | null; areaM2: number; onPropor: () => void };
+  onRisco: (id: ObjectId, risco: RiscoDeSprinkler | null) => void;
+  onApagar: (id: ObjectId) => void;
 }
 
 const ORIGEM: Record<string, string> = { DECLARADA: 'declarado', SUGERIDA: 'sugerido', TABELA: 'tabela' };
@@ -55,7 +65,7 @@ function Opcional({ rotulo, valor, tabela, onValor, passo, unidade }: { rotulo: 
 }
 
 /** E5.1: risco, densidade e área — e o que sai deles. */
-function SecaoDeSprinklers({ hs, onHs, criterio: cr, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
+function SecaoDeSprinklers({ hs, onHs, criterio: cr, areas, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
   const linha = cr.risco ? TABELA_DO_RISCO[cr.risco.valor] : null;
   const s = c.porSistema.sprinklers;
   return (
@@ -130,9 +140,92 @@ function SecaoDeSprinklers({ hs, onHs, criterio: cr, calculo: c, nomeDe, onSelec
           )}
         </p>
       )}
+      {areas && <AreasDeOperacao areas={areas} calculo={c} onSelecionar={onSelecionar} />}
       <p className="mt-1 text-[11px] text-slate-500">
-        NBR 10897, método hidráulico — CONFERIR NA NORMA. Até a Área de Operação desenhada (E5.2), abrem os N sprinklers mais desfavoráveis.
+        NBR 10897, método hidráulico — CONFERIR NA NORMA. Sem Área de Operação desenhada, abrem os N sprinklers mais desfavoráveis.
       </p>
+    </div>
+  );
+}
+
+/** E5.2: a lista das áreas desenhadas — tamanho contra o exigido, sprinklers dentro, risco próprio. */
+function AreasDeOperacao({ areas, calculo: c, onSelecionar }: { areas: AcoesDasAreas; calculo: CalculoDeIncendio; onSelecionar: (ids: string[]) => void }) {
+  const porId = new Map(c.areas.map((x) => [x.areaId, x]));
+  const botao = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+  return (
+    <div className="mt-2" data-testid="sprinklers-areas">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h5 className="text-xs font-semibold text-slate-700">Áreas de operação</h5>
+        <div className="flex gap-2">
+          <button type="button" className={botao} onClick={areas.onDesenhar} title="Clique os vértices na planta; volte ao 1º para fechar">
+            Desenhar
+          </button>
+          <button
+            type="button"
+            className={botao}
+            onClick={areas.proposta.onPropor}
+            disabled={!!areas.proposta.motivo}
+            title={areas.proposta.motivo ?? `Retângulo 1,2√A no sprinkler mais desfavorável, recortado pelo ambiente — ${n(areas.proposta.areaM2, 0)} m² · um passo de desfazer`}
+          >
+            Propor na região mais desfavorável
+          </button>
+        </div>
+      </div>
+      {areas.proposta.motivo && <p className="mt-1 text-[11px] text-slate-500">Proposta: {areas.proposta.motivo}.</p>}
+      {areas.lista.length === 0 ? (
+        <p className="mt-1 text-xs text-slate-500">Nenhuma desenhada.</p>
+      ) : (
+        <table className="mt-1 w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-slate-500">
+              <th className="py-1 pr-2 font-medium">Área</th>
+              <th className="py-1 pr-2 text-right font-medium">Desenhada</th>
+              <th className="py-1 pr-2 text-right font-medium">Sprinklers</th>
+              <th className="py-1 pr-2 font-medium">Risco</th>
+              <th className="py-1 font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {areas.lista.map((a) => {
+              const r = porId.get(a.id);
+              const exigida = r?.criterio.areaDeOperacao?.valorM2 ?? null;
+              const curta = r != null && exigida != null && r.areaDesenhadaM2 + 1e-6 < exigida;
+              return (
+                <tr key={a.id} className="border-b border-slate-100 text-slate-700">
+                  <td className="py-1.5 pr-2">
+                    <button type="button" className="text-left text-blue-700 hover:underline" onClick={() => onSelecionar([a.id])}>
+                      {a.nome}
+                    </button>
+                  </td>
+                  <td className={`py-1.5 pr-2 text-right tabular-nums ${curta ? 'font-semibold text-red-700' : ''}`}>
+                    {r ? `${n(r.areaDesenhadaM2, 0)} m²` : '—'}
+                    {exigida != null && <span className="text-slate-400"> / {n(exigida, 0)}</span>}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{r ? r.resultado.abertos.length : '—'}</td>
+                  <td className="py-1.5 pr-2">
+                    <select
+                      value={a.risco ?? ''}
+                      onChange={(e) => areas.onRisco(a.id, (e.target.value || null) as RiscoDeSprinkler | null)}
+                      aria-label={`Risco da ${a.nome}`}
+                      className={campo}
+                    >
+                      <option value="">Do estudo</option>
+                      {RISCOS_DE_SPRINKLER.map((x) => (
+                        <option key={x} value={x}>{ROTULO_DO_RISCO[x]}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="py-1.5 text-right">
+                    <button type="button" className="text-red-700 hover:underline" onClick={() => areas.onApagar(a.id)} aria-label={`Apagar a ${a.nome}`}>
+                      Apagar
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

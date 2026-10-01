@@ -146,6 +146,8 @@ export type BlueprintTool =
   | 'lote'
   | 'via'
   | 'area-publica'
+  /** INCÊNDIO (E5.2): área de operação dos sprinklers — polígono, fecha no 1º vértice (Orto = retângulo). */
+  | 'area-operacao'
   /** VAGA DE GARAGEM (E2.5): um clique no centro; o tipo vem da barra. */
   | 'vaga'
   /** COMPONENTE (E7.1): mobiliário/louça/bancada, um clique no centro; o tipo vem do catálogo. */

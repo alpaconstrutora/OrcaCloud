@@ -104,3 +104,35 @@ describe('PainelCalculoIncendio › sprinklers (E5.1)', () => {
     expect(onHs).toHaveBeenLastCalledWith({ ...hs, densidadeLminM2: null });
   });
 });
+
+describe('PainelCalculoIncendio › áreas de operação (E5.2)', () => {
+  it('lista a área com o tamanho contra o exigido; desenhar, risco e apagar chamam o editor; a proposta desligada diz por quê', async () => {
+    let m = comSprinklers();
+    m = applyCommand(m, { type: 'AddAreaDeOperacao', levelId: m.levels[0].id, pontos: [point(5000, -1000), point(10000, -1000), point(10000, 1000), point(5000, 1000)] } as Command).model;
+    const criterio = criterioDeSprinklers(HS, 'A-2');
+    const c = calculoDeIncendio(m, HIP, criterio);
+    const areas = {
+      lista: [{ id: m.areasDeOperacao![0].id, nome: 'AO-1', risco: null }],
+      onDesenhar: vi.fn(),
+      proposta: { motivo: 'nenhum sprinkler ligado à rede', areaM2: 0, onPropor: vi.fn() },
+      onRisco: vi.fn(),
+      onApagar: vi.fn(),
+    };
+    render(<PainelCalculoIncendio hip={HIP} onHip={vi.fn()} calculo={c} nomeDe={() => 'SPK-1'} onSelecionar={vi.fn()} ajusteDeDn={{ alterados: 0, onAjustar: vi.fn() }} sprinklers={{ hs: HS, onHs: vi.fn(), criterio, areas }} />);
+    const sec = screen.getByTestId('sprinklers-areas');
+    // 5 × 2 m = 10 m² desenhados contra 139 exigidos; dois sprinklers (x = 6 e 9 m) dentro.
+    expect(sec.textContent).toContain('10 m² / 139');
+    expect(sec.textContent).toContain('Proposta: nenhum sprinkler ligado à rede.');
+    const propor = screen.getByRole('button', { name: 'Propor na região mais desfavorável' });
+    expect(propor).toBeDisabled();
+    expect(propor.getAttribute('title')).toBe('nenhum sprinkler ligado à rede');
+    const u = userEvent.setup();
+    await u.click(screen.getByRole('button', { name: 'Desenhar' }));
+    expect(areas.onDesenhar).toHaveBeenCalled();
+    await u.selectOptions(screen.getByLabelText('Risco da AO-1'), 'EXTRA_1');
+    expect(areas.onRisco).toHaveBeenCalledWith(m.areasDeOperacao![0].id, 'EXTRA_1');
+    await u.click(screen.getByRole('button', { name: 'Apagar a AO-1' }));
+    expect(areas.onApagar).toHaveBeenCalledWith(m.areasDeOperacao![0].id);
+  });
+});
+

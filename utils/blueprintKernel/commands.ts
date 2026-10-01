@@ -61,6 +61,10 @@ import {
   findLote,
   findVia,
   findAreaPublica,
+  findAreaDeOperacao,
+  RISCOS_DE_SPRINKLER,
+  MAX_NOME_DE_AREA_DE_OPERACAO,
+  type RiscoDeSprinkler,
   TIPOS_DE_LOTE,
   TIPOS_DE_AREA_PUBLICA,
   MAX_NOME_DE_QUADRA,
@@ -600,6 +604,10 @@ export type Command =
   | { type: 'SetAreaPublicaProps'; areaId: ObjectId; tipo?: TipoDeAreaPublica; nome?: string | null; pontos?: Point[] }
   | { type: 'MoveAreaPublicaVertex'; areaId: ObjectId; index: number; to: Point }
   | { type: 'DeleteAreaPublica'; areaId: ObjectId }
+  /** INCÊNDIO (0.83.0): área de operação dos sprinklers. `risco: null` = volta ao do estudo; `nome: null` = sem nome. */
+  | { type: 'AddAreaDeOperacao'; levelId: ObjectId; pontos: Point[]; risco?: RiscoDeSprinkler | null; nome?: string | null }
+  | { type: 'SetAreaDeOperacaoProps'; areaId: ObjectId; pontos?: Point[]; risco?: RiscoDeSprinkler | null; nome?: string | null }
+  | { type: 'DeleteAreaDeOperacao'; areaId: ObjectId }
   | { type: 'AddVistaDependente'; levelId: ObjectId; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'SetVistaDependenteProps'; vistaId: ObjectId; nome?: string; recorte?: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'DeleteVistaDependente'; vistaId: ObjectId }
@@ -3033,6 +3041,56 @@ function aplicarSemHash(
       break;
     }
 
+    // ── Área de operação dos sprinklers (0.83.0) ────────────────────────────
+
+    case 'AddAreaDeOperacao': {
+      findLevel(next, command.levelId);
+      if (command.pontos.length < 3) throw new KernelError('BAD_OPERATION_AREA', `A área de operação precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`);
+      if (command.risco != null && !RISCOS_DE_SPRINKLER.includes(command.risco)) throw new KernelError('BAD_OPERATION_AREA', `Risco desconhecido: ${String(command.risco)}`);
+      const id = nextId(next, 'aop');
+      const nome = command.nome?.trim().slice(0, MAX_NOME_DE_AREA_DE_OPERACAO).trim();
+      next.areasDeOperacao = [
+        ...(next.areasDeOperacao ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          pontos: command.pontos.map(paraPontoMm),
+          ...(command.risco != null ? { risco: command.risco } : {}),
+          ...(nome ? { nome } : {}),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetAreaDeOperacaoProps': {
+      const a = findAreaDeOperacao(next, command.areaId);
+      if (command.pontos !== undefined) {
+        if (command.pontos.length < 3) throw new KernelError('BAD_OPERATION_AREA', 'A área de operação precisa de pelo menos 3 vértices');
+        a.pontos = command.pontos.map(paraPontoMm);
+      }
+      if (command.risco !== undefined) {
+        if (command.risco === null) delete a.risco;
+        else if (!RISCOS_DE_SPRINKLER.includes(command.risco)) throw new KernelError('BAD_OPERATION_AREA', `Risco desconhecido: ${String(command.risco)}`);
+        else a.risco = command.risco;
+      }
+      if (command.nome !== undefined) {
+        const nome = command.nome?.trim().slice(0, MAX_NOME_DE_AREA_DE_OPERACAO).trim();
+        if (nome) a.nome = nome;
+        else delete a.nome;
+      }
+      diff.updated.push(a.id);
+      break;
+    }
+
+    case 'DeleteAreaDeOperacao': {
+      const a = findAreaDeOperacao(next, command.areaId);
+      next.areasDeOperacao = (next.areasDeOperacao ?? []).filter((x) => x.id !== a.id);
+      diff.deleted.push(a.id);
+      break;
+    }
+
     // ── Vistas dependentes (P2.17) ──────────────────────────────────────────
 
     case 'AddVistaDependente': {
@@ -4907,6 +4965,8 @@ function aplicarSemHash(
       next.vistasDependentes = (next.vistasDependentes ?? []).filter((v) => v.levelId !== level.id);
       next.subRegioes = (next.subRegioes ?? []).filter((s) => s.levelId !== level.id);
       next.rodapes = (next.rodapes ?? []).filter((r) => r.levelId !== level.id);
+      const operacaoDoNivel = (next.areasDeOperacao ?? []).filter((a) => a.levelId === level.id);
+      next.areasDeOperacao = (next.areasDeOperacao ?? []).filter((a) => a.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -4941,6 +5001,7 @@ function aplicarSemHash(
         ...vistasDoNivel.map((v) => v.id),
         ...subRegioesDoNivel.map((s) => s.id),
         ...rodapesDoNivel.map((r) => r.id),
+        ...operacaoDoNivel.map((a) => a.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

@@ -13,8 +13,10 @@
  * sprinklers mais desfavoráveis, N = ⌈área de operação ÷ área por sprinkler⌉.
  */
 
-export const RISCOS_DE_SPRINKLER = ['LEVE', 'ORDINARIO_1', 'ORDINARIO_2', 'EXTRA_1', 'EXTRA_2'] as const;
-export type RiscoDeSprinkler = (typeof RISCOS_DE_SPRINKLER)[number];
+import { RISCOS_DE_SPRINKLER, pointInPolygon, polygonArea, type AreaDeOperacao, type BlueprintModel, type RiscoDeSprinkler, type Terminal } from './blueprintKernel';
+
+// A lista mora no kernel (0.83.0) porque a Área de Operação declara a sua.
+export { RISCOS_DE_SPRINKLER, type RiscoDeSprinkler };
 
 export const ROTULO_DO_RISCO: Record<RiscoDeSprinkler, string> = {
   LEVE: 'Leve',
@@ -121,6 +123,9 @@ export interface CriterioDeSprinklers {
   /** Densidade × área de operação. */
   vazaoDaAreaLmin: number | null;
   fonte: string;
+  /** De onde saiu — para a Área de Operação com risco próprio rederivar (E5.2). */
+  hipoteses: HipotesesDeSprinklers;
+  divisao: string | null;
 }
 
 export function criterioDeSprinklers(hs: HipotesesDeSprinklers, divisao: string | null): CriterioDeSprinklers {
@@ -130,7 +135,7 @@ export function criterioDeSprinklers(hs: HipotesesDeSprinklers, divisao: string 
     : sug
       ? { valor: sug.risco, origem: 'SUGERIDA' as const, motivo: sug.motivo }
       : null;
-  const vazio: CriterioDeSprinklers = { risco, densidade: null, areaDeOperacao: null, areaPorSprinkler: null, duracaoMin: null, sprinklersNaArea: null, vazaoPorSprinklerLmin: null, vazaoDaAreaLmin: null, fonte: FONTE_NBR_10897 };
+  const vazio: CriterioDeSprinklers = { risco, densidade: null, areaDeOperacao: null, areaPorSprinkler: null, duracaoMin: null, sprinklersNaArea: null, vazaoPorSprinklerLmin: null, vazaoDaAreaLmin: null, fonte: FONTE_NBR_10897, hipoteses: hs, divisao };
   if (!risco) return vazio;
   const t = TABELA_DO_RISCO[risco.valor];
   const escolher = (declarado: number | null, tabela: number) => (declarado != null ? { v: declarado, origem: 'DECLARADA' as const } : { v: tabela, origem: 'TABELA' as const });
@@ -149,3 +154,19 @@ export function criterioDeSprinklers(hs: HipotesesDeSprinklers, divisao: string 
     vazaoDaAreaLmin: d.v * A.v,
   };
 }
+
+// ─── A Área de Operação desenhada (E5.2) ─────────────────────────────────────
+
+/** Área do contorno, m². */
+export const areaDoContornoM2 = (a: Pick<AreaDeOperacao, 'pontos'>) => polygonArea(a.pontos) / 1e6;
+
+/** Os sprinklers da área — DERIVADOS: do mesmo pavimento, com o ponto dentro do contorno (a borda conta). */
+export function sprinklersDaArea(model: BlueprintModel, a: AreaDeOperacao): Terminal[] {
+  return (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'SPRINKLER' && t.levelId === a.levelId && pointInPolygon(a.pontos, t.at));
+}
+
+/** O critério da área: o risco dela, se declarado, vence o do estudo; o resto das premissas é o do estudo. */
+export function criterioDaArea(doEstudo: CriterioDeSprinklers, a: AreaDeOperacao): CriterioDeSprinklers {
+  return a.risco ? criterioDeSprinklers({ ...doEstudo.hipoteses, risco: a.risco }, doEstudo.divisao) : doEstudo;
+}
+

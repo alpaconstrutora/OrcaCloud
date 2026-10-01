@@ -488,7 +488,17 @@
  * (`limparBombasOrfas`). Tudo omitido quando ausente. Vocabulário novo, forma
  * igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.82.0';
+/**
+ * ─── 0.82.0 → 0.83.0 (01/10/2026) — A ÁREA DE OPERAÇÃO ──────────────────────
+ *
+ * Nos sprinklers (E5.2 do roadmap de incêndio): `model.areasDeOperacao` — o
+ * contorno (>= 3 vértices inteiros) em que os sprinklers abrem juntos no
+ * cálculo, com o risco próprio e o nome opcionais. Os sprinklers dela são
+ * DERIVADOS (os do pavimento com o ponto dentro). No canônico, pavimento por
+ * índice e omitida quando não há; some com o pavimento. `RISCOS_DE_SPRINKLER`
+ * passou a morar no kernel. Coleção nova, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.83.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

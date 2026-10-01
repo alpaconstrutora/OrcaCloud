@@ -145,7 +145,7 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
   });
   // E5.1: os sprinklers — o critério (risco → densidade × área) e o cenário deles.
   const s = c.porSistema.sprinklers;
-  const cr = c.criterio;
+  const cr = s?.criterio ?? c.criterio;
   if (s) {
     itens.push({
       grupo: 'NBR 10897',
@@ -178,6 +178,19 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
       });
     }
   }
+  // E5.2: cada Área de Operação desenhada tem de ter, no mínimo, a área do critério dela.
+  c.areas.forEach((x, i) => {
+    const exigida = x.criterio.areaDeOperacao?.valorM2 ?? null;
+    const a = (model.areasDeOperacao ?? []).find((y) => y.id === x.areaId);
+    itens.push({
+      grupo: 'NBR 10897',
+      item: `Área de operação ${a?.nome ?? `AO-${i + 1}`}: tamanho`,
+      exigido: exigida != null ? `≥ ${um(exigida, 0)} m² (${x.criterio.risco ? ROTULO_DO_RISCO[x.criterio.risco.valor].toLowerCase() : '—'})` : 'o risco da área',
+      obtido: `${um(x.areaDesenhadaM2, 1)} m² desenhados, ${x.resultado.abertos.length} sprinkler(s) dentro`,
+      estado: exigida == null ? 'NAO_AVALIADO' : x.areaDesenhadaM2 + 1e-6 >= exigida ? 'ATENDE' : 'FALTA',
+      alvos: [x.areaId],
+    });
+  });
   const rapidos = cenariosDoCalculo(c).flatMap((cen) => cen.trechos).filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9);
   itens.push({
     grupo: 'NBR 13714',

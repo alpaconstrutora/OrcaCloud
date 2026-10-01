@@ -42,7 +42,7 @@ function predio(): { m: BlueprintModel; qgbt: string; qd1: string; qd2: string }
 
 describe('hierarquia · kernel 0.76.0', () => {
   it('versão; tipo e pai gravam; canônico omite sem hierarquia e leva `pai` por índice com ida e volta; auto-alimentação, pai inexistente e ciclo recusados', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.82.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.83.0');
     const { m, qgbt, qd1, qd2 } = predio();
     expect(m.quadros[0].tipo).toBe('QGBT');
     expect(m.quadros[1].quadroPaiId).toBe(qgbt);

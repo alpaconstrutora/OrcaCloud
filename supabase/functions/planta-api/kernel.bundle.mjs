@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.82.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.83.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -712,6 +712,7 @@ function emptyModel() {
     lotes: [],
     vias: [],
     areasPublicas: [],
+    areasDeOperacao: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -1972,6 +1973,17 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.tipo, y.tipo)
   );
+  const areasDeOperacao = ordenar(
+    model.areasDeOperacao ?? [],
+    (a) => ({
+      level: nivel(a.levelId),
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...a.risco !== void 0 ? { risco: a.risco } : {},
+      ...a.nome !== void 0 ? { nome: a.nome } : {},
+      parametros: parametrosCanonicos(a.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome ?? "", y.nome ?? "")
+  );
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
     (v) => ({
@@ -2295,6 +2307,7 @@ function projetar(model) {
     lotes: lotes.length ? lotes.map((l) => l.geom) : void 0,
     vias: vias.length ? vias.map((v) => v.geom) : void 0,
     areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : void 0,
+    areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : void 0,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
@@ -2331,6 +2344,7 @@ function projetar(model) {
     lotes: lotes.map((l) => l.item.uid ?? null),
     vias: vias.map((v) => v.item.uid ?? null),
     areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
+    ...areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {},
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -2716,6 +2730,19 @@ function modelFromCanonicalPayload(payload) {
       tipo: a.tipo,
       nome: a.nome,
       pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}
+    });
+  });
+  const operacaoPayload = payload.areasDeOperacao ?? [];
+  operacaoPayload.forEach((a, i) => {
+    if (!levelIds[a.level]) return;
+    (model.areasDeOperacao ??= []).push({
+      id: nextId(model, "aop"),
+      uid: uidDe("areasDeOperacao", i, operacaoPayload.length),
+      levelId: levelIds[a.level],
+      pontos: a.pontos.map((p) => ({ x: p.x, y: p.y })),
+      ...a.risco !== void 0 ? { risco: a.risco } : {},
+      ...a.nome !== void 0 ? { nome: a.nome } : {},
       ...a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}
     });
   });

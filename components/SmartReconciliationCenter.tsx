@@ -83,6 +83,10 @@ interface SmartReconciliationCenterProps {
     credorRegistros: SupplierOption[];
 }
 
+/** Grade das sugestões: Sistema | Confiança | Extrato. A coluna do meio é FIXA para o
+ *  cabeçalho alinhar com todos os cartões (com `auto` ela variava de cartão para cartão). */
+const GRADE_SUGESTAO = 'lg:grid-cols-[1fr_260px_1fr]';
+
 /** Quantas "regras sugeridas" a Central mostra de uma vez. */
 const MAX_SUGERIDAS = 5;
 
@@ -405,6 +409,14 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     </div>
                 ) : (
                     <div className="p-4 space-y-3 bg-gray-50/40">
+                        {/* Cabeçalho das colunas — no lugar do "Sistema"/"Extrato" repetido em cada
+                            cartão (pedido de 01/10/2026). Mesma grade dos cartões (GRADE_SUGESTAO);
+                            some no celular, onde os cartões empilham. */}
+                        <div className={`hidden lg:grid ${GRADE_SUGESTAO} px-px text-xs font-semibold text-gray-500`}>
+                            <p className="px-4 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Sistema</p>
+                            <p className="px-4 text-center">Confiança</p>
+                            <p className="px-4 flex items-center gap-1.5"><Landmark className="w-3.5 h-3.5" /> Extrato</p>
+                        </div>
                         {visible.map(({ sug, alt }) => {
                             const cand = sug.candidate_internal_transaction;
                             const bank = bankMap.get(sug.bank_transaction_id);
@@ -416,10 +428,10 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                 : null;
                             return (
                                 <div key={sug.id} className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(200px,auto)_1fr]">
+                                    <div className={`grid grid-cols-1 ${GRADE_SUGESTAO}`}>
                                         {/* Sistema */}
                                         <div className="p-4 border-b lg:border-b-0 lg:border-r border-gray-100 min-w-0">
-                                            <p className={`${label} flex items-center gap-1.5 mb-1`}><FileText className="w-3.5 h-3.5" /> Sistema</p>
+                                            <p className={`${label} flex items-center gap-1.5 mb-1 lg:hidden`}><FileText className="w-3.5 h-3.5" /> Sistema</p>
                                             <p className="text-sm font-medium text-gray-900 truncate" title={cand?.description}>{cand?.description || '—'}</p>
                                             {candParty && (
                                                 <p className={`text-sm flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-700' : 'text-indigo-700'}`} title={`${candParty.label}: ${candParty.name}`}>
@@ -444,7 +456,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
 
                                         {/* Extrato */}
                                         <div className="p-4 lg:border-l border-gray-100 min-w-0">
-                                            <p className={`${label} flex items-center gap-1.5 mb-1`}><Landmark className="w-3.5 h-3.5" /> Extrato</p>
+                                            <p className={`${label} flex items-center gap-1.5 mb-1 lg:hidden`}><Landmark className="w-3.5 h-3.5" /> Extrato</p>
                                             <p className="text-sm font-medium text-gray-900 truncate" title={bank?.description_raw}>{bank?.description_normalized || bank?.description_raw || '—'}</p>
                                             {bankParty && (
                                                 <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>

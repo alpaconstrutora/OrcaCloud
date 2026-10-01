@@ -34,7 +34,7 @@ import { applyBatch, conflitosArquitetonicos, pointInPolygon } from './blueprint
 import { classificarEdificacao, exigenciasDaEdificacao, pavimentoDeDescarga, type HipotesesIncendio, type MedidaDeSeguranca } from './blueprintIncendioClassificacao';
 import { percursoDeFuga } from './blueprintRotaDeFuga';
 import { analisarExtintores, proporExtintores } from './blueprintExtintores';
-import { analisarSinalizacao, proporSinalizacao } from './blueprintSinalizacao';
+import { analisarSinalizacao, comPlacas, proporSinalizacao } from './blueprintSinalizacao';
 import { kitDaPeca } from './blueprintKitsIncendio';
 import { criteriosDoPercursoMG } from './blueprintIncendioSaidasMG';
 import { desenhoPrefereMangotinho, divergenciasDaIT17, sistemaDeHidrantesMG, temSistema, type SistemaDeHidrantesMG } from './blueprintIncendioHidrantesMG';
@@ -219,7 +219,8 @@ export function gerarPpci(
         }
         const tubos = tracarRedeDeSprinklers(m, plano, alt, 'PONTA', risco);
         if (tubos.motivo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Traçado dos sprinklers em ${s.name ?? 'ambiente'}: ${tubos.motivo}.` });
-        n += aplicar([...comandosDaDistribuicao(plano, alt), ...tubos.comandos]);
+        // D1.2 (IT 15): a VGA do traçado entra com a placa E11.
+        n += aplicar(comPlacas(m, [...comandosDaDistribuicao(plano, alt), ...tubos.comandos]));
       }
       etapa('SPRINKLERS', 'Sprinklers por ambiente e traçado', 'LANCOU', n);
     }
@@ -297,7 +298,8 @@ export function gerarPpci(
     etapa('ILUMINACAO', 'Iluminação de emergência ao longo das rotas', 'LANCOU', n);
   } else etapa('ILUMINACAO', 'Iluminação de emergência ao longo das rotas', 'NAO_EXIGIDA', 0);
   if (exigida('DETECCAO') || exigida('ALARME')) {
-    let n = aplicar(proporAlarme(m, analisarAlarme(m, exigida('DETECCAO'), exigida('ALARME'))));
+    // D1.2 (IT 15): acionadores (E2) e avisadores (E1) entram com a placa — o kit da peça.
+    let n = aplicar(kitDaPeca(m, proporAlarme(m, analisarAlarme(m, exigida('DETECCAO'), exigida('ALARME')))).comandos);
     // F3: o eletroduto do laço (central → dispositivos, e a prumada).
     n += aplicar(proporEletrodutoDoLaco(m));
     etapa('ALARME', 'Detecção e alarme (laço, central e eletroduto)', 'LANCOU', n);

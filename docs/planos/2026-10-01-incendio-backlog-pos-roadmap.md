@@ -390,7 +390,15 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
         escada) — análise e proposta (a proposta põe um junto da entrada; a lei A1 segue fechando);
       - 6.2.1: unidade de pó ABC (ou A + BC) por pavimento; 6.2.1.2 (ABC em garagem e sem
         brigada) como aviso;
-    - [ ] IT 15 (sinalização), IT 13 (iluminação), IT 14 (alarme);
+    - [x] IT 15 (sinalização) — `blueprintSinalizacao.ts`, transcrição `it15-itens.txt`:
+      - os códigos do Anexo B: o rascunho usava E9 no recalque (E9 é o hidrante FORA do abrigo; o
+        recalque não tem código — a tampa "INCÊNDIO" da IT 17 o identifica) e S3 nas setas da rota
+        (S3 é a placa acima da porta; as setas são S1) — S3 segue no catálogo para as placas já
+        desenhadas;
+      - placas novas: VGA (E11), acionador (E2), avisador (E1) — o gerador as lança no kit;
+      - na rota, além das curvas e da saída, uma placa a no máximo 15 m de qualquer ponto
+        (6.1.3 b); o térreo de percurso curto e reto fica isento (6.1.3.5);
+    - [ ] IT 13 (iluminação), IT 14 (alarme);
   - [ ] D1.3 — a Tabela A.1 da IT 09 como catálogo de ATIVIDADES (divisão + carga).
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [x] **Fase F — 6 de 6** (frente `incendio-fase-f`):

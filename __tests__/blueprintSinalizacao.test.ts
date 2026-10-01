@@ -50,13 +50,13 @@ describe('E7.2 · a placa no kernel (0.86.0)', () => {
     let m = ponto(predio(), 'EXTINTOR', 3000, 3000);
     expect(canonicalPayload(m)).not.toMatch(/codigoPlaca|"alvo"/);
     m = ponto(m, 'PLACA', 3000, 3000, { codigoPlaca: 'E5', alvoId: m.terminais![0].id });
-    m = ponto(m, 'PLACA', 5000, 5000, { codigoPlaca: 'S3', rotacaoGraus: -90 });
+    m = ponto(m, 'PLACA', 5000, 5000, { codigoPlaca: 'S1', rotacaoGraus: -90 });
     const volta = modelFromCanonicalPayload(parseCanonicalPayload(canonicalPayload(m)));
     const e = volta.terminais!.find((t) => t.tipoHidraulico === 'EXTINTOR')!;
     const p1 = volta.terminais!.find((t) => t.codigoPlaca === 'E5')!;
-    const p2 = volta.terminais!.find((t) => t.codigoPlaca === 'S3')!;
+    const p2 = volta.terminais!.find((t) => t.codigoPlaca === 'S1')!;
     expect(p1).toMatchObject({ codigoPlaca: 'E5', alvoId: e.id });
-    expect(p2).toMatchObject({ codigoPlaca: 'S3', rotacaoGraus: 270 });
+    expect(p2).toMatchObject({ codigoPlaca: 'S1', rotacaoGraus: 270 });
     expect(canonicalPayload(volta)).toBe(canonicalPayload(m));
   });
 });
@@ -84,7 +84,7 @@ describe('E7.2 · a sinalização', () => {
     const saida = a.pontosDaRota.find((x) => x.codigo === 'S12')!;
     expect(saida).toMatchObject({ levelId: desc, at: point(2450, 0), coberto: false });
     // Quem desce a escada sai da caixa pela porta (6; 2,45) e dobra para a rua (70°): placa de seta ali, no térreo.
-    expect(a.pontosDaRota.some((x) => x.codigo === 'S3' && x.levelId === desc && x.at.x === 6000 && x.at.y === 2450)).toBe(true);
+    expect(a.pontosDaRota.some((x) => x.codigo === 'S1' && x.levelId === desc && x.at.x === 6000 && x.at.y === 2450)).toBe(true);
     // A dobra de 14° no canto da caixa (6; 6) não pede placa (abaixo de 30°).
     expect(a.pontosDaRota.some((x) => x.at.x === 6000 && x.at.y === 6000)).toBe(false);
     // Lançadas, ficam cobertas; e as de rota nascem viradas.

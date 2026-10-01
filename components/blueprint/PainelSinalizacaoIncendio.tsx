@@ -46,7 +46,7 @@ export default function PainelSinalizacaoIncendio({ analise: a, onSelecionar, pr
           <Linha rotulo="placa(s) sem código" ids={a.placasSemCodigo} onSelecionar={onSelecionar} />
           {faltamNaRota.length > 0 && (
             <li className="text-red-700">
-              {faltamNaRota.length} de {rota.length} ponto(s) da rota sem placa ({faltamNaRota.filter((p) => p.codigo === 'S12').length} saída(s), {faltamNaRota.filter((p) => p.codigo === 'S3').length} mudança(s) de direção)
+              {faltamNaRota.length} de {rota.length} ponto(s) da rota sem placa ({faltamNaRota.filter((p) => p.codigo === 'S12').length} saída(s), {faltamNaRota.filter((p) => p.codigo === 'S1').length} de orientação — curvas e a cada 15 m)
             </li>
           )}
         </ul>

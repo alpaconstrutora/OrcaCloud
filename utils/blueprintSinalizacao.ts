@@ -12,26 +12,37 @@
  *    lote vai criar são PREVISTOS aplicando-o numa cópia, e a previsão é
  *    conferida — o molde de `conferirPlano`.
  *
- * ⚠️ NORMA (CONFERIR NA NBR 13434 e na IT de sinalização do CBMMG): os códigos
- * das placas e as alturas de instalação foram transcritos de memória.
+ * NORMA: desde a D1.2 (01/10/2026), a IT 15 do CBMMG (transcrição em
+ * `docs/normas/incendio-mg/it15-itens.txt`): os códigos do Anexo B (E5 extintor, E7 mangotinho,
+ * E8 abrigo de mangueira e hidrante; S1 sentido da saída, S12 "SAÍDA"), a base a 1,80 m (6.1.4), a
+ * placa da porta de saída até 0,10 m acima da verga (6.1.3 a), e na ROTA uma placa a cada mudança
+ * de direção e a no máximo 15 m de qualquer ponto (6.1.3 b) — com a isenção do térreo de percurso
+ * curto e direto (6.1.3.5). O recalque não tem código na IT 15: é identificado pela tampa
+ * "INCÊNDIO" (IT 17, 5.3.4) — não ganha placa automática.
  */
 import { applyBatch, pointInPolygon, type BlueprintModel, type Command, type ObjectId, type Point, type Terminal } from './blueprintKernel';
 import type { PercursoDeFuga } from './blueprintRotaDeFuga';
 
-export const FONTE_SINALIZACAO = 'NBR 13434 e IT de sinalização do CBMMG — CONFERIR (transcrito de memória)';
+export const FONTE_SINALIZACAO = 'IT 15 do CBMMG (Portaria 61/2020), 6.1 e Anexo B';
 
 export interface PlacaDoCatalogo {
   nome: string;
   categoria: 'EQUIPAMENTO' | 'ORIENTACAO';
 }
-/** CONFERIR NA NBR 13434-2. */
+/** IT 15 do CBMMG, Anexo B (pp. 18–21) — os códigos que o motor usa. */
 export const CATALOGO_DE_PLACAS: Record<string, PlacaDoCatalogo> = {
-  E5: { nome: 'Extintor portátil', categoria: 'EQUIPAMENTO' },
+  E1: { nome: 'Alarme sonoro', categoria: 'EQUIPAMENTO' },
+  E2: { nome: 'Comando manual de alarme', categoria: 'EQUIPAMENTO' },
+  E3: { nome: 'Comando manual de bomba de incêndio', categoria: 'EQUIPAMENTO' },
+  E5: { nome: 'Extintor de incêndio', categoria: 'EQUIPAMENTO' },
   E7: { nome: 'Mangotinho', categoria: 'EQUIPAMENTO' },
   E8: { nome: 'Abrigo de mangueira e hidrante', categoria: 'EQUIPAMENTO' },
-  E9: { nome: 'Hidrante de recalque', categoria: 'EQUIPAMENTO' },
-  S3: { nome: 'Rota de saída (seta)', categoria: 'ORIENTACAO' },
-  S12: { nome: 'Saída de emergência', categoria: 'ORIENTACAO' },
+  E9: { nome: 'Hidrante de incêndio (fora do abrigo)', categoria: 'EQUIPAMENTO' },
+  E11: { nome: 'Válvula de controle dos chuveiros automáticos', categoria: 'EQUIPAMENTO' },
+  S1: { nome: 'Saída de emergência — sentido (seta)', categoria: 'ORIENTACAO' },
+  S2: { nome: 'Saída de emergência — sentido (seta à esquerda)', categoria: 'ORIENTACAO' },
+  S3: { nome: 'Saída de emergência — acima da porta', categoria: 'ORIENTACAO' },
+  S12: { nome: 'Saída (mensagem "SAÍDA")', categoria: 'ORIENTACAO' },
 };
 
 /** A placa de cada equipamento. */
@@ -40,12 +51,19 @@ export const PLACA_DO_EQUIPAMENTO: Partial<Record<NonNullable<Terminal['tipoHidr
   HIDRANTE_SIMPLES: 'E8',
   HIDRANTE_DUPLO: 'E8',
   MANGOTINHO: 'E7',
-  HIDRANTE_RECALQUE: 'E9',
+  // D1.2 (IT 15, Anexo B): a válvula de controle dos chuveiros e os do alarme também têm placa.
+  VGA: 'E11',
+  ACIONADOR_MANUAL: 'E2',
+  AVISADOR: 'E1',
+  // O recalque não tem código na IT 15: a tampa "INCÊNDIO" o identifica (IT 17, 5.3.4).
 };
 
-/** Alturas de instalação, mm — CONFERIR NA IT. */
+/** IT 15, 6.1.4: base da placa de equipamento a 1,80 m do piso. */
 export const COTA_DA_PLACA_DE_EQUIPAMENTO_MM = 1800;
+/** IT 15, 6.1.3 a: a placa da saída até 0,10 m acima da verga — a da porta de 2,10 m. */
 export const COTA_DA_PLACA_DE_SAIDA_MM = 2200;
+/** IT 15, 6.1.3 b: de qualquer ponto da rota, a placa de orientação a no máximo 15 m. */
+export const DISTANCIA_MAXIMA_ATE_A_PLACA_MM = 15000;
 /** Duas placas de rota a menos disto são a mesma. */
 const RAIO_DA_MESMA_PLACA_MM = 1500;
 /** Mudança de direção que pede placa, graus. */
@@ -56,7 +74,7 @@ const ehPlaca = (t: Terminal) => t.disciplina === 'INCENDIO' && t.tipoHidraulico
 export interface PontoDeSinalizacao {
   levelId: ObjectId;
   at: Point;
-  codigo: 'S3' | 'S12';
+  codigo: 'S1' | 'S12';
   /** A direção da seta (graus, anti-horário, 0 = +x). */
   rotacaoGraus: number;
   /** Já há placa de orientação aqui. */
@@ -75,26 +93,61 @@ export interface AnaliseDeSinalizacao {
 const graus = (a: Point, b: Point) => ((Math.round((Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI) % 360) + 360) % 360;
 const d2 = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
 
-/** Os pontos de sinalização de rota: as mudanças de direção e a saída de cada rota, sem repetir. */
+/**
+ * Os pontos de sinalização de rota: as mudanças de direção (6.1.3), a saída de cada rota, e — nos
+ * trechos longos — os intermediários, para que de qualquer ponto a placa seguinte fique a no
+ * máximo 15 m pela rota (6.1.3 b). Sem repetir. A rota do térreo curta (< 15 m), reta e sem escada
+ * não pede orientação (6.1.3.5: a saída se vê de onde se está).
+ */
 export function pontosDeSinalizacaoDaRota(percurso: PercursoDeFuga, descargaLevelId: ObjectId | null): Omit<PontoDeSinalizacao, 'coberto'>[] {
   const pontos: Omit<PontoDeSinalizacao, 'coberto'>[] = [];
   const somar = (p: Omit<PontoDeSinalizacao, 'coberto'>) => {
     if (!pontos.some((q) => q.levelId === p.levelId && d2(q.at, p.at) < RAIO_DA_MESMA_PLACA_MM)) pontos.push(p);
   };
+  const giroEm = (ps: Point[], i: number) => {
+    if (d2(ps[i - 1], ps[i]) < 1 || d2(ps[i], ps[i + 1]) < 1) return 0;
+    const antes = graus(ps[i - 1], ps[i]);
+    const depois = graus(ps[i], ps[i + 1]);
+    return Math.abs((((depois - antes) % 360) + 540) % 360 - 180);
+  };
   for (const a of percurso.ambientes) {
+    const curto =
+      !a.pelaEscada &&
+      a.rota.length === 1 &&
+      a.rota[0].levelId === descargaLevelId &&
+      (a.distanciaM ?? Infinity) < DISTANCIA_MAXIMA_ATE_A_PLACA_MM / 1000 &&
+      a.rota[0].pontos.every((_, i, ps) => i === 0 || i === ps.length - 1 || giroEm(ps, i) < CURVA_MINIMA_GRAUS);
+    if (curto) continue;
     a.rota.forEach((r, ir) => {
       const ps = r.pontos;
+      // As placas da rota, em distância percorrida (mm) a partir do começo do trecho.
+      const marcas: { s: number; i: number }[] = [];
+      const acumulado = [0];
+      for (let i = 1; i < ps.length; i++) acumulado.push(acumulado[i - 1] + d2(ps[i - 1], ps[i]));
       for (let i = 1; i < ps.length - 1; i++) {
-        const antes = graus(ps[i - 1], ps[i]);
-        const depois = graus(ps[i], ps[i + 1]);
-        const giro = Math.abs((((depois - antes) % 360) + 540) % 360 - 180);
-        if (d2(ps[i - 1], ps[i]) < 1 || d2(ps[i], ps[i + 1]) < 1 || giro < CURVA_MINIMA_GRAUS) continue;
-        somar({ levelId: r.levelId, at: { x: Math.round(ps[i].x), y: Math.round(ps[i].y) }, codigo: 'S3', rotacaoGraus: depois });
+        if (giroEm(ps, i) < CURVA_MINIMA_GRAUS) continue;
+        somar({ levelId: r.levelId, at: { x: Math.round(ps[i].x), y: Math.round(ps[i].y) }, codigo: 'S1', rotacaoGraus: graus(ps[i], ps[i + 1]) });
+        marcas.push({ s: acumulado[i], i });
       }
       // A saída: o fim da última rota, no pavimento de descarga.
-      if (ir === a.rota.length - 1 && r.levelId === descargaLevelId && ps.length >= 2) {
+      const ehSaida = ir === a.rota.length - 1 && r.levelId === descargaLevelId && ps.length >= 2;
+      if (ehSaida) {
         const fim = ps[ps.length - 1];
         somar({ levelId: r.levelId, at: { x: Math.round(fim.x), y: Math.round(fim.y) }, codigo: 'S12', rotacaoGraus: graus(ps[ps.length - 2], fim) });
+      }
+      // 6.1.3 b: entre o começo (ou uma placa) e a placa seguinte (ou o fim), no máximo 15 m — se não, uma
+      // placa 15 m antes da seguinte, e assim para trás. O fim de um trecho que não é a saída (a boca da
+      // escada) conta como placa: a escada tem a sua sinalização (6.1.3 c).
+      const total = acumulado[acumulado.length - 1];
+      const paradas = [0, ...marcas.map((m) => m.s), total];
+      for (let k = paradas.length - 1; k > 0; k--) {
+        for (let alvo = paradas[k] - DISTANCIA_MAXIMA_ATE_A_PLACA_MM; alvo > paradas[k - 1] + 1; alvo -= DISTANCIA_MAXIMA_ATE_A_PLACA_MM) {
+          const j = acumulado.findIndex((x, n) => n > 0 && x >= alvo);
+          if (j <= 0) continue;
+          const t = (alvo - acumulado[j - 1]) / Math.max(1, acumulado[j] - acumulado[j - 1]);
+          const at = { x: Math.round(ps[j - 1].x + (ps[j].x - ps[j - 1].x) * t), y: Math.round(ps[j - 1].y + (ps[j].y - ps[j - 1].y) * t) };
+          somar({ levelId: r.levelId, at, codigo: 'S1', rotacaoGraus: graus(ps[j - 1], ps[j]) });
+        }
       }
     });
   }

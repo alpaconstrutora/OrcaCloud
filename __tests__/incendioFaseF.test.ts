@@ -35,7 +35,7 @@ describe('F1 · o kit da peça', () => {
     expect(kit.aviso).toBeNull();
     const depois = applyBatch(m, kit.comandos).model;
     const tipos = depois.terminais!.map((t) => t.tipoHidraulico).sort();
-    expect(tipos).toEqual(['MANOMETRO', 'MANOMETRO', 'REGISTRO_GAVETA', 'VGA']);
+    expect(tipos).toEqual(['MANOMETRO', 'MANOMETRO', 'PLACA', 'REGISTRO_GAVETA', 'VGA']); // D1.2: a placa E11 (IT 15)
     const manometros = depois.terminais!.filter((t) => t.tipoHidraulico === 'MANOMETRO').map((t) => t.at.x).sort((a, b) => a - b);
     expect(manometros).toEqual([2700, 3300]); // um de cada lado, a 30 cm
     expect(depois.terminais!.find((t) => t.tipoHidraulico === 'REGISTRO_GAVETA')!.cotaMm).toBe(1200);
@@ -44,7 +44,7 @@ describe('F1 · o kit da peça', () => {
   it('a VGA fora da rede não ganha manômetro — o aviso diz por quê', () => {
     const { m, l } = nivel();
     const kit = kitDaPeca(m, [peca(l, 'VGA', 3000)]);
-    expect(kit.comandos).toHaveLength(1);
+    expect(kit.comandos).toHaveLength(2); // a VGA e a placa E11 (IT 15) — sem manômetro
     expect(kit.aviso).toMatch(/VGA fora da rede/);
   });
 

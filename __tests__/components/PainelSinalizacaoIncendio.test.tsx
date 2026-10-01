@@ -22,15 +22,15 @@ describe('PainelSinalizacaoIncendio', () => {
       placasOrfas: ['p9'],
       pontosDaRota: [
         { levelId: 'l', at: { x: 0, y: 0 }, codigo: 'S12', rotacaoGraus: 270, coberto: false },
-        { levelId: 'l', at: { x: 5, y: 5 }, codigo: 'S3', rotacaoGraus: 0, coberto: false },
-        { levelId: 'l', at: { x: 9, y: 9 }, codigo: 'S3', rotacaoGraus: 0, coberto: true },
+        { levelId: 'l', at: { x: 5, y: 5 }, codigo: 'S1', rotacaoGraus: 0, coberto: false },
+        { levelId: 'l', at: { x: 9, y: 9 }, codigo: 'S1', rotacaoGraus: 0, coberto: true },
       ],
     };
     render(<PainelSinalizacaoIncendio analise={a} onSelecionar={onSelecionar} proposta={{ quantas: 4, onPropor }} />);
     const t = screen.getByTestId('sinalizacao-falta').textContent!;
     expect(t).toContain('2 equipamento(s) sem placa');
     expect(t).toContain('1 placa(s) sem equipamento (ele foi apagado)');
-    expect(t).toContain('2 de 3 ponto(s) da rota sem placa (1 saída(s), 1 mudança(s) de direção)');
+    expect(t).toContain('2 de 3 ponto(s) da rota sem placa (1 saída(s), 1 de orientação — curvas e a cada 15 m)');
     const u = userEvent.setup();
     await u.click(screen.getByRole('button', { name: '2 equipamento(s) sem placa' }));
     expect(onSelecionar).toHaveBeenCalledWith(['e1', 'e2']);

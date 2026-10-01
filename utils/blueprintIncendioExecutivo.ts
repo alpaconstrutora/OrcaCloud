@@ -359,7 +359,7 @@ const NORMAS = [
   'NBR 13714 — Sistemas de hidrantes e de mangotinhos para combate a incêndio',
   'NBR 10897 — Sistemas de proteção contra incêndio por chuveiros automáticos',
   'NBR 12693 — Sistemas de proteção por extintores de incêndio',
-  'NBR 13434 — Sinalização de segurança contra incêndio e pânico',
+  'NBR 13434 — Sinalização de segurança contra incêndio e pânico (com a IT 15 do CBMMG)',
   'NBR 10898 — Sistema de iluminação de emergência',
   'NBR 17240 — Sistemas de detecção e alarme de incêndio',
   'NBR 9077 — Saídas de emergência em edifícios',
@@ -419,7 +419,8 @@ export function memorialDescritivoIncendio(model: BlueprintModel, hip: Hipoteses
   const placas = pecasDoTipo(model, ['PLACA']);
   if (placas.length) {
     const codigos = [...new Set(placas.map((p) => p.codigoPlaca).filter(Boolean))].sort();
-    sistemas.push(`Sinalização de emergência: ${placas.length} placa(s) fotoluminescente(s)${codigos.length ? ` (${codigos.join(', ')})` : ''}.`);
+    sistemas.push(`Sinalização de emergência: ${placas.length} placa(s) fotoluminescente(s)${codigos.length ? ` (${codigos.join(', ')})` : ''}, conforme a IT 15 do CBMMG — base a 1,80 m nos equipamentos, a placa de saída até 0,10 m acima da verga e, na rota, uma placa a cada mudança de direção e a no máximo 15 m de qualquer ponto.`);
+    if (conta(['HIDRANTE_RECALQUE'])) sistemas.push('O registro de recalque é identificado pela tampa vermelha com a palavra "INCÊNDIO" (IT 17 do CBMMG, 5.3.4).');
   }
   const lum = pecasDoTipo(model, ['LUMINARIA_EMERGENCIA']);
   if (lum.length) sistemas.push(`Iluminação de emergência: ${lum.length} luminária(s) autônoma(s) ao longo das rotas de fuga.`);

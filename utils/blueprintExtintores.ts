@@ -337,6 +337,23 @@ export interface PropostaDeExtintores {
  * ambiente) e, gulosamente, a que cobre mais ambientes descobertos primeiro —
  * com o extintor padrão das premissas (que cobre as classes do agente dele).
  */
+/**
+ * A capacidade que a proposta lança: a do padrão, ou — se ela fica abaixo da mínima do risco nas
+ * classes do agente — a mínima do risco (TABELA_DO_RISCO_DE_EXTINTOR, CONFERIR NA IT). A carga do
+ * padrão só acompanha quando a capacidade não precisou subir.
+ */
+export function capacidadeDoRisco(hip: HipotesesDeExtintores, risco: RiscoDeExtintor): { capacidade: string; carga: number | null } {
+  const linha = TABELA_DO_RISCO_DE_EXTINTOR[risco];
+  const classes = CLASSES_DO_AGENTE[hip.agentePadrao];
+  const cap = lerCapacidade(hip.capacidadePadrao) ?? { A: null, B: null, C: false };
+  const A = classes.includes('A') ? Math.max(cap.A ?? 0, linha.minimaA) : null;
+  const B = classes.includes('B') ? Math.max(cap.B ?? 0, linha.minimaB) : null;
+  const subiu = (A != null && A !== cap.A) || (B != null && B !== cap.B);
+  if (!subiu) return { capacidade: hip.capacidadePadrao, carga: hip.cargaPadraoKg };
+  const partes = [A != null ? `${A}-A` : null, B != null ? `${B}-B` : null, classes.includes('C') ? 'C' : null].filter(Boolean);
+  return { capacidade: partes.join(':'), carga: null };
+}
+
 export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtintores, hip: HipotesesDeExtintores): PropostaDeExtintores {
   const classesDoPadrao = CLASSES_DO_AGENTE[hip.agentePadrao];
   const faltam = analise.ambientes.filter((a) => !a.atende);
@@ -358,7 +375,10 @@ export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtint
     const candidatas: { ponto: Point; space: Space }[] = [];
     const comFolga = (s: Space, q: Point) => pointInPolygon(s.ring, q) && distanciaABorda(s, q) >= 150;
     for (const s of rede.espacos) {
-      const { centro } = candidatosDoAmbiente(s);
+      // ⚠️ A1 (plano pós-roadmap): o centro ARREDONDADO, como o kernel vai pô-lo. Medido sem
+      // arredondar, um centro em meio mm "cobria" a 0,7 mm do limite e a peça caía fora.
+      const c0 = candidatosDoAmbiente(s).centro;
+      const centro = { x: Math.round(c0.x), y: Math.round(c0.y) };
       if (comFolga(s, centro)) candidatas.push({ ponto: centro, space: s });
       for (const p of rede.portais.get(s.id) ?? []) {
         const w = model.walls.find((x) => x.id === p.parede);
@@ -376,17 +396,43 @@ export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtint
         }
       }
     }
+    // ⚠️ A1: também os próprios pontos dos ambientes pendentes, 30 cm para dentro rumo ao centro —
+    // sem eles, o braço de um L (ou o fundo de um salão) além do alcance da porta e do centro ficava
+    // sem posição, e a proposta não fechava a própria análise.
+    for (const id of pendentes) {
+      const s = porId.get(id)!;
+      const c0 = candidatosDoAmbiente(s).centro;
+      for (const p of pontosDeCobertura(s)) {
+        const d = Math.hypot(c0.x - p.x, c0.y - p.y) || 1;
+        const k = Math.min(300, d) / d;
+        const q = { x: Math.round(p.x + (c0.x - p.x) * k), y: Math.round(p.y + (c0.y - p.y) * k) };
+        if (comFolga(s, q)) candidatas.push({ ponto: q, space: s });
+      }
+    }
     // A cobertura é por PONTO (ver `pontosDeCobertura`): um corredor longo precisa de mais de um extintor.
     const unidades = new Map<string, { spaceId: ObjectId; ponto: Point }>();
     for (const id of pendentes) pontosDeCobertura(porId.get(id)!).forEach((p, k) => unidades.set(`${id}|${k}`, { spaceId: id, ponto: p }));
-    // O que JÁ está coberto pelos extintores existentes não precisa de outro.
-    const existentes = (model.terminais ?? [])
-      .filter((t) => t.levelId === levelId && t.tipoHidraulico === 'EXTINTOR' && (!t.agenteExtintor || classesDoPadrao.every((c) => CLASSES_DO_AGENTE[t.agenteExtintor!].includes(c))))
-      .map((t) => ({ ponto: t.at, space: rede.espacos.find((s) => pointInPolygon(s.ring, t.at)) }))
-      .filter((x): x is { ponto: Point; space: Space } => !!x.space);
-    if (existentes.length) {
-      const dist = distanciasAosPortais(rede, existentes);
-      for (const [k, u] of unidades) if (distanciaDoPonto(rede, porId.get(u.spaceId)!, u.ponto, existentes, dist) <= limiteMm + 1e-6) unidades.delete(k);
+    // O que JÁ está coberto pelos extintores existentes não precisa de outro — mas só conta o que
+    // combate TODAS as classes do ambiente daquela unidade, com a MESMA regra da análise (sem agente:
+    // só A). ⚠️ A1: antes o sem agente valia para tudo aqui e só para A lá — a cozinha ao lado dele
+    // ficava reprovada e a proposta nunca a cobria.
+    const classesDoExistente = (t: Terminal) => (t.agenteExtintor ? CLASSES_DO_AGENTE[t.agenteExtintor] : (['A'] as const));
+    const existentesDoNivel = (model.terminais ?? [])
+      .filter((t) => ehExtintor(t) && t.levelId === levelId)
+      .map((t) => ({ t, ponto: t.at, space: rede.espacos.find((s) => pointInPolygon(s.ring, t.at)) }))
+      .filter((x): x is { t: Terminal; ponto: Point; space: Space } => !!x.space);
+    const classesDaSala = new Map(alvo.map((a) => [a.spaceId, a.classes]));
+    const distPorConjunto = new Map<string, { origens: { ponto: Point; space: Space }[]; dist: Map<string, number> }>();
+    for (const [k, u] of unidades) {
+      const precisa = classesDaSala.get(u.spaceId) ?? ['A'];
+      const chave = [...precisa].sort().join('');
+      let r = distPorConjunto.get(chave);
+      if (!r) {
+        const origens = existentesDoNivel.filter((x) => precisa.every((c) => (classesDoExistente(x.t) as readonly string[]).includes(c))).map((x) => ({ ponto: x.ponto, space: x.space }));
+        r = { origens, dist: distanciasAosPortais(rede, origens) };
+        distPorConjunto.set(chave, r);
+      }
+      if (r.origens.length && distanciaDoPonto(rede, porId.get(u.spaceId)!, u.ponto, r.origens, r.dist) <= limiteMm + 1e-6) unidades.delete(k);
     }
     const cobre = new Map<number, Set<string>>();
     candidatas.forEach((c, i) => {
@@ -409,6 +455,11 @@ export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtint
     }
     for (const id of new Set([...unidades.values()].map((u) => u.spaceId))) semCobertura.push(`${porId.get(id)?.name || id}: nenhuma posição cobre (ambiente sem porta, ou maior que o alcance)`);
   }
+  // ⚠️ A1: a capacidade lançada é a que a ANÁLISE aceita no risco. O padrão (2-A:20-B:C) abaixo da
+  // mínima do risco (médio: 3-A, 40-B) era lançado e reprovado pela própria análise. Subindo a
+  // capacidade, a carga declarada do padrão deixa de valer (a carga de um 3-A é do fabricante) e
+  // a peça sai sem ela.
+  const { capacidade, carga } = capacidadeDoRisco(hip, analise.risco);
   const comandos = pontos.map(
     (p) =>
       ({
@@ -420,8 +471,8 @@ export function proporExtintores(model: BlueprintModel, analise: AnaliseDeExtint
         at: { ...p.at },
         cotaMm: 1600,
         agenteExtintor: hip.agentePadrao,
-        cargaExtintorKg: hip.cargaPadraoKg,
-        capacidadeExtintora: hip.capacidadePadrao,
+        ...(carga != null ? { cargaExtintorKg: carga } : {}),
+        capacidadeExtintora: capacidade,
       }) as Command,
   );
   return { comandos, pontos, semCobertura, motivo: comandos.length ? null : 'nenhuma posição cobre os ambientes que faltam' };

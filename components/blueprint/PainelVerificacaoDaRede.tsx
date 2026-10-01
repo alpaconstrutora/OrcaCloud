@@ -26,6 +26,7 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   PLUVIAL_NO_ESGOTO: 'Pluvial e esgoto misturados',
   ANEL_NAO_CALCULADO: 'Anel fora do cálculo (em árvore)',
   INCENDIO_FORA_DA_REDE: 'Peça fora da rede',
+  INCENDIO_DUPLICADA: 'Peça duplicada no mesmo ponto',
   INCENDIO_SEM_BOMBA: 'Sem entrada de água (sem bomba)',
   INCENDIO_DN_PECA: 'Peça maior que o tubo',
   INCENDIO_VELOCIDADE: 'Velocidade acima da máxima',

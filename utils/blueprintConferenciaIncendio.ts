@@ -25,12 +25,32 @@ import type { AnaliseDaBomba, PressurizacaoDaRede } from './blueprintBombeamento
 const PECAS_DE_NO = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'VGA', 'BOMBA_INCENDIO', 'BOMBA_JOCKEY', 'RESERVATORIO']);
 const CONSUMIDORAS = new Set(['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO', 'SPRINKLER']);
 
+/** A6: a menos disto, duas peças do mesmo tipo são "a mesma posição". */
+export const MESMA_POSICAO_MM = 10;
+
+/** A6: uma marca por peça que repete outra do mesmo tipo no mesmo ponto (a segunda em diante). */
+export function marcasDeDuplicadas(model: BlueprintModel): MarcaDeVerificacao[] {
+  const fogo = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico);
+  const marcas: MarcaDeVerificacao[] = [];
+  fogo.forEach((t, i) => {
+    const antes = fogo.slice(0, i).find((u) => u.levelId === t.levelId && u.tipoHidraulico === t.tipoHidraulico && Math.hypot(u.at.x - t.at.x, u.at.y - t.at.y) < MESMA_POSICAO_MM);
+    if (!antes) return;
+    const nome = FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!]?.rotulo ?? t.tipoHidraulico!;
+    marcas.push({ chave: `incdup|${t.id}`, tipo: 'INCENDIO_DUPLICADA', levelId: t.levelId, at: { ...t.at }, texto: `${nome.toLowerCase()} duplicado — outro no mesmo ponto`, severidade: 'ERRO', alvoId: t.id, disciplina: 'INCENDIO' });
+  });
+  return marcas;
+}
+
 /** O diagnóstico do lançamento — sem cálculo. */
 export function marcasDoLancamentoDeIncendio(model: BlueprintModel): MarcaDeVerificacao[] {
+  // A6 (plano pós-roadmap): PEÇA DUPLICADA — o mesmo tipo, no mesmo pavimento, a menos de 1 cm de
+  // outra. É o rastro de uma proposta que empilha (a luminária da E7.3 empilhava): com a marca, o
+  // defeito aparece no desenho em vez de sumir na contagem. Vale para TODA peça de incêndio.
+  const duplicadas = marcasDeDuplicadas(model);
   const pecas = (model.terminais ?? []).filter((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico && PECAS_DE_NO.has(t.tipoHidraulico));
-  if (pecas.length === 0) return [];
+  if (pecas.length === 0) return duplicadas;
   const rede = redeDeIncendio(model);
-  const marcas: MarcaDeVerificacao[] = [];
+  const marcas: MarcaDeVerificacao[] = [...duplicadas];
   for (const t of pecas) {
     if (!rede.noDoTerminal.has(t.id)) {
       marcas.push({ chave: `incfora|${t.id}`, tipo: 'INCENDIO_FORA_DA_REDE', levelId: t.levelId, at: { ...t.at }, texto: 'fora da rede — nenhum tubo chega aqui', severidade: 'ERRO', alvoId: t.id, disciplina: 'INCENDIO' });

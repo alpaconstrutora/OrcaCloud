@@ -20,6 +20,7 @@ import {
   planejarPontosDoAmbiente,
   planejarPontosDoNivel,
   pontosDaLouca,
+  pontosEletricosDoComponente,
   pontosDasLoucasCriadas,
 } from '../utils/blueprintPontosHidraulicos';
 import { planejarEsgoto } from '../utils/blueprintEsgotoAutomatico';
@@ -165,6 +166,28 @@ describe('pontosDaLouca (27/09/2026): a peça desenhada lança os pontos dela', 
     const pontos = pontosDasLoucasCriadas(r.model, r.diff.created);
     return { m: applyBatch(r.model, pontos).model, pontos };
   };
+
+  it('A5 (plano pós-roadmap): box grande AFASTADO da parede — rodar de novo não duplica a água da face', () => {
+    // O ponto de água nasce na FACE da parede (a 800 mm do centro do box); o "já lançado" media só
+    // 600 mm a partir do centro, não achava o irmão e lançava outro no mesmo lugar.
+    const { m: m0, t } = terreo();
+    const m = applyCommand(m0, { type: 'AddWall', levelId: t, a: point(0, 0), b: point(5000, 0), thicknessMm: 150, heightMm: 2800 } as Command).model;
+    const { m: comBox } = colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'BOX', at: point(2500, 875), larguraMm: 1200, profundidadeMm: 1200 } as Command);
+    const box = comBox.componentes!.find((c) => c.tipoId === 'BOX')!;
+    const agua = comBox.terminais!.filter((x) => x.disciplina === 'AGUA_FRIA');
+    expect(agua).toHaveLength(1);
+    expect(Math.hypot(agua[0].at.x - box.at.x, agua[0].at.y - box.at.y)).toBeGreaterThan(600);
+    expect(pontosDaLouca(comBox, box)).toEqual([]);
+  });
+
+  it('A5: a evaporadora afastada da parede — rodar de novo não duplica o ponto de ar-condicionado', () => {
+    const { m: m0, t } = terreo();
+    const m = applyCommand(m0, { type: 'AddWall', levelId: t, a: point(0, 0), b: point(5000, 0), thicknessMm: 150, heightMm: 2800 } as Command).model;
+    const { m: comEvap } = colocar(m, { type: 'AddComponente', levelId: t, tipoId: 'EVAPORADORA', at: point(2500, 750), profundidadeMm: 1200 } as Command);
+    const evap = comEvap.componentes!.find((c) => c.tipoId === 'EVAPORADORA')!;
+    expect((comEvap.terminais ?? []).filter((x) => x.tipoEletrico === 'AR_CONDICIONADO')).toHaveLength(1);
+    expect(pontosEletricosDoComponente(comEvap, evap)).toEqual([]);
+  });
 
   it('vaso → água fria + esgoto, no centro da peça, na cota da ficha; o esgoto automático passa a enxergá-lo', () => {
     const { m, t } = terreo();

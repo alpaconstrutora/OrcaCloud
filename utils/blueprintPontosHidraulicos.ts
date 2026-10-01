@@ -304,6 +304,8 @@ export function planejarPontosDoNivel(
 
 /** Raio em que um ponto é "da" louça — o mesmo de `pontoHidraulicoDoComponente`. */
 const RAIO_DA_LOUCA_MM = 600;
+/** A5: "o mesmo ponto" — a posição em que o novo nasceria, ao mm do kernel mais folga. */
+const MESMO_PONTO_MM = 50;
 
 /**
  * Os `AddTerminal` que faltam à louça (vaso, lavatório, box, tanque, máquina,
@@ -327,17 +329,20 @@ export function pontosDaLouca(
 ): Extract<Command, { type: 'AddTerminal' }>[] {
   const tipo = (CATALOGO_DE_COMPONENTES[componente.tipoId] as FichaDoComponente | undefined)?.ligaAoPonto;
   if (!tipo) return [];
+  const alcance = Math.max(componente.larguraMm, componente.profundidadeMm) / 2 + 400;
+  const naFace = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance)?.face;
+  // ⚠️ A5 (plano pós-roadmap): "irmão" também é o ponto que já está ONDE o novo nasceria (a face da
+  // parede). Medindo só a partir do centro, o box grande afastado da parede (face a > 600 mm) não
+  // achava a própria água e a lançava de novo no mesmo lugar a cada vez.
   const irmaos = (model.terminais ?? [])
     .filter((t) => t.levelId === componente.levelId && t.tipoHidraulico === tipo)
-    .map((t) => ({ t, d: Math.hypot(t.at.x - componente.at.x, t.at.y - componente.at.y) }))
-    .filter((x) => x.d <= RAIO_DA_LOUCA_MM)
-    .sort((a, b) => a.d - b.d)
+    .map((t) => ({ t, d: Math.hypot(t.at.x - componente.at.x, t.at.y - componente.at.y), f: naFace ? Math.hypot(t.at.x - naFace.x, t.at.y - naFace.y) : Infinity }))
+    .filter((x) => x.d <= RAIO_DA_LOUCA_MM || x.f <= MESMO_PONTO_MM)
+    .sort((a, b) => Math.min(a.d, a.f) - Math.min(b.d, b.f))
     .map((x) => x.t);
   const ficha = FICHA_DO_PONTO_HIDRAULICO[tipo];
   const ehAgua = (d: DisciplinaDeRede) => d === 'AGUA_FRIA' || d === 'AGUA_QUENTE';
   const irmaoDeAgua = irmaos.find((t) => ehAgua(t.disciplina));
-  const alcance = Math.max(componente.larguraMm, componente.profundidadeMm) / 2 + 400;
-  const naFace = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance)?.face;
   const posicao = (d: DisciplinaDeRede) =>
     ehAgua(d) ? (irmaoDeAgua?.at ?? naFace ?? componente.at) : (irmaos.find((t) => !ehAgua(t.disciplina))?.at ?? componente.at);
   return disciplinasDoAparelho(tipo, hip)
@@ -370,12 +375,17 @@ export function pontosEletricosDoComponente(
 ): Extract<Command, { type: 'AddTerminal' }>[] {
   const tipo = (CATALOGO_DE_COMPONENTES[componente.tipoId] as FichaDoComponente | undefined)?.ligaAoPontoEletrico;
   if (!tipo) return [];
-  const jaTem = (model.terminais ?? []).some(
-    (t) => t.levelId === componente.levelId && t.disciplina === 'ELETRICA' && t.tipoEletrico === tipo && Math.hypot(t.at.x - componente.at.x, t.at.y - componente.at.y) <= RAIO_DA_LOUCA_MM,
-  );
-  if (jaTem) return [];
   const alcance = Math.max(componente.larguraMm, componente.profundidadeMm) / 2 + 400;
   const naFace = faceDaParede(componente.at, model.walls.filter((w) => w.levelId === componente.levelId), alcance)?.face;
+  // ⚠️ A5: o ponto já na posição de nascer (a face) também conta — ver `pontosDaLouca`.
+  const jaTem = (model.terminais ?? []).some(
+    (t) =>
+      t.levelId === componente.levelId &&
+      t.disciplina === 'ELETRICA' &&
+      t.tipoEletrico === tipo &&
+      (Math.hypot(t.at.x - componente.at.x, t.at.y - componente.at.y) <= RAIO_DA_LOUCA_MM || (!!naFace && Math.hypot(t.at.x - naFace.x, t.at.y - naFace.y) <= MESMO_PONTO_MM)),
+  );
+  if (jaTem) return [];
   const ponto = naFace ?? componente.at;
   const potencia = potenciaPadraoVA(tipo, null);
   return [

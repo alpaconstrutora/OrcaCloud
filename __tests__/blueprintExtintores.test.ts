@@ -121,7 +121,9 @@ describe('E7.1 · a regra', () => {
     const depois = applyBatch(m, p.comandos).model;
     const a = analisarExtintores(depois, 'MEDIA', HE);
     expect(a.ambientes.every((x) => x.atende)).toBe(true);
-    expect(a.extintores.every((x) => x.agente === 'PQS_ABC' && x.capacidadeAtende === false)).toBe(true); // 2-A < 3-A do médio
+    // A1 (plano pós-roadmap): a proposta lança a capacidade que o risco pede — antes lançava o padrão
+    // 2-A, que a própria análise reprovava no médio (3-A), e este teste AFIRMAVA a reprovação.
+    expect(a.extintores.every((x) => x.agente === 'PQS_ABC' && x.capacidade === '3-A:40-B:C' && x.capacidadeAtende === true)).toBe(true);
   });
 });
 

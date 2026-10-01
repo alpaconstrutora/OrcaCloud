@@ -252,7 +252,36 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
 
 - [x] A7 — iluminação: folga de 10 cm e teste sem duplicada (e8f37182); dado em produção
   verificado: nada a limpar
-- [ ] A1 · A2 · A3 · A4 · A5 · A6
+- [x] **Fase A — 7 de 7** (01/10/2026, frente `incendio-fase-a`):
+  - [x] A1 — `__tests__/propostasIdempotentes.test.ts`: 5 motores × 4 cenários (retângulo, meio
+    mm, L, L estreito) + 2 sem solução (sem porta, salão de 70 m com uma porta) + os casos
+    pontuais.
+    - **Antes de corrigir, 7 falhas**, que eram os riscos da auditoria:
+      - a capacidade reprovada nos 4 cenários;
+      - o extintor sem agente;
+      - a detecção no L estreito;
+      - o acionador relançado no salão de 70 m.
+  - [x] A2 — extintores:
+    - o centro arredondado antes de medir;
+    - o existente só desconta a unidade se combate TODAS as classes do ambiente (sem agente = A,
+      como na análise; só os da disciplina de incêndio);
+    - candidatos também nos pontos descobertos (30 cm para dentro), porque o braço do L ficava sem
+      posição;
+    - `capacidadeDoRisco`: a capacidade lançada sobe para a mínima do risco (médio: `3-A:40-B:C`,
+      sem carga declarada). O teste antigo que AFIRMAVA a reprovação passou a afirmar o atendimento.
+  - [x] A3 — alarme:
+    - detectores cobrem os MESMOS pontos da análise, descontando os existentes (guloso sobre
+      posições arredondadas: a malha e os pontos descobertos);
+    - acionadores descontam o que os existentes alcançam;
+    - o que nenhuma posição cobre fica dito, não relançado.
+  - [x] A4 — `distribuirSprinklers` recusa o ambiente que já tem sprinkler ("apague-os para
+    redistribuir"). A gaveta mostra o motivo e desliga o botão; vale também para o gerador.
+  - [x] A5 — pontos de louça e o elétrico do componente: "já lançado" também na posição de nascer
+    (a face, 50 mm). Reproduzido antes (box de 1,20 m, evaporadora afastada) e corrigido.
+  - [x] A6 — marca `INCENDIO_DUPLICADA` (mesmo tipo, mesmo pavimento, < 1 cm), em toda peça de
+    incêndio.
+  - Suíte com 6.826 testes: 6.793 + 33 pulados (a 1ª rodada caiu no worker). Build ok (a 1ª
+    tentativa foi a queda do Node 24; a 2ª passou).
 - [ ] B1 · B2 · B3 · B4 (dependem de D-1, D-2, D-3)
 - [ ] C1
 - [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)

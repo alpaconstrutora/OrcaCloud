@@ -59,6 +59,8 @@ export type TipoDeMarca =
   | 'ANEL_NAO_CALCULADO'
   // Incêndio E2.4 — o diagnóstico do lançamento (sempre) e o do cálculo (com a tarefa aberta).
   | 'INCENDIO_FORA_DA_REDE'
+  /** A6 (plano pós-roadmap): peça de incêndio repetida no mesmo ponto. */
+  | 'INCENDIO_DUPLICADA'
   | 'INCENDIO_SEM_BOMBA'
   | 'INCENDIO_DN_PECA'
   | 'INCENDIO_VELOCIDADE'
@@ -271,6 +273,6 @@ export function resumoDaVerificacao(marcas: readonly MarcaDeVerificacao[], disci
   return {
     pontasAbertas: daRede.filter((m) => m.tipo === 'PONTA_ABERTA').length,
     dnFora: daRede.filter((m) => m.tipo === 'DN_MENOR' || m.tipo === 'DN_MAIOR'),
-    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO', 'ANEL_NAO_CALCULADO', 'INCENDIO_FORA_DA_REDE', 'INCENDIO_SEM_BOMBA', 'INCENDIO_DN_PECA', 'INCENDIO_VELOCIDADE', 'INCENDIO_PRESSAO_ALTA', 'INCENDIO_NAO_ATENDE', 'INCENDIO_SEM_COBERTURA'].includes(m.tipo)),
+    fluxo: daRede.filter((m) => ['CONTRAFLUXO', 'DECLIVIDADE_BAIXA', 'DN_DIMINUI', 'SEM_DESTINO', 'SEM_VENTILACAO', 'VENTILACAO_BAIXA', 'DN_VENTILACAO', 'ATRAVESSA_PILAR', 'CRUZA_VIGA', 'CALHA_INSUFICIENTE', 'CALHA_DECLIVIDADE', 'CONDUTOR_INSUFICIENTE', 'CONDUTOR_DECLIVIDADE', 'PLUVIAL_NO_ESGOTO', 'ANEL_NAO_CALCULADO', 'INCENDIO_FORA_DA_REDE', 'INCENDIO_DUPLICADA', 'INCENDIO_SEM_BOMBA', 'INCENDIO_DN_PECA', 'INCENDIO_VELOCIDADE', 'INCENDIO_PRESSAO_ALTA', 'INCENDIO_NAO_ATENDE', 'INCENDIO_SEM_COBERTURA'].includes(m.tipo)),
   };
 }

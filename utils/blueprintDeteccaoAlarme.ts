@@ -164,10 +164,38 @@ export function proporAlarme(model: BlueprintModel, a: AnaliseDeAlarme): Command
     }
   }
   const laco = centralId ? { centralAlarmeId: centralId } : {};
-  // Detectores: a malha nos ambientes descobertos.
+  // Detectores: cobrir os MESMOS pontos que a análise mede (`pontosDeCobertura`), descontando os
+  // detectores que já estão no ambiente — guloso, sobre posições JÁ arredondadas: a malha e os
+  // próprios pontos descobertos puxados para dentro. ⚠️ A1 (plano pós-roadmap): antes a malha
+  // entrava INTEIRA a cada clique; no L estreito ela não cobria, e cada clique empilhava outra.
   for (const amb of a.ambientes.filter((x) => !x.atende)) {
     const s = model.spaces.find((x) => x.id === amb.spaceId)!;
-    for (const p of malhaDeDetectores(s, RAIO_DO_DETECTOR_MM[amb.detector])) lote.push(novo(amb.levelId, amb.detector, p, 2700, laco));
+    const raio = RAIO_DO_DETECTOR_MM[amb.detector];
+    const cobreP = (d: Point, p: Point) => Math.hypot(d.x - p.x, d.y - p.y) <= raio + 1e-6;
+    const existentes = (model.terminais ?? []).filter((t) => ehTipo(t, DETECTORES) && t.levelId === s.levelId && pointInPolygon(s.ring, t.at));
+    const doTipoExistente = (t: (typeof existentes)[number], p: Point) => Math.hypot(t.at.x - p.x, t.at.y - p.y) <= RAIO_DO_DETECTOR_MM[t.tipoHidraulico as keyof typeof RAIO_DO_DETECTOR_MM] + 1e-6;
+    let faltam = pontosDeCobertura(s).filter((p) => !existentes.some((t) => doTipoExistente(t, p)));
+    const c0 = candidatosDoAmbiente(s).centro;
+    const paraDentro = (p: Point): Point => {
+      const d = Math.hypot(c0.x - p.x, c0.y - p.y) || 1;
+      const k = Math.min(300, d) / d;
+      return { x: Math.round(p.x + (c0.x - p.x) * k), y: Math.round(p.y + (c0.y - p.y) * k) };
+    };
+    const candidatas = [...malhaDeDetectores(s, raio), ...faltam.map(paraDentro)]
+      .map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }))
+      .filter((p) => pointInPolygon(s.ring, p));
+    while (faltam.length) {
+      let melhor: Point | null = null;
+      let n = 0;
+      for (const c of candidatas) {
+        const k = faltam.filter((p) => cobreP(c, p)).length;
+        if (k > n) (melhor = c, n = k);
+      }
+      if (!melhor) break; // o que nenhuma posição cobre fica dito na análise, não relançado
+      lote.push(novo(amb.levelId, amb.detector, melhor, 2700, laco));
+      const m = melhor;
+      faltam = faltam.filter((p) => !cobreP(m, p));
+    }
   }
   // Acionadores: gulosa sobre a cobertura de 30 m, candidatos ao lado das portas.
   const porNivel = new Map<ObjectId, { spaceId: ObjectId }[]>();
@@ -180,6 +208,16 @@ export function proporAlarme(model: BlueprintModel, a: AnaliseDeAlarme): Command
     const porId = new Map(rede.espacos.map((s) => [s.id, s]));
     const unidades = new Map<string, { s: Space; p: Point }>();
     for (const { spaceId } of lista) pontosDeCobertura(porId.get(spaceId)!).forEach((p, k) => unidades.set(`${spaceId}|${k}`, { s: porId.get(spaceId)!, p }));
+    // ⚠️ A1: o que os acionadores EXISTENTES já alcançam não pede outro (como nos extintores) —
+    // antes o ponto inalcançável mantinha o ambiente na lista e o mesmo acionador voltava a cada clique.
+    const existentes = (model.terminais ?? [])
+      .filter((t) => ehTipo(t, ['ACIONADOR_MANUAL']) && t.levelId === levelId)
+      .map((t) => ({ ponto: t.at, space: rede.espacos.find((s) => pointInPolygon(s.ring, t.at)) }))
+      .filter((x): x is { ponto: Point; space: Space } => !!x.space);
+    if (existentes.length) {
+      const dist = distanciasAosPortais(rede, existentes);
+      for (const [k, u] of unidades) if (distanciaDoPonto(rede, u.s, u.p, existentes, dist) <= DISTANCIA_ATE_ACIONADOR_MM + 1e-6) unidades.delete(k);
+    }
     const candidatas: { ponto: Point; space: Space }[] = [];
     for (const s of rede.espacos) {
       for (const pt of rede.portais.get(s.id) ?? []) {

@@ -173,6 +173,10 @@ export function distribuirSprinklers(model: BlueprintModel, spaceId: ObjectId, c
   const vazio = (motivo: string): PlanoDeSprinklers => ({ spaceId, levelId: space?.levelId ?? '', cotaMm: 0, alternativas: [], motivo });
   if (!space) return vazio('ambiente inexistente');
   if (!criterio.risco || !criterio.areaPorSprinkler) return vazio('sem o risco dos sprinklers — declare-o nas premissas');
+  // ⚠️ A4 (plano pós-roadmap): o ambiente que JÁ tem sprinkler não recebe outra malha — dois cliques
+  // em "Lançar" davam a mesma malha duas vezes, no mesmo lugar. Redistribuir = apagar e lançar.
+  const jaTem = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'SPRINKLER' && t.levelId === space.levelId && pointInPolygon(space.ring, t.at)).length;
+  if (jaTem) return vazio(`o ambiente já tem ${jaTem} sprinkler(s) — apague-os para redistribuir`);
   const nivel = model.levels.find((l) => l.id === space.levelId)!;
   const cotaMm = nivel.defaultHeightMm - (hs.distanciaAoTetoMm ?? DISTANCIA_AO_TETO_PADRAO_MM);
   const S = ESPACAMENTO_MAXIMO_MM[criterio.risco.valor];

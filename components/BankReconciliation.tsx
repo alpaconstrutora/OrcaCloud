@@ -1065,13 +1065,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         try {
             const { data } = await supabase
                 .from('projects')
-                .select('id, name, settings')
+                // Só o que a lista usa. Antes: `settings` inteiro (~1,1 MB na Alpa) para
+                // ler um campo. A JSON path do PostgREST traz só a organização.
+                .select('id, name, organization_id:settings->>organizationId')
                 .filter('settings->>organizationId', 'in', `(${orgIds.join(',')})`)
                 .not('name', 'in', SYSTEM_PROJECT_NAMES_SQL) // utils/systemProjects.ts
                 .order('name', { ascending: true });
             if (data) {
-                type Row = { id: string; name: string; settings?: { organizationId?: string } | null };
-                const rows = (data as Row[]).map(p => ({ id: p.id, name: p.name, organization_id: p.settings?.organizationId ?? null }));
+                type Row = { id: string; name: string; organization_id?: string | null };
+                const rows = (data as Row[]).map(p => ({ id: p.id, name: p.name, organization_id: p.organization_id ?? null }));
                 // Dedup por nome DENTRO da org (duas orgs podem ter obra homônima).
                 const uniqueProjects = Array.from(new Map(rows.map(p => [`${p.organization_id}|${p.name}`, p])).values());
                 setMasterProjects(uniqueProjects);
@@ -1350,27 +1352,38 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             // Dispara em paralelo tudo que não depende uma da outra (supabase-js resolve com
             // { error } em vez de rejeitar, então uma falha aqui não derruba o Promise.all).
+            // Cada etapa marca o próprio tempo: se uma estourar o corte de 20 s, o aviso diz
+            // QUAL foi e quanto levou (01/10/2026: "signal is aborted" sem dizer de onde).
+            const t0Carga = Date.now();
+            const tempos: Record<string, number> = {};
+            const medir = <R,>(etapa: string, pr: Promise<R>) => pr.finally(() => { tempos[etapa] = Date.now() - t0Carga; });
             const [bankResult, iTxResult, projResult, sugResult] = await Promise.all([
-                fetchAllPages<BankTransaction>(buildBankQuery as never),
-                fetchAllPages<InternalTransaction>(buildITxQuery as never),
+                medir('extratos', fetchAllPages<BankTransaction>(buildBankQuery as never)),
+                medir('lançamentos', fetchAllPages<InternalTransaction>(buildITxQuery as never)),
                 // --- PONTE COMERCIAL --- só relevante na aba Pendentes
                 (isPendingView && orgForProj)
-                    ? supabase.from('projects').select('id, name, settings').filter('settings->>organizationId', 'eq', orgForProj)
+                    // Só as transações financeiras (1,1 MB → 186 KB na Alpa, medido em 01/10/2026).
+                    ? supabase.from('projects').select('id, name, settings:settings->financialInfo').filter('settings->>organizationId', 'eq', orgForProj)
                         .then(r => r, (err: unknown) => {
                             console.error('Erro na varredura total de projetos:', err);
                             return { data: [] as Array<{ id: string; name: string; settings: any }> };
                         })
                     : Promise.resolve({ data: [] as Array<{ id: string; name: string; settings: any }> }),
-                isPendingView ? buscarSugestoes() : Promise.resolve(null),
+                isPendingView ? medir('sugestões', buscarSugestoes()) : Promise.resolve(null),
             ]);
 
             if (!vigente()) return;
+            const etapaFalhou = (etapa: string, err: unknown) => {
+                const e = new Error(`${etapa} (${((tempos[etapa] ?? 0) / 1000).toFixed(1)} s): ${errorMessage(err, 'erro desconhecido')}`);
+                (e as Error & { code?: string }).code = (err as { code?: string } | null)?.code;
+                return e;
+            };
             const { data: bTxs, error: bError } = bankResult;
-            if (bError) throw bError;
+            if (bError) throw etapaFalhou('extratos', bError);
             setBankTransactions(bTxs || []);
 
             const { data: iTxs, error: iError } = iTxResult;
-            if (iError) throw iError;
+            if (iError) throw etapaFalhou('lançamentos', iError);
 
             let finalITxs = iTxs || [];
 
@@ -1378,7 +1391,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (allProjData && allProjData.length > 0) {
                 let commercialMatches: CommercialMatch[] = [];
                 allProjData.forEach(proj => {
-                    const txs: Array<Record<string, unknown>> = proj.settings?.financialInfo?.transactions || [];
+                    // `settings` aqui já É o financialInfo (JSON path no select acima).
+                    const txs: Array<Record<string, unknown>> = proj.settings?.transactions || [];
                     const mappedCommercial = txs
                         .filter((t) => (t['status'] === 'PENDING' || t['status'] === 'PENDENTE' || t['status'] === 'OPEN'))
                         .filter((t) => {
@@ -1420,7 +1434,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (sugResult) {
                 if (sugResult.error) {
                     console.error('Error loading suggestions:', sugResult.error);
-                    setActionFeedback({ message: 'Não foi possível carregar as sugestões: ' + errorMessage(sugResult.error, 'erro desconhecido'), type: 'error' });
+                    setActionFeedback({ message: `Não foi possível carregar as sugestões (${((tempos['sugestões'] ?? 0) / 1000).toFixed(1)} s): ` + errorMessage(sugResult.error, 'erro desconhecido'), type: 'error' });
                     setTimeout(() => setActionFeedback(null), 8000);
                 }
                 setSuggestions(bTxs && bTxs.length > 0 ? (sugResult.data ?? []) : []);

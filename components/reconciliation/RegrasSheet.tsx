@@ -83,16 +83,21 @@ const RegrasSheet: React.FC<Props> = ({
     // ── Categorias fora da conciliação (pedido de 01/10/2026: "Movimentação") ──
     // `null` = ainda não leu (ou a leitura falhou): sem lista lida, não deixa gravar —
     // gravaria por cima do que está no banco.
+    // + "Incluir lançamentos do extrato sem credor/cliente definido" (pedido de 01/10/2026,
+    // padrão marcado). Os dois filtros são lidos e gravados juntos.
     const [excluidas, setExcluidas] = useState<string[] | null>(null);
+    const [incluirSemContraparte, setIncluirSemContraparte] = useState(true);
     const [gravandoExcluidas, setGravandoExcluidas] = useState(false);
     const excluidasMudaram = useRef(false);
 
     async function carregarExcluidas(org: string) {
         setExcluidas(null);
         try {
-            setExcluidas(await bankReconciliationService.lerCategoriasExcluidas(org));
+            const filtros = await bankReconciliationService.lerFiltrosDaConciliacao(org);
+            setIncluirSemContraparte(filtros.include_without_counterparty);
+            setExcluidas(filtros.excluded_categories);
         } catch (e) {
-            setErro('Não foi possível ler as categorias fora da conciliação: '
+            setErro('Não foi possível ler o que fica fora da conciliação: '
                 + (e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)));
         }
     }
@@ -101,15 +106,16 @@ const RegrasSheet: React.FC<Props> = ({
         if (open && organizationId) void carregarExcluidas(organizationId);
     }, [open, organizationId]);
 
-    async function gravarExcluidas(org: string, lista: string[]) {
+    async function gravarFiltros(org: string, filtros: { excluded_categories?: string[]; include_without_counterparty?: boolean }) {
         setGravandoExcluidas(true);
         setErro(null);
         try {
-            await bankReconciliationService.salvarCategoriasExcluidas(org, lista);
-            setExcluidas(lista);
+            await bankReconciliationService.salvarFiltrosDaConciliacao(org, filtros);
+            if (filtros.excluded_categories) setExcluidas(filtros.excluded_categories);
+            if (filtros.include_without_counterparty !== undefined) setIncluirSemContraparte(filtros.include_without_counterparty);
             excluidasMudaram.current = true;
         } catch (e) {
-            setErro('Não foi possível salvar as categorias fora da conciliação: '
+            setErro('Não foi possível salvar o que fica fora da conciliação: '
                 + (e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e)));
         } finally {
             setGravandoExcluidas(false);
@@ -268,7 +274,7 @@ const RegrasSheet: React.FC<Props> = ({
                 {organizationId && !form && (
                     <div className="space-y-4">
                         <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
-                            <h3 className="text-sm font-semibold text-gray-900">Categorias fora da conciliação</h3>
+                            <h3 className="text-sm font-semibold text-gray-900">Fora da conciliação</h3>
                             {gravandoExcluidas && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
                         </div>
                         <p className="text-sm text-gray-600">
@@ -284,7 +290,7 @@ const RegrasSheet: React.FC<Props> = ({
                                         {c}
                                         <button
                                             type="button"
-                                            onClick={() => gravarExcluidas(organizationId, excluidas.filter(x => x !== c))}
+                                            onClick={() => gravarFiltros(organizationId, { excluded_categories: excluidas.filter(x => x !== c) })}
                                             disabled={gravandoExcluidas}
                                             title={`Voltar "${c}" para a conciliação`}
                                             className="p-0.5 rounded-[4px] text-gray-400 hover:text-gray-700 hover:bg-gray-200 disabled:opacity-50"
@@ -296,7 +302,7 @@ const RegrasSheet: React.FC<Props> = ({
                                 <select
                                     aria-label="Adicionar categoria fora da conciliação"
                                     value=""
-                                    onChange={e => { if (e.target.value) void gravarExcluidas(organizationId, [...excluidas, e.target.value]); }}
+                                    onChange={e => { if (e.target.value) void gravarFiltros(organizationId, { excluded_categories: [...excluidas, e.target.value] }); }}
                                     disabled={gravandoExcluidas}
                                     title={gravandoExcluidas ? 'Salvando a lista…' : undefined}
                                     className={field.replace('w-full ', 'w-56 ')}
@@ -306,6 +312,25 @@ const RegrasSheet: React.FC<Props> = ({
                                         .map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
+                        )}
+                        {excluidas !== null && (
+                            <label className="flex items-start gap-2.5 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={incluirSemContraparte}
+                                    onChange={e => gravarFiltros(organizationId, { include_without_counterparty: e.target.checked })}
+                                    disabled={gravandoExcluidas}
+                                    title={gravandoExcluidas ? 'Salvando…' : undefined}
+                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                />
+                                <span className="text-sm">
+                                    <span className="text-gray-900">Incluir lançamentos do extrato sem credor/cliente definido</span>
+                                    <span className="block text-xs text-gray-500">
+                                        Desmarcado, o extrato sem credor/cliente fica fora da conciliação, como as categorias acima.
+                                        O que o motor reconhecer pelo CNPJ, PIX ou apelido ganha o nome no Reprocessar e volta a entrar.
+                                    </span>
+                                </span>
+                            </label>
                         )}
                     </div>
                 )}

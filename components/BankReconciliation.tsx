@@ -46,7 +46,7 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
-import { foraDaConciliacao } from '../utils/reconciliationRules';
+import { extratoForaDaConciliacao } from '../utils/reconciliationRules';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
 import { reconciliationReprocessService, resumoDoReprocesso } from '../services/reconciliationReprocessService';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
@@ -1358,12 +1358,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             const t0Carga = Date.now();
             const tempos: Record<string, number> = {};
             const medir = <R,>(etapa: string, pr: Promise<R>) => pr.finally(() => { tempos[etapa] = Date.now() - t0Carga; });
-            // Categorias fora da conciliação (painel Regras da Central): na Pendentes e na
-            // Central o extrato delas some da lista, com as sugestões dele. No Extrato fica.
-            // A lista é da organização da CONTA, como as regras e as tolerâncias.
+            // Fora da conciliação (painel Regras da Central: categoria excluída, ou sem
+            // credor/cliente com a inclusão desligada): na Pendentes e na Central o extrato some
+            // da lista, com as sugestões dele. No Extrato fica. Os filtros são da organização
+            // da CONTA, como as regras e as tolerâncias.
             const recortaCategorias = activeView === 'pending' || activeView === 'center';
             const orgDaContaSelecionada = accounts.find(a => a.id === selectedAccountId)?.organization_id || null;
-            const [bankResult, iTxResult, projResult, sugResult, categoriasExcluidas] = await Promise.all([
+            const [bankResult, iTxResult, projResult, sugResult, filtrosDaConciliacao] = await Promise.all([
                 medir('extratos', fetchAllPages<BankTransaction>(buildBankQuery as never)),
                 medir('lançamentos', fetchAllPages<InternalTransaction>(buildITxQuery as never)),
                 // --- PONTE COMERCIAL --- só relevante na aba Pendentes
@@ -1378,11 +1379,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 isPendingView ? medir('sugestões', buscarSugestoes()) : Promise.resolve(null),
                 (recortaCategorias && orgDaContaSelecionada)
                     // Falha ao ler a lista não derruba a carga: sem ela, nada é escondido.
-                    ? bankReconciliationService.lerCategoriasExcluidas(orgDaContaSelecionada).catch(e => {
-                        console.error('[loadTransactions] categorias excluídas', e);
-                        return [] as string[];
+                    ? bankReconciliationService.lerFiltrosDaConciliacao(orgDaContaSelecionada).catch(e => {
+                        console.error('[loadTransactions] filtros da conciliação', e);
+                        return null;
                     })
-                    : Promise.resolve([] as string[]),
+                    : Promise.resolve(null),
             ]);
 
             if (!vigente()) return;
@@ -1393,8 +1394,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             };
             const { data: bTxsDaConta, error: bError } = bankResult;
             if (bError) throw etapaFalhou('extratos', bError);
-            const bTxs = categoriasExcluidas.length
-                ? (bTxsDaConta || []).filter(t => !foraDaConciliacao(t.category, categoriasExcluidas))
+            const bTxs = filtrosDaConciliacao
+                ? (bTxsDaConta || []).filter(t => !extratoForaDaConciliacao(t, filtrosDaConciliacao))
                 : (bTxsDaConta || []);
             setBankTransactions(bTxs);
 

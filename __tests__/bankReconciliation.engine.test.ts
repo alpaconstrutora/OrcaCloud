@@ -388,3 +388,52 @@ describe('planMatching — extrato de categoria excluída não vira sugestão ne
         expect(regrasPuras.montarAjustes(null, { excluded_categories: ['', ' ', 'X'] }).excluded_categories).toEqual(['X']);
     });
 });
+
+// ─── Pedido do usuário (01/10/2026): "Incluir lançamentos do extrato sem credor/cliente" ───
+describe('extratoForaDaConciliacao — extrato sem credor/cliente', () => {
+    const { extratoForaDaConciliacao } = regrasPuras;
+
+    it('padrão (ausente/true): sem contraparte continua entrando', () => {
+        expect(extratoForaDaConciliacao({ counterparty_name: null }, null)).toBe(false);
+        expect(extratoForaDaConciliacao({ counterparty_name: '' }, { include_without_counterparty: true })).toBe(false);
+    });
+
+    it('desligado: sem contraparte (vazia ou só espaço) sai; com contraparte fica', () => {
+        const f = { include_without_counterparty: false };
+        expect(extratoForaDaConciliacao({ counterparty_name: '  ' }, f)).toBe(true);
+        expect(extratoForaDaConciliacao({ counterparty_name: 'FULANO' }, f)).toBe(false);
+    });
+
+    it('categoria excluída sai mesmo com contraparte', () => {
+        expect(extratoForaDaConciliacao({ category: 'Movimentação', counterparty_name: 'FULANO' }, { excluded_categories: ['movimentacao'] })).toBe(true);
+    });
+});
+
+describe('planMatching — inclusão de extrato sem credor/cliente desligada', () => {
+    const titulo = { id: 't1', amount: 1500, direction: 'DEBIT', transaction_date: '2025-08-05', description: 'Pagamento', entity_name: '' };
+    const semNome = { id: 'b1', amount: 1500, direction: 'DEBIT', transaction_date: '2025-08-05', description_normalized: 'PIX ENVIADO', counterparty_name: '' };
+    const vazio = { docIndex: new Map(), aliases: [] };
+
+    it('ligado (padrão): o par exato e único concilia', () => {
+        const plano = regrasPuras.planMatching([semNome], [titulo], regrasPuras.montarAjustes(null, null), vazio);
+        expect(plano.autoMatches.map(m => m.bankId)).toEqual(['b1']);
+    });
+
+    it('desligado: o extrato sem nome sai do plano', () => {
+        const plano = regrasPuras.planMatching([semNome], [titulo], regrasPuras.montarAjustes(null, { include_without_counterparty: false }), vazio);
+        expect(plano.autoMatches).toEqual([]);
+        expect(plano.suggestionRows).toEqual([]);
+    });
+
+    it('desligado, mas RECONHECIDO pelo apelido: continua (o plano grava o nome)', () => {
+        const indice = { docIndex: new Map(), aliases: [{ token: 'PIX ENVIADO', party_type: 'SUPPLIER' as const, party_name: 'FORNECEDOR X', hit: 3 }] };
+        const plano = regrasPuras.planMatching([semNome], [titulo], regrasPuras.montarAjustes(null, { include_without_counterparty: false }), indice);
+        expect(plano.autoMatches.map(m => m.bankId)).toEqual(['b1']);
+    });
+
+    it('montarAjustes: padrão true; false só quando gravado', () => {
+        expect(regrasPuras.montarAjustes(null, null).include_without_counterparty).toBe(true);
+        expect(regrasPuras.montarAjustes(null, { include_without_counterparty: null }).include_without_counterparty).toBe(true);
+        expect(regrasPuras.montarAjustes(null, { include_without_counterparty: false }).include_without_counterparty).toBe(false);
+    });
+});

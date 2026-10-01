@@ -37,6 +37,11 @@ export interface ReconciliationEngineSettings {
      * `montarAjustes` sempre preenche.
      */
     excluded_categories?: string[];
+    /**
+     * "Incluir lançamentos do extrato sem credor/cliente definido" (painel Regras). `false`
+     * = extrato sem contraparte fica fora da conciliação. Padrão `true` (nada muda).
+     */
+    include_without_counterparty?: boolean;
 }
 
 /** Contraparte reconhecida no texto do extrato. */
@@ -77,6 +82,25 @@ export function foraDaConciliacao(categoria: string | null | undefined, excluida
     const chave = chaveDeCategoria(categoria);
     if (!chave || !excluidas?.length) return false;
     return excluidas.some(e => chaveDeCategoria(e) === chave);
+}
+
+/** Os dois filtros da organização que tiram um extrato da conciliação (painel Regras). */
+export interface FiltrosDaConciliacao {
+    excluded_categories?: readonly string[] | null;
+    include_without_counterparty?: boolean | null;
+}
+
+/**
+ * O extrato fica fora da conciliação? Categoria excluída, ou — com "Incluir lançamentos do
+ * extrato sem credor/cliente definido" desligado (pedido de 01/10/2026) — sem contraparte.
+ * Mesma regra da `fn_reconciliation_divergences`. `null`/ausente = incluir (padrão).
+ */
+export function extratoForaDaConciliacao(
+    tx: { category?: string | null; counterparty_name?: string | null },
+    filtros: FiltrosDaConciliacao | null | undefined,
+): boolean {
+    if (foraDaConciliacao(tx.category, filtros?.excluded_categories)) return true;
+    return filtros?.include_without_counterparty === false && !(tx.counterparty_name || '').trim();
 }
 
 /**
@@ -489,10 +513,14 @@ export function planMatching(
 ): PlanoDeConciliacao {
     const AUTO_THRESHOLD = settings.auto_threshold;
     const MIN_SUGGESTION = settings.suggestion_min;
-    // Categorias fora da conciliação: o extrato não vira sugestão nem conciliação
-    // automática. Quem chama continua passando TODOS os ids para `fn_replace_suggestions`,
-    // e assim as sugestões antigas desses extratos somem no próximo Reprocessar.
-    const bankTxs = bankTxsTodos.filter(b => !foraDaConciliacao(b.category, settings.excluded_categories));
+    // Fora da conciliação (painel Regras): categoria excluída, ou sem credor/cliente com a
+    // inclusão desligada — o extrato não vira sugestão nem conciliação automática. Sem nome
+    // mas RECONHECIDO aqui (CNPJ/PIX/apelido) não conta como "sem contraparte": este mesmo
+    // plano grava o nome (`partyUpdates`). Quem chama continua passando TODOS os ids para
+    // `fn_replace_suggestions`, e as sugestões antigas dos excluídos somem no Reprocessar.
+    const bankTxs = bankTxsTodos.filter(b =>
+        !extratoForaDaConciliacao(b, settings)
+        || (!foraDaConciliacao(b.category, settings.excluded_categories) && !!resolveBankParty(b, partyIndex)));
 
     // 2) Casa em memória (sem ida ao banco por transação)
     const autoMatches: { bankId: string; internalId: string; score: number; reason: string }[] = [];
@@ -588,7 +616,7 @@ export const AJUSTES_PADRAO: ReconciliationEngineSettings = {
     fine_percent: 2, interest_percent_month: 1,
     value_tol_abs: 50, value_tol_pct: 3, encargos_tol_pct: 0.5,
     date_window_days: 10, auto_threshold: 100, suggestion_min: 40,
-    excluded_categories: [],
+    excluded_categories: [], include_without_counterparty: true,
 };
 
 /**
@@ -602,8 +630,8 @@ export const AJUSTES_PADRAO: ReconciliationEngineSettings = {
  */
 export function montarAjustes(
     asaas?: { fine_percent?: number | null; interest_percent_month?: number | null } | null,
-    rs?: (Partial<Record<Exclude<keyof ReconciliationEngineSettings, 'excluded_categories'>, number | null>>
-        & { excluded_categories?: string[] | null }) | null,
+    rs?: (Partial<Record<Exclude<keyof ReconciliationEngineSettings, 'excluded_categories' | 'include_without_counterparty'>, number | null>>
+        & { excluded_categories?: string[] | null; include_without_counterparty?: boolean | null }) | null,
 ): ReconciliationEngineSettings {
     return {
         fine_percent:           asaas?.fine_percent ?? AJUSTES_PADRAO.fine_percent,
@@ -615,6 +643,7 @@ export function montarAjustes(
         auto_threshold:         rs?.auto_threshold ?? AJUSTES_PADRAO.auto_threshold,
         suggestion_min:         rs?.suggestion_min ?? AJUSTES_PADRAO.suggestion_min,
         excluded_categories:    (rs?.excluded_categories ?? []).filter(c => !!c?.trim()),
+        include_without_counterparty: rs?.include_without_counterparty ?? true,
     };
 }
 

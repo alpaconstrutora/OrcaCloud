@@ -651,22 +651,32 @@ export const bankReconciliationService = {
      * divergências e da Pendentes; continuam no Extrato e nas transferências entre contas.
      * Erro de leitura SOBE: o painel não pode gravar por cima de uma lista que não leu.
      */
-    async lerCategoriasExcluidas(organizationId: string): Promise<string[]> {
+    async lerFiltrosDaConciliacao(organizationId: string): Promise<{ excluded_categories: string[]; include_without_counterparty: boolean }> {
         const { data, error } = await supabase
             .from('reconciliation_settings')
-            .select('excluded_categories')
+            .select('excluded_categories, include_without_counterparty')
             .eq('organization_id', organizationId)
             .maybeSingle();
         if (error) throw error;
-        return ((data as { excluded_categories?: string[] | null } | null)?.excluded_categories ?? []).filter(c => !!c?.trim());
+        const row = data as { excluded_categories?: string[] | null; include_without_counterparty?: boolean | null } | null;
+        return {
+            excluded_categories: (row?.excluded_categories ?? []).filter(c => !!c?.trim()),
+            // Sem linha / sem valor = incluir (padrão: nada muda até alguém desligar).
+            include_without_counterparty: row?.include_without_counterparty ?? true,
+        };
     },
 
-    /** Grava SÓ a lista (as tolerâncias da mesma linha ficam como estão). */
-    async salvarCategoriasExcluidas(organizationId: string, categorias: string[]): Promise<void> {
-        const limpa = Array.from(new Set(categorias.map(c => c.trim()).filter(Boolean)));
-        const { error } = await supabase
-            .from('reconciliation_settings')
-            .upsert({ organization_id: organizationId, excluded_categories: limpa, updated_at: new Date().toISOString() }, { onConflict: 'organization_id' });
+    /** Grava SÓ os filtros informados (as tolerâncias da mesma linha ficam como estão). */
+    async salvarFiltrosDaConciliacao(
+        organizationId: string,
+        filtros: { excluded_categories?: string[]; include_without_counterparty?: boolean },
+    ): Promise<void> {
+        const linha: Record<string, unknown> = { organization_id: organizationId, updated_at: new Date().toISOString() };
+        if (filtros.excluded_categories) {
+            linha.excluded_categories = Array.from(new Set(filtros.excluded_categories.map(c => c.trim()).filter(Boolean)));
+        }
+        if (filtros.include_without_counterparty !== undefined) linha.include_without_counterparty = filtros.include_without_counterparty;
+        const { error } = await supabase.from('reconciliation_settings').upsert(linha, { onConflict: 'organization_id' });
         if (error) throw error;
     },
 
@@ -793,7 +803,7 @@ export const bankReconciliationService = {
         try {
             const [{ data: asaas }, { data: rs }] = await Promise.all([
                 supabase.from('asaas_charge_config').select('fine_percent, interest_percent_month').eq('organization_id', organizationId).maybeSingle(),
-                supabase.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min, excluded_categories').eq('organization_id', organizationId).maybeSingle(),
+                supabase.from('reconciliation_settings').select('value_tol_abs, value_tol_pct, encargos_tol_pct, date_window_days, auto_threshold, suggestion_min, excluded_categories, include_without_counterparty').eq('organization_id', organizationId).maybeSingle(),
             ]);
             // A MISTURA com os padrões vive em `reconciliationRules`, não aqui: o padrão é
             // decisão (`auto_threshold: 100` separa "concilia sozinho" de "só sugere"), e

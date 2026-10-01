@@ -241,6 +241,8 @@ import { pavimentoDeDescarga } from '../../utils/blueprintIncendioClassificacao'
 import PainelSaidasIncendio from './PainelSaidasIncendio';
 import PainelExtintoresIncendio from './PainelExtintoresIncendio';
 import PainelSinalizacaoIncendio from './PainelSinalizacaoIncendio';
+import PainelIluminacaoIncendio from './PainelIluminacaoIncendio';
+import { analisarIluminacao, proporIluminacao } from '../../utils/blueprintIluminacaoEmergencia';
 import { analisarSinalizacao, comPlacas, proporSinalizacao } from '../../utils/blueprintSinalizacao';
 import { analisarExtintores, proporExtintores } from '../../utils/blueprintExtintores';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
@@ -7359,6 +7361,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         : null,
     [classificacaoDeIncendio, editor.model, percursoDeIncendio, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId],
   );
+  /** E7.3: a iluminação de emergência ao longo das rotas — e a proposta (derivadas). */
+  const iluminacaoDeIncendio = useMemo(
+    () =>
+      classificacaoDeIncendio
+        ? analisarIluminacao(editor.model, percursoDeIncendio, pavimentoDeDescarga(editor.model, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId)?.id ?? null, incendioDoEstudo.hipoteses.iluminacao)
+        : null,
+    [classificacaoDeIncendio, editor.model, percursoDeIncendio, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId, incendioDoEstudo.hipoteses.iluminacao],
+  );
+  const propostaDeIluminacao = useMemo(() => (iluminacaoDeIncendio ? proporIluminacao(editor.model, percursoDeIncendio, iluminacaoDeIncendio) : []), [iluminacaoDeIncendio, editor.model, percursoDeIncendio]);
   const propostaDeSinalizacao = useMemo(() => (sinalizacaoDeIncendio ? proporSinalizacao(editor.model, sinalizacaoDeIncendio) : []), [sinalizacaoDeIncendio, editor.model]);
   /** E6.1: saídas de emergência — população e largura das escadas, corredores e descarga. */
   const saidasDeIncendio = useMemo(
@@ -14443,6 +14454,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       onPropor: () => {
                         if (!propostaDeSinalizacao.length) return;
                         const criados = editor.runBatch(propostaDeSinalizacao);
+                        if (criados?.length) selecionar(criados);
+                      },
+                    }}
+                  />
+                </div>
+              )}
+              {iluminacaoDeIncendio && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <PainelIluminacaoIncendio
+                    analise={iluminacaoDeIncendio}
+                    hip={incendioDoEstudo.hipoteses.iluminacao}
+                    onHip={(iluminacao) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, iluminacao })}
+                    onSelecionar={selecionar}
+                    proposta={{
+                      quantas: propostaDeIluminacao.length,
+                      onPropor: () => {
+                        if (!propostaDeIluminacao.length) return;
+                        const criados = editor.runBatch(propostaDeIluminacao);
                         if (criados?.length) selecionar(criados);
                       },
                     }}

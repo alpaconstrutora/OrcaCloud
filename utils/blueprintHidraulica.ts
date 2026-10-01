@@ -592,6 +592,16 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 300, profundidadeMm: 20, alturaMm: 200 },
     ajuda: 'Placa de sinalização (NBR 13434): de equipamento (aponta para o extintor ou o hidrante dela) ou de rota de fuga (a direção é a rotação da peça). O código fica no painel da peça.',
   },
+  LUMINARIA_EMERGENCIA: {
+    rotulo: 'Luminária de emergência',
+    sigla: 'LE',
+    grupo: PREVENTIVOS,
+    // Acima das portas e ao longo da rota — CONFERIR NA NBR 10898.
+    cotaMm: { INCENDIO: 2200 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 300, profundidadeMm: 60, alturaMm: 100 },
+    ajuda: 'Bloco autônomo de iluminação de emergência (NBR 10898): ao longo da rota de fuga, nas mudanças de direção, escadas e saídas. A autonomia (padrão 60 min) fica no painel da peça.',
+  },
 };
 
 export const ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

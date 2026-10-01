@@ -50,6 +50,7 @@ export const TIPOS_COM_SIMBOLO_DE_INCENDIO: readonly TipoDePontoHidraulico[] = [
   // E7.1/E7.2: os preventivos.
   'EXTINTOR',
   'PLACA',
+  'LUMINARIA_EMERGENCIA',
 ];
 
 export function temSimboloDeIncendio(tipo: TipoDePontoHidraulico | null | undefined): tipo is TipoDePontoHidraulico {
@@ -98,6 +99,12 @@ export function simboloDeIncendio(tipo: TipoDePontoHidraulico, posicao?: Posicao
     case 'EXTINTOR':
       // O triângulo do extintor, com o cilindro (círculo cheio) dentro.
       return [{ tipo: 'poligono', pontos: [[0, -0.5], [0.5, 0.5], [-0.5, 0.5]], cheio: false }, circulo(0.14, true)];
+    case 'LUMINARIA_EMERGENCIA':
+      // O bloco autônomo: retângulo com a metade de baixo cheia (a lâmpada acesa sem rede).
+      return [
+        { tipo: 'poligono', pontos: [[-0.5, -0.25], [0.5, -0.25], [0.5, 0.25], [-0.5, 0.25]], cheio: false },
+        { tipo: 'poligono', pontos: [[-0.5, 0], [0.5, 0], [0.5, 0.25], [-0.5, 0.25]], cheio: true },
+      ];
     case 'PLACA':
       // A placa retangular, baixa, com a seta (a direção é a rotação da peça).
       return [

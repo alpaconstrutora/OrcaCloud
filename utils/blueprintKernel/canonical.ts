@@ -902,6 +902,8 @@ function projetar(model: BlueprintModel): {
       capacidadeExtintora: t.capacidadeExtintora ?? undefined,
       // Incêndio E7.2 (0.86.0): o código da placa, só quando declarado; o alvo vai por índice (segundo passo).
       codigoPlaca: t.codigoPlaca ?? undefined,
+      // Incêndio E7.3 (0.87.0): a autonomia da luminária de emergência, só quando declarada.
+      autonomiaMin: t.autonomiaMin ?? undefined,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? undefined,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -1618,6 +1620,8 @@ export interface CanonicalPayload {
     /** Placa: o código e o equipamento (índice). Ausentes sob kernel < 0.86.0 e quando não declarados. */
     codigoPlaca?: string;
     alvo?: number;
+    /** Luminária de emergência: autonomia, min. Ausente sob kernel < 0.87.0 e quando não declarada. */
+    autonomiaMin?: number;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
     /** Curva Q×H [L/min, mm], NPSH requerido e a principal da jockey (índice). Ausentes sob kernel < 0.82.0. */
@@ -2400,6 +2404,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       cargaExtintorKg: t.cargaExtintorKg ?? null,
       capacidadeExtintora: t.capacidadeExtintora ?? null,
       codigoPlaca: t.codigoPlaca ?? null,
+      autonomiaMin: t.autonomiaMin ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,

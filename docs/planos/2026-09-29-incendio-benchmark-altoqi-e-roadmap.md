@@ -1653,7 +1653,7 @@ Fecha o **bloco 3**.
 
 Fecha os **A** das seções 22 e 27.
 
-## Etapa 7 — Preventivos · kernel bump · 4 fases · **em andamento (7.1 e 7.2 ✅ 01/10/2026; kernel 0.84.0 → 0.86.0)**
+## Etapa 7 — Preventivos · kernel bump · 4 fases · **em andamento (7.1, 7.2 e 7.3 ✅ 01/10/2026; kernel 0.84.0 → 0.87.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2398,4 +2398,33 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   de migration, que só se aplica com o OK do usuário).
 - **Testes:** `blueprintSinalizacao.test.ts` (6) e 3 de tela. Suíte com 6.694 testes: 6.661 + 33
   pulados. Build ok.
+
+### Etapa 7.3 — 01/10/2026 (frente `incendio-e7`, kernel 0.87.0)
+
+- **Kernel 0.87.0:** o tipo `LUMINARIA_EMERGENCIA` (grupo preventivos, a 2,20 m, acima das portas) e,
+  só nele, `autonomiaMin` (inteiro, 1–600; ausente = 60 da ficha), omitida quando ausente. IFC
+  `IfcLightFixture` `.SECURITYLIGHTING.`, símbolo do bloco autônomo e numeração LE-n. Ritual:
+  goldens 7/7 em 0.86.0, 6 hashes, 22 pinos. Bundle regerado.
+  - Desvio já anunciado na 7.1: o roadmap previa a 7.3 sem bump, mas o tipo é vocabulário novo.
+    Detecção e alarme (7.4) ficam com 0.88.0.
+- **Regra (`utils/blueprintIluminacaoEmergencia.ts`, CONFERIR NA NBR 10898):**
+  - **Pontos obrigatórios:** cada mudança de direção e saída das rotas da E6.3 (os mesmos pontos da
+    sinalização) e cada boca de escada em cada pavimento pedem luminária a até 2 m.
+  - **Espaçamento:** nenhum ponto da rota (a cada 1 m) a mais de meio espaçamento máximo da luminária
+    mais próxima do pavimento, o que equivale a luminárias a no máximo 15 m umas das outras. Há um
+    espaçamento declarável.
+  - **Autonomia:** abaixo de 60 min é dita.
+- **Proposta:** primeiro os pontos obrigatórios; depois, ao longo das rotas, cada luminária nova meio
+  espaçamento ADIANTE do primeiro ponto descoberto, que cobre para trás e para a frente. É um lote só.
+- **Harness `docs/spikes/iluminacao-emergencia`** (canvas real, porta 3170): no andar de 60 m com dez
+  salas, lançou 11 luminárias, uma sobre cada porta de sala (onde a rota dobra para o corredor) e uma
+  na saída. Ficaram 0 trechos sem luz e 0 pontos obrigatórios faltando.
+- **Tela:**
+  - **Painel da peça:** a autonomia.
+  - **Painel "Iluminação de emergência"** na tarefa Incêndio: o que falta por tipo, os trechos sem
+    luz, a autonomia curta selecionável, o espaçamento declarável e "Propor N luminária(s)".
+- **Fica para depois:** ligar a luminária a um circuito da elétrica, para entrar no quadro de cargas.
+  Hoje a luminária é do incêndio e não tem circuito.
+- **Testes:** `blueprintIluminacaoEmergencia.test.ts` (4) e o painel (2). Suíte com 6.700 testes:
+  6.667 + 33 pulados. Build ok.
 

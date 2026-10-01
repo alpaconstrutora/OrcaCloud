@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.86.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.87.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -676,7 +676,9 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "EXTINTOR",
   // 01/10/2026 (incêndio E7.2, 0.86.0): a placa de sinalização — de equipamento
   // (aponta para ele) ou de rota de fuga (a direção é a rotação da peça).
-  "PLACA"
+  "PLACA",
+  // 01/10/2026 (incêndio E7.3, 0.87.0): a luminária de emergência (bloco autônomo).
+  "LUMINARIA_EMERGENCIA"
 ];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
@@ -2168,6 +2170,8 @@ function projetar(model) {
       capacidadeExtintora: t.capacidadeExtintora ?? void 0,
       // Incêndio E7.2 (0.86.0): o código da placa, só quando declarado; o alvo vai por índice (segundo passo).
       codigoPlaca: t.codigoPlaca ?? void 0,
+      // Incêndio E7.3 (0.87.0): a autonomia da luminária de emergência, só quando declarada.
+      autonomiaMin: t.autonomiaMin ?? void 0,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? void 0,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -2943,6 +2947,7 @@ function modelFromCanonicalPayload(payload) {
       cargaExtintorKg: t.cargaExtintorKg ?? null,
       capacidadeExtintora: t.capacidadeExtintora ?? null,
       codigoPlaca: t.codigoPlaca ?? null,
+      autonomiaMin: t.autonomiaMin ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -6381,6 +6386,9 @@ function entidadeDoPontoHidraulico(tipo) {
     // E7.2: o IFC4 não tem placa com tipo predefinido (IfcSign é IFC4X3 — fica para a E9.3); USERDEFINED.
     case "PLACA":
       return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".USERDEFINED." };
+    // E7.3: IfcLightFixture tem o valor de iluminação de segurança no enum do IFC4.
+    case "LUMINARIA_EMERGENCIA":
+      return { entidade: "IFCLIGHTFIXTURE", predefinido: ".SECURITYLIGHTING." };
     case "BOMBA_INCENDIO":
     case "BOMBA_JOCKEY":
       return { entidade: "IFCPUMP", predefinido: ".USERDEFINED." };
@@ -7399,6 +7407,16 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: {},
     medidasMm: { larguraMm: 300, profundidadeMm: 20, alturaMm: 200 },
     ajuda: "Placa de sinaliza\xE7\xE3o (NBR 13434): de equipamento (aponta para o extintor ou o hidrante dela) ou de rota de fuga (a dire\xE7\xE3o \xE9 a rota\xE7\xE3o da pe\xE7a). O c\xF3digo fica no painel da pe\xE7a."
+  },
+  LUMINARIA_EMERGENCIA: {
+    rotulo: "Lumin\xE1ria de emerg\xEAncia",
+    sigla: "LE",
+    grupo: PREVENTIVOS,
+    // Acima das portas e ao longo da rota — CONFERIR NA NBR 10898.
+    cotaMm: { INCENDIO: 2200 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 300, profundidadeMm: 60, alturaMm: 100 },
+    ajuda: "Bloco aut\xF4nomo de ilumina\xE7\xE3o de emerg\xEAncia (NBR 10898): ao longo da rota de fuga, nas mudan\xE7as de dire\xE7\xE3o, escadas e sa\xEDdas. A autonomia (padr\xE3o 60 min) fica no painel da pe\xE7a."
   }
 };
 var ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

@@ -2800,6 +2800,8 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   // 01/10/2026 (incêndio E7.2, 0.86.0): a placa de sinalização — de equipamento
   // (aponta para ele) ou de rota de fuga (a direção é a rotação da peça).
   'PLACA',
+  // 01/10/2026 (incêndio E7.3, 0.87.0): a luminária de emergência (bloco autônomo).
+  'LUMINARIA_EMERGENCIA',
 ] as const;
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -2900,6 +2902,7 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   PRESSOSTATO: INC,
   EXTINTOR: INC,
   PLACA: INC,
+  LUMINARIA_EMERGENCIA: INC,
 };
 
 /** INCÊNDIO (0.86.0, E7.2): o código da placa — letra(s) + número (E5, S12). O catálogo mora em `blueprintSinalizacao`. */
@@ -3050,6 +3053,12 @@ export interface Terminal {
    */
   codigoPlaca?: string | null;
   alvoId?: ObjectId | null;
+  /**
+   * LUMINÁRIA DE EMERGÊNCIA (incêndio E7.3, 0.87.0) — só nela: a autonomia
+   * declarada, minutos inteiros (1–600). Ausente = a da ficha (60, CONFERIR
+   * NA NBR 10898). Omitida do canônico quando ausente.
+   */
+  autonomiaMin?: number | null;
   /**
    * RESERVA TÉCNICA DE INCÊNDIO (incêndio E3.2, 30/09/2026) — só na caixa de
    * ÁGUA FRIA compartilhada: os litros do volume dela que ficam para o incêndio
@@ -5980,6 +5989,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (t.posicaoSprinkler != null && !(POSICOES_DO_SPRINKLER as readonly string[]).includes(t.posicaoSprinkler)) {
         throw new KernelError('BAD_SPRINKLER', `Posição de sprinkler inválida em ${t.id}: ${t.posicaoSprinkler}`);
       }
+    }
+    // Luminária de emergência (incêndio E7.3): autonomia só nela, inteira entre 1 e 600 min.
+    if (t.autonomiaMin != null) {
+      if (t.tipoHidraulico !== 'LUMINARIA_EMERGENCIA') throw new KernelError('BAD_EMERGENCY_LIGHT', `Terminal ${t.id} não é luminária de emergência e não pode ter autonomia`);
+      if (!Number.isInteger(t.autonomiaMin) || t.autonomiaMin < 1 || t.autonomiaMin > 600) throw new KernelError('BAD_EMERGENCY_LIGHT', `Autonomia inválida em ${t.id}: ${t.autonomiaMin}`);
     }
     // Placa (incêndio E7.2): código e alvo só na placa; o alvo é um terminal de incêndio que não é placa.
     if (t.codigoPlaca != null || t.alvoId != null) {

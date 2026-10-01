@@ -2430,6 +2430,9 @@ function entidadeDoPontoHidraulico(
     // E7.2: o IFC4 não tem placa com tipo predefinido (IfcSign é IFC4X3 — fica para a E9.3); USERDEFINED.
     case 'PLACA':
       return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.USERDEFINED.' };
+    // E7.3: IfcLightFixture tem o valor de iluminação de segurança no enum do IFC4.
+    case 'LUMINARIA_EMERGENCIA':
+      return { entidade: 'IFCLIGHTFIXTURE', predefinido: '.SECURITYLIGHTING.' };
     case 'BOMBA_INCENDIO':
     case 'BOMBA_JOCKEY':
       return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };

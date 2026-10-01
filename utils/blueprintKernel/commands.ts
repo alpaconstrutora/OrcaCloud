@@ -746,6 +746,8 @@ export type Command =
       /** Placa (incêndio E7.2) — só em `PLACA`: o código e o equipamento. `null` apaga. */
       codigoPlaca?: string | null;
       alvoId?: ObjectId | null;
+      /** Luminária de emergência (incêndio E7.3): autonomia, min. `null` = a da ficha. */
+      autonomiaMin?: number | null;
       /** Reserva de incêndio (E3.2) — só na caixa de água fria; ignorada nas demais. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1): curva, NPSH requerido e, na jockey, a principal. */
@@ -803,6 +805,8 @@ export type Command =
       /** Placa (incêndio E7.2) — só em `PLACA`: o código e o equipamento. `null` apaga. */
       codigoPlaca?: string | null;
       alvoId?: ObjectId | null;
+      /** Luminária de emergência (incêndio E7.3): autonomia, min. `null` = a da ficha. */
+      autonomiaMin?: number | null;
       /** Reserva de incêndio na caixa de água fria (E3.2). `null` apaga. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1). `null` apaga. */
@@ -3515,6 +3519,7 @@ function aplicarSemHash(
           ...(command.capacidadeExtintora != null && command.tipoHidraulico === 'EXTINTOR' ? { capacidadeExtintora: command.capacidadeExtintora.trim().toUpperCase() } : {}),
           ...(command.codigoPlaca != null && command.tipoHidraulico === 'PLACA' ? { codigoPlaca: command.codigoPlaca.trim().toUpperCase() } : {}),
           ...(command.alvoId != null && command.tipoHidraulico === 'PLACA' ? { alvoId: command.alvoId } : {}),
+          ...(command.autonomiaMin != null && command.tipoHidraulico === 'LUMINARIA_EMERGENCIA' ? { autonomiaMin: Math.round(command.autonomiaMin) } : {}),
           ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
           ...(command.curvaBomba != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { curvaBomba: curvaInteira(command.curvaBomba) } : {}),
           ...(command.npshrMm != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { npshrMm: Math.round(command.npshrMm) } : {}),
@@ -3581,6 +3586,8 @@ function aplicarSemHash(
       if (command.capacidadeExtintora !== undefined) terminal.capacidadeExtintora = command.capacidadeExtintora?.trim().toUpperCase() || null;
       if (command.codigoPlaca !== undefined) terminal.codigoPlaca = command.codigoPlaca?.trim().toUpperCase() || null;
       if (command.alvoId !== undefined) terminal.alvoId = command.alvoId ?? null;
+      if (command.autonomiaMin !== undefined) terminal.autonomiaMin = command.autonomiaMin == null ? null : Math.round(command.autonomiaMin);
+      if (terminal.tipoHidraulico !== 'LUMINARIA_EMERGENCIA' && terminal.autonomiaMin != null) terminal.autonomiaMin = null;
       // Deixar de ser placa leva código e alvo juntos — a invariante recusaria.
       if (terminal.tipoHidraulico !== 'PLACA') {
         if (terminal.codigoPlaca != null) terminal.codigoPlaca = null;

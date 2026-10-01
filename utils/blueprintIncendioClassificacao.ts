@@ -30,6 +30,7 @@ import { HIPOTESES_BOMBEAMENTO_PADRAO, hipotesesDoBombeamentoDaColuna, type Hipo
 import { HIPOTESES_SPRINKLERS_PADRAO, hipotesesDeSprinklersDaColuna, type HipotesesDeSprinklers } from './blueprintSprinklersIncendio';
 import { HIPOTESES_SAIDAS_PADRAO, hipotesesDeSaidasDaColuna, type HipotesesDeSaidas } from './blueprintSaidasIncendio';
 import { HIPOTESES_EXTINTORES_PADRAO, hipotesesDeExtintoresDaColuna, type HipotesesDeExtintores } from './blueprintExtintores';
+import { HIPOTESES_ILUMINACAO_PADRAO, hipotesesDeIluminacaoDaColuna, type HipotesesDeIluminacao } from './blueprintIluminacaoEmergencia';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -143,6 +144,8 @@ export interface HipotesesIncendio {
   saidas: HipotesesDeSaidas;
   /** E7.1 (01/10/2026): distância máxima declarada e o extintor da proposta. */
   extintores: HipotesesDeExtintores;
+  /** E7.3 (01/10/2026): o espaçamento máximo declarado das luminárias de emergência. */
+  iluminacao: HipotesesDeIluminacao;
 }
 
 export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
@@ -153,6 +156,7 @@ export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
   sprinklers: HIPOTESES_SPRINKLERS_PADRAO,
   saidas: HIPOTESES_SAIDAS_PADRAO,
   extintores: HIPOTESES_EXTINTORES_PADRAO,
+  iluminacao: HIPOTESES_ILUMINACAO_PADRAO,
 };
 
 const numeroOuNulo = (x: unknown, min: number): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= min ? x : null);
@@ -176,6 +180,7 @@ export function hipotesesIncendioDaColuna(raw: unknown): HipotesesIncendio {
     sprinklers: hipotesesDeSprinklersDaColuna(r.sprinklers),
     saidas: hipotesesDeSaidasDaColuna(r.saidas),
     extintores: hipotesesDeExtintoresDaColuna(r.extintores),
+    iluminacao: hipotesesDeIluminacaoDaColuna(r.iluminacao),
   };
 }
 

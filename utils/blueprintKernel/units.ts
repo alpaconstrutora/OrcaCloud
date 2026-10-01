@@ -526,7 +526,14 @@
  * da placa de rota é a `rotacaoGraus`. Omitidos quando ausentes. Vocabulário
  * novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.86.0';
+/**
+ * ─── 0.86.0 → 0.87.0 (01/10/2026) — A LUMINÁRIA DE EMERGÊNCIA ───────────────
+ *
+ * Nos preventivos de incêndio (E7.3 do roadmap de incêndio): o tipo
+ * `LUMINARIA_EMERGENCIA` e, só nele, `Terminal.autonomiaMin` (inteiro, 1–600).
+ * Omitida quando ausente. Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.87.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

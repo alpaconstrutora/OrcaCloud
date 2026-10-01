@@ -119,6 +119,8 @@ interface Props {
     capacidadeExtintora?: string | null;
     /** Incêndio E7.2: o código da placa. `null` apaga. */
     codigoPlaca?: string | null;
+    /** Incêndio E7.3: a autonomia da luminária de emergência. `null` = a da ficha. */
+    autonomiaMin?: number | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -396,6 +398,26 @@ export default function PainelTrechoSelecionado({
               )}
               {(terminal.tipoHidraulico === 'BOMBA_INCENDIO' || terminal.tipoHidraulico === 'BOMBA_JOCKEY') && (
                 <CamposDaBombaDeIncendio terminal={terminal} principais={bombasPrincipais.filter((b) => b.id !== terminal.id)} onBomba={(c) => onTerminal(c)} />
+              )}
+              {terminal.tipoHidraulico === 'LUMINARIA_EMERGENCIA' && (
+                <label className="block" data-testid="campos-da-luminaria-de-emergencia">
+                  <span className="text-[11px] font-medium text-slate-600">Autonomia (min)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={600}
+                    step={10}
+                    value={terminal.autonomiaMin ?? ''}
+                    placeholder="60"
+                    onChange={(e) => {
+                      if (e.target.value === '') return onTerminal({ autonomiaMin: null });
+                      const x = Math.round(Number(e.target.value));
+                      if (Number.isFinite(x) && x >= 1 && x <= 600) onTerminal({ autonomiaMin: x });
+                    }}
+                    aria-label="Autonomia da luminária de emergência (min)"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                  />
+                </label>
               )}
               {terminal.tipoHidraulico === 'PLACA' && (
                 <div className="space-y-1" data-testid="campos-da-placa">

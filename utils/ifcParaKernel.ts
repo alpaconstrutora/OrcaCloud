@@ -44,6 +44,12 @@ import type {
 import { lerSecaoT } from './ifcSecaoT';
 import { uidDeIfcGuid } from './blueprintIfc';
 import {
+  AGENTES_EXTINTORES,
+  FATOR_K_MAXIMO,
+  PADRAO_DO_CODIGO_DE_PLACA,
+  POSICOES_DO_SPRINKLER,
+  capacidadeExtintoraValida,
+  type AgenteExtintor,
   DISCIPLINAS_DO_PONTO_HIDRAULICO,
   TIPOS_DE_INTERRUPTOR,
   TIPOS_DE_PONTO_ELETRICO,
@@ -908,6 +914,50 @@ export interface PontoDeIncendioTraduzido {
   at: PontoMm;
   cotaAbsMm: number;
   tipoHidraulico: TipoDePontoHidraulico;
+  /** C1: o que o arquivo DECLARA da peça (Pset_OpuraIncendio, sufixo _Declarado/_Declarada) — só o que passa pela regra do kernel. */
+  especificacao: EspecificacaoDeIncendio;
+}
+
+/** C1: os campos de especificação que o kernel aceita na peça de incêndio. */
+export interface EspecificacaoDeIncendio {
+  fatorK?: number;
+  posicaoSprinkler?: (typeof POSICOES_DO_SPRINKLER)[number];
+  agenteExtintor?: AgenteExtintor;
+  cargaExtintorKg?: number;
+  capacidadeExtintora?: string;
+  codigoPlaca?: string;
+  autonomiaMin?: number;
+}
+
+/**
+ * C1 (plano pós-roadmap): o `_Declarado` do Pset_OpuraIncendio → os campos da peça, cada um pela
+ * MESMA regra que o kernel aplica (a peça com valor inválido seria recusada inteira). O `_Derivado`
+ * (a numeração) e o `_Calculada` (o cálculo) ficam de fora de propósito: o desenho os refaz.
+ * Valor que não passa vira AVISO — a peça entra sem ele, nunca é recusada por causa dele.
+ */
+export function especificacaoDoPset(props: Record<string, string> | undefined, tipo: TipoDePontoHidraulico): { especificacao: EspecificacaoDeIncendio; avisos: string[] } {
+  const e: EspecificacaoDeIncendio = {};
+  const avisos: string[] = [];
+  if (!props) return { especificacao: e, avisos };
+  // O leitor escreve "—" para valor ausente (ver `texto`): ausente não é inválido.
+  const val = (k: string) => (props[k] != null && props[k] !== '' && props[k] !== '—' ? props[k] : null);
+  const num = (k: string) => (val(k) != null ? Number(val(k)) : null);
+  const recusar = (campo: string, valor: string) => avisos.push(`${tipo}: ${campo} "${valor}" ignorado (fora da regra do sistema)`);
+  const k = num('FatorK_Declarado');
+  if (k != null) Number.isInteger(k) && k > 0 && k <= FATOR_K_MAXIMO ? (e.fatorK = k) : recusar('fator K', props.FatorK_Declarado);
+  const pos = val('PosicaoSprinkler_Declarada');
+  if (pos) (POSICOES_DO_SPRINKLER as readonly string[]).includes(pos) ? (e.posicaoSprinkler = pos as EspecificacaoDeIncendio['posicaoSprinkler']) : recusar('posição', pos);
+  const ag = val('AgenteExtintor_Declarado');
+  if (ag) (AGENTES_EXTINTORES as readonly string[]).includes(ag) ? (e.agenteExtintor = ag as AgenteExtintor) : recusar('agente', ag);
+  const carga = num('CargaExtintorKg_Declarada');
+  if (carga != null) Number.isFinite(carga) && carga > 0 && carga <= 200 ? (e.cargaExtintorKg = carga) : recusar('carga', props.CargaExtintorKg_Declarada);
+  const cap = val('CapacidadeExtintora_Declarada');
+  if (cap) capacidadeExtintoraValida(cap.toUpperCase()) ? (e.capacidadeExtintora = cap.toUpperCase()) : recusar('capacidade extintora', cap);
+  const placa = val('CodigoPlaca_Declarado');
+  if (placa) PADRAO_DO_CODIGO_DE_PLACA.test(placa.toUpperCase()) ? (e.codigoPlaca = placa.toUpperCase()) : recusar('código da placa', placa);
+  const aut = num('AutonomiaMin_Declarada');
+  if (aut != null) Number.isInteger(aut) && aut >= 1 && aut <= 600 ? (e.autonomiaMin = aut) : recusar('autonomia', props.AutonomiaMin_Declarada);
+  return { especificacao: e, avisos };
 }
 
 /**
@@ -928,7 +978,9 @@ export function traduzirIncendio(leitura: LeituraEletrica): { pontos: PontoDeInc
       recusas.push({ expressID: p.expressID, nome: p.nome, classe: p.classe, motivo: 'a peça não tem geometria para dizer onde está' });
       continue;
     }
-    pontos.push({ expressID: p.expressID, nome: p.nome, pavimento: p.pavimento, at: arredondar(paraPlano(p.centro)), cotaAbsMm: Math.round(paraCota(p.centro)), tipoHidraulico: tipo });
+    const { especificacao, avisos } = especificacaoDoPset(p.propriedades, tipo);
+    for (const a of avisos) recusas.push({ expressID: p.expressID, nome: p.nome, classe: p.classe, motivo: a });
+    pontos.push({ expressID: p.expressID, nome: p.nome, pavimento: p.pavimento, at: arredondar(paraPlano(p.centro)), cotaAbsMm: Math.round(paraCota(p.centro)), tipoHidraulico: tipo, especificacao });
   }
   // O tubo: o mesmo encadeamento dos sólidos do eletroduto; a bitola medida (65 sem geometria legível).
   const tubos = traduzirEletrica({ pontos: [], eletrodutos: leitura.eletrodutos, recusas: [] });
@@ -960,6 +1012,8 @@ export function comandosDoIncendio(
       tipoHidraulico: p.tipoHidraulico,
       at: { x: p.at.x + dx, y: p.at.y + dy },
       cotaMm: p.cotaAbsMm - nivel.elevationMm,
+      // C1: o que o arquivo declara da peça (fator K, agente, código da placa…).
+      ...p.especificacao,
     } as Command);
   }
   for (const e of tubos) {

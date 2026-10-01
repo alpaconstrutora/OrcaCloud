@@ -8,7 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { COBERTURA_IFC, gerarIfc, type OpcoesIfc } from '../utils/blueprintIfc';
-import { comandosDoIncendio, tipoDoPontoDeIncendioIfc, traduzirEletrica, traduzirIncendio } from '../utils/ifcParaKernel';
+import { comandosDoIncendio, especificacaoDoPset, tipoDoPontoDeIncendioIfc, traduzirEletrica, traduzirIncendio } from '../utils/ifcParaKernel';
+import { KERNEL_VERSION, POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
 import { eDeIncendio } from '../services/ifcParametricoService';
 
 const PECAS = ['HIDRANTE_SIMPLES', 'MANGOTINHO', 'HIDRANTE_RECALQUE', 'SPRINKLER', 'BOMBA_INCENDIO', 'EXTINTOR', 'PLACA', 'LUMINARIA_EMERGENCIA', 'DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR', 'CENTRAL_ALARME'];
@@ -21,7 +22,7 @@ function predio(): BlueprintModel {
   const inc = (tipo: string, i: number, extra: Record<string, unknown> = {}): Command =>
     ({ type: 'AddTerminal', levelId: t1, disciplina: 'INCENDIO', tipo, tipoHidraulico: tipo, at: point(1000 + i * 1500, 3000), cotaMm: 1300, ...extra }) as Command;
   return applyBatch(m, [
-    ...PECAS.map((p, i) => inc(p, i, p === 'SPRINKLER' ? { fatorK: 80, posicaoSprinkler: 'PENDENTE', cotaMm: 2700 } : p === 'EXTINTOR' ? { agenteExtintor: 'PQS_ABC', cargaExtintorKg: 4 } : p === 'PLACA' ? { codigoPlaca: 'S12' } : {})),
+    ...PECAS.map((p, i) => inc(p, i, p === 'SPRINKLER' ? { fatorK: 80, posicaoSprinkler: 'PENDENTE', cotaMm: 2700 } : p === 'EXTINTOR' ? { agenteExtintor: 'PQS_ABC', cargaExtintorKg: 4, capacidadeExtintora: '2-A:20-B:C' } : p === 'PLACA' ? { codigoPlaca: 'S12' } : p === 'LUMINARIA_EMERGENCIA' ? { autonomiaMin: 120 } : {})),
     { type: 'AddTrecho', levelId: t1, disciplina: 'INCENDIO', a: point(0, 1000), b: point(8000, 1000), cotaAMm: 2600, cotaBMm: 2600, bitolaMm: 65 } as Command,
     { type: 'AddTerminal', levelId: t0, disciplina: 'AGUA_FRIA', tipo: 'Torneira', tipoHidraulico: 'TORNEIRA', at: point(500, 500), cotaMm: 1100 } as Command,
     { type: 'AddTrecho', levelId: t0, disciplina: 'AGUA_FRIA', a: point(0, 500), b: point(3000, 500), cotaAMm: 2200, cotaBMm: 2200, bitolaMm: 25 } as Command,
@@ -99,6 +100,31 @@ describe('E9.3 · importar o incêndio do IFC', () => {
     expect(eDeIncendio('IFCSENSOR', 'PRESSURESENSOR', false)).toBe(false);
     expect(eDeIncendio('IFCSENSOR', 'SMOKESENSOR', false)).toBe(true);
     expect(eDeIncendio('IFCLIGHTFIXTURE', 'USERDEFINED', false)).toBe(false);
+  });
+});
+
+describe('C1 (plano pós-roadmap) · as especificações voltam do IFC', () => {
+  it('⚠️ PRONTO QUANDO: a ida e volta preserva fator K, posição, agente, carga, capacidade, placa e autonomia — e o quantitativo por especificação é IGUAL', async () => {
+    const m = predio();
+    const r = traduzirIncendio((await lerDeVolta(m)).incendio);
+    expect(r.recusas).toEqual([]);
+    let alvo = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Superior', elevationMm: 3000, defaultHeightMm: 2800 }).model;
+    alvo = applyBatch(alvo, comandosDoIncendio(r.pontos, r.tubos, () => ({ levelId: alvo.levels[0].id, elevationMm: 3000 }))).model;
+    const porEspec = (x: BlueprintModel) =>
+      computeQuantities(x, POLITICA_PADRAO, KERNEL_VERSION)
+        .totais.porTerminal.filter((t) => t.disciplina === 'INCENDIO')
+        .map((t) => `${t.classificacao}|${t.especificacao ?? ''}|${t.quantidade}`)
+        .sort();
+    expect(porEspec(alvo)).toEqual(porEspec(m));
+    expect(alvo.terminais!.find((t) => t.tipoHidraulico === 'EXTINTOR')).toMatchObject({ agenteExtintor: 'PQS_ABC', cargaExtintorKg: 4, capacidadeExtintora: '2-A:20-B:C' });
+    expect(alvo.terminais!.find((t) => t.tipoHidraulico === 'SPRINKLER')).toMatchObject({ fatorK: 80, posicaoSprinkler: 'PENDENTE' });
+  });
+
+  it('valor fora da regra do sistema vira AVISO e a peça entra sem ele; ausente ("—") não é inválido; _Calculada e _Derivado ficam de fora', () => {
+    const r = especificacaoDoPset({ FatorK_Declarado: '80.5', AgenteExtintor_Declarado: 'PO_MAGICO', CodigoPlaca_Declarado: 's12', AutonomiaMin_Declarada: '—', Numero_Derivado: 'H-9', VazaoLmin_Calculada: '300' }, 'SPRINKLER');
+    expect(r.especificacao).toEqual({ codigoPlaca: 'S12' });
+    expect(r.avisos).toEqual(['SPRINKLER: fator K "80.5" ignorado (fora da regra do sistema)', 'SPRINKLER: agente "PO_MAGICO" ignorado (fora da regra do sistema)']);
+    expect(especificacaoDoPset(undefined, 'EXTINTOR')).toEqual({ especificacao: {}, avisos: [] });
   });
 });
 

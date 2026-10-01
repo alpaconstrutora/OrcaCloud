@@ -945,6 +945,11 @@ export interface PontoEletricoIfc {
    */
   centro: P3m | null;
   pavimento: number | null;
+  /**
+   * C1 (plano pós-roadmap): as propriedades do Pset pedido ao leitor (no incêndio,
+   * `Pset_OpuraIncendio`), nome → valor em texto. Ausente quando o arquivo não as tem.
+   */
+  propriedades?: Record<string, string>;
 }
 
 /** Um eletroduto do arquivo: as pontas de cada sólido, na ordem, no mundo (METRO). */
@@ -1002,7 +1007,7 @@ export async function lerEletricaParametrica(modeloId: number): Promise<LeituraE
 
 /** E9.3 — as peças e a tubulação de incêndio do arquivo (o tubo: só o do sistema `.FIREPROTECTION.`). */
 export async function lerIncendioParametrico(modeloId: number): Promise<LeituraEletrica> {
-  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_DE_INCENDIO, 'IFCPIPESEGMENT', 'tubo', (classe, pd, noSistema) => (classe === 'IFCPIPESEGMENT' ? noSistema : eDeIncendio(classe, pd, noSistema)));
+  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_DE_INCENDIO, 'IFCPIPESEGMENT', 'tubo', (classe, pd, noSistema) => (classe === 'IFCPIPESEGMENT' ? noSistema : eDeIncendio(classe, pd, noSistema)), 'Pset_OpuraIncendio');
 }
 
 /**
@@ -1017,6 +1022,8 @@ async function lerInstalacaoParametrica(
   classeDoTubo: string,
   rotuloDoTubo: string,
   aceitar: (classe: string, predefinido: string | null, noSistemaDeIncendio: boolean) => boolean,
+  /** C1: o Pset cujas propriedades vêm junto de cada peça (uma varredura só das relações). */
+  pset: string | null = null,
 ): Promise<LeituraEletrica> {
   const api = await obterApi();
   const raiz = await tabelaDeTipos();
@@ -1135,6 +1142,22 @@ async function lerInstalacaoParametrica(
     distancias.sort((x, y) => x - y);
     const raio = distancias.length ? distancias[Math.floor(distancias.length / 2)] : 0;
     eletrodutos.push({ expressID: eid, nome, globalId, segmentos, diametroM: raio > 0 ? 2 * raio : null, pavimento: pavimentoDe.get(eid) ?? null });
+  }
+  // C1: o Pset das peças, numa varredura só de IfcRelDefinesByProperties (não uma por peça).
+  if (pset && pontos.length && typeof raiz.IFCRELDEFINESBYPROPERTIES === 'number') {
+    const porId = new Map(pontos.map((p) => [p.expressID, p]));
+    const rels = api.GetLineIDsWithType(modeloId, raiz.IFCRELDEFINESBYPROPERTIES as number);
+    for (let i = 0; i < rels.size(); i++) {
+      const rel = api.GetLine(modeloId, rels.get(i), true) as Record<string, unknown>;
+      const def = rel.RelatingPropertyDefinition as Record<string, unknown> | undefined;
+      if (!def || texto(def.Name) !== pset) continue;
+      const props = (def.HasProperties ?? []) as Record<string, unknown>[];
+      for (const o of (rel.RelatedObjects ?? []) as { value?: number; expressID?: number }[]) {
+        const p = porId.get((o?.value ?? o?.expressID) as number);
+        if (!p) continue;
+        p.propriedades = { ...(p.propriedades ?? {}), ...Object.fromEntries(props.map((x) => [texto(x.Name), texto(x.NominalValue)])) };
+      }
+    }
   }
   return { pontos, eletrodutos, recusas };
 }

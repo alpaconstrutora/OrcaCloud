@@ -283,7 +283,15 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
   - Suíte com 6.826 testes: 6.793 + 33 pulados (a 1ª rodada caiu no worker). Build ok (a 1ª
     tentativa foi a queda do Node 24; a 2ª passou).
 - [ ] B1 · B2 · B3 · B4 (dependem de D-1, D-2, D-3)
-- [ ] C1
+- [x] **C1** (01/10/2026, frente `incendio-fase-c`):
+  - **Leitura:** `lerIncendioParametrico` traz o `Pset_OpuraIncendio` de cada peça, numa varredura
+    só das `IfcRelDefinesByProperties`.
+  - **Tradução:** `especificacaoDoPset` traduz só o `_Declarado`, pela MESMA regra do kernel.
+    - Valor fora da regra vira aviso, e a peça entra sem ele.
+    - "—" (ausente) não é inválido.
+    - `_Derivado` e `_Calculada` ficam de fora.
+  - **Prova:** a ida e volta pelo web-ifc dá `porTerminal` por especificação IGUAL ao original.
+  - Suíte com 6.828 testes: 6.795 + 33 pulados. Build ok.
 - [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
 - [ ] F1 · F2 · F3 · F4 · F5 · F6

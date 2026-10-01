@@ -27,6 +27,7 @@ import { usoDoNome } from './blueprintPrograma';
 import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO, hipotesesHidraulicasDaColuna, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
 import { HIPOTESES_REDE_DE_HIDRANTES_PADRAO, hipotesesDaRedeDaColuna, type HipotesesDaRedeDeHidrantes } from './blueprintRedeDeHidrantes';
 import { HIPOTESES_BOMBEAMENTO_PADRAO, hipotesesDoBombeamentoDaColuna, type HipotesesDoBombeamento } from './blueprintBombeamentoIncendio';
+import { HIPOTESES_SPRINKLERS_PADRAO, hipotesesDeSprinklersDaColuna, type HipotesesDeSprinklers } from './blueprintSprinklersIncendio';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -134,6 +135,8 @@ export interface HipotesesIncendio {
   rede: HipotesesDaRedeDeHidrantes;
   /** E4.2 (01/10/2026): altitude e perda na sucção, para o NPSH disponível. */
   bombeamento: HipotesesDoBombeamento;
+  /** E5.1 (01/10/2026): risco e, se declarados, densidade, área de operação e área por sprinkler. */
+  sprinklers: HipotesesDeSprinklers;
 }
 
 export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
@@ -141,6 +144,7 @@ export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
   hidraulica: HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO,
   rede: HIPOTESES_REDE_DE_HIDRANTES_PADRAO,
   bombeamento: HIPOTESES_BOMBEAMENTO_PADRAO,
+  sprinklers: HIPOTESES_SPRINKLERS_PADRAO,
 };
 
 const numeroOuNulo = (x: unknown, min: number): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= min ? x : null);
@@ -161,6 +165,7 @@ export function hipotesesIncendioDaColuna(raw: unknown): HipotesesIncendio {
     hidraulica: hipotesesHidraulicasDaColuna(r.hidraulica),
     rede: hipotesesDaRedeDaColuna(r.rede),
     bombeamento: hipotesesDoBombeamentoDaColuna(r.bombeamento),
+    sprinklers: hipotesesDeSprinklersDaColuna(r.sprinklers),
   };
 }
 

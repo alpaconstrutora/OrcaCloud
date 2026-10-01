@@ -15,7 +15,8 @@
  */
 import type { BlueprintModel, ObjectId } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { redeDeIncendio, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
+import { redeDeIncendio, type CalculoDeIncendio, type CenarioCalculado, type HipotesesHidraulicasDeIncendio } from './blueprintCalculoIncendio';
+import { ROTULO_DO_RISCO } from './blueprintSprinklersIncendio';
 import type { MarcaDeVerificacao } from './blueprintVerificacaoRede';
 import type { AnaliseDaBomba, PressurizacaoDaRede } from './blueprintBombeamentoIncendio';
 
@@ -71,12 +72,15 @@ export function marcasDoLancamentoDeIncendio(model: BlueprintModel): MarcaDeVeri
 
 /** O diagnóstico que só o cálculo dá. */
 export function marcasDoCalculoDeIncendio(model: BlueprintModel, c: CalculoDeIncendio, hip: HipotesesHidraulicasDeIncendio): MarcaDeVerificacao[] {
-  if (!c.cenario) return [];
+  // E5.1: os cenários de CADA sistema (hidrantes e sprinklers), não só o que governa a bomba.
+  const cenarios = cenariosDoCalculo(c);
+  if (cenarios.length === 0) return [];
   const um = (v: number, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
   const trechoPorId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
   const terminalPorId = new Map((model.terminais ?? []).map((t) => [t.id, t]));
   const marcas: MarcaDeVerificacao[] = [];
-  for (const x of c.cenario.trechos.filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9)) {
+  for (const x of cenarios.flatMap((cen) => cen.trechos).filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9)) {
+    if (marcas.some((m) => m.chave === `incvel|${x.trechoId}`)) continue;
     const t = trechoPorId.get(x.trechoId)!;
     marcas.push({ chave: `incvel|${t.id}`, tipo: 'INCENDIO_VELOCIDADE', levelId: t.levelId, at: { x: Math.round((t.a.x + t.b.x) / 2), y: Math.round((t.a.y + t.b.y) / 2) }, texto: `${um(x.velocidadeMs, 2)} > ${um(hip.velocidadeMaxMs)} m/s`, severidade: 'ERRO', alvoId: t.id, disciplina: 'INCENDIO' });
   }
@@ -85,7 +89,7 @@ export function marcasDoCalculoDeIncendio(model: BlueprintModel, c: CalculoDeInc
     const t = terminalPorId.get(id)!;
     marcas.push({ chave: `incpmax|${id}`, tipo: 'INCENDIO_PRESSAO_ALTA', levelId: t.levelId, at: { ...t.at }, texto: `estática ${um(p, 0)} > ${um(hip.pressaoMaximaKpa, 0)} kPa`, severidade: 'ERRO', alvoId: id, disciplina: 'INCENDIO' });
   }
-  for (const x of c.cenario.terminais.filter((t) => !t.atende)) {
+  for (const x of cenarios.flatMap((cen) => cen.terminais).filter((t) => !t.atende)) {
     const t = terminalPorId.get(x.terminalId)!;
     marcas.push({ chave: `incnao|${x.terminalId}`, tipo: 'INCENDIO_NAO_ATENDE', levelId: t.levelId, at: { ...t.at }, texto: x.exigidoLmin != null ? `${um(x.vazaoLmin, 0)} < ${um(x.exigidoLmin, 0)} L/min` : `${um(x.pressaoNoBicoKpa, 0)} < ${um(x.exigidoKpa ?? 0, 0)} kPa`, severidade: 'ERRO', alvoId: x.terminalId, disciplina: 'INCENDIO' });
   }
@@ -96,8 +100,14 @@ export function marcasDoCalculoDeIncendio(model: BlueprintModel, c: CalculoDeInc
 
 export type EstadoDaConferencia = 'ATENDE' | 'FALTA' | 'NAO_AVALIADO';
 
+/** Os cenários de projeto de cada sistema calculado (E5.1). */
+export function cenariosDoCalculo(c: CalculoDeIncendio): CenarioCalculado[] {
+  const lista = [c.porSistema.hidrantes?.cenario, c.porSistema.sprinklers?.cenario].filter((x): x is CenarioCalculado => !!x);
+  return lista.length ? lista : c.cenario ? [c.cenario] : [];
+}
+
 export interface ItemDaConferencia {
-  grupo: 'NBR 13714' | 'CBMMG' | 'Lançamento';
+  grupo: 'NBR 13714' | 'NBR 10897' | 'CBMMG' | 'Lançamento';
   item: string;
   exigido: string;
   obtido: string;
@@ -121,28 +131,66 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
   const finos = lanc.filter((m) => m.tipo === 'INCENDIO_DN_PECA');
   itens.push({ grupo: 'Lançamento', item: 'Tubo à altura do DN de cada peça', exigido: 'DN do tubo ≥ DN da peça', obtido: finos.length ? `${finos.length} peça(s) maior(es) que o tubo` : 'todas', estado: !temRede ? 'NAO_AVALIADO' : finos.length ? 'FALTA' : 'ATENDE', alvos: finos.map((m) => m.alvoId) });
 
-  const naoAtendem = c.cenario?.terminais.filter((t) => !t.atende) ?? [];
+  // Os itens de hidrante leem o cenário DOS HIDRANTES (E5.1: a bomba pode ser governada pelos sprinklers).
+  const h = c.porSistema.hidrantes;
+  const semHidrantes = !h?.cenario;
+  const naoAtendem = h?.cenario?.terminais.filter((t) => !t.atende) ?? [];
   itens.push({
     grupo: 'NBR 13714',
-    item: `Vazão no esguicho dos ${c.abertos.length || hip.hidrantesSimultaneos} hidrante(s) mais desfavoráveis`,
+    item: `Vazão no esguicho dos ${h?.abertos.length || hip.hidrantesSimultaneos} hidrante(s) mais desfavoráveis`,
     exigido: `≥ ${um(hip.vazaoMinimaHidranteLmin, 0)} L/min (mangotinho ${um(hip.vazaoMinimaMangotinhoLmin, 0)})`,
-    obtido: semCalculo ? (c.motivo ?? '—') : `mínima ${um(Math.min(...c.cenario!.terminais.map((t) => t.vazaoLmin)), 0)} L/min com a bomba a ${um(c.cargaNecessariaM ?? 0)} mca`,
-    estado: semCalculo ? 'NAO_AVALIADO' : naoAtendem.length ? 'FALTA' : 'ATENDE',
+    obtido: semHidrantes ? (h?.motivo ?? c.motivo ?? 'nenhum hidrante na rede') : `mínima ${um(Math.min(...h!.cenario!.terminais.map((t) => t.vazaoLmin)), 0)} L/min com a bomba a ${um(h!.cargaNecessariaM ?? 0)} mca`,
+    estado: semHidrantes ? 'NAO_AVALIADO' : naoAtendem.length ? 'FALTA' : 'ATENDE',
     alvos: naoAtendem.map((t) => t.terminalId),
   });
-  const rapidos = c.cenario?.trechos.filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9) ?? [];
+  // E5.1: os sprinklers — o critério (risco → densidade × área) e o cenário deles.
+  const s = c.porSistema.sprinklers;
+  const cr = c.criterio;
+  if (s) {
+    itens.push({
+      grupo: 'NBR 10897',
+      item: 'Risco dos sprinklers definido',
+      exigido: 'classe de risco da ocupação — CONFERIR NA NORMA',
+      obtido: cr?.risco ? `${ROTULO_DO_RISCO[cr.risco.valor]} (${cr.risco.origem === 'DECLARADA' ? 'declarado' : 'sugerido pela divisão'})` : 'sem risco',
+      estado: cr?.risco ? 'ATENDE' : 'FALTA',
+      alvos: [],
+    });
+    const naoSpk = s.cenario?.terminais.filter((t) => !t.atende) ?? [];
+    const minQ = s.cenario?.terminais.length ? Math.min(...s.cenario.terminais.map((t) => t.vazaoLmin)) : 0;
+    const minP = s.cenario?.terminais.length ? Math.min(...s.cenario.terminais.map((t) => t.pressaoNoBicoKpa)) : 0;
+    itens.push({
+      grupo: 'NBR 10897',
+      item: `Vazão e pressão nos ${s.abertos.length || cr?.sprinklersNaArea || 0} sprinkler(s) mais desfavoráveis`,
+      exigido: cr?.vazaoPorSprinklerLmin != null ? `≥ ${um(cr.vazaoPorSprinklerLmin, 1)} L/min (${um(cr.densidade!.valorLminM2, 1)} L/min/m² × ${um(cr.areaPorSprinkler!.valorM2, 1)} m²) e ≥ ${um(hip.pressaoMinimaSprinklerKpa, 0)} kPa cada` : 'o critério do risco',
+      obtido: !s.cenario ? (s.motivo ?? '—') : `mínimas ${um(minQ, 1)} L/min e ${um(minP, 0)} kPa com a bomba a ${um(s.cargaNecessariaM ?? 0)} mca`,
+      estado: !s.cenario ? (cr?.risco ? 'FALTA' : 'NAO_AVALIADO') : naoSpk.length ? 'FALTA' : 'ATENDE',
+      alvos: naoSpk.map((t) => t.terminalId),
+    });
+    if (s.cenario && cr?.vazaoDaAreaLmin != null) {
+      const total = s.cenario.vazaoNaFonteLmin;
+      itens.push({
+        grupo: 'NBR 10897',
+        item: 'Vazão da área de operação',
+        exigido: `≥ ${um(cr.vazaoDaAreaLmin, 0)} L/min (${um(cr.densidade!.valorLminM2, 1)} L/min/m² × ${um(cr.areaDeOperacao!.valorM2, 0)} m²)`,
+        obtido: `${um(total, 0)} L/min em ${s.abertos.length} sprinkler(s)${s.abertos.length < (cr.sprinklersNaArea ?? 0) ? ` — a rede tem menos que os ${cr.sprinklersNaArea} da área` : ''}`,
+        estado: total + 1e-6 >= cr.vazaoDaAreaLmin ? 'ATENDE' : 'FALTA',
+        alvos: [],
+      });
+    }
+  }
+  const rapidos = cenariosDoCalculo(c).flatMap((cen) => cen.trechos).filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9);
   itens.push({
     grupo: 'NBR 13714',
     item: 'Velocidade da água nos trechos',
     exigido: `≤ ${um(hip.velocidadeMaxMs)} m/s`,
-    obtido: semCalculo ? '—' : `máxima ${um(Math.max(0, ...c.cenario!.trechos.map((t) => t.velocidadeMs)), 2)} m/s`,
+    obtido: semCalculo ? '—' : `máxima ${um(Math.max(0, ...cenariosDoCalculo(c).flatMap((cen) => cen.trechos).map((t) => t.velocidadeMs)), 2)} m/s`,
     estado: semCalculo ? 'NAO_AVALIADO' : rapidos.length ? 'FALTA' : 'ATENDE',
-    alvos: rapidos.map((t) => t.trechoId),
+    alvos: [...new Set(rapidos.map((t) => t.trechoId))],
   });
   const altas = [...c.estaticaKpa].filter(([, p]) => p > hip.pressaoMaximaKpa);
   itens.push({
     grupo: 'NBR 13714',
-    item: 'Pressão estática nos hidrantes',
+    item: 'Pressão estática nos hidrantes e sprinklers',
     exigido: `≤ ${um(hip.pressaoMaximaKpa, 0)} kPa`,
     obtido: semCalculo ? '—' : `máxima ${um(Math.max(0, ...c.estaticaKpa.values()), 0)} kPa`,
     estado: semCalculo ? 'NAO_AVALIADO' : altas.length ? 'FALTA' : 'ATENDE',
@@ -152,8 +200,8 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
     grupo: 'CBMMG',
     item: 'Simultaneidade considerada',
     exigido: `${hip.hidrantesSimultaneos} hidrante(s) — CONFERIR NA IT`,
-    obtido: semCalculo ? '—' : `${c.abertos.length} aberto(s) no cálculo${c.abertos.length < hip.hidrantesSimultaneos ? ' (a rede tem menos hidrantes)' : ''}`,
-    estado: semCalculo ? 'NAO_AVALIADO' : 'ATENDE',
+    obtido: semHidrantes ? '—' : `${h!.abertos.length} aberto(s) no cálculo${h!.abertos.length < hip.hidrantesSimultaneos ? ' (a rede tem menos hidrantes)' : ''}`,
+    estado: semHidrantes ? 'NAO_AVALIADO' : 'ATENDE',
     alvos: [],
   });
   // E3.1: o registro de recalque — por onde o caminhão do Corpo de Bombeiros alimenta a rede.
@@ -188,14 +236,14 @@ export function conferenciaDeIncendio(model: BlueprintModel, c: CalculoDeIncendi
     itens.push({ grupo: 'CBMMG', item: 'Bomba jockey ligada à principal', exigido: 'pressurização da rede — CONFERIR NA IT', obtido: pressurizacao.jockeyId ? 'ligada' : 'não há jockey ligada à principal', estado: pressurizacao.jockeyId ? 'ATENDE' : 'FALTA', alvos: bomba ? [bomba.terminalId] : [] });
     itens.push({ grupo: 'CBMMG', item: 'Pressostatos (um por bomba)', exigido: pressurizacao.jockeyId ? '≥ 2' : '≥ 1', obtido: `${pressurizacao.pressostatos} na rede`, estado: pressurizacao.pressostatos >= (pressurizacao.jockeyId ? 2 : 1) ? 'ATENDE' : 'FALTA', alvos: [] });
     if (pressurizacao.jockeyId) itens.push({ grupo: 'CBMMG', item: 'Jockey alcança a pressão de parada', exigido: pressurizacao.ajustes ? `shutoff da jockey ≥ ${um(pressurizacao.ajustes.paradaJockeyKpa, 0)} kPa` : 'curva da principal', obtido: pressurizacao.jockeyAlcancaParada == null ? 'sem curva da jockey ou da principal' : pressurizacao.jockeyAlcancaParada ? 'alcança' : 'não alcança', estado: est(pressurizacao.jockeyAlcancaParada), alvos: [pressurizacao.jockeyId] });
-    if (pressurizacao.topoPressurizado) itens.push({ grupo: 'CBMMG', item: 'Rede pressurizada no hidrante mais alto', exigido: 'pressão > 0 com a rede na partida da principal', obtido: `${um(pressurizacao.topoPressurizado.pressaoKpa, 0)} kPa`, estado: est(pressurizacao.topoPressurizado.atende), alvos: [] });
+    if (pressurizacao.topoPressurizado) itens.push({ grupo: 'CBMMG', item: 'Rede pressurizada no ponto mais alto', exigido: 'pressão > 0 com a rede na partida da principal', obtido: `${um(pressurizacao.topoPressurizado.pressaoKpa, 0)} kPa`, estado: est(pressurizacao.topoPressurizado.atende), alvos: [] });
   }
   // E3.2: a RTI — vazão do cálculo × autonomia, contra a reserva desenhada.
   const litros = (v: number) => `${Math.round(v).toLocaleString('pt-BR')} L`;
   itens.push({
     grupo: 'CBMMG',
     item: 'Reserva técnica de incêndio',
-    exigido: c.rti.exigidaL != null ? `≥ ${litros(c.rti.exigidaL)} (${um(c.cenario?.vazaoNaFonteLmin ?? 0, 0)} L/min × ${hip.autonomiaMin} min — CONFERIR NA IT)` : `vazão × ${hip.autonomiaMin} min — CONFERIR NA IT`,
+    exigido: c.rti.exigidaL != null ? `≥ ${litros(c.rti.exigidaL)} (${um(c.cenario?.vazaoNaFonteLmin ?? 0, 0)} L/min × ${c.rti.autonomiaMin} min — CONFERIR NA IT)` : `vazão × ${c.rti.autonomiaMin} min — CONFERIR NA IT`,
     obtido: c.rti.disponivelL > 0 ? `${litros(c.rti.disponivelL)} desenhados` : 'nenhuma reserva desenhada',
     estado: c.rti.exigidaL == null ? 'NAO_AVALIADO' : c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'ATENDE' : 'FALTA',
     alvos: c.rti.caixas,

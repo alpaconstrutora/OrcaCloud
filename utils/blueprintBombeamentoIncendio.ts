@@ -146,7 +146,7 @@ export function analisarBomba(model: BlueprintModel, hip: HipotesesHidraulicasDe
   const projeto = c.cenario && c.cargaNecessariaM != null ? { vazaoLmin: c.cenario.vazaoNaFonteLmin, alturaM: c.cargaNecessariaM } : null;
   const alturaNaVazaoDeProjetoM = curva && projeto ? alturaDaBombaM(curva, projeto.vazaoLmin) : null;
   const ateM = Math.max(curva ? (shutoffM(curva) ?? curva[0].alturaMm / 1000) : 0, (projeto?.alturaM ?? 0) * 1.6, 10);
-  const sistema = c.abertos.length ? curvaDoSistema(model, hip, c.abertos, ateM) : [];
+  const sistema = c.abertos.length ? curvaDoSistema(model, c.hip, c.abertos, ateM) : [];
   const zBomba = rede.cota.get(rede.noDaFonte!)!;
   // Sucção: o fundo da caixa de RTI mais baixa; sem caixa, a cota da bomba (afogamento zero).
   const caixas = (model.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && (t.disciplina === 'INCENDIO' || (t.volumeRtiL ?? 0) > 0));
@@ -163,7 +163,7 @@ export function analisarBomba(model: BlueprintModel, hip: HipotesesHidraulicasDe
     projeto,
     alturaNaVazaoDeProjetoM,
     atendeProjeto: curva && projeto ? alturaNaVazaoDeProjetoM != null && alturaNaVazaoDeProjetoM + 1e-9 >= projeto.alturaM : null,
-    operacao: curva && c.abertos.length ? pontoDeOperacao(model, hip, c.abertos, curva) : null,
+    operacao: curva && c.abertos.length ? pontoDeOperacao(model, c.hip, c.abertos, curva) : null,
     cento50: curva && projeto ? (() => {
       const h = alturaDaBombaM(curva, projeto.vazaoLmin * 1.5);
       const minimoM = projeto.alturaM * 0.65;
@@ -208,8 +208,8 @@ export interface PressurizacaoDaRede {
   /** A jockey alcança a pressão de parada? (o shutoff dela ≥ a parada) `null` sem curva. */
   jockeyAlcancaParada: boolean | null;
   /**
-   * Com a rede parada na pressão de partida da principal, o hidrante mais ALTO
-   * ainda tem pressão? (senão a rede esvazia lá em cima antes de a bomba partir)
+   * Com a rede parada na pressão de partida da principal, o ponto mais ALTO
+   * (hidrante ou sprinkler) ainda tem pressão? (senão a rede esvazia lá em cima antes de a bomba partir)
    */
   topoPressurizado: { pressaoKpa: number; atende: boolean } | null;
 }

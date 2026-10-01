@@ -76,7 +76,7 @@ describe('E2.4 · diagnóstico do cálculo e conferência', () => {
     const hip = { ...HIP, pressaoMaximaKpa: 300 };
     const c = calculoDeIncendio(m, hip);
     expect(marcasDoCalculoDeIncendio(m, c, hip).some((x) => x.tipo === 'INCENDIO_PRESSAO_ALTA')).toBe(true);
-    expect(conferenciaDeIncendio(m, c, hip).find((i) => i.item === 'Pressão estática nos hidrantes')!.estado).toBe('FALTA');
+    expect(conferenciaDeIncendio(m, c, hip).find((i) => i.item === 'Pressão estática nos hidrantes e sprinklers')!.estado).toBe('FALTA');
   });
 
   it('rede sã: vazão ATENDE, fonte ATENDE; sem reserva desenhada a RTI FALTA (E3.2)', () => {

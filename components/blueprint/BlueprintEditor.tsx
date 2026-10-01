@@ -233,6 +233,7 @@ import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/bl
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
+import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
 import PainelCalhas from './PainelCalhas';
 import PainelCondutores from './PainelCondutores';
 import { contribuicaoPluvial } from '../../utils/blueprintPluvial';
@@ -7304,9 +7305,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   const exigenciasDeIncendio = useMemo(() => (classificacaoDeIncendio ? exigenciasDaEdificacao(classificacaoDeIncendio) : null), [classificacaoDeIncendio]);
   /** E2.3: o cálculo hidráulico — só com a tarefa aberta (é bisseção por hidrante). */
+  /** E5.1: o critério dos sprinklers — o risco declarado, ou o sugerido pela divisão da classificação. */
+  const criterioDeSprinklersDoEstudo = useMemo(
+    () =>
+      tarefaAberta === 'incendioCalculo'
+        ? criterioDeSprinklers(incendioDoEstudo.hipoteses.sprinklers, classificarEdificacao(editor.model, incendioDoEstudo.hipoteses.classificacao).divisao.valor)
+        : null,
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.sprinklers, incendioDoEstudo.hipoteses.classificacao],
+  );
   const calculoHidraulicoDeIncendio = useMemo(
-    () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
-    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+    () => (tarefaAberta === 'incendioCalculo' ? calculoDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo],
   );
   /** E4.2: a bomba contra a rede — análise derivada; as candidatas vêm do catálogo de tipos da organização. */
   const analiseDaBombaDeIncendio = useMemo(
@@ -7349,8 +7358,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
   );
   const ajusteDeDnDeIncendio = useMemo(
-    () => (calculoHidraulicoDeIncendio?.cenario ? ajustarDnDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
-    [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+    () => (calculoHidraulicoDeIncendio?.cenario ? ajustarDnDeIncendio(editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo) : null),
+    [calculoHidraulicoDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica, criterioDeSprinklersDoEstudo],
   );
   const hipotesesDeAgua = hidroDoEstudo.hipoteses.agua;
   const setHipDeAguaSalvas = (agua: HipotesesDeAgua) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, agua });
@@ -14208,6 +14217,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   },
                 }}
                 conferencia={conferenciaDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica, analiseDaBombaDeIncendio, pressurizacaoDeIncendio)}
+                sprinklers={
+                  criterioDeSprinklersDoEstudo && (editor.model.terminais ?? []).some((t) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'SPRINKLER')
+                    ? {
+                        hs: incendioDoEstudo.hipoteses.sprinklers,
+                        onHs: (sprinklers) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, sprinklers }),
+                        criterio: criterioDeSprinklersDoEstudo,
+                      }
+                    : undefined
+                }
               />
               {analiseDaBombaDeIncendio && (
                 <div className="mt-4">

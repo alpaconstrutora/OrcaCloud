@@ -63,6 +63,6 @@ describe('PainelBombaIncendio › jockey e pressostatos (E4.3)', () => {
     const s = screen.getByTestId('bomba-pressurizacao').textContent!;
     expect(s).toContain('Não há jockey ligada a esta bomba');
     expect(screen.getByTestId('bomba-ajustes').textContent).toContain('Parada da jockey687 kPa');
-    expect(s).toContain('Hidrante mais alto pressurizado');
+    expect(s).toContain('Ponto mais alto pressurizado');
   });
 });

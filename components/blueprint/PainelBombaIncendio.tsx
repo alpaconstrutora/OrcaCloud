@@ -171,7 +171,7 @@ export default function PainelBombaIncendio({ analise: a, curva, hb, onHb, candi
           <ul className="mt-1 space-y-1">
             {pz.jockeyAlcancaParada != null && <Sim ok={pz.jockeyAlcancaParada} rotulo="Jockey alcança a parada" detalhe="o shutoff da jockey cobre a pressão de parada" />}
             {pz.topoPressurizado && (
-              <Sim ok={pz.topoPressurizado.atende} rotulo="Hidrante mais alto pressurizado" detalhe={`${n(pz.topoPressurizado.pressaoKpa, 0)} kPa com a rede na partida da principal`} />
+              <Sim ok={pz.topoPressurizado.atende} rotulo="Ponto mais alto pressurizado" detalhe={`${n(pz.topoPressurizado.pressaoKpa, 0)} kPa com a rede na partida da principal`} />
             )}
           </ul>
           <div className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs text-slate-600 sm:grid-cols-2">

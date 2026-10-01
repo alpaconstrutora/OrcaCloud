@@ -37,6 +37,7 @@ import {
   type Trecho,
 } from './blueprintKernel';
 import { comprimentoMm, fazerChave } from './blueprintGrafoDeRede';
+import type { CriterioDeSprinklers } from './blueprintSprinklersIncendio';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { FICHA_DO_MATERIAL, comprimentoEquivalenteM, type PecaDePerda } from './blueprintHidraulicaPressao';
 import {
@@ -70,8 +71,14 @@ export interface HipotesesHidraulicasDeIncendio {
   diametroMangueiraMangotinhoMm: number;
   /** C de Hazen-Williams da mangueira (revestida). */
   cMangueira: number;
-  /** Sprinkler: pressão mínima no bico (a densidade é a E5). */
+  /** Sprinkler: pressão mínima no bico. */
   pressaoMinimaSprinklerKpa: number;
+  /**
+   * E5.1: a vazão mínima no sprinkler mais desfavorável (densidade × área por
+   * sprinkler). DERIVADA do critério pelo `calculoDeIncendio` — não é premissa
+   * gravada (o leitor da coluna nem a lê). Ausente = só a pressão mínima.
+   */
+  vazaoMinimaSprinklerLmin?: number;
   /** Limites da rede. */
   pressaoMaximaKpa: number;
   velocidadeMaxMs: number;
@@ -305,7 +312,8 @@ export function calcularCenario(model: BlueprintModel, hip: HipotesesHidraulicas
     const q = (s.vazao.get(`emissor:${t.id}`) ?? 0) * 60000;
     if (ehSprinkler(t)) {
       const p = pressao(no);
-      return { terminalId: t.id, tipo: t.tipoHidraulico!, vazaoLmin: q, pressaoNoKpa: p, pressaoNoBicoKpa: p, exigidoLmin: null, exigidoKpa: hip.pressaoMinimaSprinklerKpa, atende: p >= hip.pressaoMinimaSprinklerKpa - 1e-6 };
+      const qMin = hip.vazaoMinimaSprinklerLmin ?? 0;
+      return { terminalId: t.id, tipo: t.tipoHidraulico!, vazaoLmin: q, pressaoNoKpa: p, pressaoNoBicoKpa: p, exigidoLmin: qMin > 0 ? qMin : null, exigidoKpa: hip.pressaoMinimaSprinklerKpa, atende: p >= hip.pressaoMinimaSprinklerKpa - 1e-6 && q >= qMin * (1 - 1e-6) };
     }
     const ex = exigencias(t, hip);
     const zEsg = rede.cota.get(no)!;
@@ -326,11 +334,20 @@ export function calcularCenario(model: BlueprintModel, hip: HipotesesHidraulicas
 // ─── A carga que a bomba tem de dar ──────────────────────────────────────────
 
 const CARGA_MAXIMA_M = 600;
+/** E5.1: a carga com que cada sprinkler, aberto sozinho, é comparado aos outros. */
+const CARGA_DE_ORDENACAO_M = 100;
 
 /** A folga do pior terminal aberto: ≥ 0 = todos atendem. Razão, para comparar vazão e pressão. */
 function folga(c: CenarioCalculado): number {
   if (!c.convergiu || c.terminais.length === 0) return -Infinity;
-  return Math.min(...c.terminais.map((t) => (t.exigidoLmin != null ? t.vazaoLmin / t.exigidoLmin - 1 : t.pressaoNoBicoKpa / (t.exigidoKpa ?? 1) - 1)));
+  const pela = (x: number, min: number) => x / min - 1;
+  return Math.min(
+    ...c.terminais.map((t) => {
+      // O sprinkler tem de dar as DUAS: a vazão (densidade) e a pressão mínimas.
+      if (t.tipo === 'SPRINKLER') return Math.min(t.exigidoLmin != null ? pela(t.vazaoLmin, t.exigidoLmin) : Infinity, pela(t.pressaoNoBicoKpa, t.exigidoKpa ?? 1));
+      return t.exigidoLmin != null ? pela(t.vazaoLmin, t.exigidoLmin) : pela(t.pressaoNoBicoKpa, t.exigidoKpa ?? 1);
+    }),
+  );
 }
 
 /**
@@ -355,6 +372,19 @@ export function cargaNecessaria(model: BlueprintModel, hip: HipotesesHidraulicas
 export type PapelDoTrecho = 'GERAL' | 'COLUNA' | 'RAMAL' | 'SUB_RAMAL' | 'ANEL';
 export const ROTULO_DO_PAPEL: Record<PapelDoTrecho, string> = { GERAL: 'Geral', COLUNA: 'Coluna', RAMAL: 'Ramal', SUB_RAMAL: 'Sub-ramal', ANEL: 'Anel' };
 
+export type SistemaDeIncendio = 'HIDRANTES' | 'SPRINKLERS';
+
+/** O cenário de projeto de UM sistema (E5.1). */
+export interface ResultadoDoSistema {
+  /** Os que abrem juntos — vazio quando falta o critério (o motivo diz). */
+  abertos: ObjectId[];
+  cargaNecessariaM: number | null;
+  cenario: CenarioCalculado | null;
+  motivo: string | null;
+  /** O tempo que a RTI tem de garantir para este sistema, min. */
+  autonomiaMin: number;
+}
+
 export interface CalculoDeIncendio {
   motivo: string | null;
   /** Hidrantes e mangotinhos ligados à rede, do mais ao menos desfavorável (carga que cada um sozinho exige). */
@@ -374,8 +404,14 @@ export interface CalculoDeIncendio {
    * teria de estar, e o cenário é o que a caixa entrega de fato.
    */
   porGravidade: boolean;
-  /** E3.2: a reserva técnica — exigida (vazão × autonomia) e a desenhada. */
-  rti: { exigidaL: number | null; disponivelL: number; caixas: ObjectId[] };
+  /** E3.2: a reserva técnica — exigida (vazão × autonomia do sistema que governa) e a desenhada. */
+  rti: { exigidaL: number | null; autonomiaMin: number; disponivelL: number; caixas: ObjectId[] };
+  /** E5.1: as premissas EFETIVAS (com a vazão mínima por sprinkler do critério) — a bomba usa estas. */
+  hip: HipotesesHidraulicasDeIncendio;
+  criterio: CriterioDeSprinklers | null;
+  /** E5.1: o sistema que governa a bomba — `cenario`, `abertos` e `cargaNecessariaM` acima são dele. */
+  sistema: SistemaDeIncendio | null;
+  porSistema: { hidrantes: ResultadoDoSistema | null; sprinklers: ResultadoDoSistema | null };
 }
 
 /** A RTI desenhada: a reserva das caixas de água fria compartilhadas + o volume das caixas só de incêndio. */
@@ -465,37 +501,87 @@ export function papelDosTrechos(rede: RedeDeIncendio): Map<ObjectId, PapelDoTrec
 }
 
 /**
- * O cálculo do AltoQi para a rede de hidrantes: cada hidrante sozinho dá a
- * carga que exigiria; os N mais exigentes são os mais DESFAVORÁVEIS e abrem
- * juntos; a carga necessária é a menor com que todos eles atendem, e o
- * resultado dela já traz o ponto de equilíbrio (os outros abertos recebem mais).
+ * O cálculo do AltoQi: cada SISTEMA ligado à rede dá o seu cenário de projeto.
+ *  - HIDRANTES: cada um sozinho dá a carga que exigiria; os N mais exigentes são
+ *    os mais DESFAVORÁVEIS e abrem juntos; a carga necessária é a menor com que
+ *    todos atendem, e o resultado já traz o ponto de equilíbrio.
+ *  - SPRINKLERS (E5.1): abrem os N mais desfavoráveis, N = ⌈área de operação ÷
+ *    área por sprinkler⌉ do critério, cada um com a vazão mínima densidade ×
+ *    área por sprinkler. A ordem é a pressão de cada um aberto sozinho com a
+ *    mesma carga (uma resolução por sprinkler). A Área de Operação desenhada
+ *    substitui essa escolha na E5.2.
+ * O que GOVERNA a bomba (o `cenario`/`abertos`/`cargaNecessariaM` de cima) é o
+ * sistema de maior potência hidráulica Q × H; um sistema que não fecha governa,
+ * para a tela dizer o porquê. A demanda SOMADA (sprinkler + mangueiras na mesma
+ * bomba) é a E5.4.
  */
-export function calculoDeIncendio(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio): CalculoDeIncendio {
+export function calculoDeIncendio(model: BlueprintModel, hipDoEstudo: HipotesesHidraulicasDeIncendio, criterio: CriterioDeSprinklers | null = null): CalculoDeIncendio {
+  const hip: HipotesesHidraulicasDeIncendio = criterio?.vazaoPorSprinklerLmin != null ? { ...hipDoEstudo, vazaoMinimaSprinklerLmin: criterio.vazaoPorSprinklerLmin } : hipDoEstudo;
   const rede = redeDeIncendio(model);
-  const combate = (model.terminais ?? []).filter(ehDeCombate);
-  const desligados = (model.terminais ?? []).filter((t) => (ehDeCombate(t) || ehSprinkler(t)) && !rede.noDoTerminal.has(t.id)).map((t) => t.id);
+  const terminais = model.terminais ?? [];
+  const desligados = terminais.filter((t) => (ehDeCombate(t) || ehSprinkler(t)) && !rede.noDoTerminal.has(t.id)).map((t) => t.id);
   const papel = papelDosTrechos(rede);
   const rtiDesenhada = rtiDoDesenho(model);
-  const base: CalculoDeIncendio = { motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map(), porGravidade: rede.tipoDaFonte === 'GRAVIDADE', rti: { exigidaL: null, ...rtiDesenhada } };
+  const base: CalculoDeIncendio = {
+    motivo: null, desfavoraveis: [], abertos: [], cargaNecessariaM: null, cenario: null, desligados, papel, estaticaKpa: new Map(),
+    porGravidade: rede.tipoDaFonte === 'GRAVIDADE', rti: { exigidaL: null, autonomiaMin: hip.autonomiaMin, ...rtiDesenhada },
+    hip, criterio, sistema: null, porSistema: { hidrantes: null, sprinklers: null },
+  };
   if (!rede.fonte) return { ...base, motivo: 'sem bomba de incêndio nem caixa de incêndio ligada à rede — lance uma das duas e ligue-a à tubulação' };
-  const naRede = combate.filter((t) => rede.noDoTerminal.has(t.id));
-  if (naRede.length === 0) return { ...base, motivo: 'nenhum hidrante ou mangotinho ligado à rede' };
+  const naRede = terminais.filter((t) => ehDeCombate(t) && rede.noDoTerminal.has(t.id));
+  const spkNaRede = terminais.filter((t) => ehSprinkler(t) && rede.noDoTerminal.has(t.id));
+  if (naRede.length === 0 && spkNaRede.length === 0) return { ...base, motivo: 'nenhum hidrante, mangotinho ou sprinkler ligado à rede' };
+
+  const resolver = (abertos: ObjectId[], autonomiaMin: number, quem: string): ResultadoDoSistema => {
+    const r = cargaNecessaria(model, hip, abertos, rede);
+    if (base.porGravidade) {
+      // A caixa entrega o que a cota dela dá: o cenário é com carga ZERO acima do fundo.
+      const cenario = calcularCenario(model, hip, abertos, 0, rede);
+      return { abertos, cargaNecessariaM: r?.cargaM ?? null, cenario: cenario.convergiu ? cenario : null, motivo: cenario.convergiu ? null : cenario.motivo, autonomiaMin };
+    }
+    if (!r) return { abertos, cargaNecessariaM: null, cenario: null, motivo: `nem ${CARGA_MAXIMA_M} m de carga na bomba atendem os ${quem} abertos — a rede está subdimensionada`, autonomiaMin };
+    return { abertos, cargaNecessariaM: r.cargaM, cenario: r.cenario, motivo: null, autonomiaMin };
+  };
+
   const desfavoraveis = naRede
     .map((t) => ({ terminalId: t.id, cargaM: cargaNecessaria(model, hip, [t.id], rede)?.cargaM ?? null }))
     .sort((a, b) => (b.cargaM ?? Infinity) - (a.cargaM ?? Infinity) || a.terminalId.localeCompare(b.terminalId));
-  const abertos = desfavoraveis.slice(0, Math.min(hip.hidrantesSimultaneos, desfavoraveis.length)).map((d) => d.terminalId);
-  const r = cargaNecessaria(model, hip, abertos, rede);
-  const zFonte = rede.cota.get(rede.noDaFonte!)!;
-  if (base.porGravidade) {
-    // A caixa entrega o que a cota dela dá: o cenário é com carga ZERO acima do fundo.
-    const cenario = calcularCenario(model, hip, abertos, 0, rede);
-    if (!cenario.convergiu) return { ...base, desfavoraveis, abertos, motivo: cenario.motivo };
-    const estaticaKpa = new Map(naRede.map((t) => [t.id, (zFonte - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
-    return { ...base, desfavoraveis, abertos, cargaNecessariaM: r?.cargaM ?? null, cenario, estaticaKpa, rti: { ...base.rti, exigidaL: cenario.vazaoNaFonteLmin * hip.autonomiaMin } };
+  const hidrantes = naRede.length
+    ? resolver(desfavoraveis.slice(0, Math.min(hip.hidrantesSimultaneos, desfavoraveis.length)).map((d) => d.terminalId), hip.autonomiaMin, 'hidrantes')
+    : null;
+
+  let sprinklers: ResultadoDoSistema | null = null;
+  if (spkNaRede.length) {
+    const n = criterio?.sprinklersNaArea ?? null;
+    if (n == null) {
+      sprinklers = { abertos: [], cargaNecessariaM: null, cenario: null, motivo: 'sem o risco dos sprinklers — declare-o nas premissas, ou a divisão da edificação na classificação', autonomiaMin: hip.autonomiaMin };
+    } else {
+      const ordem = spkNaRede
+        .map((t) => {
+          const cen = calcularCenario(model, hip, [t.id], CARGA_DE_ORDENACAO_M, rede);
+          return { id: t.id, p: cen.convergiu && cen.terminais.length ? cen.terminais[0].pressaoNoBicoKpa : -Infinity };
+        })
+        .sort((a, b) => a.p - b.p || a.id.localeCompare(b.id));
+      sprinklers = resolver(ordem.slice(0, Math.min(n, ordem.length)).map((o) => o.id), criterio!.duracaoMin ?? hip.autonomiaMin, 'sprinklers');
+    }
   }
-  if (!r) return { ...base, desfavoraveis, abertos, motivo: `nem ${CARGA_MAXIMA_M} m de carga na bomba atendem os hidrantes abertos — a rede está subdimensionada` };
-  const estaticaKpa = new Map(naRede.map((t) => [t.id, (zFonte + r.cargaM - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
-  return { ...base, desfavoraveis, abertos, cargaNecessariaM: r.cargaM, cenario: r.cenario, estaticaKpa, rti: { ...base.rti, exigidaL: r.cenario.vazaoNaFonteLmin * hip.autonomiaMin } };
+
+  // Quem governa: o que não fecha; senão o de maior Q × H (por gravidade, a maior carga exigida).
+  const peso = (r: ResultadoDoSistema) => {
+    if (base.porGravidade) return r.cargaNecessariaM ?? Infinity;
+    return r.cenario && r.cargaNecessariaM != null ? r.cenario.vazaoNaFonteLmin * r.cargaNecessariaM : Infinity;
+  };
+  const pares: [SistemaDeIncendio, ResultadoDoSistema | null][] = [['HIDRANTES', hidrantes], ['SPRINKLERS', sprinklers]];
+  const candidatos = pares.filter((x): x is [SistemaDeIncendio, ResultadoDoSistema] => !!x[1] && x[1].abertos.length > 0);
+  const porSistema = { hidrantes, sprinklers };
+  if (candidatos.length === 0) return { ...base, desfavoraveis, porSistema, motivo: sprinklers?.motivo ?? 'nada a calcular' };
+  const [sistema, g] = candidatos.reduce((a, b) => (peso(b[1]) > peso(a[1]) ? b : a));
+  const comum: CalculoDeIncendio = { ...base, desfavoraveis, porSistema, sistema, abertos: g.abertos, cargaNecessariaM: g.cargaNecessariaM, cenario: g.cenario, motivo: g.motivo };
+  if (!g.cenario) return comum;
+  const zFonte = rede.cota.get(rede.noDaFonte!)!;
+  const carga = base.porGravidade ? 0 : g.cargaNecessariaM!;
+  const estaticaKpa = new Map([...naRede, ...spkNaRede].map((t) => [t.id, (zFonte + carga - rede.cota.get(rede.noDoTerminal.get(t.id)!)!) * KPA_POR_MCA_INC]));
+  return { ...comum, estaticaKpa, rti: { ...base.rti, autonomiaMin: g.autonomiaMin, exigidaL: g.cenario.vazaoNaFonteLmin * g.autonomiaMin } };
 }
 
 // ─── DN automático ───────────────────────────────────────────────────────────
@@ -505,11 +591,11 @@ export function calculoDeIncendio(model: BlueprintModel, hip: HipotesesHidraulic
  * e recalcula — até nenhum passar ou 8 rodadas. Devolve os comandos (um lote,
  * desfazível) e quantos trechos mudaram.
  */
-export function ajustarDnDeIncendio(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio): { comandos: Command[]; alterados: number; motivo: string | null } {
+export function ajustarDnDeIncendio(model: BlueprintModel, hip: HipotesesHidraulicasDeIncendio, criterio: CriterioDeSprinklers | null = null): { comandos: Command[]; alterados: number; motivo: string | null } {
   let m = model;
   const novoDn = new Map<ObjectId, number>();
   for (let rodada = 0; rodada < 8; rodada++) {
-    const c = calculoDeIncendio(m, hip);
+    const c = calculoDeIncendio(m, hip, criterio);
     if (!c.cenario) return { comandos: [], alterados: 0, motivo: c.motivo };
     const rapidos = c.cenario.trechos.filter((t) => t.velocidadeMs > hip.velocidadeMaxMs + 1e-9);
     if (rapidos.length === 0) break;

@@ -10,6 +10,7 @@ import { FORMULAS_DE_PERDA, ROTULO_DA_FORMULA, type FormulaDePerda } from '../..
 import { ROTULO_DO_PAPEL, type CalculoDeIncendio, type HipotesesHidraulicasDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import type { EstadoDaConferencia, ItemDaConferencia } from '../../utils/blueprintConferenciaIncendio';
+import { RISCOS_DE_SPRINKLER, ROTULO_DO_RISCO, TABELA_DO_RISCO, type CriterioDeSprinklers, type HipotesesDeSprinklers, type RiscoDeSprinkler } from '../../utils/blueprintSprinklersIncendio';
 
 interface Props {
   hip: HipotesesHidraulicasDeIncendio;
@@ -22,6 +23,118 @@ interface Props {
   ajusteDeDn: { alterados: number; onAjustar: () => void };
   /** E2.4: a conferência em três estados + "não avaliada". Ausente = não mostrar. */
   conferencia?: ItemDaConferencia[];
+  /** E5.1: o critério dos sprinklers (risco → densidade × área). Ausente = não mostrar. */
+  sprinklers?: { hs: HipotesesDeSprinklers; onHs: (h: HipotesesDeSprinklers) => void; criterio: CriterioDeSprinklers };
+}
+
+const ORIGEM: Record<string, string> = { DECLARADA: 'declarado', SUGERIDA: 'sugerido', TABELA: 'tabela' };
+
+/** Número que pode ficar vazio: vazio = o valor da tabela (mostrado como dica). */
+function Opcional({ rotulo, valor, tabela, onValor, passo, unidade }: { rotulo: string; valor: number | null; tabela: number | null; onValor: (v: number | null) => void; passo: number; unidade: string }) {
+  return (
+    <label className="flex items-center justify-between gap-2">
+      <span>
+        {rotulo} <span className="text-slate-400">({unidade})</span>
+      </span>
+      <input
+        type="number"
+        min={0}
+        step={passo}
+        value={valor ?? ''}
+        placeholder={tabela != null ? String(tabela).replace('.', ',') : 'tabela'}
+        onChange={(e) => {
+          if (e.target.value === '') return onValor(null);
+          const x = Number(e.target.value.replace(',', '.'));
+          if (Number.isFinite(x) && x > 0) onValor(x);
+        }}
+        aria-label={`${rotulo} (${unidade})`}
+        className={`w-20 ${campo}`}
+      />
+    </label>
+  );
+}
+
+/** E5.1: risco, densidade e área — e o que sai deles. */
+function SecaoDeSprinklers({ hs, onHs, criterio: cr, calculo: c, nomeDe, onSelecionar }: NonNullable<Props['sprinklers']> & { calculo: CalculoDeIncendio; nomeDe: (id: ObjectId) => string; onSelecionar: (ids: string[]) => void }) {
+  const linha = cr.risco ? TABELA_DO_RISCO[cr.risco.valor] : null;
+  const s = c.porSistema.sprinklers;
+  return (
+    <div data-testid="calculo-incendio-sprinklers">
+      <h4 className="mb-1 text-xs font-semibold text-slate-700">Sprinklers — risco e densidade</h4>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs text-slate-600 sm:grid-cols-2">
+        <label className="flex items-center justify-between gap-2 sm:col-span-2">
+          <span>Classe de risco</span>
+          <select
+            value={hs.risco ?? ''}
+            onChange={(e) => onHs({ ...hs, risco: (e.target.value || null) as RiscoDeSprinkler | null })}
+            aria-label="Classe de risco dos sprinklers"
+            className={campo}
+          >
+            <option value="">{cr.risco?.origem === 'SUGERIDA' ? `Pela ocupação (${ROTULO_DO_RISCO[cr.risco.valor]})` : 'Pela ocupação (sem sugestão)'}</option>
+            {RISCOS_DE_SPRINKLER.map((r) => (
+              <option key={r} value={r}>{ROTULO_DO_RISCO[r]}</option>
+            ))}
+          </select>
+        </label>
+        <Opcional rotulo="Densidade" unidade="L/min/m²" passo={0.1} valor={hs.densidadeLminM2} tabela={linha?.densidadeLminM2 ?? null} onValor={(v) => onHs({ ...hs, densidadeLminM2: v })} />
+        <Opcional rotulo="Área de operação" unidade="m²" passo={1} valor={hs.areaDeOperacaoM2} tabela={linha?.areaDeOperacaoM2 ?? null} onValor={(v) => onHs({ ...hs, areaDeOperacaoM2: v })} />
+        <Opcional rotulo="Área por sprinkler" unidade="m²" passo={0.1} valor={hs.areaPorSprinklerM2} tabela={linha?.areaMaxPorSprinklerM2 ?? null} onValor={(v) => onHs({ ...hs, areaPorSprinklerM2: v })} />
+      </div>
+      {cr.risco ? (
+        <>
+          <p className="mt-1 text-[11px] text-slate-500">{cr.risco.origem === 'DECLARADA' ? 'Risco declarado nas premissas.' : `Risco sugerido: ${cr.risco.motivo}.`} Campos vazios seguem a tabela.</p>
+          <table className="mt-1 w-full text-xs" data-testid="sprinklers-criterio">
+            <tbody>
+              {(
+                [
+                  ['Densidade', `${n(cr.densidade!.valorLminM2, 1)} L/min/m²`, ORIGEM[cr.densidade!.origem]],
+                  ['Área de operação', `${n(cr.areaDeOperacao!.valorM2, 0)} m²`, ORIGEM[cr.areaDeOperacao!.origem]],
+                  ['Área por sprinkler', `${n(cr.areaPorSprinkler!.valorM2, 1)} m²`, ORIGEM[cr.areaPorSprinkler!.origem]],
+                  ['Sprinklers na área', `${cr.sprinklersNaArea}`, 'derivado'],
+                  ['Vazão por sprinkler', `${n(cr.vazaoPorSprinklerLmin!, 1)} L/min`, 'derivado'],
+                  ['Vazão da área', `${n(cr.vazaoDaAreaLmin!, 0)} L/min`, 'derivado'],
+                  ['Duração', `${cr.duracaoMin} min`, 'tabela'],
+                ] as const
+              ).map(([r, v, o]) => (
+                <tr key={r} className="border-b border-slate-100 text-slate-700">
+                  <td className="py-1 pr-2">{r}</td>
+                  <td className="py-1 pr-2 text-right tabular-nums">{v}</td>
+                  <td className="py-1 text-right text-slate-400">{o}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <p className="mt-1 text-xs text-red-700">Sem classe de risco: declare-a acima, ou a divisão da edificação na classificação (aba Incêndio).</p>
+      )}
+      {s && (
+        <p className="mt-1 text-xs text-slate-700" data-testid="sprinklers-resultado">
+          {s.cenario && s.cargaNecessariaM != null ? (
+            <>
+              Os {s.abertos.length} sprinkler(s) mais desfavoráveis pedem <strong className="tabular-nums">{n(s.cenario.vazaoNaFonteLmin, 0)} L/min</strong> a{' '}
+              <strong className="tabular-nums">{n(s.cargaNecessariaM, 1)} mca</strong> na fonte
+              {s.abertos.length > 0 && (
+                <>
+                  {' '}(o pior:{' '}
+                  <button type="button" className="text-blue-700 hover:underline" onClick={() => onSelecionar([s.abertos[0]])}>
+                    {nomeDe(s.abertos[0])}
+                  </button>
+                  )
+                </>
+              )}
+              .
+            </>
+          ) : (
+            <span className="text-red-700">{s.motivo ?? 'Sem cálculo dos sprinklers.'}</span>
+          )}
+        </p>
+      )}
+      <p className="mt-1 text-[11px] text-slate-500">
+        NBR 10897, método hidráulico — CONFERIR NA NORMA. Até a Área de Operação desenhada (E5.2), abrem os N sprinklers mais desfavoráveis.
+      </p>
+    </div>
+  );
 }
 
 const ESTADO: Record<EstadoDaConferencia, { rotulo: string; cor: string }> = {
@@ -55,10 +168,12 @@ function Numero({ rotulo, valor, onValor, passo, unidade }: { rotulo: string; va
   );
 }
 
-export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, onSelecionar, ajusteDeDn, conferencia }: Props) {
+export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, onSelecionar, ajusteDeDn, conferencia, sprinklers }: Props) {
   const set = <K extends keyof HipotesesHidraulicasDeIncendio>(k: K) => (v: HipotesesHidraulicasDeIncendio[K]) => onHip({ ...hip, [k]: v });
   const cen = c.cenario;
   const acimaDaMaxima = [...c.estaticaKpa].filter(([, p]) => p > hip.pressaoMaximaKpa);
+  const quem = c.sistema === 'SPRINKLERS' ? 'sprinkler(s)' : 'hidrante(s)';
+  const doisSistemas = !!c.porSistema.hidrantes && !!c.porSistema.sprinklers;
   const motivoDoAjuste = !cen ? 'sem cálculo — veja o aviso acima' : ajusteDeDn.alterados === 0 ? `nenhum trecho passa de ${n(hip.velocidadeMaxMs)} m/s` : null;
 
   return (
@@ -90,6 +205,8 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
         <Numero rotulo="Autonomia da reserva" unidade="min" passo={5} valor={hip.autonomiaMin} onValor={set('autonomiaMin')} />
       </div>
 
+      {sprinklers && <SecaoDeSprinklers {...sprinklers} calculo={c} nomeDe={nomeDe} onSelecionar={onSelecionar} />}
+
       {c.motivo && (
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800" data-testid="calculo-incendio-motivo">
           {c.motivo}
@@ -109,7 +226,7 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
           {c.porGravidade ? (
             <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800" data-testid="calculo-incendio-gravidade">
               Por gravidade, a caixa de incêndio entrega <strong className="tabular-nums">{n(cen.vazaoNaFonteLmin, 0)} L/min</strong> com{' '}
-              {c.abertos.length} hidrante(s) aberto(s).{' '}
+              {c.abertos.length} {quem} aberto(s).{' '}
               {cen.terminais.every((t) => t.atende)
                 ? 'Atende.'
                 : c.cargaNecessariaM == null
@@ -120,12 +237,13 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
             <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800" data-testid="calculo-incendio-bomba">
               A bomba precisa dar <strong className="tabular-nums">{n(cen.vazaoNaFonteLmin, 0)} L/min</strong> a{' '}
               <strong className="tabular-nums">{n(c.cargaNecessariaM ?? 0, 1)} mca</strong> ({n((c.cargaNecessariaM ?? 0) * 9.80665, 0)} kPa) acima dela, com{' '}
-              {c.abertos.length} hidrante(s) aberto(s) — os mais desfavoráveis.
+              {c.abertos.length} {quem} aberto(s) — os mais desfavoráveis.
+              {doisSistemas && ` Governa a bomba: ${c.sistema === 'SPRINKLERS' ? 'os sprinklers' : 'os hidrantes'} (maior vazão × altura).`}
             </p>
           )}
           {c.rti.exigidaL != null && (
             <p className="text-xs text-slate-700" data-testid="calculo-incendio-rti">
-              Reserva técnica: {n(c.rti.exigidaL, 0)} L exigidos ({n(cen.vazaoNaFonteLmin, 0)} L/min × {hip.autonomiaMin} min) · {n(c.rti.disponivelL, 0)} L desenhados{' '}
+              Reserva técnica: {n(c.rti.exigidaL, 0)} L exigidos ({n(cen.vazaoNaFonteLmin, 0)} L/min × {c.rti.autonomiaMin} min) · {n(c.rti.disponivelL, 0)} L desenhados{' '}
               <span className={c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? 'text-emerald-700' : 'font-semibold text-red-700'}>
                 {c.rti.disponivelL + 1e-6 >= c.rti.exigidaL ? '— atende' : `— faltam ${n(c.rti.exigidaL - c.rti.disponivelL, 0)} L`}
               </span>
@@ -138,7 +256,7 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
                 <th className="py-1 pr-2 font-medium">Aberto</th>
                 <th className="py-1 pr-2 text-right font-medium">Vazão</th>
                 <th className="py-1 pr-2 text-right font-medium">Válvula</th>
-                <th className="py-1 pr-2 text-right font-medium">Esguicho</th>
+                <th className="py-1 pr-2 text-right font-medium">Esguicho/bico</th>
                 <th className="py-1 text-right font-medium">Mínimo</th>
               </tr>
             </thead>
@@ -161,8 +279,9 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
             </tbody>
           </table>
 
+          {c.desfavoraveis.length > 0 && (
           <p className="text-xs text-slate-600">
-            Mais desfavoráveis (carga que cada um, sozinho, exigiria):{' '}
+            Hidrantes mais desfavoráveis (carga que cada um, sozinho, exigiria):{' '}
             {c.desfavoraveis.slice(0, 5).map((d, i) => (
               <span key={d.terminalId}>
                 {i > 0 && ' · '}
@@ -173,6 +292,7 @@ export default function PainelCalculoIncendio({ hip, onHip, calculo: c, nomeDe, 
               </span>
             ))}
           </p>
+          )}
 
           {acimaDaMaxima.length > 0 && (
             <p className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800" data-testid="calculo-incendio-pressao-maxima">

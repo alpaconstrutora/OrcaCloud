@@ -1632,7 +1632,7 @@ Fecha a parte de hidrante do **bloco 4** (§19).
 
 Fecha o **bloco 4**.
 
-## Etapa 5 — Sprinklers · kernel bump · 4 fases
+## Etapa 5 — Sprinklers · kernel bump · 4 fases · **em andamento (5.1 ✅ 01/10/2026, sem bump)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2071,4 +2071,44 @@ haver um bump só.
   diferenciais e a jockey clicável (seleciona no desenho).
 - **Testes:** `blueprintPressurizacaoIncendio.test.ts` (5) e mais um caso no painel. Suíte com 6.597
   testes: 6.564 + 33 pulados. Build ok.
+
+### Etapa 5.1 — 01/10/2026 (frente `incendio-e5`, sem bump)
+
+- **`utils/blueprintSprinklersIncendio.ts`:** a cadeia risco → densidade × área de operação → vazão por
+  sprinkler e da área → duração.
+  - **Tabela:** riscos leve, ordinário 1/2 e extraordinário 1/2, pelo método hidráulico da NBR 10897.
+    Transcrita de memória pelos pontos de área mínima da NFPA 13, em que a NBR se baseia: **CONFERIR NA
+    NORMA**. Cada linha traz densidade, área de operação, área máxima por sprinkler, duração e o
+    adicional de mangueiras (este fica para a E5.4).
+  - **Origem de cada número:**
+    - o risco declarado vence o sugerido pela divisão da E0 (A/B/D/E/H/F → leve, G → ordinário 1,
+      C/I/J → ordinário 2, L/M → sem sugestão);
+    - a densidade, a área e a área por sprinkler declaradas vencem a tabela;
+    - o estudo grava só o declarado (`hipoteses.sprinklers`).
+  - N = ⌈área de operação ÷ área por sprinkler⌉. A vazão mínima no pior sprinkler é a densidade ×
+    a área por sprinkler.
+- **Cálculo (`calculoDeIncendio`), um cenário por SISTEMA:**
+  - **Hidrantes:** como antes.
+  - **Sprinklers:** abrem os N mais desfavoráveis (cada um sozinho com a mesma carga; o de menor
+    pressão é o pior), e cada sprinkler aberto tem de dar a vazão E a pressão mínimas. Até a Área de
+    Operação desenhada (E5.2), é esta a escolha.
+  - **O que governa a bomba:** o sistema de maior Q × H; um sistema que não fecha governa, para a tela
+    dizer o porquê. A bomba, a curva do sistema e o ponto de operação usam as premissas EFETIVAS do
+    cálculo (`c.hip`).
+  - **RTI:** a duração do sistema que governa (30 min no risco leve, não os 60 dos hidrantes).
+  - A demanda SOMADA (sprinkler + mangueiras) é a E5.4.
+- **Conferência (grupo NBR 10897):** risco definido; vazão e pressão nos N mais desfavoráveis;
+  vazão da área de operação (diz quando a rede tem menos sprinklers que a área pede).
+  - Os itens de hidrante passaram a ler o cenário DOS HIDRANTES, seja quem for que governe.
+  - As marcas de velocidade e de "não atende" saem dos dois cenários.
+  - A estática e o "ponto mais alto pressurizado" contam hidrantes e sprinklers.
+- **Tela:** seção "Sprinklers — risco e densidade" no painel do cálculo. Tem a classe de risco (vazio =
+  pela ocupação, com a sugestão no rótulo), campos opcionais com o valor da tabela como dica, a tabela
+  da cadeia com a origem de cada número e o resultado dos sprinklers. Diz também quem governa a bomba.
+- **Harness `docs/spikes/sprinklers-incendio`** (porta 3162 + Edge): ramal de 10 sprinklers e um
+  hidrante. Ele mostrou a cadeia, os 7 mais distantes abertos e o pior exatamente nos 86 L/min. Também
+  pegou a lista "mais desfavoráveis" (que é só de hidrantes) solta sob a tabela de sprinklers: virou
+  "Hidrantes mais desfavoráveis" e some sem hidrante.
+- **Testes:** `blueprintSprinklersIncendio.test.ts` (11; inclui "mudar o risco muda a vazão exigida na
+  bomba") e mais 2 no painel. Suíte com 6.610 testes: 6.577 + 33 pulados. Build ok.
 

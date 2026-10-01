@@ -4492,6 +4492,62 @@ function segmentosDoEletroduto(t, peDireitoMm) {
   ];
 }
 
+// utils/blueprintNumeracaoIncendio.ts
+var PREFIXO_DA_NUMERACAO = {
+  HIDRANTE_SIMPLES: "H",
+  HIDRANTE_DUPLO: "H",
+  MANGOTINHO: "MG",
+  HIDRANTE_RECALQUE: "RR",
+  SPRINKLER: "SPK",
+  VGA: "VGA",
+  CHAVE_FLUXO: "CF",
+  BOMBA_INCENDIO: "BI",
+  BOMBA_JOCKEY: "BJ",
+  PRESSOSTATO: "PS",
+  EXTINTOR: "EXT",
+  PLACA: "PL",
+  LUMINARIA_EMERGENCIA: "LE",
+  DETECTOR_FUMACA: "DF",
+  DETECTOR_TEMPERATURA: "DT",
+  ACIONADOR_MANUAL: "AM",
+  AVISADOR: "AV",
+  CENTRAL_ALARME: "CA",
+  PREVENTIVO_PERSONALIZADO: "PP"
+};
+function numeracaoDeIncendio(model) {
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const numeraveis = (model.terminais ?? []).filter(
+    (t) => t.disciplina === "INCENDIO" && !!t.tipoHidraulico && !!PREFIXO_DA_NUMERACAO[t.tipoHidraulico]
+  );
+  const porPrefixo = /* @__PURE__ */ new Map();
+  for (const t of numeraveis) {
+    const p = PREFIXO_DA_NUMERACAO[t.tipoHidraulico];
+    porPrefixo.set(p, [...porPrefixo.get(p) ?? [], t]);
+  }
+  const resultado = /* @__PURE__ */ new Map();
+  for (const [prefixo, pecas] of porPrefixo) {
+    const doPrefixo = new RegExp(`^${prefixo}-(\\d+)$`, "i");
+    const reservados = /* @__PURE__ */ new Set();
+    for (const t of pecas) {
+      const r = t.rotulo?.trim();
+      if (!r) continue;
+      resultado.set(t.id, { numero: r, origem: "DECLARADO" });
+      const m = doPrefixo.exec(r);
+      if (m) reservados.add(Number(m[1]));
+    }
+    const ordenadas = pecas.filter((t) => !t.rotulo?.trim()).sort(
+      (a, b) => (elevacao.get(a.levelId) ?? 0) - (elevacao.get(b.levelId) ?? 0) || b.at.y - a.at.y || a.at.x - b.at.x || a.id.localeCompare(b.id)
+    );
+    let n4 = 1;
+    for (const t of ordenadas) {
+      while (reservados.has(n4)) n4++;
+      resultado.set(t.id, { numero: `${prefixo}-${n4}`, origem: "DERIVADO" });
+      n4++;
+    }
+  }
+  return resultado;
+}
+
 // utils/blueprintRede.ts
 var MEDIDAS_PADRAO_QUADRO = {
   larguraMm: 400,
@@ -5235,7 +5291,9 @@ var COBERTURA_IFC = [
   'APROVA\xC7\xC3O: quando a revis\xE3o foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash \u2014 \xE9 o par (o que foi aprovado, quem aprovou) que vale. Revis\xE3o que n\xE3o passou por aprova\xE7\xE3o N\xC3O menciona o assunto: dizer "n\xE3o aprovado" afirmaria que algu\xE9m olhou e recusou.',
   "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o, tamb\xE9m como marca de lugar: no esquema IFC4 (o padr\xE3o) sai IfcFlowController \u2014 IfcDistributionBoard, o exato, n\xE3o existe no IFC4 e os leitores n\xE3o o leem \u2014; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard (.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege \u2014, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por tipo (fase, neutro, retorno, terra) e se\xE7\xE3o de condutor do circuito, SEM geometria (o cabo corre dentro do eletroduto), com o comprimento total em Qto_CableSegmentBaseQuantities \u2014 o mesmo do quantitativo. Pset_OpuraEletrica separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista escolheu (tens\xE3o, liga\xE7\xE3o, fase, disjuntor, curva, se\xE7\xE3o, DPS, Icn); _Calculada \xE9 conta do pr\xE9-dimensionamento com as hip\xF3teses do estudo (IB, demanda do quadro); _Derivados \xE9 o que o motor de fia\xE7\xE3o deriva (a composi\xE7\xE3o dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon (normativo) s\xF3 leva FATO: RatedVoltage = a tens\xE3o declarada do circuito, e HasProtectiveEarth nas tomadas de uso geral e espec\xEDfico. N\xC3O CONT\xC9M registro, nem dimensionamento hidr\xE1ulico: bitola e cota das redes de \xE1gua e esgoto s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de perda de carga.",
   "CONT\xC9M guarda-corpos e corrim\xE3os (IfcRailing .GUARDRAIL. / .HANDRAIL.): um s\xF3lido por trecho da polilinha \u2014 50 mm de espessura, na altura declarada, apoiado no piso do pavimento \u2014, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura \xE9 MARCA DE LUGAR, n\xE3o perfil: o desenho sabe onde a prote\xE7\xE3o est\xE1 e quanto mede, n\xE3o o desenho do gradil.",
-  "CONT\xC9M a rede de inc\xEAndio desenhada (desde 30/09/2026): tubula\xE7\xE3o como IfcPipeSegment no sistema .FIREPROTECTION.; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal; VGA como IfcValve; chave de fluxo e pressostato como IfcSensor; bombas como IfcPump. N\xC3O CONT\xC9M os preventivos (extintor, sinaliza\xE7\xE3o, ilumina\xE7\xE3o de emerg\xEAncia, detec\xE7\xE3o e alarme), nem c\xE1lculo hidr\xE1ulico de inc\xEAndio.",
+  // ⚠️ E9.3 (01/10/2026): esta linha dizia "NÃO CONTÉM os preventivos" desde a E1 — falsa desde a
+  // E7, que passou a emitir extintor, placa, luminária, detecção e alarme (achado 5 do roadmap).
+  "CONT\xC9M a seguran\xE7a contra inc\xEAndio desenhada, no sistema .FIREPROTECTION.: tubula\xE7\xE3o como IfcPipeSegment; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal (.FIREHYDRANT., .HOSEREEL., .BREECHINGINLET., .SPRINKLER.); extintor e preventivo personalizado como IfcFireSuppressionTerminal .USERDEFINED.; placa de sinaliza\xE7\xE3o como IfcFireSuppressionTerminal .USERDEFINED. no IFC4 e IfcSign .PICTORAL. no IFC4X3; lumin\xE1ria de emerg\xEAncia como IfcLightFixture .SECURITYLIGHTING.; detectores como IfcSensor (.SMOKESENSOR., .HEATSENSOR.), chave de fluxo e pressostato como IfcSensor; acionador e avisador como IfcAlarm; central como IfcController; VGA como IfcValve; bombas como IfcPump. O ObjectType leva o tipo do sistema (\xE9 por ele que a importa\xE7\xE3o reconhece a pe\xE7a). Pset_OpuraIncendio separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista informou (fator K, posi\xE7\xE3o do sprinkler, agente, carga e capacidade do extintor, c\xF3digo da placa, autonomia da lumin\xE1ria); _Derivado \xE9 a numera\xE7\xE3o do desenho (H-1, SPK-3); _Calculada \xE9 o resultado do c\xE1lculo hidr\xE1ulico com as premissas do estudo (vaz\xE3o e press\xE3o no bico das pe\xE7as abertas no cen\xE1rio de projeto) \u2014 s\xF3 quando o arquivo \xE9 gerado com elas. N\xC3O CONT\xC9M a planilha de press\xF5es nem a curva da bomba (est\xE3o no PDF e no XLSX).",
   "N\xC3O CONT\xC9M ar-condicionado nem g\xE1s.",
   "N\xC3O CONT\xC9M ARMADURA. Nenhuma barra de a\xE7o, estribo ou cobrimento \u2014 a estrutura aqui \xE9 s\xF3 a forma do concreto.",
   'CONT\xC9M tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de cat\xE1logo), com IfcRelDefinesByType ligando as inst\xE2ncias \u2014 inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma fam\xEDlia. O nome do tipo \xE9 o de projeto ("P1"); o item de cat\xE1logo vai em Pset_OpuraPlanta.ItemCode do tipo.',
@@ -5341,6 +5399,7 @@ function n(v) {
 }
 function gerarIfc(model, o) {
   const linhas = [];
+  const numerosDeIncendio = numeracaoDeIncendio(model);
   let proximo = 1;
   const emitir = (corpo) => {
     const id = `#${proximo++}`;
@@ -5654,6 +5713,7 @@ function gerarIfc(model, o) {
     }
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
+      if (t.disciplina === "INCENDIO") psetDeIncendio(ctx, produto, t, numerosDeIncendio.get(t.id)?.numero ?? null, o.resultadosDeIncendio?.get(t.id) ?? null);
       produtos.push(produto);
       porSistema.set(t.disciplina, [...porSistema.get(t.disciplina) ?? [], produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, "terminal"));
@@ -5844,6 +5904,23 @@ function valorIfc(v) {
     default:
       return `${v.tipo}(${s(v.v)})`;
   }
+}
+function psetDeIncendio(ctx, produto, t, numero, calc) {
+  const p = [];
+  if (numero) p.push(["Numero_Derivado", { tipo: "IFCLABEL", v: numero }]);
+  if (t.fatorK != null) p.push(["FatorK_Declarado", { tipo: "IFCREAL", v: t.fatorK }]);
+  if (t.posicaoSprinkler) p.push(["PosicaoSprinkler_Declarada", { tipo: "IFCLABEL", v: t.posicaoSprinkler }]);
+  if (t.agenteExtintor) p.push(["AgenteExtintor_Declarado", { tipo: "IFCLABEL", v: t.agenteExtintor }]);
+  if (t.cargaExtintorKg != null) p.push(["CargaExtintorKg_Declarada", { tipo: "IFCREAL", v: t.cargaExtintorKg }]);
+  if (t.capacidadeExtintora) p.push(["CapacidadeExtintora_Declarada", { tipo: "IFCLABEL", v: t.capacidadeExtintora }]);
+  if (t.codigoPlaca) p.push(["CodigoPlaca_Declarado", { tipo: "IFCLABEL", v: t.codigoPlaca }]);
+  if (t.autonomiaMin != null) p.push(["AutonomiaMin_Declarada", { tipo: "IFCREAL", v: t.autonomiaMin }]);
+  if (calc) {
+    p.push(["VazaoLmin_Calculada", { tipo: "IFCREAL", v: Math.round(calc.vazaoLmin * 10) / 10 }]);
+    p.push(["PressaoNoBicoKpa_Calculada", { tipo: "IFCREAL", v: Math.round(calc.pressaoNoBicoKpa * 10) / 10 }]);
+    p.push(["Atende_Calculada", { tipo: "IFCBOOLEAN", v: calc.atende }]);
+  }
+  emitirPset(ctx, produto, t.uid, "Pset_OpuraIncendio", p);
 }
 function emitirPset(ctx, produto, uidPai, nome, props) {
   if (props.length === 0) return;
@@ -6560,7 +6637,7 @@ function emitirTerminal(t, ctx, localNivel) {
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
   const eletrico = t.disciplina === "ELETRICA" && t.tipoEletrico ? t.tipoEletrico : null;
   if (!eletrico && t.tipoHidraulico) {
-    const { entidade: entidade2, predefinido: predefinido2 } = entidadeDoPontoHidraulico(t.tipoHidraulico);
+    const { entidade: entidade2, predefinido: predefinido2 } = t.tipoHidraulico === "PLACA" && ctx.esquema === "IFC4X3" ? { entidade: "IFCSIGN", predefinido: ".PICTORAL." } : entidadeDoPontoHidraulico(t.tipoHidraulico);
     const objectType2 = t.tipoHidraulico === "RESERVATORIO" && t.volumeL != null ? `${t.tipoHidraulico}:${t.volumeL}L` : t.tipoHidraulico;
     return emitir(
       `${entidade2}(${guidDe(t.uid, `terminal-${t.id}`)},${historico},${s(t.tipo)},$,${s(objectType2)},${local},${produtoForma},${s(rotuloCurto(t.uid, "terminal"))},${predefinido2})`

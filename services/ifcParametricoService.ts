@@ -975,14 +975,64 @@ const transformar = (m: number[], x: number, y: number, z: number): P3m => ({
 });
 
 /**
- * E7.2 — lê os pontos e os eletrodutos do arquivo. Toda posição sai dos
- * VÉRTICES da malha (ver `PontoEletricoIfc.centro`); o eixo do eletroduto é a
- * direção local Z do sólido (a da extrusão), e as pontas são os extremos dos
- * vértices ao longo dele.
+ * E9.3 (incêndio): as classes de PEÇA de incêndio. Valem quando a peça está no
+ * sistema `.FIREPROTECTION.` do arquivo — ou quando a classe/enum só pode ser de
+ * incêndio (o terminal de supressão, o alarme, o detector de fumaça/calor, a
+ * luminária de segurança). Bomba, válvula e sensor de vazão/pressão FORA do
+ * sistema de incêndio são da água: ficam de fora, não adivinhados.
+ */
+const CLASSES_DE_PONTO_DE_INCENDIO = ['IFCFIRESUPPRESSIONTERMINAL', 'IFCALARM', 'IFCSENSOR', 'IFCPUMP', 'IFCVALVE', 'IFCLIGHTFIXTURE', 'IFCCONTROLLER', 'IFCSIGN'];
+export function eDeIncendio(classe: string, predefinido: string | null, noSistemaDeIncendio: boolean): boolean {
+  if (noSistemaDeIncendio) return true;
+  const pd = (predefinido ?? '').replace(/\./g, '');
+  if (classe === 'IFCFIRESUPPRESSIONTERMINAL' || classe === 'IFCALARM') return true;
+  if (classe === 'IFCSENSOR') return pd === 'SMOKESENSOR' || pd === 'HEATSENSOR';
+  if (classe === 'IFCLIGHTFIXTURE') return pd === 'SECURITYLIGHTING';
+  return false;
+}
+
+/**
+ * E7.2 — lê os pontos e os eletrodutos do arquivo. E9.3: o mesmo leitor serve ao
+ * incêndio (`lerIncendioParametrico`) — e a elétrica deixa de ler o que está no
+ * sistema de incêndio (a luminária de emergência entraria duas vezes).
  */
 export async function lerEletricaParametrica(modeloId: number): Promise<LeituraEletrica> {
+  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_ELETRICO, 'IFCCABLECARRIERSEGMENT', 'eletroduto', (_classe, _pd, noSistemaDeIncendio) => !noSistemaDeIncendio);
+}
+
+/** E9.3 — as peças e a tubulação de incêndio do arquivo (o tubo: só o do sistema `.FIREPROTECTION.`). */
+export async function lerIncendioParametrico(modeloId: number): Promise<LeituraEletrica> {
+  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_DE_INCENDIO, 'IFCPIPESEGMENT', 'tubo', (classe, pd, noSistema) => (classe === 'IFCPIPESEGMENT' ? noSistema : eDeIncendio(classe, pd, noSistema)));
+}
+
+/**
+ * Lê as peças e os tubos de UMA instalação. Toda posição sai dos VÉRTICES da
+ * malha (ver `PontoEletricoIfc.centro`); o eixo do tubo é a direção local Z do
+ * sólido (a da extrusão), e as pontas são os extremos dos vértices ao longo dele.
+ * `aceitar` decide, por classe, enum e pertença ao sistema de incêndio.
+ */
+async function lerInstalacaoParametrica(
+  modeloId: number,
+  classesDePonto: readonly string[],
+  classeDoTubo: string,
+  rotuloDoTubo: string,
+  aceitar: (classe: string, predefinido: string | null, noSistemaDeIncendio: boolean) => boolean,
+): Promise<LeituraEletrica> {
   const api = await obterApi();
   const raiz = await tabelaDeTipos();
+
+  // Quem está no sistema de incêndio (IfcRelAssignsToGroup → IfcDistributionSystem .FIREPROTECTION.).
+  const noIncendio = new Set<number>();
+  const grupos = typeof raiz.IFCRELASSIGNSTOGROUP === 'number' ? api.GetLineIDsWithType(modeloId, raiz.IFCRELASSIGNSTOGROUP as number) : null;
+  for (let i = 0; grupos && i < grupos.size(); i++) {
+    const rel = api.GetLine(modeloId, grupos.get(i), false) as Record<string, unknown>;
+    const ref = rel.RelatingGroup as { value?: number } | undefined;
+    if (ref?.value === undefined) continue;
+    const grupo = api.GetLine(modeloId, ref.value, false) as Record<string, unknown> & { type?: number };
+    const pd = (grupo.PredefinedType as { value?: unknown } | undefined)?.value;
+    if (grupo.type !== raiz.IFCDISTRIBUTIONSYSTEM || String(pd ?? '') !== 'FIREPROTECTION') continue;
+    for (const o of (rel.RelatedObjects ?? []) as { value?: number }[]) if (o?.value !== undefined) noIncendio.add(o.value);
+  }
 
   const pavimentoDe = new Map<number, number>();
   const rels = api.GetLineIDsWithType(modeloId, raiz.IFCRELCONTAINEDINSPATIALSTRUCTURE as number);
@@ -998,7 +1048,7 @@ export async function lerEletricaParametrica(modeloId: number): Promise<LeituraE
 
   // Quem interessa: os pontos e os eletrodutos.
   const classeDe = new Map<number, string>();
-  for (const classe of [...CLASSES_DE_PONTO_ELETRICO, 'IFCCABLECARRIERSEGMENT']) {
+  for (const classe of [...classesDePonto, classeDoTubo]) {
     const codigo = raiz[classe] as number | undefined;
     if (typeof codigo !== 'number') continue;
     const ids = api.GetLineIDsWithType(modeloId, codigo);
@@ -1034,9 +1084,10 @@ export async function lerEletricaParametrica(modeloId: number): Promise<LeituraE
       const v = (x as { value?: unknown } | undefined)?.value;
       return v == null ? null : String(v);
     };
+    if (!aceitar(classe, valor(el.PredefinedType), noIncendio.has(eid))) continue;
     const geos = solidos.get(eid) ?? [];
     const todos = geos.flatMap((g) => g.vertices);
-    if (classe !== 'IFCCABLECARRIERSEGMENT') {
+    if (classe !== classeDoTubo) {
       let centro: P3m | null = null;
       if (todos.length > 0) {
         const min = { X: Infinity, Y: Infinity, Z: Infinity };
@@ -1051,7 +1102,7 @@ export async function lerEletricaParametrica(modeloId: number): Promise<LeituraE
       continue;
     }
     if (geos.length === 0) {
-      recusas.push({ expressID: eid, classe, nome, motivo: 'eletroduto sem geometria' });
+      recusas.push({ expressID: eid, classe, nome, motivo: `${rotuloDoTubo} sem geometria` });
       continue;
     }
     const segmentos: { de: P3m; para: P3m }[] = [];
@@ -1078,7 +1129,7 @@ export async function lerEletricaParametrica(modeloId: number): Promise<LeituraE
       segmentos.push({ de: { X: c.X + u.X * smin, Y: c.Y + u.Y * smin, Z: c.Z + u.Z * smin }, para: { X: c.X + u.X * smax, Y: c.Y + u.Y * smax, Z: c.Z + u.Z * smax } });
     }
     if (segmentos.length === 0) {
-      recusas.push({ expressID: eid, classe, nome, motivo: 'eletroduto sem eixo legível' });
+      recusas.push({ expressID: eid, classe, nome, motivo: `${rotuloDoTubo} sem eixo legível` });
       continue;
     }
     distancias.sort((x, y) => x - y);

@@ -47,6 +47,7 @@
  * coordenadas saem cruas: nada de espelhar.
  */
 
+import { numeracaoDeIncendio } from './blueprintNumeracaoIncendio';
 import {
   ehConjunto,
   ROTULO_DA_CONEXAO,
@@ -178,7 +179,9 @@ export const COBERTURA_IFC = [
     'hidráulico: bitola e cota das redes de água e esgoto são o que alguém desenhou, e ' +
     'não resultado de cálculo de perda de carga.',
   'CONTÉM guarda-corpos e corrimãos (IfcRailing .GUARDRAIL. / .HANDRAIL.): um sólido por trecho da polilinha — 50 mm de espessura, na altura declarada, apoiado no piso do pavimento —, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura é MARCA DE LUGAR, não perfil: o desenho sabe onde a proteção está e quanto mede, não o desenho do gradil.',
-  'CONTÉM a rede de incêndio desenhada (desde 30/09/2026): tubulação como IfcPipeSegment no sistema .FIREPROTECTION.; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal; VGA como IfcValve; chave de fluxo e pressostato como IfcSensor; bombas como IfcPump. NÃO CONTÉM os preventivos (extintor, sinalização, iluminação de emergência, detecção e alarme), nem cálculo hidráulico de incêndio.',
+  // ⚠️ E9.3 (01/10/2026): esta linha dizia "NÃO CONTÉM os preventivos" desde a E1 — falsa desde a
+  // E7, que passou a emitir extintor, placa, luminária, detecção e alarme (achado 5 do roadmap).
+  'CONTÉM a segurança contra incêndio desenhada, no sistema .FIREPROTECTION.: tubulação como IfcPipeSegment; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal (.FIREHYDRANT., .HOSEREEL., .BREECHINGINLET., .SPRINKLER.); extintor e preventivo personalizado como IfcFireSuppressionTerminal .USERDEFINED.; placa de sinalização como IfcFireSuppressionTerminal .USERDEFINED. no IFC4 e IfcSign .PICTORAL. no IFC4X3; luminária de emergência como IfcLightFixture .SECURITYLIGHTING.; detectores como IfcSensor (.SMOKESENSOR., .HEATSENSOR.), chave de fluxo e pressostato como IfcSensor; acionador e avisador como IfcAlarm; central como IfcController; VGA como IfcValve; bombas como IfcPump. O ObjectType leva o tipo do sistema (é por ele que a importação reconhece a peça). Pset_OpuraIncendio separa pelo SUFIXO: _Declarado/_Declarada é o que o projetista informou (fator K, posição do sprinkler, agente, carga e capacidade do extintor, código da placa, autonomia da luminária); _Derivado é a numeração do desenho (H-1, SPK-3); _Calculada é o resultado do cálculo hidráulico com as premissas do estudo (vazão e pressão no bico das peças abertas no cenário de projeto) — só quando o arquivo é gerado com elas. NÃO CONTÉM a planilha de pressões nem a curva da bomba (estão no PDF e no XLSX).',
   'NÃO CONTÉM ar-condicionado nem gás.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
@@ -566,6 +569,12 @@ export interface OpcoesIfc {
   esquema?: 'IFC4' | 'IFC4X3';
   /** E7.1: as hipóteses do pré-dimensionamento, para o IB e a demanda CALCULADOS no Pset elétrico. */
   hipotesesEletricas?: HipotesesEletricas;
+  /**
+   * E9.3 (incêndio): o resultado do cálculo hidráulico por peça aberta no cenário de projeto
+   * (`calculoDoEstudo` com as premissas do estudo), para o `_Calculada` do Pset de incêndio.
+   * Vem PRONTO de quem gera o arquivo — o cálculo não mora no gerador de IFC.
+   */
+  resultadosDeIncendio?: ReadonlyMap<string, { vazaoLmin: number; pressaoNoBicoKpa: number; atende: boolean }>;
 }
 
 interface Ctx {
@@ -598,6 +607,8 @@ interface Ctx {
 
 export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const linhas: string[] = [];
+  // E9.3: a numeração de incêndio do desenho INTEIRO (H-1, SPK-3) — a mesma das pranchas.
+  const numerosDeIncendio = numeracaoDeIncendio(model);
   let proximo = 1;
   /** Emite uma entidade e devolve a referência `#n`. */
   const emitir = (corpo: string): string => {
@@ -1034,6 +1045,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     }
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
+      if (t.disciplina === 'INCENDIO') psetDeIncendio(ctx, produto, t, numerosDeIncendio.get(t.id)?.numero ?? null, o.resultadosDeIncendio?.get(t.id) ?? null);
       produtos.push(produto);
       porSistema.set(t.disciplina, [...(porSistema.get(t.disciplina) ?? []), produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, 'terminal'));
@@ -1342,6 +1354,30 @@ function valorIfc(v: ValorIfc): string {
     default:
       return `${v.tipo}(${s(v.v)})`;
   }
+}
+
+/**
+ * E9.3 — `Pset_OpuraIncendio`: o que o projetista DECLAROU (sufixo _Declarado/_Declarada), a
+ * numeração do desenho (_Derivado) e, quando o arquivo vem com as premissas do estudo, o
+ * resultado do cálculo hidráulico da peça aberta no cenário de projeto (_Calculada). O que
+ * ninguém informou não sai (ausente ≠ zero).
+ */
+function psetDeIncendio(ctx: Ctx, produto: string, t: Terminal, numero: string | null, calc: { vazaoLmin: number; pressaoNoBicoKpa: number; atende: boolean } | null): void {
+  const p: [string, ValorIfc][] = [];
+  if (numero) p.push(['Numero_Derivado', { tipo: 'IFCLABEL', v: numero }]);
+  if (t.fatorK != null) p.push(['FatorK_Declarado', { tipo: 'IFCREAL', v: t.fatorK }]);
+  if (t.posicaoSprinkler) p.push(['PosicaoSprinkler_Declarada', { tipo: 'IFCLABEL', v: t.posicaoSprinkler }]);
+  if (t.agenteExtintor) p.push(['AgenteExtintor_Declarado', { tipo: 'IFCLABEL', v: t.agenteExtintor }]);
+  if (t.cargaExtintorKg != null) p.push(['CargaExtintorKg_Declarada', { tipo: 'IFCREAL', v: t.cargaExtintorKg }]);
+  if (t.capacidadeExtintora) p.push(['CapacidadeExtintora_Declarada', { tipo: 'IFCLABEL', v: t.capacidadeExtintora }]);
+  if (t.codigoPlaca) p.push(['CodigoPlaca_Declarado', { tipo: 'IFCLABEL', v: t.codigoPlaca }]);
+  if (t.autonomiaMin != null) p.push(['AutonomiaMin_Declarada', { tipo: 'IFCREAL', v: t.autonomiaMin }]);
+  if (calc) {
+    p.push(['VazaoLmin_Calculada', { tipo: 'IFCREAL', v: Math.round(calc.vazaoLmin * 10) / 10 }]);
+    p.push(['PressaoNoBicoKpa_Calculada', { tipo: 'IFCREAL', v: Math.round(calc.pressaoNoBicoKpa * 10) / 10 }]);
+    p.push(['Atende_Calculada', { tipo: 'IFCBOOLEAN', v: calc.atende }]);
+  }
+  emitirPset(ctx, produto, t.uid, 'Pset_OpuraIncendio', p);
 }
 
 /**
@@ -2591,7 +2627,8 @@ function emitirTerminal(t: Terminal, ctx: Ctx, localNivel: string): string {
   // entidade específica seria escolher por quem não escolheu.
   const eletrico = t.disciplina === 'ELETRICA' && t.tipoEletrico ? t.tipoEletrico : null;
   if (!eletrico && t.tipoHidraulico) {
-    const { entidade, predefinido } = entidadeDoPontoHidraulico(t.tipoHidraulico);
+    // E9.3: a placa é IfcSign no IFC4X3 (a classe não existe no IFC4, que segue com o terminal .USERDEFINED.).
+    const { entidade, predefinido } = t.tipoHidraulico === 'PLACA' && ctx.esquema === 'IFC4X3' ? { entidade: 'IFCSIGN', predefinido: '.PICTORAL.' } : entidadeDoPontoHidraulico(t.tipoHidraulico);
     // O ObjectType leva o tipo do kernel e, no reservatório, o volume ("RESERVATORIO:1000L").
     const objectType = t.tipoHidraulico === 'RESERVATORIO' && t.volumeL != null ? `${t.tipoHidraulico}:${t.volumeL}L` : t.tipoHidraulico;
     return emitir(

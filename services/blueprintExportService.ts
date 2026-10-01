@@ -7,6 +7,7 @@
 // uma vez contra a interface. Aqui só se traduz "milímetro de papel" para o que
 // cada destino entende — pixel no canvas, ponto no PDF.
 
+import type { HipotesesIncendio } from '../utils/blueprintIncendioClassificacao';
 import { abaDaListaDeMateriaisIncendio, materiaisDeIncendio, temMateriaisDeIncendio } from '../utils/blueprintListaDeMateriaisIncendio';
 import { abaDaPlanilhaDePressoes, calculoDoEstudo, caminhoCritico, planilhaDePressoes } from '../utils/blueprintPlanilhaDePressoes';
 import { paraWinAnsi } from './blueprintMemorialHidroService';
@@ -143,6 +144,14 @@ function opcoesDaCamada(p: PranchaExport): Partial<OpcoesExportacao> {
     incendio: p === 'incendio' ? 'TODAS' : undefined,
     ...opcoesDaHumanizada(p),
   };
+}
+
+/** E9.3: o resultado do cálculo de incêndio por peça aberta no cenário de projeto — para o Pset do IFC. */
+export function resultadosDeIncendioParaIfc(model: BlueprintModel, hip: HipotesesIncendio | undefined): Map<string, { vazaoLmin: number; pressaoNoBicoKpa: number; atende: boolean }> | undefined {
+  if (!hip || !(model.trechos ?? []).some((t) => t.disciplina === 'INCENDIO')) return undefined;
+  const cen = calculoDoEstudo(model, hip).calculo.cenario;
+  if (!cen) return undefined;
+  return new Map(cen.terminais.map((t) => [t.terminalId, { vazaoLmin: t.vazaoLmin, pressaoNoBicoKpa: t.pressaoNoBicoKpa, atende: t.atende }]));
 }
 
 /** As redes das pranchas hidrossanitárias marcadas (E2.3: o esquema vertical mostra só elas). */
@@ -901,6 +910,8 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     // E7.1: o esquema escolhido e as hipóteses do estudo (IB e demanda calculados no Pset elétrico).
     esquema: o.esquemaIfc,
     hipotesesEletricas: o.hipotesesEletricas,
+    // E9.3: o calculado de incêndio (vazão e pressão no bico das peças abertas), com as premissas do estudo.
+    resultadosDeIncendio: resultadosDeIncendioParaIfc(model, o.hipotesesDeIncendio),
   });
 
   return [

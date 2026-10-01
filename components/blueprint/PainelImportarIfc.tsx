@@ -13,12 +13,14 @@ import {
   caixaDasPecas,
   caixaDoDesenho,
   comandosDaEletrica,
+  comandosDoIncendio,
   deslocamentoDaImportacao,
   type AncoragemIfc,
   type CaixaPlana,
   type EletrodutoTraduzido,
   type ParedeTraduzida,
   type PecaTraduzida,
+  type PontoDeIncendioTraduzido,
   type PontoEletricoTraduzido,
   type VaoTraduzido,
 } from '../../utils/ifcParaKernel';
@@ -87,10 +89,13 @@ interface Preparado {
   /** E7.2: a elétrica do arquivo — pontos e eletrodutos, cotas absolutas. */
   pontosEletricos: PontoEletricoTraduzido[];
   eletrodutos: EletrodutoTraduzido[];
+  /** E9.3: o incêndio do arquivo — peças e tubos do sistema .FIREPROTECTION., cotas absolutas. */
+  pecasDeIncendio: PontoDeIncendioTraduzido[];
+  tubosDeIncendio: EletrodutoTraduzido[];
 }
 
-/** E7.2: a caixa em planta da elétrica que vai entrar (para a ancoragem contar a mesma história). */
-function caixaDaEletrica(pontos: PontoEletricoTraduzido[], eletrodutos: EletrodutoTraduzido[]): CaixaPlana | null {
+/** E7.2: a caixa em planta da elétrica (E9.3: e do incêndio) que vai entrar — para a ancoragem contar a mesma história. */
+function caixaDaEletrica(pontos: readonly { at: { x: number; y: number } }[], eletrodutos: readonly EletrodutoTraduzido[]): CaixaPlana | null {
   const ps = [...pontos.map((p) => p.at), ...eletrodutos.flatMap((e) => [e.a, e.b])];
   if (ps.length === 0) return null;
   return {
@@ -182,8 +187,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       setPreparado(null);
       try {
         const { obterApi } = await import('../../services/ifcViewerService');
-        const { lerPecasParametricas, lerEletricaParametrica } = await import('../../services/ifcParametricoService');
-        const { traduzirPecas, traduzirParedes, traduzirVaos, traduzirEletrica } = await import(
+        const { lerPecasParametricas, lerEletricaParametrica, lerIncendioParametrico } = await import('../../services/ifcParametricoService');
+        const { traduzirPecas, traduzirParedes, traduzirVaos, traduzirEletrica, traduzirIncendio } = await import(
           '../../utils/ifcParaKernel'
         );
         const { encostarNasFaces } = await import('../../utils/ifcEncostarParedes');
@@ -219,10 +224,20 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             leituraEletrica.recusas.push({ expressID: 0, classe: 'ELETRICA', nome: 'instalação elétrica', motivo: `não foi possível ler a elétrica do arquivo: ${e instanceof Error ? e.message : String(e)}` });
           }
           const eletrica = traduzirEletrica(leituraEletrica);
+          // E9.3: o INCÊNDIO — a mesma proteção: falhar a leitura dele não trava o resto.
+          let leituraIncendio: Awaited<ReturnType<typeof lerIncendioParametrico>> = { pontos: [], eletrodutos: [], recusas: [] };
+          try {
+            leituraIncendio = await lerIncendioParametrico(id);
+          } catch (e) {
+            leituraIncendio.recusas.push({ expressID: 0, classe: 'INCENDIO', nome: 'segurança contra incêndio', motivo: `não foi possível ler o incêndio do arquivo: ${e instanceof Error ? e.message : String(e)}` });
+          }
+          const incendio = traduzirIncendio(leituraIncendio);
           const p: Preparado = {
             nomeArquivo,
             pontosEletricos: eletrica.pontos,
             eletrodutos: eletrica.eletrodutos,
+            pecasDeIncendio: incendio.pontos,
+            tubosDeIncendio: incendio.tubos,
             pecas: traduzido.pecas,
             paredes: encostado.paredes,
             vaos: traduzidosVaos.vaos,
@@ -236,6 +251,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
               ...traduzidosVaos.recusas,
               ...leituraEletrica.recusas,
               ...eletrica.recusas,
+              ...leituraIncendio.recusas,
+              ...incendio.recusas,
             ],
           };
           setPreparado(p);
@@ -278,8 +295,14 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
   /** E7.2: a elétrica que entra, pela mesma regra de pavimento. */
   const pontosAImportar = preparado ? preparado.pontosEletricos.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
   const eletrodutosAImportar = preparado ? preparado.eletrodutos.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
-  const totalAImportar = aImportar.length + paredesAImportar.length + pontosAImportar.length + eletrodutosAImportar.length;
-  const pegada = uniao(uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar)), caixaDaEletrica(pontosAImportar, eletrodutosAImportar));
+  /** E9.3: o incêndio que entra, pela mesma regra de pavimento. */
+  const pecasDeIncendioAImportar = preparado ? preparado.pecasDeIncendio.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
+  const tubosDeIncendioAImportar = preparado ? preparado.tubosDeIncendio.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
+  const totalAImportar = aImportar.length + paredesAImportar.length + pontosAImportar.length + eletrodutosAImportar.length + pecasDeIncendioAImportar.length + tubosDeIncendioAImportar.length;
+  const pegada = uniao(
+    uniao(uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar)), caixaDaEletrica(pontosAImportar, eletrodutosAImportar)),
+    caixaDaEletrica(pecasDeIncendioAImportar, tubosDeIncendioAImportar),
+  );
   const doDesenho = caixaDoDesenho(model);
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, doDesenho);
   const distanciaMm =
@@ -389,6 +412,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
     // E7.2 — a ELÉTRICA: pontos e eletrodutos no pavimento casado (novo inclusive, pelo `levelUid`),
     // com a cota relativa a ele — o arquivo a traz absoluta.
     comandos.push(...comandosDaEletrica(pontosAImportar, eletrodutosAImportar, destino, dx, dy));
+    // E9.3 — o INCÊNDIO: peças e tubos na disciplina INCENDIO, pela mesma regra.
+    comandos.push(...comandosDoIncendio(pecasDeIncendioAImportar, tubosDeIncendioAImportar, destino, dx, dy));
 
     if (comandos.length > 0) onImportar(comandos);
     setPreparado(null);
@@ -487,6 +512,12 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
                 : []),
               ...(preparado.eletrodutos.length > 0
                 ? [`${preparado.eletrodutos.length} eletroduto${preparado.eletrodutos.length > 1 ? 's' : ''}`]
+                : []),
+              ...(preparado.pecasDeIncendio.length > 0
+                ? [`${preparado.pecasDeIncendio.length} peça${preparado.pecasDeIncendio.length > 1 ? 's' : ''} de incêndio`]
+                : []),
+              ...(preparado.tubosDeIncendio.length > 0
+                ? [`${preparado.tubosDeIncendio.length} tubo${preparado.tubosDeIncendio.length > 1 ? 's' : ''} de incêndio`]
                 : []),
             ].join(' · ') || 'nenhuma peça legível'}
           </p>

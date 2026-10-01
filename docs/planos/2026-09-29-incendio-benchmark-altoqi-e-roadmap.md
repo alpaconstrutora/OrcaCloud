@@ -1675,7 +1675,7 @@ Fecha o **bloco 5** e os A das seções 20, 21, 23, 24 e 25.
 
 Fecha o **bloco 7**.
 
-## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **em andamento (9.1 e 9.2 ✅ 01/10/2026)**
+## Etapa 9 — Quantitativo e BIM · quant bump · 4 fases · **em andamento (9.1, 9.2 e 9.3 ✅ 01/10/2026)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2704,4 +2704,45 @@ Pedido: "Fazer a E9.2 agora" (migration e prova autorizadas).
   - `components/PainelComposicoesDePeca.test.tsx` (3);
   - `PainelOrcamento.test.tsx` com o serviço novo simulado.
   - Suíte com 6.755 testes: 6.722 + 33 pulados. Build ok.
+
+### Etapa 9.3 — 01/10/2026 (frente `incendio-e9`, sem bump)
+
+- **O mapeamento das classes já existia** desde a E1.1 e a E7: hidrante, mangotinho, recalque e
+  sprinkler, extintor/placa .USERDEFINED., luminária .SECURITYLIGHTING., detectores, alarme,
+  central, VGA, bombas e o sistema `.FIREPROTECTION.`. O que faltava era isto:
+  - ⚠️ **A frase de cobertura (achado 5)** dizia "NÃO CONTÉM os preventivos", e isso era falso desde
+    a E7. Agora ela lista o que o arquivo contém, classe por classe, e o teste a fixa.
+  - **Placa como `IfcSign .PICTORAL.` no IFC4X3.** No IFC4, que não tem a classe, segue como
+    terminal .USERDEFINED. O web-ifc lê o arquivo nos dois esquemas.
+  - **`Pset_OpuraIncendio`**, pelo sufixo de quem decidiu:
+    - `_Declarado/_Declarada`: fator K, posição, agente, carga, capacidade, código da placa,
+      autonomia;
+    - `_Derivado`: o número do desenho (H-1);
+    - `_Calculada`: vazão, pressão no bico e se atende, para as peças abertas no cenário de projeto.
+      Só sai quando a exportação vem com as premissas do estudo; o cálculo é feito pelo serviço
+      (`resultadosDeIncendioParaIfc`), não pelo gerador.
+- **Importar incêndio do IFC** (molde E7.2 da elétrica):
+  - `lerIncendioParametrico`: o leitor da elétrica virou `lerInstalacaoParametrica`, com um filtro
+    por classe, enum e pertença ao sistema `.FIREPROTECTION.` (lida das `IfcRelAssignsToGroup`).
+    - O tubo de incêndio é o `IfcPipeSegment` DO sistema; o de água fica de fora.
+    - Bomba, válvula e sensor de pressão ou vazão fora do sistema são da água e não entram.
+    - Terminal de supressão, alarme, detector de fumaça/calor e luminária de segurança entram
+      sempre.
+  - ⚠️ **A elétrica deixou de ler o que está no sistema de incêndio.** A luminária de emergência
+    (IfcLightFixture) entraria duas vezes, como ILUMINACAO_TETO e como LUMINARIA_EMERGENCIA.
+  - `tipoDoPontoDeIncendioIfc`: o nosso `ObjectType` quando já é um tipo de incêndio do sistema;
+    senão, a classe e o enum. O .USERDEFINED. de outro programa é RECUSADO com o motivo, nunca vira
+    extintor por palpite.
+  - `traduzirIncendio` / `comandosDoIncendio`: a peça no centro da malha e o tubo pelas pontas do
+    caminho, na disciplina INCENDIO com a cota relativa. O painel "Importar IFC" mostra e importa
+    "N peças / tubos de incêndio", e a falha da leitura vira recusa sem travar o resto.
+  - A ida e volta preserva TIPO, posição e cota. As especificações do Pset ainda não voltam (ficam
+    para o backlog).
+- **planta-api:** o `kernel.bundle.mjs` foi regenerado (o `gerarIfc` mudou).
+- **Testes:**
+  - `ifcImportarIncendio.test.ts` (6): pelo web-ifc, as 13 peças voltam iguais e o tubo volta com
+    1 mm de ruído do eixo da malha; a água não entra; a luminária não duplica; os comandos; o
+    `IfcSign` no IFC4X3; o reconhecimento sem o nosso ObjectType; o Pset; a cobertura;
+  - `PainelImportarIfc.test.tsx` (+1, a falha do incêndio não trava a estrutura).
+  - Suíte com 6.774 testes: 6.741 + 33 pulados. Build ok.
 

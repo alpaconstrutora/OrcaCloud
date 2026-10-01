@@ -44,8 +44,11 @@ import type {
 import { lerSecaoT } from './ifcSecaoT';
 import { uidDeIfcGuid } from './blueprintIfc';
 import {
+  DISCIPLINAS_DO_PONTO_HIDRAULICO,
   TIPOS_DE_INTERRUPTOR,
   TIPOS_DE_PONTO_ELETRICO,
+  TIPOS_DE_PONTO_HIDRAULICO,
+  type TipoDePontoHidraulico,
   contornoEmPlanta,
   type TipoDeInterruptor,
   type TipoDePontoEletrico,
@@ -863,3 +866,117 @@ export function comandosDaEletrica(
   }
   return comandos;
 }
+
+// ─── E9.3 (incêndio): a SEGURANÇA CONTRA INCÊNDIO do arquivo ─────────────────
+
+/** Os tipos do sistema que são de incêndio (os que admitem a disciplina INCENDIO e só ela). */
+const TIPOS_DE_INCENDIO = new Set<string>(TIPOS_DE_PONTO_HIDRAULICO.filter((t) => DISCIPLINAS_DO_PONTO_HIDRAULICO[t].length === 1 && DISCIPLINAS_DO_PONTO_HIDRAULICO[t][0] === 'INCENDIO'));
+
+/**
+ * O tipo da peça de incêndio: o `ObjectType` quando ele JÁ é um tipo do sistema
+ * (o nosso export escreve "HIDRANTE_SIMPLES", "PLACA"…); senão a classe e o
+ * `PredefinedType` pelo que a norma IFC diz deles. `null` = sem equivalente —
+ * o terminal .USERDEFINED. de outro programa não vira extintor por palpite.
+ */
+export function tipoDoPontoDeIncendioIfc(classe: string, predefinido: string | null, objectType: string | null): TipoDePontoHidraulico | null {
+  const base = (objectType ?? '').split(':')[0];
+  if (TIPOS_DE_INCENDIO.has(base)) return base as TipoDePontoHidraulico;
+  const pd = (predefinido ?? '').replace(/\./g, '');
+  switch (classe) {
+    case 'IFCFIRESUPPRESSIONTERMINAL':
+      return pd === 'FIREHYDRANT' ? 'HIDRANTE_SIMPLES' : pd === 'HOSEREEL' ? 'MANGOTINHO' : pd === 'BREECHINGINLET' ? 'HIDRANTE_RECALQUE' : pd === 'SPRINKLER' ? 'SPRINKLER' : null;
+    case 'IFCALARM':
+      return pd === 'MANUALPULLBOX' ? 'ACIONADOR_MANUAL' : pd === 'SIREN' || pd === 'BELL' || pd === 'LIGHT' ? 'AVISADOR' : null;
+    case 'IFCSENSOR':
+      return pd === 'SMOKESENSOR' ? 'DETECTOR_FUMACA' : pd === 'HEATSENSOR' ? 'DETECTOR_TEMPERATURA' : pd === 'FLOWSENSOR' ? 'CHAVE_FLUXO' : pd === 'PRESSURESENSOR' ? 'PRESSOSTATO' : null;
+    case 'IFCLIGHTFIXTURE':
+      return pd === 'SECURITYLIGHTING' ? 'LUMINARIA_EMERGENCIA' : null;
+    case 'IFCSIGN':
+      return 'PLACA';
+    case 'IFCPUMP':
+      // Só chega aqui a bomba do sistema de incêndio (o leitor filtra).
+      return 'BOMBA_INCENDIO';
+    default:
+      return null;
+  }
+}
+
+export interface PontoDeIncendioTraduzido {
+  expressID: number;
+  nome: string;
+  pavimento: number | null;
+  at: PontoMm;
+  cotaAbsMm: number;
+  tipoHidraulico: TipoDePontoHidraulico;
+}
+
+/**
+ * E9.3 — traduz o incêndio lido do arquivo: a peça no CENTRO (em planta e em
+ * cota), o tubo pelas pontas do caminho — como a elétrica (E7.2). Peça sem
+ * tipo ou sem geometria é recusada com o motivo, nunca adivinhada.
+ */
+export function traduzirIncendio(leitura: LeituraEletrica): { pontos: PontoDeIncendioTraduzido[]; tubos: EletrodutoTraduzido[]; recusas: RecusaDeTraducao[] } {
+  const pontos: PontoDeIncendioTraduzido[] = [];
+  const recusas: RecusaDeTraducao[] = [];
+  for (const p of leitura.pontos) {
+    const tipo = tipoDoPontoDeIncendioIfc(p.classe, p.predefinido, p.objectType);
+    if (!tipo) {
+      recusas.push({ expressID: p.expressID, nome: p.nome, classe: p.classe, motivo: `${p.classe}${p.predefinido ? ` .${p.predefinido}.` : ''} não tem equivalente entre as peças de incêndio` });
+      continue;
+    }
+    if (!p.centro) {
+      recusas.push({ expressID: p.expressID, nome: p.nome, classe: p.classe, motivo: 'a peça não tem geometria para dizer onde está' });
+      continue;
+    }
+    pontos.push({ expressID: p.expressID, nome: p.nome, pavimento: p.pavimento, at: arredondar(paraPlano(p.centro)), cotaAbsMm: Math.round(paraCota(p.centro)), tipoHidraulico: tipo });
+  }
+  // O tubo: o mesmo encadeamento dos sólidos do eletroduto; a bitola medida (65 sem geometria legível).
+  const tubos = traduzirEletrica({ pontos: [], eletrodutos: leitura.eletrodutos, recusas: [] });
+  return {
+    pontos,
+    tubos: tubos.eletrodutos.map((t) => ({ ...t, bitolaMm: leitura.eletrodutos.find((e) => e.expressID === t.expressID)?.diametroM != null ? t.bitolaMm : 65 })),
+    recusas: [...recusas, ...tubos.recusas.map((r) => ({ ...r, classe: 'IFCPIPESEGMENT', motivo: r.motivo.replace('eletroduto', 'tubo') }))],
+  };
+}
+
+/** E9.3 — os comandos do incêndio importado: peças e tubos na disciplina INCENDIO, cota relativa ao pavimento. */
+export function comandosDoIncendio(
+  pontos: readonly PontoDeIncendioTraduzido[],
+  tubos: readonly EletrodutoTraduzido[],
+  destino: (pavimento: number) => DestinoDaImportacao | null,
+  dx = 0,
+  dy = 0,
+): Command[] {
+  const comandos: Command[] = [];
+  for (const p of pontos) {
+    const nivel = p.pavimento == null ? null : destino(p.pavimento);
+    if (!nivel) continue;
+    comandos.push({
+      type: 'AddTerminal',
+      levelId: nivel.levelId,
+      ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
+      disciplina: 'INCENDIO',
+      tipo: p.nome && p.nome !== '—' ? p.nome : p.tipoHidraulico,
+      tipoHidraulico: p.tipoHidraulico,
+      at: { x: p.at.x + dx, y: p.at.y + dy },
+      cotaMm: p.cotaAbsMm - nivel.elevationMm,
+    } as Command);
+  }
+  for (const e of tubos) {
+    const nivel = e.pavimento == null ? null : destino(e.pavimento);
+    if (!nivel) continue;
+    comandos.push({
+      type: 'AddTrecho',
+      levelId: nivel.levelId,
+      ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
+      disciplina: 'INCENDIO',
+      a: { x: e.a.x + dx, y: e.a.y + dy },
+      b: { x: e.b.x + dx, y: e.b.y + dy },
+      cotaAMm: e.cotaAAbsMm - nivel.elevationMm,
+      cotaBMm: e.cotaBAbsMm - nivel.elevationMm,
+      bitolaMm: e.bitolaMm,
+    });
+  }
+  return comandos;
+}
+

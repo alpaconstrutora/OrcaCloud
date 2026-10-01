@@ -7,6 +7,10 @@
  *  - na VGA: o MANÔMETRO de montante e o de jusante e o REGISTRO de bloqueio, sobre
  *    os tubos que chegam nela (a 30 e a 60 cm dela).
  *
+ *  - F6: na LUMINÁRIA DE EMERGÊNCIA, o ponto de ALIMENTAÇÃO dela no circuito de
+ *    iluminação do local (ponto elétrico de iluminação, `POTENCIA_DA_LUMINARIA_W`)
+ *    — os circuitos automáticos e o quadro de cargas passam a contá-la.
+ *
  * O DRENO da VGA não entra como peça: seria um ramal sem destino — a verificação o
  * acusaria como ponta aberta. Ele continua no detalhe típico (E8.3).
  *
@@ -22,6 +26,25 @@ const DO_MANOMETRO_MM = 300;
 const DO_REGISTRO_MM = 600;
 
 const ehVga = (t: Terminal) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'VGA';
+const ehLuminaria = (t: Terminal) => t.disciplina === 'INCENDIO' && t.tipoHidraulico === 'LUMINARIA_EMERGENCIA';
+/** F6: a carga da luminária autônoma no circuito de iluminação (carregador da bateria), W — CONFERIR com o fabricante. */
+export const POTENCIA_DA_LUMINARIA_W = 10;
+export const ROTULO_DA_ALIMENTACAO = 'Alimentação da luminária de emergência';
+
+/**
+ * F6: o ponto de alimentação de cada luminária de emergência que ainda não tem (um ponto elétrico a
+ * menos de 5 cm dela) — de iluminação, para entrar no circuito de luz do ambiente, não num exclusivo.
+ */
+export function alimentacaoDasLuminarias(model: BlueprintModel, apenas?: ReadonlySet<string>): Command[] {
+  const eletricos = (model.terminais ?? []).filter((t) => t.disciplina === 'ELETRICA');
+  return (model.terminais ?? [])
+    .filter((t) => ehLuminaria(t) && (!apenas || apenas.has(t.id)))
+    .filter((t) => !eletricos.some((e) => e.levelId === t.levelId && Math.hypot(e.at.x - t.at.x, e.at.y - t.at.y) < 50))
+    .map(
+      (t) =>
+        ({ type: 'AddTerminal', levelId: t.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DA_ALIMENTACAO, tipoEletrico: 'ILUMINACAO_PAREDE', at: { x: t.at.x, y: t.at.y }, cotaMm: t.cotaMm, potenciaW: POTENCIA_DA_LUMINARIA_W }) as Command,
+    );
+}
 
 /** O ponto a `d` mm de `de` ao longo do trecho (rumo à outra ponta), com a cota interpolada. */
 function aoLongo(t: Trecho, deA: boolean, d: number): { at: Point; cotaMm: number } | null {
@@ -74,7 +97,8 @@ export function kitDaPeca(model: BlueprintModel, comandos: Command[]): { comando
   }
   const antes = new Set((model.terminais ?? []).map((t) => t.id));
   const vgas = (r.model.terminais ?? []).filter((t) => !antes.has(t.id) && ehVga(t));
-  const extras = vgas.flatMap((v) => kitDaVga(r.model, v));
+  const novasLuminarias = new Set((r.model.terminais ?? []).filter((t) => !antes.has(t.id) && ehLuminaria(t)).map((t) => t.id));
+  const extras = [...vgas.flatMap((v) => kitDaVga(r.model, v)), ...(novasLuminarias.size ? alimentacaoDasLuminarias(r.model, novasLuminarias) : [])];
   const semRede = vgas.filter((v) => !kitDaVga(r.model, v).length);
   return {
     comandos: [...comPlaca, ...extras],

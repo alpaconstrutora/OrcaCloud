@@ -34,7 +34,11 @@ import { applyBatch, conflitosArquitetonicos, pointInPolygon } from './blueprint
 import { classificarEdificacao, exigenciasDaEdificacao, pavimentoDeDescarga, type HipotesesIncendio, type MedidaDeSeguranca } from './blueprintIncendioClassificacao';
 import { percursoDeFuga } from './blueprintRotaDeFuga';
 import { analisarExtintores, proporExtintores } from './blueprintExtintores';
-import { analisarSinalizacao, comPlacas, proporSinalizacao } from './blueprintSinalizacao';
+import { analisarSinalizacao, proporSinalizacao } from './blueprintSinalizacao';
+import { kitDaPeca } from './blueprintKitsIncendio';
+import { proporEletrodutoDoLaco } from './blueprintLacoDeAlarme';
+import { analisarAntipanico, proporAntipanico } from './blueprintAntipanico';
+import { analisarSaidas } from './blueprintSaidasIncendio';
 import { analisarIluminacao, proporIluminacao } from './blueprintIluminacaoEmergencia';
 import { analisarAlarme, proporAlarme } from './blueprintDeteccaoAlarme';
 import { proporHidrantes } from './blueprintCoberturaIncendio';
@@ -53,7 +57,7 @@ import type { BombaCandidata } from './blueprintBombeamentoIncendio';
 export type SituacaoDaEtapa = 'LANCOU' | 'NADA_A_FAZER' | 'NAO_EXIGIDA' | 'NAO_RODOU';
 
 export interface EtapaDoPpci {
-  id: 'EXTINTORES' | 'HIDRANTES' | 'SPRINKLERS' | 'FONTE' | 'REDE' | 'RECALQUE' | 'DN' | 'RESERVA' | 'AREA_DE_OPERACAO' | 'SINALIZACAO' | 'ILUMINACAO' | 'ALARME';
+  id: 'EXTINTORES' | 'HIDRANTES' | 'SPRINKLERS' | 'FONTE' | 'REDE' | 'RECALQUE' | 'DN' | 'RESERVA' | 'AREA_DE_OPERACAO' | 'SINALIZACAO' | 'ILUMINACAO' | 'ALARME' | 'ANTIPANICO';
   rotulo: string;
   situacao: SituacaoDaEtapa;
   /** Comandos que a etapa pôs no lote. */
@@ -148,7 +152,8 @@ export function gerarPpci(
   // ── Extintores (com a placa de cada um) ───────────────────────────────────
   if (exigida('EXTINTORES')) {
     const p = proporExtintores(m, analisarExtintores(m, classificacao.carga.nivel, hip.extintores), hip.extintores);
-    const n = aplicar(p.comandos.length ? comPlacas(m, p.comandos) : []);
+    // F1: o kit da peça (a placa de cada extintor) — o mesmo da inserção à mão.
+    const n = aplicar(p.comandos.length ? kitDaPeca(m, p.comandos).comandos : []);
     for (const s of p.semCobertura) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Extintor: ${s}` });
     etapa('EXTINTORES', 'Extintores (com placa)', 'LANCOU', n, p.motivo);
   } else etapa('EXTINTORES', 'Extintores (com placa)', 'NAO_EXIGIDA', 0);
@@ -156,7 +161,7 @@ export function gerarPpci(
   // ── Hidrantes pela cobertura (com placa) ──────────────────────────────────
   if (exigida('HIDRANTES')) {
     const p = proporHidrantes(m, hip.hidraulica);
-    const n = aplicar(p.comandos.length ? comPlacas(m, p.comandos) : []);
+    const n = aplicar(p.comandos.length ? kitDaPeca(m, p.comandos).comandos : []);
     const nomes = new Map(m.spaces.map((s) => [s.id, s.name ?? 'ambiente']));
     for (const id of p.semSolucao) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Hidrante: ${nomes.get(id) ?? id} fica fora do alcance de qualquer posição proposta.` });
     etapa('HIDRANTES', 'Hidrantes pela cobertura (com placa)', 'LANCOU', n, p.semSolucao.length ? `${p.semSolucao.length} ambiente(s) sem solução` : null);
@@ -253,14 +258,24 @@ export function gerarPpci(
       const pc = percurso();
       const lote = proporIluminacao(m, pc, analisarIluminacao(m, pc, descarga, hip.iluminacao));
       if (lote.length === 0) break;
-      n += aplicar(lote);
+      // F6: cada luminária com o ponto de alimentação dela no circuito de iluminação.
+      n += aplicar(kitDaPeca(m, lote).comandos);
     }
     etapa('ILUMINACAO', 'Iluminação de emergência ao longo das rotas', 'LANCOU', n);
   } else etapa('ILUMINACAO', 'Iluminação de emergência ao longo das rotas', 'NAO_EXIGIDA', 0);
   if (exigida('DETECCAO') || exigida('ALARME')) {
-    const n = aplicar(proporAlarme(m, analisarAlarme(m, exigida('DETECCAO'), exigida('ALARME'))));
-    etapa('ALARME', 'Detecção e alarme (laço e central)', 'LANCOU', n);
-  } else etapa('ALARME', 'Detecção e alarme (laço e central)', 'NAO_EXIGIDA', 0);
+    let n = aplicar(proporAlarme(m, analisarAlarme(m, exigida('DETECCAO'), exigida('ALARME'))));
+    // F3: o eletroduto do laço (central → dispositivos, e a prumada).
+    n += aplicar(proporEletrodutoDoLaco(m));
+    etapa('ALARME', 'Detecção e alarme (laço, central e eletroduto)', 'LANCOU', n);
+  } else etapa('ALARME', 'Detecção e alarme (laço, central e eletroduto)', 'NAO_EXIGIDA', 0);
+
+  // ── F5: a barra antipânico nas portas da rota ─────────────────────────────
+  if (exigida('SAIDAS_EMERGENCIA')) {
+    const saidas = analisarSaidas(m, classificacao.divisao.valor, hip.saidas, hip.classificacao.pisoDeDescargaLevelId, classificacao.altura.valorM);
+    const n = aplicar(proporAntipanico(m, analisarAntipanico(m, percurso(), saidas)));
+    etapa('ANTIPANICO', 'Barra antipânico nas portas da rota', 'LANCOU', n);
+  } else etapa('ANTIPANICO', 'Barra antipânico nas portas da rota', 'NAO_EXIGIDA', 0);
 
   // (Fase B: bomba, jockey, pressostatos, recalque e reserva agora são propostos — o que cada passo
   // não resolveu entrou acima como "não decide", com o motivo.)

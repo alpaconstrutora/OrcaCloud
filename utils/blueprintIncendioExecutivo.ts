@@ -46,6 +46,7 @@ import { ROTULO_DO_AGENTE, analisarExtintores, type AnaliseDeExtintores } from '
 import { analisarSinalizacao, type AnaliseDeSinalizacao } from './blueprintSinalizacao';
 import { analisarIluminacao, type AnaliseDeIluminacao } from './blueprintIluminacaoEmergencia';
 import { analisarAlarme, type AnaliseDeAlarme } from './blueprintDeteccaoAlarme';
+import { analisarAntipanico } from './blueprintAntipanico';
 
 // ─── As análises, uma vez ────────────────────────────────────────────────────
 
@@ -539,6 +540,12 @@ export function verificacoesIncendio(model: BlueprintModel, hip: HipotesesIncend
   for (const e of a.saidas.protecao) {
     if (e.atende === null) continue;
     v.push({ grupo: 'SAIDAS', item: `Proteção da escada — ${e.rotulo}`, norma: 'NBR 9077 · IT do CBMMG', exigido: e.exigida ? ROTULO_DA_PROTECAO[e.exigida] : '—', obtido: e.declarada ? ROTULO_DA_PROTECAO[e.declarada] : 'não declarada', atende: e.atende });
+  }
+  // F5: a barra antipânico nas portas por onde a rota passa (regra CONFERIR NA IT).
+  const portas = analisarAntipanico(model, a.percurso, a.saidas).filter((p) => p.exigida);
+  if (portas.length) {
+    const sem = portas.filter((p) => !p.tem);
+    v.push({ grupo: 'SAIDAS', item: 'Barra antipânico nas portas da rota', norma: 'NBR 11785 · IT do CBMMG — CONFERIR', exigido: `${portas.length} porta(s): ${portas[0].motivo}`, obtido: sem.length ? `${sem.length} sem a barra` : 'todas com a barra', atende: sem.length === 0 });
   }
   const longas = a.percurso.ambientes.filter((r) => r.atende === false);
   if (a.percurso.ambientes.length) {

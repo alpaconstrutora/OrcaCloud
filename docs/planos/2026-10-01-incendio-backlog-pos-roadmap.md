@@ -323,7 +323,7 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
   - Suíte com 6.828 testes: 6.795 + 33 pulados. Build ok.
 - [ ] D1 (⏸ aguarda os PDFs do CBMMG) · D2 (⏸ adiada — só MG agora)
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)
-- [ ] **Fase F — 2 de 6** (frente `incendio-fase-f`):
+- [ ] **Fase F — 5 de 6** (frente `incendio-fase-f`):
   - [x] **Kernel 0.89.0** (um bump para os dois tipos novos; goldens 7/7 antes, 6 hashes e 22 pinos
     depois; bundle da planta-api regenerado): `MANOMETRO` (sobre o trecho) e `DETECTOR_CHAMA` (do
     laço). Cada um tem ficha, símbolo, numeração (MN, DC), família da prancha, IFC
@@ -346,8 +346,27 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
     - a proposta o põe nas quinas, olhando para o centro.
     - ⚠️ **A lei da Fase A pegou um defeito do alarme:** os detectores lançados criavam o laço no
       pavimento, e o avisador que o laço exige só vinha na 2ª proposta. Agora vem no mesmo lote.
-  - Suíte com 6.853 testes: 6.820 + 33 pulados. Build ok.
-  - [ ] F2 · F3 · F5 · F6
+  - Suíte com 6.853 testes: 6.820 + 33 pulados. Build ok. (Publicado em 38fa4908.)
+  - [x] F3 — `utils/blueprintLacoDeAlarme.ts · proporEletrodutoDoLaco`:
+    - eletrodutos ELÉTRICOS "Laço de alarme" (20 mm, sugeridos), da central a cada dispositivo,
+      em cadeia pelo mais perto;
+    - a PRUMADA na posição da central para os outros pavimentos, e a cadeia de lá parte do pé (ou
+      do topo) dela;
+    - idempotente (dispositivo já alcançado não ganha outro).
+    - Lançado no MESMO lote da proposta de alarme (gaveta e gerador). O quantitativo conta o
+      eletroduto.
+  - [x] F5 — `utils/blueprintAntipanico.ts`:
+    - a porta de abrir por onde a ROTA passa (o centro do vão = o portal do grafo) pede a barra
+      quando o grupo é F ou o pavimento tem ≥ 50 pessoas (CONFERIR NA IT / NBR 11785);
+    - a proposta acrescenta a marca `ANTIPANICO`, mantendo as outras;
+    - a conferência da emissão ganhou "Barra antipânico nas portas da rota", e o gerador ganhou a
+      etapa.
+  - [x] F6 — `alimentacaoDasLuminarias` (no kit da peça): a luminária de emergência entra com o
+    ponto de ALIMENTAÇÃO no circuito de iluminação do local (ponto elétrico de iluminação, 10 W,
+    CONFERIR com o fabricante), e os circuitos automáticos o põem num circuito de ILUMINAÇÃO, sem
+    regra nova no motor elétrico. Vale na gaveta de iluminação e no gerador.
+  - Suíte com 6.857 testes: 6.824 + 33 pulados. Build ok.
+  - [ ] F2 — kits por organização (migration: o SQL é mostrado ao usuário antes de aplicar).
 
 ## Verificação
 

@@ -258,6 +258,7 @@ import { analisarAlarme, proporAlarme } from '../../utils/blueprintDeteccaoAlarm
 import { analisarIluminacao, proporIluminacao } from '../../utils/blueprintIluminacaoEmergencia';
 import { analisarSinalizacao, comPlacas, proporSinalizacao } from '../../utils/blueprintSinalizacao';
 import { kitDaPeca } from '../../utils/blueprintKitsIncendio';
+import { proporEletrodutoDoLaco } from '../../utils/blueprintLacoDeAlarme';
 import { analisarExtintores, proporExtintores } from '../../utils/blueprintExtintores';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
@@ -14635,7 +14636,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       quantas: propostaDeIluminacao.length,
                       onPropor: () => {
                         if (!propostaDeIluminacao.length) return;
-                        const criados = editor.runBatch(propostaDeIluminacao);
+                        // F6: cada luminária com o ponto de alimentação dela (o kit da peça).
+                        const criados = editor.runBatch(kitDaPeca(editor.model, propostaDeIluminacao).comandos);
                         if (criados?.length) selecionar(criados);
                       },
                     }}
@@ -14651,7 +14653,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       quantos: propostaDeAlarme.length,
                       onPropor: () => {
                         if (!propostaDeAlarme.length) return;
-                        const criados = editor.runBatch(propostaDeAlarme);
+                        // F3: o eletroduto do laço no mesmo lote (calculado com os dispositivos novos já no lugar).
+                        const comLaco = (() => {
+                          try {
+                            return [...propostaDeAlarme, ...proporEletrodutoDoLaco(applyBatch(editor.model, propostaDeAlarme).model)];
+                          } catch {
+                            return propostaDeAlarme;
+                          }
+                        })();
+                        const criados = editor.runBatch(comLaco);
                         if (criados?.length) selecionar(criados);
                       },
                     }}

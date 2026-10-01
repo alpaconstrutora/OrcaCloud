@@ -1612,7 +1612,7 @@ Fecha o **bloco 1**.
 
 Fecha o **bloco 2**.
 
-## Etapa 3 — Hidrantes e reserva · kernel bump · 3 fases · **em andamento (3.1 e 3.2 ✅ 30/09/2026, kernel 0.81.0)**
+## Etapa 3 — Hidrantes e reserva · kernel bump · 3 fases · **✅ CONCLUÍDA em 01/10/2026 (3 de 3; kernel 0.80.0 → 0.81.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -1965,4 +1965,27 @@ cálculo da 2.3.
   testes: 6.529 + 33 pulados. Na 1ª rodada, 110 testes do `BlueprintEditor.test.tsx` ficaram
   "pending" (worker caído); o arquivo sozinho passou 193/193, e na 2ª rodada da suíte a conta
   fechou limpa.
+
+### Etapa 3.3 — 01/10/2026 (frente `incendio-e3`, sem bump)
+
+- **`utils/blueprintCoberturaIncendio.ts`:** todo ponto de todo ambiente tem de ter algum hidrante
+  ao alcance. O alcance é mangueira + jato (`alcanceDoJatoM` 10 m, CONFERIR NA IT), medido pelo
+  percurso das portas do grafo espacial: hidrante → portas → ponto. No ambiente do próprio
+  hidrante, a reta. Um pavimento por vez.
+  - Os pontos testados são os cantos e um a cada 2 m ao longo das paredes.
+  - O cache dos percursos entre ambientes deixa o caso de 11 ambientes em ~80 ms.
+- ⚠️ **O 1º critério estava errado, e uma sonda pegou.** O critério era "um hidrante cobre o
+  ambiente inteiro", e com 25 m de alcance ele deixava o corredor de 60 m sem solução: o corredor
+  só é coberto por **dois** hidrantes, cada um com a sua metade. O critério passou a ser por ponto,
+  e a proposta passou a cobrir pontos.
+- ⚠️ **A 1ª expectativa de teste também estava errada:** "2 ou 3 hidrantes" para o corredor com
+  40 m. O certo é **um**, no meio do corredor (30 m + ~6 m até o canto < 40 m), e o teste agora
+  prova a posição.
+- **Proposta gulosa:** os candidatos ficam 10 cm para dentro da face da parede mais próxima do
+  centro de cada ambiente e, na circulação, junto a cada ponto testado. A circulação tem
+  preferência. Os hidrantes nascem `sugerida`, num lote.
+- **Tela:** Incêndio → Cobertura → "Cobertura dos hidrantes", com a marca `INCENDIO_SEM_COBERTURA`
+  no centro de cada ambiente fora do alcance (com a tarefa aberta) e "Propor hidrantes".
+- **Testes:** `blueprintCoberturaIncendio.test.ts` (5) e o painel (3). Suíte com 6.570 testes
+  (6.536 + 33 pulados + 1, corrigida e reconferida isolada). Build ok.
 

@@ -77,6 +77,8 @@ export interface HipotesesHidraulicasDeIncendio {
   velocidadeMaxMs: number;
   /** E3.2: tempo de funcionamento que a RTI tem de garantir, min — CONFERIR NA IT. */
   autonomiaMin: number;
+  /** E3.3: o jato além da mangueira, para a cobertura por alcance, m — CONFERIR NA IT. */
+  alcanceDoJatoM: number;
 }
 
 export const HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO: HipotesesHidraulicasDeIncendio = {
@@ -95,6 +97,7 @@ export const HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO: HipotesesHidraulicasDeIncend
   pressaoMaximaKpa: 1000,
   velocidadeMaxMs: 5,
   autonomiaMin: 60,
+  alcanceDoJatoM: 10,
 };
 
 /** As premissas gravadas, completadas com o padrão — só entra número finito e positivo. */

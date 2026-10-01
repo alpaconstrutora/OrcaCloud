@@ -31,6 +31,7 @@ const ROTULO_DO_FLUXO: Partial<Record<MarcaDeVerificacao['tipo'], string>> = {
   INCENDIO_VELOCIDADE: 'Velocidade acima da máxima',
   INCENDIO_PRESSAO_ALTA: 'Pressão acima da máxima',
   INCENDIO_NAO_ATENDE: 'Hidrante não atende',
+  INCENDIO_SEM_COBERTURA: 'Fora do alcance dos hidrantes',
 };
 
 interface Props {

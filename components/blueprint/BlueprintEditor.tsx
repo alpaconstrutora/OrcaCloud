@@ -223,6 +223,8 @@ import PainelPluvial from './PainelPluvial';
 import PainelIncendio from './PainelIncendio';
 import PainelCalculoIncendio from './PainelCalculoIncendio';
 import PainelRedeDeHidrantes from './PainelRedeDeHidrantes';
+import PainelCoberturaIncendio from './PainelCoberturaIncendio';
+import { coberturaDosHidrantes, marcasDaCobertura, proporHidrantes } from '../../utils/blueprintCoberturaIncendio';
 import { conferirPlanoDaRede, planejarRedeDeHidrantes } from '../../utils/blueprintRedeDeHidrantes';
 import { ajustarDnDeIncendio, calculoDeIncendio } from '../../utils/blueprintCalculoIncendio';
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
@@ -1010,6 +1012,8 @@ const ROTULO_DA_TAREFA = {
   incendioCalculo: 'Cálculo hidráulico de incêndio',
   // INCÊNDIO E3.1 (30/09/2026): bomba → geral → colunas → ramais → hidrantes, sugerida.
   incendioRede: 'Rede de hidrantes automática',
+  // INCÊNDIO E3.3 (30/09/2026): todo ambiente ao alcance de um hidrante (mangueira + jato pelas portas).
+  incendioCobertura: 'Cobertura dos hidrantes',
   // Matriz (18/09/2026, roadmap E0.1): N cópias da seleção a k·passo — a
   // fileira de pilares, a bateria de banheiros. Um lote, um Ctrl+Z.
   matriz: 'Matriz — repetir a seleção',
@@ -7308,6 +7312,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.rede],
   );
   const provaDaRedeDeHidrantes = useMemo(() => (planoDaRedeDeHidrantes ? conferirPlanoDaRede(editor.model, planoDaRedeDeHidrantes) : null), [planoDaRedeDeHidrantes, editor.model]);
+  /** E3.3: a cobertura por alcance e a proposta — só com a tarefa aberta. */
+  const coberturaDeIncendio = useMemo(
+    () => (tarefaAberta === 'incendioCobertura' ? coberturaDosHidrantes(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null),
+    [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.hidraulica],
+  );
+  const propostaDeHidrantes = useMemo(() => (coberturaDeIncendio ? proporHidrantes(editor.model, incendioDoEstudo.hipoteses.hidraulica) : null), [coberturaDeIncendio, editor.model, incendioDoEstudo.hipoteses.hidraulica]);
   /** E2.4: as marcas do cálculo (velocidade, pressão máxima, não atende) — no desenho só com a tarefa aberta. */
   const marcasDoCalculoIncendio = useMemo(
     () => (calculoHidraulicoDeIncendio ? marcasDoCalculoDeIncendio(editor.model, calculoHidraulicoDeIncendio, incendioDoEstudo.hipoteses.hidraulica) : []),
@@ -10567,6 +10577,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Da bomba aos hidrantes: geral, uma coluna por grupo de hidrantes empilhados (atravessando as lajes) e um ramal no forro até cada válvula — sugerida, num lote, Ctrl+Z desfaz"
               />
             </GrupoDoRibbon>
+            {/* INCÊNDIO E3.3 (30/09/2026): o alcance dos hidrantes pelos ambientes. */}
+            <GrupoDoRibbon rotulo="Cobertura">
+              <BotaoDoRibbon
+                icone={Scan}
+                rotulo="Cobertura dos hidrantes"
+                ativo={tarefaAberta === 'incendioCobertura'}
+                onClick={() => alternarTarefa('incendioCobertura')}
+                ajuda="Todo ambiente ao alcance de um hidrante: mangueira + jato pelo percurso das portas até o ponto mais desfavorável; marca os que ficam fora e propõe hidrantes que os cobrem"
+              />
+            </GrupoDoRibbon>
             {/* INCÊNDIO E2.3 (30/09/2026): o cálculo hidráulico da rede. */}
             <GrupoDoRibbon rotulo="Cálculo">
               <BotaoDoRibbon
@@ -12590,7 +12610,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           ) : (
             <BlueprintCanvas
               pressoesDaAgua={pressoesDaAgua}
-              marcasDoCalculo={marcasDoCalculoIncendio}
+              marcasDoCalculo={coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio}
               encaixesAtivos={encaixesAtivos}
               mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos}
               model={editor.model}
@@ -13613,6 +13633,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'incendio' && <Flame className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioCalculo' && <Gauge className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioRede' && <GitFork className="h-5 w-5 text-red-700" />}
+              {tarefaAberta === 'incendioCobertura' && <Scan className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -13670,6 +13691,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             )}
             {tarefaAberta === 'pluvial' &&
               'A chuva que o telhado e as lajes descobertas recebem: a área de contribuição de cada superfície (NBR 10844), a intensidade pluviométrica da cidade e a vazão de projeto que as calhas e os condutores vão levar. A rede pluvial é independente do esgoto.'}
+            {tarefaAberta === 'incendioCobertura' &&
+              'O alcance de cada hidrante: a mangueira esticada pelo caminho das portas mais o jato, até o ponto mais desfavorável de cada ambiente do pavimento. O que fica fora ganha marca no desenho, e a proposta lança hidrantes sugeridos que cobrem o resto.'}
             {tarefaAberta === 'incendioRede' &&
               'A rede de combate lançada pelo sistema: da bomba sobe o geral, cada grupo de hidrantes empilhados vira uma coluna que atravessa as lajes, e um ramal no forro desce até cada válvula. Nasce sugerida (tracejada); relançar refaz o que ainda é sugerido.'}
             {tarefaAberta === 'incendioCalculo' &&
@@ -14106,6 +14129,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'incendioCobertura' && coberturaDeIncendio && propostaDeHidrantes && (
+            <div data-testid="tarefa-incendio-cobertura">
+              <PainelCoberturaIncendio
+                hip={incendioDoEstudo.hipoteses.hidraulica}
+                onHip={(hidraulica) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, hidraulica })}
+                cobertura={coberturaDeIncendio}
+                nomeDoPavimento={(id) => editor.model.levels.find((l) => l.id === id)?.name ?? id}
+                proposta={{
+                  hidrantes: propostaDeHidrantes.comandos.length,
+                  semSolucao: propostaDeHidrantes.semSolucao.length,
+                  onPropor: () => {
+                    if (propostaDeHidrantes.comandos.length) editor.runBatch(propostaDeHidrantes.comandos);
+                  },
+                }}
+              />
             </div>
           )}
 

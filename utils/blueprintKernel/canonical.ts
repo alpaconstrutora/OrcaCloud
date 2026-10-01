@@ -1023,6 +1023,8 @@ function projetar(model: BlueprintModel): {
     if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) (t.geom as { principal?: number }).principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
     // Incêndio E7.2: o equipamento da placa, idem.
     if (t.item.alvoId != null && indiceDoTerminal.has(t.item.alvoId)) (t.geom as { alvo?: number }).alvo = indiceDoTerminal.get(t.item.alvoId);
+    // Incêndio E7.4: a central do laço de alarme, idem.
+    if (t.item.centralAlarmeId != null && indiceDoTerminal.has(t.item.centralAlarmeId)) (t.geom as { central?: number }).central = indiceDoTerminal.get(t.item.centralAlarmeId);
   }
 
   // GRUPOS (0.38.0): origem por ÍNDICE nas famílias ordenadas; instâncias com a
@@ -1622,6 +1624,8 @@ export interface CanonicalPayload {
     alvo?: number;
     /** Luminária de emergência: autonomia, min. Ausente sob kernel < 0.87.0 e quando não declarada. */
     autonomiaMin?: number;
+    /** Laço de alarme: a central (índice). Ausente sob kernel < 0.88.0 e fora de laço. */
+    central?: number;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
     /** Curva Q×H [L/min, mm], NPSH requerido e a principal da jockey (índice). Ausentes sob kernel < 0.82.0. */
@@ -2493,6 +2497,13 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     const alvo = model.terminais[i];
     const p = model.terminais[t.principal];
     if (alvo && p && p.id !== alvo.id) alvo.bombaPrincipalId = p.id;
+  });
+  // Incêndio E7.4: a central do laço, por índice — idem.
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.central == null) return;
+    const d = model.terminais[i];
+    const c = model.terminais[t.central];
+    if (d && c && c.id !== d.id) d.centralAlarmeId = c.id;
   });
   // Incêndio E7.2: o equipamento da placa, por índice — idem.
   (payload.terminais ?? []).forEach((t, i) => {

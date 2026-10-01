@@ -111,7 +111,7 @@ interface Portal {
 }
 
 /** A menor distância do ponto ao contorno do ambiente, mm. */
-function distanciaABorda(s: Space, p: Point): number {
+export function distanciaABorda(s: Space, p: Point): number {
   let d = Infinity;
   for (const anel of [s.ring, ...s.holes]) {
     for (let i = 0; i < anel.length; i++) {
@@ -128,7 +128,7 @@ function distanciaABorda(s: Space, p: Point): number {
 }
 
 /** O pavimento como rede de portas: os portais de cada ambiente e o caminho entre eles por dentro. */
-function redeDoPavimento(model: BlueprintModel, levelId: ObjectId) {
+export function redeDoPavimento(model: BlueprintModel, levelId: ObjectId) {
   const g = construirGrafoEspacial(model, levelId);
   const portais = new Map<ObjectId, Portal[]>();
   for (const a of g.arestas) {
@@ -156,7 +156,7 @@ function redeDoPavimento(model: BlueprintModel, levelId: ObjectId) {
  * As distâncias, a partir de um conjunto de ORIGENS (pontos com o ambiente
  * deles), a cada portal do pavimento — Dijkstra de várias origens.
  */
-function distanciasAosPortais(rede: ReturnType<typeof redeDoPavimento>, origens: { ponto: Point; space: Space }[]): Map<string, number> {
+export function distanciasAosPortais(rede: ReturnType<typeof redeDoPavimento>, origens: { ponto: Point; space: Space }[]): Map<string, number> {
   const dist = new Map<string, number>();
   for (const o of origens) {
     for (const p of rede.portais.get(o.space.id) ?? []) {
@@ -205,7 +205,7 @@ export function pontosDeCobertura(s: Space): Point[] {
 }
 
 /** A distância de UM ponto do ambiente às origens, pelo menor caminho. */
-function distanciaDoPonto(rede: ReturnType<typeof redeDoPavimento>, s: Space, c: Point, origens: { ponto: Point; space: Space }[], dist: Map<string, number>): number {
+export function distanciaDoPonto(rede: ReturnType<typeof redeDoPavimento>, s: Space, c: Point, origens: { ponto: Point; space: Space }[], dist: Map<string, number>): number {
   let melhor = Infinity;
   for (const o of origens) if (o.space.id === s.id) melhor = Math.min(melhor, caminhoDentro(s, c, o.ponto)?.mm ?? Infinity);
   for (const p of rede.portais.get(s.id) ?? []) {

@@ -121,6 +121,8 @@ interface Props {
     codigoPlaca?: string | null;
     /** Incêndio E7.3: a autonomia da luminária de emergência. `null` = a da ficha. */
     autonomiaMin?: number | null;
+    /** Incêndio E7.4: a central do laço de alarme. `null` = fora de laço. */
+    centralAlarmeId?: string | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -133,6 +135,8 @@ interface Props {
    */
   /** Incêndio E7.2: o nome do equipamento que a placa sinaliza (EXT-2, H-1). */
   nomeDoAlvo?: (id: string) => string;
+  /** Incêndio E7.4: as centrais de alarme do desenho, para o dispositivo escolher a do laço dele. */
+  centraisDeAlarme?: { id: string; nome: string }[];
   circuitos?: { id: string; nome: string; quadroNome: string; tensaoV?: number | null; ligacao?: 'FN' | 'FF' | 'FFF' | null }[];
   /** TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo salvo para este ponto. */
   onAplicarTipoDoTerminal?: (propriedades: PropriedadesDeTerminal) => void;
@@ -191,6 +195,7 @@ export default function PainelTrechoSelecionado({
   onExcluir,
   numeroDeIncendio,
   nomeDoAlvo,
+  centraisDeAlarme,
   bombasPrincipais = [],
 }: Props) {
   if (terminal) {
@@ -398,6 +403,22 @@ export default function PainelTrechoSelecionado({
               )}
               {(terminal.tipoHidraulico === 'BOMBA_INCENDIO' || terminal.tipoHidraulico === 'BOMBA_JOCKEY') && (
                 <CamposDaBombaDeIncendio terminal={terminal} principais={bombasPrincipais.filter((b) => b.id !== terminal.id)} onBomba={(c) => onTerminal(c)} />
+              )}
+              {terminal.tipoHidraulico && ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR'].includes(terminal.tipoHidraulico) && (
+                <label className="block" data-testid="campos-do-laco">
+                  <span className="text-[11px] font-medium text-slate-600">Laço (central)</span>
+                  <select
+                    value={terminal.centralAlarmeId ?? ''}
+                    onChange={(e) => onTerminal({ centralAlarmeId: e.target.value || null })}
+                    aria-label="Central do laço"
+                    className={`mt-0.5 w-full rounded-md border px-2 py-1 text-xs ${terminal.centralAlarmeId ? 'border-slate-300' : 'border-red-300 text-red-700'}`}
+                  >
+                    <option value="">Fora do laço</option>
+                    {(centraisDeAlarme ?? []).map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
+                </label>
               )}
               {terminal.tipoHidraulico === 'LUMINARIA_EMERGENCIA' && (
                 <label className="block" data-testid="campos-da-luminaria-de-emergencia">

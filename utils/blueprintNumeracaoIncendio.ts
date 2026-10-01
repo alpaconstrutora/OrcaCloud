@@ -27,6 +27,12 @@ export const PREFIXO_DA_NUMERACAO: Partial<Record<TipoDePontoHidraulico, string>
   EXTINTOR: 'EXT',
   PLACA: 'PL',
   LUMINARIA_EMERGENCIA: 'LE',
+  DETECTOR_FUMACA: 'DF',
+  DETECTOR_TEMPERATURA: 'DT',
+  ACIONADOR_MANUAL: 'AM',
+  AVISADOR: 'AV',
+  CENTRAL_ALARME: 'CA',
+  PREVENTIVO_PERSONALIZADO: 'PP',
 };
 
 export interface NumeroDaPeca {

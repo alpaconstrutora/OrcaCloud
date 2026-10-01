@@ -77,3 +77,14 @@ describe('PainelTrechoSelecionado › placa (E7.2)', () => {
   });
 });
 
+describe('PainelTrechoSelecionado › laço de alarme (E7.4)', () => {
+  it('o detector escolhe a central do laço; "fora do laço" é null', async () => {
+    const onTerminal = vi.fn();
+    render(<PainelTrechoSelecionado trecho={null} terminal={ponto('DETECTOR_FUMACA')} onTrecho={() => {}} onTerminal={onTerminal} centraisDeAlarme={[{ id: 'c1', nome: 'CA-1' }]} />);
+    await userEvent.setup().selectOptions(screen.getByLabelText('Central do laço'), 'c1');
+    expect(onTerminal).toHaveBeenLastCalledWith({ centralAlarmeId: 'c1' });
+    await userEvent.setup().selectOptions(screen.getByLabelText('Central do laço'), '');
+    expect(onTerminal).toHaveBeenLastCalledWith({ centralAlarmeId: null });
+  });
+});
+

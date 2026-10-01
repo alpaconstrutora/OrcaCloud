@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.87.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.88.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -678,7 +678,16 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   // (aponta para ele) ou de rota de fuga (a direção é a rotação da peça).
   "PLACA",
   // 01/10/2026 (incêndio E7.3, 0.87.0): a luminária de emergência (bloco autônomo).
-  "LUMINARIA_EMERGENCIA"
+  "LUMINARIA_EMERGENCIA",
+  // 01/10/2026 (incêndio E7.4, 0.88.0): detecção e alarme — os do laço apontam
+  // a CENTRAL deles (`centralAlarmeId`) — e o preventivo personalizado
+  // (ventilador de pressurização, motor, o que o cadastro trouxer).
+  "DETECTOR_FUMACA",
+  "DETECTOR_TEMPERATURA",
+  "ACIONADOR_MANUAL",
+  "AVISADOR",
+  "CENTRAL_ALARME",
+  "PREVENTIVO_PERSONALIZADO"
 ];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
@@ -2255,6 +2264,7 @@ function projetar(model) {
   for (const t of terminais) {
     if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) t.geom.principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
     if (t.item.alvoId != null && indiceDoTerminal.has(t.item.alvoId)) t.geom.alvo = indiceDoTerminal.get(t.item.alvoId);
+    if (t.item.centralAlarmeId != null && indiceDoTerminal.has(t.item.centralAlarmeId)) t.geom.central = indiceDoTerminal.get(t.item.centralAlarmeId);
   }
   const indiceDeParede = new Map(walls.map((w, i) => [w.item.uid, i]));
   const indiceDeEstruturaG = new Map(structures.map((s2, i) => [s2.item.uid, i]));
@@ -3022,6 +3032,12 @@ function modelFromCanonicalPayload(payload) {
     const alvo = model.terminais[i];
     const p = model.terminais[t.principal];
     if (alvo && p && p.id !== alvo.id) alvo.bombaPrincipalId = p.id;
+  });
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.central == null) return;
+    const d = model.terminais[i];
+    const c = model.terminais[t.central];
+    if (d && c && c.id !== d.id) d.centralAlarmeId = c.id;
   });
   (payload.terminais ?? []).forEach((t, i) => {
     if (t.alvo == null) return;
@@ -6389,6 +6405,19 @@ function entidadeDoPontoHidraulico(tipo) {
     // E7.3: IfcLightFixture tem o valor de iluminação de segurança no enum do IFC4.
     case "LUMINARIA_EMERGENCIA":
       return { entidade: "IFCLIGHTFIXTURE", predefinido: ".SECURITYLIGHTING." };
+    // E7.4: detecção e alarme — os enums do IFC4 têm os quatro.
+    case "DETECTOR_FUMACA":
+      return { entidade: "IFCSENSOR", predefinido: ".SMOKESENSOR." };
+    case "DETECTOR_TEMPERATURA":
+      return { entidade: "IFCSENSOR", predefinido: ".HEATSENSOR." };
+    case "ACIONADOR_MANUAL":
+      return { entidade: "IFCALARM", predefinido: ".MANUALPULLBOX." };
+    case "AVISADOR":
+      return { entidade: "IFCALARM", predefinido: ".SIREN." };
+    case "CENTRAL_ALARME":
+      return { entidade: "IFCCONTROLLER", predefinido: ".USERDEFINED." };
+    case "PREVENTIVO_PERSONALIZADO":
+      return { entidade: "IFCFIRESUPPRESSIONTERMINAL", predefinido: ".USERDEFINED." };
     case "BOMBA_INCENDIO":
     case "BOMBA_JOCKEY":
       return { entidade: "IFCPUMP", predefinido: ".USERDEFINED." };
@@ -7417,6 +7446,61 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: {},
     medidasMm: { larguraMm: 300, profundidadeMm: 60, alturaMm: 100 },
     ajuda: "Bloco aut\xF4nomo de ilumina\xE7\xE3o de emerg\xEAncia (NBR 10898): ao longo da rota de fuga, nas mudan\xE7as de dire\xE7\xE3o, escadas e sa\xEDdas. A autonomia (padr\xE3o 60 min) fica no painel da pe\xE7a."
+  },
+  // E7.4 (01/10/2026): detecção e alarme — alturas CONFERIR NA NBR 17240.
+  DETECTOR_FUMACA: {
+    rotulo: "Detector de fuma\xE7a",
+    sigla: "DF",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 2700 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 100, profundidadeMm: 100, alturaMm: 60 },
+    ajuda: "Detector pontual de fuma\xE7a, no teto. Entra no la\xE7o de uma central (painel da pe\xE7a); a cobertura \xE9 conferida na tarefa Inc\xEAndio."
+  },
+  DETECTOR_TEMPERATURA: {
+    rotulo: "Detector de temperatura",
+    sigla: "DT",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 2700 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 100, profundidadeMm: 100, alturaMm: 60 },
+    ajuda: "Detector pontual de temperatura (cozinha, garagem \u2014 onde a fuma\xE7a normal dispararia o de fuma\xE7a). Cobre menos \xE1rea que o de fuma\xE7a."
+  },
+  ACIONADOR_MANUAL: {
+    rotulo: "Acionador manual",
+    sigla: "AM",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 1200 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 100, profundidadeMm: 50, alturaMm: 100 },
+    ajuda: "Botoeira de alarme, \xE0 altura da m\xE3o, junto \xE0s sa\xEDdas e ao longo da rota. A dist\xE2ncia a percorrer at\xE9 um \xE9 conferida na tarefa Inc\xEAndio."
+  },
+  AVISADOR: {
+    rotulo: "Avisador sonoro e visual",
+    sigla: "AV",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 2200 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 120, profundidadeMm: 60, alturaMm: 120 },
+    ajuda: "Sirene com flash: ao menos um por pavimento, no la\xE7o da central."
+  },
+  CENTRAL_ALARME: {
+    rotulo: "Central de alarme",
+    sigla: "CA",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 1500 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 400, profundidadeMm: 120, alturaMm: 400 },
+    ajuda: "A central do sistema de detec\xE7\xE3o e alarme: os detectores, acionadores e avisadores apontam para ela (o la\xE7o)."
+  },
+  PREVENTIVO_PERSONALIZADO: {
+    rotulo: "Preventivo personalizado",
+    sigla: "PP",
+    grupo: PREVENTIVOS,
+    cotaMm: { INCENDIO: 1500 },
+    dnMinimoMm: {},
+    medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 400 },
+    ajuda: "Equipamento de inc\xEAndio fora da lista (ventilador de pressuriza\xE7\xE3o da escada, motor, damper\u2026). Nome e item comercial v\xEAm do cadastro de tipos."
   }
 };
 var ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

@@ -29,7 +29,7 @@ function casa(): { m: BlueprintModel; quadroId: string } {
 
 describe('equipamentos elétricos · taxonomia', () => {
   it('kernel 0.69.0; os oito tipos existem e todo tipo tem rótulo, sigla, grupo e cota', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.87.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.88.0');
     for (const t of NOVOS) expect(TIPOS_DE_PONTO_ELETRICO).toContain(t);
     for (const t of TIPOS_DE_PONTO_ELETRICO) {
       expect(ROTULO_DO_PONTO_ELETRICO[t], t).toBeTruthy();

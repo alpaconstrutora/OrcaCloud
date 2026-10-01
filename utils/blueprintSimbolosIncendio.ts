@@ -51,6 +51,12 @@ export const TIPOS_COM_SIMBOLO_DE_INCENDIO: readonly TipoDePontoHidraulico[] = [
   'EXTINTOR',
   'PLACA',
   'LUMINARIA_EMERGENCIA',
+  'DETECTOR_FUMACA',
+  'DETECTOR_TEMPERATURA',
+  'ACIONADOR_MANUAL',
+  'AVISADOR',
+  'CENTRAL_ALARME',
+  'PREVENTIVO_PERSONALIZADO',
 ];
 
 export function temSimboloDeIncendio(tipo: TipoDePontoHidraulico | null | undefined): tipo is TipoDePontoHidraulico {
@@ -99,6 +105,21 @@ export function simboloDeIncendio(tipo: TipoDePontoHidraulico, posicao?: Posicao
     case 'EXTINTOR':
       // O triângulo do extintor, com o cilindro (círculo cheio) dentro.
       return [{ tipo: 'poligono', pontos: [[0, -0.5], [0.5, 0.5], [-0.5, 0.5]], cheio: false }, circulo(0.14, true)];
+    // E7.4: detecção e alarme.
+    case 'DETECTOR_FUMACA':
+      return [circulo(0.5), texto('F')];
+    case 'DETECTOR_TEMPERATURA':
+      return [circulo(0.5), texto('T')];
+    case 'ACIONADOR_MANUAL':
+      // A botoeira: quadrado com o botão cheio.
+      return [quadrado(), circulo(0.2, true)];
+    case 'AVISADOR':
+      // A sirene: triângulo de som saindo do quadrado.
+      return [quadrado(), { tipo: 'poligono', pontos: [[-0.25, -0.2], [0.3, -0.38], [0.3, 0.38], [-0.25, 0.2]], cheio: true }];
+    case 'CENTRAL_ALARME':
+      return [quadrado(), texto('C')];
+    case 'PREVENTIVO_PERSONALIZADO':
+      return [quadrado(), texto('P')];
     case 'LUMINARIA_EMERGENCIA':
       // O bloco autônomo: retângulo com a metade de baixo cheia (a lâmpada acesa sem rede).
       return [

@@ -2433,6 +2433,19 @@ function entidadeDoPontoHidraulico(
     // E7.3: IfcLightFixture tem o valor de iluminação de segurança no enum do IFC4.
     case 'LUMINARIA_EMERGENCIA':
       return { entidade: 'IFCLIGHTFIXTURE', predefinido: '.SECURITYLIGHTING.' };
+    // E7.4: detecção e alarme — os enums do IFC4 têm os quatro.
+    case 'DETECTOR_FUMACA':
+      return { entidade: 'IFCSENSOR', predefinido: '.SMOKESENSOR.' };
+    case 'DETECTOR_TEMPERATURA':
+      return { entidade: 'IFCSENSOR', predefinido: '.HEATSENSOR.' };
+    case 'ACIONADOR_MANUAL':
+      return { entidade: 'IFCALARM', predefinido: '.MANUALPULLBOX.' };
+    case 'AVISADOR':
+      return { entidade: 'IFCALARM', predefinido: '.SIREN.' };
+    case 'CENTRAL_ALARME':
+      return { entidade: 'IFCCONTROLLER', predefinido: '.USERDEFINED.' };
+    case 'PREVENTIVO_PERSONALIZADO':
+      return { entidade: 'IFCFIRESUPPRESSIONTERMINAL', predefinido: '.USERDEFINED.' };
     case 'BOMBA_INCENDIO':
     case 'BOMBA_JOCKEY':
       return { entidade: 'IFCPUMP', predefinido: '.USERDEFINED.' };

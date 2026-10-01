@@ -122,6 +122,8 @@ import {
   limparEtiquetasOrfasDasUnidades,
   limparBombasOrfas,
   limparPlacasOrfas,
+  limparLacosOrfos,
+  TIPOS_DO_LACO_DE_ALARME,
   findGrupo,
   findNucleo,
   type TipoDeNucleo,
@@ -748,6 +750,8 @@ export type Command =
       alvoId?: ObjectId | null;
       /** Luminária de emergência (incêndio E7.3): autonomia, min. `null` = a da ficha. */
       autonomiaMin?: number | null;
+      /** Laço de alarme (incêndio E7.4): a central. `null` = fora de laço. */
+      centralAlarmeId?: ObjectId | null;
       /** Reserva de incêndio (E3.2) — só na caixa de água fria; ignorada nas demais. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1): curva, NPSH requerido e, na jockey, a principal. */
@@ -807,6 +811,8 @@ export type Command =
       alvoId?: ObjectId | null;
       /** Luminária de emergência (incêndio E7.3): autonomia, min. `null` = a da ficha. */
       autonomiaMin?: number | null;
+      /** Laço de alarme (incêndio E7.4): a central. `null` = fora de laço. */
+      centralAlarmeId?: ObjectId | null;
       /** Reserva de incêndio na caixa de água fria (E3.2). `null` apaga. */
       volumeRtiL?: number | null;
       /** Bomba de incêndio (E4.1). `null` apaga. */
@@ -3520,6 +3526,7 @@ function aplicarSemHash(
           ...(command.codigoPlaca != null && command.tipoHidraulico === 'PLACA' ? { codigoPlaca: command.codigoPlaca.trim().toUpperCase() } : {}),
           ...(command.alvoId != null && command.tipoHidraulico === 'PLACA' ? { alvoId: command.alvoId } : {}),
           ...(command.autonomiaMin != null && command.tipoHidraulico === 'LUMINARIA_EMERGENCIA' ? { autonomiaMin: Math.round(command.autonomiaMin) } : {}),
+          ...(command.centralAlarmeId != null && command.tipoHidraulico && TIPOS_DO_LACO_DE_ALARME.includes(command.tipoHidraulico) ? { centralAlarmeId: command.centralAlarmeId } : {}),
           ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
           ...(command.curvaBomba != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { curvaBomba: curvaInteira(command.curvaBomba) } : {}),
           ...(command.npshrMm != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { npshrMm: Math.round(command.npshrMm) } : {}),
@@ -3588,6 +3595,9 @@ function aplicarSemHash(
       if (command.alvoId !== undefined) terminal.alvoId = command.alvoId ?? null;
       if (command.autonomiaMin !== undefined) terminal.autonomiaMin = command.autonomiaMin == null ? null : Math.round(command.autonomiaMin);
       if (terminal.tipoHidraulico !== 'LUMINARIA_EMERGENCIA' && terminal.autonomiaMin != null) terminal.autonomiaMin = null;
+      if (command.centralAlarmeId !== undefined) terminal.centralAlarmeId = command.centralAlarmeId ?? null;
+      // Deixar de ser do laço leva a central junto — a invariante recusaria.
+      if ((!terminal.tipoHidraulico || !TIPOS_DO_LACO_DE_ALARME.includes(terminal.tipoHidraulico)) && terminal.centralAlarmeId != null) terminal.centralAlarmeId = null;
       // Deixar de ser placa leva código e alvo juntos — a invariante recusaria.
       if (terminal.tipoHidraulico !== 'PLACA') {
         if (terminal.codigoPlaca != null) terminal.codigoPlaca = null;
@@ -5382,6 +5392,7 @@ function aplicarSemHash(
   diff.updated.push(...limparEtiquetasOrfasDasUnidades(next));
   diff.updated.push(...limparBombasOrfas(next));
   diff.updated.push(...limparPlacasOrfas(next));
+  diff.updated.push(...limparLacosOrfos(next));
   // PAREDE CURVA (P2.12): faceta que saiu do círculo perde o metadado.
   retirarArcosDesfeitos(next, diff);
   // FAMÍLIAS ANINHADAS (P2.18): filho cujo conjunto sumiu fica solto.

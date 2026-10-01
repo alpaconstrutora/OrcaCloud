@@ -1653,7 +1653,7 @@ Fecha o **bloco 3**.
 
 Fecha os **A** das seções 22 e 27.
 
-## Etapa 7 — Preventivos · kernel bump · 4 fases · **em andamento (7.1, 7.2 e 7.3 ✅ 01/10/2026; kernel 0.84.0 → 0.87.0)**
+## Etapa 7 — Preventivos · kernel bump · 4 fases · **✅ CONCLUÍDA em 01/10/2026 (4 de 4; kernel 0.84.0 → 0.88.0)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2427,4 +2427,45 @@ traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
   Hoje a luminária é do incêndio e não tem circuito.
 - **Testes:** `blueprintIluminacaoEmergencia.test.ts` (4) e o painel (2). Suíte com 6.700 testes:
   6.667 + 33 pulados. Build ok.
+
+### Etapa 7.4 — 01/10/2026 (frente `incendio-e7`, kernel 0.88.0) — fecha a E7
+
+- **Kernel 0.88.0:**
+  - **Tipos:** DETECTOR_FUMACA, DETECTOR_TEMPERATURA, ACIONADOR_MANUAL, AVISADOR, CENTRAL_ALARME e
+    PREVENTIVO_PERSONALIZADO (ventilador de pressurização, motor: nome e item vêm do cadastro).
+  - **Laço:** é uma RELAÇÃO. Detector, acionador e avisador têm `centralAlarmeId`, que tem de apontar
+    uma central. No canônico vai por índice (`central`), num segundo passo. Apagar a central solta o
+    laço (`limparLacosOrfos`; só o alvo que sumiu, como na placa).
+  - **IFC:** IfcSensor SMOKESENSOR/HEATSENSOR, IfcAlarm MANUALPULLBOX/SIREN, IfcController USERDEFINED.
+  - Ritual: goldens 7/7 em 0.87.0, 6 hashes, 22 pinos. Bundle regerado.
+- **Regra (`utils/blueprintDeteccaoAlarme.ts`, CONFERIR NA NBR 17240 / IT):**
+  - **Detectores:** quando a detecção é exigida (E0), todo ponto de cada ambiente (exceto banheiro e
+    lavabo) fica a até o raio de um detector DO MESMO AMBIENTE (a fumaça não atravessa parede):
+    6,3 m o de fumaça, 4,2 m o de temperatura. Cozinha e garagem pedem o de temperatura.
+  - **Acionadores:** quando o alarme é exigido, a distância a percorrer até um acionador é de no
+    máximo 30 m, pelo motor da E7.1 (portas, contornando paredes, malha a cada 3 m).
+  - **Avisador:** um por pavimento com dispositivo, ou com alarme exigido.
+  - **Laço:** sistema sem central e dispositivo fora do laço são ditos.
+- **Proposta:** primeiro a central, se falta, junto da saída do pavimento mais baixo; os ids do lote
+  são previstos, como no kit. Depois a malha de detectores por ambiente (células inscritas no círculo
+  de cobertura), os acionadores pela cobertura gulosa ao lado das portas, um avisador por pavimento e
+  a ligação dos existentes fora do laço. Tudo no laço, num lote só.
+- **Harness `docs/spikes/deteccao-alarme`** (canvas real, porta 3171): no andar de 60 m lançou 1
+  central junto da saída, 15 detectores de fumaça (um por sala e uma linha no corredor), 4 de
+  temperatura na cozinha (raio 4,2 m → malha 2 × 2), nenhum no banheiro, 3 acionadores e 1 avisador.
+  Ficaram 0 ambientes descobertos, 0 longe de acionador e 0 fora do laço.
+- **Tela:**
+  - **Painel da peça:** a central do laço; "fora do laço" fica em vermelho.
+  - **Painel "Detecção e alarme"** na tarefa Incêndio: o que é exigido pela classificação, o que
+    falta (central, cobertura, acionador com a pior distância, avisador, laço), selecionável, e
+    "Propor N item(ns)".
+- **Fica para depois (backlog nomeado):**
+  - o eletroduto do laço roteado pelo automático da elétrica;
+  - o detector de chama;
+  - a cobertura do avisador pelo nível sonoro;
+  - o antipânico, que depende da IT (desde a E6.2).
+- **Testes:** `blueprintDeteccaoAlarme.test.ts` (6) e 3 de tela. Suíte com 6.709 testes: 6.676 + 33
+  pulados. Build ok.
+
+**Fecha o bloco 5** (preventivos) e os A das seções 20, 21, 23, 24 e 25.
 

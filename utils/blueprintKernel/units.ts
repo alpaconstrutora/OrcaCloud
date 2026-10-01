@@ -533,7 +533,17 @@
  * `LUMINARIA_EMERGENCIA` e, só nele, `Terminal.autonomiaMin` (inteiro, 1–600).
  * Omitida quando ausente. Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.87.0';
+/**
+ * ─── 0.87.0 → 0.88.0 (01/10/2026) — DETECÇÃO E ALARME ───────────────────────
+ *
+ * Nos preventivos de incêndio (E7.4 do roadmap de incêndio): os tipos
+ * DETECTOR_FUMACA, DETECTOR_TEMPERATURA, ACIONADOR_MANUAL, AVISADOR,
+ * CENTRAL_ALARME e PREVENTIVO_PERSONALIZADO; e, só nos do laço,
+ * `Terminal.centralAlarmeId` — no canônico por ÍNDICE (`central`), num segundo
+ * passo; apagar a central solta o laço (`limparLacosOrfos`). Omitido quando
+ * ausente. Vocabulário novo, forma igual — provado antes do bump.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.88.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

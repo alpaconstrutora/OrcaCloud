@@ -242,6 +242,8 @@ import PainelSaidasIncendio from './PainelSaidasIncendio';
 import PainelExtintoresIncendio from './PainelExtintoresIncendio';
 import PainelSinalizacaoIncendio from './PainelSinalizacaoIncendio';
 import PainelIluminacaoIncendio from './PainelIluminacaoIncendio';
+import PainelAlarmeIncendio from './PainelAlarmeIncendio';
+import { analisarAlarme, proporAlarme } from '../../utils/blueprintDeteccaoAlarme';
 import { analisarIluminacao, proporIluminacao } from '../../utils/blueprintIluminacaoEmergencia';
 import { analisarSinalizacao, comPlacas, proporSinalizacao } from '../../utils/blueprintSinalizacao';
 import { analisarExtintores, proporExtintores } from '../../utils/blueprintExtintores';
@@ -7370,6 +7372,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [classificacaoDeIncendio, editor.model, percursoDeIncendio, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId, incendioDoEstudo.hipoteses.iluminacao],
   );
   const propostaDeIluminacao = useMemo(() => (iluminacaoDeIncendio ? proporIluminacao(editor.model, percursoDeIncendio, iluminacaoDeIncendio) : []), [iluminacaoDeIncendio, editor.model, percursoDeIncendio]);
+  /** E7.4: detecção e alarme — exigidos pela classificação (E0) — e a proposta (derivadas). */
+  const alarmeDeIncendio = useMemo(() => {
+    if (!exigenciasDeIncendio) return null;
+    const exigida = (id: string) => exigenciasDeIncendio.medidas.some((x) => x.medida === id && x.estado === 'EXIGIDA');
+    return analisarAlarme(editor.model, exigida('DETECCAO'), exigida('ALARME'));
+  }, [exigenciasDeIncendio, editor.model]);
+  const propostaDeAlarme = useMemo(() => (alarmeDeIncendio ? proporAlarme(editor.model, alarmeDeIncendio) : []), [alarmeDeIncendio, editor.model]);
   const propostaDeSinalizacao = useMemo(() => (sinalizacaoDeIncendio ? proporSinalizacao(editor.model, sinalizacaoDeIncendio) : []), [sinalizacaoDeIncendio, editor.model]);
   /** E6.1: saídas de emergência — população e largura das escadas, corredores e descarga. */
   const saidasDeIncendio = useMemo(
@@ -8452,6 +8461,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         terminal={terminalSel}
         numeroDeIncendio={terminalSel ? numerosDeIncendio.get(terminalSel.id) ?? null : null}
         nomeDoAlvo={(id) => numerosDeIncendio.get(id)?.numero ?? id}
+        centraisDeAlarme={(editor.model.terminais ?? []).filter((t) => t.tipoHidraulico === 'CENTRAL_ALARME').map((t) => ({ id: t.id, nome: numerosDeIncendio.get(t.id)?.numero ?? t.id }))}
         bombasPrincipais={(editor.model.terminais ?? []).filter((t) => t.tipoHidraulico === 'BOMBA_INCENDIO').map((t) => ({ id: t.id, nome: numerosDeIncendio.get(t.id)?.numero ?? t.tipo }))}
         circuitos={circuitosParaEscolher}
         // E4.3/E4.4: entrada e medidor ligam-se a um quadro; o medidor mede uma unidade.
@@ -14472,6 +14482,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       onPropor: () => {
                         if (!propostaDeIluminacao.length) return;
                         const criados = editor.runBatch(propostaDeIluminacao);
+                        if (criados?.length) selecionar(criados);
+                      },
+                    }}
+                  />
+                </div>
+              )}
+              {alarmeDeIncendio && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <PainelAlarmeIncendio
+                    analise={alarmeDeIncendio}
+                    onSelecionar={selecionar}
+                    proposta={{
+                      quantos: propostaDeAlarme.length,
+                      onPropor: () => {
+                        if (!propostaDeAlarme.length) return;
+                        const criados = editor.runBatch(propostaDeAlarme);
                         if (criados?.length) selecionar(criados);
                       },
                     }}

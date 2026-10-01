@@ -2802,6 +2802,15 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'PLACA',
   // 01/10/2026 (incêndio E7.3, 0.87.0): a luminária de emergência (bloco autônomo).
   'LUMINARIA_EMERGENCIA',
+  // 01/10/2026 (incêndio E7.4, 0.88.0): detecção e alarme — os do laço apontam
+  // a CENTRAL deles (`centralAlarmeId`) — e o preventivo personalizado
+  // (ventilador de pressurização, motor, o que o cadastro trouxer).
+  'DETECTOR_FUMACA',
+  'DETECTOR_TEMPERATURA',
+  'ACIONADOR_MANUAL',
+  'AVISADOR',
+  'CENTRAL_ALARME',
+  'PREVENTIVO_PERSONALIZADO',
 ] as const;
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -2903,7 +2912,16 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   EXTINTOR: INC,
   PLACA: INC,
   LUMINARIA_EMERGENCIA: INC,
+  DETECTOR_FUMACA: INC,
+  DETECTOR_TEMPERATURA: INC,
+  ACIONADOR_MANUAL: INC,
+  AVISADOR: INC,
+  CENTRAL_ALARME: INC,
+  PREVENTIVO_PERSONALIZADO: INC,
 };
+
+/** INCÊNDIO (0.88.0, E7.4): os tipos que entram no LAÇO de uma central de alarme. */
+export const TIPOS_DO_LACO_DE_ALARME: readonly string[] = ['DETECTOR_FUMACA', 'DETECTOR_TEMPERATURA', 'ACIONADOR_MANUAL', 'AVISADOR'];
 
 /** INCÊNDIO (0.86.0, E7.2): o código da placa — letra(s) + número (E5, S12). O catálogo mora em `blueprintSinalizacao`. */
 export const PADRAO_DO_CODIGO_DE_PLACA = /^[A-Z]{1,2}\d{1,2}$/;
@@ -3059,6 +3077,13 @@ export interface Terminal {
    * NA NBR 10898). Omitida do canônico quando ausente.
    */
   autonomiaMin?: number | null;
+  /**
+   * LAÇO DE ALARME (incêndio E7.4, 0.88.0) — só em detector, acionador e
+   * avisador: a CENTRAL do laço (um `CENTRAL_ALARME`). O laço é derivado: os
+   * que apontam a mesma central. No canônico por ÍNDICE (`central`), num
+   * segundo passo; apagar a central solta o laço (`limparLacosOrfos`).
+   */
+  centralAlarmeId?: ObjectId | null;
   /**
    * RESERVA TÉCNICA DE INCÊNDIO (incêndio E3.2, 30/09/2026) — só na caixa de
    * ÁGUA FRIA compartilhada: os litros do volume dela que ficam para o incêndio
@@ -3769,6 +3794,19 @@ export function unidadeDaEtiqueta(model: BlueprintModel, labelUid: ElementUid): 
  * cômodo da unidade sem cada `Delete*` ter de lembrar. A unidade FICA, mesmo
  * vazia — sumir com ela em silêncio esconderia o que a reforma fez.
  */
+/** Incêndio E7.4: o dispositivo cuja central sumiu sai do laço (a conferência diz "laço sem central"). */
+export function limparLacosOrfos(model: BlueprintModel): ObjectId[] {
+  const ids = new Set((model.terminais ?? []).map((t) => t.id));
+  const tocadas: ObjectId[] = [];
+  for (const t of model.terminais ?? []) {
+    if (t.centralAlarmeId != null && !ids.has(t.centralAlarmeId)) {
+      t.centralAlarmeId = null;
+      tocadas.push(t.id);
+    }
+  }
+  return tocadas;
+}
+
 /** Incêndio E7.2: a placa cujo equipamento sumiu perde o alvo (e a conferência diz "placa sem equipamento"). */
 export function limparPlacasOrfas(model: BlueprintModel): ObjectId[] {
   // Só o alvo que SUMIU é limpo; o alvo que existe mas é inválido (outra placa) fica para a invariante recusar.
@@ -5989,6 +6027,12 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (t.posicaoSprinkler != null && !(POSICOES_DO_SPRINKLER as readonly string[]).includes(t.posicaoSprinkler)) {
         throw new KernelError('BAD_SPRINKLER', `Posição de sprinkler inválida em ${t.id}: ${t.posicaoSprinkler}`);
       }
+    }
+    // Laço de alarme (incêndio E7.4): a central só em detector, acionador e avisador, e tem de ser uma central.
+    if (t.centralAlarmeId != null) {
+      if (!t.tipoHidraulico || !TIPOS_DO_LACO_DE_ALARME.includes(t.tipoHidraulico)) throw new KernelError('BAD_ALARM_LOOP', `Terminal ${t.id} não entra em laço de alarme`);
+      const c = (model.terminais ?? []).find((x) => x.id === t.centralAlarmeId);
+      if (!c || c.tipoHidraulico !== 'CENTRAL_ALARME') throw new KernelError('BAD_ALARM_LOOP', `A central do laço de ${t.id} não é uma central de alarme`);
     }
     // Luminária de emergência (incêndio E7.3): autonomia só nela, inteira entre 1 e 600 min.
     if (t.autonomiaMin != null) {

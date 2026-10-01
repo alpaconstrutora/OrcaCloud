@@ -235,6 +235,8 @@ import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
 import { proporAreaDeOperacao } from '../../utils/blueprintAreaDeOperacao';
+import { analisarSaidas } from '../../utils/blueprintSaidasIncendio';
+import PainelSaidasIncendio from './PainelSaidasIncendio';
 import { comandosDaDistribuicao, distribuirSprinklers } from '../../utils/blueprintDistribuicaoSprinklers';
 import { ajustarDnPelasTabelas, metodoDasTabelas, tracarRedeDeSprinklers } from '../../utils/blueprintRedeDeSprinklers';
 import PainelCalhas from './PainelCalhas';
@@ -7316,6 +7318,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
   );
   const exigenciasDeIncendio = useMemo(() => (classificacaoDeIncendio ? exigenciasDaEdificacao(classificacaoDeIncendio) : null), [classificacaoDeIncendio]);
+  /** E6.1: saídas de emergência — população e largura das escadas, corredores e descarga. */
+  const saidasDeIncendio = useMemo(
+    () =>
+      classificacaoDeIncendio
+        ? analisarSaidas(editor.model, classificacaoDeIncendio.divisao.valor, incendioDoEstudo.hipoteses.saidas, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId)
+        : null,
+    [classificacaoDeIncendio, editor.model, incendioDoEstudo.hipoteses.saidas, incendioDoEstudo.hipoteses.classificacao.pisoDeDescargaLevelId],
+  );
   /** E2.3: o cálculo hidráulico — só com a tarefa aberta (é bisseção por hidrante). */
   /** E5.1: o critério dos sprinklers — o risco declarado, ou o sugerido pela divisão da classificação. */
   const criterioDeSprinklersDoEstudo = useMemo(
@@ -14330,6 +14340,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 niveis={editor.model.levels}
                 persistenciaIndisponivel={incendioDoEstudo.persistenciaIndisponivel}
               />
+              {saidasDeIncendio && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <PainelSaidasIncendio
+                    analise={saidasDeIncendio}
+                    hip={incendioDoEstudo.hipoteses.saidas}
+                    onHip={(saidas) => incendioDoEstudo.setHipoteses({ ...incendioDoEstudo.hipoteses, saidas })}
+                    onSelecionar={selecionar}
+                  />
+                </div>
+              )}
             </div>
           )}
 

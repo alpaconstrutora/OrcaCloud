@@ -1643,7 +1643,7 @@ Fecha o **bloco 4**.
 
 Fecha o **bloco 3**.
 
-## Etapa 6 — Saídas e rota de fuga (vai além) · kernel bump · 3 fases
+## Etapa 6 — Saídas e rota de fuga (vai além) · kernel bump · 3 fases · **em andamento (6.1 ✅ 01/10/2026, sem bump)**
 
 | Fase | Entrega | Pronto quando |
 |---|---|---|
@@ -2223,4 +2223,36 @@ haver um bump só.
 
 **Fecha o bloco 3** (sprinklers): risco e densidade, Área de Operação, distribuição com alternativas,
 traçado em espinha e grelha, método das tabelas, VGA e demanda somada.
+
+### Etapa 6.1 — 01/10/2026 (frente `incendio-e6`, sem bump)
+
+- **`utils/blueprintSaidasIncendio.ts`:**
+  - **População por pavimento:** no grupo A, pessoas por dormitório (padrão 2); nas outras divisões,
+    a área ÷ m² por pessoa da tabela (B 15, C 5, D 7, E 1,5, F 1, G 40, H 7, I 10, J 30). O m² por
+    pessoa declarado vence a tabela.
+  - **Unidades de passagem:** N = ⌈P ÷ C⌉, com C a capacidade da unidade por grupo e tipo (acesso,
+    escada, porta; ex. grupo A: 60/45/100). A largura é N × 0,55 m, com o mínimo de 2 unidades
+    (1,10 m) em acesso e escada e 1 em porta.
+  - **Tabelas:** CONFERIR NA IT de saídas do CBMMG / NBR 9077, transcritas de memória.
+- **Conferências contra o desenho:**
+  - cada **escada**, pela população do pavimento mais populoso que desce por ela (a largura não
+    soma andares);
+  - cada **corredor** (circulação pelo nome, ou pela forma), pela população do pavimento dele;
+  - as **saídas para o exterior** do pavimento de descarga (soma das portas), pela maior população
+    entre ele e os de cima.
+  - Pendências: sem divisão; prédio de vários pavimentos sem escada; descarga sem porta para fora.
+- ⚠️ **Achado: o contorno do ambiente passa pelo EIXO das paredes.** O corredor de 1,20 m entre eixos
+  tem 1,05 m livres com paredes de 15 cm, e medir eixo a eixo aprovava o que a norma reprova. A
+  largura do corredor agora desconta meia espessura das paredes dos dois lados compridos (corredor
+  alinhado a x/y). Quem pegou foi a asserção do teste, quando troquei "entre 1,00 e 1,20" pelo valor
+  exato.
+- **Premissas:** `hipoteses.saidas` (pessoas por dormitório, m² por pessoa).
+- **Tela:** `PainelSaidasIncendio` na tarefa Incêndio, abaixo da classificação. Mostra a população
+  por pavimento com a base (dormitórios ou m²) e a largura exigida × desenhada, em vermelho quando
+  falta, com a população e as unidades de cada item. Clicar seleciona a peça.
+- **Harness `docs/spikes/saidas-incendio`** (porta 3166): o pavimento-tipo com a escada de 0,90 m e
+  o corredor de 1,05 m em vermelho, e a descarga atendendo.
+- **Testes:** `blueprintSaidasIncendio.test.ts` (6: unidades, premissas, escada estreita no
+  pavimento-tipo, corredor livre e descarga, comércio pela área, pendências) e
+  `PainelSaidasIncendio.test.tsx` (2). Suíte com 6.657 testes: 6.624 + 33 pulados. Build ok.
 

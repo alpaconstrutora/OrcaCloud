@@ -28,6 +28,7 @@ import { HIPOTESES_HIDRAULICAS_INCENDIO_PADRAO, hipotesesHidraulicasDaColuna, ty
 import { HIPOTESES_REDE_DE_HIDRANTES_PADRAO, hipotesesDaRedeDaColuna, type HipotesesDaRedeDeHidrantes } from './blueprintRedeDeHidrantes';
 import { HIPOTESES_BOMBEAMENTO_PADRAO, hipotesesDoBombeamentoDaColuna, type HipotesesDoBombeamento } from './blueprintBombeamentoIncendio';
 import { HIPOTESES_SPRINKLERS_PADRAO, hipotesesDeSprinklersDaColuna, type HipotesesDeSprinklers } from './blueprintSprinklersIncendio';
+import { HIPOTESES_SAIDAS_PADRAO, hipotesesDeSaidasDaColuna, type HipotesesDeSaidas } from './blueprintSaidasIncendio';
 
 // ─── Presets de Corpo de Bombeiros ───────────────────────────────────────────
 
@@ -137,6 +138,8 @@ export interface HipotesesIncendio {
   bombeamento: HipotesesDoBombeamento;
   /** E5.1 (01/10/2026): risco e, se declarados, densidade, área de operação e área por sprinkler. */
   sprinklers: HipotesesDeSprinklers;
+  /** E6.1 (01/10/2026): pessoas por dormitório e m² por pessoa declarados. */
+  saidas: HipotesesDeSaidas;
 }
 
 export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
@@ -145,6 +148,7 @@ export const HIPOTESES_INCENDIO_PADRAO: HipotesesIncendio = {
   rede: HIPOTESES_REDE_DE_HIDRANTES_PADRAO,
   bombeamento: HIPOTESES_BOMBEAMENTO_PADRAO,
   sprinklers: HIPOTESES_SPRINKLERS_PADRAO,
+  saidas: HIPOTESES_SAIDAS_PADRAO,
 };
 
 const numeroOuNulo = (x: unknown, min: number): number | null => (typeof x === 'number' && Number.isFinite(x) && x >= min ? x : null);
@@ -166,6 +170,7 @@ export function hipotesesIncendioDaColuna(raw: unknown): HipotesesIncendio {
     rede: hipotesesDaRedeDaColuna(r.rede),
     bombeamento: hipotesesDoBombeamentoDaColuna(r.bombeamento),
     sprinklers: hipotesesDeSprinklersDaColuna(r.sprinklers),
+    saidas: hipotesesDeSaidasDaColuna(r.saidas),
   };
 }
 

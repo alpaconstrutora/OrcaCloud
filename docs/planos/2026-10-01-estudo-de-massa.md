@@ -788,7 +788,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M1 — família `Bloco` + indicadores urbanísticos + menu (`671ada75` + este registro)
 - [x] M2 — produto e eficiência (02/10/2026)
 - [x] M3 — financeiro e ponte com Empreendimento/Imovib (`f5c35dc` + correções da prova real)
-- [ ] M4 — cenários e comparador · **8 de 9** (falta provar a GRAVAÇÃO real do produto congelado ao publicar — exige estudo descartável, autorização)
+- [x] M4 — cenários e comparador · **9 de 9** (gravação real provada em 02/10/2026; achado no gatilho de imutabilidade corrigido — migration `aplicar_20271002000040`)
 - [ ] M5 — gerador de implantações e otimizador
 - [ ] M6 — da massa à planta e ao BIM
 
@@ -1012,4 +1012,6 @@ caiu no Windows com 0xC0000409; o trabalho em disco estava intacto e foi retomad
 | Teste de editor "estudo de massa (M4)" | EM-003 sugerido; 2 colunas; "Unidades 80 × 34"; "menor complexidade: principal", "menor custo: Duas torres"; nenhuma linha de vencedor; publicar → produto congelado com o snapshot `snap_1` |
 | Migration | `authenticated` só SELECT/INSERT, `anon` nada; RLS com 2 políticas; gatilho de imutabilidade |
 | App real (só leitura) | sessão logada lê `blueprint_snapshot_produto` sem erro; `daVersao` de versão inexistente = null; 0 escritas |
-| **Gravação real ao publicar** | **pendente** — exige publicar num estudo descartável (autorização); a leitura e a segurança estão provadas |
+| **Gravação real ao publicar** (autorizada, 02/10/2026) | estudo descartável "ZZ TESTE Estudo de Massa (descartável — prova M4)" com lote + Torre A 10 pav + produto residencial médio; **Publicar clicado na tela** → versão rev 1 e linha em `blueprint_snapshot_produto` (2 tipologias, padrão R8-N, `snapshot_id` = a versão, autor gravado); UPDATE pela sessão logada recusado (42501) e o produto lido de volta intacto |
+| Achado da prova: gatilho de imutabilidade | o UPDATE como `postgres` (que passa por cima de grant/RLS e só esbarra no gatilho) devolvia **42703** "record … has no field id" em vez da mensagem de imutável: `fn_blueprint_block_mutation` lia `OLD.id`, e `blueprint_snapshot_produto` e `blueprint_snapshot_topografia` (fase 7, 21/09) têm a chave em `snapshot_id`. O dado ficava protegido, mas pelo motivo errado. Migration `aplicar_20271002000040_blueprint_block_mutation_sem_id.sql` (APLICADA): a chave vem de `to_jsonb(OLD)`. Depois: as duas tabelas dão **23001** "… é imutável (tentativa de UPDATE em <snapshot_id>). Publique uma nova versão."; `blueprint_objects` (tem `id`) continua com o id na mensagem; acentuação da função conferida sem mojibake |
+| Limpeza | estudo descartável apagado pelo id + `name LIKE 'ZZ TESTE%'` (o CASCADE levou versão, produto congelado e produto do estudo); contagens iguais às de antes: estudos 72 · versões 8 · congelados 0 · produtos 0 · ZZ 0. Os 2 eventos de `blueprint_audit_events` ficam (imutáveis por projeto). Servidor de prova (porta 3177) parado pelo PID |

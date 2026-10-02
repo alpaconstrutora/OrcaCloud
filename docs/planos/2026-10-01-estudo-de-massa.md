@@ -787,7 +787,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M0 — plano em `docs/planos/` e frente `estudo-de-massa` a partir de `origin/main`
 - [x] M1 — família `Bloco` + indicadores urbanísticos + menu (`671ada75` + este registro)
 - [x] M2 — produto e eficiência (02/10/2026)
-- [ ] M3 — financeiro e ponte com Empreendimento/Imovib
+- [ ] M3 — financeiro e ponte com Empreendimento/Imovib · **9 de 10** (falta o envio real a um empreendimento descartável, autorizado)
 - [ ] M4 — cenários e comparador
 - [ ] M5 — gerador de implantações e otimizador
 - [ ] M6 — da massa à planta e ao BIM
@@ -893,3 +893,54 @@ publicada; segue a M2.
 | Teste de editor "estudo de massa (M2)" | semente aplicada e gravada; 80 un, 73,9 %, "0 de 120" vagas; Lançar núcleo → "33,00 · desenhado · 2 elev." |
 | Harness `docs/spikes/massa/medir.mjs` | 21/21 ok (produto misto: torre 2 un/pav com núcleo de 34 m², podium 6 lojas/pav) |
 | App real (agente-leitura, só leitura) | botão Produto, gaveta abre, a tabela nova é lida sem erro de RLS; 0 escritas; banco igual antes/depois (0 produtos, rascunho 29/09) |
+
+**Pedido posterior (02/10/2026, mesma sessão):** *"pode seguir"* — segue a M3.
+
+### M3 — Financeiro e ponte com o Empreendimento (02/10/2026)
+
+**O que entrou.**
+
+- **Financeiro** `utils/blueprintFinanceiroMassa.ts` (puro): VGV por tipologia (unidades × área × preço/m²),
+  custo de obra por natureza (edificação ×1, garagem acima do solo × fator, subsolo × fator) sobre o custo/m²
+  base — digitado vence; senão CUB × (1 + itens fora do CUB) —, terreno, corretagem/marketing, tributos e
+  outras despesas em % do VGV; resultado, margem, VGV ÷ custo, obra por m² privativo. Sem custo, `null` com o
+  motivo; tipologia sem preço fica fora do VGV e é nomeada. Fluxo de caixa/TIR/VPL continuam na Viabilidade.
+  O produto ganhou `precoM2` por tipologia e `financeiro` (UF, custo digitado, acréscimos, fatores, terreno,
+  despesas) — produto gravado antes da M3 recebe os padrões na leitura.
+- **CUB** `services/cubService.ts`: `cubDoPadrao(uf, padrão)` lê `cub_parametric_data` (linha Total, com
+  desoneração), mês mais recente por AAAAMM; reserva `cubEstimado` dita como estimativa. ⚠️ Mapa padrão →
+  coluna EXPLÍCITO (`PP-N` → `pp_4_n`, `CSL8-N` → `csl_8_n`).
+  **Achado fora de escopo:** o `parametricService` do Estimador monta a coluna pela chave (`pp_n`, `csl8_n`) e,
+  para PP-*, CSL*, CAL*, a busca falha em silêncio e cai no valor estimado. Não corrigido aqui.
+  **Achado de medição:** ordenar `reference_date` ("MM/AAAA") como texto põe 12/2025 antes de 01/2026; o serviço
+  converte para AAAAMM — o harness e o app real leram 01/2026.
+- **Ponte** (origem nova `massa` no motor `services/sync/`): migration `aplicar_20271002000020` (APLICADA e
+  conferida): `empreendimento_towers.blueprint_bloco_uid`, `empreendimento_units.blueprint_massa_chave`, dois
+  índices únicos parciais, e os dois CHECKs ampliados (`origin` … 'massa'; `source` … 'sync_massa').
+  `SyncOrigin`/`PROVENANCE`/`ORIGIN_LABEL`/`SYNC_FIELDS.massa` (torre: pavimentos, un/pav, custo e preço/m²;
+  unidade: nome, andar, tipologia, áreas, dormitórios); `TOWER_COLS`/`UNIT_COLS` com as colunas novas;
+  `EmpreendimentoAuditSource` e o rótulo do Histórico. `services/sync/massaAdapter.ts` — `ladoDaMassa` puro
+  (bloco com unidades → torre, adoção por nome; cada unidade do produto → unidade "T01", "101"… com área comum
+  rateada, preço-semente e `floor_tipo`; garagem não vira torre, avisada) e `loadMassaSide` (snapshot PUBLICADO +
+  produto atual + CUB). `services/massaEmpreendimentoSync.ts` (prévia, conflitos → Curadoria, auditoria
+  `sync_massa`). ⚠️ Desvio do plano: sem coluna `blueprint_bloco_uid` em unidade; a unidade tem chave texto
+  própria porque não existe no desenho.
+- **Tela**: gaveta Produto ganha a coluna Preço (R$/m²) e a seção Financeiro (UF, custo digitado, a linha do CUB
+  com mês/desoneração, acréscimos, fatores, terreno, despesas); gaveta Estudo de massa ganha **Financeiro —
+  pré-viabilidade** (VGV, custo de obra com a origem, custo total, resultado e margem, VGV ÷ custo, obra/m²
+  privativo) e **Enviar ao Empreendimento** (escolha do empreendimento → vincula o estudo → prévia → confirmação
+  com órfãs avisadas → envio).
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `tsc --noEmit` | exit 0 (1ª tentativa caiu com o crash conhecido do Node 24, sem erro de tipo) |
+| `check-ui-standard.sh` (PainelProduto, PainelEstudoDeMassa, BlueprintEditor, HistoricoTab) | 0 violações |
+| Suíte cheia (JSON) | 668/668 arquivos · 7.007 testes = 6.973 ok + 34 pulados · 0 falhas |
+| `vite build` · XSS · org guard | ok · ok · ok |
+| `__tests__/blueprintMassaFinanceiroEPonte.test.ts` (6) | VGV 46,12 mi, obra 19,95 mi, total 29,868 mi, margem 35,2 %; custo digitado/sem CUB/estimado/sem preço; produto antigo; mapa do CUB; 1 torre e 80 unidades; reenvio sem mudança nenhuma; 9 pavimentos → 8 órfãs reportadas + conflito de pavimentos; torre à mão ADOTADA |
+| Teste de editor "estudo de massa (M3)" | R$ 46,1 mi, R$ 18,0 mi, CUB 12/2025 (mock), margem, bloco de envio |
+| Harness | 25/25 ok · CUB REAL R8-N/MG 2.439,37 e PP-N 2.799,34 (TABELA, 01/2026) |
+| App real (agente-leitura, só leitura) | linha do CUB real na gaveta Produto (01/2026 · Com Desoneração), seção financeira; 0 escritas; banco igual antes/depois (rascunho, produtos, torres, empreendimentos) |
+| **Envio real ao Empreendimento** | **pendente** — escreve torres/unidades num cadastro de produção; precisa de autorização e de um empreendimento descartável (criado para o teste e apagado depois). A idempotência e a adoção estão provadas no motor puro, que é o mesmo do loteamento em produção. |

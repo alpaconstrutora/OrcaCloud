@@ -129,6 +129,8 @@ export interface EmpreendimentoTower {
     planta_ai_scenario_id?: string | null;
     /** LOTEAMENTO (B3): o `uid` da Quadra no payload canônico — uid, nunca id. */
     blueprint_quadra_uid?: string | null;
+    /** Estudo de Massa (M3): uid do Bloco que originou esta torre. */
+    blueprint_bloco_uid?: string | null;
     name: string;
     floors_count?: number;
     units_per_floor?: number;
@@ -170,6 +172,8 @@ export interface EmpreendimentoUnit {
     planta_ai_unit_id?: string | null;
     /** LOTEAMENTO (B3): o `uid` do Lote no payload canônico — uid, nunca id. */
     blueprint_lote_uid?: string | null;
+    /** Estudo de Massa (M3): "<uid do bloco>:<pavimento>:<posição>" — unidade derivada, placeholder. */
+    blueprint_massa_chave?: string | null;
     /** Quadra do lote, como no memorial ("A", "01"). Texto: "12-A" não é número. */
     quadra?: string | null;
     /** Número do lote, como no memorial ("12", "12-A"). */
@@ -439,7 +443,7 @@ export type EmpreendimentoAuditAction =
     | 'sync' | 'publish' | 'pull' | 'approve' | 'reject' | 'export';
 
 export type EmpreendimentoAuditSource =
-    | 'app' | 'sync_imovib' | 'sync_planta' | 'sync_blueprint' | 'curadoria'
+    | 'app' | 'sync_imovib' | 'sync_planta' | 'sync_blueprint' | 'sync_massa' | 'curadoria'
     | 'comercial' | 'locacao' | 'area_engine';
 
 export interface EmpreendimentoAuditLog {

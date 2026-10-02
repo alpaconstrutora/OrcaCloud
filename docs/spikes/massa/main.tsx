@@ -22,6 +22,8 @@ import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
 import { COR_DO_USO_DO_BLOCO } from '../../../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente } from '../../../utils/blueprintProduto';
+import { financeiroDaMassa } from '../../../utils/blueprintFinanceiroMassa';
+import { cubDoPadrao } from '../../../services/cubService';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command } from '../../../utils/blueprintKernel';
 import { divisasDoLote, medirTerreno } from '../../../utils/blueprintTerreno';
@@ -78,6 +80,9 @@ declare global {
       ordinaisDaTorre: (number | null)[];
       /** M2: o produto residencial médio repartido na massa. */
       produto: { unidades: number; torrePorPav: number; podiumPorPav: number; eficienciaGlobalPct: number | null; vagasExigidas: number; nucleoDaTorre: string };
+      /** M3: financeiro com CUB fixo de 2.000 (conta conferível) e o CUB REAL da tabela. */
+      financeiro?: { vgv: number; custoObra: number | null; margemPct: number | null };
+      cubReal?: { r8n: { valorM2: number; fonte: string; referencia: string | null }; ppn: { valorM2: number; fonte: string; referencia: string | null } } | { erro: string };
     };
   }
 }
@@ -130,6 +135,17 @@ function App() {
       </div>
     </ConfirmProvider>
   );
+}
+
+{
+  const p = produtoSemente('MISTO');
+  const dist = distribuirProduto(model, medida, p);
+  const f = financeiroDaMassa(medida, p, dist, { valorM2: 2000, fonte: 'TABELA', referencia: 'fixo do harness' });
+  window.__massa!.financeiro = { vgv: f.vgv, custoObra: f.custoObra, margemPct: f.margemPct };
+  // A consulta REAL: mesma função que a tela usa, contra a tabela do Estimador (leitura pública).
+  Promise.all([cubDoPadrao('MG', 'R8-N'), cubDoPadrao('MG', 'PP-N')])
+    .then(([r8n, ppn]) => (window.__massa!.cubReal = { r8n, ppn }))
+    .catch((e) => (window.__massa!.cubReal = { erro: String(e) }));
 }
 
 createRoot(document.getElementById('raiz') as HTMLElement).render(<App />);

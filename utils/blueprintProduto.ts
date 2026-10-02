@@ -61,6 +61,8 @@ export interface TipologiaDoProduto {
   vagasPorUnidade: number;
   /** Participação no mix, em NÚMERO de unidades, 0–100. Normalizada entre as do mesmo uso. */
   proporcaoPct: number;
+  /** M3: preço de venda por m² de área privativa, R$. 0 = sem preço (não entra no VGV). */
+  precoM2: number;
 }
 
 export interface HipotesesDoProduto {
@@ -92,6 +94,44 @@ export const HIPOTESES_DO_PRODUTO_PADRAO: HipotesesDoProduto = {
   arranjoDasVagas: 'PERPENDICULAR',
 };
 
+/**
+ * M3 — as hipóteses FINANCEIRAS do estudo. Ordem de grandeza de pré-viabilidade,
+ * ditas na tela: o fluxo de caixa, a TIR e o VPL são da Viabilidade (Imovib),
+ * que recebe a estrutura pelo Empreendimento.
+ */
+export interface HipotesesFinanceiras {
+  /** UF do CUB (tabela `cub_parametric_data`). */
+  uf: string;
+  /** Custo de obra por m² digitado; `null` = CUB do padrão × (1 + acréscimos). */
+  custoM2Manual: number | null;
+  /** Itens fora do CUB pela NBR 12721 (fundações, elevadores, projetos, BDI…), % sobre o CUB. */
+  acrescimosSobreCubPct: number;
+  /** Custo relativo do m² de garagem acima do solo (1 = igual ao da torre). */
+  fatorGaragem: number;
+  /** Custo relativo do m² de subsolo (escavação, contenção, impermeabilização). */
+  fatorSubsolo: number;
+  /** Custo do terreno, R$. */
+  terrenoR$: number;
+  /** Corretagem + marketing, % do VGV. */
+  despesasComerciaisPct: number;
+  /** Tributos sobre a receita (RET ou presumido), % do VGV. */
+  impostosPct: number;
+  /** Incorporação, projetos, legalização, administração, % do VGV. */
+  outrasDespesasPct: number;
+}
+
+export const HIPOTESES_FINANCEIRAS_PADRAO: HipotesesFinanceiras = {
+  uf: 'MG',
+  custoM2Manual: null,
+  acrescimosSobreCubPct: 25,
+  fatorGaragem: 0.6,
+  fatorSubsolo: 1.3,
+  terrenoR$: 0,
+  despesasComerciaisPct: 6,
+  impostosPct: 4,
+  outrasDespesasPct: 5,
+};
+
 export interface Produto {
   nome: string;
   padrao: PadraoDoProduto;
@@ -99,10 +139,12 @@ export interface Produto {
   /** "Quero 40 apartamentos": a meta, conferida contra o que cabe. `null` = sem meta. */
   metaUnidades: number | null;
   hipoteses: HipotesesDoProduto;
+  /** M3. Ausente em produto gravado antes da M3 — `produtoDaColuna` preenche. */
+  financeiro: HipotesesFinanceiras;
 }
 
 export function produtoVazio(): Produto {
-  return { nome: 'Produto', padrao: 'R8-N', tipologias: [], metaUnidades: null, hipoteses: { ...HIPOTESES_DO_PRODUTO_PADRAO } };
+  return { nome: 'Produto', padrao: 'R8-N', tipologias: [], metaUnidades: null, hipoteses: { ...HIPOTESES_DO_PRODUTO_PADRAO }, financeiro: { ...HIPOTESES_FINANCEIRAS_PADRAO } };
 }
 
 // ─── Sementes ────────────────────────────────────────────────────────────────
@@ -116,7 +158,7 @@ export const SEMENTES_DO_PRODUTO = {
 } as const;
 export type SementeDoProduto = keyof typeof SEMENTES_DO_PRODUTO;
 
-const t = (id: string, nome: string, uso: UsoDaTipologia, dormitorios: number, areaPrivativaM2: number, vagasPorUnidade: number, proporcaoPct: number): TipologiaDoProduto => ({
+const t = (id: string, nome: string, uso: UsoDaTipologia, dormitorios: number, areaPrivativaM2: number, vagasPorUnidade: number, proporcaoPct: number, precoM2: number): TipologiaDoProduto => ({
   id,
   nome,
   uso,
@@ -124,6 +166,7 @@ const t = (id: string, nome: string, uso: UsoDaTipologia, dormitorios: number, a
   areaPrivativaM2,
   vagasPorUnidade,
   proporcaoPct,
+  precoM2,
 });
 
 /** Mixes de MERCADO, ditos como referência — não norma. O usuário ajusta. */
@@ -131,18 +174,18 @@ export function produtoSemente(s: SementeDoProduto): Produto {
   const base = { ...produtoVazio(), nome: SEMENTES_DO_PRODUTO[s] };
   switch (s) {
     case 'RESIDENCIAL_ECONOMICO':
-      return { ...base, padrao: 'PP-N', tipologias: [t('2q', '2 dorm.', 'RESIDENCIAL', 2, 45, 1, 80), t('1q', '1 dorm.', 'RESIDENCIAL', 1, 35, 1, 20)] };
+      return { ...base, padrao: 'PP-N', tipologias: [t('2q', '2 dorm.', 'RESIDENCIAL', 2, 45, 1, 80, 5500), t('1q', '1 dorm.', 'RESIDENCIAL', 1, 35, 1, 20, 5800)] };
     case 'RESIDENCIAL_MEDIO':
-      return { ...base, padrao: 'R8-N', tipologias: [t('2q', '2 dorm.', 'RESIDENCIAL', 2, 58, 1, 50), t('3q', '3 dorm. (1 suíte)', 'RESIDENCIAL', 3, 75, 2, 50)] };
+      return { ...base, padrao: 'R8-N', tipologias: [t('2q', '2 dorm.', 'RESIDENCIAL', 2, 58, 1, 50, 8500), t('3q', '3 dorm. (1 suíte)', 'RESIDENCIAL', 3, 75, 2, 50, 8800)] };
     case 'RESIDENCIAL_ALTO':
-      return { ...base, padrao: 'R16-A', hipoteses: { ...HIPOTESES_DO_PRODUTO_PADRAO, areaComumTerreoM2: 150 }, tipologias: [t('3q', '3 suítes', 'RESIDENCIAL', 3, 120, 2, 60), t('4q', '4 suítes', 'RESIDENCIAL', 4, 160, 3, 40)] };
+      return { ...base, padrao: 'R16-A', hipoteses: { ...HIPOTESES_DO_PRODUTO_PADRAO, areaComumTerreoM2: 150 }, tipologias: [t('3q', '3 suítes', 'RESIDENCIAL', 3, 120, 2, 60, 13000), t('4q', '4 suítes', 'RESIDENCIAL', 4, 160, 3, 40, 14000)] };
     case 'COMERCIAL':
-      return { ...base, padrao: 'CSL8-N', tipologias: [t('sala', 'Sala', 'COMERCIAL', 0, 40, 1, 80), t('loja', 'Loja', 'COMERCIAL', 0, 90, 2, 20)] };
+      return { ...base, padrao: 'CSL8-N', tipologias: [t('sala', 'Sala', 'COMERCIAL', 0, 40, 1, 80, 9000), t('loja', 'Loja', 'COMERCIAL', 0, 90, 2, 20, 11000)] };
     case 'MISTO':
       return {
         ...base,
         padrao: 'R8-N',
-        tipologias: [t('2q', '2 dorm.', 'RESIDENCIAL', 2, 58, 1, 60), t('3q', '3 dorm. (1 suíte)', 'RESIDENCIAL', 3, 75, 2, 40), t('loja', 'Loja', 'COMERCIAL', 0, 90, 2, 100)],
+        tipologias: [t('2q', '2 dorm.', 'RESIDENCIAL', 2, 58, 1, 60, 8500), t('3q', '3 dorm. (1 suíte)', 'RESIDENCIAL', 3, 75, 2, 40, 8800), t('loja', 'Loja', 'COMERCIAL', 0, 90, 2, 100, 11000)],
       };
   }
 }
@@ -175,9 +218,12 @@ export function produtoDaColuna(raw: unknown): Produto {
       areaPrivativaM2: num(r.areaPrivativaM2, 60, 10, 5000),
       vagasPorUnidade: num(r.vagasPorUnidade, 1, 0, 10),
       proporcaoPct: num(r.proporcaoPct, 0, 0, 100),
+      precoM2: num(r.precoM2, 0, 0, 1_000_000),
     });
   }
   const P = HIPOTESES_DO_PRODUTO_PADRAO;
+  const F = HIPOTESES_FINANCEIRAS_PADRAO;
+  const f = (o.financeiro && typeof o.financeiro === 'object' ? o.financeiro : {}) as Record<string, unknown>;
   return {
     nome: typeof o.nome === 'string' && o.nome.trim() ? o.nome.trim().slice(0, 60) : vazio.nome,
     padrao: (PADROES_DO_PRODUTO as readonly string[]).includes(o.padrao as string) ? (o.padrao as PadraoDoProduto) : vazio.padrao,
@@ -192,6 +238,17 @@ export function produtoDaColuna(raw: unknown): Produto {
       pavimentosParaSegundoElevador: Math.round(num(h.pavimentosParaSegundoElevador, P.pavimentosParaSegundoElevador, 1, 200)),
       areaComumTerreoM2: num(h.areaComumTerreoM2, P.areaComumTerreoM2, 0, 10000),
       arranjoDasVagas: (['PERPENDICULAR', 'ESPINHA_45', 'PARALELA'] as const).includes(h.arranjoDasVagas as ArranjoDasVagas) ? (h.arranjoDasVagas as ArranjoDasVagas) : P.arranjoDasVagas,
+    },
+    financeiro: {
+      uf: typeof f.uf === 'string' && /^[A-Z]{2}$/.test(f.uf) ? f.uf : F.uf,
+      custoM2Manual: f.custoM2Manual == null || f.custoM2Manual === '' ? null : num(f.custoM2Manual, 0, 0, 1_000_000) || null,
+      acrescimosSobreCubPct: num(f.acrescimosSobreCubPct, F.acrescimosSobreCubPct, 0, 300),
+      fatorGaragem: num(f.fatorGaragem, F.fatorGaragem, 0, 5),
+      fatorSubsolo: num(f.fatorSubsolo, F.fatorSubsolo, 0, 5),
+      terrenoR$: num(f['terrenoR$'], F.terrenoR$, 0, 1e12),
+      despesasComerciaisPct: num(f.despesasComerciaisPct, F.despesasComerciaisPct, 0, 50),
+      impostosPct: num(f.impostosPct, F.impostosPct, 0, 50),
+      outrasDespesasPct: num(f.outrasDespesasPct, F.outrasDespesasPct, 0, 50),
     },
   };
 }

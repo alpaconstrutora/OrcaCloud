@@ -143,6 +143,10 @@ const getPrograma = vi.fn(async () => null as unknown);
 const savePrograma = vi.fn(async () => ({}));
 const getProduto = vi.fn(async () => null as unknown);
 const saveProduto = vi.fn(async () => ({}) as unknown);
+vi.mock('../../services/cubService', async () => {
+  const real = await vi.importActual<typeof import('../../services/cubService')>('../../services/cubService');
+  return { ...real, cubDoPadrao: vi.fn(async () => ({ valorM2: 2000, fonte: 'TABELA', referencia: '12/2025 · Com Desoneração' })) };
+});
 vi.mock('../../services/blueprintProdutoService', () => ({
   blueprintProdutoService: {
     get: (...a: unknown[]) => getProduto(...(a as [])),
@@ -1338,6 +1342,39 @@ describe('BlueprintEditor · quantitativos', () => {
     // Lançar núcleo: 2 elevadores + shaft no centro do bloco; o núcleo passa a ser o desenhado.
     await user.click(within(sec).getByRole('button', { name: /^lançar núcleo$/i }));
     await waitFor(() => expect(within(gaveta).getByTestId('produto-da-massa')).toHaveTextContent(/33,00 · desenhado · 2 elev\./));
+  });
+
+  it('estudo de massa (M3): o financeiro do cenário (VGV, obra pelo CUB, margem) e o bloco de envio ao Empreendimento', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { produtoSemente } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 30000, 0, 'FRENTE'),
+        d(30000, 0, 30000, 40000, 'LATERAL_DIREITA'),
+        d(30000, 40000, 0, 40000, 'FUNDOS'),
+        d(0, 40000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(3000, 6000), k.point(27000, 6000), k.point(27000, 36000), k.point(3000, 36000)], pavimentos: 10 },
+      ]).model,
+    );
+    const semente = produtoSemente('RESIDENCIAL_MEDIO');
+    getProduto.mockResolvedValueOnce({ id: 'p1', study_id: 'st', organization_id: 'org_1', produto: { ...semente, financeiro: { ...semente.financeiro, terrenoR$: 3000000 } }, created_at: '', updated_at: '' });
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    const fin = await within(gaveta).findByTestId('financeiro-da-massa');
+    // VGV 40 × 58 × 8.500 + 40 × 75 × 8.800 = 46,12 mi; obra 7.200 m² × (2.000 × 1,25) = 18,0 mi.
+    expect(fin).toHaveTextContent(/R\$ 46,1 mi/);
+    expect(fin).toHaveTextContent(/R\$ 18,0 mi/);
+    expect(fin).toHaveTextContent(/CUB 12\/2025/);
+    expect(fin).toHaveTextContent(/margem \d+,\d %/);
+    const envio = within(gaveta).getByTestId('envio-ao-empreendimento');
+    expect(within(envio).getByLabelText('Empreendimento')).toBeInTheDocument();
   });
 
   it('vocabulário e restrição (E3.1): a APP nos fundos reduz a área construtível; testada mínima digitada é conferida; a ferramenta Divisa oferece a faixa restrita', async () => {

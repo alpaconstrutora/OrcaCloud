@@ -9,12 +9,13 @@
  * aqui — mudar um bloco, um recuo ou a zona recalcula tudo na hora.
  */
 import React from 'react';
-import { AlertTriangle, ArrowUpFromLine, Building2, CarFront, Droplets, Gauge, Home, Layers, LandPlot, Percent, Ruler, Scale, SquareStack, Users } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, Banknote, Building2, CarFront, Droplets, Gauge, Hammer, Home, Layers, LandPlot, Percent, Ruler, Scale, Send, SquareStack, TrendingUp, Users, Wallet } from 'lucide-react';
 import { KpiCard, type KpiColor } from '../ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO, type UsoDoBloco } from '../../utils/blueprintKernel';
 import type { EstadoDoIndicador, HipotesesDaMassa, IndicadorDaMassa, MedidaDaMassa, MedidaDoBloco } from '../../utils/blueprintMassa';
 import type { ProdutoDoBloco, ResultadoDoProduto } from '../../utils/blueprintProduto';
+import type { ResultadoFinanceiro } from '../../utils/blueprintFinanceiroMassa';
 
 interface Props {
   medida: MedidaDaMassa;
@@ -27,7 +28,22 @@ interface Props {
   onAbrirProduto?: () => void;
   /** Lança os elevadores sugeridos + um shaft como peças reais no centro do bloco. */
   onLancarNucleo?: (blocoId: string, elevadores: number) => void;
+  /** M3: VGV, custo e margem do cenário; `null` = sem produto. */
+  financeiro?: ResultadoFinanceiro | null;
+  /** M3: enviar o cenário ao Empreendimento (estrutura: torres e unidades). */
+  envio?: {
+    empreendimentos: { id: string; name: string }[];
+    alvo: string;
+    onAlvo: (id: string) => void;
+    onEnviar: () => void;
+    enviando: boolean;
+    resultado: string | null;
+  };
 }
+
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+/** "R$ 46,1 mi" — o cartão lê ordem de grandeza; o valor exato vai no `title`. */
+const mi = (v: number) => (Math.abs(v) >= 1e6 ? `R$ ${(v / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} mi` : brl(v));
 
 const COLUNAS_DO_PRODUTO: StandardTableColumn[] = [
   { key: 'nome', label: 'Bloco', sortable: true, width: 140 },
@@ -71,7 +87,7 @@ function problemasDoBloco(b: MedidaDoBloco): string {
   return b.pisos.some((p) => p.cabe === null) ? 'sem lote para conferir' : 'cabe no envelope';
 }
 
-export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo }: Props) {
+export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo, financeiro: fi = null, envio }: Props) {
   const l = r.legal;
   const campo = 'h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800';
   return (
@@ -278,6 +294,94 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
                 empty={{ title: 'Nenhum bloco' }}
               />
             </>
+          )}
+        </section>
+      )}
+
+      {fi && pr && pr.unidades > 0 && (
+        <section className="space-y-3" data-testid="financeiro-da-massa">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Financeiro — pré-viabilidade</h3>
+            {onAbrirProduto && (
+              <button type="button" onClick={onAbrirProduto} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                Editar hipóteses
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <KpiCard label="VGV" value={mi(fi.vgv)} title={brl(fi.vgv)} sub={fi.semPreco.length ? `sem preço: ${fi.semPreco.join(', ')}` : `${pr.unidades} unidades · ${n2(pr.privativaTotalM2)} m²`} icon={<Banknote />} color="blue" />
+            <KpiCard
+              label="Custo de obra"
+              value={fi.custoObra == null ? '—' : mi(fi.custoObra)}
+              title={fi.custoObra == null ? undefined : brl(fi.custoObra)}
+              sub={fi.custoM2Base == null ? 'sem CUB e sem custo digitado' : `${brl(fi.custoM2Base)}/m² · ${fi.origemDoCusto === 'MANUAL' ? 'digitado' : fi.origemDoCusto === 'CUB' ? `CUB ${fi.cub?.referencia ?? ''}` : 'CUB estimado'}`}
+              icon={<Hammer />}
+              color={fi.custoObra == null ? 'gray' : 'orange'}
+            />
+            <KpiCard
+              label="Custo total"
+              value={fi.custoTotal == null ? '—' : mi(fi.custoTotal)}
+              title={fi.custoTotal == null ? undefined : brl(fi.custoTotal)}
+              sub={`terreno ${mi(fi.terreno)} · despesas ${mi(fi.despesasComerciais + fi.impostos + fi.outrasDespesas)}`}
+              icon={<Wallet />}
+              color="amber"
+            />
+            <KpiCard
+              label="Resultado"
+              value={fi.resultado == null ? '—' : mi(fi.resultado)}
+              title={fi.resultado == null ? undefined : brl(fi.resultado)}
+              sub={fi.margemPct == null ? 'sem custo, sem margem' : `margem ${n1(fi.margemPct)} % do VGV`}
+              icon={<TrendingUp />}
+              color={fi.resultado == null ? 'gray' : fi.resultado >= 0 ? 'emerald' : 'red'}
+            />
+            <KpiCard label="VGV ÷ custo" value={fi.vgvSobreCusto == null ? '—' : n2(fi.vgvSobreCusto)} sub="quanto cada real de custo vira de venda" icon={<Scale />} color="indigo" />
+            <KpiCard label="Obra por m² privativo" value={fi.custoPorM2Privativo == null ? '—' : brl(fi.custoPorM2Privativo)} sub="custo de obra ÷ área privativa" icon={<Ruler />} color="violet" />
+          </div>
+          {fi.avisos.length > 0 && (
+            <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-do-financeiro">
+              {fi.avisos.map((a) => (
+                <li key={a} className="flex gap-1.5">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>{a}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {envio && pr && pr.unidades > 0 && (
+        <section className="space-y-3" data-testid="envio-ao-empreendimento">
+          <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Enviar ao Empreendimento</h3>
+          <p className="text-xs text-gray-500">
+            Os blocos da versão <strong>publicada</strong> viram torres e o produto vira unidades no cadastro (espelho de vendas). Daí a Viabilidade recebe pelo caminho de
+            sempre. Preço e status de unidades que já existem lá não são tocados; divergências vão para a Curadoria; o que sumir do estudo é avisado, nunca apagado.
+          </p>
+          <div className="flex items-end gap-3">
+            <div className="flex-1 space-y-1.5">
+              <label htmlFor="massa-empreendimento" className="text-xs font-semibold text-slate-500">Empreendimento</label>
+              <select id="massa-empreendimento" value={envio.alvo} onChange={(e) => envio.onAlvo(e.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800">
+                <option value="">Escolha o empreendimento…</option>
+                {envio.empreendimentos.map((e) => (
+                  <option key={e.id} value={e.id}>{e.name}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={envio.onEnviar}
+              disabled={!envio.alvo || envio.enviando}
+              title={!envio.alvo ? 'Escolha o empreendimento que recebe o cenário' : envio.enviando ? 'Enviando…' : 'Mostra a prévia antes de gravar'}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Send className="h-[15px] w-[15px]" /> {envio.enviando ? 'Enviando…' : 'Enviar'}
+            </button>
+          </div>
+          {!envio.alvo && <p className="text-xs text-gray-500">Escolha o empreendimento para habilitar o envio.</p>}
+          {envio.resultado && (
+            <p role="status" className="text-xs text-gray-700" data-testid="resultado-do-envio">
+              {envio.resultado}
+            </p>
           )}
         </section>
       )}

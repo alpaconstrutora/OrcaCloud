@@ -770,6 +770,9 @@ import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
 import { useBlueprintProduto } from '../../hooks/useBlueprintProduto';
 import PainelProduto from './PainelProduto';
 import { comandosDoNucleoSugerido, distribuirProduto } from '../../utils/blueprintProduto';
+import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
+import { cubDoPadrao, type CubDoPadrao } from '../../services/cubService';
+import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
@@ -4527,6 +4530,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (produtoDoEstudo.produto.tipologias.length > 0 && massa.blocos.length > 0 ? distribuirProduto(editor.model, massa, produtoDoEstudo.produto, zona.vagasPorUnidade) : null),
     [editor.model, massa, produtoDoEstudo.produto, zona.vagasPorUnidade],
   );
+  /**
+   * FINANCEIRO (M3): o CUB do padrão na UF do produto (mês mais recente da
+   * tabela do Estimador) e a conta de pré-viabilidade. Custo digitado dispensa
+   * a consulta. Sem CUB, o custo fica "—" — nunca um valor fixo no código.
+   */
+  const [cubDoEstudo, setCubDoEstudo] = useState<CubDoPadrao | null>(null);
+  const ufDoProduto = produtoDoEstudo.produto.financeiro.uf;
+  const padraoDoProduto = produtoDoEstudo.produto.padrao;
+  useEffect(() => {
+    let vivo = true;
+    setCubDoEstudo(null);
+    cubDoPadrao(ufDoProduto, padraoDoProduto)
+      .then((c) => vivo && setCubDoEstudo(c))
+      .catch(() => vivo && setCubDoEstudo(null));
+    return () => {
+      vivo = false;
+    };
+  }, [ufDoProduto, padraoDoProduto]);
+  const financeiroDoEstudo = useMemo(
+    () => (distribuicaoDoProduto ? financeiroDaMassa(massa, produtoDoEstudo.produto, distribuicaoDoProduto, cubDoEstudo) : null),
+    [massa, produtoDoEstudo.produto, distribuicaoDoProduto, cubDoEstudo],
+  );
   /** O próximo bloco nasce com o que está na barra de opções. */
   const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
   const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
@@ -6464,6 +6489,52 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   const [enviandoAoEmpreendimento, setEnviandoAoEmpreendimento] = useState(false);
   const empreendimentoDoLoteamento = zona.empreendimentoId || empreendimentoSugerido;
+
+  /**
+   * M3 — enviar o ESTUDO DE MASSA ao Empreendimento: blocos da versão PUBLICADA
+   * viram torres; o produto distribuído vira unidades. Prévia, confirmação e só
+   * então a escrita — o mesmo rito do loteamento, pelo mesmo motor de sync.
+   */
+  const [alvoDaMassa, setAlvoDaMassa] = useState('');
+  const alvoEfetivoDaMassa = alvoDaMassa || empreendimentoDoLoteamento || '';
+  const [enviandoMassa, setEnviandoMassa] = useState(false);
+  const [resultadoDoEnvioDaMassa, setResultadoDoEnvioDaMassa] = useState<string | null>(null);
+
+  async function enviarMassaAoEmpreendimento() {
+    if (!alvoEfetivoDaMassa) return;
+    setEnviandoMassa(true);
+    setResultadoDoEnvioDaMassa(null);
+    try {
+      await massaEmpreendimentoSync.linkStudy(alvoEfetivoDaMassa, study.id);
+      const previa = await massaEmpreendimentoSync.previewSync(alvoEfetivoDaMassa);
+      const total = previa.towersCreated + previa.towersUpdated + previa.unitsCreated + previa.unitsUpdated;
+      if (total === 0) {
+        setResultadoDoEnvioDaMassa(
+          previa.warnings[0] ?? 'O empreendimento já reflete a versão publicada deste estudo de massa — nada a enviar.',
+        );
+        return;
+      }
+      const orfas = previa.orphanUnits.length + previa.orphanTowers.length;
+      const ok = await confirmar({
+        title: 'Enviar o estudo de massa ao empreendimento?',
+        message:
+          `Da versão PUBLICADA: ${previa.towersCreated} torre(s) nova(s), ${previa.towersUpdated} atualizada(s); ${previa.unitsCreated} unidade(s) nova(s), ${previa.unitsUpdated} atualizada(s).` +
+          (orfas > 0 ? `\n\n${orfas} item(ns) do cadastro não estão mais no estudo: ficam lá e são avisados, nada é apagado.` : '') +
+          '\n\nPreço e status de venda das unidades que já existem não são tocados; divergências vão para a Curadoria.',
+        confirmLabel: 'Enviar',
+        variant: 'warning',
+      });
+      if (!ok) return;
+      const feito = await massaEmpreendimentoSync.syncToEmpreendimento(alvoEfetivoDaMassa);
+      setResultadoDoEnvioDaMassa(
+        `Enviado: ${feito.towersCreated} torre(s) e ${feito.unitsCreated} unidade(s) criadas, ${feito.towersUpdated + feito.unitsUpdated} atualizada(s). Veja em Empreendimentos › Torres & Unidades (e a Curadoria, se houver divergência).`,
+      );
+    } catch (e) {
+      setResultadoDoEnvioDaMassa(`Não consegui enviar: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setEnviandoMassa(false);
+    }
+  }
 
   async function enviarLoteamentoAoEmpreendimento() {
     if (!empreendimentoDoLoteamento) return;
@@ -14649,6 +14720,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onSelecionarBloco={(id) => selecionar([id])}
               onDesenharBloco={() => editor.setTool('bloco')}
               produto={distribuicaoDoProduto}
+              financeiro={financeiroDoEstudo}
+              envio={{
+                empreendimentos: empreendimentos.map((e) => ({ id: e.id, name: e.name })),
+                alvo: alvoEfetivoDaMassa,
+                onAlvo: setAlvoDaMassa,
+                onEnviar: () => void enviarMassaAoEmpreendimento(),
+                enviando: enviandoMassa,
+                resultado: resultadoDoEnvioDaMassa,
+              }}
               onAbrirProduto={() => setTarefa('produto')}
               onLancarNucleo={(blocoId, elevadores) => {
                 const b = (editor.model.blocos ?? []).find((x) => x.id === blocoId);
@@ -14663,6 +14743,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onProduto={produtoDoEstudo.setProduto}
               persistenciaIndisponivel={produtoDoEstudo.persistenciaIndisponivel}
               erroDeGravacao={produtoDoEstudo.erroDeGravacao}
+              cub={produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo}
             />
           )}
 

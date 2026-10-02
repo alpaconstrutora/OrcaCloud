@@ -119,6 +119,18 @@ if (!dados) {
   exigir(pr.torrePorPav > 0 && pr.podiumPorPav > 0, `unidades por pavimento: torre ${pr.torrePorPav} · podium ${pr.podiumPorPav}`);
   exigir(pr.unidades > 0 && pr.eficienciaGlobalPct > 40 && pr.eficienciaGlobalPct < 90, `produto: ${pr.unidades} unidades, eficiência global ${pr.eficienciaGlobalPct} %`);
   exigir(pr.vagasExigidas > 0, `vagas exigidas pelo produto: ${pr.vagasExigidas}`);
+  // M3 — financeiro com CUB fixo (2.000 × 1,25): obra = (podium 2.160 + torre 1.575) × 2.500.
+  const fi = dados.financeiro;
+  exigir(fi && fi.custoObra === 3735 * 2500, `custo de obra ${fi?.custoObra} (3.735 m² × R$ 2.500)`);
+  exigir(fi && fi.vgv > 0 && fi.margemPct !== null, `VGV ${fi?.vgv} · margem ${fi?.margemPct} %`);
+  // O CUB REAL, pela mesma função da tela: tem de vir da TABELA, inclusive o PP-N (coluna pp_4_n).
+  for (let i = 0; i < 20 && !dados.cubReal; i += 1) {
+    await page.waitForTimeout(500);
+    dados.cubReal = await page.evaluate(() => window.__massa?.cubReal ?? null);
+  }
+  const cr = dados.cubReal;
+  exigir(cr && !cr.erro && cr.r8n.fonte === 'TABELA' && cr.r8n.valorM2 > 1000, `CUB real R8-N/MG: ${cr?.r8n?.valorM2} (${cr?.r8n?.fonte} ${cr?.r8n?.referencia ?? ''})${cr?.erro ? ' ' + cr.erro : ''}`);
+  exigir(cr && !cr.erro && cr.ppn.fonte === 'TABELA' && cr.ppn.valorM2 > 1000, `CUB real PP-N/MG: ${cr?.ppn?.valorM2} (${cr?.ppn?.fonte}) — coluna pp_4_n`);
 }
 if (!com) exigir(false, 'não achei o canvas');
 else {

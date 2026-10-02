@@ -17,7 +17,7 @@ import {
     EmpreendimentoTowerInsert, EmpreendimentoUnitInsert, EmpreendimentoCommonAreaInsert,
 } from '../../types/empreendimento';
 
-export type SyncOrigin = 'imovib' | 'planta_ai' | 'blueprint';
+export type SyncOrigin = 'imovib' | 'planta_ai' | 'blueprint' | 'massa';
 export type SyncEntity = 'empreendimento' | 'tower' | 'unit' | 'common_area';
 export type FieldGroup = 'identidade' | 'estrutura' | 'area' | 'comercial';
 
@@ -175,8 +175,8 @@ export interface TargetState {
  * (evita cascade delete e permite órfão).
  */
 export const PROVENANCE: Record<SyncOrigin, {
-    towerKey: 'imovib_block_id' | 'planta_ai_scenario_id' | 'blueprint_quadra_uid';
-    unitKey: 'imovib_instance_id' | 'planta_ai_unit_id' | 'blueprint_lote_uid';
+    towerKey: 'imovib_block_id' | 'planta_ai_scenario_id' | 'blueprint_quadra_uid' | 'blueprint_bloco_uid';
+    unitKey: 'imovib_instance_id' | 'planta_ai_unit_id' | 'blueprint_lote_uid' | 'blueprint_massa_chave';
 }> = {
     imovib: { towerKey: 'imovib_block_id', unitKey: 'imovib_instance_id' },
     planta_ai: { towerKey: 'planta_ai_scenario_id', unitKey: 'planta_ai_unit_id' },
@@ -185,10 +185,14 @@ export const PROVENANCE: Record<SyncOrigin, {
     // reatribui os ids a cada carregamento, e um vínculo por id trocaria de dono
     // em silêncio — o lote 12 viraria o lote 3 sem erro nenhum.
     blueprint: { towerKey: 'blueprint_quadra_uid', unitKey: 'blueprint_lote_uid' },
+    // ESTUDO DE MASSA (M3, 02/10/2026): bloco → torre pelo `uid`; a unidade é
+    // DERIVADA (não existe no desenho), chave "<uid do bloco>:<pavimento>:<posição>".
+    massa: { towerKey: 'blueprint_bloco_uid', unitKey: 'blueprint_massa_chave' },
 };
 
 export const ORIGIN_LABEL: Record<SyncOrigin, string> = {
     imovib: 'Viabilidade',
     planta_ai: 'Arquitetura',
     blueprint: 'Loteamento',
+    massa: 'Estudo de massa',
 };

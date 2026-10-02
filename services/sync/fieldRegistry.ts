@@ -111,6 +111,23 @@ export const SYNC_FIELDS: Record<SyncOrigin, FieldSpec[]> = {
         { entity: 'unit', field: 'testada_m', label: 'Testada (m)', group: 'estrutura', compare: 'numeric', tolerance: CENT },
         { entity: 'unit', field: 'position_type', label: 'Posição', group: 'estrutura', compare: 'exact' },
     ],
+
+    // ── Estudo de Massa (Planta Inteligente, M3) ─────────────────────────────
+    // O bloco vira torre: pavimentos com unidade, unidades por pavimento, e os
+    // R$/m² do cenário (custo de obra e preço médio) — os mesmos campos que o
+    // Planta IA já propunha. O NOME da torre fica fora pela mesma razão das outras
+    // arestas: depois de criada, é dado local.
+    // A unidade é placeholder do produto: nome, pavimento, tipologia, áreas e
+    // dormitórios. Preço e status são do Empreendimento (só na criação).
+    massa: [
+        { entity: 'tower', field: 'floors_count', label: 'Pavimentos', group: 'estrutura', compare: 'exact' },
+        { entity: 'tower', field: 'units_per_floor', label: 'Unidades por pavimento', group: 'estrutura', compare: 'exact' },
+        { entity: 'tower', field: 'construction_cost_sqm', label: 'Custo de obra por m²', group: 'comercial', compare: 'numeric', tolerance: CENT },
+        { entity: 'tower', field: 'sales_price_sqm', label: 'Preço de venda por m²', group: 'comercial', compare: 'numeric', tolerance: CENT },
+
+        ...UNIT_SHARED,
+        { entity: 'unit', field: 'bedrooms', label: 'Dormitórios', group: 'estrutura', compare: 'exact' },
+    ],
 };
 
 /** Índice (origin → entity → field) → spec. */

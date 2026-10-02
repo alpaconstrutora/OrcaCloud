@@ -11,7 +11,8 @@ import { Plus } from 'lucide-react';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import { CUB_STANDARDS_DATA } from '../../constants';
+import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../../constants';
+import type { CubDoPadrao } from '../../services/cubService';
 import {
   PADROES_DO_PRODUTO,
   ROTULO_DO_USO_DA_TIPOLOGIA,
@@ -20,6 +21,7 @@ import {
   problemasDoProduto,
   produtoSemente,
   type HipotesesDoProduto,
+  type HipotesesFinanceiras,
   type PadraoDoProduto,
   type Produto,
   type SementeDoProduto,
@@ -33,6 +35,8 @@ interface Props {
   onProduto: (p: Produto | ((atual: Produto) => Produto)) => void;
   persistenciaIndisponivel: boolean;
   erroDeGravacao: string | null;
+  /** M3: o CUB do padrão na UF (null = carregando ou sem consulta). */
+  cub?: CubDoPadrao | null;
 }
 
 const COLUNAS: StandardTableColumn[] = [
@@ -42,7 +46,11 @@ const COLUNAS: StandardTableColumn[] = [
   { key: 'area', label: 'Área privativa (m²)', sortable: true, width: 150, align: 'right' },
   { key: 'vagas', label: 'Vagas/un.', sortable: true, width: 100, align: 'right' },
   { key: 'mix', label: 'Mix (%)', sortable: true, width: 90, align: 'right' },
+  { key: 'preco', label: 'Preço (R$/m²)', sortable: true, width: 130, align: 'right' },
 ];
+
+const UFS = Object.keys(BASE_CUB_RATES).sort();
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 });
 
 /** Campo editável dentro da célula — §7.1: mesma tipografia do TD. */
 const celula = 'h-8 w-full rounded border border-gray-100 bg-gray-50 px-2 text-sm font-normal text-gray-900';
@@ -53,7 +61,7 @@ function numeroDe(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function PainelProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao }: Props) {
+export default function PainelProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao, cub = null }: Props) {
   const confirmar = useConfirm();
   const [semente, setSemente] = useState<SementeDoProduto>('RESIDENCIAL_MEDIO');
   const problemas = problemasDoProduto(p);
@@ -62,6 +70,8 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
   const atualizarTipologia = (id: string, patch: Partial<TipologiaDoProduto>) =>
     onProduto((atual) => ({ ...atual, tipologias: atual.tipologias.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
   const hip = <K extends keyof HipotesesDoProduto>(k: K, v: HipotesesDoProduto[K]) => onProduto((atual) => ({ ...atual, hipoteses: { ...atual.hipoteses, [k]: v } }));
+  const fin = <K extends keyof HipotesesFinanceiras>(k: K, v: HipotesesFinanceiras[K]) => onProduto((atual) => ({ ...atual, financeiro: { ...atual.financeiro, [k]: v } }));
+  const f = p.financeiro;
 
   async function aplicarSemente() {
     if (p.tipologias.length > 0) {
@@ -75,7 +85,7 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
     onProduto((atual) => {
       let n = atual.tipologias.length + 1;
       while (atual.tipologias.some((x) => x.id === `t${n}`)) n++;
-      return { ...atual, tipologias: [...atual.tipologias, { id: `t${n}`, nome: `Tipologia ${n}`, uso: 'RESIDENCIAL', dormitorios: 2, areaPrivativaM2: 60, vagasPorUnidade: 1, proporcaoPct: 0 }] };
+      return { ...atual, tipologias: [...atual.tipologias, { id: `t${n}`, nome: `Tipologia ${n}`, uso: 'RESIDENCIAL', dormitorios: 2, areaPrivativaM2: 60, vagasPorUnidade: 1, proporcaoPct: 0, precoM2: 0 }] };
     });
   }
 
@@ -153,7 +163,7 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
           rows={p.tipologias}
           rowKey={(x) => x.id}
           dense
-          sortValue={(k, x) => (k === 'nome' ? x.nome : k === 'uso' ? x.uso : k === 'dormitorios' ? x.dormitorios : k === 'area' ? x.areaPrivativaM2 : k === 'vagas' ? x.vagasPorUnidade : x.proporcaoPct)}
+          sortValue={(k, x) => (k === 'nome' ? x.nome : k === 'uso' ? x.uso : k === 'dormitorios' ? x.dormitorios : k === 'area' ? x.areaPrivativaM2 : k === 'vagas' ? x.vagasPorUnidade : k === 'preco' ? x.precoM2 : x.proporcaoPct)}
           renderCell={(k, x) => {
             if (k === 'nome') return <input aria-label={`Nome da tipologia ${x.nome}`} type="text" maxLength={40} value={x.nome} onChange={(e) => atualizarTipologia(x.id, { nome: e.target.value })} className={celula} />;
             if (k === 'uso')
@@ -179,6 +189,7 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
             if (k === 'dormitorios') return num(x.dormitorios, 'dormitorios', 1, 'Dormitórios');
             if (k === 'area') return num(x.areaPrivativaM2, 'areaPrivativaM2', 1, 'Área privativa');
             if (k === 'vagas') return num(x.vagasPorUnidade, 'vagasPorUnidade', 0.5, 'Vagas por unidade');
+            if (k === 'preco') return num(x.precoM2, 'precoM2', 100, 'Preço por m²');
             return num(x.proporcaoPct, 'proporcaoPct', 5, 'Participação no mix');
           }}
           actions={{ width: 70, render: (x) => <ActionIconButton kind="delete" title={`Remover ${x.nome}`} onClick={() => onProduto((a) => ({ ...a, tipologias: a.tipologias.filter((y) => y.id !== x.id) }))} /> }}
@@ -224,6 +235,66 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
               {(Object.keys(ROTULO_DO_ARRANJO) as ArranjoDasVagas[]).map((a) => <option key={a} value={a}>{ROTULO_DO_ARRANJO[a]}</option>)}
             </select>
           </div>
+        </div>
+      </section>
+
+      <section className="space-y-4" data-testid="financeiro-do-produto">
+        <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Financeiro — hipóteses de pré-viabilidade</h3>
+        <p className="text-xs text-gray-500" data-testid="cub-do-padrao">
+          {f.custoM2Manual
+            ? `Custo de obra digitado: ${brl(f.custoM2Manual)}/m² (o CUB não é usado).`
+            : cub
+              ? `CUB ${p.padrao}/${f.uf}: ${brl(cub.valorM2)}/m² ${cub.fonte === 'TABELA' ? `(${cub.referencia})` : '(estimado: base da UF × multiplicador do padrão — não está na tabela)'} + ${f.acrescimosSobreCubPct.toLocaleString('pt-BR')} % de itens fora do CUB = ${brl(cub.valorM2 * (1 + f.acrescimosSobreCubPct / 100))}/m².`
+              : `Buscando o CUB ${p.padrao}/${f.uf}…`}{' '}
+          Fluxo de caixa, TIR e VPL ficam na Viabilidade, que recebe o cenário pelo Empreendimento.
+        </p>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="produto-f-uf" className="text-xs font-semibold text-slate-500">UF do CUB</label>
+            <select id="produto-f-uf" value={f.uf} onChange={(e) => fin('uf', e.target.value)} className={campo}>
+              {UFS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="produto-f-manual" className="text-xs font-semibold text-slate-500">Custo de obra digitado (R$/m²)</label>
+            <input
+              id="produto-f-manual"
+              type="number"
+              min={0}
+              step={50}
+              placeholder="pelo CUB"
+              value={f.custoM2Manual ?? ''}
+              onChange={(e) => fin('custoM2Manual', e.target.value === '' ? null : Math.max(0, Number(e.target.value)) || null)}
+              className={campo}
+            />
+          </div>
+          {(
+            [
+              ['acrescimosSobreCubPct', 'Itens fora do CUB (% sobre o CUB)', 1],
+              ['fatorGaragem', 'Custo relativo da garagem (×)', 0.05],
+              ['fatorSubsolo', 'Custo relativo do subsolo (×)', 0.05],
+              ['terrenoR$', 'Terreno (R$)', 10000],
+              ['despesasComerciaisPct', 'Corretagem e marketing (% VGV)', 0.5],
+              ['impostosPct', 'Tributos (% VGV)', 0.5],
+              ['outrasDespesasPct', 'Incorporação, projetos, legal (% VGV)', 0.5],
+            ] as const
+          ).map(([k, rotulo, step]) => (
+            <div key={k} className="space-y-1.5">
+              <label htmlFor={`produto-f-${k}`} className="text-xs font-semibold text-slate-500">{rotulo}</label>
+              <input
+                id={`produto-f-${k}`}
+                type="number"
+                min={0}
+                step={step}
+                value={f[k]}
+                onChange={(e) => {
+                  const v = numeroDe(e.target.value);
+                  if (v !== null && v >= 0) fin(k, v);
+                }}
+                className={campo}
+              />
+            </div>
+          ))}
         </div>
       </section>
     </div>

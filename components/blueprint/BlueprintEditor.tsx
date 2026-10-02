@@ -1226,6 +1226,49 @@ interface Props {
   onTrocarRamo?: (branchId: string) => void;
 }
 
+/**
+ * As tarefas cujo painel NÃO traz o próprio padding: o drawer dá `px-6 py-4` (o `SheetPanel` não tem
+ * padding — quem chama põe). As demais (importações, gerar paredes…) já trazem o seu. ⚠️ Painel novo
+ * sem padding próprio entra aqui — os de incêndio, o pluvial, os memoriais hidro e a matriz ficaram
+ * encostados nas bordas até 01/10/2026 por não estarem nesta lista.
+ */
+const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
+  'tomadas',
+  'eletrodutos',
+  'circuitos',
+  'pilares',
+  'vigas',
+  'lajes',
+  'fundacoes',
+  'pontosHidraulicos',
+  'agua',
+  'esgoto',
+  'grupo',
+  'vagas',
+  'lotear',
+  'grafo',
+  'insolacao',
+  'mobiliario',
+  'ia',
+  'acabamentos',
+  'esquadrias',
+  'guardaCorpos',
+  'rodapes',
+  'departamentos',
+  'lod',
+  'etapas',
+  'incendio',
+  'incendioCalculo',
+  'incendioRede',
+  'incendioCobertura',
+  'incendioPpci',
+  'kitsDeInsercao',
+  'memoriaisIncendio',
+  'pluvial',
+  'memoriaisHidro',
+  'matriz',
+]);
+
 export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo }: Props) {
   // MULTIUSUÁRIO (E10.1): o editor pergunta aos ganchos ANTES de aplicar (trava de
   // outra pessoa, somente leitura) e difunde DEPOIS. Os ganchos leem refs porque o
@@ -14106,7 +14149,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         </SheetHeader>
 
         <SheetPanel
-          className={`drawer-legivel ${tarefaAberta === 'tomadas' || tarefaAberta === 'eletrodutos' || tarefaAberta === 'circuitos' || tarefaAberta === 'pilares' || tarefaAberta === 'vigas' || tarefaAberta === 'lajes' || tarefaAberta === 'fundacoes' || tarefaAberta === 'pontosHidraulicos' || tarefaAberta === 'agua' || tarefaAberta === 'esgoto' || tarefaAberta === 'grupo' || tarefaAberta === 'vagas' || tarefaAberta === 'lotear' || tarefaAberta === 'grafo' || tarefaAberta === 'insolacao' || tarefaAberta === 'mobiliario' || tarefaAberta === 'ia' || tarefaAberta === 'acabamentos' || tarefaAberta === 'esquadrias' || tarefaAberta === 'guardaCorpos' || tarefaAberta === 'rodapes' || tarefaAberta === 'departamentos' || tarefaAberta === 'lod' || tarefaAberta === 'etapas' ? 'px-6 py-4' : 'p-0'}`}
+          className={`drawer-legivel ${tarefaAberta && TAREFAS_COM_RESPIRO.has(tarefaAberta) ? 'px-6 py-4' : 'p-0'}`}
         >
           {tarefaAberta === 'terreno' && painelDoTerreno(pedidoDeImportacaoDeLevantamento)}
 

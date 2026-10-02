@@ -6366,3 +6366,15 @@ describe('BlueprintEditor · SIGEF (A4)', () => {
     expect(sigef).toHaveAttribute('title', expect.stringMatching(/feche o contorno do lote/i));
   });
 });
+
+describe('drawer de tarefa: o painel do meio com padding lateral (01/10/2026)', () => {
+  it('os painéis de incêndio (ex.: Kits de inserção) abrem com px-6 — antes encostavam nas bordas', async () => {
+    await montar();
+    await abrirAba(/^incêndio$/i);
+    await userEvent.setup().click(screen.getByRole('button', { name: /^Kits de inserção/ }));
+    const painel = await screen.findByTestId('kits-de-insercao');
+    const corpo = painel.closest('.drawer-legivel');
+    expect(corpo).not.toBeNull();
+    expect(corpo!.className).toMatch(/\bpx-6\b/);
+  });
+});

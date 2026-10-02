@@ -71,6 +71,7 @@ import {
   saveMapping,
 } from '../services/blueprintBudgetService';
 import { BlueprintRevisionConflict } from '../types/blueprint';
+import { apagarComposicao, listarComposicoes, salvarComposicao } from '../services/blueprintComposicaoService';
 
 /**
  * Credenciais: variável de ambiente, com `.env.local` como alternativa.
@@ -105,6 +106,8 @@ let studyId = '';
 let branchId = '';
 let projetoDescartavelId = '';
 const mapeamentosCriados: string[] = [];
+/** E1 (incêndio pós-roadmap): as composições por peça que o teste cria — apagadas no `afterAll`. */
+const composicoesCriadas: string[] = [];
 
 /** Sala de 4 paredes + divisória: dois ambientes, geometria não trivial. */
 function modeloDeTeste(): BlueprintModel {
@@ -187,6 +190,13 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     }
 
     for (const id of mapeamentosCriados) await deleteMapping(id);
+
+    // E1: a composição de prova sai do catálogo da organização — conferida, como o estudo e a obra.
+    for (const id of composicoesCriadas) {
+      await apagarComposicao(id, orgId);
+      const { data: resto } = await supabase.from('blueprint_composicoes_de_peca').select('id').eq('id', id);
+      if ((resto ?? []).length > 0) throw new Error(`limpeza silenciosa: a composição de prova ${id} continua existindo`);
+    }
 
     if (projetoDescartavelId) {
       const { error } = await supabase
@@ -761,6 +771,67 @@ describe.skipIf(!ENABLED)('E0 · integração com o Supabase real', () => {
     const integridade = await verifySnapshotIntegrity(snapshotId);
     expect(integridade.ok).toBe(true);
   }, 60000);
+
+  // ── E1 (incêndio pós-roadmap, 01/10/2026): a composição por peça num orçamento real ─────
+  //
+  // A peça de incêndio SEM código vira uma linha por item da COMPOSIÇÃO da organização
+  // (peças × quantidade por peça), na prévia e na obra. Prova o caminho inteiro sob RLS:
+  // cadastro da composição → publicar → `preverLancamentos` → `aplicarNoProjeto`.
+  //
+  // ⚠️ NÃO sobrescreve dado real: a chave da composição é organização + disciplina + tipo +
+  // especificação. Se a organização já tem composição GENÉRICA para o tipo, ele não é usado;
+  // sem tipo livre, o caso avisa e não roda.
+  it('E1: o hidrante sem código vira as 7 linhas da composição da organização — na prévia e na obra', async () => {
+    const { data: catalogo, error: erroCat } = await supabase.from('sinapi_items').select('code').eq('unit', 'UN').limit(7);
+    expect(erroCat).toBeNull();
+    const codigos = [...new Set((catalogo ?? []).map((c) => c.code as string))];
+    expect(codigos, 'sete itens por unidade no catálogo real').toHaveLength(7);
+
+    const existentes = await listarComposicoes(orgId);
+    const tipo = (['HIDRANTE_SIMPLES', 'HIDRANTE_DUPLO', 'MANGOTINHO'] as const).find(
+      (t) => !existentes.some((c) => c.disciplina === 'INCENDIO' && c.tipo === t && !c.especificacao),
+    );
+    if (!tipo) {
+      console.warn('E1 NÃO exercitado: a organização já tem composição genérica para hidrante simples, duplo e mangotinho — o teste não sobrescreve dado real');
+      return;
+    }
+    const comp = await salvarComposicao(orgId, {
+      disciplina: 'INCENDIO',
+      tipo,
+      especificacao: null,
+      itens: codigos.map((codigo, k) => ({ codigo, quantidade: k + 1, descricao: `${MARCADOR} item ${k + 1}` })),
+    });
+    composicoesCriadas.push(comp.id);
+
+    // Uma revisão nova com a peça (sem código próprio).
+    const branch = await getBranch(branchId);
+    const base = await loadBranchModel(branchId);
+    expect(base).not.toBeNull();
+    const comPeca = applyCommand(base!, {
+      type: 'AddTerminal',
+      levelId: base!.levels[0].id,
+      disciplina: 'INCENDIO',
+      tipo: 'Hidrante de prova',
+      tipoHidraulico: tipo,
+      at: point(1000, 1000),
+      cotaMm: 1300,
+    } as Command).model;
+    const snapshotId = await publishSnapshot({ branchId, baseRevision: branch!.base_revision, model: comPeca });
+
+    // A prévia: uma linha por item, peças (1) × quantidade por peça (k + 1).
+    const previa = await preverLancamentos(snapshotId);
+    const daComposicao = previa.entries.filter((e) => e.id.includes(`:instalacao:composicao:INCENDIO:${tipo}:`));
+    expect(daComposicao.map((e) => e.sinapiItem.code).sort()).toEqual([...codigos].sort());
+    codigos.forEach((codigo, k) => expect(daComposicao.find((e) => e.sinapiItem.code === codigo)!.quantity, codigo).toBe(k + 1));
+    expect(previa.divergencias.filter((d) => codigos.includes(d.itemCode ?? '')), 'nenhum item da composição "não encontrado"').toEqual([]);
+
+    // Aplicar na obra DESCARTÁVEL (reaberta pelo caso anterior): as linhas gravadas, com a quantidade.
+    expect(await orcamentoFechado(projetoDescartavelId)).toBe(false);
+    const r = await aplicarNoProjeto(projetoDescartavelId, previa.entries, previa.contexto);
+    expect(r.total, 'as linhas da revisão nova + a linha manual').toBe(previa.entries.length + 1);
+    const gravado = (await orcamentoDaObra(projetoDescartavelId)) as { id: string; quantity: number }[];
+    for (const e of daComposicao) expect(gravado.find((b) => b.id === e.id)?.quantity, e.id).toBe(e.quantity);
+  }, 90000);
 
   it('não é possível criar estudo em organização de terceiros (RLS negativa)', async () => {
     if (!outraOrgId) {

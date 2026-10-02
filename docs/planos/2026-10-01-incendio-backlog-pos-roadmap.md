@@ -246,7 +246,7 @@ com o "pronto quando" provado em teste.
 Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
 - **D1:** desbloqueada (PDFs entregues em 01/10); em execução por partes (D1.1 → D1.2 …).
 - **D2:** adiada por decisão do usuário.
-- **E1:** aguarda confirmar a escrita com o usuário de leitura e a obra de prova.
+- **E1:** ✅ feita em 01/10 (ver Execução).
 
 ## Estado
 
@@ -421,6 +421,18 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
     (divisão)" — 4 descrições existem no comércio e na indústria) dá a divisão e a carga quando
     não declaradas; carga que remete aos Anexos B/C pede declaração; divisão declarada diferente
     da da atividade vira pendência. No painel: campo de busca com as 605 atividades.
+- [x] **E1 — composição por peça num orçamento real** (frente `incendio-integracao`): o teste de
+  integração `blueprintE0.integration.test.ts` ganhou o caso — composição de 7 itens reais do
+  catálogo para o hidrante (sem sobrescrever composição da organização), revisão com a peça,
+  prévia com as 7 linhas (peças × quantidade por peça) e aplicação na obra descartável. Rodou com a
+  conta `agente-leitura` (perfil Membro — grava sob RLS), autorizada pelo usuário: **25/25**.
+  - ⚠️ **regressão achada**: a LIMPEZA falhou — desde a 20270919000034 (aprovação) o gatilho de
+    imutabilidade voltou a barrar o DELETE dos snapshots, e nenhum estudo publicado podia ser
+    excluído no app (o mesmo defeito que a 20270905000002 já tinha corrigido). A migration
+    `aplicar_20271001000070` tira só o gatilho de DELETE (o guarda de UPDATE por coluna fica; o
+    cliente segue sem apagar snapshot avulso — sem policy de DELETE). Aplicada com OK do usuário
+    (conferência 0/1/0); os restos do teste (estudo, obra, de-para ativo de área de piso,
+    composição) apagados e conferidos; a E1 rodada de novo: 25/25 e banco limpo.
 - **D1 FECHADA** (D1.1 exigências, D1.2 as sete ITs, D1.3 atividades). Seguem CONFERIR só os
   valores das NBR 10897, 10898 e 17240, que as ITs adotam e não estão entre os textos.
 - [ ] E1 (⏸ confirmar a escrita com o usuário de leitura antes de rodar)

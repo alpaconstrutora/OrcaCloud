@@ -55,7 +55,8 @@ export function relatorioDoPlano(side: CanonicalSide, plan: SyncPlan): PlantaAiS
     scenarioUnits: side.towers.reduce((s, t) => s + t.units.length, 0),
     orphanTowers: plan.orphanTowers,
     orphanUnits: plan.orphanUnits,
-    warnings: plan.warnings.concat(side.warnings),
+    // `plan.warnings` já começa com os da origem (o planner os copia): somar de novo duplicava.
+    warnings: plan.warnings,
   };
 }
 

@@ -69,7 +69,8 @@ function planToReport(sync: BlueprintSync): PlantaAiSyncReport {
     scenarioUnits: sync.side.towers.reduce((s, t) => s + t.units.length, 0),
     orphanTowers: sync.plan.orphanTowers,
     orphanUnits: sync.plan.orphanUnits,
-    warnings: sync.plan.warnings.concat(sync.side.warnings),
+    // `plan.warnings` já começa com os da origem (o planner os copia): somar de novo duplicava.
+    warnings: sync.plan.warnings,
   };
 }
 

@@ -19,8 +19,9 @@
 import { supabase } from '../../lib/supabase';
 import { getSnapshot, listSnapshots } from '../blueprintService';
 import { Empreendimento, EmpreendimentoUnitInsert, UnitStatus } from '../../types/empreendimento';
-import { modelFromCanonicalPayload, parseCanonicalPayload, type BlueprintModel } from '../../utils/blueprintKernel';
+import type { BlueprintModel } from '../../utils/blueprintKernel';
 import { medirLote, rotuloDoLote } from '../../utils/blueprintLoteamento';
+import { modeloDoPayloadPublicado } from './modeloPublicado';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
 
 /** Área em m² com 2 casas — a mesma régua das outras arestas. */
@@ -74,12 +75,9 @@ export async function loadBlueprintSide(empreendimento: Empreendimento): Promise
   const snapshot = await getSnapshot(maisRecente.id);
   if (!snapshot) throw new Error('A versão publicada do estudo não pôde ser carregada.');
 
-  let model: BlueprintModel;
-  try {
-    model = modelFromCanonicalPayload(parseCanonicalPayload(snapshot.payload as string));
-  } catch (e) {
-    throw new Error(`A versão publicada não pôde ser lida: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  // Objeto (jsonb) ou texto: a função comum trata os dois — ver modeloPublicado.ts.
+  const model: BlueprintModel = modeloDoPayloadPublicado(snapshot.payload);
+
 
   const quadras = model.quadras ?? [];
   const lotes = (model.lotes ?? []).filter((l) => l.tipo === 'LOTE');

@@ -787,7 +787,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M0 — plano em `docs/planos/` e frente `estudo-de-massa` a partir de `origin/main`
 - [x] M1 — família `Bloco` + indicadores urbanísticos + menu (`671ada75` + este registro)
 - [x] M2 — produto e eficiência (02/10/2026)
-- [ ] M3 — financeiro e ponte com Empreendimento/Imovib · **9 de 10** (falta o envio real a um empreendimento descartável, autorizado)
+- [x] M3 — financeiro e ponte com Empreendimento/Imovib (`f5c35dc` + correções da prova real)
 - [ ] M4 — cenários e comparador
 - [ ] M5 — gerador de implantações e otimizador
 - [ ] M6 — da massa à planta e ao BIM
@@ -943,4 +943,34 @@ publicada; segue a M2.
 | Teste de editor "estudo de massa (M3)" | R$ 46,1 mi, R$ 18,0 mi, CUB 12/2025 (mock), margem, bloco de envio |
 | Harness | 25/25 ok · CUB REAL R8-N/MG 2.439,37 e PP-N 2.799,34 (TABELA, 01/2026) |
 | App real (agente-leitura, só leitura) | linha do CUB real na gaveta Produto (01/2026 · Com Desoneração), seção financeira; 0 escritas; banco igual antes/depois (rascunho, produtos, torres, empreendimentos) |
-| **Envio real ao Empreendimento** | **pendente** — escreve torres/unidades num cadastro de produção; precisa de autorização e de um empreendimento descartável (criado para o teste e apagado depois). A idempotência e a adoção estão provadas no motor puro, que é o mesmo do loteamento em produção. |
+| Envio real ao Empreendimento | feito em 02/10 com autorização — ver "Prova real do envio" abaixo |
+
+**Pedido posterior (02/10/2026, mesma sessão):** *"Autorizo criação de empreendimento"* — prova real do envio.
+
+#### Prova real do envio (02/10/2026)
+
+Roteiro `c:/tmp/pwtest/massa-envio-real.cjs`: navegador logado (agente-leitura, org Alpa), código REAL do app
+importado do servidor Vite (mesmo cliente Supabase, mesma sessão, mesma RLS). Criados: estudo "ZZ TESTE Estudo
+de Massa (descartável — prova M3)" com torre 24 × 30 × 10 e subsolo de garagem publicados, produto residencial
+médio, empreendimento "ZZ TESTE Empreendimento (descartável — prova M3)".
+
+**A prova achou três defeitos — todos herdados do envio do LOTEAMENTO (B3, 25/09), que portanto nunca funcionou
+em produção:**
+
+1. `EMPREENDIMENTO_COLS` (`services/empreendimentoService.ts`) sem `blueprint_study_id`: o vínculo era gravado,
+   `getById` não o devolvia, e todo envio parava em "não está vinculado a um estudo". Corrigido.
+2. Os dois adaptadores faziam `snapshot.payload as string`, mas o jsonb chega como OBJETO: o parse lia
+   "[object Object]". Corrigido com uma função só, `services/sync/modeloPublicado.ts`, usada pelos dois.
+3. O relatório somava os avisos da origem duas vezes (o planner já os copia). Corrigido nos dois.
+
+Travas: `__tests__/syncPlantaInteligenteTravas.test.ts` (3) — sem as correções, 2 falham (o 3º exercita a função
+nova). Os testes do motor não pegavam nada disso porque montam o lado canônico a partir de modelo em memória.
+
+**Depois das correções:** envio 1 = 1 torre + 80 unidades criadas; envio 2 = **zero** em tudo (idempotente). No
+banco: "Torre A", 10 pavimentos, 8 un/pav, custo R$ 3.049,21/m² (CUB real 01/2026 × 1,25), preço R$ 8.669,17/m²,
+80 unidades com 80 chaves distintas (101 … T08), VGV-semente R$ 46,12 mi; auditoria `sync_massa` gravada (o CHECK
+novo aceitou). **Limpeza:** empreendimento (torre e unidades em cascata), auditoria do empreendimento, estudo
+(versão, produto em cascata) apagados; conferido 0 restante com "ZZ TESTE". Ficaram 2 eventos em
+`blueprint_audit_events` do estudo apagado: a tabela é imutável por gatilho, de propósito.
+
+Portões depois das correções: tsc 0 · suíte 669/669 arquivos, 7.010 testes, 0 falhas · build ok · XSS ok · org ok.

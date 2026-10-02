@@ -23,11 +23,12 @@ import { getSnapshot, listSnapshots } from '../blueprintService';
 import { blueprintProdutoService } from '../blueprintProdutoService';
 import { cubDoPadrao, type CubDoPadrao } from '../cubService';
 import { Empreendimento, EmpreendimentoUnitInsert, FloorTipo, UnitStatus } from '../../types/empreendimento';
-import { modelFromCanonicalPayload, parseCanonicalPayload, type BlueprintModel } from '../../utils/blueprintKernel';
+import type { BlueprintModel } from '../../utils/blueprintKernel';
 import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../../utils/blueprintTerreno';
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../utils/blueprintMassa';
 import { distribuirProduto, produtoDaColuna, type Produto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
+import { modeloDoPayloadPublicado } from './modeloPublicado';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
@@ -144,12 +145,9 @@ export async function loadMassaSide(empreendimento: Empreendimento): Promise<Can
   const maisRecente = snapshots.reduce((a, b) => (b.revision > a.revision ? b : a));
   const snapshot = await getSnapshot(maisRecente.id);
   if (!snapshot) throw new Error('A versão publicada do estudo não pôde ser carregada.');
-  let model: BlueprintModel;
-  try {
-    model = modelFromCanonicalPayload(parseCanonicalPayload(snapshot.payload as string));
-  } catch (e) {
-    throw new Error(`A versão publicada não pôde ser lida: ${e instanceof Error ? e.message : String(e)}`);
-  }
+  // Objeto (jsonb) ou texto: a função comum trata os dois — ver modeloPublicado.ts.
+  const model: BlueprintModel = modeloDoPayloadPublicado(snapshot.payload);
+
   const row = await blueprintProdutoService.get(empreendimento.blueprint_study_id);
   const produto = produtoDaColuna(row?.produto ?? null);
   const cub = produto.financeiro.custoM2Manual ? null : await cubDoPadrao(produto.financeiro.uf, produto.padrao).catch(() => null);

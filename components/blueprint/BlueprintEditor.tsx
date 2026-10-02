@@ -46,6 +46,7 @@ import {
   Building2,
   CarFront,
   Box,
+  Home,
   Scale,
   ClipboardList,
   Footprints,
@@ -766,6 +767,9 @@ import { analisarInsolacao, diaDoAno, direcaoDoSol, insolacaoParaRegras, posicao
 import { conferirPrograma, linhasParaLegislacao } from '../../utils/blueprintConferenciaDoPrograma';
 import { construirGrafoEspacial, descreverFachadas, percursoAteASaida, vizinhosDe } from '../../utils/blueprintGrafoEspacial';
 import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
+import { useBlueprintProduto } from '../../hooks/useBlueprintProduto';
+import PainelProduto from './PainelProduto';
+import { comandosDoNucleoSugerido, distribuirProduto } from '../../utils/blueprintProduto';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
@@ -1078,6 +1082,8 @@ const ROTULO_DA_TAREFA = {
   vagas: 'Vagas de garagem — lançamento automático',
   // ESTUDO DE MASSA (01/10/2026, M1): envelope legal, indicadores da massa e hipóteses do CA.
   massa: 'Estudo de massa — envelope legal e indicadores',
+  // ESTUDO DE MASSA (02/10/2026, M2): o produto — tipologias, mix, padrão e hipóteses do pavimento.
+  produto: 'Produto — tipologias, mix e hipóteses',
   // LOTEAR QUADRA (25/09/2026, B2): a quadra vira N lotes de testada fixa —
   // prévia tracejada, um lote de comandos, um Ctrl+Z.
   lotear: 'Lotear quadra — subdivisão automática',
@@ -1261,6 +1267,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'grupo',
   'vagas',
   'massa',
+  'produto',
   'lotear',
   'grafo',
   'insolacao',
@@ -1590,6 +1597,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const armaduraDoEstudo = useBlueprintArmadura(study.id, study.organization_id);
   /** PROGRAMA DE NECESSIDADES (E4.1): do estudo, fora do payload. */
   const programaDoEstudo = useBlueprintPrograma(study.id, study.organization_id);
+  /** ESTUDO DE MASSA (M2): o produto — tipologias, mix, padrão, hipóteses do pavimento. Do estudo. */
+  const produtoDoEstudo = useBlueprintProduto(study.id, study.organization_id);
   const hipotesesDeArmadura = armaduraDoEstudo.hipoteses;
   /** ARMADURA no 3D (16/09/2026): as barras do esquema, com o concreto translúcido. Nasce desligada. */
   const [mostrarArmadura3d, setMostrarArmadura3d] = usePersistedState<boolean>('blueprint:vista3dArmadura', false);
@@ -4510,6 +4519,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [massa, editor.model.blocos],
   );
   const [mostrarMassa3d, setMostrarMassa3d] = usePersistedState('blueprint:vista3dMassa', true);
+  /**
+   * PRODUTO NA MASSA (M2): unidades por pavimento depois de núcleo, paredes e
+   * corredor; eficiências; vagas pedidas pelo produto/zona × as que cabem.
+   */
+  const distribuicaoDoProduto = useMemo(
+    () => (produtoDoEstudo.produto.tipologias.length > 0 && massa.blocos.length > 0 ? distribuirProduto(editor.model, massa, produtoDoEstudo.produto, zona.vagasPorUnidade) : null),
+    [editor.model, massa, produtoDoEstudo.produto, zona.vagasPorUnidade],
+  );
   /** O próximo bloco nasce com o que está na barra de opções. */
   const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
   const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
@@ -10875,6 +10892,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={() => alternarTarefa('massa')}
                 ajuda="O que a lei deixa no lote (implantação máxima, área computável máxima, pavimentos possíveis) e o que os blocos usam: TO, CA, gabarito, permeabilidade, aproveitamento do potencial — recalculado a cada mudança"
               />
+              <BotaoDoRibbon
+                icone={Home}
+                rotulo="Produto"
+                contagem={produtoDoEstudo.produto.tipologias.length || undefined}
+                ativo={tarefaAberta === 'produto'}
+                onClick={() => alternarTarefa('produto')}
+                ajuda="O que se vende: tipologias, mix, padrão construtivo (CUB), meta de unidades e as hipóteses do pavimento (núcleo, paredes, corredor) — o Estudo de massa reparte o mix pelos blocos"
+              />
             </GrupoDoRibbon>
             {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente
                 ou pelo contorno do pavimento; os mínimos PCD/idoso e a exigência conferidos. */}
@@ -14623,6 +14648,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onHipoteses={setHipotesesDaMassa}
               onSelecionarBloco={(id) => selecionar([id])}
               onDesenharBloco={() => editor.setTool('bloco')}
+              produto={distribuicaoDoProduto}
+              onAbrirProduto={() => setTarefa('produto')}
+              onLancarNucleo={(blocoId, elevadores) => {
+                const b = (editor.model.blocos ?? []).find((x) => x.id === blocoId);
+                if (b) editor.runBatch(comandosDoNucleoSugerido(b, elevadores));
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'produto' && (
+            <PainelProduto
+              produto={produtoDoEstudo.produto}
+              onProduto={produtoDoEstudo.setProduto}
+              persistenciaIndisponivel={produtoDoEstudo.persistenciaIndisponivel}
+              erroDeGravacao={produtoDoEstudo.erroDeGravacao}
             />
           )}
 

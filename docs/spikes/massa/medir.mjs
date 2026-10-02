@@ -112,6 +112,13 @@ if (!dados) {
   exigir(dados.pavimentosMax === 10, `pavimentos do prédio ${dados.pavimentosMax}`);
   exigir(JSON.stringify(dados.comProblema) === JSON.stringify(['Torre']), `blocos com problema: ${dados.comProblema.join(', ') || 'nenhum'} (esperado só a Torre)`);
   exigir(dados.construidaM2 === 720 * 3 + 225 * 7, `área construída ${dados.construidaM2} m² (2.160 + 1.575)`);
+  // M2 — produto MISTO: o podium COMERCIAL recebe lojas, a torre RESIDENCIAL os apartamentos;
+  // a torre vai até o 10º pavimento do prédio → 2 elevadores → núcleo 24 + 10 = 34 m².
+  const pr = dados.produto;
+  exigir(pr.nucleoDaTorre === 'SUGERIDO:34', `núcleo da torre ${pr.nucleoDaTorre} (esperado SUGERIDO:34)`);
+  exigir(pr.torrePorPav > 0 && pr.podiumPorPav > 0, `unidades por pavimento: torre ${pr.torrePorPav} · podium ${pr.podiumPorPav}`);
+  exigir(pr.unidades > 0 && pr.eficienciaGlobalPct > 40 && pr.eficienciaGlobalPct < 90, `produto: ${pr.unidades} unidades, eficiência global ${pr.eficienciaGlobalPct} %`);
+  exigir(pr.vagasExigidas > 0, `vagas exigidas pelo produto: ${pr.vagasExigidas}`);
 }
 if (!com) exigir(false, 'não achei o canvas');
 else {

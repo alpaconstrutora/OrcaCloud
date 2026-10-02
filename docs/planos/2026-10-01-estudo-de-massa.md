@@ -786,7 +786,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 
 - [x] M0 — plano em `docs/planos/` e frente `estudo-de-massa` a partir de `origin/main`
 - [x] M1 — família `Bloco` + indicadores urbanísticos + menu (`671ada75` + este registro)
-- [ ] M2 — produto e eficiência
+- [x] M2 — produto e eficiência (02/10/2026)
 - [ ] M3 — financeiro e ponte com Empreendimento/Imovib
 - [ ] M4 — cenários e comparador
 - [ ] M5 — gerador de implantações e otimizador
@@ -849,3 +849,47 @@ antes do push e, se o 0.90.0 já estiver tomado, renumerar.
 
 **Pedido posterior (02/10/2026, mesma sessão):** *"SENHA = [fornecida] · pode seguir"* — prova no app real feita e M1
 publicada; segue a M2.
+
+### M2 — Produto e eficiência (02/10/2026)
+
+**O que entrou.**
+
+- **Tabela** `blueprint_study_produto` (migration `aplicar_20271002000010`, APLICADA por `db query -f`): uma linha
+  por estudo, FK composta ao estudo com CASCADE, RLS `is_org_member` numa perna só, `REVOKE … FROM PUBLIC, anon,
+  authenticated` + grant só de CRUD. Conferido em `role_table_grants`: `anon` sem nada, `authenticated` com
+  SELECT/INSERT/UPDATE/DELETE; RLS ligada, 1 política. `services/blueprintProdutoService.ts` +
+  `hooks/useBlueprintProduto.ts` (molde do programa: estado na hora, gravação com respiro de 500 ms, degrada
+  para a sessão).
+- **Motor** `utils/blueprintProduto.ts` (puro). ⚠️ Desvio do plano: a distribuição mora aqui, e não em
+  `blueprintMassa.ts` — o produto é outra camada e importa a medida da massa, não o contrário.
+  `Produto {nome, padrao (chaves do CUB do Estimador), tipologias [uso, dormitórios, área privativa alvo,
+  vagas/un, mix %], metaUnidades, hipoteses}`; sementes (econômico, médio, alto, comercial, misto);
+  `produtoDaColuna` tolerante; `problemasDoProduto` (mix que não fecha).
+  `nucleoDoBloco`: o desenhado (núcleos e escadas com centro dentro do bloco) vence a hipótese; sem escada
+  desenhada, escada/hall/shafts da hipótese continuam somados; elevadores pela hipótese (1 a partir de 5
+  pavimentos acima do solo, 2 a partir de 9). `distribuirProduto`: por pavimento, bruta − núcleo − paredes −
+  portaria (1º pav) − corredor = privativa disponível, repartida pelo mix (`floor`, maior resto, corte pela
+  área); bloco residencial recebe as residenciais, comercial as comerciais, misto as duas. Eficiência do
+  pavimento tipo e global, área comum por unidade, vagas do produto × da zona × as que CABEM (garagem pelo
+  `planejarVagas` da E2.5 num modelo provisório com o contorno do bloco — sem pilares, dito como teto),
+  índice de garagem, meta de unidades. `comandosDoNucleoSugerido`: elevadores (ficha de 8 passageiros) + shaft
+  como `AddNucleo` no centro do bloco. ⚠️ A escada NÃO é lançada (fica com o projetista; a hipótese segue).
+- **Tela**: Terreno › Massa › **Produto** (gaveta `PainelProduto`: semente com confirmação, padrão CUB, meta,
+  tabela de tipologias editável na linha, hipóteses do pavimento e o arranjo das vagas); gaveta Estudo de
+  massa ganha **Produto e eficiência** (cartões: unidades × meta, privativa total e média, eficiência do
+  pavimento e global, área comum por unidade, vagas que cabem × exigidas, índice de garagem; avisos; tabela
+  por bloco com núcleo, origem e "Lançar núcleo").
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `tsc --noEmit` | exit 0 (1ª tentativa caiu com o crash 0xC0000005 conhecido do Node 24, sem erro de tipo) |
+| `check-ui-standard.sh` (PainelProduto, PainelEstudoDeMassa, BlueprintEditor) | 0 violações |
+| `segurancaMigrations.test.ts` | ok |
+| Suíte cheia (JSON) | 667/667 arquivos · 7.000 testes = 6.966 ok + 34 pulados · 0 falhas |
+| `vite build` · XSS · org guard | ok · ok · ok |
+| `__tests__/blueprintProduto.test.ts` (6) | torre 24 × 30 × 10: núcleo 34 m², 8 un/pav, 80 unidades, 5.320 m², 73,9 %; vagas 120 pelo produto e pela zona; garagem 20 × 15 = 7 vagas (o mesmo número da E2.5); núcleo lançado = 33 m² desenhado |
+| Teste de editor "estudo de massa (M2)" | semente aplicada e gravada; 80 un, 73,9 %, "0 de 120" vagas; Lançar núcleo → "33,00 · desenhado · 2 elev." |
+| Harness `docs/spikes/massa/medir.mjs` | 21/21 ok (produto misto: torre 2 un/pav com núcleo de 34 m², podium 6 lojas/pav) |
+| App real (agente-leitura, só leitura) | botão Produto, gaveta abre, a tabela nova é lida sem erro de RLS; 0 escritas; banco igual antes/depois (0 produtos, rascunho 29/09) |

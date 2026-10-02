@@ -207,6 +207,16 @@ export interface BlueprintProgramRow {
   updated_at: string;
 }
 
+/** Produto do Estudo de Massa (M2) — `blueprint_study_produto`. */
+export interface BlueprintProdutoRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  produto: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 /** Biblioteca de materiais da organização (E7.4) — `blueprint_materials`. */
 export interface BlueprintMaterialRow {
   id: string;

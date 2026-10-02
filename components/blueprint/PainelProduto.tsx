@@ -1,0 +1,231 @@
+/**
+ * A gaveta "Produto" do Estudo de Massa (fase M2): o que se vende — semente,
+ * padrão construtivo (as chaves do CUB do Estimador), meta de unidades, o mix
+ * de tipologias editável na linha e as hipóteses de perda do pavimento.
+ *
+ * Apresentacional: o produto vem de `useBlueprintProduto` (do ESTUDO, gravado
+ * com respiro); a distribuição na massa aparece na gaveta "Estudo de massa".
+ */
+import React, { useState } from 'react';
+import { Plus } from 'lucide-react';
+import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
+import ActionIconButton from '../ui/ActionIconButton';
+import { useConfirm } from '../ui/confirm';
+import { CUB_STANDARDS_DATA } from '../../constants';
+import {
+  PADROES_DO_PRODUTO,
+  ROTULO_DO_USO_DA_TIPOLOGIA,
+  SEMENTES_DO_PRODUTO,
+  USOS_DA_TIPOLOGIA,
+  problemasDoProduto,
+  produtoSemente,
+  type HipotesesDoProduto,
+  type PadraoDoProduto,
+  type Produto,
+  type SementeDoProduto,
+  type TipologiaDoProduto,
+  type UsoDaTipologia,
+} from '../../utils/blueprintProduto';
+import { ROTULO_DO_ARRANJO, type ArranjoDasVagas } from '../../utils/blueprintVagasAutomaticas';
+
+interface Props {
+  produto: Produto;
+  onProduto: (p: Produto | ((atual: Produto) => Produto)) => void;
+  persistenciaIndisponivel: boolean;
+  erroDeGravacao: string | null;
+}
+
+const COLUNAS: StandardTableColumn[] = [
+  { key: 'nome', label: 'Tipologia', sortable: true, width: 170 },
+  { key: 'uso', label: 'Uso', sortable: true, width: 130 },
+  { key: 'dormitorios', label: 'Dorm.', sortable: true, width: 80, align: 'right' },
+  { key: 'area', label: 'Área privativa (m²)', sortable: true, width: 150, align: 'right' },
+  { key: 'vagas', label: 'Vagas/un.', sortable: true, width: 100, align: 'right' },
+  { key: 'mix', label: 'Mix (%)', sortable: true, width: 90, align: 'right' },
+];
+
+/** Campo editável dentro da célula — §7.1: mesma tipografia do TD. */
+const celula = 'h-8 w-full rounded border border-gray-100 bg-gray-50 px-2 text-sm font-normal text-gray-900';
+const campo = 'h-9 w-full rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800';
+
+function numeroDe(v: string): number | null {
+  const n = Number(v.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+export default function PainelProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao }: Props) {
+  const confirmar = useConfirm();
+  const [semente, setSemente] = useState<SementeDoProduto>('RESIDENCIAL_MEDIO');
+  const problemas = problemasDoProduto(p);
+  const h = p.hipoteses;
+
+  const atualizarTipologia = (id: string, patch: Partial<TipologiaDoProduto>) =>
+    onProduto((atual) => ({ ...atual, tipologias: atual.tipologias.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const hip = <K extends keyof HipotesesDoProduto>(k: K, v: HipotesesDoProduto[K]) => onProduto((atual) => ({ ...atual, hipoteses: { ...atual.hipoteses, [k]: v } }));
+
+  async function aplicarSemente() {
+    if (p.tipologias.length > 0) {
+      const ok = await confirmar({ title: 'Substituir o produto?', message: `As ${p.tipologias.length} tipologia(s) atuais e as hipóteses dão lugar à semente "${SEMENTES_DO_PRODUTO[semente]}".`, variant: 'warning', confirmLabel: 'Substituir' });
+      if (!ok) return;
+    }
+    onProduto(produtoSemente(semente));
+  }
+
+  function novaTipologia() {
+    onProduto((atual) => {
+      let n = atual.tipologias.length + 1;
+      while (atual.tipologias.some((x) => x.id === `t${n}`)) n++;
+      return { ...atual, tipologias: [...atual.tipologias, { id: `t${n}`, nome: `Tipologia ${n}`, uso: 'RESIDENCIAL', dormitorios: 2, areaPrivativaM2: 60, vagasPorUnidade: 1, proporcaoPct: 0 }] };
+    });
+  }
+
+  return (
+    <div className="space-y-6 text-sm text-gray-700" data-testid="tarefa-produto">
+      <p className="text-gray-600">
+        O que se pretende vender. A gaveta <strong>Estudo de massa</strong> reparte este mix pelos blocos — depois de reservar núcleo, paredes e corredor — e confere as vagas.
+      </p>
+      {(persistenciaIndisponivel || erroDeGravacao) && (
+        <p role="status" className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {persistenciaIndisponivel ? 'Sem gravação no banco: o produto vale só nesta sessão.' : `Não gravou o produto: ${erroDeGravacao}`}
+        </p>
+      )}
+
+      <section className="space-y-4">
+        <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Produto</h3>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="produto-semente" className="text-xs font-semibold text-slate-500">Começar de uma semente</label>
+            <div className="flex gap-2">
+              <select id="produto-semente" value={semente} onChange={(e) => setSemente(e.target.value as SementeDoProduto)} className={campo}>
+                {(Object.keys(SEMENTES_DO_PRODUTO) as SementeDoProduto[]).map((s) => (
+                  <option key={s} value={s}>{SEMENTES_DO_PRODUTO[s]}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => void aplicarSemente()} className="h-9 shrink-0 rounded-[6px] border border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-700 hover:bg-gray-50">
+                Aplicar
+              </button>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="produto-nome" className="text-xs font-semibold text-slate-500">Nome</label>
+            <input id="produto-nome" type="text" maxLength={60} value={p.nome} onChange={(e) => onProduto((a) => ({ ...a, nome: e.target.value }))} className={campo} />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="produto-padrao" className="text-xs font-semibold text-slate-500">Padrão construtivo (CUB)</label>
+            <select id="produto-padrao" value={p.padrao} onChange={(e) => onProduto((a) => ({ ...a, padrao: e.target.value as PadraoDoProduto }))} className={campo}>
+              {PADROES_DO_PRODUTO.map((k) => (
+                <option key={k} value={k}>{CUB_STANDARDS_DATA[k]?.label ?? k}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="produto-meta" className="text-xs font-semibold text-slate-500">Meta de unidades</label>
+            <input
+              id="produto-meta"
+              type="number"
+              min={0}
+              step={1}
+              placeholder="sem meta"
+              value={p.metaUnidades ?? ''}
+              onChange={(e) => onProduto((a) => ({ ...a, metaUnidades: e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))) || null }))}
+              className={campo}
+            />
+          </div>
+        </div>
+        {problemas.length > 0 && (
+          <ul className="space-y-0.5 text-xs text-amber-700" data-testid="problemas-do-produto">
+            {problemas.map((x) => <li key={x}>{x}</li>)}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <h3 className="text-sm font-semibold text-gray-900">Tipologias e mix</h3>
+          <button type="button" onClick={novaTipologia} className="flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700">
+            <Plus className="h-[15px] w-[15px]" /> Nova tipologia
+          </button>
+        </div>
+        {/* Sem busca: poucas tipologias por estudo. */}
+        <StandardTable<TipologiaDoProduto>
+          storageKey="blueprint:massa:tipologias"
+          columns={COLUNAS}
+          rows={p.tipologias}
+          rowKey={(x) => x.id}
+          dense
+          sortValue={(k, x) => (k === 'nome' ? x.nome : k === 'uso' ? x.uso : k === 'dormitorios' ? x.dormitorios : k === 'area' ? x.areaPrivativaM2 : k === 'vagas' ? x.vagasPorUnidade : x.proporcaoPct)}
+          renderCell={(k, x) => {
+            if (k === 'nome') return <input aria-label={`Nome da tipologia ${x.nome}`} type="text" maxLength={40} value={x.nome} onChange={(e) => atualizarTipologia(x.id, { nome: e.target.value })} className={celula} />;
+            if (k === 'uso')
+              return (
+                <select aria-label={`Uso da tipologia ${x.nome}`} value={x.uso} onChange={(e) => atualizarTipologia(x.id, { uso: e.target.value as UsoDaTipologia })} className={celula}>
+                  {USOS_DA_TIPOLOGIA.map((u) => <option key={u} value={u}>{ROTULO_DO_USO_DA_TIPOLOGIA[u]}</option>)}
+                </select>
+              );
+            const num = (valor: number, campoDe: keyof TipologiaDoProduto, step: number, rotulo: string) => (
+              <input
+                aria-label={`${rotulo} — ${x.nome}`}
+                type="number"
+                min={0}
+                step={step}
+                value={valor}
+                onChange={(e) => {
+                  const v = numeroDe(e.target.value);
+                  if (v !== null && v >= 0) atualizarTipologia(x.id, { [campoDe]: v } as Partial<TipologiaDoProduto>);
+                }}
+                className={`${celula} text-right`}
+              />
+            );
+            if (k === 'dormitorios') return num(x.dormitorios, 'dormitorios', 1, 'Dormitórios');
+            if (k === 'area') return num(x.areaPrivativaM2, 'areaPrivativaM2', 1, 'Área privativa');
+            if (k === 'vagas') return num(x.vagasPorUnidade, 'vagasPorUnidade', 0.5, 'Vagas por unidade');
+            return num(x.proporcaoPct, 'proporcaoPct', 5, 'Participação no mix');
+          }}
+          actions={{ width: 70, render: (x) => <ActionIconButton kind="delete" title={`Remover ${x.nome}`} onClick={() => onProduto((a) => ({ ...a, tipologias: a.tipologias.filter((y) => y.id !== x.id) }))} /> }}
+          empty={{ title: 'Nenhuma tipologia', subtitle: 'Aplique uma semente ou crie a primeira.' }}
+        />
+        <p className="text-xs text-gray-500">O mix é em número de unidades e se normaliza por uso. Bloco residencial recebe as residenciais; comercial, as comerciais; misto, as duas.</p>
+      </section>
+
+      <section className="space-y-4" data-testid="hipoteses-do-produto">
+        <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Hipóteses do pavimento</h3>
+        <p className="text-xs text-gray-500">Referências de pré-projeto, não norma. O núcleo desenhado (shaft, elevador, escada dentro do bloco) substitui a hipótese.</p>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          {(
+            [
+              ['paredesPct', 'Paredes e fachada (% da bruta)', 0.5],
+              ['circulacaoPct', 'Corredor do andar (% da útil)', 0.5],
+              ['nucleoBaseM2', 'Escada + hall + shafts (m²/pav)', 1],
+              ['elevadorM2', 'Por elevador (m²/pav)', 0.5],
+              ['pavimentosParaElevador', '1 elevador a partir de (pav.)', 1],
+              ['pavimentosParaSegundoElevador', '2 elevadores a partir de (pav.)', 1],
+              ['areaComumTerreoM2', 'Portaria/hall no térreo (m²)', 5],
+            ] as const
+          ).map(([k, rotulo, step]) => (
+            <div key={k} className="space-y-1.5">
+              <label htmlFor={`produto-h-${k}`} className="text-xs font-semibold text-slate-500">{rotulo}</label>
+              <input
+                id={`produto-h-${k}`}
+                type="number"
+                min={0}
+                step={step}
+                value={h[k]}
+                onChange={(e) => {
+                  const v = numeroDe(e.target.value);
+                  if (v !== null && v >= 0) hip(k, v);
+                }}
+                className={campo}
+              />
+            </div>
+          ))}
+          <div className="space-y-1.5">
+            <label htmlFor="produto-h-arranjo" className="text-xs font-semibold text-slate-500">Arranjo das vagas</label>
+            <select id="produto-h-arranjo" value={h.arranjoDasVagas} onChange={(e) => hip('arranjoDasVagas', e.target.value as ArranjoDasVagas)} className={campo}>
+              {(Object.keys(ROTULO_DO_ARRANJO) as ArranjoDasVagas[]).map((a) => <option key={a} value={a}>{ROTULO_DO_ARRANJO[a]}</option>)}
+            </select>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

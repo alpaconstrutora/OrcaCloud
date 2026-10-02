@@ -141,6 +141,14 @@ const deleteParameterDefinition = vi.fn(async () => {});
 // Programa de necessidades (E4.1): `get` controlável; `save` observável (gravação com respiro).
 const getPrograma = vi.fn(async () => null as unknown);
 const savePrograma = vi.fn(async () => ({}));
+const getProduto = vi.fn(async () => null as unknown);
+const saveProduto = vi.fn(async () => ({}) as unknown);
+vi.mock('../../services/blueprintProdutoService', () => ({
+  blueprintProdutoService: {
+    get: (...a: unknown[]) => getProduto(...(a as [])),
+    save: (...a: unknown[]) => saveProduto(...(a as [])),
+  },
+}));
 vi.mock('../../services/blueprintProgramService', () => ({
   blueprintProgramService: {
     get: (...a: unknown[]) => getPrograma(...(a as [])),
@@ -1291,6 +1299,45 @@ describe('BlueprintEditor · quantitativos', () => {
     fireEvent.blur(pav);
     await waitFor(() => expect(painel).toHaveTextContent(/3\.600,00 m² construídos/));
     expect(within(gaveta).getByTestId('indicadores-da-massa')).toHaveTextContent(/3,00/);
+  });
+
+  it('estudo de massa (M2): Terreno › Produto aplica a semente e grava; o estudo mostra 80 unidades e 73,9 %; lançar núcleo vira núcleo desenhado', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 30000, 0, 'FRENTE'),
+        d(30000, 0, 30000, 40000, 'LATERAL_DIREITA'),
+        d(30000, 40000, 0, 40000, 'FUNDOS'),
+        d(0, 40000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(3000, 6000), k.point(27000, 6000), k.point(27000, 36000), k.point(3000, 36000)], pavimentos: 10 },
+      ]).model,
+    );
+    saveProduto.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^produto/i }));
+    const gavetaProduto = await screen.findByTestId('tarefa-produto');
+    await user.selectOptions(within(gavetaProduto).getByLabelText('Começar de uma semente'), 'RESIDENCIAL_MEDIO');
+    await user.click(within(gavetaProduto).getByRole('button', { name: /^aplicar$/i }));
+    expect(await within(gavetaProduto).findByDisplayValue('3 dorm. (1 suíte)')).toBeInTheDocument();
+    await waitFor(() => expect(saveProduto).toHaveBeenCalled(), { timeout: 2000 });
+    // A gaveta do estudo reparte o mix: 8 unidades por pavimento, 80 no total.
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    const sec = within(gaveta).getByTestId('produto-da-massa');
+    expect(sec).toHaveTextContent(/80/);
+    expect(sec).toHaveTextContent(/73,9 %/);
+    expect(sec).toHaveTextContent(/5\.320,00 m²/);
+    expect(sec).toHaveTextContent(/0 de 120/); // sem garagem: nenhuma vaga cabe
+    expect(sec).toHaveTextContent(/34,00 · hipótese · 2 elev\./);
+    // Lançar núcleo: 2 elevadores + shaft no centro do bloco; o núcleo passa a ser o desenhado.
+    await user.click(within(sec).getByRole('button', { name: /^lançar núcleo$/i }));
+    await waitFor(() => expect(within(gaveta).getByTestId('produto-da-massa')).toHaveTextContent(/33,00 · desenhado · 2 elev\./));
   });
 
   it('vocabulário e restrição (E3.1): a APP nos fundos reduz a área construtível; testada mínima digitada é conferida; a ferramenta Divisa oferece a faixa restrita', async () => {

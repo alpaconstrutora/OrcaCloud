@@ -21,6 +21,7 @@ import { createRoot } from 'react-dom/client';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
 import { COR_DO_USO_DO_BLOCO } from '../../../utils/blueprintMassa';
+import { distribuirProduto, produtoSemente } from '../../../utils/blueprintProduto';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command } from '../../../utils/blueprintKernel';
 import { divisasDoLote, medirTerreno } from '../../../utils/blueprintTerreno';
@@ -75,6 +76,8 @@ declare global {
       pavimentosMax: number;
       construidaM2: number;
       ordinaisDaTorre: (number | null)[];
+      /** M2: o produto residencial médio repartido na massa. */
+      produto: { unidades: number; torrePorPav: number; podiumPorPav: number; eficienciaGlobalPct: number | null; vagasExigidas: number; nucleoDaTorre: string };
     };
   }
 }
@@ -92,6 +95,19 @@ window.__massa = {
   pavimentosMax: medida.pavimentosMax,
   construidaM2: medida.areaConstruidaM2,
   ordinaisDaTorre: torre ? torre.pisos.map((p) => p.ordinal) : [],
+  produto: (() => {
+    const r = distribuirProduto(model, medida, produtoSemente('MISTO'));
+    const pt = r.blocos.find((b) => b.nome === 'Torre');
+    const pp = r.blocos.find((b) => b.nome === 'Podium');
+    return {
+      unidades: r.unidades,
+      torrePorPav: pt?.unidadesPorPavimento ?? 0,
+      podiumPorPav: pp?.unidadesPorPavimento ?? 0,
+      eficienciaGlobalPct: r.eficienciaGlobalPct,
+      vagasExigidas: r.vagasExigidas,
+      nucleoDaTorre: pt ? `${pt.nucleo.origem}:${pt.nucleo.m2}` : '',
+    };
+  })(),
 };
 
 const massa3d = medida.blocos.flatMap((m) => {

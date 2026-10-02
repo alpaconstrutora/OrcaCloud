@@ -9,11 +9,12 @@
  * aqui — mudar um bloco, um recuo ou a zona recalcula tudo na hora.
  */
 import React from 'react';
-import { AlertTriangle, ArrowUpFromLine, Building2, Droplets, Gauge, Layers, LandPlot, Ruler, Scale, SquareStack } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, Building2, CarFront, Droplets, Gauge, Home, Layers, LandPlot, Percent, Ruler, Scale, SquareStack, Users } from 'lucide-react';
 import { KpiCard, type KpiColor } from '../ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO, type UsoDoBloco } from '../../utils/blueprintKernel';
 import type { EstadoDoIndicador, HipotesesDaMassa, IndicadorDaMassa, MedidaDaMassa, MedidaDoBloco } from '../../utils/blueprintMassa';
+import type { ProdutoDoBloco, ResultadoDoProduto } from '../../utils/blueprintProduto';
 
 interface Props {
   medida: MedidaDaMassa;
@@ -21,7 +22,22 @@ interface Props {
   onHipoteses: (h: HipotesesDaMassa) => void;
   onSelecionarBloco: (id: string) => void;
   onDesenharBloco: () => void;
+  /** M2: a distribuição do produto na massa; `null` = sem produto ainda. */
+  produto?: ResultadoDoProduto | null;
+  onAbrirProduto?: () => void;
+  /** Lança os elevadores sugeridos + um shaft como peças reais no centro do bloco. */
+  onLancarNucleo?: (blocoId: string, elevadores: number) => void;
 }
+
+const COLUNAS_DO_PRODUTO: StandardTableColumn[] = [
+  { key: 'nome', label: 'Bloco', sortable: true, width: 140 },
+  { key: 'porPav', label: 'Un./pav.', sortable: true, width: 90, align: 'right' },
+  { key: 'unidades', label: 'Unidades', sortable: true, width: 100, align: 'right' },
+  { key: 'privativa', label: 'Privativa (m²)', sortable: true, width: 120, align: 'right' },
+  { key: 'eficiencia', label: 'Efic. pav. (%)', sortable: true, width: 120, align: 'right' },
+  { key: 'nucleo', label: 'Núcleo (m²/pav)', sortable: true, width: 200 },
+  { key: 'vagas', label: 'Vagas', sortable: true, width: 80, align: 'right' },
+];
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const n1 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -55,7 +71,7 @@ function problemasDoBloco(b: MedidaDoBloco): string {
   return b.pisos.some((p) => p.cabe === null) ? 'sem lote para conferir' : 'cabe no envelope';
 }
 
-export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco }: Props) {
+export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo }: Props) {
   const l = r.legal;
   const campo = 'h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800';
   return (
@@ -164,6 +180,107 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
           </>
         )}
       </section>
+
+      {r.blocos.length > 0 && (
+        <section className="space-y-3" data-testid="produto-da-massa">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Produto e eficiência</h3>
+            {onAbrirProduto && (
+              <button type="button" onClick={onAbrirProduto} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                Editar o produto
+              </button>
+            )}
+          </div>
+          {!pr || pr.porTipologia.length === 0 ? (
+            <p className="text-xs text-gray-500">Sem produto: defina as tipologias (ou aplique uma semente) na gaveta Produto para ver unidades, eficiência e vagas.</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <KpiCard
+                  label="Unidades"
+                  value={String(pr.unidades)}
+                  sub={pr.meta ? `meta ${pr.meta.unidades} · ${pr.meta.diferenca >= 0 ? `sobram ${pr.meta.diferenca}` : `faltam ${-pr.meta.diferenca}`}` : pr.porTipologia.filter((t) => t.unidades > 0).map((t) => `${t.unidades} × ${t.nome}`).join(' · ') || undefined}
+                  icon={<Home />}
+                  color={pr.meta && pr.meta.diferenca < 0 ? 'red' : 'blue'}
+                />
+                <KpiCard label="Área privativa" value={m2(pr.privativaTotalM2)} sub={pr.privativaMediaM2 != null ? `média ${n2(pr.privativaMediaM2)} m² por unidade` : undefined} icon={<SquareStack />} color="indigo" />
+                <KpiCard label="Eficiência do pavimento" value={pr.eficienciaDoPavimentoPct == null ? '—' : `${n1(pr.eficienciaDoPavimentoPct)} %`} sub="privativa ÷ área do pavimento tipo" icon={<Percent />} color="teal" />
+                <KpiCard label="Eficiência global" value={pr.eficienciaGlobalPct == null ? '—' : `${n1(pr.eficienciaGlobalPct)} %`} sub="privativa ÷ construída" icon={<Gauge />} color="emerald" />
+                <KpiCard label="Área comum por unidade" value={pr.areaComumPorUnidadeM2 == null ? '—' : `${n2(pr.areaComumPorUnidadeM2)} m²`} sub={`comum ${m2(pr.areaComumM2)}`} icon={<Users />} color="violet" />
+                <KpiCard
+                  label="Vagas"
+                  value={`${pr.vagasQueCabem} de ${pr.vagasExigidas}`}
+                  sub={pr.vagasFaltando > 0 ? `faltam ${pr.vagasFaltando}${pr.vagasDaZona != null ? ` · zona pede ${pr.vagasDaZona}` : ''}` : `atende${pr.indiceDeGaragemM2 != null ? ` · ${n2(pr.indiceDeGaragemM2)} m² de garagem por vaga` : ''}`}
+                  icon={<CarFront />}
+                  color={pr.vagasFaltando > 0 ? 'red' : 'emerald'}
+                />
+              </div>
+              {pr.avisos.length > 0 && (
+                <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-do-produto">
+                  {pr.avisos.map((a) => (
+                    <li key={a} className="flex gap-1.5">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>{a}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {/* Sem busca: poucos blocos por estudo. */}
+              <StandardTable<ProdutoDoBloco>
+                storageKey="blueprint:massa:produto-por-bloco"
+                columns={COLUNAS_DO_PRODUTO}
+                rows={pr.blocos}
+                rowKey={(b) => b.blocoId}
+                dense
+                onRowClick={(b) => onSelecionarBloco(b.blocoId)}
+                sortValue={(k, b) =>
+                  k === 'nome' ? b.nome
+                  : k === 'porPav' ? b.unidadesPorPavimento
+                  : k === 'unidades' ? b.unidades
+                  : k === 'privativa' ? b.privativaM2
+                  : k === 'eficiencia' ? b.eficienciaDoPavimentoPct ?? -1
+                  : k === 'nucleo' ? b.nucleo.m2
+                  : b.vagas
+                }
+                renderCell={(k, b) => {
+                  if (k === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
+                  if (k === 'porPav') return <span className="text-sm font-normal text-gray-600">{b.uso === 'GARAGEM' ? `${b.vagasPorPavimento} vagas` : b.unidadesPorPavimento}</span>;
+                  if (k === 'unidades') return <span className="text-sm font-normal text-gray-600">{b.unidades}</span>;
+                  if (k === 'privativa') return <span className="text-sm font-normal text-gray-600">{n2(b.privativaM2)}</span>;
+                  if (k === 'eficiencia') return <span className="text-sm font-normal text-gray-600">{b.eficienciaDoPavimentoPct == null ? '—' : n1(b.eficienciaDoPavimentoPct)}</span>;
+                  if (k === 'nucleo') {
+                    const rotulo = b.nucleo.origem === 'NENHUM' ? '—' : `${n2(b.nucleo.m2)} · ${b.nucleo.origem === 'DESENHADO' ? 'desenhado' : 'hipótese'}${b.nucleo.elevadores ? ` · ${b.nucleo.elevadores} elev.` : ''}`;
+                    return <span className="block truncate text-sm font-normal text-gray-600" title={b.nucleo.explicacao}>{rotulo}</span>;
+                  }
+                  return <span className="text-sm font-normal text-gray-600">{b.uso === 'GARAGEM' ? b.vagas : '—'}</span>;
+                }}
+                actions={
+                  onLancarNucleo
+                    ? {
+                        width: 130,
+                        render: (b) =>
+                          b.nucleo.origem === 'SUGERIDO' ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onLancarNucleo(b.blocoId, b.nucleo.elevadores);
+                              }}
+                              title={`Lança ${b.nucleo.elevadores} elevador(es) da ficha de 8 passageiros e um shaft no centro do bloco — peças reais, desfazíveis`}
+                              className="rounded-lg p-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                            >
+                              Lançar núcleo
+                            </button>
+                          ) : null,
+                      }
+                    : undefined
+                }
+                empty={{ title: 'Nenhum bloco' }}
+              />
+            </>
+          )}
+        </section>
+      )}
 
       <section className="space-y-3" data-testid="hipoteses-da-massa">
         <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Hipóteses — o que não conta no CA</h3>

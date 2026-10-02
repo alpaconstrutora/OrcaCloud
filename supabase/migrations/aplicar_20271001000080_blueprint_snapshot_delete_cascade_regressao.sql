@@ -17,6 +17,10 @@
 -- leva junto o que é dele. O cliente continua sem apagar snapshot avulso: a tabela não
 -- tem policy de DELETE (o RLS recusa); só o CASCADE, que roda como dono, passa.
 --
+-- ⚠️ NÚMERO: nasceu como 20271001000070 e colidiu com `..._conciliacao_extrato_sem_contraparte`
+--    (outra frente, que chegou antes em main); renomeada para 080. JÁ FOI APLICADA em 01/10/2026
+--    com o nome 070 (conferência 0/1/0) — não precisa rodar de novo (é idempotente de todo modo).
+--
 -- ⚠️ APLICAR À MÃO: npx supabase db query --linked -f <este arquivo>. NUNCA `db push`.
 --    Idempotente (DROP IF EXISTS).
 -- ============================================================================

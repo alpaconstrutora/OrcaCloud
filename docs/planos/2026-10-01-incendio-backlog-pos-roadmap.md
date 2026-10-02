@@ -429,7 +429,7 @@ Todas respondidas em 01/10/2026 (tabela acima). Restam bloqueios externos:
   - ⚠️ **regressão achada**: a LIMPEZA falhou — desde a 20270919000034 (aprovação) o gatilho de
     imutabilidade voltou a barrar o DELETE dos snapshots, e nenhum estudo publicado podia ser
     excluído no app (o mesmo defeito que a 20270905000002 já tinha corrigido). A migration
-    `aplicar_20271001000070` tira só o gatilho de DELETE (o guarda de UPDATE por coluna fica; o
+    `aplicar_20271001000080` (nasceu 070, colidiu com a conciliação; aplicada como 070) tira só o gatilho de DELETE (o guarda de UPDATE por coluna fica; o
     cliente segue sem apagar snapshot avulso — sem policy de DELETE). Aplicada com OK do usuário
     (conferência 0/1/0); os restos do teste (estudo, obra, de-para ativo de área de piso,
     composição) apagados e conferidos; a E1 rodada de novo: 25/25 e banco limpo.

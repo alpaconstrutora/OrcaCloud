@@ -624,7 +624,7 @@ import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCor
 import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
 import PainelIa, { concluirTurno, novoTurno, turnoComMudancas, type TurnoDaConversa } from './PainelIa';
 import { aplicarMudancas, interpretarPedidoLocal } from '../../utils/blueprintIa';
-import { pedirMudancasAIa } from '../../services/plantaIaService';
+import { pedirMudancasAIa, pedirMudancasDaMassaAIa } from '../../services/plantaIaService';
 import { HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, sugerirShaft, type HipotesesDeMobiliario } from '../../utils/blueprintMobiliario';
 import { useGerador } from '../../hooks/useGerador';
 import { useGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
@@ -9860,6 +9860,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 setTelaAberta('alternativas');
               }}
               onAplicar={aplicarMassaGerada}
+              onProduto={produtoDoEstudo.setProduto}
+              onPedirIa={pedirMudancasDaMassaAIa}
             />
           </div>
         </div>

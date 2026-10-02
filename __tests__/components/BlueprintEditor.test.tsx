@@ -290,8 +290,10 @@ vi.mock('../../services/blueprintViewTemplateService', () => ({
 
 // IA da planta (E6.4): a Edge Function é controlável — por padrão "não configurada" (o intérprete local responde).
 const pedirMudancasAIa = vi.fn(async () => ({ mudancas: null, indisponivel: 'IA não configurada ou indisponível' }) as unknown);
+const pedirMudancasDaMassaAIa = vi.fn(async () => ({ mudancas: null, indisponivel: 'IA não configurada ou indisponível' }) as unknown);
 vi.mock('../../services/plantaIaService', () => ({
   pedirMudancasAIa: (...a: unknown[]) => pedirMudancasAIa(...(a as [])),
+  pedirMudancasDaMassaAIa: (...a: unknown[]) => pedirMudancasDaMassaAIa(...(a as [])),
 }));
 
 vi.mock('../../services/blueprintKitService', () => ({
@@ -1488,6 +1490,56 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(ins).queryByTestId('vizinhos-do-navegador')).not.toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('blueprint:insolacao')!).vizinhos).toEqual([]);
   });
+
+  it('estudo de massa (M5c): "duas torres com apartamentos entre 65 e 75 m²" muda o produto e a biblioteca, re-gera e mostra o delta; desfazer volta tudo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { produtoSemente } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    loadBranchModel.mockResolvedValue(k.applyBatch(nivel.model, [d(0, 0, 40000, 0, 'FRENTE'), d(40000, 0, 40000, 60000, 'LATERAL_DIREITA'), d(40000, 60000, 0, 60000, 'FUNDOS'), d(0, 60000, 0, 0, 'LATERAL_ESQUERDA')]).model);
+    getProduto.mockResolvedValueOnce({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', produto: produtoSemente('RESIDENCIAL_MEDIO'), created_at: '', updated_at: '' });
+    saveProduto.mockClear();
+    pedirMudancasDaMassaAIa.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^gerar massa/i }));
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^gerar massa$/i })).closest('[data-tela="gerar-massa"]') as HTMLElement;
+    // Sem IA configurada: o intérprete local responde, e diz que foi ele.
+    await user.type(within(tela).getByLabelText('Pedido para a massa'), 'duas torres com apartamentos entre 65 e 75 m²');
+    await user.click(within(tela).getByTestId('enviar-pedido-da-massa'));
+    const turno = await within(tela).findByTestId('turno-da-massa');
+    expect(pedirMudancasDaMassaAIa).toHaveBeenCalledWith('duas torres com apartamentos entre 65 e 75 m²', expect.objectContaining({ produto: expect.anything(), configuracao: expect.anything() }));
+    expect(turno).toHaveTextContent(/intérprete local — IA não configurada ou indisponível/);
+    expect(turno).toHaveTextContent(/2 dorm\.: 58 → 65 m² \(faixa 65–75\)/);
+    expect(turno).toHaveTextContent(/implantações: duas torres/);
+    // O gerador re-gera só com duas torres; o turno fecha com o delta.
+    await waitFor(() => expect(within(turno).getByTestId('delta-da-massa')).toHaveTextContent(/^melhor: Duas torres · /), { timeout: 15000 });
+    // Uma linha na tabela: só a implantação pedida entrou na varredura.
+    expect(within(tela).getByTestId('tela-gerador-de-massa').querySelectorAll('tbody tr')).toHaveLength(1);
+    expect(within(tela).queryByText(/^Torre única (central|deslocada) · /)).not.toBeInTheDocument();
+    // A biblioteca da tela acompanha: só "Duas torres" marcada.
+    expect(within(tela).getByLabelText('Duas torres')).toBeChecked();
+    expect(within(tela).getByLabelText('Torre única')).not.toBeChecked();
+    // O produto mudado vai para o estudo (o mesmo setProduto da gaveta Produto).
+    await waitFor(() => expect(saveProduto).toHaveBeenCalled(), { timeout: 2000 });
+    const [, , gravado] = saveProduto.mock.calls[saveProduto.mock.calls.length - 1] as unknown as [string, string, { tipologias: { areaPrivativaM2: number }[] }];
+    expect(gravado.tipologias.map((x) => x.areaPrivativaM2)).toEqual([65, 75]);
+    // Desfazer: produto e biblioteca de antes, e a varredura volta a ter todas as implantações.
+    saveProduto.mockClear();
+    await user.click(within(turno).getByTestId('desfazer-pedido-da-massa'));
+    await waitFor(() => expect(saveProduto).toHaveBeenCalled(), { timeout: 2000 });
+    const [, , voltou] = saveProduto.mock.calls[0] as unknown as [string, string, { tipologias: { areaPrivativaM2: number }[] }];
+    expect(voltou.tipologias.map((x) => x.areaPrivativaM2)).toEqual([58, 75]);
+    expect(turno).toHaveTextContent(/Desfeito\./);
+    await waitFor(() => expect(within(tela).getByText(/^Torre única (central|deslocada) · /)).toBeInTheDocument(), { timeout: 15000 });
+    // Pedido que não é de massa: diz que não entendeu e dá exemplos, sem mudar nada.
+    await user.type(within(tela).getByLabelText('Pedido para a massa'), 'bom dia');
+    await user.click(within(tela).getByTestId('enviar-pedido-da-massa'));
+    expect(await within(tela).findByText(/Não entendi o pedido\. Exemplos:/)).toBeInTheDocument();
+  }, 45000);
 
   it('estudo de massa (M4): Alternativas compara TODAS com a mesma régua, destaca por linha sem vencedor, sugere EM-00N; publicar congela o produto', async () => {
     const k = await import('../../utils/blueprintKernel');

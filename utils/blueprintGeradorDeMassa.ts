@@ -150,6 +150,23 @@ export const HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO: HipotesesDoGeradorDeMassa = {
   iteracoes: 40,
 };
 
+/** Tudo o que a tela do gerador escolhe — e o que a conversa (M5c) pode mudar. */
+export interface ConfiguracaoDoGeradorDeMassa {
+  objetivo: ObjetivoDaMassa;
+  pesos: PesosDoObjetivo;
+  restricoes: RestricoesDaMassa;
+  hipoteses: HipotesesDoGeradorDeMassa;
+  semente: number;
+}
+
+export const CONFIGURACAO_DO_GERADOR_DE_MASSA_PADRAO: ConfiguracaoDoGeradorDeMassa = {
+  objetivo: 'RESULTADO',
+  pesos: PESOS_PADRAO,
+  restricoes: RESTRICOES_PADRAO,
+  hipoteses: HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO,
+  semente: 1,
+};
+
 export interface EntradaDoGeradorDeMassa {
   /** O modelo do estudo: o lote (divisas com papéis) e os pavimentos. Os blocos que houver são substituídos. */
   model: BlueprintModel;

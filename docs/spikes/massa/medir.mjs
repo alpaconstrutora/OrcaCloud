@@ -197,6 +197,23 @@ for (const t of ['Torre única', 'Duas torres', 'Bloco longitudinal']) exigir(te
 exigir(!tela.rolagem, tela.rolagem ? `a tabela rola na horizontal no miolo de 1.340 px (${tela.rolagem.scroll} > ${tela.rolagem.visivel})` : 'a tabela cabe no miolo do app com a barra lateral (sem rolagem horizontal)');
 exigir(tela.caminhos >= 2 && tela.svgAltura > 200, `a planta da implantação desenhou o lote e os blocos (${tela.caminhos} contornos, ${tela.svgAltura} px)`);
 
+// ── 4. M5c: a CONVERSA no navegador real — pedido → produto e biblioteca → worker → delta ──
+await page.fill('[aria-label="Pedido para a massa"]', 'duas torres com apartamentos entre 65 e 75 m²');
+await page.click('[data-testid="enviar-pedido-da-massa"]');
+await page.waitForFunction(() => /^melhor: /.test(document.querySelector('[data-testid="delta-da-massa"]')?.textContent ?? ''), null, { timeout: 30000 }).catch(() => null);
+const conversa = await page.evaluate(() => ({
+  turno: document.querySelector('[data-testid="turno-da-massa"]')?.textContent ?? '',
+  delta: document.querySelector('[data-testid="delta-da-massa"]')?.textContent ?? '',
+  linhas: [...document.querySelectorAll('[data-testid="tela-gerador-de-massa"] tbody tr')].map((tr) => (tr.textContent ?? '').slice(0, 40)),
+  areas: (window.__produtoDoHarness?.tipologias ?? []).map((t) => t.areaPrivativaM2),
+}));
+await page.screenshot({ path: path.join(saida, 'massa-conversa.png'), fullPage: true });
+linhas.push(`      conversa: ${conversa.delta}`);
+exigir(/intérprete local/.test(conversa.turno) && /2 dorm\.: 58 → 65 m²/.test(conversa.turno), 'o pedido foi entendido pelo intérprete local e mudou o 2 dorm. para 65 m²');
+exigir(JSON.stringify(conversa.areas) === JSON.stringify([65, 75]), `o produto da tela mudou: áreas ${JSON.stringify(conversa.areas)}`);
+exigir(/^melhor: .+ → Duas torres · /.test(conversa.delta), 'o turno fechou com o delta do melhor cenário (via worker)');
+exigir(conversa.linhas.length === 1 && conversa.linhas[0].startsWith('Duas torres'), `a varredura nova tem só duas torres (${conversa.linhas.length} linha(s))`);
+
 exigir(erros.length === 0, erros.length === 0 ? 'nenhum erro de console' : `erros: ${erros.slice(0, 3).join(' | ')}`);
 
 console.log(linhas.join('\n'));

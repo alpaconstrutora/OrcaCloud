@@ -7,16 +7,21 @@
  * "Criar alternativa com esta" (um ramo novo, E6.1 — o comparador da M4 põe
  * lado a lado) e "Aplicar neste estudo" (troca os blocos do desenho aberto;
  * Ctrl+Z desfaz).
+ *
+ * CONVERSA (M5c): "duas torres", "apartamentos entre 65 e 75 m²", "reduzir
+ * área comum" — o pedido vira mudanças no produto e na configuração (IA
+ * `planta-ia` modo massa, ou o intérprete local), o gerador re-gera e o turno
+ * fecha com o delta do melhor cenário. "Desfazer" volta o produto e a
+ * configuração de antes do pedido.
  */
-import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Building2, Play, Square } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Bot, Building2, Play, Square, Undo2 } from 'lucide-react';
 
 import {
-  HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO,
+  CONFIGURACAO_DO_GERADOR_DE_MASSA_PADRAO,
+  type ConfiguracaoDoGeradorDeMassa,
   MODOS_DE_ESTACIONAMENTO,
   OBJETIVOS_DA_MASSA,
-  PESOS_PADRAO,
-  RESTRICOES_PADRAO,
   ROTULO_DA_IMPLANTACAO,
   ROTULO_DO_ESTACIONAMENTO,
   ROTULO_DO_OBJETIVO,
@@ -31,6 +36,8 @@ import {
   type TipoDeImplantacao,
 } from '../../utils/blueprintGeradorDeMassa';
 import { formatarDoComparador, nomeSugeridoDoCenario } from '../../utils/blueprintComparadorDeMassa';
+import { aplicarMudancasDaMassa, deltaDaMassa, interpretarPedidoDaMassaLocal, type MudancasDaMassa } from '../../utils/blueprintIaDaMassa';
+import type { Produto } from '../../utils/blueprintProduto';
 import { COR_DO_USO_DO_BLOCO } from '../../utils/blueprintMassa';
 import { divisasDoLote, medirTerreno } from '../../utils/blueprintTerreno';
 import type { BlueprintModel, Point } from '../../utils/blueprintKernel';
@@ -48,17 +55,29 @@ interface Props {
   onAbrirProduto: () => void;
   onCriarAlternativa: (c: CandidatoDeMassa, nome: string) => Promise<void>;
   onAplicar: (c: CandidatoDeMassa) => Promise<void>;
+  /** M5c: grava o produto mudado por um pedido (o mesmo `setProduto` da gaveta Produto). */
+  onProduto?: (p: Produto) => void;
+  /** M5c: a IA no modo massa; `mudancas: null` + motivo quando indisponível. */
+  onPedirIa?: (pedido: string, contexto: unknown) => Promise<{ mudancas: MudancasDaMassa | null; indisponivel: string | null }>;
 }
 
-interface Configuracao {
-  objetivo: ObjetivoDaMassa;
-  pesos: PesosDoObjetivo;
-  restricoes: RestricoesDaMassa;
-  hipoteses: HipotesesDoGeradorDeMassa;
-  semente: number;
+interface TurnoDaMassa {
+  id: number;
+  pedido: string;
+  entendimento: string;
+  fonte: string;
+  aplicadas: string[];
+  recusadas: string[];
+  antes: { produto: Produto; cfg: ConfiguracaoDoGeradorDeMassa; melhor: CandidatoDeMassa | null };
+  /** Preenchido quando o gerador termina a nova varredura. */
+  delta: string | null;
+  desfeito: boolean;
 }
 
-const PADRAO: Configuracao = { objetivo: 'RESULTADO', pesos: PESOS_PADRAO, restricoes: RESTRICOES_PADRAO, hipoteses: HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO, semente: 1 };
+const EXEMPLOS_DE_PEDIDO = ['duas torres com apartamentos entre 65 e 75 m²', 'reduzir área comum', 'no máximo 12 pavimentos e sem subsolo', '60% de 2 dorm e aumente o preço em 5%'];
+
+type Configuracao = ConfiguracaoDoGeradorDeMassa;
+const PADRAO: Configuracao = CONFIGURACAO_DO_GERADOR_DE_MASSA_PADRAO;
 
 const COLUNAS: StandardTableColumn[] = [
   // Soma 1.230 px: cabe no miolo do app COM a barra lateral (1.600 px de janela).
@@ -144,7 +163,7 @@ function formatarObjetivo(v: number | null, objetivo: ObjetivoDaMassa): string {
   }
 }
 
-export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumero, onAbrirProduto, onCriarAlternativa, onAplicar }: Props) {
+export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumero, onAbrirProduto, onCriarAlternativa, onAplicar, onProduto, onPedirIa }: Props) {
   const [cfg, setCfg] = usePersistedState<Configuracao>('blueprint:gerador-de-massa', PADRAO);
   const c: Configuracao = { ...PADRAO, ...cfg, restricoes: { ...PADRAO.restricoes, ...cfg.restricoes }, hipoteses: { ...PADRAO.hipoteses, ...cfg.hipoteses }, pesos: { ...PADRAO.pesos, ...cfg.pesos } };
   const [profundidadesTexto, setProfundidadesTexto] = useState(listaParaTexto(c.hipoteses.profundidadesM));
@@ -184,8 +203,131 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
   };
   const motivoDoGerar = c.hipoteses.tipos.length === 0 ? 'Escolha pelo menos uma implantação' : lote.length < 3 ? 'Feche o lote na aba Terreno primeiro' : null;
 
+  // ── Conversa (M5c) ──
+  const [pedido, setPedido] = useState('');
+  const [pensando, setPensando] = useState(false);
+  const [turnos, setTurnos] = useState<TurnoDaMassa[]>([]);
+  const pendente = useRef<number | null>(null);
+  const proximoId = useRef(1);
+  const gerarCom = (produto: Produto, k: ConfiguracaoDoGeradorDeMassa) => {
+    setErro(null);
+    setEscolhida(null);
+    gerador.gerar({ model, regua: { ...regua, produto }, objetivo: k.objetivo, pesos: k.pesos, restricoes: k.restricoes }, k.semente, k.hipoteses);
+  };
+  // O turno pendente fecha com o delta quando a varredura nova termina.
+  useEffect(() => {
+    if (pendente.current == null || gerador.rodando || !gerador.resultado) return;
+    const id = pendente.current;
+    pendente.current = null;
+    const depois = gerador.resultado.melhores[0] ?? null;
+    setTurnos((ts) => ts.map((t) => (t.id === id ? { ...t, delta: deltaDaMassa(t.antes.melhor, depois) } : t)));
+  }, [gerador.resultado, gerador.rodando]);
+  const enviarPedido = async () => {
+    const texto = pedido.trim();
+    if (!texto || pensando) return;
+    setPensando(true);
+    try {
+      const contexto = {
+        produto: { padrao: regua.produto.padrao, metaUnidades: regua.produto.metaUnidades, tipologias: regua.produto.tipologias.map((t) => ({ nome: t.nome, uso: t.uso, dormitorios: t.dormitorios, areaPrivativaM2: t.areaPrivativaM2, proporcaoPct: t.proporcaoPct, precoM2: t.precoM2 })) },
+        configuracao: { objetivo: c.objetivo, tipos: c.hipoteses.tipos, estacionamento: c.hipoteses.estacionamento, pavimentosMax: c.restricoes.pavimentosMax, unidadesMin: c.restricoes.unidadesMin },
+        melhor: r?.melhores[0] ? { rotulo: r.melhores[0].rotulo, unidades: r.melhores[0].cenario.unidades, vgv: r.melhores[0].cenario.vgv } : null,
+      };
+      const resposta = onPedirIa ? await onPedirIa(texto, contexto) : { mudancas: null, indisponivel: 'sem IA nesta tela' };
+      const mudancas = resposta.mudancas ?? interpretarPedidoDaMassaLocal(texto, regua.produto);
+      const fonte = resposta.mudancas ? 'IA' : `intérprete local${resposta.indisponivel ? ` — ${resposta.indisponivel}` : ''}`;
+      const id = proximoId.current++;
+      const antes = { produto: regua.produto, cfg: c, melhor: r?.melhores[0] ?? null };
+      if (!mudancas) {
+        setTurnos((ts) => [{ id, pedido: texto, entendimento: `Não entendi o pedido. Exemplos: ${EXEMPLOS_DE_PEDIDO.map((x) => `"${x}"`).join(', ')}.`, fonte, aplicadas: [], recusadas: [], antes, delta: null, desfeito: false }, ...ts].slice(0, 6));
+        return;
+      }
+      const ap = aplicarMudancasDaMassa(mudancas, regua.produto, c);
+      setTurnos((ts) => [{ id, pedido: texto, entendimento: mudancas.entendimento, fonte, aplicadas: ap.aplicadas, recusadas: ap.recusadas, antes, delta: null, desfeito: false }, ...ts].slice(0, 6));
+      setPedido('');
+      if (ap.aplicadas.length === 0) return;
+      if (onProduto && JSON.stringify(ap.produto) !== JSON.stringify(regua.produto)) onProduto(ap.produto);
+      setCfg(ap.configuracao);
+      // O que impede gerar é avaliado DEPOIS do pedido (ele pode ter mudado a biblioteca).
+      const impede = lote.length < 3 ? 'sem lote fechado: não gerou' : ap.configuracao.hipoteses.tipos.length === 0 ? 'nenhuma implantação escolhida: não gerou' : null;
+      if (impede) {
+        setTurnos((ts) => ts.map((x) => (x.id === id ? { ...x, delta: impede } : x)));
+        return;
+      }
+      pendente.current = id;
+      gerarCom(ap.produto, ap.configuracao);
+    } finally {
+      setPensando(false);
+    }
+  };
+  const desfazer = (t: TurnoDaMassa) => {
+    if (onProduto && JSON.stringify(t.antes.produto) !== JSON.stringify(regua.produto)) onProduto(t.antes.produto);
+    setCfg(t.antes.cfg);
+    setTurnos((ts) => ts.map((x) => (x.id === t.id ? { ...x, desfeito: true } : x)));
+    gerarCom(t.antes.produto, t.antes.cfg);
+  };
+
   return (
     <div className="space-y-4" data-testid="tela-gerador-de-massa">
+      <div className="space-y-3 rounded-[6px] border border-gray-200 bg-white px-5 py-4" data-testid="conversa-da-massa">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void enviarPedido();
+          }}
+        >
+          <Bot className="h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            value={pedido}
+            onChange={(e) => setPedido(e.target.value)}
+            placeholder={`Peça em linguagem natural — ex.: "${EXEMPLOS_DE_PEDIDO[0]}"`}
+            aria-label="Pedido para a massa"
+            className="h-9 min-w-[280px] flex-1 rounded-[6px] border border-slate-300 bg-white px-3 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={!pedido.trim() || pensando || gerador.rodando}
+            title={!pedido.trim() ? 'Escreva o pedido' : pensando ? 'Interpretando o pedido…' : gerador.rodando ? 'Aguarde a varredura em andamento' : undefined}
+            className="h-9 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+            data-testid="enviar-pedido-da-massa"
+          >
+            {pensando ? 'Interpretando…' : 'Aplicar e gerar'}
+          </button>
+        </form>
+        <p className="text-xs text-slate-500">
+          O pedido muda o PRODUTO (tipologias, faixa de área, mix, preço, padrão) e esta configuração — nunca desenha blocos: o gerador re-gera e o turno mostra o que mudou no melhor cenário.
+        </p>
+        {turnos.length > 0 && (
+          <ol className="space-y-2" data-testid="turnos-da-massa">
+            {turnos.map((t, i) => (
+              <li key={t.id} className={`rounded-[6px] border px-3 py-2 text-xs ${t.desfeito ? 'border-slate-200 bg-slate-50 text-slate-400' : 'border-slate-200 bg-white text-gray-700'}`} data-testid="turno-da-massa">
+                <div className="flex items-start justify-between gap-2">
+                  <p>
+                    <span className="font-medium text-gray-900">“{t.pedido}”</span> <span className="text-slate-400">· {t.fonte}</span>
+                  </p>
+                  {i === 0 && !t.desfeito && t.aplicadas.length > 0 && (
+                    <button type="button" onClick={() => desfazer(t)} disabled={gerador.rodando} title={gerador.rodando ? 'Aguarde a varredura em andamento' : 'Volta o produto e a configuração de antes deste pedido'} className="inline-flex shrink-0 items-center gap-1 rounded-[6px] border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50" data-testid="desfazer-pedido-da-massa">
+                      <Undo2 className="h-3.5 w-3.5" /> Desfazer
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-slate-600">{t.entendimento}</p>
+                {t.aplicadas.length > 0 && <p className="mt-1">Aplicado: {t.aplicadas.join(' · ')}</p>}
+                {t.recusadas.length > 0 && <p className="mt-1 text-amber-800">Não aplicado: {t.recusadas.join(' · ')}</p>}
+                {t.desfeito ? (
+                  <p className="mt-1">Desfeito.</p>
+                ) : t.aplicadas.length > 0 ? (
+                  <p className="mt-1 font-medium text-gray-900" data-testid="delta-da-massa">
+                    {t.delta ?? 'Gerando…'}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
       <div className="space-y-3 rounded-[6px] border border-gray-200 bg-white px-5 py-4" data-testid="configuracao-do-gerador-de-massa">
         <div className="flex flex-wrap items-end gap-4 text-xs text-slate-600">
           <label className="flex flex-col gap-1">

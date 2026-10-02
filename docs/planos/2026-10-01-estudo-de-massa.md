@@ -789,10 +789,10 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M2 — produto e eficiência (02/10/2026)
 - [x] M3 — financeiro e ponte com Empreendimento/Imovib (`f5c35dc` + correções da prova real)
 - [x] M4 — cenários e comparador · **9 de 9** (gravação real provada em 02/10/2026; achado no gatilho de imutabilidade corrigido — migration `aplicar_20271002000040`)
-- [ ] M5 — gerador de implantações e otimizador · dividida em três entregas (02/10/2026):
+- [x] M5 — gerador de implantações e otimizador · dividida em três entregas (02/10/2026), as três publicadas:
   - [x] **M5a** — gerador + otimizador + estacionamento como alternativa (este registro)
   - [x] **M5b** — insolação de massa (sol nas fachadas, lote livre, vizinhos) como indicador e objetivo; entorno persistido por estudo (este registro)
-  - [ ] **M5c** — IA no vocabulário do produto ("duas torres", "apartamentos entre 65 e 75 m²")
+  - [x] **M5c** — IA no vocabulário do produto ("duas torres", "apartamentos entre 65 e 75 m²") (este registro)
   - orientação por unidade (`position_type`, `sun_orientation`) → vai para a M6, junto da divisão do pavimento em unidades
 - [ ] M6 — da massa à planta e ao BIM
 
@@ -1119,3 +1119,43 @@ põe o critério "pronto quando" da M5 no ar sem esperar as outras; cada uma tem
 | App real (estudo descartável "ZZ TESTE … prova M5b": lote 40 × 60, lâmina 8 pav, produto) | 10/10: a gaveta mostra "Sol nas fachadas" e a perda da frente; o estudo começa sem vizinho; "Declarar o entorno" → a gaveta diz que os vizinhos são do estudo; **"+ Vizinho" grava na tabela do estudo** (lido de volta pelo serviço); **página recarregada → a gaveta usa 1 vizinho declarado**; o gerador com "maximizar o sol" diz o critério em horas, mantém 80 % das unidades e usa o entorno do estudo; 0 erros de página/PostgREST. Na 1ª rodada o roteiro falhou em dois pontos do próprio roteiro (rótulo em maiúsculas por CSS; clique no ribbon com a gaveta aberta por cima) — estudo apagado e rodado de novo do zero |
 | Achados do app real | subtítulos dos cartões cortados e a tabela por bloco rolando na gaveta estreita (larguras e textos refeitos — a tabela soma 500 px; conferido sem rolagem); "fachada maior" de lâmina saía "Sul" pelo empate (agora a de mais sol) |
 | Limpeza | os 2 estudos descartáveis apagados pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes: estudos 72 · ramos 72 · versões 8 · produtos 0 · entornos 0 · ZZ 0 |
+
+### M5c — Conversa no vocabulário do produto (02/10/2026)
+
+**O que entrou.**
+
+- **Motor** `utils/blueprintIaDaMassa.ts` (puro), mesmo princípio da E6.4: o pedido NUNCA vira geometria. Vira
+  `MudancasDaMassa` — no PRODUTO (área de tipologia, **faixa de área** para todos os apartamentos, mix com os outros
+  do mesmo uso dividindo o resto, preço absoluto ou %, adicionar/remover tipologia, padrão do CUB, meta, hipóteses
+  do pavimento) e na CONFIGURAÇÃO do gerador (implantações, objetivo, estacionamento, máximo de pavimentos, mínimo de
+  unidades, exigir vagas). `aplicarMudancasDaMassa` valida tudo (faixas razoáveis, enums, "não removo a única
+  tipologia") e nunca lança — o que não passa vai para `recusadas`, dito na tela. `interpretarPedidoDaMassaLocal`
+  entende os pedidos comuns por padrão de texto ("duas torres", "apartamentos entre 65 e 75 m²", "reduzir área
+  comum", "no máximo 12 pavimentos", "sem subsolo", "60% de 2 dorm", "3 quartos com 80 m²", "aumente o preço em 5%",
+  "preço de 9.500/m²", "adicione um studio de 32 m²", "padrão R16-A", "não exigir vagas"). `deltaDaMassa` compara o
+  melhor cenário de antes com o de depois (omite o que formata igual).
+- **Configuração do gerador** (`ConfiguracaoDoGeradorDeMassa`) saiu da tela para o motor, para a conversa mudá-la.
+- **Edge `planta-ia`**: modo `massa` (ferramenta `emitir_mudancas_da_massa`, esquema fechado, sistema próprio); sem
+  `modo`, o de antes. PUBLICADA (`npx supabase functions deploy planta-ia`); sem token → 401.
+  ⚠️ **O Supabase não tem `ANTHROPIC_API_KEY` configurada**: a Edge responde 503 `SEM_CHAVE` e quem atende em produção
+  é o intérprete local — a tela diz isso no turno ("intérprete local — IA não configurada ou indisponível").
+  Configurar a chave é decisão do usuário (não mexi em segredo).
+- **Tela Gerar massa**: caixa "Peça em linguagem natural" → "Aplicar e gerar": o turno mostra o pedido, a fonte (IA
+  ou intérprete local e por quê), o que foi aplicado e o que não, e fecha com o DELTA do melhor cenário quando a
+  varredura nova termina (no worker). O produto mudado é gravado no estudo (o mesmo `setProduto` da gaveta Produto);
+  **"Desfazer"** volta o produto e a configuração de antes do pedido e re-gera. Pedido que não é de massa: "Não
+  entendi" com exemplos, sem mudar nada.
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintIaDaMassa.test.ts` (6) | "duas torres com apartamentos entre 65 e 75 m²" → só duas torres; 2 dorm. 58 → 65, 3 dorm. 75 já na faixa; o produto de entrada não muda; "reduzir área comum" → MENOR_COMUM; pavimentos, unidades, "sem subsolo" → PILOTIS, "2 subsolos", "não exigir vagas"; mix 60/40, área, delta de área, preço +5 % e "9.500" (milhar com ponto); studio com o preço médio; remover; padrão válido e inválido; alvo inexistente recusado; resposta da IA filtrada; de ponta a ponta com o gerador e o delta; o que formata igual não aparece |
+| Teste de editor "estudo de massa (M5c)" | pelo intérprete local (a IA mockada como indisponível): o turno diz a fonte, aplica faixa e biblioteca, a varredura nova tem 1 linha (duas torres) e as caixas da biblioteca acompanham; o produto gravado é 65/75; **Desfazer** grava 58/75 e a varredura volta a ter torre única; "bom dia" → "Não entendi" |
+| `tsc` · `check-ui-standard` · org guard · XSS | 0 · 0 violações · ok · ok |
+| Harness `docs/spikes/massa/medir.mjs` | **41/41** (+4): no navegador real o pedido muda o produto da tela para 65/75, a varredura nova (worker) tem só duas torres e o turno fecha com o delta "Embasamento + torre → Duas torres · unidades 60 → 64 (+4) · …" |
+| Edge publicada | `planta-ia` com o modo massa; sem token → 401 |
+| App real (estudo descartável "ZZ TESTE … prova M5c": lote 40 × 60 + produto, sem bloco) | 10/10: produto no banco 58/75 antes; o pedido digitado na tela chamou a Edge **no modo massa e ela respondeu 503 SEM_CHAVE** (de verdade, com a sessão logada); o turno diz "intérprete local — IA não configurada ou indisponível"; faixa e biblioteca aplicadas; o delta diz que o melhor agora é duas torres; 1 linha; **o produto foi GRAVADO no estudo (65/75)**; "Desfazer" → "Desfeito." e **o banco voltou a 58/75**; 0 erros. Na 1ª rodada o roteiro cortou o corpo da requisição antes do `"modo":"massa"` (falha do roteiro) — estudo apagado e rodado de novo do zero |
+| Limpeza | estudos apagados pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes: estudos 72 · ramos 72 · versões 8 · produtos 0 · entornos 0 · ZZ 0 |
+| Suíte cheia | 1ª rodada: 673 arquivos, 0 falhas, mas a conta NÃO fechou (171 testes "pending" em `BlueprintEditor.test.tsx`: o worker morreu no 32º teste, sem erro — "Some tests are still running when generating the JSON report"). O teste novo (M5c) é o 39º, então não tinha rodado: é a queda intermitente do Node 24 já registrada. O arquivo sozinho, 6 rodadas: 4 inteiras (203/203) e 2 interrompidas em pontos diferentes (50, 119). Suíte refeita até fechar — ver a linha abaixo |
+| Suíte cheia (JSON), refeita | tentativa 1 de novo interrompida no mesmo arquivo (151 "pending"); **tentativa 2: 673/673 arquivos · 7.040 testes = 7.006 ok + 34 pulados · 0 falhas — a conta fecha**. ⚠️ A queda do worker nesse arquivo ficou frequente hoje (4 de 9 rodadas); não há evidência de causa no código (para em pontos diferentes, inclusive antes dos testes da M5), mas o arquivo tem 203 testes e os da M5 rodam o gerador no fio principal (sem Worker no jsdom) — se continuar, dividir o arquivo |

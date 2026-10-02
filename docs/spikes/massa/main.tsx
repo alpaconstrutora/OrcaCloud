@@ -150,10 +150,13 @@ const REGUA_DO_GERADOR: EntradaDoGeradorDeMassa['regua'] = {
 function AppDoGerador() {
   const gerador = useGeradorDeMassa();
   const model = React.useMemo(loteDoGerador, []);
+  // M5c: o produto é estado (a conversa o muda); `window.__produtoDoHarness` deixa o medir.mjs conferir.
+  const [produto, setProduto] = React.useState(REGUA_DO_GERADOR.produto);
+  (window as unknown as { __produtoDoHarness: unknown }).__produtoDoHarness = produto;
   return (
     <ConfirmProvider>
       <div style={{ padding: 24, background: '#f8fafc', minHeight: '100vh' }}>
-        <TelaGeradorDeMassa gerador={gerador} model={model} regua={REGUA_DO_GERADOR} proximoNumero={2} onAbrirProduto={() => {}} onCriarAlternativa={async () => {}} onAplicar={async () => {}} />
+        <TelaGeradorDeMassa gerador={gerador} model={model} regua={{ ...REGUA_DO_GERADOR, produto }} proximoNumero={2} onAbrirProduto={() => {}} onCriarAlternativa={async () => {}} onAplicar={async () => {}} onProduto={setProduto} />
       </div>
     </ConfirmProvider>
   );

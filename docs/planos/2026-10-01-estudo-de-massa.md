@@ -785,7 +785,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 ## Estado
 
 - [x] M0 — plano em `docs/planos/` e frente `estudo-de-massa` a partir de `origin/main`
-- [ ] M1 — família `Bloco` + indicadores urbanísticos + menu · **8 de 9 itens** (falta a prova no app real logado)
+- [x] M1 — família `Bloco` + indicadores urbanísticos + menu (`671ada75` + este registro)
 - [ ] M2 — produto e eficiência
 - [ ] M3 — financeiro e ponte com Empreendimento/Imovib
 - [ ] M4 — cenários e comparador
@@ -838,12 +838,14 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 | Teste de editor "estudo de massa (M1)" | gaveta, seleção pela linha, pavimentos 10 → 5 recalcula |
 | Harness `docs/spikes/massa/medir.mjs` (portão) | 17/17 ok · âmbar 52.723 px e vermelho 873 px com blocos · 0 e 0 no controle vazio · 0 erros de console |
 | 3D (`?3d=1`, print) | podium âmbar 3 pav, torre 7 pav, 9º e 10º vermelhos |
-| **App real logado** | **pendente** — a skill `rodar-app` exige a senha da conta de leitura, que o usuário fornece por sessão |
+| **App real logado** (02/10, agente-leitura, só leitura) | menu sem o item antigo e com Planta Inteligente; estudo "Planta 26/09/2026" aberto; Terreno › grupo Massa com Bloco e Estudo de massa; gaveta abre com envelope legal e estado vazio que diz o que falta; 0 erros; 0 escritas tentadas; banco conferido antes/depois: 72 ramos, última gravação ainda 29/09 |
 
 **Achado fora de escopo (registrado, não corrigido):** `RemoveLevel` não trata `quadras`/`lotes`/`vias`/`areasPublicas`
 — remover o pavimento delas violaria o invariante "pavimento inexistente". O bloco já é tratado.
 
-**Publicação:** commit na branch `feat/estudo-de-massa`, empurrado como **preview** (não `main`), aguardando a prova
-no app real e o "pode seguir". Ao publicar em `main`: redeploy da Edge Function `planta-api` (bundle 0.90.0) e
+**Publicação:** primeiro como preview na branch; em 02/10, com a prova no app real e o "pode seguir" do usuário, em `main`. Ao publicar em `main`: redeploy da Edge Function `planta-api` (bundle 0.90.0) e
 `conferir-producao.sh "Estudo de massa"`. ⚠️ Outras frentes (incêndio) estão subindo o kernel no mesmo dia: rebase
 antes do push e, se o 0.90.0 já estiver tomado, renumerar.
+
+**Pedido posterior (02/10/2026, mesma sessão):** *"SENHA = [fornecida] · pode seguir"* — prova no app real feita e M1
+publicada; segue a M2.

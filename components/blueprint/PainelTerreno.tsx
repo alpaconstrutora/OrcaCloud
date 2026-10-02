@@ -152,6 +152,12 @@ function LimiteConferido({
 }
 
 interface Props {
+  /**
+   * Dentro do drawer de tarefa (01/10/2026): sem a faixa cinza, a borda e o px-4 de seção do
+   * painel de propriedades, e sem o cabeçalho "Terreno" (o drawer já tem o título) — o padding
+   * vem do drawer, igual aos outros painéis.
+   */
+  emDrawer?: boolean;
   /** O lote medido. `null` quando não há divisa de terreno desenhada. */
   terreno: Terreno | null;
   /** SUB-REGIÕES DO TERRENO (P2.19): o quadro por material e a taxa de permeabilidade desenhada. */
@@ -238,6 +244,7 @@ interface Props {
 }
 
 export default function PainelTerreno({
+  emDrawer = false,
   terreno,
   subRegioes = null,
   taxaPermeabilidadeMinPct = null,
@@ -275,6 +282,7 @@ export default function PainelTerreno({
   georreferencia,
   onGeorreferencia,
 }: Props) {
+  const raizDoPainel = emDrawer ? 'space-y-3' : 'border-b border-slate-200 bg-slate-50 px-4 py-3';
   const empSelecionado = empreendimentos.find((e) => e.id === empreendimentoId) ?? null;
   /**
    * ⚠️ Sem lote e sem divisa selecionada o painel não tinha o que dizer — e
@@ -286,11 +294,13 @@ export default function PainelTerreno({
   if (!terreno && !divisaSelecionada) {
     if (!topografiaSlot) return null;
     return (
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          <LandPlot className="h-3.5 w-3.5" />
-          Terreno
-        </h3>
+      <div className={raizDoPainel}>
+        {!emDrawer && (
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <LandPlot className="h-3.5 w-3.5" />
+            Terreno
+          </h3>
+        )}
         <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
         {topografiaSlot}
       </div>
@@ -307,11 +317,13 @@ export default function PainelTerreno({
     : 0;
 
   return (
-    <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-      <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <LandPlot className="h-3.5 w-3.5" />
-        Terreno
-      </h3>
+    <div className={raizDoPainel}>
+      {!emDrawer && (
+        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <LandPlot className="h-3.5 w-3.5" />
+          Terreno
+        </h3>
+      )}
 
       {terreno ? (
         <>

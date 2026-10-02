@@ -1233,6 +1233,7 @@ interface Props {
  * encostados nas bordas até 01/10/2026 por não estarem nesta lista.
  */
 const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
+  'terreno',
   'tomadas',
   'eletrodutos',
   'circuitos',
@@ -8385,8 +8386,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * gaveta recebe o pedido de importação; com o token nos dois, o clique no
    * ribbon abriria DUAS caixas de arquivo.
    */
-  const painelDoTerreno = (pedidoDeImportacao?: number) => (
+  const painelDoTerreno = (pedidoDeImportacao?: number, emDrawer = false) => (
     <PainelTerreno
+      emDrawer={emDrawer}
       terreno={terreno}
       subRegioes={quadroDeSubRegioes(editor.model, terreno?.areaMm2 ?? null, levelId)}
       taxaPermeabilidadeMinPct={zona.taxaPermeabilidadeMin ?? null}
@@ -14151,7 +14153,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         <SheetPanel
           className={`drawer-legivel ${tarefaAberta && TAREFAS_COM_RESPIRO.has(tarefaAberta) ? 'px-6 py-4' : 'p-0'}`}
         >
-          {tarefaAberta === 'terreno' && painelDoTerreno(pedidoDeImportacaoDeLevantamento)}
+          {tarefaAberta === 'terreno' && painelDoTerreno(pedidoDeImportacaoDeLevantamento, true)}
 
           {tarefaAberta === 'ia' && (
             <PainelIa

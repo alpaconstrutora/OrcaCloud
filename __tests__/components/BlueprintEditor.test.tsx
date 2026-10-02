@@ -6377,4 +6377,13 @@ describe('drawer de tarefa: o painel do meio com padding lateral (01/10/2026)', 
     expect(corpo).not.toBeNull();
     expect(corpo!.className).toMatch(/\bpx-6\b/);
   });
+
+  it('o Terreno ("Dados do lote") também — era a seção do painel de propriedades encaixada com px-4', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+    await userEvent.setup().click(screen.getByRole('button', { name: /^Dados do lote/ }));
+    const corpo = (await screen.findByRole('dialog')).querySelector('.drawer-legivel');
+    expect(corpo).not.toBeNull();
+    expect(corpo!.className).toMatch(/\bpx-6\b/);
+  });
 });

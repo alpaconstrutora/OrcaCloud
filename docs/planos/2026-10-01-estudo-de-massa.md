@@ -789,7 +789,11 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M2 — produto e eficiência (02/10/2026)
 - [x] M3 — financeiro e ponte com Empreendimento/Imovib (`f5c35dc` + correções da prova real)
 - [x] M4 — cenários e comparador · **9 de 9** (gravação real provada em 02/10/2026; achado no gatilho de imutabilidade corrigido — migration `aplicar_20271002000040`)
-- [ ] M5 — gerador de implantações e otimizador
+- [ ] M5 — gerador de implantações e otimizador · dividida em três entregas (02/10/2026):
+  - [x] **M5a** — gerador + otimizador + estacionamento como alternativa (este registro)
+  - [ ] **M5b** — insolação de massa (sombra do bloco no lote e nos vizinhos, horas de sol por fachada) como indicador e objetivo; entorno persistido por estudo
+  - [ ] **M5c** — IA no vocabulário do produto ("duas torres", "apartamentos entre 65 e 75 m²")
+  - orientação por unidade (`position_type`, `sun_orientation`) → vai para a M6, junto da divisão do pavimento em unidades
 - [ ] M6 — da massa à planta e ao BIM
 
 ## Execução
@@ -1015,3 +1019,56 @@ caiu no Windows com 0xC0000409; o trabalho em disco estava intacto e foi retomad
 | **Gravação real ao publicar** (autorizada, 02/10/2026) | estudo descartável "ZZ TESTE Estudo de Massa (descartável — prova M4)" com lote + Torre A 10 pav + produto residencial médio; **Publicar clicado na tela** → versão rev 1 e linha em `blueprint_snapshot_produto` (2 tipologias, padrão R8-N, `snapshot_id` = a versão, autor gravado); UPDATE pela sessão logada recusado (42501) e o produto lido de volta intacto |
 | Achado da prova: gatilho de imutabilidade | o UPDATE como `postgres` (que passa por cima de grant/RLS e só esbarra no gatilho) devolvia **42703** "record … has no field id" em vez da mensagem de imutável: `fn_blueprint_block_mutation` lia `OLD.id`, e `blueprint_snapshot_produto` e `blueprint_snapshot_topografia` (fase 7, 21/09) têm a chave em `snapshot_id`. O dado ficava protegido, mas pelo motivo errado. Migration `aplicar_20271002000040_blueprint_block_mutation_sem_id.sql` (APLICADA): a chave vem de `to_jsonb(OLD)`. Depois: as duas tabelas dão **23001** "… é imutável (tentativa de UPDATE em <snapshot_id>). Publique uma nova versão."; `blueprint_objects` (tem `id`) continua com o id na mensagem; acentuação da função conferida sem mojibake |
 | Limpeza | estudo descartável apagado pelo id + `name LIKE 'ZZ TESTE%'` (o CASCADE levou versão, produto congelado e produto do estudo); contagens iguais às de antes: estudos 72 · versões 8 · congelados 0 · produtos 0 · ZZ 0. Os 2 eventos de `blueprint_audit_events` ficam (imutáveis por projeto). Servidor de prova (porta 3177) parado pelo PID |
+
+### M5a — Gerador de implantações e otimizador (02/10/2026)
+
+**Por que dividir a M5.** O item do plano juntava quatro coisas de natureza diferente: o gerador/otimizador (motor
+puro, sem banco), a insolação de massa (exige persistir o entorno por estudo — migration), a IA (Edge Function) e a
+orientação por unidade (que só existe quando o pavimento é dividido em unidades — M6). Publicar o gerador primeiro
+põe o critério "pronto quando" da M5 no ar sem esperar as outras; cada uma tem o seu ritual.
+
+**O que entrou.**
+
+- **Motor** `utils/blueprintGeradorDeMassa.ts` (puro). Biblioteca: torre única (posição na folga como parâmetro),
+  duas torres, bloco longitudinal (lâmina), blocos paralelos, L, U, H e embasamento + torre (embasamento até a TO
+  máxima, torre centrada sobre ele). Quadro de trabalho GIRADO com a divisa FRENTE; em cada cenário, o maior
+  retângulo inscrito no envelope legal **na altura do topo** (com afastamento progressivo o envelope encolhe com a
+  altura: o do topo garante todos os pavimentos), a 10 cm da borda. Varredura exaustiva: profundidade da lâmina ×
+  comprimento da torre × pavimentos (todos até 12; acima, uma grade que inclui o teto) × estacionamento (sem
+  garagem, pilotis, 1 ou 2 subsolos — o subsolo ocupa o lote). Cada combinação é medida por `medirCenarioDeMassa`
+  — a MESMA régua do comparador da M4. Restrições: lei (CA, TO, gabarito, envelope por pavimento), vagas exigidas,
+  mínimo de unidades (padrão: a meta do produto) e teto de pavimentos. Objetivos: VGV, resultado, vendável,
+  unidades, eficiência, menor custo (com meta: total; sem meta: por m² vendável — senão ganharia o menor prédio),
+  menor área comum por unidade, menor estacionamento e combinação ponderada (indicadores normalizados entre o pior
+  e o melhor da grade). A SEMENTE guia só o refinamento (recozimento com o PRNG da E6.2 sobre profundidade,
+  comprimento, posição, pavimentos e garagem); a grade não depende dela. Sai a melhor de cada implantação + a frente
+  de Pareto (VGV ↑, custo ↓, complexidade ↓) + o log de decisões + os descartes por motivo.
+- **Fora, dito no cabeçalho do módulo:** pátio fechado (o `Bloco` é polígono simples), casas geminadas (unidade de
+  dois pavimentos não é o modelo de distribuição por pavimento) e estacionamento descoberto no térreo.
+- **Worker** `utils/blueprintGeradorDeMassa.worker.ts` + `hooks/useGeradorDeMassa.ts` (sem Worker, mesmo
+  `gerarMassa` no fio principal).
+- **Tela** Terreno › Massa › **Gerar massa** (`TelaGeradorDeMassa.tsx`, tela do editor como "Gerar plantas"):
+  objetivo, pesos, restrições, biblioteca, profundidades/comprimentos, semente; tabela com a melhor de cada
+  implantação; planta da escolhida (lote + blocos pelo uso, subsolo tracejado); "Criar alternativa EM-00N" (ramo
+  novo com os blocos — o comparador da M4 põe lado a lado) e "Aplicar neste estudo" (troca os blocos; Ctrl+Z).
+  Botão desligado diz o motivo (sem lote).
+- **Comparador**: `medirCenarioDeMassa` devolve também a massa, a distribuição e o financeiro; o cenário ganhou
+  `areaComumPorUnidadeM2` (linha nova "Área comum por unidade", destaque "menor") e `garagemM2`.
+- **Achado e correção — vagas em garagem girada:** `vagasQueCabem` (M2) contava diferente conforme a rotação do
+  desenho (o lançador corre as fileiras nos eixos x/y): a mesma garagem 38 × 58 m dava 91 alinhada e 94 girada a
+  30°. Agora o anel é girado para o lado mais longo ficar no eixo x antes de contar. Reproduzido antes da correção
+  pelo teste novo (94 ≠ 91), verde depois.
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintGeradorDeMassa.test.ts` (11) | lote 40 × 60, TO 60 %, CA 3, gabarito 12: **torre única, duas torres e bloco longitudinal saem**, todos dentro da lei e com as vagas; ranking pelo objetivo; mesma semente = resultado idêntico (`toEqual`); comandos aplicados no kernel reproduzem o cenário medido; lote girado 30° dá as mesmas implantações, unidades, pavimentos e vagas (resultado a menos de 0,05 % — arredondamento do mm); "mais unidades"; sem garagem + vagas exigidas → nada viável com o motivo; meta 60 un + teto 8 pav; sem lote / sem preço dizem o que falta; ponderado 0–100; Pareto com dominados conhecidos; vagas em garagem girada |
+| Teste de editor "estudo de massa (M5)" | Terreno › Gerar massa → gerar → as três linhas do pedido; aplicar troca os blocos (a tela reaberta avisa "já tem N bloco(s)"); criar alternativa → `createAlternative` com nome `EM-002 — X pav / Y un` e o modelo com os blocos da escolhida |
+| `tsc --noEmit` · `check-ui-standard` · org guard · XSS | 0 · 0 violações · ok · ok (tsc na 3ª tentativa: segfault do Node 24 nas duas primeiras) |
+| Suíte cheia (JSON) | 671/671 arquivos · 7.026 testes = 6.992 ok + 34 pulados · 0 falhas |
+| `vite build` | ok (2ª tentativa; a 1ª caiu sem erro de código) — o worker sai em pacote próprio (294 KB) |
+| Harness `docs/spikes/massa/medir.mjs` | **34/34** (23 de antes + 11 novos): worker REAL no navegador responde e dá o MESMO resultado do fio principal; os três cenários; controle (antes de gerar, nenhuma linha); a tela mostra resumo, 8 implantações e a planta; **a tabela cabe no miolo de 1.340 px** (janela de 1.600 − barra lateral) — o portão reprova com uma coluna larga de propósito (1.391 > 1.290) |
+| App real (estudo descartável "ZZ TESTE … prova M5", lote 40 × 60 + produto, sem bloco) | 13/13: botão "Gerar massa" no ribbon e habilitado; a tela abre no editor; o worker roda no app (2.195 combinações, 777 viáveis — sem zona aplicada, a varredura vai até o teto de 40 pav, como os avisos dizem); a tela lê o produto do banco; as três linhas; **"Criar alternativa" clicado na tela** → ramo `EM-002 — 40 pav / 190 un` com os blocos no rascunho (subsolo, embasamento, torre); 0 erros de página/PostgREST |
+| Achado do app real | a tabela passava da largura com a barra lateral (coluna Pareto cortada) — o harness sem barra não via; larguras refeitas (1.230 px) e o portão de largura acima entrou para não voltar |
+| Limpeza | estudo apagado pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes: estudos 72 · ramos 72 · versões 8 · produtos 0 · ZZ 0 |

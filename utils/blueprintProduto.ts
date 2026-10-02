@@ -346,13 +346,38 @@ export function comandosDoNucleoSugerido(b: Bloco, elevadores: number): Command[
 
 // ─── Garagem ─────────────────────────────────────────────────────────────────
 
+/** O anel girado em torno da origem para o lado mais longo ficar horizontal (mm inteiros). */
+function alinharAoLadoMaisLongo(anel: Point[]): Point[] {
+  let ang = 0;
+  let maior = -1;
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > maior + 1e-6) {
+      maior = len;
+      ang = Math.atan2(b.y - a.y, b.x - a.x);
+    }
+  }
+  // Já alinhado (a menos de 0,01°): não mexe — o arredondamento mudaria um anel exato.
+  const resto = Math.abs(((ang % (Math.PI / 2)) + Math.PI / 2) % (Math.PI / 2));
+  if (resto < 1.75e-4 || Math.PI / 2 - resto < 1.75e-4) return anel;
+  const c = Math.cos(-ang);
+  const sn = Math.sin(-ang);
+  return anel.map((p) => ({ x: Math.round(p.x * c - p.y * sn), y: Math.round(p.x * sn + p.y * c) }));
+}
+
 /**
  * Quantas vagas cabem num pavimento de garagem com este contorno — pelo
  * lançador da E2.5, num modelo PROVISÓRIO (paredes de 20 cm no contorno do
  * bloco). Pilares não existem ainda na massa: o número é o teto, dito assim.
  */
-export function vagasQueCabem(anel: Point[], arranjo: ArranjoDasVagas): number {
-  if (anel.length < 3) return 0;
+export function vagasQueCabem(anelOriginal: Point[], arranjo: ArranjoDasVagas): number {
+  if (anelOriginal.length < 3) return 0;
+  // O lançador corre as fileiras nos eixos do desenho: a garagem girada (lote
+  // fora do norte do desenho, M5) perderia vagas que existem. Gira-se o anel
+  // para o lado mais longo ficar no eixo x — a contagem não depende da rotação.
+  const anel = alinharAoLadoMaisLongo(anelOriginal);
   let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Garagem', elevationMm: 0, defaultHeightMm: 3000 }]).model;
   const lv = m.levels[0].id;
   const paredes: Command[] = anel.map((a, i) => ({ type: 'AddWall', levelId: lv, a, b: anel[(i + 1) % anel.length], thicknessMm: 200, heightMm: 3000 }));
@@ -469,10 +494,15 @@ export function unidadesNoPiso(disponivelM2: number, tipos: TipologiaDoProduto[]
   return out;
 }
 
-export function distribuirProduto(model: BlueprintModel, massa: MedidaDaMassa, produto: Produto, vagasPorUnidadeDaZona: number | null = null): ResultadoDoProduto {
+/**
+ * `cacheDeVagas`: vagas por pavimento já calculadas, por contorno + arranjo. O
+ * gerador de massa (M5) mede centenas de cenários com a MESMA garagem — sem o
+ * cache, o lançador de vagas rodaria de novo em cada um.
+ */
+export function distribuirProduto(model: BlueprintModel, massa: MedidaDaMassa, produto: Produto, vagasPorUnidadeDaZona: number | null = null, cacheDeVagas?: Map<string, number>): ResultadoDoProduto {
   const avisos: string[] = [];
   const blocos: ProdutoDoBloco[] = [];
-  const garagens = new Map<string, number>();
+  const garagens = cacheDeVagas ?? new Map<string, number>();
 
   for (const m of massa.blocos) {
     const b = (model.blocos ?? []).find((x) => x.id === m.blocoId);

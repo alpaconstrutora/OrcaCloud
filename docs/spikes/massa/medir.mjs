@@ -150,6 +150,47 @@ else {
   exigir(sem.vermelho < 50, `sem bloco não há vermelho (${sem.vermelho} px)`);
 }
 
+// ── 3. M5: a TELA do gerador de massa, com o Web Worker real ─────────────────
+// 1.340 px = janela de 1.600 menos a barra lateral do app (260): a largura REAL
+// do miolo — o harness sem barra mentia sobre a largura (a coluna Pareto cortada).
+await page.setViewportSize({ width: 1340, height: 1300 });
+await page.goto(`${ALVO}?gerar=1`, { waitUntil: 'networkidle' });
+let ger = null;
+for (let i = 0; i < 40 && !ger; i += 1) {
+  await page.waitForTimeout(250);
+  ger = await page.evaluate(() => window.__gerador ?? null);
+}
+exigir(ger && ger.viaWorker && !ger.erro, `worker do gerador respondeu no navegador (${ger?.msWorker} ms; fio principal ${ger?.msLocal} ms)${ger?.erro ? ' ' + ger.erro : ''}`);
+exigir(ger && ger.igual, 'worker e fio principal deram o MESMO resultado (determinístico)');
+exigir(ger && ['TORRE', 'DUAS_TORRES', 'LAMINA'].every((t) => ger.tipos.includes(t)), `os três cenários do pedido saíram: ${ger?.tipos?.join(', ')}`);
+// Controle: ANTES do clique não há resumo nem linha — a medição abaixo discrimina.
+const antes = await page.evaluate(() => ({ resumo: !!document.querySelector('[data-testid="resumo-do-gerador-de-massa"]'), linhas: document.querySelectorAll('[data-testid="tela-gerador-de-massa"] tbody tr td:not([colspan])').length }));
+exigir(!antes.resumo && antes.linhas === 0, `controle: antes de gerar, nenhuma implantação na tela (${antes.linhas} células)`);
+await page.click('[data-testid="gerar-massa"]');
+await page.waitForSelector('[data-testid="resumo-do-gerador-de-massa"]', { timeout: 20000 }).catch(() => null);
+const tela = await page.evaluate(() => {
+  const resumo = document.querySelector('[data-testid="resumo-do-gerador-de-massa"]')?.textContent ?? null;
+  const linhas = [...document.querySelectorAll('[data-testid="tela-gerador-de-massa"] tbody tr')].map((tr) => tr.textContent ?? '');
+  const svg = document.querySelector('[data-testid="mini-implantacao"]');
+  const caixa = svg?.getBoundingClientRect();
+  // A rolagem horizontal da tabela: o contêiner que rola é o ancestral do <table> com overflow.
+  let rolagem = null;
+  for (let el = document.querySelector('[data-testid="tela-gerador-de-massa"] table'); el; el = el.parentElement) {
+    if (el.scrollWidth > el.clientWidth + 1 && /auto|scroll/.test(getComputedStyle(el).overflowX)) {
+      rolagem = { scroll: el.scrollWidth, visivel: el.clientWidth };
+      break;
+    }
+  }
+  return { resumo, linhas, caminhos: svg ? svg.querySelectorAll('path').length : 0, svgAltura: caixa ? Math.round(caixa.height) : 0, rolagem };
+});
+await page.screenshot({ path: path.join(saida, 'massa-gerador.png'), fullPage: true });
+linhas.push(`      gerador: ${tela.resumo ?? '(sem resumo)'}`);
+exigir(!!tela.resumo && /\d+ combinações medidas, \d+ viáveis/.test(tela.resumo), 'a tela mostrou o resumo da varredura');
+exigir(tela.linhas.length >= 3, `a tabela tem ${tela.linhas.length} implantação(ões) (uma por tipo)`);
+for (const t of ['Torre única', 'Duas torres', 'Bloco longitudinal']) exigir(tela.linhas.some((l) => l.startsWith(t)), `linha "${t}" na tabela`);
+exigir(!tela.rolagem, tela.rolagem ? `a tabela rola na horizontal no miolo de 1.340 px (${tela.rolagem.scroll} > ${tela.rolagem.visivel})` : 'a tabela cabe no miolo do app com a barra lateral (sem rolagem horizontal)');
+exigir(tela.caminhos >= 2 && tela.svgAltura > 200, `a planta da implantação desenhou o lote e os blocos (${tela.caminhos} contornos, ${tela.svgAltura} px)`);
+
 exigir(erros.length === 0, erros.length === 0 ? 'nenhum erro de console' : `erros: ${erros.slice(0, 3).join(' | ')}`);
 
 console.log(linhas.join('\n'));

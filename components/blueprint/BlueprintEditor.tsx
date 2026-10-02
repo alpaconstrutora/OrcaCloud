@@ -516,6 +516,7 @@ import {
   linhasDoQuadro,
   medidasPorPapel,
   medirTerreno,
+  divisasDoLote,
   papeisSugeridos,
   ROTULO_DO_PAPEL,
 } from '../../utils/blueprintTerreno';
@@ -597,6 +598,7 @@ import {
 } from '../../services/blueprintService';
 import TelaAlternativas from './TelaAlternativas';
 import TelaGerador from './TelaGerador';
+import TelaGeradorDeMassa from './TelaGeradorDeMassa';
 import PainelMobiliario from './PainelMobiliario';
 import PainelAcabamentos, { type AmbienteComAcabamento } from './PainelAcabamentos';
 import PainelGuardaCorpoSelecionado from './PainelGuardaCorpoSelecionado';
@@ -625,6 +627,8 @@ import { aplicarMudancas, interpretarPedidoLocal } from '../../utils/blueprintIa
 import { pedirMudancasAIa } from '../../services/plantaIaService';
 import { HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, sugerirShaft, type HipotesesDeMobiliario } from '../../utils/blueprintMobiliario';
 import { useGerador } from '../../hooks/useGerador';
+import { useGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
+import { comandosDoCandidato, modeloDoCandidato, type CandidatoDeMassa } from '../../utils/blueprintGeradorDeMassa';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
 import {
@@ -774,7 +778,7 @@ import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { cubDoPadrao, type CubDoPadrao } from '../../services/cubService';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
 import { blueprintSnapshotProdutoService } from '../../services/blueprintSnapshotProdutoService';
-import { cenarioDeMassa, nomeSugeridoDoCenario } from '../../utils/blueprintComparadorDeMassa';
+import { cenarioDeMassa, nomeSugeridoDoCenario, type ReguaDoComparador } from '../../utils/blueprintComparadorDeMassa';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
@@ -1830,7 +1834,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -4559,26 +4563,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * hipóteses do ESTUDO — aplicada ao modelo de cada alternativa. Ausente quando
    * o estudo não tem bloco nenhum: aí Alternativas é só a de antes.
    */
-  const medirCenario = useCallback(
-    (m: BlueprintModel) =>
-      cenarioDeMassa(m, {
-        zona: {
-          afastamentoProgressivo: zona.afastamentoProgressivo,
-          recuoFrenteEscalonado: zona.recuoFrenteEscalonado,
-          gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
-          gabaritoPavimentos: zona.gabaritoPavimentos,
-          taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
-          coeficienteMax: zona.coeficienteMax,
-          taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
-        },
-        recuosBase: zona.recuos,
-        hipotesesDaMassa: hipotesesDaMassa,
-        produto: produtoDoEstudo.produto,
-        cub: produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo,
-        vagasPorUnidadeDaZona: zona.vagasPorUnidade,
-      }),
+  const reguaDoEstudo = useMemo<ReguaDoComparador>(
+    () => ({
+      zona: {
+        afastamentoProgressivo: zona.afastamentoProgressivo,
+        recuoFrenteEscalonado: zona.recuoFrenteEscalonado,
+        gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
+        gabaritoPavimentos: zona.gabaritoPavimentos,
+        taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
+        coeficienteMax: zona.coeficienteMax,
+        taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
+      },
+      recuosBase: zona.recuos,
+      hipotesesDaMassa: hipotesesDaMassa,
+      produto: produtoDoEstudo.produto,
+      cub: produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo,
+      vagasPorUnidadeDaZona: zona.vagasPorUnidade,
+    }),
     [zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, zona.recuos, zona.vagasPorUnidade, hipotesesDaMassa, produtoDoEstudo.produto, cubDoEstudo],
   );
+  const medirCenario = useCallback((m: BlueprintModel) => cenarioDeMassa(m, reguaDoEstudo), [reguaDoEstudo]);
   /** O próximo bloco nasce com o que está na barra de opções. */
   const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
   const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
@@ -5043,6 +5047,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * do centro do lote), o norte e a latitude da georreferência, o programa.
    */
   const gerador = useGerador();
+  /**
+   * GERADOR DE MASSA (M5): a varredura de implantações × pavimentos ×
+   * estacionamento pela régua do estudo. As duas saídas trocam os blocos —
+   * numa alternativa nova ou no desenho aberto (um lote: Ctrl+Z desfaz).
+   */
+  const geradorDeMassa = useGeradorDeMassa();
+  /** O lote do ESTUDO (qualquer pavimento): é onde o gerador implanta. */
+  const temLoteDoEstudo = useMemo(() => !!medirTerreno(divisasDoLote(editor.model.boundaries)), [editor.model.boundaries]);
+  const levelIdDaMassa = geradorDeMassa.resultado?.levelId ?? null;
+  const aplicarMassaGerada = async (c: CandidatoDeMassa) => {
+    if (!levelIdDaMassa) throw new Error('Gere de novo: o pavimento do lote não foi encontrado.');
+    editor.runBatch(comandosDoCandidato(c, editor.model, levelIdDaMassa));
+    setTelaAberta(null);
+  };
   const [hipotesesDoGerador, setHipotesesDoGerador] = usePersistedState<HipotesesDoGerador>('blueprint:gerador', HIPOTESES_DO_GERADOR_PADRAO);
   const entradaDoGerador = useMemo(() => {
     const prisma = envelope3d?.prismas.find((p) => p.levelId === levelId) ?? null;
@@ -9793,6 +9811,35 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           </div>
         </div>
       )}
+      {telaAberta === 'gerar-massa' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="gerar-massa">
+          {cabecalhoDaTela(
+            'Gerar massa',
+            'Do lote, da zona e do produto do estudo, as implantações da biblioteca — torre única, duas torres, bloco longitudinal, blocos paralelos, L, U, H, embasamento + torre — varridas em profundidade, comprimento, pavimentos e estacionamento, medidas com a régua do estudo e ranqueadas pelo objetivo que você escolher, dentro da lei e das vagas. Sai a melhor de cada implantação.',
+            Building2,
+            'Terreno',
+          )}
+          <div>
+            <TelaGeradorDeMassa
+              gerador={geradorDeMassa}
+              model={editor.model}
+              regua={reguaDoEstudo}
+              proximoNumero={ramos.length + 1}
+              onAbrirProduto={() => {
+                setTelaAberta(null);
+                alternarTarefa('produto');
+              }}
+              onCriarAlternativa={async (c, nome) => {
+                if (!levelIdDaMassa) throw new Error('Gere de novo: o pavimento do lote não foi encontrado.');
+                await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome, descricao: `Gerada: ${c.rotulo}`, model: modeloDoCandidato(c, editor.model, levelIdDaMassa) });
+                await recarregarRamos();
+                setTelaAberta('alternativas');
+              }}
+              onAplicar={aplicarMassaGerada}
+            />
+          </div>
+        </div>
+      )}
       {telaAberta === 'tipos' && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="tipos">
           {cabecalhoDaTela(
@@ -11012,6 +11059,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ativo={tarefaAberta === 'produto'}
                 onClick={() => alternarTarefa('produto')}
                 ajuda="O que se vende: tipologias, mix, padrão construtivo (CUB), meta de unidades e as hipóteses do pavimento (núcleo, paredes, corredor) — o Estudo de massa reparte o mix pelos blocos"
+              />
+              <BotaoDoRibbon
+                icone={Wand2}
+                rotulo="Gerar massa"
+                contagem={geradorDeMassa.resultado?.melhores.length || undefined}
+                ativo={telaAberta === 'gerar-massa'}
+                onClick={() => alternarTela('gerar-massa')}
+                disabled={!temLoteDoEstudo}
+                ajuda={
+                  !temLoteDoEstudo
+                    ? 'Feche o lote primeiro (divisas do terreno, com a FRENTE marcada): o gerador implanta dentro do envelope legal'
+                    : 'Gerar implantações: torre única, duas torres, lâmina, L, U, H, embasamento + torre — varridas em pavimentos e estacionamento, ranqueadas pelo objetivo (VGV, lucro, unidades, custo…) dentro da lei e das vagas'
+                }
               />
             </GrupoDoRibbon>
             {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente

@@ -1384,6 +1384,50 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(envio).getByLabelText('Empreendimento')).toBeInTheDocument();
   });
 
+  it('estudo de massa (M5): Terreno › Gerar massa varre as implantações, mostra a melhor de cada uma, aplica os blocos e cria a alternativa EM-00N', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { produtoSemente } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    // Lote 40 × 60 m, sem bloco nenhum: a massa nasce do gerador.
+    loadBranchModel.mockResolvedValue(k.applyBatch(nivel.model, [d(0, 0, 40000, 0, 'FRENTE'), d(40000, 0, 40000, 60000, 'LATERAL_DIREITA'), d(40000, 60000, 0, 60000, 'FUNDOS'), d(0, 60000, 0, 0, 'LATERAL_ESQUERDA')]).model);
+    getProduto.mockResolvedValueOnce({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', produto: produtoSemente('RESIDENCIAL_MEDIO'), created_at: '', updated_at: '' });
+    createAlternative.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^gerar massa/i }));
+    const abrirTela = async () => (await screen.findByRole('heading', { level: 1, name: /^gerar massa$/i })).closest('[data-tela="gerar-massa"]') as HTMLElement;
+    let tela = await abrirTela();
+    await user.selectOptions(within(tela).getByLabelText('Objetivo'), 'UNIDADES');
+    await user.click(within(tela).getByTestId('gerar-massa'));
+    expect(await within(tela).findByTestId('resumo-do-gerador-de-massa', {}, { timeout: 15000 })).toHaveTextContent(/\d+ combinações medidas, \d+ viáveis/);
+    // Os três cenários do exemplo do pedido, um por linha.
+    expect(within(tela).getByText(/^Torre única (central|deslocada) · /)).toBeInTheDocument();
+    expect(within(tela).getByText(/^Duas torres · /)).toBeInTheDocument();
+    expect(within(tela).getByText(/^Bloco longitudinal · /)).toBeInTheDocument();
+    const escolhida = within(tela).getByTestId('implantacao-escolhida');
+    expect(within(escolhida).getByTestId('mini-implantacao')).toBeInTheDocument();
+    expect(within(escolhida).getByTestId('decisoes-do-gerador-de-massa')).toHaveTextContent(/divisa FRENTE/);
+    const blocosDaEscolhida = within(escolhida).getByTestId('blocos-da-implantacao').querySelectorAll('li').length;
+    expect(blocosDaEscolhida).toBeGreaterThan(0);
+    // Aplicar: os blocos entram no desenho (a tela fecha); reabrir avisa que aplicar de novo troca todos.
+    await user.click(within(escolhida).getByTestId('aplicar-massa'));
+    await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: /^gerar massa$/i })).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^gerar massa/i }));
+    tela = await abrirTela();
+    expect(within(tela).getByTestId('implantacao-escolhida')).toHaveTextContent(new RegExp(`O desenho já tem ${blocosDaEscolhida} bloco\\(s\\)`));
+    // Criar alternativa: o nome no padrão EM-00N e o modelo com os blocos da escolhida (os antigos trocados).
+    await user.click(within(tela).getByTestId('criar-alternativa-de-massa'));
+    await waitFor(() => expect(createAlternative).toHaveBeenCalled());
+    const chamada = createAlternative.mock.calls[0][0] as unknown as { nome: string; descricao: string; model: { blocos?: unknown[] } };
+    expect(chamada.nome).toMatch(/^EM-002 — \d+ pav \/ \d+ un$/);
+    expect(chamada.descricao).toMatch(/^Gerada: /);
+    expect(chamada.model.blocos).toHaveLength(blocosDaEscolhida);
+  }, 30000);
+
   it('estudo de massa (M4): Alternativas compara TODAS com a mesma régua, destaca por linha sem vencedor, sugere EM-00N; publicar congela o produto', async () => {
     const k = await import('../../utils/blueprintKernel');
     const { produtoSemente } = await import('../../utils/blueprintProduto');

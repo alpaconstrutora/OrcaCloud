@@ -16,9 +16,9 @@
  */
 import type { BlueprintModel } from './blueprintKernel';
 import { divisasDoLote, medirTerreno, type Recuos } from './blueprintTerreno';
-import { medirMassa, type HipotesesDaMassa, type ZonaDaMassa } from './blueprintMassa';
-import { distribuirProduto, type Produto } from './blueprintProduto';
-import { financeiroDaMassa } from './blueprintFinanceiroMassa';
+import { medirMassa, type HipotesesDaMassa, type MedidaDaMassa, type ZonaDaMassa } from './blueprintMassa';
+import { distribuirProduto, type Produto, type ResultadoDoProduto } from './blueprintProduto';
+import { financeiroDaMassa, type ResultadoFinanceiro } from './blueprintFinanceiroMassa';
 import type { CubDoPadrao } from '../services/cubService';
 
 export interface CenarioDeMassa {
@@ -33,6 +33,10 @@ export interface CenarioDeMassa {
   eficienciaGlobalPct: number | null;
   vagasQueCabem: number;
   vagasExigidas: number;
+  /** Construída − privativa, ÷ unidades, m²; null sem unidade. */
+  areaComumPorUnidadeM2: number | null;
+  /** Área dos blocos de garagem, somados os pavimentos, m². */
+  garagemM2: number;
   vgv: number | null;
   custoTotal: number | null;
   resultado: number | null;
@@ -55,18 +59,32 @@ export interface ReguaDoComparador {
   produto: Produto;
   cub: CubDoPadrao | null;
   vagasPorUnidadeDaZona: number | null;
+  /** Vagas por contorno de garagem já calculadas — ver `distribuirProduto`. */
+  cacheDeVagas?: Map<string, number>;
+}
+
+/** O cenário e as medidas de onde ele saiu — o gerador (M5) precisa do estado da lei e das vagas. */
+export interface CenarioMedido {
+  cenario: CenarioDeMassa;
+  massa: MedidaDaMassa;
+  distribuicao: ResultadoDoProduto | null;
+  financeiro: ResultadoFinanceiro | null;
 }
 
 /** Os indicadores de UM cenário; `null` se a alternativa não tem bloco de massa. */
 export function cenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador): CenarioDeMassa | null {
+  return medirCenarioDeMassa(model, r)?.cenario ?? null;
+}
+
+export function medirCenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador): CenarioMedido | null {
   if ((model.blocos ?? []).length === 0) return null;
   const massa = medirMassa(model, { terreno: medirTerreno(divisasDoLote(model.boundaries)), limites: model.boundaries, recuosBase: r.recuosBase, zona: r.zona, hipoteses: r.hipotesesDaMassa });
   const temProduto = r.produto.tipologias.length > 0;
-  const dist = temProduto ? distribuirProduto(model, massa, r.produto, r.vagasPorUnidadeDaZona) : null;
+  const dist = temProduto ? distribuirProduto(model, massa, r.produto, r.vagasPorUnidadeDaZona, r.cacheDeVagas) : null;
   const fin = dist ? financeiroDaMassa(massa, r.produto, dist, r.cub) : null;
   const subsolos = massa.blocos.reduce((s, b) => s + b.pavimentosNoSubsolo, 0);
   const apoiados = massa.blocos.filter((b) => b.apoiadoEm).length;
-  return {
+  const cenario: CenarioDeMassa = {
     blocos: massa.blocos.length,
     pavimentosMax: massa.pavimentosMax,
     alturaMaxM: massa.alturaMaxM,
@@ -78,6 +96,8 @@ export function cenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador): Cen
     eficienciaGlobalPct: dist?.eficienciaGlobalPct ?? null,
     vagasQueCabem: dist?.vagasQueCabem ?? 0,
     vagasExigidas: dist?.vagasExigidas ?? 0,
+    areaComumPorUnidadeM2: dist?.areaComumPorUnidadeM2 ?? null,
+    garagemM2: Math.round(massa.blocos.filter((b) => b.uso === 'GARAGEM').reduce((s, b) => s + b.areaConstruidaM2, 0) * 100) / 100,
     vgv: fin && fin.vgv > 0 ? fin.vgv : null,
     custoTotal: fin?.custoTotal ?? null,
     resultado: fin?.resultado ?? null,
@@ -86,6 +106,7 @@ export function cenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador): Cen
     pisosComProblema: massa.pisosForaDoEnvelope + massa.pisosAcimaDoGabarito,
     complexidade: massa.blocos.length + 2 * subsolos + apoiados,
   };
+  return { cenario, massa, distribuicao: dist, financeiro: fin };
 }
 
 export type ChaveDoComparador = keyof CenarioDeMassa;
@@ -113,6 +134,7 @@ export const LINHAS_DO_COMPARADOR: readonly LinhaDoComparador[] = [
   { chave: 'eficienciaGlobalPct', rotulo: 'Eficiência', formato: 'pct', melhor: 'MAIOR', destaque: 'maior eficiência' },
   { chave: 'vagasQueCabem', rotulo: 'Vagas que cabem', formato: 'num', melhor: null },
   { chave: 'vagasExigidas', rotulo: 'Vagas exigidas', formato: 'num', melhor: null },
+  { chave: 'areaComumPorUnidadeM2', rotulo: 'Área comum por unidade', formato: 'm2', melhor: 'MENOR', destaque: 'menor área comum por unidade' },
   { chave: 'vgv', rotulo: 'VGV', formato: 'brl', melhor: 'MAIOR', destaque: 'maior VGV' },
   { chave: 'custoTotal', rotulo: 'Custo total', formato: 'brl', melhor: 'MENOR', destaque: 'menor custo' },
   { chave: 'resultado', rotulo: 'Resultado', formato: 'brl', melhor: null },

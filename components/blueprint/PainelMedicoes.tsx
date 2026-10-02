@@ -82,7 +82,7 @@ export default function PainelMedicoes({
 
   return (
     <div className="overflow-y-auto">
-      <div className="border-b border-slate-200 px-4 py-3">
+      <div className="border-b border-slate-200 px-6 py-3">
         <h2 className="text-sm font-semibold text-slate-800">Medições</h2>
         <p className="text-xs text-slate-500">
           Traçadas à mão sobre a planta de fundo. O número é <strong>afirmado</strong>,
@@ -91,7 +91,7 @@ export default function PainelMedicoes({
       </div>
 
       {!temFundo && (
-        <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+        <p className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-800">
           Sem planta de fundo, medir é traçar no vazio. Importe uma planta e afira a
           escala antes.
         </p>
@@ -101,7 +101,7 @@ export default function PainelMedicoes({
           preferência de quem está olhando, não fato do levantamento. Uma tabela
           de camadas traria três colunas de estado por estudo para resolver o que
           um `Set` em memória resolve. */}
-      <div className="border-b border-slate-200 px-4 py-3">
+      <div className="border-b border-slate-200 px-6 py-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Camadas
         </h3>
@@ -153,7 +153,7 @@ export default function PainelMedicoes({
       </div>
 
       {ocultas > 0 && (
-        <p className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600">
+        <p className="border-b border-slate-200 bg-slate-50 px-6 py-2 text-[11px] text-slate-600">
           {/* Sumir sem explicação parece defeito. E o total abaixo continua
               contando estas — esconder não é apagar. */}
           {ocultas} medição(ões) fora da lista: de outra prancha ou de camada
@@ -162,7 +162,7 @@ export default function PainelMedicoes({
       )}
 
       {formas.length === 0 ? (
-        <p className="px-4 py-3 text-xs text-slate-500">
+        <p className="px-6 py-3 text-xs text-slate-500">
           Nenhuma medição ainda. Use <strong>Área</strong>, <strong>Linha</strong> ou{' '}
           <strong>Contar</strong> na barra: clique os vértices e feche no primeiro
           ponto, ou dê duplo clique para encerrar.
@@ -178,7 +178,7 @@ export default function PainelMedicoes({
             const rotulo = f.nome || ROTULO_TIPO[f.tipo];
             return (
               <li key={f.id} className={sel ? 'bg-blue-50' : ''}>
-                <div className="px-4 py-2">
+                <div className="px-6 py-2">
                   <div className="flex items-center gap-2">
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-sm"
@@ -291,7 +291,7 @@ export default function PainelMedicoes({
       )}
 
       {pendentes.length > 0 && (
-        <p className="flex items-start gap-1.5 border-b border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+        <p className="flex items-start gap-1.5 border-b border-amber-200 bg-amber-50 px-6 py-2 text-[11px] text-amber-800">
           <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
           {/* Sumir do total em silêncio seria pior que aparecer como pendência. */}
           <span>
@@ -302,7 +302,7 @@ export default function PainelMedicoes({
       )}
 
       {totais.length > 0 && (
-        <div className="px-4 py-3">
+        <div className="px-6 py-3">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Total por item
           </h3>
@@ -344,8 +344,8 @@ export default function PainelMedicoes({
         </div>
       )}
 
-      {aviso && <p className="px-4 pb-3 text-xs text-emerald-700">{aviso}</p>}
-      {erro && <p className="px-4 pb-3 text-xs text-red-600">{erro}</p>}
+      {aviso && <p className="px-6 pb-3 text-xs text-emerald-700">{aviso}</p>}
+      {erro && <p className="px-6 pb-3 text-xs text-red-600">{erro}</p>}
     </div>
   );
 }

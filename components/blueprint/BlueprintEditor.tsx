@@ -16923,7 +16923,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
         <SheetPanel className="drawer-legivel p-0">
           {relatorioNoDrawer === 'roteiro' && (
-            <div className="px-4 py-3">
+            <div className="px-6 py-4">
               <PainelRoteiroPerimetrico
                 roteiro={roteiro}
                 memorial={memorialConvencional(roteiro, { nome: study.name || 'Imóvel' })}
@@ -16948,7 +16948,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {relatorioNoDrawer === 'car' && (
-            <div className="px-4 py-3">
+            <div className="px-6 py-4">
               <PainelCar
                 car={car}
                 bioma={regularizacao.bioma}
@@ -16976,7 +16976,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {relatorioNoDrawer === 'reurb' && (
-            <div className="px-4 py-3">
+            <div className="px-6 py-4">
               <PainelReurb
                 model={editor.model}
                 dados={regularizacao.reurb}
@@ -17018,7 +17018,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {relatorioNoDrawer === 'sigef' && (
-            <div className="px-4 py-3">
+            <div className="px-6 py-4">
               <PainelSigef
                 model={editor.model}
                 sigef={sigef}
@@ -17050,7 +17050,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {relatorioNoDrawer === 'vias' && (
-            <div className="px-4 py-3">
+            <div className="px-6 py-4">
               <PainelViasEGreide
                 vias={viasDeProjeto}
                 viasDoLoteamento={viasDoLoteamento}
@@ -17076,7 +17076,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {relatorioNoDrawer === 'loteamento' && (
-            <div className="px-4 py-3">
+            <div className="px-6 py-4">
               <PainelConferenciaDoLoteamento
                 avisos={avisosDoLoteamento}
                 regras={regrasDoLoteamento}
@@ -17091,29 +17091,31 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           )}
 
           {relatorioNoDrawer === 'conflitos' && (
-            <PainelConflitos
-              model={editor.model}
-              conflitos={conflitos}
-              arquitetonicos={conflitosArq}
-              aceites={mapaDeAceites}
-              podeDecidir={!somenteLeitura}
-              onAceitar={async (e) => {
-                const a = await blueprintConflitoStatusService.aceitar({ studyId: study.id, organizationId: study.organization_id, ...e });
-                setAceitesDeConflito((lista) => [...lista.filter((x) => x.chave !== a.chave), a]);
-              }}
-              onReabrir={async (a) => {
-                await blueprintConflitoStatusService.reabrir(a.id);
-                setAceitesDeConflito((lista) => lista.filter((x) => x.id !== a.id));
-              }}
-              onSelecionar={(id) => selecionar([id])}
-              onExportarBcf={exportarBcfDoEstudo}
-              destaqueNo3d={destacarConflitos3d}
-              onDestaqueNo3d={setDestacarConflitos3d}
-            />
+            <div className="px-6 py-4">
+              <PainelConflitos
+                model={editor.model}
+                conflitos={conflitos}
+                arquitetonicos={conflitosArq}
+                aceites={mapaDeAceites}
+                podeDecidir={!somenteLeitura}
+                onAceitar={async (e) => {
+                  const a = await blueprintConflitoStatusService.aceitar({ studyId: study.id, organizationId: study.organization_id, ...e });
+                  setAceitesDeConflito((lista) => [...lista.filter((x) => x.chave !== a.chave), a]);
+                }}
+                onReabrir={async (a) => {
+                  await blueprintConflitoStatusService.reabrir(a.id);
+                  setAceitesDeConflito((lista) => lista.filter((x) => x.id !== a.id));
+                }}
+                onSelecionar={(id) => selecionar([id])}
+                onExportarBcf={exportarBcfDoEstudo}
+                destaqueNo3d={destacarConflitos3d}
+                onDestaqueNo3d={setDestacarConflitos3d}
+              />
+            </div>
           )}
 
           {relatorioNoDrawer === 'restricoes' && (
-            <div className="p-3">
+            <div className="px-6 py-4">
               <PainelRestricoes model={editor.model} conferencias={conferenciaDeRestricoes} onComando={(c) => editor.run(c)} onSelecionar={(id) => id && selecionar([id])} />
             </div>
           )}

@@ -255,7 +255,7 @@ export default function PainelOrcamento({
 
   return (
     <div className="overflow-y-auto">
-      <div className="border-b border-slate-200 px-4 py-3">
+      <div className="border-b border-slate-200 px-6 py-3">
         <h2 className="text-sm font-semibold text-slate-800">Orçamento</h2>
         <p className="text-xs text-slate-500">
           De-para entre a medida geométrica e o item do catálogo. A unidade do item tem
@@ -264,7 +264,7 @@ export default function PainelOrcamento({
       </div>
 
       {!obraId && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+        <div className="border-b border-amber-200 bg-amber-50 px-6 py-3">
           <p className="text-xs text-amber-800">
             Esta planta não está vinculada a uma obra — não há orçamento onde aplicar.
             Escolha a obra:
@@ -305,13 +305,13 @@ export default function PainelOrcamento({
           "a prévia usa a versão 0" mandaria o usuário procurar um snapshot que
           nunca existiu. */}
       {revisao === 0 ? (
-        <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+        <p className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-800">
           Nenhuma versão publicada ainda. O quantitativo nunca sai de rascunho —
           publique antes de gerar a prévia.
         </p>
       ) : (
         dirty && (
-          <p className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          <p className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-xs text-amber-800">
             Há alterações não publicadas. A prévia usa a versão {revisao} — não o que
             está na tela.
           </p>
@@ -319,7 +319,7 @@ export default function PainelOrcamento({
       )}
 
       {/* ── De-para ────────────────────────────────────────────────────────── */}
-      <div className="border-b border-slate-200 px-4 py-3">
+      <div className="border-b border-slate-200 px-6 py-3">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           Medidas mapeadas
         </h3>
@@ -399,7 +399,7 @@ export default function PainelOrcamento({
       <PainelComposicoesDePeca organizationId={study.organization_id} onMudou={invalidarPrevia} onContagem={setComposicoes} />
 
       {/* ── Prévia ─────────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3">
+      <div className="px-6 py-3">
         <button
           type="button"
           onClick={() => void prever()}

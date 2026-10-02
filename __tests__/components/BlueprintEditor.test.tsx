@@ -6386,4 +6386,15 @@ describe('drawer de tarefa: o painel do meio com padding lateral (01/10/2026)', 
     expect(corpo).not.toBeNull();
     expect(corpo!.className).toMatch(/\bpx-6\b/);
   });
+
+  it('o drawer de relatório (ex.: Conflitos) também — o PainelConflitos encostava nas bordas', async () => {
+    await montar();
+    await abrirAba(/^analisar$/i);
+    abrirMenusDoRibbon();
+    await userEvent.setup().click(screen.getByRole('button', { name: /^conflitos/i }));
+    const corpo = (await screen.findByRole('dialog')).querySelector('.drawer-legivel');
+    expect(corpo).not.toBeNull();
+    // O corpo é p-0 (Medições e Orçamento têm seções de largura toda); cada relatório traz o px-6.
+    expect((corpo!.firstElementChild as HTMLElement).className).toMatch(/\bpx-6\b/);
+  });
 });

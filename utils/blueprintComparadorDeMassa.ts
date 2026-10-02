@@ -20,6 +20,7 @@ import { medirMassa, type HipotesesDaMassa, type MedidaDaMassa, type ZonaDaMassa
 import { distribuirProduto, type Produto, type ResultadoDoProduto } from './blueprintProduto';
 import { financeiroDaMassa, type ResultadoFinanceiro } from './blueprintFinanceiroMassa';
 import type { CubDoPadrao } from '../services/cubService';
+import { insolacaoDaMassa, type OpcoesDaInsolacaoDaMassa } from './blueprintInsolacaoDaMassa';
 
 export interface CenarioDeMassa {
   blocos: number;
@@ -37,6 +38,12 @@ export interface CenarioDeMassa {
   areaComumPorUnidadeM2: number | null;
   /** Área dos blocos de garagem, somados os pavimentos, m². */
   garagemM2: number;
+  /** M5b: horas de sol nas fachadas em 21/06, média pela área de fachada; null sem a régua do sol. */
+  solNasFachadasH: number | null;
+  /** M5b: % da área de fachada abaixo do mínimo de sol em 21/06. */
+  fachadaCriticaPct: number | null;
+  /** M5b: a maior perda de sol no térreo de uma divisa vizinha em 21/06, h. */
+  perdaDoVizinhoH: number | null;
   vgv: number | null;
   custoTotal: number | null;
   resultado: number | null;
@@ -61,6 +68,12 @@ export interface ReguaDoComparador {
   vagasPorUnidadeDaZona: number | null;
   /** Vagas por contorno de garagem já calculadas — ver `distribuirProduto`. */
   cacheDeVagas?: Map<string, number>;
+  /**
+   * M5b: o sol do estudo (latitude, norte, entorno, mínimo). Ausente = os
+   * indicadores de sol saem null. A amostragem é SEMPRE a rápida aqui: a régua
+   * tem de ser a mesma para todos os cenários comparados.
+   */
+  insolacao?: Omit<OpcoesDaInsolacaoDaMassa, 'amostragem'> | null;
 }
 
 /** O cenário e as medidas de onde ele saiu — o gerador (M5) precisa do estado da lei e das vagas. */
@@ -84,6 +97,7 @@ export function medirCenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador)
   const fin = dist ? financeiroDaMassa(massa, r.produto, dist, r.cub) : null;
   const subsolos = massa.blocos.reduce((s, b) => s + b.pavimentosNoSubsolo, 0);
   const apoiados = massa.blocos.filter((b) => b.apoiadoEm).length;
+  const sol = r.insolacao ? insolacaoDaMassa(model, { ...r.insolacao, amostragem: 'RAPIDA' }) : null;
   const cenario: CenarioDeMassa = {
     blocos: massa.blocos.length,
     pavimentosMax: massa.pavimentosMax,
@@ -98,6 +112,9 @@ export function medirCenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador)
     vagasExigidas: dist?.vagasExigidas ?? 0,
     areaComumPorUnidadeM2: dist?.areaComumPorUnidadeM2 ?? null,
     garagemM2: Math.round(massa.blocos.filter((b) => b.uso === 'GARAGEM').reduce((s, b) => s + b.areaConstruidaM2, 0) * 100) / 100,
+    solNasFachadasH: sol?.horasInverno ?? null,
+    fachadaCriticaPct: sol?.fachadaCriticaPct ?? null,
+    perdaDoVizinhoH: sol?.maiorPerdaDoVizinhoH ?? null,
     vgv: fin && fin.vgv > 0 ? fin.vgv : null,
     custoTotal: fin?.custoTotal ?? null,
     resultado: fin?.resultado ?? null,
@@ -110,7 +127,7 @@ export function medirCenarioDeMassa(model: BlueprintModel, r: ReguaDoComparador)
 }
 
 export type ChaveDoComparador = keyof CenarioDeMassa;
-export type FormatoDaLinha = 'num' | 'm2' | 'pct' | 'brl' | 'razao' | 'm';
+export type FormatoDaLinha = 'num' | 'm2' | 'pct' | 'brl' | 'razao' | 'm' | 'h';
 
 export interface LinhaDoComparador {
   chave: ChaveDoComparador;
@@ -140,6 +157,9 @@ export const LINHAS_DO_COMPARADOR: readonly LinhaDoComparador[] = [
   { chave: 'resultado', rotulo: 'Resultado', formato: 'brl', melhor: null },
   { chave: 'margemPct', rotulo: 'Margem', formato: 'pct', melhor: null },
   { chave: 'vgvSobreCusto', rotulo: 'VGV ÷ custo', formato: 'razao', melhor: 'MAIOR', destaque: 'melhor relação VGV/custo' },
+  { chave: 'solNasFachadasH', rotulo: 'Sol nas fachadas (21/06)', formato: 'h', melhor: 'MAIOR', destaque: 'maior insolação nas fachadas' },
+  { chave: 'fachadaCriticaPct', rotulo: 'Fachada com pouco sol', formato: 'pct', melhor: 'MENOR', destaque: 'menos fachada sem sol' },
+  { chave: 'perdaDoVizinhoH', rotulo: 'Sol tirado do vizinho (21/06)', formato: 'h', melhor: 'MENOR', destaque: 'menor sombra nos vizinhos' },
   { chave: 'pisosComProblema', rotulo: 'Pavimentos fora da lei', formato: 'num', melhor: null },
   { chave: 'complexidade', rotulo: 'Complexidade construtiva', formato: 'num', melhor: 'MENOR', destaque: 'menor complexidade construtiva' },
 ];
@@ -184,6 +204,8 @@ export function formatarDoComparador(v: number | null, f: FormatoDaLinha): strin
       return n(2);
     case 'm':
       return `${n(2)} m`;
+    case 'h':
+      return `${n(1)} h`;
     default:
       return n(0);
   }

@@ -5,7 +5,8 @@
  * profundidade), o toggle do sol no 3D, e a tabela por ambiente: fachadas com
  * janela e horas de sol em 21/06, 21/03 e 21/12, horas do ambiente, ventilação
  * cruzada e "sol agora". Clique na linha seleciona a etiqueta. Só leitura do
- * desenho; as hipóteses são do navegador.
+ * desenho; data, hora e latitude suposta são do navegador — os VIZINHOS são do
+ * ESTUDO desde a M5b do Estudo de Massa (`blueprint_study_entorno`).
  */
 import React, { useMemo } from 'react';
 import { AlertTriangle, Plus, Sun, Trash2 } from 'lucide-react';
@@ -53,12 +54,17 @@ interface Props {
   temLote: boolean;
   nomeDoPavimento: string;
   onSelecionar: (etiquetaId: ObjectId) => void;
+  /** M5b: de onde vêm os vizinhos — gravados no estudo, ou só nesta sessão (sem a tabela). */
+  entorno?: { gravadoNoEstudo: boolean; persistenciaIndisponivel: boolean; erroDeGravacao: string | null };
+  /** Vizinhos que este navegador guardava do jeito antigo (chave global), para trazer ao estudo. */
+  vizinhosDoNavegador?: number;
+  onTrazerDoNavegador?: () => void;
 }
 
 const h = (v: number) => `${v.toFixed(2).replace('.', ',')} h`;
 const LADOS: BoundaryPapel[] = ['FRENTE', 'FUNDOS', 'LATERAL_DIREITA', 'LATERAL_ESQUERDA'];
 
-export default function PainelInsolacao({ hipoteses, onHipoteses, latitudeDoEstudo, norteGraus, analise, insolacaoMinimaH, temLote, nomeDoPavimento, onSelecionar }: Props) {
+export default function PainelInsolacao({ hipoteses, onHipoteses, latitudeDoEstudo, norteGraus, analise, insolacaoMinimaH, temLote, nomeDoPavimento, onSelecionar, entorno, vizinhosDoNavegador = 0, onTrazerDoNavegador }: Props) {
   const latitude = latitudeDoEstudo ?? hipoteses.latitudeManual;
   const dia = diaDoAno(hipoteses.data);
   const sol = useMemo(() => posicaoSolar(latitude, dia, hipoteses.horaSolar), [latitude, dia, hipoteses.horaSolar]);
@@ -185,6 +191,7 @@ export default function PainelInsolacao({ hipoteses, onHipoteses, latitudeDoEstu
           <button
             type="button"
             disabled={!temLote}
+            title={temLote ? undefined : 'Desenhe as divisas do lote primeiro'}
             onClick={() => set({ vizinhos: [...hipoteses.vizinhos, { id: `v${Date.now().toString(36)}`, lado: 'LATERAL_DIREITA', alturaM: 9, afastamentoM: 1.5, profundidadeM: 12 }] })}
             className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-slate-300 bg-white px-2 text-xs font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50"
             data-testid="novo-vizinho"
@@ -193,6 +200,23 @@ export default function PainelInsolacao({ hipoteses, onHipoteses, latitudeDoEstu
           </button>
         </div>
         {!temLote && <p className="mt-1 text-[11px] text-amber-800">Desenhe as divisas do lote (Terreno) para posicionar vizinhos por lado.</p>}
+        {entorno && (
+          <p className="mt-1 text-[11px] text-slate-500" data-testid="origem-do-entorno">
+            {entorno.persistenciaIndisponivel
+              ? 'Os vizinhos valem só nesta sessão: a tabela do entorno não está disponível.'
+              : entorno.erroDeGravacao
+                ? <span className="text-red-700">Os vizinhos não foram gravados: {entorno.erroDeGravacao}</span>
+                : 'Os vizinhos são do estudo: quem abrir o estudo vê os mesmos, e o Estudo de massa os usa na sombra.'}
+          </p>
+        )}
+        {vizinhosDoNavegador > 0 && hipoteses.vizinhos.length === 0 && onTrazerDoNavegador && (
+          <p className="mt-1 rounded-[6px] bg-amber-50 px-2 py-1 text-[11px] text-amber-900" data-testid="vizinhos-do-navegador">
+            Este navegador guardava {vizinhosDoNavegador} vizinho(s) do jeito antigo (valiam para todos os estudos).{' '}
+            <button type="button" onClick={onTrazerDoNavegador} className="font-medium text-blue-700 hover:underline">
+              Trazer para este estudo
+            </button>
+          </p>
+        )}
         {hipoteses.vizinhos.length > 0 && (
           <table className="mt-1 w-full text-xs">
             <thead>

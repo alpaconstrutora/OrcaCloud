@@ -131,6 +131,12 @@ if (!dados) {
   const cr = dados.cubReal;
   exigir(cr && !cr.erro && cr.r8n.fonte === 'TABELA' && cr.r8n.valorM2 > 1000, `CUB real R8-N/MG: ${cr?.r8n?.valorM2} (${cr?.r8n?.fonte} ${cr?.r8n?.referencia ?? ''})${cr?.erro ? ' ' + cr.erro : ''}`);
   exigir(cr && !cr.erro && cr.ppn.fonte === 'TABELA' && cr.ppn.valorM2 > 1000, `CUB real PP-N/MG: ${cr?.ppn?.valorM2} (${cr?.ppn?.fonte}) — coluna pp_4_n`);
+  // M5b — sol de 21/06 a 19,9° S (o sol fica ao norte o dia todo): a fachada norte da torre vê sol, a sul não;
+  // a sombra cai para o sul — o vizinho da frente (rua, ao sul) perde, o dos fundos não. E cabe numa edição.
+  const so = dados.sol;
+  exigir(so && so.norteDaTorreH > 6 && so.sulDaTorreH === 0, `sol na torre em 21/06: norte ${so?.norteDaTorreH} h, sul ${so?.sulDaTorreH} h`);
+  exigir(so && so.perdaFrenteH > 0 && so.perdaFundosH === 0, `sol tirado do vizinho: frente ${so?.perdaFrenteH} h, fundos ${so?.perdaFundosH} h`);
+  exigir(so && so.ms < 150, `insolação completa da massa em ${so?.ms} ms (roda a cada edição com a gaveta aberta)`);
 }
 if (!com) exigir(false, 'não achei o canvas');
 else {

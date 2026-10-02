@@ -111,6 +111,33 @@ export interface VizinhoDoEntorno {
   profundidadeM: number;
 }
 
+const LADOS_DO_ENTORNO: readonly BoundaryPapel[] = ['FRENTE', 'FUNDOS', 'LATERAL_DIREITA', 'LATERAL_ESQUERDA'];
+
+/**
+ * A coluna `blueprint_study_entorno.vizinhos` (M5b) → vizinhos válidos. O que
+ * não serve (lado desconhecido, número negativo, não-objeto) cai fora — nunca
+ * vira um vizinho de altura 0 que pareceria declarado.
+ */
+export function vizinhosDaColuna(raw: unknown): VizinhoDoEntorno[] {
+  if (!Array.isArray(raw)) return [];
+  const num = (v: unknown, min: number, max: number) => {
+    const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v.replace(',', '.')) : NaN;
+    return Number.isFinite(n) && n >= min && n <= max ? n : null;
+  };
+  const out: VizinhoDoEntorno[] = [];
+  raw.forEach((x, i) => {
+    if (!x || typeof x !== 'object') return;
+    const o = x as Record<string, unknown>;
+    const lado = LADOS_DO_ENTORNO.find((l) => l === o.lado);
+    const alturaM = num(o.alturaM, 0.1, 500);
+    const afastamentoM = num(o.afastamentoM, 0, 500);
+    const profundidadeM = num(o.profundidadeM, 0.1, 500);
+    if (!lado || alturaM == null || afastamentoM == null || profundidadeM == null) return;
+    out.push({ id: typeof o.id === 'string' && o.id ? o.id : `viz_${i + 1}`, lado, alturaM, afastamentoM, profundidadeM });
+  });
+  return out;
+}
+
 export interface PrismaDoEntorno {
   id: string;
   rotulo: string;

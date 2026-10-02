@@ -167,6 +167,33 @@ describe('gerador de massa', () => {
     expect(vagasQueCabem(girado, 'PERPENDICULAR')).toBe(vagasQueCabem(ret, 'PERPENDICULAR'));
   });
 
+  it('M5b: com a régua do sol, "maximizar o sol" ranqueia pela insolação e testa as variantes do L e do U; nos outros objetivos o sol vira indicador dos melhores', () => {
+    const sol = { latitudeGraus: -23.5, rotacaoNorteDeg: null, entorno: [], minimaH: 2 };
+    const comSol = gerarMassa(entrada(LOTE, { objetivo: 'INSOLACAO', regua: { ...REGUA, insolacao: sol } }), 1);
+    expect(comSol.melhores.length).toBeGreaterThan(3);
+    for (const c of comSol.melhores) {
+      expect(c.cenario.solNasFachadasH).not.toBeNull();
+      expect(c.valor).toBe(c.cenario.solNasFachadasH);
+    }
+    expect(comSol.melhores[0].valor).toBe(Math.max(...comSol.melhores.map((c) => c.valor!)));
+    expect(comSol.decisoes.join(' ')).toMatch(/medido em cada combinação/);
+    // Sem meta de unidades, o sol não pode levar ao prédio baixo: 80 % das unidades da varredura.
+    const piso = Number(/mantendo pelo menos (\d+) unidades \(80 %/.exec(comSol.decisoes.join(' '))![1]);
+    expect(piso).toBeGreaterThan(50);
+    for (const c of comSol.melhores) expect(c.cenario.unidades).toBeGreaterThanOrEqual(piso);
+    expect(comSol.descartes.some((d) => d.motivo === 'abaixo de 80 % das unidades possíveis')).toBe(true);
+    expect(comSol.avaliados).toBeGreaterThan(r.avaliados); // as variantes do L e do U entraram
+    // Objetivo financeiro: o ranking não muda, os melhores ganham o sol como indicador.
+    const fin = gerarMassa(entrada(LOTE, { regua: { ...REGUA, insolacao: sol } }), 1);
+    expect(fin.melhores.map((c) => c.chave)).toEqual(r.melhores.map((c) => c.chave));
+    for (const c of fin.melhores) expect(c.cenario.solNasFachadasH).not.toBeNull();
+    expect(fin.decisoes.join(' ')).toMatch(/medido só nas melhores/);
+    // Sem a régua do sol, o objetivo não se mede — e diz por quê.
+    const semSol = gerarMassa(entrada(LOTE, { objetivo: 'INSOLACAO' }), 1, { tipos: ['TORRE'] });
+    expect(semSol.melhores).toHaveLength(0);
+    expect(semSol.avisos.join(' ')).toMatch(/sol não foi informado/);
+  });
+
   it('grade de pavimentos: todos até 12; acima, sempre com o teto', () => {
     expect(gradeDePavimentos(5)).toEqual([1, 2, 3, 4, 5]);
     const g = gradeDePavimentos(30);

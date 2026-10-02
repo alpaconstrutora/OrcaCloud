@@ -208,6 +208,16 @@ export interface BlueprintProgramRow {
 }
 
 /** Produto do Estudo de Massa (M2) — `blueprint_study_produto`. */
+/** ENTORNO do estudo (M5b): vizinhos por divisa, sanitizados por `vizinhosDaColuna`. */
+export interface BlueprintEntornoRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  vizinhos: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintProdutoRow {
   id: string;
   study_id: string;

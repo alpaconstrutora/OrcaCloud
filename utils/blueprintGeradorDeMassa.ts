@@ -74,7 +74,7 @@ export const ROTULO_DO_ESTACIONAMENTO: Record<ModoDeEstacionamento, string> = {
   SUBSOLO_2: '2 subsolos',
 };
 
-export const OBJETIVOS_DA_MASSA = ['VGV', 'RESULTADO', 'VENDAVEL', 'UNIDADES', 'EFICIENCIA', 'MENOR_CUSTO', 'MENOR_COMUM', 'MENOR_GARAGEM', 'PONDERADO'] as const;
+export const OBJETIVOS_DA_MASSA = ['VGV', 'RESULTADO', 'VENDAVEL', 'UNIDADES', 'EFICIENCIA', 'INSOLACAO', 'MENOR_CUSTO', 'MENOR_COMUM', 'MENOR_GARAGEM', 'PONDERADO'] as const;
 export type ObjetivoDaMassa = (typeof OBJETIVOS_DA_MASSA)[number];
 
 export const ROTULO_DO_OBJETIVO: Record<ObjetivoDaMassa, string> = {
@@ -83,6 +83,7 @@ export const ROTULO_DO_OBJETIVO: Record<ObjetivoDaMassa, string> = {
   VENDAVEL: 'Maximizar a área vendável',
   UNIDADES: 'Maximizar o número de unidades',
   EFICIENCIA: 'Maximizar a eficiência',
+  INSOLACAO: 'Maximizar o sol nas fachadas (21/06)',
   MENOR_CUSTO: 'Minimizar o custo',
   MENOR_COMUM: 'Minimizar a área comum por unidade',
   MENOR_GARAGEM: 'Minimizar a área de estacionamento',
@@ -99,9 +100,11 @@ export interface PesosDoObjetivo {
   custo: number;
   /** Menor complexidade construtiva é melhor. */
   complexidade: number;
+  /** M5b: sol nas fachadas em 21/06 (mais é melhor). Só pesa com a régua do sol. */
+  insolacao: number;
 }
 
-export const PESOS_PADRAO: PesosDoObjetivo = { vgv: 1, resultado: 2, unidades: 1, eficiencia: 1, custo: 1, complexidade: 1 };
+export const PESOS_PADRAO: PesosDoObjetivo = { vgv: 1, resultado: 2, unidades: 1, eficiencia: 1, custo: 1, complexidade: 1, insolacao: 1 };
 
 export interface RestricoesDaMassa {
   /** CA, TO, gabarito e envelope por pavimento. Desligado, o gerador ainda fica dentro do envelope do térreo. */
@@ -178,6 +181,12 @@ export interface ParametrosDoCandidato {
   /** Posição da torre única na folga do retângulo, −1 a 1 (0 = centro). */
   du: number;
   dv: number;
+  /**
+   * M5b: o espelho da forma (L: em que canto fica a dobra; U: para que lado
+   * abre). Com a régua do sol a orientação muda o resultado; sem ela as
+   * variantes dariam números iguais e não são testadas.
+   */
+  variante: number;
 }
 
 export interface CandidatoDeMassa {
@@ -335,7 +344,10 @@ function paraBloco(ctx: Contexto, nome: string, local: Point[], cotaBaseMm: numb
 
 /** Os contornos (no quadro local) dos blocos de unidades de um tipo; null = a forma não cabe no retângulo. */
 function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandidato, g: number): { nome: string; anel: Point[] }[] | null {
-  const { comprimento: len, largura: larg, pt } = eixoDo(r);
+  const eixo = eixoDo(r);
+  const { comprimento: len, largura: larg } = eixo;
+  // Variante: bit 0 espelha ao longo do comprimento, bit 1 através — o L troca de canto, o U abre do outro lado.
+  const pt = (a: number, b: number) => eixo.pt(p.variante & 1 ? len - a : a, p.variante & 2 ? larg - b : b);
   const prof = Math.min(p.profundidadeMm, larg);
   if (prof < LADO_MIN_MM) return null;
   switch (tipo) {
@@ -473,6 +485,7 @@ const CHAVES_DO_PESO: { peso: keyof PesosDoObjetivo; valor: (c: CenarioDeMassa) 
   { peso: 'eficiencia', valor: (c) => c.eficienciaGlobalPct, sinal: 1 },
   { peso: 'custo', valor: (c) => c.custoTotal, sinal: -1 },
   { peso: 'complexidade', valor: (c) => c.complexidade, sinal: -1 },
+  { peso: 'insolacao', valor: (c) => c.solNasFachadasH, sinal: 1 },
 ];
 
 /** Maior é melhor. `metaDeUnidades` muda o "minimizar custo": com meta, custo total; sem, custo por m² vendável. */
@@ -488,6 +501,8 @@ export function valorDoObjetivo(c: CenarioDeMassa, objetivo: ObjetivoDaMassa, op
       return c.unidades;
     case 'EFICIENCIA':
       return c.eficienciaGlobalPct;
+    case 'INSOLACAO':
+      return c.solNasFachadasH;
     case 'MENOR_CUSTO':
       if (c.custoTotal == null) return null;
       if (opcoes.metaDeUnidades != null) return -c.custoTotal;
@@ -561,12 +576,16 @@ export function frenteDeParetoDaMassa(cands: readonly CandidatoDeMassa[]): strin
 
 // ─── O gerador ───────────────────────────────────────────────────────────────
 
-const chaveDe = (p: ParametrosDoCandidato) => `${p.tipo}|p${p.profundidadeMm}|c${p.comprimentoMm}|n${p.pavimentos}|${p.garagem}|${p.du.toFixed(2)},${p.dv.toFixed(2)}`;
+const chaveDe = (p: ParametrosDoCandidato) => `${p.tipo}|p${p.profundidadeMm}|c${p.comprimentoMm}|n${p.pavimentos}|${p.garagem}|${p.du.toFixed(2)},${p.dv.toFixed(2)}|v${p.variante}`;
+/** Que variantes cada forma tem (as que mudam a orientação de alguma fachada). */
+const VARIANTES: Partial<Record<TipoDeImplantacao, number[]>> = { EM_L: [0, 1, 2, 3], EM_U: [0, 2] };
+const ROTULO_DA_VARIANTE: Record<number, string> = { 1: 'espelhado', 2: 'invertido', 3: 'espelhado e invertido' };
 const f1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString('pt-BR');
 
 function rotuloDe(p: ParametrosDoCandidato, hip: HipotesesDoGeradorDeMassa): string {
   const partes = [ROTULO_DA_IMPLANTACAO[p.tipo]];
   if (p.tipo === 'TORRE') partes[0] += Math.abs(p.du) < 0.34 && Math.abs(p.dv) < 0.34 ? ' central' : ' deslocada';
+  if (p.variante && ROTULO_DA_VARIANTE[p.variante]) partes[0] += ` (${ROTULO_DA_VARIANTE[p.variante]})`;
   partes.push(p.tipo === 'EMBASAMENTO_E_TORRE' ? `${hip.pavimentosDoEmbasamento} + ${p.pavimentos} pav` : `${p.pavimentos} pav`);
   partes.push(USA_COMPRIMENTO.has(p.tipo) ? `${f1(p.comprimentoMm / 1000)} × ${f1(p.profundidadeMm / 1000)} m` : `lâmina ${f1(p.profundidadeMm / 1000)} m`);
   if (p.garagem !== 'SEM_GARAGEM') partes.push(ROTULO_DO_ESTACIONAMENTO[p.garagem].replace(/ \(.*\)$/, ''));
@@ -631,7 +650,11 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const metaDeUnidades = restricoes.unidadesMin ?? produto.metaUnidades ?? null;
 
   const cacheDeVagas = new Map<string, number>();
-  const reguaComCache: ReguaDoComparador = { ...regua, cacheDeVagas };
+  // O sol custa: só entra em CADA combinação quando o objetivo depende dele; os
+  // melhores ganham os indicadores de sol no fim de qualquer jeito.
+  const pesos = entrada.pesos ?? PESOS_PADRAO;
+  const precisaSol = !!regua.insolacao && (objetivo === 'INSOLACAO' || (objetivo === 'PONDERADO' && pesos.insolacao > 0));
+  const reguaComCache: ReguaDoComparador = { ...regua, cacheDeVagas, insolacao: precisaSol ? regua.insolacao : null };
   const base: BlueprintModel = { ...model, blocos: [] };
   const memo = new Map<string, { c: CandidatoDeMassa; medido: CenarioMedido } | null>();
   const descartes = new Map<string, number>();
@@ -685,15 +708,17 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
       for (const comp of USA_COMPRIMENTO.has(tipo) ? comprimentos : [0]) {
         for (const n of gradeDePavimentos(tetoDoTipo)) {
           let estourouALei = false;
-          for (const garagem of garagensDe(tipo)) {
-            // Pilotis come um pavimento do gabarito: a torre desce um para caber.
-            const nEf = garagem === 'PILOTIS' ? Math.min(n, tetoDoTipo - 1) : n;
-            if (nEf < 1) continue;
-            const r = avaliar({ tipo, profundidadeMm: prof, comprimentoMm: comp, pavimentos: nEf, garagem, du: 0, dv: 0 });
-            if (!r) continue;
-            if (r.c.motivos.some((m) => m === 'CA acima do máximo' || m === 'TO acima da máxima')) estourouALei = true;
-            // Sem garagem e já viável: garagem só custaria — não precisa testar.
-            if (garagem === 'SEM_GARAGEM' && r.c.viavel) break;
+          for (const variante of precisaSol ? (VARIANTES[tipo] ?? [0]) : [0]) {
+            for (const garagem of garagensDe(tipo)) {
+              // Pilotis come um pavimento do gabarito: a torre desce um para caber.
+              const nEf = garagem === 'PILOTIS' ? Math.min(n, tetoDoTipo - 1) : n;
+              if (nEf < 1) continue;
+              const r = avaliar({ tipo, profundidadeMm: prof, comprimentoMm: comp, pavimentos: nEf, garagem, du: 0, dv: 0, variante });
+              if (!r) continue;
+              if (r.c.motivos.some((m) => m === 'CA acima do máximo' || m === 'TO acima da máxima')) estourouALei = true;
+              // Sem garagem e já viável: garagem só custaria — não precisa testar.
+              if (garagem === 'SEM_GARAGEM' && r.c.viavel) break;
+            }
           }
           // CA/TO só crescem com os pavimentos: os de cima também estouram.
           if (estourouALei) break;
@@ -706,9 +731,19 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const todos = () => [...memo.values()].filter((x): x is { c: CandidatoDeMassa; medido: CenarioMedido } => !!x).map((x) => x.c);
   const viaveisDaGrade = todos().filter((c) => c.viavel);
   const faixas = objetivo === 'PONDERADO' ? faixasDe(viaveisDaGrade.map((c) => c.cenario)) : undefined;
-  const opcoes = { metaDeUnidades, pesos: entrada.pesos, faixas };
+  const opcoes = { metaDeUnidades, pesos, faixas };
+  // Sol sem meta de unidades levaria ao prédio de 1 pavimento (o baixo é o que
+  // mais vê sol): o objetivo vira "o máximo de sol mantendo 80 % das unidades
+  // que o lote comporta na varredura" — e a decisão diz isso.
+  const pisoDeUnidades = objetivo === 'INSOLACAO' && metaDeUnidades == null && viaveisDaGrade.length ? Math.ceil(0.8 * Math.max(...viaveisDaGrade.map((c) => c.cenario.unidades)) - 1e-9) : null;
+  const MOTIVO_DO_PISO = 'abaixo de 80 % das unidades possíveis';
   const pontuar = (c: CandidatoDeMassa) => {
     c.valor = valorDoObjetivo(c.cenario, objetivo, opcoes);
+    if (pisoDeUnidades != null && c.viavel && c.cenario.unidades < pisoDeUnidades) {
+      c.viavel = false;
+      c.motivos.push(MOTIVO_DO_PISO);
+      contar(descartes, MOTIVO_DO_PISO);
+    }
   };
   for (const c of todos()) pontuar(c);
 
@@ -719,7 +754,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     for (const c of [...lista].sort(compararCandidatos)) if (c.viavel && c.valor != null && !m.has(c.parametros.tipo)) m.set(c.parametros.tipo, c);
     return m;
   };
-  const iniciais = melhorPorTipo(viaveisDaGrade);
+  const iniciais = melhorPorTipo(viaveisDaGrade.filter((c) => c.viavel));
   let melhoraram = 0;
   const passo500 = (v: number) => Math.round(v / 500) * 500;
   const vizinho = (p: ParametrosDoCandidato): ParametrosDoCandidato => {
@@ -729,6 +764,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     if (p.tipo === 'TORRE') opcoesDeMudanca.push('du', 'dv');
     if (p.tipo === 'LAMINA') opcoesDeMudanca.push('dv');
     if (hip.estacionamento === 'AUTOMATICO') opcoesDeMudanca.push('gar');
+    if (precisaSol && (VARIANTES[p.tipo]?.length ?? 0) > 1) opcoesDeMudanca.push('var');
     const o = opcoesDeMudanca[Math.floor(rnd() * opcoesDeMudanca.length)];
     const sinal = rnd() < 0.5 ? -1 : 1;
     const tetoDoTipo = p.tipo === 'EMBASAMENTO_E_TORRE' ? teto.n - hip.pavimentosDoEmbasamento : teto.n;
@@ -737,7 +773,10 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     else if (o === 'pav') v.pavimentos = Math.min(Math.max(1, tetoDoTipo - (p.garagem === 'PILOTIS' ? 1 : 0)), Math.max(1, p.pavimentos + sinal));
     else if (o === 'du') v.du = Math.min(1, Math.max(-1, Math.round((p.du + sinal * 0.25) * 100) / 100));
     else if (o === 'dv') v.dv = Math.min(1, Math.max(-1, Math.round((p.dv + sinal * 0.25) * 100) / 100));
-    else {
+    else if (o === 'var') {
+      const vs = VARIANTES[p.tipo]!;
+      v.variante = vs[(vs.indexOf(p.variante) + (sinal > 0 ? 1 : vs.length - 1)) % vs.length];
+    } else {
       const gs = garagensDe(p.tipo);
       v.garagem = gs[(gs.indexOf(p.garagem) + (sinal > 0 ? 1 : gs.length - 1)) % gs.length];
     }
@@ -765,6 +804,13 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   for (const c of finais) if (c.valor == null && c.viavel) pontuar(c);
   const viaveis = finais.filter((c) => c.viavel);
   const melhores = [...melhorPorTipo(viaveis).values()].sort(compararCandidatos);
+  // Os indicadores de sol dos melhores, mesmo quando o objetivo não dependia deles.
+  if (regua.insolacao && !precisaSol) {
+    for (const c of melhores) {
+      const comSol = medirCenarioDeMassa(modeloCom(base, levelId, c.blocos), { ...regua, cacheDeVagas });
+      if (comSol) c.cenario = { ...c.cenario, solNasFachadasH: comSol.cenario.solNasFachadasH, fachadaCriticaPct: comSol.cenario.fachadaCriticaPct, perdaDoVizinhoH: comSol.cenario.perdaDoVizinhoH };
+    }
+  }
   const pareto = frenteDeParetoDaMassa(melhores);
 
   // ── Decisões e avisos ──
@@ -773,10 +819,15 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   decisoes.push(
     `Lote de ${f1(loteMm2 / 1e6)} m²; ${q.frenteDeclarada ? 'quadro orientado pela divisa FRENTE (a rua)' : 'sem divisa FRENTE marcada: quadro alinhado ao desenho (marque a frente em Terreno › Dados do lote)'}.`,
     `Envelope no térreo: retângulo inscrito de ${f1(W / 1000)} × ${f1(D / 1000)} m, a ${MARGEM_MM / 10} cm da borda. Em lote irregular o retângulo perde as pontas — a implantação é conservadora.`,
-    `Objetivo: ${ROTULO_DO_OBJETIVO[objetivo].toLowerCase()}${objetivo === 'MENOR_CUSTO' ? (metaDeUnidades != null ? ` com pelo menos ${metaDeUnidades} unidades` : ' por m² vendável (sem meta de unidades, o custo total levaria ao menor prédio)') : ''}.`,
+    `Objetivo: ${ROTULO_DO_OBJETIVO[objetivo].toLowerCase()}${objetivo === 'MENOR_CUSTO' ? (metaDeUnidades != null ? ` com pelo menos ${metaDeUnidades} unidades` : ' por m² vendável (sem meta de unidades, o custo total levaria ao menor prédio)') : ''}${pisoDeUnidades != null ? ` mantendo pelo menos ${pisoDeUnidades} unidades (80 % do máximo da varredura — sem meta, o sol sozinho levaria ao prédio de 1 pavimento)` : ''}.`,
     `Restrições: ${[restricoes.respeitarLei ? 'CA, TO, gabarito e envelope por pavimento' : 'lei DESLIGADA (só o envelope do térreo)', restricoes.atenderVagas ? 'vagas exigidas atendidas' : 'vagas não exigidas', metaDeUnidades != null ? `mínimo de ${metaDeUnidades} unidades` : null].filter(Boolean).join('; ')}.`,
     `Pavimentos testados até ${teto.n} (limitados ${teto.por}); estacionamento: ${ROTULO_DO_ESTACIONAMENTO[hip.estacionamento].toLowerCase()}.`,
     `${avaliados} combinações medidas com a régua do estudo (${tipos.length} implantações × ${profundidades.length} profundidades × comprimentos × pavimentos × garagem); ${viaveis.length} viáveis.`,
+    ...(regua.insolacao
+      ? [
+          `Sol de 21/06 a ${f1(regua.insolacao.latitudeGraus)}°, ${regua.insolacao.entorno.length} prisma(s) de vizinho declarado(s), mínimo de ${f1(regua.insolacao.minimaH)} h na fachada — ${precisaSol ? 'medido em cada combinação (o objetivo depende dele; L e U testados nas variantes espelhadas)' : 'medido só nas melhores, como indicador'}.`,
+        ]
+      : []),
     `Refinamento com a semente ${semente}: ${hip.iteracoes} passos de recozimento por implantação; ${melhoraram} de ${iniciais.size} melhoraram em relação à grade.`,
   );
   if (produto.tipologias.length === 0) avisos.push('O estudo não tem produto (gaveta Produto): sem tipologias não há unidades nem dinheiro — só a massa se mede.');
@@ -788,6 +839,8 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     avisos.push(
       objetivo === 'VGV' || objetivo === 'RESULTADO'
         ? 'Nenhum cenário tem VGV: as tipologias do produto estão sem preço/m². Preencha os preços ou escolha outro objetivo.'
+        : objetivo === 'INSOLACAO' && !regua.insolacao
+          ? 'O sol não foi informado ao gerador (latitude e norte do estudo): a insolação não se mede.'
         : 'O objetivo escolhido não se mede nestes cenários (falta custo ou unidades). Confira o produto ou escolha outro objetivo.',
     );
   }

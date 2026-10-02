@@ -75,7 +75,7 @@ const COLUNAS: StandardTableColumn[] = [
   { key: 'pareto', label: 'Pareto', width: 100 },
 ];
 
-const ROTULO_DO_PESO: Record<keyof PesosDoObjetivo, string> = { vgv: 'VGV', resultado: 'Resultado', unidades: 'Unidades', eficiencia: 'Eficiência', custo: 'Custo (menor)', complexidade: 'Complexidade (menor)' };
+const ROTULO_DO_PESO: Record<keyof PesosDoObjetivo, string> = { vgv: 'VGV', resultado: 'Resultado', unidades: 'Unidades', eficiencia: 'Eficiência', custo: 'Custo (menor)', complexidade: 'Complexidade (menor)', insolacao: 'Sol nas fachadas' };
 
 /** "12; 15; 18" → [12, 15, 18] (vírgula decimal aceita). */
 function listaDeMetros(texto: string): number[] {
@@ -135,6 +135,8 @@ function formatarObjetivo(v: number | null, objetivo: ObjetivoDaMassa): string {
       return formatarDoComparador(v, 'num');
     case 'EFICIENCIA':
       return formatarDoComparador(v, 'pct');
+    case 'INSOLACAO':
+      return `${formatarDoComparador(v, 'h')} de sol nas fachadas`;
     case 'MENOR_CUSTO':
       return Math.abs(v) < 100_000 ? `${formatarDoComparador(Math.abs(v), 'num')} R$/m² vendável` : formatarDoComparador(Math.abs(v), 'brl');
     case 'PONDERADO':

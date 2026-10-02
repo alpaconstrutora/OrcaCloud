@@ -147,6 +147,14 @@ vi.mock('../../services/cubService', async () => {
   const real = await vi.importActual<typeof import('../../services/cubService')>('../../services/cubService');
   return { ...real, cubDoPadrao: vi.fn(async () => ({ valorM2: 2000, fonte: 'TABELA', referencia: '12/2025 · Com Desoneração' })) };
 });
+const getEntorno = vi.fn(async () => null as unknown);
+const saveEntorno = vi.fn(async () => ({}) as unknown);
+vi.mock('../../services/blueprintEntornoService', () => ({
+  blueprintEntornoService: {
+    get: (...a: unknown[]) => getEntorno(...(a as [])),
+    save: (...a: unknown[]) => saveEntorno(...(a as [])),
+  },
+}));
 const congelarProduto = vi.fn(async () => {});
 vi.mock('../../services/blueprintSnapshotProdutoService', () => ({
   blueprintSnapshotProdutoService: {
@@ -1299,7 +1307,8 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(ind).toHaveTextContent(/a zona não informa a taxa de ocupação/);
     expect(ind).toHaveTextContent(/7\.200,00 m²/);
     // A linha da tabela seleciona o bloco; o painel dele aparece com a medida.
-    await user.click(within(gaveta).getByText('Torre A'));
+    // (O bloco aparece também na tabela de insolação da M5b: a linha é a da tabela de indicadores.)
+    await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Torre A'));
     const painel = await screen.findByTestId('painel-bloco');
     expect(painel).toHaveTextContent(/Bloco de massa · Torre A/);
     expect(painel).toHaveTextContent(/720,00 m² de projeção/);
@@ -1427,6 +1436,58 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(chamada.descricao).toMatch(/^Gerada: /);
     expect(chamada.model.blocos).toHaveLength(blocosDaEscolhida);
   }, 30000);
+
+  it('estudo de massa (M5b): a gaveta mede o sol da massa (fachadas, lote, vizinhos); o entorno é do ESTUDO e os vizinhos antigos do navegador podem ser trazidos', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    // Lote 40 × 60 m com a rua ao sul; uma lâmina leste–oeste de 12 m de profundidade e 8 pavimentos.
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 40000, 0, 'FRENTE'),
+        d(40000, 0, 40000, 60000, 'LATERAL_DIREITA'),
+        d(40000, 60000, 0, 60000, 'FUNDOS'),
+        d(0, 60000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBloco', levelId: t, nome: 'Lâmina', pontos: [k.point(5000, 20000), k.point(35000, 20000), k.point(35000, 32000), k.point(5000, 32000)], pavimentos: 8 },
+      ]).model,
+    );
+    // Vizinhos do jeito antigo: a chave GLOBAL do navegador.
+    localStorage.setItem('blueprint:insolacao', JSON.stringify({ data: '2026-06-21', horaSolar: 9, latitudeManual: -23.5, vizinhos: [{ id: 'velho', lado: 'FUNDOS', alturaM: 40, afastamentoM: 0, profundidadeM: 15 }], solNo3d: true }));
+    getEntorno.mockResolvedValueOnce(null);
+    saveEntorno.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    const sol = within(gaveta).getByTestId('insolacao-da-massa');
+    expect(sol).toHaveTextContent(/Sol nas fachadas/);
+    expect(sol).toHaveTextContent(/Fachada com pouco sol\s*\d+,\d %/);
+    // A sombra cai para o sul: a frente (rua) perde sol; os fundos, não.
+    const viz = within(sol).getByTestId('sol-dos-vizinhos');
+    expect(viz).toHaveTextContent(/Frente \(rua\): [\d,]+ h → [\d,]+ h \(−[\d,]+ h\)/);
+    expect(viz).toHaveTextContent(/Fundos: [\d,]+ h → [\d,]+ h \(sem perda\)/);
+    // Por bloco: profundidade 12 m e a fachada sul sem sol em 21/06.
+    expect(within(sol).getByText('12,00')).toBeInTheDocument();
+    expect(sol).toHaveTextContent(/1 de 4/);
+    // O estudo ainda não tem vizinhos: o aviso leva à gaveta do entorno.
+    expect(sol).toHaveTextContent(/0 vizinho\(s\) declarado\(s\)/);
+    await user.click(within(sol).getByRole('button', { name: /^declarar o entorno$/i }));
+    const ins = await screen.findByTestId('tarefa-insolacao');
+    expect(within(ins).getByTestId('origem-do-entorno')).toHaveTextContent(/Os vizinhos são do estudo/);
+    // Os vizinhos antigos do navegador: trazidos para o estudo num clique, e gravados nele.
+    const oferta = within(ins).getByTestId('vizinhos-do-navegador');
+    expect(oferta).toHaveTextContent(/guardava 1 vizinho\(s\) do jeito antigo/);
+    await user.click(within(oferta).getByRole('button', { name: /^trazer para este estudo$/i }));
+    await waitFor(() => expect(saveEntorno).toHaveBeenCalled(), { timeout: 2000 });
+    const [estudo, , vizinhos] = saveEntorno.mock.calls[0] as unknown as [string, string, { lado: string; alturaM: number }[]];
+    expect(estudo).toBe('std_1');
+    expect(vizinhos).toEqual([expect.objectContaining({ lado: 'FUNDOS', alturaM: 40 })]);
+    expect(within(ins).queryByTestId('vizinhos-do-navegador')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('blueprint:insolacao')!).vizinhos).toEqual([]);
+  });
 
   it('estudo de massa (M4): Alternativas compara TODAS com a mesma régua, destaca por linha sem vencedor, sugere EM-00N; publicar congela o produto', async () => {
     const k = await import('../../utils/blueprintKernel');

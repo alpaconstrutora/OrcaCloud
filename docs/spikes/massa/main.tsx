@@ -34,6 +34,7 @@ import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command
 import { divisasDoLote, medirTerreno } from '../../../utils/blueprintTerreno';
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../../utils/blueprintMassa';
 import TelaGeradorDeMassa from '../../../components/blueprint/TelaGeradorDeMassa';
+import { insolacaoDaMassa } from '../../../utils/blueprintInsolacaoDaMassa';
 import { useGeradorDeMassa } from '../../../hooks/useGeradorDeMassa';
 import { gerarMassa, RESTRICOES_PADRAO, type EntradaDoGeradorDeMassa } from '../../../utils/blueprintGeradorDeMassa';
 
@@ -92,6 +93,8 @@ declare global {
       /** M3: financeiro com CUB fixo de 2.000 (conta conferível) e o CUB REAL da tabela. */
       financeiro?: { vgv: number; custoObra: number | null; margemPct: number | null };
       cubReal?: { r8n: { valorM2: number; fonte: string; referencia: string | null }; ppn: { valorM2: number; fonte: string; referencia: string | null } } | { erro: string };
+      /** M5b: a insolação COMPLETA da massa a 19,9° S, num navegador de verdade (física e tempo). */
+      sol?: { ms: number; norteDaTorreH: number; sulDaTorreH: number; perdaFrenteH: number; perdaFundosH: number; loteComSolPct: number | null };
     };
   }
 }
@@ -204,6 +207,15 @@ function App() {
   const dist = distribuirProduto(model, medida, p);
   const f = financeiroDaMassa(medida, p, dist, { valorM2: 2000, fonte: 'TABELA', referencia: 'fixo do harness' });
   window.__massa!.financeiro = { vgv: f.vgv, custoObra: f.custoObra, margemPct: f.margemPct };
+  if (!vazio) {
+    const t0 = performance.now();
+    const s = insolacaoDaMassa(model, { latitudeGraus: -19.9, rotacaoNorteDeg: null, entorno: [], minimaH: 2, amostragem: 'COMPLETA' });
+    const ms = performance.now() - t0;
+    const torreSol = s.blocos.find((b) => b.nome === 'Torre');
+    const h = (o: string) => torreSol?.fachadas.find((x) => x.orientacao === o)?.horasInverno ?? -1;
+    const perda = (l: string) => s.vizinhos.find((v) => v.lado === l)?.perdidasH ?? -1;
+    window.__massa!.sol = { ms: Math.round(ms), norteDaTorreH: h('N'), sulDaTorreH: h('S'), perdaFrenteH: perda('FRENTE'), perdaFundosH: perda('FUNDOS'), loteComSolPct: s.loteComSolPct };
+  }
   // A consulta REAL: mesma função que a tela usa, contra a tabela do Estimador (leitura pública).
   Promise.all([cubDoPadrao('MG', 'R8-N'), cubDoPadrao('MG', 'PP-N')])
     .then(([r8n, ppn]) => (window.__massa!.cubReal = { r8n, ppn }))

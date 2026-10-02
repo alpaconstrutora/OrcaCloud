@@ -9,13 +9,16 @@
  * aqui — mudar um bloco, um recuo ou a zona recalcula tudo na hora.
  */
 import React from 'react';
-import { AlertTriangle, ArrowUpFromLine, Banknote, Building2, CarFront, Droplets, Gauge, Hammer, Home, Layers, LandPlot, Percent, Ruler, Scale, Send, SquareStack, TrendingUp, Users, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, Banknote, Building2, CarFront, CloudSun, Droplets, Gauge, Hammer, Home, Layers, LandPlot, Percent, Ruler, Scale, Send, SquareStack, Sun, SunDim, TrendingUp, Users, Wallet } from 'lucide-react';
 import { KpiCard, type KpiColor } from '../ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO, type UsoDoBloco } from '../../utils/blueprintKernel';
 import type { EstadoDoIndicador, HipotesesDaMassa, IndicadorDaMassa, MedidaDaMassa, MedidaDoBloco } from '../../utils/blueprintMassa';
 import type { ProdutoDoBloco, ResultadoDoProduto } from '../../utils/blueprintProduto';
 import type { ResultadoFinanceiro } from '../../utils/blueprintFinanceiroMassa';
+import type { InsolacaoDaMassa, InsolacaoDoBloco } from '../../utils/blueprintInsolacaoDaMassa';
+import { ROTULO_DO_LADO } from '../../utils/blueprintInsolacao';
+import { ROTULO_DO_PONTO_CARDEAL } from '../../utils/blueprintGrafoEspacial';
 
 interface Props {
   medida: MedidaDaMassa;
@@ -30,6 +33,11 @@ interface Props {
   onLancarNucleo?: (blocoId: string, elevadores: number) => void;
   /** M3: VGV, custo e margem do cenário; `null` = sem produto. */
   financeiro?: ResultadoFinanceiro | null;
+  /** M5b: o sol da massa (amostragem completa); `null` = sem bloco com fachada útil. */
+  insolacao?: InsolacaoDaMassa | null;
+  /** "latitude da georreferência (−19,92°) · norte = +Y do desenho" — de onde vem o sol. */
+  origemDoSol?: string;
+  onAbrirEntorno?: () => void;
   /** M3: enviar o cenário ao Empreendimento (estrutura: torres e unidades). */
   envio?: {
     empreendimentos: { id: string; name: string }[];
@@ -68,6 +76,22 @@ function legenda(ind: IndicadorDaMassa, fmt: (v: number) => string): string {
   return `limite ${fmt(ind.limite!)} · ${ind.estado === 'ATENDE' ? 'atende' : 'excede'}`;
 }
 
+// Soma 500 px: cabe na gaveta sem rolar (as colunas de sol são curtas de propósito).
+const COLUNAS_DO_SOL: StandardTableColumn[] = [
+  { key: 'nome', label: 'Bloco', sortable: true, width: 110 },
+  { key: 'orientacao', label: 'Orientação', sortable: true, width: 100 },
+  { key: 'profundidade', label: 'Prof. (m)', sortable: true, width: 80, align: 'right' },
+  { key: 'inverno', label: '21/06 (h)', sortable: true, width: 70, align: 'right' },
+  { key: 'verao', label: '21/12 (h)', sortable: true, width: 70, align: 'right' },
+  { key: 'criticas', label: 'Sem sol', sortable: true, width: 70, align: 'right' },
+];
+
+const horasDoVerao = (b: InsolacaoDoBloco): number | null => {
+  const com = b.fachadas.filter((f) => f.horasVerao != null);
+  const c = com.reduce((s, f) => s + f.comprimentoM, 0);
+  return c > 0 ? com.reduce((s, f) => s + f.horasVerao! * f.comprimentoM, 0) / c : null;
+};
+
 const COLUNAS: StandardTableColumn[] = [
   { key: 'nome', label: 'Bloco', sortable: true, width: 150 },
   { key: 'uso', label: 'Uso', sortable: true, width: 110 },
@@ -87,7 +111,7 @@ function problemasDoBloco(b: MedidaDoBloco): string {
   return b.pisos.some((p) => p.cabe === null) ? 'sem lote para conferir' : 'cabe no envelope';
 }
 
-export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo, financeiro: fi = null, envio }: Props) {
+export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo, financeiro: fi = null, envio, insolacao: sol = null, origemDoSol, onAbrirEntorno }: Props) {
   const l = r.legal;
   const campo = 'h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800';
   return (
@@ -295,6 +319,108 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
               />
             </>
           )}
+        </section>
+      )}
+
+      {sol && sol.blocos.length > 0 && (
+        <section className="space-y-3" data-testid="insolacao-da-massa">
+          <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Insolação da massa — 21/06, o pior sol</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <KpiCard
+              label="Sol nas fachadas"
+              value={sol.horasInverno == null ? '—' : `${n1(sol.horasInverno)} h`}
+              sub={`mínimo ${n1(sol.minimaH)} h`}
+              icon={<Sun />}
+              color={sol.horasInverno == null ? 'gray' : sol.horasInverno >= sol.minimaH ? 'emerald' : 'amber'}
+            />
+            <KpiCard
+              label="Fachada com pouco sol"
+              value={sol.fachadaCriticaPct == null ? '—' : `${n1(sol.fachadaCriticaPct)} %`}
+              sub={`abaixo de ${n1(sol.minimaH)} h`}
+              icon={<SunDim />}
+              color={sol.fachadaCriticaPct == null ? 'gray' : sol.fachadaCriticaPct > 25 ? 'amber' : 'emerald'}
+            />
+            <KpiCard
+              label="Lote livre com sol"
+              value={sol.loteComSolPct == null ? '—' : `${n1(sol.loteComSolPct)} %`}
+              sub={sol.loteHorasInverno == null ? 'sem lote' : `média ${n1(sol.loteHorasInverno)} h`}
+              icon={<LandPlot />}
+              color="blue"
+            />
+            <KpiCard
+              label="Sol tirado do vizinho"
+              value={sol.maiorPerdaDoVizinhoH == null ? '—' : `${n1(sol.maiorPerdaDoVizinhoH)} h`}
+              sub="maior perda numa divisa"
+              icon={<CloudSun />}
+              color={sol.maiorPerdaDoVizinhoH == null ? 'gray' : sol.maiorPerdaDoVizinhoH >= 2 ? 'amber' : 'emerald'}
+            />
+          </div>
+          {sol.vizinhos.length > 0 && (
+            <ul className="space-y-0.5 text-xs text-gray-600" data-testid="sol-dos-vizinhos">
+              {sol.vizinhos.map((v) => (
+                <li key={v.lado}>
+                  {ROTULO_DO_LADO[v.lado]}: {n1(v.semMassaH)} h → {n1(v.comMassaH)} h{v.perdidasH > 0 ? <span className="text-amber-700"> (−{n1(v.perdidasH)} h)</span> : ' (sem perda)'}
+                </li>
+              ))}
+            </ul>
+          )}
+          <StandardTable<InsolacaoDoBloco>
+            storageKey="blueprint:massa:sol"
+            columns={COLUNAS_DO_SOL}
+            rows={sol.blocos}
+            rowKey={(b) => b.blocoId}
+            dense
+            onRowClick={(b) => onSelecionarBloco(b.blocoId)}
+            sortValue={(key, b) =>
+              key === 'nome' ? b.nome
+              : key === 'orientacao' ? (b.orientacaoPrincipal ?? '')
+              : key === 'profundidade' ? b.profundidadeM
+              : key === 'inverno' ? b.horasInverno
+              : key === 'verao' ? (horasDoVerao(b) ?? -1)
+              : b.fachadasCriticas
+            }
+            renderCell={(key, b) => {
+              if (key === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
+              if (key === 'orientacao') return <span className="text-sm font-normal text-gray-600">{b.orientacaoPrincipal ? ROTULO_DO_PONTO_CARDEAL[b.orientacaoPrincipal] : '—'}</span>;
+              if (key === 'profundidade') return <span className="text-sm font-normal text-gray-600">{n2(b.profundidadeM)}</span>;
+              if (key === 'inverno') return <span className="text-sm font-normal text-gray-600">{n1(b.horasInverno)}</span>;
+              if (key === 'verao') {
+                const v = horasDoVerao(b);
+                return <span className="text-sm font-normal text-gray-600">{v == null ? '—' : n1(v)}</span>;
+              }
+              return (
+                <span className={`text-sm font-normal ${b.fachadasCriticas > 0 ? 'text-amber-700' : 'text-gray-600'}`} title={b.fachadas.filter((f) => f.critica).map((f) => `${ROTULO_DO_PONTO_CARDEAL[f.orientacao]} · ${n1(f.comprimentoM)} m · ${n1(f.horasInverno)} h`).join('\n')}>
+                  {b.fachadasCriticas} de {b.fachadas.length}
+                </span>
+              );
+            }}
+            empty={{ title: 'Nenhum bloco com fachada útil' }}
+          />
+          {sol.avisos.length > 0 && (
+            <ul className="space-y-1 text-xs text-amber-800">
+              {sol.avisos.map((a) => (
+                <li key={a} className="flex items-start gap-1.5">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {a}
+                    {onAbrirEntorno && /vizinhos declarados/.test(a) && (
+                      <>
+                        {' '}
+                        <button type="button" onClick={onAbrirEntorno} className="font-medium text-blue-700 hover:underline">
+                          Declarar o entorno
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-xs text-gray-500">
+            Sol nas fachadas: média pela área de fachada. Lote livre: a parte fora das projeções com {n1(sol.minimaH)} h ou mais. Vizinho: o térreo a 1 m da divisa, com a massa menos sem ela. Orientação: a fachada maior (no empate, a de mais sol).{' '}
+            Sombra do entorno declarado, dos outros blocos e do próprio bloco (a asa do L sombreia a outra); garagem e subsolo não têm fachada útil. Fachada: 3 pontos ao longo × 1º, meio e topo dos pavimentos, a 1,20 m do piso.
+            {origemDoSol ? ` Sol: ${origemDoSol}.` : ''}
+          </p>
         </section>
       )}
 

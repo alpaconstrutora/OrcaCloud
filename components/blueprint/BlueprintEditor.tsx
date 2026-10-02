@@ -628,6 +628,8 @@ import { pedirMudancasAIa } from '../../services/plantaIaService';
 import { HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, sugerirShaft, type HipotesesDeMobiliario } from '../../utils/blueprintMobiliario';
 import { useGerador } from '../../hooks/useGerador';
 import { useGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
+import { useBlueprintEntorno } from '../../hooks/useBlueprintEntorno';
+import { insolacaoDaMassa, type OpcoesDaInsolacaoDaMassa } from '../../utils/blueprintInsolacaoDaMassa';
 import { comandosDoCandidato, modeloDoCandidato, type CandidatoDeMassa } from '../../utils/blueprintGeradorDeMassa';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
@@ -1608,6 +1610,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const programaDoEstudo = useBlueprintPrograma(study.id, study.organization_id);
   /** ESTUDO DE MASSA (M2): o produto — tipologias, mix, padrão, hipóteses do pavimento. Do estudo. */
   const produtoDoEstudo = useBlueprintProduto(study.id, study.organization_id);
+  /** ENTORNO (M5b): os vizinhos por divisa são do ESTUDO (antes: chave global do navegador). */
+  const entornoDoEstudo = useBlueprintEntorno(study.id, study.organization_id);
   const hipotesesDeArmadura = armaduraDoEstudo.hipoteses;
   /** ARMADURA no 3D (16/09/2026): as barras do esquema, com o concreto translúcido. Nasce desligada. */
   const [mostrarArmadura3d, setMostrarArmadura3d] = usePersistedState<boolean>('blueprint:vista3dArmadura', false);
@@ -4221,8 +4225,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   const terreno = useMemo(() => medirTerreno(limitesDoNivel), [limitesDoNivel]);
   const prismasDoEntornoDoEstudo = useMemo(() => {
-    return prismasDoEntorno(hipotesesDeInsolacao.vizinhos, limitesDoNivel, terreno?.anel ?? null);
-  }, [limitesDoNivel, terreno, hipotesesDeInsolacao.vizinhos]);
+    return prismasDoEntorno(entornoDoEstudo.vizinhos, limitesDoNivel, terreno?.anel ?? null);
+  }, [limitesDoNivel, terreno, entornoDoEstudo.vizinhos]);
+  /**
+   * O SOL DA MASSA (M5b): latitude e norte do estudo, os vizinhos posicionados
+   * nas divisas do LOTE (de qualquer pavimento — o bloco não mora num só) e o
+   * mínimo da zona (2 h quando ela não diz).
+   */
+  const solDaMassa = useMemo<Omit<OpcoesDaInsolacaoDaMassa, 'amostragem'>>(() => {
+    const divisas = divisasDoLote(editor.model.boundaries);
+    return {
+      latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual,
+      rotacaoNorteDeg: norteDoDesenho,
+      entorno: prismasDoEntorno(entornoDoEstudo.vizinhos, divisas, medirTerreno(divisas)?.anel ?? null),
+      minimaH: zona.insolacaoMinimaH ?? 2,
+    };
+  }, [editor.model.boundaries, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, norteDoDesenho, entornoDoEstudo.vizinhos, zona.insolacaoMinimaH]);
   const insolacaoDoNivel = useMemo(() => {
     if (!grafoDoNivel) return [];
     const piso = editor.model.levels.find((l) => l.id === levelId)?.elevationMm ?? 0;
@@ -4579,8 +4597,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       produto: produtoDoEstudo.produto,
       cub: produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo,
       vagasPorUnidadeDaZona: zona.vagasPorUnidade,
+      insolacao: solDaMassa,
     }),
-    [zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, zona.recuos, zona.vagasPorUnidade, hipotesesDaMassa, produtoDoEstudo.produto, cubDoEstudo],
+    [zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, zona.recuos, zona.vagasPorUnidade, hipotesesDaMassa, produtoDoEstudo.produto, cubDoEstudo, solDaMassa],
+  );
+  /** A insolação COMPLETA da massa (fachadas em 3 alturas, inverno e verão, o lote em grade) — só com a gaveta aberta. */
+  const insolacaoDoEstudoDeMassa = useMemo(
+    () => (tarefaAberta === 'massa' && (editor.model.blocos ?? []).length > 0 ? insolacaoDaMassa(editor.model, { ...solDaMassa, amostragem: 'COMPLETA' }) : null),
+    [tarefaAberta, editor.model, solDaMassa],
   );
   const medirCenario = useCallback((m: BlueprintModel) => cenarioDeMassa(m, reguaDoEstudo), [reguaDoEstudo]);
   /** O próximo bloco nasce com o que está na barra de opções. */
@@ -14767,8 +14791,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
           {tarefaAberta === 'insolacao' && (
             <PainelInsolacao
-              hipoteses={hipotesesDeInsolacao}
-              onHipoteses={setHipotesesDeInsolacao}
+              hipoteses={{ ...hipotesesDeInsolacao, vizinhos: entornoDoEstudo.vizinhos }}
+              onHipoteses={(h) => {
+                // Os vizinhos vão para o ESTUDO; o resto (data, hora, latitude suposta, sol no 3D) fica no navegador.
+                if (h.vizinhos !== entornoDoEstudo.vizinhos) entornoDoEstudo.setVizinhos(h.vizinhos);
+                setHipotesesDeInsolacao({ ...h, vizinhos: hipotesesDeInsolacao.vizinhos });
+              }}
+              entorno={entornoDoEstudo}
+              vizinhosDoNavegador={entornoDoEstudo.carregando ? 0 : hipotesesDeInsolacao.vizinhos.length}
+              onTrazerDoNavegador={() => {
+                entornoDoEstudo.setVizinhos(hipotesesDeInsolacao.vizinhos);
+                setHipotesesDeInsolacao({ ...hipotesesDeInsolacao, vizinhos: [] });
+              }}
               latitudeDoEstudo={latitudeDoEstudo}
               norteGraus={norteDoDesenho}
               analise={insolacaoDoNivel}
@@ -14823,6 +14857,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onDesenharBloco={() => editor.setTool('bloco')}
               produto={distribuicaoDoProduto}
               financeiro={financeiroDoEstudo}
+              insolacao={insolacaoDoEstudoDeMassa}
+              origemDoSol={`${latitudeDoEstudo != null ? `latitude da georreferência (${latitudeDoEstudo.toFixed(2).replace('.', ',')}°)` : `latitude SUPOSTA (${hipotesesDeInsolacao.latitudeManual.toFixed(2).replace('.', ',')}°) — georreferencie o estudo`} · ${norteDoDesenho == null ? 'norte = +Y do desenho' : `norte girado ${norteDoDesenho}°`} · ${entornoDoEstudo.vizinhos.length} vizinho(s) declarado(s)`}
+              onAbrirEntorno={() => setTarefa('insolacao')}
               envio={{
                 empreendimentos: empreendimentos.map((e) => ({ id: e.id, name: e.name })),
                 alvo: alvoEfetivoDaMassa,

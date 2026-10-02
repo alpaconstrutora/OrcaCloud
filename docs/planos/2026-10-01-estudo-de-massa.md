@@ -791,7 +791,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M4 — cenários e comparador · **9 de 9** (gravação real provada em 02/10/2026; achado no gatilho de imutabilidade corrigido — migration `aplicar_20271002000040`)
 - [ ] M5 — gerador de implantações e otimizador · dividida em três entregas (02/10/2026):
   - [x] **M5a** — gerador + otimizador + estacionamento como alternativa (este registro)
-  - [ ] **M5b** — insolação de massa (sombra do bloco no lote e nos vizinhos, horas de sol por fachada) como indicador e objetivo; entorno persistido por estudo
+  - [x] **M5b** — insolação de massa (sol nas fachadas, lote livre, vizinhos) como indicador e objetivo; entorno persistido por estudo (este registro)
   - [ ] **M5c** — IA no vocabulário do produto ("duas torres", "apartamentos entre 65 e 75 m²")
   - orientação por unidade (`position_type`, `sun_orientation`) → vai para a M6, junto da divisão do pavimento em unidades
 - [ ] M6 — da massa à planta e ao BIM
@@ -1072,3 +1072,50 @@ põe o critério "pronto quando" da M5 no ar sem esperar as outras; cada uma tem
 | App real (estudo descartável "ZZ TESTE … prova M5", lote 40 × 60 + produto, sem bloco) | 13/13: botão "Gerar massa" no ribbon e habilitado; a tela abre no editor; o worker roda no app (2.195 combinações, 777 viáveis — sem zona aplicada, a varredura vai até o teto de 40 pav, como os avisos dizem); a tela lê o produto do banco; as três linhas; **"Criar alternativa" clicado na tela** → ramo `EM-002 — 40 pav / 190 un` com os blocos no rascunho (subsolo, embasamento, torre); 0 erros de página/PostgREST |
 | Achado do app real | a tabela passava da largura com a barra lateral (coluna Pareto cortada) — o harness sem barra não via; larguras refeitas (1.230 px) e o portão de largura acima entrou para não voltar |
 | Limpeza | estudo apagado pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes: estudos 72 · ramos 72 · versões 8 · produtos 0 · ZZ 0 |
+
+### M5b — Insolação da massa e entorno por estudo (02/10/2026)
+
+**O que entrou.**
+
+- **Motor** `utils/blueprintInsolacaoDaMassa.ts` (puro), com o sol de `blueprintInsolacao` (latitude, dia, hora
+  solar, norte do desenho). Três medidas: (1) **fachadas** de bloco com unidades — horas de sol em 21/06 e 21/12,
+  média pela área de fachada, fachadas críticas (abaixo do mínimo da zona; 2 h quando ela não diz); a sombra vem do
+  entorno, dos OUTROS blocos e do PRÓPRIO bloco (a asa do L sombreia a outra — a análise por ambiente da E5.1 não
+  faz isso); (2) **lote livre** — % fora das projeções com o mínimo de sol e a média de horas; (3) **vizinhos** — o
+  térreo a 1 m de cada divisa, horas com a massa menos sem ela. Mais o §12 por bloco: orientação da fachada maior
+  (no empate da lâmina, a de mais sol) e profundidade. Teste de sombra EXATO (raio horizontal × polígono, par-ímpar,
+  faixa de altura entre base e topo do prisma), sem marcha — o bloco sobre o embasamento é um prisma que começa no
+  alto. Amostragem RÁPIDA (régua do comparador/gerador: meio da fachada no 1º pavimento, só inverno) e COMPLETA
+  (gaveta: 3 pontos × 3 alturas, inverno e verão, lote em grade). Medido: completa 6–14 ms, rápida < 1 ms.
+- **Entorno por ESTUDO**: tabela `blueprint_study_entorno` (migration `aplicar_20271002000050`, APLICADA — RLS
+  `is_org_member`, `authenticated` CRUD, `anon` nada, CHECK de array), `services/blueprintEntornoService.ts`,
+  `hooks/useBlueprintEntorno.ts`, leitor tolerante `vizinhosDaColuna`. Até aqui os vizinhos viviam numa chave
+  GLOBAL do navegador (`blueprint:insolacao`): valiam para todos os estudos daquele navegador e o colega não os via.
+  A gaveta Insolação passa a gravar no estudo e oferece **"Trazer para este estudo"** quando o navegador ainda
+  guarda vizinhos do jeito antigo (sem trazer sozinho: eram de todos os estudos, não deste).
+- **Régua comum**: o cenário do comparador ganhou `solNasFachadasH`, `fachadaCriticaPct`, `perdaDoVizinhoH` (linhas
+  "Sol nas fachadas (21/06)", "Fachada com pouco sol", "Sol tirado do vizinho" com destaque). O editor passa o sol do
+  estudo na régua.
+- **Gerador**: objetivo **"Maximizar o sol nas fachadas (21/06)"** e peso "sol" na combinação ponderada; com o sol
+  no objetivo o L e o U são testados nas variantes espelhadas (a orientação passa a importar); nos outros objetivos
+  o sol é medido só nas melhores, como indicador. ⚠️ Achado ao medir: "só o sol" escolhia prédios de 1–2 pavimentos
+  (o baixo é o que mais vê sol) — sem meta de unidades, o objetivo agora mantém **80 % das unidades** que a varredura
+  comporta, e a decisão diz isso.
+- **Gaveta Estudo de massa**: seção "Insolação da massa — 21/06" (4 cartões, a perda por divisa, a tabela por bloco
+  e de onde vem o sol: latitude da georreferência ou SUPOSTA, norte, nº de vizinhos) com o atalho "Declarar o
+  entorno".
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintInsolacaoDaMassa.test.ts` (5) | raio × prisma exato (bate, passa por cima, por baixo do suspenso, sol do outro lado); a 23,5° S em 21/06 a fachada norte tem > 8 h e a sul 0 (crítica), no verão a sul ganha; girar o norte 180° troca; profundidade 12 m; orientação "N" (empate); a sombra cai para o sul: o vizinho da frente perde, o dos fundos não; torre baixa perde menos; lote livre: média de horas e % com 6 h menores com a torre alta; outro bloco e o entorno sombreiam; amostragem rápida sem lote/verão; garagem/subsolo sem fachada; prisma sobre o embasamento com base em 6 m |
+| `blueprintGeradorDeMassa.test.ts` (+1) | objetivo sol: valor = horas, ranking, variantes do L/U entram, **piso de 80 % das unidades** respeitado e dito; objetivo financeiro: ranking idêntico ao sem sol e os melhores com o sol como indicador; sem a régua do sol, aviso |
+| Teste de editor "estudo de massa (M5b)" | a gaveta mostra o sol; "Frente (rua): … (−x h)" e "Fundos: … (sem perda)"; "1 de 4" fachadas sem sol; "Declarar o entorno" abre a Insolação; os vizinhos antigos do navegador vêm para o estudo num clique (`save` com o estudo e o vizinho) e saem do navegador. O teste da M1 passou a buscar o bloco na tabela de indicadores (o nome aparece também na de sol) |
+| `tsc` · `check-ui-standard` · org guard · XSS | 0 · 0 violações · ok · ok |
+| Suíte cheia (JSON) | 672/672 arquivos · 7.033 testes = 6.999 ok + 34 pulados · 0 falhas |
+| Migration | antes: tabela inexistente; depois: RLS ligada, 1 política, gatilho de `updated_at`, `authenticated` SELECT/INSERT/UPDATE/DELETE, `anon` nada |
+| Harness `docs/spikes/massa/medir.mjs` | **37/37** (+3): a 19,9° S em 21/06 a torre tem 10,25 h ao norte e 0 ao sul; o vizinho da frente perde 6,8 h, o dos fundos 0; insolação completa em 6 ms num navegador real |
+| App real (estudo descartável "ZZ TESTE … prova M5b": lote 40 × 60, lâmina 8 pav, produto) | 10/10: a gaveta mostra "Sol nas fachadas" e a perda da frente; o estudo começa sem vizinho; "Declarar o entorno" → a gaveta diz que os vizinhos são do estudo; **"+ Vizinho" grava na tabela do estudo** (lido de volta pelo serviço); **página recarregada → a gaveta usa 1 vizinho declarado**; o gerador com "maximizar o sol" diz o critério em horas, mantém 80 % das unidades e usa o entorno do estudo; 0 erros de página/PostgREST. Na 1ª rodada o roteiro falhou em dois pontos do próprio roteiro (rótulo em maiúsculas por CSS; clique no ribbon com a gaveta aberta por cima) — estudo apagado e rodado de novo do zero |
+| Achados do app real | subtítulos dos cartões cortados e a tabela por bloco rolando na gaveta estreita (larguras e textos refeitos — a tabela soma 500 px; conferido sem rolagem); "fachada maior" de lâmina saía "Sul" pelo empate (agora a de mais sol) |
+| Limpeza | os 2 estudos descartáveis apagados pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes: estudos 72 · ramos 72 · versões 8 · produtos 0 · entornos 0 · ZZ 0 |

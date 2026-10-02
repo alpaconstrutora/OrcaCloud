@@ -53,6 +53,7 @@ import {
   type TipoDeLimite,
   type TipoDeAreaPublica,
   type RiscoDeSprinkler,
+  type UsoDoBloco,
   type ObjectId,
   type BlueprintModel,
   type BoundaryKind,
@@ -678,6 +679,23 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome ?? '', y.nome ?? ''),
   );
 
+  // BLOCOS DE MASSA (0.90.0): pavimento por índice, nome, contorno, cota, pavimentos,
+  // piso a piso e uso. Omitidos quando não há — desenho sem bloco não ganha chave nova.
+  const blocos = ordenar(
+    model.blocos ?? [],
+    (b) => ({
+      level: nivel(b.levelId),
+      nome: b.nome,
+      pontos: b.pontos.map((p) => ({ x: p.x, y: p.y })),
+      cotaBaseMm: b.cotaBaseMm,
+      pavimentos: b.pavimentos,
+      peDireitoMm: b.peDireitoMm,
+      uso: b.uso,
+      parametros: parametrosCanonicos(b.parametros),
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.cotaBaseMm - y.cotaBaseMm || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome, y.nome),
+  );
+
   // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
@@ -1121,6 +1139,7 @@ function projetar(model: BlueprintModel): {
     vias: vias.length ? vias.map((v) => v.geom) : undefined,
     areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : undefined,
     areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : undefined,
+    blocos: blocos.length ? blocos.map((b) => b.geom) : undefined,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -1163,6 +1182,7 @@ function projetar(model: BlueprintModel): {
     vias: vias.map((v) => v.item.uid ?? null),
     areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
     ...(areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {}),
+    ...(blocos.length ? { blocos: blocos.map((b) => b.item.uid ?? null) } : {}),
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -1259,6 +1279,8 @@ export interface IdentidadeCanonica {
   areasPublicas?: (ElementUid | null)[];
   /** Ausente sob kernel < 0.83.0 e em desenho sem nenhuma. */
   areasDeOperacao?: (ElementUid | null)[];
+  /** Ausente sob kernel < 0.90.0 e em desenho sem nenhum. */
+  blocos?: (ElementUid | null)[];
   rodapes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
@@ -1514,6 +1536,8 @@ export interface CanonicalPayload {
   areasPublicas?: { level: number; tipo: TipoDeAreaPublica; nome: string | null; pontos: { x: number; y: number }[]; parametros?: Parametros }[];
   /** INCÊNDIO. Ausente sob kernel < 0.83.0 e em desenho sem nenhuma. */
   areasDeOperacao?: { level: number; pontos: { x: number; y: number }[]; risco?: RiscoDeSprinkler; nome?: string; parametros?: Parametros }[];
+  /** ESTUDO DE MASSA. Ausente sob kernel < 0.90.0 e em desenho sem nenhum. */
+  blocos?: { level: number; nome: string; pontos: { x: number; y: number }[]; cotaBaseMm: number; pavimentos: number; peDireitoMm: number; uso: UsoDoBloco; parametros?: Parametros }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
   vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
@@ -2203,6 +2227,24 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(a.risco !== undefined ? { risco: a.risco } : {}),
       ...(a.nome !== undefined ? { nome: a.nome } : {}),
       ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
+    });
+  });
+
+  // BLOCOS DE MASSA (0.90.0): pavimento por índice; o resto vem como está.
+  const blocosPayload = payload.blocos ?? [];
+  blocosPayload.forEach((b, i) => {
+    if (!levelIds[b.level]) return;
+    (model.blocos ??= []).push({
+      id: nextId(model, 'blc'),
+      uid: uidDe('blocos', i, blocosPayload.length),
+      levelId: levelIds[b.level],
+      nome: b.nome,
+      pontos: b.pontos.map((p) => ({ x: p.x, y: p.y })),
+      cotaBaseMm: b.cotaBaseMm,
+      pavimentos: b.pavimentos,
+      peDireitoMm: b.peDireitoMm,
+      uso: b.uso,
+      ...(b.parametros && Object.keys(b.parametros).length > 0 ? { parametros: { ...b.parametros } } : {}),
     });
   });
 

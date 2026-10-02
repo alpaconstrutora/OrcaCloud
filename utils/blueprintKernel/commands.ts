@@ -63,6 +63,14 @@ import {
   findVia,
   findAreaPublica,
   findAreaDeOperacao,
+  findBloco,
+  USOS_DO_BLOCO,
+  MAX_NOME_DE_BLOCO,
+  MAX_PAVIMENTOS_DO_BLOCO,
+  PE_DIREITO_PADRAO_DO_BLOCO_MM,
+  PE_DIREITO_MIN_DO_BLOCO_MM,
+  PE_DIREITO_MAX_DO_BLOCO_MM,
+  type UsoDoBloco,
   PROTECOES_DE_ESCADA,
   MARCAS_DE_EMERGENCIA,
   type ProtecaoDaEscada,
@@ -622,6 +630,14 @@ export type Command =
   | { type: 'AddAreaDeOperacao'; levelId: ObjectId; pontos: Point[]; risco?: RiscoDeSprinkler | null; nome?: string | null }
   | { type: 'SetAreaDeOperacaoProps'; areaId: ObjectId; pontos?: Point[]; risco?: RiscoDeSprinkler | null; nome?: string | null }
   | { type: 'DeleteAreaDeOperacao'; areaId: ObjectId }
+  /**
+   * ESTUDO DE MASSA (0.90.0): bloco volumétrico. Omitidos no AddBloco: cota 0,
+   * 1 pavimento, piso a piso de 3,00 m, uso RESIDENCIAL.
+   */
+  | { type: 'AddBloco'; levelId: ObjectId; nome: string; pontos: Point[]; cotaBaseMm?: number; pavimentos?: number; peDireitoMm?: number; uso?: UsoDoBloco }
+  | { type: 'SetBlocoProps'; blocoId: ObjectId; nome?: string; pontos?: Point[]; cotaBaseMm?: number; pavimentos?: number; peDireitoMm?: number; uso?: UsoDoBloco }
+  | { type: 'MoveBlocoVertex'; blocoId: ObjectId; index: number; to: Point }
+  | { type: 'DeleteBloco'; blocoId: ObjectId }
   | { type: 'AddVistaDependente'; levelId: ObjectId; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'SetVistaDependenteProps'; vistaId: ObjectId; nome?: string; recorte?: { minX: number; minY: number; maxX: number; maxY: number }; denominador?: number }
   | { type: 'DeleteVistaDependente'; vistaId: ObjectId }
@@ -1151,6 +1167,8 @@ export type Command =
       nucleoIds?: ObjectId[];
       vagaIds?: ObjectId[];
       componenteIds?: ObjectId[];
+      /** ESTUDO DE MASSA (0.90.0): o bloco anda rígido, como o núcleo. */
+      blocoIds?: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -3129,6 +3147,66 @@ function aplicarSemHash(
       break;
     }
 
+    // ── Bloco de massa (0.90.0, Estudo de Massa M1) ─────────────────────────
+
+    case 'AddBloco': {
+      findLevel(next, command.levelId);
+      const nome = command.nome?.trim().slice(0, MAX_NOME_DE_BLOCO).trim() ?? '';
+      if (!nome) throw new KernelError('BAD_MASS', 'O bloco precisa de nome');
+      if (command.pontos.length < 3) throw new KernelError('BAD_MASS', `O bloco precisa de pelo menos 3 vértices; recebeu ${command.pontos.length}`);
+      const id = nextId(next, 'blc');
+      next.blocos = [
+        ...(next.blocos ?? []),
+        {
+          id,
+          uid: novoUid(),
+          levelId: command.levelId,
+          nome,
+          pontos: command.pontos.map(paraPontoMm),
+          cotaBaseMm: cotaDoBloco(command.cotaBaseMm ?? 0),
+          pavimentos: pavimentosDoBloco(command.pavimentos ?? 1),
+          peDireitoMm: peDireitoDoBloco(command.peDireitoMm ?? PE_DIREITO_PADRAO_DO_BLOCO_MM),
+          uso: usoDoBloco(command.uso ?? 'RESIDENCIAL'),
+        },
+      ];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetBlocoProps': {
+      const b = findBloco(next, command.blocoId);
+      if (command.nome !== undefined) {
+        const nome = command.nome?.trim().slice(0, MAX_NOME_DE_BLOCO).trim() ?? '';
+        if (!nome) throw new KernelError('BAD_MASS', 'O bloco precisa de nome');
+        b.nome = nome;
+      }
+      if (command.pontos !== undefined) {
+        if (command.pontos.length < 3) throw new KernelError('BAD_MASS', 'O bloco precisa de pelo menos 3 vértices');
+        b.pontos = command.pontos.map(paraPontoMm);
+      }
+      if (command.cotaBaseMm !== undefined) b.cotaBaseMm = cotaDoBloco(command.cotaBaseMm);
+      if (command.pavimentos !== undefined) b.pavimentos = pavimentosDoBloco(command.pavimentos);
+      if (command.peDireitoMm !== undefined) b.peDireitoMm = peDireitoDoBloco(command.peDireitoMm);
+      if (command.uso !== undefined) b.uso = usoDoBloco(command.uso);
+      diff.updated.push(b.id);
+      break;
+    }
+
+    case 'MoveBlocoVertex': {
+      const b = findBloco(next, command.blocoId);
+      if (command.index < 0 || command.index >= b.pontos.length) throw new KernelError('BAD_MASS', `Vértice ${command.index} não existe em ${b.id}`);
+      b.pontos[command.index] = { x: assertIntegerMm(roundToMm(command.to.x), 'to.x'), y: assertIntegerMm(roundToMm(command.to.y), 'to.y') };
+      diff.updated.push(b.id);
+      break;
+    }
+
+    case 'DeleteBloco': {
+      const b = findBloco(next, command.blocoId);
+      next.blocos = (next.blocos ?? []).filter((x) => x.id !== b.id);
+      diff.deleted.push(b.id);
+      break;
+    }
+
     // ── Vistas dependentes (P2.17) ──────────────────────────────────────────
 
     case 'AddVistaDependente': {
@@ -4114,6 +4192,7 @@ function aplicarSemHash(
       const nucleoIds = command.nucleoIds ?? [];
       const vagaIds = command.vagaIds ?? [];
       const componenteIds = command.componenteIds ?? [];
+      const blocoIds = command.blocoIds ?? [];
       if (
         command.wallIds.length === 0 &&
         command.boundaryIds.length === 0 &&
@@ -4124,7 +4203,8 @@ function aplicarSemHash(
         quadroIds.length === 0 &&
         nucleoIds.length === 0 &&
         vagaIds.length === 0 &&
-        componenteIds.length === 0
+        componenteIds.length === 0 &&
+        blocoIds.length === 0
       ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
@@ -4277,6 +4357,11 @@ function aplicarSemHash(
         v.at = { x: inteiro(v.at.x + dx), y: inteiro(v.at.y + dy) };
         if (v.sugerida) delete v.sugerida;
         diff.updated.push(v.id);
+      }
+      for (const id of blocoIds) {
+        const b = findBloco(next, id);
+        b.pontos = b.pontos.map((p) => ({ x: inteiro(p.x + dx), y: inteiro(p.y + dy) }));
+        diff.updated.push(b.id);
       }
       // FAMÍLIAS ANINHADAS: os filhos dos conjuntos selecionados vão junto (uma vez só).
       const idsDeComponente = new Set(componenteIds);
@@ -5050,6 +5135,9 @@ function aplicarSemHash(
       next.rodapes = (next.rodapes ?? []).filter((r) => r.levelId !== level.id);
       const operacaoDoNivel = (next.areasDeOperacao ?? []).filter((a) => a.levelId === level.id);
       next.areasDeOperacao = (next.areasDeOperacao ?? []).filter((a) => a.levelId !== level.id);
+      // O bloco de massa vai junto: a cota dele é medida DESTE pavimento.
+      const blocosDoNivel = (next.blocos ?? []).filter((b) => b.levelId === level.id);
+      next.blocos = (next.blocos ?? []).filter((b) => b.levelId !== level.id);
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -5085,6 +5173,7 @@ function aplicarSemHash(
         ...subRegioesDoNivel.map((s) => s.id),
         ...rodapesDoNivel.map((r) => r.id),
         ...operacaoDoNivel.map((a) => a.id),
+        ...blocosDoNivel.map((b) => b.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),
@@ -5611,6 +5700,32 @@ function protecaoValida(p: ProtecaoDaEscada): ProtecaoDaEscada {
 
 function paraPontoMm(p: Point, i: number): Point {
   return { x: assertIntegerMm(roundToMm(p.x), `pontos[${i}].x`), y: assertIntegerMm(roundToMm(p.y), `pontos[${i}].y`) };
+}
+
+// ── Bloco de massa (0.90.0): o comando recusa, não corrige em silêncio ──────
+// Pavimentos e piso a piso fora da faixa são recusados com a faixa no texto:
+// "prender" 250 pavimentos em 200 devolveria um estudo que ninguém pediu.
+
+function cotaDoBloco(v: number): number {
+  return assertIntegerMm(roundToMm(v), 'cotaBaseMm');
+}
+
+function pavimentosDoBloco(v: number): number {
+  if (!Number.isInteger(v) || v < 1 || v > MAX_PAVIMENTOS_DO_BLOCO) throw new KernelError('BAD_MASS', `Pavimentos tem de ser inteiro entre 1 e ${MAX_PAVIMENTOS_DO_BLOCO}; recebeu ${String(v)}`);
+  return v;
+}
+
+function peDireitoDoBloco(v: number): number {
+  const mm = roundToMm(v);
+  if (!Number.isFinite(mm) || mm < PE_DIREITO_MIN_DO_BLOCO_MM || mm > PE_DIREITO_MAX_DO_BLOCO_MM) {
+    throw new KernelError('BAD_MASS', `Piso a piso tem de ficar entre ${PE_DIREITO_MIN_DO_BLOCO_MM / 1000} e ${PE_DIREITO_MAX_DO_BLOCO_MM / 1000} m; recebeu ${String(v)} mm`);
+  }
+  return mm;
+}
+
+function usoDoBloco(u: UsoDoBloco): UsoDoBloco {
+  if (!USOS_DO_BLOCO.includes(u)) throw new KernelError('BAD_MASS', `Uso de bloco desconhecido: ${String(u)}`);
+  return u;
 }
 
 export class ModelHistory {

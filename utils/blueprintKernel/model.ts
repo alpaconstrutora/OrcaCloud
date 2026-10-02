@@ -2256,6 +2256,63 @@ export interface AreaDeOperacao {
 }
 
 /**
+ * BLOCO DE MASSA (0.90.0 — Estudo de Massa, fase M1).
+ *
+ * O volume do empreendimento ANTES da planta: um contorno em planta extrudado
+ * por `pavimentos × peDireitoMm` a partir de `cotaBaseMm`. É a peça com que se
+ * testa o que cabe no terreno (TO, CA, gabarito, envelope) sem desenhar uma
+ * parede — torre, podium, embasamento, subsolo, galpão.
+ *
+ * Como a vaga, o núcleo e a sub-região, fica FORA do arranjo planar: não
+ * fecha ambiente, não divide parede, não é construção no quantitativo de
+ * obra. O que é DERIVADO e nunca gravado (área por pavimento, área construída,
+ * altura, topo, "cabe no envelope?", acima do gabarito, área computável) mora
+ * em `utils/blueprintMassa.ts`.
+ *
+ * `cotaBaseMm` é RELATIVA ao pavimento de referência (`levelId`, o pavimento
+ * em que o bloco é desenhado — tipicamente o térreo): negativa = subsolo.
+ * Podium + torre são DOIS blocos, a torre com a base no topo do podium — um
+ * campo "embasamento" dentro do bloco esconderia a segunda forma em planta,
+ * que é exatamente o que o estudo quer comparar.
+ */
+export const USOS_DO_BLOCO = ['RESIDENCIAL', 'COMERCIAL', 'MISTO', 'GARAGEM', 'LAZER', 'TECNICO'] as const;
+export type UsoDoBloco = (typeof USOS_DO_BLOCO)[number];
+export const ROTULO_DO_USO_DO_BLOCO: Record<UsoDoBloco, string> = {
+  RESIDENCIAL: 'Residencial',
+  COMERCIAL: 'Comercial',
+  MISTO: 'Uso misto',
+  GARAGEM: 'Garagem',
+  LAZER: 'Lazer',
+  TECNICO: 'Técnico',
+};
+export const MAX_NOME_DE_BLOCO = 40;
+export const MAX_PAVIMENTOS_DO_BLOCO = 200;
+/** Piso a piso padrão de um bloco novo — residencial corrente. */
+export const PE_DIREITO_PADRAO_DO_BLOCO_MM = 3000;
+/** Limites do piso a piso aceito: 2,0 m (técnico baixo) a 15 m (galpão). */
+export const PE_DIREITO_MIN_DO_BLOCO_MM = 2000;
+export const PE_DIREITO_MAX_DO_BLOCO_MM = 15000;
+
+export interface Bloco {
+  id: ObjectId;
+  uid: ElementUid;
+  parametros?: Parametros;
+  /** Pavimento de referência: onde o bloco é desenhado e de onde conta a cota. */
+  levelId: ObjectId;
+  /** "Torre A", "Podium", "Subsolo 1". */
+  nome: string;
+  /** Contorno em planta, mm inteiros, >= 3 vértices. */
+  pontos: Point[];
+  /** Piso do 1º pavimento do bloco, relativo ao pavimento de referência, mm inteiro. Negativo = subsolo. */
+  cotaBaseMm: number;
+  /** Número de pavimentos, inteiro em [1, MAX_PAVIMENTOS_DO_BLOCO]. */
+  pavimentos: number;
+  /** Piso a piso, mm inteiro em [PE_DIREITO_MIN, PE_DIREITO_MAX]. */
+  peDireitoMm: number;
+  uso: UsoDoBloco;
+}
+
+/**
  * VÉRTICE NOMEADO DO TERRENO (0.59.0).
  *
  * O memorial descritivo não fala em "lado 3": fala em "do vértice P2 ao P3". O
@@ -2338,6 +2395,12 @@ export function findAreaDeOperacao(model: BlueprintModel, id: ObjectId): AreaDeO
   const a = (model.areasDeOperacao ?? []).find((x) => x.id === id);
   if (!a) throw new KernelError('OPERATION_AREA_NOT_FOUND', `Área de operação inexistente: ${id}`);
   return a;
+}
+
+export function findBloco(model: BlueprintModel, id: ObjectId): Bloco {
+  const b = (model.blocos ?? []).find((x) => x.id === id);
+  if (!b) throw new KernelError('MASS_NOT_FOUND', `Bloco de massa inexistente: ${id}`);
+  return b;
 }
 
 export function findEtapa(model: BlueprintModel, id: ObjectId): Etapa {
@@ -3469,6 +3532,8 @@ export interface BlueprintModel {
   areasPublicas: AreaPublica[];
   /** INCÊNDIO (0.83.0) - áreas de operação dos sprinklers. Ver `AreaDeOperacao`. */
   areasDeOperacao?: AreaDeOperacao[];
+  /** ESTUDO DE MASSA (0.90.0) - blocos volumétricos. Ver `Bloco`. */
+  blocos?: Bloco[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -3596,6 +3661,7 @@ export function emptyModel(): BlueprintModel {
     vias: [],
     areasPublicas: [],
     areasDeOperacao: [],
+    blocos: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -3677,6 +3743,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     vias: (model.vias ?? []).map((v) => ({ ...v, eixo: v.eixo.map((p) => ({ ...p })), ...(v.parametros ? { parametros: { ...v.parametros } } : {}) })),
     areasPublicas: (model.areasPublicas ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     areasDeOperacao: (model.areasDeOperacao ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
+    blocos: (model.blocos ?? []).map((b) => ({ ...b, pontos: b.pontos.map((p) => ({ ...p })), ...(b.parametros ? { parametros: { ...b.parametros } } : {}) })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -4889,6 +4956,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Via', model.vias ?? []],
     ['Área pública', model.areasPublicas ?? []],
     ['Área de operação', model.areasDeOperacao ?? []],
+    ['Bloco de massa', model.blocos ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -5626,6 +5694,21 @@ export function assertModelInvariants(model: BlueprintModel): void {
     });
     if (a.risco !== undefined && !(RISCOS_DE_SPRINKLER as readonly string[]).includes(a.risco)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: risco desconhecido ${String(a.risco)}`);
     if (a.nome !== undefined && (typeof a.nome !== 'string' || a.nome.trim() !== a.nome || a.nome.length === 0 || a.nome.length > MAX_NOME_DE_AREA_DE_OPERACAO)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: nome vazio, com espaço nas pontas ou maior que ${MAX_NOME_DE_AREA_DE_OPERACAO}`);
+  }
+  // BLOCO DE MASSA (0.90.0): pavimento vivo, >= 3 vértices inteiros, nome curto e aparado,
+  // uso da lista, pavimentos e piso a piso inteiros dentro dos limites, cota inteira.
+  for (const b of model.blocos ?? []) {
+    if (!model.levels.some((l) => l.id === b.levelId)) throw new KernelError('BAD_MASS', `Bloco ${b.id}: pavimento inexistente`);
+    if (!Array.isArray(b.pontos) || b.pontos.length < 3) throw new KernelError('BAD_MASS', `Bloco ${b.id}: o contorno precisa de pelo menos 3 vértices`);
+    b.pontos.forEach((p, i) => {
+      assertIntegerMm(p.x, `${b.id}.pontos[${i}].x`);
+      assertIntegerMm(p.y, `${b.id}.pontos[${i}].y`);
+    });
+    if (typeof b.nome !== 'string' || b.nome.trim() !== b.nome || b.nome.length === 0 || b.nome.length > MAX_NOME_DE_BLOCO) throw new KernelError('BAD_MASS', `Bloco ${b.id}: nome vazio, com espaço nas pontas ou maior que ${MAX_NOME_DE_BLOCO}`);
+    if (!(USOS_DO_BLOCO as readonly string[]).includes(b.uso)) throw new KernelError('BAD_MASS', `Bloco ${b.id}: uso desconhecido ${String(b.uso)}`);
+    if (!Number.isInteger(b.pavimentos) || b.pavimentos < 1 || b.pavimentos > MAX_PAVIMENTOS_DO_BLOCO) throw new KernelError('BAD_MASS', `Bloco ${b.id}: pavimentos tem de ser inteiro em [1, ${MAX_PAVIMENTOS_DO_BLOCO}]`);
+    if (!Number.isInteger(b.peDireitoMm) || b.peDireitoMm < PE_DIREITO_MIN_DO_BLOCO_MM || b.peDireitoMm > PE_DIREITO_MAX_DO_BLOCO_MM) throw new KernelError('BAD_MASS', `Bloco ${b.id}: piso a piso fora de [${PE_DIREITO_MIN_DO_BLOCO_MM}, ${PE_DIREITO_MAX_DO_BLOCO_MM}] mm`);
+    assertIntegerMm(b.cotaBaseMm, `${b.id}.cotaBaseMm`);
   }
   // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
   for (const v of model.vistasDependentes ?? []) {

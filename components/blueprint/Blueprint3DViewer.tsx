@@ -85,6 +85,13 @@ interface Props {
   /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
   envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; pecas?: { x: number; y: number }[][]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
   /**
+   * ESTUDO DE MASSA (M1): um prisma SÓLIDO por pavimento de cada bloco, na cor
+   * do uso; vermelho quando o pavimento sai do envelope ou passa do gabarito.
+   * Sólido (não translúcido como o envelope): é a massa, não a referência.
+   * Clicar seleciona o bloco (`id`), como as demais peças.
+   */
+  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean }[];
+  /**
    * SOL (E5.1): direção unitária PARA o sol no espaço do desenho (x, y em
    * planta, z para cima) — a luz principal aponta de lá e as sombras seguem a
    * data/hora escolhidas. Ausente = a luz fixa de sempre.
@@ -952,7 +959,7 @@ function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; pos
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1320,6 +1327,19 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [envelope]);
 
+  /** BLOCOS DE MASSA (M1): um prisma por pavimento, na cota absoluta dele. */
+  const prismasDaMassa = useMemo(() => {
+    if (!massa) return [];
+    return massa
+      .filter((p) => p.anel.length >= 3 && p.topoMm > p.baseMm)
+      .map((p) => {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: (p.topoMm - p.baseMm) * S, bevelEnabled: false });
+        geom.rotateX(-Math.PI / 2);
+        return { ...p, geom, y: p.baseMm * S };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [massa]);
+
   /** COMPONENTES (E7.1): caixas no piso do pavimento — mobiliário cinza-quente, louça branca. */
   const caixasDeComponentes = useMemo(() => {
     const out: { id: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; cor: string; sugerido: boolean }[] = [];
@@ -1421,6 +1441,15 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           <Edges color="#94a3b8" />
         </mesh>
       ))}
+      {prismasDaMassa.map((p) => {
+        const sel = selecionados?.has(p.id) ?? false;
+        return (
+          <mesh key={`massa-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([p.id]); }}>
+            <meshStandardMaterial color={sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} />
+            <Edges color={sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#475569'} />
+          </mesh>
+        );
+      })}
       {prismasDoEnvelope.map((p) => (
         <mesh key={`env-${p.levelId}`} geometry={p.geom} position={[0, p.y, 0]} renderOrder={-1}>
           {/* Translúcido e sem escrever profundidade: é referência, não massa —

@@ -1141,7 +1141,10 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="regulatory-maps" label="Mapa Regulatório" icon={Map} />
                     <DropdownItem id="opportunities" label="Oportunidades" icon={Building2} />
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
-                    <DropdownItem id="planta-ai" label="Estudo de Massa" icon={Brain} />
+                    {/* ESTUDO DE MASSA (01/10/2026): saiu daqui o Planta AI v1 (lote retangular,
+                        VGV/custo fixos no código). O estudo de massa agora mora DENTRO da
+                        Planta Inteligente (aba Terreno › Massa). A rota `planta-ai` continua
+                        viva para os links internos do Empreendimento — só o item de menu saiu. */}
                     <DropdownItem id="blueprint" label="Planta Inteligente" icon={PencilRuler} />
                     <DropdownItem id="bim-viewer" label="Modelo 3D (IFC)" icon={Boxes} />
                     <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
@@ -1325,7 +1328,6 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavGroup label="Inteligência de Negócios" />
               <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" forceFull />
-              <NavItem id="planta-ai" icon={Brain} label="ÒPURA Planta AI" forceFull />
               <NavItem id="blueprint" icon={PencilRuler} label="Planta Inteligente" forceFull />
               <NavItem id="bim-viewer" icon={Boxes} label="Modelo 3D (IFC)" forceFull />
               <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />

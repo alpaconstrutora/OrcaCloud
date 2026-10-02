@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.89.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.90.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -374,6 +374,8 @@ var PREFIXO_ROTULO_UID = {
   rodape: "F",
   /** Etapa de obra — Y (linha do tempo). */
   etapa: "Y",
+  /** Bloco de massa (Estudo de Massa) — Z, a última livre; M já é o componente. */
+  bloco: "Z",
   stair: "E",
   label: "R",
   /**
@@ -736,6 +738,7 @@ function emptyModel() {
     vias: [],
     areasPublicas: [],
     areasDeOperacao: [],
+    blocos: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2011,6 +2014,20 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome ?? "", y.nome ?? "")
   );
+  const blocos = ordenar(
+    model.blocos ?? [],
+    (b) => ({
+      level: nivel(b.levelId),
+      nome: b.nome,
+      pontos: b.pontos.map((p) => ({ x: p.x, y: p.y })),
+      cotaBaseMm: b.cotaBaseMm,
+      pavimentos: b.pavimentos,
+      peDireitoMm: b.peDireitoMm,
+      uso: b.uso,
+      parametros: parametrosCanonicos(b.parametros)
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.cotaBaseMm - y.cotaBaseMm || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome, y.nome)
+  );
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
     (v) => ({
@@ -2345,6 +2362,7 @@ function projetar(model) {
     vias: vias.length ? vias.map((v) => v.geom) : void 0,
     areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : void 0,
     areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : void 0,
+    blocos: blocos.length ? blocos.map((b) => b.geom) : void 0,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
@@ -2382,6 +2400,7 @@ function projetar(model) {
     vias: vias.map((v) => v.item.uid ?? null),
     areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
     ...areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {},
+    ...blocos.length ? { blocos: blocos.map((b) => b.item.uid ?? null) } : {},
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -2783,6 +2802,22 @@ function modelFromCanonicalPayload(payload) {
       ...a.risco !== void 0 ? { risco: a.risco } : {},
       ...a.nome !== void 0 ? { nome: a.nome } : {},
       ...a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}
+    });
+  });
+  const blocosPayload = payload.blocos ?? [];
+  blocosPayload.forEach((b, i) => {
+    if (!levelIds[b.level]) return;
+    (model.blocos ??= []).push({
+      id: nextId(model, "blc"),
+      uid: uidDe("blocos", i, blocosPayload.length),
+      levelId: levelIds[b.level],
+      nome: b.nome,
+      pontos: b.pontos.map((p) => ({ x: p.x, y: p.y })),
+      cotaBaseMm: b.cotaBaseMm,
+      pavimentos: b.pavimentos,
+      peDireitoMm: b.peDireitoMm,
+      uso: b.uso,
+      ...b.parametros && Object.keys(b.parametros).length > 0 ? { parametros: { ...b.parametros } } : {}
     });
   });
   const vistasDependentes = payload.vistasDependentes ?? [];

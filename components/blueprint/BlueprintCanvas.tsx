@@ -84,6 +84,10 @@ import {
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import { faixaDaVia, calcadasDaVia, centroide, areaEmM2 } from '../../utils/blueprintLoteamento';
+import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
+
+/** Identidade estável para o padrão do prop (um `new Set()` no parâmetro redesenharia a cada render). */
+const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
 import { COR_DA_FASE } from '../../utils/blueprintFases';
 import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
 import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
@@ -875,8 +879,8 @@ interface Props {
     delta: Point,
     /** Instalações — ver `TranslateEntities`. Só x e y; a cota não muda. */
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
-    /** Núcleos, vagas e componentes (P2.4) — rígidos, no mesmo comando. */
-    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[] },
+    /** Núcleos, vagas e componentes (P2.4) — rígidos, no mesmo comando. Blocos de massa (M1) idem. */
+    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[] },
   ) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
@@ -1360,6 +1364,10 @@ interface Props {
   onAddAreaPublica?: (pontos: Point[]) => void;
   /** INCÊNDIO (E5.2): fecha o contorno da área de operação dos sprinklers. */
   onAddAreaDeOperacao?: (pontos: Point[]) => void;
+  /** ESTUDO DE MASSA (M1): fecha o contorno do bloco de massa. */
+  onAddBloco?: (pontos: Point[]) => void;
+  /** Blocos com pavimento fora do envelope ou acima do gabarito — contorno vermelho. */
+  blocosComProblema?: ReadonlySet<string>;
   /** INCÊNDIO (E6.3): as rotas de fuga DERIVADAS, um pedaço por pavimento; vermelho = acima do percurso máximo. */
   rotasDeFuga?: readonly { levelId: string; pontos: Point[]; falta: boolean }[] | null;
   onAddVia?: (eixo: Point[]) => void;
@@ -1532,6 +1540,8 @@ export default function BlueprintCanvas({
   onAddLote,
   onAddAreaPublica,
   onAddAreaDeOperacao,
+  onAddBloco,
+  blocosComProblema = SEM_BLOCOS_COM_PROBLEMA,
   rotasDeFuga,
   onAddVia,
   onMoveBoundaryVertex,
@@ -2865,6 +2875,20 @@ export default function BlueprintCanvas({
       return null;
     },
     [subRegioes, ocultos],
+  );
+  /** Qual BLOCO DE MASSA (M1) está sob o cursor — pelo polígono, o último por cima. */
+  const blocoSob = useCallback(
+    (mundo: { x: number; y: number }): { id: string } | null => {
+      const p = arredondar(mundo);
+      const blocos = model.blocos ?? [];
+      for (let i = blocos.length - 1; i >= 0; i--) {
+        const b = blocos[i];
+        if (ocultos.has(b.id) || b.pontos.length < 3 || (levelId && b.levelId !== levelId)) continue;
+        if (pointInPolygon(b.pontos, p)) return b;
+      }
+      return null;
+    },
+    [model.blocos, ocultos, levelId],
   );
   const nucleoSob = useCallback(
     (mundo: { x: number; y: number }): Nucleo | null => {
@@ -4583,6 +4607,38 @@ export default function BlueprintCanvas({
         }
       });
 
+      // ESTUDO DE MASSA (M1): o bloco — preenchido pela cor do uso, com o rótulo
+      // "nome · N pav · altura". Contorno vermelho tracejado quando algum
+      // pavimento dele sai do envelope ou passa do gabarito: é o que o estudo
+      // quer ver sem abrir relatório. Arrastado com a seleção, anda na prévia.
+      for (const b of model.blocos ?? []) {
+        if (b.pontos.length < 3 || ocultos.has(b.id) || (levelId && b.levelId !== levelId)) continue;
+        const dMov = selecao.has(b.id) && movendoSelecao ? movendoSelecao.delta : null;
+        const pontosDoBloco = dMov ? b.pontos.map((p) => ({ x: p.x + dMov.x, y: p.y + dMov.y })) : b.pontos;
+        const pts = pontosDoBloco.map(paraTela);
+        const problema = blocosComProblema.has(b.id);
+        const selecionado = selecao.has(b.id);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+        ctx.closePath();
+        ctx.fillStyle = COR_DO_USO_DO_BLOCO[b.uso];
+        ctx.globalAlpha = b.cotaBaseMm < 0 ? 0.15 : 0.35;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = selecionado ? COR_SELECIONADA : problema ? '#dc2626' : '#334155';
+        ctx.lineWidth = selecionado ? 2.5 : 1.8;
+        if (problema || b.cotaBaseMm < 0) ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.restore();
+        if (mostrarRotulos) {
+          const t = paraTela(interiorPoint(pontosDoBloco));
+          escreverRotulo(ctx, rotuloDoBloco(b), t.x, t.y - 7, problema ? '#b91c1c' : '#0f172a', Math.round(11 * fz));
+          escreverRotulo(ctx, `${areaEmM2(pontosDoBloco).toFixed(1).replace('.', ',')} m² de projeção`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
+        }
+      }
+
       // INCÊNDIO (E6.3): as rotas de fuga — tracejadas, com a seta no fim (o sentido da fuga). As que
       // estouram o limite vão POR CIMA: o pedaço do térreo de uma rota vermelha que vem de cima corre
       // junto das verdes do térreo, e desenhado antes delas sumia (o harness `rota-de-fuga` pegou).
@@ -4684,7 +4740,7 @@ export default function BlueprintCanvas({
       // Previa do loteamento em curso: poligono para quadra/lote/area publica,
       // e a CAIXA da via (nao so o eixo) enquanto se traca a rua -- e a largura
       // que diz se a rua cabe entre as quadras.
-      if ((tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao') && anelDoLoteamento.length > 0 && cursor) {
+      if ((tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao' || tool === 'bloco') && anelDoLoteamento.length > 0 && cursor) {
         const pts = [...anelDoLoteamento, cursor].map(paraTela);
         ctx.save();
         ctx.beginPath();
@@ -4692,7 +4748,7 @@ export default function BlueprintCanvas({
         for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
         ctx.closePath();
         if (pts.length >= 3) {
-          ctx.fillStyle = tool === 'area-publica' ? FICHA_DA_AREA_PUBLICA.VERDE.cor : tool === 'area-operacao' ? COR_DA_AREA_DE_OPERACAO : '#e2e8f0';
+          ctx.fillStyle = tool === 'area-publica' ? FICHA_DA_AREA_PUBLICA.VERDE.cor : tool === 'area-operacao' ? COR_DA_AREA_DE_OPERACAO : tool === 'bloco' ? COR_DO_USO_DO_BLOCO.RESIDENCIAL : '#e2e8f0';
           ctx.globalAlpha = 0.4;
           ctx.fill();
           ctx.globalAlpha = 1;
@@ -8767,6 +8823,7 @@ export default function BlueprintCanvas({
     }
   }, [
     model,
+    blocosComProblema,
     simbolosConexoes2d,
     marcasDaRede2d,
     tamanho,
@@ -9335,8 +9392,8 @@ export default function BlueprintCanvas({
       return;
     }
 
-    // LOTEAMENTO (B1): quadra, lote e area publica seguem o gesto da sub-regiao.
-    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao') {
+    // LOTEAMENTO (B1): quadra, lote e area publica seguem o gesto da sub-regiao. O bloco de massa (M1) também.
+    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao' || tool === 'bloco') {
       let alvo = capturarTracado(paraMundo(px, py));
       const anterior = anelDoLoteamento[anelDoLoteamento.length - 1] ?? null;
       if (anterior && ortoAtivo(e)) alvo = travarOrtogonal(anterior, alvo);
@@ -9735,13 +9792,14 @@ export default function BlueprintCanvas({
     // como a sub-regiao. A VIA nao: ela e polilinha aberta, e termina no duplo
     // clique ou ao clicar de novo no ultimo vertice -- fechar um eixo de rua no
     // primeiro ponto faria uma rua que volta em si mesma.
-    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao') {
+    if (tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao' || tool === 'bloco') {
       let ponto = capturarTracado(mundo);
       const fecha = anelDoLoteamento.length >= 3 && Math.hypot(anelDoLoteamento[0].x - ponto.x, anelDoLoteamento[0].y - ponto.y) < SNAP_PX / vista.escala;
       if (fecha) {
         if (tool === 'quadra') onAddQuadra?.(anelDoLoteamento);
         else if (tool === 'lote') onAddLote?.(anelDoLoteamento);
         else if (tool === 'area-operacao') onAddAreaDeOperacao?.(anelDoLoteamento);
+        else if (tool === 'bloco') onAddBloco?.(anelDoLoteamento);
         else onAddAreaPublica?.(anelDoLoteamento);
         setAnelDoLoteamento([]);
         return;
@@ -10040,6 +10098,8 @@ export default function BlueprintCanvas({
         componenteClicado?.id ??
         vagaClicada?.id ??
         w?.id ??
+        // BLOCO DE MASSA (M1) depois da parede: é grande e fica no chão do estudo.
+        blocoSob(mundo)?.id ??
         subRegiaoSob(mundo)?.id ??
         aguaClicada?.id ??
         f?.id ??
@@ -10297,6 +10357,7 @@ export default function BlueprintCanvas({
       nucleoIds: idsDeNucleosSelecionados,
       vagaIds: idsDeVagasSelecionadas,
       componenteIds: idsDeComponentesSelecionados,
+      blocoIds: (model.blocos ?? []).filter((b) => selecao.has(b.id)).map((b) => b.id),
     };
     if (
       idsDeParedesSelecionadas.length > 0 ||
@@ -10308,7 +10369,8 @@ export default function BlueprintCanvas({
       rede.quadroIds.length > 0 ||
       pecas.nucleoIds.length > 0 ||
       pecas.vagaIds.length > 0 ||
-      pecas.componenteIds.length > 0
+      pecas.componenteIds.length > 0 ||
+      pecas.blocoIds.length > 0
     ) {
       onMoverSelecao?.(
         idsDeParedesSelecionadas,
@@ -10702,15 +10764,17 @@ export default function BlueprintCanvas({
             ? pontoRodape
               ? 'Clique no FIM do trecho de rodapé · Esc cancela'
               : 'Clique no INÍCIO do trecho de rodapé, ao pé da parede'
-          : tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao'
+          : tool === 'quadra' || tool === 'lote' || tool === 'area-publica' || tool === 'area-operacao' || tool === 'bloco'
             ? anelDoLoteamento.length >= 3
-              ? `Clique no pr\u00f3ximo v\u00e9rtice \u00b7 volte ao 1\u00ba para fechar ${tool === 'quadra' ? 'a quadra' : tool === 'lote' ? 'o lote' : tool === 'area-operacao' ? 'a \u00e1rea de opera\u00e7\u00e3o' : 'a \u00e1rea p\u00fablica'} \u00b7 Esc cancela`
+              ? `Clique no pr\u00f3ximo v\u00e9rtice \u00b7 volte ao 1\u00ba para fechar ${tool === 'quadra' ? 'a quadra' : tool === 'lote' ? 'o lote' : tool === 'area-operacao' ? 'a \u00e1rea de opera\u00e7\u00e3o' : tool === 'bloco' ? 'o bloco' : 'a \u00e1rea p\u00fablica'} \u00b7 Esc cancela`
               : anelDoLoteamento.length > 0
                 ? 'Clique nos v\u00e9rtices \u00b7 Esc cancela'
                 : tool === 'quadra'
                   ? 'Clique no 1\u00ba v\u00e9rtice da QUADRA (nome na barra)'
                   : tool === 'lote'
                     ? 'Clique no 1\u00ba v\u00e9rtice do LOTE (quadra e n\u00famero na barra)'
+                    : tool === 'bloco'
+                      ? 'Clique no 1º vértice do BLOCO de massa (pavimentos e uso na barra; Orto = retângulo)'
                     : tool === 'area-operacao'
                       ? 'Clique no 1\u00ba v\u00e9rtice da \u00c1REA DE OPERA\u00c7\u00c3O dos sprinklers (lados em 90\u00b0 = ret\u00e2ngulo)'
                       : 'Clique no 1\u00ba v\u00e9rtice da \u00c1REA P\u00daBLICA (tipo na barra)'

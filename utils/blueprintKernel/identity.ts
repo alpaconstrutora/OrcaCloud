@@ -152,6 +152,8 @@ export const PREFIXO_ROTULO_UID = {
   rodape: 'F',
   /** Etapa de obra — Y (linha do tempo). */
   etapa: 'Y',
+  /** Bloco de massa (Estudo de Massa) — Z, a última livre; M já é o componente. */
+  bloco: 'Z',
   stair: 'E',
   label: 'R',
   /**

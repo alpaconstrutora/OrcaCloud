@@ -45,6 +45,7 @@ import {
   DoorOpen,
   Building2,
   CarFront,
+  Box,
   Scale,
   ClipboardList,
   Footprints,
@@ -294,6 +295,17 @@ import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
 import { comandosDeMobiliario } from '../../utils/blueprintMobiliario';
 import PainelVagas from './PainelVagas';
+import PainelEstudoDeMassa from './PainelEstudoDeMassa';
+import PainelBlocoSelecionado from './PainelBlocoSelecionado';
+import {
+  aproveitamentoDoEstudo,
+  COR_DO_USO_DO_BLOCO,
+  HIPOTESES_DA_MASSA_PADRAO,
+  medirMassa,
+  proximoNomeDeBloco,
+  type HipotesesDaMassa,
+} from '../../utils/blueprintMassa';
+import { ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO, type UsoDoBloco } from '../../utils/blueprintKernel';
 import PainelLotear from './PainelLotear';
 import PainelConferenciaDoLoteamento from './PainelConferenciaDoLoteamento';
 import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIPOTESES_VAGAS_PADRAO, planejarVagas, type HipotesesDeVagas, type RegiaoDeVagas } from '../../utils/blueprintVagasAutomaticas';
@@ -497,7 +509,6 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import {
   areaEmM2,
-  calcularAproveitamento,
   divergente,
   envelopeConstrutivo,
   faixasRestritas,
@@ -1065,6 +1076,8 @@ const ROTULO_DA_TAREFA = {
   grupo: 'Grupo com origem — agrupar e instanciar',
   // Vagas automáticas (19/09/2026, roadmap E2.5): fileiras com circulação na garagem.
   vagas: 'Vagas de garagem — lançamento automático',
+  // ESTUDO DE MASSA (01/10/2026, M1): envelope legal, indicadores da massa e hipóteses do CA.
+  massa: 'Estudo de massa — envelope legal e indicadores',
   // LOTEAR QUADRA (25/09/2026, B2): a quadra vira N lotes de testada fixa —
   // prévia tracejada, um lote de comandos, um Ctrl+Z.
   lotear: 'Lotear quadra — subdivisão automática',
@@ -1188,6 +1201,7 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   via: 'Via',
   'area-publica': 'Área pública',
   'area-operacao': 'Área de operação',
+  bloco: 'Bloco de massa',
 };
 
 /**
@@ -1246,6 +1260,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'esgoto',
   'grupo',
   'vagas',
+  'massa',
   'lotear',
   'grafo',
   'insolacao',
@@ -3851,6 +3866,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
   const subRegiaoSel = (editor.model.subRegioes ?? []).find((s) => s.id === editor.selectedId) ?? null;
   const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
+  const blocoSel = (editor.model.blocos ?? []).find((b) => b.id === editor.selectedId) ?? null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
   const anotacaoSel = (editor.model.anotacoes ?? []).find((a) => a.id === editor.selectedId) ?? null;
@@ -4444,6 +4460,60 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => envelopeVertical(editor.model, terreno, limitesDoNivel, zona.recuos, { afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado, gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM, gabaritoPavimentos: zona.gabaritoPavimentos }),
     [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos],
   );
+  /**
+   * ESTUDO DE MASSA (M1): os blocos medidos contra o lote e a zona — a mesma
+   * régua do envelope 3D (recuos fixos da zona; progressivo e escalonado por
+   * pavimento). Derivado; nada gravado. As hipóteses do CA são do navegador.
+   */
+  const [hipotesesDaMassa, setHipotesesDaMassa] = usePersistedState<HipotesesDaMassa>('blueprint:massa-hipoteses', HIPOTESES_DA_MASSA_PADRAO);
+  const massa = useMemo(
+    () =>
+      medirMassa(editor.model, {
+        terreno,
+        limites: limitesDoNivel,
+        recuosBase: zona.recuos,
+        zona: {
+          afastamentoProgressivo: zona.afastamentoProgressivo,
+          recuoFrenteEscalonado: zona.recuoFrenteEscalonado,
+          gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
+          gabaritoPavimentos: zona.gabaritoPavimentos,
+          taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
+          coeficienteMax: zona.coeficienteMax,
+          taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
+        },
+        hipoteses: { ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } },
+      }),
+    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, hipotesesDaMassa],
+  );
+  /** Blocos com pavimento fora do envelope ou acima do gabarito — vermelhos no 2D e no 3D. */
+  const blocosComProblema = useMemo(
+    () => new Set(massa.blocos.filter((b) => b.pisosForaDoEnvelope > 0 || b.pisosAcimaDoGabarito > 0).map((b) => b.blocoId)),
+    [massa],
+  );
+  /** Os prismas da massa para o 3D: um por pavimento de cada bloco. */
+  const massa3d = useMemo(
+    () =>
+      massa.blocos.flatMap((m) => {
+        const b = (editor.model.blocos ?? []).find((x) => x.id === m.blocoId);
+        if (!b) return [];
+        return m.pisos.map((p) => ({
+          id: b.id,
+          chave: `${b.id}-${p.indice}`,
+          nome: `${b.nome} · ${p.indice}º`,
+          anel: b.pontos,
+          baseMm: p.baseMm,
+          topoMm: p.topoMm,
+          cor: COR_DO_USO_DO_BLOCO[b.uso],
+          problema: p.cabe === false || p.acimaDoGabarito,
+        }));
+      }),
+    [massa, editor.model.blocos],
+  );
+  const [mostrarMassa3d, setMostrarMassa3d] = usePersistedState('blueprint:vista3dMassa', true);
+  /** O próximo bloco nasce com o que está na barra de opções. */
+  const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
+  const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
+  const [usoDoNovoBloco, setUsoDoNovoBloco] = usePersistedState<UsoDoBloco>('blueprint:bloco-uso', 'RESIDENCIAL');
   /** FAIXAS RESTRITAS (E3.1) do pavimento, para o canvas hachurar. */
   const faixasRestritasDoNivel = useMemo(
     () => faixasRestritas(terreno, limitesDoNivel).map((f) => ({ boundaryId: f.boundaryId, anel: f.anel, rotulo: `${ROTULO_DA_RESTRICAO_DO_LOTE[f.tipo]} · ${(f.faixaMm / 1000).toFixed(2).replace('.', ',')} m` })),
@@ -4779,16 +4849,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [perfilDoTerreno, rotuloDoPerfil, study.name, topografia.selecionada?.versao],
   );
 
-  const aproveitamento = useMemo(
-    () =>
-      terreno
-        ? calcularAproveitamento(
-            terreno,
-            editor.model.spaces.filter((sp) => !levelId || sp.levelId === levelId),
-          )
-        : null,
-    [terreno, editor.model.spaces, levelId],
-  );
+  /**
+   * TO e CA do ESTUDO (Estudo de Massa, M1): ambientes de TODOS os pavimentos
+   * acima do solo + os blocos de massa; projeção pela união dos contornos.
+   * Antes era só o pavimento ativo, com TO = CA por construção.
+   */
+  const aproveitamento = useMemo(() => aproveitamentoDoEstudo(editor.model, terreno, massa), [editor.model, terreno, massa]);
 
   /**
    * VERIFICAR LEGISLAÇÃO (E3.2): semente + regras da organização avaliadas
@@ -4809,7 +4875,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       lote: terreno ? { areaM2: terreno.areaMm2 / 1_000_000, perimetroM: terreno.perimetroMm / 1000, testadaM } : null,
       taxaOcupacaoPct: aproveitamento ? Math.round(aproveitamento.taxaOcupacao * 1000) / 10 : null,
       coeficiente: aproveitamento ? Math.round(aproveitamento.coeficienteAproveitamento * 100) / 100 : null,
-      alturaM: alturaDesenhadaM,
+      // A massa (M1) entra na altura: um estudo só de blocos também tem gabarito a conferir.
+      alturaM: massa.blocos.length > 0 ? Math.max(alturaDesenhadaM ?? 0, massa.alturaMaxM) : alturaDesenhadaM,
       zona: {
         taxaOcupacaoMax: zona.taxaOcupacaoMax,
         coeficienteMax: zona.coeficienteMax,
@@ -4843,7 +4910,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // O programa de necessidades (E4.3) entra como fonte, pelas mesmas linhas.
     const doPrograma = conferenciaDoPrograma ? linhasParaLegislacao(conferenciaDoPrograma, programaDoEstudo.programa) : [];
     return [...doMotor, ...da5410, ...doPrograma];
-  }, [editor.model, regrasDaOrganizacao, conferenciaDoPrograma, programaDoEstudo.programa, insolacaoDoNivel, zona.insolacaoMinimaH, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
+  }, [editor.model, regrasDaOrganizacao, conferenciaDoPrograma, programaDoEstudo.programa, insolacaoDoNivel, zona.insolacaoMinimaH, limitesDoNivel, terreno, aproveitamento, alturaDesenhadaM, massa, envelope3d, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaPermeabilidadeMin, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, ambientes, levelId]);
   const errosDeLegislacao = useMemo(() => resultadosDeRegras.filter((r) => r.estado === 'VIOLADA' && r.regra.severidade === 'ERRO').length, [resultadosDeRegras]);
   /**
    * SCORE (E5.2): os dezoito indicadores com explicação, pesos do navegador.
@@ -6253,6 +6320,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (criados.length > 0) selecionar(criados);
   }
 
+  /** ESTUDO DE MASSA (M1): o contorno fechado vira bloco com pavimentos, piso a piso e uso da barra. */
+  function adicionarBloco(pontos: Point[]) {
+    if (!levelId) return;
+    const criados = editor.run({
+      type: 'AddBloco',
+      levelId,
+      nome: proximoNomeDeBloco(editor.model),
+      pontos,
+      pavimentos: pavimentosDoNovoBloco,
+      peDireitoMm: peDireitoDoNovoBloco,
+      uso: usoDoNovoBloco,
+    });
+    if (criados.length > 0) selecionar(criados);
+  }
+
   /** SUB-REGIÃO DO TERRENO (P2.19): o polígono fechado vira sub-região com o material da barra. */
   function adicionarSubRegiao(pontos: Point[]) {
     if (!levelId) return;
@@ -6830,7 +6912,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     aguaIds: string[],
     delta: Point,
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
-    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[] },
+    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[] },
   ) {
     editor.run({
       type: 'TranslateEntities',
@@ -6842,6 +6924,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       nucleoIds: pecas?.nucleoIds ?? [],
       vagaIds: pecas?.vagaIds ?? [],
       componenteIds: pecas?.componenteIds ?? [],
+      blocoIds: pecas?.blocoIds ?? [],
       // Instalações no MESMO comando, e não num segundo: arrastar a parede e a
       // rede em dois passos deixaria um estado intermediário em que o cano
       // atravessa a parede, e o desfazer teria de ser dado duas vezes.
@@ -6988,6 +7071,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const nucleos = ids.filter((id) => (editor.model.nucleos ?? []).some((n) => n.id === id));
     const subRegioesSel = ids.filter((id) => (editor.model.subRegioes ?? []).some((s) => s.id === id));
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
+    const blocosSel = ids.filter((id) => (editor.model.blocos ?? []).some((b) => b.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
     const rodapesSel = ids.filter((id) => (editor.model.rodapes ?? []).some((r) => r.id === id));
@@ -7016,6 +7100,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ...nucleos.map((nucleoId) => ({ type: 'DeleteNucleo', nucleoId }) as const),
       ...subRegioesSel.map((subRegiaoId) => ({ type: 'DeleteSubRegiao', subRegiaoId }) as const),
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
+      ...blocosSel.map((blocoId) => ({ type: 'DeleteBloco', blocoId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
       ...rodapesSel.map((rodapeId) => ({ type: 'DeleteRodape', rodapeId }) as const),
@@ -8847,6 +8932,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         vaga={vagaSel}
         onProps={(campos) => vagaSel && editor.run({ type: 'SetVagaProps', vagaId: vagaSel.id, ...campos })}
         onExcluir={removerSelecionada}
+      />
+
+      <PainelBlocoSelecionado
+        bloco={blocoSel}
+        medida={blocoSel ? massa.blocos.find((m) => m.blocoId === blocoSel.id) ?? null : null}
+        onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
+        onExcluir={removerSelecionada}
+        onAbrirEstudo={() => setTarefa('massa')}
       />
 
       <PainelComponenteSelecionado
@@ -10764,6 +10857,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 }
               />
             </GrupoDoRibbon>
+            {/* ESTUDO DE MASSA (01/10/2026, M1): o volume do empreendimento antes da
+                planta — bloco (contorno × pavimentos) e o estudo com o envelope legal. */}
+            <GrupoDoRibbon rotulo="Massa">
+              <Ferramenta
+                atual={editor.tool}
+                valor="bloco"
+                icone={Box}
+                rotulo="Bloco"
+                onClick={editor.setTool}
+              />
+              <BotaoDoRibbon
+                icone={Building2}
+                rotulo="Estudo de massa"
+                contagem={(editor.model.blocos ?? []).length || undefined}
+                ativo={tarefaAberta === 'massa'}
+                onClick={() => alternarTarefa('massa')}
+                ajuda="O que a lei deixa no lote (implantação máxima, área computável máxima, pavimentos possíveis) e o que os blocos usam: TO, CA, gabarito, permeabilidade, aproveitamento do potencial — recalculado a cada mudança"
+              />
+            </GrupoDoRibbon>
             {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente
                 ou pelo contorno do pavimento; os mínimos PCD/idoso e a exigência conferidos. */}
             <GrupoDoRibbon rotulo="Garagem">
@@ -11897,6 +12009,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                             ? 'O prisma que a lei deixa construir, pavimento a pavimento: recuos, afastamento progressivo, faixas restritas e gabarito (vermelho acima dele). Translúcido, por cima da edificação.'
                             : 'Não há divisa de terreno desenhada — o envelope parte do lote.',
                         },
+                        {
+                          chave: 'massa-3d',
+                          rotulo: 'Blocos de massa',
+                          icone: Box,
+                          ligado: mostrarMassa3d,
+                          alternar: () => setMostrarMassa3d((v) => !v),
+                          desabilitado: (editor.model.blocos ?? []).length === 0,
+                          ajuda:
+                            (editor.model.blocos ?? []).length > 0
+                              ? 'Os blocos do estudo de massa, um prisma por pavimento na cor do uso; vermelho onde sai do envelope ou passa do gabarito.'
+                              : 'Não há bloco de massa — desenhe um na aba Terreno › Massa.',
+                        },
                       ],
                 ]}
               />
@@ -12344,6 +12468,53 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               </select>
               <span className="text-slate-400">cliques nos vértices; volte ao 1º para fechar</span>
             </label>
+          ) : editor.tool === 'bloco' ? (
+            /* ESTUDO DE MASSA (M1): pavimentos, piso a piso e uso do próximo bloco. */
+            <div className="flex items-center gap-3 text-xs text-slate-600">
+              <label className="flex items-center gap-1">
+                Pavimentos
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  step={1}
+                  value={pavimentosDoNovoBloco}
+                  onChange={(e) => {
+                    const v = Math.round(Number(e.target.value));
+                    if (v >= 1 && v <= 200) setPavimentosDoNovoBloco(v);
+                  }}
+                  aria-label="Pavimentos do próximo bloco"
+                  className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Piso a piso (m)
+                <input
+                  type="number"
+                  min={2}
+                  max={15}
+                  step={0.05}
+                  value={peDireitoDoNovoBloco / 1000}
+                  onChange={(e) => {
+                    const mm = Math.round(Number(e.target.value) * 1000);
+                    if (mm >= 2000 && mm <= 15000) setPeDireitoDoNovoBloco(mm);
+                  }}
+                  aria-label="Piso a piso do próximo bloco (m)"
+                  className="w-16 rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800"
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                Uso
+                <select value={usoDoNovoBloco} onChange={(e) => setUsoDoNovoBloco(e.target.value as UsoDoBloco)} aria-label="Uso do próximo bloco" className="rounded-md border border-slate-300 px-1.5 py-0.5 text-xs text-slate-800">
+                  {USOS_DO_BLOCO.map((u) => (
+                    <option key={u} value={u}>
+                      {ROTULO_DO_USO_DO_BLOCO[u]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-slate-400">cliques nos vértices; volte ao 1º para fechar · subsolo e torre sobre podium: cota da base no painel do bloco</span>
+            </div>
           ) : editor.tool === 'subregiao' ? (
             /* SUB-REGIÃO DO TERRENO (P2.19): o material da próxima. */
             <label className="flex items-center gap-2 text-xs text-slate-600">
@@ -12968,6 +13139,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // não tem deixaria a combinação gravada no localStorage.
               mostrarTerreno={mostrarTerreno3d && temTerreno}
               envelope={mostrarEnvelope3d && temTerreno ? envelope3d?.prismas : undefined}
+              massa={mostrarMassa3d && massa3d.length > 0 ? massa3d : undefined}
               sol={solNo3d}
               entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
               relevo={mostrarTerreno3d ? relevo3d : null}
@@ -13183,6 +13355,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onAddVia={adicionarVia}
               onAddAreaPublica={adicionarAreaPublica}
               onAddAreaDeOperacao={adicionarAreaDeOperacao}
+              onAddBloco={adicionarBloco}
+              blocosComProblema={blocosComProblema}
               rotasDeFuga={tarefaAberta === 'incendio' ? rotasDeFugaDoCanvas : null}
               vagas={vagasDoNivelAtivo}
               tipoDeVaga={tipoDeVaga}
@@ -14439,6 +14613,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               proposta={propostaDeSubdivisao}
               onAceitar={aceitarSubdivisao}
               resultado={resultadoDeLotear}
+            />
+          )}
+
+          {tarefaAberta === 'massa' && (
+            <PainelEstudoDeMassa
+              medida={massa}
+              hipoteses={{ ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } }}
+              onHipoteses={setHipotesesDaMassa}
+              onSelecionarBloco={(id) => selecionar([id])}
+              onDesenharBloco={() => editor.setTool('bloco')}
             />
           )}
 

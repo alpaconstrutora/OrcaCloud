@@ -551,7 +551,18 @@
  * `DETECTOR_CHAMA` (do laço de alarme, `TIPOS_DO_LACO_DE_ALARME`; cobertura por
  * cone pela rotação da peça). Vocabulário novo, forma igual — provado antes do bump.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.89.0';
+/**
+ * ─── 0.89.0 → 0.90.0 (01/10/2026) — O BLOCO DE MASSA ────────────────────────
+ *
+ * Estudo de Massa, fase M1 (plano `2026-10-01-estudo-de-massa.md`): família
+ * nova `blocos` — contorno em planta, cota da base relativa ao pavimento de
+ * referência, pavimentos, piso a piso e uso. É desenho (ferramenta, vértice
+ * arrastável, desfazer), então entra no payload e no hash; fica fora do arranjo
+ * planar. Chave e identidade omitidas sem bloco — desenho antigo só muda pela
+ * string da versão. Provado antes do bump: com a string em 0.89.0 os goldens
+ * passaram sem outra alteração.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.90.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

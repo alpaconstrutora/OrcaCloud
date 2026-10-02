@@ -138,6 +138,18 @@ export function enquadramentoDoModelo(
     fundo = Math.min(fundo, base * S);
   }
 
+  // BLOCO DE MASSA (Estudo de Massa, M1): pode ser TUDO o que o estudo tem —
+  // sem isto, um estudo só de massa abria o 3D olhando para o vazio.
+  for (const b of model.blocos ?? []) {
+    for (const p of b.pontos) {
+      xs.push(p.x * S);
+      zs.push(p.y * S);
+    }
+    const base = cotaDo(b.levelId) + b.cotaBaseMm;
+    topo = Math.max(topo, (base + b.pavimentos * b.peDireitoMm) * S);
+    fundo = Math.min(fundo, base * S);
+  }
+
   for (const e of model.stairs ?? []) {
     for (const q of contornoDaEscada(e)) {
       xs.push(q.x * S);

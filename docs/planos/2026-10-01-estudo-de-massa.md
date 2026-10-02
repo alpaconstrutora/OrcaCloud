@@ -785,7 +785,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 ## Estado
 
 - [x] M0 — plano em `docs/planos/` e frente `estudo-de-massa` a partir de `origin/main`
-- [ ] M1 — família `Bloco` + indicadores urbanísticos + menu
+- [ ] M1 — família `Bloco` + indicadores urbanísticos + menu · **8 de 9 itens** (falta a prova no app real logado)
 - [ ] M2 — produto e eficiência
 - [ ] M3 — financeiro e ponte com Empreendimento/Imovib
 - [ ] M4 — cenários e comparador
@@ -793,3 +793,57 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [ ] M6 — da massa à planta e ao BIM
 
 ## Execução
+
+### M1 — Família `Bloco` + indicadores urbanísticos (01–02/10/2026) · kernel 0.89.0 → 0.90.0
+
+**O que entrou.**
+
+- **Kernel**: `Bloco {nome, pontos, cotaBaseMm (relativa ao pavimento de referência), pavimentos, peDireitoMm, uso}`
+  (`USOS_DO_BLOCO`: residencial, comercial, misto, garagem, lazer, técnico); comandos `AddBloco` (padrões: cota 0,
+  1 pav, 3,00 m, residencial), `SetBlocoProps`, `MoveBlocoVertex`, `DeleteBloco`; `TranslateEntities.blocoIds`;
+  `RemoveLevel` leva os blocos do pavimento; invariantes `BAD_MASS`; canônico `blocos` + identidade **omitidos sem
+  bloco**; prefixo de rótulo `Z`; id `blc_`. Goldens provados em 0.89.0 (248 testes) e recapturados — só a versão
+  mudou, contagens 9/49/144/3/78/4 intactas. Pinos de versão dos testes e bundle da `planta-api` regenerados.
+- **Motor** `utils/blueprintMassa.ts` (puro): `areaDaUniaoMm2` (exata, por faixas verticais), `medirBloco`
+  (pisos com cota absoluta, ordinal no gabarito pela cadeia de apoio — torre sobre podium começa no 4º —, envelope
+  na altura do topo de cada piso com `recuosEfetivos` + `envelopeConstrutivo`; subsolo confere só o lote),
+  `envelopeLegal` (lote, TO × lote, envelope do térreo, CA × lote, pavimentos possíveis, altura máxima, o que falta),
+  `medirMassa` (TO pela união das projeções acima do solo, CA pela computável, gabaritos, permeabilidade das
+  sub-regiões, aproveitamento do potencial, avisos de pavimentos fora/acima e de blocos sobrepostos),
+  `aproveitamentoDoEstudo` (TO/CA de TODOS os pavimentos desenhados + massa — substitui no editor a conta antiga de
+  um pavimento só, TO = CA), `HIPOTESES_DA_MASSA_PADRAO` (garagem e técnico fora do CA, subsolo fora).
+- `blueprintEnvelope3d.ts`: `conferirNoEnvelope` extraída do `envelopeVertical` (mesma régua para pavimento e bloco).
+- **Tela**: aba Terreno › grupo **Massa** (ferramenta Bloco — polígono, fecha no 1º vértice, Orto = retângulo; barra
+  de opções com pavimentos, piso a piso e uso) e **Estudo de massa** (gaveta `PainelEstudoDeMassa`: envelope legal,
+  indicadores em `KpiCard`, avisos, `StandardTable` densa por bloco que seleciona na linha, hipóteses do CA);
+  `PainelBlocoSelecionado`; canvas pinta o bloco pela cor do uso, rótulo "nome · N pav · altura", contorno vermelho
+  tracejado quando sai do envelope/gabarito, arrasta com a seleção, entra no clique; 3D com um prisma sólido por
+  pavimento (vermelho onde passa), toggle "Blocos de massa" no Exibir, enquadramento da câmera inclui os blocos;
+  excluir a seleção leva o bloco; regras de EDIFICAÇÃO recebem a altura da massa.
+- **Menu (DR-05)**: o item "Estudo de Massa" (Planta AI v1) saiu do menu Incorporação e do menu lateral; a rota
+  `planta-ai` continua viva para os links internos do Empreendimento; a permissão virou "Planta AI v1 (legado, fora do
+  menu)". O estudo de massa mora em **Incorporação › Planta Inteligente**, como o pedido diz. Decidido não criar um
+  segundo item de menu para o mesmo módulo; a "aba preferida Terreno ao abrir" ficou de fora (exigiria rota nova).
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `tsc --noEmit` | exit 0 |
+| `check-ui-standard.sh` nos 8 `.tsx` tocados | 0 violações |
+| Suíte cheia (JSON) | 666/666 arquivos · 6.993 testes = 6.959 ok + 34 pulados · 0 falhas |
+| `vite build` | ✓ built, PWA gerado |
+| `check-xss-sinks.sh` · `check-org-selector-guard.sh` | ok · ok |
+| `__tests__/blueprintMassa.test.ts` (12) | exemplo do pedido: 720 m², 3.600 m², 5 pavimentos possíveis; torre 24×30×10: TO 60 % atende, CA 6,0 excede, 2 pav acima do gabarito; podium+torre; sobreposição; subsolo; afastamento progressivo |
+| Teste de editor "estudo de massa (M1)" | gaveta, seleção pela linha, pavimentos 10 → 5 recalcula |
+| Harness `docs/spikes/massa/medir.mjs` (portão) | 17/17 ok · âmbar 52.723 px e vermelho 873 px com blocos · 0 e 0 no controle vazio · 0 erros de console |
+| 3D (`?3d=1`, print) | podium âmbar 3 pav, torre 7 pav, 9º e 10º vermelhos |
+| **App real logado** | **pendente** — a skill `rodar-app` exige a senha da conta de leitura, que o usuário fornece por sessão |
+
+**Achado fora de escopo (registrado, não corrigido):** `RemoveLevel` não trata `quadras`/`lotes`/`vias`/`areasPublicas`
+— remover o pavimento delas violaria o invariante "pavimento inexistente". O bloco já é tratado.
+
+**Publicação:** commit na branch `feat/estudo-de-massa`, empurrado como **preview** (não `main`), aguardando a prova
+no app real e o "pode seguir". Ao publicar em `main`: redeploy da Edge Function `planta-api` (bundle 0.90.0) e
+`conferir-producao.sh "Estudo de massa"`. ⚠️ Outras frentes (incêndio) estão subindo o kernel no mesmo dia: rebase
+antes do push e, se o 0.90.0 já estiver tomado, renumerar.

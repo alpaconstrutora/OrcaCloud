@@ -1247,6 +1247,52 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(botaoComponentes()).toHaveTextContent('Vaga PCD');
   });
 
+  it('estudo de massa (M1): Terreno › Massa mede o bloco contra o lote; a linha seleciona; o painel do bloco muda os pavimentos e o estudo recalcula', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    // Lote 30 × 40 m (1.200 m²) e uma torre 24 × 30 m com 10 pavimentos.
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 30000, 0, 'FRENTE'),
+        d(30000, 0, 30000, 40000, 'LATERAL_DIREITA'),
+        d(30000, 40000, 0, 40000, 'FUNDOS'),
+        d(0, 40000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(3000, 6000), k.point(27000, 6000), k.point(27000, 36000), k.point(3000, 36000)], pavimentos: 10 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    // O ribbon tem o grupo Massa: a ferramenta Bloco e o estudo com a contagem.
+    expect(screen.getByRole('button', { name: /^bloco$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    const legal = within(gaveta).getByTestId('envelope-legal');
+    expect(legal).toHaveTextContent(/1\.200,00 m²/);
+    // Sem zona aplicada: o envelope diz o que falta, não inventa limite.
+    expect(legal).toHaveTextContent(/falta: a taxa de ocupação da zona/);
+    const ind = within(gaveta).getByTestId('indicadores-da-massa');
+    expect(ind).toHaveTextContent(/60,0 %/); // TO: 720 ÷ 1.200
+    expect(ind).toHaveTextContent(/6,00/); // CA: 7.200 ÷ 1.200
+    expect(ind).toHaveTextContent(/a zona não informa a taxa de ocupação/);
+    expect(ind).toHaveTextContent(/7\.200,00 m²/);
+    // A linha da tabela seleciona o bloco; o painel dele aparece com a medida.
+    await user.click(within(gaveta).getByText('Torre A'));
+    const painel = await screen.findByTestId('painel-bloco');
+    expect(painel).toHaveTextContent(/Bloco de massa · Torre A/);
+    expect(painel).toHaveTextContent(/720,00 m² de projeção/);
+    // 10 → 5 pavimentos: o estudo recalcula na hora (CA 3,00).
+    const pav = within(painel).getByLabelText('Número de pavimentos do bloco');
+    await user.clear(pav);
+    await user.type(pav, '5');
+    fireEvent.blur(pav);
+    await waitFor(() => expect(painel).toHaveTextContent(/3\.600,00 m² construídos/));
+    expect(within(gaveta).getByTestId('indicadores-da-massa')).toHaveTextContent(/3,00/);
+  });
+
   it('vocabulário e restrição (E3.1): a APP nos fundos reduz a área construtível; testada mínima digitada é conferida; a ferramenta Divisa oferece a faixa restrita', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });

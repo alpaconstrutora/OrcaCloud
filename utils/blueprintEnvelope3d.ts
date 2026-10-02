@@ -30,7 +30,7 @@ import { anelRecuado,
   type ObjectId,
   type Point,
 } from './blueprintKernel';
-import { envelopeConstrutivo, type Recuos, type Terreno } from './blueprintTerreno';
+import { envelopeConstrutivo, type Envelope, type Recuos, type Terreno } from './blueprintTerreno';
 import { recuosEfetivos, type AfastamentoProgressivo, type RecuoEscalonado } from './blueprintZonaUrbanistica';
 
 export interface ZonaDoEnvelope {
@@ -86,6 +86,35 @@ function areaFora(anel: Point[], envelope: Point[]): number | null {
   return Math.max(0, Math.round(Math.abs(polygonArea(anel)) - Math.abs(polygonArea(comum))));
 }
 
+/**
+ * "CABE?" de um conjunto de contornos num envelope em planta — a conta do
+ * prisma do pavimento (E3.3/P2.8/P2.11), exportada para o bloco de massa
+ * (Estudo de Massa, M1) usar a MESMA régua, sem segunda cópia.
+ *
+ * Cabe = cada contorno inteiro dentro de UMA peça (sobre a servidão não se
+ * constrói). Área fora = a menor entre as peças, somada pelos contornos;
+ * `null` quando não deu para recortar (os dois côncavos e parcialmente fora).
+ * Sem contorno, cabe.
+ */
+export function conferirNoEnvelope(contornos: Point[][], env: Envelope): { pecas: Point[][]; cabe: boolean; areaForaMm2: number | null } {
+  const anelEnvelope = env.valido ? env.anel : [];
+  const pecas = env.valido ? (env.pecas?.length ? env.pecas : [env.anel]) : [];
+  let fora: number | null = 0;
+  let cabe = true;
+  for (const c of contornos) {
+    if (pecas.length === 0 || !pecas.some((peca) => c.every((p) => pointInPolygon(peca, p)))) cabe = false;
+    let f: number | null = pecas.length ? null : Math.round(Math.abs(polygonArea(c)));
+    for (const peca of pecas) {
+      const fp = areaFora(c, peca);
+      if (fp !== null && (f === null || fp < f)) f = fp;
+    }
+    if (f === null) fora = null;
+    else if (fora !== null) fora += f;
+  }
+  if (anelEnvelope.length < 3 && contornos.length > 0) cabe = false;
+  return { pecas, cabe: contornos.length === 0 ? true : cabe, areaForaMm2: fora };
+}
+
 export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null, limites: Boundary[], recuosBase: Recuos, zona: ZonaDoEnvelope): EnvelopeVertical | null {
   if (!terreno || terreno.anel.length < 3 || model.levels.length === 0) return null;
   const niveis = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
@@ -117,20 +146,7 @@ export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null,
     // P2.11: com a servidão no meio o envelope tem PEÇAS; a edificação cabe se
     // está inteira numa peça (sobre a servidão não se constrói) e a área fora é
     // a menor entre as peças — a da peça que mais a contém.
-    const pecas = env.valido ? (env.pecas?.length ? env.pecas : [env.anel]) : [];
-    let fora: number | null = 0;
-    let cabe = true;
-    for (const c of contornos) {
-      if (pecas.length === 0 || !pecas.some((peca) => c.every((p) => pointInPolygon(peca, p)))) cabe = false;
-      let f: number | null = pecas.length ? null : Math.round(Math.abs(polygonArea(c)));
-      for (const peca of pecas) {
-        const fp = areaFora(c, peca);
-        if (fp !== null && (f === null || fp < f)) f = fp;
-      }
-      if (f === null) fora = null;
-      else if (fora !== null) fora += f;
-    }
-    if (anelEnvelope.length < 3 && contornos.length > 0) cabe = false;
+    const { pecas, cabe, areaForaMm2: fora } = conferirNoEnvelope(contornos, env);
     return {
       levelId: l.id,
       nome: l.name,
@@ -149,7 +165,7 @@ export function envelopeVertical(model: BlueprintModel, terreno: Terreno | null,
           : null,
       areaConstruidaMm2: Math.round(areaConstruidaMm2(model, l)),
       areaForaMm2: fora,
-      cabe: contornos.length === 0 ? true : cabe,
+      cabe,
     };
   });
   const dentroDoGabarito = prismas.filter((p) => !p.acimaDoGabarito);

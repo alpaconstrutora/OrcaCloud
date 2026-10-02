@@ -773,6 +773,8 @@ import { comandosDoNucleoSugerido, distribuirProduto } from '../../utils/bluepri
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { cubDoPadrao, type CubDoPadrao } from '../../services/cubService';
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
+import { blueprintSnapshotProdutoService } from '../../services/blueprintSnapshotProdutoService';
+import { cenarioDeMassa, nomeSugeridoDoCenario } from '../../utils/blueprintComparadorDeMassa';
 import { avaliarRegras, REGRAS_SEMENTE, type Regra, type ResultadoDeRegra } from '../../utils/blueprintRegras';
 import { blueprintRuleSetService, type ConjuntoDeRegras } from '../../services/blueprintRuleSetService';
 import PainelGrupo from './PainelGrupo';
@@ -4552,6 +4554,31 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (distribuicaoDoProduto ? financeiroDaMassa(massa, produtoDoEstudo.produto, distribuicaoDoProduto, cubDoEstudo) : null),
     [massa, produtoDoEstudo.produto, distribuicaoDoProduto, cubDoEstudo],
   );
+  /**
+   * COMPARADOR (M4): a régua comum — a zona, os recuos, o produto, o CUB e as
+   * hipóteses do ESTUDO — aplicada ao modelo de cada alternativa. Ausente quando
+   * o estudo não tem bloco nenhum: aí Alternativas é só a de antes.
+   */
+  const medirCenario = useCallback(
+    (m: BlueprintModel) =>
+      cenarioDeMassa(m, {
+        zona: {
+          afastamentoProgressivo: zona.afastamentoProgressivo,
+          recuoFrenteEscalonado: zona.recuoFrenteEscalonado,
+          gabaritoAlturaMaxM: zona.gabaritoAlturaMaxM,
+          gabaritoPavimentos: zona.gabaritoPavimentos,
+          taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
+          coeficienteMax: zona.coeficienteMax,
+          taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
+        },
+        recuosBase: zona.recuos,
+        hipotesesDaMassa: hipotesesDaMassa,
+        produto: produtoDoEstudo.produto,
+        cub: produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo,
+        vagasPorUnidadeDaZona: zona.vagasPorUnidade,
+      }),
+    [zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, zona.recuos, zona.vagasPorUnidade, hipotesesDaMassa, produtoDoEstudo.produto, cubDoEstudo],
+  );
   /** O próximo bloco nasce com o que está na barra de opções. */
   const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
   const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
@@ -4753,13 +4780,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   const publicarComTopografia = useCallback(async () => {
     const snapshotId = await editor.publish();
-    if (!snapshotId || !topografia.selecionada) return;
+    if (!snapshotId) return;
+    // ESTUDO DE MASSA (M4): o produto em uso é congelado junto da versão — é o
+    // que o envio ao Empreendimento lê, e não a linha viva que muda depois.
+    if (produtoDoEstudo.produto.tipologias.length > 0) {
+      try {
+        await blueprintSnapshotProdutoService.congelar(snapshotId, study.id, study.organization_id, produtoDoEstudo.produto);
+      } catch (e) {
+        console.warn('[produto] versão publicada sem o produto congelado:', e);
+      }
+    }
+    if (!topografia.selecionada) return;
     try {
       await blueprintSnapshotTopografiaService.vincular(snapshotId, topografia.selecionada);
     } catch (e) {
       console.warn('[topografia] versão publicada sem o vínculo com a topografia:', e);
     }
-  }, [editor, topografia.selecionada]);
+  }, [editor, topografia.selecionada, produtoDoEstudo.produto, study.id, study.organization_id]);
   // ── Fase 8: drenagem e muros no 3D ─────────────────────────────────────────
   const extrasDoRelevo3d = useMemo<ExtrasDoRelevo3d | null>(() => {
     const v = topografia.selecionada;
@@ -10207,6 +10244,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               carregarModelo={loadBranchModel}
               avaliarModelo={avaliarOutroModelo}
+              massa={
+                (editor.model.blocos ?? []).length > 0
+                  ? { cenario: medirCenario, nomeSugerido: nomeSugeridoDoCenario(ramos.length + 1, medirCenario(editor.model)) }
+                  : undefined
+              }
             />
           </div>
         </div>

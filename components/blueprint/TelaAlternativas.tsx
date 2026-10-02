@@ -20,6 +20,8 @@ import { useConfirm } from '../ui/confirm';
 import MiniPlanta, { caixaDosModelos } from './MiniPlanta';
 import { NotaGeral } from './TelaAvaliacao';
 
+import { destaquesDoComparador, formatarDoComparador, LINHAS_DO_COMPARADOR, type CenarioDeMassa } from '../../utils/blueprintComparadorDeMassa';
+
 interface Props {
   ramos: BlueprintBranch[];
   ramoAtualId: string;
@@ -34,6 +36,12 @@ interface Props {
   onExcluir: (branchId: string) => Promise<void>;
   carregarModelo: (branchId: string) => Promise<BlueprintModel | null>;
   avaliarModelo: (m: BlueprintModel) => Avaliacao;
+  /**
+   * ESTUDO DE MASSA (M4): mede um modelo como cenário de massa, com a régua do
+   * estudo (zona, produto, CUB); e o nome sugerido "EM-00N — X pav / Y un" para
+   * a próxima alternativa. Ausente = estudo sem massa, o comparador não aparece.
+   */
+  massa?: { cenario: (m: BlueprintModel) => CenarioDeMassa | null; nomeSugerido: string | null };
 }
 
 const COLUNAS: StandardTableColumn[] = [
@@ -47,7 +55,10 @@ const COLUNAS: StandardTableColumn[] = [
 
 const data = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
-export default function TelaAlternativas({ ramos, ramoAtualId, model, avaliacaoAtual, carregando, erro, onAbrir, onCriar, onRenomear, onPromover, onExcluir, carregarModelo, avaliarModelo }: Props) {
+export default function TelaAlternativas({ ramos, ramoAtualId, model, avaliacaoAtual, carregando, erro, onAbrir, onCriar, onRenomear, onPromover, onExcluir, carregarModelo, avaliarModelo, massa }: Props) {
+  /** M4: os cenários de massa de TODAS as alternativas, na ordem da tabela; carregados sob comando. */
+  const [cenarios, setCenarios] = useState<{ ramo: BlueprintBranch; cenario: CenarioDeMassa | null }[] | null>(null);
+  const [comparandoTodas, setComparandoTodas] = useState(false);
   const confirmar = useConfirm();
   const [novoNome, setNovoNome] = useState('');
   const [novaDescricao, setNovaDescricao] = useState('');
@@ -104,6 +115,32 @@ export default function TelaAlternativas({ ramos, ramoAtualId, model, avaliacaoA
       setNovaDescricao('');
     });
 
+  /** Carrega cada alternativa (a aberta é o modelo em memória, com o que ainda não foi salvo) e mede. */
+  const compararTodas = async () => {
+    if (!massa) return;
+    setComparandoTodas(true);
+    setErroLocal(null);
+    try {
+      const lista = await Promise.all(
+        ramos.map(async (r) => {
+          const m = r.id === ramoAtualId ? model : await carregarModelo(r.id);
+          return { ramo: r, cenario: m ? massa.cenario(m) : null };
+        }),
+      );
+      setCenarios(lista);
+    } catch (e) {
+      setErroLocal(e instanceof Error ? e.message : String(e));
+    } finally {
+      setComparandoTodas(false);
+    }
+  };
+  // A aberta muda a cada gesto: a coluna dela acompanha sem recarregar as outras.
+  const cenariosVivos = useMemo(
+    () => (cenarios && massa ? cenarios.map((c) => (c.ramo.id === ramoAtualId ? { ...c, cenario: massa.cenario(model) } : c)) : null),
+    [cenarios, massa, ramoAtualId, model],
+  );
+  const destaques = useMemo(() => (cenariosVivos ? destaquesDoComparador(cenariosVivos.map((c) => c.cenario)) : {}), [cenariosVivos]);
+
   const comparacao = useMemo(() => {
     if (!outro) return null;
     const diff = diffSnapshots(outro.model, model);
@@ -145,6 +182,11 @@ export default function TelaAlternativas({ ramos, ramoAtualId, model, avaliacaoA
         loading={carregando}
         toolbarRight={
           <div className="flex items-center gap-2">
+            {massa?.nomeSugerido && (
+              <button type="button" onClick={() => setNovoNome(massa.nomeSugerido!)} className="h-9 rounded-[6px] px-2 text-sm font-medium text-blue-600 hover:bg-blue-50" title="Nome no padrão do estudo de massa: número do cenário, pavimentos e unidades da alternativa aberta" data-testid="nome-sugerido">
+                {massa.nomeSugerido.split(' — ')[0]}
+              </button>
+            )}
             <input value={novoNome} onChange={(e) => setNovoNome(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void criar()} placeholder="Nome (ex.: Suíte ao norte)" aria-label="Nome da nova alternativa" className="h-9 w-48 rounded-[6px] border border-slate-300 px-2 text-sm" />
             <input value={novaDescricao} onChange={(e) => setNovaDescricao(e.target.value)} placeholder="O que explora (opcional)" aria-label="Descrição da nova alternativa" className="h-9 w-56 rounded-[6px] border border-slate-300 px-2 text-sm" />
             <button type="button" onClick={() => void criar()} disabled={ocupado || !novoNome.trim()} className="inline-flex h-9 items-center gap-1 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-300" data-testid="nova-alternativa" title="Copia o conteúdo editável da alternativa aberta para um ramo novo">
@@ -249,6 +291,69 @@ export default function TelaAlternativas({ ramos, ramoAtualId, model, avaliacaoA
         }}
         empty={{ title: 'Sem alternativas', subtitle: 'Crie uma a partir da atual para explorar outra solução sem perder esta.' }}
       />
+
+      {massa && (
+        <div className="space-y-3 rounded-[10px] border border-gray-100 bg-white px-5 py-4 shadow-sm" data-testid="comparador-de-massa">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Comparador de cenários de massa</h3>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Todas as alternativas medidas com a mesma zona, o mesmo produto e o mesmo CUB. Cada linha destaca quem ganha <em>nela</em> — não há vencedor geral: o critério é seu.
+              </p>
+            </div>
+            <button type="button" onClick={() => void compararTodas()} disabled={comparandoTodas || ramos.length < 2} title={ramos.length < 2 ? 'Crie outra alternativa ("Nova a partir desta") para ter o que comparar' : 'Carrega e mede todas as alternativas'} className="h-9 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {comparandoTodas ? 'Medindo…' : cenarios ? 'Medir de novo' : 'Comparar todas'}
+            </button>
+          </div>
+          {cenariosVivos && (
+            <>
+              {/* Tabela à mão, e não StandardTable: é matriz TRANSPOSTA (linha = indicador,
+                  coluna = alternativa), com colunas que nascem e somem com os ramos; ordenar
+                  por uma coluna misturaria m², R$ e % na mesma ordem. */}
+              <div className="overflow-x-auto rounded-[10px] border border-gray-100">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-500">
+                      <th className="border-r border-gray-100 px-6 py-2">Indicador</th>
+                      {cenariosVivos.map((c) => (
+                        <th key={c.ramo.id} className="border-r border-gray-100 px-6 py-2 text-right last:border-r-0">
+                          {c.ramo.name}
+                          {c.ramo.id === ramoAtualId ? ' (aberta)' : ''}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {LINHAS_DO_COMPARADOR.map((l) => (
+                      <tr key={l.chave}>
+                        <td className="border-r border-gray-100 px-6 py-2.5 text-sm font-normal text-gray-700">{l.rotulo}</td>
+                        {cenariosVivos.map((c, i) => {
+                          const ganha = (destaques[l.chave] ?? []).includes(i);
+                          const v = c.cenario ? (c.cenario[l.chave] as number | null) : null;
+                          return (
+                            <td key={c.ramo.id} className={`border-r border-gray-100 px-6 py-2.5 text-right text-sm font-normal tabular-nums last:border-r-0 ${ganha ? 'bg-emerald-50 text-emerald-700' : 'text-gray-600'}`} title={ganha ? l.destaque : undefined}>
+                              {c.cenario ? formatarDoComparador(v, l.formato) : '—'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <ul className="space-y-0.5 text-xs text-gray-600" data-testid="destaques-do-comparador">
+                {LINHAS_DO_COMPARADOR.filter((l) => l.destaque && destaques[l.chave]).map((l) => (
+                  <li key={l.chave}>
+                    <span className="text-emerald-700">{l.destaque}</span>: {destaques[l.chave]!.map((i) => cenariosVivos[i].ramo.name).join(', ')}
+                  </li>
+                ))}
+                {cenariosVivos.some((c) => !c.cenario) && <li className="text-gray-500">Alternativa sem bloco de massa aparece com "—".</li>}
+                <li className="text-gray-500">Complexidade construtiva = blocos + 2 por pavimento de subsolo + 1 por bloco apoiado em outro (transição). Índice de pré-projeto, não orçamento.</li>
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       {comparandoId && outro && comparacao && (
         <div className="space-y-4 rounded-[6px] border border-gray-200 bg-white px-5 py-4" data-testid="comparacao">

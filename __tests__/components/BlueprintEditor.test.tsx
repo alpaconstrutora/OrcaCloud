@@ -147,6 +147,13 @@ vi.mock('../../services/cubService', async () => {
   const real = await vi.importActual<typeof import('../../services/cubService')>('../../services/cubService');
   return { ...real, cubDoPadrao: vi.fn(async () => ({ valorM2: 2000, fonte: 'TABELA', referencia: '12/2025 · Com Desoneração' })) };
 });
+const congelarProduto = vi.fn(async () => {});
+vi.mock('../../services/blueprintSnapshotProdutoService', () => ({
+  blueprintSnapshotProdutoService: {
+    congelar: (...a: unknown[]) => congelarProduto(...(a as [])),
+    daVersao: vi.fn(async () => null),
+  },
+}));
 vi.mock('../../services/blueprintProdutoService', () => ({
   blueprintProdutoService: {
     get: (...a: unknown[]) => getProduto(...(a as [])),
@@ -1375,6 +1382,59 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(fin).toHaveTextContent(/margem \d+,\d %/);
     const envio = within(gaveta).getByTestId('envio-ao-empreendimento');
     expect(within(envio).getByLabelText('Empreendimento')).toBeInTheDocument();
+  });
+
+  it('estudo de massa (M4): Alternativas compara TODAS com a mesma régua, destaca por linha sem vencedor, sugere EM-00N; publicar congela o produto', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { produtoSemente } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    const lote = k.applyBatch(nivel.model, [d(0, 0, 30000, 0, 'FRENTE'), d(30000, 0, 30000, 40000, 'LATERAL_DIREITA'), d(30000, 40000, 0, 40000, 'FUNDOS'), d(0, 40000, 0, 0, 'LATERAL_ESQUERDA')]).model;
+    const ret = (x0: number, y0: number, x1: number, y1: number) => [k.point(x0, y0), k.point(x1, y0), k.point(x1, y1), k.point(x0, y1)];
+    const torreUnica = k.applyCommand(lote, { type: 'AddBloco', levelId: t, nome: 'Torre única', pontos: ret(3000, 6000, 27000, 36000), pavimentos: 10 }).model;
+    const duasTorres = k.applyBatch(lote, [
+      { type: 'AddBloco', levelId: t, nome: 'Torre 1', pontos: ret(2000, 6000, 14000, 30000), pavimentos: 6 },
+      { type: 'AddBloco', levelId: t, nome: 'Torre 2', pontos: ret(16000, 6000, 28000, 30000), pavimentos: 6 },
+    ]).model;
+    loadBranchModel.mockImplementation(async (id: unknown) => (id === 'brc_2' ? duasTorres : torreUnica));
+    listBranches.mockResolvedValue([RAMO_LIMPO, { ...RAMO_LIMPO, id: 'brc_2', name: 'Duas torres', principal: false }]);
+    const semente = produtoSemente('RESIDENCIAL_MEDIO');
+    getProduto.mockResolvedValueOnce({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', produto: semente, created_at: '', updated_at: '' });
+    congelarProduto.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^colaborar$/i);
+    abrirMenusDoRibbon();
+    await user.click(screen.getByRole('button', { name: /^alternativas/i }));
+    const tela = (await screen.findByRole('heading', { level: 1, name: /^alternativas$/i })).closest('[data-tela="alternativas"]') as HTMLElement;
+    // Nome sugerido no padrão do pedido, para a 3ª alternativa: número, pavimentos e unidades da aberta.
+    await user.click(within(tela).getByTestId('nome-sugerido'));
+    expect(within(tela).getByLabelText('Nome da nova alternativa')).toHaveValue('EM-003 — 10 pav / 80 un');
+    // Comparar todas: uma coluna por alternativa, a mesma régua.
+    const comp = within(tela).getByTestId('comparador-de-massa');
+    await user.click(within(comp).getByRole('button', { name: /^comparar todas$/i }));
+    const cab = await within(comp).findByRole('columnheader', { name: /^Duas torres$/ });
+    expect(cab).toBeInTheDocument();
+    expect(within(comp).getByRole('columnheader', { name: /^principal \(aberta\)$/ })).toBeInTheDocument();
+    const linhaUnidades = within(comp).getAllByRole('row').find((r) => /^Unidades/.test(r.textContent ?? ''))!;
+    expect(linhaUnidades).toHaveTextContent(/80/);
+    const destaques = within(comp).getByTestId('destaques-do-comparador');
+    expect(destaques).toHaveTextContent(/menor complexidade construtiva: principal/);
+    expect(destaques).toHaveTextContent(/maior VGV:/);
+    // Sem vencedor geral: nenhuma linha de "nota" ou "melhor cenário".
+    expect(within(comp).getAllByRole('row').some((r) => /^(Vencedor|Nota geral|Melhor cenário)/i.test(r.textContent ?? ''))).toBe(false);
+    expect(comp).toHaveTextContent(/não há vencedor geral/);
+    // Publicar congela o produto em uso junto da versão.
+    await user.click(within(tela).getByLabelText('Voltar ao editor'));
+    await waitFor(() => expect(botao(/publicar/i)).toBeEnabled());
+    await user.click(botao(/publicar/i));
+    await waitFor(() => expect(congelarProduto).toHaveBeenCalled());
+    const [snap, estudo, , produto] = congelarProduto.mock.calls[0] as unknown as [string, string, string, { tipologias: unknown[] }];
+    expect(snap).toBe('snap_1');
+    expect(estudo).toBe('std_1');
+    expect(produto.tipologias).toHaveLength(2);
   });
 
   it('vocabulário e restrição (E3.1): a APP nos fundos reduz a área construtível; testada mínima digitada é conferida; a ferramenta Divisa oferece a faixa restrita', async () => {

@@ -788,7 +788,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [x] M1 — família `Bloco` + indicadores urbanísticos + menu (`671ada75` + este registro)
 - [x] M2 — produto e eficiência (02/10/2026)
 - [x] M3 — financeiro e ponte com Empreendimento/Imovib (`f5c35dc` + correções da prova real)
-- [ ] M4 — cenários e comparador
+- [ ] M4 — cenários e comparador · **8 de 9** (falta provar a GRAVAÇÃO real do produto congelado ao publicar — exige estudo descartável, autorização)
 - [ ] M5 — gerador de implantações e otimizador
 - [ ] M6 — da massa à planta e ao BIM
 
@@ -974,3 +974,42 @@ novo aceitou). **Limpeza:** empreendimento (torre e unidades em cascata), audito
 `blueprint_audit_events` do estudo apagado: a tabela é imutável por gatilho, de propósito.
 
 Portões depois das correções: tsc 0 · suíte 669/669 arquivos, 7.010 testes, 0 falhas · build ok · XSS ok · org ok.
+
+**Pedido posterior (02/10/2026, mesma sessão):** *"m4"* — segue a M4. (No meio da fase o processo do Claude Code
+caiu no Windows com 0xC0000409; o trabalho em disco estava intacto e foi retomado.)
+
+### M4 — Cenários e comparador (02/10/2026)
+
+**O que entrou.**
+
+- **Comparador** `utils/blueprintComparadorDeMassa.ts` (puro): `cenarioDeMassa(model, régua)` mede uma
+  alternativa com a régua do ESTUDO (zona, recuos, produto, CUB, hipóteses) — blocos, pavimentos, altura, TO, CA,
+  construída, unidades, vendável, eficiência, vagas, VGV, custo, resultado, margem, VGV/custo, pavimentos fora da
+  lei e complexidade construtiva (índice DITO: blocos + 2 por pavimento de subsolo + 1 por bloco apoiado em outro).
+  `LINHAS_DO_COMPARADOR` diz em cada linha o que é "melhor" e o nome do destaque como o pedido lista (maior VGV,
+  menor custo, maior eficiência, mais unidades, melhor VGV/custo, menor complexidade); `destaquesDoComparador`
+  marca quem ganha CADA linha (empate total e linha sem concorrente não destacam). **Sem vencedor geral** (§17).
+  `nomeSugeridoDoCenario` → "EM-003 — 10 pav / 80 un" (§22).
+- **Tela** Colaborar › Alternativas ganha o **Comparador de cenários de massa** (quando o estudo tem bloco): "Comparar
+  todas" carrega cada alternativa (a aberta é o modelo em memória, e a coluna dela acompanha a edição) e mostra a
+  matriz indicador × alternativa com os destaques em verde e a lista "destaque: alternativa"; e o botão do nome
+  sugerido ao lado de "Nova a partir desta". Duplicar cenário = criar alternativa (E6.1, já copiava os blocos).
+- **Histórico (§22)**: tabela `blueprint_snapshot_produto` (migration `aplicar_20271002000030`, APLICADA): o produto em
+  uso é congelado ao PUBLICAR (`publicarComTopografia` → `blueprintSnapshotProdutoService.congelar`), imutável
+  (gatilho + só SELECT/INSERT), some com a versão. O envio ao Empreendimento (`loadMassaSide`) passa a usar o
+  produto DA versão publicada; versão anterior à M4 cai no produto vivo e AVISA.
+- §21 (paramétrico instantâneo): já era derivado — mudar pavimentos, recuo ou mix recalcula tudo na hora, sem gravar.
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `tsc --noEmit` | exit 0 |
+| `check-ui-standard.sh` (TelaAlternativas, BlueprintEditor) | 0 violações |
+| Suíte cheia (JSON) | 670/670 arquivos · 7.014 testes = 6.980 ok + 34 pulados · 0 falhas |
+| `vite build` · XSS · org guard | ok (2ª tentativa; a 1ª caiu sem mensagem — Node 24) · ok · ok |
+| `__tests__/blueprintComparadorDeMassa.test.ts` (3) | torre única × duas torres; destaques por linha; empate e sem concorrente; nome sugerido; formatação |
+| Teste de editor "estudo de massa (M4)" | EM-003 sugerido; 2 colunas; "Unidades 80 × 34"; "menor complexidade: principal", "menor custo: Duas torres"; nenhuma linha de vencedor; publicar → produto congelado com o snapshot `snap_1` |
+| Migration | `authenticated` só SELECT/INSERT, `anon` nada; RLS com 2 políticas; gatilho de imutabilidade |
+| App real (só leitura) | sessão logada lê `blueprint_snapshot_produto` sem erro; `daVersao` de versão inexistente = null; 0 escritas |
+| **Gravação real ao publicar** | **pendente** — exige publicar num estudo descartável (autorização); a leitura e a segurança estão provadas |

@@ -10,8 +10,8 @@
 // ⚠️ Fontes, e por que estas:
 //   - os BLOCOS vêm do SNAPSHOT PUBLICADO, como no loteamento: o rascunho muda a
 //     cada gesto, e o espelho de vendas não pode mudar debaixo do corretor.
-//   - o PRODUTO vem de `blueprint_study_produto` (a linha atual): é intenção do
-//     estudo, fora do payload. A M4 o congela junto da versão publicada.
+//   - o PRODUTO vem do congelado NA VERSÃO publicada (`blueprint_snapshot_produto`,
+//     M4); versão anterior à M4 cai na linha viva `blueprint_study_produto`, avisando.
 //   - o CUB, de `cub_parametric_data` (mês mais recente da UF do produto).
 //
 // ⚠️ A unidade da massa NÃO existe no desenho: a chave é texto determinístico
@@ -21,6 +21,7 @@
 import { supabase } from '../../lib/supabase';
 import { getSnapshot, listSnapshots } from '../blueprintService';
 import { blueprintProdutoService } from '../blueprintProdutoService';
+import { blueprintSnapshotProdutoService } from '../blueprintSnapshotProdutoService';
 import { cubDoPadrao, type CubDoPadrao } from '../cubService';
 import { Empreendimento, EmpreendimentoUnitInsert, FloorTipo, UnitStatus } from '../../types/empreendimento';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
@@ -148,8 +149,20 @@ export async function loadMassaSide(empreendimento: Empreendimento): Promise<Can
   // Objeto (jsonb) ou texto: a função comum trata os dois — ver modeloPublicado.ts.
   const model: BlueprintModel = modeloDoPayloadPublicado(snapshot.payload);
 
-  const row = await blueprintProdutoService.get(empreendimento.blueprint_study_id);
-  const produto = produtoDaColuna(row?.produto ?? null);
+  // M4: o produto CONGELADO na versão publicada vence a linha viva — o envio tem
+  // de refletir a versão que alguém publicou, não o mix digitado depois. Versão
+  // publicada antes da M4 não tem cópia: cai no produto vivo, e diz.
+  const congelado = await blueprintSnapshotProdutoService.daVersao(maisRecente.id).catch(() => null);
+  let produto;
+  const avisoDoProduto: string[] = [];
+  if (congelado) {
+    produto = produtoDaColuna(congelado);
+  } else {
+    const row = await blueprintProdutoService.get(empreendimento.blueprint_study_id);
+    produto = produtoDaColuna(row?.produto ?? null);
+    if (row) avisoDoProduto.push('A versão publicada não tem o produto congelado (publicada antes desta função): usei o produto atual do estudo. Publique de novo para fixar.');
+  }
   const cub = produto.financeiro.custoM2Manual ? null : await cubDoPadrao(produto.financeiro.uf, produto.padrao).catch(() => null);
-  return ladoDaMassa(empreendimento, model, produto, cub);
+  const lado = ladoDaMassa(empreendimento, model, produto, cub);
+  return { ...lado, warnings: [...avisoDoProduto, ...lado.warnings] };
 }

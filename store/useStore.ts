@@ -50,6 +50,10 @@ interface AuthState {
     setLoadingSession: (loading: boolean) => void;
     setCurrentProfile: (profile: Partial<AuthState['currentProfile']>) => void;
     setSelectedLoginGroup: (group: ProfileGroup | null) => void;
+    /** Escolhe o portal só em memória, sem gravar no navegador — para a rota
+     *  /portal-parceiro, que não pode deixar o portal do parceiro marcado para a
+     *  próxima visita (03/10/2026: conta interna presa no login do parceiro). */
+    selectLoginGroupForRoute: (group: ProfileGroup) => void;
     setInvestorProfile: (profile: Investor | null) => void;
     setClientProfile: (profile: Client | null) => void;
     setSupplierProfile: (profile: Supplier | null) => void;
@@ -174,6 +178,7 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         else localStorage.removeItem('orca_selectedLoginGroup');
         set({ selectedLoginGroup });
     },
+    selectLoginGroupForRoute: (selectedLoginGroup) => set({ selectedLoginGroup }),
     setInvestorProfile: (investorProfile) => set({ investorProfile }),
     setClientProfile: (clientProfile) => set({ clientProfile }),
     setSupplierProfile: (supplierProfile) => set({ supplierProfile }),

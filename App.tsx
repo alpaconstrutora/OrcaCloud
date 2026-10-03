@@ -389,7 +389,7 @@ const App: React.FC = () => {
     projectId, setProjectId,
     session, setSession,
     loadingSession, setLoadingSession,
-    selectedLoginGroup, setSelectedLoginGroup,
+    selectedLoginGroup, setSelectedLoginGroup, selectLoginGroupForRoute,
     currentProfile, setCurrentProfile,
     clients, setClients,
     investorProfile, setInvestorProfile,
@@ -675,19 +675,36 @@ const App: React.FC = () => {
   // vez do seletor de portais. Também é para onde o convite por e-mail aponta
   // (#type=invite|recovery): o ResetPassword abre, e ao concluir o grupo já é o do
   // parceiro, então ele cai no portal.
-  // Força o grupo só sem sessão ou vindo do link do convite — quem já está logado
-  // em outro perfil não é deslogado. E reafirma a cada mudança de grupo: o listener
-  // de auth (useAuthSync) zera o grupo no evento inicial sem sessão, logo DEPOIS do
-  // primeiro ajuste — medido no navegador em 03/10/2026, uma vez só não segurava.
-  // "Voltar" na tela de login troca o endereço para "/" (ver o guard do <Auth>),
-  // e aí esta regra para de valer e o seletor aparece.
+  // Quando força: sem sessão, vindo do link do convite, ou com sessão e nenhum
+  // portal escolhido (o parceiro que recarrega a página já logado). Quem está
+  // logado em OUTRO portal não é tocado. Reafirma a cada mudança de grupo: o
+  // listener de auth (useAuthSync) zera o grupo no evento inicial sem sessão, logo
+  // DEPOIS do primeiro ajuste — medido no navegador, uma vez só não segurava.
+  //
+  // ⚠️ Escolhe o portal SÓ EM MEMÓRIA (`selectLoginGroupForRoute`), nunca grava no
+  // navegador. Até a correção de 03/10/2026 gravava: quem abriu o link do convite
+  // ficava com o portal do parceiro marcado, e a conta interna dele (reservada
+  // para Desenvolvedor) entrava pela tela do parceiro, era recusada, saía e voltava
+  // à mesma tela — "entra e cai". "Voltar" troca o endereço para "/" (guard do
+  // <Auth>), e um login recusado também (efeito logo abaixo).
   React.useEffect(() => {
     if (window.location.pathname !== '/portal-parceiro' || partnerPortalToken) return;
     const hashType = new URLSearchParams(window.location.hash.slice(1)).get('type');
     const vindoDoConvite = hashType === 'invite' || hashType === 'recovery';
-    if (!vindoDoConvite && (loadingSession || session)) return;
-    if (selectedLoginGroup !== ProfileGroup.PARTNER) setSelectedLoginGroup(ProfileGroup.PARTNER);
-  }, [loadingSession, session, partnerPortalToken, selectedLoginGroup, setSelectedLoginGroup]);
+    if (loadingSession && !vindoDoConvite) return;
+    const deveForcar = vindoDoConvite || !session || !selectedLoginGroup;
+    if (deveForcar && selectedLoginGroup !== ProfileGroup.PARTNER) selectLoginGroupForRoute(ProfileGroup.PARTNER);
+  }, [loadingSession, session, partnerPortalToken, selectedLoginGroup, selectLoginGroupForRoute]);
+
+  // Login recusado na entrada do parceiro (conta que não é de parceiro): a tela de
+  // "Erro de Acesso" mostra o motivo e o useAuthSync desconecta em 3 s. Sai de
+  // /portal-parceiro já, para que depois disso apareça o seletor de portais em vez
+  // de voltar à tela do parceiro.
+  React.useEffect(() => {
+    if (authError && window.location.pathname === '/portal-parceiro' && !partnerPortalToken) {
+      window.history.replaceState(null, '', '/');
+    }
+  }, [authError, partnerPortalToken]);
 
   // ── Guards públicos (ordem preservada) ───────────────────────────────────────
   // ⚠️ `/portal-condomino` NÃO existe mais (23/09/2026). O Portal do Condômino

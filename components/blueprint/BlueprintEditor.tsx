@@ -632,6 +632,7 @@ import { useBlueprintEntorno } from '../../hooks/useBlueprintEntorno';
 import { insolacaoDaMassa, type OpcoesDaInsolacaoDaMassa } from '../../utils/blueprintInsolacaoDaMassa';
 import { direcaoDaRua, dividirPavimento, montarPavimentoTipo, ordinalDoTipo as ordinalDoPavimentoTipo, pavimentoTipoMontado } from '../../utils/blueprintPavimentoTipoDaMassa';
 import { plantasDasUnidades, unidadeTemPlanta } from '../../utils/blueprintPlantaDaUnidade';
+import { garagemLancada, lancarGaragem } from '../../utils/blueprintGaragemDaMassa';
 import { comandosDoCandidato, modeloDoCandidato, type CandidatoDeMassa } from '../../utils/blueprintGeradorDeMassa';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
@@ -9135,8 +9136,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
         onExcluir={removerSelecionada}
         onAbrirEstudo={() => setTarefa('massa')}
+        garagem={
+          blocoSel && blocoSel.uso === 'GARAGEM'
+            ? {
+                lancados: garagemLancada(editor.model, blocoSel).length,
+                onLancar: async () => {
+                  const g = lancarGaragem(editor.model, blocoSel);
+                  editor.runBatch(g.comandos);
+                  return `Vagas lançadas: ${g.total} em ${g.pisos.length} pavimento(s) (${g.pisos.map((p) => `${p.nome.split(' · ').pop()}: ${p.vagas}`).join('; ')}) — ${g.pisos[0]?.porTipo.PCD ?? 0} PCD e ${g.pisos[0]?.porTipo.IDOSO ?? 0} idoso por pavimento.${g.avisos.length ? ` ${g.avisos.join(' ')}` : ''}`;
+                },
+              }
+            : undefined
+        }
         pavimentoTipo={
-          blocoSel && divisaoDoBlocoSel
+          // Garagem não tem pavimento tipo: o painel mostra a seção dela (vagas), não o motivo.
+          blocoSel && blocoSel.uso !== 'GARAGEM' && divisaoDoBlocoSel
             ? {
                 divisao: divisaoDoBlocoSel.ok ? divisaoDoBlocoSel.divisao : null,
                 motivo: divisaoDoBlocoSel.ok ? null : divisaoDoBlocoSel.motivo,

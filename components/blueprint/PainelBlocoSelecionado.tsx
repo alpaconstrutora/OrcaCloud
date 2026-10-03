@@ -7,6 +7,8 @@
  * M6a: o PAVIMENTO TIPO — o esquema que a divisão propõe (corredor, núcleo,
  * unidades com canto e orientação) e as duas saídas: criar uma alternativa com
  * o pavimento tipo montado, ou montar neste estudo (um lote; Ctrl+Z desfaz).
+ *
+ * Garagem (pendências de 03/10/2026): o bloco de GARAGEM lança os pavimentos dele com as vagas reais.
  */
 import React, { useState } from 'react';
 import { ROTULO_DO_ESQUEMA, type DivisaoDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
@@ -36,11 +38,17 @@ interface Props {
     pendentes: number;
     onGerar: () => Promise<string | void>;
   };
+  /** Bloco de garagem: os pavimentos dele com as vagas reais (lançador da E2.5). */
+  garagem?: {
+    /** Pavimentos da garagem já lançados (0 = ainda não). */
+    lancados: number;
+    onLancar: () => Promise<string | void>;
+  };
 }
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pavimentoTipo, plantas }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pavimentoTipo, plantas, garagem }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   if (!bloco) return null;
@@ -175,6 +183,28 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
       <button type="button" onClick={onAbrirEstudo} className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800">
         Ver o estudo de massa
       </button>
+
+      {garagem && (
+        <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-2 text-[11px]" data-testid="garagem-do-bloco">
+          <p className="text-xs font-semibold text-slate-700">Garagem</p>
+          <p className="text-slate-600">
+            {garagem.lancados > 0
+              ? `Vagas já lançadas em ${garagem.lancados} pavimento(s).`
+              : `${bloco.pavimentos} pavimento(s) com o contorno do bloco e as vagas do lançador (fileiras, circulação, PCD e idoso).`}
+          </p>
+          <button
+            type="button"
+            disabled={!!ocupado || garagem.lancados > 0}
+            onClick={() => void agir('garagem', garagem.onLancar)}
+            title={garagem.lancados > 0 ? 'As vagas já estão lançadas — para refazer, remova os pavimentos da garagem' : 'Cria os pavimentos da garagem com as paredes do contorno e as vagas confirmadas (um lote: Ctrl+Z desfaz)'}
+            className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+            data-testid="lancar-garagem"
+          >
+            {ocupado === 'garagem' ? 'Lançando…' : 'Lançar as vagas'}
+          </button>
+          {resultado && !pavimentoTipo && <p className="text-slate-700" data-testid="garagem-resultado">{resultado}</p>}
+        </div>
+      )}
 
       {pavimentoTipo && (
         <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-2 text-[11px]" data-testid="pavimento-tipo-do-bloco">

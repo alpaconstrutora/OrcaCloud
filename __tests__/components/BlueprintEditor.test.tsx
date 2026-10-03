@@ -1626,6 +1626,37 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(painel).getByTestId('gerar-plantas-das-unidades')).toBeDisabled();
   }, 60000);
 
+  it('estudo de massa (garagem): o bloco de garagem lança os pavimentos com as vagas reais e depois diz que já estão lançadas', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { vagasQueCabem } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    const pontos = [k.point(5000, 10000), k.point(35000, 10000), k.point(35000, 50000), k.point(5000, 50000)];
+    const m = k.applyBatch(nivel.model, [
+      d(0, 0, 40000, 0, 'FRENTE'), d(40000, 0, 40000, 60000, 'LATERAL_DIREITA'), d(40000, 60000, 0, 60000, 'FUNDOS'), d(0, 60000, 0, 0, 'LATERAL_ESQUERDA'),
+      { type: 'AddBloco', levelId: t, nome: 'Subsolo', pontos, cotaBaseMm: -6000, pavimentos: 2, peDireitoMm: 3000, uso: 'GARAGEM' },
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Subsolo'));
+    const painel = await screen.findByTestId('painel-bloco');
+    expect(within(painel).queryByTestId('pavimento-tipo-do-bloco')).toBeNull();
+    const garagem = within(painel).getByTestId('garagem-do-bloco');
+    expect(garagem).toHaveTextContent(/2 pavimento\(s\) com o contorno do bloco/);
+    await user.click(within(garagem).getByTestId('lancar-garagem'));
+    const res = await within(painel).findByTestId('garagem-resultado', {}, { timeout: 20000 });
+    const n = vagasQueCabem(pontos, 'PERPENDICULAR');
+    expect(res).toHaveTextContent(new RegExp(`^Vagas lançadas: ${2 * n} em 2 pavimento\\(s\\) \\(2º subsolo: ${n}; 1º subsolo: ${n}\\)`));
+    await waitFor(() => expect(within(painel).getByTestId('garagem-do-bloco')).toHaveTextContent(/Vagas já lançadas em 2 pavimento\(s\)/));
+    expect(within(painel).getByTestId('lancar-garagem')).toBeDisabled();
+  }, 60000);
+
   it('estudo de massa (M4): Alternativas compara TODAS com a mesma régua, destaca por linha sem vencedor, sugere EM-00N; publicar congela o produto', async () => {
     const k = await import('../../utils/blueprintKernel');
     const { produtoSemente } = await import('../../utils/blueprintProduto');

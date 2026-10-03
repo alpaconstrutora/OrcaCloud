@@ -116,7 +116,7 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
         try {
             // Login/cadastro feito NESTA aba: só ela pode desconectar a conta se o
             // portal escolhido não combinar (lib/loginNestaAba.ts).
-            if (view === 'login' || view === 'signup') marcarLoginNestaAba();
+            if (view === 'login' || view === 'signup') marcarLoginNestaAba(email);
             if (view === 'login') {
                 const { error } = await supabase.auth.signInWithPassword({
                     email,

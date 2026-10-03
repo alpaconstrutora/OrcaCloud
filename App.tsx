@@ -371,6 +371,7 @@ import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
 import { loginFeitoNestaAba } from './lib/loginNestaAba';
+import { tipoDoLinkDeAcesso } from './lib/linkDeAcesso';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import { useOrgContext } from './hooks/useOrgContext';
 import AppRouter from './components/AppRouter';
@@ -690,13 +691,13 @@ const App: React.FC = () => {
   // <Auth>), e um login recusado também (efeito logo abaixo).
   React.useEffect(() => {
     if (window.location.pathname !== '/portal-parceiro' || partnerPortalToken) return;
-    const hashType = new URLSearchParams(window.location.hash.slice(1)).get('type');
-    const vindoDoConvite = hashType === 'invite' || hashType === 'recovery';
+    // Tipo do link capturado na carga — o Supabase já apagou o hash (lib/linkDeAcesso.ts).
+    const vindoDoConvite = !!tipoDoLinkDeAcesso;
     if (loadingSession && !vindoDoConvite) return;
     // Com sessão e sem portal escolhido, só força se o login foi feito NESTA aba
     // (o parceiro que recarregou a página). Sessão vinda de outra aba não é
     // empurrada para o portal do parceiro — ver lib/loginNestaAba.ts.
-    const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba());
+    const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba(session?.user?.email));
     if (deveForcar && selectedLoginGroup !== ProfileGroup.PARTNER) selectLoginGroupForRoute(ProfileGroup.PARTNER);
   }, [loadingSession, session, partnerPortalToken, selectedLoginGroup, selectLoginGroupForRoute]);
 
@@ -742,7 +743,13 @@ const App: React.FC = () => {
   );
 
   // ── Guards de autenticação ───────────────────────────────────────────────────
-  if (isResettingPassword) return <ResetPassword onComplete={() => setIsResettingPassword(false)} />;
+  if (isResettingPassword) return (
+    <ResetPassword
+      email={session?.user?.email}
+      tipo={tipoDoLinkDeAcesso === 'invite' ? 'invite' : 'recovery'}
+      onComplete={() => setIsResettingPassword(false)}
+    />
+  );
   if (!loadingSession && !selectedLoginGroup) return <LoginGateway onSelectGroup={setSelectedLoginGroup} />;
   if (!loadingSession && !session) return (
     <Auth

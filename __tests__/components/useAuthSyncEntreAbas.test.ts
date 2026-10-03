@@ -48,9 +48,9 @@ import { ProfileGroup } from '../../types';
 
 const SESSAO = { user: { id: 'u1', email: 'altair.rosa@alpaconstrutora.com.br' } };
 
-function montar(selectedLoginGroup: ProfileGroup | null) {
+function montar(selectedLoginGroup: ProfileGroup | null, session: { user: { id: string; email: string } } = SESSAO) {
     const props = {
-        session: SESSAO,
+        session,
         setSession: vi.fn(),
         setLoadingSession: vi.fn(),
         selectedLoginGroup,
@@ -106,7 +106,7 @@ describe('useAuthSync — sessão compartilhada entre abas', () => {
     }, 10000);
 
     it('3. login feito nesta aba: mostra o motivo e desconecta após 3 s', async () => {
-        marcarLoginNestaAba();
+        marcarLoginNestaAba(SESSAO.user.email);
         const p = montar(ProfileGroup.PARTNER);
 
         await waitFor(() => expect(p.setAuthError).toHaveBeenCalledWith('Este e-mail está reservado apenas para o Portal do Desenvolvedor.'));
@@ -116,11 +116,23 @@ describe('useAuthSync — sessão compartilhada entre abas', () => {
 
     it('4. a marca "login nesta aba" some quando a sessão termina', async () => {
         validateAccess.mockResolvedValue({ isValid: true });
-        marcarLoginNestaAba();
+        marcarLoginNestaAba(SESSAO.user.email);
         montar(ProfileGroup.DEVELOPER);
-        expect(loginFeitoNestaAba()).toBe(true);
+        expect(loginFeitoNestaAba(SESSAO.user.email)).toBe(true);
 
         act(() => { authCallback?.('SIGNED_OUT', null); });
-        expect(loginFeitoNestaAba()).toBe(false);
+        expect(loginFeitoNestaAba(SESSAO.user.email)).toBe(false);
     });
+
+    it('5. aba marcada pelo login de OUTRA pessoa: a sessão nova não é dela — não desconecta', async () => {
+        // A aba do desenvolvedor fez o login dele; o parceiro abriu o link do convite
+        // em outra aba e a sessão compartilhada passou a ser a do parceiro.
+        marcarLoginNestaAba('altair.rosa@alpaconstrutora.com.br');
+        const p = montar(ProfileGroup.DEVELOPER, { user: { id: 'u2', email: 'parceiro@fornecedor.com' } });
+
+        await waitFor(() => expect(p.selectLoginGroupForRoute).toHaveBeenCalled());
+        expect(p.setAuthError).not.toHaveBeenCalledWith(expect.stringContaining('reservado'));
+        await new Promise(r => setTimeout(r, 3300));
+        expect(signOut).not.toHaveBeenCalled();
+    }, 10000);
 });

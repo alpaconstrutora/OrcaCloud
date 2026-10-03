@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Lock, Loader2, AlertCircle, CheckCircle, Mail } from 'lucide-react';
 import Button from './ui/Button';
 
 interface ResetPasswordProps {
     onComplete: () => void;
+    /** E-mail da conta que chegou pelo link — mostrado já preenchido, sem edição:
+     *  o link identifica a pessoa, ela não precisa digitar (pedido de 03/10/2026). */
+    email?: string;
+    /** Convite = conta nova criando a primeira senha; recovery = redefinição. */
+    tipo?: 'invite' | 'recovery';
 }
 
-const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete }) => {
+const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, tipo = 'recovery' }) => {
+    const ehConvite = tipo === 'invite';
     const [loading, setLoading] = useState(false);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -48,8 +54,8 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete }) => {
                     <div className="bg-blue-600 p-3 rounded-xl mb-4 shadow-lg shadow-blue-200">
                         <Lock className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900">Nova Senha</h1>
-                    <p className="text-gray-500 mt-1">Defina sua nova senha de acesso</p>
+                    <h1 className="text-2xl font-bold text-gray-900">{ehConvite ? 'Criar sua senha' : 'Nova senha'}</h1>
+                    <p className="text-gray-500 mt-1">{ehConvite ? 'Defina a senha para entrar com o seu e-mail' : 'Defina sua nova senha de acesso'}</p>
                 </div>
 
                 {success ? (
@@ -57,13 +63,29 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete }) => {
                         <div className="flex justify-center mb-4">
                             <CheckCircle className="w-12 h-12 text-green-500" />
                         </div>
-                        <p className="text-gray-700 font-medium">Senha alterada com sucesso!</p>
+                        <p className="text-gray-700 font-medium">{ehConvite ? 'Senha criada com sucesso!' : 'Senha alterada com sucesso!'}</p>
                         <p className="text-sm text-gray-500 mt-2">Redirecionando para o painel...</p>
                     </div>
                 ) : (
                     <form onSubmit={handleReset} className="space-y-4">
+                        {email && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        readOnly
+                                        autoComplete="username"
+                                        title="O e-mail vem do link que você recebeu"
+                                        className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed outline-none"
+                                    />
+                                </div>
+                            </div>
+                        )}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{ehConvite ? 'Senha' : 'Nova Senha'}</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                                 <input
@@ -108,7 +130,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete }) => {
                             {loading ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
-                                'Salvar Nova Senha'
+                                ehConvite ? 'Criar senha e entrar' : 'Salvar Nova Senha'
                             )}
                         </Button>
                     </form>

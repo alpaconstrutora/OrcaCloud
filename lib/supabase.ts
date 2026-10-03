@@ -1,4 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+// Precisa ser avaliado ANTES do createClient: ele apaga o #type=invite|recovery
+// da URL na inicialização. Ver lib/linkDeAcesso.ts.
+import './linkDeAcesso';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

@@ -7,6 +7,7 @@ import { supplierService } from '../services/supplierService';
 import { projectService } from '../services/projectService';
 import { ProfileGroup, UserProfile } from '../types';
 import { loginFeitoNestaAba, marcarLoginNestaAba, limparLoginNestaAba } from '../lib/loginNestaAba';
+import { tipoDoLinkDeAcesso } from '../lib/linkDeAcesso';
 
 interface UseAuthSyncProps {
   session: any;
@@ -53,21 +54,21 @@ export const useAuthSync = ({
 
   // ── 1. Auth state listener ────────────────────────────────────────────────
   useEffect(() => {
-    // Detecta convite/recovery no hash da URL ANTES do Supabase processar o token
-    const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    const urlType = hashParams.get('type');
-    if (urlType === 'invite' || urlType === 'recovery') {
-      setIsResettingPassword(true);
-      // A sessão do link de convite/redefinição nasce nesta aba.
-      marcarLoginNestaAba();
-    }
+    // Convite/redefinição: o tipo foi capturado na carga (lib/linkDeAcesso.ts) —
+    // aqui o Supabase já apagou o hash da URL.
+    if (tipoDoLinkDeAcesso) setIsResettingPassword(true);
 
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      // A sessão do link de convite/redefinição nasce nesta aba, para esta pessoa.
+      if (tipoDoLinkDeAcesso && initialSession?.user?.email) marcarLoginNestaAba(initialSession.user.email);
       setSession(initialSession);
       setLoadingSession(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (tipoDoLinkDeAcesso && newSession?.user?.email && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'PASSWORD_RECOVERY')) {
+        marcarLoginNestaAba(newSession.user.email);
+      }
       setSession(newSession);
       if (!newSession) {
         limparLoginNestaAba();
@@ -106,7 +107,7 @@ export const useAuthSync = ({
 
       if (cancelled) return;
 
-      if (!result.isValid && !loginFeitoNestaAba()) {
+      if (!result.isValid && !loginFeitoNestaAba(session.user.email)) {
         // A sessão veio de OUTRA aba (ou de uma visita anterior) e não combina com
         // o portal escolhido AQUI. Não desconecta: isso derrubaria a aba onde a
         // pessoa acabou de entrar (03/10/2026, "entra e cai"). Esta aba adota o

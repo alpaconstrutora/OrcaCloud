@@ -12,7 +12,7 @@ import { point, type Boundary } from '../../utils/blueprintKernel';
 
 const DIVISA = { id: 'bnd_0001', uid: '11111111-2222-4333-8444-555555555555', levelId: 'lvl_0001', kind: 'LOTE', a: point(0, 0), b: point(10000, 0), papel: null } as Boundary;
 
-function montar(ca: number, onCoeficienteBasico = vi.fn()) {
+function montar(ca: number, onCoeficienteBasico = vi.fn(), coeficienteMin: number | null = null) {
   render(
     <PainelTerreno
       terreno={null}
@@ -29,6 +29,8 @@ function montar(ca: number, onCoeficienteBasico = vi.fn()) {
       onTaxaOcupacaoMax={vi.fn()}
       onCoeficienteMax={vi.fn()}
       onCoeficienteBasico={onCoeficienteBasico}
+      coeficienteMin={coeficienteMin}
+      onCoeficienteMin={vi.fn()}
       empreendimentos={[]}
       empreendimentoId=""
       onEmpreendimento={vi.fn()}
@@ -66,5 +68,17 @@ describe('Aproveitamento — CA básico e outorga', () => {
     fireEvent.change(campo, { target: { value: '2,5' } });
     fireEvent.blur(campo, { target: { value: '2,5' } });
     expect(fn).toHaveBeenCalledWith(2.5);
+  });
+
+  it('CA MÍNIMO: abaixo dele, âmbar e o aviso de subutilização; acima, nada', () => {
+    montar(0.2, vi.fn(), 0.25);
+    const linha = screen.getByText('Coeficiente mínimo (subutilização)').parentElement!;
+    expect(linha.querySelector('strong')!.className).toMatch(/amber/);
+    expect(screen.getByText(/Abaixo do mínimo, o lote é subutilizado/)).toBeTruthy();
+  });
+
+  it('CA mínimo atendido: sem aviso', () => {
+    montar(1.5, vi.fn(), 0.25);
+    expect(screen.queryByText(/subutilizado/)).toBeNull();
   });
 });

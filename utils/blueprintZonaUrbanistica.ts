@@ -17,7 +17,7 @@
  * faltando, porque parece conferida.
  */
 
-import { lerMilimetros, lerPorcentagem, lerValorRegulatorio } from './regulatoryValue';
+import { lerMilimetros, lerPorcentagem, lerValorRegulatorio, notaDeRodape, semNotaDeRodape } from './regulatoryValue';
 import { RECUOS_ZERO, type Recuos } from './blueprintTerreno';
 import { avaliar, erroDeSintaxe } from './blueprintFormulas';
 
@@ -49,6 +49,12 @@ export interface ZonaRegulatoria {
   gabarito_pavimentos?: string;
   lei_referencia?: string;
   nivel_confianca?: string;
+  /** Também lidos desde 03/10/2026 (comparação Planta × Mapa Regulatório): CA mínimo e área mínima da unidade
+   * viram número e conferência; uso permitido e documento fonte são mostrados com a lei. */
+  ca_minimo?: string;
+  area_minima_unidade?: string;
+  uso_permitido?: string;
+  documento_fonte?: string;
   /**
    * VOCABULÁRIO COMPLEMENTAR (19/09/2026, roadmap E3.1). Opcionais porque os
    * catálogos de hoje não os têm: quando vierem, são lidos; até lá, o estudo
@@ -74,6 +80,8 @@ export type CampoDaZona =
   | 'taxa_ocupacao_max'
   | 'coeficiente_max'
   | 'coeficiente_basico'
+  | 'coeficiente_min'
+  | 'area_minima_unidade'
   | 'gabarito_altura_max'
   | 'gabarito_pavimentos'
   | 'taxa_permeabilidade_min'
@@ -92,6 +100,8 @@ export const ROTULO_DO_CAMPO: Record<CampoDaZona, string> = {
   taxa_ocupacao_max: 'taxa de ocupação',
   coeficiente_max: 'coeficiente de aproveitamento',
   coeficiente_basico: 'coeficiente básico (sem outorga)',
+  coeficiente_min: 'coeficiente mínimo (subutilização)',
+  area_minima_unidade: 'área mínima da unidade',
   gabarito_altura_max: 'gabarito (altura)',
   gabarito_pavimentos: 'gabarito (pavimentos)',
   taxa_permeabilidade_min: 'taxa de permeabilidade',
@@ -128,7 +138,15 @@ export interface ValoresDaZona {
   afastamentoProgressivo: AfastamentoProgressivo | null;
   /** P2.10: recuo de FRENTE maior a partir de um pavimento (ex.: 5 m a partir do 3º). */
   recuoFrenteEscalonado: RecuoEscalonado | null;
+  /** CA MÍNIMO: abaixo dele o lote é subutilizado (sujeito a parcelamento compulsório / IPTU progressivo). */
+  coeficienteMin: number | null;
+  /** Área privativa mínima da unidade, m² — conferida contra as tipologias do produto. */
+  areaMinimaUnidadeM2: number | null;
 }
+
+/** Os campos do VOCABULÁRIO COMPLEMENTAR (editáveis à mão no painel da zona) — uma lista só para hook, painel e editor. */
+export type CampoDoVocabulario = 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado' | 'areaMinimaUnidadeM2';
+export type VocabularioDaZona = Pick<ValoresDaZona, CampoDoVocabulario>;
 
 /**
  * AFASTAMENTO PROGRESSIVO: acima de `aPartirDeM` de altura, o afastamento
@@ -235,9 +253,25 @@ export function recuosEfetivos(recuos: Recuos, valores: Pick<ValoresDaZona, 'afa
 }
 
 export interface AvisoDoLote {
-  campo: 'testada_minima' | 'area_minima_lote';
+  campo: 'testada_minima' | 'area_minima_lote' | 'area_minima_unidade';
   ok: boolean;
   texto: string;
+}
+
+/**
+ * Confere as TIPOLOGIAS do produto contra a área mínima da unidade da zona (só acusa; nada trava). Tipologia
+ * comercial também entra: a lei costuma dizer "unidade", sem distinguir — o aviso diz qual é qual.
+ */
+export function conferirTipologias(tipologias: readonly { nome: string; areaPrivativaM2: number }[], valores: Pick<ValoresDaZona, 'areaMinimaUnidadeM2'>): AvisoDoLote[] {
+  const min = valores.areaMinimaUnidadeM2;
+  if (min == null || tipologias.length === 0) return [];
+  const f = (v: number) => v.toFixed(2).replace('.', ',');
+  const abaixo = tipologias.filter((t) => t.areaPrivativaM2 < min);
+  return [
+    abaixo.length
+      ? { campo: 'area_minima_unidade', ok: false, texto: `Unidade mínima ${f(min)} m²: ${abaixo.map((t) => `${t.nome} (${f(t.areaPrivativaM2)} m²)`).join(', ')} abaixo do mínimo.` }
+      : { campo: 'area_minima_unidade', ok: true, texto: `Todas as tipologias ≥ unidade mínima ${f(min)} m².` },
+  ];
 }
 
 /** Confere o lote contra a testada e a área mínimas (só acusa; nada trava). */
@@ -267,11 +301,14 @@ export interface LeituraDaZona {
    * afogaria o aviso.
    */
   naoAplicados: { campo: CampoDaZona; textoOriginal: string }[];
+  /** Notas de rodapé coladas nos valores ("3²" → nota 2): o valor foi lido, mas a lei condiciona — mostrar. */
+  notas: { campo: CampoDaZona; nota: string }[];
 }
 
 /** Traduz a zona. Sempre devolve leitura — zona vazia devolve tudo `null`. */
 export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
   const naoAplicados: LeituraDaZona['naoAplicados'] = [];
+  const notas: LeituraDaZona['notas'] = [];
 
   /** Converte e, se o texto existia e não virou número, denuncia o campo. */
   function ler<T>(
@@ -280,6 +317,8 @@ export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
     conversor: (v?: string | null) => T | null,
   ): T | null {
     const valor = conversor(texto);
+    const nota = notaDeRodape(texto);
+    if (nota) notas.push({ campo, nota });
     const preenchido = (texto ?? '').trim() !== '';
     if (valor === null && preenchido) {
       naoAplicados.push({ campo, textoOriginal: (texto ?? '').trim() });
@@ -322,11 +361,14 @@ export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
       areaMinimaDoLoteM2: ler('area_minima_lote', zona.area_minima_lote, lerValorRegulatorio),
       vagasPorUnidade: ler('vagas_por_unidade', zona.vagas_por_unidade, lerValorRegulatorio),
       // Horas: "2 h", "2 horas" — o leitor genérico só conhece m/m²/%.
-      insolacaoMinimaH: ler('insolacao_minima', zona.insolacao_minima, (v) => lerValorRegulatorio((v ?? '').replace(/\s*(horas?|h)\s*$/i, ''))),
+      insolacaoMinimaH: ler('insolacao_minima', zona.insolacao_minima, (v) => lerValorRegulatorio(semNotaDeRodape(v ?? '').replace(/\s*(horas?|h)\s*$/i, ''))),
       afastamentoProgressivo: ler('afastamento_progressivo', zona.afastamento_progressivo, lerAfastamentoProgressivo),
       recuoFrenteEscalonado: ler('recuo_frente_escalonado', zona.recuo_frente_escalonado, lerRecuoEscalonado),
+      coeficienteMin: ler('coeficiente_min', zona.ca_minimo, lerValorRegulatorio),
+      areaMinimaUnidadeM2: ler('area_minima_unidade', zona.area_minima_unidade, lerValorRegulatorio),
     },
     naoAplicados,
+    notas,
   };
 }
 
@@ -397,6 +439,8 @@ export function zonaDerivou(
     ['area_minima_lote', aplicados.areaMinimaDoLoteM2 ?? null, hoje.areaMinimaDoLoteM2],
     ['vagas_por_unidade', aplicados.vagasPorUnidade ?? null, hoje.vagasPorUnidade],
     ['insolacao_minima', aplicados.insolacaoMinimaH ?? null, hoje.insolacaoMinimaH],
+    ['coeficiente_min', aplicados.coeficienteMin ?? null, hoje.coeficienteMin],
+    ['area_minima_unidade', aplicados.areaMinimaUnidadeM2 ?? null, hoje.areaMinimaUnidadeM2],
   ];
   const apAplicado = aplicados.afastamentoProgressivo ?? null;
   const apHoje = hoje.afastamentoProgressivo;

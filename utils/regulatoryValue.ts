@@ -39,6 +39,26 @@ const NAO_SE_APLICA = new Set(['n.a.', 'n.a', 'na', 'n/a', '-', '–', '—', '_
 const SUFIXO_DE_UNIDADE = /\s*(m²|m2|m|%)\s*$/i;
 
 /**
+ * NOTA DE RODAPÉ colada no fim do valor (03/10/2026): a planilha da prefeitura escreve "3²" (o C.A. 3, sujeito à nota
+ * 2 da lei) e "N.A.¹" (não se aplica, ver nota 1). Antes o valor inteiro era recusado — no catálogo de produção, 48 dos
+ * 174 C.A. máximos e 30 recuos de frente se perdiam assim. O número da nota sai da leitura e fica disponível em
+ * `notaDeRodape`. ⚠️ O "²"/"³" da UNIDADE ("360 m²") não é nota: o lookbehind exclui o `m`.
+ */
+const NOTA_DE_RODAPE = /(?<![mM])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)$/;
+const SOBRESCRITOS = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+
+/** O número da nota de rodapé colada no fim do valor ("3²" → "2"), ou `null`. */
+export function notaDeRodape(valor?: string | null): string | null {
+  const m = (valor ?? '').trim().match(NOTA_DE_RODAPE);
+  return m ? [...m[1]].map((c) => String(SOBRESCRITOS.indexOf(c))).join('') : null;
+}
+
+/** O valor sem a nota de rodapé colada no fim. */
+export function semNotaDeRodape(valor: string): string {
+  return valor.trim().replace(NOTA_DE_RODAPE, '').trim();
+}
+
+/**
  * Número de um campo do Mapa Regulatório. `null` quando não há número.
  *
  * ⚠️ **Rejeita o que não é número INTEIRAMENTE, em vez de aproveitar o começo.**
@@ -52,7 +72,7 @@ const SUFIXO_DE_UNIDADE = /\s*(m²|m2|m|%)\s*$/i;
 export function lerValorRegulatorio(valor?: string | null): number | null {
   if (valor === null || valor === undefined) return null;
 
-  const limpo = valor.trim();
+  const limpo = semNotaDeRodape(valor);
   if (limpo === '') return null;
   if (NAO_SE_APLICA.has(limpo.toLowerCase())) return null;
 

@@ -20,7 +20,7 @@ const MAP_COLS = 'id, organization_id, city_id, name, lei_referencia, status, ob
 // Literal única (não concatenar/templatizar): supabase-js precisa de string literal em
 // .select() para tipar o retorno — ver armadilha documentada em empreendimentoService.ts.
 const MAP_COLS_WITH_CITY = 'id, organization_id, city_id, name, lei_referencia, status, observacoes, created_at, updated_at, master_cities(name, master_states(code))';
-const ZONE_COLS = 'id, regulatory_map_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
+const ZONE_COLS = 'id, regulatory_map_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, testada_minima, area_minima_lote, insolacao_minima, afastamento_progressivo, recuo_frente_escalonado, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
 
 export const regulatoryMapService = {
     // ── Mapas ────────────────────────────────────────────────────────────────
@@ -184,6 +184,11 @@ export const regulatoryMapService = {
                 regra_vagas: z.regra_vagas,
                 vagas_por_unidade: z.vagas_por_unidade,
                 area_minima_unidade: z.area_minima_unidade,
+                testada_minima: z.testada_minima,
+                area_minima_lote: z.area_minima_lote,
+                insolacao_minima: z.insolacao_minima,
+                afastamento_progressivo: z.afastamento_progressivo,
+                recuo_frente_escalonado: z.recuo_frente_escalonado,
                 lei_referencia: z.lei_referencia,
                 documento_fonte: z.documento_fonte,
                 nivel_confianca: z.nivel_confianca,

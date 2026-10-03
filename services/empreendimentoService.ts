@@ -126,7 +126,7 @@ const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_in
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
-const REGULATORY_ZONE_COLS = 'id, empreendimento_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
+const REGULATORY_ZONE_COLS = 'id, empreendimento_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, testada_minima, area_minima_lote, insolacao_minima, afastamento_progressivo, recuo_frente_escalonado, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
 
 // ── Contexto para a trilha de auditoria ──────────────────────────────────────
 // Torre/pavimento/unidade não carregam `empreendimento_id`: o histórico precisa

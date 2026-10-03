@@ -11,6 +11,7 @@ import {
   type LeituraDaZona,
   type ZonaRegulatoria,
   type ValoresDaZona,
+  type VocabularioDaZona,
 } from '../../utils/blueprintZonaUrbanistica';
 
 /**
@@ -76,8 +77,8 @@ interface Props {
   onAplicar: (zonaId: string) => void;
   onDesligar: () => void;
   /** VOCABULÁRIO COMPLEMENTAR (E3.1): o que está em vigor e o ajuste manual. */
-  vocabulario?: Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>;
-  onVocabulario?: (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>>) => void;
+  vocabulario?: VocabularioDaZona;
+  onVocabulario?: (patch: Partial<VocabularioDaZona>) => void;
   salvando?: boolean;
 }
 
@@ -314,10 +315,24 @@ export default function PainelZonaUrbanistica({
         </p>
       )}
 
+      {/* NOTAS DE RODAPÉ ("3²"): o valor foi lido, mas a lei o condiciona — dito ao lado, para ninguém esquecer. */}
+      {leitura && leitura.notas.length > 0 && (
+        <p className="mt-1.5 text-xs text-slate-600" data-testid="notas-da-zona">
+          Com nota da lei: {leitura.notas.map((n) => `${ROTULO_DO_CAMPO[n.campo]} (nota ${n.nota})`).join(', ')} — confira o texto da nota{zona?.documento_fonte ? ' no documento fonte' : ''}.
+        </p>
+      )}
+
+      {zona?.uso_permitido && (
+        <p className="mt-1.5 text-xs text-slate-600" data-testid="uso-permitido-da-zona">
+          Uso permitido: {zona.uso_permitido}
+        </p>
+      )}
+
       {zona?.lei_referencia && (
         <p className="mt-1.5 text-xs text-slate-400">
           {zona.lei_referencia}
           {zona.nivel_confianca ? ` · ${zona.nivel_confianca}` : ''}
+          {zona.documento_fonte ? ` · fonte: ${zona.documento_fonte}` : ''}
         </p>
       )}
 
@@ -362,6 +377,10 @@ function VocabularioComplementar({
         <label className="flex items-center justify-between gap-1.5">
           Vagas/unidade
           <input type="text" inputMode="decimal" key={`v-${v.vagasPorUnidade ?? ''}`} defaultValue={v.vagasPorUnidade != null ? String(v.vagasPorUnidade).replace('.', ',') : ''} placeholder="—" aria-label="Vagas exigidas por unidade" onBlur={(e) => onVocabulario({ vagasPorUnidade: num(e.target.value) })} className={campo} />
+        </label>
+        <label className="flex items-center justify-between gap-1.5">
+          Área mín. unid. (m²)
+          <input type="text" inputMode="decimal" key={`u-${v.areaMinimaUnidadeM2 ?? ''}`} defaultValue={v.areaMinimaUnidadeM2 != null ? String(v.areaMinimaUnidadeM2).replace('.', ',') : ''} placeholder="—" aria-label="Área mínima da unidade (m²)" onBlur={(e) => onVocabulario({ areaMinimaUnidadeM2: num(e.target.value) })} className={campo} />
         </label>
         <label className="flex items-center justify-between gap-1.5">
           Insolação mín. (h)

@@ -16,6 +16,8 @@ import {
   lerMilimetros,
   lerPorcentagem,
   lerValorRegulatorio,
+  notaDeRodape,
+  semNotaDeRodape,
 } from '../utils/regulatoryValue';
 
 describe('lerValorRegulatorio', () => {
@@ -109,5 +111,25 @@ describe('lerMilimetros', () => {
   it('sem valor e negativo devolvem null', () => {
     expect(lerMilimetros('N.A.')).toBeNull();
     expect(lerMilimetros('-1')).toBeNull();
+  });
+});
+
+describe('nota de rodapé colada no valor (03/10/2026)', () => {
+  it('"3²" é o 3 (nota 2); "N.A.¹" é não se aplica (nota 1); a unidade m²/m³ não é nota', () => {
+    expect(lerValorRegulatorio('3²')).toBe(3);
+    expect(lerValorRegulatorio('2,5³')).toBe(2.5);
+    expect(lerValorRegulatorio('N.A.¹')).toBeNull();
+    expect(lerValorRegulatorio('360 m²')).toBe(360);
+    expect(lerPorcentagem('0,8²')).toBe(80);
+    expect(lerMilimetros('1,5¹')).toBe(1500);
+    expect(notaDeRodape('3²')).toBe('2');
+    expect(notaDeRodape('N.A.¹²')).toBe('12');
+    expect(notaDeRodape('360 m²')).toBeNull();
+    expect(notaDeRodape('3')).toBeNull();
+    expect(semNotaDeRodape(' 3² ')).toBe('3');
+  });
+
+  it('nota no MEIO não é nota: "3² a 4" continua recusado', () => {
+    expect(lerValorRegulatorio('3² a 4')).toBeNull();
   });
 });

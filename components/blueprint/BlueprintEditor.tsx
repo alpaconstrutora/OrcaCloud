@@ -345,7 +345,7 @@ import { fichaDoElemento } from '../../utils/blueprintFicha';
 import { deleteParameterDefinition, listParameterDefinitions, updateParameterDefinition, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
 import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
-import { conferirLote, ordinalDoPavimento, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
+import { conferirLote, conferirTipologias, ordinalDoPavimento, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
 import { envelopePorPavimentoParaRegras, envelopeVertical } from '../../utils/blueprintEnvelope3d';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -4536,11 +4536,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
           coeficienteMax: zona.coeficienteMax,
           coeficienteBasico: zona.coeficienteBasico,
+          coeficienteMin: zona.coeficienteMin,
           taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
         },
         hipoteses: { ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } },
       }),
-    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.coeficienteBasico, zona.taxaPermeabilidadeMin, hipotesesDaMassa],
+    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.coeficienteBasico, zona.coeficienteMin, zona.taxaPermeabilidadeMin, hipotesesDaMassa],
   );
   /** Blocos com pavimento fora do envelope ou acima do gabarito — vermelhos no 2D e no 3D. */
   const blocosComProblema = useMemo(
@@ -4665,11 +4666,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   /** Conferência do lote contra o vocabulário da zona (E3.1): testada e área mínimas. */
   const avisosDoLote = useMemo(() => {
-    if (!terreno) return [];
+    // As tipologias do produto contra a área mínima da unidade da zona (comparação Planta × Mapa Regulatório).
+    const tipologias = conferirTipologias(produtoDoEstudo.produto.tipologias, { areaMinimaUnidadeM2: zona.areaMinimaUnidadeM2 });
+    if (!terreno) return tipologias;
     const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
     const testadaMm = frentes.length ? Math.round(frentes.reduce((s, b) => s + Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y), 0)) : null;
-    return conferirLote({ areaM2: terreno.areaMm2 / 1_000_000, testadaMm }, { testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2 });
-  }, [terreno, limitesDoNivel, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2]);
+    return [...conferirLote({ areaM2: terreno.areaMm2 / 1_000_000, testadaMm }, { testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2 }), ...tipologias];
+  }, [terreno, limitesDoNivel, zona.testadaMinimaMm, zona.areaMinimaDoLoteM2, zona.areaMinimaUnidadeM2, produtoDoEstudo.produto.tipologias]);
   /** O que a ferramenta Divisa desenha (E3.1): limite solto ou faixa restrita, com o tipo. */
   const [kindDaDivisa, setKindDaDivisa] = useState<'DIVISA' | 'RESTRICAO'>('DIVISA');
   const [tipoDeRestricaoDoLote, setTipoDeRestricaoDoLote] = useState<TipoDeRestricaoDoLote>('APP');
@@ -8711,6 +8714,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       taxaOcupacaoMax={zona.taxaOcupacaoMax}
       coeficienteMax={zona.coeficienteMax}
       coeficienteBasico={zona.coeficienteBasico}
+      coeficienteMin={zona.coeficienteMin}
+      onCoeficienteMin={zona.ajustarCoeficienteMin}
       onTaxaOcupacaoMax={zona.ajustarTaxaOcupacaoMax}
       onCoeficienteMax={zona.ajustarCoeficienteMax}
       onCoeficienteBasico={zona.ajustarCoeficienteBasico}
@@ -8881,7 +8886,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           onAplicar={zona.aplicarZona}
           onDesligar={zona.desligar}
           salvando={zona.salvando}
-          vocabulario={{ testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, vagasPorUnidade: zona.vagasPorUnidade, insolacaoMinimaH: zona.insolacaoMinimaH, afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado }}
+          vocabulario={{ testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, vagasPorUnidade: zona.vagasPorUnidade, insolacaoMinimaH: zona.insolacaoMinimaH, afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado, areaMinimaUnidadeM2: zona.areaMinimaUnidadeM2 }}
           onVocabulario={zona.ajustarVocabulario}
         />
       }

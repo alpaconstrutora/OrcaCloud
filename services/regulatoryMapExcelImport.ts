@@ -98,13 +98,18 @@ const FIELD_KEYWORDS: [ZoneField, string[]][] = [
     ['taxa_ocupacao_maxima', ['ocupacao']],
     ['taxa_permeabilidade_minima', ['permeabilidade']],
     ['uso_permitido', ['uso']],
+    ['recuo_frente_escalonado', ['recuo', 'frente', 'escalon']],
     ['recuo_frente', ['recuo', 'frente']],
     ['recuo_fundos', ['recuo', 'fundos']],
     ['recuo_lateral_direita', ['recuo', 'direit']],
     ['recuo_lateral_esquerda', ['recuo', 'esquerd']],
     ['regra_vagas', ['regra', 'vaga']],
     ['vagas_por_unidade', ['vaga']],
+    ['area_minima_lote', ['area', 'minima', 'lote']],
     ['area_minima_unidade', ['area', 'minima']],
+    ['testada_minima', ['testada']],
+    ['insolacao_minima', ['insolacao']],
+    ['afastamento_progressivo', ['afastamento']],
     ['lei_referencia', ['lei']],
     ['documento_fonte', ['documento']],
     ['nivel_confianca', ['confianca']],
@@ -119,8 +124,17 @@ function normalize(s: string): string {
  *  sempre pode corrigir manualmente — isso é só um ponto de partida). */
 export function suggestMapping(headerRow: string[]): ColumnMapping[] {
     const used = new Set<ZoneField>();
+    // O RÓTULO exato da tabela primeiro: é o cabeçalho do modelo baixado (`downloadTemplateWorkbook`), e vários rótulos
+    // abreviados ("T.O. máx.", "Área mín. unid.") não batiam com nenhuma palavra-chave — o modelo não se mapeava sozinho,
+    // ao contrário do que ele promete (achado em 03/10/2026).
+    const porRotulo = new Map(ZONE_COLUMNS.map((c) => [normalize(c.label), c.key] as const));
     return headerRow.map(header => {
         const norm = normalize(header);
+        const exato = porRotulo.get(norm);
+        if (exato && !used.has(exato)) {
+            used.add(exato);
+            return exato;
+        }
         for (const [field, keywords] of FIELD_KEYWORDS) {
             if (used.has(field)) continue;
             if (keywords.every(k => norm.includes(k))) {
@@ -142,6 +156,8 @@ const TEMPLATE_EXAMPLES: Partial<Record<ZoneField, string>>[] = [
         gabarito_pavimentos: '', recuo_frente: '5', recuo_fundos: '3',
         recuo_lateral_direita: '1,5', recuo_lateral_esquerda: '1,5',
         regra_vagas: 'por unidade', vagas_por_unidade: '1', area_minima_unidade: '45',
+        testada_minima: '10', area_minima_lote: '250', insolacao_minima: '2 h',
+        afastamento_progressivo: 'acima de 6 m: (H − 6)/10', recuo_frente_escalonado: '5 m a partir do 3º pavimento',
         lei_referencia: 'Lei nº 1.234/2020', documento_fonte: 'Plano Diretor', nivel_confianca: 'Validado na prefeitura',
         observacoes: '',
     },

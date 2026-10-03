@@ -16,7 +16,9 @@ export type ZoneField =
     | 'taxa_ocupacao_maxima' | 'taxa_permeabilidade_minima' | 'gabarito_altura_maxima'
     | 'uso_permitido' | 'recuo_frente' | 'recuo_lateral_direita' | 'recuo_lateral_esquerda'
     | 'recuo_fundos' | 'gabarito_pavimentos' | 'regra_vagas' | 'vagas_por_unidade'
-    | 'area_minima_unidade' | 'lei_referencia' | 'documento_fonte' | 'nivel_confianca' | 'observacoes';
+    | 'area_minima_unidade' | 'lei_referencia' | 'documento_fonte' | 'nivel_confianca' | 'observacoes'
+    // Desde 03/10/2026: o que a Planta Inteligente lê (antes só digitado à mão em cada estudo).
+    | 'testada_minima' | 'area_minima_lote' | 'insolacao_minima' | 'afastamento_progressivo' | 'recuo_frente_escalonado';
 
 export type ZoneLike = { id: string } & Partial<Record<ZoneField, string | undefined>>;
 
@@ -52,6 +54,11 @@ export const ZONE_COLUMNS: ColDef[] = [
     { key: 'regra_vagas',                label: 'Regra de vagas',      width: 'w-40', type: 'text', placeholder: 'por unidade, por m²…' },
     { key: 'vagas_por_unidade',          label: 'Vagas / unidade',     width: 'w-28', type: 'text', placeholder: '0' },
     { key: 'area_minima_unidade',        label: 'Área mín. unid. (m²)', width: 'w-32', type: 'text', placeholder: '0' },
+    { key: 'testada_minima',             label: 'Testada mín. (m)',    width: 'w-28', type: 'text', placeholder: '0' },
+    { key: 'area_minima_lote',           label: 'Área mín. lote (m²)', width: 'w-32', type: 'text', placeholder: '0' },
+    { key: 'insolacao_minima',           label: 'Insolação mín. (h)',  width: 'w-28', type: 'text', placeholder: '2 h' },
+    { key: 'afastamento_progressivo',    label: 'Afastamento progressivo', width: 'w-56', type: 'text', placeholder: 'acima de 6 m: (H − 6)/10' },
+    { key: 'recuo_frente_escalonado',    label: 'Recuo frente escalonado', width: 'w-56', type: 'text', placeholder: '5 m a partir do 3º pavimento' },
     { key: 'lei_referencia',             label: 'Lei de referência',   width: 'w-44', type: 'text', placeholder: 'Lei nº…' },
     { key: 'documento_fonte',            label: 'Documento fonte',     width: 'w-44', type: 'text' },
     { key: 'nivel_confianca',            label: 'Nível de confiança',  width: 'w-48', type: 'select' },

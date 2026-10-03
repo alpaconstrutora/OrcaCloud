@@ -427,6 +427,9 @@ export interface BlueprintUrbanContext {
   coeficiente_max: number | null;
   /** CA BÁSICO, sem outorga onerosa (migration `aplicar_20271003000010`). `null` = a lei não disse (ou linha anterior). */
   coeficiente_basico?: number | null;
+  /** CA MÍNIMO (subutilização) e área mínima da unidade, m² (migration `aplicar_20271003000030`). */
+  coeficiente_minimo?: number | null;
+  area_minima_unidade_m2?: number | null;
   /** Em METRO. */
   gabarito_altura_max_m: number | null;
   gabarito_pavimentos: number | null;

@@ -79,6 +79,7 @@ function Indicador({
   aoMudarLimite,
   ariaLabel,
   acimaEAviso = false,
+  minimo = false,
 }: {
   rotulo: string;
   valor: string;
@@ -89,8 +90,10 @@ function Indicador({
   ariaLabel: string;
   /** Passar do limite não é infração, é um aviso (o CA básico: acima dele, outorga). Âmbar, não vermelho. */
   acimaEAviso?: boolean;
+  /** O limite é um PISO (o CA mínimo): estoura quem fica ABAIXO. */
+  minimo?: boolean;
 }) {
-  const estourou = limite !== null && atual > limite;
+  const estourou = limite !== null && (minimo ? atual < limite : atual > limite);
   return (
     <div className="flex items-center justify-between gap-2 text-xs">
       <span className="text-slate-600">{rotulo}</span>
@@ -188,6 +191,9 @@ interface Props {
   coeficienteMax: number | null;
   /** CA básico (sem outorga). Opcional: sem ele a linha não aparece. */
   coeficienteBasico?: number | null;
+  /** CA mínimo (subutilização). Opcional: sem `onCoeficienteMin` a linha não aparece. */
+  coeficienteMin?: number | null;
+  onCoeficienteMin?: (v: number | null) => void;
   onTaxaOcupacaoMax: (v: number | null) => void;
   onCoeficienteMax: (v: number | null) => void;
   onCoeficienteBasico?: (v: number | null) => void;
@@ -268,6 +274,8 @@ export default function PainelTerreno({
   taxaOcupacaoMax,
   coeficienteMax,
   coeficienteBasico = null,
+  coeficienteMin = null,
+  onCoeficienteMin,
   onTaxaOcupacaoMax,
   onCoeficienteMax,
   onCoeficienteBasico,
@@ -593,6 +601,19 @@ export default function PainelTerreno({
                 acimaEAviso
               />
             )}
+            {onCoeficienteMin && (
+              <Indicador
+                rotulo="Coeficiente mínimo (subutilização)"
+                valor={aproveitamento.coeficienteAproveitamento.toFixed(2).replace('.', ',')}
+                limite={coeficienteMin}
+                atual={aproveitamento.coeficienteAproveitamento}
+                sufixo=""
+                aoMudarLimite={onCoeficienteMin}
+                ariaLabel="Coeficiente de aproveitamento mínimo da zona (subutilização)"
+                acimaEAviso
+                minimo
+              />
+            )}
           </div>
 
           {/* ⚠️ Desde a M1 do estudo de massa o aproveitamento soma TODOS os pavimentos desenhados e os blocos de
@@ -601,6 +622,7 @@ export default function PainelTerreno({
           <p className="mt-1.5 text-xs text-slate-500">
             Todos os pavimentos desenhados e os blocos de massa: a ocupação pela projeção, o coeficiente pela área computável.
             {coeficienteBasico != null && aproveitamento.coeficienteAproveitamento > coeficienteBasico + 0.005 ? ' Acima do básico, a área depende de outorga onerosa.' : ''}
+            {coeficienteMin != null && aproveitamento.coeficienteAproveitamento < coeficienteMin - 0.005 ? ' Abaixo do mínimo, o lote é subutilizado (sujeito a parcelamento compulsório e IPTU progressivo, conforme a lei).' : ''}
           </p>
         </div>
       )}

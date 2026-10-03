@@ -369,6 +369,12 @@ export interface EmpreendimentoRegulatoryZone {
     regra_vagas?: string;
     vagas_por_unidade?: string;
     area_minima_unidade?: string;
+    /** Desde 03/10/2026: os campos que a Planta Inteligente lê (antes só digitados à mão no estudo). */
+    testada_minima?: string;
+    area_minima_lote?: string;
+    insolacao_minima?: string;
+    afastamento_progressivo?: string;
+    recuo_frente_escalonado?: string;
     lei_referencia?: string;
     documento_fonte?: string;
     nivel_confianca?: string;

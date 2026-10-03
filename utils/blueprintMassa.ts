@@ -70,6 +70,8 @@ export interface ZonaDaMassa extends ZonaDoEnvelope {
   coeficienteMax: number | null;
   /** CA básico (sem outorga onerosa). Opcional: sem ele, o estudo não fala em outorga. */
   coeficienteBasico?: number | null;
+  /** CA mínimo (subutilização). Opcional. */
+  coeficienteMin?: number | null;
   /** Em PORCENTAGEM. */
   taxaPermeabilidadeMinPct: number | null;
 }
@@ -82,6 +84,7 @@ export const ZONA_DA_MASSA_VAZIA: ZonaDaMassa = {
   taxaOcupacaoMaxPct: null,
   coeficienteMax: null,
   coeficienteBasico: null,
+  coeficienteMin: null,
   taxaPermeabilidadeMinPct: null,
 };
 
@@ -523,6 +526,10 @@ export function medirMassa(model: BlueprintModel, ctx: ContextoDaMassa): MedidaD
     if (m.pisosAcimaDoGabarito > 0) avisos.push(`"${m.nome}": ${m.pisosAcimaDoGabarito} pavimento(s) acima do gabarito.`);
   }
   avisos.push(...sobreposicoes(model, blocos));
+  // CA MÍNIMO (comparação Planta × Mapa Regulatório, 03/10/2026): abaixo dele, o lote é subutilizado.
+  if (z.coeficienteMin != null && z.coeficienteMin > 0 && lote != null && lote > 0 && blocos.length > 0 && computavel < lote * z.coeficienteMin - 0.5) {
+    avisos.push(`Abaixo do CA mínimo ${fmt(z.coeficienteMin)}: faltam ${fmt(lote * z.coeficienteMin - computavel)} m² computáveis — lote subutilizado (sujeito a parcelamento compulsório e IPTU progressivo, conforme a lei).`);
+  }
   const r = (n: number, casas: number) => Math.round(n * 10 ** casas) / 10 ** casas;
   return {
     blocos: medidas,

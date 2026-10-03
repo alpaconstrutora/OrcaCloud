@@ -10,6 +10,9 @@
  *  3. a coluna "Convite" mostra "Não enviado" / "Enviado em dd/mm/aaaa";
  *  4. "Reenviar convite" na linha chama o envio; integrante inativo não envia e o
  *     motivo aparece no título.
+ *  5. (03/10/2026, "o usuário não tem botão editar") Editar abre o mesmo painel
+ *     com os dados; o e-mail (login) não muda; salvar grava nome, telefone e
+ *     perfil — e NÃO manda convite.
  */
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -125,7 +128,8 @@ async function abrirUsuarios() {
 const linhaDe = (email: string) => screen.getByText(email).closest('tr')!;
 
 async function convidar(user: ReturnType<typeof userEvent.setup>, nome: string, email: string) {
-    await user.click(screen.getByRole('button', { name: /Convidar Integrante/ }));
+    // O painel fechado continua no DOM (fora da tela): o primeiro botão é o da barra.
+    await user.click(screen.getAllByRole('button', { name: /Convidar Integrante/ })[0]);
     await user.type(screen.getByPlaceholderText('Nome do integrante...'), nome);
     await user.type(screen.getByPlaceholderText('email@parceiro.com'), email);
     const form = screen.getByPlaceholderText('email@parceiro.com').closest('form')!;
@@ -180,5 +184,32 @@ describe('PartnerWorkspaceManager — convite por e-mail', () => {
         const botaoInativo = within(linhaDe('caio@parceiro.com')).getByRole('button', { name: 'Enviar convite por e-mail' });
         expect(botaoInativo).toBeDisabled();
         expect(botaoInativo.closest('span')).toHaveAttribute('title', 'Integrante inativo — ative para enviar o convite');
+    });
+
+    it('5. editar: painel com os dados, e-mail travado, grava nome/telefone/perfil sem reenviar convite', async () => {
+        savePartnerUser.mockImplementation(async (u: Record<string, unknown>) => ({ ...ATIVO_CONVIDADO, ...u }));
+        const user = await abrirUsuarios();
+
+        await user.click(within(linhaDe('ana@parceiro.com')).getByRole('button', { name: 'Editar integrante' }));
+
+        const nome = screen.getByPlaceholderText('Nome do integrante...') as HTMLInputElement;
+        const email = screen.getByPlaceholderText('email@parceiro.com') as HTMLInputElement;
+        expect(nome.value).toBe('Ana');
+        expect(email.value).toBe('ana@parceiro.com');
+        expect(email).toBeDisabled();
+
+        await user.clear(nome);
+        await user.type(nome, 'Ana Souza');
+        await user.selectOptions(screen.getByDisplayValue('Gestor (Visualização)'), 'FINANCEIRO');
+        const form = email.closest('form')!;
+        await user.click(within(form).getByRole('button', { name: 'Salvar' }));
+
+        await waitFor(() => expect(savePartnerUser).toHaveBeenCalledWith({
+            id: 'u1', name: 'Ana Souza', phone: '', role: 'FINANCEIRO',
+        }));
+        expect(invitePartnerUser).not.toHaveBeenCalled();
+        expect(await screen.findByText('Integrante atualizado.')).toBeInTheDocument();
+        await waitFor(() => expect(within(linhaDe('ana@parceiro.com')).getByText('FINANCEIRO')).toBeInTheDocument());
+        expect(within(linhaDe('ana@parceiro.com')).getByText('Ana Souza')).toBeInTheDocument();
     });
 });

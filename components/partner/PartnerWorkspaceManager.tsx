@@ -489,6 +489,24 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     phone: '',
     role: 'GESTOR' as PartnerRole
   });
+  // Integrante em edição no painel; null = convite novo. Mesmo painel para os
+  // dois (UI_PATTERNS: criar e editar registro = Sheet lateral).
+  const [editingPartnerUser, setEditingPartnerUser] = useState<PartnerUser | null>(null);
+  const [savingPartnerUser, setSavingPartnerUser] = useState(false);
+  const abrirConvite = () => {
+    setEditingPartnerUser(null);
+    setInviteUser({ email: '', name: '', phone: '', role: 'GESTOR' });
+    setIsInviteUserModalOpen(true);
+  };
+  const abrirEdicao = (user: PartnerUser) => {
+    setEditingPartnerUser(user);
+    setInviteUser({ email: user.email, name: user.name, phone: user.phone || '', role: user.role });
+    setIsInviteUserModalOpen(true);
+  };
+  const fecharPainelIntegrante = () => {
+    setIsInviteUserModalOpen(false);
+    setEditingPartnerUser(null);
+  };
 
   const [isShareDocModalOpen, setIsShareDocModalOpen] = useState(false);
   const [docToShareId, setDocToShareId] = useState('');
@@ -1046,6 +1064,30 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     e.preventDefault();
     if (!selectedWorkspace) return;
 
+    // Edição: nome, telefone e perfil. O e-mail é o login do integrante — trocar
+    // exige novo convite, então não muda aqui.
+    if (editingPartnerUser) {
+      setSavingPartnerUser(true);
+      try {
+        const updated = await partnerService.savePartnerUser({
+          id: editingPartnerUser.id,
+          name: inviteUser.name.trim(),
+          phone: inviteUser.phone,
+          role: inviteUser.role,
+        });
+        setPartnerUsers((prev) => prev.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)));
+        fecharPainelIntegrante();
+        showToast('Integrante atualizado.', 'success');
+      } catch (err) {
+        console.error('Erro ao editar integrante do parceiro:', err);
+        const msg = (err as { message?: string } | null)?.message;
+        showToast(msg ? `Erro ao salvar integrante: ${msg}` : 'Erro ao salvar integrante.', 'error');
+      } finally {
+        setSavingPartnerUser(false);
+      }
+      return;
+    }
+
     try {
       const created = await partnerService.savePartnerUser({
         partner_workspace_id: selectedWorkspace.id,
@@ -1056,7 +1098,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         is_active: true
       });
       setPartnerUsers((prev) => [...prev, created]);
-      setIsInviteUserModalOpen(false);
+      fecharPainelIntegrante();
       setInviteUser({ email: '', name: '', phone: '', role: 'GESTOR' });
       // O integrante já está gravado; o e-mail vai em seguida. Falha no envio
       // não desfaz o cadastro — dá para reenviar pela linha.
@@ -1560,7 +1602,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                         <MoveHorizontal className="w-4 h-4" />
                       </button>
                     </div>
-                    <Button onClick={() => setIsInviteUserModalOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/10">
+                    <Button onClick={abrirConvite} className="bg-orange-500 hover:bg-orange-600 text-white shadow-md shadow-orange-500/10">
                       <UserPlus className="w-4 h-4" />
                       Convidar Integrante
                     </Button>
@@ -1619,6 +1661,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                                 {wsUserColumns.visibleColumns.includes('actions') && (
                                   <td className="px-6 py-2.5 text-right">
                                     <div className="flex items-center justify-end gap-1.5">
+                                      <ActionIconButton kind="edit" title="Editar integrante" onClick={() => abrirEdicao(user)} />
                                       {/* O <span> carrega o motivo: botão desabilitado tem
                                           pointer-events-none e não mostraria o title. */}
                                       <span
@@ -2440,77 +2483,77 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
         </div>
       )}
 
-      {/* MODAL: CONVIDAR USUÁRIO */}
-      {isInviteUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
-            <h3 className="text-base font-bold text-gray-900">Convidar Integrante</h3>
-            <p className="text-sm text-gray-500 -mt-2">
-              O integrante recebe um e-mail para criar a senha e passa a entrar em <strong>/portal-parceiro</strong> com o e-mail e a senha.
-            </p>
-            
-            <form onSubmit={handleInviteUser} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Nome Completo</label>
+      {/* PAINEL: CONVIDAR / EDITAR INTEGRANTE — lateral (UI_PATTERNS: criar e editar
+          registro = Sheet). Era um modal central só para convidar; editar não existia. */}
+      <Sheet open={isInviteUserModalOpen} onClose={fecharPainelIntegrante} size="md">
+        <SheetHeader onClose={fecharPainelIntegrante}>
+          <SheetTitle>{editingPartnerUser ? 'Editar integrante' : 'Convidar integrante'}</SheetTitle>
+          <SheetDescription>
+            {editingPartnerUser
+              ? 'O e-mail é o login do integrante e não muda aqui. Para trocar, exclua e convide de novo.'
+              : 'O integrante recebe um e-mail para criar a senha e passa a entrar em /portal-parceiro com o e-mail e a senha.'}
+          </SheetDescription>
+        </SheetHeader>
+        <form onSubmit={handleInviteUser} className="flex-1 flex flex-col min-h-0">
+          <SheetPanel className="px-6 py-6">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-xs font-semibold text-slate-500">Nome completo</label>
                 <input
                   required
                   value={inviteUser.name}
                   onChange={(e) => setInviteUser({ ...inviteUser, name: e.target.value })}
                   placeholder="Nome do integrante..."
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
+                  className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">E-mail de Login</label>
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-xs font-semibold text-slate-500">E-mail de login</label>
                 <input
                   required
                   type="email"
                   value={inviteUser.email}
                   onChange={(e) => setInviteUser({ ...inviteUser, email: e.target.value })}
                   placeholder="email@parceiro.com"
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
+                  disabled={!!editingPartnerUser}
+                  title={editingPartnerUser ? 'O e-mail é o login do integrante. Para trocar, exclua e convide de novo.' : undefined}
+                  className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-400 uppercase font-bold">Celular / Telefone</label>
-                  <input
-                    value={inviteUser.phone}
-                    onChange={(e) => setInviteUser({ ...inviteUser, phone: e.target.value })}
-                    placeholder="(00) 00000-0000"
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-400 uppercase font-bold">Perfil / Permissão</label>
-                  <select
-                    value={inviteUser.role}
-                    onChange={(e) => setInviteUser({ ...inviteUser, role: e.target.value as any })}
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
-                  >
-                    <option value="ADMINISTRADOR">Administrador (Total)</option>
-                    <option value="GESTOR">Gestor (Visualização)</option>
-                    <option value="FINANCEIRO">Somente Financeiro</option>
-                    <option value="OPERACIONAL">Operacional / Obras</option>
-                  </select>
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500">Celular / telefone</label>
+                <input
+                  value={inviteUser.phone}
+                  onChange={(e) => setInviteUser({ ...inviteUser, phone: e.target.value })}
+                  placeholder="(00) 00000-0000"
+                  className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed"
+                />
               </div>
-
-              <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-2">
-                <Button variant="ghost" type="button" onClick={() => setIsInviteUserModalOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-orange-500 hover:bg-orange-600 text-white">
-                  Convidar Integrante
-                </Button>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500">Perfil / permissão</label>
+                <select
+                  value={inviteUser.role}
+                  onChange={(e) => setInviteUser({ ...inviteUser, role: e.target.value as PartnerRole })}
+                  className="w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm text-gray-800 focus:outline-none focus:ring-4 focus:ring-orange-500/10 focus:border-orange-500 disabled:text-gray-500 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <option value="ADMINISTRADOR">Administrador (Total)</option>
+                  <option value="GESTOR">Gestor (Visualização)</option>
+                  <option value="FINANCEIRO">Somente Financeiro</option>
+                  <option value="OPERACIONAL">Operacional / Obras</option>
+                </select>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          </SheetPanel>
+          <SheetFooter>
+            <Button variant="secondary" type="button" onClick={fecharPainelIntegrante}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={savingPartnerUser} className="bg-orange-500 hover:bg-orange-600 text-white">
+              {editingPartnerUser ? 'Salvar' : 'Convidar Integrante'}
+            </Button>
+          </SheetFooter>
+        </form>
+      </Sheet>
 
       {/* MODAL: COMPARTILHAR DOCUMENTO */}
       {isShareDocModalOpen && (

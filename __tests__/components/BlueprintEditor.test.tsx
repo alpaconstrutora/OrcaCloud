@@ -1359,11 +1359,13 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
     await user.click(botao(/^produto/i));
-    const gavetaProduto = await screen.findByTestId('tarefa-produto');
-    await user.selectOptions(within(gavetaProduto).getByLabelText('Começar de uma semente'), 'RESIDENCIAL_MEDIO');
-    await user.click(within(gavetaProduto).getByRole('button', { name: /^aplicar$/i }));
-    expect(await within(gavetaProduto).findByDisplayValue('3 dorm. (1 suíte)')).toBeInTheDocument();
+    // Desde 03/10/2026 o Produto é TELA (cobre o editor), não gaveta.
+    const telaProduto = await screen.findByTestId('tela-produto');
+    await user.selectOptions(within(telaProduto).getByLabelText('Começar de uma semente'), 'RESIDENCIAL_MEDIO');
+    await user.click(within(telaProduto).getByRole('button', { name: /^aplicar$/i }));
+    expect(await within(telaProduto).findByDisplayValue('3 dorm. (1 suíte)')).toBeInTheDocument();
     await waitFor(() => expect(saveProduto).toHaveBeenCalled(), { timeout: 2000 });
+    await user.click(screen.getByRole('button', { name: 'Voltar ao editor' }));
     // A gaveta do estudo reparte o mix: 8 unidades por pavimento, 80 no total.
     await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
@@ -1539,7 +1541,7 @@ describe('BlueprintEditor · quantitativos', () => {
     // A biblioteca da tela acompanha: só "Duas torres" marcada.
     expect(within(tela).getByLabelText('Duas torres')).toBeChecked();
     expect(within(tela).getByLabelText('Torre única')).not.toBeChecked();
-    // O produto mudado vai para o estudo (o mesmo setProduto da gaveta Produto).
+    // O produto mudado vai para o estudo (o mesmo setProduto da tela Produto).
     await waitFor(() => expect(saveProduto).toHaveBeenCalled(), { timeout: 2000 });
     const [, , gravado] = saveProduto.mock.calls[saveProduto.mock.calls.length - 1] as unknown as [string, string, { tipologias: { areaPrivativaM2: number }[] }];
     expect(gravado.tipologias.map((x) => x.areaPrivativaM2)).toEqual([65, 75]);
@@ -7038,5 +7040,45 @@ describe('BlueprintEditor · aba Terreno agrupada', () => {
       for (const nome of nomes) expect(within(caixa).getByRole('button', { name: nome })).toBeInTheDocument();
       fireEvent.click(document.querySelector(`[data-menu-do-ribbon="${menu}"]`)!);
     }
+  });
+});
+
+/**
+ * PRODUTO EM TELA (03/10/2026): *"o drawer produto deve ser transformado em tela"*.
+ */
+describe('BlueprintEditor · Produto em tela', () => {
+  it('Massa › Produto abre a TELA (o editor some); a gaveta do Estudo de massa leva a ela; voltar devolve o editor', async () => {
+    // Com um bloco: é com bloco que a gaveta do Estudo de massa mostra "Editar o produto".
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(0, 0), k.point(20000, 0), k.point(20000, 20000), k.point(0, 20000)], pavimentos: 5 },
+      ]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^produto/i));
+    const tela = await screen.findByTestId('tela-produto');
+    expect(tela.closest('[data-tela="produto"]')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: /produto/i })).toBeInTheDocument();
+    // Não é gaveta: nenhum diálogo aberto, e o editor (o ribbon) está escondido.
+    expect(screen.queryAllByRole('dialog').filter((d) => !d.className.includes('pointer-events-none'))).toHaveLength(0);
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    // Os quatro blocos estão lá: produto, tipologias, pavimento e financeiro.
+    expect(within(tela).getByLabelText('Padrão construtivo (CUB)')).toBeInTheDocument();
+    expect(within(tela).getByRole('button', { name: /nova tipologia/i })).toBeInTheDocument();
+    expect(within(tela).getByTestId('hipoteses-do-produto')).toBeInTheDocument();
+    expect(within(tela).getByTestId('financeiro-do-produto')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Voltar ao editor' }));
+    await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
+    // Pela gaveta do Estudo de massa: "Editar o produto" fecha a gaveta e abre a tela.
+    await user.click(botao(/^estudo de massa/i));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    await user.click(within(gaveta).getByRole('button', { name: 'Editar o produto' }));
+    expect(await screen.findByTestId('tela-produto')).toBeInTheDocument();
+    expect(screen.queryByTestId('tarefa-massa')).toBeNull();
   });
 });

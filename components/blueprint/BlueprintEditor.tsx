@@ -781,7 +781,7 @@ import { conferirPrograma, linhasParaLegislacao } from '../../utils/blueprintCon
 import { construirGrafoEspacial, descreverFachadas, percursoAteASaida, vizinhosDe } from '../../utils/blueprintGrafoEspacial';
 import { useBlueprintPrograma } from '../../hooks/useBlueprintPrograma';
 import { useBlueprintProduto } from '../../hooks/useBlueprintProduto';
-import PainelProduto from './PainelProduto';
+import TelaProduto from './TelaProduto';
 import { comandosDoNucleoSugerido, distribuirProduto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { cubDoPadrao, type CubDoPadrao } from '../../services/cubService';
@@ -1100,8 +1100,6 @@ const ROTULO_DA_TAREFA = {
   vagas: 'Vagas de garagem — lançamento automático',
   // ESTUDO DE MASSA (01/10/2026, M1): envelope legal, indicadores da massa e hipóteses do CA.
   massa: 'Estudo de massa — envelope legal e indicadores',
-  // ESTUDO DE MASSA (02/10/2026, M2): o produto — tipologias, mix, padrão e hipóteses do pavimento.
-  produto: 'Produto — tipologias, mix e hipóteses',
   // LOTEAR QUADRA (25/09/2026, B2): a quadra vira N lotes de testada fixa —
   // prévia tracejada, um lote de comandos, um Ctrl+Z.
   lotear: 'Lotear quadra — subdivisão automática',
@@ -1289,7 +1287,6 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'grupo',
   'vagas',
   'massa',
-  'produto',
   'lotear',
   'grafo',
   'insolacao',
@@ -1865,7 +1862,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -4658,7 +4655,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const ja = pavimentoTipoMontado(editor.model, b);
     if (ja) return { ok: false as const, motivo: `Pavimento tipo já montado: "${ja.name}". Para refazer, remova esse pavimento (as cópias se desvinculam) e monte de novo.` };
     const pb = distribuicaoDoProduto?.blocos.find((x) => x.blocoId === b.id);
-    if (!pb || pb.unidades === 0) return { ok: false as const, motivo: 'Defina o produto (gaveta Produto): sem tipologias não há unidade para dividir o pavimento.' };
+    if (!pb || pb.unidades === 0) return { ok: false as const, motivo: 'Defina o produto (Terreno › Massa › Produto): sem tipologias não há unidade para dividir o pavimento.' };
     const ord = ordinalDoPavimentoTipo(editor.model, b);
     const piso = pb.pisos.find((p) => p.ordinal === ord) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
     if (!piso) return { ok: false as const, motivo: 'O bloco não tem pavimento acima do solo.' };
@@ -9977,10 +9974,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               model={editor.model}
               regua={reguaDoEstudo}
               proximoNumero={ramos.length + 1}
-              onAbrirProduto={() => {
-                setTelaAberta(null);
-                alternarTarefa('produto');
-              }}
+              onAbrirProduto={() => setTelaAberta('produto')}
               onCriarAlternativa={async (c, nome) => {
                 if (!levelIdDaMassa) throw new Error('Gere de novo: o pavimento do lote não foi encontrado.');
                 await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome, descricao: `Gerada: ${c.rotulo}`, model: modeloDoCandidato(c, editor.model, levelIdDaMassa) });
@@ -9992,6 +9986,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onPedirIa={pedirMudancasDaMassaAIa}
             />
           </div>
+        </div>
+      )}
+      {/* PRODUTO (03/10/2026): *"o drawer produto deve ser transformado em tela"*. */}
+      {telaAberta === 'produto' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="produto">
+          {cabecalhoDaTela(
+            'Produto',
+            'O que se pretende vender: a semente, o padrão construtivo (CUB), a meta de unidades, as tipologias com área, mix e preço/m², as hipóteses do pavimento e as financeiras. O Estudo de massa e o Gerar massa leem daqui; grava no estudo sozinho.',
+            Home,
+            'Terreno',
+          )}
+          <TelaProduto
+            produto={produtoDoEstudo.produto}
+            onProduto={produtoDoEstudo.setProduto}
+            persistenciaIndisponivel={produtoDoEstudo.persistenciaIndisponivel}
+            erroDeGravacao={produtoDoEstudo.erroDeGravacao}
+            cub={produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo}
+          />
         </div>
       )}
       {telaAberta === 'tipos' && (
@@ -11243,8 +11255,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   icone={Home}
                   rotulo="Produto"
                   contagem={produtoDoEstudo.produto.tipologias.length || undefined}
-                  ativo={tarefaAberta === 'produto'}
-                  onClick={() => alternarTarefa('produto')}
+                  ativo={telaAberta === 'produto'}
+                  onClick={() => alternarTela('produto')}
                   ajuda="O que se vende: tipologias, mix, padrão construtivo (CUB), meta de unidades e as hipóteses do pavimento (núcleo, paredes, corredor) — o Estudo de massa reparte o mix pelos blocos"
                 />
                 <BotaoDoRibbon
@@ -15039,21 +15051,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 enviando: enviandoMassa,
                 resultado: resultadoDoEnvioDaMassa,
               }}
-              onAbrirProduto={() => setTarefa('produto')}
+              onAbrirProduto={() => {
+                setTarefa(null);
+                setTelaAberta('produto');
+              }}
               onLancarNucleo={(blocoId, elevadores) => {
                 const b = (editor.model.blocos ?? []).find((x) => x.id === blocoId);
                 if (b) editor.runBatch(comandosDoNucleoSugerido(b, elevadores));
               }}
-            />
-          )}
-
-          {tarefaAberta === 'produto' && (
-            <PainelProduto
-              produto={produtoDoEstudo.produto}
-              onProduto={produtoDoEstudo.setProduto}
-              persistenciaIndisponivel={produtoDoEstudo.persistenciaIndisponivel}
-              erroDeGravacao={produtoDoEstudo.erroDeGravacao}
-              cub={produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo}
             />
           )}
 

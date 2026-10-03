@@ -55,7 +55,7 @@ interface Props {
   onAbrirProduto: () => void;
   onCriarAlternativa: (c: CandidatoDeMassa, nome: string) => Promise<void>;
   onAplicar: (c: CandidatoDeMassa) => Promise<void>;
-  /** M5c: grava o produto mudado por um pedido (o mesmo `setProduto` da gaveta Produto). */
+  /** M5c: grava o produto mudado por um pedido (o mesmo `setProduto` da tela Produto). */
   onProduto?: (p: Produto) => void;
   /** M5c: a IA no modo massa; `mudancas: null` + motivo quando indisponível. */
   onPedirIa?: (pedido: string, contexto: unknown) => Promise<{ mudancas: MudancasDaMassa | null; indisponivel: string | null }>;

@@ -54,7 +54,7 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
   const tipologias = new Map(produto.tipologias.map((t) => [t.id, t]));
 
   if ((model.blocos ?? []).length === 0) warnings.push('A versão publicada não tem bloco de massa. Desenhe os blocos (Terreno › Massa) e publique.');
-  if (produto.tipologias.length === 0) warnings.push('O estudo não tem produto: defina as tipologias na gaveta Produto antes de enviar.');
+  if (produto.tipologias.length === 0) warnings.push('O estudo não tem produto: defina as tipologias na tela Produto (Terreno › Massa › Produto) antes de enviar.');
 
   const towers: CanonicalTower[] = [];
   const liveUnitSourceIds = new Set<string>();

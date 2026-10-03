@@ -524,7 +524,7 @@ export function distribuirProduto(model: BlueprintModel, massa: MedidaDaMassa, p
   const garagemM2 = blocos.reduce((s, b) => s + b.garagemM2, 0);
   const comUnidades = blocos.filter((b) => b.unidades > 0).sort((a, b) => b.privativaM2 - a.privativaM2);
 
-  if (produto.tipologias.length === 0) avisos.push('Sem tipologias: escolha uma semente ou cadastre o mix na gaveta Produto.');
+  if (produto.tipologias.length === 0) avisos.push('Sem tipologias: escolha uma semente ou cadastre o mix na tela Produto.');
   for (const b of blocos) {
     if ((b.uso === 'RESIDENCIAL' || b.uso === 'COMERCIAL' || b.uso === 'MISTO') && tipologiasDoUso(b.uso, produto).length === 0 && produto.tipologias.length > 0) {
       avisos.push(`"${b.nome}" (${b.uso.toLowerCase()}) não tem tipologia do seu uso no produto: ficou sem unidades.`);

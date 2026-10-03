@@ -239,7 +239,7 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
             )}
           </div>
           {!pr || pr.porTipologia.length === 0 ? (
-            <p className="text-xs text-gray-500">Sem produto: defina as tipologias (ou aplique uma semente) na gaveta Produto para ver unidades, eficiência e vagas.</p>
+            <p className="text-xs text-gray-500">Sem produto: defina as tipologias (ou aplique uma semente) na tela Produto (Terreno › Massa › Produto) para ver unidades, eficiência e vagas.</p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">

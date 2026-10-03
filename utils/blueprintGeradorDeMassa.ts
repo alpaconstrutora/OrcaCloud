@@ -847,7 +847,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
       : []),
     `Refinamento com a semente ${semente}: ${hip.iteracoes} passos de recozimento por implantação; ${melhoraram} de ${iniciais.size} melhoraram em relação à grade.`,
   );
-  if (produto.tipologias.length === 0) avisos.push('O estudo não tem produto (gaveta Produto): sem tipologias não há unidades nem dinheiro — só a massa se mede.');
+  if (produto.tipologias.length === 0) avisos.push('O estudo não tem produto (Terreno › Massa › Produto): sem tipologias não há unidades nem dinheiro — só a massa se mede.');
   if (restricoes.respeitarLei && z.coeficienteMax == null) avisos.push('A zona não informa o coeficiente de aproveitamento: o potencial construtivo não limita a varredura.');
   if (restricoes.respeitarLei && z.taxaOcupacaoMaxPct == null) avisos.push('A zona não informa a taxa de ocupação: só o envelope limita a projeção.');
   if (restricoes.respeitarLei && z.gabaritoPavimentos == null && z.gabaritoAlturaMaxM == null) avisos.push(`A zona não informa gabarito: a varredura vai até ${hip.pavimentosMax} pavimentos.`);

@@ -1,7 +1,14 @@
 /**
- * A gaveta "Produto" do Estudo de Massa (fase M2): o que se vende — semente,
+ * A TELA "Produto" do Estudo de Massa (fase M2): o que se vende — semente,
  * padrão construtivo (as chaves do CUB do Estimador), meta de unidades, o mix
- * de tipologias editável na linha e as hipóteses de perda do pavimento.
+ * de tipologias editável na linha, as hipóteses de perda do pavimento e as
+ * hipóteses financeiras.
+ *
+ * Era gaveta até 03/10/2026 (*"o drawer produto deve ser transformado em
+ * tela"*): a tabela de tipologias e os dois blocos de hipóteses (16 campos)
+ * não cabiam na largura de um drawer sem rolar a página inteira. Na tela, o
+ * produto ocupa um card, as tipologias a largura toda, e pavimento e
+ * financeiro ficam lado a lado.
  *
  * Apresentacional: o produto vem de `useBlueprintProduto` (do ESTUDO, gravado
  * com respiro); a distribuição na massa aparece na gaveta "Estudo de massa".
@@ -61,7 +68,7 @@ function numeroDe(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export default function PainelProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao, cub = null }: Props) {
+export default function TelaProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao, cub = null }: Props) {
   const confirmar = useConfirm();
   const [semente, setSemente] = useState<SementeDoProduto>('RESIDENCIAL_MEDIO');
   const problemas = problemasDoProduto(p);
@@ -90,19 +97,16 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
   }
 
   return (
-    <div className="space-y-6 text-sm text-gray-700" data-testid="tarefa-produto">
-      <p className="text-gray-600">
-        O que se pretende vender. A gaveta <strong>Estudo de massa</strong> reparte este mix pelos blocos — depois de reservar núcleo, paredes e corredor — e confere as vagas.
-      </p>
+    <div className="space-y-6 text-sm text-gray-700" data-testid="tela-produto">
       {(persistenciaIndisponivel || erroDeGravacao) && (
         <p role="status" className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           {persistenciaIndisponivel ? 'Sem gravação no banco: o produto vale só nesta sessão.' : `Não gravou o produto: ${erroDeGravacao}`}
         </p>
       )}
 
-      <section className="space-y-4">
+      <section className="space-y-4 rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm">
         <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Produto</h3>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 2xl:grid-cols-4">
           <div className="space-y-1.5">
             <label htmlFor="produto-semente" className="text-xs font-semibold text-slate-500">Começar de uma semente</label>
             <div className="flex gap-2">
@@ -150,8 +154,13 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
       </section>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-          <h3 className="text-sm font-semibold text-gray-900">Tipologias e mix</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Tipologias e mix</h3>
+            <p className="mt-0.5 text-xs text-gray-500">
+              A gaveta <strong className="font-semibold">Estudo de massa</strong> reparte este mix pelos blocos — depois de reservar núcleo, paredes e corredor — e confere as vagas.
+            </p>
+          </div>
           <button type="button" onClick={novaTipologia} className="flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700">
             <Plus className="h-[15px] w-[15px]" /> Nova tipologia
           </button>
@@ -198,10 +207,11 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
         <p className="text-xs text-gray-500">O mix é em número de unidades e se normaliza por uso. Bloco residencial recebe as residenciais; comercial, as comerciais; misto, as duas.</p>
       </section>
 
-      <section className="space-y-4" data-testid="hipoteses-do-produto">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      <section className="space-y-4 rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm" data-testid="hipoteses-do-produto">
         <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Hipóteses do pavimento</h3>
         <p className="text-xs text-gray-500">Referências de pré-projeto, não norma. O núcleo desenhado (shaft, elevador, escada dentro do bloco) substitui a hipótese.</p>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           {(
             [
               ['paredesPct', 'Paredes e fachada (% da bruta)', 0.5],
@@ -238,7 +248,7 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
         </div>
       </section>
 
-      <section className="space-y-4" data-testid="financeiro-do-produto">
+      <section className="space-y-4 rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm" data-testid="financeiro-do-produto">
         <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Financeiro — hipóteses de pré-viabilidade</h3>
         <p className="text-xs text-gray-500" data-testid="cub-do-padrao">
           {f.custoM2Manual
@@ -248,7 +258,7 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
               : `Buscando o CUB ${p.padrao}/${f.uf}…`}{' '}
           Fluxo de caixa, TIR e VPL ficam na Viabilidade, que recebe o cenário pelo Empreendimento.
         </p>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <label htmlFor="produto-f-uf" className="text-xs font-semibold text-slate-500">UF do CUB</label>
             <select id="produto-f-uf" value={f.uf} onChange={(e) => fin('uf', e.target.value)} className={campo}>
@@ -297,6 +307,7 @@ export default function PainelProduto({ produto: p, onProduto, persistenciaIndis
           ))}
         </div>
       </section>
+      </div>
     </div>
   );
 }

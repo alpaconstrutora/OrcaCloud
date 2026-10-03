@@ -18,13 +18,18 @@ export function getInitialView(): string {
   return localStorage.getItem('orca_activeView') || 'central';
 }
 
-/** Sync the current view to the URL hash without triggering hashchange. */
+/**
+ * Sync the current view to the URL hash without triggering hashchange.
+ *
+ * ⚠️ Só reescreve quando a VISTA é outra. Antes comparava o hash inteiro e,
+ * com isso, apagava a query dos links diretos (`#/blueprint?studyId=…`,
+ * `#/planta-ai?studyId=…`): a vista carregada sob demanda (Suspense) montava
+ * DEPOIS deste sync e já não achava o parâmetro (02/10/2026, prova no app real).
+ */
 export function syncViewToUrl(view: string): void {
   if (typeof window === 'undefined') return;
-  const newHash = `#/${view}`;
-  if (window.location.hash !== newHash) {
-    window.history.replaceState(null, '', newHash);
-  }
+  if (parseHashView(window.location.hash) === view) return;
+  window.history.replaceState(null, '', `#/${view}`);
 }
 
 /** Build a URL for a specific view (for opening in new tab/window). */

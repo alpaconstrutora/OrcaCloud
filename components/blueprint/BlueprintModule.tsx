@@ -69,6 +69,23 @@ export default function BlueprintModule() {
     carregar();
   }, [carregar]);
 
+  // LINK DIRETO (02/10/2026): `#/blueprint?studyId=…` abre o estudo — é como o
+  // Empreendimento (Vinculações, Central de Sincronização) leva à planta dele.
+  // O parâmetro sai do hash depois de usado: voltar à lista não reabre o estudo.
+  const [estudoPedido, setEstudoPedido] = useState<string | null>(() => {
+    const h = typeof window !== 'undefined' ? window.location.hash : '';
+    return h.includes('?') ? new URLSearchParams(h.split('?')[1]).get('studyId') : null;
+  });
+  useEffect(() => {
+    if (!estudoPedido || loading) return;
+    const alvo = studies.find((s) => s.id === estudoPedido);
+    setEstudoPedido(null);
+    if (typeof window !== 'undefined' && window.location.hash.startsWith('#/blueprint?')) window.history.replaceState(null, '', '#/blueprint');
+    if (alvo) void abrir(alvo);
+    else setErro('O estudo vinculado não está na lista desta organização — troque a organização no topo (ou "Todas") e tente de novo.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estudoPedido, loading, studies]);
+
   async function criar() {
     // Modo 'single': uma planta pertence a uma organização por natureza. Não faz
     // sentido replicar o mesmo desenho em várias, então o modal nem oferece

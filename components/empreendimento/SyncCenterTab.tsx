@@ -22,6 +22,7 @@ import { supabase } from '../../lib/supabase';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { plantaEmpreendimentoSync } from '../../services/plantaEmpreendimentoSync';
 import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendimentoSync';
+import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
 import { PlantaAiIntegration } from '../../services/plantaAiIntegration';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem } from '../../services/sync/writeBackImovib';
 import { Empreendimento, EmpreendimentoSyncReport, PlantaAiSyncReport, PlantaAiWriteBackReport } from '../../types';
@@ -56,6 +57,14 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
   const [plantaSyncing, setPlantaSyncing] = React.useState(false);
   const [plantaWritingBack, setPlantaWritingBack] = React.useState(false);
 
+  // ESTUDO DE MASSA — Planta Inteligente (M3). Mão única, como o loteamento: a
+  // massa publicada é a origem das torres e unidades; preço e status são do
+  // empreendimento. Desde 02/10/2026 a ARQUITETURA do empreendimento é a Planta
+  // Inteligente (massa + loteamento); o Planta IA v1 virou card de legado.
+  const [massaReport, setMassaReport] = React.useState<PlantaAiSyncReport | null>(null);
+  const [massaError, setMassaError] = React.useState<string | null>(null);
+  const [massaSyncing, setMassaSyncing] = React.useState(false);
+
   // Loteamento — Planta Inteligente (B3). Não tem write-back: o desenho é a
   // origem, e reconstruir geometria a partir de uma área não tem solução única.
   const [loteamentoReport, setLoteamentoReport] = React.useState<PlantaAiSyncReport | null>(null);
@@ -75,6 +84,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
     setWriteBackError(null);
     setPlantaError(null);
     setLoteamentoError(null);
+    setMassaError(null);
     const tasks: Promise<void>[] = [];
 
     // Viabilidade — só roda o dry-run se houver estudo vinculado
@@ -102,8 +112,14 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onOpenStudyS
           .then(r => setLoteamentoReport(r))
           .catch(err => { setLoteamentoError(err.message); setLoteamentoReport(null); })
       );
+      tasks.push(
+        massaEmpreendimentoSync.previewSync(e.id)
+          .then(r => setMassaReport(r))
+          .catch(err => { setMassaError(err.message); setMassaReport(null); })
+      );
     } else {
       setLoteamentoReport(null);
+      setMassaReport(null);
     }
 
     if (e.planta_ai_study_id) {
@@ -219,6 +235,30 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
     }
   };
 
+  const handleMassaSync = async () => {
+    if (!massaReport) return;
+    const total = massaReport.towersCreated + massaReport.towersUpdated + massaReport.unitsCreated + massaReport.unitsUpdated;
+    if (total === 0) return;
+    const ok = await confirm({
+      title: 'Trazer o estudo de massa para o empreendimento?',
+      message: `Serão criadas/atualizadas ${massaReport.towersCreated + massaReport.towersUpdated} torre(s) e ${massaReport.unitsCreated + massaReport.unitsUpdated} unidade(s) a partir da versão PUBLICADA do estudo de massa (com o produto congelado nela).
+
+A estrutura vem da massa (pavimentos, unidades, áreas, tipologia); preço, status, posição e orientação só nascem com a unidade — o que o cadastro já tem não é tocado. Unidade que sumiu da massa fica como órfã, nunca é apagada.`,
+      confirmLabel: 'Trazer',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    setMassaSyncing(true);
+    try {
+      await massaEmpreendimentoSync.syncToEmpreendimento(e.id);
+      await load();
+    } catch (err: any) {
+      setMassaError(err.message);
+    } finally {
+      setMassaSyncing(false);
+    }
+  };
+
   const handlePlantaWriteBack = async () => {
     const changes = (plantaWriteBack || []).reduce((s, r) => s + r.changes.length, 0);
     if (!plantaWriteBack || changes === 0) return;
@@ -299,6 +339,16 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
     ? plantaReport.orphanTowers.length + plantaReport.orphanUnits.length
     : 0;
   const plantaChanges = (plantaWriteBack || []).reduce((s, r) => s + r.changes.length, 0);
+  // Planta Inteligente: um estudo é de massa OU de loteamento (ou ainda nenhum dos dois).
+  const totalDe = (r: PlantaAiSyncReport | null) => (r ? r.towersCreated + r.towersUpdated + r.unitsCreated + r.unitsUpdated : 0);
+  const orfaosDe = (r: PlantaAiSyncReport | null) => (r ? r.orphanTowers.length + r.orphanUnits.length : 0);
+  const massaTotal = totalDe(massaReport);
+  const loteamentoTotalArq = totalDe(loteamentoReport);
+  const temMassa = !!massaReport && (massaReport.scenarioUnits > 0 || massaTotal > 0 || orfaosDe(massaReport) > 0);
+  const temLote = !!loteamentoReport && (loteamentoReport.scenarioUnits > 0 || loteamentoTotalArq > 0 || orfaosDe(loteamentoReport) > 0);
+  // Sem nenhum dos dois, os dois cards aparecem — cada um diz o que falta.
+  const mostrarMassa = !!e.blueprint_study_id && (temMassa || !temLote);
+  const mostrarLote = !!e.blueprint_study_id && (temLote || !temMassa);
   const plantaUnitsWithoutOrigin = (plantaWriteBack || []).reduce((s, r) => s + r.unitsWithoutPlantaOrigin, 0);
 
   if (loading) return (
@@ -340,13 +390,21 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
             icon={Ruler}
             tint="indigo"
             title="Arquitetura"
-            subtitle="Planta IA"
-            linked={!!e.planta_ai_study_id}
+            subtitle="Planta Inteligente"
+            linked={!!e.blueprint_study_id}
             unlinkedLabel="Nenhum estudo vinculado"
-            error={plantaError}
-            divergences={plantaDiverge}
-            extraOrphans={plantaOrphans}
-            footer={plantaReport ? `${plantaReport.scenarioUnits} unidade(s) no cenário` : null}
+            error={massaError || loteamentoError}
+            divergences={massaTotal + loteamentoTotalArq}
+            extraOrphans={orfaosDe(massaReport) + orfaosDe(loteamentoReport)}
+            footer={
+              temMassa
+                ? `${massaReport!.scenarioUnits} unidade(s) na massa publicada`
+                : temLote
+                  ? `${loteamentoReport!.scenarioUnits} lote(s) no desenho publicado`
+                  : e.planta_ai_study_id
+                    ? 'Planta IA (legado) também vinculado'
+                    : null
+            }
           />
 
           {/* Linha 2 — aresta Arquitetura ↔ Hub. A aresta direta Arquitetura↔Viabilidade
@@ -355,23 +413,29 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
           <div className="hidden md:block" />
           <EdgeConnector
             orientation="vertical"
-            label="Arquitetura ↔ Empreendimento"
+            label="Arquitetura → Empreendimento"
             tint="indigo"
-            active={!!e.planta_ai_study_id}
-            activeTitle="Arquitetura ↔ Empreendimento"
-            inactiveTitle="Nenhum estudo de arquitetura vinculado — vincule pelo botão Editar"
-            actions={e.planta_ai_study_id ? [
+            active={!!e.blueprint_study_id}
+            activeTitle="Planta Inteligente → Empreendimento (o desenho publicado é a origem)"
+            inactiveTitle="Nenhum estudo da Planta Inteligente vinculado — vincule pelo botão Editar, ou envie desde a própria planta"
+            actions={e.blueprint_study_id ? [
+              ...(mostrarMassa ? [{
+                label: 'Trazer da massa', icon: Download, direction: 'in' as const,
+                onClick: handleMassaSync,
+                disabled: massaTotal === 0, busy: massaSyncing,
+                title: massaTotal === 0 ? 'Nada a trazer: o empreendimento já reflete a massa publicada' : 'Criar/atualizar torres e unidades a partir da versão publicada do estudo de massa',
+              }] : []),
+              ...(mostrarLote && temLote ? [{
+                label: 'Trazer o loteamento', icon: Download, direction: 'in' as const,
+                onClick: handleLoteamentoSync,
+                disabled: loteamentoTotalArq === 0, busy: loteamentoSyncing,
+                title: loteamentoTotalArq === 0 ? 'Nada a trazer: o empreendimento já reflete o loteamento publicado' : 'Criar/atualizar quadras e lotes a partir da versão publicada',
+              }] : []),
               {
-                label: 'Sincronizar do cenário', icon: Download, direction: 'in',
-                onClick: handlePlantaSync,
-                disabled: plantaDiverge === 0, busy: plantaSyncing,
-                title: plantaDiverge === 0 ? 'Nada a sincronizar — cenário e torres alinhados' : 'Criar/atualizar torres e unidades a partir do cenário',
-              },
-              {
-                label: 'Enviar ao cenário', icon: Upload, direction: 'out',
-                onClick: handlePlantaWriteBack,
-                disabled: plantaChanges === 0, busy: plantaWritingBack,
-                title: plantaChanges === 0 ? 'Nada a enviar — cenário já reflete o realizado' : 'Recalcular os agregados do cenário a partir das torres reais',
+                label: 'Abrir a planta', icon: Upload, direction: 'out' as const,
+                onClick: () => { window.location.hash = `#/blueprint?studyId=${e.blueprint_study_id}`; },
+                disabled: false, busy: false,
+                title: 'Abrir o estudo na Planta Inteligente (o caminho de volta é mudar o desenho e publicar — preço e status nunca voltam)',
               },
             ] : undefined}
           />
@@ -433,10 +497,12 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
               <ArrowLeftRight className={`w-4 h-4 -rotate-45 shrink-0 mt-0.5 ${axStudy?.pairedWithImovib ? 'text-indigo-600' : 'text-gray-300'}`} />
               <div className="min-w-0">
                 <p className={`text-[10px] font-bold uppercase tracking-widest ${axStudy?.pairedWithImovib ? 'text-indigo-700' : 'text-gray-400'}`}>
-                  Arquitetura ↔ Viabilidade
+                  {e.planta_ai_study_id ? 'Planta IA (legado) ↔ Viabilidade' : 'Arquitetura → Viabilidade'}
                 </p>
                 <p className="text-[10px] text-gray-500 font-medium leading-relaxed mt-0.5">
-                  Ligação direta entre os dois estudos — não passa pelo Empreendimento.
+                  {e.planta_ai_study_id
+                    ? 'Ligação direta entre o estudo do Planta IA e a Viabilidade — não passa pelo Empreendimento.'
+                    : 'A Planta Inteligente chega à Viabilidade PELO Empreendimento: traga a massa para cá e use "Enviar ao estudo" na aresta Viabilidade ↔ Empreendimento.'}
                 </p>
               </div>
             </div>
@@ -463,7 +529,9 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
               <span
                 className="text-[10px] text-gray-400 font-medium shrink-0"
                 title={
-                  !e.planta_ai_study_id || !e.imovib_study_id
+                  !e.planta_ai_study_id
+                    ? 'Sem ligação direta: o caminho da Planta Inteligente até a Viabilidade passa pelo Empreendimento'
+                    : !e.imovib_study_id
                     ? 'Requer os dois estudos vinculados ao empreendimento'
                     : 'Os dois estudos vinculados não apontam um para o outro — use "Testar viabilidade" no Planta IA para criar o par'
                 }
@@ -517,15 +585,60 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
           ) : null}
         </RelationCard>
 
-        {/* Arquitetura ↔ Empreendimento (ponte direta, sem passar pelo Imovib) */}
+        {/* Sem estudo vinculado: um card só, genérico — não faz sentido chamar de "loteamento" o que ainda não existe. */}
+        {!e.blueprint_study_id && (
+          <RelationCard title="Planta Inteligente → Empreendimento" icon={Ruler} tint="indigo">
+            <EmptyHint icon={Link2Off} text="Este empreendimento não está vinculado a um estudo da Planta Inteligente. Vincule pelo botão Editar, ou envie desde a própria planta (estudo de massa ou loteamento)." />
+          </RelationCard>
+        )}
+
+        {/* ESTUDO DE MASSA → EMPREENDIMENTO (M3): a arquitetura do empreendimento. */}
+        {mostrarMassa && (
+          <RelationCard title="Estudo de massa → Empreendimento" icon={Ruler} tint="indigo">
+            {massaError ? (
+              <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0" /> {massaError}
+              </div>
+            ) : massaReport ? (
+              <>
+                <p className="text-[10px] font-semibold text-gray-400 pt-1">Da massa publicada para o empreendimento</p>
+                <DiffRow label="Torres a criar" value={massaReport.towersCreated} />
+                <DiffRow label="Torres a atualizar" value={massaReport.towersUpdated} />
+                <DiffRow label="Unidades a criar" value={massaReport.unitsCreated} />
+                <DiffRow label="Unidades a atualizar" value={massaReport.unitsUpdated} />
+                <DiffRow label="Unidades na massa" value={massaReport.scenarioUnits} muted />
+                {orfaosDe(massaReport) > 0 && <DiffRow label="Itens órfãos (mantidos)" value={orfaosDe(massaReport)} warn />}
+                {massaReport.warnings.map((w, i) => (
+                  <p key={i} className="text-[10px] text-amber-600 font-medium flex items-start gap-1.5 leading-relaxed pt-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {w}
+                  </p>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleMassaSync}
+                  disabled={massaSyncing || massaTotal === 0}
+                  title={massaTotal === 0 ? 'Nada a trazer: o empreendimento já reflete a massa publicada' : 'Traz torres e unidades da versão publicada — preço e status das existentes não são tocados'}
+                  className="mt-3 w-full rounded-[8px] bg-indigo-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+                  data-testid="trazer-da-massa"
+                >
+                  {massaSyncing ? 'Trazendo…' : `Trazer ${massaTotal || ''} ${massaTotal === 1 ? 'item' : 'itens'}`.trim()}
+                </button>
+                <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
+                  Vem da massa: torre (pavimentos, unidades por andar, custo e preço/m² de referência) e unidade (nome, andar, tipologia, áreas, dormitórios). Preço, status, posição e orientação só nascem com a unidade.
+                </p>
+              </>
+            ) : null}
+          </RelationCard>
+        )}
+
+        {/* Planta IA v1 — LEGADO (02/10/2026: a arquitetura é a Planta Inteligente). Só aparece com vínculo antigo. */}
+        {e.planta_ai_study_id && (
         <RelationCard
-          title="Arquitetura ↔ Empreendimento"
+          title="Planta IA (legado) ↔ Empreendimento"
           icon={Ruler}
           tint="indigo"
         >
-          {!e.planta_ai_study_id ? (
-            <EmptyHint icon={Link2Off} text="Este empreendimento não está vinculado a um estudo de arquitetura (Planta IA). Vincule pelo botão Editar." />
-          ) : plantaError ? (
+          {plantaError ? (
             <div className="text-xs text-rose-600 font-medium flex items-start gap-1.5">
               <AlertTriangle className="w-4 h-4 shrink-0" /> {plantaError}
             </div>
@@ -549,14 +662,27 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
               <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
                 Envia pavimentos, unidades por andar, total de unidades e áreas. VGV, custo e status de venda nunca voltam ao cenário.
               </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={handlePlantaSync} disabled={plantaSyncing || plantaDiverge === 0} title={plantaDiverge === 0 ? 'Nada a sincronizar — cenário e torres alinhados' : 'Criar/atualizar torres e unidades a partir do cenário'} className="rounded-[8px] border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {plantaSyncing ? 'Sincronizando…' : 'Sincronizar do cenário'}
+                </button>
+                <button type="button" onClick={handlePlantaWriteBack} disabled={plantaWritingBack || plantaChanges === 0} title={plantaChanges === 0 ? 'Nada a enviar — cenário já reflete o realizado' : 'Recalcular os agregados do cenário a partir das torres reais'} className="rounded-[8px] border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 disabled:cursor-not-allowed disabled:opacity-50">
+                  {plantaWritingBack ? 'Enviando…' : 'Enviar ao cenário'}
+                </button>
+              </div>
+              <p className="text-[9px] text-gray-400 font-medium leading-relaxed pt-1">
+                O Planta IA saiu do menu: novos estudos são feitos na Planta Inteligente. Este vínculo antigo continua funcionando até você tirá-lo (Editar).
+              </p>
             </>
           ) : null}
         </RelationCard>
+        )}
 
         {/* LOTEAMENTO ↔ EMPREENDIMENTO (B3). Aresta de MÃO ÚNICA, e de propósito:
             o desenho é a origem. Mudar a área de um lote é mover vértice na
             planta, não editar um número no cadastro — e reconstruir geometria a
             partir de uma área não tem solução única. */}
+        {mostrarLote && (
         <RelationCard
           title="Loteamento → Empreendimento"
           icon={LandPlot}
@@ -601,6 +727,7 @@ Só a geometria vem do desenho (quadra, número, área, testada e confrontantes)
             </>
           ) : null}
         </RelationCard>
+        )}
 
       </div>
 

@@ -797,7 +797,7 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
 - [ ] M6 — da massa à planta e ao BIM · dividida (02/10/2026):
   - [x] **M6a** — pavimento tipo esquemático do bloco (corredor, núcleo, unidades com canto e orientação, cópias vivas) + orientação ao Empreendimento (este registro)
   - [ ] **M6b** — planta interna de cada unidade pelo gerador (E6.2) dentro da fatia, grupo espelhado quando simétrico
-  - [ ] decidir com o usuário os botões do Empreendimento que ainda levam ao Planta AI v1
+  - [x] decidir com o usuário os botões do Empreendimento que ainda levam ao Planta AI v1 → **Planta Inteligente** (decisão de 02/10/2026; registro abaixo)
 
 ## Execução
 
@@ -1208,3 +1208,49 @@ depende dela e tem o seu ritual.
 | App real (estudo descartável "ZZ TESTE … prova M6a": lote 40 × 60, rua ao sul, Torre A 30 × 16 × 10 pav, produto) | 11/11: o painel propõe corredor central, 4 de canto, 2 elevadores, 101… com sul e norte; **"Criar alternativa"** → ramo gravado com 10 pavimentos (8 cópias), 5 unidades (101–105), 2 elevadores e 1 escada; de volta ao editor, **"Montar neste estudo"** → o rascunho do principal gravado com 10 pavimentos e 5 unidades; o painel passa a recusar montar de novo (sem os botões); 0 erros. No canvas: 3 unidades ao norte, 2 ao sul + núcleo, portas no corredor, e as divisórias entre duas unidades com o tracejado violeta da E2.2 ("paredes divididas por duas UNIDADES") — as unidades foram reconhecidas |
 | Achados do app real | (1) montar duas vezes empilhava — corrigido (identidade do tipo); (2) roteiro: a gaveta cobre o painel (Escape antes) e "Estudo" casava com /tudo/ na busca do botão Enquadrar |
 | Limpeza | os 3 estudos descartáveis apagados pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes da prova: estudos 73 · ramos 73 · versões 8 · produtos 0 · entornos 0 · ZZ 0 (o 73º estudo é de outro usuário, criado às 21:40 — "Planta 02/10/2026" —, não desta frente) |
+
+### DR-06 — A arquitetura do Empreendimento é a Planta Inteligente (02/10/2026)
+
+**Decisão do usuário** (pergunta feita ao fim da M6a: os caminhos do Empreendimento que ainda levavam ao Planta AI v1
+passam a apontar para a Planta Inteligente, ou ficam?): *"planta inteligente"*. Supera o alcance da DR-01
+(06/08/2026, "coexistência") e completa a DR-05 (menu, M1).
+
+**Correção do que eu disse ao perguntar.** Citei "os botões do Empreendimento" como dois; ao levantar, o Planta AI
+aparecia em QUATRO lugares do Empreendimento — o formulário de edição (campo "Estudo de Arquitetura (Planta IA)"),
+o detalhe (linha "Estudo de Arquitetura"), as Vinculações (seção "Planta IA e Viabilidade") e a Central de
+Sincronização (vértice "Arquitetura — Planta IA" e as arestas dele). O "Gerar a partir de Torres & Unidades" mora
+DENTRO do Planta AI (não no Empreendimento) e ficou como está. E um achado: a Central dizia "vincule pelo botão
+Editar" para a Planta Inteligente, mas o formulário NÃO tinha esse campo (desde o B3).
+
+**O que mudou.**
+
+- **Formulário**: campo "Estudo de Arquitetura (Planta Inteligente)" (`blueprint_study_id`, lista os estudos da
+  organização; mostra "não encontrado" quando o vínculo é de outra org); o do Planta IA vira "(legado)" e só aparece
+  para quem ainda tem vínculo (para ver e tirar).
+- **Detalhe**: "Estudo de Arquitetura" = o estudo da Planta Inteligente; "Planta IA (legado)" só com vínculo antigo.
+- **Vinculações**: seção "Planta Inteligente e Viabilidade"; "Abrir" leva DIRETO ao estudo (`#/blueprint?studyId=`);
+  desvincular grava `blueprint_study_id` nulo com auditoria (`sync_blueprint`). `empreendimentoLinksService` ganhou
+  `plantaInteligente`, `loadBlueprintStudy` e `linkBlueprintStudy`.
+- **Central de Sincronização**: o vértice "Arquitetura" é a Planta Inteligente (divergências e órfãos da massa e do
+  loteamento); a aresta com o hub é de mão única ("Trazer da massa", "Trazer o loteamento", "Abrir a planta"); card
+  novo **"Estudo de massa → Empreendimento"** (diff da versão publicada + "Trazer" com confirmação — a massa só
+  chegava ao Empreendimento pela própria planta); o card do loteamento só aparece para estudo de loteamento; sem
+  vínculo, um card genérico "Planta Inteligente → Empreendimento"; a faixa Arquitetura ↔ Viabilidade explica que a
+  Planta Inteligente chega à Viabilidade PELO Empreendimento. O Planta IA vira card "(legado)" com os seus dois
+  botões, e só aparece com vínculo antigo — nada do v1 foi apagado.
+- **Link direto** na Planta Inteligente: `#/blueprint?studyId=…` abre o editor no estudo e tira o parâmetro do hash.
+  ⚠️ Achado da prova no app real: `syncViewToUrl` (lib/tabRouter.ts) reescrevia o hash para `#/<vista>` sempre que
+  ele não era IDÊNTICO — apagava a query, e a vista carregada sob demanda (Suspense) montava depois e já não achava
+  o parâmetro. Agora só reescreve quando a VISTA é outra. Isso também conserta os links antigos `#/planta-ai?studyId=`
+  (Comercial, Imovib), que tinham o mesmo defeito.
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/components/SyncCenterTabArquitetura.test.tsx` (5, novo) | estudo de massa: vértice Planta Inteligente, "40 unidade(s) na massa publicada", card da massa, sem loteamento nem legado, o dry-run do Planta IA não roda; "Trazer" confirma e chama o envio; estudo de loteamento: o card dele aparece e o da massa some; vínculo antigo: card de legado com os botões e a faixa "Planta IA (legado) ↔ Viabilidade"; sem vínculo: card genérico, nenhum dry-run |
+| `__tests__/tabRouterLinkDireto.test.ts` (3, novo) | mesma vista preserva a query (o caso que falhava); outra vista reescreve; sem hash escreve |
+| `tsc` · `check-ui-standard` (5 telas) · org guard · XSS · build | 0 · 0 violações · ok · ok · ok (build na 2ª tentativa: segfault do Node 24 na 1ª) |
+| Suíte cheia (JSON) | 676/676 arquivos · 7.060 testes = 7.026 ok + 34 pulados · 0 falhas (fechou de primeira) |
+| App real (SÓ LEITURA no empreendimento "007 - Bella Vista" + estudo descartável para o link) | 13/13: Sincronização com o vértice Planta Inteligente, o card genérico, sem legado, a faixa da Viabilidade; Vinculações com a seção nova; Editar com o campo listando os 10 estudos da organização, sem o campo do legado — fechado SEM salvar e **nenhuma escrita no empreendimento** (monitorado nas requisições e conferido no banco: `updated_at` igual); link direto abre o editor no estudo pedido e limpa o hash. Na 1ª rodada o link direto falhou — foi o achado do `syncViewToUrl` acima |
+| Limpeza | os estudos descartáveis apagados pelo id + `name LIKE 'ZZ TESTE%'`; estudos 73 · empreendimentos 18 · ZZ 0, iguais aos de antes |

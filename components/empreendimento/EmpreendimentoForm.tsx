@@ -9,6 +9,7 @@ import { imovibService } from '../../services/imovibService';
 import { organizationService } from '../../services/organizationService';
 import { companyService } from '../../services/companyService';
 import { supabase } from '../../lib/supabase';
+import { listStudies as listBlueprintStudies } from '../../services/blueprintService';
 import { useStore } from '../../store/useStore';
 import { useConfirm } from '../ui/confirm';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
@@ -66,6 +67,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
   const [plantStudies, setPlantStudies] = React.useState<PlantStudy[]>([]);
+  const [blueprintStudies, setBlueprintStudies] = React.useState<{ id: string; name: string }[]>([]);
   const [empreendimentoTypes, setEmpreendimentoTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
   // Torres do empreendimento — só existem depois de criado. O vínculo de obra por torre
   // (multi-torre) mora aqui no painel, junto do vínculo de obra principal (project_id).
@@ -96,6 +98,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
     // estudo/obra fariam o sync de um sobrescrever o outro.
     imovib_study_id: duplicateFrom ? '' : (base?.imovib_study_id ?? ''),
     planta_ai_study_id: duplicateFrom ? '' : (base?.planta_ai_study_id ?? ''),
+    blueprint_study_id: duplicateFrom ? '' : (base?.blueprint_study_id ?? ''),
     project_id: duplicateFrom ? '' : (base?.project_id ?? ''),
     matricula: duplicateFrom ? '' : (base?.matricula ?? ''),
     construtora: base?.construtora ?? '',
@@ -150,14 +153,16 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
     markDirty();
     if (!editing) {
       // Criando do zero: nada foi salvo ainda, então invalida seleções tentativas da org anterior.
-      setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '', project_id: '' }));
+      setForm(prev => ({ ...prev, imovib_study_id: '', planta_ai_study_id: '', blueprint_study_id: '', project_id: '' }));
     }
   };
 
   React.useEffect(() => {
     // Os vínculos (Imovib / Planta IA) são por organização: sem org escolhida não há o que listar.
-    if (!orgId) { setStudies([]); setPlantStudies([]); return; }
+    if (!orgId) { setStudies([]); setPlantStudies([]); setBlueprintStudies([]); return; }
     imovibService.getStudies(orgId).then(setStudies).catch(() => setStudies([]));
+    // Estudos da Planta Inteligente — a arquitetura do empreendimento (massa, loteamento, planta).
+    listBlueprintStudies(orgId).then((xs) => setBlueprintStudies(xs.map((s) => ({ id: s.id, name: s.name })))).catch(() => setBlueprintStudies([]));
     // Estudos de arquitetura (Planta IA) — vínculo direto, independente do Imovib.
     supabase
       .from('plant_studies')
@@ -251,6 +256,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
         tipo: form.tipo || null,
         imovib_study_id: form.imovib_study_id || null,
         planta_ai_study_id: form.planta_ai_study_id || null,
+        blueprint_study_id: form.blueprint_study_id || null,
         project_id: form.project_id || null,
         matricula: form.matricula || undefined,
         construtora: form.construtora || undefined,
@@ -420,15 +426,29 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
               </select>
             </div>
             <div className="md:col-span-2">
-              <label className={labelCls}>Estudo de Arquitetura (Planta IA)</label>
-              <select className={inputCls} value={form.planta_ai_study_id} onChange={e => set('planta_ai_study_id', e.target.value)}>
+              <label className={labelCls}>Estudo de Arquitetura (Planta Inteligente)</label>
+              <select className={inputCls} value={form.blueprint_study_id} onChange={e => set('blueprint_study_id', e.target.value)} aria-label="Estudo da Planta Inteligente">
                 <option value="">— Sem vínculo —</option>
-                {plantStudies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {form.blueprint_study_id && !blueprintStudies.some(s => s.id === form.blueprint_study_id) && <option value={form.blueprint_study_id}>Estudo não encontrado nesta organização</option>}
+                {blueprintStudies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
               <p className="text-[10px] text-gray-400 font-medium mt-1">
-                Vínculo direto, independente do Imovib. Habilita o sync de torres/unidades a partir do cenário selecionado.
+                O estudo de massa e o loteamento da Planta Inteligente trazem torres e unidades (Central de Sincronização). Também vincula ao enviar desde a própria planta.
               </p>
             </div>
+            {/* Planta IA v1 — LEGADO: só aparece para quem ainda tem vínculo (para poder ver e desvincular). */}
+            {(form.planta_ai_study_id || base?.planta_ai_study_id) && (
+              <div className="md:col-span-2">
+                <label className={labelCls}>Estudo do Planta IA (legado)</label>
+                <select className={inputCls} value={form.planta_ai_study_id} onChange={e => set('planta_ai_study_id', e.target.value)}>
+                  <option value="">— Sem vínculo —</option>
+                  {plantStudies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <p className="text-[10px] text-gray-400 font-medium mt-1">
+                  O Planta IA saiu do menu: a arquitetura do empreendimento é a Planta Inteligente. O vínculo antigo continua funcionando até você tirá-lo.
+                </p>
+              </div>
+            )}
             <div className="md:col-span-2">
               <label className={labelCls}>Obra Vinculada</label>
               <select className={inputCls} value={form.project_id} onChange={e => set('project_id', e.target.value)}>

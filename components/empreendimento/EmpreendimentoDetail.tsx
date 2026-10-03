@@ -134,6 +134,18 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       .catch(() => setImovibStudyName(undefined));
   }, [e.imovib_study_id, effectiveOrgId]);
 
+  // A arquitetura do empreendimento é a Planta Inteligente (02/10/2026); o Planta IA fica como legado.
+  const [blueprintStudyName, setBlueprintStudyName] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!e.blueprint_study_id) { setBlueprintStudyName(undefined); return; }
+    supabase
+      .from('blueprint_studies')
+      .select('id, name')
+      .eq('id', e.blueprint_study_id)
+      .maybeSingle()
+      .then(({ data }) => setBlueprintStudyName((data as any)?.name));
+  }, [e.blueprint_study_id]);
+
   React.useEffect(() => {
     if (!e.planta_ai_study_id) { setPlantaStudyName(undefined); return; }
     supabase
@@ -359,7 +371,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </h3>
             <dl className="space-y-3 text-sm">
               <Row label="Estudo de Viabilidade" value={e.imovib_study_id ? (imovibStudyName || 'Estudo não encontrado') : undefined} />
-              <Row label="Estudo de Arquitetura" value={e.planta_ai_study_id ? (plantaStudyName || 'Estudo não encontrado') : undefined} />
+              <Row label="Estudo de Arquitetura" value={e.blueprint_study_id ? (blueprintStudyName || 'Estudo não encontrado') : undefined} />
+              {e.planta_ai_study_id && <Row label="Planta IA (legado)" value={plantaStudyName || 'Estudo não encontrado'} />}
               <Row label="Obra Vinculada" value={e.project_id ? (obraVinculada?.name || 'Obra não encontrada') : undefined} />
             </dl>
             <p className="text-[11px] text-gray-400 font-medium mt-4">

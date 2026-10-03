@@ -29,7 +29,7 @@ import { isSystemProject } from '../utils/systemProjects';
 
 export type EmpreendimentoLinkKind =
     | 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'AREAS_NBR'
-    | 'PLANTA_IA' | 'ESTUDO_VIABILIDADE' | 'CONTRATO' | 'FINANCEIRO'
+    | 'PLANTA_IA' | 'PLANTA_INTELIGENTE' | 'ESTUDO_VIABILIDADE' | 'CONTRATO' | 'FINANCEIRO'
     | 'CENTRO_CUSTO';
 
 export interface EmpreendimentoLink {
@@ -61,7 +61,10 @@ export interface EmpreendimentoLinksSnapshot {
     orcamentos: EmpreendimentoLink[];
     planejamentos: EmpreendimentoLink[];
     areas: EmpreendimentoLink[];
+    /** O Planta IA v1 — LEGADO desde 02/10/2026: a arquitetura do empreendimento é a Planta Inteligente. */
     plantaIA: EmpreendimentoLink[];
+    /** A Planta Inteligente (`blueprint_study_id`): massa, loteamento, planta. */
+    plantaInteligente: EmpreendimentoLink[];
     viabilidade: EmpreendimentoLink[];
     contratos: EmpreendimentoLink[];
     /** N:1 desde 20270919000030 — um empreendimento pode ter vários centros de custo. */
@@ -187,13 +190,16 @@ export const empreendimentoLinksService = {
         const plantaIA: EmpreendimentoLink[] = emp.planta_ai_study_id
             ? [await this.loadPlantaStudy(emp.planta_ai_study_id, towers.length)]
             : [];
+        const plantaInteligente: EmpreendimentoLink[] = emp.blueprint_study_id
+            ? [await this.loadBlueprintStudy(emp.blueprint_study_id)]
+            : [];
         const viabilidade: EmpreendimentoLink[] = emp.imovib_study_id
             ? [await this.loadImovibStudy(emp.imovib_study_id)]
             : [];
 
         const all = [
             ...obras, ...children.orcamentos, ...children.planejamentos,
-            ...areaProject, ...plantaIA, ...viabilidade,
+            ...areaProject, ...plantaIA, ...plantaInteligente, ...viabilidade,
         ];
 
         return {
@@ -202,6 +208,7 @@ export const empreendimentoLinksService = {
             planejamentos: children.planejamentos,
             areas: areaProject,
             plantaIA,
+            plantaInteligente,
             viabilidade,
             contratos,
             centrosCusto,
@@ -290,6 +297,25 @@ export const empreendimentoLinksService = {
             };
         } catch {
             return { kind: 'PLANTA_IA', id: studyId, label: 'Estudo da Planta IA', missing: true };
+        }
+    },
+
+    async loadBlueprintStudy(studyId: string): Promise<EmpreendimentoLink> {
+        try {
+            const { data } = await supabase
+                .from('blueprint_studies')
+                .select('id, name')
+                .eq('id', studyId)
+                .maybeSingle();
+            return {
+                kind: 'PLANTA_INTELIGENTE',
+                id: studyId,
+                label: (data as any)?.name || 'Estudo da Planta Inteligente',
+                sublabel: 'Planta Inteligente — massa, loteamento e planta',
+                missing: !data,
+            };
+        } catch {
+            return { kind: 'PLANTA_INTELIGENTE', id: studyId, label: 'Estudo da Planta Inteligente', missing: true };
         }
     },
 
@@ -640,6 +666,11 @@ export const empreendimentoLinksService = {
         await this.updateStudyLink(ctx, 'planta_ai_study_id', studyId, 'Estudo da Planta IA', 'sync_planta');
     },
 
+    /** Vincula/desvincula o estudo da Planta Inteligente (a arquitetura do empreendimento desde 02/10/2026). */
+    async linkBlueprintStudy(studyId: string | null, ctx: LinkContext): Promise<void> {
+        await this.updateStudyLink(ctx, 'blueprint_study_id', studyId, 'Estudo da Planta Inteligente', 'sync_blueprint');
+    },
+
     /** Vincula/desvincula o estudo de Viabilidade (Imovib). */
     async linkImovibStudy(studyId: string | null, ctx: LinkContext): Promise<void> {
         await this.updateStudyLink(ctx, 'imovib_study_id', studyId, 'Estudo de Viabilidade', 'sync_imovib');
@@ -647,10 +678,10 @@ export const empreendimentoLinksService = {
 
     async updateStudyLink(
         ctx: LinkContext,
-        column: 'planta_ai_study_id' | 'imovib_study_id',
+        column: 'planta_ai_study_id' | 'imovib_study_id' | 'blueprint_study_id',
         studyId: string | null,
         label: string,
-        source: 'sync_planta' | 'sync_imovib',
+        source: 'sync_planta' | 'sync_imovib' | 'sync_blueprint',
     ): Promise<void> {
         const { error } = await supabase
             .from('empreendimentos')

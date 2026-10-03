@@ -158,7 +158,7 @@ import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
 import { roteiroPerimetrico, memorialConvencional } from '../../utils/blueprintRoteiroPerimetrico';
 import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import PainelLoteDigitado from './PainelLoteDigitado';
-import { comandosDoLote, rotacaoDoNorte, type ModoDoLoteDigitado } from '../../utils/blueprintLoteDigitado';
+import { comandosDoLote, loteExistente, rotacaoDoNorte, type ModoDoLoteDigitado } from '../../utils/blueprintLoteDigitado';
 import PainelViasEGreide from './PainelViasEGreide';
 import PainelSigef from './PainelSigef';
 import PainelCar from './PainelCar';
@@ -1941,9 +1941,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }
 
   const alternarRelatorio = (id: RelatorioDoDock) => setRelatorio((r) => (r === id ? null : id));
-  /** Com que aba a gaveta do lote digitado abre — o Roteiro manda direto para o memorial. */
-  const [abaDoLoteDigitado, setAbaDoLoteDigitado] = useState<ModoDoLoteDigitado>('RETANGULO');
-  function abrirLoteDigitado(aba: ModoDoLoteDigitado = 'RETANGULO') {
+  /** Com que aba a gaveta do lote digitado abre — o Roteiro manda direto para o memorial; `undefined` = a gaveta decide. */
+  const [abaDoLoteDigitado, setAbaDoLoteDigitado] = useState<ModoDoLoteDigitado | undefined>(undefined);
+  function abrirLoteDigitado(aba?: ModoDoLoteDigitado) {
     setAbaDoLoteDigitado(aba);
     // A gaveta de Dados do lote (de onde se pode ter vindo) sai: duas gavetas empilhadas escondem a prévia.
     setTarefa(null);
@@ -6773,6 +6773,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * georreferência no estudo; a tabela é só a junção dos três.
    */
   const roteiro = useMemo(() => roteiroPerimetrico(editor.model), [editor.model]);
+  /** O lote fechado que a gaveta "Digitar" carrega para editar (03/10/2026); só calculado com ela aberta. */
+  const loteParaEditar = useMemo(() => (relatorio === 'lote-digitado' ? loteExistente(editor.model) : null), [relatorio, editor.model]);
 
   /** A1 — nomeia P1…Pn no sentido do roteiro, num comando só (Ctrl+Z desfaz). */
   async function nomearVerticesDoTerreno() {
@@ -11043,7 +11045,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 rotulo="Digitar"
                 ativo={relatorioAberto === 'lote-digitado'}
                 onClick={() => (relatorioAberto === 'lote-digitado' ? setRelatorio(null) : abrirLoteDigitado())}
-                ajuda="Criar o lote digitando: frente × fundo, lados e ângulos, azimutes/rumos, coordenadas dos vértices ou o memorial da escritura colado — com prévia e erro de fechamento"
+                ajuda={
+                  roteiro.lados.length > 0
+                    ? 'Editar o lote digitando: as medidas, ângulos, azimutes e coordenadas do lote atual vêm carregados para alterar — papel, escritura, SIGEF e nomes dos vértices acompanham cada lado'
+                    : 'Criar o lote digitando: frente × fundo, lados e ângulos, azimutes/rumos, coordenadas dos vértices ou o memorial da escritura colado — com prévia e erro de fechamento'
+                }
               />
               <Ferramenta
                 atual={editor.tool}
@@ -17461,7 +17467,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {relatorioNoDrawer === 'vias' && <Milestone className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'medicoes' && <Ruler className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
-              {RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
+              {relatorioNoDrawer === 'lote-digitado' && loteParaEditar ? 'Editar o lote digitando' : RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
               {relatorioNoDrawer === 'conflitos' && (
                 <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
                   {totalDeConflitos}
@@ -17504,7 +17510,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             {relatorioNoDrawer === 'roteiro' &&
               'A tabela que a matrícula e o SIGEF pedem: vértice a vértice, no sentido horário, com coordenadas, azimute, distância e confrontante. Tudo derivado do desenho — nada aqui se grava.'}
             {relatorioNoDrawer === 'lote-digitado' &&
-              'O contorno do lote pelas medidas da escritura ou do levantamento, sem desenhar. A prévia mostra a área e o erro de fechamento; lançar cria as divisas num passo só (Ctrl+Z desfaz) e o Quadro de divisas completa o resto.'}
+              (loteParaEditar
+                ? 'As medidas do lote atual, para alterar em qualquer aba. A prévia mostra a área e o erro de fechamento; aplicar troca o contorno num passo só (Ctrl+Z desfaz).'
+                : 'O contorno do lote pelas medidas da escritura ou do levantamento, sem desenhar. A prévia mostra a área e o erro de fechamento; lançar cria as divisas num passo só (Ctrl+Z desfaz) e o Quadro de divisas completa o resto.')}
             {relatorioNoDrawer === 'vias' &&
               'O projeto geométrico da via: eixo estaqueado, greide com PIVs e curvas verticais, seção tipo, seções transversais por estaca, volumes por áreas médias e a nota de serviço. Grava-se o eixo, o passo, os PIVs e a seção tipo; o resto é derivado contra a topografia exibida.'}
           </SheetDescription>
@@ -17525,8 +17533,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           {relatorioNoDrawer === 'lote-digitado' && (
             <div className="px-6 py-4">
               <PainelLoteDigitado
-                key={abaDoLoteDigitado}
+                // A chave leva o contorno: depois de um Ctrl+Z com a gaveta aberta, ela recarrega o lote que ficou.
+                key={`${abaDoLoteDigitado}|${(loteParaEditar?.anel ?? []).map((p) => `${p.x},${p.y}`).join(';')}`}
                 abaInicial={abaDoLoteDigitado}
+                existente={loteParaEditar}
                 rotacaoNorteDeg={rotacaoDoNorte(editor.model)}
                 georreferencia={editor.model.georreferencia ?? null}
                 temLote={(editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')}
@@ -17538,7 +17548,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   } catch (e) {
                     return e instanceof Error ? e.message : String(e);
                   }
-                  if (opcoes.substituir) {
+                  // Editar não pergunta: o contorno muda, mas papel, escritura, SIGEF e vértices vão junto — e Ctrl+Z desfaz.
+                  if (opcoes.substituir && !opcoes.editando) {
                     // §14 do guia: nunca o confirm nativo.
                     const ok = await confirmar({
                       title: 'Substituir o lote atual?',
@@ -17556,7 +17567,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   setRelatorio(null);
                   navegar('ENQUADRAR');
                   setAvisoConexaoT(
-                    `Lote lançado: ${lote.anel.length} divisas, ${(lote.areaMm2 / 1e6).toFixed(2).replace('.', ',')} m². Ctrl+Z desfaz tudo.` +
+                    `${opcoes.editando ? 'Lote alterado' : 'Lote lançado'}: ${lote.anel.length} divisas, ${(lote.areaMm2 / 1e6).toFixed(2).replace('.', ',')} m². Ctrl+Z desfaz tudo.` +
                       (lote.compensacao !== 'NENHUMA' ? ` ${lote.descricao}` : ''),
                   );
                   return null;

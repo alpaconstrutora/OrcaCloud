@@ -6971,3 +6971,36 @@ describe('BlueprintEditor · criar o lote digitando', () => {
     expect(screen.queryByText(/dados do lote, zona e topografia/i)).toBeNull();
   });
 });
+
+describe('BlueprintEditor · editar o lote digitando', () => {
+  it('com lote: Digitar carrega 12 × 30; a frente vira 15 m sem pedir confirmação; reabrir mostra o lote alterado', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const ld = await import('../../utils/blueprintLoteDigitado');
+    const m0 = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }).model;
+    const f = ld.fecharLote(ld.loteRetangular({ frenteMm: 12000, profundidadeMm: 30000, confrontantes: { FRENTE: 'Rua A' } }));
+    loadBranchModel.mockResolvedValue(k.applyBatch(m0, ld.comandosDoLote(m0, m0.levels[0].id, f, { medidasDaEscritura: true })).model);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await waitFor(() => expect(botao(/^roteiro/i)).toBeEnabled());
+    expect(botao(/^digitar$/i)).toHaveAttribute('title', expect.stringMatching(/^Editar o lote digitando/));
+    await user.click(botao(/^digitar$/i));
+    const gaveta = await screen.findByTestId('painel-lote-digitado');
+    expect(within(gaveta).getByTestId('editando-lote')).toHaveTextContent(/4 lados, 360,00 m²/);
+    expect(screen.getByText('Editar o lote digitando')).toBeInTheDocument();
+    expect(within(gaveta).getByLabelText('Frente (m)')).toHaveValue('12,00');
+    expect(within(gaveta).getByLabelText('Confrontante da frente')).toHaveValue('Rua A');
+    await user.clear(within(gaveta).getByLabelText('Frente (m)'));
+    await user.type(within(gaveta).getByLabelText('Frente (m)'), '15');
+    await user.click(within(gaveta).getByRole('button', { name: 'Aplicar as alterações' }));
+    // Sem o "Substituir o lote atual?" — editar não perde nada.
+    await waitFor(() => expect(screen.queryByTestId('painel-lote-digitado')).toBeNull());
+    expect(screen.queryByText('Substituir o lote atual?')).toBeNull();
+    expect(await screen.findByText(/Lote alterado: 4 divisas, 450,00 m²/)).toBeInTheDocument();
+    // Reabrir carrega o lote NOVO, com o confrontante que veio junto.
+    await user.click(botao(/^digitar$/i));
+    const outra = await screen.findByTestId('painel-lote-digitado');
+    expect(within(outra).getByLabelText('Frente (m)')).toHaveValue('15,00');
+    expect(within(outra).getByLabelText('Confrontante da frente')).toHaveValue('Rua A');
+  });
+});

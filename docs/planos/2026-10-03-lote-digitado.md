@@ -65,3 +65,35 @@ Perguntas feitas em plan mode e respostas do usuário:
   substituir, divisa de ajuste) e a volta do memorial do Roteiro num estudo georreferenciado com norte girado 30°.
 - `__tests__/components/PainelLoteDigitado.test.tsx` (7) e `BlueprintEditor.test.tsx › criar o lote digitando` (2).
 - Ritual da publicação + prova no app real com estudo descartável "ZZ TESTE" (banco conferido antes/depois).
+
+---
+
+## Parte 2 — editar o lote que já existe
+
+Mesma sessão, 03/10/2026, logo depois da publicação. Pedido, literal:
+
+> se o lote jaestiver sido criado, e ao clicar em digitar,carregar os valores do lote e permita editar(alteraR)
+
+### O que foi feito
+
+- `loteExistente(model)` lê o lote fechado no sentido do Roteiro (horário, a partir do vértice de partida): anel,
+  azimute verdadeiro e distância de cada lado, ângulo interno de cada vértice, e a HERANÇA de cada lado (papel,
+  confrontante, medida da escritura, dados do SIGEF) e de cada vértice (nome, tipo, sigmas, altitude). Retângulo com
+  os quatro papéis também vira frente, profundidade, "voltada para" e a ponta esquerda da frente.
+- Os geradores ganharam `origem`: o lote editado fica onde está, não vai para a origem do desenho.
+- `aplicarHeranca` leva para o contorno novo o que cada lado/vértice tinha — o que está digitado na tela vence.
+  Nas abas com linha por lado a herança viaja com a linha; no retângulo, por papel; nas coordenadas e no memorial,
+  pelo nome do vértice (sem nomes, pela posição quando a contagem é a mesma; o lado só herda com as duas pontas
+  casadas).
+- `comandosDoLote` usa a escritura herdada quando "as medidas digitadas são as da escritura" está desmarcado (o padrão
+  na edição) e regrava SIGEF e dados dos vértices.
+- Tela: com lote, "Digitar" abre em modo edição — faixa "Editando o lote atual", todas as abas preenchidas (retângulo
+  abre em Frente × fundo; o resto em Azimutes/rumos), coordenadas do desenho mantidas, botão "Aplicar as alterações",
+  sem a confirmação de "substituir" (nada se perde; Ctrl+Z desfaz).
+
+### Verificação
+
+- Unitários: ida e volta SEM mudar nada pelas abas de azimutes, lados e ângulos e retângulo devolve o MESMO lote, no
+  mesmo lugar, com escritura, papel, SIGEF e vértices; mudar uma distância muda só a geometria; o retângulo cresce
+  para a direita a partir da ponta esquerda; casamento por nome/posição nas coordenadas.
+- Componente (3) e editor (1): valores carregados, aplicar sem confirmação, reabrir mostra o lote alterado.

@@ -8,12 +8,22 @@
  * o erro de fechamento e — quando ele passa da tolerância — a escolha de como
  * fechar. Nada grava aqui: "Lançar o lote" entrega o contorno fechado ao pai,
  * que aplica os comandos num lote só (Ctrl+Z desfaz).
+ *
+ * EDITAR (03/10/2026) — *"se o lote já estiver sido criado, e ao clicar em
+ * digitar, carregar os valores do lote e permita editar (alterar)"*: com
+ * `existente`, as abas nascem preenchidas com o lote atual (no mesmo lugar do
+ * desenho) e "Aplicar as alterações" o substitui. Cada linha carrega a HERANÇA
+ * do lado e do vértice de onde veio — papel, medida da escritura, SIGEF, tipo e
+ * sigmas do vértice — e ela vai junto mesmo que a linha mude de posição.
  */
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDownToLine, Plus } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, Pencil, Plus } from 'lucide-react';
 import type { Georreferencia } from '../../utils/blueprintKernel';
 import {
+  anguloTexto,
+  aplicarHeranca,
   fecharLote,
+  herancaPorVertices,
   lerAnguloDigitado,
   lerAzimuteOuRumo,
   lerMedidaEmMetros,
@@ -21,8 +31,12 @@ import {
   lotePorCoordenadas,
   lotePorLadosEAngulos,
   loteRetangular,
+  metrosTexto,
   toleranciaDeFechamentoMm,
+  type DadosDoVertice,
   type DecisaoDeFechamento,
+  type HerancaDoLado,
+  type LoteExistente,
   type LoteDigitado,
   type LoteFechado,
   type ModoDoLoteDigitado,
@@ -36,6 +50,8 @@ import ActionIconButton from '../ui/ActionIconButton';
 export interface OpcoesDoLancamento {
   substituir: boolean;
   medidasDaEscritura: boolean;
+  /** Edição do lote existente: substitui sem perguntar — nada se perde, tudo vai pela herança. */
+  editando: boolean;
 }
 
 interface Props {
@@ -47,6 +63,8 @@ interface Props {
   onLancar: (lote: LoteFechado, opcoes: OpcoesDoLancamento) => Promise<string | null>;
   /** A aba com que a gaveta abre (o Roteiro abre direto no memorial). */
   abaInicial?: ModoDoLoteDigitado;
+  /** O lote fechado que o estudo já tem: as abas nascem com ele, para editar. */
+  existente?: LoteExistente | null;
 }
 
 const ABAS: TabsBarItem<ModoDoLoteDigitado>[] = [
@@ -63,18 +81,26 @@ const CELULA = 'w-full rounded-[6px] border border-gray-100 bg-gray-50 px-2 py-1
 const TH = 'px-3 py-2 border-r border-gray-100';
 const TD = 'px-3 py-2.5 border-r border-gray-100';
 
-interface LinhaDeLado {
+/** O que a linha herda do lote existente (edição); viaja com a linha. */
+interface Herda {
+  herdaLado?: HerancaDoLado | null;
+  herdaVertice?: DadosDoVertice | null;
+}
+interface LinhaDeLado extends Herda {
   vertice: string;
   medida: string;
   angulo: string;
   confrontante: string;
 }
-interface LinhaDeAzimute {
+interface LinhaDeAzimute extends Herda {
   vertice: string;
   azimute: string;
   distancia: string;
   confrontante: string;
 }
+
+type ColunaDeLado = 'vertice' | 'medida' | 'angulo' | 'confrontante';
+type ColunaDeAzimute = 'vertice' | 'azimute' | 'distancia' | 'confrontante';
 
 const linhasVazias = <T,>(n: number, f: () => T): T[] => Array.from({ length: n }, f);
 const ladoVazio = (): LinhaDeLado => ({ vertice: '', medida: '', angulo: '', confrontante: '' });
@@ -99,51 +125,98 @@ function colarNaTabela<T extends object>(texto: string, linhas: T[], linhaInicia
   return novo;
 }
 
-export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, temLote, onLancar, abaInicial = 'RETANGULO' }: Props) {
-  const [aba, setAba] = useState<ModoDoLoteDigitado>(abaInicial);
+export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, temLote, onLancar, abaInicial, existente = null }: Props) {
+  const e = existente;
+  const ret = e?.retangulo ?? null;
+  // Editando: abre onde o lote se lê melhor — o retângulo na sua aba, o resto pelos azimutes (o que a escritura traz).
+  const [aba, setAba] = useState<ModoDoLoteDigitado>(abaInicial ?? (e ? (ret ? 'RETANGULO' : 'AZIMUTES') : 'RETANGULO'));
   // Frente × fundo
-  const [frente, setFrente] = useState('');
-  const [profundidade, setProfundidade] = useState('');
-  const [voltadaPara, setVoltadaPara] = useState('');
-  const [confrontantesRet, setConfrontantesRet] = useState({ FRENTE: '', LATERAL_DIREITA: '', FUNDOS: '', LATERAL_ESQUERDA: '' });
+  const [frente, setFrente] = useState(ret ? metrosTexto(ret.frenteMm) : '');
+  const [profundidade, setProfundidade] = useState(ret ? metrosTexto(ret.profundidadeMm) : '');
+  const [voltadaPara, setVoltadaPara] = useState(ret ? anguloTexto(ret.frenteVoltadaPara) : '');
+  const [confrontantesRet, setConfrontantesRet] = useState({
+    FRENTE: ret?.lados.FRENTE.confrontante ?? '',
+    LATERAL_DIREITA: ret?.lados.LATERAL_DIREITA.confrontante ?? '',
+    FUNDOS: ret?.lados.FUNDOS.confrontante ?? '',
+    LATERAL_ESQUERDA: ret?.lados.LATERAL_ESQUERDA.confrontante ?? '',
+  });
   // Lados e ângulos
-  const [lados, setLados] = useState<LinhaDeLado[]>(() => linhasVazias(4, ladoVazio));
-  const [azPrimeiro, setAzPrimeiro] = useState('');
+  const [lados, setLados] = useState<LinhaDeLado[]>(() =>
+    e
+      ? e.anel.map((_, i) => ({
+          vertice: e.vertices[i]?.nome ?? '',
+          medida: metrosTexto(e.distanciasMm[i]),
+          angulo: anguloTexto(e.angulosInternos[i]),
+          confrontante: e.lados[i].confrontante ?? '',
+          herdaLado: e.lados[i],
+          herdaVertice: e.vertices[i],
+        }))
+      : linhasVazias(4, ladoVazio),
+  );
+  const [azPrimeiro, setAzPrimeiro] = useState(e ? anguloTexto(e.azimutes[0]) : '');
   // Azimutes
-  const [azimutes, setAzimutes] = useState<LinhaDeAzimute[]>(() => linhasVazias(4, azimuteVazio));
-  // Coordenadas
-  const [coordenadas, setCoordenadas] = useState('');
+  const [azimutes, setAzimutes] = useState<LinhaDeAzimute[]>(() =>
+    e
+      ? e.anel.map((_, i) => ({
+          vertice: e.vertices[i]?.nome ?? '',
+          azimute: anguloTexto(e.azimutes[i]),
+          distancia: metrosTexto(e.distanciasMm[i]),
+          confrontante: e.lados[i].confrontante ?? '',
+          herdaLado: e.lados[i],
+          herdaVertice: e.vertices[i],
+        }))
+      : linhasVazias(4, azimuteVazio),
+  );
+  // Coordenadas — editando, as do DESENHO (em metros), que ficam onde estão.
+  const [coordenadas, setCoordenadas] = useState(
+    e ? e.anel.map((p, i) => [e.vertices[i]?.nome, metrosTexto(p.x), metrosTexto(p.y)].filter(Boolean).join('  ')).join('\n') : '',
+  );
   const [ordem, setOrdem] = useState<'EN' | 'NE'>('EN');
-  const [unidade, setUnidade] = useState<'AUTO' | 'M' | 'MM' | 'UTM'>('AUTO');
+  const [unidade, setUnidade] = useState<'AUTO' | 'M' | 'MM' | 'UTM'>(e ? 'M' : 'AUTO');
+  const [manterCoordenadas, setManterCoordenadas] = useState(!!e);
   // Memorial
   const [memorial, setMemorial] = useState('');
   // Comum
   const [decisao, setDecisao] = useState<DecisaoDeFechamento | null>(null);
-  const [medidasDaEscritura, setMedidasDaEscritura] = useState(true);
+  // Editando, a escritura que o lote já tem fica — a não ser que se diga que as medidas digitadas são as dela.
+  const [medidasDaEscritura, setMedidasDaEscritura] = useState(!e);
   const [substituir, setSubstituir] = useState(false);
   const [erroDoLancamento, setErroDoLancamento] = useState<string | null>(null);
   const [lancando, setLancando] = useState(false);
 
   const restituicao = useMemo(() => (memorial.trim() ? restituirMemorial(memorial) : null), [memorial]);
 
-  /** O contorno digitado na aba ativa, mais os avisos de leitura dela. */
-  const { lote, leitura } = useMemo((): { lote: LoteDigitado | null; leitura: string[] } => {
+  /**
+   * O contorno digitado na aba ativa, os avisos de leitura dela e — editando —
+   * a herança de cada lado/vértice do contorno novo.
+   */
+  type Heranca = { lados: (HerancaDoLado | null | undefined)[]; vertices: (DadosDoVertice | null | undefined)[]; herdarConfrontante?: boolean; herdarNomes?: boolean };
+  const { lote, leitura, heranca } = useMemo((): { lote: LoteDigitado | null; leitura: string[]; heranca: Heranca | null } => {
     const leitura: string[] = [];
+    const origem = e?.anel[0] ?? null;
+    const porLinhas = (ls: Herda[]): Heranca | null => (e ? { lados: ls.map((l) => l.herdaLado), vertices: ls.map((l) => l.herdaVertice) } : null);
     if (aba === 'RETANGULO') {
       const f = lerMedidaEmMetros(frente);
       const p = lerMedidaEmMetros(profundidade);
-      if (!frente.trim() && !profundidade.trim()) return { lote: null, leitura };
+      if (!frente.trim() && !profundidade.trim()) return { lote: null, leitura, heranca: null };
       let az: number | null = null;
       if (voltadaPara.trim()) {
         const r = lerAzimuteOuRumo(voltadaPara);
         if (r.erro) leitura.push(`Frente voltada para: ${r.erro}.`);
         az = r.azimute;
       }
-      return { lote: loteRetangular({ frenteMm: f ?? 0, profundidadeMm: p ?? 0, frenteVoltadaPara: az, rotacaoNorteDeg, confrontantes: confrontantesRet }), leitura };
+      return {
+        lote: loteRetangular({ frenteMm: f ?? 0, profundidadeMm: p ?? 0, frenteVoltadaPara: az, rotacaoNorteDeg, confrontantes: confrontantesRet, origem: ret?.origem ?? origem }),
+        leitura,
+        // Retângulo editado herda por PAPEL; os nomes dos vértices pelos cantos (a aba não tem coluna de nome).
+        heranca: ret
+          ? { lados: (['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA'] as const).map((p) => ret.lados[p]), vertices: ret.vertices, herdarNomes: true }
+          : null,
+      };
     }
     if (aba === 'LADOS') {
       const usadas = lados.filter((l) => l.medida.trim() || l.angulo.trim());
-      if (usadas.length === 0) return { lote: null, leitura };
+      if (usadas.length === 0) return { lote: null, leitura, heranca: null };
       let az: number | null = null;
       if (azPrimeiro.trim()) {
         const r = lerAzimuteOuRumo(azPrimeiro);
@@ -153,54 +226,71 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
       return {
         lote: lotePorLadosEAngulos(
           usadas.map((l) => ({ distanciaMm: lerMedidaEmMetros(l.medida) ?? 0, anguloInternoGraus: lerAnguloDigitado(l.angulo), confrontante: l.confrontante, verticeNome: l.vertice })),
-          { azimuteDoPrimeiro: az, rotacaoNorteDeg },
+          { azimuteDoPrimeiro: az, rotacaoNorteDeg, origem },
         ),
         leitura,
+        heranca: porLinhas(usadas),
       };
     }
     if (aba === 'AZIMUTES') {
       const usadas = azimutes.filter((l) => l.azimute.trim() || l.distancia.trim());
-      if (usadas.length === 0) return { lote: null, leitura };
+      if (usadas.length === 0) return { lote: null, leitura, heranca: null };
       const trechos = usadas.map((l, i) => {
         const r = lerAzimuteOuRumo(l.azimute);
         if (r.erro && l.azimute.trim()) leitura.push(`Trecho ${i + 1}: ${r.erro}.`);
         return { azimute: r.azimute ?? Number.NaN, distanciaMm: lerMedidaEmMetros(l.distancia) ?? 0, confrontante: l.confrontante, verticeNome: l.vertice };
       });
-      return { lote: lotePorAzimutes(trechos, { rotacaoNorteDeg }), leitura };
+      return { lote: lotePorAzimutes(trechos, { rotacaoNorteDeg, origem }), leitura, heranca: porLinhas(usadas) };
     }
     if (aba === 'COORDENADAS') {
-      if (!coordenadas.trim()) return { lote: null, leitura };
-      const r = lotePorCoordenadas(coordenadas, { georreferencia }, { ordem, unidade });
+      if (!coordenadas.trim()) return { lote: null, leitura, heranca: null };
+      const r = lotePorCoordenadas(coordenadas, { georreferencia }, { ordem, unidade, manterCoordenadas });
       for (const l of r.naoLidas.slice(0, 5)) leitura.push(`Não li: “${l.slice(0, 80)}”.`);
-      if (r.unidadeLida) leitura.push(r.unidadeLida === 'UTM' ? 'Lidas como UTM: o lote cai no lugar pela georreferência do estudo.' : `Lidas em ${r.unidadeLida === 'MM' ? 'milímetros' : 'metros'}, locais: o 1º vértice vai para a origem do desenho.`);
-      return { lote: r, leitura };
+      if (r.unidadeLida) {
+        const unidadeTexto = r.unidadeLida === 'MM' ? 'milímetros' : 'metros';
+        leitura.push(
+          r.unidadeLida === 'UTM'
+            ? 'Lidas como UTM: o lote cai no lugar pela georreferência do estudo.'
+            : manterCoordenadas
+              ? `Lidas em ${unidadeTexto}, como coordenadas do desenho.`
+              : `Lidas em ${unidadeTexto}, locais: o 1º vértice vai para a origem do desenho.`,
+        );
+      }
+      const h = e && !r.problema ? herancaPorVertices(r.vertices, e) : null;
+      return { lote: r, leitura, heranca: h ? { ...h, herdarConfrontante: true } : null };
     }
     // MEMORIAL
     if (!restituicao || restituicao.trechos.length === 0) {
       if (restituicao) for (const t of restituicao.naoLidos.slice(0, 5)) leitura.push(`Não li: “${t.slice(0, 80)}”.`);
-      return { lote: null, leitura };
+      return { lote: null, leitura, heranca: null };
     }
     for (const t of restituicao.naoLidos.slice(0, 5)) leitura.push(`Não li: “${t.slice(0, 80)}”.`);
     const nomes = [restituicao.verticeInicial, ...restituicao.trechos.slice(0, -1).map((t) => t.ateVertice)];
-    return {
-      lote: lotePorAzimutes(
-        restituicao.trechos.map((t, i) => ({ azimute: t.azimute, distanciaMm: t.distanciaMm, confrontante: t.confrontante, verticeNome: nomes[i] ?? null })),
-        { rotacaoNorteDeg },
-      ),
-      leitura,
-    };
-  }, [aba, frente, profundidade, voltadaPara, confrontantesRet, lados, azPrimeiro, azimutes, coordenadas, ordem, unidade, restituicao, georreferencia, rotacaoNorteDeg]);
+    const doMemorial = lotePorAzimutes(
+      restituicao.trechos.map((t, i) => ({ azimute: t.azimute, distanciaMm: t.distanciaMm, confrontante: t.confrontante, verticeNome: nomes[i] ?? null })),
+      { rotacaoNorteDeg, origem },
+    );
+    // Memorial colado sobre um lote existente: herda só pelo NOME do vértice (sem nomes, não há como casar).
+    const h = e ? herancaPorVertices(doMemorial.vertices, e) : null;
+    const comNome = h && doMemorial.vertices.some((x) => x);
+    return { lote: doMemorial, leitura, heranca: comNome ? { ...h, herdarConfrontante: true } : null };
+  }, [aba, frente, profundidade, voltadaPara, confrontantesRet, lados, azPrimeiro, azimutes, coordenadas, ordem, unidade, manterCoordenadas, restituicao, georreferencia, rotacaoNorteDeg, e, ret]);
 
   const tolerancia = lote ? toleranciaDeFechamentoMm(lote.perimetroMm) : 10;
   const precisaDecidir = !!lote && !lote.problema && lote.erroDeFechamentoMm > tolerancia;
-  const fechado = useMemo(() => (lote ? fecharLote(lote, precisaDecidir ? decisao : null) : null), [lote, precisaDecidir, decisao]);
+  const fechado = useMemo(() => {
+    if (!lote) return null;
+    const f = fecharLote(lote, precisaDecidir ? decisao : null);
+    return heranca ? aplicarHeranca(f, heranca.lados, heranca.vertices, { herdarConfrontante: heranca.herdarConfrontante, herdarNomes: heranca.herdarNomes }) : f;
+  }, [lote, precisaDecidir, decisao, heranca]);
+  const editando = !!e;
   const temMedidaDigitada = aba !== 'COORDENADAS';
 
   const motivoDesligado = !lote
     ? 'Digite as medidas do lote'
     : fechado?.problema
       ? fechado.problema
-      : temLote && !substituir
+      : temLote && !editando && !substituir
         ? 'O estudo já tem lote: marque "Substituir o lote atual"'
         : lancando
           ? 'Lançando…'
@@ -211,7 +301,11 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
     setLancando(true);
     setErroDoLancamento(null);
     try {
-      const erro = await onLancar(fechado, { substituir: temLote && substituir, medidasDaEscritura: temMedidaDigitada && medidasDaEscritura });
+      const erro = await onLancar(fechado, {
+        substituir: editando || (temLote && substituir),
+        medidasDaEscritura: temMedidaDigitada && medidasDaEscritura,
+        editando,
+      });
       setErroDoLancamento(erro);
     } finally {
       setLancando(false);
@@ -235,6 +329,16 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
   return (
     <div className="space-y-5 text-sm text-slate-700" data-testid="painel-lote-digitado">
       <TabsBar tabs={ABAS} value={aba} onChange={(a) => { setAba(a); setDecisao(null); setErroDoLancamento(null); }} />
+
+      {e && (
+        <p className="flex items-start gap-2 rounded-[6px] bg-blue-50 px-3 py-2 text-xs text-blue-800" data-testid="editando-lote">
+          <Pencil className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            Editando o lote atual ({e.anel.length} lados, {numeroBr(e.areaMm2 / 1e6)} m²), carregado em todas as abas, no mesmo lugar do desenho.
+            Aplicar substitui o contorno; papel, confrontante, medida da escritura, dados do SIGEF e nomes dos vértices acompanham cada lado.
+          </span>
+        </p>
+      )}
 
       {aba === 'RETANGULO' && (
         <div className="space-y-4">
@@ -297,8 +401,8 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {lados.map((l, i) => {
-                  const colunas: (keyof LinhaDeLado)[] = ['vertice', 'medida', 'angulo', 'confrontante'];
-                  const campo = (c: keyof LinhaDeLado, rotulo: string, placeholder: string, decimal = false) => (
+                  const colunas: ColunaDeLado[] = ['vertice', 'medida', 'angulo', 'confrontante'];
+                  const campo = (c: ColunaDeLado, rotulo: string, placeholder: string, decimal = false) => (
                     <input
                       value={l[c]}
                       inputMode={decimal ? 'decimal' : undefined}
@@ -363,8 +467,8 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {azimutes.map((l, i) => {
-                  const colunas: (keyof LinhaDeAzimute)[] = ['vertice', 'azimute', 'distancia', 'confrontante'];
-                  const campo = (c: keyof LinhaDeAzimute, rotulo: string, placeholder: string, decimal = false) => (
+                  const colunas: ColunaDeAzimute[] = ['vertice', 'azimute', 'distancia', 'confrontante'];
+                  const campo = (c: ColunaDeAzimute, rotulo: string, placeholder: string, decimal = false) => (
                     <input
                       value={l[c]}
                       inputMode={decimal ? 'decimal' : undefined}
@@ -417,6 +521,10 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
             />
             <p className="text-xs text-slate-500">Nome opcional e duas coordenadas, separados por espaço, tabulação ou ponto e vírgula. Vírgula decimal vale.</p>
           </div>
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={manterCoordenadas} onChange={(ev) => setManterCoordenadas(ev.target.checked)} className="mt-0.5" />
+            <span>São coordenadas do desenho (locais): o lote fica onde elas dizem, sem levar o 1º vértice para a origem</span>
+          </label>
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="lote-ordem">Ordem das colunas</label>
@@ -520,10 +628,13 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
         {temMedidaDigitada && (
           <label className="flex items-start gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={medidasDaEscritura} onChange={(e) => setMedidasDaEscritura(e.target.checked)} className="mt-0.5" />
-            <span>As medidas digitadas são as da escritura (vão para a coluna Escritura do Quadro de divisas)</span>
+            <span>
+              As medidas digitadas são as da escritura (vão para a coluna Escritura do Quadro de divisas)
+              {editando && !medidasDaEscritura && <> — desmarcado, as medidas de escritura que o lote já tem ficam como estão</>}
+            </span>
           </label>
         )}
-        {temLote && (
+        {temLote && !editando && (
           <label className="flex items-start gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={substituir} onChange={(e) => setSubstituir(e.target.checked)} className="mt-0.5" />
             <span>Substituir o lote atual — as divisas dele, as medidas de escritura e os nomes dos vértices saem</span>
@@ -536,10 +647,10 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
             type="button"
             onClick={() => void lancar()}
             disabled={!!motivoDesligado}
-            title={motivoDesligado ?? 'Cria as divisas do lote num passo só — Ctrl+Z desfaz'}
+            title={motivoDesligado ?? (editando ? 'Substitui o contorno do lote num passo só, levando o que cada lado e vértice tinham — Ctrl+Z desfaz' : 'Cria as divisas do lote num passo só — Ctrl+Z desfaz')}
             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:active:scale-100"
           >
-            Lançar o lote
+            {editando ? 'Aplicar as alterações' : 'Lançar o lote'}
           </button>
         </div>
       </div>

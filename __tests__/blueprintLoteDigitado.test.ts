@@ -11,6 +11,12 @@ import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, signedArea, type BlueprintModel, type Point } from '../utils/blueprintKernel';
 import { azimuteDaDirecao } from '../utils/blueprintGrafoEspacial';
 import {
+  anguloTexto,
+  aplicarHeranca,
+  herancaPorVertices,
+  loteExistente,
+  metrosTexto,
+  rotacaoDoNorte,
   comandosDoLote,
   direcaoDoAzimute,
   fecharLote,
@@ -32,6 +38,7 @@ function base(): BlueprintModel {
   return applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }).model;
 }
 
+const PAPEIS_RET = ['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA'] as const;
 const perto = (a: Point, b: Point, tol: number) => Math.hypot(a.x - b.x, a.y - b.y) <= tol;
 
 describe('leitura do que se digita', () => {
@@ -351,5 +358,184 @@ describe('a volta do memorial', () => {
     expect(r.verticeInicial).toBe('M-01');
     expect(r.trechos.map((t) => t.confrontante)).toEqual(['a Rua das Acácias', 'Lote 11']);
     expect(r.trechos.map((t) => t.ateVertice)).toEqual(['M-02', 'M-03']);
+  });
+});
+
+/**
+ * EDITAR o lote que já existe (03/10/2026) — *"se o lote já estiver sido
+ * criado, e ao clicar em digitar, carregar os valores do lote e permita editar
+ * (alterar)"*.
+ *
+ * A ida e a volta pela tela (o texto que a aba mostra, lido de novo) têm de dar
+ * o MESMO lote, no mesmo lugar, com tudo o que ele carregava; e mudar uma
+ * medida muda só a geometria.
+ */
+describe('editar o lote existente', () => {
+  /** Lote irregular, girado, fora da origem, com escritura, confrontante, papel, SIGEF e vértices com dados. */
+  function comLote(rotacaoNorteDeg = 30): BlueprintModel {
+    const m0 = base();
+    const levelId = m0.levels[0].id;
+    const anel = [{ x: 3000, y: 4000 }, { x: 4500, y: 33000 }, { x: 19000, y: 32000 }, { x: 16000, y: 5000 }];
+    const comDivisas = applyBatch(m0, [
+      { type: 'SetGeorreferencia', georreferencia: { latitude: -19.9167, longitude: -43.9345, rotacaoNorteDeg } },
+      ...anel.map((a, i) => ({ type: 'AddBoundary' as const, levelId, a, b: anel[(i + 1) % 4], kind: 'TERRENO' as const })),
+    ]).model;
+    const ids = comDivisas.boundaries.map((b) => b.id);
+    return applyBatch(comDivisas, [
+      ...ids.map((id, i) => ({ type: 'SetBoundaryEscritura' as const, boundaryId: id, medidaMm: 29000 + i, confrontante: `Confrontante ${i + 1}` })),
+      { type: 'SetBoundaryPapel' as const, boundaryId: ids[3], papel: 'FRENTE' },
+      { type: 'SetBoundarySigef' as const, boundaryId: ids[1], tipoDeLimite: 'LA1', confrontanteMatricula: '12.345' },
+      ...anel.map((p, i) => ({ type: 'SetVerticeDoTerreno' as const, ponto: p, nome: `M-0${i + 1}`, tipo: 'M' as const, sigmaMm: 50 + i, altitudeM: 800 + i })),
+    ]).model;
+  }
+
+  /** O que importa comparar, sem depender de ids nem da ordem gravada. */
+  function resumo(m: BlueprintModel) {
+    const chave = (p: Point) => `${p.x},${p.y}`;
+    const lados = m.boundaries
+      .filter((b) => b.kind === 'TERRENO')
+      .map((b) => `${chave(b.a)}>${chave(b.b)}|${b.papel ?? '-'}|${b.medidaEscrituraMm ?? '-'}|${b.confrontante ?? '-'}|${b.tipoDeLimite ?? '-'}|${b.confrontanteMatricula ?? '-'}`)
+      .sort();
+    const vertices = (m.verticesDoTerreno ?? []).map((v) => `${chave(v.ponto)}|${v.nome}|${v.tipo}|${v.sigmaMm}|${v.altitudeM}`).sort();
+    return { lados, vertices };
+  }
+
+  /** As pontas como conjunto não orientado (o lote recriado pode correr no outro sentido). */
+  function lado(b: { a: Point; b: Point }) {
+    const [p, q] = [`${b.a.x},${b.a.y}`, `${b.b.x},${b.b.y}`].sort();
+    return `${p}~${q}`;
+  }
+
+  it('loteExistente lê o lote no sentido do roteiro, com tudo o que cada lado e vértice carregam', () => {
+    const m = comLote();
+    const e = loteExistente(m)!;
+    expect(e).not.toBeNull();
+    expect(e.anel).toHaveLength(4);
+    expect(e.lados.filter((l) => l.papel === 'FRENTE')).toHaveLength(1);
+    expect(e.lados.some((l) => l.sigef?.tipoDeLimite === 'LA1' && l.sigef.confrontanteMatricula === '12.345')).toBe(true);
+    expect(e.vertices.every((v) => v && /^M-0\d$/.test(v.nome) && v.tipo === 'M')).toBe(true);
+    // Ângulos internos de um quadrilátero somam 360°.
+    expect(e.angulosInternos.reduce((s, a) => s + a, 0)).toBeCloseTo(360, 6);
+    expect(e.retangulo).toBeNull();
+    expect(loteExistente(base())).toBeNull();
+  });
+
+  /** Recria o lote pelos azimutes como a tela faria (textos de volta) e aplica. */
+  function pelosAzimutes(m: BlueprintModel, mudar?: (i: number, distanciaMm: number) => number) {
+    const e = loteExistente(m)!;
+    const rot = rotacaoDoNorte(m);
+    const trechos = e.anel.map((_, i) => ({
+      azimute: lerAzimuteOuRumo(anguloTexto(e.azimutes[i])).azimute!,
+      distanciaMm: lerMedidaEmMetros(metrosTexto(mudar ? mudar(i, e.distanciasMm[i]) : e.distanciasMm[i]))!,
+      confrontante: e.lados[i].confrontante,
+      verticeNome: e.vertices[i]?.nome ?? null,
+    }));
+    const f = aplicarHeranca(fecharLote(lotePorAzimutes(trechos, { rotacaoNorteDeg: rot, origem: e.anel[0] }), 'DISTRIBUIR'), e.lados, e.vertices);
+    return applyBatch(m, comandosDoLote(m, m.levels[0].id, f, { substituir: true, medidasDaEscritura: false })).model;
+  }
+
+  it('⚠️ pelos azimutes, sem mudar nada: o MESMO lote, no mesmo lugar, com escritura, papel, SIGEF e vértices', () => {
+    const m = comLote();
+    const r = pelosAzimutes(m);
+    expect(resumo(r).vertices).toEqual(resumo(m).vertices);
+    const orig = m.boundaries.map(lado).sort();
+    expect(r.boundaries.filter((b) => b.kind === 'TERRENO').map(lado).sort()).toEqual(orig);
+    // Cada lado recriado leva o que o lado de mesma geometria tinha.
+    const porLado = (x: BlueprintModel) => new Map(x.boundaries.map((b) => [lado(b), b]));
+    const [antes, depois] = [porLado(m), porLado(r)];
+    for (const [k, b] of antes) {
+      const d = depois.get(k)!;
+      expect([d.papel ?? null, d.medidaEscrituraMm, d.confrontante, d.tipoDeLimite ?? null, d.confrontanteMatricula ?? null]).toEqual([
+        b.papel ?? null,
+        b.medidaEscrituraMm,
+        b.confrontante,
+        b.tipoDeLimite ?? null,
+        b.confrontanteMatricula ?? null,
+      ]);
+    }
+  });
+
+  it('pelos lados e ângulos, sem mudar nada: o mesmo lote', () => {
+    const m = comLote(-12);
+    const e = loteExistente(m)!;
+    const lados = e.anel.map((_, i) => ({
+      distanciaMm: lerMedidaEmMetros(metrosTexto(e.distanciasMm[i]))!,
+      anguloInternoGraus: lerAnguloDigitado(anguloTexto(e.angulosInternos[i])),
+      confrontante: e.lados[i].confrontante,
+      verticeNome: e.vertices[i]?.nome ?? null,
+    }));
+    const lote = lotePorLadosEAngulos(lados, { azimuteDoPrimeiro: lerAzimuteOuRumo(anguloTexto(e.azimutes[0])).azimute, rotacaoNorteDeg: rotacaoDoNorte(m), origem: e.anel[0] });
+    expect(Math.abs(lote.erroAngularGraus!)).toBeLessThan(1e-4);
+    const f = aplicarHeranca(fecharLote(lote, 'DISTRIBUIR'), e.lados, e.vertices);
+    const r = applyBatch(m, comandosDoLote(m, m.levels[0].id, f, { substituir: true })).model;
+    expect(r.boundaries.filter((b) => b.kind === 'TERRENO').map(lado).sort()).toEqual(m.boundaries.map(lado).sort());
+    expect(resumo(r).vertices).toEqual(resumo(m).vertices);
+  });
+
+  it('mudar UMA distância muda a geometria e mantém a escritura e os nomes', () => {
+    const m = comLote();
+    const r = pelosAzimutes(m, (i, d) => (i === 1 ? d + 1500 : d));
+    const t = r.boundaries.filter((b) => b.kind === 'TERRENO');
+    expect(t).toHaveLength(4);
+    expect(medirTerreno(t)!.fechado).toBe(true);
+    expect(t.map(lado).sort()).not.toEqual(m.boundaries.map(lado).sort());
+    expect(t.map((b) => b.medidaEscrituraMm).sort()).toEqual([29000, 29001, 29002, 29003]);
+    expect((r.verticesDoTerreno ?? []).map((v) => v.nome).sort()).toEqual(['M-01', 'M-02', 'M-03', 'M-04']);
+  });
+
+  it('com "as medidas digitadas são as da escritura", a escritura passa a ser a digitada', () => {
+    const m = comLote();
+    const e = loteExistente(m)!;
+    const trechos = e.anel.map((_, i) => ({ azimute: e.azimutes[i], distanciaMm: Math.round(e.distanciasMm[i]), verticeNome: e.vertices[i]?.nome ?? null }));
+    const f = aplicarHeranca(fecharLote(lotePorAzimutes(trechos, { rotacaoNorteDeg: 30, origem: e.anel[0] }), 'DISTRIBUIR'), e.lados, e.vertices);
+    const r = applyBatch(m, comandosDoLote(m, m.levels[0].id, f, { substituir: true, medidasDaEscritura: true })).model;
+    expect(r.boundaries.map((b) => b.medidaEscrituraMm).sort()).toEqual(e.distanciasMm.map((d) => Math.round(d)).sort());
+  });
+
+  it('retângulo com os quatro papéis: abre em Frente × fundo e volta igual; aumentar a frente cresce para a DIREITA', () => {
+    const m0 = base();
+    const levelId = m0.levels[0].id;
+    const comRot = applyBatch(m0, [{ type: 'SetGeorreferencia', georreferencia: { latitude: -19.9, longitude: -43.9, rotacaoNorteDeg: 25 } }]).model;
+    const novo = fecharLote(loteRetangular({ frenteMm: 12000, profundidadeMm: 30000, frenteVoltadaPara: 200, rotacaoNorteDeg: 25, origem: { x: 7000, y: -3000 }, confrontantes: { FRENTE: 'Rua A' } }));
+    const m = applyBatch(comRot, comandosDoLote(comRot, levelId, novo, { medidasDaEscritura: true })).model;
+    const e = loteExistente(m)!;
+    expect(e.retangulo).not.toBeNull();
+    const ret = e.retangulo!;
+    expect(ret.frenteMm).toBeCloseTo(12000, 0);
+    expect(ret.profundidadeMm).toBeCloseTo(30000, 0);
+    expect(ret.frenteVoltadaPara).toBeCloseTo(200, 3);
+    expect(perto(ret.origem, { x: 7000, y: -3000 }, 2)).toBe(true);
+    expect(ret.lados.FRENTE.confrontante).toBe('Rua A');
+    const refazer = (frenteMm: number) =>
+      aplicarHeranca(
+        fecharLote(loteRetangular({ frenteMm, profundidadeMm: ret.profundidadeMm, frenteVoltadaPara: lerAzimuteOuRumo(anguloTexto(ret.frenteVoltadaPara)).azimute, rotacaoNorteDeg: 25, origem: ret.origem, confrontantes: { FRENTE: ret.lados.FRENTE.confrontante } })),
+        PAPEIS_RET.map((p) => ret.lados[p]),
+        ret.vertices,
+        { herdarNomes: true },
+      );
+    const igual = applyBatch(m, comandosDoLote(m, levelId, refazer(12000), { substituir: true })).model;
+    expect(igual.boundaries.map(lado).sort()).toEqual(m.boundaries.map(lado).sort());
+    const maior = applyBatch(m, comandosDoLote(m, levelId, refazer(15000), { substituir: true })).model;
+    const frente = maior.boundaries.find((b) => b.papel === 'FRENTE')!;
+    // A ponta esquerda fica; a frente cresce 3 m.
+    expect([frente.a, frente.b].some((p) => perto(p, { x: 7000, y: -3000 }, 2))).toBe(true);
+    // (Coordenada é mm inteiro: num lado girado, o comprimento erra por menos de 1 mm.)
+    expect(Math.abs(Math.hypot(frente.b.x - frente.a.x, frente.b.y - frente.a.y) - 15000)).toBeLessThan(1);
+    expect(frente.confrontante).toBe('Rua A');
+  });
+
+  it('coordenadas: casa os vértices pelo NOME (ou pela posição), e o lado só herda com as duas pontas casadas', () => {
+    const m = comLote();
+    const e = loteExistente(m)!;
+    const nomes = e.vertices.map((v) => v!.nome);
+    const h1 = herancaPorVertices(nomes, e);
+    expect(h1.lados.every((l, i) => l === e.lados[i])).toBe(true);
+    // Um vértice novo no meio: o lado que entra e o que sai dele são novos.
+    const h2 = herancaPorVertices([nomes[0], 'NOVO', nomes[1], nomes[2], nomes[3]], e);
+    expect(h2.lados.map((l) => l === null)).toEqual([true, true, false, false, false]);
+    expect(h2.vertices[1]).toBeNull();
+    // Sem nomes: pela posição, se a contagem é a mesma.
+    expect(herancaPorVertices([null, null, null, null], e).lados[2]).toBe(e.lados[2]);
+    expect(herancaPorVertices([null, null, null], e).lados.every((l) => l === null)).toBe(true);
   });
 });

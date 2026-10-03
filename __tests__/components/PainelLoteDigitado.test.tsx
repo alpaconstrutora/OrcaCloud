@@ -37,7 +37,7 @@ describe('PainelLoteDigitado', () => {
     expect(lote.anel).toHaveLength(4);
     expect(lote.lados.map((l) => l.papel)).toEqual(['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA']);
     expect(lote.lados[0].confrontante).toBe('Rua das Acácias');
-    expect(opcoes).toEqual({ substituir: false, medidasDaEscritura: true });
+    expect(opcoes).toEqual({ substituir: false, medidasDaEscritura: true, editando: false });
   });
 
   it('com lote existente: desligado até marcar "Substituir", e diz por quê', async () => {
@@ -49,7 +49,7 @@ describe('PainelLoteDigitado', () => {
     await user.click(screen.getByRole('checkbox', { name: /Substituir o lote atual/ }));
     expect(lancar()).toBeEnabled();
     await user.click(lancar());
-    expect(onLancar.mock.calls[0][1]).toEqual({ substituir: true, medidasDaEscritura: true });
+    expect(onLancar.mock.calls[0][1]).toEqual({ substituir: true, medidasDaEscritura: true, editando: false });
   });
 
   it('azimutes que não fecham: a escolha aparece; a divisa de ajuste entra como 5º lado', async () => {
@@ -132,5 +132,78 @@ describe('PainelLoteDigitado', () => {
     await user.type(screen.getByLabelText('Profundidade (m)'), '20');
     await user.click(lancar());
     expect(await within(screen.getByTestId('painel-lote-digitado')).findByText('O desenho recusou o contorno: teste')).toBeInTheDocument();
+  });
+});
+
+/**
+ * EDITAR (03/10/2026) — *"se o lote já estiver sido criado, e ao clicar em
+ * digitar, carregar os valores do lote e permita editar (alterar)"*.
+ */
+describe('PainelLoteDigitado · editar o lote existente', () => {
+  async function existenteRetangular() {
+    const k = await import('../../utils/blueprintKernel');
+    const ld = await import('../../utils/blueprintLoteDigitado');
+    const m0 = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }).model;
+    const f = ld.fecharLote(ld.loteRetangular({ frenteMm: 12000, profundidadeMm: 30000, origem: { x: 5000, y: 2000 }, confrontantes: { FRENTE: 'Rua A', FUNDOS: 'Lote 9' } }));
+    let m = k.applyBatch(m0, ld.comandosDoLote(m0, m0.levels[0].id, f, { medidasDaEscritura: true })).model;
+    m = k.applyCommand(m, { type: 'NomearVerticesDoTerreno', pontos: f.anel }).model;
+    return ld.loteExistente(m)!;
+  }
+
+  it('retângulo: abre em Frente × fundo com os valores do lote; mudar a frente e aplicar não pede "substituir"', async () => {
+    const existente = await existenteRetangular();
+    const { onLancar, user } = montar({ temLote: true, existente });
+    expect(screen.getByTestId('editando-lote')).toHaveTextContent(/Editando o lote atual \(4 lados, 360,00 m²\)/);
+    expect(screen.getByRole('tab', { name: 'Frente × fundo' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Frente (m)')).toHaveValue('12,00');
+    expect(screen.getByLabelText('Profundidade (m)')).toHaveValue('30,00');
+    expect(screen.getByLabelText('Confrontante da frente')).toHaveValue('Rua A');
+    expect(screen.getByLabelText('Fundos')).toHaveValue('Lote 9');
+    // Sem "substituir": editar já é substituir, e nada se perde.
+    expect(screen.queryByRole('checkbox', { name: /Substituir o lote atual/ })).toBeNull();
+    // A escritura que o lote tem fica, a não ser que se diga o contrário.
+    expect(screen.getByRole('checkbox', { name: /medidas digitadas são as da escritura/ })).not.toBeChecked();
+    const aplicar = screen.getByRole('button', { name: 'Aplicar as alterações' });
+    await user.clear(screen.getByLabelText('Frente (m)'));
+    await user.type(screen.getByLabelText('Frente (m)'), '15');
+    expect(screen.getByTestId('resumo-do-lote')).toHaveTextContent(/área 450,00 m²/);
+    await user.click(aplicar);
+    const [lote, opcoes] = onLancar.mock.calls[0];
+    expect(opcoes).toEqual({ substituir: true, medidasDaEscritura: false, editando: true });
+    // No mesmo lugar (a ponta esquerda da frente fica), com papéis, escritura antiga e nomes herdados.
+    expect(lote.anel[0]).toEqual({ x: 5000, y: 2000 });
+    expect(lote.lados.map((l) => l.papel)).toEqual(['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA']);
+    expect(lote.lados.map((l) => l.escrituraMm)).toEqual([12000, 30000, 12000, 30000]);
+    expect(lote.vertices.every((v) => v && /^P\d$/.test(v))).toBe(true);
+  });
+
+  it('azimutes: o lote vem linha a linha, no sentido do Roteiro; aplicar sem mexer devolve o mesmo lote com a herança', async () => {
+    const existente = await existenteRetangular();
+    const { onLancar, user } = montar({ temLote: true, existente, abaInicial: 'AZIMUTES' });
+    expect(screen.getByLabelText('Vértice do trecho 1')).toHaveValue(existente.vertices[0]!.nome);
+    expect(screen.getByLabelText('Distância do trecho 1')).toHaveValue(existente.distanciasMm[0] === 12000 ? '12,00' : '30,00');
+    expect(screen.getByTestId('resumo-do-lote')).toHaveTextContent(/área 360,00 m²/);
+    expect(screen.getByTestId('resumo-do-lote')).toHaveTextContent(/erro de fechamento 0,000 m/);
+    await user.click(screen.getByRole('button', { name: 'Aplicar as alterações' }));
+    const [lote] = onLancar.mock.calls[0];
+    expect(lote.anel).toEqual(existente.anel);
+    expect(lote.lados.map((l) => l.papel)).toEqual(existente.lados.map((l) => l.papel));
+    expect(lote.lados.map((l) => l.escrituraMm)).toEqual(existente.lados.map((l) => l.escrituraMm));
+  });
+
+  it('lados e ângulos e coordenadas também vêm preenchidos; as coordenadas são as do desenho', async () => {
+    const existente = await existenteRetangular();
+    const { onLancar, user } = montar({ temLote: true, existente, abaInicial: 'LADOS' });
+    expect(screen.getByLabelText('Ângulo interno do lado 2')).toHaveValue("90°00'00\"");
+    await user.click(screen.getByRole('tab', { name: 'Coordenadas' }));
+    const texto = (screen.getByLabelText(/Vértices, um por linha/) as HTMLTextAreaElement).value;
+    expect(texto.split('\n')).toHaveLength(4);
+    expect(texto).toMatch(/^P\d\s+\d+,\d{2}\s+\d+,\d{2}/);
+    expect(screen.getByRole('checkbox', { name: /São coordenadas do desenho/ })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Aplicar as alterações' }));
+    const [lote] = onLancar.mock.calls[0];
+    expect(lote.anel).toEqual(existente.anel);
+    // Coordenadas não têm coluna de confrontante: herdam pelo vértice.
+    expect(lote.lados.map((l) => l.confrontante)).toEqual(existente.lados.map((l) => l.confrontante));
   });
 });

@@ -27,9 +27,10 @@
  *    10 mm e perímetro/5000) o erro é distribuído e DITO; acima dela, quem
  *    digitou escolhe: distribuir (Bowditch) ou fechar com uma divisa de ajuste.
  */
-import type { BlueprintModel, BoundaryPapel, Command, Georreferencia, Point } from './blueprintKernel';
+import type { BlueprintModel, Boundary, BoundaryPapel, Command, Georreferencia, Point, VerticeDoTerreno } from './blueprintKernel';
 import { applyBatch, isSimplePolygon, signedArea } from './blueprintKernel';
-import { lerAngulo } from './blueprintRoteiroPerimetrico';
+import { lerAngulo, roteiroPerimetrico, verticeNoPonto } from './blueprintRoteiroPerimetrico';
+import { azimuteTexto } from './geo';
 import { importarPontos, numeroFlexivel } from './blueprintTopografiaImportacao';
 
 export type ModoDoLoteDigitado = 'RETANGULO' | 'LADOS' | 'AZIMUTES' | 'COORDENADAS' | 'MEMORIAL';
@@ -42,7 +43,33 @@ export interface LadoDigitado {
   confrontante?: string | null;
   /** true na divisa que fecha o erro (`DIVISA_DE_AJUSTE`) — não veio da escritura. */
   ajuste?: boolean;
+  /**
+   * EDITAR o lote (03/10/2026): a medida de escritura que o lado JÁ tinha. Vale
+   * quando "as medidas digitadas são as da escritura" está desmarcado — editar
+   * a geometria não apaga o que a matrícula diz.
+   */
+  escrituraMm?: number | null;
+  /** O que o SIGEF pede do trecho, herdado do lado que existia. */
+  sigef?: DadosSigefDoLado | null;
 }
+
+export interface DadosSigefDoLado {
+  tipoDeLimite: Boundary['tipoDeLimite'] | null;
+  confrontanteCns: string | null;
+  confrontanteMatricula: string | null;
+  confrontanteDocumento: string | null;
+}
+
+/** O que um lado do lote existente leva para a edição. */
+export interface HerancaDoLado {
+  papel: BoundaryPapel | null;
+  confrontante: string | null;
+  escrituraMm: number | null;
+  sigef: DadosSigefDoLado | null;
+}
+
+/** O vértice do lote existente: o nome e o que o SIGEF guarda nele. */
+export type DadosDoVertice = Omit<VerticeDoTerreno, 'uid' | 'ponto'>;
 
 /**
  * O contorno como foi DIGITADO, antes de fechar: `caminho` tem n + 1 pontos
@@ -78,6 +105,8 @@ export interface LoteFechado {
   problema: string | null;
   /** Frase para a tela: o que foi feito com o erro. */
   descricao: string;
+  /** Tipo, sigmas e altitude de cada vértice, herdados na edição (`aplicarHeranca`). */
+  dadosDosVertices?: (DadosDoVertice | null)[];
 }
 
 const PAPEIS_DO_RETANGULO: BoundaryPapel[] = ['FRENTE', 'LATERAL_DIREITA', 'FUNDOS', 'LATERAL_ESQUERDA'];
@@ -202,6 +231,8 @@ export function loteRetangular(entrada: {
   frenteVoltadaPara?: number | null;
   rotacaoNorteDeg?: number | null;
   confrontantes?: Partial<Record<BoundaryPapel, string | null>>;
+  /** Onde fica a ponta ESQUERDA da frente (de quem está na rua). Ausente = origem do desenho. */
+  origem?: Point | null;
 }): LoteDigitado {
   const { frenteMm: f, profundidadeMm: p } = entrada;
   if (!(f > 0) || !(p > 0)) {
@@ -214,11 +245,12 @@ export function loteRetangular(entrada: {
     n = { x: -fora.x, y: -fora.y };
   }
   const direita: Point = { x: n.y, y: -n.x };
+  const o = entrada.origem ?? { x: 0, y: 0 };
   const anel: Point[] = [
-    { x: 0, y: 0 },
-    { x: direita.x * f, y: direita.y * f },
-    { x: direita.x * f + n.x * p, y: direita.y * f + n.y * p },
-    { x: n.x * p, y: n.y * p },
+    { x: o.x, y: o.y },
+    { x: o.x + direita.x * f, y: o.y + direita.y * f },
+    { x: o.x + direita.x * f + n.x * p, y: o.y + direita.y * f + n.y * p },
+    { x: o.x + n.x * p, y: o.y + n.y * p },
   ];
   const medidas = [f, p, f, p];
   const lados = PAPEIS_DO_RETANGULO.map((papel, i) => ({ papel, medidaMm: medidas[i], confrontante: entrada.confrontantes?.[papel]?.trim() || null }));
@@ -240,7 +272,7 @@ export interface LadoComAngulo {
  */
 export function lotePorLadosEAngulos(
   lados: LadoComAngulo[],
-  opcoes: { azimuteDoPrimeiro?: number | null; rotacaoNorteDeg?: number | null } = {},
+  opcoes: { azimuteDoPrimeiro?: number | null; rotacaoNorteDeg?: number | null; origem?: Point | null } = {},
 ): LoteDigitado {
   const n = lados.length;
   const faltaAngulo = lados.findIndex((l, i) => i > 0 && (l.anguloInternoGraus == null || !(l.anguloInternoGraus > 0 && l.anguloInternoGraus < 360)));
@@ -256,7 +288,7 @@ export function lotePorLadosEAngulos(
       passos.push({ direcao: direcaoDoAzimute(az, rot), distanciaMm: l.distanciaMm });
     });
   }
-  const caminho = passos.length ? caminhar({ x: 0, y: 0 }, passos) : [];
+  const caminho = passos.length ? caminhar(opcoes.origem ?? { x: 0, y: 0 }, passos) : [];
   const lote = montar(
     caminho,
     lados.map((l) => ({ medidaMm: l.distanciaMm > 0 ? Math.round(l.distanciaMm) : null, confrontante: l.confrontante?.trim() || null })),
@@ -280,12 +312,12 @@ export interface TrechoPorAzimute {
 }
 
 /** AZIMUTES (verdadeiros) e distâncias, a partir da origem, girados pelo norte do estudo. */
-export function lotePorAzimutes(trechos: TrechoPorAzimute[], opcoes: { rotacaoNorteDeg?: number | null } = {}): LoteDigitado {
+export function lotePorAzimutes(trechos: TrechoPorAzimute[], opcoes: { rotacaoNorteDeg?: number | null; origem?: Point | null } = {}): LoteDigitado {
   const faltaMedida = trechos.findIndex((t) => !(t.distanciaMm > 0));
   const faltaAz = trechos.findIndex((t) => !Number.isFinite(t.azimute));
   const caminho =
     faltaMedida < 0 && faltaAz < 0
-      ? caminhar({ x: 0, y: 0 }, trechos.map((t) => ({ direcao: direcaoDoAzimute(t.azimute, opcoes.rotacaoNorteDeg), distanciaMm: t.distanciaMm })))
+      ? caminhar(opcoes.origem ?? { x: 0, y: 0 }, trechos.map((t) => ({ direcao: direcaoDoAzimute(t.azimute, opcoes.rotacaoNorteDeg), distanciaMm: t.distanciaMm })))
       : [];
   const lote = montar(
     caminho,
@@ -490,13 +522,233 @@ export function comandosDoLote(
   if (novas.length !== n) throw new Error(`O desenho criou ${novas.length} divisas para ${n} lados.`);
   const escritura: Command[] = [];
   lote.lados.forEach((l, i) => {
-    const medida = opcoes.medidasDaEscritura && l.medidaMm ? Math.round(l.medidaMm) : null;
+    // A digitada, quando é a da escritura; senão a que o lado JÁ tinha (edição) — editar a geometria não apaga a matrícula.
+    const medida = opcoes.medidasDaEscritura && l.medidaMm ? Math.round(l.medidaMm) : l.escrituraMm != null ? Math.round(l.escrituraMm) : null;
     const confrontante = l.confrontante?.trim() || null;
     if (medida !== null || confrontante !== null) escritura.push({ type: 'SetBoundaryEscritura', boundaryId: novas[i].id, medidaMm: medida, confrontante });
+    const s = l.sigef;
+    if (s && (s.tipoDeLimite || s.confrontanteCns || s.confrontanteMatricula || s.confrontanteDocumento)) {
+      escritura.push({
+        type: 'SetBoundarySigef',
+        boundaryId: novas[i].id,
+        tipoDeLimite: s.tipoDeLimite ?? null,
+        confrontanteCns: s.confrontanteCns,
+        confrontanteMatricula: s.confrontanteMatricula,
+        confrontanteDocumento: s.confrontanteDocumento,
+      });
+    }
   });
-  const nomes: Command[] = lote.vertices.flatMap((nome, i) => (nome ? [{ type: 'SetVerticeDoTerreno' as const, ponto: lote.anel[i], nome }] : []));
+  const nomes: Command[] = lote.vertices.flatMap((nome, i) => {
+    if (!nome) return [];
+    const d = lote.dadosDosVertices?.[i];
+    return [
+      {
+        type: 'SetVerticeDoTerreno' as const,
+        ponto: lote.anel[i],
+        nome,
+        ...(d
+          ? {
+              tipo: d.tipo ?? null,
+              sigmaMm: d.sigmaMm ?? null,
+              metodo: d.metodo ?? null,
+              sigmaEMm: d.sigmaEMm ?? null,
+              sigmaNMm: d.sigmaNMm ?? null,
+              sigmaHMm: d.sigmaHMm ?? null,
+              altitudeM: d.altitudeM ?? null,
+            }
+          : {}),
+      },
+    ];
+  });
   const comandos = [...apagar, ...criar, ...escritura, ...nomes];
   // A lista inteira tem de passar — melhor recusar aqui do que no meio do lote.
   applyBatch(model, comandos);
   return comandos;
+}
+
+// ── Editar o lote que já existe (03/10/2026) ─────────────────────────────
+//
+// *"se o lote já estiver sido criado, e ao clicar em digitar, carregar os
+// valores do lote e permita editar (alterar)"*.
+//
+// O lote existente vira as linhas das abas — no sentido do Roteiro (horário, a
+// partir do vértice de partida) e no MESMO lugar do desenho (`origem`). Aplicar
+// recria o contorno; o que cada lado e cada vértice carregam (papel,
+// confrontante, medida da escritura, SIGEF, nome, tipo, sigmas) vai junto pela
+// HERANÇA — nada some por editar a geometria.
+
+/** O azimute (verdadeiro) de uma direção do desenho, sem arredondar — o inverso exato de `direcaoDoAzimute`. */
+export function azimuteDaDirecaoExato(d: Point, rotacaoNorteDeg: number | null | undefined): number {
+  return normalizar((Math.atan2(d.x, d.y) * 180) / Math.PI - (rotacaoNorteDeg ?? 0));
+}
+
+/** Metros para a tela: 2 casas quando a medida é de centímetros inteiros, 3 quando tem milímetro. */
+export function metrosTexto(mmValor: number): string {
+  const r = Math.round(mmValor);
+  return (r / 1000).toFixed(r % 10 === 0 ? 2 : 3).replace('.', ',');
+}
+
+/** Ângulo para a tela, em GMS; segundos com 2 casas só quando precisa. */
+export function anguloTexto(graus: number): string {
+  const seg = graus * 3600;
+  return azimuteTexto(graus, Math.abs(seg - Math.round(seg)) < 0.005 ? 0 : 2);
+}
+
+export interface LoteExistente {
+  /** Anel no sentido HORÁRIO do Roteiro, a partir do vértice de partida, em mm do desenho. */
+  anel: Point[];
+  /** Lado i = do vértice i ao i + 1. */
+  lados: HerancaDoLado[];
+  /** O vértice i, quando tem nome (o provisório "V1" não conta). */
+  vertices: (DadosDoVertice | null)[];
+  areaMm2: number;
+  /** Azimute verdadeiro (pelo norte do estudo) de cada lado, o ângulo interno em cada vértice e a distância. */
+  azimutes: number[];
+  angulosInternos: number[];
+  distanciasMm: number[];
+  /** Só quando o lote é um retângulo com os quatro papéis: o que a aba Frente × fundo precisa. */
+  retangulo: {
+    frenteMm: number;
+    profundidadeMm: number;
+    frenteVoltadaPara: number;
+    /** A ponta esquerda da frente — a `origem` do `loteRetangular`. */
+    origem: Point;
+    lados: Record<BoundaryPapel, HerancaDoLado>;
+    /** Os 4 vértices na ordem do `loteRetangular` (frente-esq., frente-dir., fundos-dir., fundos-esq.). */
+    vertices: (DadosDoVertice | null)[];
+  } | null;
+}
+
+const dadosDoVertice = (v: VerticeDoTerreno | null): DadosDoVertice | null => {
+  if (!v) return null;
+  const { uid: _u, ponto: _p, ...dados } = v;
+  return dados;
+};
+
+/** O lote fechado do estudo, pronto para virar as linhas das abas; `null` sem lote fechado. */
+export function loteExistente(model: BlueprintModel): LoteExistente | null {
+  const roteiro = roteiroPerimetrico(model);
+  if (roteiro.lados.length < 3) return null;
+  const rot = rotacaoDoNorte(model);
+  const porId = new Map((model.boundaries ?? []).map((b) => [b.id, b]));
+  const anel = roteiro.vertices.map((v) => ({ ...v.ponto }));
+  const n = anel.length;
+  const lados: HerancaDoLado[] = roteiro.lados.map((l) => {
+    const b = porId.get(l.divisaId);
+    const sigef: DadosSigefDoLado = {
+      tipoDeLimite: b?.tipoDeLimite ?? null,
+      confrontanteCns: b?.confrontanteCns ?? null,
+      confrontanteMatricula: b?.confrontanteMatricula ?? null,
+      confrontanteDocumento: b?.confrontanteDocumento ?? null,
+    };
+    const temSigef = !!(sigef.tipoDeLimite || sigef.confrontanteCns || sigef.confrontanteMatricula || sigef.confrontanteDocumento);
+    return { papel: b?.papel ?? null, confrontante: b?.confrontante ?? null, escrituraMm: b?.medidaEscrituraMm ?? null, sigef: temSigef ? sigef : null };
+  });
+  const vertices = anel.map((p) => dadosDoVertice(verticeNoPonto(model, p)));
+  const azimutes = anel.map((p, i) => {
+    const q = anel[(i + 1) % n];
+    return azimuteDaDirecaoExato({ x: q.x - p.x, y: q.y - p.y }, rot);
+  });
+  const distanciasMm = anel.map((p, i) => Math.hypot(anel[(i + 1) % n].x - p.x, anel[(i + 1) % n].y - p.y));
+  // Percurso horário: Azᵢ = Azᵢ₋₁ + 180° − internoᵢ ⇒ internoᵢ = Azᵢ₋₁ + 180° − Azᵢ.
+  const angulosInternos = azimutes.map((az, i) => {
+    const anterior = azimutes[(i - 1 + n) % n];
+    const v = normalizar(anterior + 180 - az);
+    return v === 0 ? 360 : v;
+  });
+
+  let retangulo: LoteExistente['retangulo'] = null;
+  const papeis = lados.map((l) => l.papel);
+  const iFrente = papeis.indexOf('FRENTE');
+  const reto =
+    n === 4 &&
+    angulosInternos.every((a) => Math.abs(a - 90) < 1e-3) &&
+    new Set(papeis).size === 4 &&
+    PAPEIS_DO_RETANGULO.every((p) => papeis.includes(p));
+  if (reto && iFrente >= 0) {
+    const a = anel[iFrente];
+    const b = anel[(iFrente + 1) % n];
+    const meioFrente = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const centro = { x: anel.reduce((s, p) => s + p.x, 0) / n, y: anel.reduce((s, p) => s + p.y, 0) / n };
+    const lenF = Math.hypot(b.x - a.x, b.y - a.y);
+    // Normal interna: perpendicular à frente, apontando para o centro do lote.
+    let nIn = { x: -(b.y - a.y) / lenF, y: (b.x - a.x) / lenF };
+    if (nIn.x * (centro.x - meioFrente.x) + nIn.y * (centro.y - meioFrente.y) < 0) nIn = { x: -nIn.x, y: -nIn.y };
+    const direita = { x: nIn.y, y: -nIn.x };
+    const esq = (b.x - a.x) * direita.x + (b.y - a.y) * direita.y > 0 ? a : b;
+    const dir = esq === a ? b : a;
+    const profundidadeMm = distanciasMm[papeis.indexOf('LATERAL_DIREITA')];
+    const fundosDir = { x: dir.x + nIn.x * profundidadeMm, y: dir.y + nIn.y * profundidadeMm };
+    const fundosEsq = { x: esq.x + nIn.x * profundidadeMm, y: esq.y + nIn.y * profundidadeMm };
+    const verticeEm = (q: Point) => {
+      const i = anel.findIndex((p) => Math.hypot(p.x - q.x, p.y - q.y) < 2);
+      return i >= 0 ? vertices[i] : null;
+    };
+    retangulo = {
+      frenteMm: lenF,
+      profundidadeMm,
+      frenteVoltadaPara: azimuteDaDirecaoExato({ x: -nIn.x, y: -nIn.y }, rot),
+      origem: { ...esq },
+      lados: Object.fromEntries(PAPEIS_DO_RETANGULO.map((p) => [p, lados[papeis.indexOf(p)]])) as Record<BoundaryPapel, HerancaDoLado>,
+      vertices: [esq, dir, fundosDir, fundosEsq].map(verticeEm),
+    };
+  }
+  return { anel, lados, vertices, areaMm2: roteiro.areaMm2, azimutes, angulosInternos, distanciasMm, retangulo };
+}
+
+/**
+ * Leva para o contorno editado o que o lote existente carregava, lado a lado
+ * (`lados[i]` é a herança do lado i do contorno NOVO; ausente = lado novo).
+ * O que está digitado na tela vence: o papel do retângulo, o confrontante da
+ * linha, o nome do vértice. `herdarConfrontante`/`herdarNomes` só valem nas
+ * abas que não têm a coluna (coordenadas, memorial; o retângulo não tem nomes).
+ */
+export function aplicarHeranca(
+  f: LoteFechado,
+  lados: (HerancaDoLado | null | undefined)[],
+  vertices: (DadosDoVertice | null | undefined)[],
+  opcoes: { herdarConfrontante?: boolean; herdarNomes?: boolean } = {},
+): LoteFechado {
+  if (f.problema) return f;
+  const novosLados = f.lados.map((l, i) => {
+    const h = l.ajuste ? null : lados[i];
+    if (!h) return l;
+    return {
+      ...l,
+      papel: l.papel ?? h.papel,
+      confrontante: l.confrontante ?? (opcoes.herdarConfrontante ? h.confrontante : null),
+      escrituraMm: h.escrituraMm,
+      sigef: h.sigef,
+    };
+  });
+  const nomes = f.vertices.map((nome, i) => nome ?? (opcoes.herdarNomes ? (vertices[i]?.nome ?? null) : null));
+  const dados = nomes.map((nome, i) => {
+    const v = vertices[i];
+    return nome && v ? { ...v, nome } : null;
+  });
+  return { ...f, lados: novosLados, vertices: nomes, dadosDosVertices: dados };
+}
+
+/**
+ * Para as abas sem linha por lado (coordenadas, memorial): casa cada vértice
+ * novo com um do lote existente pelo NOME; sem nomes, pela posição quando a
+ * contagem é a mesma. O lado herda só quando as DUAS pontas casam com um lado
+ * existente (do j ao j + 1).
+ */
+export function herancaPorVertices(
+  nomesNovos: (string | null)[],
+  existente: LoteExistente,
+): { lados: (HerancaDoLado | null)[]; vertices: (DadosDoVertice | null)[] } {
+  const n = nomesNovos.length;
+  const m = existente.anel.length;
+  const porNome = new Map(existente.vertices.flatMap((v, j) => (v ? [[v.nome, j] as const] : [])));
+  const algumNome = nomesNovos.some((x) => x && porNome.has(x));
+  const casa = nomesNovos.map((nome, i) => (nome && porNome.has(nome) ? porNome.get(nome)! : !algumNome && n === m ? i : -1));
+  return {
+    vertices: casa.map((j) => (j >= 0 ? existente.vertices[j] : null)),
+    lados: casa.map((j, i) => {
+      const k = casa[(i + 1) % n];
+      return j >= 0 && k === (j + 1) % m ? existente.lados[j] : null;
+    }),
+  };
 }

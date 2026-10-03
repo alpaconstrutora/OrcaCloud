@@ -370,6 +370,7 @@ import { destinoDoLinkDeNotificacao } from './utils/linkNotificacao';
 import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
+import { loginFeitoNestaAba } from './lib/loginNestaAba';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import { useOrgContext } from './hooks/useOrgContext';
 import AppRouter from './components/AppRouter';
@@ -540,7 +541,7 @@ const App: React.FC = () => {
   });
 
   useAuthSync({
-    session, setSession, setLoadingSession, selectedLoginGroup, setSelectedLoginGroup,
+    session, setSession, setLoadingSession, selectedLoginGroup, setSelectedLoginGroup, selectLoginGroupForRoute,
     setAuthError, setIsResettingPassword, profileSynchronized, setProfileSynchronized,
     currentProfile, setCurrentProfile, setIsValidating, setInvestorProfile, setClientProfile,
     setSupplierProfile, fetchProjects, fetchClients, fetchOrganizations,
@@ -692,7 +693,10 @@ const App: React.FC = () => {
     const hashType = new URLSearchParams(window.location.hash.slice(1)).get('type');
     const vindoDoConvite = hashType === 'invite' || hashType === 'recovery';
     if (loadingSession && !vindoDoConvite) return;
-    const deveForcar = vindoDoConvite || !session || !selectedLoginGroup;
+    // Com sessão e sem portal escolhido, só força se o login foi feito NESTA aba
+    // (o parceiro que recarregou a página). Sessão vinda de outra aba não é
+    // empurrada para o portal do parceiro — ver lib/loginNestaAba.ts.
+    const deveForcar = vindoDoConvite || !session || (!selectedLoginGroup && loginFeitoNestaAba());
     if (deveForcar && selectedLoginGroup !== ProfileGroup.PARTNER) selectLoginGroupForRoute(ProfileGroup.PARTNER);
   }, [loadingSession, session, partnerPortalToken, selectedLoginGroup, selectLoginGroupForRoute]);
 

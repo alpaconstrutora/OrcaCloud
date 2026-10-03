@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { marcarLoginNestaAba } from '../lib/loginNestaAba';
 import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase, Landmark } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -113,6 +114,9 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
         setSuccessMessage(null);
 
         try {
+            // Login/cadastro feito NESTA aba: só ela pode desconectar a conta se o
+            // portal escolhido não combinar (lib/loginNestaAba.ts).
+            if (view === 'login' || view === 'signup') marcarLoginNestaAba();
             if (view === 'login') {
                 const { error } = await supabase.auth.signInWithPassword({
                     email,

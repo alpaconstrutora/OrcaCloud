@@ -6,6 +6,7 @@ import { clientService } from '../services/clientService';
 import { supplierService } from '../services/supplierService';
 import { projectService } from '../services/projectService';
 import { ProfileGroup, UserProfile } from '../types';
+import { loginFeitoNestaAba, marcarLoginNestaAba, limparLoginNestaAba } from '../lib/loginNestaAba';
 
 interface UseAuthSyncProps {
   session: any;
@@ -13,6 +14,8 @@ interface UseAuthSyncProps {
   setLoadingSession: (loading: boolean) => void;
   selectedLoginGroup: ProfileGroup | null;
   setSelectedLoginGroup: (group: ProfileGroup | null) => void;
+  /** Escolhe o portal só nesta aba, sem gravar no navegador. */
+  selectLoginGroupForRoute: (group: ProfileGroup | null) => void;
   setAuthError: (error: string | null) => void;
   setIsResettingPassword: (val: boolean) => void;
   profileSynchronized: boolean;
@@ -33,7 +36,7 @@ interface UseAuthSyncProps {
 }
 
 export const useAuthSync = ({
-  session, setSession, setLoadingSession, selectedLoginGroup, setSelectedLoginGroup,
+  session, setSession, setLoadingSession, selectedLoginGroup, setSelectedLoginGroup, selectLoginGroupForRoute,
   setAuthError, setIsResettingPassword, profileSynchronized, setProfileSynchronized,
   currentProfile, setCurrentProfile, setIsValidating, setInvestorProfile, setClientProfile,
   setSupplierProfile, fetchProjects, fetchClients, fetchOrganizations,
@@ -55,6 +58,8 @@ export const useAuthSync = ({
     const urlType = hashParams.get('type');
     if (urlType === 'invite' || urlType === 'recovery') {
       setIsResettingPassword(true);
+      // A sessão do link de convite/redefinição nasce nesta aba.
+      marcarLoginNestaAba();
     }
 
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
@@ -65,6 +70,7 @@ export const useAuthSync = ({
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (!newSession) {
+        limparLoginNestaAba();
         setSelectedLoginGroup(null);
         setAuthError(null);
         setProfileSynchronized(false);
@@ -99,6 +105,18 @@ export const useAuthSync = ({
       const result = await profileService.validateAccess(session.user.email!, selectedLoginGroup);
 
       if (cancelled) return;
+
+      if (!result.isValid && !loginFeitoNestaAba()) {
+        // A sessão veio de OUTRA aba (ou de uma visita anterior) e não combina com
+        // o portal escolhido AQUI. Não desconecta: isso derrubaria a aba onde a
+        // pessoa acabou de entrar (03/10/2026, "entra e cai"). Esta aba adota o
+        // portal gravado pela aba que fez o login; sem ele, volta ao seletor.
+        setProfileSynchronized(false);
+        const doNavegador = localStorage.getItem('orca_selectedLoginGroup') as ProfileGroup | null;
+        selectLoginGroupForRoute(doNavegador && doNavegador !== selectedLoginGroup ? doNavegador : null);
+        setIsValidating(false);
+        return;
+      }
 
       if (!result.isValid) {
         setAuthError(result.error || 'Acesso negado.');

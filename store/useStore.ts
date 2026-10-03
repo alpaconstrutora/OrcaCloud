@@ -53,7 +53,7 @@ interface AuthState {
     /** Escolhe o portal só em memória, sem gravar no navegador — para a rota
      *  /portal-parceiro, que não pode deixar o portal do parceiro marcado para a
      *  próxima visita (03/10/2026: conta interna presa no login do parceiro). */
-    selectLoginGroupForRoute: (group: ProfileGroup) => void;
+    selectLoginGroupForRoute: (group: ProfileGroup | null) => void;
     setInvestorProfile: (profile: Investor | null) => void;
     setClientProfile: (profile: Client | null) => void;
     setSupplierProfile: (profile: Supplier | null) => void;

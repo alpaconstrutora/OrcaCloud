@@ -48,11 +48,20 @@
  * kernel (`GROUP_INSTANCE`), que manda editar a origem. Os cômodos copiados
  * passam a ser a unidade da M6a (o mesmo número, a mesma unidade).
  *
- * Espelhar num eixo só exige o bloco alinhado ao desenho (o kernel espelha nos
- * eixos do mundo); girado, só repetição e giro de 180° — a canto espelhada
- * fica com a planta própria. Unidade de canto e unidade do meio NÃO são
- * iguais: a de canto tem a fachada da ponta, e a planta dela foi escolhida
- * por isso.
+ * O kernel espelha nos eixos do mundo e gira de 90 em 90°: a instância só
+ * existe quando a composição dos dois quadros (o da origem e o da igual) é
+ * isso — num bloco girado, a canto espelhada fica com a planta própria.
+ * Unidade de canto e unidade do meio NÃO são iguais: a de canto tem a fachada
+ * da ponta, e a planta dela foi escolhida por isso.
+ *
+ * ─── O QUADRO DE CADA UNIDADE (pendências de 03/10/2026) ────────────────────
+ *
+ * Cada unidade é gerada no SEU quadro, tirado do ambiente dela: a fachada
+ * principal (o lado mais longo sobre o contorno do bloco) embaixo, o corredor
+ * do outro lado. Vale para o bloco retangular e para L, U, T e H — nas asas
+ * verticais a fachada fica de lado no desenho, e o quadro do bloco não servia.
+ * Unidade em L (a de canto que dobra a esquina) fica aberta: o gerador é de
+ * retângulo.
  *
  * O que fica fora do grupo, dito: as JANELAS da fachada. A fachada é uma
  * parede só para o andar inteiro (o contorno do bloco), e a janela é da
@@ -78,7 +87,7 @@ import { gerar, type ResultadoDoGerador } from './blueprintGerador';
 import { atualizarItem, programaSemente, removerItem, type Programa } from './blueprintPrograma';
 import { FICHA_DO_USO } from './blueprintPrograma';
 import type { Produto, TipologiaDoProduto } from './blueprintProduto';
-import { ALEM_MM, HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, pavimentoTipoMontado, quadroDoBloco, type QuadroDoBloco } from './blueprintPavimentoTipoDaMassa';
+import { ALEM_MM, pavimentoTipoMontado, type QuadroDoBloco } from './blueprintPavimentoTipoDaMassa';
 
 /** O programa de necessidades de uma tipologia do produto (sementes da E4.1 ajustadas aos dormitórios). */
 export function programaDaTipologia(t: Pick<TipologiaDoProduto, 'uso' | 'dormitorios' | 'nome'>): Programa | null {
@@ -123,69 +132,181 @@ export interface PlantasDasUnidades {
   avisos: string[];
 }
 
-/** Retângulo de uma unidade no quadro do bloco (`a` ao longo do bloco, `b` através). */
-export interface RetLocal {
-  a0: number;
-  b0: number;
-  a1: number;
-  b1: number;
-}
-
-/**
- * Como uma unidade igual repete a planta de outra: espelhada ao longo do bloco (`espelhaA`: troca as pontas),
- * através do corredor (`espelhaB`: troca o lado da rua pelo dos fundos), ou as duas (= giro de 180°).
- */
+/** Como uma unidade igual repete a planta de outra, no quadro DELA (fachada embaixo): igual, ou espelhada (troca as pontas). */
 export interface Repeticao {
   espelhaA: boolean;
-  espelhaB: boolean;
 }
 
+const noMundo = (q: QuadroDoBloco, a: number, b: number): Point => ({ x: Math.round(q.o.x + q.u.x * a + q.v.x * b), y: Math.round(q.o.y + q.u.y * a + q.v.y * b) });
 const paraLocal = (q: QuadroDoBloco, p: Point) => {
   const dx = p.x - q.o.x;
   const dy = p.y - q.o.y;
   return { a: dx * q.u.x + dy * q.u.y, b: dx * q.v.x + dy * q.v.y };
 };
-const noMundo = (q: QuadroDoBloco, a: number, b: number): Point => ({ x: Math.round(q.o.x + q.u.x * a + q.v.x * b), y: Math.round(q.o.y + q.u.y * a + q.v.y * b) });
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const girado = (q: QuadroDoBloco) => Math.abs(q.u.x * q.u.y) > 1e-9;
 
-export function rotuloDaRepeticao(rep: Repeticao): string {
-  if (rep.espelhaA && rep.espelhaB) return 'girada 180°';
-  if (rep.espelhaA || rep.espelhaB) return 'espelhada';
+/** O rótulo da instância como o desenho a vê: espelhada, girada ou repetida. */
+export function rotuloDaInstancia(i: { rotacaoGraus: RotacaoDoGrupo; espelho: EspelhoDoGrupo }): string {
+  if (i.espelho !== 'NENHUM') return 'espelhada';
+  if (i.rotacaoGraus === 180) return 'girada 180°';
+  if (i.rotacaoGraus !== 0) return 'girada 90°';
   return 'repetida';
 }
 
+/** O ponto está sobre o contorno (a menos de 5 mm de um lado dele)? */
+function noContorno(contorno: readonly Point[], p: Point): boolean {
+  for (let i = 0; i < contorno.length; i++) {
+    const a = contorno[i];
+    const b = contorno[(i + 1) % contorno.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) continue;
+    const t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len;
+    const dist = Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len;
+    if (dist <= 5 && t >= -5 && t <= len + 5) return true;
+  }
+  return false;
+}
+/** O segmento está sobre o contorno (as duas pontas e o meio)? — a parede que hospeda janela. */
+const segmentoNoContorno = (contorno: readonly Point[], a: Point, b: Point) => noContorno(contorno, a) && noContorno(contorno, b) && noContorno(contorno, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+/** Quanto do segmento [a, b] corre sobre o contorno (colinear, a menos de 5 mm), mm. */
+function trechoNoContorno(contorno: readonly Point[], a: Point, b: Point): number {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  if (len < 1) return 0;
+  let soma = 0;
+  for (let i = 0; i < contorno.length; i++) {
+    const c = contorno[i];
+    const d = contorno[(i + 1) % contorno.length];
+    const lc = Math.hypot(d.x - c.x, d.y - c.y);
+    if (lc < 1) continue;
+    // Colinear: as duas pontas do segmento a menos de 5 mm da reta do lado.
+    const dist = (p: Point) => Math.abs((p.x - c.x) * (d.y - c.y) - (p.y - c.y) * (d.x - c.x)) / lc;
+    if (dist(a) > 5 || dist(b) > 5) continue;
+    const t = (p: Point) => ((p.x - c.x) * (d.x - c.x) + (p.y - c.y) * (d.y - c.y)) / lc;
+    const lo = Math.max(Math.min(t(a), t(b)), 0);
+    const hi = Math.min(Math.max(t(a), t(b)), lc);
+    if (hi > lo) soma += hi - lo;
+  }
+  return soma;
+}
+/** O lado da unidade é FACHADA: corre sobre o contorno por pelo menos 1 m (ou 30 % dele). Parcial vale — a janela
+ * só cai onde há parede de fachada (o perímetro confere na hora de pôr). */
+const ladoDeFachada = (contorno: readonly Point[], a: Point, b: Point) => trechoNoContorno(contorno, a, b) >= Math.min(1000, 0.3 * Math.hypot(b.x - a.x, b.y - a.y));
+
 /**
- * A instância de grupo (E2.3) que leva a planta da unidade `rO` para a `rT` (retângulos no quadro do bloco, mesmas
- * medidas) com a repetição dada: espelho e giro em torno do CENTRO da origem, depois a translação até o centro da
- * outra. Espelhar num eixo só exige o eixo do bloco alinhado ao desenho; `null` = não dá.
+ * O QUADRO de uma unidade retangular: origem na ponta da fachada principal (o lado mais longo sobre o contorno do
+ * bloco), `u` ao longo dela, `v` para dentro (quadro destro); W ao longo da fachada, D até o corredor. `e`/`d`: o
+ * lado em a = 0 / a = W também é fachada (unidade de canto); `fundo`: o lado oposto também.
  */
-export function instanciaDaUnidadeIgual(
-  q: QuadroDoBloco,
-  rO: RetLocal,
-  rT: RetLocal,
+export function quadroDaUnidade(anel: readonly Point[], contorno: readonly Point[]): { q: QuadroDoBloco; e: boolean; d: boolean; fundo: boolean } | { motivo: string } {
+  // Limpeza até estabilizar: pontos coincidentes (< 6 mm), AGULHAS (A → B → A: a ponta de 3 mm que passa do
+  // encontro, somada ao arredondamento do bloco girado, deixa um bico de ~5 mm no anel) e colineares.
+  let pts = [...anel];
+  for (let volta = 0; volta < 10; volta++) {
+    const antes = pts.length;
+    pts = pts.filter((p, i) => {
+      const a = pts[(i - 1 + pts.length) % pts.length];
+      return Math.hypot(p.x - a.x, p.y - a.y) >= 6;
+    });
+    pts = pts.filter((p, i) => {
+      const a = pts[(i - 1 + pts.length) % pts.length];
+      const c = pts[(i + 1) % pts.length];
+      if (Math.hypot(a.x - c.x, a.y - c.y) < 6) return false; // a ponta da agulha
+      const cruz = (p.x - a.x) * (c.y - p.y) - (p.y - a.y) * (c.x - p.x);
+      return Math.abs(cruz) / ((Math.hypot(p.x - a.x, p.y - a.y) || 1) * (Math.hypot(c.x - p.x, c.y - p.y) || 1)) > 0.01;
+    });
+    if (pts.length === antes || pts.length < 3) break;
+  }
+  if (pts.length !== 4) return { motivo: 'unidade em L (não retangular): fica aberta — o gerador é de retângulo' };
+  for (let i = 0; i < 4; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % 4];
+    const c = pts[(i + 2) % 4];
+    const dot = (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y);
+    if (Math.abs(dot) / ((Math.hypot(b.x - a.x, b.y - a.y) || 1) * (Math.hypot(c.x - b.x, c.y - b.y) || 1)) > 0.01) return { motivo: 'unidade não retangular: fica aberta' };
+  }
+  const lados = [0, 1, 2, 3].map((i) => ({ i, a: pts[i], b: pts[(i + 1) % 4], len: Math.hypot(pts[(i + 1) % 4].x - pts[i].x, pts[(i + 1) % 4].y - pts[i].y), fachada: trechoNoContorno(contorno, pts[i], pts[(i + 1) % 4]) }));
+  // A principal: a de mais fachada (não a mais longa — um lado longo com 1 m no contorno perde para um curto inteiro).
+  const principal = lados.filter((l) => ladoDeFachada(contorno, l.a, l.b)).sort((x, y) => y.fachada - x.fachada || y.len - x.len || x.i - y.i)[0];
+  if (!principal) return { motivo: 'unidade sem fachada: fica aberta' };
+  const cx = pts.reduce((sm, p) => sm + p.x, 0) / 4;
+  const cy = pts.reduce((sm, p) => sm + p.y, 0) / 4;
+  // Quadro destro com v para dentro: se rot90(u) aponta para fora, a fachada é percorrida ao contrário.
+  let [P, Q] = [principal.a, principal.b];
+  let u = { x: (Q.x - P.x) / principal.len, y: (Q.y - P.y) / principal.len };
+  let v = { x: -u.y, y: u.x };
+  if ((cx - P.x) * v.x + (cy - P.y) * v.y < 0) {
+    [P, Q] = [Q, P];
+    u = { x: -u.x, y: -u.y };
+    v = { x: -u.y, y: u.x };
+  }
+  const D = Math.max(...pts.map((p) => (p.x - P.x) * v.x + (p.y - P.y) * v.y));
+  const q: QuadroDoBloco = { o: P, u, v, W: principal.len, D };
+  const lado = (a0: number, b0: number, a1: number, b1: number) => ladoDeFachada(contorno, noMundo(q, a0, b0), noMundo(q, a1, b1));
+  return { q, e: lado(0, 0, 0, D), d: lado(q.W, 0, q.W, D), fundo: lado(0, D, q.W, D) };
+}
+
+/**
+ * A instância de grupo (E2.3) que leva a planta da unidade de quadro `qO` para a de quadro `qT` (mesmas medidas):
+ * no quadro, igual ou espelhada; no desenho, a composição dos dois quadros — que o kernel só representa como espelho
+ * nos eixos do mundo e giro de 90 em 90°. `null` quando não é isso (quadros girados com espelho, por exemplo).
+ * Pivô no centro da origem; a translação leva ao centro da igual.
+ */
+export function instanciaEntreUnidades(
+  qO: QuadroDoBloco,
+  qT: QuadroDoBloco,
   rep: Repeticao,
 ): { pivo: Point; translacao: Point; rotacaoGraus: RotacaoDoGrupo; espelho: EspelhoDoGrupo } | null {
-  let espelho: EspelhoDoGrupo = 'NENHUM';
-  let rotacaoGraus: RotacaoDoGrupo = 0;
-  if (rep.espelhaA && rep.espelhaB) rotacaoGraus = 180;
-  else if (rep.espelhaA || rep.espelhaB) {
-    // Espelhar ao longo de `u` = refletir na reta pelo pivô perpendicular a `u`: `X` se `u` é horizontal.
-    const eixo = rep.espelhaA ? q.u : q.v;
-    if (Math.abs(eixo.y) < 1e-9) espelho = 'X';
-    else if (Math.abs(eixo.x) < 1e-9) espelho = 'Y';
-    else return null;
+  const f = rep.espelhaA ? -1 : 1;
+  // L = M_T · diag(f, 1) · M_Oᵀ, com M = [u v] em colunas.
+  const L = [
+    [qT.u.x * f * qO.u.x + qT.v.x * qO.v.x, qT.u.x * f * qO.u.y + qT.v.x * qO.v.y],
+    [qT.u.y * f * qO.u.x + qT.v.y * qO.v.x, qT.u.y * f * qO.u.y + qT.v.y * qO.v.y],
+  ];
+  const inteiro = (x: number) => {
+    const r = Math.round(x);
+    return Math.abs(x - r) < 2e-3 && Math.abs(r) <= 1 ? r : null;
+  };
+  const Li = L.map((l) => l.map(inteiro));
+  if (Li.some((l) => l.some((x) => x === null))) return null;
+  const Lm = Li as number[][];
+  const GIROS: [number, number, RotacaoDoGrupo][] = [[1, 0, 0], [0, 1, 90], [-1, 0, 180], [0, -1, 270]];
+  const opcoes: { espelho: EspelhoDoGrupo; rot: RotacaoDoGrupo }[] = [];
+  // O kernel espelha ANTES de girar: L = R(k) · E, então R(k) = L · E (E = E⁻¹).
+  for (const [espelho, E] of [['NENHUM', [[1, 0], [0, 1]]], ['X', [[-1, 0], [0, 1]]], ['Y', [[1, 0], [0, -1]]]] as [EspelhoDoGrupo, number[][]][]) {
+    const R = [
+      [Lm[0][0] * E[0][0] + Lm[0][1] * E[1][0], Lm[0][0] * E[0][1] + Lm[0][1] * E[1][1]],
+      [Lm[1][0] * E[0][0] + Lm[1][1] * E[1][0], Lm[1][0] * E[0][1] + Lm[1][1] * E[1][1]],
+    ];
+    const g = GIROS.find(([c, sn]) => R[0][0] === c && R[1][0] === sn && R[0][1] === -sn && R[1][1] === c);
+    if (g) opcoes.push({ espelho, rot: g[2] });
   }
-  const centro = (r: RetLocal) => ({
-    x: q.o.x + (q.u.x * (r.a0 + r.a1)) / 2 + (q.v.x * (r.b0 + r.b1)) / 2,
-    y: q.o.y + (q.u.y * (r.a0 + r.a1)) / 2 + (q.v.y * (r.b0 + r.b1)) / 2,
-  });
-  const cO = centro(rO);
+  // Preferência: sem espelho; espelho sem giro; o resto.
+  const escolha = opcoes.find((o) => o.espelho === 'NENHUM') ?? opcoes.find((o) => o.rot === 0) ?? opcoes[0];
+  if (!escolha) return null;
+  const centro = (q: QuadroDoBloco) => ({ x: q.o.x + (q.u.x * q.W) / 2 + (q.v.x * q.D) / 2, y: q.o.y + (q.u.y * q.W) / 2 + (q.v.y * q.D) / 2 });
+  const cO = centro(qO);
   const pivo = { x: Math.round(cO.x), y: Math.round(cO.y) };
-  // Sem translação, o centro da origem vai para `semT`; a translação o leva ao centro da igual.
-  const semT = transformarPontoDoGrupo({ pivo }, { translacao: { x: 0, y: 0 }, rotacaoGraus, espelho }, cO);
-  const cT = centro(rT);
-  return { pivo, translacao: { x: Math.round(cT.x - semT.x), y: Math.round(cT.y - semT.y) }, rotacaoGraus, espelho };
+  const semT = transformarPontoDoGrupo({ pivo }, { translacao: { x: 0, y: 0 }, rotacaoGraus: escolha.rot, espelho: escolha.espelho }, cO);
+  const cT = centro(qT);
+  return { pivo, translacao: { x: Math.round(cT.x - semT.x), y: Math.round(cT.y - semT.y) }, rotacaoGraus: escolha.rot, espelho: escolha.espelho };
+}
+
+/**
+ * O erro (mm) da instância nos cantos: o canto da origem levado pela instância × o canto da igual lido no quadro dela.
+ * Quadros tirados de anéis arredondados (bloco girado) e centros em meio milímetro (giro de 90°) deixam a cópia uns mm
+ * fora — a parede copiada não encontraria a divisória da igual. Acima de 1,5 mm (metade do ALEM_MM) não vale grupo.
+ */
+export function erroDaInstanciaMm(qO: QuadroDoBloco, qT: QuadroDoBloco, rep: Repeticao, inst: { pivo: Point; translacao: Point; rotacaoGraus: RotacaoDoGrupo; espelho: EspelhoDoGrupo }): number {
+  let pior = 0;
+  for (const [x, y] of [[0, 0], [qO.W, 0], [0, qO.D], [qO.W, qO.D]]) {
+    const levado = transformarPontoDoGrupo({ pivo: inst.pivo }, inst, noMundo(qO, x, y));
+    const certo = noMundo(qT, rep.espelhaA ? qT.W - x * (qT.W / (qO.W || 1)) : x * (qT.W / (qO.W || 1)), y * (qT.D / (qO.D || 1)));
+    pior = Math.max(pior, Math.hypot(levado.x - certo.x, levado.y - certo.y));
+  }
+  return pior;
 }
 
 /** A unidade já tem planta interna? (mais de um ambiente no pavimento.) */
@@ -230,22 +351,16 @@ export function plantasDasUnidades(model: BlueprintModel, b: Bloco, produto: Pro
 function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente: number, agrupar: boolean): PlantasDasUnidades {
   const avisos: string[] = [];
   const tipo = pavimentoTipoMontado(model, b);
-  const q = quadroDoBloco(b);
-  if (!tipo || !q) return { comandos: [], model, unidades: [], geracoes: 0, grupos: [], avisos: [!tipo ? `Monte o pavimento tipo de "${b.nome}" primeiro (painel do bloco).` : `"${b.nome}" não é retangular.`] };
-  const hipT = HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO;
-  const blocoGirado = girado(q);
-  const perimetro = (w: Wall) => {
-    // As 4 paredes do contorno do bloco: eixo sobre a borda do retângulo do bloco.
-    const pa = paraLocal(q, w.a);
-    const pb = paraLocal(q, w.b);
-    const naBorda = (v: number, alvo: number) => Math.abs(v - alvo) < 5;
-    return (naBorda(pa.b, 0) && naBorda(pb.b, 0)) || (naBorda(pa.b, q.D) && naBorda(pb.b, q.D)) || (naBorda(pa.a, 0) && naBorda(pb.a, 0)) || (naBorda(pa.a, q.W) && naBorda(pb.a, q.W));
-  };
+  if (!tipo) return { comandos: [], model, unidades: [], geracoes: 0, grupos: [], avisos: [`Monte o pavimento tipo de "${b.nome}" primeiro (painel do bloco).`] };
+  // A FACHADA é o contorno do bloco (retângulo, L, U, T, H): parede cujo eixo está sobre ele.
+  const contorno = b.pontos;
+  const perimetro = (w: Wall) => segmentoNoContorno(contorno, w.a, w.b);
 
-  // As unidades do pavimento tipo, com o ambiente e a tipologia do produto.
-  // `e`/`d`: a unidade está na ponta esquerda/direita do bloco (tem a fachada da ponta, além da do lado dela).
-  type Alvo = { numero: string; unidadeId: ObjectId; t: TipologiaDoProduto | null; tipologiaNome: string; r: RetLocal; ladoA: boolean; e: boolean; d: boolean; W: number; D: number };
+  // As unidades do pavimento tipo, com o ambiente, o QUADRO dela e a tipologia do produto.
+  // `e`/`d`: o lado em a = 0 / a = W do quadro também é fachada (unidade de canto); `fundo`: o oposto à fachada também.
+  type Alvo = { numero: string; unidadeId: ObjectId; t: TipologiaDoProduto | null; tipologiaNome: string; q: QuadroDoBloco; e: boolean; d: boolean; fundo: boolean; W: number; D: number };
   const alvos: Alvo[] = [];
+  const abertas: PlantaDeUmaUnidade[] = [];
   for (const u of model.unidades ?? []) {
     const etiquetas = model.labels.filter((l) => l.levelId === tipo.id && u.etiquetaUids.includes(l.uid));
     if (etiquetas.length === 0) continue;
@@ -255,45 +370,32 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     }
     const s = model.spaces.find((x) => x.levelId === tipo.id && x.labelUid === etiquetas[0].uid);
     if (!s) continue;
-    const pts = s.ring.map((p) => paraLocal(q, p));
-    const as = pts.map((p) => p.a);
-    const bs = pts.map((p) => p.b);
-    // O anel do ambiente JÁ está nos EIXOS das paredes (o arranjo do kernel é pelas linhas de centro): o
-    // retângulo da unidade é a caixa dele. (Expandir pela meia espessura — a primeira versão — empurrava a
-    // unidade 75–100 mm para fora: janela fora do perímetro e parede interna entrando no vizinho.)
-    const r: RetLocal = { a0: Math.min(...as), a1: Math.max(...as), b0: Math.min(...bs), b1: Math.max(...bs) };
+    // O anel do ambiente JÁ está nos EIXOS das paredes (o arranjo do kernel é pelas linhas de centro): o quadro da
+    // unidade sai dele. (Expandir pela meia espessura — a primeira versão — empurrava a unidade 75–100 mm para fora.)
+    const qu = quadroDaUnidade(s.ring, contorno);
+    if ('motivo' in qu) {
+      abertas.push({ numero: u.numero, tipologia: u.tipologia ?? '—', ambientes: [], origem: qu.motivo, janelas: 0, portas: 0, semFachada: [] });
+      continue;
+    }
     const t = produto.tipologias.find((x) => x.nome === u.tipologia) ?? null;
-    alvos.push({
-      numero: u.numero,
-      unidadeId: u.id,
-      t,
-      tipologiaNome: u.tipologia ?? '—',
-      r,
-      ladoA: r.b0 < hipT.paredeExternaMm,
-      e: r.a0 < hipT.paredeExternaMm,
-      d: r.a1 > q.W - hipT.paredeExternaMm,
-      W: Math.round(r.a1 - r.a0),
-      D: Math.round(r.b1 - r.b0),
-    });
+    alvos.push({ numero: u.numero, unidadeId: u.id, t, tipologiaNome: u.tipologia ?? '—', q: qu.q, e: qu.e, d: qu.d, fundo: qu.fundo, W: Math.round(qu.q.W), D: Math.round(qu.q.D) });
   }
-  if (alvos.length === 0) return { comandos: [], model, unidades: [], geracoes: 0, grupos: [], avisos: avisos.length ? avisos : ['O pavimento tipo não tem unidade sem planta.'] };
+  if (abertas.length) avisos.push(`${abertas.length} unidade(s) ficaram abertas: ${abertas.map((x) => `${x.numero} (${x.origem.split(':')[0]})`).join(', ')}.`);
+  if (alvos.length === 0) return { comandos: [], model, unidades: abertas, geracoes: 0, grupos: [], avisos: avisos.length ? avisos : ['O pavimento tipo não tem unidade sem planta.'] };
 
   // As classes de unidades IGUAIS (ver o cabeçalho): a primeira de cada uma é a origem.
-  // Tolerância das medidas: alinhado, o anel sai em mm inteiro; girado, o arredondamento e o `ALEM_MM` mexem uns mm.
-  const tolMm = blocoGirado ? 5 : 2;
-  const REPETICOES: Repeticao[] = [
-    { espelhaA: false, espelhaB: false },
-    { espelhaA: true, espelhaB: true },
-    { espelhaA: true, espelhaB: false },
-    { espelhaA: false, espelhaB: true },
-  ];
+  // Cada quadro tem a fachada embaixo: as iguais são as de mesma tipologia e medidas, com as pontas iguais ou
+  // trocadas (espelho), e a composição dos quadros representável pelo kernel. Tolerância: alinhado, o anel sai em mm
+  // inteiro; girado, o arredondamento e o `ALEM_MM` mexem uns mm.
+  const REPETICOES: Repeticao[] = [{ espelhaA: false }, { espelhaA: true }];
   const repeticaoEntre = (o: Alvo, x: Alvo): Repeticao | null => {
-    if (!o.t || o.t.id !== x.t?.id || Math.abs(o.W - x.W) > tolMm || Math.abs(o.D - x.D) > tolMm) return null;
+    const tolMm = girado(o.q) || girado(x.q) ? 5 : 2;
+    if (!o.t || o.t.id !== x.t?.id || Math.abs(o.W - x.W) > tolMm || Math.abs(o.D - x.D) > tolMm || o.fundo !== x.fundo) return null;
     for (const rep of REPETICOES) {
-      if (blocoGirado && rep.espelhaA !== rep.espelhaB) continue;
-      const lado = rep.espelhaB ? !o.ladoA : o.ladoA;
       const [e, d] = rep.espelhaA ? [o.d, o.e] : [o.e, o.d];
-      if (lado === x.ladoA && e === x.e && d === x.d) return rep;
+      if (e !== x.e || d !== x.d) continue;
+      const inst = instanciaEntreUnidades(o.q, x.q, rep);
+      if (inst && erroDaInstanciaMm(o.q, x.q, rep, inst) <= ALEM_MM / 2) return rep;
     }
     return null;
   };
@@ -329,20 +431,20 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     const { W, D } = a;
     const programa = a.t ? programaDaTipologia(a.t) : null;
     let melhor: { res: ResultadoDoGerador; nota: number; corredor: boolean } | null = null;
-    const yFachada = a.ladoA ? 0 : D;
+    const yFachada = 0;
     const pedeLuz = (amb: ResultadoDoGerador['ambientes'][number]) => {
       const f = FICHA_DO_USO[amb.item.uso];
       return f.exigeFachada || f.exigeIluminacao;
     };
     const tocaFachada = (amb: ResultadoDoGerador['ambientes'][number]) => {
       const r = amb.ret;
-      return Math.abs((a.ladoA ? r.y0 : r.y1) - yFachada) < 60 || (a.e && r.x0 < 60) || (a.d && r.x1 > W - 60);
+      return Math.abs(r.y0 - yFachada) < 60 || (a.e && r.x0 < 60) || (a.d && r.x1 > W - 60) || (a.fundo && r.y1 > D - 60);
     };
     if (programa) {
       const nota = (res: ResultadoDoGerador) => res.ambientes.filter((amb) => pedeLuz(amb) && tocaFachada(amb)).length;
       // Frente pelo corredor (a entrada certa) e pelas duas pontas; duas sementes cada.
       const frentes: { dir: Point; corredor: boolean }[] = [
-        { dir: { x: 0, y: a.ladoA ? 1 : -1 }, corredor: true },
+        { dir: { x: 0, y: 1 }, corredor: true },
         { dir: { x: -1, y: 0 }, corredor: false },
         { dir: { x: 1, y: 0 }, corredor: false },
       ];
@@ -367,10 +469,10 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     return saida;
   };
 
-  const resumo: PlantaDeUmaUnidade[] = [];
+  const resumo: PlantaDeUmaUnidade[] = [...abertas];
   /** Por unidade desenhada: o arranjo e como ele é lido no quadro dela (espelhos). */
   const nomesPorUnidade: { a: Alvo; res: ResultadoDoGerador; plano: (p: Point) => Point }[] = [];
-  const paredesDaUnidade: Command[] = [];
+  const paredesDaUnidade: Extract<Command, { type: 'AddWall' }>[] = [];
   const uidsDasParedesDe = new Map<string, string[]>();
   /** Aberturas: a de parede interna já vira comando (pela identidade da parede); a de fachada espera achar a parede do perímetro. */
   type Pendente = { tipo: 'interna'; cmd: Command } | { tipo: 'fachada'; centro: Point; widthMm: number; heightMm: number; sillMm: number };
@@ -384,7 +486,8 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     }
     const membro = membroDe.get(a.numero);
     const fonte = membro ? membro.classe.origem : a;
-    const rep = membro?.rep ?? { espelhaA: false, espelhaB: false };
+    const rep = membro?.rep ?? { espelhaA: false };
+    const espec = membro ? instanciaEntreUnidades(membro.classe.origem.q, a.q, rep) : null;
     const g = resultadoDe(fonte);
     if (!g) {
       resumo.push({ numero: a.numero, tipologia: a.tipologiaNome, ambientes: [], origem: 'o gerador não fechou a planta', janelas: 0, portas: 0, semFachada: [] });
@@ -395,7 +498,7 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     if (viraInstancia) instancias.add(a.numero);
     const { W, D } = a;
     // O arranjo foi gerado no quadro da ORIGEM; a igual o lê espelhado (ver `Repeticao`).
-    const plano = (p: Point): Point => ({ x: rep.espelhaA ? W - p.x : p.x, y: rep.espelhaB ? D - p.y : p.y });
+    const plano = (p: Point): Point => ({ x: rep.espelhaA ? W - p.x : p.x, y: p.y });
     // ⚠️ O gerador encaixa o retângulo na malha de 50 mm: a borda dele pode ficar até 25 mm DENTRO da unidade.
     // As paredes de borda são reconhecidas pelo retângulo DELE; as pontas das internas que chegam nessa borda
     // são esticadas até a borda da unidade (o eixo das paredes dela) — senão nasciam paredes duplicadas coladas
@@ -407,14 +510,15 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     });
     const paraDesenho = (p: Point) => {
       const l = plano(p);
-      return noMundo(q, a.r.a0 + l.x, a.r.b0 + l.y);
+      return noMundo(a.q, l.x, l.y);
     };
-    // Bloco GIRADO: a parede passa ALEM_MM de cada ponta para a junção em T existir depois do arredondamento
-    // (o kernel só corta em interseção exata) — ver `montarPavimentoTipo`.
+    // A parede interna passa ALEM_MM de cada ponta para a junção em T existir depois de qualquer arredondamento (o
+    // kernel só corta em interseção EXATA): no bloco girado, e na CÓPIA do grupo — girada 90° entre uma asa e outra,
+    // o centro da unidade cai em meio milímetro e a cópia ficava até 0,5 mm fora (achado no H: "8 de 11 cômodos").
+    // A ponta de 3 mm some no vértice (tolerância de 5 mm do arranjo).
     const pontas = (w: Wall): [Point, Point] => {
       const ea = esticar(w.a);
       const eb = esticar(w.b);
-      if (!blocoGirado) return [ea, eb];
       const l = Math.hypot(eb.x - ea.x, eb.y - ea.y) || 1;
       const dx = ((eb.x - ea.x) / l) * ALEM_MM;
       const dy = ((eb.y - ea.y) / l) * ALEM_MM;
@@ -467,15 +571,19 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
       numero: a.numero,
       tipologia: a.tipologiaNome,
       ambientes: res.ambientes.map((x) => ({ nome: x.nome, areaM2: r2(x.areaM2) })),
-      origem: membro ? `${agrupar ? 'instância' : 'a mesma planta'} da ${fonte.numero} (${rotuloDaRepeticao(rep)})` : 'gerada',
+      origem: membro ? `${agrupar ? 'instância' : 'a mesma planta'} da ${fonte.numero} (${espec ? rotuloDaInstancia(espec) : rep.espelhaA ? 'espelhada' : 'repetida'})` : 'gerada',
       janelas,
       portas,
       semFachada: g.semFachada,
     });
   }
 
-  // 1. Paredes internas das unidades desenhadas (um lote).
-  aplicar(paredesDaUnidade);
+  // ⚠️ LOTE ATÔMICO (`AddWalls`, `AddOpenings`, `PlaceSpaceLabels`): UM comando para as paredes, um para as aberturas,
+  // um para os nomes. Cada comando refaz a cauda do kernel (sincronizar as cópias vivas, rederivar os ambientes,
+  // conferir os invariantes) — com centenas de comandos unitários, a planta de um bloco em H levava 22–40 s.
+
+  // 1. Paredes internas das unidades desenhadas.
+  if (paredesDaUnidade.length) aplicar([{ type: 'AddWalls', walls: paredesDaUnidade.map(({ type: _t, ...w }) => w) }]);
 
   // 2. Aberturas: as das paredes internas por uid; as da fachada resolvidas na parede do perímetro.
   const paredesTipo = m.walls.filter((w) => w.levelId === tipo.id);
@@ -516,7 +624,7 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     aceitas.push(o);
   }
   try {
-    aplicar(aceitas);
+    if (aceitas.length) aplicar([{ type: 'AddOpenings', openings: aceitas.map((o) => { const { type: _t, ...resto } = o as Extract<Command, { type: 'AddOpening' }>; return resto; }) }]);
   } catch {
     // Algum vão que a conferência não pegou (fim de parede, por exemplo): cai para um a um.
     for (const o of aceitas) {
@@ -529,19 +637,29 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
   }
   if (janelasDescartadas > 0) avisos.push(`${janelasDescartadas} abertura(s) do gerador ficaram de fora (janela que daria para o corredor ou para o vizinho, ou vão sobreposto).`);
 
-  // 3. Os cômodos: nome do gerador e a unidade (E2.2).
-  const nomes: Command[] = [];
+  // 3. Os cômodos: a etiqueta de cada um num comando só (a da M6a, que já está num deles, é RENOMEADA — mantém o uid
+  // e a unidade), com o tipo de ambiente da NBR 5410; depois a unidade (E2.2) recebe todas as etiquetas dela.
+  const etiquetas: Omit<Extract<Command, { type: 'PlaceSpaceLabel' }>, 'type'>[] = [];
   for (const { a, res, plano } of nomesPorUnidade) {
     for (const amb of res.ambientes) {
       const l = plano({ x: (amb.ret.x0 + amb.ret.x1) / 2, y: (amb.ret.y0 + amb.ret.y1) / 2 });
-      const c = noMundo(q, a.r.a0 + l.x, a.r.b0 + l.y);
-      const s = m.spaces.find((x) => x.levelId === tipo.id && pointInPolygon(x.ring, c));
-      if (!s) continue;
-      if (s.labelUid) nomes.push({ type: 'NameSpace', spaceId: s.id, name: amb.nome, tipoDeAmbiente: FICHA_DO_USO[amb.item.uso].tipoNbr5410 });
-      nomes.push({ type: 'SetUnidadeDoAmbiente', spaceId: s.id, unidadeId: a.unidadeId, nome: amb.nome });
+      const c = noMundo(a.q, l.x, l.y);
+      if (!m.spaces.some((x) => x.levelId === tipo.id && pointInPolygon(x.ring, c))) continue;
+      etiquetas.push({ levelId: tipo.id, at: c, name: amb.nome, tipoDeAmbiente: FICHA_DO_USO[amb.item.uso].tipoNbr5410 });
     }
   }
-  aplicar(nomes);
+  if (etiquetas.length) aplicar([{ type: 'PlaceSpaceLabels', labels: etiquetas }]);
+  const dentroDaUnidade = (x: { q: QuadroDoBloco; W: number; D: number }, p: Point) => {
+    const l = paraLocal(x.q, p);
+    return l.a > 0 && l.a < x.W && l.b > 0 && l.b < x.D;
+  };
+  aplicar(
+    nomesPorUnidade.map(({ a }) => ({
+      type: 'SetUnidadeProps' as const,
+      unidadeId: a.unidadeId,
+      labelIds: m.labels.filter((l) => l.levelId === tipo.id && dentroDaUnidade(a, l.at)).map((l) => l.id),
+    })),
+  );
 
   // 4. As iguais: um GRUPO por classe (a planta da origem) com uma instância por igual (E2.3).
   const grupos: GrupoDeUnidadesIguais[] = [];
@@ -555,8 +673,8 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
     const etiquetasDaOrigem = etiquetasDaUnidade(c.origem.unidadeId);
     const paredesDaOrigem = (uidsDasParedesDe.get(c.origem.numero) ?? []).map((uid) => m.walls.find((w) => w.uid === uid)?.id).filter((id): id is ObjectId => !!id);
     if (etiquetasDaOrigem.length < 2 || paredesDaOrigem.length === 0) throw new FalhaDoGrupo(`a planta da ${c.origem.numero} não fechou`);
-    const especs = iguais.map((x) => instanciaDaUnidadeIgual(q, c.origem.r, x.a.r, x.rep));
-    if (especs.some((x) => !x)) throw new FalhaDoGrupo(`a ${c.origem.numero} não espelha neste bloco girado`);
+    const especs = iguais.map((x) => instanciaEntreUnidades(c.origem.q, x.a.q, x.rep));
+    if (especs.some((x) => !x)) throw new FalhaDoGrupo(`a ${c.origem.numero} não se repete nas iguais pelos eixos do desenho`);
     // A etiqueta única que a M6a pôs em cada igual sai: a instância traz os cômodos copiados, e duas etiquetas
     // no mesmo ambiente seriam duas identidades. (Um a um: tirar uma rederiva os ambientes.)
     for (const x of iguais) {
@@ -581,15 +699,11 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
       throw new FalhaDoGrupo(e instanceof Error ? e.message : String(e));
     }
     // Os cômodos copiados passam a ser a unidade da M6a (o mesmo número).
-    const dentro = (r: RetLocal, p: Point) => {
-      const l = paraLocal(q, p);
-      return l.a > r.a0 && l.a < r.a1 && l.b > r.b0 && l.b < r.b1;
-    };
     aplicar(
       iguais.map((x) => ({
         type: 'SetUnidadeProps' as const,
         unidadeId: x.a.unidadeId,
-        labelIds: m.labels.filter((l) => l.levelId === tipo.id && dentro(x.a.r, l.at)).map((l) => l.id),
+        labelIds: m.labels.filter((l) => l.levelId === tipo.id && dentroDaUnidade(x.a, l.at)).map((l) => l.id),
       })),
     );
     // Conferência: cada igual com os mesmos cômodos da origem, todos fechados.
@@ -598,7 +712,7 @@ function gerarPlantas(model: BlueprintModel, b: Bloco, produto: Produto, semente
       const fechados = ets.filter((l) => m.spaces.some((s) => s.levelId === tipo.id && s.labelUid === l.uid)).length;
       if (ets.length !== etiquetasDaOrigem.length || fechados !== ets.length) throw new FalhaDoGrupo(`a ${x.a.numero} saiu com ${fechados} de ${etiquetasDaOrigem.length} cômodos`);
     }
-    grupos.push({ nome: nome.slice(0, 40), origem: c.origem.numero, iguais: iguais.map((x) => ({ numero: x.a.numero, repeticao: rotuloDaRepeticao(x.rep) })) });
+    grupos.push({ nome: nome.slice(0, 40), origem: c.origem.numero, iguais: iguais.map((x, k) => ({ numero: x.a.numero, repeticao: rotuloDaInstancia(especs[k]!) })) });
   }
 
   const semLuz = resumo.reduce((n, u) => n + u.semFachada.length, 0);

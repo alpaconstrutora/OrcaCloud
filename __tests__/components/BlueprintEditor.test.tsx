@@ -1583,6 +1583,42 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(chamada.model.unidades!.map((u) => u.numero)[0]).toBe('101');
   });
 
+  it('estudo de massa (bloco em L): o painel propõe o pavimento tipo em ASAS, monta no estudo e gera a planta das unidades', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { produtoSemente } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    // Lote 60 × 60; Torre em L com asas de 16 m, 8 pavimentos.
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 60000, 0, 'FRENTE'),
+        d(60000, 0, 60000, 60000, 'LATERAL_DIREITA'),
+        d(60000, 60000, 0, 60000, 'FUNDOS'),
+        d(0, 60000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBloco', levelId: t, nome: 'Torre L', pontos: [k.point(5000, 5000), k.point(45000, 5000), k.point(45000, 21000), k.point(21000, 21000), k.point(21000, 50000), k.point(5000, 50000)], pavimentos: 8 },
+      ]).model,
+    );
+    getProduto.mockResolvedValueOnce({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', produto: produtoSemente('RESIDENCIAL_MEDIO'), created_at: '', updated_at: '' });
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Torre L'));
+    const painel = await screen.findByTestId('painel-bloco');
+    const tipo = within(painel).getByTestId('pavimento-tipo-do-bloco');
+    expect(tipo).toHaveTextContent(/asas \(L, U, T, H\) com os corredores ligados nos nós · 13 unidade\(s\), \d+ de canto · núcleo com 1 elevador\(es\)/);
+    await user.click(within(tipo).getByTestId('pavimento-tipo-montar-aqui'));
+    const plantas = await within(painel).findByTestId('plantas-das-unidades', {}, { timeout: 20000 });
+    expect(plantas).toHaveTextContent(/13 unidade\(s\) do tipo ainda sem planta interna/);
+    await user.click(within(plantas).getByTestId('gerar-plantas-das-unidades'));
+    await waitFor(() => expect(within(painel).getByTestId('pavimento-tipo-resultado')).toHaveTextContent(/^Plantas geradas: 13 unidade\(s\)/), { timeout: 30000 });
+    expect(within(painel).getByTestId('pavimento-tipo-resultado')).toHaveTextContent(/grupo\(s\) de unidades iguais/);
+    await waitFor(() => expect(within(painel).getByTestId('plantas-das-unidades')).toHaveTextContent(/Todas as unidades do tipo já têm planta interna/));
+  }, 90000);
+
   it('estudo de massa (M6b): com o pavimento tipo montado, o painel do bloco gera a planta interna das unidades (as iguais em grupo) e depois diz que todas já têm', async () => {
     const k = await import('../../utils/blueprintKernel');
     const { produtoSemente, distribuirProduto } = await import('../../utils/blueprintProduto');

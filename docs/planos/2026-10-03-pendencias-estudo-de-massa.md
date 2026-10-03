@@ -19,7 +19,7 @@ ciclo, por último os opcionais de conveniência e o maior de todos.
 3. [x] **Vagas reais na garagem/subsolo** a partir do estudo de massa.
 4. [x] **Outorga onerosa**: "CA máximo com outorga" como campo da zona, e o estudo mostra o potencial adicional.
 5. [x] **Abrir na aba Terreno** — o estudo de massa (ver registro: não há item de menu "Estudo de Massa" desde a M1).
-6. [ ] **Bloco em L, U ou H** no pavimento tipo (e na planta das unidades).
+6. [x] **Bloco em L, U, T ou H** no pavimento tipo e na planta das unidades.
 
 ## 1. CUB no Estimador e no CNO (03/10/2026)
 
@@ -147,3 +147,59 @@ vale; com uma parede → a aba salva (Arquitetura).
 | Build | ok |
 | App real (estudo descartável "ZZ TESTE … prova outorga": lote 40 × 60, torre 30 × 16 × 10, nenhuma parede; a aba salva no navegador forçada para Arquitetura antes) | 5/5: **abriu na aba Terreno**; no painel do lote, CA básico 1,5 e máximo 3 digitados → "Acima do básico, a área depende de outorga onerosa" e sem o texto falso; **no banco** `coeficiente_basico` 1,5, `coeficiente_max` 3, origem MANUAL; a gaveta: "Sujeita a outorga 1.200,00 m² · acima do CA básico 1,50 (3.600,00 m² de direito)"; 0 erros |
 | Limpeza | estudo apagado (o contexto urbano vai junto); estudos 73 · ramos 73 · contextos 1 · ZZ 0, iguais aos de antes |
+
+## 6. Bloco em L, U, T ou H (03/10/2026)
+
+**A lacuna.** A M6a dividia só bloco retangular ("divida L, U e H em blocos retangulares"), e a M6b gerava a planta no
+quadro do BLOCO retangular.
+
+**O que entrou.**
+- `utils/blueprintPavimentoOrtogonal.ts` (puro), para contorno ORTOGONAL (lados em dois eixos perpendiculares):
+  - grade das linhas dos vértices → célula com vizinho nos dois eixos é NÓ, as outras formam as ASAS; junção que não
+    é retângulo é recusada com o motivo; contorno fora de dois eixos (trapézio) também;
+  - um corredor por asa (central se cabem duas unidades + corredor; senão lateral, do lado de dentro), avançando no
+    nó até cruzar os das outras asas;
+  - núcleo no nó com mais asas, na parte livre SEM fachada (o canto de dentro do L), com escada, elevadores e o hall;
+  - o resto são peças (faixas das asas e partes dos nós) encadeadas em CAMINHOS (preferindo seguir reto); a peça de
+    canto é partida em reto-antes / dobra / reto-depois; cada cadeia recebe unidades (repartição pela capacidade com
+    rebalanceamento) e é cortada pela área alvo — a dobra nunca é cortada, e a unidade de canto pode sair em L com duas
+    fachadas; cadeia sem fachada nenhuma vira área comum; unidade fora de ±25 % do alvo é dita;
+  - montagem: paredes pelas bordas entre regiões numa grade só (junções em T exatas), porta de cada região no trecho
+    mais longo que encosta no corredor, unidades (E2.2), núcleo, cópias vivas — no formato da divisão retangular
+    (esquema `ASAS`); `dividirPavimentoDoBloco` / `montarPavimentoTipoDoBloco` escolhem o caminho (editor e envio ao
+    Empreendimento passam por eles).
+- `utils/blueprintPlantaDaUnidade.ts` — a planta de cada unidade no QUADRO DELA (`quadroDaUnidade`: a fachada principal
+  embaixo, quadro destro, para dentro; fachada parcial vale), para qualquer forma; o grupo das iguais pela composição
+  dos dois quadros (`instanciaEntreUnidades`: giro de 90° entre asas, espelho X/Y, ou nada) com a conferência de
+  precisão nos cantos (≤ 1,5 mm, `erroDaInstanciaMm`); as paredes internas sempre passam 3 mm do encontro; anel com
+  agulha (bico de ~5 mm do bloco girado) é limpo; unidade em L fica aberta, dito.
+
+**Achados no caminho (todos com teste).**
+1. **O desempenho da planta num bloco grande**: a do H (24 unidades, 8 pavimentos) levava 22–40 s — ~690 comandos, e
+   cada um refazia a cauda do kernel num modelo de 1.600 paredes. Três correções no KERNEL (o formato do payload não
+   muda; goldens verdes):
+   - **lote atômico**: `AddWalls`, `AddOpenings`, `PlaceSpaceLabels` — N peças num comando, uma cauda só (os corpos
+     de `AddWall`/`AddOpening`/`PlaceSpaceLabel` extraídos e reusados; a recusa em pavimento cópia vale item por item);
+   - **memória do arranjo**: o arranjo é função pura dos segmentos do nível — memorizado pela assinatura; a cópia viva
+     reaproveita o do tipo;
+   - **tocador do diff**: a sincronização tocava a lista de mudanças com `includes` (O(n²)) — agora com um conjunto.
+   A planta do H caiu para ~2,4 s (26 comandos); no app real, a do L leva ~6 s com a aplicação no editor.
+2. **Vitest × Node 24**: com a carga da planta do H, o worker do Vitest cai (falha de segmentação) — o mesmo script no
+   Node direto roda limpo. A medição foi feita no Node; a suíte fecha.
+3. **Grupo no H**: a cópia girada 90° ficava 0,5 mm fora (centro em meio milímetro) e as junções não fechavam ("8 de 11
+   cômodos") — daí o avanço de 3 mm sempre e a conferência de precisão por igual (a que não fecha fica com planta
+   própria, sem derrubar o grupo inteiro).
+
+**Pronto quando** (feito):
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintPavimentoOrtogonal.test.ts` (13) | quadro ortogonal (girado dá o mesmo; trapézio não é); contorno da união em L; L, U, T e H: esquema `ASAS`, todas as unidades da M2 numeradas na ordem do produto, corredores numa rede só, núcleo encostado no corredor, unidade de canto, área média 85–130 % do alvo; degrau vira nó + asas; trapézio recusado com o motivo; montagem de L, H, L girado 30° e T girado 30°: cada unidade fecha o ambiente, porta para cada uma, circulação e núcleo nomeados, 6 cópias com as paredes; planta do L: 13 unidades, janelas só na fachada, cômodos fechados, grupos repetida e espelhada, lista de uma vez = o mesmo modelo, < 40 comandos; H: grupo GIRADO 90°, só a unidade em L fica aberta |
+| `__tests__/blueprintKernelLoteAtomico.test.ts` (4) | o lote = os unitários em sequência (paredes, aberturas, ambientes, nomes, cópias); recusa em pavimento cópia item por item; lote vazio; a etiqueta do lote renomeia (não empilha); a memória do arranjo devolve o mesmo, com o id do pavimento pedido e objetos novos |
+| `__tests__/blueprintPlantaDaUnidade.test.ts` (+3) | o quadro da unidade (fachada embaixo, asa vertical, em L e sem fachada abertas) e a instância entre quadros (repetida, 180°, espelho X, espelho Y, giro de 90°, girado 30° repetida; girado com espelho não dá) |
+| Teste de editor "estudo de massa (bloco em L)" | o painel propõe "asas (L, U, T, H) … 13 unidade(s)"; montar; 13 sem planta; gerar → "Plantas geradas: 13 unidade(s)" com grupos; depois "todas já têm" |
+| `tsc` · `check-ui-standard` · org guard · XSS | 0 · 0 violações · ok · ok |
+| Suíte cheia (JSON, `pending` = 0) | 684/684 arquivos · 7.127 testes = 7.093 ok + 34 pulados · 0 falhas |
+| Build · harness `docs/spikes/massa/medir.mjs` | ok · 41/41 |
+| App real (estudo descartável "ZZ TESTE … prova bloco em L": lote 60 × 60, Torre L de asas de 16 m, 8 pav) | 7/7: o painel propõe o pavimento tipo em asas com 13 unidades; montar (0,5 s); gerar as plantas (6 s) → 13 unidades, 122 cômodos, 4 grupos; **no banco**: 13 unidades com todos os cômodos fechados (8 nos 2 dorm., 11 nos 3 dorm.), núcleo e circulação nomeados, 6 cópias com as paredes do tipo, 28 janelas todas na fachada; 0 erros. No desenho: as duas asas com unidades dos dois lados, o núcleo no canto de dentro do nó |
+| Limpeza | estudo apagado; estudos 73 · ramos 73 · produtos 0 · contextos 1 · ZZ 0, iguais aos de antes |

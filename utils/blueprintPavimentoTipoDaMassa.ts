@@ -30,14 +30,16 @@
  * aplica a MESMA lista de comandos no editor — os ids batem. A planta INTERNA
  * de cada unidade (o gerador da E6.2 dentro da fatia) é a etapa seguinte (M6b).
  *
- * Fora, dito: bloco que não é retângulo (L, U, H — divida em blocos
- * retangulares) e o pavimento térreo.
+ * Fora, dito: o pavimento térreo. Bloco em L, U, T ou H tem o caminho próprio
+ * (`blueprintPavimentoOrtogonal`, pendências de 03/10/2026) — quem chama usa
+ * `dividirPavimentoDoBloco`/`montarPavimentoTipoDoBloco`, que escolhem.
  */
 import { applyBatch, pointInPolygon, signedArea, uidDeterministico, type BlueprintModel, type Bloco, type Command, type Level, type ObjectId, type Point, type Wall } from './blueprintKernel';
 import { divisasDoLote, medirTerreno } from './blueprintTerreno';
 import { azimuteDaDirecao, pontoCardeal, type PontoCardeal } from './blueprintGrafoEspacial';
 import { FICHA_DO_ELEVADOR } from './blueprintNucleoVertical';
 import type { Produto } from './blueprintProduto';
+import type { PlanoOrtogonal } from './blueprintPavimentoOrtogonal';
 
 /** "301", "1202"; o 1º pavimento acima do solo é o térreo: "T01". (A mesma regra do envio ao Empreendimento.) */
 export function nomeDaUnidadeDaMassa(ordinal: number, posicao: number): string {
@@ -67,14 +69,15 @@ export const HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO: HipotesesDoPavimentoTipo = {
   larguraDaEscadaMm: 1200,
 };
 
-export type EsquemaDoPavimento = 'CORREDOR_CENTRAL' | 'CORREDOR_LATERAL';
-export const ROTULO_DO_ESQUEMA: Record<EsquemaDoPavimento, string> = { CORREDOR_CENTRAL: 'corredor central', CORREDOR_LATERAL: 'corredor lateral' };
+/** `ASAS`: bloco em L, U, T ou H — um corredor por asa, ligados nos nós (`blueprintPavimentoOrtogonal`). */
+export type EsquemaDoPavimento = 'CORREDOR_CENTRAL' | 'CORREDOR_LATERAL' | 'ASAS';
+export const ROTULO_DO_ESQUEMA: Record<EsquemaDoPavimento, string> = { CORREDOR_CENTRAL: 'corredor central', CORREDOR_LATERAL: 'corredor lateral', ASAS: 'asas (L, U, T, H) com os corredores ligados nos nós' };
 
 /** Quanto a parede interna de bloco GIRADO passa do encontro (< tolerância de 5 mm do arranjo) — ver `montarPavimentoTipo`. */
 export const ALEM_MM = 3;
 
 /** Retângulo no quadro do bloco: `a` ao longo do eixo maior, `b` atravessa (0 = fachada do lado A). */
-interface RetLocal {
+export interface RetLocal {
   a0: number;
   b0: number;
   a1: number;
@@ -120,6 +123,8 @@ export interface DivisaoDoPavimento {
   corredor: RetLocal;
   nucleo: RetLocal | null;
   profundidades: { a: number; b: number };
+  /** Bloco em L, U, T ou H: o plano das regiões (corredores, núcleo, áreas comuns, partes de cada unidade). */
+  ortogonal?: PlanoOrtogonal;
 }
 
 export interface QuadroDoBloco {
@@ -187,7 +192,7 @@ export type ResultadoDaDivisao = { ok: true; divisao: DivisaoDoPavimento } | { o
 export function dividirPavimento(e: EntradaDaDivisao, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): ResultadoDaDivisao {
   const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
   const q = quadroDoBloco(e.bloco);
-  if (!q) return { ok: false, motivo: `"${e.bloco.nome}" não é um retângulo: a divisão automática do pavimento só trabalha em bloco retangular (divida L, U e H em blocos retangulares).` };
+  if (!q) return { ok: false, motivo: `"${e.bloco.nome}" não é um retângulo: este é o caminho do bloco retangular — L, U, T e H vão por \`dividirPavimentoDoBloco\`.` };
   const lista: { t: Produto['tipologias'][number] }[] = [];
   for (const t of e.produto.tipologias) for (let k = 0; k < (e.porTipologia[t.id] ?? 0); k++) lista.push({ t });
   if (lista.length === 0) return { ok: false, motivo: `"${e.bloco.nome}" não recebe unidade no pavimento tipo (sem produto do uso do bloco, ou o pavimento é pequeno para o mix).` };
@@ -351,7 +356,7 @@ function paredeNoPonto(paredes: readonly Wall[], p: Point): { w: Wall; off: numb
 }
 
 /** As cotas dos pavimentos ACIMA DO SOLO do bloco (absolutas). */
-function pisosAcimaDoSolo(model: BlueprintModel, b: Bloco): number[] {
+export function pisosAcimaDoSolo(model: BlueprintModel, b: Bloco): number[] {
   const elev = model.levels.find((l) => l.id === b.levelId)?.elevationMm ?? 0;
   const base = elev + b.cotaBaseMm;
   const out: number[] = [];

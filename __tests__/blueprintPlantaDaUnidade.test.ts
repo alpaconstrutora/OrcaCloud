@@ -12,7 +12,7 @@ import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../utils/blueprintTerr
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente, type Produto } from '../utils/blueprintProduto';
 import { direcaoDaRua, dividirPavimento, montarPavimentoTipo, ordinalDoTipo, quadroDoBloco } from '../utils/blueprintPavimentoTipoDaMassa';
-import { instanciaDaUnidadeIgual, plantasDasUnidades, programaDaTipologia, unidadeTemPlanta, type RetLocal } from '../utils/blueprintPlantaDaUnidade';
+import { instanciaEntreUnidades, plantasDasUnidades, programaDaTipologia, quadroDaUnidade, unidadeTemPlanta } from '../utils/blueprintPlantaDaUnidade';
 
 type Papel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
 const MEDIO = produtoSemente('RESIDENCIAL_MEDIO');
@@ -215,37 +215,54 @@ describe('unidades iguais viram GRUPO (E2.3): editar a origem propaga às iguais
   });
 }, 180_000);
 
-describe('a instância que leva uma unidade na igual', () => {
-  // Quadro alinhado e quadro girado 30°: os cantos da origem, lidos com a repetição, caem nos cantos da igual.
-  const alinhado = { o: point(1000, 20000), u: { x: 1, y: 0 }, v: { x: 0, y: 1 }, W: 38000, D: 16000 };
-  const c = Math.cos(Math.PI / 6);
-  const sn = Math.sin(Math.PI / 6);
-  const girado = { o: point(-5670, 19821), u: { x: c, y: sn }, v: { x: -sn, y: c }, W: 38000, D: 16000 };
-  const rO: RetLocal = { a0: 0, a1: 9500, b0: 0, b1: 7250 };
-  const rT: RetLocal = { a0: 19000, a1: 28500, b0: 8750, b1: 16000 };
-  const casos = [
-    { espelhaA: false, espelhaB: false },
-    { espelhaA: true, espelhaB: true },
-    { espelhaA: true, espelhaB: false },
-    { espelhaA: false, espelhaB: true },
+describe('o quadro de cada unidade e a instância entre quadros', () => {
+  const quadrado = (x0: number, y0: number, x1: number, y1: number) => [point(x0, y0), point(x1, y0), point(x1, y1), point(x0, y1)];
+  // Um contorno em L: asa de baixo 0..40 × 0..16, asa da esquerda 0..16 × 0..40.
+  const L = [point(0, 0), point(40000, 0), point(40000, 16000), point(16000, 16000), point(16000, 40000), point(0, 40000)];
+
+  it('a fachada principal fica embaixo, o quadro é destro e para dentro; pontas de fachada; em L e sem fachada ficam abertas', () => {
+    // Unidade na asa de baixo, fachada em y = 0, ponta direita também fachada (x = 40).
+    const a = quadroDaUnidade(quadrado(30000, 0, 40000, 7250), L);
+    if ('motivo' in a) throw new Error(a.motivo);
+    expect([a.q.o, a.q.u, a.q.v, a.q.W, a.q.D]).toEqual([point(30000, 0), { x: 1, y: 0 }, { x: -0, y: 1 }, 10000, 7250]);
+    expect([a.e, a.d, a.fundo]).toEqual([false, true, false]);
+    // Unidade na asa VERTICAL: fachada no lado x = 0 — o quadro gira (u para baixo, v para dentro = +x).
+    const v = quadroDaUnidade(quadrado(0, 30000, 7250, 40000), L);
+    if ('motivo' in v) throw new Error(v.motivo);
+    expect([v.q.W, v.q.D, v.q.v.x]).toEqual([10000, 7250, 1]);
+    expect(v.q.u.y).toBe(-1);
+    // Em L e sem fachada.
+    const emL = quadroDaUnidade([point(0, 0), point(9000, 0), point(9000, 7000), point(7000, 7000), point(7000, 12000), point(0, 12000)], L);
+    expect('motivo' in emL && emL.motivo).toMatch(/em L/);
+    const miolo = quadroDaUnidade(quadrado(20000, 3000, 26000, 9000), [point(-1000, -1000), point(50000, -1000), point(50000, 50000), point(-1000, 50000)]);
+    expect('motivo' in miolo && miolo.motivo).toMatch(/sem fachada/);
+  });
+
+  // Quadros de origem e de destino: a planta no quadro da origem, lida (igual ou espelhada) no quadro do destino.
+  const Q = (o: Point, u: Point, W = 9500, D = 7250) => ({ o, u, v: { x: -u.y, y: u.x }, W, D });
+  const c30 = Math.cos(Math.PI / 6);
+  const s30 = Math.sin(Math.PI / 6);
+  const casos: { nome: string; qO: ReturnType<typeof Q>; qT: ReturnType<typeof Q>; espelhaA: boolean; espera: string | null }[] = [
+    { nome: 'repetida', qO: Q(point(0, 0), { x: 1, y: 0 }), qT: Q(point(20000, 0), { x: 1, y: 0 }), espelhaA: false, espera: 'NENHUM/0' },
+    { nome: 'do outro lado do corredor = giro de 180°', qO: Q(point(0, 0), { x: 1, y: 0 }), qT: Q(point(29500, 16000), { x: -1, y: 0 }), espelhaA: false, espera: 'NENHUM/180' },
+    { nome: 'espelhada no mesmo lado', qO: Q(point(0, 0), { x: 1, y: 0 }), qT: Q(point(28500, 0), { x: 1, y: 0 }), espelhaA: true, espera: 'X/0' },
+    { nome: 'espelhada do outro lado = espelho Y', qO: Q(point(0, 0), { x: 1, y: 0 }), qT: Q(point(29500, 16000), { x: -1, y: 0 }), espelhaA: true, espera: 'Y/0' },
+    { nome: 'na asa vertical = giro de 90°', qO: Q(point(0, 0), { x: 1, y: 0 }), qT: Q(point(0, 40000), { x: 0, y: -1 }), espelhaA: false, espera: 'NENHUM/270' },
+    { nome: 'girado 30°, repetida', qO: Q(point(0, 0), { x: c30, y: s30 }), qT: Q(point(Math.round(20000 * c30), Math.round(20000 * s30)), { x: c30, y: s30 }), espelhaA: false, espera: 'NENHUM/0' },
+    { nome: 'girado 30°, espelhada: não dá', qO: Q(point(0, 0), { x: c30, y: s30 }), qT: Q(point(Math.round(28500 * c30), Math.round(28500 * s30)), { x: c30, y: s30 }), espelhaA: true, espera: null },
   ];
-  it.each(casos)('repetição %o', (rep) => {
-    for (const q of [alinhado, girado]) {
-      const inst = instanciaDaUnidadeIgual(q, rO, rT, rep);
-      if (q === girado && rep.espelhaA !== rep.espelhaB) {
-        expect(inst).toBeNull();
-        continue;
-      }
-      expect(inst).not.toBeNull();
-      const W = rO.a1 - rO.a0;
-      const D = rO.b1 - rO.b0;
-      const mundo = (a: number, b: number) => ({ x: q.o.x + q.u.x * a + q.v.x * b, y: q.o.y + q.u.y * a + q.v.y * b });
-      for (const [x, y] of [[0, 0], [W, 0], [0, D], [W, D], [1234, 567]]) {
-        const naOrigem = mundo(rO.a0 + x, rO.b0 + y);
-        const esperado = mundo(rT.a0 + (rep.espelhaA ? W - x : x), rT.b0 + (rep.espelhaB ? D - y : y));
-        const obtido = transformarPontoDoGrupo({ pivo: inst!.pivo }, inst!, naOrigem);
-        expect(Math.hypot(obtido.x - esperado.x, obtido.y - esperado.y)).toBeLessThan(2);
-      }
+  it.each(casos)('$nome', ({ qO, qT, espelhaA, espera }) => {
+    const inst = instanciaEntreUnidades(qO, qT, { espelhaA });
+    if (espera === null) {
+      expect(inst).toBeNull();
+      return;
+    }
+    expect(inst && `${inst.espelho}/${inst.rotacaoGraus}`).toBe(espera);
+    const mundo = (q: typeof qO, a: number, b: number) => ({ x: q.o.x + q.u.x * a + q.v.x * b, y: q.o.y + q.u.y * a + q.v.y * b });
+    for (const [x, y] of [[0, 0], [qO.W, 0], [0, qO.D], [qO.W, qO.D], [1234, 567]]) {
+      const esperado = mundo(qT, espelhaA ? qO.W - x : x, y);
+      const obtido = transformarPontoDoGrupo({ pivo: inst!.pivo }, inst!, mundo(qO, x, y));
+      expect(Math.hypot(obtido.x - esperado.x, obtido.y - esperado.y)).toBeLessThan(2);
     }
   });
 });

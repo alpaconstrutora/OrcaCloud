@@ -30,7 +30,8 @@ import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../utils/blueprintMassa';
 import { distribuirProduto, produtoDaColuna, type Produto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { modeloDoPayloadPublicado } from './modeloPublicado';
-import { direcaoDaRua, dividirPavimento, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { dividirPavimentoDoBloco } from '../../utils/blueprintPavimentoOrtogonal';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
@@ -72,7 +73,7 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
     const ordTipo = ordinalDoTipo(model, b);
     const pisoTipo = pb.pisos.find((p) => (p.ordinal ?? p.indice) === ordTipo) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
     const divisao = pisoTipo
-      ? dividirPavimento({ bloco: b, produto, porTipologia: pisoTipo.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ordTipo, rotacaoNorteDeg: model.georreferencia?.rotacaoNorteDeg ?? null, direcaoDaRua: direcaoDaRua(model) })
+      ? dividirPavimentoDoBloco({ bloco: b, produto, porTipologia: pisoTipo.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ordTipo, rotacaoNorteDeg: model.georreferencia?.rotacaoNorteDeg ?? null, direcaoDaRua: direcaoDaRua(model) })
       : null;
     const naPosicao = (posicao: number, tipologiaId: string): UnidadeDoPavimento | null => {
       if (!divisao?.ok) return null;

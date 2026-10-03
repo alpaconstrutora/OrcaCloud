@@ -43,7 +43,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { DocumentsTable } from './documents/DocumentsTable';
+import { DocumentsTable, sortDocumentsForTable } from './documents/DocumentsTable';
 import { DocumentQrLabelModal } from './documents/DocumentQrLabelModal';
 import { BatchUploadSheet } from './documents/BatchUploadSheet';
 import { DocumentBatchEditModal } from './documents/DocumentBatchEditModal';
@@ -1665,6 +1665,31 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     return achada ? achada.name : '-';
   }, [disciplines, folders]);
 
+  // Texto da coluna "Obra Vinculada" — o mesmo valor alimenta a célula e a ordenação.
+  const resolveGedProjectName = React.useCallback(
+    (doc: OpuraDocument): string =>
+      doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-',
+    [projects],
+  );
+
+  // Ordem pela coluna clicada no cabeçalho. Até 03/10/2026 a seta mudava e as
+  // linhas não: a DocumentsTable deixa a ordem com quem chama, e o GED não
+  // ordenava (mesmo defeito corrigido no Portal do Parceiro em a7902573).
+  // ⚠️ É ESTA a lista que a tabela mostra — o Shift+clique (handleToggleDocRow)
+  // recorta o intervalo por posição, então tem de recortar desta, não da filtrada.
+  const sortedDocuments = React.useMemo(
+    () => sortDocumentsForTable(filteredDocuments, tableColumns.sortColumn, tableColumns.sortDirection, {
+      resolveProjectName: resolveGedProjectName,
+      resolveDisciplineLabel,
+    }),
+    [filteredDocuments, tableColumns.sortColumn, tableColumns.sortDirection, resolveGedProjectName, resolveDisciplineLabel],
+  );
+  // Trocar a ordenação muda o que está em cada posição: a âncora do Shift+clique
+  // apontaria para outra linha.
+  React.useEffect(() => {
+    setLastCheckedDocIndex(null);
+  }, [tableColumns.sortColumn, tableColumns.sortDirection]);
+
   // Rótulo de exibição (sentence case) para colunas dinâmicas — `dynamicColumns` guarda o
   // token bruto da máscara (ex: "[OBRA{3}]") porque é isso que o corpo da tabela usa para
   // casar com `col.toUpperCase().includes(...)"; aqui só traduzimos para o cabeçalho (§6.2).
@@ -2088,7 +2113,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   const handleToggleDocRow = (doc: OpuraDocument, index: number, shiftKey: boolean) => {
     if (shiftKey && lastCheckedDocIndex !== null) {
       const [start, end] = lastCheckedDocIndex < index ? [lastCheckedDocIndex, index] : [index, lastCheckedDocIndex];
-      const rangeIds = filteredDocuments
+      const rangeIds = sortedDocuments
         .slice(start, end + 1)
         .filter(isDocSelectableForBatch)
         .map((d) => d.id);
@@ -2880,7 +2905,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 documentada, não decisão fechada. Candidata legítima (acervo pode crescer bastante),
                 mas fica para uma tarefa própria em vez de decidir ad-hoc nesta correção. */}
             <DocumentsTable
-              documents={filteredDocuments}
+              documents={sortedDocuments}
               tableColumns={tableColumns}
               cols={gedDocCols}
               selectable={canAccessTab(activeTab)}
@@ -2891,7 +2916,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               onToggleAll={handleToggleAllDocs}
               showValidade={activeTab !== 'engenharia'}
               extensionIcons={extensionIcons}
-              resolveProjectName={(doc) => doc.project_id ? (projects.find(p => p.id === doc.project_id)?.name || 'Vínculo Externo') : '-'}
+              resolveProjectName={resolveGedProjectName}
               resolveDisciplineLabel={resolveDisciplineLabel}
               dynamicColumns={visibleDynamicColumns}
               getDynamicColumnLabel={getDynamicColumnLabel}

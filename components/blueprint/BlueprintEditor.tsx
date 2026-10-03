@@ -11075,233 +11075,256 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={() => alternarTarefa('terreno')}
                 ajuda="Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem"
               />
-              {/* A1: o nome do vértice é o que amarra memorial, planta e tabela
-                  de coordenadas ao MESMO ponto — e hoje é digitado três vezes. */}
-              <BotaoDoRibbon
-                icone={Hash}
-                rotulo="Nomear vértices"
-                onClick={() => void nomearVerticesDoTerreno()}
-                disabled={roteiro.vertices.length < 3}
-                ajuda={
-                  roteiro.vertices.length < 3
-                    ? 'Feche o contorno do lote com a ferramenta Terreno antes: os vértices são os do anel'
-                    : 'Nomeia P1, P2… no sentido horário a partir do primeiro vértice — um comando só, Ctrl+Z desfaz; edite um a um no quadro de divisas'
-                }
-              />
-              <BotaoDoRibbon
-                icone={ListOrdered}
-                rotulo="Roteiro"
-                contagem={roteiro.lados.length || undefined}
-                ativo={relatorioAberto === 'roteiro'}
-                onClick={() => alternarRelatorio('roteiro')}
-                disabled={roteiro.lados.length === 0}
-                ajuda={
-                  roteiro.lados.length === 0
-                    ? 'Feche o contorno do lote com a ferramenta Terreno: o roteiro é a tabela vértice a vértice dele'
-                    : roteiro.georreferenciado
-                      ? 'Vértice a vértice: E/N, latitude/longitude, azimute verdadeiro, distância e confrontante; memorial convencional; restituição por memorial'
-                      : 'Vértice a vértice com azimutes de DESENHO — informe latitude/longitude e o CRS em Dados do lote para os azimutes verdadeiros e as coordenadas'
-                }
-              />
-              {/* A4: as peças do georreferenciamento do imóvel rural para o credenciado. */}
-              <BotaoDoRibbon
-                icone={Landmark}
-                rotulo="SIGEF"
-                ativo={relatorioAberto === 'sigef'}
-                onClick={() => alternarRelatorio('sigef')}
-                disabled={roteiro.lados.length === 0}
-                ajuda={
-                  roteiro.lados.length === 0
-                    ? 'Feche o contorno do lote com a ferramenta Terreno: o SIGEF é sobre os vértices dele'
-                    : 'GeoINCRA: códigos dos vértices no padrão do credenciado, tipo, sigmas e método; tipo de limite e confrontante por trecho; pendências pelas regras do INCRA; planilha ODS no modelo oficial, memorial, cartas de anuência e conferência do retorno'
-                }
-              />
-              {/* A5: os temas ambientais do imóvel rural, para o SICAR. */}
-              <BotaoDoRibbon
-                icone={Trees}
-                rotulo="CAR"
-                contagem={car.poligonos.filter((p) => p.tema !== 'AREA_IMOVEL').length || undefined}
-                ativo={relatorioAberto === 'car'}
-                onClick={() => alternarRelatorio('car')}
-                disabled={roteiro.lados.length === 0}
-                ajuda={
-                  roteiro.lados.length === 0
-                    ? 'Feche o contorno do imóvel com a ferramenta Terreno: o CAR mede os temas contra ele'
-                    : 'Quadro de APP, Reserva Legal, vegetação nativa, área consolidada, servidão e hidrografia; apoio à Reserva Legal pelo bioma; Shapefile por tema, KML e coordenadas para o SICAR. Os temas se desenham com Área (tipo Ambiental)'
-                }
-              />
+              {/* MENUS DA ABA TERRENO (03/10/2026): *"menubar terreno está com duas
+                  linhas. é possível agrupar algo?"*. À vista ficou só o que desenha
+                  e descreve o lote; os documentos dele (vértices, roteiro, SIGEF,
+                  CAR) e os grupos Loteamento, Massa (com Vagas) e Topografia viraram
+                  menus ▾ — mesmos comandos, mesmo rótulo e ajuda, um clique a mais. */}
+              <MenuDoRibbon
+                rotulo="Documentos"
+                icone={FileText}
+                ajuda="Os documentos do lote: nomear os vértices, roteiro perimétrico e memorial, GeoINCRA/SIGEF e CAR"
+              >
+                {/* A1: o nome do vértice é o que amarra memorial, planta e tabela
+                    de coordenadas ao MESMO ponto — e hoje é digitado três vezes. */}
+                <BotaoDoRibbon
+                  icone={Hash}
+                  rotulo="Nomear vértices"
+                  onClick={() => void nomearVerticesDoTerreno()}
+                  disabled={roteiro.vertices.length < 3}
+                  ajuda={
+                    roteiro.vertices.length < 3
+                      ? 'Feche o contorno do lote com a ferramenta Terreno antes: os vértices são os do anel'
+                      : 'Nomeia P1, P2… no sentido horário a partir do primeiro vértice — um comando só, Ctrl+Z desfaz; edite um a um no quadro de divisas'
+                  }
+                />
+                <BotaoDoRibbon
+                  icone={ListOrdered}
+                  rotulo="Roteiro"
+                  contagem={roteiro.lados.length || undefined}
+                  ativo={relatorioAberto === 'roteiro'}
+                  onClick={() => alternarRelatorio('roteiro')}
+                  disabled={roteiro.lados.length === 0}
+                  ajuda={
+                    roteiro.lados.length === 0
+                      ? 'Feche o contorno do lote com a ferramenta Terreno: o roteiro é a tabela vértice a vértice dele'
+                      : roteiro.georreferenciado
+                        ? 'Vértice a vértice: E/N, latitude/longitude, azimute verdadeiro, distância e confrontante; memorial convencional; restituição por memorial'
+                        : 'Vértice a vértice com azimutes de DESENHO — informe latitude/longitude e o CRS em Dados do lote para os azimutes verdadeiros e as coordenadas'
+                  }
+                />
+                {/* A4: as peças do georreferenciamento do imóvel rural para o credenciado. */}
+                <BotaoDoRibbon
+                  icone={Landmark}
+                  rotulo="SIGEF"
+                  ativo={relatorioAberto === 'sigef'}
+                  onClick={() => alternarRelatorio('sigef')}
+                  disabled={roteiro.lados.length === 0}
+                  ajuda={
+                    roteiro.lados.length === 0
+                      ? 'Feche o contorno do lote com a ferramenta Terreno: o SIGEF é sobre os vértices dele'
+                      : 'GeoINCRA: códigos dos vértices no padrão do credenciado, tipo, sigmas e método; tipo de limite e confrontante por trecho; pendências pelas regras do INCRA; planilha ODS no modelo oficial, memorial, cartas de anuência e conferência do retorno'
+                  }
+                />
+                {/* A5: os temas ambientais do imóvel rural, para o SICAR. */}
+                <BotaoDoRibbon
+                  icone={Trees}
+                  rotulo="CAR"
+                  contagem={car.poligonos.filter((p) => p.tema !== 'AREA_IMOVEL').length || undefined}
+                  ativo={relatorioAberto === 'car'}
+                  onClick={() => alternarRelatorio('car')}
+                  disabled={roteiro.lados.length === 0}
+                  ajuda={
+                    roteiro.lados.length === 0
+                      ? 'Feche o contorno do imóvel com a ferramenta Terreno: o CAR mede os temas contra ele'
+                      : 'Quadro de APP, Reserva Legal, vegetação nativa, área consolidada, servidão e hidrografia; apoio à Reserva Legal pelo bioma; Shapefile por tema, KML e coordenadas para o SICAR. Os temas se desenham com Área (tipo Ambiental)'
+                  }
+                />
+              </MenuDoRibbon>
             </GrupoDoRibbon>
-            {/* LOTEAMENTO (B1, 25/09/2026): o parcelamento do solo. Separado do grupo
-                Lote porque ali o assunto é UM imóvel (a gleba, a escritura, os
-                recuos); aqui são as N unidades que nascem dele e vão virar
-                matícula, espelho de vendas e memória descritiva cada uma. */}
-            <GrupoDoRibbon rotulo="Loteamento">
-              <Ferramenta
-                atual={editor.tool}
-                valor="quadra"
+            <GrupoDoRibbon rotulo="Implantação">
+              {/* LOTEAMENTO (B1, 25/09/2026): o parcelamento do solo. Separado do grupo
+                  Lote porque ali o assunto é UM imóvel (a gleba, a escritura, os
+                  recuos); aqui são as N unidades que nascem dele e vão virar
+                  matícula, espelho de vendas e memória descritiva cada uma. */}
+              <MenuDoRibbon
+                rotulo="Loteamento"
                 icone={Grid3x3}
-                rotulo="Quadra"
-                onClick={editor.setTool}
-              />
-              <Ferramenta
-                atual={editor.tool}
-                valor="lote"
-                icone={Scan}
-                rotulo="Lote"
-                onClick={editor.setTool}
-              />
-              <Ferramenta
-                atual={editor.tool}
-                valor="via"
-                icone={Route}
-                rotulo="Via"
-                onClick={editor.setTool}
-              />
-              <Ferramenta
-                atual={editor.tool}
-                valor="area-publica"
-                icone={TreePine}
-                rotulo="Área pública"
-                onClick={editor.setTool}
-              />
-              <BotaoDoRibbon
-                icone={Grid2x2}
-                rotulo="Lotear"
-                ativo={tarefaAberta === 'lotear'}
-                onClick={() => alternarTarefa('lotear')}
-                disabled={quadrasDoNivel.length === 0}
-                ajuda={
-                  quadrasDoNivel.length === 0
-                    ? 'Desenhe uma quadra primeiro: é ela que se subdivide em lotes'
-                    : 'Fatia a quadra em lotes de testada fixa — prévia antes de lançar, e um Ctrl+Z desfaz'
-                }
-              />
-              <BotaoDoRibbon
-                icone={ListOrdered}
-                rotulo="Numerar"
-                onClick={numerarQuadraSelecionada}
-                disabled={(editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0}
-                ajuda={
-                  (editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0
-                    ? 'Desenhe uma quadra primeiro: a numeração corre no sentido horário dentro dela'
-                    : 'Renumera os lotes da quadra selecionada no sentido horário, a partir do 1º vértice dela · um Ctrl+Z desfaz tudo'
-                }
-              />
-              {/* A5: regularização fundiária — os lotes com seus ocupantes. */}
-              <BotaoDoRibbon
-                icone={Users}
-                rotulo="REURB"
-                ativo={relatorioAberto === 'reurb'}
-                onClick={() => alternarRelatorio('reurb')}
-                disabled={(editor.model.lotes ?? []).length === 0}
-                ajuda={
-                  (editor.model.lotes ?? []).length === 0
-                    ? 'Desenhe os lotes do núcleo primeiro (Quadra, Lote — sobre a ortofoto, se houver)'
-                    : 'Regularização fundiária (Lei 13.465/2017): ocupantes por lote lidos do Empreendimento, memoriais REURB, listagem de ocupantes para cartório e prefeitura e as pranchas por lote'
-                }
-              />
-            </GrupoDoRibbon>
-            {/* ESTUDO DE MASSA (01/10/2026, M1): o volume do empreendimento antes da
-                planta — bloco (contorno × pavimentos) e o estudo com o envelope legal. */}
-            <GrupoDoRibbon rotulo="Massa">
-              <Ferramenta
-                atual={editor.tool}
-                valor="bloco"
+                ajuda="O parcelamento do solo: quadras, lotes, vias e áreas públicas; lotear e numerar; REURB"
+              >
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="quadra"
+                  icone={Grid3x3}
+                  rotulo="Quadra"
+                  onClick={editor.setTool}
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="lote"
+                  icone={Scan}
+                  rotulo="Lote"
+                  onClick={editor.setTool}
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="via"
+                  icone={Route}
+                  rotulo="Via"
+                  onClick={editor.setTool}
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="area-publica"
+                  icone={TreePine}
+                  rotulo="Área pública"
+                  onClick={editor.setTool}
+                />
+                <BotaoDoRibbon
+                  icone={Grid2x2}
+                  rotulo="Lotear"
+                  ativo={tarefaAberta === 'lotear'}
+                  onClick={() => alternarTarefa('lotear')}
+                  disabled={quadrasDoNivel.length === 0}
+                  ajuda={
+                    quadrasDoNivel.length === 0
+                      ? 'Desenhe uma quadra primeiro: é ela que se subdivide em lotes'
+                      : 'Fatia a quadra em lotes de testada fixa — prévia antes de lançar, e um Ctrl+Z desfaz'
+                  }
+                />
+                <BotaoDoRibbon
+                  icone={ListOrdered}
+                  rotulo="Numerar"
+                  onClick={numerarQuadraSelecionada}
+                  disabled={(editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0}
+                  ajuda={
+                    (editor.model.quadras ?? []).filter((q) => q.levelId === levelId).length === 0
+                      ? 'Desenhe uma quadra primeiro: a numeração corre no sentido horário dentro dela'
+                      : 'Renumera os lotes da quadra selecionada no sentido horário, a partir do 1º vértice dela · um Ctrl+Z desfaz tudo'
+                  }
+                />
+                {/* A5: regularização fundiária — os lotes com seus ocupantes. */}
+                <BotaoDoRibbon
+                  icone={Users}
+                  rotulo="REURB"
+                  ativo={relatorioAberto === 'reurb'}
+                  onClick={() => alternarRelatorio('reurb')}
+                  disabled={(editor.model.lotes ?? []).length === 0}
+                  ajuda={
+                    (editor.model.lotes ?? []).length === 0
+                      ? 'Desenhe os lotes do núcleo primeiro (Quadra, Lote — sobre a ortofoto, se houver)'
+                      : 'Regularização fundiária (Lei 13.465/2017): ocupantes por lote lidos do Empreendimento, memoriais REURB, listagem de ocupantes para cartório e prefeitura e as pranchas por lote'
+                  }
+                />
+              </MenuDoRibbon>
+              {/* ESTUDO DE MASSA (01/10/2026, M1): o volume do empreendimento antes da
+                  planta — bloco (contorno × pavimentos) e o estudo com o envelope legal. */}
+              <MenuDoRibbon
+                rotulo="Massa"
                 icone={Box}
-                rotulo="Bloco"
-                onClick={editor.setTool}
-              />
-              <BotaoDoRibbon
-                icone={Building2}
-                rotulo="Estudo de massa"
-                contagem={(editor.model.blocos ?? []).length || undefined}
-                ativo={tarefaAberta === 'massa'}
-                onClick={() => alternarTarefa('massa')}
-                ajuda="O que a lei deixa no lote (implantação máxima, área computável máxima, pavimentos possíveis) e o que os blocos usam: TO, CA, gabarito, permeabilidade, aproveitamento do potencial — recalculado a cada mudança"
-              />
-              <BotaoDoRibbon
-                icone={Home}
-                rotulo="Produto"
-                contagem={produtoDoEstudo.produto.tipologias.length || undefined}
-                ativo={tarefaAberta === 'produto'}
-                onClick={() => alternarTarefa('produto')}
-                ajuda="O que se vende: tipologias, mix, padrão construtivo (CUB), meta de unidades e as hipóteses do pavimento (núcleo, paredes, corredor) — o Estudo de massa reparte o mix pelos blocos"
-              />
-              <BotaoDoRibbon
-                icone={Wand2}
-                rotulo="Gerar massa"
-                contagem={geradorDeMassa.resultado?.melhores.length || undefined}
-                ativo={telaAberta === 'gerar-massa'}
-                onClick={() => alternarTela('gerar-massa')}
-                disabled={!temLoteDoEstudo}
-                ajuda={
-                  !temLoteDoEstudo
-                    ? 'Feche o lote primeiro (divisas do terreno, com a FRENTE marcada): o gerador implanta dentro do envelope legal'
-                    : 'Gerar implantações: torre única, duas torres, lâmina, L, U, H, embasamento + torre — varridas em pavimentos e estacionamento, ranqueadas pelo objetivo (VGV, lucro, unidades, custo…) dentro da lei e das vagas'
-                }
-              />
-            </GrupoDoRibbon>
-            {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente
-                ou pelo contorno do pavimento; os mínimos PCD/idoso e a exigência conferidos. */}
-            <GrupoDoRibbon rotulo="Garagem">
-              <BotaoDoRibbon
-                icone={CarFront}
-                rotulo="Vagas"
-                contagem={vagasSugeridasNoNivel || undefined}
-                ativo={tarefaAberta === 'vagas'}
-                onClick={() => alternarTarefa('vagas')}
-                ajuda="Lança vagas em fileiras (2,50 × 5,00 m) com faixa de circulação, desviando de pilares e paredes; PCD e idoso nos mínimos legais; confere com a exigência — sugeridas até aceitar"
-              />
-            </GrupoDoRibbon>
-            {/* PERFIL altimétrico e DRENAGEM traçada (fases 4 e 6 da topografia):
-                uma VISTA do terreno e uma premissa de terraplenagem — nenhuma das
-                duas passa pelo kernel. */}
-            <GrupoDoRibbon rotulo="Topografia">
-              {/* IMPORTAR LEVANTAMENTO (P2.64): o arquivo do topógrafo em um
-                  clique. Primeiro do grupo porque é o primeiro passo real de
-                  quem tem topografia — antes de traçar perfil ou drenagem,
-                  alguém precisa pôr as cotas no desenho. */}
-              <BotaoDoRibbon
-                icone={FileUp}
-                rotulo="Importar levantamento"
-                onClick={importarLevantamento}
-                ajuda="Arquivo do topógrafo — CSV/TXT de estação total (PNEZD), GeoJSON, KML, DXF, SVG ou LandXML. Traz os pontos cotados e, quando o arquivo tem o perímetro, lança as divisas do lote junto. Prévia antes de entrar; o sha256 do arquivo vai na proveniência da versão."
-              />
-              <Ferramenta
-                atual={editor.tool}
-                valor="perfil"
-                icone={Activity}
-                rotulo="Perfil"
-                onClick={editor.setTool}
-              />
-              <Ferramenta
-                atual={editor.tool}
-                valor="drenagem"
-                icone={Waves}
-                rotulo="Drenagem"
-                onClick={editor.setTool}
-              />
-              {/* C2: o eixo de uma via de projeto e a gaveta com estacas, greide,
-                  seções, volumes e nota de serviço. */}
-              <Ferramenta
-                atual={editor.tool}
-                valor="eixo-via"
-                icone={Route}
-                rotulo="Eixo de projeto"
-                onClick={editor.setTool}
-              />
-              <BotaoDoRibbon
-                icone={Milestone}
-                rotulo="Vias e greide"
-                contagem={vias.vias.length || undefined}
-                ativo={relatorioAberto === 'vias'}
-                onClick={() => alternarRelatorio('vias')}
-                ajuda={
-                  vias.vias.length === 0
-                    ? 'Trace um eixo de projeto na planta primeiro — a via nasce dele, estaqueada a cada 20 m'
-                    : 'Estacas, greide com PIVs e curvas verticais, seção tipo, seções transversais, volumes por áreas médias e nota de serviço (CSV)'
-                }
-              />
+                ajuda="O volume do empreendimento antes da planta: bloco, estudo de massa, produto, gerador de implantações e vagas da garagem"
+              >
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="bloco"
+                  icone={Box}
+                  rotulo="Bloco"
+                  onClick={editor.setTool}
+                />
+                <BotaoDoRibbon
+                  icone={Building2}
+                  rotulo="Estudo de massa"
+                  contagem={(editor.model.blocos ?? []).length || undefined}
+                  ativo={tarefaAberta === 'massa'}
+                  onClick={() => alternarTarefa('massa')}
+                  ajuda="O que a lei deixa no lote (implantação máxima, área computável máxima, pavimentos possíveis) e o que os blocos usam: TO, CA, gabarito, permeabilidade, aproveitamento do potencial — recalculado a cada mudança"
+                />
+                <BotaoDoRibbon
+                  icone={Home}
+                  rotulo="Produto"
+                  contagem={produtoDoEstudo.produto.tipologias.length || undefined}
+                  ativo={tarefaAberta === 'produto'}
+                  onClick={() => alternarTarefa('produto')}
+                  ajuda="O que se vende: tipologias, mix, padrão construtivo (CUB), meta de unidades e as hipóteses do pavimento (núcleo, paredes, corredor) — o Estudo de massa reparte o mix pelos blocos"
+                />
+                <BotaoDoRibbon
+                  icone={Wand2}
+                  rotulo="Gerar massa"
+                  contagem={geradorDeMassa.resultado?.melhores.length || undefined}
+                  ativo={telaAberta === 'gerar-massa'}
+                  onClick={() => alternarTela('gerar-massa')}
+                  disabled={!temLoteDoEstudo}
+                  ajuda={
+                    !temLoteDoEstudo
+                      ? 'Feche o lote primeiro (divisas do terreno, com a FRENTE marcada): o gerador implanta dentro do envelope legal'
+                      : 'Gerar implantações: torre única, duas torres, lâmina, L, U, H, embasamento + torre — varridas em pavimentos e estacionamento, ranqueadas pelo objetivo (VGV, lucro, unidades, custo…) dentro da lei e das vagas'
+                  }
+                />
+              {/* GARAGEM (19/09/2026, E2.5): vagas em fileiras com circulação, por ambiente
+                  ou pelo contorno do pavimento; os mínimos PCD/idoso e a exigência conferidos. */}
+                <BotaoDoRibbon
+                  icone={CarFront}
+                  rotulo="Vagas"
+                  contagem={vagasSugeridasNoNivel || undefined}
+                  ativo={tarefaAberta === 'vagas'}
+                  onClick={() => alternarTarefa('vagas')}
+                  ajuda="Lança vagas em fileiras (2,50 × 5,00 m) com faixa de circulação, desviando de pilares e paredes; PCD e idoso nos mínimos legais; confere com a exigência — sugeridas até aceitar"
+                />
+              </MenuDoRibbon>
+              {/* PERFIL altimétrico e DRENAGEM traçada (fases 4 e 6 da topografia):
+                  uma VISTA do terreno e uma premissa de terraplenagem — nenhuma das
+                  duas passa pelo kernel. */}
+              <MenuDoRibbon
+                rotulo="Topografia"
+                icone={Mountain}
+                ajuda="Importar o levantamento, traçar perfil e drenagem, eixo de projeto e vias com greide"
+              >
+                {/* IMPORTAR LEVANTAMENTO (P2.64): o arquivo do topógrafo em um
+                    clique. Primeiro do grupo porque é o primeiro passo real de
+                    quem tem topografia — antes de traçar perfil ou drenagem,
+                    alguém precisa pôr as cotas no desenho. */}
+                <BotaoDoRibbon
+                  icone={FileUp}
+                  rotulo="Importar levantamento"
+                  onClick={importarLevantamento}
+                  ajuda="Arquivo do topógrafo — CSV/TXT de estação total (PNEZD), GeoJSON, KML, DXF, SVG ou LandXML. Traz os pontos cotados e, quando o arquivo tem o perímetro, lança as divisas do lote junto. Prévia antes de entrar; o sha256 do arquivo vai na proveniência da versão."
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="perfil"
+                  icone={Activity}
+                  rotulo="Perfil"
+                  onClick={editor.setTool}
+                />
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="drenagem"
+                  icone={Waves}
+                  rotulo="Drenagem"
+                  onClick={editor.setTool}
+                />
+                {/* C2: o eixo de uma via de projeto e a gaveta com estacas, greide,
+                    seções, volumes e nota de serviço. */}
+                <Ferramenta
+                  atual={editor.tool}
+                  valor="eixo-via"
+                  icone={Route}
+                  rotulo="Eixo de projeto"
+                  onClick={editor.setTool}
+                />
+                <BotaoDoRibbon
+                  icone={Milestone}
+                  rotulo="Vias e greide"
+                  contagem={vias.vias.length || undefined}
+                  ativo={relatorioAberto === 'vias'}
+                  onClick={() => alternarRelatorio('vias')}
+                  ajuda={
+                    vias.vias.length === 0
+                      ? 'Trace um eixo de projeto na planta primeiro — a via nasce dele, estaqueada a cada 20 m'
+                      : 'Estacas, greide com PIVs e curvas verticais, seção tipo, seções transversais, volumes por áreas médias e nota de serviço (CSV)'
+                  }
+                />
+              </MenuDoRibbon>
             </GrupoDoRibbon>
           </>
         )}

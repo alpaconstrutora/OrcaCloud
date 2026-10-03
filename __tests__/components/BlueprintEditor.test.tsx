@@ -1283,7 +1283,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     expect(within(gaveta).getByText('Nenhum bloco ainda')).toBeInTheDocument();
     await user.click(within(gaveta).getByRole('button', { name: 'Desenhar bloco' }));
@@ -1312,8 +1312,8 @@ describe('BlueprintEditor · quantitativos', () => {
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
     // O ribbon tem o grupo Massa: a ferramenta Bloco e o estudo com a contagem.
-    expect(screen.getByRole('button', { name: /^bloco$/i })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    expect(botao(/^bloco$/i)).toBeInTheDocument();
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     const legal = within(gaveta).getByTestId('envelope-legal');
     expect(legal).toHaveTextContent(/1\.200,00 m²/);
@@ -1358,14 +1358,14 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^produto/i }));
+    await user.click(botao(/^produto/i));
     const gavetaProduto = await screen.findByTestId('tarefa-produto');
     await user.selectOptions(within(gavetaProduto).getByLabelText('Começar de uma semente'), 'RESIDENCIAL_MEDIO');
     await user.click(within(gavetaProduto).getByRole('button', { name: /^aplicar$/i }));
     expect(await within(gavetaProduto).findByDisplayValue('3 dorm. (1 suíte)')).toBeInTheDocument();
     await waitFor(() => expect(saveProduto).toHaveBeenCalled(), { timeout: 2000 });
     // A gaveta do estudo reparte o mix: 8 unidades por pavimento, 80 no total.
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     const sec = within(gaveta).getByTestId('produto-da-massa');
     expect(sec).toHaveTextContent(/80/);
@@ -1399,7 +1399,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     const fin = await within(gaveta).findByTestId('financeiro-da-massa');
     // VGV 40 × 58 × 8.500 + 40 × 75 × 8.800 = 46,12 mi; obra 7.200 m² × (2.000 × 1,25) = 18,0 mi.
@@ -1425,7 +1425,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^gerar massa/i }));
+    await user.click(botao(/^gerar massa/i));
     const abrirTela = async () => (await screen.findByRole('heading', { level: 1, name: /^gerar massa$/i })).closest('[data-tela="gerar-massa"]') as HTMLElement;
     let tela = await abrirTela();
     await user.selectOptions(within(tela).getByLabelText('Objetivo'), 'UNIDADES');
@@ -1443,7 +1443,7 @@ describe('BlueprintEditor · quantitativos', () => {
     // Aplicar: os blocos entram no desenho (a tela fecha); reabrir avisa que aplicar de novo troca todos.
     await user.click(within(escolhida).getByTestId('aplicar-massa'));
     await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: /^gerar massa$/i })).not.toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /^gerar massa/i }));
+    await user.click(botao(/^gerar massa/i));
     tela = await abrirTela();
     expect(within(tela).getByTestId('implantacao-escolhida')).toHaveTextContent(new RegExp(`O desenho já tem ${blocosDaEscolhida} bloco\\(s\\)`));
     // Criar alternativa: o nome no padrão EM-00N e o modelo com os blocos da escolhida (os antigos trocados).
@@ -1478,7 +1478,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     const sol = within(gaveta).getByTestId('insolacao-da-massa');
     expect(sol).toHaveTextContent(/Sol nas fachadas/);
@@ -1521,7 +1521,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^gerar massa/i }));
+    await user.click(botao(/^gerar massa/i));
     const tela = (await screen.findByRole('heading', { level: 1, name: /^gerar massa$/i })).closest('[data-tela="gerar-massa"]') as HTMLElement;
     // Sem IA configurada: o intérprete local responde, e diz que foi ele.
     await user.type(within(tela).getByLabelText('Pedido para a massa'), 'duas torres com apartamentos entre 65 e 75 m²');
@@ -1579,7 +1579,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Torre A'));
     const painel = await screen.findByTestId('painel-bloco');
@@ -1620,7 +1620,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Torre L'));
     const painel = await screen.findByTestId('painel-bloco');
@@ -1663,7 +1663,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Torre A'));
     const painel = await screen.findByTestId('painel-bloco');
@@ -1713,7 +1713,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^terreno$/i);
-    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tarefa-massa');
     await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Subsolo'));
     const painel = await screen.findByTestId('painel-bloco');
@@ -6870,10 +6870,11 @@ describe('BlueprintEditor · roteiro perimétrico (A1)', () => {
  * ensina a traçar. O nome do tool é `eixo-via` — `eixo` já é a malha estrutural.
  */
 describe('BlueprintEditor · vias e greide (C2)', () => {
-  it('Eixo de projeto e Vias e greide ficam no grupo Topografia; a gaveta sem via ensina a traçar', async () => {
+  it('Eixo de projeto e Vias e greide ficam no menu Topografia; a gaveta sem via ensina a traçar', async () => {
     await montar();
     await abrirAba(/^terreno$/i);
-    const grupo = screen.getByRole('group', { name: /^topografia$/i });
+    // Desde 03/10/2026 a Topografia é um menu ▾ (aberto pelo `abrirAba`), não um grupo à vista.
+    const grupo = screen.getByLabelText(/^topografia$/i);
     expect(within(grupo).getByRole('button', { name: /^eixo de projeto$/i })).toBeInTheDocument();
     const vias = within(grupo).getByRole('button', { name: /^vias e greide$/i });
     expect(vias).toHaveAttribute('title', expect.stringMatching(/trace um eixo de projeto/i));
@@ -6883,7 +6884,8 @@ describe('BlueprintEditor · vias e greide (C2)', () => {
     // "Traçar eixo" fecha a gaveta e liga a ferramenta — o botão do ribbon fica pressionado
     await userEvent.setup().click(within(painel).getByRole('button', { name: /traçar eixo/i }));
     await waitFor(() => expect(screen.queryByTestId('painel-vias')).toBeNull());
-    expect(within(grupo).getByRole('button', { name: /^eixo de projeto$/i })).toHaveAttribute('aria-pressed', 'true');
+    // (O menu fechou com o clique: `botao` o reabre.)
+    expect(botao(/^eixo de projeto$/i)).toHaveAttribute('aria-pressed', 'true');
   }, 60000);
 });
 
@@ -7002,5 +7004,39 @@ describe('BlueprintEditor · editar o lote digitando', () => {
     const outra = await screen.findByTestId('painel-lote-digitado');
     expect(within(outra).getByLabelText('Frente (m)')).toHaveValue('15,00');
     expect(within(outra).getByLabelText('Confrontante da frente')).toHaveValue('Rua A');
+  });
+});
+
+/**
+ * ABA TERRENO EM MENUS (03/10/2026): *"menubar terreno está com duas linhas.
+ * é possível agrupar algo?"* — à vista o que desenha e descreve o lote; o resto
+ * em quatro menus ▾, com os mesmos comandos.
+ */
+describe('BlueprintEditor · aba Terreno agrupada', () => {
+  it('à vista: Terreno, Digitar, Sub-região, Divisa, Dados do lote e os menus Documentos, Loteamento, Massa, Topografia', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i, false);
+    for (const nome of [/^terreno$/i, /^digitar$/i, /^sub-região$/i, /^divisa$/i, /^dados do lote$/i]) {
+      expect(screen.getByRole('button', { name: nome })).toBeInTheDocument();
+    }
+    const menus = [...document.querySelectorAll('[data-menu-do-ribbon]')].map((b) => b.getAttribute('data-menu-do-ribbon'));
+    expect(menus).toEqual(['Documentos', 'Loteamento', 'Massa', 'Topografia']);
+    // Fechados, os comandos de dentro não estão no DOM.
+    for (const nome of [/^roteiro/i, /^quadra$/i, /^estudo de massa/i, /^vagas/i, /^perfil$/i]) {
+      expect(screen.queryByRole('button', { name: nome })).toBeNull();
+    }
+    // Cada menu traz o seu grupo inteiro.
+    const conteudo: Record<string, RegExp[]> = {
+      Documentos: [/^nomear vértices$/i, /^roteiro/i, /^sigef$/i, /^car$/i],
+      Loteamento: [/^quadra$/i, /^lote$/i, /^via$/i, /^área pública$/i, /^lotear/i, /^numerar/i, /^reurb/i],
+      Massa: [/^bloco$/i, /^estudo de massa/i, /^produto/i, /^gerar massa/i, /^vagas/i],
+      Topografia: [/^importar levantamento$/i, /^perfil$/i, /^drenagem$/i, /^eixo de projeto$/i, /^vias e greide$/i],
+    };
+    for (const [menu, nomes] of Object.entries(conteudo)) {
+      fireEvent.click(document.querySelector(`[data-menu-do-ribbon="${menu}"]`)!);
+      const caixa = screen.getByLabelText(menu);
+      for (const nome of nomes) expect(within(caixa).getByRole('button', { name: nome })).toBeInTheDocument();
+      fireEvent.click(document.querySelector(`[data-menu-do-ribbon="${menu}"]`)!);
+    }
   });
 });

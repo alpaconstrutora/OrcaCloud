@@ -51,6 +51,74 @@ export const getDocumentStatusPresentation = (status: OpuraDocument['status']) =
   return { statusColor, statusLabel };
 };
 
+/**
+ * Ordena documentos pela coluna do cabeçalho. A `DocumentsTable` é só apresentação
+ * e deixa a ordem com quem chama — e até 03/10/2026 ninguém ordenava: clicar no
+ * cabeçalho mudava a seta e as linhas ficavam no lugar (Portal do Parceiro e GED).
+ *
+ * Compara o MESMO valor que a célula mostra (extensão do arquivo, nome da obra
+ * resolvido, rótulo do status), para a ordem bater com o que se lê. Texto em
+ * pt-BR com números em ordem natural ("R2" antes de "R10"); datas pelo instante.
+ * Vazio ("-", nulo) vai sempre para o fim, nos dois sentidos. Sem coluna de
+ * ordenação, devolve a lista na ordem recebida. Não altera o array de entrada.
+ */
+export function sortDocumentsForTable(
+  documents: OpuraDocument[],
+  sortColumn: string | null | undefined,
+  sortDirection: 'asc' | 'desc',
+  ctx: {
+    resolveProjectName?: (doc: OpuraDocument) => string;
+    resolveDisciplineLabel?: (doc: OpuraDocument) => string;
+    resolveStatus?: (doc: OpuraDocument) => { label: string; className: string };
+  } = {},
+): OpuraDocument[] {
+  if (!sortColumn || sortColumn === 'actions') return documents;
+
+  const texto = (v: string | null | undefined): string | null => {
+    const t = (v ?? '').trim();
+    return t === '' || t === '-' ? null : t;
+  };
+  const instante = (v: string | null | undefined): number | null => {
+    if (!v) return null;
+    const ms = new Date(v).getTime();
+    return Number.isNaN(ms) ? null : ms;
+  };
+  const valor = (doc: OpuraDocument): string | number | null => {
+    switch (sortColumn) {
+      case 'nome': return texto(doc.nome);
+      case 'extensao': return texto(getDocumentExtension(doc.active_version?.storage_path));
+      case 'descricao': return texto(doc.descricao);
+      case 'autor': return texto(doc.autor);
+      case 'numero_documento_fornecedor': return texto(doc.numero_documento_fornecedor);
+      case 'tipo_documento': return texto(doc.tipo_documento);
+      case 'disciplina': return texto(ctx.resolveDisciplineLabel ? ctx.resolveDisciplineLabel(doc) : doc.discipline_code);
+      case 'revisao': return texto(doc.revisao);
+      case 'project_id': return texto(ctx.resolveProjectName ? ctx.resolveProjectName(doc) : null);
+      case 'data_emissao': return instante(doc.data_emissao);
+      case 'data_validade': return instante(doc.data_validade);
+      case 'status': return texto(ctx.resolveStatus ? ctx.resolveStatus(doc).label : getDocumentStatusPresentation(doc.status).statusLabel);
+      default: {
+        const v = (doc as unknown as Record<string, unknown>)[sortColumn];
+        return v == null ? null : texto(String(v));
+      }
+    }
+  };
+
+  const dir = sortDirection === 'desc' ? -1 : 1;
+  return documents
+    .map((doc, i) => ({ doc, i, v: valor(doc) }))
+    .sort((a, b) => {
+      if (a.v === null && b.v === null) return a.i - b.i;
+      if (a.v === null) return 1;
+      if (b.v === null) return -1;
+      const c = typeof a.v === 'number' && typeof b.v === 'number'
+        ? a.v - b.v
+        : String(a.v).localeCompare(String(b.v), 'pt-BR', { numeric: true, sensitivity: 'base' });
+      return c !== 0 ? c * dir : a.i - b.i;
+    })
+    .map(x => x.doc);
+}
+
 export interface DocumentsTableProps {
   documents: OpuraDocument[];
   /** Estado de colunas/ordenação — cada tela chama seu próprio `useTableColumns(COLUMNS, 'chave')`. */

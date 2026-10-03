@@ -76,7 +76,11 @@ vi.mock('../../lib/supabase', () => ({
         removeChannel: () => undefined,
     },
 }));
-vi.mock('../../components/documents/DocumentsTable', () => ({ DocumentsTable: () => null }));
+// Só o componente vira stub; o resto do módulo (sortDocumentsForTable) é o real.
+vi.mock('../../components/documents/DocumentsTable', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../components/documents/DocumentsTable')>()),
+    DocumentsTable: () => null,
+}));
 vi.mock('../../components/documents/DocumentQrLabelModal', () => ({ DocumentQrLabelModal: () => null }));
 
 import { PartnerPortal } from '../../components/partner/PartnerPortal';

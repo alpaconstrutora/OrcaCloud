@@ -58,7 +58,7 @@ import {
   ACCEPTANCE_KIND_LABELS, RETENTION_RELEASE_KIND_LABELS,
 } from '../../lib/contractLabels';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
-import { DocumentsTable } from '../documents/DocumentsTable';
+import { DocumentsTable, sortDocumentsForTable } from '../documents/DocumentsTable';
 import { isSentDocument, sentDocumentAsRow, sentDocumentStatus } from '../../utils/partnerSentDocuments';
 import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
 import {
@@ -105,6 +105,11 @@ const PARTNER_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+// Texto da coluna "Obra Vinculada" dos documentos compartilhados — o mesmo valor
+// alimenta a célula e a ordenação (sortDocumentsForTable).
+const sharedDocProjectName = (doc: OpuraDocument): string =>
+  doc.project_name || (doc.project_id ? 'Vínculo Externo' : '-');
+
 const PARTNER_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, autor: 150, numero_documento_fornecedor: 160, tipo_documento: 160,
   revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
@@ -534,6 +539,15 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
     return result;
   }, [sharedOpuraDocuments, selectedFolderId, selectedDisciplineCode, docStatusFilter, docSearchQuery, getFolderSubtreeIds, resolveDisciplineCode]);
 
+  // Ordem pela coluna clicada no cabeçalho. Antes de 03/10/2026 a seta mudava e as
+  // linhas não — a DocumentsTable deixa a ordem com quem chama, e ninguém ordenava.
+  const sortedSharedDocuments = React.useMemo(
+    () => sortDocumentsForTable(filteredSharedDocuments, partnerDocColumns.sortColumn, partnerDocColumns.sortDirection, {
+      resolveProjectName: sharedDocProjectName,
+    }),
+    [filteredSharedDocuments, partnerDocColumns.sortColumn, partnerDocColumns.sortDirection],
+  );
+
   // 1. Carregar perfil e workspace inicial (ou o workspace de pré-visualização, se for o caso)
   useEffect(() => {
     const loadPreviewWorkspace = async () => {
@@ -923,6 +937,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const sentRequestById = React.useMemo(() => new Map(sentDocuments.map((r) => [r.id, r])), [sentDocuments]);
   // Cada envio vira uma linha da DocumentsTable (ver utils/partnerSentDocuments.ts),
   // filtrada pela busca e ordenada pela coluna escolhida no cabeçalho.
+  const resolveSentStatus = React.useCallback((doc: OpuraDocument) => {
+    const req = sentRequestById.get(doc.id);
+    return req ? sentDocumentStatus(req) : { label: '-', className: 'text-gray-600' };
+  }, [sentRequestById]);
   const sentDocRows = React.useMemo(() => {
     const ctx = { supplierName: workspace?.supplier_name, organizationId: workspace?.organization_id };
     let rows = sentDocuments.map((r) => sentDocumentAsRow(r, ctx));
@@ -934,19 +952,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           .some((v) => (v || '').toLowerCase().includes(q));
       });
     }
-    const col = sentDocColumns.sortColumn;
-    if (col) {
-      const dir = sentDocColumns.sortDirection === 'desc' ? -1 : 1;
-      const valor = (d: (typeof rows)[number]): string => {
-        if (col === 'status') { const req = sentRequestById.get(d.id); return req ? sentDocumentStatus(req).label : ''; }
-        if (col === 'extensao') return (d.active_version?.storage_path?.split('.').pop() || '').toLowerCase();
-        const v = (d as unknown as Record<string, unknown>)[col];
-        return v == null ? '' : String(v).toLowerCase();
-      };
-      rows = [...rows].sort((a, b) => valor(a).localeCompare(valor(b), 'pt-BR') * dir);
-    }
-    return rows;
-  }, [sentDocuments, sentRequestById, sentDocSearch, sentDocColumns.sortColumn, sentDocColumns.sortDirection, workspace?.supplier_name, workspace?.organization_id]);
+    // Mesma regra de ordenação da tabela de compartilhados.
+    return sortDocumentsForTable(rows, sentDocColumns.sortColumn, sentDocColumns.sortDirection, {
+      resolveProjectName: () => '-',
+      resolveStatus: resolveSentStatus,
+    });
+  }, [sentDocuments, sentRequestById, sentDocSearch, sentDocColumns.sortColumn, sentDocColumns.sortDirection, workspace?.supplier_name, workspace?.organization_id, resolveSentStatus]);
 
   if (loading) {
     return (
@@ -1355,10 +1366,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         tableColumns={sentDocColumns}
                         cols={sentDocCols}
                         resolveProjectName={() => '-'}
-                        resolveStatus={(doc) => {
-                          const req = sentRequestById.get(doc.id);
-                          return req ? sentDocumentStatus(req) : { label: '-', className: 'text-gray-600' };
-                        }}
+                        resolveStatus={resolveSentStatus}
                         renderNameDetail={(doc) =>
                           doc.descricao ? (
                             <span className="block truncate text-sm text-gray-500 mt-0.5" title={doc.descricao}>{doc.descricao}</span>
@@ -1476,12 +1484,10 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </div>
 
                   <DocumentsTable
-                    documents={filteredSharedDocuments}
+                    documents={sortedSharedDocuments}
                     tableColumns={partnerDocColumns}
                     cols={partnerDocCols}
-                    resolveProjectName={(doc) =>
-                      doc.project_name || (doc.project_id ? 'Vínculo Externo' : '-')
-                    }
+                    resolveProjectName={sharedDocProjectName}
                     renderActions={(doc) => (
                       <>
                         {doc.active_version?.storage_path && (

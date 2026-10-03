@@ -76,7 +76,9 @@ vi.mock('../../lib/supabase', () => ({
     },
 }));
 // Stub que só diz quantos documentos recebeu — é o recorte que está em teste.
-vi.mock('../../components/documents/DocumentsTable', () => ({
+// O resto do módulo (sortDocumentsForTable, helpers) continua o real.
+vi.mock('../../components/documents/DocumentsTable', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../components/documents/DocumentsTable')>()),
     DocumentsTable: ({ documents }: { documents: unknown[] }) => (
         <div data-testid="tabela" data-linhas={documents.length} />
     ),

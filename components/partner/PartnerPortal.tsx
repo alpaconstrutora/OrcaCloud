@@ -39,7 +39,7 @@ import { partnerService } from '../../services/partnerService';
 import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
 import { reciboPagamentoPortalService, rotuloRecibo } from '../../services/reciboPagamentoPortalService';
 import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
-import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortalTabId } from '../../utils/partnerPortalTabs';
+import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortalTabId, enabledPartnerContractTabs, type PartnerContractTabId } from '../../utils/partnerPortalTabs';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -196,7 +196,16 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // menos as internas: sem Riscos & Conformidade (avaliação da construtora sobre o
   // parceiro — decisão do usuário), sem Financeiro (é aba própria do portal), sem
   // Avaliação de Desempenho e Emissão.
-  const [detailTab, setDetailTab] = useState<'overview' | 'items' | 'execucao' | 'addendums' | 'measurements' | 'retention' | 'penalties'>('overview');
+  const [detailTab, setDetailTab] = useState<PartnerContractTabId>('overview');
+  // Sub-abas do detalhe do contrato liberadas para o parceiro — engrenagem da
+  // aba Contratos na visão do app, uma lista por workspace (vale para todos os
+  // contratos). Independente da lista geral. Ver utils/partnerPortalTabs.ts.
+  const enabledContractTabs = React.useMemo(() => enabledPartnerContractTabs(workspace?.settings), [workspace?.settings]);
+  const semAbasDoContrato = !!workspace && enabledContractTabs.length === 0;
+  const showDetailTab = (id: PartnerContractTabId) => !semAbasDoContrato && detailTab === id;
+  useEffect(() => {
+    if (enabledContractTabs.length > 0 && !enabledContractTabs.includes(detailTab)) setDetailTab(enabledContractTabs[0]);
+  }, [enabledContractTabs, detailTab]);
   const [detailLoading, setDetailLoading] = useState(false);
   // Um payload só (núcleo partner_ws_contract_detail) para os dois modos —
   // itens/aditivos/medições continuam como estados próprios porque a Visão Geral
@@ -305,7 +314,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // tela interna de Suprimentos > Contratos mostra, só que somente leitura.
   const openContractDetail = async (contract: Contract) => {
     setDetailContract(contract);
-    setDetailTab('overview');
+    setDetailTab(enabledContractTabs[0] ?? 'overview');
     setDetailLoading(true);
     try {
       // Os dois modos leem o MESMO núcleo, cada um pela sua casca. Até 10/09/2026
@@ -1455,6 +1464,20 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </div>
               </div>
 
+              {semAbasDoContrato && (
+                <div className="min-h-[240px] flex items-center justify-center">
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 max-w-md text-center">
+                    <EyeOff className="w-9 h-9 text-gray-200 mx-auto mb-4" />
+                    <h3 className="text-base font-semibold text-gray-900 mb-1.5">Detalhes do contrato não liberados</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">
+                      Nenhuma informação deste contrato está liberada para você no momento.
+                      Fale com a construtora para liberar o acesso.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {!semAbasDoContrato && (
               <div className="flex gap-1 border-b border-gray-100 overflow-x-auto shrink-0">
                 {([
                   { id: 'overview', label: 'Visão Geral', icon: TrendingUp },
@@ -1464,7 +1487,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   { id: 'measurements', label: `Medições (${contractMeasurements.length})`, icon: Ruler },
                   { id: 'retention', label: 'Retenção de Garantia', icon: DollarSign },
                   { id: 'penalties', label: `Penalidades (${contractDetail.penalties.length})`, icon: AlertTriangle },
-                ] as const).map((tab) => (
+                ] as const).filter((tab) => enabledContractTabs.includes(tab.id)).map((tab) => (
                   <button
                     key={tab.id}
                     onClick={() => setDetailTab(tab.id)}
@@ -1476,12 +1499,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   </button>
                 ))}
               </div>
+              )}
 
-              {detailLoading ? (
+              {semAbasDoContrato ? null : detailLoading ? (
                 <div className="text-center py-12 text-sm text-gray-400">Carregando...</div>
               ) : (
                 <>
-                  {detailTab === 'overview' && (
+                  {showDetailTab('overview') && (
                     <div className="flex flex-col gap-4">
                       <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
                         <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Resumo de Execução</h4>
@@ -1552,7 +1576,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     </div>
                   )}
 
-                  {detailTab === 'items' && (
+                  {showDetailTab('items') && (
                     <div className="flex flex-col gap-2">
                       {contractItems.map((item) => (
                         <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
@@ -1569,7 +1593,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     </div>
                   )}
 
-                  {detailTab === 'addendums' && (
+                  {showDetailTab('addendums') && (
                     <div className="flex flex-col gap-2">
                       {contractAddendums.map((a) => (
                         <div key={a.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
@@ -1596,7 +1620,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   {/* EXECUÇÃO & ENTREGA — os mesmos blocos de Suprimentos › Contratos,
                       em leitura: o parceiro vê o que tem de cumprir (pré-mobilização,
                       documentos condicionantes) e o que já foi recebido. */}
-                  {detailTab === 'execucao' && (
+                  {showDetailTab('execucao') && (
                     <div className="flex flex-col gap-4">
                       {(detailContract.description || (detailContract as any).services_included || (detailContract as any).services_excluded
                         || (detailContract as any).execution_address || (detailContract as any).sla_days || (detailContract as any).warranty_months) && (
@@ -1690,7 +1714,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
                   {/* RETENÇÃO DE GARANTIA — deste contrato. O ledger é a mesma conta contra
                       a qual a construtora libera; sem botão de liberar (é dela). */}
-                  {detailTab === 'retention' && (
+                  {showDetailTab('retention') && (
                     <div className="flex flex-col gap-4">
                       <div className="grid grid-cols-3 gap-3">
                         <div className="bg-white border border-gray-200 rounded-xl p-3">
@@ -1724,7 +1748,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   )}
 
                   {/* PENALIDADES — inclusive canceladas, com o status dizendo. Sem ações. */}
-                  {detailTab === 'penalties' && (
+                  {showDetailTab('penalties') && (
                     <div className="flex flex-col gap-2">
                       {contractDetail.penalties.map((pen) => (
                         <div key={pen.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
@@ -1746,7 +1770,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     </div>
                   )}
 
-                  {detailTab === 'measurements' && (
+                  {showDetailTab('measurements') && (
                     <div className="flex flex-col gap-2">
                       {contractMeasurements.map((m) => (
                         <div key={m.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">

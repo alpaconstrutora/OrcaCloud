@@ -28,7 +28,11 @@ import {
   Undo2,
   Settings2,
   EyeOff,
-  LayoutDashboard
+  LayoutDashboard,
+  TrendingUp,
+  Package,
+  Ruler,
+  AlertTriangle
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
@@ -43,7 +47,10 @@ import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton,
 import { DocumentsTable } from '../documents/DocumentsTable';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
-import { enabledPartnerPortalTabs, togglePartnerPortalTab, PARTNER_PORTAL_TAB_IDS, PARTNER_PORTAL_TAB_LABELS, type PartnerPortalTabId } from '../../utils/partnerPortalTabs';
+import {
+  enabledPartnerPortalTabs, togglePartnerPortalTab, PARTNER_PORTAL_TAB_IDS, PARTNER_PORTAL_TAB_LABELS, PARTNER_PORTAL_TABS_KEY, type PartnerPortalTabId,
+  enabledPartnerContractTabs, togglePartnerContractTab, PARTNER_CONTRACT_TAB_IDS, PARTNER_CONTRACT_TAB_LABELS, PARTNER_CONTRACT_TABS_KEY, type PartnerContractTabId,
+} from '../../utils/partnerPortalTabs';
 import { KpiCard } from '../ui/KpiCard';
 import { contractService } from '../../services/contractService';
 import ContractRetentionReleaseModal from '../ContractRetentionReleaseModal';
@@ -270,6 +277,106 @@ const PORTAL_TAB_ICONS: Record<PartnerPortalTabId, React.ElementType> = {
   solicitacoes: ClipboardList,
 };
 
+// Mesmos ícones das sub-abas do detalhe do contrato no PartnerPortal.
+const CONTRACT_TAB_ICONS: Record<PartnerContractTabId, React.ElementType> = {
+  overview: TrendingUp,
+  items: Package,
+  execucao: ClipboardList,
+  addendums: FileText,
+  measurements: Ruler,
+  retention: DollarSign,
+  penalties: AlertTriangle,
+};
+
+/**
+ * Modal de abas visíveis — o mesmo painel serve à configuração geral (6 abas do
+ * portal) e à do detalhe do contrato (7 sub-abas). Espelha o do Portal do
+ * Fornecedor (SupplierDashboard), em sentence case (guia §21).
+ */
+function ConfigAbasModal<Id extends string>({
+  tituloId, titulo, subtitulo, aviso, ids, rotulos, icones, habilitadas, onToggle, onClose,
+}: {
+  tituloId: string;
+  titulo: string;
+  subtitulo: string;
+  aviso?: string;
+  ids: readonly Id[];
+  rotulos: Record<Id, string>;
+  icones: Record<Id, React.ElementType>;
+  habilitadas: readonly Id[];
+  onToggle: (id: Id) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={tituloId}
+        className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-8 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Settings2 className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 id={tituloId} className="text-lg font-black text-gray-900">{titulo}</h2>
+              <p className="text-xs font-semibold text-gray-500 mt-0.5">{subtitulo}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {aviso && (
+          <div className="mx-8 mt-6 flex items-start gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            <EyeOff className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{aviso}</span>
+          </div>
+        )}
+        <div className="p-8 space-y-3">
+          {ids.map(id => {
+            const Icon: React.ElementType = icones[id];
+            const isVisible = habilitadas.includes(id);
+            return (
+              <button
+                key={id}
+                onClick={() => onToggle(id)}
+                aria-pressed={isVisible}
+                className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
+                  isVisible
+                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                    : 'bg-gray-50 border-gray-100 text-gray-400'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-4 h-4 ${isVisible ? 'text-blue-500' : 'text-gray-300'}`} />
+                  <span className="text-sm font-semibold">{rotulos[id]}</span>
+                </div>
+                <div className={`flex items-center gap-2 text-xs font-semibold ${isVisible ? 'text-blue-500' : 'text-gray-400'}`}>
+                  {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="px-8 pb-8">
+          <p className="text-xs text-gray-500 text-center">
+            Clique em cada aba para alternar a visibilidade no portal do parceiro.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = ({ organizationId, currentUserEmail }) => {
   const confirm = useConfirm();
   const { showToast } = useToast();
@@ -287,6 +394,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   const [requests, setRequests] = useState<PartnerRequest[]>([]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [showTabConfig, setShowTabConfig] = useState(false);
+  const [showContractTabConfig, setShowContractTabConfig] = useState(false);
   const [portalToken, setPortalToken] = useState<PartnerPortalToken | null>(null);
   const [tokenModalOpen, setTokenModalOpen] = useState(false);
   const [tokenLoading, setTokenLoading] = useState(false);
@@ -765,13 +873,22 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
   );
   const ocultaParaParceiro = (id: PartnerPortalTabId) => !enabledPortalTabs.includes(id);
 
-  const togglePortalTabVisibility = async (id: PartnerPortalTabId) => {
+  // Sub-abas do detalhe do contrato liberadas — uma lista por workspace, vale
+  // para TODOS os contratos do parceiro (decisão do usuário em 03/10/2026),
+  // gravada em `partner_workspaces.settings.partnerContractTabs`.
+  const enabledContractTabs = useMemo(
+    () => enabledPartnerContractTabs(selectedWorkspace?.settings),
+    [selectedWorkspace?.settings],
+  );
+
+  // Grava UMA lista de abas preservando o resto de `settings` (a outra lista
+  // inclusive) — as duas engrenagens passam por aqui.
+  const salvarAbas = async (chave: string, next: readonly string[]) => {
     if (!selectedWorkspace) return;
-    const next = togglePartnerPortalTab(enabledPortalTabs, id);
     try {
       const updated = await partnerService.updateWorkspaceSettings(selectedWorkspace.id, {
         ...(selectedWorkspace.settings || {}),
-        partnerPortalTabs: next,
+        [chave]: next,
       });
       setSelectedWorkspace(prev => (prev && prev.id === updated.id ? { ...prev, settings: updated.settings } : prev));
       setWorkspaces(prev => prev.map(w => (w.id === updated.id ? { ...w, settings: updated.settings } : w)));
@@ -781,6 +898,12 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       showToast(msg ? `Erro ao salvar configuração de abas: ${msg}` : 'Erro ao salvar configuração de abas.', 'error');
     }
   };
+
+  const togglePortalTabVisibility = (id: PartnerPortalTabId) =>
+    salvarAbas(PARTNER_PORTAL_TABS_KEY, togglePartnerPortalTab(enabledPortalTabs, id));
+
+  const toggleContractTabVisibility = (id: PartnerContractTabId) =>
+    salvarAbas(PARTNER_CONTRACT_TABS_KEY, togglePartnerContractTab(enabledContractTabs, id));
 
   // Gerar/regenerar o link de acesso público do workspace selecionado
   const handleGenerateToken = async () => {
@@ -1607,7 +1730,18 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             {/* SUBTAB: CONTRATOS — lista */}
             {activeSubTab === 'contratos' && !openContractId && (
               <div className="flex flex-col gap-4">
-                <h3 className="text-sm font-bold text-gray-800">Contratos deste Fornecedor</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-bold text-gray-800">Contratos deste Fornecedor</h3>
+                  {/* Abas do detalhe do contrato — configuração própria, além da geral */}
+                  <button
+                    onClick={() => setShowContractTabConfig(true)}
+                    title="Configurar abas do contrato visíveis ao parceiro"
+                    aria-label="Configurar abas do contrato visíveis ao parceiro"
+                    className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                  </button>
+                </div>
 
                 <div className="flex flex-col gap-3">
                   {workspaceContracts.map((contract) => (
@@ -2508,66 +2642,35 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
       {/* MODAL: CONFIGURAR ABAS — espelha o painel do Portal do Fornecedor */}
       {showTabConfig && selectedWorkspace && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowTabConfig(false)}>
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="config-abas-parceiro-titulo"
-            className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md animate-in zoom-in-95 fade-in duration-200"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-8 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                  <Settings2 className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h2 id="config-abas-parceiro-titulo" className="text-lg font-black text-gray-900">Portal do Parceiro</h2>
-                  <p className="text-xs font-semibold text-gray-500 mt-0.5">Abas visíveis para {selectedWorkspace.supplier_name || 'o parceiro'}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowTabConfig(false)}
-                aria-label="Fechar"
-                className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-all"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-8 space-y-3">
-              {PARTNER_PORTAL_TAB_IDS.map(id => {
-                const Icon = PORTAL_TAB_ICONS[id];
-                const isVisible = enabledPortalTabs.includes(id);
-                return (
-                  <button
-                    key={id}
-                    onClick={() => togglePortalTabVisibility(id)}
-                    aria-pressed={isVisible}
-                    className={`w-full flex items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
-                      isVisible
-                        ? 'bg-blue-50 border-blue-200 text-blue-700'
-                        : 'bg-gray-50 border-gray-100 text-gray-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isVisible ? 'text-blue-500' : 'text-gray-300'}`} />
-                      <span className="text-sm font-semibold">{PARTNER_PORTAL_TAB_LABELS[id]}</span>
-                    </div>
-                    <div className={`flex items-center gap-2 text-xs font-semibold ${isVisible ? 'text-blue-500' : 'text-gray-400'}`}>
-                      {isVisible ? <><Eye className="w-3.5 h-3.5" /> Visível</> : <><EyeOff className="w-3.5 h-3.5" /> Oculta</>}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="px-8 pb-8">
-              <p className="text-xs text-gray-500 text-center">
-                Clique em cada aba para alternar a visibilidade no portal do parceiro.
-              </p>
-            </div>
-          </div>
-        </div>
+        <ConfigAbasModal
+          tituloId="config-abas-parceiro-titulo"
+          titulo="Portal do Parceiro"
+          subtitulo={`Abas visíveis para ${selectedWorkspace.supplier_name || 'o parceiro'}`}
+          ids={PARTNER_PORTAL_TAB_IDS}
+          rotulos={PARTNER_PORTAL_TAB_LABELS}
+          icones={PORTAL_TAB_ICONS}
+          habilitadas={enabledPortalTabs}
+          onToggle={togglePortalTabVisibility}
+          onClose={() => setShowTabConfig(false)}
+        />
+      )}
+
+      {/* MODAL: CONFIGURAR ABAS DO CONTRATO — vale para todos os contratos do parceiro */}
+      {showContractTabConfig && selectedWorkspace && (
+        <ConfigAbasModal
+          tituloId="config-abas-contrato-titulo"
+          titulo="Detalhe do contrato"
+          subtitulo={`Abas visíveis para ${selectedWorkspace.supplier_name || 'o parceiro'} em todos os contratos`}
+          aviso={ocultaParaParceiro('contratos')
+            ? 'A aba Contratos está oculta no portal. Esta configuração vale quando ela for liberada.'
+            : undefined}
+          ids={PARTNER_CONTRACT_TAB_IDS}
+          rotulos={PARTNER_CONTRACT_TAB_LABELS}
+          icones={CONTRACT_TAB_ICONS}
+          habilitadas={enabledContractTabs}
+          onToggle={toggleContractTabVisibility}
+          onClose={() => setShowContractTabConfig(false)}
+        />
       )}
 
       {/* PRÉ-VISUALIZAÇÃO: como o parceiro veria o próprio portal */}

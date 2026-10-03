@@ -94,6 +94,7 @@ vi.mock('../../components/documents/DocumentsTable', () => ({ DocumentsTable: ()
 vi.mock('../../components/documents/DocumentQrLabelModal', () => ({ DocumentQrLabelModal: () => null }));
 
 import { PartnerPortal } from '../../components/partner/PartnerPortal';
+import { partnerPortalTokenService } from '../../services/partnerPortalTokenService';
 import { ConfirmProvider } from '../../components/ui/confirm';
 
 async function abrirContrato(props: React.ComponentProps<typeof PartnerPortal>) {
@@ -177,5 +178,55 @@ describe('PartnerPortal › detalhe do contrato — abas novas', () => {
         expect(screen.getByText('SST/Compliance')).toBeInTheDocument();
         expect(screen.getByText('Cancelada')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Aplicar|Aceitar Cura|Notificar/ })).toBeNull();
+    });
+});
+
+/**
+ * Abas do detalhe do contrato configuradas pela engrenagem da aba Contratos na
+ * visão do app — `settings.partnerContractTabs`, uma lista por workspace.
+ * Pedido de 03/10/2026, docs/planos/2026-10-03-portal-parceiro-abas-visiveis-do-contrato.md
+ */
+describe('PartnerPortal › detalhe do contrato — abas configuradas', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        getDetailToken.mockResolvedValue(DETALHE);
+        window.localStorage.clear();
+    });
+
+    async function abrirComConfig(partnerContractTabs: string[]) {
+        vi.mocked(partnerPortalTokenService.getPortalData).mockResolvedValueOnce({
+            valid: true,
+            workspace: { ...WORKSPACE, settings: { partnerContractTabs } },
+        });
+        const user = userEvent.setup();
+        render(<ConfirmProvider><PartnerPortal userEmail="" portalToken="tok123" /></ConfirmProvider>);
+        await user.click(await screen.findByRole('button', { name: /^Contratos$/ }));
+        await user.click(await screen.findByRole('button', { name: 'Ver Detalhes' }));
+        await waitFor(() => expect(getDetailToken).toHaveBeenCalled());
+        return user;
+    }
+
+    it('7. só as sub-abas liberadas aparecem, e o detalhe abre na primeira delas', async () => {
+        await abrirComConfig(['measurements', 'items']);
+
+        expect(await screen.findByText('Apoio mensal')).toBeInTheDocument();   // conteúdo de Itens
+        const nomes = abas();
+        expect(nomes.some(n => n.startsWith('Itens'))).toBe(true);
+        expect(nomes.some(n => n.startsWith('Medições'))).toBe(true);
+        expect(nomes).not.toContain('Visão Geral');
+        expect(nomes).not.toContain('Execução & Entrega');
+        expect(nomes).not.toContain('Retenção de Garantia');
+        expect(nomes.some(n => n.startsWith('Penalidades'))).toBe(false);
+    });
+
+    it('8. lista vazia: nenhuma sub-aba e o aviso no lugar', async () => {
+        await abrirComConfig([]);
+
+        expect(await screen.findByText('Detalhes do contrato não liberados')).toBeInTheDocument();
+        expect(screen.getByText('Assistencia Administrativa')).toBeInTheDocument();   // cabeçalho segue
+        const nomes = abas();
+        expect(nomes).not.toContain('Visão Geral');
+        expect(nomes.some(n => n.startsWith('Itens'))).toBe(false);
+        expect(screen.queryByText('Apoio mensal')).toBeNull();
     });
 });

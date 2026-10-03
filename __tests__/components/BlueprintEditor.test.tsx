@@ -1276,6 +1276,22 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(botaoComponentes()).toHaveTextContent('Vaga PCD');
   });
 
+  it('estudo de massa: "Desenhar bloco" (estudo sem bloco) FECHA a gaveta e liga a ferramenta Bloco — antes ficava atrás da gaveta e parecia não fazer nada', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    loadBranchModel.mockResolvedValue(nivel.model);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    expect(within(gaveta).getByText('Nenhum bloco ainda')).toBeInTheDocument();
+    await user.click(within(gaveta).getByRole('button', { name: 'Desenhar bloco' }));
+    await waitFor(() => expect(screen.queryByTestId('tarefa-massa')).toBeNull());
+    // A ferramenta Bloco ativa: a barra de opções pede os pavimentos do próximo bloco.
+    expect(screen.getAllByText('Pavimentos').some((el) => el.closest('label')?.querySelector('input[type="number"]'))).toBe(true);
+  });
+
   it('estudo de massa (M1): Terreno › Massa mede o bloco contra o lote; a linha seleciona; o painel do bloco muda os pavimentos e o estudo recalcula', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });

@@ -14959,7 +14959,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               hipoteses={{ ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } }}
               onHipoteses={setHipotesesDaMassa}
               onSelecionarBloco={(id) => selecionar([id])}
-              onDesenharBloco={() => editor.setTool('bloco')}
+              onDesenharBloco={() => {
+                // A gaveta é modal e cobre o desenho: sem fechá-la, a ferramenta ligava ATRÁS dela e o clique
+                // "não fazia nada" (03/10/2026). Fecha e liga — como os outros botões de gaveta.
+                setTarefa(null);
+                editor.setTool('bloco');
+              }}
               produto={distribuicaoDoProduto}
               financeiro={financeiroDoEstudo}
               insolacao={insolacaoDoEstudoDeMassa}

@@ -128,10 +128,11 @@ const WS_USER_COLUMNS: ColumnConfig[] = [
   { key: 'email', label: 'E-mail', sortable: true },
   { key: 'phone', label: 'Telefone', sortable: true },
   { key: 'role', label: 'Papel/Função', sortable: true },
+  { key: 'invited_at', label: 'Convite', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
-const WS_USER_COL_WIDTHS: Record<string, number> = { name: 180, email: 220, phone: 130, role: 140, status: 100, actions: 90 };
+const WS_USER_COL_WIDTHS: Record<string, number> = { name: 180, email: 220, phone: 130, role: 140, invited_at: 160, status: 100, actions: 110 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
@@ -150,6 +151,7 @@ const WS_USER_COLUMN_HEADERS: Record<string, { label: string; className: string 
   email: { label: 'E-mail', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   phone: { label: 'Telefone', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   role: { label: 'Papel/Função', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+  invited_at: { label: 'Convite', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
@@ -198,6 +200,10 @@ function renderWsUserCell(key: string, user: PartnerUser, ctx: { onToggleActive:
       return <span className="text-sm font-normal text-gray-500">{user.phone || '-'}</span>;
     case 'role':
       return <span className="text-sm font-normal text-gray-600">{user.role}</span>;
+    case 'invited_at':
+      return user.invited_at
+        ? <span className="text-sm font-normal text-gray-600">Enviado em {formatDateBR(user.invited_at)}</span>
+        : <span className="text-sm font-normal text-gray-400">Não enviado</span>;
     case 'status':
       return (
         <button
@@ -1011,6 +1017,30 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
+  // Envia (ou reenvia) o convite por e-mail de um integrante — link para criar a
+  // senha e o endereço /portal-parceiro. Plano 2026-10-03-portal-parceiro-acesso-por-email.
+  const [sendingInviteId, setSendingInviteId] = useState<string | null>(null);
+  const handleSendInvite = async (user: PartnerUser) => {
+    setSendingInviteId(user.id);
+    try {
+      const { kind } = await partnerService.invitePartnerUser(user.id);
+      const agora = new Date().toISOString();
+      setPartnerUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, invited_at: agora } : u)));
+      showToast(
+        kind === 'invite'
+          ? `Convite enviado para ${user.email}.`
+          : `Convite enviado para ${user.email}. O e-mail já tinha cadastro: o link é para redefinir a senha.`,
+        'success',
+      );
+    } catch (err) {
+      console.error('Erro ao enviar convite do parceiro:', err);
+      const msg = (err as { message?: string } | null)?.message;
+      showToast(`Integrante salvo, mas o convite não foi enviado${msg ? `: ${msg}` : '.'}`, 'error');
+    } finally {
+      setSendingInviteId(null);
+    }
+  };
+
   // Convidar Usuário Parceiro
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1028,8 +1058,13 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       setPartnerUsers((prev) => [...prev, created]);
       setIsInviteUserModalOpen(false);
       setInviteUser({ email: '', name: '', phone: '', role: 'GESTOR' });
+      // O integrante já está gravado; o e-mail vai em seguida. Falha no envio
+      // não desfaz o cadastro — dá para reenviar pela linha.
+      await handleSendInvite(created);
     } catch (err) {
       console.error('Erro ao convidar usuário do parceiro:', err);
+      const msg = (err as { message?: string } | null)?.message;
+      showToast(msg ? `Erro ao convidar integrante: ${msg}` : 'Erro ao convidar integrante.', 'error');
     }
   };
 
@@ -1583,7 +1618,28 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                                 <td aria-hidden="true"></td>
                                 {wsUserColumns.visibleColumns.includes('actions') && (
                                   <td className="px-6 py-2.5 text-right">
-                                    <ActionIconButton kind="delete" title="Excluir Usuário" onClick={() => handleDeleteUser(user.id)} />
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {/* O <span> carrega o motivo: botão desabilitado tem
+                                          pointer-events-none e não mostraria o title. */}
+                                      <span
+                                        className="inline-flex"
+                                        title={
+                                          !user.is_active
+                                            ? 'Integrante inativo — ative para enviar o convite'
+                                            : sendingInviteId === user.id
+                                              ? 'Enviando convite...'
+                                              : user.invited_at ? 'Reenviar convite por e-mail' : 'Enviar convite por e-mail'
+                                        }
+                                      >
+                                        <ActionIconButton
+                                          kind="mail"
+                                          title={user.invited_at ? 'Reenviar convite por e-mail' : 'Enviar convite por e-mail'}
+                                          disabled={!user.is_active || sendingInviteId === user.id}
+                                          onClick={() => handleSendInvite(user)}
+                                        />
+                                      </span>
+                                      <ActionIconButton kind="delete" title="Excluir Usuário" onClick={() => handleDeleteUser(user.id)} />
+                                    </div>
                                   </td>
                                 )}
                               </tr>
@@ -2388,7 +2444,10 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
       {isInviteUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white border border-gray-200 max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 shadow-2xl relative">
-            <h3 className="text-md font-bold text-gray-900">Convidar Integrante</h3>
+            <h3 className="text-base font-bold text-gray-900">Convidar Integrante</h3>
+            <p className="text-sm text-gray-500 -mt-2">
+              O integrante recebe um e-mail para criar a senha e passa a entrar em <strong>/portal-parceiro</strong> com o e-mail e a senha.
+            </p>
             
             <form onSubmit={handleInviteUser} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">

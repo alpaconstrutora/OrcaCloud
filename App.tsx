@@ -669,6 +669,26 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [showOverlay]);
 
+  // ── /portal-parceiro sem token = entrada do parceiro por e-mail e senha ────────
+  // Pedido de 03/10/2026 ("além do acesso via token, acesso via e-mail"). Sem token,
+  // a rota abre direto a tela de login do parceiro (Auth com tema do parceiro), em
+  // vez do seletor de portais. Também é para onde o convite por e-mail aponta
+  // (#type=invite|recovery): o ResetPassword abre, e ao concluir o grupo já é o do
+  // parceiro, então ele cai no portal.
+  // Força o grupo só sem sessão ou vindo do link do convite — quem já está logado
+  // em outro perfil não é deslogado. E reafirma a cada mudança de grupo: o listener
+  // de auth (useAuthSync) zera o grupo no evento inicial sem sessão, logo DEPOIS do
+  // primeiro ajuste — medido no navegador em 03/10/2026, uma vez só não segurava.
+  // "Voltar" na tela de login troca o endereço para "/" (ver o guard do <Auth>),
+  // e aí esta regra para de valer e o seletor aparece.
+  React.useEffect(() => {
+    if (window.location.pathname !== '/portal-parceiro' || partnerPortalToken) return;
+    const hashType = new URLSearchParams(window.location.hash.slice(1)).get('type');
+    const vindoDoConvite = hashType === 'invite' || hashType === 'recovery';
+    if (!vindoDoConvite && (loadingSession || session)) return;
+    if (selectedLoginGroup !== ProfileGroup.PARTNER) setSelectedLoginGroup(ProfileGroup.PARTNER);
+  }, [loadingSession, session, partnerPortalToken, selectedLoginGroup, setSelectedLoginGroup]);
+
   // ── Guards públicos (ordem preservada) ───────────────────────────────────────
   // ⚠️ `/portal-condomino` NÃO existe mais (23/09/2026). O Portal do Condômino
   // era o caminho anterior a 01/09, com link por OCUPAÇÃO; desde então o
@@ -703,7 +723,17 @@ const App: React.FC = () => {
   // ── Guards de autenticação ───────────────────────────────────────────────────
   if (isResettingPassword) return <ResetPassword onComplete={() => setIsResettingPassword(false)} />;
   if (!loadingSession && !selectedLoginGroup) return <LoginGateway onSelectGroup={setSelectedLoginGroup} />;
-  if (!loadingSession && !session) return <Auth group={selectedLoginGroup || undefined} onBack={() => setSelectedLoginGroup(null)} />;
+  if (!loadingSession && !session) return (
+    <Auth
+      group={selectedLoginGroup || undefined}
+      onBack={() => {
+        // Saindo da entrada própria do parceiro: o endereço vira "/" para a regra
+        // de /portal-parceiro (acima) não devolver a tela do parceiro.
+        if (window.location.pathname === '/portal-parceiro') window.history.replaceState(null, '', '/');
+        setSelectedLoginGroup(null);
+      }}
+    />
+  );
   if (authError) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 p-6 text-center gap-4">
       <Shield className="w-12 h-12 text-red-500" />

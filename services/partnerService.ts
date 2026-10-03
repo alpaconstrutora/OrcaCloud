@@ -215,7 +215,31 @@ export const partnerService = {
     return data as PartnerUser | null;
   },
 
+  /**
+   * Manda o convite por e-mail (Edge Function partner-invite-user): link para criar
+   * a senha — ou redefinir, se o e-mail já tem conta — e o endereço /portal-parceiro.
+   * Devolve o tipo de link enviado; erro com a mensagem da function.
+   */
+  async invitePartnerUser(partnerUserId: string): Promise<{ kind: 'invite' | 'recovery' }> {
+    const { data, error } = await supabase.functions.invoke('partner-invite-user', {
+      body: { partner_user_id: partnerUserId },
+    });
+    if (error) {
+      let msg = error.message || 'Falha ao enviar o convite.';
+      try {
+        const body = await (error as { context?: Response }).context?.json();
+        if (body?.error) msg = body.error;
+      } catch { /* corpo não era JSON */ }
+      throw new Error(msg);
+    }
+    if (!data?.ok) throw new Error(data?.error || 'Falha ao enviar o convite.');
+    return { kind: data.kind };
+  },
+
   async savePartnerUser(user: Partial<PartnerUser>): Promise<PartnerUser> {
+    // E-mail sempre minúsculo: a autorização do modo logado compara com o e-mail
+    // do JWT letra a letra. O banco também normaliza (gatilho de 03/10/2026).
+    if (typeof user.email === 'string') user = { ...user, email: user.email.trim().toLowerCase() };
     if (user.id) {
       const { data, error } = await supabase
         .from('partner_users')

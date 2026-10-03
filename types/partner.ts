@@ -33,6 +33,8 @@ export interface PartnerUser {
   phone?: string;
   role: PartnerRole;
   is_active: boolean;
+  /** Último convite por e-mail enviado (Edge Function partner-invite-user). */
+  invited_at?: string | null;
   created_at: string;
   updated_at: string;
 }

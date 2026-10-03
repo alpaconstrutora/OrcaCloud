@@ -13,6 +13,7 @@ import {
   Highlighter,
   Lock,
   Unlock,
+  Mail,
 } from 'lucide-react';
 
 export type ActionKind =
@@ -28,7 +29,8 @@ export type ActionKind =
   | 'duplicate'
   | 'annotate'
   | 'lock'
-  | 'unlock';
+  | 'unlock'
+  | 'mail';
 
 type Tone = 'neutral' | 'attention' | 'danger';
 type Size = 'md' | 'sm';
@@ -50,6 +52,8 @@ const KIND_DEFAULTS: Record<ActionKind, { Icon: React.ComponentType<{ className?
   annotate:  { Icon: Highlighter,      title: 'Anotar',        tone: 'neutral' },
   lock:      { Icon: Lock,             title: 'Bloquear para edição', tone: 'attention' },
   unlock:    { Icon: Unlock,           title: 'Desbloquear',   tone: 'neutral' },
+  // Enviar/reenviar e-mail (convite do Portal do Parceiro, 03/10/2026).
+  mail:      { Icon: Mail,             title: 'Enviar e-mail', tone: 'attention' },
 };
 
 const TONE_CLASSES: Record<Tone, string> = {

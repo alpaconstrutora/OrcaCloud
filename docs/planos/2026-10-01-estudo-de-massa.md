@@ -794,9 +794,9 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
   - [x] **M5b** — insolação de massa (sol nas fachadas, lote livre, vizinhos) como indicador e objetivo; entorno persistido por estudo (este registro)
   - [x] **M5c** — IA no vocabulário do produto ("duas torres", "apartamentos entre 65 e 75 m²") (este registro)
   - orientação por unidade (`position_type`, `sun_orientation`) → vai para a M6, junto da divisão do pavimento em unidades
-- [ ] M6 — da massa à planta e ao BIM · dividida (02/10/2026):
+- [x] M6 — da massa à planta e ao BIM · dividida (02/10/2026), concluída em 03/10/2026:
   - [x] **M6a** — pavimento tipo esquemático do bloco (corredor, núcleo, unidades com canto e orientação, cópias vivas) + orientação ao Empreendimento (este registro)
-  - [ ] **M6b** — planta interna de cada unidade pelo gerador (E6.2) dentro da fatia, grupo espelhado quando simétrico
+  - [x] **M6b** — planta interna de cada unidade pelo gerador (E6.2), no quadro do bloco (registro abaixo; o Grupo da E2.3 fica como passo seguinte)
   - [x] decidir com o usuário os botões do Empreendimento que ainda levam ao Planta AI v1 → **Planta Inteligente** (decisão de 02/10/2026; registro abaixo)
 
 ## Execução
@@ -1254,3 +1254,53 @@ Editar" para a Planta Inteligente, mas o formulário NÃO tinha esse campo (desd
 | Suíte cheia (JSON) | 676/676 arquivos · 7.060 testes = 7.026 ok + 34 pulados · 0 falhas (fechou de primeira) |
 | App real (SÓ LEITURA no empreendimento "007 - Bella Vista" + estudo descartável para o link) | 13/13: Sincronização com o vértice Planta Inteligente, o card genérico, sem legado, a faixa da Viabilidade; Vinculações com a seção nova; Editar com o campo listando os 10 estudos da organização, sem o campo do legado — fechado SEM salvar e **nenhuma escrita no empreendimento** (monitorado nas requisições e conferido no banco: `updated_at` igual); link direto abre o editor no estudo pedido e limpa o hash. Na 1ª rodada o link direto falhou — foi o achado do `syncViewToUrl` acima |
 | Limpeza | os estudos descartáveis apagados pelo id + `name LIKE 'ZZ TESTE%'`; estudos 73 · empreendimentos 18 · ZZ 0, iguais aos de antes |
+
+### M6b — A planta interna de cada unidade (03/10/2026)
+
+**O que entrou.**
+
+- **Motor** `utils/blueprintPlantaDaUnidade.ts` (puro). `programaDaTipologia`: a semente da E4.1 ajustada aos
+  dormitórios do produto (2 dorm. → APTO_2Q; 3+ → APTO_3Q_SUITE com dormitórios extra; 1 dorm. e studio; comercial
+  não tem programa). `plantasDasUnidades`: para cada unidade do pavimento tipo montado ainda sem planta (um ambiente
+  só), o GERADOR DE PLANTAS da E6.2 roda dentro do retângulo dela — no QUADRO DO BLOCO, e o resultado volta ao
+  desenho por transformação rígida. Entram as paredes INTERNAS, as portas internas e as janelas que caem na FACHADA
+  (perímetro do bloco); janela para o corredor ou para o vizinho não entra, a porta de entrada do gerador não entra
+  (a M6a já abriu a da unidade), e cada cômodo vira parte da unidade (E2.2). As cópias vivas levam tudo. Não refaz
+  unidade que já tem planta. Uma lista de comandos só (as aberturas conferidas antes e aplicadas num lote).
+- **Orientação escolhida por medida**: o zoneamento do gerador (faixa social na frente, íntima no fundo) é de casa;
+  com a frente no corredor, a sala de uma unidade rasa e larga cai longe da fachada. Cada unidade testa a frente
+  pelo corredor e pelas duas pontas, com duas sementes, e fica com o arranjo em que mais cômodos que pedem luz tocam
+  a fachada (empate: corredor). O que ainda fica sem fachada é LISTADO por unidade e dito no aviso.
+- **UI**: o painel do bloco, com o tipo montado, diz quantas unidades estão sem planta e oferece "Gerar a planta das
+  unidades"; depois diz que todas já têm (botão desligado com o motivo).
+- **Fora, dito**: o Grupo espelhado da E2.3 (editar uma unidade e propagar às iguais) — a repetição aqui é
+  geométrica; e unidade comercial fica aberta.
+
+**Achados no caminho (todos com teste).**
+
+1. **Malha do gerador**: ele encaixa o retângulo em 50 mm, e a borda dele caía até 25 mm DENTRO da unidade — as
+   paredes de borda não eram reconhecidas e entravam como internas coladas na divisória (parede duplicada, com as
+   janelas). Agora a borda vem do retângulo DELE e as pontas das internas são esticadas até a borda da unidade.
+2. **O anel do ambiente já está nos EIXOS** (o arranjo do kernel é pelas linhas de centro): a 1ª versão expandia a
+   unidade pela meia espessura e a empurrava 75–100 mm para fora — janela fora do perímetro e parede interna entrando
+   no vizinho (as 35 janelas eram todas descartadas). Corrigido também o comentário da M6a que dizia "entre as faces".
+3. **Bloco GIRADO** (defeito da M6a, que o teste girado só pegava na divisão, não na montagem): o kernel só corta
+   parede em interseção EXATA, e a ponta arredondada de uma divisória girada fica a < 1 mm da parede que devia tocar
+   — a junção em T não acontecia e ambientes se fundiam (101 e 103 sem ambiente, o da 104 com 17 vértices). Girado,
+   a parede interna passa 3 mm de cada encontro (`ALEM_MM`): elas se cruzam de verdade e a ponta some no vértice
+   (tolerância de 5 mm do arranjo). Alinhado ao desenho, nada muda. Teste novo de montagem girada na M6a.
+4. **Desempenho**: aplicar as aberturas uma a uma re-sincronizava as 8 cópias vivas a cada comando (3,1 s); num lote
+   só, ~1,8 s para 5 unidades com 30 tentativas do gerador (cada geração custa 10–40 ms).
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintPlantaDaUnidade.test.ts` (7) | programa por tipologia (2, 3, 4 dorm., 1 dorm., studio, comercial nulo); cada unidade com 8 (2 dorm.) ou 11 (3 dorm.) cômodos, todos na unidade; contorno continua com 4 paredes; janelas SÓ no perímetro; as cópias com as mesmas paredes; a lista de uma vez dá o mesmo modelo; rodar de novo não refaz e diz; o que ficou sem fachada é dito e é minoria; sem tipo pede para montar; comercial fica aberta; estudo girado 30° com as mesmas unidades e cômodos |
+| `blueprintPavimentoTipoDaMassa.test.ts` (+1) | montagem GIRADA 30°: todos os ambientes fecham, uma etiqueta por unidade, as mesmas áreas do alinhado (< 0,1 m²) |
+| Teste de editor "estudo de massa (M6b)" | tipo montado → o painel diz "5 unidade(s) do tipo ainda sem planta"; gerar → "Plantas geradas: 5 unidade(s), N cômodo(s)"; depois "todas já têm" e o botão desligado |
+| `tsc` · `check-ui-standard` · org guard · XSS · build | 0 · 0 violações · ok · ok · ok |
+| Suíte cheia (JSON) | 677/677 arquivos · 7.069 testes = 7.035 ok + 34 pulados · 0 falhas (fechou de primeira) |
+| App real (estudo descartável "ZZ TESTE … prova M6b") | 9/9: montar pelo painel; o painel oferece as 5 plantas; gerar → 46 cômodos; **no banco**: 101–103 com 8 cômodos, 104–105 com 11, 51 paredes no tipo com o contorno de 4, **19 janelas, todas na fachada**, as 8 cópias com as mesmas paredes; o painel diz que todas já têm; 0 erros. No desenho: as 5 unidades com cômodos e portas, núcleo e corredor |
+| Qualidade, medida | 19 janelas na fachada e 19 descartadas (davam para corredor/vizinho); 6 cômodos que pedem luz ficaram sem fachada (1–2 por unidade — p.ex. a varanda), listados — estudo preliminar, o projetista ajusta |
+| Limpeza | estudo apagado pelo id + `name LIKE 'ZZ TESTE%'`; estudos 73 · ramos 73 · produtos 0 · ZZ 0, iguais aos de antes |

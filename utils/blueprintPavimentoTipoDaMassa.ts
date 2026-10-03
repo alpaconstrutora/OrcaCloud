@@ -70,6 +70,9 @@ export const HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO: HipotesesDoPavimentoTipo = {
 export type EsquemaDoPavimento = 'CORREDOR_CENTRAL' | 'CORREDOR_LATERAL';
 export const ROTULO_DO_ESQUEMA: Record<EsquemaDoPavimento, string> = { CORREDOR_CENTRAL: 'corredor central', CORREDOR_LATERAL: 'corredor lateral' };
 
+/** Quanto a parede interna de bloco GIRADO passa do encontro (< tolerância de 5 mm do arranjo) — ver `montarPavimentoTipo`. */
+export const ALEM_MM = 3;
+
 /** Retângulo no quadro do bloco: `a` ao longo do eixo maior, `b` atravessa (0 = fachada do lado A). */
 interface RetLocal {
   a0: number;
@@ -327,7 +330,7 @@ export interface PavimentoTipoMontado {
   model: BlueprintModel;
   tipoLevelId: ObjectId;
   copias: number;
-  /** Área do ambiente de cada unidade no desenho (entre as faces das paredes), m². */
+  /** Área do ambiente de cada unidade no desenho (o anel do arranjo, entre os EIXOS das paredes), m². */
   areasDesenhadas: { numero: string; areaM2: number }[];
   eficienciaDesenhadaPct: number | null;
   avisos: string[];
@@ -400,9 +403,26 @@ export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoD
   // 2. Paredes: perímetro, corredor e divisórias (pelas bordas das fatias, sem repetir).
   const { W, D } = q;
   const seg = (a0: number, b0: number, a1: number, b1: number, esp: number): Command => ({ type: 'AddWall', levelId: tipo, a: noMundo(q, a0, b0), b: noMundo(q, a1, b1), thicknessMm: esp, heightMm: b.peDireitoMm });
+  /**
+   * ⚠️ BLOCO GIRADO: o kernel só corta parede em interseção EXATA, e a ponta de
+   * uma divisória arredondada ao mm fica a < 1 mm da parede que ela devia tocar
+   * — a junção em T não acontece e os ambientes se fundem (achado do teste da
+   * M6b: no estudo girado, 101 e 103 ficaram sem ambiente). Girado, a parede
+   * interna passa ALÉM_MM de cada encontro: elas se cruzam de verdade, e a ponta
+   * de 3 mm some no vértice (a tolerância do arranjo é 5 mm). Alinhado ao
+   * desenho, nada muda.
+   */
+  const girado = Math.abs(q.u.x * q.u.y) > 1e-9;
+  const segInterna = (a0: number, b0: number, a1: number, b1: number, esp: number): Command => {
+    if (!girado) return seg(a0, b0, a1, b1, esp);
+    const l = Math.hypot(a1 - a0, b1 - b0) || 1;
+    const da = ((a1 - a0) / l) * ALEM_MM;
+    const db = ((b1 - b0) / l) * ALEM_MM;
+    return seg(a0 - da, b0 - db, a1 + da, b1 + db, esp);
+  };
   const paredes: Command[] = [seg(0, 0, W, 0, hip.paredeExternaMm), seg(W, 0, W, D, hip.paredeExternaMm), seg(W, D, 0, D, hip.paredeExternaMm), seg(0, D, 0, 0, hip.paredeExternaMm)];
-  paredes.push(seg(0, d.corredor.b0, W, d.corredor.b0, hip.paredeInternaMm));
-  if (d.esquema === 'CORREDOR_CENTRAL') paredes.push(seg(0, d.corredor.b1, W, d.corredor.b1, hip.paredeInternaMm));
+  paredes.push(segInterna(0, d.corredor.b0, W, d.corredor.b0, hip.paredeInternaMm));
+  if (d.esquema === 'CORREDOR_CENTRAL') paredes.push(segInterna(0, d.corredor.b1, W, d.corredor.b1, hip.paredeInternaMm));
   const fatias = [...d.unidades.map((u) => u.local), ...(d.nucleo ? [d.nucleo] : [])];
   for (const lado of ['A', 'B'] as const) {
     const doLado = fatias.filter((r) => (lado === 'A' ? r.b0 < 1 : r.b0 >= 1));
@@ -410,7 +430,7 @@ export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoD
     for (const r of doLado) for (const a of [r.a0, r.a1]) if (a > 1 && a < W - 1) cortes.add(Math.round(a));
     const [b0, b1] = lado === 'A' ? [0, d.profundidades.a] : [D - d.profundidades.b, D];
     if (lado === 'B' && d.profundidades.b <= 0) continue;
-    for (const a of [...cortes].sort((x, y) => x - y)) paredes.push(seg(a, b0, a, b1, hip.paredeInternaMm));
+    for (const a of [...cortes].sort((x, y) => x - y)) paredes.push(segInterna(a, b0, a, b1, hip.paredeInternaMm));
   }
   aplicar(paredes);
 

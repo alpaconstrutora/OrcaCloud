@@ -30,11 +30,17 @@ interface Props {
     onCriarAlternativa: () => Promise<string | void>;
     onMontarAqui: () => Promise<string | void>;
   };
+  /** M6b: a planta interna das unidades do pavimento tipo já montado (gerador da E6.2). */
+  plantas?: {
+    /** Quantas unidades ainda não têm planta interna; 0 = todas já têm. */
+    pendentes: number;
+    onGerar: () => Promise<string | void>;
+  };
 }
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pavimentoTipo }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pavimentoTipo, plantas }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   if (!bloco) return null;
@@ -215,6 +221,25 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
             </>
           ) : (
             <p className="text-slate-500" data-testid="pavimento-tipo-motivo">{pavimentoTipo.motivo ?? 'Sem divisão possível.'}</p>
+          )}
+          {plantas && (
+            <div className="space-y-1 pt-1" data-testid="plantas-das-unidades">
+              <p className="text-slate-600">
+                {plantas.pendentes > 0
+                  ? `${plantas.pendentes} unidade(s) do tipo ainda sem planta interna.`
+                  : 'Todas as unidades do tipo já têm planta interna.'}
+              </p>
+              <button
+                type="button"
+                disabled={!!ocupado || plantas.pendentes === 0}
+                onClick={() => void agir('plantas', plantas.onGerar)}
+                title={plantas.pendentes === 0 ? 'Todas as unidades já têm planta interna — para refazer, apague as paredes internas da unidade' : 'O gerador de plantas dentro de cada unidade: cômodos, portas internas e janelas na fachada (um lote: Ctrl+Z desfaz)'}
+                className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+                data-testid="gerar-plantas-das-unidades"
+              >
+                {ocupado === 'plantas' ? 'Gerando as plantas…' : 'Gerar a planta das unidades'}
+              </button>
+            </div>
           )}
           {resultado && <p className="text-slate-700" data-testid="pavimento-tipo-resultado">{resultado}</p>}
         </div>

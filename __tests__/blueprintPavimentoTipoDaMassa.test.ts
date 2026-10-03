@@ -164,6 +164,17 @@ describe('pavimento tipo da massa — montagem no kernel', () => {
     expect(montarPavimentoTipo(M, b, d).model.levels.filter((l) => l.tipoDeId).map((l) => l.uid)).toEqual(copias);
   });
 
+  it('bloco GIRADO 30°: a montagem fecha todos os ambientes (a junção em T sobrevive ao arredondamento)', () => {
+    const G = estudo(ret(5000, 20000, 35000, 36000), 10, 30);
+    const dg = (dividir(G) as { ok: true; divisao: DivisaoDoPavimento }).divisao;
+    const mg = montarPavimentoTipo(G, G.blocos![0], dg);
+    expect(mg.avisos.filter((a) => /não fechou|não achei/.test(a))).toEqual([]);
+    for (const u of mg.model.unidades ?? []) expect(mg.model.labels.filter((l) => l.levelId === mg.tipoLevelId && u.etiquetaUids.includes(l.uid))).toHaveLength(1);
+    // Os mesmos ambientes do bloco alinhado: unidades + corredor + núcleo, com as mesmas áreas (a menos de 0,1 m²).
+    expect(mg.model.spaces.filter((s) => s.levelId === mg.tipoLevelId)).toHaveLength(mont.model.spaces.filter((s) => s.levelId === mont.tipoLevelId).length);
+    mg.areasDesenhadas.forEach((a, i) => expect(Math.abs(a.areaM2 - mont.areasDesenhadas[i].areaM2)).toBeLessThan(0.1));
+  });
+
   it('número que já existe no estudo não é recriado (e diz)', () => {
     const comUma = applyBatch(M, [{ type: 'AddUnidade', numero: d.unidades[0].numero }]).model;
     const m2 = montarPavimentoTipo(comUma, comUma.blocos![0], d);

@@ -631,6 +631,7 @@ import { useGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
 import { useBlueprintEntorno } from '../../hooks/useBlueprintEntorno';
 import { insolacaoDaMassa, type OpcoesDaInsolacaoDaMassa } from '../../utils/blueprintInsolacaoDaMassa';
 import { direcaoDaRua, dividirPavimento, montarPavimentoTipo, ordinalDoTipo as ordinalDoPavimentoTipo, pavimentoTipoMontado } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { plantasDasUnidades, unidadeTemPlanta } from '../../utils/blueprintPlantaDaUnidade';
 import { comandosDoCandidato, modeloDoCandidato, type CandidatoDeMassa } from '../../utils/blueprintGeradorDeMassa';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
@@ -4626,6 +4627,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (!piso) return { ok: false as const, motivo: 'O bloco não tem pavimento acima do solo.' };
     return dividirPavimento({ bloco: b, produto: produtoDoEstudo.produto, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null, direcaoDaRua: direcaoDaRua(editor.model) });
   }, [blocoSelecionadoParaTipo, distribuicaoDoProduto, editor.model, produtoDoEstudo.produto]);
+  /** M6b: unidades do pavimento tipo do bloco selecionado ainda sem planta interna (null = sem tipo montado). */
+  const unidadesSemPlanta = useMemo(() => {
+    const b = blocoSelecionadoParaTipo;
+    const tipo = b ? pavimentoTipoMontado(editor.model, b) : null;
+    if (!tipo) return null;
+    const doTipo = (editor.model.unidades ?? []).filter((u) => editor.model.labels.some((l) => l.levelId === tipo.id && u.etiquetaUids.includes(l.uid)));
+    return doTipo.filter((u) => !unidadeTemPlanta(editor.model, u.numero, tipo.id)).length;
+  }, [blocoSelecionadoParaTipo, editor.model]);
   /** O próximo bloco nasce com o que está na barra de opções. */
   const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
   const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
@@ -9143,6 +9152,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   const mont = montarPavimentoTipo(editor.model, blocoSel, divisaoDoBlocoSel.divisao);
                   editor.runBatch(mont.comandos);
                   return `Montado: ${divisaoDoBlocoSel.divisao.unidades.length} unidade(s) no pavimento tipo + ${mont.copias} cópia(s); eficiência desenhada ${mont.eficienciaDesenhadaPct ?? '—'} %.${mont.avisos.length ? ` ${mont.avisos.join(' ')}` : ''}`;
+                },
+              }
+            : undefined
+        }
+        plantas={
+          blocoSel && unidadesSemPlanta != null
+            ? {
+                pendentes: unidadesSemPlanta,
+                onGerar: async () => {
+                  // Um respiro para o botão mostrar "Gerando…": a geração roda no fio principal (~2 s num pavimento de 5 unidades).
+                  await new Promise((r) => setTimeout(r, 30));
+                  const pl = plantasDasUnidades(editor.model, blocoSel, produtoDoEstudo.produto);
+                  if (pl.comandos.length === 0) return pl.avisos.join(' ') || 'Nada a gerar.';
+                  editor.runBatch(pl.comandos);
+                  const comodos = pl.unidades.reduce((s, u) => s + u.ambientes.length, 0);
+                  return `Plantas geradas: ${pl.unidades.filter((u) => u.ambientes.length > 0).length} unidade(s), ${comodos} cômodo(s), ${pl.geracoes} tentativa(s) do gerador.${pl.avisos.length ? ` ${pl.avisos.join(' ')}` : ''}${pl.unidades.some((u) => u.semFachada.length) ? ` Sem fachada: ${pl.unidades.filter((u) => u.semFachada.length).map((u) => `${u.numero} (${u.semFachada.join(', ')})`).join('; ')}.` : ''}`;
                 },
               }
             : undefined

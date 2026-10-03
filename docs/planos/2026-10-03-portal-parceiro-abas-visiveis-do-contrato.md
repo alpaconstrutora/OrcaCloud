@@ -72,3 +72,7 @@ essas sub-abas.
    check-run `ci` do commit.
    *Pronto quando:* o domínio serve um commit que contém o desta frente e a CI
    do commit está verde.
+   ✅ commit `3cce2758` em main; `conferir-producao.sh` em 03/10/2026: domínio
+   serve `3cce275`, com "Configurar abas do contrato visíveis ao parceiro" e
+   "Detalhes do contrato não liberados" nos bundles; check-run `ci` do commit:
+   `completed success`.

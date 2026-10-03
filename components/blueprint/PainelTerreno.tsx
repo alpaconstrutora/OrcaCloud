@@ -12,7 +12,7 @@ import {
   desvioDaAreaEmUtm,
   gmsTexto,
 } from '../../utils/geo';
-import { AlertTriangle, LandPlot, Save, Table2 } from 'lucide-react';
+import { AlertTriangle, Keyboard, LandPlot, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
 import {
   areaEmM2,
@@ -222,6 +222,8 @@ interface Props {
   erro?: string | null;
   /** Abre o quadro de divisas — papéis, medidas da escritura e confrontantes. */
   onAbrirQuadro: () => void;
+  /** Sem lote: abre "Criar o lote digitando" (03/10/2026). */
+  onDigitarLote?: () => void;
   /** Quantos lados do lote ainda não têm papel. */
   ladosSemPapel: number;
   /** Quantos lados divergem da medida da escritura além da tolerância. */
@@ -286,6 +288,7 @@ export default function PainelTerreno({
   gravando = false,
   erro = null,
   onAbrirQuadro,
+  onDigitarLote,
   ladosSemPapel,
   ladosDivergentes,
   zonaSlot,
@@ -310,7 +313,7 @@ export default function PainelTerreno({
   if (!terreno && !divisaSelecionada) {
     // A ZONA também vale sem lote (03/10/2026): escolher a lei — e com ela os recuos e o gabarito que o lote vai
     // receber — não depende de já haver divisa desenhada. Este retorno antecipado a deixava de fora.
-    if (!topografiaSlot && !zonaSlot) return null;
+    if (!topografiaSlot && !zonaSlot && !onDigitarLote) return null;
     return (
       <div className={raizDoPainel}>
         {!emDrawer && (
@@ -318,6 +321,21 @@ export default function PainelTerreno({
             <LandPlot className="h-3.5 w-3.5" />
             Terreno
           </h3>
+        )}
+        {/* 03/10/2026: *"hoje o terreno ou lote é criado apenas desenhando. implementar também
+            digitando"* — quem tem a escritura na mão começa por aqui. */}
+        {onDigitarLote && (
+          <div className="space-y-1.5" data-testid="sem-lote-digitar">
+            <p className="text-xs text-slate-500">Ainda não há contorno de lote. Desenhe com a ferramenta Terreno, ou digite as medidas da escritura.</p>
+            <button
+              type="button"
+              onClick={onDigitarLote}
+              className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <Keyboard className="h-3.5 w-3.5 shrink-0" />
+              Criar o lote digitando
+            </button>
+          </div>
         )}
         <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
         {zonaSlot}

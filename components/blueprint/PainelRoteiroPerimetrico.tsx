@@ -1,33 +1,31 @@
 /**
  * ROTEIRO PERIMÉTRICO (A1) — o relatório em gaveta.
  *
- * Três partes, na ordem em que se usa: a tabela vértice a vértice (o que a
- * matrícula e o SIGEF pedem), o memorial convencional pronto para copiar, e a
- * restituição — colar um memorial e lançar as divisas dele.
+ * Duas partes, na ordem em que se usa: a tabela vértice a vértice (o que a
+ * matrícula e o SIGEF pedem) e o memorial convencional pronto para copiar.
  *
- * Nada aqui grava: a tabela é derivada; o memorial é texto; a restituição
- * emite comandos pelo pai, num lote só que o Ctrl+Z desfaz.
+ * A restituição (colar um memorial e lançar as divisas dele) morava aqui até
+ * 03/10/2026 — inalcançável: o Roteiro só abre COM lote, e ela só lançava SEM.
+ * Mudou-se para "Criar o lote digitando" (aba Memorial), que também substitui
+ * o lote atual e gira pelo norte do estudo; aqui fica o atalho.
+ *
+ * Nada aqui grava: a tabela é derivada; o memorial é texto.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { AlertTriangle, ClipboardCopy, Hash, MapPin } from 'lucide-react';
 import type { RoteiroPerimetrico } from '../../utils/blueprintRoteiroPerimetrico';
-import { restituirMemorial } from '../../utils/blueprintRoteiroPerimetrico';
 import { numeroBr } from '../../utils/blueprintMemorialLote';
 
 interface Props {
   roteiro: RoteiroPerimetrico;
   memorial: string;
   onNomear: () => void;
-  /** Lança as divisas de um anel restituído (mm locais). */
-  onRestituir: (anel: { x: number; y: number }[]) => void;
-  /** Já existe lote desenhado: restituir por cima seria destruição. */
-  temLote: boolean;
+  /** Abre "Criar o lote digitando" na aba Memorial. */
+  onRestituirPorMemorial: () => void;
 }
 
-export default function PainelRoteiroPerimetrico({ roteiro, memorial, onNomear, onRestituir, temLote }: Props) {
-  const [textoColado, setTextoColado] = useState('');
+export default function PainelRoteiroPerimetrico({ roteiro, memorial, onNomear, onRestituirPorMemorial }: Props) {
   const [copiado, setCopiado] = useState(false);
-  const restituicao = useMemo(() => (textoColado.trim() ? restituirMemorial(textoColado) : null), [textoColado]);
 
   const copiar = async () => {
     try {
@@ -152,49 +150,16 @@ export default function PainelRoteiroPerimetrico({ roteiro, memorial, onNomear, 
           <MapPin className="h-3.5 w-3.5" /> Restituir por memorial
         </p>
         <p className="mb-1.5 text-slate-500">
-          Cole o memorial da escritura ("segue com azimute 45°30' e distância de 32,50 m até…"). Os trechos lidos viram o contorno
-          do lote; o que não der para ler fica listado aqui, não some.
+          Colar o memorial da escritura ("segue com azimute 45°30' e distância de 32,50 m até…") e lançar o contorno dele — no lugar
+          deste lote, se for o caso — fica em "Criar o lote digitando".
         </p>
-        <textarea
-          value={textoColado}
-          onChange={(e) => setTextoColado(e.target.value)}
-          rows={4}
-          placeholder="Inicia-se no vértice P1; daí segue com azimute 90°00'00&quot; e distância de 12,00 m até o vértice P2; …"
-          aria-label="Texto do memorial a restituir"
-          className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-800"
-        />
-        {restituicao && (
-          <div className="mt-2 space-y-1.5" data-testid="restituicao">
-            <p className="text-slate-700">
-              {restituicao.trechos.length} trecho(s) lido(s) · erro de fechamento {numeroBr(restituicao.erroDeFechamentoMm / 1000, 3)} m
-            </p>
-            {restituicao.naoLidos.length > 0 && (
-              <ul className="space-y-1">
-                {restituicao.naoLidos.map((t, i) => (
-                  <li key={i} className="flex items-start gap-2 rounded-md bg-amber-50 px-2 py-1 text-amber-800">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>Não li: “{t.slice(0, 90)}{t.length > 90 ? '…' : ''}”</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <button
-              type="button"
-              onClick={() => onRestituir(restituicao.anel)}
-              disabled={temLote || restituicao.anel.length < 3}
-              title={
-                temLote
-                  ? 'Já há lote desenhado: apague as divisas antes — restituir por cima seria destruição'
-                  : restituicao.anel.length < 3
-                    ? 'Precisa de pelo menos 3 trechos lidos'
-                    : 'Lança as divisas num lote só de comandos — Ctrl+Z desfaz'
-              }
-              className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              Lançar {restituicao.anel.length} divisas
-            </button>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={onRestituirPorMemorial}
+          className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Abrir na aba Memorial
+        </button>
       </div>
     </div>
   );

@@ -318,7 +318,9 @@ export function memorialConvencional(roteiro: RoteiroPerimetrico, dados: { nome?
 export interface RestituicaoDoMemorial {
   anel: Point[];
   /** Um trecho por lado lido: azimute (graus) e distância (mm). */
-  trechos: { azimute: number; distanciaMm: number; texto: string }[];
+  trechos: { azimute: number; distanciaMm: number; texto: string; confrontante: string | null; ateVertice: string | null }[];
+  /** O vértice de "Inicia-se a descrição no vértice P1", quando o memorial diz. */
+  verticeInicial: string | null;
   /** Distância entre o último ponto e a origem, em mm. Zero = fechou. */
   erroDeFechamentoMm: number;
   /** Linhas que pareciam trechos e não deu para ler. */
@@ -327,7 +329,7 @@ export interface RestituicaoDoMemorial {
 
 const GMS = String.raw`(\d{1,3})\s*[°º]\s*(?:(\d{1,2})\s*['′]\s*)?(?:(\d{1,2}(?:[.,]\d+)?)\s*["″]\s*)?`;
 
-function lerAngulo(texto: string): number | null {
+export function lerAngulo(texto: string): number | null {
   const gms = texto.match(new RegExp(`^\\s*${GMS}`));
   if (gms) {
     const g = Number(gms[1]);
@@ -375,7 +377,12 @@ export function restituirMemorial(texto: string): RestituicaoDoMemorial {
       naoLidos.push(parte);
       continue;
     }
-    trechos.push({ azimute, distanciaMm, texto: parte });
+    // "… até o vértice P2, confrontando com a Rua das Acácias" — o que o
+    // `memorialConvencional` escreve; a ida e a volta têm de dar o mesmo lote.
+    const ate = parte.match(/at[ée]\s+o\s+(?:v[ée]rtice|marco)\s+([^\s,;]+)/i);
+    const conf = parte.match(/confrontando\s+com\s+(.+)$/i);
+    const confrontante = conf ? conf[1].split(/,\s*v[ée]rtice inicial/i)[0].replace(/[\s.;,]+$/, '').trim() || null : null;
+    trechos.push({ azimute, distanciaMm, texto: parte, confrontante, ateVertice: ate ? ate[1].replace(/[.]+$/, '') : null });
   }
 
   const anel: Point[] = [{ x: 0, y: 0 }];
@@ -393,7 +400,8 @@ export function restituirMemorial(texto: string): RestituicaoDoMemorial {
   const erro = trechos.length > 0 ? Math.hypot(ultimo.x, ultimo.y) : 0;
   if (trechos.length > 0) anel.pop();
 
-  return { anel, trechos, erroDeFechamentoMm: Math.round(erro), naoLidos };
+  const inicio = texto.match(/inicia-se[^;]*?(?:v[ée]rtice|marco)\s+([^\s,;]+)/i);
+  return { anel, trechos, erroDeFechamentoMm: Math.round(erro), naoLidos, verticeInicial: inicio ? inicio[1] : null };
 }
 
 export { anelDoTerreno };

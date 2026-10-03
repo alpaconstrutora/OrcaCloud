@@ -6932,3 +6932,42 @@ describe('drawer de tarefa: o painel do meio com padding lateral (01/10/2026)', 
     expect((corpo!.firstElementChild as HTMLElement).className).toMatch(/\bpx-6\b/);
   });
 });
+
+/**
+ * O LOTE DIGITADO (03/10/2026): *"hoje o terreno ou lote é criado apenas
+ * desenhando. implementar também digitando"*.
+ */
+describe('BlueprintEditor · criar o lote digitando', () => {
+  it('Terreno › Digitar: 12 × 30 vira lote de 360 m² com papéis; o Roteiro liga; Desfazer tira tudo de uma vez', async () => {
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    await abrirAba(/^terreno$/i);
+    expect(botao(/^roteiro/i)).toBeDisabled();
+    await user.click(botao(/^digitar$/i));
+    const gaveta = await screen.findByTestId('painel-lote-digitado');
+    await user.type(within(gaveta).getByLabelText('Frente (m)'), '12');
+    await user.type(within(gaveta).getByLabelText('Profundidade (m)'), '30');
+    await user.click(within(gaveta).getByRole('button', { name: 'Lançar o lote' }));
+    await waitFor(() => expect(screen.queryByTestId('painel-lote-digitado')).toBeNull());
+    expect(await screen.findByText(/Lote lançado: 4 divisas, 360,00 m²/)).toBeInTheDocument();
+    expect(botao(/^roteiro/i)).toBeEnabled();
+    // O retângulo já traz os papéis: o Quadro de divisas não precisa abrir sozinho.
+    // (A gaveta fechada continua montada, com `pointer-events-none`: conta-se só a aberta.)
+    expect(screen.queryAllByRole('dialog').filter((d) => !d.className.includes('pointer-events-none'))).toHaveLength(0);
+    // Um passo de desfazer leva as quatro divisas.
+    await user.click(barra().getByRole('button', { name: /^desfazer/i }));
+    await waitFor(() => expect(botao(/^roteiro/i)).toBeDisabled());
+  });
+
+  it('sem lote, "Dados do lote" oferece "Criar o lote digitando", que troca a gaveta', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^dados do lote$/i));
+    const bloco = await screen.findByTestId('sem-lote-digitar');
+    await user.click(within(bloco).getByRole('button', { name: 'Criar o lote digitando' }));
+    expect(await screen.findByTestId('painel-lote-digitado')).toBeInTheDocument();
+    expect(screen.queryByText(/dados do lote, zona e topografia/i)).toBeNull();
+  });
+});

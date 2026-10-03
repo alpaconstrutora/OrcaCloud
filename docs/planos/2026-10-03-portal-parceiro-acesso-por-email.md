@@ -66,6 +66,9 @@ Perguntas feitas ao usuário antes do plano, e as respostas:
    Primeira versão falhou nessa medição: o listener de auth zerava o grupo logo
    depois do ajuste; a regra passou a se reafirmar.
 5. **Publicação** — push em main, `conferir-producao.sh`, check-run `ci`.
+   ✅ commit `6bbb3daa` em main; `conferir-producao.sh`: domínio serve `6bbb3da`
+   com o texto novo do modal; as quatro checagens da entrada repetidas contra
+   produção passaram; check-run `ci`: `completed success`.
 
 ## Fora do escopo
 

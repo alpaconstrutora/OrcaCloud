@@ -120,6 +120,21 @@ describe('ponte massa → Empreendimento', () => {
     expect(nomeDaUnidadeDaMassa(4, 12)).toBe('312');
   });
 
+  it('M6a: a divisão do pavimento tipo semeia posição e sol de cada unidade (createOnly — o cadastro pode corrigir)', () => {
+    // Torre 24 × 30 m com o eixo maior norte–sul: as fachadas das unidades olham para leste e oeste,
+    // e a rua fica ao sul — as unidades são LATERAIS em relação a ela.
+    const lado = ladoDaMassa(emp, estudo(), produto(), CUB);
+    const doTipo = lado.towers[0].units.filter((u) => /^1\d\d$/.test(String(u.fields.name)));
+    expect(doTipo).toHaveLength(8);
+    for (const u of doTipo) {
+      expect(['LESTE', 'OESTE']).toContain(u.createOnly!.sun_orientation);
+      expect(u.createOnly!.position_type).toBe('LATERAL');
+      // Semente, não campo sincronizado: o envio seguinte não sobrescreve o que o cadastro corrigir.
+      expect(u.fields).not.toHaveProperty('sun_orientation');
+    }
+    expect(new Set(doTipo.map((u) => u.createOnly!.sun_orientation)).size).toBe(2);
+  });
+
   it('cadastro vazio: cria 1 torre com 80 unidades; o mesmo envio de novo não muda nada (idempotente)', () => {
     const m = estudo();
     const lado = ladoDaMassa(emp, m, produto(), CUB);

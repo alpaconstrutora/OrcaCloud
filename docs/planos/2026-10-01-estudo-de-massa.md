@@ -794,7 +794,10 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
   - [x] **M5b** — insolação de massa (sol nas fachadas, lote livre, vizinhos) como indicador e objetivo; entorno persistido por estudo (este registro)
   - [x] **M5c** — IA no vocabulário do produto ("duas torres", "apartamentos entre 65 e 75 m²") (este registro)
   - orientação por unidade (`position_type`, `sun_orientation`) → vai para a M6, junto da divisão do pavimento em unidades
-- [ ] M6 — da massa à planta e ao BIM
+- [ ] M6 — da massa à planta e ao BIM · dividida (02/10/2026):
+  - [x] **M6a** — pavimento tipo esquemático do bloco (corredor, núcleo, unidades com canto e orientação, cópias vivas) + orientação ao Empreendimento (este registro)
+  - [ ] **M6b** — planta interna de cada unidade pelo gerador (E6.2) dentro da fatia, grupo espelhado quando simétrico
+  - [ ] decidir com o usuário os botões do Empreendimento que ainda levam ao Planta AI v1
 
 ## Execução
 
@@ -1159,3 +1162,49 @@ põe o critério "pronto quando" da M5 no ar sem esperar as outras; cada uma tem
 | Limpeza | estudos apagados pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes: estudos 72 · ramos 72 · versões 8 · produtos 0 · entornos 0 · ZZ 0 |
 | Suíte cheia | 1ª rodada: 673 arquivos, 0 falhas, mas a conta NÃO fechou (171 testes "pending" em `BlueprintEditor.test.tsx`: o worker morreu no 32º teste, sem erro — "Some tests are still running when generating the JSON report"). O teste novo (M5c) é o 39º, então não tinha rodado: é a queda intermitente do Node 24 já registrada. O arquivo sozinho, 6 rodadas: 4 inteiras (203/203) e 2 interrompidas em pontos diferentes (50, 119). Suíte refeita até fechar — ver a linha abaixo |
 | Suíte cheia (JSON), refeita | tentativa 1 de novo interrompida no mesmo arquivo (151 "pending"); **tentativa 2: 673/673 arquivos · 7.040 testes = 7.006 ok + 34 pulados · 0 falhas — a conta fecha**. ⚠️ A queda do worker nesse arquivo ficou frequente hoje (4 de 9 rodadas); não há evidência de causa no código (para em pontos diferentes, inclusive antes dos testes da M5), mas o arquivo tem 203 testes e os da M5 rodam o gerador no fio principal (sem Worker no jsdom) — se continuar, dividir o arquivo |
+
+### M6a — Da massa ao pavimento tipo (02/10/2026)
+
+**Por que dividir a M6.** "Gerar a planta" junta duas coisas: o PAVIMENTO TIPO (onde ficam corredor, núcleo e
+unidades — decisão de massa) e a planta INTERNA de cada unidade (o gerador da E6.2 dentro da fatia). A primeira já
+fecha o ciclo massa → BIM → Empreendimento (paredes, unidades, quantitativo, IFC, orientação no cadastro); a segunda
+depende dela e tem o seu ritual.
+
+**O que entrou.**
+
+- **Motor** `utils/blueprintPavimentoTipoDaMassa.ts` (puro). `dividirPavimento`: do bloco RETANGULAR e do produto
+  distribuído (M2) no pavimento tipo → esquema (**corredor central** quando a profundidade comporta 2 × 6 m + 1,5 m;
+  senão **lateral**), núcleo numa fatia do lado A onde a divisão das unidades cai mais perto do meio (comprimento
+  pela área da M2 e pelas PEÇAS: elevadores da ficha de 8 + shaft + folgas), unidades em fatias proporcionais à área
+  alvo ajustadas para preencher cada lado (aviso quando ficam > 10 % menores ou > 15 % maiores), as de ponta são de
+  **canto**, a orientação é a da fachada (azimute com o norte do estudo) → `solCardinal` (NORTE/SUL/LESTE/OESTE) e
+  `posicaoNoLote` (FRENTE/LATERAL/FUNDOS, pela normal da fachada contra a direção da divisa FRENTE). Numeração e
+  posição IGUAIS às do envio ao Empreendimento (tipologias na ordem do produto; `nomeDaUnidadeDaMassa` mudou-se para
+  cá e o adapter re-exporta). `montarPavimentoTipo`: um pavimento na cota do 2º pavimento do bloco, paredes externas
+  (20 cm), do corredor e entre unidades (15 cm), a porta de cada unidade e do núcleo no corredor, elevadores, shaft e
+  escada no núcleo, cada unidade como `Unidade` (E2.2) com número e tipologia, e os demais pavimentos como CÓPIAS
+  VIVAS (E2.1). Uma lista de comandos só: aplicada de uma vez no modelo de origem dá os mesmos ids da simulação.
+- **Identidade**: o pavimento tipo do bloco tem uid DERIVADO do bloco (e as cópias também) — montar de novo é
+  recusado com o motivo. ⚠️ Achado da prova no app real: montar e depois criar a alternativa empilhava um segundo
+  tipo (19 pavimentos, 4 elevadores, 2 escadas) e ainda nascia a unidade 106 — com o núcleo já desenhado, a M2 conta
+  a área real (menor) e cabe mais uma.
+- **Empreendimento**: o envio da massa (M3) semeia `sun_orientation` e `position_type` de cada unidade pela divisão
+  (só em `createOnly`: o cadastro pode corrigir e o envio seguinte não sobrescreve), casando por posição E tipologia.
+- **UI**: o painel do bloco selecionado ganha "Pavimento tipo" — o esquema, as unidades (número, tipologia, área,
+  orientação, canto), os avisos e as saídas "Criar alternativa com o pavimento tipo" e "Montar neste estudo"; motivo
+  quando não dá (bloco sem unidade, sem produto, não retangular, já montado).
+- **Fora, dito**: bloco não retangular (L, U, H — dividir em blocos), o térreo (portaria, lazer, pilotis — fica com o
+  projetista) e a planta interna das unidades (M6b).
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintPavimentoTipoDaMassa.test.ts` (10) | 30 × 16 m: corredor central, núcleo no lado A, numeração 101… na ordem do envio, 4 de canto, cada lado preenche os 30 m; rua ao sul → lado A SUL/FRENTE, lado B NORTE/FUNDOS; norte girado muda; 12 m → corredor lateral; L recusado com o motivo; estudo girado 30° → as mesmas unidades; montagem: tipo a 3,00 m + 8 cópias vivas, Unidade por apartamento com 1 etiqueta, portas = unidades + 1, 2 elevadores + shaft + escada, áreas desenhadas coerentes, eficiência desenhada entre 55 e 90 %; a lista aplicada DE UMA VEZ dá o mesmo modelo; **quantitativo por pavimento: as 9 cópias com a mesma alvenaria, portas e ambientes; IFC com 10 IfcBuildingStorey, paredes × 9 e os IfcSpace**; montar duas vezes recusado; uid das cópias estável; número repetido não recriado |
+| `blueprintMassaFinanceiroEPonte.test.ts` (+1) | a torre norte–sul do fixture: as 8 unidades do tipo saem LESTE/OESTE e LATERAL, só em `createOnly`; a idempotência do envio continua |
+| Teste de editor "estudo de massa (M6a)" | o painel do bloco: "corredor central · N unidade(s), 4 de canto · núcleo com 2 elevador(es)", "101 · 2 dorm. · … · sul/norte · canto"; "Criar alternativa" → modelo com 10 pavimentos (8 cópias) e as unidades a partir de 101 |
+| `tsc` · `check-ui-standard` · org guard · XSS · build | 0 · 0 violações · ok · ok · ok |
+| Suíte cheia (JSON) | 674/674 arquivos · 7.052 testes = 7.018 ok + 34 pulados · 0 falhas (fechou de primeira) |
+| App real (estudo descartável "ZZ TESTE … prova M6a": lote 40 × 60, rua ao sul, Torre A 30 × 16 × 10 pav, produto) | 11/11: o painel propõe corredor central, 4 de canto, 2 elevadores, 101… com sul e norte; **"Criar alternativa"** → ramo gravado com 10 pavimentos (8 cópias), 5 unidades (101–105), 2 elevadores e 1 escada; de volta ao editor, **"Montar neste estudo"** → o rascunho do principal gravado com 10 pavimentos e 5 unidades; o painel passa a recusar montar de novo (sem os botões); 0 erros. No canvas: 3 unidades ao norte, 2 ao sul + núcleo, portas no corredor, e as divisórias entre duas unidades com o tracejado violeta da E2.2 ("paredes divididas por duas UNIDADES") — as unidades foram reconhecidas |
+| Achados do app real | (1) montar duas vezes empilhava — corrigido (identidade do tipo); (2) roteiro: a gaveta cobre o painel (Escape antes) e "Estudo" casava com /tudo/ na busca do botão Enquadrar |
+| Limpeza | os 3 estudos descartáveis apagados pelo id + `name LIKE 'ZZ TESTE%'`; contagens iguais às de antes da prova: estudos 73 · ramos 73 · versões 8 · produtos 0 · entornos 0 · ZZ 0 (o 73º estudo é de outro usuário, criado às 21:40 — "Planta 02/10/2026" —, não desta frente) |

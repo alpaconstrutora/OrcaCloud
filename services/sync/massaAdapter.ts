@@ -30,16 +30,13 @@ import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../utils/blueprintMassa';
 import { distribuirProduto, produtoDaColuna, type Produto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { modeloDoPayloadPublicado } from './modeloPublicado';
+import { direcaoDaRua, dividirPavimento, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
 
 const r2 = (v: number): number => Math.round(v * 100) / 100;
 
-/** "301", "1202"; o 1º pavimento acima do solo é o térreo: "T01". */
-export function nomeDaUnidadeDaMassa(ordinal: number, posicao: number): string {
-  const andar = ordinal - 1;
-  const pos = String(posicao).padStart(2, '0');
-  return andar <= 0 ? `T${pos}` : `${andar}${pos}`;
-}
+/** "301", "1202"; o 1º pavimento acima do solo é o térreo: "T01". A regra mora no pavimento tipo (M6a). */
+export const nomeDaUnidadeDaMassa = nomeDaUnidade;
 
 /**
  * O lado canônico a partir do modelo e do produto — PURO (o que o teste exercita).
@@ -69,6 +66,19 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
     const medida = massa.blocos.find((m) => m.blocoId === b.id)!;
     const construidaAcima = medida.projecaoM2 * pb.pisos.length;
     const comumDoBloco = Math.max(0, construidaAcima - pb.privativaM2);
+    // M6a: a divisão do pavimento tipo dá a POSIÇÃO e a ORIENTAÇÃO de cada unidade
+    // (a de canto, a que olha para a rua, o sol da fachada). Vai como SEMENTE
+    // (createOnly): o cadastro do Empreendimento pode corrigir depois.
+    const ordTipo = ordinalDoTipo(model, b);
+    const pisoTipo = pb.pisos.find((p) => (p.ordinal ?? p.indice) === ordTipo) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
+    const divisao = pisoTipo
+      ? dividirPavimento({ bloco: b, produto, porTipologia: pisoTipo.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ordTipo, rotacaoNorteDeg: model.georreferencia?.rotacaoNorteDeg ?? null, direcaoDaRua: direcaoDaRua(model) })
+      : null;
+    const naPosicao = (posicao: number, tipologiaId: string): UnidadeDoPavimento | null => {
+      if (!divisao?.ok) return null;
+      const u = divisao.divisao.unidades.find((x) => x.posicao === posicao);
+      return u && u.tipologiaId === tipologiaId ? u : null;
+    };
     const vgvDoBloco = pb.pisos.reduce((s, p) => s + Object.entries(p.porTipologia).reduce((ss, [id, q]) => ss + q * (tipologias.get(id)?.areaPrivativaM2 ?? 0) * (tipologias.get(id)?.precoM2 ?? 0), 0), 0);
 
     const units: CanonicalUnit[] = [];
@@ -85,6 +95,7 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
           // Rateio da área comum do bloco pela privativa — estimativa de massa;
           // o motor NBR 12721 do Empreendimento recalcula quando houver projeto.
           const comum = pb.privativaM2 > 0 ? r2((comumDoBloco * t.areaPrivativaM2) / pb.privativaM2) : 0;
+          const lugar = naPosicao(posicao, t.id);
           units.push({
             sourceId,
             fields: {
@@ -103,6 +114,8 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
               status: 'DISPONIVEL' as UnitStatus,
               // Preço-semente: área × preço/m² da tipologia. Depois é do Empreendimento.
               ...(t.precoM2 > 0 ? { price: r2(privativa * t.precoM2) } : {}),
+              ...(lugar ? { sun_orientation: lugar.solCardinal } : {}),
+              ...(lugar?.posicaoNoLote ? { position_type: lugar.posicaoNoLote } : {}),
             } satisfies Partial<EmpreendimentoUnitInsert> as Record<string, unknown>,
           });
         }

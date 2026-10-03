@@ -1541,6 +1541,48 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(await within(tela).findByText(/Não entendi o pedido\. Exemplos:/)).toBeInTheDocument();
   }, 45000);
 
+  it('estudo de massa (M6a): o painel do bloco propõe o pavimento tipo (corredor, núcleo, unidades com canto e orientação), cria a alternativa e monta no estudo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const { produtoSemente } = await import('../../utils/blueprintProduto');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    // Lote 40 × 60 m com a rua ao sul; Torre A 30 × 16 m, 10 pavimentos.
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        d(0, 0, 40000, 0, 'FRENTE'),
+        d(40000, 0, 40000, 60000, 'LATERAL_DIREITA'),
+        d(40000, 60000, 0, 60000, 'FUNDOS'),
+        d(0, 60000, 0, 0, 'LATERAL_ESQUERDA'),
+        { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(5000, 20000), k.point(35000, 20000), k.point(35000, 36000), k.point(5000, 36000)], pavimentos: 10 },
+      ]).model,
+    );
+    getProduto.mockResolvedValueOnce({ id: 'p1', study_id: 'std_1', organization_id: 'org_1', produto: produtoSemente('RESIDENCIAL_MEDIO'), created_at: '', updated_at: '' });
+    createAlternative.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(screen.getByRole('button', { name: /^estudo de massa/i }));
+    const gaveta = await screen.findByTestId('tarefa-massa');
+    await user.click(within(within(gaveta).getByTestId('indicadores-da-massa')).getByText('Torre A'));
+    const painel = await screen.findByTestId('painel-bloco');
+    const tipo = within(painel).getByTestId('pavimento-tipo-do-bloco');
+    expect(tipo).toHaveTextContent(/corredor central · \d+ unidade\(s\), 4 de canto · núcleo com 2 elevador\(es\)/);
+    // Rua ao sul: o lado A olha para o sul, o lado B para o norte.
+    expect(tipo).toHaveTextContent(/101 · 2 dorm\. · [\d,]+ m² · (sul|norte) · canto/);
+    expect(tipo).toHaveTextContent(/· sul/);
+    expect(tipo).toHaveTextContent(/· norte/);
+    // Criar alternativa: o modelo leva o pavimento tipo, as 8 cópias e as unidades.
+    await user.click(within(tipo).getByTestId('pavimento-tipo-criar-alternativa'));
+    await waitFor(() => expect(createAlternative).toHaveBeenCalled());
+    const chamada = createAlternative.mock.calls[0][0] as unknown as { nome: string; model: { levels: { tipoDeId?: string }[]; unidades?: { numero: string }[] } };
+    expect(chamada.nome).toBe('Torre A — pavimento tipo');
+    expect(chamada.model.levels).toHaveLength(10); // térreo do lote + tipo + 8 cópias
+    expect(chamada.model.levels.filter((l) => l.tipoDeId)).toHaveLength(8);
+    expect(chamada.model.unidades!.map((u) => u.numero)[0]).toBe('101');
+  });
+
   it('estudo de massa (M4): Alternativas compara TODAS com a mesma régua, destaca por linha sem vencedor, sugere EM-00N; publicar congela o produto', async () => {
     const k = await import('../../utils/blueprintKernel');
     const { produtoSemente } = await import('../../utils/blueprintProduto');

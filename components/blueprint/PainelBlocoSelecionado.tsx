@@ -3,8 +3,14 @@
  * piso a piso e cota da base — e o que o motor diz dele (projeção, construída,
  * computável, altura, pavimentos fora do envelope/acima do gabarito).
  * Molde: `PainelVagaSelecionada`.
+ *
+ * M6a: o PAVIMENTO TIPO — o esquema que a divisão propõe (corredor, núcleo,
+ * unidades com canto e orientação) e as duas saídas: criar uma alternativa com
+ * o pavimento tipo montado, ou montar neste estudo (um lote; Ctrl+Z desfaz).
  */
-import React from 'react';
+import React, { useState } from 'react';
+import { ROTULO_DO_ESQUEMA, type DivisaoDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { ROTULO_DO_PONTO_CARDEAL } from '../../utils/blueprintGrafoEspacial';
 import type { Bloco, UsoDoBloco } from '../../utils/blueprintKernel';
 import { MAX_PAVIMENTOS_DO_BLOCO, ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO } from '../../utils/blueprintKernel';
 import type { MedidaDoBloco } from '../../utils/blueprintMassa';
@@ -17,12 +23,33 @@ interface Props {
   onProps: (campos: { nome?: string; uso?: UsoDoBloco; pavimentos?: number; peDireitoMm?: number; cotaBaseMm?: number }) => void;
   onExcluir: () => void;
   onAbrirEstudo: () => void;
+  /** M6a: a divisão do pavimento tipo deste bloco (ou o motivo de não haver) e as saídas. */
+  pavimentoTipo?: {
+    divisao: DivisaoDoPavimento | null;
+    motivo: string | null;
+    onCriarAlternativa: () => Promise<string | void>;
+    onMontarAqui: () => Promise<string | void>;
+  };
 }
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pavimentoTipo }: Props) {
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  const [resultado, setResultado] = useState<string | null>(null);
   if (!bloco) return null;
+  const agir = async (nome: string, fn: () => Promise<string | void>) => {
+    setOcupado(nome);
+    setResultado(null);
+    try {
+      setResultado((await fn()) || null);
+    } catch (e) {
+      setResultado(e instanceof Error ? e.message : String(e));
+    } finally {
+      setOcupado(null);
+    }
+  };
+  const dv = pavimentoTipo?.divisao ?? null;
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
   const foraDoEnvelope = medida?.pisos.filter((p) => p.cabe === false) ?? [];
   const acimaDoGabarito = medida?.pisos.filter((p) => p.acimaDoGabarito) ?? [];
@@ -142,6 +169,56 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
       <button type="button" onClick={onAbrirEstudo} className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800">
         Ver o estudo de massa
       </button>
+
+      {pavimentoTipo && (
+        <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-2 text-[11px]" data-testid="pavimento-tipo-do-bloco">
+          <p className="text-xs font-semibold text-slate-700">Pavimento tipo</p>
+          {dv ? (
+            <>
+              <p className="text-slate-600">
+                {ROTULO_DO_ESQUEMA[dv.esquema]} · {dv.unidades.length} unidade(s), {dv.unidades.filter((u) => u.canto).length} de canto
+                {dv.elevadores ? ` · núcleo com ${dv.elevadores} elevador(es)` : ''}
+              </p>
+              <ul className="max-h-28 space-y-0.5 overflow-y-auto text-slate-600">
+                {dv.unidades.map((u) => (
+                  <li key={u.numero}>
+                    {u.numero} · {u.tipologiaNome} · {n2(u.areaM2)} m² · {ROTULO_DO_PONTO_CARDEAL[u.orientacao].toLowerCase()}
+                    {u.canto ? ' · canto' : ''}
+                  </li>
+                ))}
+              </ul>
+              {dv.avisos.map((a) => (
+                <p key={a} className="text-amber-800">{a}</p>
+              ))}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <button
+                  type="button"
+                  disabled={!!ocupado}
+                  onClick={() => void agir('criar', pavimentoTipo.onCriarAlternativa)}
+                  className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+                  data-testid="pavimento-tipo-criar-alternativa"
+                >
+                  {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa com o pavimento tipo'}
+                </button>
+                <button
+                  type="button"
+                  disabled={!!ocupado}
+                  onClick={() => void agir('montar', pavimentoTipo.onMontarAqui)}
+                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  data-testid="pavimento-tipo-montar-aqui"
+                  title="Paredes, portas, núcleo, escada e unidades entram neste estudo (um lote: Ctrl+Z desfaz)"
+                >
+                  {ocupado === 'montar' ? 'Montando…' : 'Montar neste estudo'}
+                </button>
+              </div>
+              <p className="text-slate-500">O térreo fica com o projetista; os demais pavimentos entram como cópias vivas do tipo. A planta interna de cada unidade vem depois (gerador).</p>
+            </>
+          ) : (
+            <p className="text-slate-500" data-testid="pavimento-tipo-motivo">{pavimentoTipo.motivo ?? 'Sem divisão possível.'}</p>
+          )}
+          {resultado && <p className="text-slate-700" data-testid="pavimento-tipo-resultado">{resultado}</p>}
+        </div>
+      )}
     </div>
   );
 }

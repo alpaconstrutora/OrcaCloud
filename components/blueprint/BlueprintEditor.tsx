@@ -630,6 +630,7 @@ import { useGerador } from '../../hooks/useGerador';
 import { useGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
 import { useBlueprintEntorno } from '../../hooks/useBlueprintEntorno';
 import { insolacaoDaMassa, type OpcoesDaInsolacaoDaMassa } from '../../utils/blueprintInsolacaoDaMassa';
+import { direcaoDaRua, dividirPavimento, montarPavimentoTipo, ordinalDoTipo as ordinalDoPavimentoTipo, pavimentoTipoMontado } from '../../utils/blueprintPavimentoTipoDaMassa';
 import { comandosDoCandidato, modeloDoCandidato, type CandidatoDeMassa } from '../../utils/blueprintGeradorDeMassa';
 import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
@@ -4607,6 +4608,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [tarefaAberta, editor.model, solDaMassa],
   );
   const medirCenario = useCallback((m: BlueprintModel) => cenarioDeMassa(m, reguaDoEstudo), [reguaDoEstudo]);
+  /**
+   * PAVIMENTO TIPO (M6a) do bloco selecionado: a divisão pelo produto
+   * distribuído (M2) no pavimento tipo dele. Só calcula com um bloco na mão.
+   */
+  const blocoSelecionadoParaTipo = (editor.model.blocos ?? []).find((b) => b.id === editor.selectedId) ?? null;
+  const divisaoDoBlocoSel = useMemo(() => {
+    const b = blocoSelecionadoParaTipo;
+    if (!b) return null;
+    if (b.uso === 'GARAGEM' || b.uso === 'TECNICO' || b.uso === 'LAZER') return { ok: false as const, motivo: 'Bloco sem unidade (garagem, técnico ou lazer): não tem pavimento tipo.' };
+    const ja = pavimentoTipoMontado(editor.model, b);
+    if (ja) return { ok: false as const, motivo: `Pavimento tipo já montado: "${ja.name}". Para refazer, remova esse pavimento (as cópias se desvinculam) e monte de novo.` };
+    const pb = distribuicaoDoProduto?.blocos.find((x) => x.blocoId === b.id);
+    if (!pb || pb.unidades === 0) return { ok: false as const, motivo: 'Defina o produto (gaveta Produto): sem tipologias não há unidade para dividir o pavimento.' };
+    const ord = ordinalDoPavimentoTipo(editor.model, b);
+    const piso = pb.pisos.find((p) => p.ordinal === ord) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
+    if (!piso) return { ok: false as const, motivo: 'O bloco não tem pavimento acima do solo.' };
+    return dividirPavimento({ bloco: b, produto: produtoDoEstudo.produto, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null, direcaoDaRua: direcaoDaRua(editor.model) });
+  }, [blocoSelecionadoParaTipo, distribuicaoDoProduto, editor.model, produtoDoEstudo.produto]);
   /** O próximo bloco nasce com o que está na barra de opções. */
   const [pavimentosDoNovoBloco, setPavimentosDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pavimentos', 4);
   const [peDireitoDoNovoBloco, setPeDireitoDoNovoBloco] = usePersistedState<number>('blueprint:bloco-pe-direito', 3000);
@@ -9107,6 +9126,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
         onExcluir={removerSelecionada}
         onAbrirEstudo={() => setTarefa('massa')}
+        pavimentoTipo={
+          blocoSel && divisaoDoBlocoSel
+            ? {
+                divisao: divisaoDoBlocoSel.ok ? divisaoDoBlocoSel.divisao : null,
+                motivo: divisaoDoBlocoSel.ok ? null : divisaoDoBlocoSel.motivo,
+                onCriarAlternativa: async () => {
+                  if (!divisaoDoBlocoSel.ok) return;
+                  const mont = montarPavimentoTipo(editor.model, blocoSel, divisaoDoBlocoSel.divisao);
+                  await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome: `${blocoSel.nome} — pavimento tipo`.slice(0, 80), descricao: divisaoDoBlocoSel.divisao.decisoes.join(' '), model: mont.model });
+                  await recarregarRamos();
+                  setTelaAberta('alternativas');
+                },
+                onMontarAqui: async () => {
+                  if (!divisaoDoBlocoSel.ok) return;
+                  const mont = montarPavimentoTipo(editor.model, blocoSel, divisaoDoBlocoSel.divisao);
+                  editor.runBatch(mont.comandos);
+                  return `Montado: ${divisaoDoBlocoSel.divisao.unidades.length} unidade(s) no pavimento tipo + ${mont.copias} cópia(s); eficiência desenhada ${mont.eficienciaDesenhadaPct ?? '—'} %.${mont.avisos.length ? ` ${mont.avisos.join(' ')}` : ''}`;
+                },
+              }
+            : undefined
+        }
       />
 
       <PainelComponenteSelecionado

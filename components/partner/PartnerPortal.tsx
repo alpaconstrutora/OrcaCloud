@@ -58,8 +58,8 @@ import {
   ACCEPTANCE_KIND_LABELS, RETENTION_RELEASE_KIND_LABELS,
 } from '../../lib/contractLabels';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
-import { DocumentsTable, renderFileIcon } from '../documents/DocumentsTable';
-import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
+import { DocumentsTable } from '../documents/DocumentsTable';
+import { isSentDocument, sentDocumentAsRow, sentDocumentStatus } from '../../utils/partnerSentDocuments';
 import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
 import {
   PartnerWorkspace,
@@ -105,30 +105,6 @@ const PARTNER_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
-// "Enviados por você": o que o parceiro mandou pela aba Documentos (solicitação
-// DOCUMENTACAO com anexo), à espera de a construtora revisar e incluir no GED.
-// Mesmo desenho de tabela do GED logo abaixo (StandardTable segue o mesmo guia
-// que a DocumentsTable), com as colunas que esse registro TEM — não é um
-// documento do GED ainda, então não tem autor, revisão, obra ou validade.
-const SENT_DOC_COLUMNS: StandardTableColumn[] = [
-  { key: 'nome', label: 'Documento', sortable: true, width: 300 },
-  { key: 'extensao', label: 'Extensão', sortable: true, width: 100 },
-  { key: 'observacao', label: 'Observação', sortable: true, width: 260 },
-  { key: 'enviado_em', label: 'Enviado em', sortable: true, width: 150 },
-  { key: 'status', label: 'Status', sortable: true, width: 200 },
-];
-const sentDocFileName = (req: PartnerRequest) =>
-  (req.attachment_paths?.[0]?.split('/').pop() || '').replace(/^\d+_/, '') || req.title;
-const sentDocExtension = (req: PartnerRequest) => {
-  const name = sentDocFileName(req);
-  return name.includes('.') ? name.split('.').pop()!.toUpperCase() : '-';
-};
-const SENT_DOC_STATUS: Record<string, { label: string; className: string }> = {
-  CONCLUIDO: { label: 'Incluído no GED', className: 'text-green-600' },
-};
-const sentDocStatus = (req: PartnerRequest) =>
-  SENT_DOC_STATUS[req.status] ?? { label: 'Aguardando revisão', className: 'text-amber-600' };
-
 const PARTNER_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, autor: 150, numero_documento_fornecedor: 160, tipo_documento: 160,
   revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
@@ -417,6 +393,11 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [showDocFilters, setShowDocFilters] = React.useState(false);
   const partnerDocColumns = useTableColumns(PARTNER_DOC_COLUMNS, 'partnerDocsColumns');
   const partnerDocCols = useResizableColumns(PARTNER_DOC_COL_WIDTHS, 'partnerPortalDocsColWidths');
+  // "Enviados por você" — MESMAS colunas da tabela de documentos (pedido de
+  // 03/10/2026), com estado próprio: esconder uma coluna lá não esconde aqui.
+  const sentDocColumns = useTableColumns(PARTNER_DOC_COLUMNS, 'partnerSentDocsColumns');
+  const sentDocCols = useResizableColumns(PARTNER_DOC_COL_WIDTHS, 'partnerPortalSentDocsColWidths');
+  const [sentDocSearch, setSentDocSearch] = usePersistedState<string>('partnerPortal:sentDocsSearch', '');
   const [selectedDocForQrCode, setSelectedDocForQrCode] = React.useState<OpuraDocument | null>(null);
 
   // Pastas e disciplinas compartilhadas — alimentam os dois selects da toolbar. Vêm junto dos
@@ -938,10 +919,34 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   };
 
   // Documentos que o próprio parceiro enviou, para dar visibilidade na mesma aba
-  const sentDocuments = React.useMemo(
-    () => requests.filter((r) => r.type === 'DOCUMENTACAO' && r.attachment_paths && r.attachment_paths.length > 0),
-    [requests]
-  );
+  const sentDocuments = React.useMemo(() => requests.filter(isSentDocument), [requests]);
+  const sentRequestById = React.useMemo(() => new Map(sentDocuments.map((r) => [r.id, r])), [sentDocuments]);
+  // Cada envio vira uma linha da DocumentsTable (ver utils/partnerSentDocuments.ts),
+  // filtrada pela busca e ordenada pela coluna escolhida no cabeçalho.
+  const sentDocRows = React.useMemo(() => {
+    const ctx = { supplierName: workspace?.supplier_name, organizationId: workspace?.organization_id };
+    let rows = sentDocuments.map((r) => sentDocumentAsRow(r, ctx));
+    const q = sentDocSearch.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((d) => {
+        const req = sentRequestById.get(d.id);
+        return [d.nome, d.descricao, d.autor, req ? sentDocumentStatus(req).label : '']
+          .some((v) => (v || '').toLowerCase().includes(q));
+      });
+    }
+    const col = sentDocColumns.sortColumn;
+    if (col) {
+      const dir = sentDocColumns.sortDirection === 'desc' ? -1 : 1;
+      const valor = (d: (typeof rows)[number]): string => {
+        if (col === 'status') { const req = sentRequestById.get(d.id); return req ? sentDocumentStatus(req).label : ''; }
+        if (col === 'extensao') return (d.active_version?.storage_path?.split('.').pop() || '').toLowerCase();
+        const v = (d as unknown as Record<string, unknown>)[col];
+        return v == null ? '' : String(v).toLowerCase();
+      };
+      rows = [...rows].sort((a, b) => valor(a).localeCompare(valor(b), 'pt-BR') * dir);
+    }
+    return rows;
+  }, [sentDocuments, sentRequestById, sentDocSearch, sentDocColumns.sortColumn, sentDocColumns.sortDirection, workspace?.supplier_name, workspace?.organization_id]);
 
   if (loading) {
     return (
@@ -1311,58 +1316,69 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                     <h4 className="text-sm font-semibold text-gray-700">
                       Enviados por você <span className="text-gray-400 font-normal">({sentDocuments.length})</span>
                     </h4>
-                    <StandardTable<PartnerRequest>
-                      storageKey="partnerPortal:enviadosPorVoce"
-                      columns={SENT_DOC_COLUMNS}
-                      rows={sentDocuments}
-                      rowKey={(req) => req.id}
-                      searchText={(req) => `${sentDocFileName(req)} ${req.description || ''} ${sentDocStatus(req).label}`}
-                      searchPlaceholder="Buscar documento enviado por nome, observação ou status..."
-                      maxHeight="40vh"
-                      sortValue={(key, req) => {
-                        switch (key) {
-                          case 'nome': return sentDocFileName(req).toLowerCase();
-                          case 'extensao': return sentDocExtension(req);
-                          case 'observacao': return (req.description || '').toLowerCase();
-                          case 'enviado_em': return req.created_at;
-                          case 'status': return sentDocStatus(req).label;
-                          default: return null;
+                    {/* Mesma tabela e mesmas colunas da de documentos abaixo (DocumentsTable),
+                        com a toolbar acoplada do mesmo jeito (§5.2). */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                      <div className="p-2 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                          <div className="flex-1 relative w-full">
+                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              value={sentDocSearch}
+                              onChange={(e) => setSentDocSearch(e.target.value)}
+                              placeholder="Buscar documento enviado por nome, observação ou status..."
+                              className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all"
+                            />
+                          </div>
+                          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                            <ColumnConfigButton
+                              columns={PARTNER_DOC_COLUMNS.filter((c) => c.key !== 'actions')}
+                              visibleColumns={sentDocColumns.visibleColumns}
+                              showColumnConfig={sentDocColumns.showColumnConfig}
+                              onToggleShow={() => sentDocColumns.setShowColumnConfig(!sentDocColumns.showColumnConfig)}
+                              onToggleColumn={sentDocColumns.toggleColumn}
+                              onReset={sentDocColumns.resetColumns}
+                            />
+                            {/* Autofit sob comando explícito — nunca automático (§6.1.2 do guia). */}
+                            <button
+                              onClick={() => sentDocCols.autoFit()}
+                              className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                              title="Ajustar largura das colunas ao conteúdo"
+                            >
+                              <MoveHorizontal className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <DocumentsTable
+                        documents={sentDocRows}
+                        tableColumns={sentDocColumns}
+                        cols={sentDocCols}
+                        resolveProjectName={() => '-'}
+                        resolveStatus={(doc) => {
+                          const req = sentRequestById.get(doc.id);
+                          return req ? sentDocumentStatus(req) : { label: '-', className: 'text-gray-600' };
+                        }}
+                        renderNameDetail={(doc) =>
+                          doc.descricao ? (
+                            <span className="block truncate text-sm text-gray-500 mt-0.5" title={doc.descricao}>{doc.descricao}</span>
+                          ) : null
                         }
-                      }}
-                      renderCell={(key, req) => {
-                        switch (key) {
-                          case 'nome':
-                            return (
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="flex-shrink-0">{renderFileIcon('', sentDocFileName(req))}</div>
-                                <span className="text-sm font-medium text-gray-900 truncate" title={sentDocFileName(req)}>{sentDocFileName(req)}</span>
-                              </div>
-                            );
-                          case 'extensao':
-                            return <span className="text-sm font-normal text-gray-600">{sentDocExtension(req)}</span>;
-                          case 'observacao':
-                            return <span className="text-sm font-normal text-gray-700 block truncate" title={req.description || undefined}>{req.description || '-'}</span>;
-                          case 'enviado_em':
-                            return <span className="text-sm font-normal text-gray-600">{new Date(req.created_at).toLocaleDateString('pt-BR')}</span>;
-                          case 'status': {
-                            const st = sentDocStatus(req);
-                            return <span className={`text-sm font-normal ${st.className}`}>{st.label}</span>;
-                          }
-                          default:
-                            return null;
-                        }
-                      }}
-                      actions={{
-                        width: 100,
-                        render: (req) =>
-                          req.attachment_paths?.[0] ? (
+                        renderActions={(doc) =>
+                          doc.active_version?.storage_path ? (
                             <ActionIconButton
                               kind="download"
-                              onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
+                              onClick={() => handleDownloadAttachment(doc.active_version!.storage_path)}
                             />
-                          ) : null,
-                      }}
-                    />
+                          ) : null
+                        }
+                        emptyState={
+                          <div className="text-sm text-slate-400 font-medium">
+                            Nenhum documento enviado encontrado para a busca.
+                          </div>
+                        }
+                      />
+                    </div>
                   </div>
                 )}
 

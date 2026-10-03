@@ -75,6 +75,13 @@ export interface DocumentsTableProps {
   onRowClick?: (doc: OpuraDocument) => void;
   /** Render prop da coluna Ações — cada consumidor decide o que pode ser feito com o documento. */
   renderActions: (doc: OpuraDocument) => React.ReactNode;
+  /** Status com rótulo/cor próprios. Omitir mantém a regra do GED (Ativo / Em Alerta /
+   * Vencido). O Portal do Parceiro usa para os envios do parceiro, que têm status de
+   * revisão ("Aguardando revisão" / "Incluído no GED"), não de validade. */
+  resolveStatus?: (doc: OpuraDocument) => { label: string; className: string };
+  /** Linha secundária sob o nome na coluna Documento (ex.: a observação do envio).
+   * Omitir = só o nome, como no GED. */
+  renderNameDetail?: (doc: OpuraDocument) => React.ReactNode;
   /** Estado vazio quando não há documento algum (antes de aplicar filtros). */
   emptyState?: React.ReactNode;
 
@@ -146,6 +153,8 @@ function renderDocumentCell(
     resolveProjectName?: (doc: OpuraDocument) => string;
     resolveDisciplineLabel?: (doc: OpuraDocument) => string;
     extensionIcons?: Record<string, string>;
+    resolveStatus?: (doc: OpuraDocument) => { label: string; className: string };
+    renderNameDetail?: (doc: OpuraDocument) => React.ReactNode;
   },
 ): React.ReactNode {
   switch (key) {
@@ -157,6 +166,7 @@ function renderDocumentCell(
           </div>
           <div className="min-w-0">
             <span className="font-medium text-gray-900 block truncate">{doc.nome}</span>
+            {ctx.renderNameDetail?.(doc)}
             {doc.locked_by && (
               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-orange-600 mt-0.5">
                 <Lock className="w-3 h-3" />
@@ -187,6 +197,10 @@ function renderDocumentCell(
     case 'data_validade':
       return doc.data_validade ? new Date(doc.data_validade).toLocaleDateString() : '-';
     case 'status': {
+      if (ctx.resolveStatus) {
+        const { label, className } = ctx.resolveStatus(doc);
+        return <span className={className}>{label}</span>;
+      }
       const { statusColor, statusLabel } = getDocumentStatusPresentation(doc.status);
       return <span className={statusColor}>{statusLabel}</span>;
     }
@@ -213,6 +227,8 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
   getDynamicCellValue,
   onRowClick,
   renderActions,
+  resolveStatus,
+  renderNameDetail,
   emptyState,
   selectable = false,
   selectedIds,
@@ -313,7 +329,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
                 const renderCoreTd = (key: string) => (
                   <td key={key} className={DOCUMENTS_TABLE_CELL_CLASS[key] ?? 'px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600'}
                     title={key === 'descricao' ? (doc.descricao || undefined) : undefined}>
-                    {renderDocumentCell(key, doc, { resolveProjectName, resolveDisciplineLabel, extensionIcons })}
+                    {renderDocumentCell(key, doc, { resolveProjectName, resolveDisciplineLabel, extensionIcons, resolveStatus, renderNameDetail })}
                   </td>
                 );
                 return (

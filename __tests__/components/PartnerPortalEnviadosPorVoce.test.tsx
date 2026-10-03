@@ -4,9 +4,12 @@
  * Pedido de 03/10/2026: "na aba documentos, os documentos enviados pela parceiro
  * esta em formato de card. Implementar o mesmo design (tabela) dos documentos do app".
  *
+ * 2º pedido, mesmo dia: "a tabela de documentos enviados pela parceiro deve ter as
+ * mesmas colunas da tabela de documentos do app" — virou a própria DocumentsTable.
+ *
  * Trava:
- *  1. o que o parceiro enviou aparece numa tabela (não em cards), com as colunas
- *     que esse registro tem e o status em texto colorido (§8, sem pílula);
+ *  1. o que o parceiro enviou aparece numa tabela (não em cards), com AS MESMAS
+ *     colunas da tabela de documentos, e o status em texto colorido (§8, sem pílula);
  *  2. a coluna Documento mostra o nome do ARQUIVO (sem o prefixo numérico do
  *     upload) e a extensão sai dele;
  *  3. baixar pela coluna Ações usa o mesmo caminho de antes (link assinado do token);
@@ -95,7 +98,14 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
         const tabela = await tabelaEnviados();
 
         const cabecalho = within(tabela).getAllByRole('columnheader').map(th => th.textContent?.trim()).filter(Boolean);
-        expect(cabecalho).toEqual(['Documento', 'Extensão', 'Observação', 'Enviado em', 'Status', 'Ações']);
+        expect(cabecalho).toEqual([
+            'Documento', 'Extensão', 'Autor', 'Nº Doc. Fornecedor', 'Tipo / Categoria', 'Revisão',
+            'Obra Vinculada', 'Emissão', 'Validade', 'Status', 'Ações',
+        ]);
+        // ...e são exatamente as da tabela de documentos compartilhados logo abaixo
+        const tabelaGed = screen.getAllByRole('table')[1];
+        const cabecalhoGed = within(tabelaGed).getAllByRole('columnheader').map(th => th.textContent?.trim()).filter(Boolean);
+        expect(cabecalho).toEqual(cabecalhoGed);
         expect(screen.getByText('(2)')).toBeInTheDocument();
 
         const linhas = within(tabela).getAllByRole('row').slice(1);
@@ -108,7 +118,7 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
         expect(within(tabela).getByText('Incluído no GED').className).toContain('text-green-600');
     });
 
-    it('2. nome do arquivo sem o prefixo do upload, e a extensão vem dele', async () => {
+    it('2. nome do arquivo sem o prefixo do upload, extensão dele, autor = parceiro, observação sob o nome', async () => {
         await abrirDocumentos();
         const tabela = await tabelaEnviados();
 
@@ -117,6 +127,7 @@ describe('PartnerPortal › Documentos — Enviados por você', () => {
         expect(within(tabela).getByText('PDF')).toBeInTheDocument();
         expect(within(tabela).getByText('DWG')).toBeInTheDocument();
         expect(within(tabela).getByText('Revisão da proposta')).toBeInTheDocument();
+        expect(within(tabela).getAllByText('Parceiro X')).toHaveLength(2);
     });
 
     it('3. baixar pela coluna Ações pede o link assinado do token', async () => {

@@ -1418,9 +1418,41 @@ function segmentosDoNivel(model, level) {
     ...pontesEstruturais(model, level)
   ];
 }
+var MEMORIA_DO_ARRANJO = /* @__PURE__ */ new Map();
+var MAX_MEMORIA_DO_ARRANJO = 256;
+function assinaturaDosSegmentos(segmentos, tolerance) {
+  let s2 = `${tolerance}|`;
+  for (const g of segmentos) s2 += `${g.a.x},${g.a.y},${g.b.x},${g.b.y};`;
+  return s2;
+}
+function espacosDaMemoria(m, level) {
+  return {
+    spaces: m.spaces.map((sp, i) => ({
+      id: `spc_${level.id}_${String(i + 1).padStart(4, "0")}`,
+      levelId: level.id,
+      ring: sp.ring.map((p) => ({ x: p.x, y: p.y })),
+      holes: sp.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))),
+      areaMm2: sp.areaMm2,
+      perimeterMm: sp.perimeterMm
+    })),
+    danglingVertices: m.danglingVertices.map((p) => ({ x: p.x, y: p.y }))
+  };
+}
 function buildArrangement(model, level, tolerance = DEFAULT_TOLERANCE_MM) {
   const rawSegments = segmentosDoNivel(model, level);
   if (rawSegments.length === 0) return { spaces: [], danglingVertices: [] };
+  const chave = assinaturaDosSegmentos(rawSegments, tolerance);
+  const lembrado = MEMORIA_DO_ARRANJO.get(chave);
+  if (lembrado) return espacosDaMemoria(lembrado, level);
+  const calculado = arranjoDosSegmentos(rawSegments, level, tolerance);
+  MEMORIA_DO_ARRANJO.set(chave, {
+    spaces: calculado.spaces.map(({ id: _id, levelId: _l, ...resto }) => ({ ...resto, ring: resto.ring.map((p) => ({ x: p.x, y: p.y })), holes: resto.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) })),
+    danglingVertices: calculado.danglingVertices.map((p) => ({ x: p.x, y: p.y }))
+  });
+  if (MEMORIA_DO_ARRANJO.size > MAX_MEMORIA_DO_ARRANJO) MEMORIA_DO_ARRANJO.delete(MEMORIA_DO_ARRANJO.keys().next().value);
+  return calculado;
+}
+function arranjoDosSegmentos(rawSegments, level, tolerance) {
   const split = splitAtIntersections(rawSegments);
   const endpoints = split.flatMap((s2) => [s2.a, s2.b]);
   const { vertices, indexOf } = snapVertices(endpoints, tolerance);

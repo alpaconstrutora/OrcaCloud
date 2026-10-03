@@ -198,6 +198,17 @@ export type Command =
   /** `tipoDeId`: nasce vinculado a este pavimento tipo (E2.1). */
   /** `uid` (P2.32): identidade dada por quem importa, para as peças do MESMO lote apontarem pelo `levelUid` — o id só nasce ao aplicar. */
   | { type: 'AddLevel'; name: string; elevationMm: number; defaultHeightMm: number; tipoDeId?: ObjectId; uid?: ElementUid }
+  /**
+   * LOTE ATÔMICO (03/10/2026): N paredes, aberturas ou etiquetas num comando SÓ — e portanto uma cauda só (sincronizar
+   * as cópias do pavimento tipo e dos grupos, rederivar os ambientes, conferir os invariantes). Cada item é o comando
+   * unitário (`AddWall`, `AddOpening`, `PlaceSpaceLabel`), aplicado em ordem SEM rederivar no meio: a etiqueta acha o
+   * ambiente pelo arranjo de antes do comando, e a abertura acha a parede já criada. Medido: a planta das unidades de
+   * um bloco em H (24 unidades, 8 pavimentos) eram ~650 comandos e 22–40 s, porque cada comando refazia a cauda num
+   * modelo de 1.600 paredes. Quem gera centenas de peças de uma vez usa estes; o desenho à mão continua unitário.
+   */
+  | { type: 'AddWalls'; walls: Omit<ComandoAddWall, 'type'>[] }
+  | { type: 'AddOpenings'; openings: Omit<ComandoAddOpening, 'type'>[] }
+  | { type: 'PlaceSpaceLabels'; labels: Omit<ComandoPlaceSpaceLabel, 'type'>[] }
   | {
       type: 'AddWall';
       levelId: ObjectId;
@@ -1526,35 +1537,23 @@ function aplicarSemHash(
     }
 
     case 'AddWall': {
-      if (pointsEqual(command.a, command.b)) {
-        throw new KernelError('DEGENERATE_WALL', 'Parede de comprimento zero');
-      }
-      // `uid` fora de formato e lista de camadas vazia são recusados por
-      // `assertModelInvariants`, que roda em todo `applyCommand` — repetir a
-      // guarda aqui criaria uma segunda verdade sobre o que é válido.
-      const id = nextId(next, 'wal');
-      next.walls.push({
-        id,
-        uid: command.uid ?? novoUid(),
-        levelId: command.levelId,
-        a: { ...command.a },
-        b: { ...command.b },
-        // Com camadas, a espessura É a soma delas — a mesma regra de
-        // `SetWallLayers`, que recusa `SetThickness` numa parede composta.
-        thicknessMm: command.camadas ? somaDasCamadas(command.camadas) : command.thicknessMm,
-        heightMm: command.heightMm,
-        ...(command.camadas ? { camadas: clonarCamadas(command.camadas) } : {}),
-        // `'EIXO'` não é gravado: é o padrão, e emitir a chave em toda parede
-        // faria o payload canônico de TODO desenho antigo crescer sem que nada
-        // no desenho tivesse mudado. Mesma razão de `areaEscrituraMm2`.
-        ...(command.alinhamento && command.alinhamento !== 'EIXO'
-          ? { alinhamento: command.alinhamento }
-          : {}),
-      });
-      diff.created.push(id);
+      adicionarParede(next, diff, command);
       break;
     }
 
+    // ── Lote atômico (ver o tipo) ────────────────────────────────────────────
+    case 'AddWalls': {
+      for (const w of command.walls) adicionarParede(next, diff, resolverLevelUid(next, { ...w, type: 'AddWall' }) as ComandoAddWall);
+      break;
+    }
+    case 'AddOpenings': {
+      for (const o of command.openings) adicionarAbertura(next, diff, { ...o, type: 'AddOpening' });
+      break;
+    }
+    case 'PlaceSpaceLabels': {
+      for (const l of command.labels) colocarEtiqueta(next, diff, { ...l, type: 'PlaceSpaceLabel' });
+      break;
+    }
     case 'SetWallCortina': {
       const w = findWall(next, command.wallId);
       if (command.cortina) w.cortina = { moduloMm: assertIntegerMm(roundToMm(command.cortina.moduloMm), 'moduloMm'), montanteMm: assertIntegerMm(roundToMm(command.cortina.montanteMm), 'montanteMm'), painel: command.cortina.painel };
@@ -1597,42 +1596,9 @@ function aplicarSemHash(
     }
 
     case 'AddOpening': {
-      const porUid = command.wallUid
-        ? next.walls.find((w) => w.uid === command.wallUid)
-        : undefined;
-      if (command.wallUid && !porUid) {
-        throw new KernelError('WALL_NOT_FOUND', `Nenhuma parede com uid ${command.wallUid}`);
-      }
-      const wall = porUid ?? findWall(next, command.wallId);
-      const limit = wallLength(wall);
-      if (command.offsetMm < 0 || command.offsetMm + command.widthMm > limit) {
-        throw new KernelError(
-          'OPENING_OUT_OF_BOUNDS',
-          `Abertura ${command.offsetMm}+${command.widthMm} não cabe em ${limit} mm`,
-        );
-      }
-      const id = nextId(next, 'opn');
-      next.openings.push({
-        id,
-        uid: novoUid(),
-        wallId: wall.id,
-        kind: command.kind,
-        offsetMm: command.offsetMm,
-        widthMm: command.widthMm,
-        heightMm: command.heightMm,
-        sillMm: command.sillMm,
-        hingeAtStart: command.hingeAtStart ?? true,
-        swingReversed: command.swingReversed ?? false,
-        // Por FORA é o padrão: é a forma comum, e o bolso exige parede
-        // preparada — quem tem bolso sabe que tem, quem não pensou no assunto
-        // não tem.
-        embutida: command.embutida ?? false,
-        ...(command.esquadria ? { esquadria: { ...command.esquadria } } : {}),
-      });
-      diff.created.push(id);
+      adicionarAbertura(next, diff, command);
       break;
     }
-
     case 'AddBoundary': {
       // A MESMA guarda de `AddWall`. Faltava enquanto nenhuma UI criava limite:
       // agora que se desenha terreno clicando, dois cliques no mesmo vértice
@@ -5028,25 +4994,9 @@ function aplicarSemHash(
     }
 
     case 'PlaceSpaceLabel': {
-      findLevel(next, command.levelId);
-      const nome = command.name.trim();
-      if (!nome) throw new KernelError('BAD_NAME', 'Nome de ambiente vazio');
-      if (!Number.isFinite(command.at.x) || !Number.isFinite(command.at.y)) throw new KernelError('BAD_POINT', 'Ponto inválido para a etiqueta');
-      const espaco = next.spaces.find((s) => s.levelId === command.levelId && pointInPolygon(s.ring, command.at) && !s.holes.some((h) => pointInPolygon(h, command.at)));
-      const existente = espaco
-        ? next.labels.find((l) => l.levelId === espaco.levelId && pointInPolygon(espaco.ring, l.at) && !espaco.holes.some((h) => pointInPolygon(h, l.at)))
-        : undefined;
-      if (existente) {
-        next.labels = next.labels.map((l) => (l.id === existente.id ? { ...l, name: nome, ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}) } : l));
-        diff.updated.push(existente.id);
-        break;
-      }
-      const id = nextId(next, 'lbl');
-      next.labels.push({ id, uid: novoUid(), levelId: command.levelId, at: { x: Math.round(command.at.x), y: Math.round(command.at.y) }, name: nome, tipoDeAmbiente: command.tipoDeAmbiente ?? null });
-      diff.created.push(id);
+      colocarEtiqueta(next, diff, command);
       break;
     }
-
     case 'SetSpaceLabelProps': {
       const label = next.labels.find((l) => l.id === command.labelId);
       if (!label) throw new KernelError('LABEL_NOT_FOUND', `Etiqueta inexistente: ${command.labelId}`);
@@ -5572,6 +5522,10 @@ function retirarArcosDesfeitos(next: BlueprintModel, diff: Diff): void {
   }
 }
 
+type ComandoAddWall = Extract<Command, { type: 'AddWall' }>;
+type ComandoAddOpening = Extract<Command, { type: 'AddOpening' }>;
+type ComandoPlaceSpaceLabel = Extract<Command, { type: 'PlaceSpaceLabel' }>;
+
 /** O que uma instância nova pede — em `AddInstanciaDeGrupo` e nas iniciais de `AddGrupo`. */
 export interface EspecificacaoDeInstancia {
   levelId?: ObjectId;
@@ -5638,6 +5592,91 @@ function transferirEtiquetas(model: BlueprintModel, uids: ElementUid[], exceto: 
     u.etiquetaUids = u.etiquetaUids.filter((x) => !conjunto.has(x));
     if (u.etiquetaUids.length !== antes) diff.updated.push(u.id);
   }
+}
+
+/** Os corpos de `AddWall`, `AddOpening` e `PlaceSpaceLabel` — usados pelo unitário e pelo lote atômico. */
+function adicionarParede(next: BlueprintModel, diff: Diff, command: ComandoAddWall): void {
+  if (pointsEqual(command.a, command.b)) {
+    throw new KernelError('DEGENERATE_WALL', 'Parede de comprimento zero');
+  }
+  // `uid` fora de formato e lista de camadas vazia são recusados por
+  // `assertModelInvariants`, que roda em todo `applyCommand` — repetir a
+  // guarda aqui criaria uma segunda verdade sobre o que é válido.
+  const id = nextId(next, 'wal');
+  next.walls.push({
+    id,
+    uid: command.uid ?? novoUid(),
+    levelId: command.levelId,
+    a: { ...command.a },
+    b: { ...command.b },
+    // Com camadas, a espessura É a soma delas — a mesma regra de
+    // `SetWallLayers`, que recusa `SetThickness` numa parede composta.
+    thicknessMm: command.camadas ? somaDasCamadas(command.camadas) : command.thicknessMm,
+    heightMm: command.heightMm,
+    ...(command.camadas ? { camadas: clonarCamadas(command.camadas) } : {}),
+    // `'EIXO'` não é gravado: é o padrão, e emitir a chave em toda parede
+    // faria o payload canônico de TODO desenho antigo crescer sem que nada
+    // no desenho tivesse mudado. Mesma razão de `areaEscrituraMm2`.
+    ...(command.alinhamento && command.alinhamento !== 'EIXO'
+      ? { alinhamento: command.alinhamento }
+      : {}),
+  });
+  diff.created.push(id);
+}
+
+function adicionarAbertura(next: BlueprintModel, diff: Diff, command: ComandoAddOpening): void {
+  const porUid = command.wallUid
+    ? next.walls.find((w) => w.uid === command.wallUid)
+    : undefined;
+  if (command.wallUid && !porUid) {
+    throw new KernelError('WALL_NOT_FOUND', `Nenhuma parede com uid ${command.wallUid}`);
+  }
+  const wall = porUid ?? findWall(next, command.wallId);
+  const limit = wallLength(wall);
+  if (command.offsetMm < 0 || command.offsetMm + command.widthMm > limit) {
+    throw new KernelError(
+      'OPENING_OUT_OF_BOUNDS',
+      `Abertura ${command.offsetMm}+${command.widthMm} não cabe em ${limit} mm`,
+    );
+  }
+  const id = nextId(next, 'opn');
+  next.openings.push({
+    id,
+    uid: novoUid(),
+    wallId: wall.id,
+    kind: command.kind,
+    offsetMm: command.offsetMm,
+    widthMm: command.widthMm,
+    heightMm: command.heightMm,
+    sillMm: command.sillMm,
+    hingeAtStart: command.hingeAtStart ?? true,
+    swingReversed: command.swingReversed ?? false,
+    // Por FORA é o padrão: é a forma comum, e o bolso exige parede
+    // preparada — quem tem bolso sabe que tem, quem não pensou no assunto
+    // não tem.
+    embutida: command.embutida ?? false,
+    ...(command.esquadria ? { esquadria: { ...command.esquadria } } : {}),
+  });
+  diff.created.push(id);
+}
+
+function colocarEtiqueta(next: BlueprintModel, diff: Diff, command: ComandoPlaceSpaceLabel): void {
+  findLevel(next, command.levelId);
+  const nome = command.name.trim();
+  if (!nome) throw new KernelError('BAD_NAME', 'Nome de ambiente vazio');
+  if (!Number.isFinite(command.at.x) || !Number.isFinite(command.at.y)) throw new KernelError('BAD_POINT', 'Ponto inválido para a etiqueta');
+  const espaco = next.spaces.find((s) => s.levelId === command.levelId && pointInPolygon(s.ring, command.at) && !s.holes.some((h) => pointInPolygon(h, command.at)));
+  const existente = espaco
+    ? next.labels.find((l) => l.levelId === espaco.levelId && pointInPolygon(espaco.ring, l.at) && !espaco.holes.some((h) => pointInPolygon(h, l.at)))
+    : undefined;
+  if (existente) {
+    next.labels = next.labels.map((l) => (l.id === existente.id ? { ...l, name: nome, ...(command.tipoDeAmbiente !== undefined ? { tipoDeAmbiente: command.tipoDeAmbiente } : {}) } : l));
+    diff.updated.push(existente.id);
+    return;
+  }
+  const id = nextId(next, 'lbl');
+  next.labels.push({ id, uid: novoUid(), levelId: command.levelId, at: { x: Math.round(command.at.x), y: Math.round(command.at.y) }, name: nome, tipoDeAmbiente: command.tipoDeAmbiente ?? null });
+  diff.created.push(id);
 }
 
 /** Aplica UM comando. O hash sai daqui porque quem pede um comando só o usa. */
@@ -5909,6 +5948,12 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
     case 'AddOpening':
       a.wallIds = str(c.wallId);
       break;
+    case 'AddWalls':
+      a.levelIds = [...new Set(((c.walls as { levelId?: unknown }[]) ?? []).flatMap((w) => str(w.levelId)))];
+      break;
+    case 'AddOpenings':
+      a.wallIds = [...new Set(((c.openings as { wallId?: unknown }[]) ?? []).flatMap((o) => str(o.wallId)))];
+      break;
     case 'MoveVertex':
     case 'SetThickness':
     case 'SetWallLayers':
@@ -6013,6 +6058,27 @@ function recusarEdicaoEmInstanciaDeGrupo(model: BlueprintModel, command: Command
 }
 
 /**
+ * "Toca" um id numa lista do diff sem repetir. Com um CONJUNTO ao lado da lista, montado no primeiro toque: as
+ * sincronizações (grupos, pavimento tipo) tocam milhares de peças por comando, e o `includes` antigo era O(n²) —
+ * 47 ms por comando num prédio de 8 pavimentos com o tipo montado (medido nas pendências de 03/10/2026). Vale dentro
+ * de UMA chamada: quem cria o tocador não pode empurrar direto nas mesmas listas no meio.
+ */
+function tocadorDoDiff(): (lista: ObjectId[], id: ObjectId) => void {
+  const conjuntos = new Map<ObjectId[], Set<ObjectId>>();
+  return (lista, id) => {
+    let c = conjuntos.get(lista);
+    if (!c) {
+      c = new Set(lista);
+      conjuntos.set(lista, c);
+    }
+    if (!c.has(id)) {
+      c.add(id);
+      lista.push(id);
+    }
+  };
+}
+
+/**
  * Re-deriva as cópias de cada instância de grupo a partir da origem, com a
  * transformação da instância. Mesma reconciliação do pavimento tipo: uid
  * determinístico por (instância, peça), cópia existente ATUALIZADA com o
@@ -6021,9 +6087,7 @@ function recusarEdicaoEmInstanciaDeGrupo(model: BlueprintModel, command: Command
 export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes: ReadonlySet<ElementUid>): void {
   const grupos = next.grupos ?? [];
   if (grupos.length === 0) return;
-  const tocar = (lista: ObjectId[], id: ObjectId) => {
-    if (!lista.includes(id)) lista.push(id);
-  };
+  const tocar = tocadorDoDiff();
   // Cópias que DEVEM existir ao fim; toda cópia de grupo fora deste conjunto some.
   const esperadas = new Set<ElementUid>();
   const paredePorUid = new Map(next.walls.map((w) => [w.uid, w]));
@@ -6148,9 +6212,7 @@ export function sincronizarGrupos(next: BlueprintModel, diff: Diff, copiasAntes:
  * levantamento é ANTES: depois de `DeleteGrupo` ninguém mais sabe.
  */
 function apagarCopiasNaoEsperadas(next: BlueprintModel, diff: Diff, conhecidas: ReadonlySet<ElementUid>, esperadas: Set<ElementUid>): void {
-  const tocar = (lista: ObjectId[], id: ObjectId) => {
-    if (!lista.includes(id)) lista.push(id);
-  };
+  const tocar = tocadorDoDiff();
   if (conhecidas.size === 0) return;
   const apagar = (uid: ElementUid) => conhecidas.has(uid) && !esperadas.has(uid);
   for (const w of next.walls.filter((x) => apagar(x.uid))) {
@@ -6184,9 +6246,7 @@ function apagarCopiasNaoEsperadas(next: BlueprintModel, diff: Diff, conhecidas: 
 export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff): void {
   const vinculados = next.levels.filter((l) => l.tipoDeId !== undefined);
   if (vinculados.length === 0) return;
-  const tocar = (lista: ObjectId[], id: ObjectId) => {
-    if (!lista.includes(id)) lista.push(id);
-  };
+  const tocar = tocadorDoDiff();
   for (const nivel of vinculados) {
     const tipo = next.levels.find((l) => l.id === nivel.tipoDeId);
     if (!tipo) continue;

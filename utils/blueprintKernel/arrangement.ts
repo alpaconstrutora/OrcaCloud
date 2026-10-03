@@ -445,6 +445,38 @@ function segmentosDoNivel(model: BlueprintModel, level: Level): Segment[] {
 }
 
 /**
+ * MEMÓRIA DO ARRANJO (03/10/2026, pendências do Estudo de Massa). O arranjo é função PURA dos segmentos do nível
+ * (paredes, limites que não são de terreno, pontes estruturais) e da tolerância — e todo comando recalculava os
+ * ambientes de TODOS os pavimentos (`recomputeSpaces`). Num prédio com o pavimento tipo e 6 cópias vivas, cada
+ * comando fazia 7 arranjos iguais ou inalterados: a planta das unidades de um bloco em H (~650 comandos) passava de
+ * 40 s. Memorizado pela assinatura dos segmentos: o pavimento que não mudou não recalcula, e a cópia (mesmos
+ * segmentos do tipo) reaproveita o do tipo. O id do ambiente é por pavimento (`spc_<nível>_<ordinal>`) — o modelo
+ * guarda a ordem, e o id é refeito para o nível pedido. Cada chamada devolve objetos NOVOS (as etiquetas os mudam).
+ */
+const MEMORIA_DO_ARRANJO = new Map<string, { spaces: Omit<Space, 'id' | 'levelId'>[]; danglingVertices: Point[] }>();
+const MAX_MEMORIA_DO_ARRANJO = 256;
+
+function assinaturaDosSegmentos(segmentos: readonly Segment[], tolerance: number): string {
+  let s = `${tolerance}|`;
+  for (const g of segmentos) s += `${g.a.x},${g.a.y},${g.b.x},${g.b.y};`;
+  return s;
+}
+
+function espacosDaMemoria(m: { spaces: Omit<Space, 'id' | 'levelId'>[]; danglingVertices: Point[] }, level: Level): ArrangementResult {
+  return {
+    spaces: m.spaces.map((sp, i) => ({
+      id: `spc_${level.id}_${String(i + 1).padStart(4, '0')}`,
+      levelId: level.id,
+      ring: sp.ring.map((p) => ({ x: p.x, y: p.y })),
+      holes: sp.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))),
+      areaMm2: sp.areaMm2,
+      perimeterMm: sp.perimeterMm,
+    })),
+    danglingVertices: m.danglingVertices.map((p) => ({ x: p.x, y: p.y })),
+  };
+}
+
+/**
  * Reconstrói os ambientes de um nível a partir das paredes e limites.
  *
  * A face não limitada de cada componente é descartada por ter área com sinal
@@ -459,6 +491,21 @@ export function buildArrangement(
   const rawSegments = segmentosDoNivel(model, level);
 
   if (rawSegments.length === 0) return { spaces: [], danglingVertices: [] };
+
+  const chave = assinaturaDosSegmentos(rawSegments, tolerance);
+  const lembrado = MEMORIA_DO_ARRANJO.get(chave);
+  if (lembrado) return espacosDaMemoria(lembrado, level);
+  const calculado = arranjoDosSegmentos(rawSegments, level, tolerance);
+  MEMORIA_DO_ARRANJO.set(chave, {
+    spaces: calculado.spaces.map(({ id: _id, levelId: _l, ...resto }) => ({ ...resto, ring: resto.ring.map((p) => ({ x: p.x, y: p.y })), holes: resto.holes.map((h) => h.map((p) => ({ x: p.x, y: p.y }))) })),
+    danglingVertices: calculado.danglingVertices.map((p) => ({ x: p.x, y: p.y })),
+  });
+  if (MEMORIA_DO_ARRANJO.size > MAX_MEMORIA_DO_ARRANJO) MEMORIA_DO_ARRANJO.delete(MEMORIA_DO_ARRANJO.keys().next().value!);
+  return calculado;
+}
+
+/** O arranjo propriamente dito (sem memória). */
+function arranjoDosSegmentos(rawSegments: Segment[], level: Level, tolerance: number): ArrangementResult {
 
   const split = splitAtIntersections(rawSegments);
   const endpoints = split.flatMap((s) => [s.a, s.b]);

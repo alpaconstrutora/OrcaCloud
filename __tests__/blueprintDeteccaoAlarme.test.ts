@@ -71,6 +71,8 @@ describe('E7.4 · a regra', () => {
     expect(a.ambientes.some((x) => x.rotulo === 'Banheiro')).toBe(false);
   });
 
+  // Tempo próprio: ~0,6 s local, mas 6+ s no runner da CI (10× mais lento nesta conta) — o limite
+  // padrão de 5 s derrubou a CI em todos os runs desde 02/10/2026. Só este teste; a régua dos outros fica.
   it('⚠️ PRONTO QUANDO: sem nada, tudo falta (laço sem central incluído); a proposta fecha detecção, acionadores, avisador e laço num lote', () => {
     const m = andar();
     const a = analisarAlarme(m, true, true);
@@ -90,7 +92,7 @@ describe('E7.4 · a regra', () => {
     // A cozinha ganhou detector de temperatura.
     const coz = depois.spaces.find((s) => s.name === 'Cozinha')!;
     expect(depois.terminais!.some((t) => t.tipoHidraulico === 'DETECTOR_TEMPERATURA' && t.at.x < 6000 && t.at.y > 2000 && coz)).toBe(true);
-  });
+  }, 20_000);
 
   it('dispositivo existente fora do laço é dito, e a proposta o liga à central', () => {
     let m = ponto(andar(), 'CENTRAL_ALARME', 500, 1000);

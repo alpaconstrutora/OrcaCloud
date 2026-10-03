@@ -103,6 +103,8 @@ describe('E7.1 · a regra', () => {
     expect(a.pendencias[0]).toMatch(/não definida/);
   });
 
+  // Tempo próprio: ~0,6 s local, mas 6+ s no runner da CI (10× mais lento nesta conta) — o limite
+  // padrão de 5 s derrubou a CI em todos os runs desde 02/10/2026. Só este teste; a régua dos outros fica.
   it('a proposta cobre todos os ambientes, e depois de aplicada a análise fecha', () => {
     const m = andar();
     const p = proporExtintores(m, analisarExtintores(m, 'MEDIA', HE), HE);
@@ -127,7 +129,7 @@ describe('E7.1 · a regra', () => {
     // A1 (plano pós-roadmap): a proposta lança a capacidade que o risco pede — antes lançava o padrão
     // 2-A, que a própria análise reprovava no médio (3-A), e este teste AFIRMAVA a reprovação.
     expect(a.extintores.every((x) => x.agente === 'PQS_ABC' && x.capacidade === '3-A:40-B:C' && x.capacidadeAtende === true)).toBe(true);
-  });
+  }, 20_000);
 });
 
 describe('E7.1 · o ponto entre dois extintores', () => {

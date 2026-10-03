@@ -1496,8 +1496,16 @@ function aplicarSemHash(
   const command = resolverLevelUid(next, comandoCru);
   recusarEdicaoEmPavimentoVinculado(model, command);
   recusarEdicaoEmInstanciaDeGrupo(model, command);
-  /** Cópias de instância de grupo que existem agora — a sincronização apaga as que deixarem de ser esperadas. */
-  const copiasAntes: ReadonlySet<ElementUid> = new Set(copiasDeInstancia(model).keys());
+  /**
+   * Cópias de instância de grupo que existem agora — a sincronização apaga as que deixarem de ser esperadas.
+   * Mutável de propósito: desagrupar (e o pavimento da origem que some) LIBERA as cópias — tira-as daqui para a
+   * sincronização da cauda não as apagar como órfãs.
+   */
+  const copiasAntes = new Set(copiasDeInstancia(model).keys());
+  /** As cópias das instâncias de `g` deixam de ser cópias: ficam como peças livres. */
+  const liberarCopias = (g: Grupo) => {
+    for (const [uid, dono] of copiasDeInstancia(next)) if (dono.grupo.id === g.id) copiasAntes.delete(uid);
+  };
   const diff = emptyDiff();
 
   switch (command.type) {
@@ -3388,6 +3396,10 @@ function aplicarSemHash(
         // Apaga as cópias ANTES de esquecer o grupo: depois ninguém mais sabe que eram cópias.
         g.instancias = [];
         sincronizarGrupos(next, diff, copiasAntes);
+      } else {
+        // ⚠️ Desagrupar: as cópias FICAM. Sem liberá-las, a sincronização da cauda (que roda porque há OUTROS grupos)
+        // as via como órfãs e apagava — "as cópias ficam" só valia com um grupo só no modelo (03/10/2026).
+        liberarCopias(g);
       }
       next.grupos = (next.grupos ?? []).filter((x) => x.id !== g.id);
       diff.deleted.push(g.id);
@@ -5138,6 +5150,37 @@ function aplicarSemHash(
       // O bloco de massa vai junto: a cota dele é medida DESTE pavimento.
       const blocosDoNivel = (next.blocos ?? []).filter((b) => b.levelId === level.id);
       next.blocos = (next.blocos ?? []).filter((b) => b.levelId !== level.id);
+      // O LOTEAMENTO deste piso vai junto (quadras, lotes, vias, áreas públicas) — antes ficava, e o invariante
+      // "pavimento inexistente" recusava a remoção inteira com um erro críptico. Lote de OUTRO piso que apontava para
+      // uma quadra daqui fica sem quadra, como no `DeleteQuadra`.
+      const quadrasDoNivel = (next.quadras ?? []).filter((q) => q.levelId === level.id);
+      const idsQuadraDoNivel = new Set(quadrasDoNivel.map((q) => q.id));
+      const lotesDoNivel = (next.lotes ?? []).filter((l) => l.levelId === level.id);
+      const viasDoNivel = (next.vias ?? []).filter((v) => v.levelId === level.id);
+      const publicasDoNivel = (next.areasPublicas ?? []).filter((a) => a.levelId === level.id);
+      if (next.quadras) next.quadras = next.quadras.filter((q) => q.levelId !== level.id);
+      if (next.lotes) next.lotes = next.lotes.filter((l) => l.levelId !== level.id);
+      if (next.vias) next.vias = next.vias.filter((v) => v.levelId !== level.id);
+      if (next.areasPublicas) next.areasPublicas = next.areasPublicas.filter((a) => a.levelId !== level.id);
+      for (const l of next.lotes ?? []) {
+        if (l.quadraId && idsQuadraDoNivel.has(l.quadraId)) {
+          l.quadraId = null;
+          diff.updated.push(l.id);
+        }
+      }
+      // GRUPOS (E2.3): o grupo cuja ORIGEM é deste piso some, e as cópias dele em OUTROS pisos ficam livres (como
+      // desagrupar — o conteúdo dos outros andares não some com este); a instância que caía NESTE piso sai (as cópias
+      // dela já saíram com as peças do piso).
+      const gruposDoNivel = (next.grupos ?? []).filter((g) => g.levelId === level.id);
+      for (const g of gruposDoNivel) liberarCopias(g);
+      if (next.grupos) {
+        next.grupos = next.grupos.filter((g) => g.levelId !== level.id);
+        for (const g of next.grupos) {
+          const antes = g.instancias.length;
+          g.instancias = g.instancias.filter((i) => i.levelId !== level.id);
+          if (g.instancias.length !== antes) diff.updated.push(g.id);
+        }
+      }
       // ⚠️ O quadro vai junto (é peça deste piso); os CIRCUITOS dele vão junto
       // também, senão ficariam apontando para um quadro que não existe mais. E
       // os terminais que os citavam já saíram, ou perdem a referência.
@@ -5174,6 +5217,11 @@ function aplicarSemHash(
         ...rodapesDoNivel.map((r) => r.id),
         ...operacaoDoNivel.map((a) => a.id),
         ...blocosDoNivel.map((b) => b.id),
+        ...quadrasDoNivel.map((q) => q.id),
+        ...lotesDoNivel.map((l) => l.id),
+        ...viasDoNivel.map((v) => v.id),
+        ...publicasDoNivel.map((a) => a.id),
+        ...gruposDoNivel.map((g) => g.id),
         ...quadrosDoNivel.map((q) => q.id),
         ...circuitosOrfaos.map((c) => c.id),
         ...etiquetasDoNivel.map((l) => l.id),

@@ -1,7 +1,7 @@
 import React from 'react';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
-import ResetPassword from './components/ResetPassword';
+import ResetPassword, { LinkDeAcessoInvalido } from './components/ResetPassword';
 import LoginGateway from './components/LoginGateway';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
@@ -371,7 +371,7 @@ import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
 import { useAuthSync } from './hooks/useAuthSync';
 import { loginFeitoNestaAba } from './lib/loginNestaAba';
-import { tipoDoLinkDeAcesso } from './lib/linkDeAcesso';
+import { tipoDoLinkDeAcesso, linkDeAcesso } from './lib/linkDeAcesso';
 import { useProjectOperations } from './hooks/useProjectOperations';
 import { useOrgContext } from './hooks/useOrgContext';
 import AppRouter from './components/AppRouter';
@@ -711,6 +711,11 @@ const App: React.FC = () => {
     }
   }, [authError, partnerPortalToken]);
 
+  // Link de convite/redefinição que o servidor recusou (já usado ou vencido): o
+  // retorno vem com #error=…&error_code=otp_expired, sem `type`. Em vez de cair
+  // calado num login, mostra o motivo uma vez.
+  const [linkInvalidoDispensado, setLinkInvalidoDispensado] = React.useState(false);
+
   // ── Guards públicos (ordem preservada) ───────────────────────────────────────
   // ⚠️ `/portal-condomino` NÃO existe mais (23/09/2026). O Portal do Condômino
   // era o caminho anterior a 01/09, com link por OCUPAÇÃO; desde então o
@@ -743,9 +748,13 @@ const App: React.FC = () => {
   );
 
   // ── Guards de autenticação ───────────────────────────────────────────────────
+  if (linkDeAcesso.erro && !linkInvalidoDispensado && !isResettingPassword) return (
+    <LinkDeAcessoInvalido onContinuar={() => setLinkInvalidoDispensado(true)} />
+  );
   if (isResettingPassword) return (
     <ResetPassword
       email={session?.user?.email}
+      emailDoLink={linkDeAcesso.email}
       tipo={tipoDoLinkDeAcesso === 'invite' ? 'invite' : 'recovery'}
       onComplete={() => setIsResettingPassword(false)}
     />

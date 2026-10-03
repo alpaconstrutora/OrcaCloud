@@ -7,7 +7,7 @@ import { supplierService } from '../services/supplierService';
 import { projectService } from '../services/projectService';
 import { ProfileGroup, UserProfile } from '../types';
 import { loginFeitoNestaAba, marcarLoginNestaAba, limparLoginNestaAba } from '../lib/loginNestaAba';
-import { tipoDoLinkDeAcesso } from '../lib/linkDeAcesso';
+import { tipoDoLinkDeAcesso, linkDeAcesso } from '../lib/linkDeAcesso';
 
 interface UseAuthSyncProps {
   session: any;
@@ -52,6 +52,11 @@ export const useAuthSync = ({
   useEffect(() => { profileSynchronizedRef.current = profileSynchronized; }, [profileSynchronized]);
   useEffect(() => { currentProfileRef.current = currentProfile; }, [currentProfile]);
 
+  // A sessão é a da pessoa que o link identifica? (outra aba pode ter trocado a
+  // sessão compartilhada por outra conta — ver lib/linkDeAcesso.ts)
+  const ehDaPessoaDoLink = (email: string | null | undefined) =>
+    !!email && (!linkDeAcesso.email || email.toLowerCase() === linkDeAcesso.email);
+
   // ── 1. Auth state listener ────────────────────────────────────────────────
   useEffect(() => {
     // Convite/redefinição: o tipo foi capturado na carga (lib/linkDeAcesso.ts) —
@@ -60,14 +65,14 @@ export const useAuthSync = ({
 
     supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       // A sessão do link de convite/redefinição nasce nesta aba, para esta pessoa.
-      if (tipoDoLinkDeAcesso && initialSession?.user?.email) marcarLoginNestaAba(initialSession.user.email);
+      if (tipoDoLinkDeAcesso && ehDaPessoaDoLink(initialSession?.user?.email)) marcarLoginNestaAba(initialSession!.user.email);
       setSession(initialSession);
       setLoadingSession(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (tipoDoLinkDeAcesso && newSession?.user?.email && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'PASSWORD_RECOVERY')) {
-        marcarLoginNestaAba(newSession.user.email);
+      if (tipoDoLinkDeAcesso && ehDaPessoaDoLink(newSession?.user?.email) && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'PASSWORD_RECOVERY')) {
+        marcarLoginNestaAba(newSession!.user.email);
       }
       setSession(newSession);
       if (!newSession) {

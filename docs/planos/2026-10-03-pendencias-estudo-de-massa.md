@@ -17,8 +17,8 @@ ciclo, por último os opcionais de conveniência e o maior de todos.
 1. [x] **CUB no Estimador e no CNO** — número errado em silêncio.
 2. [x] **`RemoveLevel` com loteamento e grupos** (+ desagrupar apagando as cópias, achado ao investigar).
 3. [x] **Vagas reais na garagem/subsolo** a partir do estudo de massa.
-4. [ ] **Outorga onerosa**: "CA máximo com outorga" como campo da zona, e o estudo mostra o potencial adicional.
-5. [ ] **Abrir na aba Terreno** quando se entra pelo menu "Estudo de Massa".
+4. [x] **Outorga onerosa**: "CA máximo com outorga" como campo da zona, e o estudo mostra o potencial adicional.
+5. [x] **Abrir na aba Terreno** — o estudo de massa (ver registro: não há item de menu "Estudo de Massa" desde a M1).
 6. [ ] **Bloco em L, U ou H** no pavimento tipo (e na planta das unidades).
 
 ## 1. CUB no Estimador e no CNO (03/10/2026)
@@ -97,3 +97,53 @@ grupo mantém as cópias livres e o outro grupo intacto; excluir com cópias apa
 | App real (logado, RLS de verdade) — CUB | comparação regional PP-N 01/2025: MG 2.535,68 · RJ 2.472,57 · SC 2.392 · SP 2.254 · ES 2.106,80 (antes: 400 e vazio); total PP-N MG 100 m² = R$ 253.568 (tabela, não estimado); orçamento CSL8-N com as 4 naturezas; histórico CAL8-N com 13 meses; **CNO com o formulário padrão (MG, "2026-02", sem desoneração): CUB R$ 3.027,37, "tabela 01/2026 · Sem Desoneração"** (antes: 2.500 fixos) |
 | App real — garagem (estudo descartável "ZZ TESTE … prova garagem", 30 × 40 m, 2 subsolos) | o painel oferece (sem o pavimento tipo); lançar → "90 em 2 pavimento(s) (2º subsolo: 45; 1º subsolo: 45) — 1 PCD e 3 idoso"; depois "já lançadas", botão desligado; **no banco**: os 2 pavimentos em −6 e −3 m, 4 paredes e 45 vagas confirmadas cada; 0 erros. No desenho: fileiras com circulação, PCD/idoso no começo, `S1-1…45` |
 | Limpeza | estudo apagado pelo id + `name LIKE 'ZZ TESTE%'`; estudos 73 · ramos 73 · produtos 0 · entornos 0 · ZZ 0, iguais aos de antes |
+
+## 4. Outorga onerosa (03/10/2026)
+
+**A lacuna.** As duas tabelas da zona (`empreendimento_regulatory_zones`, `regulatory_map_zones`) têm `ca_basico` e
+`ca_maximo`; o editor só lia o máximo. A outorga é a faixa entre os dois.
+
+**O que entrou.**
+- Migration `aplicar_20271003000010_blueprint_urban_context_ca_basico.sql` (APLICADA e conferida em
+  `information_schema`): `blueprint_study_urban_context.coeficiente_basico numeric`. Só uma coluna — sem policy nem
+  função (REGRA #7 não se aplica).
+- `utils/blueprintZonaUrbanistica.ts`: `ca_basico` lido em `ValoresDaZona.coeficienteBasico` (campo
+  `coeficiente_basico`, "coeficiente básico (sem outorga)"); texto ilegível vai para os não aplicados; mudar na zona é
+  deriva (ajustado à mão, não).
+- `hooks/useBlueprintZonaUrbanistica.ts`: carrega, aplica e grava o básico; `ajustarCoeficienteBasico` marca MANUAL.
+- `utils/blueprintMassa.ts`: `MedidaDaMassa.outorga = { caBasico, basicoM2, maximoM2, sujeitaM2 }` — a computável acima
+  de lote × CA básico; `null` sem básico ou sem lote. O VALOR da outorga (fórmula municipal) continua fora, como o plano
+  original registrou; aqui a área, que é o que a fórmula pede.
+- Painel do lote (Terreno): linha "Coeficiente básico (sem outorga)" — passar dele é ÂMBAR (aviso), não vermelho — e
+  "Acima do básico, a área depende de outorga onerosa". Gaveta do estudo de massa: cartão "Sujeita a outorga".
+- **Achado e corrigido junto:** o painel do lote ainda dizia "Um nível desenhado: o coeficiente ainda não soma
+  pavimentos" — FALSO desde a M1, que passou o aproveitamento a somar todos os pavimentos e a massa
+  (`aproveitamentoDoEstudo`). Agora diz o que a conta faz.
+
+**Pronto quando** (feito): `__tests__/blueprintOutorgaDaMassa.test.ts` (5) — lê o básico ao lado do máximo; ilegível é
+dito; deriva só do que veio da zona; 6 pav × 600 m² em 1.200 m² com básico 2 → 2.400 de direito e 1.200 sujeitos;
+dentro do básico, 0; acima do máximo o CA acusa; sem básico, `null`. `__tests__/components/PainelTerrenoOutorga.test.tsx`
+(2) — âmbar e o aviso acima do básico, sem o texto falso; digitar o básico chama o ajuste.
+
+## 5. O estudo de massa abre no Terreno (03/10/2026)
+
+**O que o item era.** O plano da M1 previa "ao abrir a Planta Inteligente pelo item 'Estudo de Massa', a aba preferida
+é Terreno". Mas a M1 decidiu NÃO criar esse item de menu (um módulo, um item) — então não há de onde vir a preferência.
+O equivalente útil: o ESTUDO DE MASSA em fase inicial (tem blocos e nenhuma parede) abre na aba Terreno, onde mora o
+grupo Massa — abrir em Arquitetura escondia tudo.
+
+**O que entrou.** `BlueprintEditor`: uma vez por abertura do ramo, na planta, se o modelo tem blocos e nenhuma parede,
+a aba vai para Terreno; depois manda a escolha da pessoa (salva como sempre).
+
+**Pronto quando** (feito): teste de editor "estudo de massa abre no Terreno" — só blocos → Terreno; escolher outra aba
+vale; com uma parede → a aba salva (Arquitetura).
+
+## Prova dos itens 4–5 (03/10/2026)
+
+| Portão | Resultado |
+|---|---|
+| `tsc` · `check-ui-standard` (PainelTerreno, PainelEstudoDeMassa, BlueprintEditor) · org guard · XSS | 0 · 0 violações · ok · ok |
+| Suíte cheia (JSON, `pending` = 0) | 682/682 arquivos · 7.105 testes = 7.071 ok + 34 pulados · 0 falhas |
+| Build | ok |
+| App real (estudo descartável "ZZ TESTE … prova outorga": lote 40 × 60, torre 30 × 16 × 10, nenhuma parede; a aba salva no navegador forçada para Arquitetura antes) | 5/5: **abriu na aba Terreno**; no painel do lote, CA básico 1,5 e máximo 3 digitados → "Acima do básico, a área depende de outorga onerosa" e sem o texto falso; **no banco** `coeficiente_basico` 1,5, `coeficiente_max` 3, origem MANUAL; a gaveta: "Sujeita a outorga 1.200,00 m² · acima do CA básico 1,50 (3.600,00 m² de direito)"; 0 erros |
+| Limpeza | estudo apagado (o contexto urbano vai junto); estudos 73 · ramos 73 · contextos 1 · ZZ 0, iguais aos de antes |

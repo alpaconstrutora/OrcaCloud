@@ -1725,6 +1725,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   };
 
   /**
+   * O ESTUDO DE MASSA ABRE NO TERRENO (pendências de 03/10/2026; a M1 deixou de fora a "aba preferida Terreno"). Estudo
+   * com blocos de massa e nenhuma parede ainda é um estudo de massa em fase inicial: o trabalho é no grupo Massa da aba
+   * Terreno, e abrir em Arquitetura escondia tudo. Uma vez por abertura do ramo, na planta; depois manda a escolha da
+   * pessoa (salva como sempre).
+   */
+  const abaDoEstudoDeMassaDecidida = useRef<string | null>(null);
+  useEffect(() => {
+    if (editor.loading || abaDoEstudoDeMassaDecidida.current === branchId) return;
+    abaDoEstudoDeMassaDecidida.current = branchId;
+    if (vista === 'planta' && (editor.model.blocos ?? []).length > 0 && editor.model.walls.length === 0) {
+      setEmModificar(false);
+      setAbaSalva('terreno');
+    }
+  }, [editor.loading, editor.model, branchId, vista, setAbaSalva]);
+
+  /**
    * A TAREFA aberta no painel e o RELATÓRIO aberto no dock. Estado de sessão,
    * não preferência: reabrir o editor com "Importar do IFC" aberto seria
    * estranho. Fora da planta não há tarefa; o relatório que a vista não admite
@@ -4518,11 +4534,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           gabaritoPavimentos: zona.gabaritoPavimentos,
           taxaOcupacaoMaxPct: zona.taxaOcupacaoMax,
           coeficienteMax: zona.coeficienteMax,
+          coeficienteBasico: zona.coeficienteBasico,
           taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
         },
         hipoteses: { ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } },
       }),
-    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, hipotesesDaMassa],
+    [editor.model, terreno, limitesDoNivel, zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.coeficienteBasico, zona.taxaPermeabilidadeMin, hipotesesDaMassa],
   );
   /** Blocos com pavimento fora do envelope ou acima do gabarito — vermelhos no 2D e no 3D. */
   const blocosComProblema = useMemo(
@@ -8692,8 +8709,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       envelopeVertical={envelope3d}
       taxaOcupacaoMax={zona.taxaOcupacaoMax}
       coeficienteMax={zona.coeficienteMax}
+      coeficienteBasico={zona.coeficienteBasico}
       onTaxaOcupacaoMax={zona.ajustarTaxaOcupacaoMax}
       onCoeficienteMax={zona.ajustarCoeficienteMax}
+      onCoeficienteBasico={zona.ajustarCoeficienteBasico}
       empreendimentos={empreendimentos.map((e) => ({
         id: e.id,
         nome: e.name,

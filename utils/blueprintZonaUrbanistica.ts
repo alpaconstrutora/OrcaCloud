@@ -43,6 +43,8 @@ export interface ZonaRegulatoria {
   taxa_ocupacao_maxima?: string;
   taxa_permeabilidade_minima?: string;
   ca_maximo?: string;
+  /** CA básico (sem outorga onerosa) — nas duas tabelas da zona. */
+  ca_basico?: string;
   gabarito_altura_maxima?: string;
   gabarito_pavimentos?: string;
   lei_referencia?: string;
@@ -71,6 +73,7 @@ export type CampoDaZona =
   | 'recuo_lateral_esquerda'
   | 'taxa_ocupacao_max'
   | 'coeficiente_max'
+  | 'coeficiente_basico'
   | 'gabarito_altura_max'
   | 'gabarito_pavimentos'
   | 'taxa_permeabilidade_min'
@@ -88,6 +91,7 @@ export const ROTULO_DO_CAMPO: Record<CampoDaZona, string> = {
   recuo_lateral_esquerda: 'recuo lateral esquerda',
   taxa_ocupacao_max: 'taxa de ocupação',
   coeficiente_max: 'coeficiente de aproveitamento',
+  coeficiente_basico: 'coeficiente básico (sem outorga)',
   gabarito_altura_max: 'gabarito (altura)',
   gabarito_pavimentos: 'gabarito (pavimentos)',
   taxa_permeabilidade_min: 'taxa de permeabilidade',
@@ -107,6 +111,11 @@ export interface ValoresDaZona {
   taxaOcupacaoMax: number | null;
   taxaPermeabilidadeMin: number | null;
   coeficienteMax: number | null;
+  /**
+   * CA BÁSICO: até ele, a área computável é de direito; entre ele e o máximo, depende de OUTORGA ONEROSA (pendências
+   * de 03/10/2026). `null` = a lei não disse — o estudo não fala em outorga.
+   */
+  coeficienteBasico: number | null;
   /** Em METRO. */
   gabaritoAlturaMaxM: number | null;
   gabaritoPavimentos: number | null;
@@ -299,6 +308,7 @@ export function lerZona(zona: ZonaRegulatoria): LeituraDaZona {
       // C.A. é número puro (2,5 = duas vezes e meia a área do lote), não taxa —
       // passar por `lerPorcentagem` transformaria um C.A. de 1,0 em 100.
       coeficienteMax: ler('coeficiente_max', zona.ca_maximo, lerValorRegulatorio),
+      coeficienteBasico: ler('coeficiente_basico', zona.ca_basico, lerValorRegulatorio),
       gabaritoAlturaMaxM: ler(
         'gabarito_altura_max',
         zona.gabarito_altura_maxima,
@@ -380,6 +390,7 @@ export function zonaDerivou(
     ['taxa_ocupacao_max', aplicados.taxaOcupacaoMax, hoje.taxaOcupacaoMax],
     ['taxa_permeabilidade_min', aplicados.taxaPermeabilidadeMin, hoje.taxaPermeabilidadeMin],
     ['coeficiente_max', aplicados.coeficienteMax, hoje.coeficienteMax],
+    ['coeficiente_basico', aplicados.coeficienteBasico ?? null, hoje.coeficienteBasico],
     ['gabarito_altura_max', aplicados.gabaritoAlturaMaxM, hoje.gabaritoAlturaMaxM],
     ['gabarito_pavimentos', aplicados.gabaritoPavimentos, hoje.gabaritoPavimentos],
     ['testada_minima', aplicados.testadaMinimaMm ?? null, hoje.testadaMinimaMm],

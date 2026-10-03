@@ -17,7 +17,7 @@ const COLS =
   'zona_rotulo, lei_referencia, zona_origem, regulatory_map_id, '  +
   'recuo_frente_mm, recuo_fundos_mm, ' +
   'recuo_lateral_direita_mm, recuo_lateral_esquerda_mm, taxa_ocupacao_max, ' +
-  'taxa_permeabilidade_min, coeficiente_max, gabarito_altura_max_m, ' +
+  'taxa_permeabilidade_min, coeficiente_max, coeficiente_basico, gabarito_altura_max_m, ' +
   'gabarito_pavimentos, testada_minima_mm, area_minima_lote_m2, vagas_por_unidade, ' +
   'insolacao_minima_h, afastamento_progressivo_a_partir_m, afastamento_progressivo_formula, ' +
   'recuo_frente_escalonado_mm, recuo_frente_escalonado_pavimento, ' +

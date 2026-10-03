@@ -1626,6 +1626,25 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(within(painel).getByTestId('gerar-plantas-das-unidades')).toBeDisabled();
   }, 60000);
 
+  it('estudo de massa abre no Terreno: só blocos e nenhuma parede → aba Terreno; com paredes, a aba salva', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const comBloco = k.applyCommand(nivel.model, { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(0, 0), k.point(20000, 0), k.point(20000, 15000), k.point(0, 15000)], pavimentos: 8 }).model;
+    loadBranchModel.mockResolvedValue(comBloco);
+    await montar();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Terreno' })).toHaveAttribute('aria-selected', 'true'));
+    // A escolha da pessoa vale depois (salva como sempre).
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Elétrica' }));
+    expect(screen.getByRole('tab', { name: 'Elétrica' })).toHaveAttribute('aria-selected', 'true');
+    cleanup();
+    localStorage.clear();
+    const comParede = k.applyCommand(comBloco, { type: 'AddWall', levelId: t, a: k.point(0, 0), b: k.point(5000, 0), thicknessMm: 150, heightMm: 2800 }).model;
+    loadBranchModel.mockResolvedValue(comParede);
+    await montar();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true'));
+  }, 60000);
+
   it('estudo de massa (garagem): o bloco de garagem lança os pavimentos com as vagas reais e depois diz que já estão lançadas', async () => {
     const k = await import('../../utils/blueprintKernel');
     const { vagasQueCabem } = await import('../../utils/blueprintProduto');

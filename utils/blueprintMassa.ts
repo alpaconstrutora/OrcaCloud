@@ -68,6 +68,8 @@ export interface ZonaDaMassa extends ZonaDoEnvelope {
   /** Em PORCENTAGEM (60 = 60 %), como `ValoresDaZona`. */
   taxaOcupacaoMaxPct: number | null;
   coeficienteMax: number | null;
+  /** CA básico (sem outorga onerosa). Opcional: sem ele, o estudo não fala em outorga. */
+  coeficienteBasico?: number | null;
   /** Em PORCENTAGEM. */
   taxaPermeabilidadeMinPct: number | null;
 }
@@ -79,6 +81,7 @@ export const ZONA_DA_MASSA_VAZIA: ZonaDaMassa = {
   gabaritoPavimentos: null,
   taxaOcupacaoMaxPct: null,
   coeficienteMax: null,
+  coeficienteBasico: null,
   taxaPermeabilidadeMinPct: null,
 };
 
@@ -465,6 +468,12 @@ export interface MedidaDaMassa {
   permeabilidade: IndicadorDaMassa;
   /** Computável ÷ potencial, %. */
   aproveitamentoDoPotencialPct: number | null;
+  /**
+   * OUTORGA ONEROSA (pendências de 03/10/2026): a área computável acima do CA BÁSICO depende de outorga (até o máximo;
+   * acima do máximo é o indicador `ca` que acusa). `null` sem CA básico ou sem lote. O VALOR da outorga é fórmula
+   * municipal — fica fora (o plano registra); aqui só a área, que é o que a fórmula pede.
+   */
+  outorga: { caBasico: number; basicoM2: number; maximoM2: number | null; sujeitaM2: number } | null;
   pisosForaDoEnvelope: number;
   pisosAcimaDoGabarito: number;
   avisos: string[];
@@ -536,6 +545,15 @@ export function medirMassa(model: BlueprintModel, ctx: ContextoDaMassa): MedidaD
           ? { usado: perm.taxa_permeabilidade, limite: null, estado: 'SEM_LIMITE', motivo: 'a zona não informa a permeabilidade mínima' }
           : { usado: perm.taxa_permeabilidade, limite: z.taxaPermeabilidadeMinPct, estado: perm.taxa_permeabilidade + 0.05 >= z.taxaPermeabilidadeMinPct ? 'ATENDE' : 'EXCEDE', motivo: null },
     aproveitamentoDoPotencialPct: legal.potencialM2 ? r((computavel / legal.potencialM2) * 100, 1) : null,
+    outorga:
+      z.coeficienteBasico != null && lote != null && lote > 0
+        ? {
+            caBasico: z.coeficienteBasico,
+            basicoM2: r(lote * z.coeficienteBasico, 2),
+            maximoM2: legal.potencialM2,
+            sujeitaM2: r(Math.max(0, computavel - lote * z.coeficienteBasico), 2),
+          }
+        : null,
     pisosForaDoEnvelope: medidas.reduce((s, m) => s + m.pisosForaDoEnvelope, 0),
     pisosAcimaDoGabarito: medidas.reduce((s, m) => s + m.pisosAcimaDoGabarito, 0),
     avisos,

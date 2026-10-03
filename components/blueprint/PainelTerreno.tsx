@@ -78,6 +78,7 @@ function Indicador({
   sufixo,
   aoMudarLimite,
   ariaLabel,
+  acimaEAviso = false,
 }: {
   rotulo: string;
   valor: string;
@@ -86,13 +87,15 @@ function Indicador({
   sufixo: string;
   aoMudarLimite: (v: number | null) => void;
   ariaLabel: string;
+  /** Passar do limite não é infração, é um aviso (o CA básico: acima dele, outorga). Âmbar, não vermelho. */
+  acimaEAviso?: boolean;
 }) {
   const estourou = limite !== null && atual > limite;
   return (
     <div className="flex items-center justify-between gap-2 text-xs">
       <span className="text-slate-600">{rotulo}</span>
       <span className="flex items-center gap-1.5">
-        <strong className={estourou ? 'text-red-700' : 'text-slate-800'}>{valor}</strong>
+        <strong className={estourou ? (acimaEAviso ? 'text-amber-700' : 'text-red-700') : 'text-slate-800'}>{valor}</strong>
         <span className="text-slate-400">/</span>
         <input
           type="text"
@@ -183,8 +186,11 @@ interface Props {
   /** Limites da zona, digitados. `null` = não informado, e aí não se compara. */
   taxaOcupacaoMax: number | null;
   coeficienteMax: number | null;
+  /** CA básico (sem outorga). Opcional: sem ele a linha não aparece. */
+  coeficienteBasico?: number | null;
   onTaxaOcupacaoMax: (v: number | null) => void;
   onCoeficienteMax: (v: number | null) => void;
+  onCoeficienteBasico?: (v: number | null) => void;
   /**
    * Empreendimentos onde a área pode ser gravada.
    *
@@ -261,8 +267,10 @@ export default function PainelTerreno({
   envelopeVertical = null,
   taxaOcupacaoMax,
   coeficienteMax,
+  coeficienteBasico = null,
   onTaxaOcupacaoMax,
   onCoeficienteMax,
+  onCoeficienteBasico,
   empreendimentos,
   empreendimentoId,
   onEmpreendimento,
@@ -570,13 +578,26 @@ export default function PainelTerreno({
               aoMudarLimite={onCoeficienteMax}
               ariaLabel="Coeficiente de aproveitamento máximo da zona"
             />
+            {onCoeficienteBasico && (
+              <Indicador
+                rotulo="Coeficiente básico (sem outorga)"
+                valor={aproveitamento.coeficienteAproveitamento.toFixed(2).replace('.', ',')}
+                limite={coeficienteBasico}
+                atual={aproveitamento.coeficienteAproveitamento}
+                sufixo=""
+                aoMudarLimite={onCoeficienteBasico}
+                ariaLabel="Coeficiente de aproveitamento básico da zona (sem outorga onerosa)"
+                acimaEAviso
+              />
+            )}
           </div>
 
-          {/* Enquanto o editor trabalha UM nível, projeção e área total são o
-              mesmo número. Dizer isso é melhor que deixar parecer que o
-              coeficiente já soma pavimentos. */}
+          {/* ⚠️ Desde a M1 do estudo de massa o aproveitamento soma TODOS os pavimentos desenhados e os blocos de
+              massa (`aproveitamentoDoEstudo`). O texto antigo ("um nível: o coeficiente ainda não soma pavimentos")
+              ficou para trás e passou a ser falso — corrigido nas pendências de 03/10/2026. */}
           <p className="mt-1.5 text-xs text-slate-500">
-            Um nível desenhado: o coeficiente ainda não soma pavimentos.
+            Todos os pavimentos desenhados e os blocos de massa: a ocupação pela projeção, o coeficiente pela área computável.
+            {coeficienteBasico != null && aproveitamento.coeficienteAproveitamento > coeficienteBasico + 0.005 ? ' Acima do básico, a área depende de outorga onerosa.' : ''}
           </p>
         </div>
       )}

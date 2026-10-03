@@ -76,6 +76,8 @@ export interface ZonaUrbanistica {
   recuos: Recuos;
   taxaOcupacaoMax: number | null;
   coeficienteMax: number | null;
+  /** CA básico (sem outorga onerosa). */
+  coeficienteBasico: number | null;
   gabaritoAlturaMaxM: number | null;
   gabaritoPavimentos: number | null;
   taxaPermeabilidadeMin: number | null;
@@ -94,6 +96,7 @@ export interface ZonaUrbanistica {
   ajustarRecuo: (papel: keyof Recuos, mm: number) => void;
   ajustarTaxaOcupacaoMax: (v: number | null) => void;
   ajustarCoeficienteMax: (v: number | null) => void;
+  ajustarCoeficienteBasico: (v: number | null) => void;
 
   aplicarZona: (zonaId: string) => void;
   desligar: () => void;
@@ -128,6 +131,7 @@ const TODOS_OS_CAMPOS: CampoDaZona[] = [
   'recuo_lateral_esquerda',
   'taxa_ocupacao_max',
   'coeficiente_max',
+  'coeficiente_basico',
   'gabarito_altura_max',
   'gabarito_pavimentos',
   'taxa_permeabilidade_min',
@@ -142,6 +146,7 @@ const TODOS_OS_CAMPOS: CampoDaZona[] = [
 const SEM_LIMITES: Omit<ValoresDaZona, 'recuoMm'> = {
   taxaOcupacaoMax: null,
   coeficienteMax: null,
+  coeficienteBasico: null,
   gabaritoAlturaMaxM: null,
   gabaritoPavimentos: null,
   taxaPermeabilidadeMin: null,
@@ -241,6 +246,7 @@ export function useBlueprintZonaUrbanistica(
         setLimites({
           taxaOcupacaoMax: ctx.taxa_ocupacao_max,
           coeficienteMax: ctx.coeficiente_max,
+          coeficienteBasico: ctx.coeficiente_basico ?? null,
           gabaritoAlturaMaxM: ctx.gabarito_altura_max_m,
           gabaritoPavimentos: ctx.gabarito_pavimentos,
           taxaPermeabilidadeMin: ctx.taxa_permeabilidade_min,
@@ -360,6 +366,7 @@ export function useBlueprintZonaUrbanistica(
       setLimites({
         taxaOcupacaoMax: lidos.taxaOcupacaoMax,
         coeficienteMax: lidos.coeficienteMax,
+        coeficienteBasico: lidos.coeficienteBasico,
         gabaritoAlturaMaxM: lidos.gabaritoAlturaMaxM,
         gabaritoPavimentos: lidos.gabaritoPavimentos,
         taxaPermeabilidadeMin: lidos.taxaPermeabilidadeMin,
@@ -394,6 +401,7 @@ export function useBlueprintZonaUrbanistica(
         taxa_ocupacao_max: lidos.taxaOcupacaoMax,
         taxa_permeabilidade_min: lidos.taxaPermeabilidadeMin,
         coeficiente_max: lidos.coeficienteMax,
+        coeficiente_basico: lidos.coeficienteBasico,
         gabarito_altura_max_m: lidos.gabaritoAlturaMaxM,
         gabarito_pavimentos: lidos.gabaritoPavimentos,
         ...colunasDoVocabulario(lidos),
@@ -452,6 +460,14 @@ export function useBlueprintZonaUrbanistica(
     [marcarManual],
   );
 
+  const ajustarCoeficienteBasico = useCallback(
+    (v: number | null) => {
+      setLimites((s) => ({ ...s, coeficienteBasico: v }));
+      marcarManual('coeficiente_basico', { coeficiente_basico: v });
+    },
+    [marcarManual],
+  );
+
   const ajustarVocabulario = useCallback(
     (patch: Partial<Pick<ValoresDaZona, 'testadaMinimaMm' | 'areaMinimaDoLoteM2' | 'vagasPorUnidade' | 'insolacaoMinimaH' | 'afastamentoProgressivo' | 'recuoFrenteEscalonado'>>) => {
       setLimites((s) => ({ ...s, ...patch }));
@@ -501,6 +517,7 @@ export function useBlueprintZonaUrbanistica(
     ajustarRecuo,
     ajustarTaxaOcupacaoMax,
     ajustarCoeficienteMax,
+    ajustarCoeficienteBasico,
     ajustarVocabulario,
     aplicarZona,
     desligar,

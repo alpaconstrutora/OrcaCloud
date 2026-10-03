@@ -425,6 +425,8 @@ export interface BlueprintUrbanContext {
   taxa_ocupacao_max: number | null;
   taxa_permeabilidade_min: number | null;
   coeficiente_max: number | null;
+  /** CA BÁSICO, sem outorga onerosa (migration `aplicar_20271003000010`). `null` = a lei não disse (ou linha anterior). */
+  coeficiente_basico?: number | null;
   /** Em METRO. */
   gabarito_altura_max_m: number | null;
   gabarito_pavimentos: number | null;

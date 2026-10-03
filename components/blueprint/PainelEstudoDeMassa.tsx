@@ -164,6 +164,13 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
                 icon={<Gauge />}
                 color={r.aproveitamentoDoPotencialPct != null && r.aproveitamentoDoPotencialPct > 100.05 ? 'red' : 'teal'}
               />
+              <KpiCard
+                label="Sujeita a outorga"
+                value={r.outorga == null ? '—' : m2(r.outorga.sujeitaM2)}
+                sub={r.outorga == null ? 'a zona não informa o CA básico' : `acima do CA básico ${n2(r.outorga.caBasico)} (${m2(r.outorga.basicoM2)} de direito)`}
+                icon={<Banknote />}
+                color={r.outorga != null && r.outorga.sujeitaM2 > 0 ? 'amber' : 'gray'}
+              />
               <KpiCard label="Área ocupada" value={m2(r.areaOcupadaM2)} sub="união das projeções acima do solo" icon={<Ruler />} color="sky" />
               <KpiCard
                 label="Permeabilidade"

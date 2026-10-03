@@ -300,7 +300,9 @@ export default function PainelTerreno({
    * vale por si, com o cabeçalho para não aparecer solto no meio da gaveta.
    */
   if (!terreno && !divisaSelecionada) {
-    if (!topografiaSlot) return null;
+    // A ZONA também vale sem lote (03/10/2026): escolher a lei — e com ela os recuos e o gabarito que o lote vai
+    // receber — não depende de já haver divisa desenhada. Este retorno antecipado a deixava de fora.
+    if (!topografiaSlot && !zonaSlot) return null;
     return (
       <div className={raizDoPainel}>
         {!emDrawer && (
@@ -310,6 +312,7 @@ export default function PainelTerreno({
           </h3>
         )}
         <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />
+        {zonaSlot}
         {topografiaSlot}
       </div>
     );

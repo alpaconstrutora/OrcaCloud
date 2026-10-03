@@ -796,7 +796,8 @@ TelaGerador,Blueprint3DViewer}.tsx`, `services/plantaAiEngine.ts` (só para apos
   - orientação por unidade (`position_type`, `sun_orientation`) → vai para a M6, junto da divisão do pavimento em unidades
 - [x] M6 — da massa à planta e ao BIM · dividida (02/10/2026), concluída em 03/10/2026:
   - [x] **M6a** — pavimento tipo esquemático do bloco (corredor, núcleo, unidades com canto e orientação, cópias vivas) + orientação ao Empreendimento (este registro)
-  - [x] **M6b** — planta interna de cada unidade pelo gerador (E6.2), no quadro do bloco (registro abaixo; o Grupo da E2.3 fica como passo seguinte)
+  - [x] **M6b** — planta interna de cada unidade pelo gerador (E6.2), no quadro do bloco (registro abaixo)
+  - [x] **M6b+** — unidades iguais viram Grupo da E2.3: editar a origem propaga às iguais (registro abaixo)
   - [x] decidir com o usuário os botões do Empreendimento que ainda levam ao Planta AI v1 → **Planta Inteligente** (decisão de 02/10/2026; registro abaixo)
 
 ## Execução
@@ -1304,3 +1305,41 @@ Editar" para a Planta Inteligente, mas o formulário NÃO tinha esse campo (desd
 | App real (estudo descartável "ZZ TESTE … prova M6b") | 9/9: montar pelo painel; o painel oferece as 5 plantas; gerar → 46 cômodos; **no banco**: 101–103 com 8 cômodos, 104–105 com 11, 51 paredes no tipo com o contorno de 4, **19 janelas, todas na fachada**, as 8 cópias com as mesmas paredes; o painel diz que todas já têm; 0 erros. No desenho: as 5 unidades com cômodos e portas, núcleo e corredor |
 | Qualidade, medida | 19 janelas na fachada e 19 descartadas (davam para corredor/vizinho); 6 cômodos que pedem luz ficaram sem fachada (1–2 por unidade — p.ex. a varanda), listados — estudo preliminar, o projetista ajusta |
 | Limpeza | estudo apagado pelo id + `name LIKE 'ZZ TESTE%'`; estudos 73 · ramos 73 · produtos 0 · ZZ 0, iguais aos de antes |
+
+### M6b+ — Unidades iguais viram Grupo (E2.3) (03/10/2026)
+
+**Pedido do usuário (literal):** "Implementar : Ficou de fora, por escolha: a repetição de unidades iguais é feita
+copiando o desenho, não como um grupo do editor (a função de grupo espelhado da E2.3). Com grupo, editar uma unidade
+propagaria a mudança para as iguais."
+
+**O que entrou** (`utils/blueprintPlantaDaUnidade.ts`).
+
+- **Classes de unidades IGUAIS**: mesma tipologia, mesmas medidas (±2 mm alinhado; ±5 mm girado, por causa do
+  arredondamento e do `ALEM_MM`) e a mesma situação de fachada **a menos de um espelho** — canto esquerdo ↔ canto
+  direito (espelho ao longo do bloco), lado da rua ↔ fundos (espelho através do corredor), as duas juntas = giro de 180°.
+  Canto e meio NÃO são iguais (a planta do canto foi escolhida pela fachada da ponta).
+- A planta é gerada **uma vez por classe**, na primeira unidade (a ORIGEM); cada igual vira **instância** de um
+  `Grupo` (`AddGrupo` com as paredes internas e os cômodos da origem; as portas vêm junto, hospedadas). O pivô é o
+  centro da origem; a translação leva ao centro da igual (`instanciaDaUnidadeIgual`, pura e testada nas 4 repetições,
+  alinhado e girado). A etiqueta única que a M6a pôs na igual sai, e os cômodos copiados passam a ser a MESMA unidade
+  da M6a (`SetUnidadeProps` — o número e a unidade não mudam).
+- **Bloco girado**: o kernel espelha nos eixos do mundo, então só repetição e giro de 180°; o canto espelhado fica
+  com planta própria. Girado 90°, o espelho ao longo do bloco é o `Y`.
+- **Fora do grupo, dito**: as janelas da fachada — a fachada é UMA parede para o andar inteiro e a janela é da
+  parede que a hospeda; cada igual continua com as suas, na posição espelhada.
+- **Caminho de volta**: se o grupo não fechar (o kernel recusar, ou uma igual sair com cômodos a menos), tudo é
+  refeito como cópia do desenho, com aviso (`opcoes.agrupar: false`).
+- **UI**: a mensagem do painel lista os grupos ("4 grupo(s) de unidades iguais (101 → 107 espelhada; …): edite a
+  planta da origem e a mudança vai para as iguais"); a gaveta existente "Grupo com origem" mostra cada um.
+
+**Prova.**
+
+| Portão | Resultado |
+|---|---|
+| `__tests__/blueprintPlantaDaUnidade.test.ts` (+11) | torre de 38 m com uma tipologia: 4 grupos (101→107 e 102→108 espelhadas, 103→105 e 104→106 repetidas), 24 gerações (só as origens); cada igual é a unidade da M6a com os mesmos 8 cômodos, todos fechados; cópias vivas com as mesmas paredes; a lista de uma vez dá o mesmo modelo; **editar a origem propaga** (espessura, porta apagada, cômodo renomeado) e **editar a cópia é recusado**; janelas por unidade; `agrupar: false` dá as mesmas plantas sem grupo; girado 30° só repetição; girado 90° espelho `Y`; `instanciaDaUnidadeIgual` nas 4 repetições × alinhado/girado |
+| Teste de editor "estudo de massa (M6b)" | agora na torre de 38 m: "Plantas geradas: 8 unidade(s), 64 cômodo(s)" + a lista dos 4 grupos |
+| `tsc` · `check-ui-standard` · org guard · XSS | 0 · 0 violações · ok · ok |
+| Suíte cheia (JSON) | 677/677 arquivos · 7.080 testes = 7.046 ok + 34 pulados · 0 falhas |
+| Build · harness `docs/spikes/massa/medir.mjs` | ok · 41/41 portões |
+| App real (estudo descartável "ZZ TESTE … prova grupo M6b") | 11/11: montar; 8 unidades sem planta; gerar → 64 cômodos e a mensagem com os 4 grupos; a gaveta "Grupo com origem" do tipo lista os 4 (7 paredes · 1 instância cada); "selecionar a origem" da 101 → "#1 · espelho X · +28,50 m"; **no banco**: 4 grupos (X, X, —, —), 8 unidades × 8 cômodos, a 107 com os mesmos da 101; no modelo gravado, mudar a parede da origem muda a da instância e editar a cópia dá `GROUP_INSTANCE`; as 8 cópias vivas com as paredes do grupo; 0 erros. No desenho: os cantos espelhados (portas inclusive) e o meio repetido |
+| Limpeza | estudo apagado pelo id + `name LIKE 'ZZ TESTE%'`; estudos 73 · ramos 73 · produtos 0 · entornos 0 · ZZ 0, iguais aos de antes |

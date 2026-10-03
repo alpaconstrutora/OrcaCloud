@@ -9167,7 +9167,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   if (pl.comandos.length === 0) return pl.avisos.join(' ') || 'Nada a gerar.';
                   editor.runBatch(pl.comandos);
                   const comodos = pl.unidades.reduce((s, u) => s + u.ambientes.length, 0);
-                  return `Plantas geradas: ${pl.unidades.filter((u) => u.ambientes.length > 0).length} unidade(s), ${comodos} cômodo(s), ${pl.geracoes} tentativa(s) do gerador.${pl.avisos.length ? ` ${pl.avisos.join(' ')}` : ''}${pl.unidades.some((u) => u.semFachada.length) ? ` Sem fachada: ${pl.unidades.filter((u) => u.semFachada.length).map((u) => `${u.numero} (${u.semFachada.join(', ')})`).join('; ')}.` : ''}`;
+                  // Unidades iguais viram grupo (E2.3): diz quais, e que a edição vai da origem para as iguais.
+                  const grupos = pl.grupos.length
+                    ? ` ${pl.grupos.length} grupo(s) de unidades iguais (${pl.grupos.map((g) => `${g.origem} → ${g.iguais.map((i) => `${i.numero} ${i.repeticao}`).join(', ')}`).join('; ')}): edite a planta da origem e a mudança vai para as iguais.`
+                    : '';
+                  return `Plantas geradas: ${pl.unidades.filter((u) => u.ambientes.length > 0).length} unidade(s), ${comodos} cômodo(s), ${pl.geracoes} tentativa(s) do gerador.${grupos}${pl.avisos.length ? ` ${pl.avisos.join(' ')}` : ''}${pl.unidades.some((u) => u.semFachada.length) ? ` Sem fachada: ${pl.unidades.filter((u) => u.semFachada.length).map((u) => `${u.numero} (${u.semFachada.join(', ')})`).join('; ')}.` : ''}`;
                 },
               }
             : undefined

@@ -1583,20 +1583,22 @@ describe('BlueprintEditor · quantitativos', () => {
     expect(chamada.model.unidades!.map((u) => u.numero)[0]).toBe('101');
   });
 
-  it('estudo de massa (M6b): com o pavimento tipo montado, o painel do bloco gera a planta interna das unidades e depois diz que todas já têm', async () => {
+  it('estudo de massa (M6b): com o pavimento tipo montado, o painel do bloco gera a planta interna das unidades (as iguais em grupo) e depois diz que todas já têm', async () => {
     const k = await import('../../utils/blueprintKernel');
     const { produtoSemente, distribuirProduto } = await import('../../utils/blueprintProduto');
     const { medirMassa, ZONA_DA_MASSA_VAZIA } = await import('../../utils/blueprintMassa');
     const { divisasDoLote, medirTerreno, RECUOS_ZERO } = await import('../../utils/blueprintTerreno');
     const pt = await import('../../utils/blueprintPavimentoTipoDaMassa');
-    const P = produtoSemente('RESIDENCIAL_MEDIO');
+    // Uma tipologia só numa torre de 38 m: 8 unidades, 4 classes de iguais (cantos espelhados, meio repetido).
+    const M = produtoSemente('RESIDENCIAL_MEDIO');
+    const P = { ...M, tipologias: [{ ...M.tipologias[0], proporcaoPct: 100 }] };
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
     const t = nivel.model.levels[0].id;
     const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
       ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
     const m = k.applyBatch(nivel.model, [
       d(0, 0, 40000, 0, 'FRENTE'), d(40000, 0, 40000, 60000, 'LATERAL_DIREITA'), d(40000, 60000, 0, 60000, 'FUNDOS'), d(0, 60000, 0, 0, 'LATERAL_ESQUERDA'),
-      { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(5000, 20000), k.point(35000, 20000), k.point(35000, 36000), k.point(5000, 36000)], pavimentos: 10 },
+      { type: 'AddBloco', levelId: t, nome: 'Torre A', pontos: [k.point(1000, 20000), k.point(39000, 20000), k.point(39000, 36000), k.point(1000, 36000)], pavimentos: 10 },
     ]).model;
     // O pavimento tipo já montado (M6a), como o estudo fica depois do "Montar neste estudo".
     const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
@@ -1615,10 +1617,11 @@ describe('BlueprintEditor · quantitativos', () => {
     const painel = await screen.findByTestId('painel-bloco');
     const plantas = within(painel).getByTestId('plantas-das-unidades');
     expect(within(painel).getByTestId('pavimento-tipo-motivo')).toHaveTextContent(/Pavimento tipo já montado/);
-    expect(plantas).toHaveTextContent(/5 unidade\(s\) do tipo ainda sem planta interna/);
+    expect(plantas).toHaveTextContent(/8 unidade\(s\) do tipo ainda sem planta interna/);
     await user.click(within(plantas).getByTestId('gerar-plantas-das-unidades'));
     const res = await within(painel).findByTestId('pavimento-tipo-resultado', {}, { timeout: 20000 });
-    expect(res).toHaveTextContent(/^Plantas geradas: 5 unidade\(s\), \d+ cômodo\(s\)/);
+    expect(res).toHaveTextContent(/^Plantas geradas: 8 unidade\(s\), 64 cômodo\(s\)/);
+    expect(res).toHaveTextContent(/4 grupo\(s\) de unidades iguais \(101 → 107 espelhada; 102 → 108 espelhada; 103 → 105 repetida; 104 → 106 repetida\): edite a planta da origem/);
     await waitFor(() => expect(within(painel).getByTestId('plantas-das-unidades')).toHaveTextContent(/Todas as unidades do tipo já têm planta interna/));
     expect(within(painel).getByTestId('gerar-plantas-das-unidades')).toBeDisabled();
   }, 60000);

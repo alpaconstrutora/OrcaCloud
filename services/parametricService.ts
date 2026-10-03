@@ -2,6 +2,7 @@ import { ProjectSettings, BudgetEntry, SinapiType, SinapiItem } from '../types';
 import { CUB_STANDARDS_DATA, BASE_CUB_RATES } from '../constants';
 import { NBR_12721_COEFFICIENTS } from '../constants_nbr';
 import { supabase } from '../lib/supabase';
+import { colunaDoPadraoCub } from './cubService';
 
 // Parse de valor CUB do banco — Supabase retorna numeric como JS number,
 // mas protege contra strings com formato BR ("1.234,56") caso a coluna seja text.
@@ -19,7 +20,13 @@ function parseCubRate(value: unknown): number {
 export const parametricService = {
     async generateParametricBudgetAsync(settings: ProjectSettings): Promise<BudgetEntry[]> {
         const area = settings.area || 0;
-        const standardKey = (settings.standard || 'R8-N').toLowerCase().replace(/-/g, '_');
+        // ⚠️ A coluna vem do mapa EXPLÍCITO (`pp_4_n`, `csl_8_n`…): montar pelo nome da chave ("PP-N" → "pp_n")
+        // não achava a coluna e o padrão saía sem orçamento, em silêncio.
+        const standardKey = colunaDoPadraoCub(settings.standard);
+        if (!standardKey) {
+            console.error('[parametricService] padrão CUB desconhecido:', settings.standard);
+            return [];
+        }
 
         // Fetch from Supabase
         const { data, error } = await supabase
@@ -116,7 +123,7 @@ export const parametricService = {
 
     async calculateTotalEstimatedValueAsync(settings: ProjectSettings): Promise<number> {
         const area = settings.area || 0;
-        const standardKey = (settings.standard || 'R8-N').toLowerCase().replace(/-/g, '_');
+        const standardKey = colunaDoPadraoCub(settings.standard);
 
         const { data, error } = await supabase
             .from('cub_parametric_data')
@@ -128,7 +135,7 @@ export const parametricService = {
         let cubRateFromTable = 0;
         if (!error && data && data.length > 0) {
             const totalRow = data.find(d => d.nature === 'Total');
-            if (totalRow && totalRow[standardKey] > 0) {
+            if (standardKey && totalRow && totalRow[standardKey] > 0) {
                 cubRateFromTable = parseCubRate(totalRow[standardKey]);
             }
         }
@@ -188,7 +195,8 @@ export const parametricService = {
     },
 
     async getHistoricalCubDataAsync(settings: ProjectSettings): Promise<{ date: string; rate: number }[]> {
-        const standardKey = (settings.standard || 'R8-N').toLowerCase().replace(/-/g, '_');
+        const standardKey = colunaDoPadraoCub(settings.standard);
+        if (!standardKey) return [];
 
         // Fetch enough records to find unique months and avoid duplicates
         const { data, error } = await supabase
@@ -232,7 +240,8 @@ export const parametricService = {
     },
 
     async getRegionalComparisonDataAsync(settings: ProjectSettings): Promise<{ state: string; rate: number }[]> {
-        const standardKey = (settings.standard || 'R8-N').toLowerCase().replace(/-/g, '_');
+        const standardKey = colunaDoPadraoCub(settings.standard);
+        if (!standardKey) return [];
         const targetStates = ['MG', 'SP', 'RJ', 'SC', 'PR', 'ES']; // Chave states for benchmarking
 
         const { data, error } = await supabase

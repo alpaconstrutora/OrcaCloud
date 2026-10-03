@@ -226,6 +226,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
     economiaMetodoConstrutivo: number;
     inssFinalEstimado: number;
     cubValor: number;
+    cubOrigem: string;
   } | null>(null);
 
   // Carregar dados
@@ -1320,6 +1321,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       <div className="p-4 bg-gray-50 rounded-2xl">
                         <span className="text-xs font-black uppercase tracking-wider text-gray-400">Valor CUB (m²)</span>
                         <h5 className="text-lg font-bold text-gray-800 mt-1">R$ {activeSimResult.cubValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h5>
+                        <p className="mt-1 text-xs text-gray-500" data-testid="cno-cub-origem">{activeSimResult.cubOrigem}</p>
                       </div>
                       <div className="p-4 bg-gray-50 rounded-2xl">
                         <span className="text-xs font-black uppercase tracking-wider text-gray-400">Custo Global Estimado</span>

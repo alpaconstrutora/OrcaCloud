@@ -35,6 +35,14 @@ export const COLUNA_DO_PADRAO_CUB: Record<string, string> = {
   RP1Q: 'rp1q',
 };
 
+/**
+ * A coluna de `cub_parametric_data` de um padrão ("PP-N" → `pp_4_n`). `null` = padrão desconhecido: quem chama trata
+ * como "sem tabela" (estimado ou vazio), nunca monta o nome da coluna a partir da chave.
+ */
+export function colunaDoPadraoCub(padrao: string | null | undefined): string | null {
+  return COLUNA_DO_PADRAO_CUB[(padrao || 'R8-N').trim().toUpperCase()] ?? null;
+}
+
 export interface CubDoPadrao {
   valorM2: number;
   /** TABELA = lido do Sinduscon; ESTIMADO = base da UF × multiplicador do padrão. */
@@ -60,9 +68,29 @@ function valorDe(v: unknown): number {
 }
 
 /** "MM/AAAA" → número comparável (AAAAMM); inválido → 0. */
-function mesDe(ref: unknown): number {
-  const m = /^(\d{1,2})\/(\d{4})$/.exec(String(ref ?? '').trim());
-  return m ? Number(m[2]) * 100 + Number(m[1]) : 0;
+/** "MM/AAAA" (o banco) ou "AAAA-MM" (o campo de mês do navegador) → AAAAMM; 0 se não for nenhum dos dois. */
+export function mesDe(ref: unknown): number {
+  const t = String(ref ?? '').trim();
+  const br = /^(\d{1,2})\/(\d{4})$/.exec(t);
+  if (br) return Number(br[2]) * 100 + Number(br[1]);
+  const iso = /^(\d{4})-(\d{1,2})$/.exec(t);
+  return iso ? Number(iso[1]) * 100 + Number(iso[2]) : 0;
+}
+
+/** O rótulo de encargos como o banco grava, a partir do valor do formulário (`com_desoneracao`) ou do próprio rótulo. */
+export function encargosDoCub(v: string | null | undefined): 'Com Desoneração' | 'Sem Desoneração' {
+  return /^sem/i.test(String(v ?? '').trim()) ? 'Sem Desoneração' : 'Com Desoneração';
+}
+
+/**
+ * A linha do mês pedido; se o mês não tem tabela (os dados são esparsos), a mais recente ANTERIOR a ele; se não há
+ * anterior, a mais recente que houver. `null` sem linhas. Diz qual mês foi usado — nunca troca o mês em silêncio.
+ */
+export function linhaDoMesOuAnterior<T extends { reference_date?: unknown }>(linhas: readonly T[], mesPedido: unknown): T | null {
+  const comMes = linhas.map((l) => ({ l, mes: mesDe(l.reference_date) })).filter((x) => x.mes > 0).sort((a, b) => b.mes - a.mes);
+  if (comMes.length === 0) return null;
+  const alvo = mesDe(mesPedido);
+  return (alvo > 0 ? comMes.find((x) => x.mes <= alvo) : undefined)?.l ?? comMes[0].l;
 }
 
 export async function cubDoPadrao(uf: string, padrao: string, desoneracao: 'Com Desoneração' | 'Sem Desoneração' = 'Com Desoneração'): Promise<CubDoPadrao> {

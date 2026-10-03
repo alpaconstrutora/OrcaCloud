@@ -25,6 +25,7 @@ import {
   OpuraCnoReductionUpdate
 } from '../types';
 import { documentService } from './documentService';
+import { encargosDoCub, linhaDoMesOuAnterior } from './cubService';
 
 const DCTFWEB_COLUMNS =
   'id, organization_id, cno_registration_id, declaration_number, transmission_date, principal_amount, fine_amount, interest_amount, total_amount, status, created_at, updated_at';
@@ -476,22 +477,30 @@ export const cnoService = {
     economiaMetodoConstrutivo: number;
     inssFinalEstimado: number;
     cubValor: number;
+    /** De onde veio o CUB: "12/2025 · Com Desoneração" (o mês pode ser anterior ao pedido) ou a estimativa fixa. */
+    cubOrigem: string;
   }> {
-    const { data: cubData, error: cubError } = await supabase
+    // ⚠️ Três desencontros com o banco, todos silenciosos (a conta caía SEMPRE nos 2.500 fixos): o formulário manda
+    // `com_desoneracao` e o mês como "AAAA-MM", o banco grava "Com Desoneração" e "MM/AAAA"; e há 5 linhas por
+    // (UF, mês, encargos) — uma por natureza e a "Total". Lê a "Total" da UF e escolhe o mês pedido ou o anterior
+    // mais recente (a tabela é esparsa).
+    const { data: cubLinhas, error: cubError } = await supabase
       .from('cub_parametric_data')
-      .select('*')
-      .eq('state', params.state)
-      .eq('reference_date', params.referenceDate)
-      .eq('social_charges', params.socialCharges)
-      .maybeSingle();
+      .select('reference_date, r1_b, pp_4_b, r1_n, r8_n, r1_a, r8_a')
+      .ilike('state', params.state)
+      .eq('social_charges', encargosDoCub(params.socialCharges))
+      .eq('nature', 'Total');
 
     if (cubError) {
       console.error('[CnoService] Erro ao buscar dados do CUB:', cubError);
       throw new Error(`Erro ao buscar dados do CUB: ${cubError.message}`);
     }
+    const cubData = linhaDoMesOuAnterior((cubLinhas ?? []) as Record<string, unknown>[], params.referenceDate);
 
     let cubValue = 2500; // fallback padrão nacional aproximado
+    let cubOrigem = 'estimativa fixa (sem tabela CUB da UF)';
     if (cubData) {
+      cubOrigem = `tabela ${String(cubData.reference_date)} · ${encargosDoCub(params.socialCharges)}`;
       if (params.padrao === 'baixo') {
         cubValue = Number(cubData.r1_b || cubData.pp_4_b || 2000);
       } else if (params.padrao === 'alto') {
@@ -530,7 +539,8 @@ export const cnoService = {
       inssPatronalEstimado,
       economiaMetodoConstrutivo,
       inssFinalEstimado,
-      cubValor: cubValue
+      cubValor: cubValue,
+      cubOrigem
     };
   },
 

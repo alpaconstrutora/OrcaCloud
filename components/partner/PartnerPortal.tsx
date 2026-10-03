@@ -58,7 +58,8 @@ import {
   ACCEPTANCE_KIND_LABELS, RETENTION_RELEASE_KIND_LABELS,
 } from '../../lib/contractLabels';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
-import { DocumentsTable } from '../documents/DocumentsTable';
+import { DocumentsTable, renderFileIcon } from '../documents/DocumentsTable';
+import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { DocumentQrLabelModal } from '../documents/DocumentQrLabelModal';
 import {
   PartnerWorkspace,
@@ -104,6 +105,30 @@ const PARTNER_DOC_COLUMNS: ColumnConfig[] = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
+// "Enviados por você": o que o parceiro mandou pela aba Documentos (solicitação
+// DOCUMENTACAO com anexo), à espera de a construtora revisar e incluir no GED.
+// Mesmo desenho de tabela do GED logo abaixo (StandardTable segue o mesmo guia
+// que a DocumentsTable), com as colunas que esse registro TEM — não é um
+// documento do GED ainda, então não tem autor, revisão, obra ou validade.
+const SENT_DOC_COLUMNS: StandardTableColumn[] = [
+  { key: 'nome', label: 'Documento', sortable: true, width: 300 },
+  { key: 'extensao', label: 'Extensão', sortable: true, width: 100 },
+  { key: 'observacao', label: 'Observação', sortable: true, width: 260 },
+  { key: 'enviado_em', label: 'Enviado em', sortable: true, width: 150 },
+  { key: 'status', label: 'Status', sortable: true, width: 200 },
+];
+const sentDocFileName = (req: PartnerRequest) =>
+  (req.attachment_paths?.[0]?.split('/').pop() || '').replace(/^\d+_/, '') || req.title;
+const sentDocExtension = (req: PartnerRequest) => {
+  const name = sentDocFileName(req);
+  return name.includes('.') ? name.split('.').pop()!.toUpperCase() : '-';
+};
+const SENT_DOC_STATUS: Record<string, { label: string; className: string }> = {
+  CONCLUIDO: { label: 'Incluído no GED', className: 'text-green-600' },
+};
+const sentDocStatus = (req: PartnerRequest) =>
+  SENT_DOC_STATUS[req.status] ?? { label: 'Aguardando revisão', className: 'text-amber-600' };
+
 const PARTNER_DOC_COL_WIDTHS: Record<string, number> = {
   nome: 260, extensao: 100, autor: 150, numero_documento_fornecedor: 160, tipo_documento: 160,
   revisao: 110, project_id: 160, data_emissao: 120, data_validade: 120, status: 110, actions: 140,
@@ -1283,40 +1308,61 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
                 {sentDocuments.length > 0 && (
                   <div className="flex flex-col gap-3">
-                    <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                      Enviados por Você
-                      <span className="text-gray-400 font-bold">({sentDocuments.length})</span>
+                    <h4 className="text-sm font-semibold text-gray-700">
+                      Enviados por você <span className="text-gray-400 font-normal">({sentDocuments.length})</span>
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {sentDocuments.map((req) => (
-                        <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col gap-3 shadow-sm">
-                          <div className="flex items-start justify-between">
-                            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl"><Upload className="w-5 h-5" /></div>
-                            <span className={`text-xs font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md border
-                              ${req.status === 'CONCLUIDO' ? 'bg-green-50 text-green-600 border-green-200' : 'bg-yellow-50 text-yellow-600 border-yellow-200'}`}>
-                              {req.status === 'CONCLUIDO' ? 'Incluído no GED' : 'Aguardando revisão'}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-bold text-gray-900 truncate">{req.title}</h4>
-                            <p className="text-sm text-gray-400 mt-1 truncate">{req.description}</p>
-                          </div>
-                          <div className="flex items-center justify-between text-sm text-gray-400 border-t border-gray-100 pt-3 mt-1">
-                            <span>Enviado em: {new Date(req.created_at).toLocaleDateString()}</span>
-                            {req.attachment_paths?.[0] && (
-                              <button
-                                type="button"
-                                onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
-                                className="flex items-center gap-1 text-orange-500 hover:text-orange-600 font-semibold"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Ver</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <StandardTable<PartnerRequest>
+                      storageKey="partnerPortal:enviadosPorVoce"
+                      columns={SENT_DOC_COLUMNS}
+                      rows={sentDocuments}
+                      rowKey={(req) => req.id}
+                      searchText={(req) => `${sentDocFileName(req)} ${req.description || ''} ${sentDocStatus(req).label}`}
+                      searchPlaceholder="Buscar documento enviado por nome, observação ou status..."
+                      maxHeight="40vh"
+                      sortValue={(key, req) => {
+                        switch (key) {
+                          case 'nome': return sentDocFileName(req).toLowerCase();
+                          case 'extensao': return sentDocExtension(req);
+                          case 'observacao': return (req.description || '').toLowerCase();
+                          case 'enviado_em': return req.created_at;
+                          case 'status': return sentDocStatus(req).label;
+                          default: return null;
+                        }
+                      }}
+                      renderCell={(key, req) => {
+                        switch (key) {
+                          case 'nome':
+                            return (
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex-shrink-0">{renderFileIcon('', sentDocFileName(req))}</div>
+                                <span className="text-sm font-medium text-gray-900 truncate" title={sentDocFileName(req)}>{sentDocFileName(req)}</span>
+                              </div>
+                            );
+                          case 'extensao':
+                            return <span className="text-sm font-normal text-gray-600">{sentDocExtension(req)}</span>;
+                          case 'observacao':
+                            return <span className="text-sm font-normal text-gray-700 block truncate" title={req.description || undefined}>{req.description || '-'}</span>;
+                          case 'enviado_em':
+                            return <span className="text-sm font-normal text-gray-600">{new Date(req.created_at).toLocaleDateString('pt-BR')}</span>;
+                          case 'status': {
+                            const st = sentDocStatus(req);
+                            return <span className={`text-sm font-normal ${st.className}`}>{st.label}</span>;
+                          }
+                          default:
+                            return null;
+                        }
+                      }}
+                      actions={{
+                        width: 100,
+                        render: (req) =>
+                          req.attachment_paths?.[0] ? (
+                            <ActionIconButton
+                              kind="download"
+                              onClick={() => handleDownloadAttachment(req.attachment_paths![0])}
+                            />
+                          ) : null,
+                      }}
+                    />
                   </div>
                 )}
 

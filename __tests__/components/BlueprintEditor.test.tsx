@@ -5614,6 +5614,14 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     expect(within(porAmbiente).getByRole('row', { name: 'Ambiente Sala' })).toHaveTextContent(/sim \*\s*3\s*22,0 °C/);
     expect(editorDaSala).toHaveTextContent(/3 pessoa\(s\), sentado, em repouso/);
     expect(porAmbiente).toHaveTextContent(/1 de 2 ambiente\(s\) com algo declarado/);
+    // E1.3: teto e piso derivados — um pavimento só, sem telhado nem laje: laje exposta sobre o solo,
+    // com DUAS pendências ditas: o último pavimento sem telhado nem laje, e o vizinho sem etiqueta
+    // (o cômodo sem nome divide parede com a Sala — não se sabe se é climatizado).
+    const exposicaoDaSala = within(porAmbiente).getByTestId(`exposicao-${sala.id}`);
+    expect(exposicaoDaSala).toHaveTextContent(/laje exposta \/ sobre o solo/);
+    expect(exposicaoDaSala).toHaveTextContent(/⚠ 2/);
+    expect(exposicaoDaSala).toHaveAttribute('title', expect.stringMatching(/Último pavimento sem telhado nem laje/));
+    expect(exposicaoDaSala).toHaveAttribute('title', expect.stringMatching(/Vizinho "Ambiente" sem etiqueta/));
   }, 60000);
 });
 

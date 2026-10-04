@@ -12,6 +12,7 @@
  */
 import React from 'react';
 import type { AcabamentosDoAmbiente, ObjectId } from '../../utils/blueprintKernel';
+import { ROTULO_DA_EXPOSICAO, type ExposicaoDoAmbiente } from '../../utils/blueprintExposicaoTermica';
 import {
   CLIMA_POR_CIDADE,
   FONTE_DO_CLIMA,
@@ -54,6 +55,8 @@ interface Props {
   /** E0.3: os ambientes do pavimento ativo. */
   ambientes: AmbienteParaClima[];
   nomeDoPavimento: string;
+  /** E1.3: o que há do outro lado de cada face, derivado do desenho — por `spaceId`. */
+  exposicao?: ReadonlyMap<ObjectId, ExposicaoDoAmbiente>;
   onSelecionar?: (spaceId: ObjectId) => void;
   /** Sem a tabela no banco: as premissas valem só nesta sessão. */
   persistenciaIndisponivel: boolean;
@@ -184,7 +187,7 @@ function EditorDoAmbiente({ a, declarado, onDeclarar, temperaturaDoEstudoC }: { 
   );
 }
 
-export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes, nomeDoPavimento, onSelecionar, persistenciaIndisponivel }: Props) {
+export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes, nomeDoPavimento, exposicao, onSelecionar, persistenciaIndisponivel }: Props) {
   const conf = hip.conforto;
   const clima = hip.clima;
   const cidades = Object.keys(CLIMA_POR_CIDADE);
@@ -301,6 +304,7 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
                   <th className="py-1 pr-2 text-right font-medium">Pessoas</th>
                   <th className="py-1 pr-2 text-right font-medium">Setpoint</th>
                   <th className="py-1 pr-2 text-right font-medium">Volume (m³)</th>
+                  {exposicao && <th className="py-1 pr-2 font-medium">Teto / piso</th>}
                   <th className="py-1 font-medium" />
                 </tr>
               </thead>
@@ -320,6 +324,15 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
                         <td className="py-1.5 pr-2 text-right tabular-nums">{p.pessoas.valor}{marca(p.pessoas.origem)}</td>
                         <td className="py-1.5 pr-2 text-right tabular-nums">{num(p.temperaturaInternaC.valor)} °C</td>
                         <td className="py-1.5 pr-2 text-right tabular-nums">{num(p.volumeM3)}</td>
+                        {exposicao && (() => {
+                          const e = exposicao.get(a.spaceId);
+                          return (
+                            <td className="py-1.5 pr-2 text-slate-700" data-testid={`exposicao-${a.spaceId}`} title={e?.pendencias.join('\n') || undefined}>
+                              {e ? `${ROTULO_DA_EXPOSICAO[e.teto.tipo]}${e.teto.vizinho ? ` (${e.teto.vizinho.nome})` : ''} / ${ROTULO_DA_EXPOSICAO[e.piso.tipo]}${e.piso.vizinho ? ` (${e.piso.vizinho.nome})` : ''}` : '—'}
+                              {e && e.pendencias.length > 0 && <span className="ml-1 text-[10px] text-amber-800">⚠ {e.pendencias.length}</span>}
+                            </td>
+                          );
+                        })()}
                         <td className="py-1.5 text-right">
                           {a.uid ? (
                             <button type="button" onClick={() => setAberto(aberto === a.spaceId ? null : a.spaceId)} aria-label={`Declarar climatização de ${a.rotulo}`} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50">
@@ -332,7 +345,7 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
                       </tr>
                       {aberto === a.spaceId && a.uid && (
                         <tr className="border-t border-slate-100 bg-slate-50/60">
-                          <td colSpan={7} className="px-2 py-3">
+                          <td colSpan={exposicao ? 8 : 7} className="px-2 py-3">
                             <EditorDoAmbiente a={a} declarado={declarado} onDeclarar={(h) => declarar(a.uid!, h)} temperaturaDoEstudoC={conf.temperaturaInternaC} />
                           </td>
                         </tr>
@@ -346,6 +359,7 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
         )}
         <p className="text-[11px] text-slate-500">
           * = padrão do uso, não declarado.{algumDoUso ? ` ${FONTE_DO_PADRAO_POR_USO}` : ''} O volume usa o pé-direito livre (do piso acabado à face do forro).
+          {exposicao ? ' Teto e piso são derivados do desenho (ambiente acima/abaixo, cobertura, laje exposta, solo); ⚠ = o desenho não soube responder algo — passe o mouse.' : ''}
         </p>
       </section>
     </div>

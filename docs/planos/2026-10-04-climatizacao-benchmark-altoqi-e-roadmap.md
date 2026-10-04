@@ -1452,3 +1452,32 @@ leva o vidro), `PainelEsquadrias` 15/15. `check-ui-standard` e `check-xss-sinks`
 só laje, lista vazia, espessura 0 e função estranha recusadas; U 0,716 W/m²·K conferido à mão para
 telha + lã de rocha + laje, e λ ausente dito), goldens 7/7, `blueprintCamadas`, `plantaApi`
 (bundle fresco), `blueprintCoberturaExtrusao` — 38/38. `check-ui-standard` limpo nos cinco `.tsx`.
+Commit `a865f70d`.
+
+### Etapa 1.3 — 04/10/2026 (frente `clima-e1`, sem bump — derivação pura)
+
+**O que entrou:**
+- `utils/blueprintExposicaoTermica.ts` — `exposicaoDoNivel(model, levelId)` / `exposicaoDoAmbiente`:
+  para cada ambiente, **as faces verticais** (externas com a orientação de 8 pontos do grafo
+  espacial; internas com o vizinho e o `labelUid` dele — a chave do "climatizado?" das premissas;
+  áreas bruta, de vãos e líquida; cada vão com área e o vidro da E1.1; as camadas da parede),
+  **o teto** (AMBIENTE acima / COBERTURA / LAJE_EXPOSTA / EXTERIOR descoberto, com as camadas da
+  água ou da laje da E1.2) e **o piso** (AMBIENTE abaixo / SOLO / EXTERIOR pilotis). Achado 7
+  fechado. Pendências ditas, nunca inventadas: vizinho ou ambiente acima/abaixo sem etiqueta,
+  cobertura/laje sem camadas, parede sem lado, ambiente de cima cobrindo só parte, último pavimento
+  sem telhado nem laje. `resumirExposicao` conta por tipo.
+- **Decisão: ponto interior, não interseção de polígonos.** `areaComum` só recorta com faca convexa
+  e devolve zero honesto nos côncavos; "o que está em cima" é pertinência, não área — `interiorPoint`
+  (respeita furos) contra ambientes, lajes e águas. O caso que isso erra (ambiente metade sob outro)
+  vira pendência quando o de cima é bem menor.
+- `PainelClimatizacao` ganha a coluna **Teto / piso** na tabela por ambiente (com o vizinho entre
+  parênteses e ⚠ n com as pendências no `title`); o editor calcula a exposição do pavimento ativo só
+  com a gaveta aberta.
+
+**Prova.** `blueprintExposicaoTermica.test.ts` (4, sobrado Sala+Cozinha / Quarto sobre a Sala /
+telhado: Sala com N-O-S externas e a divisa interna com a Cozinha, janela de 1,32 m² com vidro na
+face sul, teto = Quarto, piso = solo, sem pendência; Cozinha sob a cobertura com "sem camadas"
+como pendência que some ao declarar a telha; Quarto sob a cobertura e sobre a Sala; sem telhado o
+Quarto vira laje exposta e a Cozinha exterior; vizinho sem etiqueta é pendência; resumo por tipo).
+`BlueprintEditor.test.tsx` (o caso das premissas confere a coluna: "laje exposta / sobre o solo"
+com ⚠ 1 e o motivo no `title`). `check-ui-standard` limpo.

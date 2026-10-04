@@ -251,6 +251,7 @@ import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/bl
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { useBlueprintClimatizacao } from '../../hooks/useBlueprintClimatizacao';
 import { condicoesExternas } from '../../utils/blueprintClimatizacao';
+import { exposicaoDoNivel } from '../../utils/blueprintExposicaoTermica';
 import PainelClimatizacao from './PainelClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
@@ -15375,6 +15376,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos };
                 })}
                 nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+                // E1.3: derivado do desenho, só com a gaveta aberta (é por ambiente do pavimento ativo).
+                exposicao={levelId ? new Map(exposicaoDoNivel(editor.model, levelId).map((e) => [e.spaceId, e])) : undefined}
                 onSelecionar={(spaceId) => selecionar([spaceId])}
                 persistenciaIndisponivel={climatizacaoDoEstudo.persistenciaIndisponivel}
               />

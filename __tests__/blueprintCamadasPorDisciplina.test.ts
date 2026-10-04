@@ -30,7 +30,7 @@ import {
 function modelo(): BlueprintModel {
   const m = emptyModel() as unknown as Record<string, unknown[]>;
   const um = (k: string, extra: Record<string, unknown> = {}) => m[k].push({ id: k, levelId: 'L1', ...extra });
-  for (const k of ['walls', 'spaces', 'labels', 'roofs', 'stairs', 'guardaCorpos', 'rodapes', 'vagas', 'structures', 'boundaries', 'verticesDoTerreno', 'quadras', 'lotes', 'vias', 'areasPublicas', 'blocos', 'subRegioes', 'areasDeOperacao']) um(k);
+  for (const k of ['walls', 'spaces', 'labels', 'roofs', 'stairs', 'guardaCorpos', 'rodapes', 'vagas', 'structures', 'boundaries', 'quadras', 'lotes', 'vias', 'areasPublicas', 'blocos', 'subRegioes', 'areasDeOperacao']) um(k);
   m.openings.push({ id: 'openings', wallId: 'walls' });
   m.componentes.push({ id: 'cama', levelId: 'L1', familia: 'MOBILIARIO' }, { id: 'condensadora', levelId: 'L1', familia: 'CLIMATIZACAO' });
   m.nucleos.push(
@@ -85,7 +85,6 @@ describe('classificação peça → camada', () => {
     ['shaftGeral', 'ARQUITETURA'],
     ['structures', 'ESTRUTURA'],
     ['boundaries', 'TERRENO'],
-    ['verticesDoTerreno', 'TERRENO'],
     ['quadras', 'TERRENO'],
     ['lotes', 'TERRENO'],
     ['vias', 'TERRENO'],
@@ -122,7 +121,8 @@ describe('classificação peça → camada', () => {
   it('PORTÃO: coleção nova do modelo precisa ser classificada ou declarada referência', () => {
     // Acrescentou uma coleção desenhável ao `emptyModel`? Classifique-a em
     // `classificarPecas` ou, se for referência, inclua-a aqui com o porquê.
-    const REFERENCIAS = new Set(['levels', 'sections', 'eixos', 'restricoes', 'unidades', 'grupos', 'anotacoes', 'vistasDependentes', 'etapas']);
+    // `verticesDoTerreno` não tem id (nome de um ponto da divisa — some com ela).
+    const REFERENCIAS = new Set(['levels', 'sections', 'eixos', 'restricoes', 'unidades', 'grupos', 'anotacoes', 'vistasDependentes', 'etapas', 'verticesDoTerreno']);
     const vazio = emptyModel() as unknown as Record<string, unknown>;
     const colecoes = Object.keys(vazio).filter((k) => Array.isArray(vazio[k]) && !REFERENCIAS.has(k));
     for (const k of colecoes) {

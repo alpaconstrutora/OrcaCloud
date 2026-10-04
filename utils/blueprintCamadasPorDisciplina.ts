@@ -144,8 +144,9 @@ export function classificarPecas(model: BlueprintModel): Map<ObjectId, Pertenca>
   por(model.structures, 'ESTRUTURA');
 
   // TERRENO — o lote, o loteamento, a massa e a implantação.
+  // Os vértices nomeados (A1) não têm id: são o nome de um ponto da divisa e
+  // somem com ela.
   por(model.boundaries, 'TERRENO');
-  por(model.verticesDoTerreno, 'TERRENO');
   por(model.quadras, 'TERRENO');
   por(model.lotes, 'TERRENO');
   por(model.vias, 'TERRENO');

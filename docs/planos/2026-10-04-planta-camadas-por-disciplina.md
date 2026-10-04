@@ -61,7 +61,7 @@ Estado por camada: `'VISIVEL' | 'ATENUADA' | 'OCULTA'`. Estado do grupo = deriva
 - **Pronto quando**: `tsc` limpo; testes existentes que clicavam em "Elétrica — iluminação"/"Rede de incêndio" no Exibir migrados para o painel; `__tests__/blueprintTemplatesDeVista*.test.ts` com caso de template antigo (sem `disciplinas`) e novo.
 
 ### F3 — Seção "Camadas" no painel direito (`components/blueprint/PainelCamadas.tsx` novo)
-- `SECOES_DO_PAINEL` += `{ id: 'camadas', rotulo: 'Camadas', naVista: true, no3d: true }` (antes de Componentes); `SECOES_ABERTAS_PADRAO.camadas = true`; ramo `idDaSecao === 'camadas'` no map de `:14042`.
+- `SECOES_DO_PAINEL` += `{ id: 'camadas', rotulo: 'Camadas', naVista: false, no3d: true }` (04/10: elevação e corte não leem `ocultos`, então a seção fica na planta e no 3D) (antes de Componentes); `SECOES_ABERTAS_PADRAO.camadas = true`; ramo `idDaSecao === 'camadas'` no map de `:14042`.
 - Linha por grupo (chevron expande subcamadas): olho (visível↔oculta), botão atenuar (meio-tom), rótulo, **contagem** de peças no pavimento ativo (no 3D, nos pavimentos da vista; camada vazia esmaecida), **Isolar**. Cabeçalho da seção (`acoes` do `SecaoAccordion`): "Mostrar todas", "Ocultar todas", e preferência "Isolar mantém a arquitetura como referência" (persistida, padrão ligada).
 - Botões com `ActionIconButton`/padrão de ícone do app; desabilitado sempre com motivo no `title` (memória: botão desligado diz por quê); Isolar ativo mostra "Reexibir" no mesmo lugar.
 - Seleção: ao ocultar/atenuar, tirar da seleção os ids que deixaram de ser clicáveis (como `alternarOcultoNoDesenho` faz).
@@ -100,7 +100,7 @@ Estado por camada: `'VISIVEL' | 'ATENUADA' | 'OCULTA'`. Estado do grupo = deriva
 
 ## Estado
 - [x] F1 — motor puro (59 testes)
-- [ ] F2 — ligação no editor
+- [x] F2 — ligação no editor (3D passa a esconder as camadas; overlays de terreno/arquitetura/estrutura/elétrica com o grupo; Exibir sem os 3 toggles; templates com `disciplinas`)
 - [ ] F3 — seção Camadas no painel
 - [ ] F4 — atenuar
 - [ ] F5 — conflitos filtrados

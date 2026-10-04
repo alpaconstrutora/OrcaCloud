@@ -163,8 +163,9 @@ describe('no conjunto, no DXF e na vista', () => {
     expect(semForca.has(tronco)).toBe(false);
     expect(semForca.has(m.quadros[0].id)).toBe(false);
     expect([...semForca].some((id) => m.terminais.find((t) => t.id === id)?.tipoEletrico === 'CAIXA_PASSAGEM')).toBe(false);
-    expect(CONFIGURACAO_PADRAO.planta.eletricaIluminacao).toBe(true);
-    expect(CONFIGURACAO_PADRAO.planta.eletricaForca).toBe(true);
-    expect(configuracaoDaColuna({ planta: { eletricaForca: false } }).planta).toMatchObject({ eletricaIluminacao: true, eletricaForca: false });
+    // 04/10/2026: as duas chaves viraram subcamadas de `disciplinas`; template antigo é convertido na leitura.
+    expect(CONFIGURACAO_PADRAO.disciplinas).toMatchObject({ ELETRICA_ILUMINACAO: 'VISIVEL', ELETRICA_FORCA: 'VISIVEL' });
+    expect(configuracaoDaColuna({ planta: { eletricaForca: false } }).disciplinas).toMatchObject({ ELETRICA_ILUMINACAO: 'VISIVEL', ELETRICA_FORCA: 'OCULTA' });
+    expect(configuracaoDaColuna({ disciplinas: { ESGOTO: 'ATENUADA' } }).disciplinas).toMatchObject({ ESGOTO: 'ATENUADA', ELETRICA_FORCA: 'VISIVEL' });
   });
 });

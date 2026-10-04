@@ -9,6 +9,7 @@
  */
 import { MODOS_DE_COR, type ModoDeCor } from './blueprintPaletas';
 import { FILTROS_DE_FASE, ROTULO_DO_FILTRO_DE_FASE, type FiltroDeFase } from './blueprintFases';
+import { CAMADAS, ESTADOS_PADRAO, ROTULO_DA_CAMADA, estadosDasChavesAntigas, sanearEstados, type EstadoDaCamada, type EstadosDasCamadas } from './blueprintCamadasPorDisciplina';
 
 export type Estilo3d = 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
 export const ESTILOS_3D: readonly Estilo3d[] = ['SOMBREADO', 'LINHA_OCULTA', 'TRANSPARENTE'];
@@ -34,9 +35,9 @@ export interface CamadasDaPlanta {
   envelope: boolean;
   cotaAltoContraste: boolean;
   mobiliario: boolean;
-  /** E5.1: a elétrica por tipo de ponto — luz (luminárias, interruptores) e tomadas/força. Quadros e o comum ficam sempre. */
-  eletricaIluminacao: boolean;
-  eletricaForca: boolean;
+  // `eletricaIluminacao`/`eletricaForca` (E5.1) viraram subcamadas de
+  // `ConfiguracaoDeVista.disciplinas` (04/10/2026). Template gravado antes
+  // ainda os traz no JSONB — `configuracaoDaColuna` os converte.
 }
 export interface Camadas3d {
   laje: boolean;
@@ -54,15 +55,18 @@ export interface ConfiguracaoDeVista {
   estiloPlanta: EstiloDaPlanta;
   /** FASES DE REFORMA (E10.2): tudo / antes / depois / só demolição. Ausente → tudo. */
   fase: FiltroDeFase;
+  /** CAMADAS POR DISCIPLINA (04/10/2026): visível / meio-tom / oculta por camada. Ausente → derivado das chaves elétricas antigas. */
+  disciplinas: EstadosDasCamadas;
 }
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
-  planta: { medidas: false, medidasLoteMassa: true, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false, eletricaIluminacao: true, eletricaForca: true },
+  planta: { medidas: false, medidasLoteMassa: true, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false },
   modoDeCor: 'NENHUM',
   vista3d: { laje: false, arestas: true, armadura: false, terreno: false, envelope: true },
   estilo3d: 'SOMBREADO',
   estiloPlanta: 'TECNICA',
   fase: 'TUDO',
+  disciplinas: ESTADOS_PADRAO,
 };
 
 export interface TemplateDeVista {
@@ -95,6 +99,8 @@ export function configuracaoDaColuna(raw: unknown): ConfiguracaoDeVista {
     estilo3d: ESTILOS_3D.includes(o.estilo3d as Estilo3d) ? (o.estilo3d as Estilo3d) : CONFIGURACAO_PADRAO.estilo3d,
     estiloPlanta: ESTILOS_DA_PLANTA.includes(o.estiloPlanta as EstiloDaPlanta) ? (o.estiloPlanta as EstiloDaPlanta) : CONFIGURACAO_PADRAO.estiloPlanta,
     fase: FILTROS_DE_FASE.includes(o.fase as FiltroDeFase) ? (o.fase as FiltroDeFase) : CONFIGURACAO_PADRAO.fase,
+    // Template de antes das camadas: o que ele dizia da elétrica vale como padrão.
+    disciplinas: sanearEstados(o.disciplinas, estadosDasChavesAntigas({ iluminacao: p.eletricaIluminacao, forca: p.eletricaForca })),
   };
 }
 
@@ -113,10 +119,10 @@ const ROTULO_PLANTA: Record<keyof CamadasDaPlanta, string> = {
   envelope: 'Envelope construtivo',
   cotaAltoContraste: 'Cota em alto contraste',
   mobiliario: 'Mobiliário mínimo',
-  eletricaIluminacao: 'Elétrica — iluminação',
-  eletricaForca: 'Elétrica — tomadas e força',
 };
 const ROTULO_3D: Record<keyof Camadas3d, string> = { laje: 'Laje (3D)', arestas: 'Arestas (3D)', armadura: 'Armadura (3D)', terreno: 'Terreno (3D)', envelope: 'Envelope (3D)' };
+
+const VERBO_DO_ESTADO: Record<EstadoDaCamada, string> = { VISIVEL: 'mostrar', ATENUADA: 'meio-tom', OCULTA: 'ocultar' };
 
 /** O que muda de `de` para `para`, em frases curtas — a prévia antes de aplicar. */
 export function diferencas(de: ConfiguracaoDeVista, para: ConfiguracaoDeVista): string[] {
@@ -131,6 +137,9 @@ export function diferencas(de: ConfiguracaoDeVista, para: ConfiguracaoDeVista): 
   if (de.estilo3d !== para.estilo3d) out.push(`Estilo 3D: ${ROTULO_DO_ESTILO_3D[para.estilo3d]}`);
   if (de.estiloPlanta !== para.estiloPlanta) out.push(`Planta: ${ROTULO_DO_ESTILO_DA_PLANTA[para.estiloPlanta]}`);
   if (de.fase !== para.fase) out.push(`Fase: ${ROTULO_DO_FILTRO_DE_FASE[para.fase]}`);
+  for (const c of CAMADAS) {
+    if (de.disciplinas[c] !== para.disciplinas[c]) out.push(`Camada ${ROTULO_DA_CAMADA[c]}: ${VERBO_DO_ESTADO[para.disciplinas[c]]}`);
+  }
   return out;
 }
 
@@ -142,7 +151,7 @@ export function mesmaConfiguracao(a: ConfiguracaoDeVista, b: ConfiguracaoDeVista
 export const TEMPLATES_DE_FABRICA: readonly TemplateDeVista[] = [
   { id: 'fab:apresentacao', organizationId: '', nome: 'Apresentação', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, medidas: false, cotas: false, camadas: false, circuitos: false, mobiliario: true, grade: false }, modoDeCor: 'TIPO_DE_AMBIENTE', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: true, arestas: false }, estilo3d: 'SOMBREADO' } },
   { id: 'fab:executivo', organizationId: '', nome: 'Executivo (cotas)', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, medidas: true, cotas: true, cotaInterna: true, camadas: true, preenchimento: false, grade: true }, modoDeCor: 'NENHUM', estilo3d: 'LINHA_OCULTA' } },
-  { id: 'fab:instalacoes', organizationId: '', nome: 'Instalações', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, circuitos: true, preenchimento: false, rotulos: true }, modoDeCor: 'NENHUM', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: false }, estilo3d: 'TRANSPARENTE' } },
+  { id: 'fab:instalacoes', organizationId: '', nome: 'Instalações', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, circuitos: true, preenchimento: false, rotulos: true }, modoDeCor: 'NENHUM', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: false }, estilo3d: 'TRANSPARENTE', disciplinas: { ...ESTADOS_PADRAO, ARQUITETURA: 'ATENUADA', ESTRUTURA: 'ATENUADA', TERRENO: 'OCULTA' } } },
   { id: 'fab:comercial', organizationId: '', nome: 'Comercial (unidades)', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, grade: false, medidas: false, cotas: false }, modoDeCor: 'UNIDADE', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: true }, estilo3d: 'SOMBREADO' } },
   // E8.4: a planta de venda — sem grade, sem medida, sem cota, sem circuito; pisos por material e mobiliário.
   { id: 'fab:humanizada', organizationId: '', nome: 'Humanizada (venda)', deFabrica: true, active: true, config: { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, grade: false, medidas: false, cotas: false, cotaInterna: false, camadas: false, circuitos: false, preenchimento: true, rotulos: true }, modoDeCor: 'NENHUM', vista3d: { ...CONFIGURACAO_PADRAO.vista3d, laje: true }, estilo3d: 'SOMBREADO', estiloPlanta: 'HUMANIZADA' } },

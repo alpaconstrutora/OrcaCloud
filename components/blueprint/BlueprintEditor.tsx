@@ -31,7 +31,6 @@ import {
   MessageSquare,
   MessagesSquare,
   PenTool,
-  Lightbulb,
   Plug,
   Split,
   Table2,
@@ -500,8 +499,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
-import { idsForaDaVistaEletrica } from '../../utils/blueprintRecorteEletrico';
-import { idsDaRedeDeIncendio } from '../../utils/blueprintSimbolosIncendio';
+import { classificarPecas, estadoDoOverlay, estadosDasChavesAntigas, idsPorEstado, sanearEstados, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -952,6 +950,10 @@ const PADRAO_ESTRUTURAL: Record<StructuralKind, MedidasEstruturais> = {
  */
 const SECOES_DO_PAINEL = [
   { id: 'pavimentos', rotulo: 'Pavimentos', naVista: true, no3d: false },
+  // CAMADAS POR DISCIPLINA (04/10/2026): na planta e no 3D — os dois desenhos
+  // que leem o conjunto de ocultos. Elevação e corte não o leem (têm os
+  // toggles próprios da vista), então a seção não aparece lá.
+  { id: 'camadas', rotulo: 'Camadas', naVista: false, no3d: true },
   // Antes de "Ambientes" porque é a ordem do trabalho e a do vocabulário: aqui
   // está o que se DESENHA, ali o que a topologia DERIVA do desenho.
   { id: 'componentes', rotulo: 'Componentes', naVista: false, no3d: true },
@@ -978,6 +980,27 @@ type SecaoDoPainel = (typeof SECOES_DO_PAINEL)[number]['id'];
  * PROXIMO nome de quadra: A -> B -> ... -> Z -> AA. Quadra costuma ser letra no
  * Brasil; se o usuario escreveu numero ("01"), a sequencia segue em numero.
  */
+/**
+ * O estado inicial das CAMADAS POR DISCIPLINA (04/10/2026) para quem ainda não
+ * tem `blueprint:camadasPorDisciplina:v1`: as três chaves do Exibir que elas
+ * substituíram (elétrica iluminação/força, rede de incêndio). Lido uma vez.
+ */
+function estadosIniciaisDasCamadas(): EstadosDasCamadas {
+  const ler = (k: string): unknown => {
+    try {
+      const v = typeof window === 'undefined' ? null : localStorage.getItem(k);
+      return v == null ? undefined : JSON.parse(v);
+    } catch {
+      return undefined;
+    }
+  };
+  return estadosDasChavesAntigas({
+    iluminacao: ler('blueprint:mostrarEletricaIluminacao'),
+    forca: ler('blueprint:mostrarEletricaForca'),
+    incendio: ler('blueprint:mostrarIncendio'),
+  });
+}
+
 function proximaQuadra(atual: string): string {
   const t = atual.trim();
   if (/^\d+$/.test(t)) return proximoNumero(t);
@@ -1251,6 +1274,7 @@ const SECOES_NO_3D = new Set<SecaoDoPainel>(
  */
 const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   pavimentos: true,
+  camadas: true,
   // O editor também a abre sozinho ao selecionar um componente.
   componentes: true,
   ambientes: true,
@@ -2950,11 +2974,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** MOBILIÁRIO (E6.3): sugestão por ambiente do pavimento ativo; overlay opcional no canvas. */
   const [hipotesesDeMobiliario, setHipotesesDeMobiliario] = usePersistedState<HipotesesDeMobiliario>('blueprint:mobiliario', HIPOTESES_MOBILIARIO_PADRAO);
   const [mostrarMobiliario, setMostrarMobiliario] = usePersistedState('blueprint:mostrarMobiliario', false);
-  // E5.1: a elétrica por tipo de ponto na vista — ligadas por padrão.
-  const [mostrarEletricaIluminacao, setMostrarEletricaIluminacao] = usePersistedState('blueprint:mostrarEletricaIluminacao', true);
-  const [mostrarEletricaForca, setMostrarEletricaForca] = usePersistedState('blueprint:mostrarEletricaForca', true);
-  // Incêndio E1.3: a rede de incêndio inteira na vista — ligada por padrão.
-  const [mostrarIncendio, setMostrarIncendio] = usePersistedState('blueprint:mostrarIncendio', true);
+  /**
+   * CAMADAS POR DISCIPLINA (04/10/2026): visível / meio-tom / oculta por
+   * camada — ver `utils/blueprintCamadasPorDisciplina.ts`. Substituem os três
+   * toggles do Exibir (elétrica iluminação/força E5.1, rede de incêndio E1.3),
+   * cujas chaves antigas dão o estado inicial de quem já os tinha mexido.
+   * Persistido por NOME de camada — seguro, ao contrário de ids de peça.
+   */
+  const [padraoDasCamadas] = useState(estadosIniciaisDasCamadas);
+  const [camadasSalvas, setCamadasSalvas] = usePersistedState<EstadosDasCamadas>('blueprint:camadasPorDisciplina:v1', padraoDasCamadas);
+  const camadas = useMemo(() => sanearEstados(camadasSalvas), [camadasSalvas]);
+  const classificacaoDasPecas = useMemo(() => classificarPecas(editor.model), [editor.model]);
+  const idsDasCamadas = useMemo(() => idsPorEstado(classificacaoDasPecas, camadas), [classificacaoDasPecas, camadas]);
+  /** Overlays que não são peça (curvas, armadura, marcas da rede) desligam com o grupo oculto. */
+  const terrenoAVista = estadoDoOverlay('TERRENO', camadas) !== 'OCULTA';
+  const arquiteturaAVista = estadoDoOverlay('ARQUITETURA', camadas) !== 'OCULTA';
+  const estruturaAVista = estadoDoOverlay('ESTRUTURA', camadas) !== 'OCULTA';
+  const eletricaAVista = estadoDoOverlay('ELETRICA', camadas) !== 'OCULTA';
   const mobiliarioDoNivel = useMemo(() => (levelId ? mobiliarNivel(editor.model, levelId, hipotesesDeMobiliario) : []), [editor.model, levelId, hipotesesDeMobiliario]);
   const mobiliarioParaOCanvas = useMemo(
     () =>
@@ -3302,16 +3338,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         envelope: mostrarEnvelope,
         cotaAltoContraste,
         mobiliario: mostrarMobiliario,
-        eletricaIluminacao: mostrarEletricaIluminacao,
-        eletricaForca: mostrarEletricaForca,
       },
       modoDeCor,
       vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
       estilo3d,
       estiloPlanta,
       fase: filtroDeFase,
+      disciplinas: camadas,
     }),
-    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEletricaIluminacao, mostrarEletricaForca, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
+    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, camadas, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
@@ -3329,8 +3364,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       setMostrarEnvelope(c.planta.envelope);
       setCotaAltoContraste(c.planta.cotaAltoContraste);
       setMostrarMobiliario(c.planta.mobiliario);
-      setMostrarEletricaIluminacao(c.planta.eletricaIluminacao);
-      setMostrarEletricaForca(c.planta.eletricaForca);
+      setCamadasSalvas(c.disciplinas);
       setModoDeCor(c.modoDeCor);
       setCoresPorAmbiente(c.modoDeCor === 'AMBIENTE');
       setMostrarLaje3d(c.vista3d.laje);
@@ -4170,10 +4204,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const ocultosNoCanvas = useMemo(() => {
     // FASES DE REFORMA (E10.2): o filtro da vista esconde o que não é daquela fase.
     const daFase = idsOcultosPelaFase(editor.model, filtroDeFase);
-    // E5.1: a elétrica por tipo de ponto — some do desenho E do clique (entra pelo mesmo conjunto).
-    for (const id of idsForaDaVistaEletrica(editor.model, { iluminacao: mostrarEletricaIluminacao, forca: mostrarEletricaForca })) daFase.add(id);
-    // Incêndio E1.3: a rede de incêndio some do desenho, do 3D e do clique pelo mesmo conjunto.
-    if (!mostrarIncendio) for (const id of idsDaRedeDeIncendio(editor.model)) daFase.add(id);
+    // CAMADAS POR DISCIPLINA: a camada oculta some do desenho E do clique pelo mesmo conjunto.
+    for (const id of idsDasCamadas.ocultos) daFase.add(id);
     // ETAPAS (P2): o que não existe na etapa em vista.
     for (const id of vistaDaEtapaAtual?.ocultos ?? []) daFase.add(id);
     if (!vistaDePlanta) {
@@ -4185,7 +4217,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     for (const id of ocultosNoDesenho) daVista.add(id);
     for (const id of daFase) daVista.add(id);
     return daVista;
-  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual, mostrarEletricaIluminacao, mostrarEletricaForca, mostrarIncendio]);
+  }, [ocultosNoDesenho, vistaDePlanta, editor.model, nivelDaVistaDePlanta, filtroDeFase, vistaDaEtapaAtual, idsDasCamadas]);
+  /**
+   * O 3D esconde o olho do usuário + as camadas ocultas. Até 04/10/2026 recebia
+   * só o olho (`ocultosNoDesenho`): os toggles de elétrica e incêndio diziam
+   * "no desenho e no 3D" e não sumiam no 3D. Fase, etapa e recorte de vista
+   * continuam fora daqui — são da planta.
+   */
+  const ocultosNo3d = useMemo(() => {
+    if (idsDasCamadas.ocultos.size === 0) return ocultosNoDesenho;
+    const s = new Set(idsDasCamadas.ocultos);
+    for (const id of ocultosNoDesenho) s.add(id);
+    return s;
+  }, [ocultosNoDesenho, idsDasCamadas]);
   /** id → fase (só existente/a demolir), para o canvas colorir; e a fase da seleção, para os botões do ribbon. Com etapa em vista, o status é o DERIVADO dela. */
   const fasesDoDesenho = useMemo(() => vistaDaEtapaAtual?.fases ?? fasePorId(editor.model), [editor.model, vistaDaEtapaAtual]);
   const etapasDoEstudo = useMemo(() => etapasOrdenadas(editor.model), [editor.model]);
@@ -12597,31 +12641,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                         'Escreve o circuito ao lado de cada ponto elétrico, e marca com um anel âmbar o ponto que ainda não está em circuito nenhum. É como uma prancha elétrica identifica a divisão — sem isto, saber a que circuito uma tomada pertence exige selecionar uma por uma.',
                     },
                     {
-                      chave: 'eletricaIluminacao',
-                      rotulo: 'Elétrica — iluminação',
-                      icone: Lightbulb,
-                      ligado: mostrarEletricaIluminacao,
-                      alternar: () => setMostrarEletricaIluminacao((v) => !v),
+                      chave: 'camadasPorDisciplina',
+                      rotulo: 'Camadas por disciplina',
+                      icone: Layers,
+                      ligado: secoes.camadas,
+                      alternar: () => alternarSecao('camadas'),
                       ajuda:
-                        'Luminárias, interruptores e os eletrodutos que só os servem. Desligar deixa só a planta de tomadas e força — como a prancha separa. Quadros, caixas de passagem e eletrodutos compartilhados ficam sempre.',
-                    },
-                    {
-                      chave: 'eletricaForca',
-                      rotulo: 'Elétrica — tomadas e força',
-                      icone: Plug,
-                      ligado: mostrarEletricaForca,
-                      alternar: () => setMostrarEletricaForca((v) => !v),
-                      ajuda:
-                        'Tomadas, TUE, ligação direta, equipamentos, dados e entrada, com os eletrodutos que só os servem. Desligar deixa só a planta de iluminação. Quadros, caixas de passagem e eletrodutos compartilhados ficam sempre.',
-                    },
-                    {
-                      chave: 'incendio',
-                      rotulo: 'Rede de incêndio',
-                      icone: Flame,
-                      ligado: mostrarIncendio,
-                      alternar: () => setMostrarIncendio((v) => !v),
-                      ajuda:
-                        'Tubulação de incêndio, hidrantes, mangotinhos, sprinklers, VGA e bombas — no desenho e no 3D. Desligar tira a rede de combate da vista para trabalhar nas outras instalações; não apaga nada.',
+                        'Abre a seção Camadas no painel lateral: Arquitetura, Estrutura, Terreno, Elétrica (iluminação / força), Hidráulica (água fria, quente, esgoto, pluvial), Incêndio e Mecânica — mostrar, meio-tom, ocultar e isolar, no desenho e no 3D. A elétrica por tipo de ponto e a rede de incêndio, que moravam aqui, estão lá.',
                     },
                     {
                       chave: 'nomes',
@@ -13608,21 +13634,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
               mostrarRotulosDeRede={mostrarRotulosDeRede3d}
               estilo={estilo3d}
-              armadura={mostrarArmadura3d ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
+              armadura={mostrarArmadura3d && estruturaAVista ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
               // A guarda vive aqui, e não só no menu: o estado é persistido, e
               // ligar o terreno num estudo que tem lote e depois abrir outro que
               // não tem deixaria a combinação gravada no localStorage.
-              mostrarTerreno={mostrarTerreno3d && temTerreno}
-              envelope={mostrarEnvelope3d && temTerreno ? envelope3d?.prismas : undefined}
-              massa={mostrarMassa3d && massa3d.length > 0 ? massa3d : undefined}
+              // CAMADAS: com o Terreno oculto, relevo, envelope e massa saem juntos (não são peça do modelo).
+              mostrarTerreno={mostrarTerreno3d && temTerreno && terrenoAVista}
+              envelope={mostrarEnvelope3d && temTerreno && terrenoAVista ? envelope3d?.prismas : undefined}
+              massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3d : undefined}
               sol={solNo3d}
               entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
-              relevo={mostrarTerreno3d ? relevo3d : null}
+              relevo={mostrarTerreno3d && terrenoAVista ? relevo3d : null}
               relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
-              alturaDoChao={mostrarTerreno3d ? alturaDoChao3d : undefined}
-              extrasDoRelevo={mostrarTerreno3d ? extrasDoRelevo3d : null}
+              alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
+              extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevo3d : null}
               extrasChave={extrasDoRelevo3dChave}
-              ocultos={ocultosNoDesenho}
+              ocultos={ocultosNo3d}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
               // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
               // uma parede no 3D e voltar para a planta tem de mostrar a mesma
@@ -13653,7 +13680,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               pressoesDaAgua={pressoesDaAgua}
               marcasDoCalculo={coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio}
               encaixesAtivos={encaixesAtivos}
-              mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos}
+              mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos && eletricaAVista}
               model={editor.model}
               tool={vistaDePlanta ? 'selecionar' : editor.tool}
               levelId={nivelDaVistaDePlanta ? nivelDaVistaDePlanta.id : levelId}
@@ -13701,37 +13728,37 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               onJuntarPontas={juntarPontas}
               ortogonal={ortogonal}
-              mostrarMedidasParedes={ajusteDaVista ? false : mostrarMedidas}
+              mostrarMedidasParedes={ajusteDaVista ? false : (mostrarMedidas && arquiteturaAVista)}
               // Também nas vistas (Situação, Implantação): é nelas que o lote e a massa mais importam.
-              mostrarMedidasLoteMassa={mostrarMedidasLoteMassa}
-              mostrarCamadasParedes={ajusteDaVista ? false : mostrarCamadas}
-              mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : mostrarCotas}
-              mostrarCotaInterna={ajusteDaVista ? false : mostrarCotaInterna}
-              mostrarRotulosAmbiente={ajusteDaVista ? vistaDePlanta === 'departamentos' : mostrarRotulos}
+              mostrarMedidasLoteMassa={(mostrarMedidasLoteMassa && terrenoAVista)}
+              mostrarCamadasParedes={ajusteDaVista ? false : (mostrarCamadas && arquiteturaAVista)}
+              mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : (mostrarCotas && arquiteturaAVista)}
+              mostrarCotaInterna={ajusteDaVista ? false : (mostrarCotaInterna && arquiteturaAVista)}
+              mostrarRotulosAmbiente={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarRotulos && arquiteturaAVista)}
               rotulosDeAmbiente={rotulosDeAmbiente}
               ambientesComForro={plantaDeForro?.comForro}
               etiquetasDeAbertura={etiquetasDeAbertura}
               paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
-              mobiliario={mobiliarioParaOCanvas}
+              mobiliario={arquiteturaAVista ? mobiliarioParaOCanvas : undefined}
               mostrarGrade={ajusteDaVista ? false : mostrarGrade}
-              mostrarPreenchimentoAmbientes={ajusteDaVista ? vistaDePlanta === 'departamentos' : mostrarPreenchimento}
-              mostrarPreenchimentoTerreno={mostrarPreenchimentoTerreno}
-              curvasDeNivel={mostrarCurvasDeNivel ? topografia.selecionada?.curvas : undefined}
+              mostrarPreenchimentoAmbientes={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarPreenchimento && arquiteturaAVista)}
+              mostrarPreenchimentoTerreno={(mostrarPreenchimentoTerreno && terrenoAVista)}
+              curvasDeNivel={(mostrarCurvasDeNivel && terrenoAVista) ? topografia.selecionada?.curvas : undefined}
               // Os pontos aparecem enquanto se digita, só na fonte que os usa:
               // com o DEM escolhido, pontos antigos na tela seriam ruído.
               pontosCotados={
-                mostrarCurvasDeNivel && topografia.fonte.tipo === 'LOCAL'
+                (mostrarCurvasDeNivel && terrenoAVista) && topografia.fonte.tipo === 'LOCAL'
                   ? topografia.pontosCotados
                   : undefined
               }
-              feicoesDoLevantamento={mostrarFeicoes && topografia.fonte.tipo === 'LOCAL' ? feicoesNoCanvas : null}
+              feicoesDoLevantamento={(mostrarFeicoes && terrenoAVista) && topografia.fonte.tipo === 'LOCAL' ? feicoesNoCanvas : null}
               declividade={
-                mostrarDeclividade && declividade && topografia.selecionada
+                (mostrarDeclividade && terrenoAVista) && declividade && topografia.selecionada
                   ? { grade: topografia.selecionada.grade, faixaDaCelula: declividade.faixaDaCelula }
                   : null
               }
               terraplenagem={
-                mostrarTerraplenagem && terraplenagemCalc && topografia.selecionada
+                (mostrarTerraplenagem && terrenoAVista) && terraplenagemCalc && topografia.selecionada
                   ? {
                       grade: topografia.selecionada.grade,
                       ladoDaCelula: terraplenagemCalc.ladoDaCelula,
@@ -13740,7 +13767,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   : null
               }
               drenagem={
-                mostrarCurvasDeNivel && terraplenagem.drenagem.length > 0
+                (mostrarCurvasDeNivel && terrenoAVista) && terraplenagem.drenagem.length > 0
                   ? { linhas: terraplenagem.drenagem, ativa: drenagemAtiva, atende: atendeDrenagem }
                   : null
               }
@@ -13749,7 +13776,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 if (id) setDrenagemAtiva(id);
                 editor.setTool('selecionar');
               }}
-              eixosDeVia={viasDeProjeto.length > 0 ? eixosNoCanvas : null}
+              eixosDeVia={viasDeProjeto.length > 0 && terrenoAVista ? eixosNoCanvas : null}
               onEixoDeViaTracado={(pontos) => {
                 const id = vias.adicionar(pontos);
                 if (id) setRelatorio('vias');
@@ -13757,9 +13784,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               }}
               hipsometria={
                 // A3: a mancha de inundação usa a mesma pintura por célula, em azul, e passa na frente.
-                manchaDeCheia && topografia.selecionada
+                manchaDeCheia && terrenoAVista && topografia.selecionada
                   ? { grade: topografia.selecionada.grade, classeDaCelula: manchaDeCheia.classeDaCelula, cores: ['#2563eb'] }
-                  : mostrarHipsometria && hipsometria && topografia.selecionada
+                  : (mostrarHipsometria && terrenoAVista) && hipsometria && topografia.selecionada
                   ? {
                       grade: topografia.selecionada.grade,
                       classeDaCelula: hipsometria.classeDaCelula,
@@ -13767,16 +13794,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     }
                   : null
               }
-              corDaCurva={mostrarCurvasDeNivel && curvasPelaCota && topografia.selecionada ? corDaCota : null}
+              corDaCurva={(mostrarCurvasDeNivel && terrenoAVista) && curvasPelaCota && topografia.selecionada ? corDaCota : null}
               nosDaGrade={
-                mostrarNosDaGrade && topografia.selecionada ? { grade: topografia.selecionada.grade, cor: corDaCota } : null
+                (mostrarNosDaGrade && terrenoAVista) && topografia.selecionada ? { grade: topografia.selecionada.grade, cor: corDaCota } : null
               }
-              curvaEmDestaque={mostrarCurvasDeNivel ? curvaEmDestaque : null}
+              curvaEmDestaque={(mostrarCurvasDeNivel && terrenoAVista) ? curvaEmDestaque : null}
               centroDeCargas={centroNaPlanta}
               onClicarCurva={(indice, ponto) =>
                 setCurvaEmDestaque(indice === null ? null : { indice, ponto })
               }
-              linhasDoPerfil={mostrarCurvasDeNivel ? linhasDoPerfil : null}
+              linhasDoPerfil={(mostrarCurvasDeNivel && terrenoAVista) ? linhasDoPerfil : null}
               linhaDoPerfilAtiva={usaLinhaDesenhada ? indiceDaLinha : null}
               onPerfilTracado={(pontos) => {
                 const indice = terraplenagem.adicionarLinhaDoPerfil(pontos);
@@ -13790,19 +13817,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // Só colore se houver preenchimento. A guarda vive aqui, e não só
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.
-              coresPorAmbiente={mostrarPreenchimento && modoDeCor === 'AMBIENTE'}
-              coresDosAmbientes={vistaDePlanta === 'departamentos' || (mostrarPreenchimento && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined}
+              coresPorAmbiente={(mostrarPreenchimento && arquiteturaAVista) && modoDeCor === 'AMBIENTE'}
+              coresDosAmbientes={vistaDePlanta === 'departamentos' || ((mostrarPreenchimento && arquiteturaAVista) && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined}
               humanizada={humanizada}
               fases={fasesDoDesenho}
               selecoesRemotas={selecoesRemotas}
-              pisosHumanizados={mostrarPreenchimento ? pisosDoDesenho : undefined}
+              pisosHumanizados={(mostrarPreenchimento && arquiteturaAVista) ? pisosDoDesenho : undefined}
               vegetacao={vegetacaoDoDesenho}
               cotaAltoContraste={cotaAltoContraste}
               passoMoverMm={passoMover === 'grade' ? null : passoMover}
               onMoveVertex={moverPonta}
               envelope={envelope?.valido ? envelope.anel : []}
               envelopePecas={envelope?.valido ? envelope.pecas : undefined}
-              mostrarEnvelope={ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope}
+              mostrarEnvelope={(ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope) && terrenoAVista}
               onAddLimite={adicionarLimite}
               kindDaDivisa={kindDaDivisa}
               faixasRestritas={faixasRestritasDoNivel}

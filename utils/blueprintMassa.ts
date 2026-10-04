@@ -632,63 +632,6 @@ export function rotuloDoBloco(b: Pick<Bloco, 'nome' | 'pavimentos' | 'peDireitoM
   return `${b.nome} · ${b.pavimentos} pav · ${fmt(altura)} m${sub}`;
 }
 
-/** Um afastamento do bloco até a divisa do lote: do meio do lado do bloco até onde a perpendicular encontra a divisa. */
-export interface AfastamentoDoBloco {
-  de: Point;
-  ate: Point;
-  distanciaMm: number;
-}
-
-/**
- * OS AFASTAMENTOS DO BLOCO (04/10/2026) — *"o desenho gerado através do menu terreno Lote e massa não tem medidas"*.
- *
- * Para cada lado do bloco, a perpendicular para FORA (sentido pelo `signedArea`) a partir do meio do lado, até a
- * primeira divisa do lote que ela cruza. É a distância que se confere contra o recuo da zona — frente, laterais,
- * fundos. Lado com o meio fora do lote, ou cuja perpendicular não volta a cruzar o lote, fica sem afastamento; lado
- * encostado na divisa (menos de 5 mm) também — "0,00 m" em cima da linha só atrapalha a leitura.
- *
- * Conta em ponto flutuante (não pelo `intersectSegments` do kernel, que trabalha em mm inteiro e com tolerância de
- * topologia): aqui só importa a distância, e o arredondamento é o do rótulo.
- */
-export function afastamentosDoBloco(pontos: Point[], anelDoLote: Point[] | null): AfastamentoDoBloco[] {
-  if (!anelDoLote || anelDoLote.length < 3 || pontos.length < 3) return [];
-  const horario = signedArea(pontos) < 0;
-  const n = pontos.length;
-  const m = anelDoLote.length;
-  const saida: AfastamentoDoBloco[] = [];
-  for (let i = 0; i < n; i += 1) {
-    const a = pontos[i];
-    const b = pontos[(i + 1) % n];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const comp = Math.hypot(dx, dy);
-    if (comp < 1) continue;
-    // Normal externa: num anel anti-horário o interior fica à esquerda do sentido do lado; num horário, à direita.
-    const nx = (horario ? -dy : dy) / comp;
-    const ny = (horario ? dx : -dx) / comp;
-    const meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    if (!pointInPolygon(anelDoLote, meio)) continue;
-    let melhor: number | null = null;
-    for (let k = 0; k < m; k += 1) {
-      const p = anelDoLote[k];
-      const q = anelDoLote[(k + 1) % m];
-      const ex = q.x - p.x;
-      const ey = q.y - p.y;
-      // meio + t·n = p + s·e  →  resolve t (ao longo da normal) e s (ao longo da divisa).
-      const det = nx * -ey - ny * -ex;
-      if (Math.abs(det) < 1e-9) continue;
-      const wx = p.x - meio.x;
-      const wy = p.y - meio.y;
-      const t = (wx * -ey - wy * -ex) / det;
-      const s = (nx * wy - ny * wx) / det;
-      if (t > 0 && s >= 0 && s <= 1 && (melhor === null || t < melhor)) melhor = t;
-    }
-    if (melhor === null || melhor < 5) continue;
-    saida.push({ de: meio, ate: { x: meio.x + nx * melhor, y: meio.y + ny * melhor }, distanciaMm: Math.round(melhor) });
-  }
-  return saida;
-}
-
 /** Nome sugerido para o próximo bloco: "Bloco 1", "Bloco 2"… pelo primeiro livre. */
 export function proximoNomeDeBloco(model: BlueprintModel, prefixo = 'Bloco'): string {
   const usados = new Set((model.blocos ?? []).map((b) => b.nome));

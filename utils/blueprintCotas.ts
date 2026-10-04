@@ -735,3 +735,61 @@ export function cotasDeAmbiente(model: BlueprintModel, level: Level): CotaDeAmbi
   return saida;
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CADEIAS DO LOTE (04/10/2026)
+//
+// *"as medidas devem estar nas laterais externas da planta e não dentro da
+// planta. veja exemplo de uma planta baixa"* — e o exemplo é a prancha de
+// sempre: por FORA da divisa, uma linha com o lado repartido pelo que está
+// implantado (afastamento | edificação | afastamento) e, mais para fora, o total
+// do lado. Nada escrito dentro do lote.
+//
+// A mesma estrutura das cadeias das paredes (`LadoDoContorno` + `pontoDaCota`),
+// para o canvas desenhar com o MESMO traço e a normal para fora vir da mesma
+// conta. A diferença está nas quebras: aqui são pontos de FORA do lado (os
+// vértices dos blocos e do contorno das paredes), projetados nele.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CadeiasDoLote {
+  lado: LadoDoContorno;
+  /** O lado inteiro, de vértice a vértice do lote. */
+  total: SegmentoDeCota;
+  /** O lado repartido pelas quebras; vazio quando nada o reparte (aí só o total). */
+  parcial: SegmentoDeCota[];
+}
+
+/** Abaixo disto duas quebras são a mesma (e uma quebra colada no canto não reparte nada). */
+const QUEBRA_MINIMA_MM = 5;
+
+/**
+ * As cadeias de cota de um contorno (o lote, ou um bloco quando não há lote).
+ *
+ * O anel é posto em sentido ANTI-HORÁRIO aqui — é a premissa de
+ * `referencialDoLado` para a normal apontar para FORA (ver o aviso lá). As
+ * `quebras` são projetadas em cada lado; as que caem dentro dele (longe dos
+ * cantos) repartem a cadeia parcial. Vértices colineares do próprio contorno
+ * (um marco no meio de um lado reto) também quebram.
+ */
+export function cadeiasDoLote(anel: Point[], quebras: Point[]): CadeiasDoLote[] {
+  if (anel.length < 3) return [];
+  const antiHorario = signedArea(anel) < 0 ? [...anel].reverse() : anel;
+  const cadeias: CadeiasDoLote[] = [];
+  for (const lado of ladosDoContorno(antiHorario)) {
+    const { ux, uy } = referencialDoLado(lado);
+    const comp = Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y);
+    if (comp < 1) continue;
+    const t = (p: Point) => (p.x - lado.a.x) * ux + (p.y - lado.a.y) * uy;
+    const ts = [...quebras, ...lado.intermediarios]
+      .map(t)
+      .filter((v) => v > QUEBRA_MINIMA_MM && v < comp - QUEBRA_MINIMA_MM)
+      .sort((x, y) => x - y)
+      .filter((v, i, arr) => i === 0 || v - arr[i - 1] >= QUEBRA_MINIMA_MM);
+    const total: SegmentoDeCota = { de: 0, ate: comp, rotulo: rotuloDeCota(comp) };
+    const pontos = [0, ...ts, comp];
+    const parcial: SegmentoDeCota[] =
+      ts.length === 0 ? [] : pontos.slice(0, -1).map((de, i) => ({ de, ate: pontos[i + 1], rotulo: rotuloDeCota(pontos[i + 1] - de) }));
+    cadeias.push({ lado, total, parcial });
+  }
+  return cadeias;
+}

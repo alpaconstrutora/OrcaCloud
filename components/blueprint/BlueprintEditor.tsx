@@ -2018,7 +2018,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   /**
    * MEDIDAS DO LOTE E DA MASSA (04/10/2026): *"o desenho gerado através do menu terreno Lote e massa não tem
-   * medidas"*. Lados do lote, lados dos blocos e afastamentos — poucas etiquetas, então nasce LIGADO.
+   * medidas"*; e, no mesmo dia, *"as medidas devem estar nas laterais externas da planta e não dentro da planta"*:
+   * cadeias de cota por fora da divisa (lado repartido pela massa + total). Poucas linhas, então nasce LIGADO.
    */
   const [mostrarMedidasLoteMassa, setMostrarMedidasLoteMassa] = usePersistedState(
     'blueprint:mostrarMedidasLoteMassa',
@@ -12412,7 +12413,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                             icone: LandPlot,
                             ligado: mostrarMedidasLoteMassa,
                             alternar: () => setMostrarMedidasLoteMassa((v) => !v),
-                            ajuda: 'Os lados do lote e dos blocos e o afastamento de cada bloco até as divisas — o mesmo item da Planta.',
+                            ajuda: 'Cotas por fora da divisa: cada lado repartido pela massa e o total do lado — o mesmo item da Planta.',
                           },
                         ]
                       : [
@@ -12556,7 +12557,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       desabilitado: !limitesDoNivel.some((b) => b.kind === 'TERRENO') && !(editor.model.blocos ?? []).some((b) => b.levelId === levelId),
                       ajuda:
                         limitesDoNivel.some((b) => b.kind === 'TERRENO') || (editor.model.blocos ?? []).some((b) => b.levelId === levelId)
-                          ? 'O comprimento de cada lado do lote (com o papel: "Frente 12,00 m"), de cada lado dos blocos de massa e o afastamento de cada bloco até as divisas — por fora do contorno.'
+                          ? 'Cotas por FORA da divisa, como na prancha: perto do lote, cada lado repartido pela massa (afastamento | bloco | afastamento); mais para fora, o total do lado. Sem lote fechado, a cota vai em volta do bloco.'
                           : 'Sem lote nem bloco neste pavimento: desenhe o lote (Terreno › Terreno ou Digitar) ou um bloco (Terreno › Massa › Bloco).',
                     },
                     {

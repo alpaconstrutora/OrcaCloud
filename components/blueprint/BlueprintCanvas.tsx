@@ -84,7 +84,7 @@ import {
 } from '../../utils/blueprintUnderlay';
 import { anelDoTerreno, medirTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import { faixaDaVia, calcadasDaVia, centroide, areaEmM2 } from '../../utils/blueprintLoteamento';
-import { afastamentosDoBloco, COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
+import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
 
 /** Identidade estável para o padrão do prop (um `new Set()` no parâmetro redesenharia a cada render). */
 const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
@@ -104,6 +104,7 @@ import {
   AFASTAMENTO_COTA,
   ambientesNaParede,
   cotasDeAmbiente,
+  cadeiasDoLote,
   cadeiasPorLado,
   pontoDaCota,
   type LadoDoContorno,
@@ -1029,9 +1030,9 @@ interface Props {
   /** Escreve o comprimento de CADA parede junto dela, como uma cota de planta. */
   mostrarMedidasParedes?: boolean;
   /**
-   * MEDIDAS DO LOTE E DA MASSA (04/10/2026): os lados do lote, os lados de cada bloco e o afastamento de cada
-   * bloco até as divisas. Separado de `mostrarMedidasParedes` porque são poucas etiquetas e são as que o estudo de
-   * massa lê — nasce LIGADO; o das paredes enche a planta e nasce desligado.
+   * COTAS DO LOTE E DA MASSA (04/10/2026): cadeias por FORA da divisa — cada lado repartido pela massa e o total
+   * do lado (`cadeiasDoLote`); sem lote fechado, em volta de cada bloco. Separado de `mostrarMedidasParedes`: são as
+   * cotas que o estudo de massa lê, e nascem LIGADAS; as das paredes enchem a planta e nascem desligadas.
    */
   mostrarMedidasLoteMassa?: boolean;
   /**
@@ -4342,96 +4343,105 @@ export default function BlueprintCanvas({
     // conversão local→mundo e a normal para fora. Aqui só se desenha. É o que
     // mantém tela, PDF e DXF com os MESMOS números: cota que diverge entre o
     // papel e o CAD é pior que cota nenhuma.
-    if (mostrarCotas && cadeiasDeCota.length > 0) {
-      // Afastamento em PIXEL DE TELA, convertido para mm do modelo: a cota tem
-      // de manter a mesma folga em qualquer zoom, senão em zoom afastado ela
-      // encosta na planta e em zoom próximo some da tela.
-      const passoPx = 22;
-      const passoMm = passoPx / vista.escala;
-      const folgaBaseMm = 10 / vista.escala;
+    // O DESENHO DE UMA CADEIA DE COTA — fora do `if` das cadeias das paredes desde 04/10/2026: as cotas do LOTE
+    // (por fora da divisa) usam o mesmo traço, os mesmos tiques e a mesma regra de rótulo.
+    // Afastamento em PIXEL DE TELA, convertido para mm do modelo: a cota tem
+    // de manter a mesma folga em qualquer zoom, senão em zoom afastado ela
+    // encosta na planta e em zoom próximo some da tela.
+    const passoPx = 22;
+    const passoMm = passoPx / vista.escala;
+    const folgaBaseMm = 10 / vista.escala;
 
+    const desenharCadeia = (
+      lado: LadoDoContorno,
+      segmentos: { de: number; ate: number; rotulo: string; vao?: boolean }[],
+      nivelAfastamento: number,
+      /**
+       * Abaixo disto (px) o trecho some inteiro. As cadeias das paredes usam o mínimo das medidas; as do LOTE passam
+       * ~0: na prancha o trecho curto (um afastamento de 1 m em zoom afastado) mantém a linha e os tiques, e só o
+       * número fica de fora quando não cabe — sem a linha, a cadeia parecia não começar no canto do lote.
+       */
+      minimoPx: number = MIN_PX_COTA_PAREDE,
+    ) => {
+      ctx.strokeStyle = corLinhaCota;
+      const afasta = folgaBaseMm + passoMm * nivelAfastamento;
+      for (const seg of segmentos) {
+        const a = paraTela(pontoDaCota(lado, seg.de, afasta) as Point);
+        const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
+        if (Math.hypot(b.x - a.x, b.y - a.y) < minimoPx) continue;
+
+        // O VÃO ganha traço mais forte: numa cadeia de esquadria o que se
+        // procura é onde estão as aberturas, e sem distinção elas se perdem
+        // no meio dos trechos de parede.
+        ctx.lineWidth = seg.vao ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+
+        // Tique a 45° — a marca de fim de cota do desenho de arquitetura.
+        for (const p of [a, b]) {
+          ctx.beginPath();
+          ctx.moveTo(p.x - 3, p.y + 3);
+          ctx.lineTo(p.x + 3, p.y - 3);
+          ctx.stroke();
+        }
+
+        // O RÓTULO SÓ SAI SE COUBER NO TRECHO.
+        //
+        // Cota que não se lê não é cota — e é pior que a ausência dela,
+        // porque suja o desenho fingindo informar. A linha e os tiques FICAM:
+        // eles ainda mostram onde a cadeia quebra.
+        const compPx = Math.hypot(b.x - a.x, b.y - a.y);
+        ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
+        const larguraTexto = ctx.measureText(seg.rotulo).width;
+        if (compPx < larguraTexto + 10) continue;
+
+        // O TEXTO ACOMPANHA O LADO.
+        //
+        // Sem girar, os três níveis da cadeia de um lado VERTICAL caem lado a
+        // lado e leem como um número só — medido no harness: "3,80 6,20 6,20"
+        // numa fileira. Girado, cada nível fica na sua linha de cota, que é a
+        // convenção de prancha e o que também faz o lado OBLÍQUO se ler.
+        //
+        // O ângulo é normalizado para o texto nunca sair de cabeça para
+        // baixo: de pernas para o ar ele é ilegível mesmo estando no lugar.
+        let ang = Math.atan2(b.y - a.y, b.x - a.x);
+        if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
+
+        // ⚠️ O AFASTAMENTO DO RÓTULO É CALCULADO ANTES DE GIRAR.
+        //
+        // Ele saía como `(0, -7)` DEPOIS da rotação, e "para cima" no
+        // referencial girado inverte justamente nos lados em que a
+        // normalização acima soma π. Medido num retângulo: em três lados o
+        // rótulo ficava 7 px para dentro da própria linha de cota e no quarto
+        // ficava 7 px para fora — a mesma família do defeito das Medidas.
+        //
+        // A direção "para fora" vem de dois pontos da MESMA conta de
+        // `pontoDaCota`, um metro afastado do outro: assim ela acompanha o
+        // espelhamento do Y do canvas sem repetir a regra aqui.
+        const tMeio = (seg.de + seg.ate) / 2;
+        const foraPx = paraTela(pontoDaCota(lado, tMeio, afasta + 1000) as Point);
+        const meioPx = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const fx = foraPx.x - meioPx.x;
+        const fy = foraPx.y - meioPx.y;
+        const cf = Math.hypot(fx, fy) || 1;
+
+        ctx.save();
+        // 7 px PARA DENTRO da linha, do lado do desenho — o mesmo lugar em que
+        // o rótulo já caía nos três lados que estavam certos.
+        ctx.translate(meioPx.x - (fx / cf) * 7, meioPx.y - (fy / cf) * 7);
+        ctx.rotate(ang);
+        escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, Math.round(11 * fz), fundoCota);
+        ctx.restore();
+      }
+    };
+
+    if (mostrarCotas && cadeiasDeCota.length > 0) {
       ctx.save();
       ctx.strokeStyle = corLinhaCota;
       ctx.lineWidth = 1;
-
-      const desenharCadeia = (
-        lado: LadoDoContorno,
-        segmentos: { de: number; ate: number; rotulo: string; vao?: boolean }[],
-        nivelAfastamento: number,
-      ) => {
-        const afasta = folgaBaseMm + passoMm * nivelAfastamento;
-        for (const seg of segmentos) {
-          const a = paraTela(pontoDaCota(lado, seg.de, afasta) as Point);
-          const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
-          if (Math.hypot(b.x - a.x, b.y - a.y) < MIN_PX_COTA_PAREDE) continue;
-
-          // O VÃO ganha traço mais forte: numa cadeia de esquadria o que se
-          // procura é onde estão as aberturas, e sem distinção elas se perdem
-          // no meio dos trechos de parede.
-          ctx.lineWidth = seg.vao ? 2 : 1;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-          ctx.lineWidth = 1;
-
-          // Tique a 45° — a marca de fim de cota do desenho de arquitetura.
-          for (const p of [a, b]) {
-            ctx.beginPath();
-            ctx.moveTo(p.x - 3, p.y + 3);
-            ctx.lineTo(p.x + 3, p.y - 3);
-            ctx.stroke();
-          }
-
-          // O RÓTULO SÓ SAI SE COUBER NO TRECHO.
-          //
-          // Cota que não se lê não é cota — e é pior que a ausência dela,
-          // porque suja o desenho fingindo informar. A linha e os tiques FICAM:
-          // eles ainda mostram onde a cadeia quebra.
-          const compPx = Math.hypot(b.x - a.x, b.y - a.y);
-          ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
-          const larguraTexto = ctx.measureText(seg.rotulo).width;
-          if (compPx < larguraTexto + 10) continue;
-
-          // O TEXTO ACOMPANHA O LADO.
-          //
-          // Sem girar, os três níveis da cadeia de um lado VERTICAL caem lado a
-          // lado e leem como um número só — medido no harness: "3,80 6,20 6,20"
-          // numa fileira. Girado, cada nível fica na sua linha de cota, que é a
-          // convenção de prancha e o que também faz o lado OBLÍQUO se ler.
-          //
-          // O ângulo é normalizado para o texto nunca sair de cabeça para
-          // baixo: de pernas para o ar ele é ilegível mesmo estando no lugar.
-          let ang = Math.atan2(b.y - a.y, b.x - a.x);
-          if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
-
-          // ⚠️ O AFASTAMENTO DO RÓTULO É CALCULADO ANTES DE GIRAR.
-          //
-          // Ele saía como `(0, -7)` DEPOIS da rotação, e "para cima" no
-          // referencial girado inverte justamente nos lados em que a
-          // normalização acima soma π. Medido num retângulo: em três lados o
-          // rótulo ficava 7 px para dentro da própria linha de cota e no quarto
-          // ficava 7 px para fora — a mesma família do defeito das Medidas.
-          //
-          // A direção "para fora" vem de dois pontos da MESMA conta de
-          // `pontoDaCota`, um metro afastado do outro: assim ela acompanha o
-          // espelhamento do Y do canvas sem repetir a regra aqui.
-          const tMeio = (seg.de + seg.ate) / 2;
-          const foraPx = paraTela(pontoDaCota(lado, tMeio, afasta + 1000) as Point);
-          const meioPx = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-          const fx = foraPx.x - meioPx.x;
-          const fy = foraPx.y - meioPx.y;
-          const cf = Math.hypot(fx, fy) || 1;
-
-          ctx.save();
-          // 7 px PARA DENTRO da linha, do lado do desenho — o mesmo lugar em que
-          // o rótulo já caía nos três lados que estavam certos.
-          ctx.translate(meioPx.x - (fx / cf) * 7, meioPx.y - (fy / cf) * 7);
-          ctx.rotate(ang);
-          escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, Math.round(11 * fz), fundoCota);
-          ctx.restore();
-        }
-      };
 
       for (const c of cadeiasDeCota) {
         desenharCadeia(c.lado, c.aberturas, AFASTAMENTO_COTA.aberturas);
@@ -5367,11 +5377,10 @@ export default function BlueprintCanvas({
         // nenhum — inventar um para o que ninguém classificou faria a tela
         // afirmar algo que o modelo não guarda.
         //
-        // 04/10/2026 (*"o desenho gerado através do menu terreno Lote e massa não tem medidas"*): o lado do LOTE
-        // aparece também com "Medidas do lote e da massa" (ligado por padrão), e por FORA do lote.
+        // 04/10/2026: o rótulo do lado do LOTE cai por FORA do lote. As cotas do lote e da massa propriamente ditas
+        // são as cadeias por fora da divisa, logo abaixo.
         const compPx = Math.hypot(z.x - a.x, z.y - a.y);
-        const medirEste = mostrarMedidasParedes || (mostrarMedidasLoteMassa && b.kind === 'TERRENO');
-        if (medirEste && compPx >= MIN_PX_COTA_PAREDE) {
+        if (mostrarMedidasParedes && compPx >= MIN_PX_COTA_PAREDE) {
           const mm = Math.round(Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y));
           const medida = `${(mm / 1000).toFixed(2).replace('.', ',')} m`;
           const papel = b.papel ? ROTULO_CURTO_DO_PAPEL[b.papel] : null;
@@ -5384,53 +5393,6 @@ export default function BlueprintCanvas({
             selecionado ? COR_SELECIONADA : COR_TERRENO,
             b.kind === 'TERRENO' ? ladoDeFora(a, z, anelDoLoteTela) : 1,
           );
-        }
-      }
-
-      // MEDIDAS DA MASSA (04/10/2026): o lado de cada bloco (por fora dele) e o afastamento de cada lado até a
-      // divisa do lote. Numa passada própria, DEPOIS do lote e das divisas: desenhadas junto do bloco, o
-      // preenchimento do lote (que vem depois) passava por cima.
-      if (mostrarMedidasLoteMassa && (model.blocos ?? []).length > 0) {
-        const loteFechado = medirTerreno(limitesDoNivel.filter((x) => x.kind === 'TERRENO'))?.fechado ? anelDoLoteNoNivel : null;
-        for (const bl of model.blocos ?? []) {
-          if (bl.pontos.length < 3 || ocultos.has(bl.id) || (levelId && bl.levelId !== levelId)) continue;
-          const dMov = selecao.has(bl.id) && movendoSelecao ? movendoSelecao.delta : null;
-          const pontosDoBloco = dMov ? bl.pontos.map((q) => ({ x: q.x + dMov.x, y: q.y + dMov.y })) : bl.pontos;
-          const pts = pontosDoBloco.map(paraTela);
-          for (let i = 0; i < pts.length; i += 1) {
-            const a = pts[i];
-            const z = pts[(i + 1) % pts.length];
-            if (Math.hypot(z.x - a.x, z.y - a.y) < MIN_PX_COTA_PAREDE) continue;
-            const ma = pontosDoBloco[i];
-            const mz = pontosDoBloco[(i + 1) % pontosDoBloco.length];
-            rotuloDoTraco(ctx, metrosDoRotulo(Math.hypot(mz.x - ma.x, mz.y - ma.y)), a, z, 2, corTextoCota, ladoDeFora(a, z, pts), fundoCota);
-          }
-          // Afastamentos: linha fina tracejada do lado do bloco até a divisa, traço nas pontas, o valor no meio.
-          for (const af of afastamentosDoBloco(pontosDoBloco, loteFechado)) {
-            const de = paraTela(af.de);
-            const ate = paraTela(af.ate);
-            const comp = Math.hypot(ate.x - de.x, ate.y - de.y);
-            if (comp < MIN_PX_COTA_PAREDE) continue;
-            const ux = (ate.x - de.x) / comp;
-            const uy = (ate.y - de.y) / comp;
-            ctx.save();
-            ctx.strokeStyle = corLinhaCota;
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 3]);
-            ctx.beginPath();
-            ctx.moveTo(de.x, de.y);
-            ctx.lineTo(ate.x, ate.y);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.beginPath();
-            for (const pt of [de, ate]) {
-              ctx.moveTo(pt.x - uy * 4, pt.y + ux * 4);
-              ctx.lineTo(pt.x + uy * 4, pt.y - ux * 4);
-            }
-            ctx.stroke();
-            ctx.restore();
-            escreverRotulo(ctx, metrosDoRotulo(af.distanciaMm), (de.x + ate.x) / 2, (de.y + ate.y) / 2, corTextoCota, 11, fundoCota);
-          }
         }
       }
 
@@ -5450,6 +5412,31 @@ export default function BlueprintCanvas({
           ctx.stroke();
         }
       }
+    }
+
+    // COTAS DO LOTE E DA MASSA (04/10/2026) — *"as medidas devem estar nas laterais externas da planta e não dentro
+    // da planta. veja exemplo de uma planta baixa"*. Por FORA da divisa, como na prancha: perto do lote, o lado
+    // repartido pelo que está implantado (afastamento | bloco | afastamento — e o contorno das paredes, quando as
+    // cadeias delas estão ligadas); mais para fora, o total do lado. Nada escrito dentro do lote. Sem lote fechado,
+    // a cota vai em volta do próprio bloco. Fora do `if (limitesDoNivel.length > 0)`: bloco sem lote também é cotado.
+    if (mostrarMedidasLoteMassa) {
+      const blocosDoNivel = (model.blocos ?? [])
+        .filter((bl) => bl.pontos.length >= 3 && !ocultos.has(bl.id) && (!levelId || bl.levelId === levelId))
+        .map((bl) => {
+          const dMov = selecao.has(bl.id) && movendoSelecao ? movendoSelecao.delta : null;
+          return dMov ? bl.pontos.map((q) => ({ x: q.x + dMov.x, y: q.y + dMov.y })) : bl.pontos;
+        });
+      const anelDoLoteParaCota = anelDoTerreno(limitesDoNivel);
+      const loteFechado = !!medirTerreno(limitesDoNivel.filter((x) => x.kind === 'TERRENO'))?.fechado && anelDoLoteParaCota.length >= 3;
+      const quebras = [...blocosDoNivel.flat(), ...cadeiasDeCota.flatMap((c) => [c.lado.a, c.lado.b, ...c.lado.intermediarios])];
+      const cadeiasDoContorno = loteFechado ? cadeiasDoLote(anelDoLoteParaCota, quebras) : blocosDoNivel.flatMap((pts) => cadeiasDoLote(pts, []));
+      ctx.save();
+      ctx.lineWidth = 1;
+      for (const c of cadeiasDoContorno) {
+        if (c.parcial.length > 0) desenharCadeia(c.lado, c.parcial, 1, 1);
+        desenharCadeia(c.lado, [c.total], c.parcial.length > 0 ? 2 : 1, 1);
+      }
+      ctx.restore();
     }
 
     // ── Estrutura ────────────────────────────────────────────────────────────

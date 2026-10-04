@@ -35,3 +35,31 @@ Sessão `7d36268b` (Claude Code, VS Code), 04/10/2026, com print do lote + bloco
   por fora; desligado não aparece nada; só "Medidas das paredes" mantém os lados do lote.
 - Editor: o item em Vista › Exibir, desligado com motivo sem lote, ligado por padrão com lote, alternando a chave.
 - Prova no app real com estudo descartável.
+
+---
+
+## Parte 2 — as cotas vão para FORA da planta
+
+Mesmo dia, com o print de uma planta baixa de referência (cotas em cadeia por fora da divisa: 8,50 | 1,50 e o total
+10,00; nas laterais 1,50 | 3,70 | 1,50 | 5,05 … e o total 20,00). Pedido, literal:
+
+> as medidas devem estar nas laterais externas da planta e nao dentro da planta. veja exemplo de uma planta baixa
+
+### O que mudou
+
+- `cadeiasDoLote(anel, quebras)` (`utils/blueprintCotas.ts`, junto das cadeias das paredes): para cada lado do lote
+  (anel posto anti-horário, para a normal de `referencialDoLado` apontar para fora), a **parcial** — o lado repartido
+  pela projeção dos vértices dos blocos e, quando as cadeias das paredes estão ligadas, do contorno das paredes — e o
+  **total**. Rótulo no padrão da prancha ("12,00", sem "m").
+- O canvas desenha essas cadeias com a MESMA função das cadeias das paredes (`desenharCadeia`, tirada de dentro do `if`
+  das paredes): parcial na primeira linha por fora da divisa, total na segunda, tiques a 45°.
+- Saíram os rótulos dentro do lote: os lados do bloco e as linhas de afastamento (as mesmas medidas estão na parcial).
+  `afastamentosDoBloco` foi removida. A prévia ao desenhar o bloco continua.
+- Sem lote fechado, a cadeia vai em volta de cada bloco. O lado do lote com "Medidas das paredes" continua como antes.
+
+### Verificação
+
+- `cadeiasDoLote`: lote 12×30 com torre → 1,00 | 10,00 | 1,00 e 4,00 | 20,00 | 6,00 com totais 12,00/30,00; por fora nos
+  dois sentidos do anel; sem quebra só o total; parcial fecha contra o total.
+- Canvas: os números certos por desenho, nenhum rótulo com "m" dentro do lote, todas as âncoras fora do lote,
+  desligado nada, bloco sem lote cotado em volta.

@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 /**
  * MEDIDAS DO LOTE E DA MASSA (04/10/2026) — *"veja print. o desenho gerado atraves do menu terreno Lote e massa nao
- * tem medidas"*. O canvas escreve os lados do lote (com o papel), os lados de cada bloco e o afastamento de cada bloco
- * até as divisas — por FORA do contorno — com o item "Medidas do lote e da massa" (ligado por padrão), independente
- * de "Medidas das paredes". Contexto 2D falso por Proxy que grava as chamadas (molde: `BlueprintCanvasIncendio.test.tsx`).
+ * tem medidas"*; e *"as medidas devem estar nas laterais externas da planta e não dentro da planta"*. Com o item
+ * "Medidas do lote e da massa" (ligado por padrão): cadeias de cota POR FORA da divisa — cada lado repartido pela
+ * massa e o total —, nada escrito dentro do lote. Contexto 2D falso por Proxy que grava as chamadas (molde: `BlueprintCanvasIncendio.test.tsx`).
  */
 import React from 'react';
 import { render } from '@testing-library/react';
@@ -85,57 +85,70 @@ describe('BlueprintCanvas · medidas do lote e da massa', () => {
 
   const textos = () => chamadas.filter((c) => c.metodo === 'fillText').map((c) => String(c.args[0]));
 
-  /** Onde o `rotuloDoTraco` ancorou o texto: o último `translate` antes do `fillText` dele. */
-  function ancoraDe(texto: string): { x: number; y: number } {
-    const i = chamadas.findIndex((c) => c.metodo === 'fillText' && c.args[0] === texto);
-    expect(i).toBeGreaterThanOrEqual(0);
-    for (let k = i; k >= 0; k -= 1) {
-      if (chamadas[k].metodo === 'translate') return { x: Number(chamadas[k].args[0]), y: Number(chamadas[k].args[1]) };
-    }
-    throw new Error(`sem translate antes de ${texto}`);
+  /** Onde cada ocorrência do texto foi ancorada: o último `translate` antes de cada `fillText` dele. */
+  function ancorasDe(texto: string): { x: number; y: number }[] {
+    const out: { x: number; y: number }[] = [];
+    chamadas.forEach((c, i) => {
+      if (c.metodo !== 'fillText' || c.args[0] !== texto) return;
+      for (let k = i; k >= 0; k -= 1) {
+        if (chamadas[k].metodo === 'translate') {
+          out.push({ x: Number(chamadas[k].args[0]), y: Number(chamadas[k].args[1]) });
+          return;
+        }
+      }
+    });
+    return out;
   }
 
-  it('por padrão (sem "Medidas das paredes"): os lados do lote com o papel, os lados do bloco e os afastamentos', () => {
+  it('por padrão: cotas por fora — cada lado repartido pela torre e o total; nada com "m" dentro do lote', () => {
     desenhar(cena());
     const t = textos();
-    expect(t).toEqual(expect.arrayContaining(['frente 12,00 m', 'fundos 12,00 m', 'lat. dir. 30,00 m', 'lat. esq. 30,00 m']));
     // O canvas desenha a cena mais de uma vez ao montar (medida do contêiner): conta-se por desenho.
-    const desenhos = t.filter((x) => x === 'frente 12,00 m').length;
+    const desenhos = t.filter((x) => x === '30,00').length / 2;
     expect(desenhos).toBeGreaterThan(0);
     const porDesenho = (x: string) => t.filter((y) => y === x).length / desenhos;
-    // Lados do bloco: 10 m (frente e fundos do bloco) e 20 m (laterais).
-    expect(porDesenho('10,00 m')).toBe(2);
-    expect(porDesenho('20,00 m')).toBe(2);
-    // Afastamentos: 1 m de cada lateral, 4 m da frente, 6 m dos fundos.
-    expect(porDesenho('1,00 m')).toBe(2);
-    expect(porDesenho('4,00 m')).toBe(1);
-    expect(porDesenho('6,00 m')).toBe(1);
-  });
-
-  it('⚠️ o lado do lote sai POR FORA do lote', () => {
-    desenhar(cena());
-    const pontos = ['frente 12,00 m', 'fundos 12,00 m', 'lat. dir. 30,00 m', 'lat. esq. 30,00 m'].map(ancoraDe);
-    // Os quatro rótulos, simétricos, têm o centro no centro do lote (600 × 1500 px na escala 0,05).
-    const cx = pontos.reduce((s, p) => s + p.x, 0) / 4;
-    const cy = pontos.reduce((s, p) => s + p.y, 0) / 4;
-    const [frente, fundos, dir, esq] = pontos;
-    // Por fora: além da metade da profundidade (750 px) e da metade da frente (300 px). Por dentro ficariam aquém.
-    expect(Math.abs(frente.y - cy)).toBeGreaterThan(750);
-    expect(Math.abs(fundos.y - cy)).toBeGreaterThan(750);
-    expect(Math.abs(dir.x - cx)).toBeGreaterThan(300);
-    expect(Math.abs(esq.x - cx)).toBeGreaterThan(300);
-  });
-
-  it('desligado ("Medidas do lote e da massa" e "Medidas das paredes"), nenhuma dessas medidas', () => {
-    desenhar(cena(), { mostrarMedidasLoteMassa: false, mostrarMedidasParedes: false });
-    const t = textos();
+    expect(porDesenho('12,00')).toBe(2); // totais: frente e fundos
+    expect(porDesenho('30,00')).toBe(2); // totais: laterais
+    expect(porDesenho('10,00')).toBe(2); // torre na frente e nos fundos
+    expect(porDesenho('1,00')).toBe(4); // afastamentos laterais, nas duas cadeias de 12 m
+    expect(porDesenho('20,00')).toBe(2); // torre nas laterais
+    expect(porDesenho('4,00')).toBe(2); // afastamento da frente, nas duas laterais
+    expect(porDesenho('6,00')).toBe(2); // afastamento dos fundos
+    // Os rótulos antigos (dentro do lote) não existem mais.
     for (const x of ['frente 12,00 m', '10,00 m', '20,00 m', '1,00 m', '4,00 m', '6,00 m']) expect(t).not.toContain(x);
   });
 
-  it('só "Medidas das paredes" continua mostrando os lados do lote, como antes', () => {
+  it('⚠️ todas as cotas ficam POR FORA do lote (600 × 1500 px na escala 0,05)', () => {
+    desenhar(cena());
+    const nosLadosCurtos = ['12,00', '10,00', '1,00'].flatMap(ancorasDe); // frente e fundos (horizontais)
+    const nosLadosLongos = ['30,00', '20,00', '4,00', '6,00'].flatMap(ancorasDe); // laterais (verticais)
+    const todos = [...nosLadosCurtos, ...nosLadosLongos];
+    const cx = todos.reduce((s, p) => s + p.x, 0) / todos.length;
+    const cy = nosLadosCurtos.reduce((s, p) => s + p.y, 0) / nosLadosCurtos.length;
+    const cxl = nosLadosLongos.reduce((s, p) => s + p.x, 0) / nosLadosLongos.length;
+    for (const p of nosLadosCurtos) expect(Math.abs(p.y - cy)).toBeGreaterThan(750);
+    for (const p of nosLadosLongos) expect(Math.abs(p.x - cxl)).toBeGreaterThan(300);
+    expect(Number.isFinite(cx)).toBe(true);
+  });
+
+  it('desligado ("Medidas do lote e da massa" e "Medidas das paredes"), nenhuma cota do lote', () => {
+    desenhar(cena(), { mostrarMedidasLoteMassa: false, mostrarMedidasParedes: false });
+    const t = textos();
+    for (const x of ['12,00', '30,00', '10,00', '20,00', '4,00', '6,00', 'frente 12,00 m']) expect(t).not.toContain(x);
+  });
+
+  it('só "Medidas das paredes" continua escrevendo o lado do lote, como antes', () => {
     desenhar(cena(), { mostrarMedidasLoteMassa: false, mostrarMedidasParedes: true });
     const t = textos();
     expect(t).toContain('frente 12,00 m');
-    expect(t).not.toContain('4,00 m');
+    expect(t).not.toContain('20,00');
+  });
+
+  it('sem lote fechado, a cota vai em volta do próprio bloco', () => {
+    const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const soBloco = applyBatch(m, [{ type: 'AddBloco', levelId: l, nome: 'Torre', pontos: [point(0, 0), point(10000, 0), point(10000, 20000), point(0, 20000)], pavimentos: 4 }]).model;
+    desenhar(soBloco);
+    expect(textos()).toEqual(expect.arrayContaining(['10,00', '20,00']));
   });
 });

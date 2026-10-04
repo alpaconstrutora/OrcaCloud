@@ -996,3 +996,51 @@ describe('cotasDeAmbiente — medidas iguais em lugares diferentes', () => {
     expect(cotasDeAmbiente(m, m.levels[0])).toHaveLength(2);
   });
 });
+
+/**
+ * CADEIAS DO LOTE (04/10/2026) — *"as medidas devem estar nas laterais externas da planta e não dentro da planta.
+ * veja exemplo de uma planta baixa"*: por fora da divisa, o lado repartido pelo que está implantado e o total.
+ */
+describe('cadeiasDoLote', () => {
+  const lote = [{ x: 0, y: 0 }, { x: 12000, y: 0 }, { x: 12000, y: 30000 }, { x: 0, y: 30000 }];
+  const torre = [{ x: 1000, y: 4000 }, { x: 11000, y: 4000 }, { x: 11000, y: 24000 }, { x: 1000, y: 24000 }];
+  const rotulos = (c: { parcial: { rotulo: string }[] }) => c.parcial.map((s) => s.rotulo);
+
+  it('lote 12 × 30 com uma torre: cada lado repartido pela torre (afastamento | torre | afastamento) e o total', async () => {
+    const { cadeiasDoLote } = await import('../utils/blueprintCotas');
+    const cs = cadeiasDoLote(lote, torre);
+    expect(cs).toHaveLength(4);
+    const porTotal = (r: string) => cs.filter((c) => c.total.rotulo === r);
+    expect(porTotal('12,00')).toHaveLength(2);
+    expect(porTotal('30,00')).toHaveLength(2);
+    for (const c of porTotal('12,00')) expect(rotulos(c)).toEqual(['1,00', '10,00', '1,00']);
+    // Os dois lados de 30 m: 4 m da frente, 20 m de torre, 6 m dos fundos (a ordem depende do sentido do lado).
+    for (const c of porTotal('30,00')) expect([rotulos(c).join(' | '), [...rotulos(c)].reverse().join(' | ')]).toContain('4,00 | 20,00 | 6,00');
+  });
+
+  it('⚠️ a cota sai POR FORA, qualquer que seja o sentido em que o lote foi desenhado', async () => {
+    const { cadeiasDoLote, pontoDaCota } = await import('../utils/blueprintCotas');
+    for (const anel of [lote, [...lote].reverse()]) {
+      for (const c of cadeiasDoLote(anel, torre)) {
+        const meio = pontoDaCota(c.lado, (c.total.de + c.total.ate) / 2, 500);
+        expect(pointInPolygon(lote, meio as never)).toBe(false);
+      }
+    }
+  });
+
+  it('sem nada implantado, só o total; quebra colada no canto não reparte', async () => {
+    const { cadeiasDoLote } = await import('../utils/blueprintCotas');
+    for (const c of cadeiasDoLote(lote, [])) expect(c.parcial).toEqual([]);
+    const encostada = [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 10000 }, { x: 0, y: 10000 }];
+    const frente = cadeiasDoLote(lote, encostada).find((c) => c.total.rotulo === '12,00' && c.lado.a.y === 0 && c.lado.b.y === 0)!;
+    expect(rotulos(frente)).toEqual(['6,00', '6,00']);
+  });
+
+  it('a parcial fecha contra o total', async () => {
+    const { cadeiasDoLote } = await import('../utils/blueprintCotas');
+    for (const c of cadeiasDoLote(lote, torre)) {
+      const soma = c.parcial.reduce((s, x) => s + (x.ate - x.de), 0);
+      expect(soma).toBeCloseTo(c.total.ate - c.total.de, 6);
+    }
+  });
+});

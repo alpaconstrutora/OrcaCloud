@@ -104,7 +104,7 @@ Estado por camada: `'VISIVEL' | 'ATENUADA' | 'OCULTA'`. Estado do grupo = deriva
 - [x] F3 — seção Camadas no painel (PainelCamadas 7 testes + 3 no editor; guia §19.5)
 - [x] F4 — atenuar (2D: fator multiplicativo no globalAlpha + clique/laço pulam atenuados; divisas, ambientes, conexões e marcas respeitam ocultos; 3D: passada fantasma translúcida sem raycast) — prova visual na F6
 - [x] F5 — conflitos filtrados (faixa "N de M · Ver todos"; ribbon, cabeçalho, destaque 3D e BCF seguem a lista exibida; 5 testes)
-- [x] F6 — verificação e publicação (push feb28655 em main; check-run `ci` success; `conferir-producao.sh` — domínio serve feb2865 com "Isolar mantém a arquitetura em meio-tom")
+- [ ] F6 — verificação e publicação: FEITO — suíte, tsc, harness 15/15, push feb28655, `ci` success, domínio conferido. FALTA — passeio no app real com login (estudo real: ocultar cada grupo em 2D e 3D, isolar, conflitos, recarregar, template "Instalações"). (push feb28655 em main; check-run `ci` success; `conferir-producao.sh` — domínio serve feb2865 com "Isolar mantém a arquitetura em meio-tom")
 
 ## Verificação (04/10/2026)
 - Suíte inteira (`vitest --maxWorkers=4`, JSON): 717 arquivos, 7.464 testes = 7.430 ✅ + 34 pendentes (integração/arquivo-de-prova pulados — linha de base), 0 falhas; a conta fecha.

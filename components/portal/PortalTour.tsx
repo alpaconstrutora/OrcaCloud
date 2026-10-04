@@ -17,7 +17,7 @@ import { elementoDaAncora, posicaoDoPopover, type Caixa } from '../../utils/port
  *     "Disponível quando…" (falta dado, não falta tela); sem `quando` pula em
  *     silêncio na direção do movimento (ex.: `conta` no celular).
  * Clique fora NÃO encerra (o usuário perdia o tour por engano); fecham X,
- * Pular, Escape e Concluir. Ao terminar, volta para a aba em que começou.
+ * Pular, Escape e Concluir. A volta para a aba de origem é do PortalHelp.
  * Nenhuma âncora na tela → termina como 'pulado' sem aparecer.
  */
 export interface PortalTourProps {
@@ -60,7 +60,6 @@ export const PortalTour: React.FC<PortalTourProps> = ({
   const alvo = useRef<HTMLElement | null>(null);
   const jaAchou = useRef(false);
   const terminou = useRef(false);
-  const secaoInicial = useRef(currentSection);
   const secaoAtual = useRef(currentSection);
   secaoAtual.current = currentSection;
   const navegar = useRef(onNavigate);
@@ -71,8 +70,6 @@ export const PortalTour: React.FC<PortalTourProps> = ({
   const terminar = useCallback((motivo: 'concluido' | 'pulado', alcancado: number) => {
     if (terminou.current) return;
     terminou.current = true;
-    const volta = secaoInicial.current;
-    if (volta && navegar.current && secaoAtual.current !== volta) navegar.current(volta);
     fim.current(motivo, alcancado);
   }, []);
 
@@ -171,7 +168,11 @@ export const PortalTour: React.FC<PortalTourProps> = ({
 
   const passo = steps[idx];
   const total = steps.length;
-  const ultimo = idx === total - 1;
+  // Último de verdade: depois deste só sobram passos de cromo (sem aba) que não
+  // estão nesta tela (ex.: `ajuda`/`conta` no celular) — seriam pulados.
+  const docAtual = raiz?.ownerDocument;
+  const ultimo = idx === total - 1 || (!!docAtual && steps.slice(idx + 1).every(s =>
+    s.section === null && !s.quando && !elementoDaAncora(s.anchor, docAtual)));
   const temAnterior = steps.some((_, i) => i < idx && !pulados.has(i));
   const mostrando = !!passo && (fase === 'sem-alvo' || (fase === 'alvo' && !!caixa));
   const pos = fase === 'alvo' && caixa

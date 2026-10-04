@@ -8,8 +8,8 @@
  *      `quando`) é pulado ali, e a contagem "Passo i de n" conta todos;
  *   2. passo com `quando` e sem elemento aparece centralizado com a nota
  *      "Disponível quando…";
- *   3. passo de outra aba chama `onNavigate(section)` UMA vez e espera a âncora;
- *      ao terminar, volta para a aba em que começou;
+ *   3. passo de outra aba chama `onNavigate(section)` UMA vez e espera a âncora
+ *      (a volta para a aba de origem é do PortalHelp — PortalHelpTour.test);
  *   4. clique fora NÃO encerra; Escape, X, Pular e Concluir encerram;
  *   5. sem nenhuma âncora termina como 'pulado' sem aparecer;
  *   6. funciona dentro de um <iframe> (prévia mobile): procura no ownerDocument.
@@ -91,7 +91,7 @@ describe('PortalTour v2', () => {
     expect(screen.getByText('Passo 2 de 2')).toBeInTheDocument();
   });
 
-  it('passo de outra aba navega uma vez, espera a âncora e, ao terminar, volta para a aba de origem', async () => {
+  it('passo de outra aba navega uma vez e espera a âncora; o motor não volta sozinho', async () => {
     const user = userEvent.setup();
     const onFinish = vi.fn();
     ancoras([{ anchor: 'menu' }]);
@@ -109,7 +109,7 @@ describe('PortalTour v2', () => {
     expect(onNavigate).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith('documentos');
     await user.click(screen.getByRole('button', { name: 'Concluir' }));
-    expect(onNavigate).toHaveBeenLastCalledWith('dashboard');
+    expect(onNavigate).toHaveBeenCalledTimes(1);
     expect(onFinish).toHaveBeenCalledWith('concluido', 2);
   });
 
@@ -129,13 +129,35 @@ describe('PortalTour v2', () => {
   it('Pular e o X encerram como pulado, informando até onde chegou', async () => {
     const user = userEvent.setup();
     const onFinish = vi.fn();
-    ancoras([{ anchor: 'menu' }, { anchor: 'ajuda' }]);
+    ancoras([{ anchor: 'menu' }, { anchor: 'ajuda' }, { anchor: 'conta' }]);
     render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('ajuda', 'Ajuda'), passo('conta', 'Conta')]} onFinish={onFinish} {...RAPIDO} />);
     await screen.findByText('Bem-vindo');
     await user.click(screen.getByRole('button', { name: 'Próximo' }));
     await screen.findByText('Ajuda');
     await user.click(screen.getByRole('button', { name: 'Pular' }));
     expect(onFinish).toHaveBeenCalledWith('pulado', 2);
+  });
+
+  it('passos de cromo que não estão nesta tela (celular) não contam: o último visível já mostra Concluir', async () => {
+    const user = userEvent.setup();
+    const onFinish = vi.fn();
+    ancoras([{ anchor: 'menu' }, { anchor: 'mobile-mais' }]);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('mobile-mais', 'Mais seções'), passo('ajuda', 'Ajuda'), passo('conta', 'Conta')]} onFinish={onFinish} {...RAPIDO} />);
+    await screen.findByText('Bem-vindo');
+    expect(screen.getByRole('button', { name: 'Próximo' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Próximo' }));
+    await screen.findByText('Mais seções');
+    expect(screen.queryByRole('button', { name: 'Próximo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pular' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Concluir' }));
+    expect(onFinish).toHaveBeenCalledWith('concluido', 4);
+  });
+
+  it('passo de OUTRA aba depois deste não conta como ausente (pode existir lá)', async () => {
+    ancoras([{ anchor: 'menu' }]);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('pedidos-tabela', 'Pedidos', { section: 'orders' })]} onFinish={vi.fn()} onNavigate={vi.fn()} {...RAPIDO} />);
+    await screen.findByText('Bem-vindo');
+    expect(screen.getByRole('button', { name: 'Próximo' })).toBeInTheDocument();
   });
 
   it('sem nenhuma âncora termina como pulado sem aparecer', async () => {

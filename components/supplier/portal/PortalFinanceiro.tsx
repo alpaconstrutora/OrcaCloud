@@ -94,7 +94,7 @@ const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder })
                 </PortalCard>
             )}
 
-            <KpiStrip items={kpis} />
+            <KpiStrip items={kpis} data-tour="financeiro-kpis" />
 
             {resumo.proximoVencimento && (
                 <PortalCard className="px-5 py-3.5 flex items-center gap-3">
@@ -107,7 +107,7 @@ const PortalFinanceiro: React.FC<Props> = ({ orders, portalToken, onOpenOrder })
                 </PortalCard>
             )}
 
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="financeiro-parcelas">
                 <CardHeader
                     title="Parcelas"
                     subtitle="Condições de pagamento e parcelas dos seus pedidos"

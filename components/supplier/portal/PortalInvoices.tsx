@@ -153,12 +153,13 @@ const PortalInvoices: React.FC<Props> = ({ supplier, orders, portalToken, onChan
             )}
 
             {/* Envio — zona de arraste no vocabulário do portal */}
-            <PortalCard>
+            <PortalCard data-tour="notas-enviar">
                 <CardHeader
                     title="Enviar nota fiscal"
                     subtitle="PDF, XML ou imagem, até 5MB"
                     right={
                         <select
+                            data-tour="notas-vincular"
                             value={linkOrderId}
                             onChange={e => setLinkOrderId(e.target.value)}
                             className="h-8 rounded-[8px] border border-[#ECECEF] bg-white px-2.5 text-[13px] text-[#4A505C] outline-none focus:border-[#E1553C] cursor-pointer"
@@ -206,7 +207,7 @@ const PortalInvoices: React.FC<Props> = ({ supplier, orders, portalToken, onChan
             </PortalCard>
 
             {/* Enviadas */}
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="notas-tabela">
                 <CardHeader
                     title="Notas enviadas"
                     subtitle={rows.length > 0 ? `${rows.length} documento${rows.length === 1 ? '' : 's'}` : undefined}

@@ -59,7 +59,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
     return (
         <div className="space-y-6">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4" data-tour="comissoes-totais">
                 <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
@@ -120,7 +120,7 @@ const BrokerCommissions: React.FC<BrokerCommissionsProps> = ({ brokerEmail, orga
             </div>
 
             {/* Commission List */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden" data-tour="comissoes-lista">
                 <div className="divide-y divide-gray-100">
                     {filtered.map(comm => {
                         const cfg = STATUS_CONFIG[comm.status];

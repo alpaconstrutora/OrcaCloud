@@ -32,7 +32,7 @@ const PortalNegotiations: React.FC<Props> = ({ orders, loading, onNegotiate }) =
 
     return (
         <div className="space-y-3">
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="lances-tabela">
                 <CardHeader
                     title="Oportunidades de venda"
                     subtitle={rows.length > 0
@@ -90,6 +90,7 @@ const PortalNegotiations: React.FC<Props> = ({ orders, loading, onNegotiate }) =
                                                     <Td className="text-right">
                                                         <button
                                                             type="button"
+                                                            data-tour="lances-negociar"
                                                             onClick={e => { e.stopPropagation(); onNegotiate(o.id); }}
                                                             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#C24428] hover:text-[#E1553C] transition-colors"
                                                         >
@@ -148,7 +149,7 @@ const PortalNegotiations: React.FC<Props> = ({ orders, loading, onNegotiate }) =
                                     </div>
                                     <div className="flex items-center justify-between gap-3 mt-3">
                                         <span className="text-sm font-semibold text-[#1F2430] tabular-nums">{fmtBRL(orderTotal(o))}</span>
-                                        <span className="text-[13px] font-semibold text-[#C24428]">Negociar</span>
+                                        <span className="text-[13px] font-semibold text-[#C24428]" data-tour="lances-negociar">Negociar</span>
                                     </div>
                                 </button>
                             ))}

@@ -53,7 +53,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
 
     return (
         <div className="space-y-3">
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="cotacoes-tabela">
                 <CardHeader
                     title="Solicitações de cotação"
                     subtitle={`${rows.length} solicitaç${rows.length === 1 ? 'ão' : 'ões'} · ${abertas} aguardando resposta`}
@@ -62,6 +62,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                             <div className="relative">
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
                                 <input
+                                    data-tour="cotacoes-busca"
                                     type="text"
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
@@ -94,6 +95,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
                         <input
+                            data-tour="cotacoes-busca"
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
@@ -172,6 +174,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                                                     <span className="inline-flex items-center justify-end gap-3">
                                                         <button
                                                             type="button"
+                                                            data-tour="cotacoes-responder"
                                                             onClick={e => { e.stopPropagation(); onRespond(r.id); }}
                                                             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#C24428] hover:text-[#E1553C] transition-colors"
                                                         >
@@ -207,7 +210,7 @@ const PortalQuotations: React.FC<Props> = ({ quotations, loading, onRespond }) =
                                     </div>
                                     <div className="flex items-center justify-between gap-3 mt-3">
                                         <span className="text-[12px] text-[#8A8F9A]">Prazo {fmtDate(r.deadline)}</span>
-                                        <span className="text-[13px] font-semibold text-[#C24428]">Responder</span>
+                                        <span className="text-[13px] font-semibold text-[#C24428]" data-tour="cotacoes-responder">Responder</span>
                                     </div>
                                 </button>
                             ))}

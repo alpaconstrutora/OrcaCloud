@@ -1,6 +1,6 @@
 # Tour guiado v2 dos portais externos
 
-**Data:** 2026-10-04 · **Status:** F4 em publicação; F5–F8 pendentes
+**Data:** 2026-10-04 · **Status:** F4 e F5 publicadas; F6–F8 pendentes
 **Antecede:** `docs/planos/2026-10-03-ajuda-portais-externos.md` (central de ajuda F1–F3)
 
 ## Pedido original (literal)
@@ -67,3 +67,30 @@ Detalhe de cada fase no plano aprovado da sessão (resumo aqui ao fechar cada um
 - **Testes**: `PortalTour.test.tsx` (reescrito), `PortalHelpTour.test.tsx`
   (mini-tour, rever, prévia), `portalTourAnchors.test.ts` (lista de arquivos por
   portal, todos os tours, sem âncora/chave repetida), `portalHelpDefaults.test.ts`.
+
+## F5 — o que entrou
+
+- **Fornecedor**: tour do portal com 9 passos (Cotações → lista, Pedidos →
+  lista, Nota Fiscal, "Mais seções" só no celular, Ajuda, Conta) e mini-tours
+  de Estatísticas, Lances, Cotações, Pedidos, Nota Fiscal e Financeiro, com
+  âncoras nos `components/supplier/portal/*` (PortalKit já repassa atributos;
+  teste `PortalKitAtributos.test.tsx`).
+- **Corretor**: tour do portal (Estoque → mapa, Propostas → lista, Leads,
+  Ajuda, Conta) e mini-tours de Analytics, Estoque, Empreendimentos,
+  Propostas, Leads, Comissões, Materiais e Chat. `PropertyUnitMap` (compartilhado
+  com o admin) não foi tocado: a âncora é um `<div>` em volta, no BrokerPortal.
+- **Regressão do F4 corrigida**: as rotas públicas do Fornecedor e do Corretor
+  montam o portal com `portalToken` **e** `isPreview` (histórico: só esconde o
+  cromo de admin). `modoPrevia={isPreview}` tratava o link real como prévia do
+  gestor — sem tour automático e sem marca. Agora `modoPrevia = isPreview &&
+  !portalToken`. Testes: `SupplierPortalAjuda.test.tsx` (montado como a rota
+  pública) e `portalTourPreviaVsLink.test.ts` (contrato no fonte do Corretor).
+- **Motor**: passos de cromo (sem aba) que não existem na tela atual — `ajuda`
+  e `conta` no celular do Fornecedor — deixam de contar: o último passo
+  visível já mostra "Concluir".
+- **Volta para a aba de origem** saiu do motor e foi para o `PortalHelp`, que
+  acompanha a aba atual até o tour navegar pela primeira vez. Motivo: o
+  Corretor nasce numa aba e o próprio portal corrige para a primeira liberada;
+  o tour voltava para a aba de antes da correção, o portal corrigia de novo e
+  essa correção disparava o mini-tour como se fosse um clique.
+- Teste de âncoras lê a lista de arquivos dos três portais.

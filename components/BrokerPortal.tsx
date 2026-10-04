@@ -545,7 +545,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 visibleSections={enabledTabIds}
                 currentSection={currentTab}
                 onNavigate={(s) => { setShowSimulator(false); setCurrentTab(s as PortalTab); }}
-                modoPrevia={isPreview}
+                // a rota pública do link TAMBÉM passa isPreview (só para esconder o cromo de admin):
+                // prévia do gestor é isPreview SEM token
+                modoPrevia={isPreview && !portalToken}
                 accent="indigo"
                 tourKey={portalToken || effectiveBrokerEmail || null}
                 autoTour={isStandalone}
@@ -662,7 +664,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 Visíveis SOMENTE na aba Analytics: são o resumo de desempenho do
                 corretor, não um cromo global do portal. */}
             {currentTab === 'analytics' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3" data-tour="analytics-kpis">
                 <KpiCard label="Unidades Disponíveis" value={loading ? '…' : stats.available} sub={loading ? undefined : `de ${visibleUnits.length} unidades`} icon={<Building2 className="w-5 h-5" />} color="blue" />
                 <KpiCard label="Propostas Enviadas" value={loading ? '…' : stats.sent} sub="Aguardando análise" icon={<Send className="w-5 h-5" />} color="amber" pulse={!loading && stats.sent > 0} />
                 <KpiCard label="Propostas Aprovadas" value={loading ? '…' : stats.approved} sub="Vendas confirmadas" icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
@@ -814,7 +816,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             {currentTab === 'estoque' && !showSimulator && (
                 <div className="space-y-6">
                     <div className="flex flex-col xl:flex-row gap-4 justify-between xl:items-center">
-                        <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit shrink-0">
+                        <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit shrink-0" data-tour="estoque-finalidade">
                             {[
                                 { id: 'SALE', label: 'Vendas' },
                                 { id: 'RENTAL', label: 'Locação' },
@@ -864,6 +866,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                         )}
                     </div>
 
+                    <div data-tour="estoque-mapa">
                     <PropertyUnitMap
                         units={displayUnits}
                         parentProperty={buildings.find(b => b.id === selectedBuildingId)}
@@ -888,10 +891,12 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                         selectedUnitIds={cart.map(u => u.id)}
                         onToggleUnit={handleToggleCart}
                     />
+                    </div>
                 </div>
             )}
 
             {currentTab === 'empreendimentos' && (
+                <div data-tour="empreendimentos-lista">
                 <BrokerDevelopments
                     buildings={buildings}
                     units={visibleUnits}
@@ -901,6 +906,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                     selectedUnitIds={cart.map(u => u.id)}
                     onToggleUnit={handleToggleCart}
                 />
+                </div>
             )}
 
             {currentTab === 'propostas' && showSimulator && cart.length > 0 && (
@@ -915,7 +921,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             )}
 
             {currentTab === 'propostas' && !showSimulator && (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden" data-tour="propostas-lista">
                     <div className="p-6 border-b border-gray-100">
                         <h3 className="text-lg font-black text-gray-900">Minhas propostas</h3>
                         <p className="text-sm text-gray-400 mt-1">Histórico de propostas enviadas</p>
@@ -983,7 +989,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             {/* Barra da cesta — só aparece com seleção em andamento e fora do simulador.
                 Permite montar apto + vaga + box e mandar UMA proposta. */}
             {!showSimulator && cart.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[290] w-[min(92vw,44rem)] bg-white rounded-2xl border border-indigo-200 shadow-2xl p-4 animate-in slide-in-from-bottom-4 duration-300">
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[290] w-[min(92vw,44rem)] bg-white rounded-2xl border border-indigo-200 shadow-2xl p-4 animate-in slide-in-from-bottom-4 duration-300" data-tour="cesta-barra">
                     {cartWarning && (
                         <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3">
                             {cartWarning}
@@ -1040,7 +1046,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             )}
 
             {currentTab === 'materiais' && (
-                <BrokerMaterials organizationId={initialOrgId || selectedOrgId || 'demo'} />
+                <div data-tour="materiais-grade"><BrokerMaterials organizationId={initialOrgId || selectedOrgId || 'demo'} /></div>
             )}
 
             {currentTab === 'ranking' && (
@@ -1060,7 +1066,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             )}
 
             {currentTab === 'analytics' && (
-                <BrokerAnalytics organizationId={initialOrgId || selectedOrgId || 'demo'} />
+                <div data-tour="analytics-graficos"><BrokerAnalytics organizationId={initialOrgId || selectedOrgId || 'demo'} /></div>
             )}
 
             {currentTab === 'saude' && (

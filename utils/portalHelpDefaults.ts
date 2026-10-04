@@ -456,18 +456,87 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
   fornecedor: {
     geral: tourDe('geral', [
       { key: 'fornecedor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Fornecedor', body: 'O menu leva às seções liberadas para a sua empresa: cotações, lances, pedidos, notas fiscais e financeiro.' },
+      { key: 'fornecedor.tour.geral.cotacoes', anchor: 'aba-quotations', section: 'quotations', title: 'Cotações', body: 'Pedidos de preço da construtora. Você responde item a item, com preço e prazo.' },
+      { key: 'fornecedor.tour.geral.cotacoes-tabela', anchor: 'cotacoes-tabela', section: 'quotations', title: 'Suas cotações', body: 'As que aguardam resposta aparecem primeiro. "Responder" abre o formulário da cotação.' },
       { key: 'fornecedor.tour.pedidos', anchor: 'aba-orders', section: 'orders', title: 'Pedidos', body: 'Aqui você acompanha os pedidos de compra e atualiza a logística de entrega.' },
+      { key: 'fornecedor.tour.geral.pedidos-tabela', anchor: 'pedidos-tabela', section: 'orders', title: 'Seus pedidos', body: 'Status, valor e entrega prevista de cada pedido. Clique para ver os itens e o histórico.' },
+      { key: 'fornecedor.tour.geral.notas', anchor: 'aba-documents', section: 'documents', title: 'Nota Fiscal', body: 'Envie a nota fiscal do pedido por aqui; é ela que libera o pagamento.' },
+      { key: 'fornecedor.tour.geral.mais', anchor: 'mobile-mais', section: null, title: 'Mais seções', body: 'No celular, as outras seções e a Ajuda ficam aqui.' },
       { key: 'fornecedor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
+      { key: 'fornecedor.tour.geral.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê os dados da sua empresa.' },
     ]),
-    porAba: {},
+    porAba: {
+      overview: tourDe('overview', [
+        { key: 'fornecedor.tour.overview.kpis', anchor: 'overview-kpis', section: 'overview', title: 'Indicadores', body: 'Negociações, cotações pendentes, pedidos em andamento e volume faturado com a construtora.' },
+        { key: 'fornecedor.tour.overview.recentes', anchor: 'overview-recentes', section: 'overview', title: 'Mais recentes', body: 'Os últimos pedidos, cotações e notas. Troque pelas abas do cartão e clique para abrir.' },
+      ]),
+      negotiations: tourDe('negotiations', [
+        { key: 'fornecedor.tour.lances.tabela', anchor: 'lances-tabela', section: 'negotiations', title: 'Negociações', body: 'As negociações abertas com a construtora e a situação da sua proposta em cada uma.' },
+        { key: 'fornecedor.tour.lances.negociar', anchor: 'lances-negociar', section: 'negotiations', title: 'Negociar', body: 'Enquanto a negociação estiver aberta, você pode melhorar a oferta por aqui.', quando: 'quando houver uma negociação aberta' },
+      ]),
+      quotations: tourDe('quotations', [
+        { key: 'fornecedor.tour.cotacoes.busca', anchor: 'cotacoes-busca', section: 'quotations', title: 'Buscar', body: 'Ache uma cotação pelo número, pela obra ou pelo item. Os filtros ao lado separam por situação.' },
+        { key: 'fornecedor.tour.cotacoes.tabela', anchor: 'cotacoes-tabela', section: 'quotations', title: 'Cotações', body: 'Situação e prazo de resposta de cada pedido de preço.' },
+        { key: 'fornecedor.tour.cotacoes.responder', anchor: 'cotacoes-responder', section: 'quotations', title: 'Responder', body: 'Abre a cotação para você informar preço e prazo por item e enviar a proposta.', quando: 'quando houver uma cotação para responder' },
+      ]),
+      orders: tourDe('orders', [
+        { key: 'fornecedor.tour.pedidos.busca', anchor: 'pedidos-busca', section: 'orders', title: 'Buscar', body: 'Ache um pedido pelo número ou pela obra. Os filtros ao lado separam por situação.' },
+        { key: 'fornecedor.tour.pedidos.tabela', anchor: 'pedidos-tabela', section: 'orders', title: 'Pedidos', body: 'Status, valor e entrega prevista. Clique no pedido para ver itens, financeiro e recebimento.' },
+        { key: 'fornecedor.tour.pedidos.logistica', anchor: 'pedidos-logistica', section: 'orders', title: 'Logística', body: 'Informe separação, envio e entrega do pedido. Datas em dia evitam cobrança da obra.', quando: 'quando houver um pedido em andamento' },
+      ]),
+      documents: tourDe('documents', [
+        { key: 'fornecedor.tour.notas.enviar', anchor: 'notas-enviar', section: 'documents', title: 'Enviar nota fiscal', body: 'Arraste o PDF, XML ou imagem da nota (até 5 MB) ou clique para escolher o arquivo.' },
+        { key: 'fornecedor.tour.notas.vincular', anchor: 'notas-vincular', section: 'documents', title: 'Vincular ao pedido', body: 'Escolha o pedido da nota antes de enviar: ela é conferida com ele.' },
+        { key: 'fornecedor.tour.notas.tabela', anchor: 'notas-tabela', section: 'documents', title: 'Notas enviadas', body: 'Situação de conferência de cada nota que você mandou.' },
+      ]),
+      financeiro: tourDe('financeiro', [
+        { key: 'fornecedor.tour.financeiro.kpis', anchor: 'financeiro-kpis', section: 'financeiro', title: 'Resumo financeiro', body: 'O que você tem a receber e o que já recebeu nos seus pedidos.' },
+        { key: 'fornecedor.tour.financeiro.parcelas', anchor: 'financeiro-parcelas', section: 'financeiro', title: 'Parcelas', body: 'Vencimento, valor e status de cada parcela. O recibo aparece quando o pagamento é feito.' },
+      ]),
+    },
   },
   corretor: {
     geral: tourDe('geral', [
       { key: 'corretor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Corretor', body: 'O menu leva às seções liberadas para você: estoque, propostas, leads, comissões, materiais e mais.' },
+      { key: 'corretor.tour.geral.estoque', anchor: 'aba-estoque', section: 'estoque', title: 'Estoque', body: 'As unidades disponíveis de cada empreendimento, com o preço vigente.' },
+      { key: 'corretor.tour.geral.estoque-mapa', anchor: 'estoque-mapa', section: 'estoque', title: 'Mapa de unidades', body: 'Clique numa unidade para fazer a proposta, ou marque várias para propor juntas.' },
       { key: 'corretor.tour.propostas', anchor: 'aba-propostas', section: 'propostas', title: 'Propostas', body: 'Envie propostas de compra e acompanhe a resposta da incorporadora por aqui.' },
+      { key: 'corretor.tour.geral.propostas-lista', anchor: 'propostas-lista', section: 'propostas', title: 'Suas propostas', body: 'Situação e resposta de cada proposta. Dá para baixar o PDF e compartilhar o link.' },
+      { key: 'corretor.tour.geral.leads', anchor: 'aba-leads', section: 'leads', title: 'Leads', body: 'Os interessados que você está atendendo, por etapa do funil.' },
       { key: 'corretor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da incorporadora.' },
+      { key: 'corretor.tour.geral.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê os seus dados.' },
     ]),
-    porAba: {},
+    porAba: {
+      analytics: tourDe('analytics', [
+        { key: 'corretor.tour.analytics.kpis', anchor: 'analytics-kpis', section: 'analytics', title: 'Seus números', body: 'Unidades disponíveis, propostas enviadas e aprovadas e a comissão acumulada.' },
+        { key: 'corretor.tour.analytics.graficos', anchor: 'analytics-graficos', section: 'analytics', title: 'Evolução', body: 'Gráficos de vendas e propostas para acompanhar o seu desempenho.' },
+      ]),
+      estoque: tourDe('estoque', [
+        { key: 'corretor.tour.estoque.finalidade', anchor: 'estoque-finalidade', section: 'estoque', title: 'Venda ou locação', body: 'Filtre as unidades pela finalidade.' },
+        { key: 'corretor.tour.estoque.mapa', anchor: 'estoque-mapa', section: 'estoque', title: 'Mapa de unidades', body: 'Cada unidade com área, situação e preço. Clique para propor; marque várias para uma proposta só.' },
+        { key: 'corretor.tour.estoque.cesta', anchor: 'cesta-barra', section: 'estoque', title: 'Unidades marcadas', body: 'A barra mostra as unidades marcadas e abre o simulador da proposta.', quando: 'quando você marcar uma unidade no mapa' },
+      ]),
+      empreendimentos: tourDe('empreendimentos', [
+        { key: 'corretor.tour.empreendimentos.lista', anchor: 'empreendimentos-lista', section: 'empreendimentos', title: 'Empreendimentos', body: 'Os empreendimentos liberados para você. Abra um para ver a tabela de preços e propor.' },
+      ]),
+      propostas: tourDe('propostas', [
+        { key: 'corretor.tour.propostas.lista', anchor: 'propostas-lista', section: 'propostas', title: 'Suas propostas', body: 'Situação e resposta da incorporadora; baixe o PDF ou compartilhe o link de cada uma.' },
+      ]),
+      leads: tourDe('leads', [
+        { key: 'corretor.tour.leads.busca', anchor: 'leads-busca', section: 'leads', title: 'Buscar', body: 'Ache um lead pelo nome, telefone ou e-mail.' },
+        { key: 'corretor.tour.leads.novo', anchor: 'leads-novo', section: 'leads', title: 'Novo Lead', body: 'Cadastre o interessado com contato e o que ele procura.' },
+      ]),
+      comissoes: tourDe('comissoes', [
+        { key: 'corretor.tour.comissoes.totais', anchor: 'comissoes-totais', section: 'comissoes', title: 'Totais', body: 'Comissão prevista, liberada e paga.' },
+        { key: 'corretor.tour.comissoes.lista', anchor: 'comissoes-lista', section: 'comissoes', title: 'Por venda', body: 'Valor, situação e datas de cada comissão.' },
+      ]),
+      materiais: tourDe('materiais', [
+        { key: 'corretor.tour.materiais.grade', anchor: 'materiais-grade', section: 'materiais', title: 'Materiais de venda', body: 'Tabelas, plantas e peças publicadas pela incorporadora. Use sempre a versão mais recente.' },
+      ]),
+      chat: tourDe('chat', [
+        { key: 'corretor.tour.chat.enviar', anchor: 'chat-enviar', section: 'chat', title: 'Enviar mensagem', body: 'Dúvidas rápidas com a equipe comercial. Propostas vão pela aba Propostas.' },
+      ]),
+    },
   },
 };
 

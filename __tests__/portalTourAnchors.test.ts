@@ -21,8 +21,14 @@ import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 // desenham o conteúdo das abas. O primeiro é o arquivo do portal.
 const ARQUIVOS: Record<Portal, string[]> = {
   parceiro: ['components/partner/PartnerPortal.tsx', 'components/partner/PartnerPortalFinanceiro.tsx'],
-  fornecedor: ['components/SupplierDashboard.tsx'],
-  corretor: ['components/BrokerPortal.tsx'],
+  fornecedor: [
+    'components/SupplierDashboard.tsx',
+    ...['Overview', 'Negotiations', 'Quotations', 'Orders', 'Invoices', 'Financeiro'].map(x => `components/supplier/portal/Portal${x}.tsx`),
+  ],
+  corretor: [
+    'components/BrokerPortal.tsx',
+    ...['LeadManager', 'Commissions', 'Chat'].map(x => `components/broker/Broker${x}.tsx`),
+  ],
 };
 const fonteDe = (portal: Portal) =>
   ARQUIVOS[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');

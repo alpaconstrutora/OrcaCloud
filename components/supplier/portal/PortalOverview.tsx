@@ -81,9 +81,9 @@ const PortalOverview: React.FC<Props> = ({
                 </PortalCard>
             )}
 
-            <KpiStrip items={kpis} />
+            <KpiStrip items={kpis} data-tour="overview-kpis" />
 
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="overview-recentes">
                 <PortalTabs tabs={tabs} active={tab} onChange={setTab} />
 
                 <div className="overflow-x-auto">

@@ -18,8 +18,9 @@ import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const getByToken = vi.fn();
+const getMine = vi.fn(async () => ({ orgs: [], help: null }));
 vi.mock('../../services/portalHelpService', () => ({
-  portalHelpService: { getByToken: (...a: unknown[]) => getByToken(...a), getMine: vi.fn() },
+  portalHelpService: { getByToken: (...a: unknown[]) => getByToken(...a), getMine: (...a: unknown[]) => getMine(...a) },
 }));
 vi.mock('../../services/supplierPortalTokenService', () => ({
   supplierPortalTokenService: {
@@ -60,9 +61,9 @@ import type { Supplier } from '../../types';
 
 const TODAS = ['overview', 'negotiations', 'quotations', 'orders', 'documents', 'financeiro'];
 
-function montar(tabs: string[]) {
+function montar(tabs: string[], extra: { isPreview?: boolean; portalToken?: string } = { portalToken: 'tok-forn' }) {
   const supplier = { id: 'sup1', name: 'Ferragens Beta', email: 'beta@x.com', settings: { supplierPortalTabs: tabs } } as unknown as Supplier;
-  render(<ConfirmProvider><SupplierDashboard supplierProfile={supplier} portalToken="tok-forn" /></ConfirmProvider>);
+  render(<ConfirmProvider><SupplierDashboard supplierProfile={supplier} {...extra} /></ConfirmProvider>);
 }
 
 const barra = () => document.querySelector('.md\\:hidden.fixed.bottom-0') as HTMLElement;
@@ -81,6 +82,23 @@ beforeEach(() => {
 });
 
 describe('Portal do Fornecedor › ajuda', () => {
+  it('link real (rota pública passa portalToken E isPreview): o tour abre sozinho no 1º acesso — não é prévia do gestor', async () => {
+    // Regressão do tour v2 (04/10/2026): `modoPrevia={isPreview}` tratava o link
+    // como prévia — sem tour automático e sem marca de "já viu".
+    montar(TODAS, { portalToken: 'tok-forn', isPreview: true });
+    await waitFor(() => expect(getByToken).toHaveBeenCalledWith('fornecedor', 'tok-forn'));
+    expect(screen.queryByRole('menuitem', { name: 'Ajuda' })).not.toBeInTheDocument();
+  });
+
+  it('prévia do gestor (isPreview sem token): nada abre sozinho', async () => {
+    montar(TODAS, { isPreview: true });
+    await screen.findByRole('button', { name: 'Abrir a ajuda do portal' }).catch(() => null);
+    await new Promise(r => setTimeout(r, 100));
+    // sem token o painel leria por get_mine — e só leria se algo abrisse
+    expect(getMine).not.toHaveBeenCalled();
+    expect(getByToken).not.toHaveBeenCalled();
+  });
+
   it('botão "?" do header abre a central lendo a casca do token, só com as seções liberadas', async () => {
     const user = userEvent.setup();
     montar(['overview', 'orders']);

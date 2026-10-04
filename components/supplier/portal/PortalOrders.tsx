@@ -58,7 +58,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
 
     return (
         <div className="space-y-3">
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="pedidos-tabela">
                 <CardHeader
                     title="Meus pedidos"
                     subtitle={`${rows.length} pedido${rows.length === 1 ? '' : 's'} · ${fmtBRL(totalAberto)} em aberto`}
@@ -67,6 +67,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                             <div className="relative">
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
                                 <input
+                                    data-tour="pedidos-busca"
                                     type="text"
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
@@ -99,6 +100,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                     <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A0A4AD]" />
                         <input
+                            data-tour="pedidos-busca"
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
@@ -180,6 +182,7 @@ const PortalOrders: React.FC<Props> = ({ orders, invoices, loading, onOpenOrder 
                                                     <span className="inline-flex items-center justify-end gap-3">
                                                         <button
                                                             type="button"
+                                                            data-tour="pedidos-logistica"
                                                             onClick={e => { e.stopPropagation(); onOpenOrder(o.id, 'logistics'); }}
                                                             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#C24428] hover:text-[#E1553C] transition-colors"
                                                         >

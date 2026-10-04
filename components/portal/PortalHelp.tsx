@@ -74,13 +74,28 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
   const { loading, erro, help, contact, orgs, selectedOrgId, selectOrg, precisaEscolherOrg } = usePortalHelp(portal, {
     token, orgId, visibleSections, enabled: open || !!tourAtivo,
   });
+  // Aba de onde o tour saiu. Acompanha a aba atual ATÉ o tour navegar pela
+  // primeira vez — assim absorve a correção de aba que alguns portais fazem ao
+  // montar (o Corretor nasce numa aba e pula para a primeira liberada). No fim,
+  // o tour volta para ela; essa volta não é "o usuário abriu a aba" e não pode
+  // disparar mini-tour (`voltaDoTour`).
   const fimDoTour = useRef(0);
-  // aba em que o tour começou: o tour volta para ela ao terminar, e essa volta
-  // não é "o usuário abriu a aba" (não pode disparar mini-tour)
-  const secaoAntesDoTour = useRef(currentSection);
-  useEffect(() => { if (tourAtivo) secaoAntesDoTour.current = currentSection; }, [tourAtivo]); // eslint-disable-line react-hooks/exhaustive-deps
+  const secaoDeOrigem = useRef<string | null>(currentSection ?? null);
+  const tourNavegou = useRef(false);
+  const voltaDoTour = useRef<string | null>(null);
+  if (tourAtivo && !tourNavegou.current) secaoDeOrigem.current = currentSection ?? null;
+  const navegarPeloTour = useMemo(() => onNavigate && ((s: string) => {
+    tourNavegou.current = true;
+    onNavigate(s);
+  }), [onNavigate]);
   const encerrarTour = (motivo: 'concluido' | 'pulado') => {
     if (tourAtivo && tourKey && !modoPrevia) marcarTourVisto(chaveDoTour(portal, tourKey, tourAtivo), motivo);
+    const origem = secaoDeOrigem.current;
+    if (tourNavegou.current && origem && onNavigate && currentSection !== origem) {
+      voltaDoTour.current = origem;
+      onNavigate(origem);
+    }
+    tourNavegou.current = false;
     fimDoTour.current = Date.now();
     setTourAtivo(null);
   };
@@ -94,7 +109,11 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
     ultimaSecao.current = currentSection;
     if (!currentSection || currentSection === anterior) return;
     if (!autoTour || modoPrevia || !tourKey || tourAtivo) return;
-    if (currentSection === secaoAntesDoTour.current && Date.now() - fimDoTour.current < 1500) return;
+    if (voltaDoTour.current) {
+      const eraAVolta = voltaDoTour.current === currentSection && Date.now() - fimDoTour.current < 1500;
+      voltaDoTour.current = null;
+      if (eraAVolta) return;
+    }
     if (!viuNesteAparelho('geral') || viuNesteAparelho(currentSection)) return;
     if (!help.tours[currentSection]?.length) return;
     const aba = currentSection;
@@ -185,7 +204,7 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
         steps={help.tours[tourAtivo] ?? SEM_PASSOS}
         accent={accent}
         currentSection={currentSection}
-        onNavigate={onNavigate}
+        onNavigate={navegarPeloTour}
         onFinish={encerrarTour}
       />
     )}

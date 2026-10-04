@@ -1672,6 +1672,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             })}
                             {hasMore && (
                                 <button
+                                    data-tour="mobile-mais"
                                     onClick={() => setShowMoreSheet(true)}
                                     className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
                                         ${moreActive ? 'text-[#C24428]' : 'text-gray-400'}
@@ -1753,7 +1754,9 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                     setActiveNegotiationId(null);
                     setActiveTab(s as SupplierPortalTab);
                 }}
-                modoPrevia={isPreview}
+                // a rota pública do link TAMBÉM passa isPreview (só para esconder o cromo de admin):
+                // prévia do gestor é isPreview SEM token
+                modoPrevia={isPreview && !portalToken}
                 accent="coral"
                 tourKey={portalToken || effectiveSupplier?.email || null}
                 autoTour={isStandalone}

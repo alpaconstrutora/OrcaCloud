@@ -130,6 +130,7 @@ const BrokerChat: React.FC<BrokerChatProps> = ({ brokerEmail, brokerName }) => {
             <div className="px-4 py-3 border-t border-gray-100 bg-white">
                 <div className="flex gap-2">
                     <input
+                        data-tour="chat-enviar"
                         type="text"
                         value={newMessage}
                         onChange={e => setNewMessage(e.target.value)}

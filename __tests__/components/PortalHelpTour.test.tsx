@@ -205,6 +205,48 @@ describe('PortalHelp × tour', () => {
     expect(await screen.findByText(DOCS[0].title, {}, { timeout: 2000 })).toBeInTheDocument();
   });
 
+  it('portal que corrige a aba ao montar (Corretor): a volta é para a aba corrigida e não dispara mini-tour', async () => {
+    const user = userEvent.setup();
+    const extra = document.createElement('div');
+    extra.setAttribute('data-ancoras', '');
+    for (const a of ['aba-documentos', 'aba-contratos']) { const el = document.createElement('button'); el.setAttribute('data-tour', a); extra.appendChild(el); }
+    document.body.appendChild(extra);
+    const navegacoes: string[] = [];
+    function Portal() {
+      // nasce numa aba que não existe para este externo e o portal corrige logo depois
+      const [secao, setSecao] = React.useState('analytics');
+      React.useEffect(() => { if (secao === 'analytics') setSecao('dashboard'); }, [secao]);
+      const ir = (s: string) => {
+        navegacoes.push(s);
+        // a lista de contratos só existe depois de abrir a aba Contratos
+        if (s === 'contratos' && !document.querySelector('[data-tour="contratos-lista"]')) {
+          const el = document.createElement('button'); el.setAttribute('data-tour', 'contratos-lista'); extra.appendChild(el);
+        }
+        setSecao(s);
+      };
+      return (
+        <ConfirmProvider>
+          <button type="button" onClick={() => setSecao('documentos')}>usuário abre Documentos</button>
+          <PortalHelp open={false} onClose={() => {}} portal="parceiro" token="tok" tourKey="tok" autoTour currentSection={secao} onNavigate={ir} />
+        </ConfirmProvider>
+      );
+    }
+    render(<Portal />);
+    await screen.findByText(GERAL[0].title);
+    // menu → aba-documentos → documentos-enviar → aba-contratos → contratos-lista (navega)
+    for (let i = 0; i < 4; i++) await user.click(screen.getByRole('button', { name: 'Próximo' }));
+    expect(await screen.findByText('Seus contratos', { selector: 'h3' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(navegacoes).toEqual(['contratos']);
+    await user.click(screen.getByRole('button', { name: 'Pular' }));
+    // voltou para o Dashboard (a aba corrigida), não para "analytics"
+    expect(navegacoes).toEqual(['contratos', 'dashboard']);
+    await esperar(600);
+    expect(screen.queryByRole('dialog', { name: 'Tour do portal' })).not.toBeInTheDocument();
+    // e um clique de verdade logo depois continua abrindo o "como usar"
+    await user.click(screen.getByRole('button', { name: 'usuário abre Documentos' }));
+    expect(await screen.findByText(DOCS[0].title, {}, { timeout: 2000 })).toBeInTheDocument();
+  });
+
   it('sem tourKey e fora da prévia o painel não oferece tour', async () => {
     montar({ open: true, tourKey: null });
     await screen.findByPlaceholderText('Buscar na ajuda...');

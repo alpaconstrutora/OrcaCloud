@@ -61,9 +61,36 @@ function logoComoDataUrl(url?: string | null): Promise<string | null> {
     return p;
 }
 
-async function logoDaOrganizacao(orgId: string): Promise<string | null> {
-    const { data } = await supabase.from('organizations').select('logo_url').eq('id', orgId).maybeSingle();
-    return (data as { logo_url?: string | null } | null)?.logo_url ?? null;
+/** O que o PDF lê da organização na hora (não congelado): logo e contato. */
+export interface DadosEmitente {
+    logo_url: string | null;
+    phone: string | null;
+    email: string | null;
+    website: string | null;
+}
+
+const orgCache = new Map<string, Promise<DadosEmitente | null>>();
+
+/**
+ * Logo + contato da organização DONA do recibo, numa consulta por org por
+ * sessão. Falha → null: o recibo sai sem contato, nunca deixa de sair.
+ */
+function dadosDaOrganizacao(orgId: string): Promise<DadosEmitente | null> {
+    const emCache = orgCache.get(orgId);
+    if (emCache) return emCache;
+    const p = (async (): Promise<DadosEmitente | null> => {
+        try {
+            const { data, error } = await supabase.from('organizations')
+                .select('logo_url,phone,email,website')
+                .eq('id', orgId)
+                .maybeSingle();
+            return error ? null : ((data as DadosEmitente | null) ?? null);
+        } catch {
+            return null;
+        }
+    })();
+    orgCache.set(orgId, p);
+    return p;
 }
 
 async function guardarPdf(recibo: FinancialReceipt, pdf: Blob): Promise<void> {
@@ -160,10 +187,14 @@ export const financialReceiptService = {
             // Arquivo sumiu do bucket: monta de novo pelo registro congelado.
         }
 
-        // Sem logo informada (ex.: Portal do Cliente, visão da equipe), usa a da
-        // organização DONA do recibo — não a do topo.
-        const logoUrl = opts.logoUrl !== undefined ? opts.logoUrl : await logoDaOrganizacao(recibo.organization_id);
-        const pdf = montarReciboPdf(recibo, await logoComoDataUrl(logoUrl)).output('blob');
+        // Contato (e, sem logo informada — ex.: Portal do Cliente, visão da
+        // equipe —, a logo) vêm da organização DONA do recibo, não a do topo.
+        const org = await dadosDaOrganizacao(recibo.organization_id);
+        const logoUrl = opts.logoUrl !== undefined ? opts.logoUrl : (org?.logo_url ?? null);
+        const pdf = montarReciboPdf(recibo, {
+            logoDataUrl: await logoComoDataUrl(logoUrl),
+            contato: org ? { phone: org.phone, email: org.email, website: org.website } : null,
+        }).output('blob');
         let guardado = !!recibo.file_path;
         if (!recibo.file_path) {
             try {

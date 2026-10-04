@@ -1480,4 +1480,16 @@ face sul, teto = Quarto, piso = solo, sem pendência; Cozinha sob a cobertura co
 como pendência que some ao declarar a telha; Quarto sob a cobertura e sobre a Sala; sem telhado o
 Quarto vira laje exposta e a Cozinha exterior; vizinho sem etiqueta é pendência; resumo por tipo).
 `BlueprintEditor.test.tsx` (o caso das premissas confere a coluna: "laje exposta / sobre o solo"
-com ⚠ 1 e o motivo no `title`). `check-ui-standard` limpo.
+com **⚠ 2** — o último pavimento sem telhado E o vizinho sem etiqueta — e os motivos no `title`).
+`check-ui-standard` limpo. Commit `6f1c1c62`.
+
+### Fecho da Etapa 1 — 04/10/2026
+
+- **Migration `aplicar_20271004000050_blueprint_opening_types_vidro.sql` APLICADA** com o OK do
+  usuário; prova: `information_schema.columns` → `vidro jsonb`, anulável.
+- **Suíte inteira** (reporter JSON, conta fechando): 7546 testes = 7512 ✅ + 34 pulados de propósito +
+  0 pendentes + 0 falhas. `npm run build` (tsc + vite) exit 0. ⚠️ Um `tsc` isolado caiu com exit 139
+  (segfault do Node, sem `error TS`) enquanto suíte e build rodavam juntos — a tipagem foi provada
+  pelo `tsc` de dentro do build.
+- Fica para a prova no app real: declarar vidro numa janela, camadas num telhado, e ver a coluna
+  "Teto / piso" — a E2 abre com esse passeio.

@@ -285,16 +285,27 @@ declaração de `textoRecibo` ("Recebemos de Alpa … (CNPJ …)"); credor assin
   metadados, valor + contato com bullets, tabela de 1 linha, barra TOTAL, declaração,
   assinatura (PAG com "Local e data"), rodapé com contato e logo pequena. Ajuste após o
   1º render: colunas DATA/FORMA afastadas e assinatura sobe para y≥220.
-- [ ] 6. `npm run ci` — em andamento.
-- [ ] 7. Publicação.
-- [ ] 5. Regeração — **backup feito em 04/10/2026 01:08** (pasta da sessão `regerar/backup`):
+- [x] 6. `npm run ci` verde: 7285 testes (34 skipped), build 21 s.
+- [x] 7. Publicação — commit `0ec7bb10` em main (04/10/2026). CI do GitHub `success`.
+  `conferir-producao.sh "VALOR RECEBIDO"` provou o texto no bundle servido; o domínio
+  passou a servir `3a53a5f` (commit seguinte de outra frente, que contém este).
+- [x] 5. Regeração — feita em 04/10/2026, DEPOIS do deploy, a partir do commit publicado
+  (`scripts/regerar-recibos.ts` gerou os mesmos hashes antes e depois do rebase — PDF
+  determinístico). `storage rm` + `storage cp` no MESMO `file_path`; `financial_receipts`
+  conferida inalterada (file_path, issued_at, cancelados). Bucket depois:
+  `storage.objects` com `application/pdf` e bytes = manifesto. Os nº 1–3 cancelados
+  ficaram como estavam. Backup feito em 04/10/2026 01:08 (pasta da sessão `regerar/backup`):
 
-  | nº | id | bytes | sha256 (antigo) |
+  | nº | id | antigo (bytes · sha256) | novo no bucket (bytes · sha256) |
   |---|---|---|---|
-  | PAG 000001 | 0b3897b5-… | 58054 | `6b184595a465…` |
-  | REC 000004 | 286048b5-… | 57908 | `e630eca9d945…` |
-  | REC 000005 | 104b87cf-… | 57916 | `981daabd8af4…` |
-  | REC 000006 | 572bfa2c-… | 57917 | `f279f491ff95…` |
+  | PAG 000001 | 0b3897b5-… | 58054 · `6b184595a465…` | 64602 · `702e03f8df4d…` |
+  | REC 000004 | 286048b5-… | 57908 · `e630eca9d945…` | 64442 · `94ebb7fb9340…` |
+  | REC 000005 | 104b87cf-… | 57916 · `981daabd8af4…` | 64468 · `2dc011b1db82…` |
+  | REC 000006 | 572bfa2c-… | 57917 · `f279f491ff95…` | 64470 · `82f970127088…` |
+
+  Rollback, se preciso: `storage rm` + `storage cp` do backup para o mesmo path.
+  Portais: as Edge Functions só assinam o `file_path`, então já entregam o arquivo novo
+  (o mesmo baixado de volta pelo CLI, hash conferido).
 
   ⚠️ `supabase storage cp` no Git Bash: `MSYS_NO_PATHCONV=1` e caminho local RELATIVO
   (um `C:/…` é lido como esquema de URL e um `/c/…` vira caminho relativo torto).

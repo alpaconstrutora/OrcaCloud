@@ -1,6 +1,8 @@
 // @ts-nocheck
 import React, { useState, useMemo } from 'react';
 import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, Bell, HelpCircle } from 'lucide-react';
+import { PortalHelp } from './portal/PortalHelp';
+import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 import { downloadProposalPdf } from '../services/proposalPdfService';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import BrokerProposalSimulator from './broker/BrokerProposalSimulator';
@@ -27,7 +29,7 @@ import { PropertyStatus, UserProfile, ProfileGroup } from '../types';
 import type { BrokerUnit, BrokerProposal, BrokerProfile } from '../types';
 import type { PropertyDeal } from '../types/imovib';
 
-type PortalTab = 'estoque' | 'empreendimentos' | 'propostas' | 'leads' | 'comissoes' | 'materiais' | 'ranking' | 'treinamento' | 'agenda' | 'chat' | 'analytics' | 'saude' | 'integracoes';
+type PortalTab = typeof BROKER_PORTAL_TAB_IDS[number];
 
 interface BrokerPortalProps {
     profile: { group: string; role: string; email?: string };
@@ -106,6 +108,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
     // Menu de conta do portal público (link do corretor) — espelha o dropdown de perfil do sistema
     const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
     const [showMyAccount, setShowMyAccount] = useState(false);
+    // Central de ajuda (F2, 04/10/2026) — mesmo painel do Portal do Parceiro.
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         if (!isAccountMenuOpen) return;
@@ -445,6 +449,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                         <div className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-black uppercase tracking-wider">Broker Portal</div>
                         <h1 className="text-md font-bold text-gray-900 tracking-tight">Portal do Corretor</h1>
                     </div>
+                    <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIsHelpOpen(true)}
+                        title="Ajuda"
+                        aria-label="Abrir a ajuda do portal"
+                        data-tour="ajuda"
+                        className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    >
+                        <HelpCircle className="w-5 h-5" />
+                    </button>
                     <div className="relative" ref={accountMenuRef}>
                         <button
                             type="button"
@@ -505,19 +520,31 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                                 <div className="border-t border-gray-100 p-2">
                                     <button
                                         type="button"
-                                        onClick={() => { setIsAccountMenuOpen(false); toast('Dúvidas? Fale com a incorporadora responsável por este empreendimento.'); }}
+                                        onClick={() => { setIsAccountMenuOpen(false); setIsHelpOpen(true); }}
                                         className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                         role="menuitem"
                                     >
                                         <HelpCircle className="h-4 w-4 text-gray-400" />
-                                        <span className="flex-1">Ajuda e comandos</span>
+                                        <span className="flex-1">Ajuda</span>
                                     </button>
                                 </div>
                             </div>
                         )}
                     </div>
+                    </div>
                 </header>
             )}
+
+            <PortalHelp
+                open={isHelpOpen}
+                onClose={() => setIsHelpOpen(false)}
+                portal="corretor"
+                token={portalToken}
+                orgId={initialOrgId || selectedOrgId || null}
+                visibleSections={enabledTabIds}
+                initialSection={currentTab}
+                accent="indigo"
+            />
 
             {showMyAccount && (
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
@@ -603,6 +630,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
 
             {/* Header — só no app autenticado; no portal público a casca acima já tem header próprio */}
             {!isStandalone && (
+            <div className="flex items-start justify-between gap-4">
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                     Portal do Corretor
@@ -610,6 +638,17 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">
                     {effectiveBrokerEmail ? `Olá, ${effectiveBrokerEmail.split('@')[0]}` : 'Bem-vindo'} • Estoque, propostas, leads e comissões em tempo real.
                 </p>
+            </div>
+                <button
+                    type="button"
+                    onClick={() => setIsHelpOpen(true)}
+                    title="Ajuda"
+                    aria-label="Abrir a ajuda do portal"
+                    data-tour="ajuda"
+                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 shrink-0"
+                >
+                    <HelpCircle className="w-5 h-5" />
+                </button>
             </div>
             )}
 

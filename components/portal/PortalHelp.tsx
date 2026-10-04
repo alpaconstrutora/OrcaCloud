@@ -34,12 +34,13 @@ export interface PortalHelpProps {
   /** F3: reabrir o tour guiado */
   onRestartTour?: () => void;
   /** acento do portal: laranja (parceiro) ou coral (kit §24) */
-  accent?: 'orange' | 'coral';
+  accent?: 'orange' | 'coral' | 'indigo';
 }
 
 const ACCENT = {
   orange: { text: 'text-orange-600', bg: 'bg-orange-500 hover:bg-orange-600', ring: 'focus:ring-orange-500/20 focus:border-orange-500', soft: 'bg-orange-50 text-orange-700' },
   coral: { text: 'text-[#C24428]', bg: 'bg-[#E1553C] hover:bg-[#C24428]', ring: 'focus:ring-[#E1553C]/20 focus:border-[#E1553C]', soft: 'bg-[#FDEDE8] text-[#C24428]' },
+  indigo: { text: 'text-indigo-600', bg: 'bg-indigo-600 hover:bg-indigo-700', ring: 'focus:ring-indigo-500/20 focus:border-indigo-500', soft: 'bg-indigo-50 text-indigo-700' },
 };
 
 const soDigitos = (s: string) => s.replace(/\D/g, '');

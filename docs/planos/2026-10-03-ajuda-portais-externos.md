@@ -83,9 +83,22 @@ sobrescreveu aquela chave. "Restaurar padrão" = apagar a sobrescrita.
   aba oculta).
 
 ## Fases
-- **F1 (esta frente):** banco, textos dos 3 portais, editor, Parceiro completo.
-- **F2:** Fornecedor e Corretor (botão `?`, toast → painel, "Mais" permanente no
-  celular do Fornecedor, seções ≡ ids exportados dos portais).
+- **F1 (frente `ajuda-portais`, 376de903):** banco, textos dos 3 portais, editor,
+  Parceiro completo.
+- **F2 (frente `ajuda-portais-f2`, 04/10/2026):** Fornecedor e Corretor.
+  - Pedido literal: "f2".
+  - `utils/supplierPortalTabs.ts` e `utils/brokerPortalTabs.ts` passam a ser a
+    fonte dos ids de aba (os tipos `SupplierPortalTab`/`PortalTab` derivam deles);
+    `__tests__/portalHelpSections.test.ts` trava `PORTAL_SECTIONS` ≡ ids dos três
+    portais.
+  - `SupplierDashboard`: `?` no header do link, item "Ajuda" no menu (era toast),
+    barra inferior do celular com "Mais" **permanente** (4 abas + Mais) e "Ajuda"
+    dentro do sheet — o header com o menu é só md+; `visibleSections =
+    enabledTabIds`; `accent="coral"`.
+  - `BrokerPortal`: `?` no header do link e ao lado do título no modo app, item
+    "Ajuda" no menu (era toast); `orgId = initialOrgId || selectedOrgId`;
+    `accent="indigo"` (novo no `PortalHelp`).
+  - Teste: `__tests__/components/SupplierPortalAjuda.test.tsx`.
 - **F3:** Tour guiado (`components/portal/PortalTour.tsx`, `data-tour` nos
   portais; edição dos textos já cabe no editor da F1).
 - **F4 (só se pedirem):** "já viu o tour" por e-mail em tabela.

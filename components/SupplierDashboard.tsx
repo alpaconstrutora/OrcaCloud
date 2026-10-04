@@ -65,6 +65,8 @@ import PortalFinanceiro from './supplier/portal/PortalFinanceiro';
 import SupplierFinanceiroTab from './supplier/SupplierFinanceiroTab';
 import PortalMyData from './supplier/portal/PortalMyData';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import { PortalHelp } from './portal/PortalHelp';
+import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { SupplierBankAccount } from '../types/supplierBankAccount';
 import { supabase } from '../lib/supabase';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
@@ -74,7 +76,7 @@ import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
  * repetida em três lugares (props, useState e o cast do AppRouter) e a aba
  * Financeiro (2026-09-17) foi a quarta vez que alguém teria de acertar os três.
  */
-export type SupplierPortalTab = 'overview' | 'negotiations' | 'quotations' | 'orders' | 'documents' | 'financeiro';
+export type SupplierPortalTab = typeof SUPPLIER_PORTAL_TAB_IDS[number];
 
 interface SupplierDashboardProps {
     supplierProfile?: Supplier | null;
@@ -189,6 +191,8 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const [showTabConfig, setShowTabConfig] = React.useState(false);
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
     const [showMoreSheet, setShowMoreSheet] = React.useState(false);
+    // Central de ajuda (F2, 04/10/2026) — mesmo painel do Portal do Parceiro.
+    const [isHelpOpen, setIsHelpOpen] = React.useState(false);
     const [dataError, setDataError] = React.useState<string | null>(null);
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
@@ -1311,6 +1315,17 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                             </div>
                             <h1 className="text-md font-bold text-gray-900 tracking-tight">Olá, {supplierGreetingName}</h1>
                         </div>
+                        <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsHelpOpen(true)}
+                            title="Ajuda"
+                            aria-label="Abrir a ajuda do portal"
+                            data-tour="ajuda"
+                            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        >
+                            <HelpCircle className="w-5 h-5" />
+                        </button>
                         <div className="relative" ref={accountMenuRef}>
                             <button
                                 type="button"
@@ -1371,16 +1386,17 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     <div className="border-t border-gray-100 p-2">
                                         <button
                                             type="button"
-                                            onClick={() => { setIsAccountMenuOpen(false); showToast('Dúvidas? Fale com a construtora responsável por esta obra.'); }}
+                                            onClick={() => { setIsAccountMenuOpen(false); setIsHelpOpen(true); }}
                                             className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                             role="menuitem"
                                         >
                                             <HelpCircle className="h-4 w-4 text-gray-400" />
-                                            <span className="flex-1">Ajuda e comandos</span>
+                                            <span className="flex-1">Ajuda</span>
                                         </button>
                                     </div>
                                 </div>
                             )}
+                        </div>
                         </div>
                     </header>
             )}
@@ -1618,10 +1634,12 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             {/* Barra de navegação inferior (mobile) — máx. 5 slots; excedente vai
                 pro sheet "Mais", igual ao Portal do Investidor. */}
             {isPublicExperience && !semAbasHabilitadas && (() => {
+                // "Mais" é permanente (04/10/2026): o header com o menu da conta é só
+                // md+, e é pelo "Mais" que o celular chega à Ajuda. 4 abas + Mais.
                 const MAX_BAR = 5;
-                const hasMore = navTabs.length > MAX_BAR;
-                const barTabs = hasMore ? navTabs.slice(0, MAX_BAR - 1) : navTabs;
-                const moreTabs = hasMore ? navTabs.slice(MAX_BAR - 1) : [];
+                const hasMore = true;
+                const barTabs = navTabs.slice(0, MAX_BAR - 1);
+                const moreTabs = navTabs.slice(MAX_BAR - 1);
                 const moreActive = moreTabs.some(t => t.id === activeTab);
                 return (
                     <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
@@ -1675,7 +1693,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             {/* Bottom-sheet "Mais" — abas excedentes (somente mobile) */}
             {showMoreSheet && (() => {
                 const MAX_BAR = 5;
-                const moreTabs = navTabs.length > MAX_BAR ? navTabs.slice(MAX_BAR - 1) : [];
+                const moreTabs = navTabs.slice(MAX_BAR - 1);
                 return (
                     <div className="md:hidden fixed inset-0 z-[200]" onClick={() => setShowMoreSheet(false)}>
                         <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
@@ -1703,11 +1721,30 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                         </button>
                                     );
                                 })}
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowMoreSheet(false); setIsHelpOpen(true); }}
+                                    className="w-full flex items-center gap-3 p-4 rounded-2xl border bg-gray-50 border-gray-100 text-gray-600 transition-all"
+                                >
+                                    <HelpCircle className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm font-black uppercase tracking-tight">Ajuda</span>
+                                </button>
                             </div>
                         </div>
                     </div>
                 );
             })()}
+
+            <PortalHelp
+                open={isHelpOpen}
+                onClose={() => setIsHelpOpen(false)}
+                portal="fornecedor"
+                token={portalToken}
+                orgId={(effectiveSupplier as { organization_id?: string | null } | null | undefined)?.organization_id ?? null}
+                visibleSections={enabledTabIds}
+                initialSection={activeTab}
+                accent="coral"
+            />
 
                 </div>{/* /coluna de conteúdo */}
             </div>{/* /wrapper do corpo */}

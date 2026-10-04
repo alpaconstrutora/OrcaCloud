@@ -385,6 +385,15 @@ export const MEDIDAS: DefinicaoMedida[] = [
     dimensao: 'M',
     descricao: 'Metros de duto da disciplina mecânica (P2.2), uma linha por diâmetro equivalente.',
   },
+  // E0.4 do roadmap de climatização (04/10/2026): até aqui o difusor entrava em
+  // `CONTAGEM_PONTOS_HIDRAULICOS`, que filtrava só "não elétrica". A medida mentia pelo nome.
+  {
+    id: 'CONTAGEM_TERMINAIS_DE_AR',
+    rotulo: 'Terminais de ar (mecânica)',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Difusores, grelhas e tomadas de ar da disciplina mecânica, uma linha por nome do terminal; o filtro casa com o nome.',
+  },
   {
     id: 'CONTAGEM_CONEXOES',
     rotulo: 'Conexões hidráulicas',
@@ -1083,9 +1092,24 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
         }));
     }
 
+    // E0.4 (04/10/2026): o terminal de ar tem medida própria abaixo — aqui só as redes hidráulicas.
+    case 'CONTAGEM_TERMINAIS_DE_AR': {
+      return (quant.totais.porTerminal ?? [])
+        .filter((t) => t.disciplina === 'MECANICA' && t.quantidade > 0)
+        .map((t) => ({ t, rotulo: `${t.tipo} · ${ROTULO_DA_DISCIPLINA.MECANICA}${t.itemCode ? ` · ${t.itemCode}` : ''}` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ t, rotulo }) => ({
+          ref: `${t.disciplina}-${t.tipo}${t.itemCode ? `-${t.itemCode}` : ''}`,
+          rotulo,
+          valor: t.quantidade,
+          formula: 'contagem de terminais de ar pelo nome',
+          variaveis: { disciplina: t.disciplina, tipo: t.tipo, quantidade: t.quantidade },
+        }));
+    }
+
     case 'CONTAGEM_PONTOS_HIDRAULICOS': {
       return (quant.totais.porTerminal ?? [])
-        .filter((t) => t.disciplina !== 'ELETRICA' && t.quantidade > 0)
+        .filter((t) => t.disciplina !== 'ELETRICA' && t.disciplina !== 'MECANICA' && t.quantidade > 0)
         .map((t) => ({
           t,
           rotulo: `${t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? t.tipo) : t.tipo} · ${ROTULO_DA_DISCIPLINA[t.disciplina as DisciplinaDeRede] ?? t.disciplina}${t.itemCode ? ` · ${t.itemCode}` : ''}`,

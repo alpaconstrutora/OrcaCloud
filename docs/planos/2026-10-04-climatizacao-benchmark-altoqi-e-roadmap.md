@@ -1252,4 +1252,40 @@ tipo errado/fora da faixa/NaN = padrão; pontas aceitas) e o caso novo em
 `BlueprintEditor.test.tsx` › "HVAC mínimo (E11.1)" (o botão abre a gaveta com 24/50; 22 °C aplica;
 95 % fica inválido; fechar e reabrir mantém 22 e devolve 50). `check-ui-standard` nos dois `.tsx`
 tocados e `check-xss-sinks` limpos. A prova "a premissa gravada volta depois de recarregar" depende
-da migration aplicada — registrada na publicação.
+da migration aplicada — registrada na publicação. Commit `c7a51700`.
+
+### Etapa 0.4 — 04/10/2026 (frente `clima-e0`, sem bump de kernel nem de quantitativo)
+
+Feita antes da 0.2 e da 0.3 porque são os quatro defeitos reais do benchmark (achados 9–12), e
+nenhum depende das premissas.
+
+**O que entrou:**
+- **Achado 9** — `blueprintIfc.ts`: a linha "NÃO CONTÉM ar-condicionado nem gás" virou a descrição do
+  que o arquivo CONTÉM desde 20/09 (duto `IfcDuctSegment` no sistema `.AIRCONDITIONING.`, split como
+  `IfcUnitaryEquipment .SPLITSYSTEM.`, exaustor `IfcFan`, casa de máquinas como reserva) e do que não
+  contém (linha frigorígena, dreno, duto retangular, conexões de duto, terminal de ar classificado,
+  carga térmica; e o gás). A lista de disciplinas do `IfcDistributionSystem` no mesmo parágrafo
+  também omitia pluvial, incêndio e mecânica. `blueprintTrocaDeArquivos.test.ts:380` fixava a frase
+  falsa — passou a exigir a verdadeira.
+- **Achado 11** — `SISTEMA_IFC.MECANICA = '.AIRCONDITIONING.'` (valor do `IfcDistributionSystemEnum`
+  do IFC4). Decisão: `.AIRCONDITIONING.` e não `.VENTILATION.`, porque a disciplina de hoje nasce dos
+  equipamentos de ar-condicionado; a rede só de ventilação/exaustão ganha o tipo dela na E7.
+- **Achado 10** — `blueprintBudget.ts`: `CONTAGEM_PONTOS_HIDRAULICOS` deixa de contar MECANICA; medida
+  nova `CONTAGEM_TERMINAIS_DE_AR` (INSTALACAO, UN, uma linha por nome do terminal). Sem bump de
+  `POLITICA_PADRAO`: o de-para do orçamento não é o quantitativo (a P2.2 criou `COMPRIMENTO_DUTO` do
+  mesmo jeito, sem bump).
+- **Achado 12** — `commands.ts` › `DuplicateLevel` copia os componentes do pavimento (mobiliário,
+  louça, reservas de climatização) com uid novo; o filho de conjunto aponta para a CÓPIA do pai (mapa
+  uid antigo → novo; pai não copiado = `paiUid` removido, como a limpeza de órfão já faz). Sem mudança
+  no canônico, logo sem bump — mas o bundle da `planta-api` foi regenerado porque o IFC mudou.
+
+**Prova.** `__tests__/blueprintClimatizacaoTrilhos.test.ts` (4 — um por achado: a cobertura não
+nega o que emite; o sistema do duto sai `.AIRCONDITIONING.` e não `$`; o lavatório conta como ponto
+hidráulico e o difusor/grelha só em terminais de ar, 2 un; o pavimento duplicado tem os mesmos
+componentes, nenhum uid repetido, os 3 filhos do conjunto apontam para o pai copiado, a cota 2200
+da evaporadora vem junto e o original não muda). Reexecutados: `blueprintTrocaDeArquivos`,
+`blueprintBudgetInstalacoes`, `blueprintDutos`, `blueprintCopiarInstalacao`, `blueprintHvac`,
+`blueprintKernelGoldens`, `plantaApi` (bundle fresco) — 61/61.
+⚠️ Lição da escrita do teste: o rótulo da linha de orçamento mora em `location.room`, não em
+`description`, e `computeQuantities` precisa da `POLITICA_PADRAO` explícita para contar terminais —
+duas falhas que eram da cena, não da correção.

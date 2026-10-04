@@ -5281,6 +5281,29 @@ function aplicarSemHash(
         next.trechos = [...(next.trechos ?? []), { ...resto, id, uid: novoUid(), levelId: novoNivelId, a: { ...t.a }, b: { ...t.b } }];
         diff.created.push(id);
       }
+      // COMPONENTES (E0.4 do roadmap de climatização, 04/10/2026): a cópia do
+      // pavimento deixava mobiliário, louça e as RESERVAS de climatização para
+      // trás — o pavimento-tipo duplicado nascia sem split. Vêm todos, com uid
+      // novo; o filho de CONJUNTO aponta para a CÓPIA do pai (o pai está no
+      // mesmo pavimento, então sempre foi copiado antes de o filho precisar dele).
+      const uidCopiado = new Map<ElementUid, ElementUid>();
+      const copias: NonNullable<typeof next.componentes>[number][] = [];
+      for (const c of (next.componentes ?? []).filter((c) => c.levelId === origem.id)) {
+        const id = nextId(next, 'cmp');
+        const uid = novoUid();
+        uidCopiado.set(c.uid, uid);
+        const { sugerido: _sugerido, ...resto } = c;
+        void _sugerido;
+        copias.push({ ...resto, id, uid, levelId: novoNivelId, at: { ...c.at } });
+        diff.created.push(id);
+      }
+      for (const c of copias) {
+        if (!c.paiUid) continue;
+        const pai = uidCopiado.get(c.paiUid);
+        if (pai) c.paiUid = pai;
+        else delete c.paiUid;
+      }
+      if (copias.length) next.componentes = [...(next.componentes ?? []), ...copias];
       break;
     }
 

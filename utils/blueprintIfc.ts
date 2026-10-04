@@ -143,7 +143,7 @@ export const COBERTURA_IFC = [
     'distinção da NBR 5410 e NÃO do enum: a diferença vive no ObjectType. Ponto sem ' +
     'classificação, e ponto de outra disciplina, seguem como IfcFlowTerminal. ' +
     'Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
-    'fria, água quente, esgoto) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
+    'fria, água quente, esgoto, pluvial, incêndio, mecânica) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
     'desce três andares é UMA rede. As CONEXÕES DERIVADAS dos encontros de trechos (joelho, ' +
     'tê, junção 45°, cruzeta, luva, redução — as mesmas do quantitativo) saem como ' +
     'IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, ' +
@@ -182,7 +182,10 @@ export const COBERTURA_IFC = [
   // ⚠️ E9.3 (01/10/2026): esta linha dizia "NÃO CONTÉM os preventivos" desde a E1 — falsa desde a
   // E7, que passou a emitir extintor, placa, luminária, detecção e alarme (achado 5 do roadmap).
   'CONTÉM a segurança contra incêndio desenhada, no sistema .FIREPROTECTION.: tubulação como IfcPipeSegment; hidrante, mangotinho, registro de recalque e sprinkler como IfcFireSuppressionTerminal (.FIREHYDRANT., .HOSEREEL., .BREECHINGINLET., .SPRINKLER.); extintor e preventivo personalizado como IfcFireSuppressionTerminal .USERDEFINED.; placa de sinalização como IfcFireSuppressionTerminal .USERDEFINED. no IFC4 e IfcSign .PICTORAL. no IFC4X3; luminária de emergência como IfcLightFixture .SECURITYLIGHTING.; detectores como IfcSensor (.SMOKESENSOR., .HEATSENSOR.), chave de fluxo e pressostato como IfcSensor; acionador e avisador como IfcAlarm; central como IfcController; VGA como IfcValve; bombas como IfcPump. O ObjectType leva o tipo do sistema (é por ele que a importação reconhece a peça). Pset_OpuraIncendio separa pelo SUFIXO: _Declarado/_Declarada é o que o projetista informou (fator K, posição do sprinkler, agente, carga e capacidade do extintor, código da placa, autonomia da luminária); _Derivado é a numeração do desenho (H-1, SPK-3); _Calculada é o resultado do cálculo hidráulico com as premissas do estudo (vazão e pressão no bico das peças abertas no cenário de projeto) — só quando o arquivo é gerado com elas. NÃO CONTÉM a planilha de pressões nem a curva da bomba (estão no PDF e no XLSX).',
-  'NÃO CONTÉM ar-condicionado nem gás.',
+  // ⚠️ E0.4 do roadmap de climatização (04/10/2026): esta linha dizia "NÃO CONTÉM ar-condicionado nem
+  // gás" — falsa desde 20/09 (E11.1/P2.2), quando o duto virou IfcDuctSegment e a condensadora,
+  // a evaporadora e o exaustor passaram a sair como equipamento. O teste que a fixava foi corrigido junto.
+  'CONTÉM a climatização MÍNIMA desenhada (20/09/2026): o duto como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING., a condensadora e a evaporadora como IfcUnitaryEquipment .SPLITSYSTEM., o exaustor como IfcFan .PROPELLORAXIAL. e a casa de máquinas como IfcBuildingElementProxy .PROVISIONFORSPACE. — todos como RESERVA DE LUGAR com as medidas da ficha, sem capacidade, vazão ou modelo. NÃO CONTÉM linha frigorígena, dreno, duto retangular, conexões de duto, terminal de ar classificado (o difusor sai IfcFlowTerminal) nem carga térmica: é o escopo do roadmap de climatização (E3 em diante). NÃO CONTÉM gás.',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
@@ -2108,6 +2111,11 @@ const SISTEMA_IFC: Record<string, string> = {
   ESGOTO: '.SEWAGE.',
   PLUVIAL: '.STORMWATER.',
   INCENDIO: '.FIREPROTECTION.',
+  // E0.4 do roadmap de climatização (04/10/2026): sem esta entrada o sistema do duto saía com
+  // PredefinedType `$`. É .AIRCONDITIONING. (e não .VENTILATION.) porque a disciplina mecânica
+  // de hoje nasce dos equipamentos de ar-condicionado; a rede só de ventilação/exaustão ganha o
+  // seu tipo quando existir como tal (E7).
+  MECANICA: '.AIRCONDITIONING.',
 };
 
 /**

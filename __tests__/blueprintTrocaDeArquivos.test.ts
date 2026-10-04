@@ -377,7 +377,12 @@ describe('IFC · a cobertura É o requisito', () => {
     // "NÃO CONTÉM conexão" mentia no mesmo parágrafo que as descrevia. O que continua de fora é o REGISTRO.
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM registro/);
     expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM conexão/);
-    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ar-condicionado/);
+    // ⚠️ E MUDOU em 04/10/2026 (E0.4 do roadmap de climatização): "NÃO CONTÉM ar-condicionado" era
+    // FALSO desde 20/09 — o duto, a condensadora, a evaporadora e o exaustor saem no arquivo. O que
+    // continua de fora é o GÁS (e o que a climatização ainda não desenha: linha, dreno, carga).
+    expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM ar-condicionado/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM a climatização MÍNIMA/);
+    expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM gás/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos de parede/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM tipos de porta e janela/);

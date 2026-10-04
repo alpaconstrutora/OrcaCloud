@@ -5547,6 +5547,43 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     await user.selectOptions(painelDoShaft, '');
     expect(screen.getByLabelText('Disciplina do shaft')).toHaveValue('');
   }, 60000);
+
+  /**
+   * CLIMATIZAÇÃO E0.1 (04/10/2026): a aba Mecânica ganha o grupo "Premissas". O
+   * botão abre a gaveta com as condições internas de projeto; o padrão é 24 °C /
+   * 50 %; um valor dentro da faixa é aplicado na hora e um fora dela não é.
+   */
+  it('Mecânica › Premissas de climatização: abre o painel com o padrão, aceita valor na faixa e recusa fora dela', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    loadBranchModel.mockResolvedValue(nivel.model);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^Premissas de climatização$/));
+    const painel = await screen.findByTestId('tarefa-climatizacao');
+    const temperatura = within(painel).getByLabelText('Temperatura interna');
+    const umidade = within(painel).getByLabelText('Umidade relativa');
+    expect(temperatura).toHaveValue(24);
+    expect(umidade).toHaveValue(50);
+    expect(painel).toHaveTextContent(/CONFERIR NA NORMA/);
+    // Dentro da faixa: aplica (o campo é controlado pelo texto digitado; o valor segue).
+    await user.clear(temperatura);
+    await user.type(temperatura, '22');
+    expect(temperatura).toHaveValue(22);
+    expect(temperatura).toHaveAttribute('aria-invalid', 'false');
+    // Fora da faixa: a borda avisa e o campo fica inválido — o modelo não recebe 95 %.
+    await user.clear(umidade);
+    await user.type(umidade, '95');
+    expect(umidade).toHaveAttribute('aria-invalid', 'true');
+    // Fechar e reabrir: o que foi aplicado continua (estado do hook), o inválido voltou ao último válido.
+    await user.click(botao(/^Premissas de climatização$/));
+    expect(screen.queryByTestId('tarefa-climatizacao')).not.toBeInTheDocument();
+    await user.click(botao(/^Premissas de climatização$/));
+    const reaberto = await screen.findByTestId('tarefa-climatizacao');
+    expect(within(reaberto).getByLabelText('Temperatura interna')).toHaveValue(22);
+    expect(within(reaberto).getByLabelText('Umidade relativa')).toHaveValue(50);
+  }, 60000);
 });
 
 /**

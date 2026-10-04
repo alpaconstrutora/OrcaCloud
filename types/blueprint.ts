@@ -182,6 +182,16 @@ export interface BlueprintIncendioRow {
   updated_at: string;
 }
 
+/** `blueprint_study_climatizacao` — premissas de climatização do estudo (E0.1 do roadmap de climatização, 04/10/2026). */
+export interface BlueprintClimatizacaoRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  hipoteses: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
  * Hipóteses da armadura esquemática de um estudo — linha de
  * `blueprint_study_armadura` (migration `aplicar_20270921000023`). Uma por

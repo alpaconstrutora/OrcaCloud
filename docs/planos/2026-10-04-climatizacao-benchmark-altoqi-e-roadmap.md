@@ -1218,4 +1218,38 @@ Previsão: **5 bumps de kernel** (E1, E3, E5, E6, E7; de 0.90 a ~0.95) e **2 de 
 
 ## Execução
 
-_(vazio — cada fase ganha uma seção aqui quando for feita)_
+O benchmark foi publicado em `main` em 04/10/2026 (`4425a506`; o domínio serviu o commit ~6 min
+depois do push, provado pelo `conferir-producao.sh`).
+
+### Etapa 0.1 — 04/10/2026 (frente `clima-e0`, sem bump de kernel)
+
+**O que entrou:**
+- Migration `aplicar_20271004000030_blueprint_study_climatizacao.sql` — uma linha por estudo,
+  `hipoteses` JSONB, FK composta `(study_id, organization_id)`, UNIQUE em `study_id`, RLS por
+  `is_org_member`, REVOKE de PUBLIC/anon. Molde: `blueprint_study_incendio`. **A aplicar com o OK do
+  usuário** (`npx supabase db query --linked -f …`), nunca `db push`.
+- `utils/blueprintClimatizacao.ts` — `HipotesesClimatizacao { conforto }`, padrão 24 °C / 50 %,
+  `LIMITES_DE_CONFORTO` (16–30 °C, 30–70 %), `hipotesesClimatizacaoDaColuna` (tipo errado ou fora da
+  faixa vira o padrão). `FONTE_DO_CONFORTO` diz na tela que é hipótese: **CONFERIR NA NORMA (NBR
+  16401-2)**.
+- `services/blueprintClimatizacaoService.ts`, `types/blueprint.ts` (`BlueprintClimatizacaoRow`),
+  `hooks/useBlueprintClimatizacao.ts` (estado local + gravação com 500 ms; sem a tabela, vale só na
+  sessão e a tela diz).
+- `components/blueprint/PainelClimatizacao.tsx` — gaveta "Premissas de climatização": campo de
+  temperatura e de umidade com faixa (`aria-invalid` + borda vermelha fora dela; o valor inválido não
+  chega ao modelo), aviso de persistência indisponível.
+- `BlueprintEditor.tsx` — tarefa `climatizacao` no `ROTULO_DA_TAREFA`, grupo **Premissas** na aba
+  Mecânica (antes de Conferência), ícone `Thermometer` no título da gaveta, painel da tarefa.
+
+**Decisões.** (1) As condições internas entram na 0.1 como padrão do ESTUDO; a 0.3 permite
+sobrescrever por ambiente. (2) O painel segue a família dos painéis de disciplina da Planta
+(`PainelIncendio`): campos compactos `text-xs`, `rounded-md` = 6 px (§16), rótulo §21; não é tela de
+tabela, então §1–§9 não se aplicam; nenhum `confirm()`; sem busca. (3) Faixa fechada nos limites em
+vez de aceitar qualquer número: fora de 16–30 °C não é projeto, é erro de digitação.
+
+**Prova.** `__tests__/blueprintClimatizacao.test.ts` (4: vazio = padrão; parcial completado;
+tipo errado/fora da faixa/NaN = padrão; pontas aceitas) e o caso novo em
+`BlueprintEditor.test.tsx` › "HVAC mínimo (E11.1)" (o botão abre a gaveta com 24/50; 22 °C aplica;
+95 % fica inválido; fechar e reabrir mantém 22 e devolve 50). `check-ui-standard` nos dois `.tsx`
+tocados e `check-xss-sinks` limpos. A prova "a premissa gravada volta depois de recarregar" depende
+da migration aplicada — registrada na publicação.

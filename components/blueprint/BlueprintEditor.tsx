@@ -121,6 +121,7 @@ import {
   ZoomOut,
   Flame,
   GitFork,
+  Thermometer,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -248,6 +249,8 @@ import { criteriosDoPercursoMG } from '../../utils/blueprintIncendioSaidasMG';
 import { FONTE_IT17_MG, desenhoPrefereMangotinho, divergenciasDaIT17, premissasDaIT17, sistemaDeHidrantesMG } from '../../utils/blueprintIncendioHidrantesMG';
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
+import { useBlueprintClimatizacao } from '../../hooks/useBlueprintClimatizacao';
+import PainelClimatizacao from './PainelClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
 import PainelKitsDeInsercao from './PainelKitsDeInsercao';
@@ -1156,6 +1159,9 @@ const ROTULO_DA_TAREFA = {
   // IMPORTAR DO SKETCHUP (21/09/2026, backlog P2): COLLADA .dae → paredes reconhecidas nas faces.
   'importar-collada': 'Importar do SketchUp (COLLADA)',
   'importar-bcf': 'Importar do BCF',
+  // CLIMATIZAÇÃO (04/10/2026, E0.1): as premissas do estudo — conforto interno;
+  // clima por cidade e dados por ambiente entram nas fases seguintes da E0.
+  climatizacao: 'Premissas de climatização',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -7845,6 +7851,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
   /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
   const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
+  const climatizacaoDoEstudo = useBlueprintClimatizacao(study.id, study.organization_id);
   /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(editor.model), [editor.model]);
   const classificacaoDeIncendio = useMemo(
@@ -11697,6 +11704,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onEscolher={escolherComponente}
               />
             </GrupoDoRibbon>
+            {/* CLIMATIZAÇÃO E0.1 (04/10/2026): as premissas do estudo — o que a carga térmica (E2) vai ler. */}
+            <GrupoDoRibbon rotulo="Premissas">
+              <BotaoDoRibbon
+                icone={Thermometer}
+                rotulo="Premissas de climatização"
+                ativo={tarefaAberta === 'climatizacao'}
+                onClick={() => alternarTarefa('climatizacao')}
+                ajuda="Condições internas de projeto (temperatura e umidade) gravadas no estudo — valem para todos os ambientes climatizados"
+              />
+            </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
                 icone={AlertTriangle}
@@ -14796,6 +14813,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'incendioCobertura' && <Scan className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'memoriaisIncendio' && <FileText className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioPpci' && <Wand2 className="h-5 w-5 text-red-700" />}
+              {tarefaAberta === 'climatizacao' && <Thermometer className="h-5 w-5 text-teal-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15305,6 +15323,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'climatizacao' && (
+            <div data-testid="tarefa-climatizacao">
+              <PainelClimatizacao hip={climatizacaoDoEstudo.hipoteses} onHip={climatizacaoDoEstudo.setHipoteses} persistenciaIndisponivel={climatizacaoDoEstudo.persistenciaIndisponivel} />
             </div>
           )}
 

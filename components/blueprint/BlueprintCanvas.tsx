@@ -246,6 +246,45 @@ export type AcaoDeNavegacao = 'ENQUADRAR' | 'ZOOM_MAIS' | 'ZOOM_MENOS' | 'ESCALA
 /** Identidade estável para o padrão: `[]` literal a cada render redesenharia o canvas sem parar. */
 const SEM_PECAS_PREVISTAS: readonly PecaPrevistaNoCanvas[] = [];
 const SEM_OCULTOS: ReadonlySet<string> = new Set();
+/**
+ * O alfa da camada em MEIO-TOM (04/10/2026). Multiplica o que o desenho já usa
+ * (a laje a 0,35 atenuada sai a 0,35 × 0,25) — ver `meioTom` no efeito de desenho.
+ */
+const ALFA_ATENUADO = 0.25;
+
+/**
+ * O fator-base do meio-tom, por contexto. `instalarMeioTom` faz o
+ * `globalAlpha` DESTE contexto multiplicar pelo fator: o desenho que já
+ * escreve `ctx.globalAlpha = 0.35` (laje) ou `= 1` (de volta) continua igual e
+ * sai atenuado quando a peça está numa camada em meio-tom. Sem isso seria
+ * preciso reescrever as ~40 atribuições de alfa espalhadas pelos laços.
+ * Instalado uma vez por contexto (o canvas é o mesmo a cada desenho).
+ */
+interface FatorDoMeioTom {
+  base: number;
+}
+const MEIO_TOM_POR_CONTEXTO = new WeakMap<CanvasRenderingContext2D, FatorDoMeioTom>();
+export function instalarMeioTom(ctx: CanvasRenderingContext2D): FatorDoMeioTom {
+  const existente = MEIO_TOM_POR_CONTEXTO.get(ctx);
+  if (existente) return existente;
+  const fator: FatorDoMeioTom = { base: 1 };
+  const d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(ctx), 'globalAlpha');
+  if (d?.get && d.set) {
+    const ler = d.get;
+    const gravar = d.set;
+    Object.defineProperty(ctx, 'globalAlpha', {
+      configurable: true,
+      get(this: CanvasRenderingContext2D) {
+        return (ler.call(this) as number) / fator.base;
+      },
+      set(this: CanvasRenderingContext2D, v: number) {
+        gravar.call(this, v * fator.base);
+      },
+    });
+  }
+  MEIO_TOM_POR_CONTEXTO.set(ctx, fator);
+  return fator;
+}
 /** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
 const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
@@ -1337,6 +1376,18 @@ interface Props {
    */
   ocultos?: ReadonlySet<string>;
   /**
+   * CAMADAS EM MEIO-TOM (04/10/2026): peças desenhadas como referência — com
+   * alfa reduzido (`ALFA_ATENUADO`) e FORA do acerto do clique e do laço, para
+   * o clique cair na peça de baixo (é para isso que se atenua: traçar uma
+   * disciplina por cima da outra). Vazio = nada atenuado.
+   */
+  atenuados?: ReadonlySet<string>;
+  /**
+   * O TERRENO em meio-tom (camadas): leva junto o que não é peça do modelo —
+   * curvas de nível, declividade, terraplenagem, drenagem, cotas do lote.
+   */
+  terrenoEmMeioTom?: boolean;
+  /**
    * Emite a região ao soltar.
    *
    * ⚠️ `null` significa **desistiu do gesto** (arraste curto demais, ou
@@ -1584,6 +1635,8 @@ export default function BlueprintCanvas({
   vistasDependentesDoNivel = [],
   pecasPrevistas = SEM_PECAS_PREVISTAS,
   ocultos = SEM_OCULTOS,
+  atenuados = SEM_OCULTOS,
+  terrenoEmMeioTom = false,
   onRegiaoDefinida,
   mostrarCotas = false,
   mostrarCotaInterna = false,
@@ -1936,13 +1989,16 @@ export default function BlueprintCanvas({
     () => (ocultos.size ? model.openings.filter((o) => !ocultos.has(o.id)) : model.openings),
     [model.openings, ocultos],
   );
+  // Lote/divisa e ambiente respeitam `ocultos` desde as CAMADAS (04/10/2026):
+  // com o Terreno oculto a divisa sumia do resto mas ficava no desenho, e com
+  // a Arquitetura oculta o preenchimento dos ambientes boiava sem paredes.
   const limitesReais = useMemo(
-    () => model.boundaries.filter((b) => !levelId || b.levelId === levelId),
-    [model.boundaries, levelId],
+    () => model.boundaries.filter((b) => (!levelId || b.levelId === levelId) && !ocultos.has(b.id)),
+    [model.boundaries, levelId, ocultos],
   );
   const ambientesDoNivel = useMemo(
-    () => model.spaces.filter((s) => !levelId || s.levelId === levelId),
-    [model.spaces, levelId],
+    () => model.spaces.filter((s) => (!levelId || s.levelId === levelId) && !ocultos.has(s.id)),
+    [model.spaces, levelId, ocultos],
   );
   const estruturasReais = useMemo(
     () => (model.structures ?? []).filter((s) => (!levelId || s.levelId === levelId) && !ocultos.has(s.id)),
@@ -1965,11 +2021,18 @@ export default function BlueprintCanvas({
     [model.trechos, levelId, ocultos],
   );
   /** As CONEXÕES da planta (27/09/2026, "os tubos e conexoes devem ser detalhados") — ver `blueprintIsometrico`. */
-  const simbolosConexoes2d = useMemo(() => simbolosDasConexoes2D(model, levelId ?? null), [model, levelId]);
+  // Conexão de trechos todos ocultos some (camadas, 04/10/2026).
+  const simbolosConexoes2d = useMemo(
+    () => simbolosDasConexoes2D(model, levelId ?? null).filter((sc) => !ocultos.size || sc.trechoIds.some((id) => !ocultos.has(id))),
+    [model, levelId, ocultos],
+  );
   /** As MARCAS da verificação da rede (28/09/2026, E0.1) — ver `blueprintVerificacaoRede`. */
   const marcasDaRede2d = useMemo(
-    () => [...marcasDeVerificacao(model, levelId ?? null, pressoesDaAgua), ...marcasDoCalculo.filter((m) => !levelId || m.levelId === levelId)],
-    [model, levelId, pressoesDaAgua, marcasDoCalculo],
+    () =>
+      [...marcasDeVerificacao(model, levelId ?? null, pressoesDaAgua), ...marcasDoCalculo.filter((m) => !levelId || m.levelId === levelId)]
+        // Marca de peça oculta sai junto (camadas, 04/10/2026).
+        .filter((m) => !ocultos.has(m.alvoId)),
+    [model, levelId, pressoesDaAgua, marcasDoCalculo, ocultos],
   );
   /** Incêndio E1.4: H-1, SPK-3… — derivados; o rótulo declarado vence. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(model), [model]);
@@ -2762,17 +2825,18 @@ export default function BlueprintCanvas({
       const d = distanciaNoEixo(w, mundo);
       return (
         aberturasVisiveis.find(
-          (o) => o.wallId === w.id && d >= o.offsetMm && d <= o.offsetMm + o.widthMm,
+          (o) => !atenuados.has(o.id) && o.wallId === w.id && d >= o.offsetMm && d <= o.offsetMm + o.widthMm,
         ) ?? null
       );
     },
-    [aberturasVisiveis, distanciaNoEixo],
+    [aberturasVisiveis, distanciaNoEixo, atenuados],
   );
 
   const paredeSob = useCallback(
     (mundo: { x: number; y: number }): Wall | null => {
       const limite = HIT_PX / vista.escala;
       for (const w of paredesDoNivel) {
+        if (atenuados.has(w.id)) continue;
         const dx = w.b.x - w.a.x;
         const dy = w.b.y - w.a.y;
         const comp2 = dx * dx + dy * dy;
@@ -2784,7 +2848,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [paredesDoNivel, vista.escala, espessuraMm],
+    [paredesDoNivel, vista.escala, espessuraMm, atenuados],
   );
 
   /**
@@ -2797,11 +2861,12 @@ export default function BlueprintCanvas({
     (mundo: { x: number; y: number }): Boundary | null => {
       const limite = HIT_PX / vista.escala;
       for (const b of limitesDoNivel) {
+        if (atenuados.has(b.id)) continue;
         if (distanciaAoSegmento(b.a, b.b, mundo) <= limite) return b;
       }
       return null;
     },
-    [limitesDoNivel, vista.escala],
+    [limitesDoNivel, vista.escala, atenuados],
   );
 
   /**
@@ -2824,6 +2889,7 @@ export default function BlueprintCanvas({
       const folga = HIT_PX / vista.escala;
       for (let i = estruturasDoNivel.length - 1; i >= 0; i--) {
         const s = estruturasDoNivel[i];
+        if (atenuados.has(s.id)) continue;
         if (s.circular && FORMA_ESTRUTURAL[s.kind] === 'PONTO') {
           const c = s.pontos[0];
           if (Math.hypot(c.x - mundo.x, c.y - mundo.y) <= s.larguraMm / 2 + folga) return s;
@@ -2837,7 +2903,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [estruturasDoNivel, vista.escala],
+    [estruturasDoNivel, vista.escala, atenuados],
   );
 
   /**
@@ -2853,13 +2919,14 @@ export default function BlueprintCanvas({
       const folga = HIT_PX / vista.escala;
       for (let i = aguasDoNivel.length - 1; i >= 0; i--) {
         const r = aguasDoNivel[i];
+        if (atenuados.has(r.id)) continue;
         for (let k = 0; k < r.pontos.length; k++) {
           if (distanciaAoSegmento(r.pontos[k], r.pontos[(k + 1) % r.pontos.length], mundo) <= folga) return r;
         }
       }
       return null;
     },
-    [aguasDoNivel, vista.escala],
+    [aguasDoNivel, vista.escala, atenuados],
   );
 
   /**
@@ -2872,6 +2939,7 @@ export default function BlueprintCanvas({
       const folga = HIT_PX / vista.escala;
       for (let i = escadasDoNivel.length - 1; i >= 0; i--) {
         const e = escadasDoNivel[i];
+        if (atenuados.has(e.id)) continue;
         const anel = contornoDaEscada(e);
         if (anel.length < 3) continue;
         if (pointInPolygon(anel, arredondar(mundo))) return e;
@@ -2881,7 +2949,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [escadasDoNivel, vista.escala],
+    [escadasDoNivel, vista.escala, atenuados],
   );
 
   /** Qual NÚCLEO VERTICAL está sob o cursor — pela caixa inteira, como a escada. */
@@ -2896,7 +2964,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [subRegioes, ocultos],
+    [subRegioes, ocultos, atenuados],
   );
   /** Qual BLOCO DE MASSA (M1) está sob o cursor — pelo polígono, o último por cima. */
   const blocoSob = useCallback(
@@ -2910,7 +2978,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [model.blocos, ocultos, levelId],
+    [model.blocos, ocultos, atenuados, levelId],
   );
   const nucleoSob = useCallback(
     (mundo: { x: number; y: number }): Nucleo | null => {
@@ -2925,7 +2993,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [nucleos, ocultos, vista.escala],
+    [nucleos, ocultos, atenuados, vista.escala],
   );
 
   /** Qual COMPONENTE está sob o cursor — pelo retângulo. */
@@ -2947,7 +3015,7 @@ export default function BlueprintCanvas({
       }
       return pai;
     },
-    [componentes, ocultos],
+    [componentes, ocultos, atenuados],
   );
   /** Qual VAGA está sob o cursor — pelo retângulo. */
   const vagaSob = useCallback(
@@ -2959,7 +3027,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [vagas, ocultos],
+    [vagas, ocultos, atenuados],
   );
 
   /** Qual EIXO está sob o cursor — pela linha. */
@@ -2993,26 +3061,28 @@ export default function BlueprintCanvas({
       const folga = HIT_PX / vista.escala;
       for (let i = rodapes.length - 1; i >= 0; i--) {
         const r = rodapes[i];
+        if (atenuados.has(r.id)) continue;
         for (let k = 1; k < r.pontos.length; k++) {
           if (distanciaAoSegmento(r.pontos[k - 1], r.pontos[k], mundo) <= folga) return r;
         }
       }
       return null;
     },
-    [rodapes, vista.escala],
+    [rodapes, vista.escala, atenuados],
   );
   const guardaCorpoSob = useCallback(
     (mundo: { x: number; y: number }): GuardaCorpo | null => {
       const folga = HIT_PX / vista.escala;
       for (let i = guardaCorpos.length - 1; i >= 0; i--) {
         const g = guardaCorpos[i];
+        if (atenuados.has(g.id)) continue;
         for (let k = 1; k < g.pontos.length; k++) {
           if (distanciaAoSegmento(g.pontos[k - 1], g.pontos[k], mundo) <= folga) return g;
         }
       }
       return null;
     },
-    [guardaCorpos, vista.escala],
+    [guardaCorpos, vista.escala, atenuados],
   );
 
   /** Qual LINHA DE CORTE está sob o cursor — pela linha, que é tudo que ela é. */
@@ -3078,8 +3148,8 @@ export default function BlueprintCanvas({
    * com o que se vê.
    */
   const quadroSob = useCallback(
-    (mundo: { x: number; y: number }) => acertoQuadro(quadrosDoNivel, mundo, HIT_PX / vista.escala),
-    [quadrosDoNivel, vista.escala],
+    (mundo: { x: number; y: number }) => acertoQuadro(atenuados.size ? quadrosDoNivel.filter((q) => !atenuados.has(q.id)) : quadrosDoNivel, mundo, HIT_PX / vista.escala),
+    [quadrosDoNivel, vista.escala, atenuados],
   );
 
   /**
@@ -3104,11 +3174,11 @@ export default function BlueprintCanvas({
   /** Qual TERMINAL está sob o cursor — em pixels, pela razão do quadro. */
   const terminalSob = useCallback(
     (mundo: { x: number; y: number }) => {
-      const achado = acertoTerminal(terminaisParaAcerto, mundo, HIT_PX / vista.escala);
+      const achado = acertoTerminal(atenuados.size ? terminaisParaAcerto.filter((t) => !atenuados.has(t.id)) : terminaisParaAcerto, mundo, HIT_PX / vista.escala);
       // O acerto pode ter caído na cópia (o símbolo): devolve o terminal real.
       return achado ? (terminaisDoNivel.find((t) => t.id === achado.id) ?? null) : null;
     },
-    [terminaisDoNivel, terminaisParaAcerto, vista.escala],
+    [terminaisDoNivel, terminaisParaAcerto, vista.escala, atenuados],
   );
 
   /** Qual TRECHO está sob o cursor. A PRUMADA é o caso difícil — ver o módulo. */
@@ -3122,6 +3192,7 @@ export default function BlueprintCanvas({
       for (let i = geometria.length - 1; i >= 0; i--) {
         const g = geometria[i];
         const t = trechosDoNivel[i];
+        if (atenuados.has(t.id)) continue;
         if (t.a.x === t.b.x && t.a.y === t.b.y) {
           if (acertoTrecho([t], mundo, alcance)) return t;
           continue;
@@ -3132,7 +3203,7 @@ export default function BlueprintCanvas({
       }
       return null;
     },
-    [trechosDoNivel, desenhoDosTrechos, vista.escala],
+    [trechosDoNivel, desenhoDosTrechos, vista.escala, atenuados],
   );
 
   /**
@@ -3199,9 +3270,11 @@ export default function BlueprintCanvas({
         if (pointInPolygon(ret, arredondar(q.at))) pegos.push(q.id);
       }
 
-      return pegos;
+      // Camada em meio-tom é referência: o laço não a pega.
+      return atenuados.size ? pegos.filter((id) => !atenuados.has(id)) : pegos;
     },
     [
+      atenuados,
       paredesDoNivel,
       limitesDoNivel,
       estruturasDoNivel,
@@ -3420,6 +3493,19 @@ export default function BlueprintCanvas({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // CAMADAS EM MEIO-TOM (04/10/2026): cada laço de peça chama `meioTom(...)`
+    // no começo da peça; o alfa da camada MULTIPLICA o que o desenho já usa
+    // (ver `instalarMeioTom`), então nenhum `globalAlpha = x` existente muda.
+    const fatorDoMeioTom = instalarMeioTom(ctx);
+    fatorDoMeioTom.base = 1;
+    let regiaoEmMeioTom = false;
+    const meioTom = (atenuado: boolean, ignorarRegiao = false) => {
+      const alvo = atenuado || (regiaoEmMeioTom && !ignorarRegiao) ? ALFA_ATENUADO : 1;
+      if (fatorDoMeioTom.base === alvo) return;
+      const logico = ctx.globalAlpha;
+      fatorDoMeioTom.base = alvo;
+      ctx.globalAlpha = logico;
+    };
 
     // devicePixelRatio: sem isso a planta fica borrada em tela de alta densidade.
     const dpr = window.devicePixelRatio || 1;
@@ -3527,6 +3613,7 @@ export default function BlueprintCanvas({
 
     // Ambientes derivados — pintados antes das paredes para ficarem por baixo.
     for (const s of mostrarPreenchimentoAmbientes ? ambientesDoNivel : []) {
+      meioTom(atenuados.has(s.id));
       if (s.ring.length < 3) continue;
       // O `fillStyle` entra DENTRO do laço porque com `coresPorAmbiente` ele
       // muda a cada ambiente. Fora dele só valeria para o primeiro.
@@ -3566,11 +3653,13 @@ export default function BlueprintCanvas({
         ctx.stroke();
       }
     }
+    meioTom(false);
 
     // HUMANIZADA (E8.4): a SOMBRA das paredes, sob as paredes e sobre os pisos.
     if (humanizada) {
       ctx.fillStyle = COR_SOMBRA;
       for (const w of paredesDoNivel) {
+        meioTom(atenuados.has(w.id));
         const anel = sombraDaParede(paredesDoNivel, w).map(paraTela);
         if (anel.length < 4) continue;
         ctx.beginPath();
@@ -3579,6 +3668,7 @@ export default function BlueprintCanvas({
         ctx.closePath();
         ctx.fill();
       }
+      meioTom(false);
     }
 
     // Paredes — desenhadas VAZADAS, na convencao de planta arquitetonica: duas
@@ -3671,6 +3761,7 @@ export default function BlueprintCanvas({
 
     // Passada 1 — silhueta. FASES (E10.2): existente em cinza, a demolir em vermelho tracejado.
     for (const t of traco) {
+      meioTom(atenuados.has(t.w.id));
       if (t.comp < 0.5) continue;
       const fase = fases?.get(t.w.id);
       const corDaFase = fase && fase !== 'NOVO' ? COR_DA_FASE[fase] : null;
@@ -3682,6 +3773,7 @@ export default function BlueprintCanvas({
       ctx.stroke();
       if (corDaFase?.tracejado) ctx.setLineDash([]);
     }
+    meioTom(false);
 
     // Passada 2 — escavar o miolo, com a MESMA extensão nas junções para que o
     // interior de um cômodo continue no outro sem linha atravessando o encontro.
@@ -3689,6 +3781,7 @@ export default function BlueprintCanvas({
     // HUMANIZADA: a parede fica CHEIA (a convenção da planta de venda) — não se escava o miolo.
     // A DEMOLIR (E10.2) também fica cheia: o tracejado vermelho só se lê na faixa inteira.
     for (const t of humanizada ? [] : traco.filter((x) => fases?.get(x.w.id) !== 'DEMOLIR')) {
+      meioTom(atenuados.has(t.w.id));
       const miolo = t.cheia - 2 * LINHA_PAREDE_PX;
       // Muito longe, a parede vira uma linha e não há miolo para escavar. Deixar
       // sólida é o certo: contorno de meio pixel viraria sujeira cinza.
@@ -3711,11 +3804,13 @@ export default function BlueprintCanvas({
       caminhoDaFaceta(t, recA, recB);
       ctx.stroke();
     }
+    meioTom(false);
 
     // CORTINA DE VIDRO e BRISE (P2.20): marcas por cima da parede — traços
     // curtos a cada módulo (os montantes) e um azul leve no miolo; o brise é uma
     // faixa tracejada afastada da face, com as lâminas riscadas.
     for (const t of traco) {
+      meioTom(atenuados.has(t.w.id));
       if (t.comp < 0.5) continue;
       const w = t.w;
       if (w.cortina) {
@@ -3795,6 +3890,7 @@ export default function BlueprintCanvas({
         ctx.restore();
       }
     }
+    meioTom(false);
 
     // Passada 3 — as CAMADAS, pintadas dentro do miolo já escavado.
     //
@@ -3813,6 +3909,7 @@ export default function BlueprintCanvas({
     // camadas.
     if (mostrarCamadasParedes) {
       for (const t of traco) {
+        meioTom(atenuados.has(t.w.id));
         const camadas = t.w.camadas;
         if (!camadas?.length || t.comp < 0.5 || t.arco) continue;
         // Fina demais na tela: as faixas viram um borrão que esconde o contorno
@@ -3866,6 +3963,7 @@ export default function BlueprintCanvas({
           ctx.stroke();
         }
       }
+      meioTom(false);
     }
 
     // Aberturas — desenhadas DEPOIS das paredes, em tres etapas:
@@ -3878,6 +3976,7 @@ export default function BlueprintCanvas({
     const paredePorId = new Map(paredesDoNivel.map((w) => [w.id, w]));
 
     for (const o of aberturasVisiveis) {
+      meioTom(atenuados.has(o.id));
       const w = paredePorId.get(o.wallId);
       if (!w) continue;
 
@@ -4081,6 +4180,7 @@ export default function BlueprintCanvas({
         );
       }
     }
+    meioTom(false);
 
     // Medidas das paredes — opcional, ligado pelo botão "Medidas" da barra.
     //
@@ -4095,6 +4195,7 @@ export default function BlueprintCanvas({
     // descontar espessura aqui E lá, e as duas cópias divergem cedo ou tarde.
     if (mostrarMedidasParedes) {
       for (const t of traco) {
+        meioTom(atenuados.has(t.w.id));
         if (t.comp < MIN_PX_COTA_PAREDE) continue;
         const mm = wallLength(t.w);
 
@@ -4178,12 +4279,14 @@ export default function BlueprintCanvas({
           }
         }
       }
+      meioTom(false);
     }
 
     // ── PLANTA DE FORRO (P2.14): hachura leve (quadriculado) no ambiente com forro declarado ──
     if (ambientesComForro && ambientesComForro.size > 0) {
       ctx.save();
       for (const s of ambientesDoNivel) {
+        meioTom(atenuados.has(s.id));
         if (s.ring.length < 3 || !ambientesComForro.has(s.id)) continue;
         const pts = s.ring.map(paraTela);
         ctx.save();
@@ -4223,6 +4326,7 @@ export default function BlueprintCanvas({
         }
         ctx.restore();
       }
+      meioTom(false);
       ctx.restore();
     }
 
@@ -4235,6 +4339,7 @@ export default function BlueprintCanvas({
     if (mostrarRotulosAmbiente) {
       ctx.save();
       for (const s of ambientesDoNivel) {
+        meioTom(atenuados.has(s.id));
         if (s.ring.length < 3) continue;
         const pronto = rotulosDeAmbiente.find((r) => r.spaceId === s.id);
         if (!pronto || pronto.linhas.length === 0) continue;
@@ -4277,6 +4382,7 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, texto, ancora.x, topo + i * alturaLinha, COR_ROTULO_AMBIENTE, Math.round(11 * fz));
         });
       }
+      meioTom(false);
       ctx.restore();
     }
 
@@ -4534,6 +4640,9 @@ export default function BlueprintCanvas({
       }
     }
 
+    // CAMADAS: o terreno em meio-tom leva junto o que não é peça (curvas, declividade, terraplenagem, cotas do lote).
+    regiaoEmMeioTom = terrenoEmMeioTom;
+    meioTom(false);
     // ── LIMITES (divisas de terreno) ─────────────────────────────────────────
     //
     // Traço fino TRACEJADO, nunca a faixa cheia da parede. A distinção não é
@@ -4551,6 +4660,7 @@ export default function BlueprintCanvas({
       // depois a area publica, depois a quadra (so contorno, para nao tapar os
       // lotes) e por fim o LOTE, que e o que se vende e precisa ficar legivel.
       for (const v of model.vias ?? []) {
+        meioTom(atenuados.has(v.id));
         if (v.eixo.length < 2 || ocultos.has(v.id)) continue;
         const faixa = faixaDaVia(v.eixo, v.larguraMm);
         if (faixa.length < 3) continue;
@@ -4586,8 +4696,10 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, v.nome, t.x, t.y, '#475569', Math.round(11 * fz));
         }
       }
+      meioTom(false);
 
       for (const a of model.areasPublicas ?? []) {
+        meioTom(atenuados.has(a.id));
         if (a.pontos.length < 3 || ocultos.has(a.id)) continue;
         const ficha = FICHA_DA_AREA_PUBLICA[a.tipo];
         const pts = a.pontos.map(paraTela);
@@ -4611,9 +4723,11 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, `${areaEmM2(a.pontos).toFixed(2).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
         }
       }
+      meioTom(false);
 
       // INCÊNDIO (E5.2): a área de operação dos sprinklers — tracejada, com o nome e a área.
       (model.areasDeOperacao ?? []).forEach((a, i) => {
+        meioTom(atenuados.has(a.id), true);
         if (a.pontos.length < 3 || ocultos.has(a.id) || (levelId && a.levelId !== levelId)) return;
         const pts = a.pontos.map(paraTela);
         ctx.save();
@@ -4637,12 +4751,14 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, `${areaEmM2(a.pontos).toFixed(1).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#9a3412', Math.round(10 * fz));
         }
       });
+      meioTom(false);
 
       // ESTUDO DE MASSA (M1): o bloco — preenchido pela cor do uso, com o rótulo
       // "nome · N pav · altura". Contorno vermelho tracejado quando algum
       // pavimento dele sai do envelope ou passa do gabarito: é o que o estudo
       // quer ver sem abrir relatório. Arrastado com a seleção, anda na prévia.
       for (const b of model.blocos ?? []) {
+        meioTom(atenuados.has(b.id));
         if (b.pontos.length < 3 || ocultos.has(b.id) || (levelId && b.levelId !== levelId)) continue;
         const dMov = selecao.has(b.id) && movendoSelecao ? movendoSelecao.delta : null;
         const pontosDoBloco = dMov ? b.pontos.map((p) => ({ x: p.x + dMov.x, y: p.y + dMov.y })) : b.pontos;
@@ -4669,6 +4785,7 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, `${areaEmM2(pontosDoBloco).toFixed(1).replace('.', ',')} m² de projeção`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
         }
       }
+      meioTom(false);
 
       // INCÊNDIO (E6.3): as rotas de fuga — tracejadas, com a seta no fim (o sentido da fuga). As que
       // estouram o limite vão POR CIMA: o pedaço do térreo de uma rota vermelha que vem de cima corre
@@ -4700,6 +4817,7 @@ export default function BlueprintCanvas({
       }
 
       for (const q of model.quadras ?? []) {
+        meioTom(atenuados.has(q.id));
         if (q.pontos.length < 3 || ocultos.has(q.id)) continue;
         const pts = q.pontos.map(paraTela);
         ctx.save();
@@ -4713,8 +4831,10 @@ export default function BlueprintCanvas({
         ctx.stroke();
         ctx.restore();
       }
+      meioTom(false);
 
       for (const l of model.lotes ?? []) {
+        meioTom(atenuados.has(l.id));
         if (l.pontos.length < 3 || ocultos.has(l.id)) continue;
         const pts = l.pontos.map(paraTela);
         const selecionado = selecao.has(l.id);
@@ -4740,6 +4860,7 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, `${areaEmM2(l.pontos).toFixed(2).replace('.', ',')} m\u00b2`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
         }
       }
+      meioTom(false);
 
       // B2: a PROPOSTA de subdivisão, tracejada e com a área de cada lote.
       if (lotesPropostos && lotesPropostos.length > 0) {
@@ -5223,6 +5344,7 @@ export default function BlueprintCanvas({
       // SUB-REGIÕES DO TERRENO (P2.19): o chão do lote — cor do material, trama
       // leve, contorno; nome e área quando cabem. Sob as faixas e as divisas.
       for (const s of subRegioes) {
+        meioTom(atenuados.has(s.id));
         if (s.pontos.length < 3 || ocultos.has(s.id)) continue;
         const ficha = FICHA_DO_MATERIAL_DE_SUB_REGIAO[s.material];
         const pts = s.pontos.map(paraTela);
@@ -5274,6 +5396,7 @@ export default function BlueprintCanvas({
           escreverRotulo(ctx, `${area.toFixed(2).replace('.', ',')} m²${ficha.permeavel ? ' · permeável' : ''}`, cx, cy + 7, '#475569', Math.round(10 * fz));
         }
       }
+      meioTom(false);
       // Prévia da sub-região em curso.
       if (tool === 'subregiao' && anelSubRegiao.length > 0 && cursor) {
         const ficha = FICHA_DO_MATERIAL_DE_SUB_REGIAO[materialDaSubRegiao];
@@ -5346,6 +5469,7 @@ export default function BlueprintCanvas({
       const anelDoLoteNoNivel = anelDoTerreno(limitesDoNivel);
       const anelDoLoteTela = anelDoLoteNoNivel.length >= 3 ? anelDoLoteNoNivel.map(paraTela) : null;
       for (const b of limitesDoNivel) {
+        meioTom(atenuados.has(b.id));
         const a = paraTela(b.a);
         const z = paraTela(b.b);
         const selecionado = selecao.has(b.id);
@@ -5395,6 +5519,7 @@ export default function BlueprintCanvas({
           );
         }
       }
+      meioTom(false);
 
       // Alças da divisa selecionada, pela mesma convenção da parede: só na que
       // está SOZINHA na seleção, e desenhadas — ponta arrastável sem marca é
@@ -5439,6 +5564,9 @@ export default function BlueprintCanvas({
       ctx.restore();
     }
 
+    regiaoEmMeioTom = false;
+    meioTom(false);
+
     // ── Estrutura ────────────────────────────────────────────────────────────
     //
     // DEPOIS das paredes e dos limites, e antes do envelope: o concreto está
@@ -5453,6 +5581,7 @@ export default function BlueprintCanvas({
       });
 
       for (const s of ordenadas) {
+        meioTom(atenuados.has(s.id));
         const forma = FORMA_ESTRUTURAL[s.kind];
         const selecionado = selecao.has(s.id);
         // Abaixo do piso = oculto em planta. É convenção de prancha, não
@@ -5523,6 +5652,7 @@ export default function BlueprintCanvas({
           }
         }
       }
+      meioTom(false);
 
       // Alças da peça selecionada — mesma convenção da parede e da divisa: só na
       // que está SOZINHA na seleção, e desenhadas, porque vértice arrastável sem
@@ -5625,6 +5755,7 @@ export default function BlueprintCanvas({
     // baixa existir. Fica o contorno, a seta de caimento e o rótulo da
     // inclinação; o volume é assunto do 3D e das elevações.
     for (const r of aguasDoNivel) {
+      meioTom(atenuados.has(r.id));
       const selecionado = selecao.has(r.id);
       const cor = selecionado ? COR_SELECIONADA : COR_TELHADO;
       const anel = r.pontos.map(paraTela);
@@ -5671,6 +5802,7 @@ export default function BlueprintCanvas({
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
     }
+    meioTom(false);
 
     // ── ESCADA E RAMPA ──────────────────────────────────────────────────────
     //
@@ -5701,6 +5833,7 @@ export default function BlueprintCanvas({
     // passa a 4 px do traço reto por nível, dentro do alcance de 8 px.
     const { desvios, entradas } = desenhoDosTrechos;
     for (const t of trechosDoNivel) {
+      meioTom(atenuados.has(t.id));
       const selecionado = selecao.has(t.id);
       const entrada = entradas.get(t.id);
       const p = paraTela(entrada?.a ?? t.a);
@@ -6031,6 +6164,7 @@ export default function BlueprintCanvas({
         }
       }
     }
+    meioTom(false);
     ctx.setLineDash([]);
 
     // ── CONEXÕES (27/09/2026) ──────────────────────────────────────────────
@@ -6040,6 +6174,7 @@ export default function BlueprintCanvas({
     // boca que sobe/desce, e um disco no nó da peça que muda direção. Por cima
     // dos tubos — é o que se confere no encontro.
     for (const sc of simbolosConexoes2d) {
+      meioTom(sc.trechoIds.every((id) => atenuados.has(id) || ocultos.has(id)));
       ctx.strokeStyle = sc.cor;
       ctx.fillStyle = sc.cor;
       ctx.lineCap = 'butt';
@@ -6095,6 +6230,7 @@ export default function BlueprintCanvas({
         if (detalhada) contornar();
       }
     }
+    meioTom(false);
 
     // ── VERIFICAÇÃO DA REDE (28/09/2026, E0.1 do roadmap hidrossanitário) ─
     //
@@ -6103,6 +6239,7 @@ export default function BlueprintCanvas({
     // âmbar acima). Louça sem ponto: anel âmbar na peça. Tamanho em PIXEL —
     // a marca tem de aparecer em qualquer zoom, e não é medida de nada.
     for (const mv of marcasDaRede2d) {
+      meioTom(atenuados.has(mv.alvoId));
       const c = paraTela(mv.at);
       const cor = mv.severidade === 'ERRO' ? '#dc2626' : '#d97706';
       ctx.save();
@@ -6130,8 +6267,10 @@ export default function BlueprintCanvas({
       }
       ctx.restore();
     }
+    meioTom(false);
 
     for (const t of terminaisDoNivel) {
+      meioTom(atenuados.has(t.id));
       const selecionado = selecao.has(t.id);
       // EM ESCALA: o diâmetro é a largura declarada da peça. Antes disto era um
       // círculo de 4 px fixos, que num zoom de trabalho fica menor que a
@@ -6800,11 +6939,13 @@ export default function BlueprintCanvas({
         }
       }
     }
+    meioTom(false);
 
     // O QUADRO: um retângulo com o nome ao lado. Símbolo, não medida — ele é
     // uma caixa de 30 a 60 cm e desenhá-lo em escala real o faria sumir na
     // planta inteira, que é justamente onde se procura por ele.
     for (const q of quadrosDoNivel) {
+      meioTom(atenuados.has(q.id));
       const selecionado = selecao.has(q.id);
       const c = paraTela(q.at);
       // EM ESCALA, e não mais um quadrado de 9 px: a pegada em planta é
@@ -6840,6 +6981,7 @@ export default function BlueprintCanvas({
         ctx.fillText(q.nome, Math.max(...k.map((p) => p.x)) + 3, Math.min(...k.map((p) => p.y)) - 2);
       }
     }
+    meioTom(false);
 
     // E6.2 — CENTRO DE CARGAS: a região em círculo tracejado, a cruz no centro e
     // o ponto da posição sugerida (na parede). Por cima dos quadros: é a marca
@@ -6880,6 +7022,7 @@ export default function BlueprintCanvas({
     }
 
     for (const e of escadasDoNivel) {
+      meioTom(atenuados.has(e.id));
       const selecionado = selecao.has(e.id);
       const cor = selecionado ? COR_SELECIONADA : COR_ESCADA;
       const anel = contornoDaEscada(e).map(paraTela);
@@ -6941,9 +7084,11 @@ export default function BlueprintCanvas({
       ctx.fillText(`${prefixo}${e.tipo === 'RAMPA' ? 'rampa' : 'sobe'}`, eixo[0].x + 6, eixo[0].y - 8);
       ctx.textBaseline = 'alphabetic';
     }
+    meioTom(false);
 
     // ── COMPONENTES (E7.1): caixa com o símbolo da ficha; sugerido tracejado. ──
     for (const c of componentes) {
+      meioTom(atenuados.has(c.id));
       if (ocultos.has(c.id)) continue;
       const selecionado = selecao.has(c.id);
       const familia = humanizada ? COR_DA_FAMILIA[c.familia] : null;
@@ -7114,6 +7259,7 @@ export default function BlueprintCanvas({
         ctx.textBaseline = 'alphabetic';
       }
     }
+    meioTom(false);
     // Prévia do componente sob o cursor.
     if (tool === 'componente' && cursor) {
       const f = CATALOGO_DE_COMPONENTES[tipoDeComponente];
@@ -7131,6 +7277,7 @@ export default function BlueprintCanvas({
 
     // ── VAGAS (E2.5): retângulo com o tipo e o número; sugerida tracejada. ──
     for (const v of vagas) {
+      meioTom(atenuados.has(v.id));
       if (ocultos.has(v.id)) continue;
       const selecionado = selecao.has(v.id);
       const cor = selecionado ? COR_SELECIONADA : COR_VAGA;
@@ -7173,6 +7320,7 @@ export default function BlueprintCanvas({
         ctx.textBaseline = 'alphabetic';
       }
     }
+    meioTom(false);
     // Prévia da vaga sob o cursor.
     if (tool === 'vaga' && cursor) {
       const d = DIMENSAO_DA_VAGA[tipoDeVaga];
@@ -7191,6 +7339,7 @@ export default function BlueprintCanvas({
     // ── NÚCLEO VERTICAL (E2.4): caixa com as diagonais (o símbolo de vazio na
     // planta) e o rótulo. Desenhado em todo pavimento que atravessa.
     for (const n of nucleos) {
+      meioTom(atenuados.has(n.id));
       if (ocultos.has(n.id) || n.ring.length < 3) continue;
       const selecionado = selecao.has(n.id);
       const cor = selecionado ? COR_SELECIONADA : COR_NUCLEO;
@@ -7230,6 +7379,7 @@ export default function BlueprintCanvas({
         ctx.textBaseline = 'alphabetic';
       }
     }
+    meioTom(false);
     // Prévia do núcleo em curso: retângulo tracejado do primeiro canto ao cursor.
     if (tool === 'nucleo' && pontoNucleo && cursor) {
       const a = paraTela(pontoNucleo);
@@ -7541,9 +7691,11 @@ export default function BlueprintCanvas({
       ctx.setLineDash([]);
     };
     for (const g of guardaCorpos) {
+      meioTom(atenuados.has(g.id));
       const selecionado = selecao.has(g.id);
       desenharGuardaCorpo(g.pontos, g.tipo, selecionado ? COR_SELECIONADA : COR_GUARDA_CORPO, !!g.sugerido, selecionado ? 2.5 : 1.6);
     }
+    meioTom(false);
     if (tool === 'guardacorpo' && pontoGuardaCorpo && cursor) {
       desenharGuardaCorpo([pontoGuardaCorpo, cursor], tipoDeGuardaCorpo, COR_GUARDA_CORPO, true, 1.4);
     }
@@ -7568,10 +7720,12 @@ export default function BlueprintCanvas({
       ctx.restore();
     };
     for (const r of rodapes) {
+      meioTom(atenuados.has(r.id));
       const selecionado = selecao.has(r.id);
       ctx.fillStyle = selecionado ? COR_SELECIONADA : COR_RODAPE;
       desenharRodape(r.pontos, selecionado ? COR_SELECIONADA : COR_RODAPE, !!r.sugerido, selecionado ? 2.5 : 1.4);
     }
+    meioTom(false);
     if (tool === 'rodape' && pontoRodape && cursor) {
       ctx.fillStyle = COR_RODAPE;
       desenharRodape([pontoRodape, cursor], COR_RODAPE, true, 1.2);
@@ -8874,6 +9028,7 @@ export default function BlueprintCanvas({
     if (paredesGeminadas && paredesGeminadas.size > 0) {
             ctx.save();
       for (const w of paredesDoNivel) {
+        meioTom(atenuados.has(w.id));
         if (!paredesGeminadas.has(w.id)) continue;
         const a = paraTela(w.a);
         const b = paraTela(w.b);
@@ -8892,9 +9047,12 @@ export default function BlueprintCanvas({
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
       }
+      meioTom(false);
       ctx.restore();
     }
   }, [
+    atenuados,
+    terrenoEmMeioTom,
     model,
     blocosComProblema,
     simbolosConexoes2d,

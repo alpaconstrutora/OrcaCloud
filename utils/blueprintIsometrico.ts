@@ -204,6 +204,8 @@ export interface SimboloDaConexao2D {
   aneis: number[];
   /** Raio do corpo no nó (joelho, tê, junção, cruzeta), mm; `null` na luva e na redução. */
   raioDoCorpoMm: number | null;
+  /** Os trechos que se encontram no nó — a conexão some quando todos estão ocultos (camadas, 04/10/2026). */
+  trechoIds: ObjectId[];
 }
 
 /**
@@ -237,6 +239,7 @@ export function simbolosDasConexoes2D(model: BlueprintModel, levelId: ObjectId |
         tipo: c.tipo,
         cor: corDaConexao(c.disciplina),
         no: { ...c.no },
+        trechoIds: [...c.trechoIds],
         bolsas,
         aneis,
         raioDoCorpoMm: temCorpo ? (Math.max(...c.ramais!.map((r) => r.bitolaMm)) * FATOR_DA_BOLSA) / 2 : null,

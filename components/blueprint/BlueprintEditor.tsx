@@ -13687,6 +13687,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevo3d : null}
               extrasChave={extrasDoRelevo3dChave}
               ocultos={ocultosNo3d}
+              atenuados={idsDasCamadas.atenuados}
+              terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}
               coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
               // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
               // uma parede no 3D e voltar para a planta tem de mostrar a mesma
@@ -13948,6 +13950,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               regiao={tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf' ? regiao : null}
               pecasPrevistas={pecasPrevistas}
               ocultos={ocultosNoCanvas}
+              atenuados={idsDasCamadas.atenuados}
+              terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}
               onRegiaoDefinida={(r) => {
                 // VISTA DEPENDENTE (P2.17): o arraste armado pelo botão cria (ou
                 // redefine) o recorte; nada a ver com a região de geração.

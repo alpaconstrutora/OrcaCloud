@@ -45,6 +45,10 @@ interface Props {
   extrasChave?: string;
   /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
   ocultos?: Set<string>;
+  /** CAMADAS EM MEIO-TOM (04/10/2026): peças translúcidas e sem clique — ver `Fantasma` no `Blueprint3DViewer`. */
+  atenuados?: Set<string>;
+  /** O TERRENO em meio-tom: relevo, envelope e massa vão para a passada translúcida. */
+  terrenoEmMeioTom?: boolean;
   /** Cor por `uid` — o 4D. Ver `Blueprint3DViewer`. */
   coresPorUid?: Map<string, string>;
   /** Ids do kernel selecionados, para destacar na cena. */

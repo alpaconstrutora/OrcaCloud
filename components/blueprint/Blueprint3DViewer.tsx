@@ -125,6 +125,10 @@ interface Props {
    * obrigá-la a separar.
    */
   ocultos?: Set<string>;
+  /** CAMADAS EM MEIO-TOM (04/10/2026): peças translúcidas e sem clique — ver `Fantasma`. */
+  atenuados?: Set<string>;
+  /** O TERRENO em meio-tom: relevo, envelope e massa vão para a passada translúcida. */
+  terrenoEmMeioTom?: boolean;
   /**
    * Cor por `uid` de elemento — o 4D (simulação temporal).
    *
@@ -1900,6 +1904,59 @@ function Percorrer({
   return ativo ? <PointerLockControls onUnlock={onSair} /> : null;
 }
 
+/** Opacidade da passada em MEIO-TOM (multiplica a do material). */
+const OPACIDADE_DO_MEIO_TOM = 0.18;
+
+/**
+ * CAMADAS EM MEIO-TOM (04/10/2026): o que está dentro deste grupo aparece
+ * translúcido e NÃO pega clique. A cena principal esconde as peças atenuadas e
+ * uma segunda `Cena` desenha só elas aqui dentro — assim nenhuma das ~20
+ * famílias de malha precisa saber de meio-tom.
+ *
+ * Material CLONADO (nunca o original: módulo pode compartilhar material entre
+ * as duas passadas), marcado em `userData` para não clonar de novo; o
+ * `raycast` vazio tira a malha do clique — sem ele, o `stopPropagation` do
+ * `onClick` da peça fantasma roubaria o clique da peça de trás. Confere a cada
+ * quadro porque o R3F troca malha e material quando a geometria muda.
+ */
+function Fantasma({ children }: { children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    ref.current?.traverse((o) => {
+      if (!o.userData.__meioTom) {
+        o.raycast = () => {};
+        o.castShadow = false;
+        o.userData.__meioTom = true;
+      }
+      const atual = o.material;
+      if (!atual) return;
+      const lista = Array.isArray(atual) ? atual : [atual];
+      if (lista.every((m) => m.userData?.__meioTom)) return;
+      const novos = lista.map((m) => {
+        if (m.userData?.__meioTom) return m;
+        const c = m.clone();
+        c.transparent = true;
+        c.opacity = (m.opacity ?? 1) * OPACIDADE_DO_MEIO_TOM;
+        c.depthWrite = false;
+        c.userData = { ...c.userData, __meioTom: true };
+        return c;
+      });
+      o.material = Array.isArray(atual) ? novos : novos[0];
+    });
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
+/** Todo id de peça do modelo — para a passada fantasma esconder o que NÃO está em meio-tom. */
+function idsDoModelo(model: Props['model']): Set<string> {
+  const ids = new Set<string>();
+  for (const lista of Object.values(model)) {
+    if (!Array.isArray(lista)) continue;
+    for (const x of lista) if (x && typeof x === 'object' && typeof x.id === 'string') ids.add(x.id);
+  }
+  return ids;
+}
+
 export default function Blueprint3DViewer(props: Props) {
   const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
   const { model, mostrarTerreno, relevo, relevoChave, alturaDoChao, onToggleFullscreen, isFullscreen = false } = props;
@@ -2027,7 +2084,33 @@ export default function Blueprint3DViewer(props: Props) {
           position={[centro[0], cotaDaGrade, centro[2]]}
           infiniteGrid
         />
-        <Cena {...props} />
+        {(() => {
+          // CAMADAS EM MEIO-TOM: a principal esconde os atenuados; o fantasma mostra só eles.
+          const { atenuados, terrenoEmMeioTom, ocultos } = props;
+          const comMeioTom = (atenuados?.size ?? 0) > 0 || !!terrenoEmMeioTom;
+          if (!comMeioTom) return <Cena {...props} />;
+          const ocultosDaPrincipal = new Set([...(ocultos ?? []), ...(atenuados ?? [])]);
+          const ocultosDoFantasma = new Set([...(ocultos ?? [])]);
+          for (const id of idsDoModelo(props.model)) if (!atenuados?.has(id)) ocultosDoFantasma.add(id);
+          const semTerreno = { mostrarTerreno: false, relevo: null, extrasDoRelevo: null, envelope: undefined, massa: undefined };
+          return (
+            <>
+              <Cena {...props} ocultos={ocultosDaPrincipal} {...(terrenoEmMeioTom ? semTerreno : {})} />
+              <Fantasma>
+                <Cena
+                  {...props}
+                  {...(terrenoEmMeioTom ? {} : semTerreno)}
+                  ocultos={ocultosDoFantasma}
+                  entorno={undefined}
+                  mostrarRotulosDeRede={false}
+                  selecionados={undefined}
+                  onSelecionar={undefined}
+                  armadura={undefined}
+                />
+              </Fantasma>
+            </>
+          );
+        })()}
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}
         {!andando && (

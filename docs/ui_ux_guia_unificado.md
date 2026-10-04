@@ -1990,6 +1990,20 @@ Companheiros genéricos, em `components/ui/`:
 > ⚠️ Comandos moram no ribbon; **propriedades da seleção e navegação** ficam no
 > painel lateral; **relatórios** (tabelas largas) vão para um dock inferior —
 > não misturar as quatro naturezas num acordeão só, que foi o defeito de origem.
+> ✅ **Visibilidade por disciplina é navegação** e mora no painel lateral: a
+> seção **Camadas** da Planta (`blueprint/PainelCamadas.tsx`, 04/10/2026 —
+> *"cada um destes módulos … como se fossem camadas … exibir/ocultar …
+> localizado no painel lateral direito"*). Uma linha por disciplina (as com
+> subcamadas expandem com o chevron do §19.2), contagem em `bg-slate-100
+> rounded-[6px] text-[11px]`, e três toggles por linha — meio-tom, olho,
+> isolar — no **botão plano** `p-1 rounded-[6px] hover:bg-slate-100` com ícone
+> `h-3.5`, o mesmo `Olho` do painel Componentes. ⚠️ Não é o `<ActionIconButton>`
+> (§9.2): aquele é ação de linha de tabela, com borda e sombra; aqui são
+> toggles de estado numa lista densa (`aria-pressed`, `mixed` no grupo parcial),
+> e três botões com borda por linha num painel de ~320px virariam uma grade de
+> caixinhas. Ação de lote da seção ("Mostrar todas"/"Ocultar todas") segue o
+> "Mostrar tudo" de Componentes; desligada quando não teria efeito, com o
+> motivo no `title`.
 > ✅ **Vista ≠ comando.** As doze "abas" do Planejamento (Tabela, Gantt, Curva
 > S, Recursos…) eram VISTAS num trilho §19.1, com três emojis de ícone; no
 > ribbon elas são o seletor da esquerda (ícone lucide, três grupos), e as abas

@@ -195,6 +195,7 @@ import type { Quantitativos } from '../../utils/blueprintKernel/quantities';
 import MenuComponentes, { type EscolhaComponente } from './MenuComponentes';
 import ModalSobreposicao, { type EscolhaSobreposicao } from './ModalSobreposicao';
 import PainelComponentes from './PainelComponentes';
+import PainelCamadas from './PainelCamadas';
 import { linhasDeComponentesPorNivel } from '../../utils/blueprintComponentes';
 import PainelParametros from './PainelParametros';
 import { parametrosCalculadosDoModelo, variaveisDaPeca } from '../../utils/blueprintFormulas';
@@ -499,7 +500,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
-import { classificarPecas, estadoDoOverlay, estadosDasChavesAntigas, idsPorEstado, sanearEstados, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
+import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -2986,6 +2987,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const camadas = useMemo(() => sanearEstados(camadasSalvas), [camadasSalvas]);
   const classificacaoDasPecas = useMemo(() => classificarPecas(editor.model), [editor.model]);
   const idsDasCamadas = useMemo(() => idsPorEstado(classificacaoDasPecas, camadas), [classificacaoDasPecas, camadas]);
+  /** Isolar deixa a arquitetura em meio-tom (preferência do navegador, ligada por padrão). */
+  const [isolarComBaseAtenuada, setIsolarComBaseAtenuada] = usePersistedState<boolean>('blueprint:camadasIsolarComBase', true);
+  /** O estado de antes do Isolar, para o "Reexibir" devolver — sessão só. */
+  const [camadasAntesDeIsolar, setCamadasAntesDeIsolar] = useState<EstadosDasCamadas | null>(null);
+  const contagemDasCamadas = useMemo(
+    () => (secoes.camadas ? contagemPorCamada(editor.model, classificacaoDasPecas, em3d ? (levelIdsDaVista ?? null) : levelId ? [levelId] : null) : null),
+    [secoes.camadas, editor.model, classificacaoDasPecas, em3d, levelIdsDaVista, levelId],
+  );
   /** Overlays que não são peça (curvas, armadura, marcas da rede) desligam com o grupo oculto. */
   const terrenoAVista = estadoDoOverlay('TERRENO', camadas) !== 'OCULTA';
   const arquiteturaAVista = estadoDoOverlay('ARQUITETURA', camadas) !== 'OCULTA';
@@ -4267,6 +4276,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     },
     [editor.selectedIds, editor.setSelectedIds],
   );
+
+  /**
+   * CAMADAS: troca o estado e tira da seleção o que deixou de ser clicável
+   * (oculto ou em meio-tom) — a mesma regra da seleção fantasma acima.
+   */
+  const mudarCamadasDaDisciplina = useCallback(
+    (novo: EstadosDasCamadas) => {
+      setCamadasSalvas(novo);
+      const { ocultos, atenuados } = idsPorEstado(classificacaoDasPecas, novo);
+      if (editor.selectedIds.some((id) => ocultos.has(id) || atenuados.has(id))) {
+        editor.setSelectedIds(editor.selectedIds.filter((id) => !ocultos.has(id) && !atenuados.has(id)));
+      }
+    },
+    [classificacaoDasPecas, editor.selectedIds, editor.setSelectedIds, setCamadasSalvas],
+  );
+  const isolarCamada = useCallback(
+    (alvo: AlvoDeCamada) => {
+      setCamadasAntesDeIsolar(camadas);
+      mudarCamadasDaDisciplina(isolar(alvo, { baseAtenuada: isolarComBaseAtenuada }));
+    },
+    [camadas, mudarCamadasDaDisciplina, isolarComBaseAtenuada],
+  );
+  const reexibirCamadas = useCallback(() => {
+    // O de antes, se ele não for ele mesmo um isolamento; senão tudo à vista.
+    const antes = camadasAntesDeIsolar;
+    mudarCamadasDaDisciplina(antes && !estadosIguais(antes, camadas) ? antes : CAMADAS_TODAS_VISIVEIS);
+    setCamadasAntesDeIsolar(null);
+  }, [camadasAntesDeIsolar, camadas, mudarCamadasDaDisciplina]);
 
   /**
    * Selecionar uma peça no canvas ABRE a seção que mostra as propriedades dela.
@@ -14070,6 +14107,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 <SecaoOrdenavel key={idDaSecao} id={idDaSecao}>
                   {(alca) => (
                     <>
+          {idDaSecao === 'camadas' && secaoVisivel('camadas') && (
+            <SecaoAccordion alca={alca}
+              titulo="Camadas"
+              aberta={secoes.camadas}
+              onAlternar={() => alternarSecao('camadas')}
+            >
+              <PainelCamadas
+                estados={camadas}
+                onMudar={mudarCamadasDaDisciplina}
+                contagem={contagemDasCamadas ?? contagemPorCamada(editor.model, classificacaoDasPecas, null)}
+                baseAtenuada={isolarComBaseAtenuada}
+                onBaseAtenuada={setIsolarComBaseAtenuada}
+                onIsolar={isolarCamada}
+                onReexibir={reexibirCamadas}
+              />
+            </SecaoAccordion>
+          )}
           {idDaSecao === 'pavimentos' && (
           <SecaoAccordion alca={alca}
             titulo="Pavimentos"

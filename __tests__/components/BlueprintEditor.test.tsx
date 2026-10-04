@@ -3534,6 +3534,16 @@ describe('BlueprintEditor · menu Exibir', () => {
     localStorage.clear();
   });
 
+  it('elétrica e incêndio viraram CAMADAS (04/10/2026): o Exibir traz o atalho, não os três toggles', async () => {
+    await montar();
+    await abrirMenu();
+    expect(screen.queryByRole('menuitemcheckbox', { name: /rede de incêndio/i })).toBeNull();
+    expect(screen.queryByRole('menuitemcheckbox', { name: /elétrica — iluminação/i })).toBeNull();
+    expect(screen.queryByRole('menuitemcheckbox', { name: /elétrica — tomadas/i })).toBeNull();
+    // A seção nasce aberta — o atalho diz isso.
+    expect(item(/camadas por disciplina/i)).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('as medidas nascem DESLIGADAS — cota em toda parede é poluição até ser pedida', async () => {
     await montar();
     await abrirMenu();
@@ -5345,15 +5355,45 @@ describe('BlueprintEditor · armadura no painel do grupo', () => {
 describe('BlueprintEditor · seções do painel ordenáveis', () => {
   const ordem = () => [...document.querySelectorAll('[data-secao-ordenavel]')].map((el) => el.getAttribute('data-secao-ordenavel'));
 
-  it('nasce Pavimentos · Componentes · Ambientes, respeita a ordem salva e ignora id desconhecido', async () => {
+  it('nasce Pavimentos · Camadas · Componentes · Ambientes, respeita a ordem salva e ignora id desconhecido', async () => {
     localStorage.setItem('blueprint:ordemDasSecoes', JSON.stringify(['ambientes', 'nada', 'pavimentos']));
     await montar();
-    expect(ordem()).toEqual(['ambientes', 'pavimentos', 'componentes']);
-    expect(screen.getAllByRole('button', { name: /arrastar a seção/i })).toHaveLength(3);
+    // Seção que a ordem salva não conhece entra no fim, na ordem de fábrica (Camadas, 04/10/2026).
+    expect(ordem()).toEqual(['ambientes', 'pavimentos', 'camadas', 'componentes']);
+    expect(screen.getAllByRole('button', { name: /arrastar a seção/i })).toHaveLength(4);
   });
 
   // O arrasto em si não se prova em jsdom (o dnd-kit precisa de geometria
   // real para decidir onde soltar); fica para a prova no app real — ver o plano.
+});
+
+/**
+ * CAMADAS POR DISCIPLINA (04/10/2026): a seção do painel lateral, ligada ao
+ * estado persistido — e as chaves antigas do Exibir dando o estado inicial.
+ */
+describe('BlueprintEditor · camadas por disciplina', () => {
+  const linhaDaCamada = (c: string) => document.querySelector<HTMLElement>(`[data-camada="${c}"]`)!;
+  beforeEach(() => localStorage.clear());
+
+  it('quem tinha desligado a rede de incêndio no Exibir abre com a camada Incêndio oculta; reexibir grava a chave nova', async () => {
+    localStorage.setItem('blueprint:mostrarIncendio', 'false');
+    await montar();
+    expect(linhaDaCamada('INCENDIO')).toHaveAttribute('data-estado', 'OCULTA');
+    expect(linhaDaCamada('ESTRUTURA')).toHaveAttribute('data-estado', 'VISIVEL');
+    await userEvent.click(within(linhaDaCamada('INCENDIO')).getByRole('button', { name: 'Exibir Incêndio' }));
+    expect(linhaDaCamada('INCENDIO')).toHaveAttribute('data-estado', 'VISIVEL');
+    expect(JSON.parse(localStorage.getItem('blueprint:camadasPorDisciplina:v1') ?? '{}').INCENDIO).toBe('VISIVEL');
+  });
+
+  it('isolar a Estrutura deixa só ela (arquitetura em meio-tom) e Reexibir volta tudo', async () => {
+    await montar();
+    await userEvent.click(within(linhaDaCamada('ESTRUTURA')).getByRole('button', { name: /isolar estrutura/i }));
+    expect(linhaDaCamada('ESTRUTURA')).toHaveAttribute('data-estado', 'VISIVEL');
+    expect(linhaDaCamada('ARQUITETURA')).toHaveAttribute('data-estado', 'ATENUADA');
+    expect(linhaDaCamada('TERRENO')).toHaveAttribute('data-estado', 'OCULTA');
+    await userEvent.click(within(linhaDaCamada('ESTRUTURA')).getByRole('button', { name: /reexibir/i }));
+    for (const c of ['ARQUITETURA', 'ESTRUTURA', 'TERRENO', 'INCENDIO', 'MECANICA']) expect(linhaDaCamada(c)).toHaveAttribute('data-estado', 'VISIVEL');
+  });
 });
 
 /**

@@ -137,8 +137,11 @@ export function diferencas(de: ConfiguracaoDeVista, para: ConfiguracaoDeVista): 
   if (de.estilo3d !== para.estilo3d) out.push(`Estilo 3D: ${ROTULO_DO_ESTILO_3D[para.estilo3d]}`);
   if (de.estiloPlanta !== para.estiloPlanta) out.push(`Planta: ${ROTULO_DO_ESTILO_DA_PLANTA[para.estiloPlanta]}`);
   if (de.fase !== para.fase) out.push(`Fase: ${ROTULO_DO_FILTRO_DE_FASE[para.fase]}`);
+  // Objeto montado fora de `configuracaoDaColuna` (template gravado antes de 04/10/2026 em memória) pode vir sem as camadas.
+  const deC = de.disciplinas ?? ESTADOS_PADRAO;
+  const paraC = para.disciplinas ?? ESTADOS_PADRAO;
   for (const c of CAMADAS) {
-    if (de.disciplinas[c] !== para.disciplinas[c]) out.push(`Camada ${ROTULO_DA_CAMADA[c]}: ${VERBO_DO_ESTADO[para.disciplinas[c]]}`);
+    if (deC[c] !== paraC[c]) out.push(`Camada ${ROTULO_DA_CAMADA[c]}: ${VERBO_DO_ESTADO[paraC[c]]}`);
   }
   return out;
 }

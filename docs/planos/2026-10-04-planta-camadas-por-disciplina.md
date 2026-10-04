@@ -101,7 +101,7 @@ Estado por camada: `'VISIVEL' | 'ATENUADA' | 'OCULTA'`. Estado do grupo = deriva
 ## Estado
 - [x] F1 — motor puro (59 testes)
 - [x] F2 — ligação no editor (3D passa a esconder as camadas; overlays de terreno/arquitetura/estrutura/elétrica com o grupo; Exibir sem os 3 toggles; templates com `disciplinas`)
-- [ ] F3 — seção Camadas no painel
+- [x] F3 — seção Camadas no painel (PainelCamadas 7 testes + 3 no editor; guia §19.5)
 - [ ] F4 — atenuar
 - [ ] F5 — conflitos filtrados
 - [ ] F6 — verificação e publicação

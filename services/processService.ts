@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { approvalService, type RoleLabels } from './approvalService';
 import { avaliarCondicao } from '../utils/processCondition';
+import { proximoNivelDeAprovacao } from '../utils/processApproval';
+import type { ApprovalStep } from '../types/financial';
 import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
 import type { PurchaseOrderItem } from '../types/supplyChain';
 import type {
@@ -8,6 +10,7 @@ import type {
     ProcessInstanceWithSteps, ProcessComment, ProcessInstanceStatus, PendingStepItem,
     ProcessPriority, ProcessCriticality, ProcessEventKey, ProcessStepBottleneck,
     ProcessConditionContext, ProcessAssignableMember, ProcessGroup,
+    ProcessTemplateHeader, ProcessTemplateStepDraft,
 } from '../types/process';
 
 // ============================================================
@@ -75,7 +78,41 @@ async function contextoDaInstancia(instanceId: string): Promise<ProcessCondition
     return { project_id: inst?.project_id ?? null, supplier_id: inst?.supplier_id ?? null, amount };
 }
 
-type EtapaParaAvancar = Pick<ProcessInstanceStep, 'id' | 'status' | 'step_type' | 'order_index' | 'template_step_id' | 'condition' | 'amount'>;
+type EtapaParaAvancar = Pick<ProcessInstanceStep, 'id' | 'status' | 'step_type' | 'order_index' | 'template_step_id' | 'condition' | 'amount' | 'responsible_user_id' | 'sla_hours'>;
+
+/**
+ * O que impede gravar um modelo. Modelo AUTOMÁTICO (EVENTO) precisa de evento e
+ * de dono: é o dono que recebe o aviso quando uma etapa vence sem responsável
+ * nem escalado. Medido em 04/10/2026: os 24 modelos automáticos não tinham dono,
+ * e o primeiro processo real venceu sem ninguém saber.
+ */
+export function problemaDoModelo(h: ProcessTemplateHeader, etapas: ProcessTemplateStepDraft[]): string | null {
+    if (!h.name.trim()) return 'Informe o nome do modelo.';
+    if (etapas.length === 0) return 'O modelo precisa de pelo menos uma etapa.';
+    const semNome = etapas.findIndex(e => !e.name.trim());
+    if (semNome >= 0) return `Etapa ${semNome + 1}: informe o nome.`;
+    if (h.trigger_type === 'EVENTO') {
+        if (!h.trigger_event_key) return 'Modelo automático: escolha o evento que dispara o processo.';
+        if (!h.owner_user_id) return 'Modelo automático: escolha o dono. Ele recebe o aviso quando uma etapa vence sem responsável.';
+    }
+    return null;
+}
+
+/** Linha de `process_template_steps` a partir da etapa enviada pela tela. */
+const linhaDaEtapa = (e: ProcessTemplateStepDraft, order_index: number) => ({
+    name: e.name.trim(),
+    step_type: e.step_type,
+    order_index,
+    is_required: true,
+    requires_document: e.requires_document,
+    can_skip: false,
+    condition: e.condition ?? null,
+    sla_hours: e.sla_hours ?? null,
+    default_responsible_type: e.default_responsible_type ?? null,
+    default_responsible_id: e.default_responsible_id ?? null,
+    escalation_user_id: e.escalation_user_id ?? null,
+    escalation_after_hours: e.escalation_user_id ? (e.escalation_after_hours ?? 0) : null,
+});
 
 /**
  * Avança a instância para a próxima etapa ELEGÍVEL (ou conclui se não houver
@@ -87,7 +124,7 @@ type EtapaParaAvancar = Pick<ProcessInstanceStep, 'id' | 'status' | 'step_type' 
 async function advanceToNextStep(instanceId: string, userId?: string): Promise<void> {
     const { data: steps, error } = await supabase
         .from('process_instance_steps')
-        .select('id, status, step_type, order_index, template_step_id, condition, amount')
+        .select('id, status, step_type, order_index, template_step_id, condition, amount, responsible_user_id, sla_hours')
         .eq('process_instance_id', instanceId)
         .order('order_index', { ascending: true });
     if (error) {
@@ -126,24 +163,19 @@ async function advanceToNextStep(instanceId: string, userId?: string): Promise<v
         return;
     }
 
-    // Resolve responsável default (só USER é resolvido automaticamente no MVP;
-    // DEPARTMENT/ROLE ficam sem responsável — usuário assume via "Assumir etapa").
-    const { data: templateStep } = await supabase
-        .from('process_template_steps')
-        .select('default_responsible_type, default_responsible_id, sla_hours')
-        .eq('id', next.template_step_id)
-        .maybeSingle();
-    const responsibleUserId = templateStep?.default_responsible_type === 'USER'
-        ? templateStep.default_responsible_id
-        : null;
+    // Responsável e SLA vêm da PRÓPRIA etapa da instância (cópia feita em
+    // `startInstance`), não do modelo: desde 04/10/2026 o modelo pode ser
+    // editado, e editar não pode mudar processo em curso. Pessoa já vem em
+    // `responsible_user_id`; grupo (DEPARTMENT/ROLE) fica sem — um membro assume.
+    const responsibleUserId = next.responsible_user_id ?? null;
 
     // O prazo da etapa nasce AQUI, quando ela começa — não no início da
     // instância. Antes, `startInstance` calculava `due_at` de todas as etapas
     // de uma vez, e a etapa 1 (SLA 24h) vencia antes da etapa 0 (SLA 48h) que
     // a precedia (medido na instância do Passo 1.2, 28/09/2026).
     const agora = new Date();
-    const dueAt = templateStep?.sla_hours
-        ? new Date(agora.getTime() + Number(templateStep.sla_hours) * 3_600_000).toISOString()
+    const dueAt = next.sla_hours
+        ? new Date(agora.getTime() + Number(next.sla_hours) * 3_600_000).toISOString()
         : null;
 
     const { error: stepErr } = await supabase
@@ -152,7 +184,6 @@ async function advanceToNextStep(instanceId: string, userId?: string): Promise<v
             status: 'EM_ANDAMENTO',
             started_at: agora.toISOString(),
             due_at: dueAt,
-            ...(responsibleUserId ? { responsible_user_id: responsibleUserId } : {}),
         })
         .eq('id', next.id);
     if (stepErr) {
@@ -210,12 +241,24 @@ export const processService = {
     },
 
     async createTemplate(
-        template: Pick<ProcessTemplate, 'organization_id' | 'name' | 'category' | 'criticality' | 'default_sla_hours'> & Partial<ProcessTemplate>,
-        steps: Array<Pick<ProcessTemplateStep, 'name' | 'step_type' | 'is_required' | 'requires_document' | 'can_skip'> & Partial<ProcessTemplateStep>>,
+        organizationId: string,
+        header: ProcessTemplateHeader,
+        steps: ProcessTemplateStepDraft[],
     ): Promise<ProcessTemplate> {
+        const problema = problemaDoModelo(header, steps);
+        if (problema) throw new Error(problema);
         const { data: created, error } = await supabase
             .from('process_templates')
-            .insert({ ...template, status: template.status ?? 'ATIVO' })
+            .insert({
+                organization_id: organizationId,
+                name: header.name.trim(),
+                category: header.category?.trim() || null,
+                owner_user_id: header.owner_user_id || null,
+                trigger_type: header.trigger_type,
+                trigger_event_key: header.trigger_type === 'EVENTO' ? header.trigger_event_key : null,
+                criticality: 'MEDIA',
+                status: 'ATIVO',
+            })
             .select()
             .single();
         if (error) {
@@ -223,15 +266,75 @@ export const processService = {
             throw new Error(`Erro ao criar template: ${error.message}`);
         }
 
-        if (steps.length > 0) {
-            const rows = steps.map((s, idx) => ({ ...s, process_template_id: created.id, order_index: s.order_index ?? idx }));
-            const { error: stepsErr } = await supabase.from('process_template_steps').insert(rows);
-            if (stepsErr) {
-                console.error('[processService] createTemplate (steps):', stepsErr);
-                throw new Error(`Erro ao criar etapas do template: ${stepsErr.message}`);
-            }
+        const rows = steps.map((s, idx) => ({ ...linhaDaEtapa(s, idx), process_template_id: created.id }));
+        const { error: stepsErr } = await supabase.from('process_template_steps').insert(rows);
+        if (stepsErr) {
+            console.error('[processService] createTemplate (steps):', stepsErr);
+            throw new Error(`Erro ao criar etapas do template: ${stepsErr.message}`);
         }
         return created as ProcessTemplate;
+    },
+
+    /**
+     * Edita o modelo: cabeçalho, etapas existentes (por `id`), etapas novas e
+     * etapas removidas; sobe a versão. Processo em curso NÃO muda — a etapa da
+     * instância é cópia (nome, tipo, condição, responsável, escalado e, desde
+     * 04/10/2026, o SLA), e a FK para a etapa do modelo é ON DELETE SET NULL.
+     * A versão sobe por último: ela só muda se as etapas gravaram.
+     */
+    async updateTemplate(
+        templateId: string,
+        header: ProcessTemplateHeader,
+        steps: ProcessTemplateStepDraft[],
+    ): Promise<void> {
+        const problema = problemaDoModelo(header, steps);
+        if (problema) throw new Error(problema);
+
+        const { data: atual, error: fErr } = await supabase
+            .from('process_templates')
+            .select('version')
+            .eq('id', templateId)
+            .single();
+        if (fErr) throw new Error(`Erro ao carregar modelo: ${fErr.message}`);
+        const existentes = await this.getTemplateSteps(templateId);
+
+        const mantidas = new Set(steps.map(s => s.id).filter((id): id is string => !!id));
+        const removidas = existentes.filter(e => !mantidas.has(e.id)).map(e => e.id);
+        if (removidas.length > 0) {
+            const { error } = await supabase.from('process_template_steps').delete().in('id', removidas);
+            if (error) throw new Error(`Erro ao remover etapas: ${error.message}`);
+        }
+
+        const conhecidas = new Set(existentes.map(e => e.id));
+        const novas: ReturnType<typeof linhaDaEtapa>[] = [];
+        for (const [idx, s] of steps.entries()) {
+            const linha = linhaDaEtapa(s, idx);
+            if (s.id && conhecidas.has(s.id)) {
+                const { error } = await supabase.from('process_template_steps').update(linha).eq('id', s.id);
+                if (error) throw new Error(`Erro ao atualizar a etapa ${idx + 1}: ${error.message}`);
+            } else {
+                novas.push(linha);
+            }
+        }
+        if (novas.length > 0) {
+            const { error } = await supabase.from('process_template_steps')
+                .insert(novas.map(n => ({ ...n, process_template_id: templateId })));
+            if (error) throw new Error(`Erro ao incluir etapas: ${error.message}`);
+        }
+
+        const { error: hErr } = await supabase
+            .from('process_templates')
+            .update({
+                name: header.name.trim(),
+                category: header.category?.trim() || null,
+                owner_user_id: header.owner_user_id || null,
+                trigger_type: header.trigger_type,
+                trigger_event_key: header.trigger_type === 'EVENTO' ? header.trigger_event_key : null,
+                version: Number((atual as { version: number }).version ?? 1) + 1,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', templateId);
+        if (hErr) throw new Error(`Erro ao salvar modelo: ${hErr.message}`);
     },
 
     async archiveTemplate(id: string): Promise<void> {
@@ -362,6 +465,8 @@ export const processService = {
             // F3: escalonamento também é snapshot — mudar o template não muda a instância em curso.
             escalation_user_id: ts.escalation_user_id ?? null,
             escalation_after_hours: ts.escalation_after_hours ?? null,
+            // 04/10/2026: o SLA também é cópia — editar o modelo não muda o prazo de processo em curso.
+            sla_hours: ts.sla_hours ?? null,
         }));
         const { error: stepsErr } = await supabase
             .from('process_instance_steps')
@@ -774,11 +879,43 @@ export const processService = {
 
     // ── Etapas de aprovação — delega 100% para approvalService ─
 
-    async submitStepApproval(stepId: string, instanceId: string, organizationId: string, amount: number): Promise<void> {
+    /**
+     * Envia a etapa para a alçada. Organização e valor vêm DO PROCESSO, não da
+     * tela (04/10/2026): a tela mandava a org do topo — vazia em "Todas" — e
+     * `step.amount`, que nada preenchia (0 de 12 etapas). Resultado: a alçada
+     * por valor nunca valia, e um pagamento de qualquer tamanho virava um clique.
+     * O valor agora é o da etapa ou, se ela não tiver, o do pedido de origem
+     * (`contextoDaInstancia`, mesma régua da alçada do pedido), e fica gravado
+     * na etapa. Abaixo do piso da alçada a etapa é liberada: conclui e avança.
+     */
+    async submitStepApproval(stepId: string, instanceId: string): Promise<void> {
+        const { data: inst, error: iErr } = await supabase
+            .from('process_instances')
+            .select('organization_id')
+            .eq('id', instanceId)
+            .single();
+        if (iErr || !inst) throw new Error(`Erro ao carregar processo: ${iErr?.message ?? 'não encontrado'}`);
+        const { data: etapa, error: sErr } = await supabase
+            .from('process_instance_steps')
+            .select('amount')
+            .eq('id', stepId)
+            .single();
+        if (sErr) throw new Error(`Erro ao carregar etapa: ${sErr.message}`);
+
+        let amount = Number((etapa as { amount: number | null } | null)?.amount ?? 0) || 0;
+        if (amount <= 0) {
+            const ctx = await contextoDaInstancia(instanceId);
+            amount = Number(ctx.amount ?? 0) || 0;
+            if (amount > 0) {
+                const { error } = await supabase.from('process_instance_steps').update({ amount }).eq('id', stepId);
+                if (error) throw new Error(`Erro ao gravar o valor da etapa: ${error.message}`);
+            }
+        }
+        const organizationId = (inst as { organization_id: string }).organization_id;
+
         /* `semFaixa` depende de a etapa TER valor, e por isso é decidido aqui e
            não no `approvalService` (ver a explicação longa lá).
-           A etapa chega com `step.amount ?? 0` (ProcessosModule:228), e o zero
-           tem dois significados diferentes:
+           O zero tem dois significados diferentes:
 
              amount > 0  etapa monetária. "Fora de faixa" quer dizer ABAIXO DO
                          PISO da alçada — mesma leitura de título/contrato/
@@ -790,23 +927,59 @@ export const processService = {
                          PRECISA de aprovação — liberar sozinho faria o portão
                          se autoaprovar e a instância ficar AGUARDANDO_APROVACAO
                          sem nunca ter esperado ninguém. */
-        await approvalService.submit('process_step', stepId, {}, {
+        const res = await approvalService.submit('process_step', stepId, {}, {
             organizationId,
             amount,
             semFaixa: amount > 0 ? 'liberar' : 'exigir1',
         });
+
+        // Abaixo do piso: a alçada liberou sem fila. Antes este caminho deixava a
+        // etapa APROVADO mas EM_ANDAMENTO, sem botão que a movesse.
+        if ((res as { approval_status?: string } | null)?.approval_status === 'APROVADO') {
+            const { error } = await supabase.from('process_instance_steps')
+                .update({ status: 'CONCLUIDO', completed_at: new Date().toISOString() })
+                .eq('id', stepId);
+            if (error) throw new Error(`Erro ao concluir etapa liberada: ${error.message}`);
+            await logAction(instanceId, undefined, 'APPROVAL_RELEASED', { metadata: { step_id: stepId, amount, motivo: 'abaixo do piso da alçada' } });
+            await advanceToNextStep(instanceId);
+            return;
+        }
+
         await supabase.from('process_instances').update({ status: 'AGUARDANDO_APROVACAO' as ProcessInstanceStatus }).eq('id', instanceId);
         await logAction(instanceId, undefined, 'APPROVAL_SUBMITTED', { metadata: { step_id: stepId, amount } });
     },
 
-    async approveStep(
-        stepId: string, instanceId: string, level: 1 | 2, approvedBy: string, labels: RoleLabels, notes?: string,
-    ): Promise<void> {
-        const result = await approvalService.approve('process_step', stepId, level, approvedBy, labels, notes, {
+    /**
+     * Aprova o PRÓXIMO nível da etapa — quem decide o nível é a etapa, não a
+     * tela (04/10/2026: a tela mandava sempre o nível 1, e numa alçada de 2
+     * níveis a etapa nunca concluía). O nível 2 exige pessoa diferente da que
+     * aprovou o nível 1. Os rótulos (Gestor/Diretoria) vêm da faixa da alçada.
+     */
+    async approveStep(stepId: string, instanceId: string, approvedBy: string, notes?: string): Promise<void> {
+        const { data: etapa, error: sErr } = await supabase
+            .from('process_instance_steps')
+            .select('approval_status, approval_required_levels, approval_chain, amount')
+            .eq('id', stepId)
+            .single();
+        if (sErr || !etapa) throw new Error(`Erro ao carregar etapa: ${sErr?.message ?? 'não encontrada'}`);
+        const e = etapa as { approval_status: string; approval_required_levels: number | null; approval_chain: ApprovalStep[] | null; amount: number | null };
+        const nivel = proximoNivelDeAprovacao(e, approvedBy);
+        if (!nivel.pode) throw new Error(nivel.motivo);
+
+        const { data: inst } = await supabase.from('process_instances').select('organization_id').eq('id', instanceId).maybeSingle();
+        const faixa = inst?.organization_id
+            ? await approvalService.resolveRequiredLevels(inst.organization_id, Number(e.amount ?? 0) || 0).catch(() => null)
+            : null;
+        const labels: RoleLabels = {
+            level1_label: faixa?.level1_label || 'Gestor',
+            level2_label: faixa?.level2_label || 'Diretoria',
+        };
+
+        const result = await approvalService.approve('process_step', stepId, nivel.level, approvedBy, labels, notes, {
             status: 'CONCLUIDO',
             completed_at: new Date().toISOString(),
         });
-        await logAction(instanceId, approvedBy, 'STEP_APPROVED', { metadata: { step_id: stepId, level } });
+        await logAction(instanceId, approvedBy, 'STEP_APPROVED', { metadata: { step_id: stepId, level: nivel.level, exigidos: nivel.exigidos } });
         if (result.approval_status === 'APROVADO') {
             await advanceToNextStep(instanceId, approvedBy);
         }

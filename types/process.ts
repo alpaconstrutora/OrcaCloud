@@ -124,7 +124,8 @@ export interface ProcessAssignableMember {
 export interface ProcessInstanceStep {
     id: string;
     process_instance_id: string;
-    template_step_id: string;
+    /** Etapa do modelo de onde veio. NULL quando ela foi removida do modelo depois (a etapa da instância é cópia completa). */
+    template_step_id: string | null;
     name: string;
     step_type: ProcessStepType;
     order_index: number;
@@ -136,6 +137,8 @@ export interface ProcessInstanceStep {
     approval_chain: unknown[];
     approval_required_levels: number;
     amount?: number | null;
+    /** Cópia do SLA (h) da etapa do modelo no início do processo — o prazo nasce daqui, então editar o modelo não muda processo em curso. */
+    sla_hours?: number | null;
     /** Snapshot da condição do template quando a instância nasceu (Passo 4). Falsa em advanceToNextStep → 'PULADO'. */
     condition?: ProcessCondition | null;
     /** F3.2: snapshot do responsável do template. DEPARTMENT/ROLE = grupo; um membro assume e vira `responsible_user_id`. */
@@ -228,3 +231,24 @@ export type ProcessEventKey =
     | 'purchase_receipt.divergence'
     /** `payableService.updateStatus('PAGO')` / `bankReconciliationService.createMatch` — título DEBIT de um pedido baixado (nasce no nó Contas a Pagar). */
     | 'internal_transaction.paid';
+
+/** Rótulo de cada evento para a tela do modelo ("Dispara quando…"). */
+export const PROCESS_EVENT_LABEL: Record<ProcessEventKey, string> = {
+    'purchase_order.approved':     'Pedido de compra aprovado',
+    'purchase_order.received':     'Pedido de compra recebido',
+    'purchase_order.divergence':   'Pedido de compra com divergência',
+    'purchase_receipt.divergence': 'Recebimento com divergência de item',
+    'nfe.linked':                  'NF-e vinculada a título do pedido',
+    'internal_transaction.paid':   'Título do pedido pago',
+};
+
+/** Cabeçalho do modelo que a tela cria/edita. */
+export type ProcessTemplateHeader = Pick<ProcessTemplate, 'name' | 'trigger_type'> & {
+    category?: string | null;
+    owner_user_id?: string | null;
+    trigger_event_key?: string | null;
+};
+
+/** Etapa do modelo como a tela envia ao salvar: com `id` = já existe (atualiza); sem `id` = nova. */
+export type ProcessTemplateStepDraft = Pick<ProcessTemplateStep, 'name' | 'step_type' | 'requires_document'> & Partial<Pick<ProcessTemplateStep,
+    'id' | 'condition' | 'sla_hours' | 'default_responsible_type' | 'default_responsible_id' | 'escalation_user_id' | 'escalation_after_hours'>>;

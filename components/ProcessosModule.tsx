@@ -5,13 +5,16 @@ import {
     Activity, LayoutGrid, List as ListIcon, AlertTriangle, SkipForward, GitBranch, Users,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { processService } from '../services/processService';
+import { processService, problemaDoModelo } from '../services/processService';
 import { taskService } from '../services/taskService';
 import type {
     ProcessTemplate, ProcessTemplateStep, ProcessInstance, ProcessInstanceWithSteps,
     ProcessInstanceStep, PendingStepItem, ProcessComment, ProcessStepType, ProcessStepBottleneck,
 } from '../types/process';
-import { INSTANCE_STATUS_LABEL } from '../types/process';
+import { INSTANCE_STATUS_LABEL, PROCESS_EVENT_LABEL } from '../types/process';
+import type { ProcessEventKey, ProcessTriggerType, ProcessTemplateStepDraft } from '../types/process';
+import { proximoNivelDeAprovacao } from '../utils/processApproval';
+import type { ApprovalStep } from '../types/financial';
 import type { ProcessCondition, ProcessConditionField, ProcessConditionOp, ProcessAssignableMember, ProcessGroup, ProcessResponsibleType } from '../types/process';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import { SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
@@ -54,6 +57,8 @@ function StatusBadge({ status }: { status: string }) {
 
 /** Etapa como o formulário a edita: a condição guarda o valor como TEXTO (ou lista de ids, no `in`) até gravar. */
 interface EtapaEmEdicao {
+    /** Etapa que já existe no modelo (edição). Ausente = etapa nova. */
+    id?: string;
     name: string;
     step_type: ProcessStepType;
     requires_document: boolean;
@@ -124,12 +129,14 @@ const horasOuNull = (v: string): number | null => {
 };
 
 /** Seletor de membro da organização. Quem não tem login vinculado aparece desabilitado COM o motivo — nunca escondido. */
-function MembroSelect({ value, onChange, membros, placeholder }: {
+function MembroSelect({ value, onChange, membros, placeholder, className = 'min-w-44 max-w-56' }: {
     value: string; onChange: (userId: string) => void; membros: ProcessAssignableMember[]; placeholder: string;
+    /** Largura: compacto na linha da etapa (padrão); `w-full` no cabeçalho do formulário. */
+    className?: string;
 }) {
     return (
         <select value={value} onChange={e => onChange(e.target.value)}
-            className="h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal min-w-44 max-w-56 truncate">
+            className={`h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal truncate ${className}`}>
             <option value="">{placeholder}</option>
             {membros.map(m => (
                 <option key={m.email} value={m.userId ?? ''} disabled={!m.userId}
@@ -171,14 +178,51 @@ function ListaDeMarcacao({ opcoes, marcados, onChange }: {
     );
 }
 
-function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
-    open: boolean; onClose: () => void; organizationId: string; onCreated: () => void;
+/** Etapa gravada no modelo → como o formulário a edita (o inverso de `condicaoParaGravar`). */
+function etapaParaEdicao(s: ProcessTemplateStep): EtapaEmEdicao {
+    const c = s.condition;
+    return {
+        id: s.id,
+        name: s.name,
+        step_type: s.step_type,
+        requires_document: s.requires_document,
+        condition: c ? { field: c.field, op: c.op, value: Array.isArray(c.value) ? c.value.map(String) : String(c.value ?? '') } : null,
+        sla_hours: s.sla_hours != null ? String(s.sla_hours) : '',
+        responsavel: s.default_responsible_type && s.default_responsible_id ? `${s.default_responsible_type}:${s.default_responsible_id}` : '',
+        escalation_user_id: s.escalation_user_id ?? '',
+        escalation_after_hours: s.escalation_after_hours != null ? String(s.escalation_after_hours) : '',
+    };
+}
+
+const EVENT_KEYS = Object.keys(PROCESS_EVENT_LABEL) as ProcessEventKey[];
+
+/** Modelo em edição: o modelo gravado + as etapas dele. Ausente = criar modelo novo. */
+interface ModeloEmEdicao { template: ProcessTemplate; steps: ProcessTemplateStep[] }
+
+function TemplateEditorModal({ open, onClose, organizationId, onSaved, editando }: {
+    open: boolean; onClose: () => void; organizationId: string; onSaved: () => void; editando?: ModeloEmEdicao | null;
 }) {
     const [name, setName] = useState('');
     const [category, setCategory] = useState('');
     const [steps, setSteps] = useState<EtapaEmEdicao[]>([{ ...ETAPA_VAZIA }]);
+    // Dono e disparo (04/10/2026): modelo automático sem dono deixava processo vencer sem aviso.
+    const [ownerUserId, setOwnerUserId] = useState('');
+    const [triggerType, setTriggerType] = useState<ProcessTriggerType>('MANUAL');
+    const [triggerEventKey, setTriggerEventKey] = useState('');
     const [saving, setSaving] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
+    // Preenche o formulário ao abrir: com o modelo (editar) ou vazio (criar).
+    useEffect(() => {
+        if (!open) return;
+        const t = editando?.template;
+        setName(t?.name ?? '');
+        setCategory(t?.category ?? '');
+        setOwnerUserId(t?.owner_user_id ?? '');
+        setTriggerType(t?.trigger_type ?? 'MANUAL');
+        setTriggerEventKey(t?.trigger_event_key ?? '');
+        setSteps(editando?.steps.length ? editando.steps.map(etapaParaEdicao) : [{ ...ETAPA_VAZIA }]);
+        setErro(null);
+    }, [open, editando]);
     // Obras da organização ativa (só OBRA, sem projeto de sistema — REGRA #2/#3 já cortadas no store).
     const obras = useStore(s => s.projects);
     // Fornecedores para a condição por fornecedor — carregados só com o modal aberto (§7.1.1: drawer, não <select>).
@@ -203,7 +247,6 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
     const setStep = (idx: number, patch: Partial<EtapaEmEdicao>) => setSteps(arr => arr.map((x, i) => i === idx ? { ...x, ...patch } : x));
 
     const save = async () => {
-        if (!name.trim() || steps.some(s => !s.name.trim())) return;
         // Condição inválida bloqueia o salvar COM o motivo (o botão nunca fica mudo).
         const condicoes = steps.map(s => condicaoParaGravar(s.condition));
         for (let i = 0; i < steps.length; i++) {
@@ -213,24 +256,33 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
         // Escalonamento sem prazo não tem quando disparar — o botão diz por quê em vez de gravar algo inerte.
         const semPrazoComEscalado = steps.findIndex(s => s.escalation_user_id && horasOuNull(s.sla_hours) === null);
         if (semPrazoComEscalado >= 0) { setErro(`Etapa ${semPrazoComEscalado + 1}: escalonamento exige SLA (h) preenchido.`); return; }
+        const header = {
+            name, category, trigger_type: triggerType,
+            trigger_event_key: triggerType === 'EVENTO' ? (triggerEventKey || null) : null,
+            owner_user_id: ownerUserId || null,
+        };
+        const etapas: ProcessTemplateStepDraft[] = steps.map((s, i) => ({
+            id: s.id,
+            name: s.name, step_type: s.step_type, requires_document: s.requires_document,
+            condition: condicoes[i],
+            sla_hours: horasOuNull(s.sla_hours),
+            default_responsible_type: decodificarResponsavel(s.responsavel).type,
+            default_responsible_id: decodificarResponsavel(s.responsavel).id,
+            escalation_user_id: s.escalation_user_id || null,
+            escalation_after_hours: s.escalation_user_id ? (horasOuNull(s.escalation_after_hours) ?? 0) : null,
+        }));
+        // Mesma regra do service, checada antes para o motivo aparecer sem ida ao banco.
+        const problema = problemaDoModelo(header, etapas);
+        if (problema) { setErro(problema); return; }
         setErro(null);
         setSaving(true);
         try {
-            await processService.createTemplate(
-                { organization_id: organizationId, name, category, criticality: 'MEDIA', default_sla_hours: null },
-                steps.map((s, i) => ({
-                    name: s.name, step_type: s.step_type, is_required: true, requires_document: s.requires_document, can_skip: false,
-                    condition: condicoes[i],
-                    sla_hours: horasOuNull(s.sla_hours),
-                    default_responsible_type: decodificarResponsavel(s.responsavel).type,
-                    default_responsible_id: decodificarResponsavel(s.responsavel).id,
-                    escalation_user_id: s.escalation_user_id || null,
-                    escalation_after_hours: s.escalation_user_id ? (horasOuNull(s.escalation_after_hours) ?? 0) : null,
-                })),
-            );
-            onCreated();
+            if (editando) await processService.updateTemplate(editando.template.id, header, etapas);
+            else await processService.createTemplate(organizationId, header, etapas);
+            onSaved();
             onClose();
-            setName(''); setCategory(''); setSteps([{ ...ETAPA_VAZIA }]);
+        } catch (e) {
+            setErro(e instanceof Error ? e.message : String(e));
         } finally {
             setSaving(false);
         }
@@ -238,18 +290,49 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
 
     return (
         <Modal open={open} onClose={onClose} size="xl">
-            <ModalHeader title="Novo template de processo" icon={<Layers className="w-5 h-5 text-blue-600" />} onClose={onClose} />
+            <ModalHeader title={editando ? `Editar modelo · v${editando.template.version}` : 'Novo template de processo'} icon={<Layers className="w-5 h-5 text-blue-600" />} onClose={onClose} />
             <ModalBody className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Nome</label>
+                {editando && (
+                    <p className="text-sm text-gray-500">
+                        Salvar cria a versão {editando.template.version + 1}. Processos já iniciados continuam com as etapas, prazos e responsáveis de quando começaram.
+                    </p>
+                )}
+                {/* §21 rótulo sentence case · §30 malha: par space-y-1.5, grade gap-x-6 gap-y-4 */}
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">Nome</label>
                         <input value={name} onChange={e => setName(e.target.value)}
-                            className="mt-1 w-full h-9 px-3 rounded-xl border border-gray-200 text-sm" placeholder="Ex.: Admissão de funcionário" />
+                            className="w-full h-9 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="Ex.: Admissão de funcionário" />
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Categoria</label>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">Categoria</label>
                         <input value={category} onChange={e => setCategory(e.target.value)}
-                            className="mt-1 w-full h-9 px-3 rounded-xl border border-gray-200 text-sm" placeholder="Ex.: RH" />
+                            className="w-full h-9 px-3 rounded-[6px] border border-gray-200 text-sm" placeholder="Ex.: RH" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">Disparo</label>
+                        <select value={triggerType} onChange={e => setTriggerType(e.target.value as ProcessTriggerType)}
+                            className="w-full h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
+                            <option value="MANUAL">Manual: alguém inicia</option>
+                            <option value="EVENTO">Automático: nasce de um evento</option>
+                        </select>
+                    </div>
+                    {triggerType === 'EVENTO' && (
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-500">Dispara quando</label>
+                            <select value={triggerEventKey} onChange={e => setTriggerEventKey(e.target.value)}
+                                className="w-full h-9 px-2 rounded-[6px] border border-gray-200 text-sm font-normal">
+                                <option value="">Escolha o evento…</option>
+                                {EVENT_KEYS.map(k => <option key={k} value={k}>{PROCESS_EVENT_LABEL[k]}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-slate-500">
+                            Dono do modelo{triggerType === 'EVENTO' ? ' (obrigatório)' : ''}
+                        </label>
+                        <MembroSelect value={ownerUserId} onChange={setOwnerUserId} membros={membros} placeholder="Escolha o dono…" className="w-full" />
+                        <p className="text-xs text-gray-500">Recebe o aviso quando uma etapa vence sem responsável nem escalado.</p>
                     </div>
                 </div>
 
@@ -358,7 +441,7 @@ function NewTemplateModal({ open, onClose, organizationId, onCreated }: {
             </ModalBody>
             <ModalFooter>
                 <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-                <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar template'}</Button>
+                <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editando ? 'Salvar nova versão' : 'Criar template'}</Button>
             </ModalFooter>
         </Modal>
     );
@@ -439,6 +522,8 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     const [membrosOrg, setMembrosOrg] = useState<ProcessAssignableMember[]>([]);
     const [gruposOrg, setGruposOrg] = useState<ProcessGroup[]>([]);
     const [claimErro, setClaimErro] = useState<string | null>(null);
+    // Erro de ação de etapa (enviar, aprovar, concluir) — aparece no painel em vez de sumir no console.
+    const [acaoErro, setAcaoErro] = useState<string | null>(null);
 
     const reload = useCallback(() => {
         if (!instanceId) return;
@@ -459,10 +544,13 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
 
     const act = async (fn: () => Promise<void>, stepId: string) => {
         setBusyStep(stepId);
+        setAcaoErro(null);
         try {
             await fn();
             reload();
             onChanged();
+        } catch (e) {
+            setAcaoErro(e instanceof Error ? e.message : String(e));
         } finally {
             setBusyStep(null);
         }
@@ -473,11 +561,13 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     const handleAction = (step: ProcessInstanceStep) => {
         if (!instance) return;
         if (step.step_type === 'approval') {
+            // Org e valor vêm do PROCESSO (service), nunca do topo — em "Todas" o topo é vazio.
             if (step.approval_status === 'RASCUNHO') {
-                return act(() => processService.submitStepApproval(step.id, instance.id, organizationId, step.amount ?? 0), step.id);
+                return act(() => processService.submitStepApproval(step.id, instance.id), step.id);
             }
+            // O nível (1 ou 2) quem decide é a etapa; o service recusa a mesma pessoa nos dois.
             if (step.approval_status === 'PENDENTE') {
-                return act(() => processService.approveStep(step.id, instance.id, 1, userEmail, { level1_label: 'Gestor' }), step.id);
+                return act(() => processService.approveStep(step.id, instance.id, userEmail), step.id);
             }
             return;
         }
@@ -500,6 +590,17 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
     };
 
     const handleCompleteTask = (step: ProcessInstanceStep) => act(() => processService.completeTaskStep(step.id, instance!.id, userId), step.id);
+
+    /** Aprovação: qual nível está aberto, rótulo do botão e, quando este usuário não pode, o motivo. */
+    const aprovacaoDa = (step: ProcessInstanceStep) => {
+        const nivel = proximoNivelDeAprovacao({
+            approval_status: step.approval_status,
+            approval_required_levels: step.approval_required_levels,
+            approval_chain: step.approval_chain as ApprovalStep[],
+        }, userEmail);
+        const rotulo = nivel.exigidos === 2 ? `Aprovar nível ${nivel.level} de 2` : 'Aprovar';
+        return { ...nivel, rotulo, motivo: nivel.pode ? undefined : nivel.motivo };
+    };
 
     const handleReject = async () => {
         if (!rejectStep || !instance) return;
@@ -641,6 +742,15 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                                                 {step.step_type === 'approval' && !isSkipped && ` · ${step.approval_status}`}
                                                 {isSkipped && ' · pulada'}
                                             </p>
+                                            {/* Alçada: valor que a decidiu e quantos níveis ela exige (04/10/2026). */}
+                                            {step.step_type === 'approval' && !isSkipped && step.approval_status !== 'RASCUNHO' && (
+                                                <p className="text-xs text-gray-500 mt-0.5">
+                                                    {Number(step.amount ?? 0) > 0
+                                                        ? `Valor ${Number(step.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                                                        : 'Sem valor'}
+                                                    {` · alçada de ${step.approval_required_levels === 2 ? '2 níveis' : '1 nível'}`}
+                                                </p>
+                                            )}
                                             {condicao && (
                                                 <p className="text-xs text-gray-500 mt-0.5">
                                                     {isSkipped ? 'Não se aplicou: ' : 'Só executa quando '}{condicao}
@@ -691,19 +801,29 @@ function InstanceDetail({ open, onClose, instanceId, organizationId, userId, use
                                                         {busyStep === step.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Concluir tarefa'}
                                                     </Button>
                                                 )}
-                                                {!(step.step_type === 'task' && step.task_id) && (
-                                                    <Button size="sm" onClick={() => handleAction(step)} disabled={busyStep === step.id}>
-                                                        {busyStep === step.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
-                                                            step.step_type === 'approval' ? (step.approval_status === 'RASCUNHO' ? 'Enviar p/ aprovação' : 'Aprovar')
-                                                            : step.step_type === 'document' ? 'Anexar documento'
-                                                            : step.step_type === 'task' ? 'Criar tarefa'
-                                                            : 'Concluir'
-                                                        )}
-                                                    </Button>
-                                                )}
+                                                {!(step.step_type === 'task' && step.task_id) && (() => {
+                                                    const aprov = step.step_type === 'approval' && step.approval_status === 'PENDENTE' ? aprovacaoDa(step) : null;
+                                                    return (
+                                                        <Button size="sm" onClick={() => handleAction(step)}
+                                                            disabled={busyStep === step.id || (aprov ? !aprov.pode : false)}
+                                                            title={aprov?.motivo}>
+                                                            {busyStep === step.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+                                                                step.step_type === 'approval' ? (step.approval_status === 'RASCUNHO' ? 'Enviar p/ aprovação' : (aprov?.rotulo ?? 'Aprovar'))
+                                                                : step.step_type === 'document' ? 'Anexar documento'
+                                                                : step.step_type === 'task' ? 'Criar tarefa'
+                                                                : 'Concluir'
+                                                            )}
+                                                        </Button>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                     </div>
+                                    {/* Motivo do "Aprovar" desabilitado e erro da última ação — abaixo da linha, nunca mudo. */}
+                                    {isCurrent && !bloqueado && step.step_type === 'approval' && step.approval_status === 'PENDENTE' && aprovacaoDa(step).motivo && (
+                                        <p className="text-xs text-gray-500 mt-2 ml-10">{aprovacaoDa(step).motivo}</p>
+                                    )}
+                                    {isCurrent && acaoErro && <p className="text-xs text-red-600 mt-2 ml-10">{acaoErro}</p>}
                                     {isCurrent && docPickerStep === step.id && (
                                         <div className="mt-3">
                                             <DocumentPicker organizationId={organizationId} onPick={doc => act(() => processService.attachDocument(step.id, instance.id, doc.id, userId), step.id).then(() => setDocPickerStep(null))} />
@@ -946,18 +1066,45 @@ function ProcessDashboard({ organizationId }: { organizationId: string | null })
 
 // ─── templates ──────────────────────────────────────────────
 
-function TemplateList({ organizationId, onCreate }: { organizationId: string | null; onCreate: () => void }) {
+function TemplateList({ organizationId, onCreate, onEdit }: {
+    organizationId: string | null; onCreate: () => void; onEdit: (m: ModeloEmEdicao) => void;
+}) {
     const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
     const [steps, setSteps] = useState<Record<string, ProcessTemplateStep[]>>({});
     const [expanded, setExpanded] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    // Nome do dono: membros por organização (em "Todas" a lista mistura orgs).
+    const [membrosPorOrg, setMembrosPorOrg] = useState<Record<string, ProcessAssignableMember[]>>({});
+    const [abrindo, setAbrindo] = useState<string | null>(null);
 
     const reload = useCallback(() => {
         setLoading(true);
-        processService.listTemplates(organizationId).then(setTemplates).finally(() => setLoading(false));
+        processService.listTemplates(organizationId)
+            .then(async ts => {
+                setTemplates(ts);
+                const orgs = [...new Set(ts.map(t => t.organization_id).filter(Boolean))];
+                const pares = await Promise.all(orgs.map(async o => [o, await processService.listAssignableMembers(o).catch(() => [])] as const));
+                setMembrosPorOrg(Object.fromEntries(pares));
+            })
+            .catch(() => setTemplates([]))
+            .finally(() => setLoading(false));
     }, [organizationId]);
 
     useEffect(reload, [reload]);
+
+    const editar = async (t: ProcessTemplate) => {
+        setAbrindo(t.id);
+        try {
+            const s = steps[t.id] ?? await processService.getTemplateSteps(t.id);
+            onEdit({ template: t, steps: s });
+        } finally {
+            setAbrindo(null);
+        }
+    };
+
+    const donoDe = (t: ProcessTemplate) => t.owner_user_id
+        ? (membrosPorOrg[t.organization_id]?.find(m => m.userId === t.owner_user_id)?.name ?? 'membro removido')
+        : null;
 
     const toggle = async (id: string) => {
         if (expanded === id) { setExpanded(null); return; }
@@ -975,14 +1122,31 @@ function TemplateList({ organizationId, onCreate }: { organizationId: string | n
             <Button size="sm" onClick={onCreate}><Plus className="w-3.5 h-3.5" /> Novo template</Button>
             {templates.map(t => (
                 <div key={t.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-                    <button onClick={() => toggle(t.id)} className="w-full flex items-center gap-3 p-4 text-left">
-                        <Layers className="w-4 h-4 text-blue-600 shrink-0" />
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-gray-900">{t.name}</p>
-                            <p className="text-xs text-gray-500">{t.category} · v{t.version}</p>
-                        </div>
-                        <ChevronRight className={`w-4 h-4 text-gray-300 transition-transform ${expanded === t.id ? 'rotate-90' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-2 pr-3">
+                        <button onClick={() => toggle(t.id)} className="flex-1 min-w-0 flex items-center gap-3 p-4 text-left">
+                            <Layers className="w-4 h-4 text-blue-600 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-gray-900">{t.name}</p>
+                                <p className="text-xs text-gray-500">
+                                    {[t.category, `v${t.version}`].filter(Boolean).join(' · ')}
+                                    {' · '}
+                                    {t.trigger_type === 'EVENTO'
+                                        ? `Automático: ${PROCESS_EVENT_LABEL[t.trigger_event_key as ProcessEventKey] ?? t.trigger_event_key ?? 'evento não definido'}`
+                                        : 'Manual'}
+                                </p>
+                                {/* Dono: modelo automático sem dono é o que deixou processo vencer sem aviso (04/10/2026). */}
+                                <p className={`text-xs ${donoDe(t) ? 'text-gray-500' : t.trigger_type === 'EVENTO' ? 'text-amber-700' : 'text-gray-400'}`}>
+                                    {donoDe(t)
+                                        ? `Dono: ${donoDe(t)}`
+                                        : t.trigger_type === 'EVENTO'
+                                            ? 'Sem dono: atrasos vão para os administradores da organização. Edite e escolha um dono.'
+                                            : 'Sem dono'}
+                                </p>
+                            </div>
+                            <ChevronRight className={`w-4 h-4 text-gray-300 transition-transform ${expanded === t.id ? 'rotate-90' : ''}`} />
+                        </button>
+                        <ActionIconButton kind="edit" title="Editar modelo" disabled={abrindo === t.id} onClick={() => editar(t)} />
+                    </div>
                     {expanded === t.id && (
                         <div className="border-t border-gray-100 p-4 space-y-1.5 bg-gray-50">
                             {(steps[t.id] ?? []).map((s, idx) => (
@@ -1132,6 +1296,8 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
     const [templates, setTemplates] = useState<ProcessTemplate[]>([]);
     const [showStart, setShowStart] = useState(false);
     const [showNewTemplate, setShowNewTemplate] = useState(false);
+    // Edição de modelo (04/10/2026). A org é a DO MODELO — não pergunta nada (REGRA #5).
+    const [modeloEmEdicao, setModeloEmEdicao] = useState<ModeloEmEdicao | null>(null);
     const [openInstanceId, setOpenInstanceId] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
@@ -1199,7 +1365,7 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                 {tab === 'pendente'  && <PendingList key={refreshKey} organizationId={organizationId} userId={userId} onOpen={setOpenInstanceId} />}
                 {tab === 'processos' && <InstanceList key={refreshKey} organizationId={organizationId} onOpen={setOpenInstanceId} />}
                 {tab === 'dashboard' && <ProcessDashboard key={refreshKey} organizationId={organizationId} />}
-                {tab === 'templates' && <TemplateList organizationId={organizationId} onCreate={handleNewTemplate} />}
+                {tab === 'templates' && <TemplateList key={refreshKey} organizationId={organizationId || null} onCreate={handleNewTemplate} onEdit={setModeloEmEdicao} />}
                 {tab === 'equipes'   && <EquipesTab organizationId={organizationId || null} userId={userId} />}
             </div>
 
@@ -1210,9 +1376,16 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
                 />
             )}
             {showNewTemplate && modalOrgId && (
-                <NewTemplateModal
+                <TemplateEditorModal
                     open={showNewTemplate} onClose={() => { setShowNewTemplate(false); setModalOrgId(undefined); }} organizationId={modalOrgId}
-                    onCreated={() => setRefreshKey(k => k + 1)}
+                    onSaved={() => setRefreshKey(k => k + 1)}
+                />
+            )}
+            {modeloEmEdicao && (
+                <TemplateEditorModal
+                    open={!!modeloEmEdicao} onClose={() => setModeloEmEdicao(null)}
+                    organizationId={modeloEmEdicao.template.organization_id} editando={modeloEmEdicao}
+                    onSaved={() => setRefreshKey(k => k + 1)}
                 />
             )}
 

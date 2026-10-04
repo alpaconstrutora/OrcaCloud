@@ -5556,7 +5556,13 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
   it('Mecânica › Premissas de climatização: abre o painel com o padrão, aceita valor na faixa e recusa fora dela', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
-    loadBranchModel.mockResolvedValue(nivel.model);
+    const t = nivel.model.levels[0].id;
+    // E0.3: uma sala fechada e nomeada (a etiqueta dá o uid onde o declarado mora) e um cômodo sem nome.
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(6000, 0, 10000, 0), w(10000, 0, 10000, 4000), w(10000, 4000, 6000, 4000)]).model;
+    const sala = m.spaces.find((s) => s.ring.some((p) => p.x < 6000))!;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: sala.id, name: 'Sala' }).model;
+    loadBranchModel.mockResolvedValue(m);
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^mecânica$/i);
@@ -5595,6 +5601,19 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     // TBS declarada vence a tabela.
     await user.type(within(clima).getByLabelText('TBS externa'), '33');
     expect(within(clima).getByTestId('clima-em-uso')).toHaveTextContent(/TBS 33,0 °C · TBU 21,7 °C/);
+    // E0.3: por ambiente. A Sala vem do padrão do uso (climatizada, 4 pessoas — com o asterisco de "não
+    // declarado"); o cômodo sem nome não tem etiqueta e não declara. Declarar 3 pessoas tira o asterisco.
+    const porAmbiente = within(reaberto).getByTestId('clima-por-ambiente');
+    expect(porAmbiente).toHaveTextContent(/1 sem etiqueta/);
+    const linhaDaSala = within(porAmbiente).getByRole('row', { name: 'Ambiente Sala' });
+    // O setpoint da Sala é o do ESTUDO — que este teste já mudou para 22 °C acima.
+    expect(linhaDaSala).toHaveTextContent(/Sala\s*Sala\s*sim \*\s*4 \*\s*22,0 °C/);
+    await user.click(within(linhaDaSala).getByRole('button', { name: 'Declarar climatização de Sala' }));
+    const editorDaSala = within(porAmbiente).getByTestId(/^clima-ambiente-/);
+    await user.type(within(editorDaSala).getByLabelText('Pessoas'), '3');
+    expect(within(porAmbiente).getByRole('row', { name: 'Ambiente Sala' })).toHaveTextContent(/sim \*\s*3\s*22,0 °C/);
+    expect(editorDaSala).toHaveTextContent(/3 pessoa\(s\), sentado, em repouso/);
+    expect(porAmbiente).toHaveTextContent(/1 de 2 ambiente\(s\) com algo declarado/);
   }, 60000);
 });
 

@@ -1325,4 +1325,45 @@ faixa, leitura da chave antiga ignorando vizinhos, igualdade das listas de cidad
 tabela, casamento sem acento, capital mais próxima, e os cinco cenários de `condicoesExternas`);
 `BlueprintEditor.test.tsx` (o caso das premissas ganhou o clima: "sem cidade" + pendência →
 São Paulo (declarada) 31,9/21,7/760 m com a marca → TBS 33 declarada vence; os 3 casos de
-insolação/vizinhos legados continuam verdes). `check-ui-standard` limpo nos dois `.tsx`.
+insolação/vizinhos legados continuam verdes). `check-ui-standard` limpo nos dois `.tsx`. Commit
+`7d371713`.
+
+### Etapa 0.3 — 04/10/2026 (frente `clima-e0`, sem bump; sem migration — o JSONB cresce)
+
+**O que entrou:**
+- `utils/blueprintClimatizacaoAmbientes.ts` — o declarado POR AMBIENTE, pelo **`uid` da etiqueta**
+  (achado 6; o `id` do `Space` muda a cada rederivação): climatizado, setpoint próprio, pessoas,
+  atividade (5 níveis), iluminação W/m², equipamentos W, fonte extra sensível/latente — tudo `null`
+  = derivar. `PADRAO_POR_USO` para os 13 usos de `blueprintPrograma` (**hipótese residencial,
+  CONFERIR NA NORMA: NBR 16401-1 e NBR 16655-3**), `premissasDoAmbiente` com a ORIGEM de cada valor
+  (DECLARADA / USO / ESTUDO / SEM) e `conferir`. `HipotesesClimatizacao.ambientes` no leitor
+  (chave vazia e declaração sem nada caem).
+- **Achado 3 fechado por nome:** `peDireitoLivreMm` (do piso acabado à face do forro =
+  `peDireitoUtilMm` dos acabamentos) é a definição ÚNICA do volume de ar da carga térmica; a conta
+  do quantitativo/planta de forro (só o rebaixo) mede outra coisa e fica, agora distinguida no
+  cabeçalho do módulo. O volume aparece na tabela por ambiente.
+- **Achado 4 fechado:** `PainelCamadasParede` mostra **U e R** da parede (Rsi 0,13 / Rse 0,04,
+  NBR 15220) logo abaixo da espessura total; camada sem λ = "U não calculado", dizendo quantas
+  faltam; sem biblioteca de materiais a linha não aparece.
+- `PainelClimatizacao` — seção **Por ambiente — <pavimento>**: a tabela compacta da família do
+  painel de acabamentos (Ambiente · Uso · Climatizado · Pessoas · Setpoint · Volume), `*` marca o
+  que veio do padrão do uso, "Editar" abre o editor com cada campo anulável (placeholder = valor em
+  uso, `title` = origem) e a linha "Em uso: …"; ambiente sem etiqueta diz "sem etiqueta — nomeie o
+  ambiente para declarar". O editor monta a lista a partir de `ambientesParaAcabamento` + o uid da
+  etiqueta.
+
+**Decisões.** (1) Nada de `parametros` na etiqueta: o dado é do ESTUDO (premissa de projeto), não
+do desenho, e não entra no hash. (2) Ambiente sem etiqueta não ganha etiqueta automática ao
+declarar: declarar clima não é nomear o cômodo — a tela pede o nome. (3) Padrão por uso em vez de
+pedir tudo: a carga térmica da E2 roda com zero declaração, marcada CONFERIR, e melhora à medida
+que o projetista declara.
+
+**Prova.** `blueprintClimatizacaoAmbientes.test.ts` (7: todo uso tem padrão; leitor por campo e
+por uid; sem declaração = USO + setpoint do ESTUDO + conferir; declarado vence; nome sem uso =
+OUTRO/SEM; pé-direito livre = `peDireitoUtilMm` e o volume dele), `blueprintClimatizacao` (15,
+inalterado), `PainelCamadasParede.test.tsx` (+3: U 2,71 W/m²·K conferido à mão para
+reboco–bloco–reboco; sem λ diz quantas faltam; sem biblioteca não aparece),
+`BlueprintEditor.test.tsx` (o caso das premissas ganhou a Sala: padrão do uso com `*`, 1 sem
+etiqueta, declarar 3 pessoas tira o `*` e conta "1 de 2"). `check-ui-standard` limpo nos três
+`.tsx`. ⚠️ Lição: o setpoint da linha herdava os 22 °C que o mesmo teste tinha declarado no estudo
+— a expectativa errada era a minha, o comportamento era o pedido.

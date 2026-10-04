@@ -15357,7 +15357,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
           {tarefaAberta === 'climatizacao' && (
             <div data-testid="tarefa-climatizacao">
-              <PainelClimatizacao hip={climatizacaoDoEstudo.hipoteses} onHip={climatizacaoDoEstudo.setHipoteses} condicoes={condicoesDoClima} persistenciaIndisponivel={climatizacaoDoEstudo.persistenciaIndisponivel} />
+              <PainelClimatizacao
+                hip={climatizacaoDoEstudo.hipoteses}
+                onHip={climatizacaoDoEstudo.setHipoteses}
+                condicoes={condicoesDoClima}
+                // E0.3: a mesma lista do painel de acabamentos, mais o uid da ETIQUETA (a chave do declarado).
+                ambientes={ambientesParaAcabamento.map((a) => {
+                  const etiquetaId = ambientes.find((x) => x.id === a.spaceId)?.etiquetaId ?? null;
+                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos };
+                })}
+                nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+                onSelecionar={(spaceId) => selecionar([spaceId])}
+                persistenciaIndisponivel={climatizacaoDoEstudo.persistenciaIndisponivel}
+              />
             </div>
           )}
 

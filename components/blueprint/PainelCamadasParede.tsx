@@ -23,7 +23,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import DatabasePickerModal from '../DatabasePickerModal';
 import SeletorDeMaterial from './SeletorDeMaterial';
-import type { Material } from '../../utils/blueprintMateriais';
+import { desempenhoTermico, type Material } from '../../utils/blueprintMateriais';
 import { CampoMedida } from './PainelParedeSelecionada';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg } from '../../hooks/useOrgContext';
 import {
@@ -431,6 +431,28 @@ export default function PainelCamadasParede({ parede, medidas, aoMudar, materiai
           <span className="ml-1.5 text-[11px] font-normal text-slate-400">soma das camadas</span>
         </span>
       </div>
+      {/* DESEMPENHO TÉRMICO (04/10/2026, E0.3 da climatização — achado 4): o U da
+          parede já era calculado para piso e forro e nunca aparecia aqui, onde as
+          camadas são editadas. Rsi 0,13 / Rse 0,04 (superfície vertical, NBR 15220).
+          Camada sem λ no catálogo = U não calculado, dito pelo nome da camada. */}
+      {camadas && materiais.length > 0 && (() => {
+        const termico = desempenhoTermico(camadas, new Map(materiais.map((m) => [m.codigo, m])), 0.13, 0.04);
+        return (
+          <div className="mt-1.5 flex items-center justify-between text-xs" data-testid="parede-desempenho-termico">
+            <span className="font-semibold text-slate-500">Desempenho térmico</span>
+            {termico.transmitanciaWm2K != null ? (
+              <span className="tabular-nums text-slate-700" title="U = 1/(Rsi + Σe/λ + Rse), NBR 15220, parede">
+                U {termico.transmitanciaWm2K.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} W/m²·K
+                <span className="ml-1.5 text-[11px] text-slate-400">R {termico.resistenciaM2KW.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²·K/W</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-amber-800" title={termico.camadasSemLambda.join(', ')}>
+                sem λ em {termico.camadasSemLambda.length} camada(s) — U não calculado
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       <button
         type="button"

@@ -22,6 +22,7 @@
  * estão no repositório. O valor declarado vale sobre a tabela, sempre.
  */
 import { DATAS_DE_REFERENCIA, LATITUDE_PADRAO } from './blueprintInsolacao';
+import { ambientesDaColuna, type HipotesesDoAmbiente } from './blueprintClimatizacaoAmbientes';
 
 // ─── Conforto (E0.1) ─────────────────────────────────────────────────────────
 
@@ -247,12 +248,15 @@ export interface HipotesesClimatizacao {
   conforto: HipotesesDeConforto;
   clima: HipotesesDeClima;
   insolacao: HipotesesDeInsolacaoDoEstudo;
+  /** E0.3: o declarado por ambiente, pelo `uid` da etiqueta (ver `blueprintClimatizacaoAmbientes`). */
+  ambientes: Record<string, HipotesesDoAmbiente>;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   conforto: HIPOTESES_DE_CONFORTO_PADRAO,
   clima: HIPOTESES_DE_CLIMA_PADRAO,
   insolacao: HIPOTESES_DE_INSOLACAO_DO_ESTUDO_PADRAO,
+  ambientes: {},
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -300,6 +304,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     conforto: hipotesesDeConfortoDaColuna(r.conforto),
     clima: hipotesesDeClimaDaColuna(r.clima),
     insolacao: hipotesesDeInsolacaoDaColuna(r.insolacao),
+    ambientes: ambientesDaColuna(r.ambientes),
   };
 }
 

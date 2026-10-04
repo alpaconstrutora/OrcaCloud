@@ -218,6 +218,39 @@ describe('painel de camadas · as seis ações do pedido', () => {
   });
 });
 
+/**
+ * DESEMPENHO TÉRMICO (04/10/2026, E0.3 do roadmap de climatização — achado 4): o U
+ * da parede era calculado só para piso e forro; aqui, onde as camadas se editam,
+ * ele não aparecia. Com λ em toda camada sai U e R; sem λ numa delas, o painel
+ * diz qual falta em vez de inventar um número.
+ */
+describe('painel de camadas · desempenho térmico (E0.3)', () => {
+  const material = (codigo: string, condutividadeWmK: number | null) => ({ id: codigo, organizationId: 'org_1', codigo, nome: codigo, fonte: 'SINAPI', unidade: 'm3', custo: 0, fabricante: null, densidadeKgM3: null, condutividadeWmK, cor: null }) as unknown as import('../../utils/blueprintMateriais').Material;
+
+  it('com λ em toda camada mostra U e R pela NBR 15220 (Rsi 0,13 / Rse 0,04)', async () => {
+    const { desempenhoTermico } = await import('../../utils/blueprintMateriais');
+    const materiais = [material('87879', 1.15), material('103333', 0.9)];
+    montar({ materiais });
+    const esperado = desempenhoTermico(COMPOSICAO, new Map(materiais.map((m) => [m.codigo, m])), 0.13, 0.04);
+    const linha = screen.getByTestId('parede-desempenho-termico');
+    expect(esperado.transmitanciaWm2K).not.toBeNull();
+    expect(linha).toHaveTextContent(`U ${esperado.transmitanciaWm2K!.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} W/m²·K`);
+    expect(linha).toHaveTextContent(/R 0,\d\d m²·K\/W/);
+    // Conta à mão: 2 × 0,025/1,15 + 0,14/0,90 = 0,199 → U = 1/(0,13 + 0,199 + 0,04) ≈ 2,71.
+    expect(esperado.transmitanciaWm2K!).toBeCloseTo(2.71, 2);
+  });
+
+  it('camada sem λ: não inventa U — diz quantas faltam', () => {
+    montar({ materiais: [material('87879', 1.15), material('103333', null)] });
+    expect(screen.getByTestId('parede-desempenho-termico')).toHaveTextContent(/sem λ em 1 camada\(s\) — U não calculado/);
+  });
+
+  it('sem biblioteca de materiais a linha nem aparece', () => {
+    montar();
+    expect(screen.queryByTestId('parede-desempenho-termico')).not.toBeInTheDocument();
+  });
+});
+
 describe('painel de camadas · o cálculo automático', () => {
   it('mostra volume e área de CADA camada, na própria linha', () => {
     // "Cálculo automático de área e volume de cada" — a razão de o número morar

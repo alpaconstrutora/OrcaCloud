@@ -4,17 +4,17 @@ import {
     ArrowLeft, FileText, Calendar, Shield, DollarSign,
     Layers, Plus, History, CheckCircle2, AlertCircle,
     MoreHorizontal, ArrowUpRight, TrendingUp, BarChart3,
-    ArrowRight, Save, Edit3, PlusCircle, Clock,
+    ArrowRight, Edit3, PlusCircle, Clock,
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown, Zap,
-    Package, Pencil, Settings, Search, Lock as LockIcon,
+    Package, Pencil, Settings, Search,
     ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
     Contract, ContractItem, ContractAddendum,
     ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
-    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType, MinutaVersion,
+    ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType,
     ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind,
     ContractRiskAssessment, ContractLaborQuestionnaire, ContractPrecedentCondition, ContractDocumentRequirement,
     DocumentRequirementPhase, ContractAcceptance, ContractTechnicalResponsibility, ContractEvaluation,
@@ -112,6 +112,8 @@ import {
 import { contractTemplateService, ContractTemplate as DBContractTemplate, renderTemplate, buildVariableMap } from '../services/contractTemplateService';
 import { documentTemplateService, DocumentTemplate } from '../services/documentTemplateService';
 import EmitDocumentModal from './EmitDocumentModal';
+import ContractDocumentsTab from './contracts/ContractDocumentsTab';
+import { contractDocumentVersionService } from '../services/contractDocumentVersionService';
 import DocxTemplateManager from './DocxTemplateManager';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { projectService } from '../services/projectService';
@@ -250,6 +252,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [contractTemplates, setContractTemplates] = React.useState<DBContractTemplate[]>([]);
     const [docxTemplates, setDocxTemplates] = React.useState<DocumentTemplate[]>([]);
     const [emitModalOpen, setEmitModalOpen] = React.useState(false);
+    // Remonta o painel de documentos da aba Emissão quando uma versão nasce
+    // fora dele ("Emitir Contrato (.docx)" grava a versão pelo modal).
+    const [docsReloadKey, setDocsReloadKey] = React.useState(0);
     const [docxManagerOpen, setDocxManagerOpen] = React.useState(false);
     const [templatePdfModal, setTemplatePdfModal] = React.useState(false);
     const [generatingTemplatePdf, setGeneratingTemplatePdf] = React.useState(false);
@@ -2103,10 +2108,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             {/* Tab: Emissão */}
             {activeTab === 'emissao' && (
                 <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-                    {/* Status do contrato + upload do contrato assinado (GED).
-                        Vieram da aba Resumo: é aqui que o documento é anexado e
-                        enviado para assinatura, então é aqui que se muda o status
-                        e se troca o PDF. */}
+                    {/* Status do contrato. Veio da aba Resumo: é aqui que o
+                        documento é versionado, emitido e enviado para
+                        assinatura, então é aqui que se muda o status. */}
                     <ContractModal
                         isOpen
                         variant="inline"
@@ -2124,21 +2128,46 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         }}
                     />
 
-                    {/* Assinatura eletrônica. O card só-leitura "Contrato
-                        Assinado / PDF Vinculado" que ficava aqui saiu: virou
-                        duplicata do campo GED editável logo acima. */}
+                    {/* Documento do contrato — UM lugar só. Versões do contrato
+                        e de cada aditivo, na tabela contract_document_versions,
+                        em qualquer status (antes: MinutaVersionsPanel, escritor
+                        legado do JSONB minuta_versions, só no status "Minuta",
+                        mais um upload "Contrato Assinado (GED)" no formulário
+                        acima — dois uploads do mesmo arquivo sem ligação).
+                        ⚠️ Não volte a montar o painel legado junto deste: o
+                        antigo escreve direto em minuta_versions, e este reprojeta
+                        o JSONB a partir da tabela — a versão criada pelo antigo
+                        some na próxima projeção.
+                        Plano: docs/planos/2026-10-03-emissao-documento-unico.md */}
+                    <ContractDocumentsTab
+                        key={docsReloadKey}
+                        contract={contract}
+                        onNotify={notify}
+                        onChanged={async () => {
+                            const updated = await contractService.getContractById(contract.id);
+                            if (updated) setContract(updated);
+                        }}
+                    />
+
+                    {/* Assinatura eletrônica — assina a versão EMITIDA mais
+                        recente do contrato, não um arquivo à parte. O PDF
+                        assinado volta pelo webhook do sign-contract em
+                        signed_contract_url e aparece aqui só para leitura. */}
                     <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                         <h4 className="text-xs font-medium text-gray-400 px-2">Assinatura Eletrônica</h4>
                         <SignaturePanel
                             contract={contract}
                             onSend={async (signers) => {
-                                if (!contract.signed_contract_url) {
-                                    notify('Anexe o PDF do contrato antes de enviar para assinatura.', 'error');
-                                    return;
-                                }
                                 try {
+                                    // listByOwner vem por v decrescente: a 1ª emitida é a mais recente.
+                                    const versoes = await contractDocumentVersionService.listByOwner('CONTRACT', contract.id);
+                                    const alvo = versoes.find(v => v.emitted);
+                                    if (!alvo) {
+                                        notify('Emita uma versão do documento do contrato antes de enviar para assinatura.', 'error');
+                                        return;
+                                    }
                                     notify('Enviando para ZapSign…', 'info');
-                                    const pdfResp = await fetch(contract.signed_contract_url);
+                                    const pdfResp = await fetch(alvo.url);
                                     const blob = await pdfResp.blob();
                                     const base64 = await new Promise<string>((res, rej) => {
                                         const fr = new FileReader();
@@ -2150,7 +2179,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         contract.id,
                                         contract.organization_id,
                                         base64,
-                                        `Contrato ${contract.number} — ${contract.title}`,
+                                        `Contrato ${contract.number} — ${contract.title} (v${alvo.v})`,
                                         signers
                                     );
                                     const updated = await contractService.getContractById(contract.id);
@@ -2173,18 +2202,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             }}
                         />
                     </div>
-
-                    {/* Versões da Minuta */}
-                    {contract.status === 'Minuta' && (
-                        <MinutaVersionsPanel
-                            contract={contract}
-                            onVersionAdded={async () => {
-                                const updated = await contractService.getContractById(contract.id);
-                                if (updated) setContract(updated);
-                            }}
-                            onNotify={notify}
-                        />
-                    )}
                 </div>
             )}
 
@@ -3715,6 +3732,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     onManageTemplates={() => { setEmitModalOpen(false); setDocxManagerOpen(true); }}
                     onFallbackPdf={() => { setEmitModalOpen(false); handleDownloadPDF(); }}
                     notify={notify}
+                    // O documento gerado entra como rascunho no painel de
+                    // documentos da aba Emissão — sem subir o arquivo de novo.
+                    persistVersion
+                    onVersionSaved={() => setDocsReloadKey(k => k + 1)}
                 />
             )}
             {/* "Modelos de documento" não é montado aqui: é tela, e substitui o
@@ -4196,237 +4217,6 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── MinutaVersionsPanel ─────────────────────────────────────────────────────
-interface MinutaVersionsPanelProps {
-    contract: Contract;
-    onVersionAdded: () => Promise<void>;
-    onNotify: (msg: string, type: 'success' | 'error' | 'info') => void;
-}
-
-const MinutaVersionsPanel: React.FC<MinutaVersionsPanelProps> = ({ contract, onVersionAdded, onNotify }) => {
-    const confirm = useConfirm();
-    const versions = (contract.minuta_versions ?? []).slice().sort((a, b) => b.v - a.v);
-    const [notes, setNotes] = React.useState('');
-    const [docName, setDocName] = React.useState('');
-    const [uploading, setUploading] = React.useState(false);
-    const [busyV, setBusyV] = React.useState<number | null>(null);
-    const [editingV, setEditingV] = React.useState<number | null>(null);
-    const [editName, setEditName] = React.useState('');
-    const fileRef = React.useRef<HTMLInputElement>(null);
-
-    // Uma versão é considerada "emitida" quando emitted === true.
-    // Versões antigas (sem o campo) são tratadas como emitidas para manter compatibilidade.
-    const isEmitted = (ver: MinutaVersion) => ver.emitted !== false;
-
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setUploading(true);
-        try {
-            const path = `contract-minutas/${contract.id}/${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
-            const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
-            if (upErr) throw upErr;
-            const { data: urlData } = supabase.storage.from('documents').getPublicUrl(path);
-            const fallbackName = file.name.replace(/\.[^.]+$/, '');
-            await contractService.addMinutaVersion(contract.id, {
-                url: urlData.publicUrl,
-                notes: notes.trim(),
-                name: docName.trim() || fallbackName,
-            });
-            setNotes('');
-            setDocName('');
-            if (fileRef.current) fileRef.current.value = '';
-            await onVersionAdded();
-            onNotify('Versão adicionada como rascunho. Clique em "Emitir" para liberá-la ao cliente.', 'success');
-        } catch (err) {
-            onNotify(`Erro ao publicar versão: ${err instanceof Error ? err.message : ''}`, 'error');
-        } finally {
-            setUploading(false);
-        }
-    };
-
-    const handleEmit = async (v: number) => {
-        setBusyV(v);
-        try {
-            await contractService.emitMinutaVersion(contract.id, v);
-            await onVersionAdded();
-            onNotify('Versão emitida! Agora está disponível no portal do cliente.', 'success');
-        } catch (err) {
-            onNotify(`Erro ao emitir versão: ${err instanceof Error ? err.message : ''}`, 'error');
-        } finally {
-            setBusyV(null);
-        }
-    };
-
-    const handleDelete = async (ver: MinutaVersion) => {
-        if (isEmitted(ver)) return;
-        const ok = await confirm({
-            title: 'Excluir versão?',
-            message: `Excluir a versão ${ver.v}? Esta ação não pode ser desfeita.`,
-            variant: 'danger',
-            confirmLabel: 'Excluir',
-        });
-        if (!ok) return;
-        setBusyV(ver.v);
-        try {
-            await contractService.deleteMinutaVersion(contract.id, ver.v);
-            await onVersionAdded();
-            onNotify('Versão excluída.', 'success');
-        } catch (err) {
-            onNotify(`Erro ao excluir versão: ${err instanceof Error ? err.message : ''}`, 'error');
-        } finally {
-            setBusyV(null);
-        }
-    };
-
-    const startEdit = (ver: MinutaVersion) => {
-        setEditingV(ver.v);
-        setEditName(ver.name ?? '');
-    };
-
-    const saveEdit = async (v: number) => {
-        setBusyV(v);
-        try {
-            await contractService.updateMinutaVersion(contract.id, v, { name: editName });
-            setEditingV(null);
-            await onVersionAdded();
-            onNotify('Nome do documento atualizado.', 'success');
-        } catch (err) {
-            onNotify(`Erro ao renomear: ${err instanceof Error ? err.message : ''}`, 'error');
-        } finally {
-            setBusyV(null);
-        }
-    };
-
-    const nextV = (versions[0]?.v ?? 0) + 1;
-
-    return (
-        <div className="bg-white p-6 rounded-[10px] border border-purple-100 shadow-sm space-y-5">
-            <div className="flex items-center gap-3">
-                <History className="w-4 h-4 text-purple-500" />
-                <h4 className="text-xs font-medium text-purple-700">Versões da Minuta</h4>
-            </div>
-
-            {/* Publicar nova versão */}
-            <div className="p-4 bg-purple-50 rounded-[10px] border border-purple-100 space-y-3">
-                <p className="text-xs font-bold text-purple-600">Adicionar Versão {String(nextV).padStart(2, '0')}</p>
-                <input
-                    type="text"
-                    value={docName}
-                    onChange={e => setDocName(e.target.value)}
-                    placeholder="Nome do documento (opcional — usa o nome do arquivo)"
-                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-[6px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
-                />
-                <textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Descreva o que mudou nesta versão (opcional)..."
-                    rows={2}
-                    className="w-full px-4 py-3 bg-white border border-purple-100 rounded-[6px] text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
-                />
-                <div className="flex items-center gap-3">
-                    <input ref={fileRef} type="file" accept=".pdf,.docx,.doc" onChange={handleUpload} className="hidden" />
-                    <button
-                        onClick={() => fileRef.current?.click()}
-                        disabled={uploading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white rounded-[6px] text-xs font-bold hover:bg-purple-700 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        {uploading ? 'Enviando…' : 'Subir Documento'}
-                    </button>
-                    <span className="text-xs text-gray-400">PDF ou DOCX</span>
-                </div>
-            </div>
-
-            {/* Histórico */}
-            {versions.length > 0 ? (
-                <div className="space-y-2">
-                    {versions.map(ver => {
-                        const emitted = isEmitted(ver);
-                        const busy = busyV === ver.v;
-                        return (
-                        <div key={ver.v} className="flex items-start gap-4 p-4 rounded-[10px] border border-gray-100 hover:border-purple-100 transition-all group">
-                            <div className={`w-9 h-9 rounded-[6px] flex items-center justify-center shrink-0 font-black text-[13px] ${emitted ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}`}>
-                                v{ver.v}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                {editingV === ver.v ? (
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            value={editName}
-                                            onChange={e => setEditName(e.target.value)}
-                                            autoFocus
-                                            placeholder={`Versão ${ver.v}`}
-                                            onKeyDown={e => { if (e.key === 'Enter') saveEdit(ver.v); if (e.key === 'Escape') setEditingV(null); }}
-                                            className="flex-1 px-3 py-1.5 bg-white border border-purple-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-300"
-                                        />
-                                        <button onClick={() => saveEdit(ver.v)} disabled={busy} className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-50" title="Salvar">
-                                            <Save className="w-4 h-4" />
-                                        </button>
-                                        <button onClick={() => setEditingV(null)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-all" title="Cancelar">
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="flex items-center gap-2">
-                                            <p className="text-sm font-bold text-gray-800 truncate">{ver.name?.trim() || `Versão ${ver.v}`}</p>
-                                            <span className={`text-sm font-normal shrink-0 ${emitted ? 'text-emerald-700' : 'text-amber-700'}`}>
-                                                {emitted ? 'Emitida' : 'Rascunho'}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs font-medium text-gray-400 mt-0.5">
-                                            {new Date(ver.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                        </p>
-                                        {ver.notes && <p className="text-sm text-gray-600 mt-0.5">{ver.notes}</p>}
-                                    </>
-                                )}
-                            </div>
-                            {editingV !== ver.v && (
-                                <div className="flex items-center gap-1 shrink-0">
-                                    {!emitted && (
-                                        <button
-                                            onClick={() => handleEmit(ver.v)}
-                                            disabled={busy}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
-                                            title="Emitir ao cliente"
-                                        >
-                                            <Send className="w-3 h-3" />
-                                            {busy ? '…' : 'Emitir'}
-                                        </button>
-                                    )}
-                                    <a
-                                        href={ver.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-[6px] transition-all"
-                                        title="Abrir documento"
-                                    >
-                                        <ExternalLink className="w-4 h-4" />
-                                    </a>
-                                    <ActionIconButton kind="edit" title="Editar nome" onClick={() => startEdit(ver)} />
-                                    <ActionIconButton
-                                        kind="delete"
-                                        disabled={emitted || busy}
-                                        icon={emitted ? <LockIcon className="w-4 h-4" /> : undefined}
-                                        title={emitted ? 'Versão emitida não pode ser excluída' : 'Excluir versão'}
-                                        onClick={() => handleDelete(ver)}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <p className="text-xs text-gray-400 text-center py-2">Nenhuma versão publicada ainda</p>
-            )}
-        </div>
-    );
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ─── SignaturePanel ───────────────────────────────────────────────────────────
 interface SignaturePanelProps {
     contract: Contract;
@@ -4471,7 +4261,18 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
         } finally { setBusy(false); }
     };
 
+    // signed_contract_url = PDF assinado devolvido pelo ZapSign (webhook do
+    // sign-contract). Contratos antigos podem tê-lo do upload "GED" que saiu
+    // da tela — continua aberto aqui, só para leitura.
+    const pdfAssinado = contract.signed_contract_url ? (
+        <a href={contract.signed_contract_url} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">
+            <ExternalLink className="w-4 h-4" /> Abrir contrato assinado (PDF)
+        </a>
+    ) : null;
+
     if (isSigned) return (
+        <div className="space-y-3">
         <div className="flex items-center gap-3 p-3 rounded-[6px] bg-emerald-50 border border-emerald-100">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <div className="flex-1">
@@ -4483,10 +4284,13 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
                 )}
             </div>
         </div>
+        {pdfAssinado}
+        </div>
     );
 
     return (
         <div className="space-y-3 border-t border-gray-100 pt-4">
+            {pdfAssinado}
             <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-gray-500">Assinatura Eletrônica</p>
                 {hasSig && (

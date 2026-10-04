@@ -13,14 +13,12 @@ import { supplierService } from '../services/supplierService';
 import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
-import { storageService } from '../services/storageService';
 import { laborService } from '../services/laborService';
 import { contractTypeService } from '../services/contractTypeService';
 import { empreendimentoService } from '../services/empreendimentoService';
-import { sanitizeFileName } from '../utils/storageUtils';
 import ContractScopeManager from './ContractScopeManager';
 import ContractGuaranteeModal from './ContractGuaranteeModal';
-import { Upload, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
+import { KeyRound, RefreshCw } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -511,28 +509,6 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         }
 
         // Unicidade garantida pelo unique index do banco ao salvar
-    };
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !organizationId) return;
-
-        setIsSubmitting(true);
-        try {
-            const cleanName = sanitizeFileName(file.name);
-            const path = `${organizationId}/contracts/signed_${Date.now()}_${cleanName}`;
-
-            await storageService.uploadFile('documents', path, file);
-            const publicUrl = storageService.getPublicUrl('documents', path);
-
-            setFormData(prev => ({ ...prev, signed_contract_url: publicUrl }));
-        } catch (error: unknown) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            console.error("Erro ao fazer upload do contrato:", err);
-            alert(`Erro ao fazer upload: ${err.message || 'Erro desconhecido'}`);
-        } finally {
-            setIsSubmitting(false);
-        }
     };
 
     // Projeto de sistema já sai no projectService — utils/systemProjects.ts.
@@ -1041,17 +1017,23 @@ export const ContractModal: React.FC<ContractModalProps> = ({
 
                         )}
 
-                        {/* Section: Status & Contrato Assinado — na tela de
-                            detalhe estes dois campos vivem na aba Emissão, junto
-                            do GED e da assinatura eletrônica. */}
+                        {/* Section: Status do contrato — na tela de detalhe vive na
+                            aba Emissão, acima dos documentos e da assinatura.
+                            O upload "Contrato Assinado (GED)" que ficava aqui
+                            saiu: duplicava as versões de documento da mesma aba,
+                            e o ZapSign assinava o arquivo do GED em vez da versão
+                            emitida. O documento do contrato agora só entra como
+                            versão (contract_document_versions); signed_contract_url
+                            é só o PDF assinado que o webhook do sign-contract grava. */}
                         {showGroup('status_documento') && (
                         <div className="space-y-4">
                             <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                                 <FileText className="w-4 h-4 text-blue-600" />
-                                <h3 className="text-sm font-semibold text-gray-900">Status &amp; Contrato Assinado</h3>
+                                <h3 className="text-sm font-semibold text-gray-900">Status do contrato</h3>
                             </div>
                             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="col-span-2 space-y-1.5">
+                                {/* Campo curto: meia linha (§30), não a linha inteira. */}
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500 ml-1">Status do Contrato</label>
                                     <div className="relative group">
                                         <select
@@ -1073,55 +1055,6 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             <option value="Cancelado">Cancelado</option>
                                         </select>
                                     </div>
-                                </div>
-
-                                {/* GED: Upload Contrato Assinado */}
-                                <div className="col-span-2 space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500 ml-1">Contrato Assinado (GED)</label>
-                                    {formData.signed_contract_url ? (
-                                        <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-100 rounded-[10px] group/file">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-blue-600 rounded-[6px] flex items-center justify-center text-white shadow-lg shadow-blue-200">
-                                                    <FileText className="w-5 h-5" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-medium text-blue-600">Documento Vinculado</p>
-                                                    <p className="text-xs font-medium text-gray-700 truncate max-w-[200px]">Contrato_Assinado.pdf</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <a
-                                                    href={formData.signed_contract_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="p-2 bg-white text-blue-600 rounded-[6px] border border-blue-100 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                                    title="Visualizar Documento"
-                                                >
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                                <ActionIconButton kind="delete" title="Remover Documento" onClick={() => setFormData({ ...formData, signed_contract_url: undefined })} />
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div
-                                            onClick={() => document.getElementById('contract-upload')?.click()}
-                                            className="w-full p-8 border-2 border-dashed border-gray-200 rounded-[10px] hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer group"
-                                        >
-                                            <input
-                                                id="contract-upload"
-                                                type="file"
-                                                accept=".pdf,.doc,.docx"
-                                                className="hidden"
-                                                onChange={handleFileUpload}
-                                            />
-                                            <div className="flex flex-col items-center gap-3">
-                                                <div className="w-12 h-12 bg-gray-50 rounded-[10px] flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                                                    <Upload className="w-6 h-6" />
-                                                </div>
-                                                <p className="text-xs font-medium text-gray-500 group-hover:text-blue-600">Fazer upload do contrato assinado (PDF)</p>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         </div>

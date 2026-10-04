@@ -1288,4 +1288,41 @@ da evaporadora vem junto e o original não muda). Reexecutados: `blueprintTrocaD
 `blueprintKernelGoldens`, `plantaApi` (bundle fresco) — 61/61.
 ⚠️ Lição da escrita do teste: o rótulo da linha de orçamento mora em `location.room`, não em
 `description`, e `computeQuantities` precisa da `POLITICA_PADRAO` explícita para contar terminais —
-duas falhas que eram da cena, não da correção.
+duas falhas que eram da cena, não da correção. Commit `31b5637b`.
+
+### Etapa 0.2 — 04/10/2026 (frente `clima-e0`, sem bump; sem migration nova — o JSONB cresce)
+
+**O que entrou:**
+- `utils/blueprintClimatizacao.ts` ganhou dois grupos: `clima` (cidade, TBS, TBU, altitude —
+  **declarados**, `null` = derivar) e `insolacao` (data, hora solar, latitude suposta, sol no 3D).
+  `CLIMA_POR_CIDADE`: as **mesmas 13 capitais** da tabela de chuvas do pluvial (o estudo escolhe UMA
+  cidade e as duas disciplinas concordam; um teste trava a igualdade das listas), com TBS/TBU de
+  verão, altitude e lat/long — **⚠️ transcrita de memória, CONFERIR NA NORMA (NBR 16401-1, Anexo A,
+  1 %)**; `FONTE_DO_CLIMA` leva a marca à tela.
+- `condicoesExternas(hip, {georreferencia, cidadeDoContexto})`: cidade = declarada > contexto
+  urbanístico (casando sem acento/caixa) > **capital mais próxima pela georreferência** (haversine;
+  acima de 300 km a tabela orienta e a pendência avisa a distância) > sem; TBS/TBU = declarada >
+  tabela > sem (pendência diz o que falta); altitude = declarada > **`Georreferencia.elevacaoM`** >
+  tabela; latitude para a insolação = georreferência > tabela. Cada número sai com a ORIGEM;
+  `conferir` acende quando algo veio da tabela; TBU > TBS vira pendência.
+- **Achado 5 fechado:** `useBlueprintClimatizacao` adota a insolação que o navegador tinha
+  (`blueprint:insolacao`) na 1ª abertura de um estudo sem linha e grava no estudo; sem a tabela
+  (migration ausente) a insolação segue no navegador, como antes. No editor, `hipotesesDeInsolacao`
+  passou a ser **estudo + vizinhos legados** (a chave antiga fica só para os vizinhos que a gaveta do
+  entorno oferece trazer, M5b); ao mudar vizinhos a chave é regravada INTEIRA com os valores novos,
+  para não devolver data/hora velhas por cima do que o hook gravou.
+- `PainelClimatizacao`: seção **Clima externo de projeto** — cidade (select com a derivada no rótulo
+  da opção vazia), TBS/TBU/altitude anuláveis (placeholder = valor em uso, `title` = origem), linha
+  "Em uso: … (origem)", pendências, marca CONFERIR, nota de que a insolação é do estudo.
+
+**Decisões.** (1) A tabela climática é das capitais do pluvial e não de "todas as cidades": o que a
+Planta não tem como derivar fica declarado, com pendência dita — não se inventa TBS para Uberlândia.
+(2) A insolação mora na tabela de climatização e não numa tabela própria: é premissa de clima do
+estudo, e evita uma 5ª tabela `blueprint_study_*` para quatro campos.
+
+**Prova.** `blueprintClimatizacao.test.ts` (15: leitor com os três grupos, data/hora/latitude com
+faixa, leitura da chave antiga ignorando vizinhos, igualdade das listas de cidades, TBU < TBS na
+tabela, casamento sem acento, capital mais próxima, e os cinco cenários de `condicoesExternas`);
+`BlueprintEditor.test.tsx` (o caso das premissas ganhou o clima: "sem cidade" + pendência →
+São Paulo (declarada) 31,9/21,7/760 m com a marca → TBS 33 declarada vence; os 3 casos de
+insolação/vizinhos legados continuam verdes). `check-ui-standard` limpo nos dois `.tsx`.

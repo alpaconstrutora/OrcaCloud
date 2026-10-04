@@ -250,6 +250,7 @@ import { FONTE_IT17_MG, desenhoPrefereMangotinho, divergenciasDaIT17, premissasD
 import { conferenciaDeIncendio, marcasDoCalculoDeIncendio } from '../../utils/blueprintConferenciaIncendio';
 import { useBlueprintIncendio } from '../../hooks/useBlueprintIncendio';
 import { useBlueprintClimatizacao } from '../../hooks/useBlueprintClimatizacao';
+import { condicoesExternas } from '../../utils/blueprintClimatizacao';
 import PainelClimatizacao from './PainelClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
@@ -3019,11 +3020,40 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   const shaftSugerido = useMemo(() => (levelId ? sugerirShaft(editor.model, levelId) : { comando: null, motivo: 'sem pavimento' }), [editor.model, levelId]);
   /**
-   * INSOLAÇÃO (E5.1): hipóteses do navegador (data, hora solar, latitude
-   * suposta, vizinhos, sol no 3D); a análise do pavimento ativo pelo grafo.
+   * CLIMATIZAÇÃO (04/10/2026, E0.1/E0.2): as premissas do ESTUDO — conforto
+   * interno, clima externo declarado e a insolação. Vive aqui, antes da
+   * insolação, porque é dela que a data/hora/latitude passam a vir.
    */
-  const [hipotesesDeInsolacao, setHipotesesDeInsolacao] = usePersistedState<HipotesesDeInsolacao>('blueprint:insolacao', HIPOTESES_DE_INSOLACAO_PADRAO);
+  const climatizacaoDoEstudo = useBlueprintClimatizacao(study.id, study.organization_id);
+  /**
+   * INSOLAÇÃO (E5.1 → E0.2 da climatização, 04/10/2026, achado 5): data, hora
+   * solar, latitude suposta e sol no 3D moram no ESTUDO
+   * (`blueprint_study_climatizacao.hipoteses.insolacao`) — antes ficavam só no
+   * navegador e o mesmo estudo calculava diferente em outra máquina. A chave
+   * antiga fica SÓ para os VIZINHOS do jeito antigo, que a gaveta do entorno
+   * oferece trazer para o estudo (M5b). A análise do pavimento ativo vem do grafo.
+   */
+  const [insolacaoLegada, setInsolacaoLegada] = usePersistedState<HipotesesDeInsolacao>('blueprint:insolacao', HIPOTESES_DE_INSOLACAO_PADRAO);
+  const hipotesesDeInsolacao = useMemo<HipotesesDeInsolacao>(
+    () => ({ ...climatizacaoDoEstudo.hipoteses.insolacao, vizinhos: insolacaoLegada.vizinhos }),
+    [climatizacaoDoEstudo.hipoteses.insolacao, insolacaoLegada.vizinhos],
+  );
+  const setHipotesesDeInsolacao = useCallback(
+    (h: HipotesesDeInsolacao) => {
+      const { vizinhos, ...doEstudo } = h;
+      // Os vizinhos legados continuam na chave antiga — gravada INTEIRA com os valores novos, para
+      // não devolver data/hora velhas por cima do que o hook acabou de gravar quando a tabela falta.
+      if (vizinhos !== insolacaoLegada.vizinhos) setInsolacaoLegada({ ...doEstudo, vizinhos });
+      climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, insolacao: doEstudo });
+    },
+    [climatizacaoDoEstudo, insolacaoLegada.vizinhos, setInsolacaoLegada],
+  );
   const latitudeDoEstudo = editor.model.georreferencia?.latitude ?? null;
+  /** E0.2: o clima externo em vigor — o declarado vence; o resto vem do contexto urbanístico e da georreferência. */
+  const condicoesDoClima = useMemo(
+    () => condicoesExternas(climatizacaoDoEstudo.hipoteses.clima, { georreferencia: editor.model.georreferencia ?? null, cidadeDoContexto: zona.cidade?.name ?? null }),
+    [climatizacaoDoEstudo.hipoteses.clima, editor.model.georreferencia, zona.cidade?.name],
+  );
   const norteDoDesenho = editor.model.georreferencia?.rotacaoNorteDeg ?? null;
   const posicaoDoSol = useMemo(
     () => posicaoSolar(latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual, diaDoAno(hipotesesDeInsolacao.data), hipotesesDeInsolacao.horaSolar),
@@ -7851,7 +7881,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
   /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
   const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
-  const climatizacaoDoEstudo = useBlueprintClimatizacao(study.id, study.organization_id);
   /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(editor.model), [editor.model]);
   const classificacaoDeIncendio = useMemo(
@@ -15328,7 +15357,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
           {tarefaAberta === 'climatizacao' && (
             <div data-testid="tarefa-climatizacao">
-              <PainelClimatizacao hip={climatizacaoDoEstudo.hipoteses} onHip={climatizacaoDoEstudo.setHipoteses} persistenciaIndisponivel={climatizacaoDoEstudo.persistenciaIndisponivel} />
+              <PainelClimatizacao hip={climatizacaoDoEstudo.hipoteses} onHip={climatizacaoDoEstudo.setHipoteses} condicoes={condicoesDoClima} persistenciaIndisponivel={climatizacaoDoEstudo.persistenciaIndisponivel} />
             </div>
           )}
 

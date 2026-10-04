@@ -5583,6 +5583,18 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     const reaberto = await screen.findByTestId('tarefa-climatizacao');
     expect(within(reaberto).getByLabelText('Temperatura interna')).toHaveValue(22);
     expect(within(reaberto).getByLabelText('Umidade relativa')).toHaveValue(50);
+    // E0.2: o clima externo. Sem cidade, contexto nem georreferência, nada é inventado — a pendência diz o
+    // que falta; escolher São Paulo traz TBS/TBU/altitude da tabela, com a marca CONFERIR NA NORMA.
+    const clima = within(reaberto).getByTestId('clima-externo');
+    expect(within(clima).getByTestId('clima-em-uso')).toHaveTextContent(/sem cidade · TBS — · TBU —/);
+    expect(within(clima).getByTestId('clima-pendencias')).toHaveTextContent(/escolha a cidade ou declare TBS e TBU/);
+    await user.selectOptions(within(clima).getByLabelText(/^Cidade do clima de projeto/), 'São Paulo');
+    expect(within(clima).getByTestId('clima-em-uso')).toHaveTextContent(/São Paulo \(declarada\) · TBS 31,9 °C · TBU 21,7 °C · altitude 760 m/);
+    expect(within(clima).queryByTestId('clima-pendencias')).not.toBeInTheDocument();
+    expect(clima).toHaveTextContent(/NBR 16401-1, Anexo A/);
+    // TBS declarada vence a tabela.
+    await user.type(within(clima).getByLabelText('TBS externa'), '33');
+    expect(within(clima).getByTestId('clima-em-uso')).toHaveTextContent(/TBS 33,0 °C · TBU 21,7 °C/);
   }, 60000);
 });
 

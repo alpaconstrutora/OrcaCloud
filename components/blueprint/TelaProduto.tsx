@@ -11,7 +11,7 @@
  * financeiro ficam lado a lado.
  *
  * Apresentacional: o produto vem de `useBlueprintProduto` (do ESTUDO, gravado
- * com respiro); a distribuição na massa aparece na gaveta "Estudo de massa".
+ * com respiro); a distribuição na massa aparece na tela "Estudo de massa".
  */
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
@@ -158,7 +158,7 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Tipologias e mix</h3>
             <p className="mt-0.5 text-xs text-gray-500">
-              A gaveta <strong className="font-semibold">Estudo de massa</strong> reparte este mix pelos blocos — depois de reservar núcleo, paredes e corredor — e confere as vagas.
+              A tela <strong className="font-semibold">Estudo de massa</strong> reparte este mix pelos blocos — depois de reservar núcleo, paredes e corredor — e confere as vagas.
             </p>
           </div>
           <button type="button" onClick={novaTipologia} className="flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700">

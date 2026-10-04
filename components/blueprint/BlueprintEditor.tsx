@@ -299,7 +299,7 @@ import SeletorDeTipo from './SeletorDeTipo';
 import { camposDoComponente, propriedadesDoComponente, type PropriedadesDeComponente } from '../../utils/blueprintTipos';
 import { comandosDeMobiliario } from '../../utils/blueprintMobiliario';
 import PainelVagas from './PainelVagas';
-import PainelEstudoDeMassa from './PainelEstudoDeMassa';
+import TelaEstudoDeMassa from './TelaEstudoDeMassa';
 import PainelBlocoSelecionado from './PainelBlocoSelecionado';
 import {
   aproveitamentoDoEstudo,
@@ -1098,8 +1098,6 @@ const ROTULO_DA_TAREFA = {
   grupo: 'Grupo com origem — agrupar e instanciar',
   // Vagas automáticas (19/09/2026, roadmap E2.5): fileiras com circulação na garagem.
   vagas: 'Vagas de garagem — lançamento automático',
-  // ESTUDO DE MASSA (01/10/2026, M1): envelope legal, indicadores da massa e hipóteses do CA.
-  massa: 'Estudo de massa — envelope legal e indicadores',
   // LOTEAR QUADRA (25/09/2026, B2): a quadra vira N lotes de testada fixa —
   // prévia tracejada, um lote de comandos, um Ctrl+Z.
   lotear: 'Lotear quadra — subdivisão automática',
@@ -1286,7 +1284,6 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'esgoto',
   'grupo',
   'vagas',
-  'massa',
   'lotear',
   'grafo',
   'insolacao',
@@ -1862,7 +1859,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -4637,10 +4634,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     }),
     [zona.afastamentoProgressivo, zona.recuoFrenteEscalonado, zona.gabaritoAlturaMaxM, zona.gabaritoPavimentos, zona.taxaOcupacaoMax, zona.coeficienteMax, zona.taxaPermeabilidadeMin, zona.recuos, zona.vagasPorUnidade, hipotesesDaMassa, produtoDoEstudo.produto, cubDoEstudo, solDaMassa],
   );
-  /** A insolação COMPLETA da massa (fachadas em 3 alturas, inverno e verão, o lote em grade) — só com a gaveta aberta. */
+  /** A insolação COMPLETA da massa (fachadas em 3 alturas, inverno e verão, o lote em grade) — só com a tela Estudo de massa aberta. */
   const insolacaoDoEstudoDeMassa = useMemo(
-    () => (tarefaAberta === 'massa' && (editor.model.blocos ?? []).length > 0 ? insolacaoDaMassa(editor.model, { ...solDaMassa, amostragem: 'COMPLETA' }) : null),
-    [tarefaAberta, editor.model, solDaMassa],
+    () => (telaAberta === 'massa' && (editor.model.blocos ?? []).length > 0 ? insolacaoDaMassa(editor.model, { ...solDaMassa, amostragem: 'COMPLETA' }) : null),
+    [telaAberta, editor.model, solDaMassa],
   );
   const medirCenario = useCallback((m: BlueprintModel) => cenarioDeMassa(m, reguaDoEstudo), [reguaDoEstudo]);
   /**
@@ -9177,7 +9174,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         medida={blocoSel ? massa.blocos.find((m) => m.blocoId === blocoSel.id) ?? null : null}
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
         onExcluir={removerSelecionada}
-        onAbrirEstudo={() => setTarefa('massa')}
+        onAbrirEstudo={() => setTelaAberta('massa')}
         garagem={
           blocoSel && blocoSel.uso === 'GARAGEM'
             ? {
@@ -9986,6 +9983,53 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onPedirIa={pedirMudancasDaMassaAIa}
             />
           </div>
+        </div>
+      )}
+      {/* ESTUDO DE MASSA (03/10/2026): *"drawer Estudo de massa — envelope legal e indicadores também deve ser transformado em tela"*. */}
+      {telaAberta === 'massa' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="massa">
+          {cabecalhoDaTela(
+            'Estudo de massa',
+            'O volume do empreendimento antes da planta: o que a lei deixa no lote e o que os blocos usam — TO, CA, gabarito, permeabilidade, produto, insolação e financeiro, recalculados a cada mudança. Recuos, afastamento progressivo, faixas restritas e gabarito são os da zona do estudo (Terreno › Dados do lote).',
+            Building2,
+            'Terreno',
+          )}
+          <TelaEstudoDeMassa
+            medida={massa}
+            hipoteses={{ ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } }}
+            onHipoteses={setHipotesesDaMassa}
+            onSelecionarBloco={(id) => {
+              // Como na tela Quantitativos: volta ao desenho com o bloco selecionado e o painel dele aberto.
+              selecionarEAbrir([id]);
+              setTelaAberta(null);
+            }}
+            onDesenharBloco={() => {
+              // A tela cobre o desenho: fecha e liga a ferramenta (a gaveta antiga ligava ATRÁS de si — 03/10/2026).
+              setTelaAberta(null);
+              editor.setTool('bloco');
+            }}
+            produto={distribuicaoDoProduto}
+            financeiro={financeiroDoEstudo}
+            insolacao={insolacaoDoEstudoDeMassa}
+            origemDoSol={`${latitudeDoEstudo != null ? `latitude da georreferência (${latitudeDoEstudo.toFixed(2).replace('.', ',')}°)` : `latitude SUPOSTA (${hipotesesDeInsolacao.latitudeManual.toFixed(2).replace('.', ',')}°) — georreferencie o estudo`} · ${norteDoDesenho == null ? 'norte = +Y do desenho' : `norte girado ${norteDoDesenho}°`} · ${entornoDoEstudo.vizinhos.length} vizinho(s) declarado(s)`}
+            onAbrirEntorno={() => {
+              setTelaAberta(null);
+              setTarefa('insolacao');
+            }}
+            envio={{
+              empreendimentos: empreendimentos.map((e) => ({ id: e.id, name: e.name })),
+              alvo: alvoEfetivoDaMassa,
+              onAlvo: setAlvoDaMassa,
+              onEnviar: () => void enviarMassaAoEmpreendimento(),
+              enviando: enviandoMassa,
+              resultado: resultadoDoEnvioDaMassa,
+            }}
+            onAbrirProduto={() => setTelaAberta('produto')}
+            onLancarNucleo={(blocoId, elevadores) => {
+              const b = (editor.model.blocos ?? []).find((x) => x.id === blocoId);
+              if (b) editor.runBatch(comandosDoNucleoSugerido(b, elevadores));
+            }}
+          />
         </div>
       )}
       {/* PRODUTO (03/10/2026): *"o drawer produto deve ser transformado em tela"*. */}
@@ -11247,8 +11291,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   icone={Building2}
                   rotulo="Estudo de massa"
                   contagem={(editor.model.blocos ?? []).length || undefined}
-                  ativo={tarefaAberta === 'massa'}
-                  onClick={() => alternarTarefa('massa')}
+                  ativo={telaAberta === 'massa'}
+                  onClick={() => alternarTela('massa')}
                   ajuda="O que a lei deixa no lote (implantação máxima, área computável máxima, pavimentos possíveis) e o que os blocos usam: TO, CA, gabarito, permeabilidade, aproveitamento do potencial — recalculado a cada mudança"
                 />
                 <BotaoDoRibbon
@@ -15023,42 +15067,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               proposta={propostaDeSubdivisao}
               onAceitar={aceitarSubdivisao}
               resultado={resultadoDeLotear}
-            />
-          )}
-
-          {tarefaAberta === 'massa' && (
-            <PainelEstudoDeMassa
-              medida={massa}
-              hipoteses={{ ...HIPOTESES_DA_MASSA_PADRAO, ...hipotesesDaMassa, naoComputavelPorUso: { ...HIPOTESES_DA_MASSA_PADRAO.naoComputavelPorUso, ...(hipotesesDaMassa?.naoComputavelPorUso ?? {}) } }}
-              onHipoteses={setHipotesesDaMassa}
-              onSelecionarBloco={(id) => selecionar([id])}
-              onDesenharBloco={() => {
-                // A gaveta é modal e cobre o desenho: sem fechá-la, a ferramenta ligava ATRÁS dela e o clique
-                // "não fazia nada" (03/10/2026). Fecha e liga — como os outros botões de gaveta.
-                setTarefa(null);
-                editor.setTool('bloco');
-              }}
-              produto={distribuicaoDoProduto}
-              financeiro={financeiroDoEstudo}
-              insolacao={insolacaoDoEstudoDeMassa}
-              origemDoSol={`${latitudeDoEstudo != null ? `latitude da georreferência (${latitudeDoEstudo.toFixed(2).replace('.', ',')}°)` : `latitude SUPOSTA (${hipotesesDeInsolacao.latitudeManual.toFixed(2).replace('.', ',')}°) — georreferencie o estudo`} · ${norteDoDesenho == null ? 'norte = +Y do desenho' : `norte girado ${norteDoDesenho}°`} · ${entornoDoEstudo.vizinhos.length} vizinho(s) declarado(s)`}
-              onAbrirEntorno={() => setTarefa('insolacao')}
-              envio={{
-                empreendimentos: empreendimentos.map((e) => ({ id: e.id, name: e.name })),
-                alvo: alvoEfetivoDaMassa,
-                onAlvo: setAlvoDaMassa,
-                onEnviar: () => void enviarMassaAoEmpreendimento(),
-                enviando: enviandoMassa,
-                resultado: resultadoDoEnvioDaMassa,
-              }}
-              onAbrirProduto={() => {
-                setTarefa(null);
-                setTelaAberta('produto');
-              }}
-              onLancarNucleo={(blocoId, elevadores) => {
-                const b = (editor.model.blocos ?? []).find((x) => x.id === blocoId);
-                if (b) editor.runBatch(comandosDoNucleoSugerido(b, elevadores));
-              }}
             />
           )}
 

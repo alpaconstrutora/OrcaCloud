@@ -1,5 +1,5 @@
 /**
- * A gaveta "Estudo de massa" (Estudo de Massa, fase M1 — plano
+ * A TELA "Estudo de massa" (Estudo de Massa, fase M1 — plano
  * `2026-10-01-estudo-de-massa.md`): o que a lei deixa no lote (envelope legal),
  * o que os blocos desenhados usam dele (TO, CA, gabarito, permeabilidade,
  * aproveitamento do potencial), os avisos, a tabela por bloco e as hipóteses
@@ -7,6 +7,11 @@
  *
  * Apresentacional: a medida vem pronta de `medirMassa` (puro). Nada é gravado
  * aqui — mudar um bloco, um recuo ou a zona recalcula tudo na hora.
+ *
+ * Era gaveta até 03/10/2026 (*"drawer Estudo de massa — envelope legal e
+ * indicadores também deve ser transformado em tela"*). Na tela os indicadores
+ * ficam 4 por linha; o que mexe no DESENHO (clicar num bloco, Desenhar bloco,
+ * Entorno) volta ao editor, como a tela Quantitativos.
  */
 import React from 'react';
 import { AlertTriangle, ArrowUpFromLine, Banknote, Building2, CarFront, CloudSun, Droplets, Gauge, Hammer, Home, Layers, LandPlot, Percent, Ruler, Scale, Send, SquareStack, Sun, SunDim, TrendingUp, Users, Wallet } from 'lucide-react';
@@ -111,19 +116,15 @@ function problemasDoBloco(b: MedidaDoBloco): string {
   return b.pisos.some((p) => p.cabe === null) ? 'sem lote para conferir' : 'cabe no envelope';
 }
 
-export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo, financeiro: fi = null, envio, insolacao: sol = null, origemDoSol, onAbrirEntorno }: Props) {
+export default function TelaEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo, financeiro: fi = null, envio, insolacao: sol = null, origemDoSol, onAbrirEntorno }: Props) {
   const l = r.legal;
   const campo = 'h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800';
   return (
-    <div className="space-y-6 text-sm text-gray-700" data-testid="tarefa-massa">
-      <p className="text-gray-600">
-        O volume do empreendimento antes da planta: desenhe <strong>blocos</strong> (contorno, pavimentos, piso a piso e uso) e veja na hora o que a lei deixa e o que
-        a massa usa. Recuos, afastamento progressivo, faixas restritas e gabarito são os da zona do estudo (Terreno › Dados do lote).
-      </p>
+    <div className="space-y-6 text-sm text-gray-700" data-testid="tela-massa">
 
       <section className="space-y-3" data-testid="envelope-legal">
         <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Envelope legal — o que a lei deixa no lote</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <KpiCard label="Lote" value={m2(l.loteM2)} icon={<LandPlot />} color="gray" />
           <KpiCard label="Implantação máxima" value={m2(l.implantacaoEfetivaM2)} sub={l.implantacaoMaxM2 != null && l.envelopeTerreoM2 != null ? `TO ${m2(l.implantacaoMaxM2)} · envelope ${m2(l.envelopeTerreoM2)}` : undefined} icon={<SquareStack />} color="blue" />
           <KpiCard label="Área computável máxima" value={m2(l.potencialM2)} sub="CA × lote" icon={<Scale />} color="indigo" />
@@ -151,7 +152,7 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <KpiCard label="Taxa de ocupação" value={r.to.usado == null ? '—' : `${n1(r.to.usado)} %`} sub={legenda(r.to, (v) => `${n1(v)} %`)} icon={<SquareStack />} color={COR_DO_ESTADO[r.to.estado]} />
               <KpiCard label="Coeficiente (CA)" value={r.ca.usado == null ? '—' : n2(r.ca.usado)} sub={legenda(r.ca, n2)} icon={<Scale />} color={COR_DO_ESTADO[r.ca.estado]} />
               <KpiCard label="Pavimentos" value={r.gabaritoPavimentos.usado == null ? '—' : String(r.gabaritoPavimentos.usado)} sub={legenda(r.gabaritoPavimentos, (v) => String(v))} icon={<Layers />} color={COR_DO_ESTADO[r.gabaritoPavimentos.estado]} />
@@ -242,7 +243,7 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
             <p className="text-xs text-gray-500">Sem produto: defina as tipologias (ou aplique uma semente) na tela Produto (Terreno › Massa › Produto) para ver unidades, eficiência e vagas.</p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <KpiCard
                   label="Unidades"
                   value={String(pr.unidades)}
@@ -332,7 +333,7 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
       {sol && sol.blocos.length > 0 && (
         <section className="space-y-3" data-testid="insolacao-da-massa">
           <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Insolação da massa — 21/06, o pior sol</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard
               label="Sol nas fachadas"
               value={sol.horasInverno == null ? '—' : `${n1(sol.horasInverno)} h`}
@@ -441,7 +442,7 @@ export default function PainelEstudoDeMassa({ medida: r, hipoteses: h, onHipotes
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <KpiCard label="VGV" value={mi(fi.vgv)} title={brl(fi.vgv)} sub={fi.semPreco.length ? `sem preço: ${fi.semPreco.join(', ')}` : `${pr.unidades} unidades · ${n2(pr.privativaTotalM2)} m²`} icon={<Banknote />} color="blue" />
             <KpiCard
               label="Custo de obra"

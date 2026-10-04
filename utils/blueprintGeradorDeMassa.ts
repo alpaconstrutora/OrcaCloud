@@ -135,6 +135,12 @@ export interface HipotesesDoGeradorDeMassa {
   estacionamento: ModoDeEstacionamento;
   /** Passos do recozimento por tipo de implantação. */
   iteracoes: number;
+  /**
+   * FOLGA ATÉ O RECUO (04/10/2026), mm: quanto o bloco fica para DENTRO da borda do envelope (a linha do recuo ou da
+   * divisa). Era a constante de 10 cm; virou hipótese a pedido do usuário. 100 mm cobre o arredondamento ao mm do
+   * lote girado; 0 encosta no recuo; mais que isso guarda a espessura do revestimento da fachada.
+   */
+  margemDoEnvelopeMm: number;
 }
 
 export const HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO: HipotesesDoGeradorDeMassa = {
@@ -148,6 +154,7 @@ export const HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO: HipotesesDoGeradorDeMassa = {
   pavimentosMax: 40,
   estacionamento: 'AUTOMATICO',
   iteracoes: 40,
+  margemDoEnvelopeMm: 100,
 };
 
 /** Tudo o que a tela do gerador escolhe — e o que a conversa (M5c) pode mudar. */
@@ -266,8 +273,8 @@ function quadroDoLote(terreno: Terreno, limites: readonly BlueprintModel['bounda
   return { ux: { x: n.y, y: -n.x }, uy: n, frenteDeclarada: true };
 }
 
-/** Margem entre os vértices e a borda do envelope, mm. */
-const MARGEM_MM = 100;
+/** Teto da folga até o recuo, mm — 2 m já é projeto, não folga. */
+export const MARGEM_MAX_DO_ENVELOPE_MM = 2000;
 const PASSO_MIN_MM = 250;
 /** Menor lado de bloco que a biblioteca aceita, mm. */
 const LADO_MIN_MM = 8000;
@@ -277,7 +284,7 @@ function encolher(r: Retangulo, mm: number): Retangulo | null {
   return s.x1 - s.x0 >= LADO_MIN_MM && s.y1 - s.y0 >= LADO_MIN_MM ? s : null;
 }
 
-function retanguloDoAnel(q: Quadro, anel: readonly Point[]): Retangulo | null {
+function retanguloDoAnel(q: Quadro, anel: readonly Point[], margemMm: number): Retangulo | null {
   if (anel.length < 3) return null;
   // Inteiros: o retângulo inscrito trabalha em milímetro inteiro (o quadro girado dá frações; a margem cobre o arredondamento).
   const local = anel.map((p) => {
@@ -291,10 +298,10 @@ function retanguloDoAnel(q: Quadro, anel: readonly Point[]): Retangulo | null {
   // de arredondamento): a caixa serve — a busca em grade perderia até um passo.
   const perimetro = local.reduce((s, p, i) => s + Math.hypot(local[(i + 1) % local.length].x - p.x, local[(i + 1) % local.length].y - p.y), 0);
   const areaDaCaixa = (caixa.x1 - caixa.x0) * (caixa.y1 - caixa.y0);
-  if (local.length === 4 && areaDaCaixa - Math.abs(areaDoAnel(local)) <= perimetro * 2) return encolher(caixa, MARGEM_MM);
+  if (local.length === 4 && areaDaCaixa - Math.abs(areaDoAnel(local)) <= perimetro * 2) return encolher(caixa, margemMm);
   const passo = Math.max(PASSO_MIN_MM, Math.round(Math.max(caixa.x1 - caixa.x0, caixa.y1 - caixa.y0) / 150));
   const r = maiorRetanguloInscrito(local, passo);
-  return r ? encolher(r, MARGEM_MM) : null;
+  return r ? encolher(r, margemMm) : null;
 }
 
 // ─── Montagem das implantações ───────────────────────────────────────────────
@@ -321,7 +328,7 @@ function retanguloNaAltura(ctx: Contexto, topoMm: number, ordinal: number): Reta
   const chave = JSON.stringify(ef.recuos);
   if (ctx.cacheDeRetangulos.has(chave)) return ctx.cacheDeRetangulos.get(chave)!;
   const env = envelopeConstrutivo(ctx.terreno, ctx.limites, ef.recuos);
-  const r = env.valido ? retanguloDoAnel(ctx.q, env.anel) : null;
+  const r = env.valido ? retanguloDoAnel(ctx.q, env.anel, ctx.hip.margemDoEnvelopeMm) : null;
   ctx.cacheDeRetangulos.set(chave, r);
   return r;
 }
@@ -625,7 +632,13 @@ function contar(m: Map<string, number>, k: string) {
 }
 
 export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipParcial: Partial<HipotesesDoGeradorDeMassa> = {}): ResultadoDoGeradorDeMassa {
-  const hip: HipotesesDoGeradorDeMassa = { ...HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO, ...hipParcial };
+  const hipMesclada: HipotesesDoGeradorDeMassa = { ...HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO, ...hipParcial };
+  // A folga vem da tela (e de configuração antiga guardada no navegador): número inteiro de mm, entre 0 e o teto.
+  const margemLida = Number(hipMesclada.margemDoEnvelopeMm);
+  const hip: HipotesesDoGeradorDeMassa = {
+    ...hipMesclada,
+    margemDoEnvelopeMm: Number.isFinite(margemLida) ? Math.min(MARGEM_MAX_DO_ENVELOPE_MM, Math.max(0, Math.round(margemLida))) : HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO.margemDoEnvelopeMm,
+  };
   const { model, regua, objetivo, restricoes } = entrada;
   const decisoes: string[] = [];
   const avisos: string[] = [];
@@ -652,7 +665,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     usoDasUnidades: temUso('RESIDENCIAL') || !temUso('COMERCIAL') ? 'RESIDENCIAL' : 'COMERCIAL',
     usoDoEmbasamento: temUso('COMERCIAL') ? 'COMERCIAL' : 'GARAGEM',
     implantacaoMaxMm2: restricoes.respeitarLei && z.taxaOcupacaoMaxPct != null ? (loteMm2 * z.taxaOcupacaoMaxPct) / 100 : null,
-    retanguloDoLote: retanguloDoAnel(q, terreno.anel),
+    retanguloDoLote: retanguloDoAnel(q, terreno.anel, hip.margemDoEnvelopeMm),
     cacheDeRetangulos: new Map(),
   };
   const rTerreo = retanguloNaAltura(ctx, hip.peDireitoMm, 1);
@@ -835,7 +848,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const D = rTerreo.y1 - rTerreo.y0;
   decisoes.push(
     `Lote de ${f1(loteMm2 / 1e6)} m²; ${q.frenteDeclarada ? 'quadro orientado pela divisa FRENTE (a rua)' : 'sem divisa FRENTE marcada: quadro alinhado ao desenho (marque a frente em Terreno › Dados do lote)'}.`,
-    `Envelope no térreo: retângulo inscrito de ${f1(W / 1000)} × ${f1(D / 1000)} m, a ${MARGEM_MM / 10} cm da borda. Em lote irregular o retângulo perde as pontas — a implantação é conservadora.`,
+    `Envelope no térreo: retângulo inscrito de ${f1(W / 1000)} × ${f1(D / 1000)} m, ${hip.margemDoEnvelopeMm > 0 ? `a ${(hip.margemDoEnvelopeMm / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cm da borda (folga até o recuo)` : 'encostado na borda (folga até o recuo 0)'}. Em lote irregular o retângulo perde as pontas — a implantação é conservadora.`,
     `Objetivo: ${ROTULO_DO_OBJETIVO[objetivo].toLowerCase()}${objetivo === 'MENOR_CUSTO' ? (metaDeUnidades != null ? ` com pelo menos ${metaDeUnidades} unidades` : ' por m² vendável (sem meta de unidades, o custo total levaria ao menor prédio)') : ''}${pisoDeUnidades != null ? ` mantendo pelo menos ${pisoDeUnidades} unidades (80 % do máximo da varredura — sem meta, o sol sozinho levaria ao prédio de 1 pavimento)` : ''}.`,
     `Restrições: ${[restricoes.respeitarLei ? 'CA, TO, gabarito e envelope por pavimento' : 'lei DESLIGADA (só o envelope do térreo)', restricoes.atenderVagas ? 'vagas exigidas atendidas' : 'vagas não exigidas', metaDeUnidades != null ? `mínimo de ${metaDeUnidades} unidades` : null].filter(Boolean).join('; ')}.`,
     `Pavimentos testados até ${teto.n} (limitados ${teto.por}); estacionamento: ${ROTULO_DO_ESTACIONAMENTO[hip.estacionamento].toLowerCase()}.`,

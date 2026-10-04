@@ -7202,3 +7202,32 @@ describe('BlueprintEditor · Medidas do lote e da massa (Vista › Exibir)', () 
     expect(localStorage.getItem('blueprint:mostrarMedidasLoteMassa')).toBe('false');
   });
 });
+
+/**
+ * FOLGA ATÉ O RECUO (04/10/2026): a margem da borda do envelope virou hipótese do Gerar massa.
+ */
+describe('BlueprintEditor · Gerar massa · folga até o recuo', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('o campo nasce com 10 cm e grava a hipótese em mm', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA') =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', papel }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [d(0, 0, 12000, 0, 'FRENTE'), d(12000, 0, 12000, 30000, 'LATERAL_DIREITA'), d(12000, 30000, 0, 30000, 'FUNDOS'), d(0, 30000, 0, 0, 'LATERAL_ESQUERDA')]).model,
+    );
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await waitFor(() => expect(botao(/^gerar massa/i)).toBeEnabled());
+    await user.click(botao(/^gerar massa/i));
+    const campo = await screen.findByLabelText('Folga até o recuo (cm)');
+    expect(campo).toHaveValue(10);
+    fireEvent.change(campo, { target: { value: '0' } });
+    expect(JSON.parse(localStorage.getItem('blueprint:gerador-de-massa')!).hipoteses.margemDoEnvelopeMm).toBe(0);
+    fireEvent.change(campo, { target: { value: '5' } });
+    expect(JSON.parse(localStorage.getItem('blueprint:gerador-de-massa')!).hipoteses.margemDoEnvelopeMm).toBe(50);
+  });
+});

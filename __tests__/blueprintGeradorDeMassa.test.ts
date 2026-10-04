@@ -203,3 +203,51 @@ describe('gerador de massa', () => {
     expect(gradeDePavimentos(0)).toEqual([]);
   });
 });
+
+/**
+ * FOLGA ATÉ O RECUO (04/10/2026) — a margem da borda do envelope deixou de ser 10 cm fixos e virou hipótese
+ * (`margemDoEnvelopeMm`): *"sim transformar em hipotese"*.
+ */
+describe('gerador de massa · folga até o recuo', () => {
+  const zona = { ...ZONA_DA_MASSA_VAZIA, taxaOcupacaoMaxPct: 70, coeficienteMax: 4, gabaritoAlturaMaxM: 18 };
+  const reguaDaPlanta: EntradaDoGeradorDeMassa['regua'] = { ...REGUA, zona, recuosBase: { FRENTE: 1500, FUNDOS: 1500, LATERAL_DIREITA: 0, LATERAL_ESQUERDA: 0 } };
+  const embasamento = (margemDoEnvelopeMm?: number) => {
+    const r = gerarMassa(entrada(lote(12, 30), { regua: reguaDaPlanta }), 1, { tipos: ['EMBASAMENTO_E_TORRE'], ...(margemDoEnvelopeMm === undefined ? {} : { margemDoEnvelopeMm }) });
+    const b = r.melhores[0]?.blocos.find((x) => x.nome === 'Embasamento');
+    if (!b) throw new Error(`sem embasamento: ${r.avisos.join(' | ')}`);
+    const xs = b.pontos.map((p) => p.x);
+    const ys = b.pontos.map((p) => p.y);
+    return { r, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...ys) - Math.min(...ys), x0: Math.min(...xs), y0: Math.min(...ys) };
+  };
+
+  it('padrão 10 cm: reproduz a "Planta 02/10/2026" — embasamento 10,48 × 23,80 m, centrado', () => {
+    const e = embasamento();
+    expect(e.w).toBeGreaterThan(10475);
+    expect(e.w).toBeLessThan(10485);
+    expect(e.d).toBeGreaterThan(23800);
+    expect(e.d).toBeLessThan(23808);
+    expect(e.r.decisoes.join(' ')).toMatch(/a 10 cm da borda \(folga até o recuo\)/);
+  });
+
+  it('folga 0 encosta no recuo: o envelope é 12 × 27 m e o embasamento (cortado pela TO) fica 10,53 × 23,69 m', () => {
+    const e = embasamento(0);
+    expect(e.r.quadro).toEqual({ larguraM: 12, profundidadeM: 27 });
+    expect(e.w).toBeGreaterThan(10525);
+    expect(e.w).toBeLessThan(10535);
+    expect(e.d).toBeGreaterThan(23688);
+    expect(e.d).toBeLessThan(23698);
+    expect(e.r.decisoes.join(' ')).toMatch(/encostado na borda \(folga até o recuo 0\)/);
+  });
+
+  it('o quadro do térreo encolhe a folga de cada lado (lote 40 × 60, recuos 5/3/1,5/1,5)', () => {
+    const q = (m: number) => gerarMassa(entrada(lote(40, 60)), 1, { tipos: ['TORRE'], margemDoEnvelopeMm: m }).quadro;
+    expect(q(0)).toEqual({ larguraM: 37, profundidadeM: 52 });
+    expect(q(500)).toEqual({ larguraM: 36, profundidadeM: 51 });
+  });
+
+  it('valor fora da faixa (negativo, acima de 2 m, não número) vira um valor válido', () => {
+    expect(embasamento(-50).r.quadro).toEqual({ larguraM: 12, profundidadeM: 27 });
+    expect(gerarMassa(entrada(lote(40, 60)), 1, { tipos: ['TORRE'], margemDoEnvelopeMm: 5000 }).quadro).toEqual({ larguraM: 33, profundidadeM: 48 });
+    expect(gerarMassa(entrada(lote(40, 60)), 1, { tipos: ['TORRE'], margemDoEnvelopeMm: Number.NaN }).quadro).toEqual({ larguraM: 36.8, profundidadeM: 51.8 });
+  });
+});

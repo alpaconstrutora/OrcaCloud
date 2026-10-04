@@ -19,6 +19,7 @@ import { AlertTriangle, Bot, Building2, Play, Square, Undo2 } from 'lucide-react
 
 import {
   CONFIGURACAO_DO_GERADOR_DE_MASSA_PADRAO,
+  MARGEM_MAX_DO_ENVELOPE_MM,
   type ConfiguracaoDoGeradorDeMassa,
   MODOS_DE_ESTACIONAMENTO,
   OBJETIVOS_DA_MASSA,
@@ -391,6 +392,26 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
           <label className="flex flex-col gap-1">
             Entre blocos (m)
             <input type="number" min={3} step={0.5} value={c.hipoteses.afastamentoEntreBlocosM} onChange={(e) => Number(e.target.value) >= 3 && setH({ afastamentoEntreBlocosM: Number(e.target.value) })} aria-label="Afastamento entre blocos (m)" className={campo} />
+          </label>
+          {/* FOLGA ATÉ O RECUO (04/10/2026): era 10 cm fixos no gerador. Guardada em mm, editada em cm. */}
+          <label
+            className="flex flex-col gap-1"
+            title="Quanto cada bloco fica para dentro da linha do recuo (ou da divisa, onde o recuo é zero). 10 cm cobre o arredondamento ao milímetro em lote girado; 0 encosta o prédio no recuo; use mais para guardar a espessura do revestimento da fachada."
+          >
+            Folga até o recuo (cm)
+            <input
+              type="number"
+              min={0}
+              max={MARGEM_MAX_DO_ENVELOPE_MM / 10}
+              step={1}
+              value={c.hipoteses.margemDoEnvelopeMm / 10}
+              onChange={(e) => {
+                const cm = Number(e.target.value);
+                if (e.target.value !== '' && Number.isFinite(cm) && cm >= 0 && cm <= MARGEM_MAX_DO_ENVELOPE_MM / 10) setH({ margemDoEnvelopeMm: Math.round(cm * 10) });
+              }}
+              aria-label="Folga até o recuo (cm)"
+              className={campo}
+            />
           </label>
           <label className="flex flex-col gap-1">
             Semente

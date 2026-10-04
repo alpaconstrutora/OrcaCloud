@@ -129,13 +129,15 @@ describe('PartnerWorkspaceManager — abas do detalhe do contrato', () => {
         updateWorkspaceSettings.mockImplementation(async (id: string, settings: Record<string, unknown>) => ({ ...WORKSPACE, id, settings }));
     });
 
-    it('1. engrenagem na sub-aba Contratos; o modal lista as 7 com o estado salvo', async () => {
+    // 8 desde 04/10/2026: + "Documentos" (versões emitidas na aba Emissão).
+    it('1. engrenagem na sub-aba Contratos; o modal lista as 8 com o estado salvo', async () => {
         const user = userEvent.setup();
         const dialog = await abrirConfigDoContrato(user);
 
         const linha = (nome: RegExp) => within(dialog).getByRole('button', { name: nome });
         expect(within(dialog).getAllByRole('button', { pressed: true })).toHaveLength(2);
-        expect(within(dialog).getAllByRole('button', { pressed: false })).toHaveLength(5);
+        expect(within(dialog).getAllByRole('button', { pressed: false })).toHaveLength(6);
+        expect(linha(/^Documentos/)).toHaveAttribute('aria-pressed', 'false');
         expect(linha(/^Visão Geral/)).toHaveAttribute('aria-pressed', 'true');
         expect(linha(/^Itens/)).toHaveAttribute('aria-pressed', 'true');
         expect(linha(/^Medições/)).toHaveAttribute('aria-pressed', 'false');

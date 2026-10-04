@@ -42,6 +42,7 @@ import { reciboPagamentoPortalService, rotuloRecibo } from '../../services/recib
 import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
 import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortalTabId, enabledPartnerContractTabs, type PartnerContractTabId } from '../../utils/partnerPortalTabs';
 import Button from '../ui/Button';
+import { urlDoPdfDoContrato } from '../../utils/contractFileUrl';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { PortalHelp } from '../portal/PortalHelp';
@@ -208,7 +209,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Abas do detalhe do contrato. Desde 10/09/2026 espelham Suprimentos › Contratos
   // menos as internas: sem Riscos & Conformidade (avaliação da construtora sobre o
   // parceiro — decisão do usuário), sem Financeiro (é aba própria do portal), sem
-  // Avaliação de Desempenho e Emissão.
+  // Avaliação de Desempenho. Da Emissão sai só o resultado: a aba "Documentos"
+  // lista as versões EMITIDAS (o núcleo nunca manda rascunho) — 04/10/2026.
   const [detailTab, setDetailTab] = useState<PartnerContractTabId>('overview');
   // Sub-abas do detalhe do contrato liberadas para o parceiro — engrenagem da
   // aba Contratos na visão do app, uma lista por workspace (vale para todos os
@@ -227,6 +229,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [contractAddendums, setContractAddendums] = useState<ContractAddendum[]>([]);
   const [contractMeasurements, setContractMeasurements] = useState<ContractMeasurement[]>([]);
   const [contractDetail, setContractDetail] = useState<PartnerContractDetail>(EMPTY_CONTRACT_DETAIL);
+  // `?? []`: payload sem a coleção (cache antigo, dublê de teste) não pode
+  // derrubar o detalhe inteiro por causa de uma aba.
+  const documentosDoContrato = contractDetail.documents ?? [];
 
   // Financeiro (parcelas, medições com NF, retenção) — agregado de todos os contratos do fornecedor
   const [financials, setFinancials] = useState<{
@@ -315,13 +320,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   const isRecentlyShared = (dateStr: string) => (Date.now() - new Date(dateStr).getTime()) < 48 * 60 * 60 * 1000;
 
-  // URL do PDF do contrato: prioriza o assinado; se não houver, cai na última minuta
-  // marcada como "emitida" (mesma flag que já gate-ia exposição ao Portal do Cliente).
-  const getContractFileUrl = (contract: Contract): string | null => {
-    if (contract.signed_contract_url) return contract.signed_contract_url;
-    const emitted = (contract.minuta_versions || []).filter((m) => m.emitted && m.url);
-    return emitted.length > 0 ? emitted[emitted.length - 1].url : null;
-  };
+  // "Ver PDF": uma regra só para as duas visões — utils/contractFileUrl.ts.
+  const getContractFileUrl = urlDoPdfDoContrato;
 
   // Abrir o detalhe de um contrato (itens/aditivos/medições) — mesmos dados que a
   // tela interna de Suprimentos > Contratos mostra, só que somente leitura.
@@ -1589,6 +1589,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   { id: 'measurements', label: `Medições (${contractMeasurements.length})`, icon: Ruler },
                   { id: 'retention', label: 'Retenção de Garantia', icon: DollarSign },
                   { id: 'penalties', label: `Penalidades (${contractDetail.penalties.length})`, icon: AlertTriangle },
+                  { id: 'documentos', label: `Documentos (${documentosDoContrato.length})`, icon: FolderOpen },
                 ] as const).filter((tab) => enabledContractTabs.includes(tab.id)).map((tab) => (
                   <button
                     key={tab.id}
@@ -1868,6 +1869,46 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       ))}
                       {contractDetail.penalties.length === 0 && (
                         <div className="text-center py-8 text-sm text-gray-400">Nenhuma penalidade registrada.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Documentos — versões EMITIDAS na aba Emissão do contrato
+                      (contrato e aditivos), mais recente primeiro. Mesmo núcleo
+                      nas duas visões: partner_ws_contract_detail.documents. */}
+                  {showDetailTab('documentos') && (
+                    <div className="flex flex-col gap-2">
+                      {documentosDoContrato.map((doc) => (
+                        <div key={doc.id} className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate" title={doc.name || undefined}>
+                                {doc.name || `Versão ${doc.v}`}
+                              </p>
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-sm text-gray-400">
+                                <span>{doc.owner_type === 'ADDENDUM' ? `Aditivo ${doc.addendum_number ?? ''}`.trim() : 'Contrato'} · v{doc.v}</span>
+                                {(doc.emitted_at || doc.created_at) && (
+                                  <span>Emitido em {new Date(doc.emitted_at || doc.created_at).toLocaleDateString('pt-BR')}</span>
+                                )}
+                                {doc.signature_status === 'SIGNED' && <span className="text-emerald-600">Assinado</span>}
+                              </div>
+                              {doc.notes && <p className="text-sm text-gray-500 mt-1">{doc.notes}</p>}
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              {doc.signed_file_url && (
+                                <a href={doc.signed_file_url} target="_blank" rel="noreferrer" className="text-sm text-orange-500 hover:text-orange-600 font-semibold">
+                                  Assinado
+                                </a>
+                              )}
+                              <a href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-orange-500 hover:text-orange-600 font-semibold">
+                                <ExternalLink className="w-3.5 h-3.5" /> Abrir
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {documentosDoContrato.length === 0 && (
+                        <div className="text-center py-8 text-sm text-gray-400">Nenhum documento emitido para este contrato.</div>
                       )}
                     </div>
                   )}

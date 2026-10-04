@@ -50,6 +50,11 @@ const DETALHE = {
         { id: 'p1', contract_id: 'ct1', kind: 'MORATORIA', reason: 'Atraso na entrega', amount: 350, status: 'NOTIFICADA' },
         { id: 'p2', contract_id: 'ct1', kind: 'SST', reason: 'EPI', amount: 120, status: 'CANCELADA' },
     ],
+    // Versões EMITIDAS da aba Emissão (o núcleo nunca manda rascunho).
+    documents: [
+        { id: 'dv2', owner_type: 'ADDENDUM', owner_id: 'ad1', addendum_number: 'AD-001', v: 1, kind: 'ADITIVO', name: 'Termo aditivo 01', notes: 'Prorroga 12 meses', url: 'https://x/aditivo.pdf', mime_type: 'application/pdf', size_bytes: 10, emitted_at: '2026-10-03T12:00:00Z', created_at: '2026-10-03T11:00:00Z', signature_status: null, signed_file_url: null },
+        { id: 'dv1', owner_type: 'CONTRACT', owner_id: 'ct1', addendum_number: null, v: 2, kind: 'MINUTA', name: 'Minuta revisada', notes: '', url: 'https://x/minuta-v2.pdf', mime_type: 'application/pdf', size_bytes: 10, emitted_at: '2026-10-02T12:00:00Z', created_at: '2026-10-02T11:00:00Z', signature_status: null, signed_file_url: null },
+    ],
 };
 
 vi.mock('../../services/partnerService', () => ({
@@ -171,6 +176,26 @@ describe('PartnerPortal › detalhe do contrato — abas novas', () => {
         expect(screen.getByText('R$ 2.400,00')).toBeInTheDocument();          // retido
         expect(screen.getByText('Liberação Provisório')).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: /Liberar/ })).toBeNull();
+    });
+
+    it('6b. Documentos: versões emitidas da aba Emissão, contrato e aditivo, com link', async () => {
+        const user = await abrirContrato({ userEmail: '', portalToken: 'tok123' });
+        await user.click(screen.getByRole('button', { name: /^Documentos \(2\)/ }));
+
+        expect(await screen.findByText('Minuta revisada')).toBeInTheDocument();
+        expect(screen.getByText('Termo aditivo 01')).toBeInTheDocument();
+        expect(screen.getByText('Aditivo AD-001 · v1')).toBeInTheDocument();
+        expect(screen.getByText('Contrato · v2')).toBeInTheDocument();
+        const links = screen.getAllByRole('link', { name: /Abrir/ }).map(a => a.getAttribute('href'));
+        expect(links).toEqual(['https://x/aditivo.pdf', 'https://x/minuta-v2.pdf']);
+    });
+
+    it('6c. Documentos sem nenhuma versão emitida: estado vazio próprio', async () => {
+        getDetailToken.mockResolvedValue({ ...DETALHE, documents: [] });
+        const user = await abrirContrato({ userEmail: '', portalToken: 'tok123' });
+        // "Documentos" sozinho colide com a aba principal do portal — a do contrato traz a contagem.
+        await user.click(screen.getByRole('button', { name: /^Documentos \(0\)/ }));
+        expect(await screen.findByText('Nenhum documento emitido para este contrato.')).toBeInTheDocument();
     });
 
     it('6. Penalidades: rótulos de lib/contractLabels, inclusive a cancelada', async () => {

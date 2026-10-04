@@ -198,7 +198,7 @@ const EmitDocumentModal: React.FC<Props> = ({
             if (persistVersion && kind === 'docx') {
                 notify?.('.docx baixado para edição — ele não entra na tabela de documentos. Depois de editar, salve em PDF e use "Subir documento".', 'info');
             } else if (savedAsVersion) {
-                notify?.(`${kind === 'docx' ? 'Documento .docx' : 'PDF'} gerado, salvo como versão (rascunho) e baixado. Use "Emitir" para liberá-lo ao Portal do Cliente.`, 'success');
+                notify?.(`${kind === 'docx' ? 'Documento .docx' : 'PDF'} gerado, salvo como versão (rascunho) e baixado. Use "Emitir" para liberá-lo no portal.`, 'success');
             } else if (!persistVersion) {
                 notify?.(kind === 'docx' ? 'Documento .docx gerado com sucesso!' : 'PDF gerado com sucesso!', 'success');
             }
@@ -226,7 +226,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                 <SheetTitle>{persistVersion ? 'Gerar pelo modelo' : 'Emitir documento'} — {contract.number}</SheetTitle>
                 <SheetDescription>
                     {persistVersion
-                        ? 'O PDF gerado entra como rascunho na tabela de documentos; o cliente só vê depois de emitido.'
+                        ? 'O PDF gerado entra como rascunho na tabela de documentos; o portal só mostra depois de emitido.'
                         : 'Escolha o modelo e o cliente para gerar o documento.'}
                 </SheetDescription>
             </SheetHeader>

@@ -35,6 +35,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import Button from '../ui/Button';
+import { urlDoPdfDoContrato } from '../../utils/contractFileUrl';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
@@ -292,6 +293,7 @@ const CONTRACT_TAB_ICONS: Record<PartnerContractTabId, React.ElementType> = {
   measurements: Ruler,
   retention: DollarSign,
   penalties: AlertTriangle,
+  documentos: FolderOpen,
 };
 
 /**
@@ -874,13 +876,8 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
     }
   };
 
-  // URL do PDF do contrato: prioriza o assinado; se não houver, cai na última minuta
-  // marcada como "emitida" (mesma lógica usada na aba Contratos do PartnerPortal.tsx).
-  const getContractFileUrl = (contract: Contract): string | null => {
-    if (contract.signed_contract_url) return contract.signed_contract_url;
-    const emitted = (contract.minuta_versions || []).filter((m) => m.emitted && m.url);
-    return emitted.length > 0 ? emitted[emitted.length - 1].url : null;
-  };
+  // "Ver PDF": uma regra só para as duas visões — utils/contractFileUrl.ts.
+  const getContractFileUrl = urlDoPdfDoContrato;
 
   // Fonte da organização que vai administrar o link: seletor do topo → organização
   // do próprio workspace → organização que já gerou o token (regenerar) → escolha

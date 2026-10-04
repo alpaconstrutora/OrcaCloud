@@ -15,6 +15,27 @@ import type {
  * lia uma RPC com corpo próprio — dois caminhos que já tinham começado a
  * divergir (o link trazia 3 coleções; o app, 3 outras chamadas).
  */
+/** Versão EMITIDA da aba Emissão (contract_document_versions) — o núcleo nunca
+ *  manda rascunho nem credencial de assinatura (aplicar_20271004000020). */
+export interface PartnerContractDocument {
+    id: string;
+    owner_type: 'CONTRACT' | 'ADDENDUM';
+    owner_id: string;
+    /** Número do aditivo quando `owner_type = 'ADDENDUM'`. */
+    addendum_number: string | null;
+    v: number;
+    kind: string;
+    name: string | null;
+    notes: string | null;
+    url: string;
+    mime_type: string | null;
+    size_bytes: number | null;
+    emitted_at: string | null;
+    created_at: string;
+    signature_status: string | null;
+    signed_file_url: string | null;
+}
+
 export interface PartnerContractDetail {
     items: ContractItem[];
     addendums: ContractAddendum[];
@@ -32,6 +53,8 @@ export interface PartnerContractDetail {
         releases: ContractRetentionRelease[];
     };
     penalties: ContractPenalty[];
+    /** Documentos do contrato — versões emitidas na aba Emissão. */
+    documents: PartnerContractDocument[];
 }
 
 export const EMPTY_CONTRACT_DETAIL: PartnerContractDetail = {
@@ -39,6 +62,7 @@ export const EMPTY_CONTRACT_DETAIL: PartnerContractDetail = {
     precedentConditions: [], documentRequirements: [], acceptances: [],
     retention: { totalRetained: 0, totalReleased: 0, balance: 0, releases: [] },
     penalties: [],
+    documents: [],
 };
 
 /** `valid:false` (token expirado, contrato de outro fornecedor) vira vazio, não exceção. */
@@ -54,6 +78,7 @@ export function normalizeContractDetail(data: unknown): PartnerContractDetail {
             releases?: ContractRetentionRelease[];
         } | null;
         penalties?: ContractPenalty[];
+        documents?: PartnerContractDocument[];
     } | null;
 
     if (!p?.valid) return EMPTY_CONTRACT_DETAIL;
@@ -73,5 +98,6 @@ export function normalizeContractDetail(data: unknown): PartnerContractDetail {
             releases: p.retention?.releases ?? [],
         },
         penalties: p.penalties ?? [],
+        documents: p.documents ?? [],
     };
 }

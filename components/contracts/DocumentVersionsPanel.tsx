@@ -124,7 +124,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
             setNovaAberta(false);
             await load();
             onChanged?.();
-            onNotify('Versão adicionada como rascunho. Clique em "Emitir" para liberá-la ao cliente.', 'success');
+            onNotify('Versão adicionada como rascunho. Clique em "Emitir" para liberá-la no portal.', 'success');
         } catch (err) {
             onNotify(`Erro ao publicar versão: ${err instanceof Error ? err.message : ''}`, 'error');
         } finally {
@@ -138,7 +138,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
             await contractDocumentVersionService.emit(ver.id);
             await load();
             onChanged?.();
-            onNotify('Versão emitida — já está disponível no Portal do Cliente.', 'success');
+            onNotify('Versão emitida — já está disponível no portal (Cliente ou Parceiro).', 'success');
         } catch (err) {
             onNotify(`Erro ao emitir: ${err instanceof Error ? err.message : ''}`, 'error');
         } finally { setBusyId(null); }
@@ -256,7 +256,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                         onClick={() => handleEmit(v)}
                                         disabled={busyId === v.id}
                                         className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-50"
-                                        title="Emitir ao Portal do Cliente"
+                                        title="Emitir: libera no portal do cliente ou do parceiro"
                                     >
                                         <Send className="w-3.5 h-3.5" /> Emitir
                                     </button>
@@ -305,7 +305,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                 dirty={!uploading && (!!novoArquivo || !!novoNome.trim() || !!novaNota.trim())}>
                 <SheetHeader onClose={() => setNovaAberta(false)}>
                     <SheetTitle>Nova versão</SheetTitle>
-                    <SheetDescription>{label} — entra como rascunho; o cliente só vê depois de emitida.</SheetDescription>
+                    <SheetDescription>{label} — entra como rascunho; o portal (cliente ou parceiro) só mostra depois de emitida.</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="p-6 space-y-4">
                     <div className="space-y-1.5">

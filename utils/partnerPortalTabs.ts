@@ -7,7 +7,7 @@
  * Duas listas independentes, mesma regra:
  *  - `partnerPortalTabs`   — as 6 abas do portal (engrenagem do cabeçalho do
  *                            workspace), desde 29/09/2026;
- *  - `partnerContractTabs` — as 7 sub-abas do detalhe do contrato, valendo para
+ *  - `partnerContractTabs` — as 8 sub-abas do detalhe do contrato, valendo para
  *                            TODOS os contratos do parceiro (engrenagem da aba
  *                            Contratos), desde 03/10/2026.
  *
@@ -89,6 +89,8 @@ export const PARTNER_CONTRACT_TAB_IDS = [
   'measurements',
   'retention',
   'penalties',
+  // Versões EMITIDAS na aba Emissão (contrato + aditivos) — 04/10/2026.
+  'documentos',
 ] as const;
 
 export type PartnerContractTabId = typeof PARTNER_CONTRACT_TAB_IDS[number];
@@ -101,6 +103,7 @@ export const PARTNER_CONTRACT_TAB_LABELS: Record<PartnerContractTabId, string> =
   measurements: 'Medições',
   retention: 'Retenção de Garantia',
   penalties: 'Penalidades',
+  documentos: 'Documentos',
 };
 
 const abasDoContrato = configDeAbas(PARTNER_CONTRACT_TAB_IDS, PARTNER_CONTRACT_TABS_KEY);

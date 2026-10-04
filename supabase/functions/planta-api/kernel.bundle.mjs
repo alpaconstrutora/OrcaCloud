@@ -1797,6 +1797,8 @@ function projetar(model) {
       alturaMm: s2.alturaMm,
       baseMm: s2.baseMm,
       circular: s2.circular,
+      // CAMADAS DA LAJE (0.91.0): só quando declaradas.
+      camadas: s2.camadas?.length ? s2.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) : void 0,
       rotacaoDeg: s2.rotacaoDeg,
       // `null` explícito, como em `boundaries.papel`: aqui a chave só existe
       // dentro de uma peça estrutural, que por definição é desenho novo — não
@@ -1827,6 +1829,8 @@ function projetar(model) {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      // CAMADAS (0.91.0): só quando declaradas — a disciplina das camadas da parede.
+      camadas: r.camadas?.length ? r.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) : void 0,
       // COBERTURA POR EXTRUSÃO (0.49.0): o eixo, só quando a água nasceu dele.
       extrusao: r.extrusao ? { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } : void 0,
       parametros: parametrosCanonicos(r.parametros)
@@ -2603,6 +2607,7 @@ function modelFromCanonicalPayload(payload) {
       alturaMm: s2.alturaMm,
       baseMm: s2.baseMm,
       circular: s2.circular,
+      ...s2.camadas?.length ? { camadas: s2.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) } : {},
       rotacaoDeg: s2.rotacaoDeg,
       rotulo: s2.rotulo ?? null,
       ...s2.cedeSobreposicao ? { cedeSobreposicao: true } : {},
@@ -2624,6 +2629,7 @@ function modelFromCanonicalPayload(payload) {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      ...r.camadas?.length ? { camadas: r.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) } : {},
       ...r.extrusao ? { extrusao: { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } } : {},
       ...r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}
     });

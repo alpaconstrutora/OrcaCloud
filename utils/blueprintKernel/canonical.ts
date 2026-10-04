@@ -358,6 +358,8 @@ function projetar(model: BlueprintModel): {
       alturaMm: s.alturaMm,
       baseMm: s.baseMm,
       circular: s.circular,
+      // CAMADAS DA LAJE (0.91.0): só quando declaradas.
+      camadas: s.camadas?.length ? s.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) : undefined,
       rotacaoDeg: s.rotacaoDeg,
       // `null` explícito, como em `boundaries.papel`: aqui a chave só existe
       // dentro de uma peça estrutural, que por definição é desenho novo — não
@@ -399,6 +401,8 @@ function projetar(model: BlueprintModel): {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      // CAMADAS (0.91.0): só quando declaradas — a disciplina das camadas da parede.
+      camadas: r.camadas?.length ? r.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) : undefined,
       // COBERTURA POR EXTRUSÃO (0.49.0): o eixo, só quando a água nasceu dele.
       extrusao: r.extrusao ? { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } : undefined,
       parametros: parametrosCanonicos(r.parametros),
@@ -1411,6 +1415,8 @@ export interface CanonicalPayload {
     circular: boolean;
     secaoT?: { mesaAlturaMm: number; almaLarguraMm: number };
     rotacaoDeg: number;
+    /** CAMADAS DA LAJE (0.91.0). Ausente em payload anterior e em peça sem declaração. */
+    camadas?: { espessuraMm: number; itemCode: string; descricao: string; funcao: string }[];
     rotulo?: string | null;
     /** Ausente sob kernel < 0.10.0 e em toda peça que não cede volume. */
     cedeSobreposicao?: boolean;
@@ -1435,6 +1441,8 @@ export interface CanonicalPayload {
     espessuraMm: number;
     /** Ausente sob kernel < 0.49.0 e em água desenhada à mão: o eixo da extrusão que a gerou. */
     extrusao?: { a: { x: number; y: number }; b: { x: number; y: number } };
+    /** CAMADAS DA COBERTURA (0.91.0). Ausente em payload anterior e em água sem declaração. */
+    camadas?: { espessuraMm: number; itemCode: string; descricao: string; funcao: string }[];
   }[];
   /**
    * Linhas de corte. Ausente sob kernel < 0.13.0 e em desenho sem corte —
@@ -1968,6 +1976,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       alturaMm: s.alturaMm,
       baseMm: s.baseMm,
       circular: s.circular,
+      ...(s.camadas?.length ? { camadas: s.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao as FuncaoCamada })) } : {}),
       rotacaoDeg: s.rotacaoDeg,
       rotulo: s.rotulo ?? null,
       ...(s.cedeSobreposicao ? { cedeSobreposicao: true } : {}),
@@ -1993,6 +2002,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
+      ...(r.camadas?.length ? { camadas: r.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao as FuncaoCamada })) } : {}),
       ...(r.extrusao ? { extrusao: { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } } : {}),
       ...(r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}),
     });

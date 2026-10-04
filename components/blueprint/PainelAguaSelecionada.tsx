@@ -4,6 +4,9 @@ import React from 'react';
 import { medirAgua, type Agua } from '../../utils/blueprintKernel';
 import { CampoMedida } from './PainelParedeSelecionada';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import CamadasDaPeca from './CamadasDaPeca';
+import type { CamadaParede } from '../../utils/blueprintKernel';
+import type { Material } from '../../utils/blueprintMateriais';
 
 /**
  * Caixa "Água selecionada" do painel lateral.
@@ -42,11 +45,14 @@ interface Props {
   /** COBERTURA POR EXTRUSÃO (P2.13): quantas águas nasceram do mesmo eixo; null = água à mão. */
   extrusao?: { aguas: number } | null;
   onSelecionarCobertura?: () => void;
+  /** CAMADAS DA COBERTURA (E1.2 da climatização): a composição de cima para baixo; `null` remove. */
+  onCamadas?: (camadas: CamadaParede[] | null) => void;
+  materiais?: readonly Material[];
 }
 
 const m2 = (v: number) => v.toFixed(2).replace('.', ',');
 
-export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onAplicarTipo, comAMesmaAssinatura, extrusao, onSelecionarCobertura }: Props) {
+export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onAplicarTipo, comAMesmaAssinatura, extrusao, onSelecionarCobertura, onCamadas, materiais }: Props) {
   if (!agua) return null;
 
   const med = medirAgua(agua);
@@ -151,6 +157,17 @@ export default function PainelAguaSelecionada({ agua, onProps, onExcluir, onApli
         aoAplicar={(cm) => onProps({ espessuraMm: Math.round(cm * 10) })}
         ariaLabel={`Espessura do pacote de cobertura, em centímetros. Agora: ${Math.round(agua.espessuraMm / 10)}`}
       />
+
+      {onCamadas && (
+        <CamadasDaPeca
+          chave={`${agua.id}-camadas-${agua.camadas?.length ?? 0}`}
+          titulo="Camadas da cobertura"
+          camadas={agua.camadas}
+          onCamadas={onCamadas}
+          materiais={materiais}
+          camadaInicial={{ espessuraMm: 20, itemCode: '', descricao: 'Telha', funcao: 'ACABAMENTO' }}
+        />
+      )}
 
       <p className="mt-2 text-[11px] text-slate-500">
         Ponto mais alto a {(med.alturaMaximaMm / 1000).toFixed(2).replace('.', ',')} m do piso ·

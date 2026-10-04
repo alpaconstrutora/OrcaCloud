@@ -9257,6 +9257,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             ...campos,
           })
         }
+        onCamadas={(camadas) => estruturaSel && editor.run({ type: 'SetStructuralProps', structuralId: estruturaSel.id, camadas })}
+        materiais={biblioteca.materiais}
         onTipo={(kind) =>
           estruturaSel &&
           editor.run({
@@ -9463,6 +9465,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         comAMesmaAssinatura={aguaSel ? (editor.model.roofs ?? []).filter((r) => assinaturaDoTipo(propriedadesDoTelhado(r)) === assinaturaDoTipo(propriedadesDoTelhado(aguaSel))).length : undefined}
         extrusao={aguaSel?.extrusao ? { aguas: aguasDaMesmaExtrusao(editor.model.roofs ?? [], aguaSel).length } : null}
         onSelecionarCobertura={() => aguaSel && editor.setSelectedIds(aguasDaMesmaExtrusao(editor.model.roofs ?? [], aguaSel).map((r) => r.id))}
+        onCamadas={(camadas) => aguaSel && editor.run({ type: 'SetAguaProps', aguaId: aguaSel.id, camadas })}
+        materiais={biblioteca.materiais}
       />
 
       <PainelParedeSelecionada

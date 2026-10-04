@@ -572,6 +572,11 @@
  * hash; omitida quando ausente — desenho antigo só muda pela string da versão.
  * Provado antes do bump: com a string em 0.90.0 os goldens e os testes de
  * esquadria passaram sem outra alteração.
+ *
+ * A MESMA 0.91.0 leva também (E1.2, antes de publicar) `Agua.camadas` e
+ * `Structural.camadas` (só LAJE): a composição de cima para baixo, de onde sai
+ * o U da cobertura e da laje. Omitidas quando ausentes; os seis goldens não têm
+ * telhado nem estrutura, então nada neles mudou.
  */
 export const KERNEL_VERSION = 'blueprint-kernel-ts-0.91.0';
 

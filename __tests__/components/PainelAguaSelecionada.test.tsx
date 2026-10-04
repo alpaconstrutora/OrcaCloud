@@ -98,3 +98,35 @@ describe('PainelAguaSelecionada', () => {
     expect(onExcluir).toHaveBeenCalled();
   });
 });
+
+/**
+ * CAMADAS DA COBERTURA (04/10/2026, E1.2 da climatização): a seção só aparece
+ * quando o editor passa `onCamadas`; sem camadas diz "U não avaliado"; com
+ * camadas e materiais com λ mostra U/R; "Adicionar camada" numa água sem camadas
+ * começa pela telha.
+ */
+describe('PainelAguaSelecionada · camadas da cobertura (E1.2)', () => {
+  const material = (codigo: string, condutividadeWmK: number | null) => ({ id: codigo, organizationId: 'o', codigo, nome: codigo, fonte: 'SINAPI', unidade: 'm3', custo: 0, fabricante: null, densidadeKgM3: null, condutividadeWmK, cor: null }) as unknown as import('../../utils/blueprintMateriais').Material;
+
+  it('sem `onCamadas` não aparece; com ele e sem camadas diz U não avaliado; adicionar começa pela telha', async () => {
+    const user = userEvent.setup();
+    render(<PainelAguaSelecionada agua={agua()} onProps={vi.fn()} onExcluir={vi.fn()} />);
+    expect(screen.queryByTestId('camadas-da-peca')).toBeNull();
+    const onCamadas = vi.fn();
+    render(<PainelAguaSelecionada agua={agua({ id: 'agu_2' })} onProps={vi.fn()} onExcluir={vi.fn()} onCamadas={onCamadas} />);
+    expect(screen.getByTestId('camadas-desempenho-termico')).toHaveTextContent(/U não avaliado/);
+    await user.click(screen.getByRole('button', { name: /Adicionar camada — Camadas da cobertura/ }));
+    expect(onCamadas).toHaveBeenCalledWith([{ espessuraMm: 20, itemCode: '', descricao: 'Telha', funcao: 'ACABAMENTO' }]);
+  });
+
+  it('com camadas e λ em todas mostra U e R; excluir a única camada devolve null', async () => {
+    const user = userEvent.setup();
+    const onCamadas = vi.fn();
+    const camadas = [{ espessuraMm: 100, itemCode: 'conc', descricao: 'Laje', funcao: 'ESTRUTURAL' as const }];
+    render(<PainelAguaSelecionada agua={agua({ camadas })} onProps={vi.fn()} onExcluir={vi.fn()} onCamadas={onCamadas} materiais={[material('conc', 1.75)]} />);
+    // 0,10/1,75 = 0,057 → U = 1/(0,17 + 0,057 + 0,04) ≈ 3,74
+    expect(screen.getByTestId('camadas-desempenho-termico')).toHaveTextContent(/U 3,7\d W\/m²·K · R 0,06 m²·K\/W/);
+    await user.click(screen.getByRole('button', { name: 'Excluir camada 1' }));
+    expect(onCamadas).toHaveBeenCalledWith(null);
+  });
+});

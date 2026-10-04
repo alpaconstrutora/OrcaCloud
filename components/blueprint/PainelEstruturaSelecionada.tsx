@@ -13,6 +13,9 @@ import SecaoArmadaSvg from './SecaoArmadaSvg';
 import ArmaduraManualForm from './ArmaduraManualForm';
 import ControleDeSobreposicao from './ControleDeSobreposicao';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import CamadasDaPeca from './CamadasDaPeca';
+import type { CamadaParede } from '../../utils/blueprintKernel';
+import type { Material } from '../../utils/blueprintMateriais';
 import CustoDoElemento from './CustoDoElemento';
 import SeletorDeTipo from './SeletorDeTipo';
 import { propriedadesDaEstrutura, type PropriedadesDeEstrutura } from '../../utils/blueprintTipos';
@@ -88,6 +91,9 @@ interface Props {
     rotulo?: string | null;
   }) => void;
   onTipo: (kind: StructuralKind) => void;
+  /** CAMADAS DA LAJE (E1.2 da climatização): só em `kind: 'LAJE'`, de cima para baixo; `null` remove. */
+  onCamadas?: (camadas: CamadaParede[] | null) => void;
+  materiais?: readonly Material[];
   /**
    * TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo do catálogo para
    * esta peça, num comando só. Opcional pela razão de sempre: chamadas antigas
@@ -158,8 +164,7 @@ export default function PainelEstruturaSelecionada({
   onCortarParedes,
   paredesJaInterrompidas = 0,
   pontasCurtas = 0,
-  onEmendarPontas,
-}: Props) {
+  onEmendarPontas, onCamadas, materiais }: Props) {
   if (!estrutura) return null;
 
   const forma = FORMA_ESTRUTURAL[estrutura.kind];
@@ -351,6 +356,16 @@ export default function PainelEstruturaSelecionada({
           className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
         />
       </label>
+
+      {estrutura.kind === 'LAJE' && onCamadas && (
+        <CamadasDaPeca
+          chave={`${estrutura.id}-camadas-${estrutura.camadas?.length ?? 0}`}
+          titulo="Camadas da laje"
+          camadas={estrutura.camadas}
+          onCamadas={onCamadas}
+          materiais={materiais}
+        />
+      )}
 
       {paredesParaCortar > 0 && onCortarParedes ? (
         <button

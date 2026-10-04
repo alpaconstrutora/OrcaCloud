@@ -1125,6 +1125,12 @@ export interface Structural {
   /** ETAPAS (0.57.0): em que etapa a peça nasce / é demolida. Ausente = fora da linha do tempo. */
   etapaId?: ObjectId | null;
   demolidaEmEtapaId?: ObjectId | null;
+  /**
+   * CAMADAS DA LAJE (0.91.0, E1.2 da climatização): só em `kind: 'LAJE'`, de
+   * CIMA para baixo (impermeabilização, isolamento, concreto…). Mesma razão e
+   * mesma regra das camadas da cobertura; pilar, viga e fundação não as têm.
+   */
+  camadas?: CamadaParede[];
 }
 
 /**
@@ -1283,6 +1289,16 @@ export interface Agua {
    * água tira o metadado — ela deixou de ser a faixa que a extrusão fez.
    */
   extrusao?: { a: Point; b: Point };
+  /**
+   * CAMADAS DA COBERTURA (0.91.0, E1.2 da climatização): a composição do
+   * pacote, de CIMA para baixo (telha, manta, isolamento, laje…). É o que dá o
+   * U da cobertura para a carga térmica. Ausente = não declarada (U não
+   * avaliado); omitida no canônico quando ausente. A soma NÃO precisa bater com
+   * `espessuraMm`: a espessura é geometria do sólido, as camadas são a
+   * composição térmica — acoplar as duas faria o desenho recusar a telha de
+   * 2 cm sobre uma água de 10 cm.
+   */
+  camadas?: CamadaParede[];
 }
 
 /**
@@ -5064,6 +5080,26 @@ export function assertModelInvariants(model: BlueprintModel): void {
         if (typeof a.rodape.itemCode !== 'string' || typeof a.rodape.descricao !== 'string') throw new KernelError('BAD_FINISH', `Rodapé de ${l.id} sem código/descrição em texto`);
       }
     }
+  }
+
+  // CAMADAS DE COBERTURA E LAJE (0.91.0, E1.2 da climatização): mesma régua
+  // das camadas de acabamento — nunca lista vazia (use ausente), espessura
+  // inteira positiva, função conhecida, código/descrição em texto. Só a LAJE
+  // tem camadas entre as peças estruturais.
+  const camadasDaPecaOk = (camadas: CamadaParede[], onde: string) => {
+    if (camadas.length === 0) throw new KernelError('BAD_LAYER_THICKNESS', `${onde} sem camadas — use ausente`);
+    for (const [i, c] of camadas.entries()) {
+      assertIntegerMm(c.espessuraMm, `${onde}.camadas[${i}].espessuraMm`);
+      if (c.espessuraMm <= 0) throw new KernelError('BAD_LAYER_THICKNESS', `Camada ${i + 1} de ${onde} com espessura não positiva`);
+      if (!FUNCOES_DE_CAMADA.includes(c.funcao)) throw new KernelError('BAD_LAYER_THICKNESS', `Função de camada inválida em ${onde}: ${String(c.funcao)}`);
+      if (typeof c.itemCode !== 'string' || typeof c.descricao !== 'string') throw new KernelError('BAD_LAYER_THICKNESS', `Camada ${i + 1} de ${onde} sem código/descrição em texto`);
+    }
+  };
+  for (const r of model.roofs ?? []) if (r.camadas) camadasDaPecaOk(r.camadas, `Água ${r.id}`);
+  for (const st of model.structures ?? []) {
+    if (!st.camadas) continue;
+    if (st.kind !== 'LAJE') throw new KernelError('BAD_LAYER_THICKNESS', `${st.id} (${st.kind}) não tem camadas — só a laje`);
+    camadasDaPecaOk(st.camadas, `Laje ${st.id}`);
   }
 
   // Parâmetros personalizados, nas famílias que os carregam.

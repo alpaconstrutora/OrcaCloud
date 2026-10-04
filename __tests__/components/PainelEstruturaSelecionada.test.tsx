@@ -122,3 +122,26 @@ describe('PainelEstruturaSelecionada · comprimento da estaca', () => {
     expect(onMedidas).toHaveBeenCalledWith({ alturaMm: 3500 });
   });
 });
+
+/**
+ * CAMADAS DA LAJE (04/10/2026, E1.2 da climatização): só a laje mostra a seção;
+ * pilar, não — mesmo com `onCamadas`. Adicionar começa pelo concreto.
+ */
+describe('PainelEstruturaSelecionada · camadas da laje (E1.2)', () => {
+  const peca = (over: Partial<import('../../utils/blueprintKernel').Structural>): import('../../utils/blueprintKernel').Structural => ({
+    id: 'str_1', uid: 'uid-str-1' as never, levelId: 'lvl_1', kind: 'LAJE', pontos: [{ x: 0, y: 0 }, { x: 6000, y: 0 }, { x: 6000, y: 4000 }, { x: 0, y: 4000 }],
+    larguraMm: 0, profundidadeMm: 0, alturaMm: 120, baseMm: 2800, circular: false, rotacaoDeg: 0, ...over,
+  });
+
+  it('laje: seção presente, U não avaliado sem camadas, adicionar começa pelo concreto; pilar: sem seção', async () => {
+    const user = userEvent.setup();
+    const onCamadas = vi.fn();
+    const { unmount } = render(<PainelEstruturaSelecionada estrutura={peca({})} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} onCamadas={onCamadas} />);
+    expect(screen.getByTestId('camadas-desempenho-termico')).toHaveTextContent(/U não avaliado/);
+    await user.click(screen.getByRole('button', { name: /Adicionar camada — Camadas da laje/ }));
+    expect(onCamadas).toHaveBeenCalledWith([{ espessuraMm: 100, itemCode: '', descricao: 'Laje de concreto', funcao: 'ESTRUTURAL' }]);
+    unmount();
+    render(<PainelEstruturaSelecionada estrutura={peca({ id: 'str_2', kind: 'PILAR', pontos: [{ x: 0, y: 0 }], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, baseMm: 0 })} onMedidas={vi.fn()} onTipo={vi.fn()} onExcluir={vi.fn()} onCamadas={onCamadas} />);
+    expect(screen.queryByTestId('camadas-da-peca')).toBeNull();
+  });
+});

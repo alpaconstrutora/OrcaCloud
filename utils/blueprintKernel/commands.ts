@@ -356,6 +356,8 @@ export type Command =
       type: 'SetStructuralProps';
       structuralId: ObjectId;
       larguraMm?: number;
+      /** CAMADAS (0.91.0, E1.2 da climatização): só na LAJE, de cima para baixo; `null` remove. */
+      camadas?: CamadaParede[] | null;
       profundidadeMm?: number;
       alturaMm?: number;
       baseMm?: number;
@@ -411,6 +413,8 @@ export type Command =
       aguaId: ObjectId;
       inclinacaoPct?: number;
       beiralIndex?: number;
+      /** CAMADAS (0.91.0, E1.2 da climatização): a composição de cima para baixo; `null` remove. */
+      camadas?: CamadaParede[] | null;
       baseMm?: number;
       espessuraMm?: number;
     }
@@ -1733,6 +1737,13 @@ function aplicarSemHash(
       if (command.alturaMm !== undefined) s.alturaMm = command.alturaMm;
       if (command.baseMm !== undefined) s.baseMm = command.baseMm;
       if (command.circular !== undefined) s.circular = command.circular;
+      if (command.camadas !== undefined) {
+        if (command.camadas === null) delete s.camadas;
+        else {
+          if (s.kind !== 'LAJE') throw new KernelError('BAD_LAYER_THICKNESS', `${s.id} (${s.kind}) não tem camadas — só a laje`);
+          s.camadas = clonarCamadas(command.camadas);
+        }
+      }
       if (command.rotacaoDeg !== undefined) {
         // Normaliza para [0, 360) — sem isso, girar dez vezes guardaria 3600 no
         // payload canônico e duas peças visualmente idênticas teriam hashes
@@ -2095,6 +2106,11 @@ function aplicarSemHash(
         agua.espessuraMm = assertIntegerMm(roundToMm(command.espessuraMm), 'espessuraMm');
       }
       if (command.beiralIndex !== undefined) agua.beiralIndex = command.beiralIndex;
+      if (command.camadas !== undefined) {
+        // Cópia, nunca o array do chamador (a razão de `clonarCamadas` na parede).
+        if (command.camadas === null) delete agua.camadas;
+        else agua.camadas = clonarCamadas(command.camadas);
+      }
       diff.updated.push(agua.id);
       break;
     }

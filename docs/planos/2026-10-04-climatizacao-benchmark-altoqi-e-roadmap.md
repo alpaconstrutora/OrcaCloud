@@ -1427,4 +1427,28 @@ também vale para porta (porta de vidro); só o vão livre fica fora.
 faixas, personalizada, vão livre e troca de kind), goldens 7/7, `plantaApi` (bundle fresco),
 `PainelEsquadria.test.tsx` (+4: hipótese do estudo → proteção cria; tabela 0,55 CONFERIR, 0,6 grava,
 15 não grava, remover; personalizada parte de 0,55 e declarado aparece como declarado; salvar tipo
-leva o vidro), `PainelEsquadrias` 15/15. `check-ui-standard` e `check-xss-sinks` limpos.
+leva o vidro), `PainelEsquadrias` 15/15. `check-ui-standard` e `check-xss-sinks` limpos. Commit
+`afc2c3ac`.
+
+### Etapa 1.2 — 04/10/2026 (frente `clima-e1`, na MESMA 0.91.0 — ainda não publicada)
+
+**O que entrou:**
+- `Agua.camadas?` e `Structural.camadas?` (só `LAJE`) — a composição de CIMA para baixo
+  (`CamadaParede[]`, o mesmo tipo da parede e do forro). `SetAguaProps.camadas` e
+  `SetStructuralProps.camadas` (`null` remove; cópia por `clonarCamadas`); invariante: lista vazia,
+  espessura não positiva, função estranha e camadas em peça que não é laje são recusadas; canônico
+  emite só quando há (molde da parede) e relê. Decisão: a soma das camadas NÃO precisa bater com a
+  `espessuraMm` da água — a espessura é o sólido, as camadas são a composição térmica.
+- **Sem bump novo:** a 0.91.0 da E1.1 ainda não foi publicada, então os campos entram nela (histórico
+  em `units.ts` diz as duas coisas). Os seis goldens não têm telhado nem estrutura: nada mudou neles.
+- `EditorDeCamadas` saiu de dentro do `PainelAcabamentos` para arquivo próprio (um editor, três
+  lugares); `CamadasDaPeca` é a seção reutilizável — editor, "Adicionar camada", escolha no catálogo
+  e **U/R pela NBR 15220 com Rsi 0,17 / Rse 0,04 (fluxo descendente, o caso do verão)**; sem camadas
+  diz "U não avaliado", sem λ diz quantas camadas faltam. Montada no `PainelAguaSelecionada`
+  ("Camadas da cobertura", primeira camada sugerida = telha 20 mm) e no `PainelEstruturaSelecionada`
+  só para LAJE ("Camadas da laje", primeira = concreto 100 mm). O editor passa `biblioteca.materiais`.
+
+**Prova.** `blueprintCamadasDeCoberturaELaje.test.ts` (3: declara/relê/remove com hash e omissão;
+só laje, lista vazia, espessura 0 e função estranha recusadas; U 0,716 W/m²·K conferido à mão para
+telha + lã de rocha + laje, e λ ausente dito), goldens 7/7, `blueprintCamadas`, `plantaApi`
+(bundle fresco), `blueprintCoberturaExtrusao` — 38/38. `check-ui-standard` limpo nos cinco `.tsx`.

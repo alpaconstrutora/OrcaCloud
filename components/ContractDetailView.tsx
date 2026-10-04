@@ -253,7 +253,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [docxTemplates, setDocxTemplates] = React.useState<DocumentTemplate[]>([]);
     const [emitModalOpen, setEmitModalOpen] = React.useState(false);
     // Remonta o painel de documentos da aba Emissão quando uma versão nasce
-    // fora dele ("Emitir Contrato (.docx)" grava a versão pelo modal).
+    // fora dele ("Gerar pelo modelo" e o PDF do sistema gravam a versão).
     const [docsReloadKey, setDocsReloadKey] = React.useState(0);
     const [docxManagerOpen, setDocxManagerOpen] = React.useState(false);
     const [templatePdfModal, setTemplatePdfModal] = React.useState(false);
@@ -991,13 +991,33 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
         try {
             setLoading(true);
-            await exportService.generateServiceContractPDF(
+            const { blob, fileName } = await exportService.generateServiceContractPDF(
                 contract,
                 items,
                 organization,
                 projectSettings
             );
-            notify("PDF do contrato gerado com sucesso!", "success");
+            // O PDF do sistema (layout fixo, sem modelo) também vira versão — antes
+            // só baixava e ficava fora da tabela de documentos. Origem SISTEMA
+            // (migration aplicar_20271004000010_cdv_source_sistema.sql).
+            try {
+                await contractDocumentVersionService.addVersionFromBlob({
+                    ownerType: 'CONTRACT',
+                    ownerId: contract.id,
+                    contractId: contract.id,
+                    organizationId: contract.organization_id ?? null,
+                    blob,
+                    fileName,
+                    source: 'SISTEMA',
+                    kind: 'MINUTA',
+                    name: 'Contrato — PDF do sistema',
+                    notes: `Gerado pelo layout padrão do sistema em ${new Date().toLocaleString('pt-BR')}.`,
+                });
+                setDocsReloadKey(k => k + 1);
+                notify('PDF do sistema gerado, salvo como versão (rascunho) e baixado. Use "Emitir" para liberá-lo ao portal.', 'success');
+            } catch (saveErr) {
+                notify(`PDF gerado e baixado, mas NÃO foi salvo como versão: ${saveErr instanceof Error ? saveErr.message : 'erro desconhecido'}`, 'error');
+            }
         } catch (error: unknown) {
             console.error("Erro ao emitir contrato:", error);
             notify(`Erro na operação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
@@ -1347,7 +1367,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 transition-all font-medium text-[13px] active:scale-95 shrink-0 disabled:opacity-50"
                             >
                                 <FileDown className="w-[15px] h-[15px]" />
-                                Emitir Contrato (.docx)
+                                {/* Era "Emitir Contrato (.docx)": o botão GERA e baixa; quem
+                                    emite (libera ao portal) é o "Emitir" da tabela. */}
+                                Gerar pelo modelo
                             </button>
                             <button
                                 onClick={() => setDocxManagerOpen(true)}

@@ -1331,7 +1331,7 @@ export const exportService = {
         items: ContractItem[],
         organization: Organization | undefined,
         projectSettings: ProjectSettings
-    ) {
+    ): Promise<{ blob: Blob; fileName: string }> {
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
         const margin = 20;
@@ -1420,7 +1420,11 @@ export const exportService = {
         doc.text('CONTRATADA', pageWidth - margin - 70, y + 5);
         doc.text(contract.supplier?.name || contract.supplierName || '', pageWidth - margin - 70, y + 9);
 
-        doc.save(`Contrato_${contract.number}_${contract.title.replace(/\s+/g, '_')}.pdf`);
+        // Baixa E devolve o arquivo: a aba Emissão grava o mesmo PDF como versão
+        // (origem SISTEMA) — docs/planos/2026-10-04-gerar-pelo-modelo-versao-pdf.md
+        const fileName = `Contrato_${contract.number}_${contract.title.replace(/\s+/g, '_')}.pdf`;
+        doc.save(fileName);
+        return { blob: doc.output('blob'), fileName };
     },
 
     generateMilestoneReport(settings: ProjectSettings, curveData: SCurveRow[], totalValue: number) {

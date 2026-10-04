@@ -232,7 +232,9 @@ export interface ContractAddendum {
 
 export type DocumentOwnerType = 'CONTRACT' | 'ADDENDUM';
 export type DocumentKind = 'MINUTA' | 'CONTRATO' | 'ADITIVO' | 'ANEXO';
-export type DocumentSource = 'UPLOAD' | 'TEMPLATE_DOCX' | 'TEMPLATE_HTML';
+// SISTEMA = PDF de layout fixo do exportService (sem modelo) — migration
+// aplicar_20271004000010_cdv_source_sistema.sql.
+export type DocumentSource = 'UPLOAD' | 'TEMPLATE_DOCX' | 'TEMPLATE_HTML' | 'SISTEMA';
 
 export interface ContractDocumentVersion {
     id: string;

@@ -154,8 +154,16 @@ const EmitDocumentModal: React.FC<Props> = ({
             // Persistir ANTES de baixar: invertido, o usuário já teria o arquivo
             // na mão quando o erro aparecesse, e o toast viraria ruído. Assim o
             // estado do sistema é conhecido no momento da mensagem.
+            // Só o PDF vira versão: é o que o cliente vê no portal e o que o
+            // ZapSign assina — e o bucket `documents` aceita só PDF/imagem desde a
+            // auditoria C3-07 (aplicar_20270918000008). O .docx era recusado no
+            // upload, a versão nunca nascia e o arquivo baixava mesmo assim — o
+            // usuário via o download e achava que tinha gravado (04/10/2026).
+            // O .docx é cópia de TRABALHO: baixa para editar, sem versão.
+            // Plano: docs/planos/2026-10-04-gerar-pelo-modelo-versao-pdf.md
+            const gravaVersao = persistVersion && kind === 'pdf';
             let savedAsVersion = false;
-            if (persistVersion) {
+            if (gravaVersao) {
                 try {
                     await contractDocumentVersionService.addVersionFromBlob({
                         ownerType: 'CONTRACT',
@@ -174,7 +182,11 @@ const EmitDocumentModal: React.FC<Props> = ({
                     onVersionSaved?.();
                 } catch (saveErr) {
                     const m = saveErr instanceof Error ? saveErr.message : '';
-                    notify?.(`Documento gerado, mas não foi possível salvá-lo como versão${m ? `: ${m}` : '.'}`, 'error');
+                    const msg = `Documento gerado e baixado, mas NÃO foi salvo como versão${m ? `: ${m}` : '.'}`;
+                    // Fica no painel aberto: o toast some em 4,5 s junto com o
+                    // download e passava despercebido (04/10/2026).
+                    setError(msg);
+                    notify?.(msg, 'error');
                 }
             }
 
@@ -183,12 +195,14 @@ const EmitDocumentModal: React.FC<Props> = ({
             // custar o arquivo inteiro.
             saveAs(output, fileName);
 
-            if (savedAsVersion) {
+            if (persistVersion && kind === 'docx') {
+                notify?.('.docx baixado para edição — ele não entra na tabela de documentos. Depois de editar, salve em PDF e use "Subir documento".', 'info');
+            } else if (savedAsVersion) {
                 notify?.(`${kind === 'docx' ? 'Documento .docx' : 'PDF'} gerado, salvo como versão (rascunho) e baixado. Use "Emitir" para liberá-lo ao Portal do Cliente.`, 'success');
             } else if (!persistVersion) {
                 notify?.(kind === 'docx' ? 'Documento .docx gerado com sucesso!' : 'PDF gerado com sucesso!', 'success');
             }
-            onClose();
+            if (!gravaVersao || savedAsVersion) onClose();
         } catch (e) {
             if (isChunkLoadError(e) && reloadOnceForChunkError()) {
                 return;
@@ -209,8 +223,12 @@ const EmitDocumentModal: React.FC<Props> = ({
     return (
         <Sheet open onClose={onClose} size="2xl">
             <SheetHeader onClose={onClose}>
-                <SheetTitle>Emitir documento — {contract.number}</SheetTitle>
-                <SheetDescription>Escolha o modelo e o cliente para gerar o documento.</SheetDescription>
+                <SheetTitle>{persistVersion ? 'Gerar pelo modelo' : 'Emitir documento'} — {contract.number}</SheetTitle>
+                <SheetDescription>
+                    {persistVersion
+                        ? 'O PDF gerado entra como rascunho na tabela de documentos; o cliente só vê depois de emitido.'
+                        : 'Escolha o modelo e o cliente para gerar o documento.'}
+                </SheetDescription>
             </SheetHeader>
 
             <SheetPanel className="px-6 py-4">
@@ -341,7 +359,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
                     >
                         {busy === 'docx' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <File className="w-[15px] h-[15px]" />}
-                        {busy === 'docx' ? 'Gerando…' : 'Baixar .docx'}
+                        {busy === 'docx' ? 'Gerando…' : persistVersion ? 'Baixar .docx para editar' : 'Baixar .docx'}
                     </button>
                     <button
                         onClick={() => emit('pdf')}
@@ -349,7 +367,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50"
                     >
                         {busy === 'pdf' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileDown className="w-[15px] h-[15px]" />}
-                        {busy === 'pdf' ? 'Gerando PDF…' : 'Baixar PDF'}
+                        {busy === 'pdf' ? 'Gerando PDF…' : persistVersion ? 'Gerar versão (PDF)' : 'Baixar PDF'}
                     </button>
                 </SheetFooter>
             )}

@@ -33,8 +33,12 @@ const ORIGEM: Record<DocumentSource, string> = {
     UPLOAD: 'Arquivo enviado',
     TEMPLATE_DOCX: 'Modelo .docx',
     TEMPLATE_HTML: 'Modelo HTML',
+    SISTEMA: 'PDF do sistema',
 };
 const origem = (s?: DocumentSource | null) => (s ? ORIGEM[s] ?? s : '—');
+// O `accept` do seletor é só sugestão (o usuário troca o filtro para "Todos os
+// arquivos") — confere de novo pelo tipo e pela extensão.
+const ehPdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
 
 // Colunas de DADO (§6.10) — "Ações" entra por `actions`. Larguras somam ~1150px
 // com Ações; a folga do card vai para o espaçador antes de "Ações" (§6.1.1).
@@ -74,6 +78,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
     const [novoNome, setNovoNome] = useState('');
     const [novaNota, setNovaNota] = useState('');
     const [novoArquivo, setNovoArquivo] = useState<File | null>(null);
+    const [arquivoRecusado, setArquivoRecusado] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
@@ -103,7 +108,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
     useEffect(() => { load(); }, [load]);
 
     const abrirNova = () => {
-        setNovoNome(''); setNovaNota(''); setNovoArquivo(null);
+        setNovoNome(''); setNovaNota(''); setNovoArquivo(null); setArquivoRecusado(null);
         if (fileRef.current) fileRef.current.value = '';
         setNovaAberta(true);
     };
@@ -304,11 +309,24 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                 </SheetHeader>
                 <SheetPanel className="p-6 space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-500">Arquivo (PDF ou DOCX)</label>
+                        <label className="text-xs font-semibold text-slate-500">Arquivo (PDF)</label>
                         {/* Input nativo escondido: o "Choose File / No file chosen"
                             do navegador muda de idioma e de cara por navegador. */}
-                        <input ref={fileRef} type="file" accept=".pdf,.docx,.doc" className="hidden"
-                            onChange={e => setNovoArquivo(e.target.files?.[0] ?? null)} />
+                        {/* Só PDF: o bucket `documents` recusa .doc/.docx desde a
+                            auditoria C3-07 (18/09/2026) e o ZapSign assina PDF. A
+                            versão é o que o cliente vê — o .docx é cópia de trabalho. */}
+                        <input ref={fileRef} type="file" accept=".pdf,application/pdf" className="hidden"
+                            onChange={e => {
+                                const f = e.target.files?.[0] ?? null;
+                                if (f && !ehPdf(f)) {
+                                    setArquivoRecusado(f.name);
+                                    setNovoArquivo(null);
+                                    e.target.value = '';
+                                    return;
+                                }
+                                setArquivoRecusado(null);
+                                setNovoArquivo(f);
+                            }} />
                         <div className="flex items-center gap-3 min-w-0">
                             <button type="button" onClick={() => fileRef.current?.click()}
                                 className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 shrink-0">
@@ -319,6 +337,11 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                 {novoArquivo ? novoArquivo.name : 'Nenhum arquivo escolhido'}
                             </span>
                         </div>
+                        {arquivoRecusado && (
+                            <p className="text-sm text-red-600">
+                                "{arquivoRecusado}" não é PDF. Salve o documento em PDF (no Word: Arquivo › Salvar como › PDF) e escolha de novo.
+                            </p>
+                        )}
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-slate-500">Nome do documento</label>

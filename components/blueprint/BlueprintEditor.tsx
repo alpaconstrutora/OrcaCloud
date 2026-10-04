@@ -500,7 +500,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
-import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
+import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, conflitoVisivel, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -3750,6 +3750,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   /** O que o ribbon conta: só os ABERTOS (aceito com justificativa não é pendência). */
   const totalDeConflitos = statusDosConflitos.abertos;
+  /**
+   * CAMADAS (04/10/2026): *"para verificar interferências ele poderia exibir
+   * uma, duas ou quantas ele quiser"* — com camada oculta, a lista mostra só os
+   * conflitos com os DOIS lados à vista (meio-tom conta). "Ver todos" devolve a
+   * lista inteira sem mexer nas camadas. Destaque no 3D e BCF seguem a lista
+   * exibida; a soma do grupo Conferência continua o total do estudo.
+   */
+  const [conflitosVerTodos, setConflitosVerTodos] = useState(false);
+  const camadasRecortamConflitos = idsDasCamadas.ocultos.size > 0;
+  const filtrarConflitosPelasCamadas = camadasRecortamConflitos && !conflitosVerTodos;
+  const conflitosExibidos = useMemo(
+    () => (filtrarConflitosPelasCamadas ? conflitos.filter((c) => conflitoVisivel([c.trechoId, c.outroId], classificacaoDasPecas, camadas)) : conflitos),
+    [filtrarConflitosPelasCamadas, conflitos, classificacaoDasPecas, camadas],
+  );
+  const conflitosArqExibidos = useMemo(
+    () => (filtrarConflitosPelasCamadas ? conflitosArq.filter((c) => conflitoVisivel([c.pecaId, c.outroId], classificacaoDasPecas, camadas)) : conflitosArq),
+    [filtrarConflitosPelasCamadas, conflitosArq, classificacaoDasPecas, camadas],
+  );
+  const abertosExibidos = useMemo(
+    () => (filtrarConflitosPelasCamadas ? contarStatus([...classificarMep(conflitosExibidos, mapaDeAceites), ...classificarArq(conflitosArqExibidos, mapaDeAceites)]).abertos : totalDeConflitos),
+    [filtrarConflitosPelasCamadas, conflitosExibidos, conflitosArqExibidos, mapaDeAceites, totalDeConflitos],
+  );
   const aceitesParaBcf = useMemo(() => new Map(aceitesDeConflito.map((a) => [a.chave, { justificativa: a.justificativa, acceptedEmail: a.acceptedEmail }])), [aceitesDeConflito]);
   /** As restrições conferidas (E1.4b) — derivadas a cada mudança do modelo. */
   const conferenciaDeRestricoes = useMemo(() => conferirRestricoes(editor.model), [editor.model]);
@@ -3768,8 +3790,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const autor = perfil?.email || 'ÒPURA';
     const agora = new Date();
     const topicos = [
-      ...topicosDeConflitos(editor.model, conflitos, autor, agora, aceitesParaBcf),
-      ...topicosDeConflitosArquitetonicos(editor.model, conflitosArq, autor, agora, aceitesParaBcf),
+      // O BCF leva o que a lista mostra (com camada oculta, o recorte dela — ver `conflitosExibidos`).
+      ...topicosDeConflitos(editor.model, conflitosExibidos, autor, agora, aceitesParaBcf),
+      ...topicosDeConflitosArquitetonicos(editor.model, conflitosArqExibidos, autor, agora, aceitesParaBcf),
       ...topicosDeComentarios(
         comentarios.map((c) => ({
           id: c.id,
@@ -3966,9 +3989,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const coresPorUid = useMemo(() => {
     const m = new Map<string, string>();
     for (const [uid, s] of situacao4d) m.set(uid, COR_DO_STATUS[s.status]);
-    if (destacarConflitos3d) for (const uid of uidsEmConflitoAberto(conflitos, conflitosArq, mapaDeAceites)) m.set(uid, COR_DO_CONFLITO_3D);
+    if (destacarConflitos3d) for (const uid of uidsEmConflitoAberto(conflitosExibidos, conflitosArqExibidos, mapaDeAceites)) m.set(uid, COR_DO_CONFLITO_3D);
     return m;
-  }, [situacao4d, destacarConflitos3d, conflitos, conflitosArq, mapaDeAceites]);
+  }, [situacao4d, destacarConflitos3d, conflitosExibidos, conflitosArqExibidos, mapaDeAceites]);
   const escadaSel = (editor.model.stairs ?? []).find((e) => e.id === editor.selectedId) ?? null;
   const nucleoSel = (editor.model.nucleos ?? []).find((n) => n.id === editor.selectedId) ?? null;
   const subRegiaoSel = (editor.model.subRegioes ?? []).find((s) => s.id === editor.selectedId) ?? null;
@@ -11960,10 +11983,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 <BotaoDoRibbon
                   icone={AlertTriangle}
                   rotulo="Conflitos"
-                  contagem={totalDeConflitos}
+                  contagem={abertosExibidos}
                   ativo={relatorioAberto === 'conflitos'}
                   onClick={() => alternarRelatorio('conflitos')}
-                  ajuda="Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF"
+                  ajuda={
+                    filtrarConflitosPelasCamadas
+                      ? `Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF. Filtrado pelas camadas visíveis: ${abertosExibidos} de ${totalDeConflitos} abertos.`
+                      : 'Interferências entre disciplinas, com a estrutura e da estrutura com vãos e escadas; exportar BCF'
+                  }
                 />
                 <BotaoDoRibbon
                   icone={LandPlot}
@@ -17623,8 +17650,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {relatorioNoDrawer === 'orcamento' && <Calculator className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'lote-digitado' && loteParaEditar ? 'Editar o lote digitando' : RELATORIOS_DO_DOCK[relatorioNoDrawer].rotulo}
               {relatorioNoDrawer === 'conflitos' && (
-                <span className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600">
-                  {totalDeConflitos}
+                <span
+                  className="rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-600"
+                  title={filtrarConflitosPelasCamadas ? `${abertosExibidos} abertos à vista de ${totalDeConflitos} no estudo` : undefined}
+                >
+                  {abertosExibidos}
                 </span>
               )}
               {relatorioNoDrawer === 'medicoes' && (
@@ -17877,8 +17907,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             <div className="px-6 py-4">
               <PainelConflitos
                 model={editor.model}
-                conflitos={conflitos}
-                arquitetonicos={conflitosArq}
+                conflitos={conflitosExibidos}
+                arquitetonicos={conflitosArqExibidos}
+                recorteDasCamadas={
+                  camadasRecortamConflitos
+                    ? {
+                        exibidos: conflitosExibidos.length + conflitosArqExibidos.length,
+                        total: conflitos.length + conflitosArq.length,
+                        verTodos: conflitosVerTodos,
+                        onAlternar: () => setConflitosVerTodos((v) => !v),
+                      }
+                    : null
+                }
                 aceites={mapaDeAceites}
                 podeDecidir={!somenteLeitura}
                 onAceitar={async (e) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, Share2, ShieldCheck, Undo2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Layers, Share2, ShieldCheck, Undo2 } from 'lucide-react';
 import { rotuloCurto, type BlueprintModel, type Conflito, type ConflitoArquitetonico } from '../../utils/blueprintKernel';
 import { CATALOGO_DE_COMPONENTES, nomeDoTipoDeAbertura } from '../../utils/blueprintKernel';
 import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
@@ -35,6 +35,7 @@ export default function PainelConflitos({
   onExportarBcf,
   destaqueNo3d = false,
   onDestaqueNo3d,
+  recorteDasCamadas = null,
 }: {
   model: BlueprintModel;
   conflitos: Conflito[];
@@ -52,6 +53,12 @@ export default function PainelConflitos({
   /** E7.2: pintar de vermelho, no 3D, as peças dos conflitos abertos. Ausente = a chave não aparece. */
   destaqueNo3d?: boolean;
   onDestaqueNo3d?: (v: boolean) => void;
+  /**
+   * CAMADAS (04/10/2026): a lista chega recortada pelas camadas à vista — um
+   * conflito sai quando um dos lados está numa camada oculta. `null` = sem
+   * recorte (nenhuma camada oculta). `verTodos` devolve a lista inteira.
+   */
+  recorteDasCamadas?: { exibidos: number; total: number; verTodos: boolean; onAlternar: () => void } | null;
 }) {
   const [exportando, setExportando] = React.useState(false);
   const [erro, setErro] = React.useState<string | null>(null);
@@ -162,9 +169,27 @@ export default function PainelConflitos({
       </p>
     </div>
   ) : null;
+  // A faixa diz que a lista está recortada — sem ela, "Nenhum conflito" com
+  // camadas ocultas seria mentira.
+  const faixaDasCamadas = recorteDasCamadas ? (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-[6px] border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] text-slate-600" data-testid="recorte-das-camadas">
+      <Layers className="h-3 w-3 shrink-0 text-blue-600" />
+      {recorteDasCamadas.verTodos ? (
+        <span>Todos os {recorteDasCamadas.total} conflitos, inclusive com camadas ocultas.</span>
+      ) : (
+        <span>
+          Filtrado pelas camadas visíveis — <strong>{recorteDasCamadas.exibidos}</strong> de {recorteDasCamadas.total}.
+        </span>
+      )}
+      <button type="button" onClick={recorteDasCamadas.onAlternar} className="text-blue-600 hover:text-blue-800 hover:underline">
+        {recorteDasCamadas.verTodos ? 'Só os das camadas visíveis' : 'Ver todos'}
+      </button>
+    </p>
+  ) : null;
   if (conflitos.length === 0 && arquitetonicos.length === 0) {
     return (
       <>
+      {faixaDasCamadas}
       <p className="flex items-start gap-1.5 text-[11px] text-slate-500" data-testid="sem-conflitos">
         <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
         <span>
@@ -316,6 +341,7 @@ export default function PainelConflitos({
 
   return (
     <div className="space-y-1.5">
+      {faixaDasCamadas}
       {barra}
       {abertos.length === 0 && (
         <p className="flex items-start gap-1.5 text-[11px] text-slate-500" data-testid="sem-abertos">

@@ -103,5 +103,5 @@ Estado por camada: `'VISIVEL' | 'ATENUADA' | 'OCULTA'`. Estado do grupo = deriva
 - [x] F2 — ligação no editor (3D passa a esconder as camadas; overlays de terreno/arquitetura/estrutura/elétrica com o grupo; Exibir sem os 3 toggles; templates com `disciplinas`)
 - [x] F3 — seção Camadas no painel (PainelCamadas 7 testes + 3 no editor; guia §19.5)
 - [x] F4 — atenuar (2D: fator multiplicativo no globalAlpha + clique/laço pulam atenuados; divisas, ambientes, conexões e marcas respeitam ocultos; 3D: passada fantasma translúcida sem raycast) — prova visual na F6
-- [ ] F5 — conflitos filtrados
+- [x] F5 — conflitos filtrados (faixa "N de M · Ver todos"; ribbon, cabeçalho, destaque 3D e BCF seguem a lista exibida; 5 testes)
 - [ ] F6 — verificação e publicação

@@ -147,17 +147,20 @@ function pivotColumns(dimLabel: string, tree: boolean): StandardTableColumn[] {
 
 // Extrato da linha clicada — tela in-flow (não drawer): com a largura da página,
 // as datas e os vínculos que no drawer viravam uma linha cinza ganham coluna.
+// As visíveis somam 1270 px: cabem em 1600 px com a sidebar aberta, sem rolar a
+// tabela — Valor é a coluna que importa e não pode nascer fora da tela.
+// Pagamento e Conta nascem ocultas (o Status já diz se foi pago); ligam na engrenagem.
 const ENTRY_COLUMNS: StandardTableColumn[] = [
-    { key: 'transaction_date', label: 'Lançamento',  sortable: true, width: 120 },
-    { key: 'due_date',         label: 'Vencimento',  sortable: true, width: 120 },
-    { key: 'payment_date',     label: 'Pagamento',   sortable: true, width: 120 },
-    { key: 'description',      label: 'Descrição',   sortable: true, width: 320 },
-    { key: 'category_name',    label: 'Categoria',   sortable: true, width: 200 },
-    { key: 'party',            label: 'Contraparte', sortable: true, width: 220 },
-    { key: 'project_name',     label: 'Obra',        sortable: true, width: 200 },
+    { key: 'transaction_date', label: 'Lançamento',  sortable: true, width: 110 },
+    { key: 'due_date',         label: 'Vencimento',  sortable: true, width: 110 },
+    { key: 'payment_date',     label: 'Pagamento',   sortable: true, width: 110, defaultHidden: true },
+    { key: 'description',      label: 'Descrição',   sortable: true, width: 280 },
+    { key: 'category_name',    label: 'Categoria',   sortable: true, width: 170 },
+    { key: 'party',            label: 'Contraparte', sortable: true, width: 190 },
+    { key: 'project_name',     label: 'Obra',        sortable: true, width: 160 },
     { key: 'account_name',     label: 'Conta',       sortable: true, width: 180, defaultHidden: true },
-    { key: 'status',           label: 'Status',      sortable: true, width: 110 },
-    { key: 'amount',           label: 'Valor',       sortable: true, width: 160, align: 'right' },
+    { key: 'status',           label: 'Status',      sortable: true, width: 100 },
+    { key: 'amount',           label: 'Valor',       sortable: true, width: 150, align: 'right' },
 ];
 
 const ENTRIES_PAGE = 200;

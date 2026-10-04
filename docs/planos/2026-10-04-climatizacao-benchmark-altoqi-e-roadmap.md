@@ -1386,6 +1386,6 @@ pelo último pedaço do log.
   o aviso de "já aplicada" no cabeçalho (é idempotente).
 - Suíte sobre a árvore rebaseada: 7443 ✅ + 34 pulados + 1 falha (o prefixo, corrigido) + **51 que
   não rodaram** em `BlueprintEditor.test.tsx` (queda intermitente do worker do Node, conhecida) —
-  o arquivo foi rerodado isolado com a conta do JSON antes do push (resultado abaixo).
+  o arquivo foi rerodado isolado com a conta do JSON antes do push: **224/224, 0 pendentes**. `npm run build` sobre a árvore rebaseada: exit 0.
 - Fica para a prova no app real (estudo descartável, precisa de login): a premissa gravada voltar
   depois de recarregar — a E1 abre com esse passeio.

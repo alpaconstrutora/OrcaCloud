@@ -465,6 +465,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                             type="button"
                             onClick={() => setIsAccountMenuOpen(o => !o)}
                             className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                            data-tour="conta"
                             aria-haspopup="menu"
                             aria-expanded={isAccountMenuOpen}
                         >
@@ -544,6 +545,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 visibleSections={enabledTabIds}
                 initialSection={currentTab}
                 accent="indigo"
+                tourKey={portalToken || effectiveBrokerEmail || null}
+                autoTour={isStandalone}
             />
 
             {showMyAccount && (
@@ -589,12 +592,13 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             )}
             <div className={isStandalone ? 'flex flex-1 overflow-hidden' : ''}>
                 {isStandalone && (
-                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1 shrink-0 overflow-y-auto">
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1 shrink-0 overflow-y-auto" data-tour="menu">
                         {navGroups.map(group => (
                             <React.Fragment key={group.label}>
                                 {group.items.map(tab => (
                                     <button
                                         key={tab.id}
+                                        data-tour={`aba-${tab.id}`}
                                         onClick={() => { setCurrentTab(tab.id as PortalTab); setShowSimulator(false); }}
                                         className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                                             currentTab === tab.id

@@ -1041,6 +1041,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             type="button"
             onClick={() => setIsAccountMenuOpen(o => !o)}
             className="flex items-center gap-2 text-sm bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+            data-tour="conta"
             aria-haspopup="menu"
             aria-expanded={isAccountMenuOpen}
           >
@@ -1137,12 +1138,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       {/* Main Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Navigation Sidebar */}
-        <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1.5 shrink-0">
+        <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex flex-col gap-1.5 shrink-0" data-tour="menu">
           {enabledTabs.map((id) => {
             const Icon = TAB_ICONS[id];
             return (
               <button
                 key={id}
+                data-tour={`aba-${id}`}
                 onClick={() => setActiveTab(id)}
                 className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150
                   ${activeTab === id ? 'bg-[#FDEDE8] border border-[#F3D9D1] text-[#C24428] font-semibold' : 'text-gray-500 hover:text-gray-900 hover:bg-white'}`}
@@ -2220,6 +2222,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         visibleSections={enabledTabs}
         initialSection={activeTab}
         accent="orange"
+        tourKey={portalToken || userEmail || null}
+        autoTour={!isPreview}
         onOpenRequest={isPreview || !enabledTabs.includes('solicitacoes') ? undefined : () => {
           setIsHelpOpen(false);
           setActiveTab('solicitacoes');

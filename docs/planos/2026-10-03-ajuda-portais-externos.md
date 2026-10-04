@@ -99,8 +99,28 @@ sobrescreveu aquela chave. "Restaurar padrão" = apagar a sobrescrita.
     "Ajuda" no menu (era toast); `orgId = initialOrgId || selectedOrgId`;
     `accent="indigo"` (novo no `PortalHelp`).
   - Teste: `__tests__/components/SupplierPortalAjuda.test.tsx`.
-- **F3:** Tour guiado (`components/portal/PortalTour.tsx`, `data-tour` nos
-  portais; edição dos textos já cabe no editor da F1).
+- **F3 (frente `ajuda-portais-f3`, 04/10/2026):** Tour guiado + artigos que faltavam.
+  - Pedido literal: "1. implementar: Observação — no Corretor, Empreendimentos e
+    Chat ainda não têm artigo padrão (…) 2. implementar F3".
+  - Item 1: artigos padrão do Corretor para Analytics, Empreendimentos, Ranking,
+    Treinamento, Agenda, Chat, Saúde e Integrações; teste trava "toda seção de
+    todo portal tem ≥ 1 artigo padrão" (`__tests__/portalTourAnchors.test.ts`).
+  - `components/portal/PortalTour.tsx`: espera as âncoras (até ~5 s, o portal
+    pode estar carregando), pula passo sem âncora visível, holofote por
+    `box-shadow` + popover posicionado (`utils/portalTour.ts › posicaoDoPopover`,
+    pura), Pular/Anterior/Próximo/Concluir, Escape pula. Sem nenhuma âncora
+    termina como 'pulado' e grava a marca (não insiste a cada carga).
+  - O tour mora dentro do `PortalHelp`: props `tourKey` (token do link ou
+    e-mail) e `autoTour`; marca "já viu" em `localStorage`
+    (`portalHelp:tour:<portal>:<id>`); "Rever o tour do portal" no painel. Os
+    textos dos passos vêm de `help.tour` (sobrescritas da construtora aplicadas).
+  - Âncoras `data-tour` nos três portais: `menu` (sidebar; no Fornecedor também
+    a barra inferior do celular), `aba-<id>` (botão de cada aba), `ajuda`,
+    `conta`. `__tests__/portalTourAnchors.test.ts` lê os arquivos dos portais e
+    exige cada âncora de `TOUR_STEPS`.
+  - Prévia (`isPreview`) não dispara o tour automático; modo app do
+    Corretor/Fornecedor idem (só o link).
+  - Testes: `PortalTour.test.tsx`, `PortalHelpTour.test.tsx`.
 - **F4 (só se pedirem):** "já viu o tour" por e-mail em tabela.
 
 ## Verificação (F1)

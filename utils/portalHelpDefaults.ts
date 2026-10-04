@@ -292,6 +292,19 @@ const CORRETOR: DefaultHelpItem[] = [
     ),
   },
   {
+    key: 'corretor.analytics.visao', kind: 'artigo', section: 'analytics',
+    title: 'Analytics: seus números de relance',
+    body_html: p('A primeira tela resume o seu desempenho: unidades disponíveis, propostas enviadas e aprovadas e a comissão acumulada. Os números seguem as abas Propostas e Comissões.'),
+  },
+  {
+    key: 'corretor.empreendimentos.conhecer', kind: 'artigo', section: 'empreendimentos',
+    title: 'Empreendimentos: o que você pode vender',
+    body_html: p(
+      'A lista traz os empreendimentos que a incorporadora liberou para você, com endereço, estágio da obra e tipologias. Abra um empreendimento para ver as unidades e seguir para a proposta.',
+      'Se um empreendimento que você atende não aparece, peça à incorporadora para liberar o acesso.',
+    ),
+  },
+  {
     key: 'corretor.estoque.consultar', kind: 'artigo', section: 'estoque',
     title: 'Estoque: unidades disponíveis e preços',
     body_html: p('Consulte as unidades disponíveis de cada empreendimento, com área, posição, vagas e preço vigente. As colunas mostradas são definidas pela incorporadora.'),
@@ -319,6 +332,39 @@ const CORRETOR: DefaultHelpItem[] = [
     title: 'Materiais: tabelas, plantas e peças de venda',
     body_html: p('Baixe os materiais oficiais do empreendimento publicados pela incorporadora. Use sempre a versão mais recente.'),
   },
+  {
+    key: 'corretor.ranking.acompanhar', kind: 'artigo', section: 'ranking',
+    title: 'Ranking: sua posição entre os corretores',
+    body_html: p('O ranking compara vendas e propostas aprovadas no período. Serve para acompanhar metas e campanhas da incorporadora.'),
+  },
+  {
+    key: 'corretor.treinamento.assistir', kind: 'artigo', section: 'treinamento',
+    title: 'Treinamento: conteúdo da incorporadora',
+    body_html: p('Vídeos e materiais de capacitação publicados pela incorporadora: produto, argumentos de venda, processo de proposta. Conclua os módulos para manter o cadastro em dia quando a incorporadora exigir.'),
+  },
+  {
+    key: 'corretor.agenda.usar', kind: 'artigo', section: 'agenda',
+    title: 'Agenda: eventos, plantões e visitas',
+    body_html: p('Aqui ficam os eventos da incorporadora (lançamentos, plantões, treinamentos) e as visitas agendadas. Confirme presença pelo próprio evento.'),
+  },
+  {
+    key: 'corretor.chat.conversar', kind: 'artigo', section: 'chat',
+    title: 'Chat: fale com a equipe comercial',
+    body_html: p(
+      'Use o chat para dúvidas rápidas com a equipe comercial da incorporadora: disponibilidade de unidade, condição de pagamento, documentação do comprador.',
+      'Propostas formais não vão pelo chat — envie pela aba <strong>Propostas</strong>, que registra data, status e resposta.',
+    ),
+  },
+  {
+    key: 'corretor.saude.entender', kind: 'artigo', section: 'saude',
+    title: 'Saúde: como a incorporadora vê a sua carteira',
+    body_html: p('Indicadores de qualidade do seu atendimento: tempo de resposta a leads, propostas convertidas, visitas realizadas. Ajudam a entender onde a carteira está travando.'),
+  },
+  {
+    key: 'corretor.integracoes.conectar', kind: 'artigo', section: 'integracoes',
+    title: 'Integrações: conectar seus canais',
+    body_html: p('Conecte CRM, WhatsApp ou portais imobiliários para receber leads direto aqui. Cada integração explica o que é compartilhado antes de ativar.'),
+  },
   ...FAQ_ACESSO('corretor', '/portal-corretor'),
   {
     key: 'corretor.faq.secao-sumiu', kind: 'faq', section: null,
@@ -333,7 +379,11 @@ export const DEFAULT_ITEMS: Record<Portal, DefaultHelpItem[]> = {
   corretor: CORRETOR,
 };
 
-/** Passos do tour. Âncoras = `data-tour` nos portais (F3). */
+/**
+ * Passos do tour. Âncoras = `data-tour` nos portais: `menu` (sidebar / barra
+ * inferior), `aba-<id>` (botão de cada aba), `ajuda` (botão ?), `conta` (menu
+ * da conta). Teste: __tests__/portalTourAnchors.test.ts.
+ */
 export const TOUR_STEPS: Record<Portal, TourStep[]> = {
   parceiro: [
     { key: 'parceiro.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Parceiro', body: 'Este menu leva às seções liberadas para a sua empresa: contratos, documentos, financeiro, solicitações e conversas.' },
@@ -344,7 +394,7 @@ export const TOUR_STEPS: Record<Portal, TourStep[]> = {
   ],
   fornecedor: [
     { key: 'fornecedor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Fornecedor', body: 'O menu leva às seções liberadas para a sua empresa: cotações, lances, pedidos, notas fiscais e financeiro.' },
-    { key: 'fornecedor.tour.pedidos', anchor: 'aba-pedidos', section: 'orders', title: 'Pedidos', body: 'Aqui você acompanha os pedidos de compra e atualiza a logística de entrega.' },
+    { key: 'fornecedor.tour.pedidos', anchor: 'aba-orders', section: 'orders', title: 'Pedidos', body: 'Aqui você acompanha os pedidos de compra e atualiza a logística de entrega.' },
     { key: 'fornecedor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
   ],
   corretor: [

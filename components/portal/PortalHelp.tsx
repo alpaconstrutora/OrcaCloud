@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { PortalTour } from './PortalTour';
+import { chaveDoTour, marcarTourVisto, tourVisto } from '../../utils/portalTour';
 import { ArrowLeft, ChevronDown, ChevronRight, HelpCircle, Mail, MessageSquare, Phone, Globe, Search, BookOpen, CircleHelp, Building2, RotateCcw } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
@@ -31,8 +33,13 @@ export interface PortalHelpProps {
   initialSection?: string | null;
   /** só o Parceiro tem solicitações; sem a prop o botão não aparece */
   onOpenRequest?: () => void;
-  /** F3: reabrir o tour guiado */
-  onRestartTour?: () => void;
+  /**
+   * Identidade para o "já viu o tour" (token do link ou e-mail). Sem a prop não
+   * há tour: nem automático, nem "Rever o tour".
+   */
+  tourKey?: string | null;
+  /** abre o tour sozinho no primeiro acesso deste aparelho (false na prévia) */
+  autoTour?: boolean;
   /** acento do portal: laranja (parceiro) ou coral (kit §24) */
   accent?: 'orange' | 'coral' | 'indigo';
 }
@@ -46,12 +53,19 @@ const ACCENT = {
 const soDigitos = (s: string) => s.replace(/\D/g, '');
 
 export const PortalHelp: React.FC<PortalHelpProps> = ({
-  open, onClose, portal, token, orgId, visibleSections, initialSection, onOpenRequest, onRestartTour, accent = 'orange',
+  open, onClose, portal, token, orgId, visibleSections, initialSection, onOpenRequest, tourKey, autoTour = false, accent = 'orange',
 }) => {
   const a = ACCENT[accent];
+  const chaveTour = tourKey ? chaveDoTour(portal, tourKey) : null;
+  // Tour no primeiro acesso: abre sozinho quando este aparelho ainda não viu.
+  const [tourOpen, setTourOpen] = useState<boolean>(() => !!(autoTour && chaveTour && !tourVisto(chaveTour)));
   const { loading, erro, help, contact, orgs, selectedOrgId, selectOrg, precisaEscolherOrg } = usePortalHelp(portal, {
-    token, orgId, visibleSections, enabled: open,
+    token, orgId, visibleSections, enabled: open || tourOpen,
   });
+  const encerrarTour = (motivo: 'concluido' | 'pulado') => {
+    if (chaveTour) marcarTourVisto(chaveTour, motivo);
+    setTourOpen(false);
+  };
 
   const [busca, setBusca] = usePersistedState<string>(`portalHelp:${portal}:busca`, '');
   const [artigoAberto, setArtigoAberto] = useState<HelpItem | null>(null);
@@ -123,9 +137,14 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
 
   // Sheet mantém os filhos montados quando fechado: os botões das seções
   // (ex.: "Contratos") colidiriam com os da sidebar do portal.
-  if (!open) return null;
+  if (!open && !tourOpen) return null;
 
   return (
+    <>
+    {tourOpen && !loading && (
+      <PortalTour steps={help.tour} accent={accent} onFinish={encerrarTour} />
+    )}
+    {open && (
     <Sheet open={open} onClose={onClose} size="md">
       <SheetHeader onClose={onClose}>
         <SheetTitle>
@@ -274,10 +293,10 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
                   </div>
                 </div>
 
-                {onRestartTour && (
+                {chaveTour && help.tour.length > 0 && (
                   <button
                     type="button"
-                    onClick={() => { onClose(); onRestartTour(); }}
+                    onClick={() => { onClose(); setTourOpen(true); }}
                     className={`inline-flex items-center gap-2 text-sm font-medium ${a.text} hover:underline`}
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -290,6 +309,8 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
         )}
       </SheetPanel>
     </Sheet>
+    )}
+    </>
   );
 };
 

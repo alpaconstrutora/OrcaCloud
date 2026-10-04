@@ -1331,6 +1331,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 type="button"
                                 onClick={() => setIsAccountMenuOpen(o => !o)}
                                 className="flex items-center gap-2 text-xs bg-gray-50 hover:bg-gray-100 px-3 py-1.5 rounded-full border border-gray-200 transition-colors"
+                                data-tour="conta"
                                 aria-haspopup="menu"
                                 aria-expanded={isAccountMenuOpen}
                             >
@@ -1403,10 +1404,11 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
 
             <div className={isStandalone ? 'md:flex md:flex-1 md:overflow-hidden md:min-h-0' : ''}>
                 {isStandalone && (
-                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
+                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex" data-tour="menu">
                         {navTabs.map(tab => (
                             <button
                                 key={tab.id}
+                                data-tour={`aba-${tab.id}`}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                                     activeTab === tab.id
@@ -1642,7 +1644,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 const moreTabs = navTabs.slice(MAX_BAR - 1);
                 const moreActive = moreTabs.some(t => t.id === activeTab);
                 return (
-                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]" data-tour="menu">
                         <div className="flex">
                             {barTabs.map(tab => {
                                 const isActive = activeTab === tab.id;
@@ -1650,6 +1652,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                 return (
                                     <button
                                         key={tab.id}
+                                        data-tour={`aba-${tab.id}`}
                                         onClick={() => setActiveTab(tab.id)}
                                         className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
                                             ${isActive ? 'text-[#C24428]' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
@@ -1744,6 +1747,8 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 visibleSections={enabledTabIds}
                 initialSection={activeTab}
                 accent="coral"
+                tourKey={portalToken || effectiveSupplier?.email || null}
+                autoTour={isStandalone}
             />
 
                 </div>{/* /coluna de conteúdo */}

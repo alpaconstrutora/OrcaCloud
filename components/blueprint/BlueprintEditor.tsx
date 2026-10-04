@@ -5522,6 +5522,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         openingId: abertura.id,
         esquadria: { nome: tipo.nome, itemCode: tipo.itemCode, descricao: tipo.descricao },
       },
+      // E1.1 da climatização: o tipo leva o vidro junto — e um tipo SEM vidro limpa o da abertura,
+      // porque "aplicar o tipo" é aplicá-lo inteiro (uma J1 não é J1 com outro vidro).
+      { type: 'SetOpeningVidro', openingId: abertura.id, vidro: tipo.vidro ?? null },
     ]);
   }
 
@@ -9564,6 +9567,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 })
               }
               onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
+              onVidro={(vidro) => editor.run({ type: 'SetOpeningVidro', openingId: aberturaSel.id, vidro })}
             />
           ) : null
         }

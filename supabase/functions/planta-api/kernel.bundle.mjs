@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.90.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.91.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1756,6 +1756,8 @@ function projetar(model) {
       esquadria: o.esquadria ? { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } : void 0,
       // INCÊNDIO (0.84.0): só quando há — a disciplina de `esquadria`.
       emergencia: o.emergencia?.length ? [...o.emergencia] : void 0,
+      // VIDRO (0.91.0): só quando declarado — mesma disciplina. Campos reescritos um a um.
+      vidro: o.vidro ? { fatorSolar: o.vidro.fatorSolar, uWm2K: o.vidro.uWm2K, protecao: o.vidro.protecao, fatorSombreamento: o.vidro.fatorSombreamento } : void 0,
       parametros: parametrosCanonicos(o.parametros)
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm
@@ -2559,6 +2561,7 @@ function modelFromCanonicalPayload(payload) {
       ...refDeDemolicao(o.demolidaEm),
       ...o.esquadria ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } } : {},
       ...o.emergencia?.length ? { emergencia: [...o.emergencia] } : {},
+      ...o.vidro ? { vidro: { fatorSolar: o.vidro.fatorSolar ?? null, uWm2K: o.vidro.uWm2K ?? null, protecao: o.vidro.protecao, fatorSombreamento: o.vidro.fatorSombreamento ?? null } } : {},
       ...o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}
     });
   });

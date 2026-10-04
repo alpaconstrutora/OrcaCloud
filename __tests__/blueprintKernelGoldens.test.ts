@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '5c85f4f9c3318051d1ddbcae8b57997ccbce0fd1872680760be31389290e92a4',
+    hash: '98770f1b80ed867f7581666af8b54696436c7270dc81ae33c7a953625a177331',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '29aaedfadf9eaa34a41e8086d4861dadca17e5d18e8dd188498575028b751317',
+    hash: '3319f4b176a8f3cfe02024a86237bcee74f242838030668396f24e556e271a03',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'a4479f815af8c7eb445accbe64b17c8013e4e98108b54d8aae955ae6ef1282eb',
+    hash: '1666cbc841ae0ac73984c6b6b8703484f0fe465085e2c628fcd8ece739a5293f',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '8019d5b8dd58c0c1cf7088a294f7a4f8ca9e32df7d1576afbb4a660c7e8bd0ae',
+    hash: '0049bb3f833e196dfbe0eb9635a83cc5701009d70a6b0592dbd49cb2d14b2db8',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '18dd6efd9eacd71f18f29a6bd37c085888d5a8895b99517c6217ca6e0b4314a9',
+    hash: '1b516c1114493411b604ee6789ece98a30d76215483d51cd08f3e3c92a5c44d7',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,10 +895,18 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'c0d86b09c1a7dccd4106af2f9b2ad1816e7dca8d924526569d76944ec1643fdb',
+    hash: '5fe4910a5fa108f35a2a067fd166fc5d64ea0dc71bcd29b26c8f8d5b1a971b5f',
   },
 };
 
+/**
+ *   0.90.0 → 0.91.0 (04/10/2026): `Opening.vidro` — fator solar, U e proteção
+ *   solar da abertura (E1.1 da climatização). Nenhum dos seis casos tem abertura,
+ *   e `vidro` é omitido quando ausente — só a versão embutida mudou. Mesma prova,
+ *   refeita ANTES de tocar num hash: com a string em 0.90.0 e o vidro no código,
+ *   os sete testes deste arquivo e os sete de `blueprintEsquadria` passaram sem
+ *   outra alteração; as contagens (9/49/144/3/78/4) seguiram idênticas.
+ */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {
     const built = recomputeSpaces(model(expected.walls));

@@ -1389,3 +1389,42 @@ pelo último pedaço do log.
   o arquivo foi rerodado isolado com a conta do JSON antes do push: **224/224, 0 pendentes**. `npm run build` sobre a árvore rebaseada: exit 0.
 - Fica para a prova no app real (estudo descartável, precisa de login): a premissa gravada voltar
   depois de recarregar — a E1 abre com esse passeio.
+- **Publicada em `main` em 04/10/2026** (`ee098c1f..8f879ae2`, 7 commits); o domínio passou a servir
+  `origin/main` ~10 min depois (já com um commit de outra frente por cima, `acd9a5e`) e a CI fechou
+  `success`. Frente `clima-e0` fechada.
+
+### Etapa 1.1 — 04/10/2026 (frente `clima-e1`, **kernel 0.90.0 → 0.91.0**)
+
+**O que entrou:**
+- `Opening.vidro?: VidroDaAbertura` — `fatorSolar` (0–1], `uWm2K` (0–10], `protecao`
+  (SEM / PELICULA / PELICULA_CORTINA / REFLETIVA_CORTINA / PERSONALIZADA) e `fatorSombreamento`
+  (0–1], obrigatório na personalizada; declarado vence a tabela). `FATOR_DE_SOMBREAMENTO_DA_PROTECAO`
+  (1 / 0,75 / 0,55 / 0,40) é **hipótese de memória — CONFERIR NA NORMA (NBR 16655-3)**.
+  `fatorDeSombreamento(v)` e `normalizarVidro` (cópia validada, `BAD_VIDRO`). Comando
+  `SetOpeningVidro` (`null` remove); invariante: faixas + vão livre não tem vidro (pega também a troca
+  de kind para vão). Canônico emite `vidro` **só quando declarado** (molde da `esquadria`).
+- **Ritual do bump, na ordem:** com o vidro no código e a string ainda em 0.90.0, goldens (7) e
+  `blueprintEsquadria` (7) passaram sem outra alteração → bump + entrada no histórico de `units.ts`
+  → 22 pinos trocados por script sobre o glob → 6 hashes novos (as contagens 9/49/144/3/78/4
+  seguiram) com a nota no cabeçalho dos goldens → bundle da `planta-api` regenerado.
+- `PainelEsquadria` — seção **Vidro e proteção solar**: proteção (select com o fator da tabela no
+  rótulo), fator solar, U e sombreamento anuláveis (faixa na borda; vazio = não declarado), "Remover
+  declaração", linha "em uso" dizendo se o fator veio da tabela (CONFERIR) ou foi declarado. Escolher
+  PERSONALIZADA parte do fator que valia. ⚠️ O campo só grava ao perder o foco **se o valor mudou** —
+  o teste pegou o blur sem mudança gerando comando (um passo de desfazer fantasma).
+- Catálogo: `TipoDeEsquadria.vidro` (migration `aplicar_20271004000050_blueprint_opening_types_vidro.sql`,
+  coluna JSONB anulável — **a aplicar com OK antes do push**, senão o `select` do catálogo falha),
+  "Salvar tipo" leva o vidro, "Aplicar tipo" aplica o vidro do tipo (e um tipo sem vidro LIMPA o da
+  abertura: aplicar é aplicar inteiro). O painel em lote (`PainelEsquadrias`) salva sem vidro, dito no
+  código: o quadro agrupa por kind × medidas × nome e não o carrega.
+
+**Decisões.** (1) Vidro é DECLARAÇÃO na abertura (entra no hash), não premissa do estudo: duas
+janelas iguais com vidros diferentes são desenhos diferentes para a carga. (2) Nenhum número
+inventado: sem declaração, o motor (E2) usa a hipótese do estudo marcada CONFERIR. (3) A proteção
+também vale para porta (porta de vidro); só o vão livre fica fora.
+
+**Prova.** `blueprintVidroDaAbertura.test.ts` (3: versão + tabela; declara/relê/remove com hash;
+faixas, personalizada, vão livre e troca de kind), goldens 7/7, `plantaApi` (bundle fresco),
+`PainelEsquadria.test.tsx` (+4: hipótese do estudo → proteção cria; tabela 0,55 CONFERIR, 0,6 grava,
+15 não grava, remover; personalizada parte de 0,55 e declarado aparece como declarado; salvar tipo
+leva o vidro), `PainelEsquadrias` 15/15. `check-ui-standard` e `check-xss-sinks` limpos.

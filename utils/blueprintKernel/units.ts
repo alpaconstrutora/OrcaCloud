@@ -562,7 +562,18 @@
  * string da versão. Provado antes do bump: com a string em 0.89.0 os goldens
  * passaram sem outra alteração.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.90.0';
+/**
+ * ─── 0.90.0 → 0.91.0 (04/10/2026) — VIDRO E PROTEÇÃO SOLAR DA ABERTURA ──────
+ *
+ * Climatização, E1.1 (plano `2026-10-04-climatizacao-benchmark-altoqi-e-roadmap.md`):
+ * `Opening.vidro` — fator solar, U do conjunto e a proteção solar (película,
+ * cortina, refletiva, fator declarado). É o que a carga térmica (E2) lê de cada
+ * janela e que nenhuma medida dela diz. Declaração, logo entra no payload e no
+ * hash; omitida quando ausente — desenho antigo só muda pela string da versão.
+ * Provado antes do bump: com a string em 0.90.0 os goldens e os testes de
+ * esquadria passaram sem outra alteração.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.91.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

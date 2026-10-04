@@ -181,6 +181,8 @@ import {
   type Level,
   type SpaceLabel,
   type Structural,
+  normalizarVidro,
+  type VidroDaAbertura,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -1329,6 +1331,8 @@ export type Command =
    * três seria a segunda cópia de cada regra.
    */
   | { type: 'SetOpeningEsquadria'; openingId: ObjectId; esquadria: Esquadria | null }
+  /** VIDRO (0.91.0): fator solar, U e proteção solar da abertura. `null` remove a declaração. */
+  | { type: 'SetOpeningVidro'; openingId: ObjectId; vidro: VidroDaAbertura | null }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
@@ -4830,6 +4834,22 @@ function aplicarSemHash(
       break;
     }
 
+    case 'SetOpeningVidro': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) {
+        throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      }
+      if (command.vidro === null) {
+        delete opening.vidro;
+      } else {
+        if (opening.kind === 'passage') throw new KernelError('BAD_VIDRO', `Vão livre ${opening.id} não tem vidro`);
+        // Cópia validada — o painel passa o próprio objeto de estado.
+        opening.vidro = normalizarVidro(command.vidro, opening.id);
+      }
+      diff.updated.push(opening.id);
+      break;
+    }
+
     case 'SetOpeningSize': {
       const opening = next.openings.find((o) => o.id === command.openingId);
       if (!opening) {
@@ -5994,6 +6014,7 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
     case 'SetOpeningSize':
     case 'SetOpeningKind':
     case 'SetOpeningEsquadria':
+    case 'SetOpeningVidro':
     case 'DeleteOpening':
       a.openingIds = str(c.openingId);
       break;

@@ -438,6 +438,65 @@ export interface Esquadria {
 }
 
 /**
+ * VIDRO E PROTEÇÃO SOLAR (04/10/2026, kernel 0.91.0 — E1.1 do roadmap de
+ * climatização): o que a carga térmica precisa saber de uma abertura e que
+ * nenhuma medida dela diz — quanto sol o vidro deixa passar (fator solar), quanto
+ * calor conduz (U) e o que há na frente dele (película, cortina).
+ *
+ * É DECLARAÇÃO, e por isso mora na abertura (entra no payload e no hash): duas
+ * janelas iguais com vidros diferentes são desenhos diferentes para a carga
+ * térmica. Ausente = não declarado; o motor (E2) então usa a hipótese do estudo,
+ * marcada CONFERIR, em vez de inventar aqui.
+ *
+ * `fatorSombreamento` só é obrigatório em `PERSONALIZADA`; nas demais proteções
+ * o valor vem da tabela `FATOR_DE_SOMBREAMENTO_DA_PROTECAO` — e um número
+ * declarado vence a tabela.
+ */
+export const PROTECOES_SOLARES = ['SEM', 'PELICULA', 'PELICULA_CORTINA', 'REFLETIVA_CORTINA', 'PERSONALIZADA'] as const;
+export type ProtecaoSolar = (typeof PROTECOES_SOLARES)[number];
+export const ROTULO_DA_PROTECAO_SOLAR: Record<ProtecaoSolar, string> = {
+  SEM: 'Sem proteção',
+  PELICULA: 'Película simples',
+  PELICULA_CORTINA: 'Película + cortina',
+  REFLETIVA_CORTINA: 'Película refletiva + cortina',
+  PERSONALIZADA: 'Fator de sombreamento declarado',
+};
+/**
+ * ⚠️ HIPÓTESE, transcrita de memória — CONFERIR NA NORMA (NBR 16655-3 / NBR 16401-1).
+ * Um número por proteção; `PERSONALIZADA` não tem número: exige o declarado.
+ */
+export const FATOR_DE_SOMBREAMENTO_DA_PROTECAO: Record<Exclude<ProtecaoSolar, 'PERSONALIZADA'>, number> = {
+  SEM: 1,
+  PELICULA: 0.75,
+  PELICULA_CORTINA: 0.55,
+  REFLETIVA_CORTINA: 0.4,
+};
+export interface VidroDaAbertura {
+  /** Fator solar do vidro (0–1]; `null` = não declarado. */
+  fatorSolar: number | null;
+  /** Transmitância do conjunto vidro + caixilho, W/m²·K (0–10]; `null` = não declarado. */
+  uWm2K: number | null;
+  protecao: ProtecaoSolar;
+  /** (0–1]. Obrigatório em `PERSONALIZADA`; nas outras, declarado vence a tabela. */
+  fatorSombreamento: number | null;
+}
+/** O fator de sombreamento em vigor: o declarado, senão o da proteção. */
+export function fatorDeSombreamento(v: VidroDaAbertura): number {
+  if (v.fatorSombreamento != null) return v.fatorSombreamento;
+  return v.protecao === 'PERSONALIZADA' ? 1 : FATOR_DE_SOMBREAMENTO_DA_PROTECAO[v.protecao];
+}
+const naFaixaAberta = (x: number | null | undefined, max: number): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0 && x <= max;
+/** Cópia validada (0 < fator ≤ 1, 0 < U ≤ 10); recusa o que não é vidro. */
+export function normalizarVidro(v: VidroDaAbertura, onde: string): VidroDaAbertura {
+  if (!(PROTECOES_SOLARES as readonly string[]).includes(v.protecao)) throw new KernelError('BAD_VIDRO', `Proteção solar inválida em ${onde}: ${String(v.protecao)}`);
+  if (v.fatorSolar != null && !naFaixaAberta(v.fatorSolar, 1)) throw new KernelError('BAD_VIDRO', `Fator solar fora de (0, 1] em ${onde}: ${String(v.fatorSolar)}`);
+  if (v.uWm2K != null && !naFaixaAberta(v.uWm2K, 10)) throw new KernelError('BAD_VIDRO', `U fora de (0, 10] W/m²·K em ${onde}: ${String(v.uWm2K)}`);
+  if (v.fatorSombreamento != null && !naFaixaAberta(v.fatorSombreamento, 1)) throw new KernelError('BAD_VIDRO', `Fator de sombreamento fora de (0, 1] em ${onde}: ${String(v.fatorSombreamento)}`);
+  if (v.protecao === 'PERSONALIZADA' && v.fatorSombreamento == null) throw new KernelError('BAD_VIDRO', `Proteção personalizada sem fator de sombreamento em ${onde}`);
+  return { fatorSolar: v.fatorSolar ?? null, uWm2K: v.uWm2K ?? null, protecao: v.protecao, fatorSombreamento: v.fatorSombreamento ?? null };
+}
+
+/**
  * PARÂMETROS PERSONALIZADOS (18/09/2026, roadmap E1.2: *"Parâmetros
  * personalizados — P0"*).
  *
@@ -560,6 +619,8 @@ export interface Opening {
   esquadria?: Esquadria;
   /** INCÊNDIO (0.84.0): saída de emergência, corta-fogo, antipânico. Ver `MARCAS_DE_EMERGENCIA`. */
   emergencia?: MarcaDeEmergencia[];
+  /** VIDRO (0.91.0): fator solar, U e proteção solar declarados. Ausente = não declarado. Omitido no canônico quando ausente. */
+  vidro?: VidroDaAbertura;
 }
 
 /**
@@ -5167,6 +5228,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (opening.kind === 'passage') {
         throw new KernelError('BAD_ESQUADRIA', `Vão livre ${opening.id} não tem esquadria`);
       }
+    }
+    // VIDRO (0.91.0): as faixas, e vão livre não tem vidro — não há o que sombrear.
+    if (opening.vidro) {
+      if (opening.kind === 'passage') throw new KernelError('BAD_VIDRO', `Vão livre ${opening.id} não tem vidro`);
+      normalizarVidro(opening.vidro, opening.id);
     }
   }
 

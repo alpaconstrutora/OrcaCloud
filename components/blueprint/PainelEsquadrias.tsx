@@ -290,6 +290,10 @@ export default function PainelEsquadrias({
           embutida: false,
           itemCode: v.itemCode,
           descricao: v.descricao,
+          // O quadro de esquadrias agrupa por kind × medidas × nome — não carrega o vidro
+          // (E1.1 da climatização); o tipo salvo daqui nasce sem ele, e o painel da
+          // abertura selecionada é onde o vidro se declara e se guarda no tipo.
+          vidro: null,
         }),
       );
       ok += r.ok;

@@ -20,7 +20,7 @@
 // — não "nenhuma". O `.eq()` só entra quando há org, e a RLS recorta o resto.
 
 import { supabase } from '../lib/supabase';
-import type { Opening } from '../utils/blueprintKernel';
+import type { Opening, VidroDaAbertura } from '../utils/blueprintKernel';
 
 export interface TipoDeEsquadria {
   id: string;
@@ -37,6 +37,8 @@ export interface TipoDeEsquadria {
   /** Item de catálogo. `''` = tipo nomeado antes de escolher o item. */
   itemCode: string;
   descricao: string;
+  /** VIDRO (E1.1 da climatização, 04/10/2026): o mesmo `Opening.vidro` do kernel; `null` = não declarado. */
+  vidro: VidroDaAbertura | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -45,12 +47,21 @@ export interface TipoDeEsquadria {
 /** O que se grava — sem id, sem carimbos. */
 export type DadosDoTipoDeEsquadria = Pick<
   TipoDeEsquadria,
-  'nome' | 'kind' | 'widthMm' | 'heightMm' | 'sillMm' | 'embutida' | 'itemCode' | 'descricao'
+  'nome' | 'kind' | 'widthMm' | 'heightMm' | 'sillMm' | 'embutida' | 'itemCode' | 'descricao' | 'vidro'
 >;
 
 /** Colunas nomeadas, nunca `select('*')`. */
 const COLS =
-  'id, organization_id, nome, kind, width_mm, height_mm, sill_mm, embutida, item_code, descricao, active, created_at, updated_at';
+  'id, organization_id, nome, kind, width_mm, height_mm, sill_mm, embutida, item_code, descricao, vidro, active, created_at, updated_at';
+
+/** O JSONB do catálogo, só com a forma que o kernel aceita; qualquer coisa estranha vira "sem vidro". */
+function vidroDaColuna(raw: unknown): VidroDaAbertura | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  if (typeof r.protecao !== 'string') return null;
+  return { fatorSolar: num(r.fatorSolar), uWm2K: num(r.uWm2K), protecao: r.protecao as VidroDaAbertura['protecao'], fatorSombreamento: num(r.fatorSombreamento) };
+}
 
 function mapear(row: Record<string, unknown>): TipoDeEsquadria {
   return {
@@ -64,6 +75,7 @@ function mapear(row: Record<string, unknown>): TipoDeEsquadria {
     embutida: Boolean(row.embutida),
     itemCode: (row.item_code as string) ?? '',
     descricao: (row.descricao as string) ?? '',
+    vidro: vidroDaColuna(row.vidro),
     active: row.active as boolean,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -116,6 +128,7 @@ export async function saveOpeningType(
         embutida: dados.embutida,
         item_code: dados.itemCode.trim(),
         descricao: dados.descricao,
+        vidro: dados.vidro ?? null,
         active: true,
         updated_at: new Date().toISOString(),
       },

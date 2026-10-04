@@ -20,6 +20,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import PainelEsquadria from '../../components/blueprint/PainelEsquadria';
 import type { Opening } from '../../utils/blueprintKernel';
 import type { TipoDeEsquadria } from '../../services/blueprintOpeningTypeService';
+import { saveOpeningType } from '../../services/blueprintOpeningTypeService';
+import { forEachTargetOrg } from '../../hooks/useOrgContext';
 
 const P1: TipoDeEsquadria = {
   id: 't1',
@@ -32,6 +34,7 @@ const P1: TipoDeEsquadria = {
   embutida: false,
   itemCode: '90843',
   descricao: 'Porta semi-oca',
+  vidro: null,
   active: true,
   createdAt: '',
   updatedAt: '',
@@ -85,6 +88,7 @@ function montar(over: Partial<React.ComponentProps<typeof PainelEsquadria>> = {}
     abertura: porta(),
     onEsquadria: vi.fn(),
     onAplicarTipo: vi.fn(),
+    onVidro: vi.fn(),
     ...over,
   };
   render(<PainelEsquadria {...props} />);
@@ -172,5 +176,63 @@ describe('PainelEsquadria · 5. vão livre', () => {
     montar({ abertura: porta({ kind: 'passage' }) });
     expect(screen.getByText(/não há caixilho a orçar/)).toBeTruthy();
     expect(screen.queryByLabelText(/Código de projeto/)).toBeNull();
+  });
+});
+
+/**
+ * VIDRO E PROTEÇÃO SOLAR (04/10/2026, E1.1 da climatização, kernel 0.91.0): o
+ * que a carga térmica lê da janela. Declarar a proteção cria a declaração; os
+ * números são opcionais e têm faixa; a personalizada parte do que valia.
+ */
+describe('PainelEsquadria · 6. vidro e proteção solar', () => {
+  const VIDRO = { fatorSolar: 0.87, uWm2K: 5.7, protecao: 'PELICULA_CORTINA' as const, fatorSombreamento: null };
+
+  it('sem declaração: diz que a carga usa a hipótese do estudo; escolher a proteção cria o vidro só com ela', async () => {
+    const user = userEvent.setup();
+    const props = montar({ abertura: porta({ kind: 'window' }) });
+    expect(screen.getByTestId('vidro-em-uso')).toHaveTextContent(/hipótese do estudo/);
+    await user.selectOptions(screen.getByLabelText('Proteção solar da abertura'), 'PELICULA');
+    expect(props.onVidro).toHaveBeenCalledWith({ fatorSolar: null, uWm2K: null, protecao: 'PELICULA', fatorSombreamento: null });
+  });
+
+  it('com vidro: o fator em uso vem da tabela (CONFERIR); fator solar na faixa grava, fora dela não; remover limpa', async () => {
+    const user = userEvent.setup();
+    const props = montar({ abertura: porta({ kind: 'window', vidro: VIDRO }) });
+    expect(screen.getByTestId('vidro-em-uso')).toHaveTextContent(/0,55 \(tabela da proteção — CONFERIR NA NORMA/);
+    const fs = screen.getByLabelText('Fator solar');
+    await user.clear(fs);
+    await user.type(fs, '0.6');
+    await user.tab();
+    expect(props.onVidro).toHaveBeenCalledWith({ ...VIDRO, fatorSolar: 0.6 });
+    (props.onVidro as ReturnType<typeof vi.fn>).mockClear();
+    // Fora da faixa (15 > 1): não grava. Sem ponto decimal de propósito — o input numérico do jsdom
+    // sanitiza "1." para vazio no meio da digitação, e vazio significaria "não declarado".
+    await user.clear(fs);
+    await user.type(fs, '15');
+    await user.tab();
+    expect(props.onVidro).not.toHaveBeenCalled();
+    expect(fs).toHaveAttribute('aria-invalid', 'true');
+    await user.click(screen.getByRole('button', { name: 'Remover declaração' }));
+    expect(props.onVidro).toHaveBeenCalledWith(null);
+  });
+
+  it('personalizada parte do fator que valia (0,55 da película + cortina); o declarado aparece como declarado', async () => {
+    const user = userEvent.setup();
+    const props = montar({ abertura: porta({ kind: 'window', vidro: VIDRO }) });
+    await user.selectOptions(screen.getByLabelText('Proteção solar da abertura'), 'PERSONALIZADA');
+    expect(props.onVidro).toHaveBeenCalledWith({ ...VIDRO, protecao: 'PERSONALIZADA', fatorSombreamento: 0.55 });
+    montar({ abertura: porta({ id: 'opn_2', kind: 'window', vidro: { ...VIDRO, fatorSombreamento: 0.3 } }) });
+    expect(screen.getAllByTestId('vidro-em-uso').at(-1)).toHaveTextContent(/0,3 \(declarado\)/);
+  });
+
+  it('salvar como tipo leva o vidro da abertura', async () => {
+    const user = userEvent.setup();
+    montar({ abertura: porta({ kind: 'window', esquadria: { nome: 'J1', itemCode: '', descricao: '' }, vidro: VIDRO }) });
+    await user.click(screen.getByRole('button', { name: /Salvar tipo/ }));
+    // `forEachTargetOrg` é mock e não executa o callback: capturamos e chamamos como o app faria.
+    await waitFor(() => expect(forEachTargetOrg).toHaveBeenCalled());
+    const gravar = vi.mocked(forEachTargetOrg).mock.calls.at(-1)![1] as (org: string) => Promise<unknown>;
+    await gravar('org_1');
+    expect(saveOpeningType).toHaveBeenCalledWith('org_1', expect.objectContaining({ nome: 'J1', vidro: VIDRO }));
   });
 });

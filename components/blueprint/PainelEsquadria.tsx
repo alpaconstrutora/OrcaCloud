@@ -1,10 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { BookMarked, Search, X } from 'lucide-react';
 import {
+  FATOR_DE_SOMBREAMENTO_DA_PROTECAO,
+  PROTECOES_SOLARES,
+  ROTULO_DA_PROTECAO_SOLAR,
+  fatorDeSombreamento,
   nomeDaEsquadria,
   nomeDoTipoDeAbertura,
   type Esquadria,
   type Opening,
+  type ProtecaoSolar,
+  type VidroDaAbertura,
 } from '../../utils/blueprintKernel';
 import { textoEmCm } from '../../utils/blueprintMedidaCm';
 import DatabasePickerModal from '../DatabasePickerModal';
@@ -43,11 +49,57 @@ interface Props {
   abertura: Opening;
   /** Grava nome/item/descrição na abertura. `null` remove o tipo. */
   onEsquadria: (esquadria: Esquadria | null) => void;
-  /** Aplica um tipo salvo INTEIRO — kind, medidas e esquadria — num lote. */
+  /** Aplica um tipo salvo INTEIRO — kind, medidas, esquadria e vidro — num lote. */
   onAplicarTipo: (tipo: TipoDeEsquadria) => void;
+  /** VIDRO (E1.1 da climatização): grava fator solar, U e proteção solar. `null` remove a declaração. */
+  onVidro: (vidro: VidroDaAbertura | null) => void;
 }
 
-export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo }: Props) {
+const VIDRO_VAZIO: VidroDaAbertura = { fatorSolar: null, uWm2K: null, protecao: 'SEM', fatorSombreamento: null };
+const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+/** Campo numérico anulável do vidro: vazio = não declarado; fora da faixa não grava e a borda avisa. */
+function CampoDoVidro({ rotulo, valor, faixa, passo, unidade, onValor, chave }: { rotulo: string; valor: number | null; faixa: { min: number; max: number }; passo: number; unidade: string; onValor: (v: number | null) => boolean; chave: string }) {
+  const [texto, setTexto] = useState(valor == null ? '' : String(valor));
+  useEffect(() => setTexto(valor == null ? '' : String(valor)), [valor, chave]);
+  const n = Number(texto.replace(',', '.'));
+  const invalido = texto.trim() !== '' && !(Number.isFinite(n) && n > faixa.min && n <= faixa.max);
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-slate-600">
+      {rotulo}
+      <input
+        type="number"
+        min={faixa.min}
+        max={faixa.max}
+        step={passo}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onBlur={() => {
+          const t = texto.trim();
+          if (t === '') {
+            // Sem mudança, sem comando: perder o foco não pode gerar um passo de desfazer.
+            if (valor == null) return;
+            if (!onValor(null)) setTexto(String(valor));
+            return;
+          }
+          const v = Number(t.replace(',', '.'));
+          if (v === valor) return;
+          if (Number.isFinite(v) && v > faixa.min && v <= faixa.max) onValor(v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        aria-label={rotulo}
+        aria-invalid={invalido}
+        title={`Maior que ${faixa.min} e até ${faixa.max}${unidade ? ` ${unidade}` : ''}; vazio = não declarado`}
+        className={`h-8 w-20 rounded-[6px] border px-2 text-sm font-normal text-slate-800 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 ${invalido ? 'border-red-400' : 'border-slate-200'}`}
+      />
+      {unidade && <span className="text-slate-400">{unidade}</span>}
+    </label>
+  );
+}
+
+export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo, onVidro }: Props) {
   const [escolhendoItem, setEscolhendoItem] = useState(false);
 
   // ⚠️ REGRA #5: `orgId` do CONTEXTO, e `null` ("Todas") não bloqueia a leitura.
@@ -101,6 +153,7 @@ export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo }
         embutida: abertura.embutida,
         itemCode: esq.itemCode,
         descricao: esq.descricao,
+        vidro: abertura.vidro ?? null,
       }),
     );
     setAviso(
@@ -226,6 +279,74 @@ export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo }
         </p>
       )}
       {aviso && <p className="mt-1.5 text-[11px] text-emerald-700">{aviso}</p>}
+
+      {/* VIDRO E PROTEÇÃO SOLAR (E1.1 da climatização, kernel 0.91.0): o que a
+          carga térmica lê da janela. Declarar a proteção já cria a declaração;
+          fator solar e U são opcionais (vazio = o motor usa a hipótese do estudo). */}
+      {(() => {
+        const vidro = abertura.vidro ?? null;
+        const base = vidro ?? VIDRO_VAZIO;
+        const chave = `${abertura.id}-${JSON.stringify(vidro)}`;
+        const gravar = (parte: Partial<VidroDaAbertura>) => onVidro({ ...base, ...parte });
+        const emUso = vidro ? fatorDeSombreamento(vidro) : null;
+        return (
+          <div className="mt-3 border-t border-slate-100 pt-3" data-testid="vidro-da-abertura">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-semibold text-slate-700">Vidro e proteção solar</h4>
+              {vidro && (
+                <button type="button" onClick={() => onVidro(null)} className="text-[11px] font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline">
+                  Remover declaração
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                Proteção
+                <select
+                  value={vidro ? vidro.protecao : ''}
+                  onChange={(e) => {
+                    const protecao = e.target.value as ProtecaoSolar | '';
+                    if (protecao === '') {
+                      onVidro(null);
+                      return;
+                    }
+                    // Personalizada exige o fator: parte do que valia até aqui (tabela ou declarado).
+                    gravar({ protecao, fatorSombreamento: protecao === 'PERSONALIZADA' ? (base.fatorSombreamento ?? (vidro ? fatorDeSombreamento(vidro) : 1)) : base.fatorSombreamento });
+                  }}
+                  aria-label="Proteção solar da abertura"
+                  className="h-8 rounded-[6px] border border-slate-200 bg-white px-2 text-sm font-normal text-slate-800 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">não declarada</option>
+                  {PROTECOES_SOLARES.map((p) => (
+                    <option key={p} value={p}>{ROTULO_DA_PROTECAO_SOLAR[p]}{p !== 'PERSONALIZADA' ? ` (${fmt(FATOR_DE_SOMBREAMENTO_DA_PROTECAO[p])})` : ''}</option>
+                  ))}
+                </select>
+              </label>
+              <CampoDoVidro chave={chave} rotulo="Fator solar" valor={base.fatorSolar} faixa={{ min: 0, max: 1 }} passo={0.01} unidade="" onValor={(fatorSolar) => (gravar({ fatorSolar }), true)} />
+              <CampoDoVidro chave={chave} rotulo="U" valor={base.uWm2K} faixa={{ min: 0, max: 10 }} passo={0.1} unidade="W/m²·K" onValor={(uWm2K) => (gravar({ uWm2K }), true)} />
+              <CampoDoVidro
+                chave={chave}
+                rotulo="Sombreamento"
+                valor={base.fatorSombreamento}
+                faixa={{ min: 0, max: 1 }}
+                passo={0.05}
+                unidade=""
+                onValor={(fatorSombreamento) => {
+                  // Personalizada não aceita vazio: o kernel recusa — o campo volta ao que era.
+                  if (fatorSombreamento == null && base.protecao === 'PERSONALIZADA') return false;
+                  gravar({ fatorSombreamento });
+                  return true;
+                }}
+              />
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-500" data-testid="vidro-em-uso">
+              {vidro
+                ? `Fator de sombreamento em uso: ${fmt(emUso!)} (${vidro.fatorSombreamento != null ? 'declarado' : 'tabela da proteção — CONFERIR NA NORMA: NBR 16655-3'}).`
+                : 'Sem declaração: a carga térmica usa a hipótese do estudo, marcada CONFERIR.'}
+            </p>
+          </div>
+        );
+      })()}
 
       <DatabasePickerModal
         isOpen={escolhendoItem}

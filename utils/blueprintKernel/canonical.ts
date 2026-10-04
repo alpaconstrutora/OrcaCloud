@@ -93,6 +93,7 @@ import {
   assinaturaDasCamadas,
   emptyModel,
   nextId,
+  type ProtecaoSolar,
 } from './model';
 import { recomputeSpaces } from './arrangement';
 import { type AlinhamentoParede } from './geom';
@@ -302,6 +303,8 @@ function projetar(model: BlueprintModel): {
         : undefined,
       // INCÊNDIO (0.84.0): só quando há — a disciplina de `esquadria`.
       emergencia: o.emergencia?.length ? [...o.emergencia] : undefined,
+      // VIDRO (0.91.0): só quando declarado — mesma disciplina. Campos reescritos um a um.
+      vidro: o.vidro ? { fatorSolar: o.vidro.fatorSolar, uWm2K: o.vidro.uWm2K, protecao: o.vidro.protecao, fatorSombreamento: o.vidro.fatorSombreamento } : undefined,
       parametros: parametrosCanonicos(o.parametros),
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm,
@@ -1369,6 +1372,8 @@ export interface CanonicalPayload {
     esquadria?: { nome: string; itemCode: string; descricao: string };
     /** INCÊNDIO. Ausente sob kernel < 0.84.0 e em porta sem marca. */
     emergencia?: ('SAIDA' | 'CORTA_FOGO' | 'ANTIPANICO')[];
+    /** VIDRO. Ausente sob kernel < 0.91.0 e em abertura sem declaração. */
+    vidro?: { fatorSolar: number | null; uWm2K: number | null; protecao: string; fatorSombreamento: number | null };
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
     /** ETAPAS (0.57.0): índices em `etapas`. */
@@ -1916,6 +1921,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
         ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } }
         : {}),
       ...(o.emergencia?.length ? { emergencia: [...o.emergencia] } : {}),
+      ...(o.vidro ? { vidro: { fatorSolar: o.vidro.fatorSolar ?? null, uWm2K: o.vidro.uWm2K ?? null, protecao: o.vidro.protecao as ProtecaoSolar, fatorSombreamento: o.vidro.fatorSombreamento ?? null } } : {}),
       ...(o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}),
     });
   });

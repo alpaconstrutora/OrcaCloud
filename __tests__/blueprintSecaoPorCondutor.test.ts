@@ -12,7 +12,7 @@ import { condutoresDoRamal } from '../utils/blueprintUnifilar';
 
 describe('seção por condutor · a norma', () => {
   it('kernel 0.72.0 e quant-1.20.0', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.90.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.91.0');
     expect(POLITICA_PADRAO.version).toBe('quant-1.24.0');
   });
 

@@ -84,7 +84,10 @@ describe('PortalFinanceiro (link público)', () => {
     it('filtro "Vencidas" conta 1 e mostra só a parcela vencida', async () => {
         const user = userEvent.setup();
         render(<PortalFinanceiro supplier={SUPPLIER} orders={[]} portalToken="tok" onOpenOrder={() => {}} />);
-        const aba = await screen.findByRole('button', { name: /Vencidas/ });
+        // Espera a CONTAGEM, não só o botão: o botão aparece antes de as parcelas
+        // chegarem ("Vencidas0"). Pegar o botão e conferir na hora falhou na CI de
+        // 3ab9fc3d (03/10/2026) e passava localmente — corrida, não regra.
+        const aba = await screen.findByRole('button', { name: /Vencidas\s*1/ });
         expect(aba.textContent).toContain('1');
         await user.click(aba);
         const tabela = screen.getByRole('table');

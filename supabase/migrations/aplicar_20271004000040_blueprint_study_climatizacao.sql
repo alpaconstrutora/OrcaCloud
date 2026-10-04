@@ -11,6 +11,12 @@
 -- A emissão com ART (CLIMATIZACAO no CHECK de `blueprint_study_projeto_executivo`)
 -- fica para a E8.4 — não há o que emitir antes.
 --
+-- ⚠️ NÚMERO: nasceu `aplicar_20271004000030_…` e colidiu com
+--   `aplicar_20271004000030_portal_help_tour_passos.sql` (outra frente, publicada
+--   antes). Renomeada para 000040 em 04/10/2026, DEPOIS de JÁ TER SIDO APLICADA
+--   no banco com o número antigo (04/10/2026, com OK do usuário). É idempotente:
+--   rodar de novo não cria nem altera nada.
+--
 -- ⚠️ APLICAR À MÃO (`npx supabase db query --linked -f`). NUNCA `db push`.
 -- ⚠️ Idempotente: CREATE … IF NOT EXISTS, DROP/CREATE POLICY e TRIGGER.
 -- ============================================================================

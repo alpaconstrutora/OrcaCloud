@@ -1224,7 +1224,7 @@ depois do push, provado pelo `conferir-producao.sh`).
 ### Etapa 0.1 — 04/10/2026 (frente `clima-e0`, sem bump de kernel)
 
 **O que entrou:**
-- Migration `aplicar_20271004000030_blueprint_study_climatizacao.sql` — uma linha por estudo,
+- Migration `aplicar_20271004000040_blueprint_study_climatizacao.sql` (nasceu `…000030` e foi renomeada no fecho da E0 — ver abaixo) — uma linha por estudo,
   `hipoteses` JSONB, FK composta `(study_id, organization_id)`, UNIQUE em `study_id`, RLS por
   `is_org_member`, REVOKE de PUBLIC/anon. Molde: `blueprint_study_incendio`. **A aplicar com o OK do
   usuário** (`npx supabase db query --linked -f …`), nunca `db push`.
@@ -1374,11 +1374,18 @@ pelo último pedaço do log.
 
 ### Fecho da Etapa 0 — 04/10/2026
 
-- **Migration `aplicar_20271004000030_blueprint_study_climatizacao.sql` APLICADA** com o OK do
+- **Migration `blueprint_study_climatizacao` APLICADA** (com o número `aplicar_20271004000030`) com o OK do
   usuário (`npx supabase db query --linked -f`, pela frente `clima-e0`, linkada ao mesmo projeto).
   Prova no banco: `relrowsecurity = true`, 1 policy, grants só `authenticated` (SELECT/INSERT/
   UPDATE/DELETE; `anon` sem nada), 1 trigger de `updated_at`, FK composta + UNIQUE.
 - **Suíte inteira** (reporter JSON, conta fechando): 2757 arquivos, 7507 testes = 7473 ✅ + 34
   pulados de propósito (integração) + 0 pendentes de verdade + 0 falhas.
+- ⚠️ **Prefixo em colisão:** o rebase trouxe `aplicar_20271004000030_portal_help_tour_passos.sql` de
+  outra frente; `migrationsPrefixo.test.ts` acusou e, pela regra (quem chegou depois move), a
+  migration da climatização foi **renomeada para `aplicar_20271004000040_…`**, com o número antigo e
+  o aviso de "já aplicada" no cabeçalho (é idempotente).
+- Suíte sobre a árvore rebaseada: 7443 ✅ + 34 pulados + 1 falha (o prefixo, corrigido) + **51 que
+  não rodaram** em `BlueprintEditor.test.tsx` (queda intermitente do worker do Node, conhecida) —
+  o arquivo foi rerodado isolado com a conta do JSON antes do push (resultado abaixo).
 - Fica para a prova no app real (estudo descartável, precisa de login): a premissa gravada voltar
   depois de recarregar — a E1 abre com esse passeio.

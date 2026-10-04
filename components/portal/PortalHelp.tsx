@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, HelpCircle, Mail, MessageSquare, 
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 import { usePortalHelp } from '../../hooks/usePortalHelp';
+import { portalHelpService } from '../../services/portalHelpService';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import {
   htmlToText, sectionLabel, PORTAL_SECTIONS, PORTAL_LABELS,
@@ -67,13 +68,29 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
   const a = ACCENT[accent];
   const podeTour = !!tourKey || modoPrevia;
   const viuNesteAparelho = (t: TourId) => !tourKey || tourVisto(chaveDoTour(portal, tourKey, t));
-  // Tour do portal no primeiro acesso deste aparelho; prévia abre o que o gestor pediu.
-  const [tourAtivo, setTourAtivo] = useState<TourId | null>(() =>
-    forcarTour ?? (autoTour && !modoPrevia && !viuNesteAparelho('geral') ? 'geral' : null));
+  // Com identidade e fora da prévia, a ajuda é lida já na montagem: é ela que
+  // traz o "já viu" gravado no banco (`seen`) — o tour não repete em outro
+  // aparelho. A prévia abre o tour que o gestor pediu.
+  const vigiaJaViu = autoTour && !modoPrevia && !!tourKey;
+  const [tourAtivo, setTourAtivo] = useState<TourId | null>(() => forcarTour ?? null);
   useEffect(() => { if (forcarTour) setTourAtivo(forcarTour); }, [forcarTour]);
-  const { loading, erro, help, contact, orgs, selectedOrgId, selectOrg, precisaEscolherOrg } = usePortalHelp(portal, {
-    token, orgId, visibleSections, enabled: open || !!tourAtivo,
+  const {
+    loading, erro, help, contact, orgs, selectedOrgId, selectOrg, precisaEscolherOrg, seen, carregado, registrarVisto,
+  } = usePortalHelp(portal, {
+    token, orgId, visibleSections, enabled: open || !!tourAtivo || vigiaJaViu,
   });
+  // Visto = marca deste aparelho OU do banco (qualquer um dos dois).
+  const jaViu = (t: TourId) => viuNesteAparelho(t) || seen.some(x => x.tour_id === t);
+
+  // Tour do portal no primeiro acesso: decide UMA vez, depois da 1ª leitura.
+  // Se a leitura falhar, `seen` fica vazio e vale só a marca do aparelho.
+  const decidiuPrimeiroAcesso = useRef(false);
+  useEffect(() => {
+    if (decidiuPrimeiroAcesso.current || !vigiaJaViu || !carregado) return;
+    decidiuPrimeiroAcesso.current = true;
+    if (!jaViu('geral')) setTourAtivo(atual => atual ?? 'geral');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregado, vigiaJaViu]);
   // Aba de onde o tour saiu. Acompanha a aba atual ATÉ o tour navegar pela
   // primeira vez — assim absorve a correção de aba que alguns portais fazem ao
   // montar (o Corretor nasce numa aba e pula para a primeira liberada). No fim,
@@ -88,8 +105,18 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
     tourNavegou.current = true;
     onNavigate(s);
   }), [onNavigate]);
-  const encerrarTour = (motivo: 'concluido' | 'pulado') => {
-    if (tourAtivo && tourKey && !modoPrevia) marcarTourVisto(chaveDoTour(portal, tourKey, tourAtivo), motivo);
+  const encerrarTour = (motivo: 'concluido' | 'pulado', passoAlcancado = 0) => {
+    if (tourAtivo && tourKey && !modoPrevia) {
+      marcarTourVisto(chaveDoTour(portal, tourKey, tourAtivo), motivo);
+      // Tour que nem apareceu (nenhum elemento na tela) não vai para o banco:
+      // no acompanhamento "pulou" tem que querer dizer que a pessoa pulou.
+      if (passoAlcancado > 0) {
+        registrarVisto(tourAtivo, motivo);
+        portalHelpService
+          .markTour(portal, { token, orgId: selectedOrgId ?? orgId ?? null }, tourAtivo, motivo, passoAlcancado)
+          .catch(e => console.warn('[portalHelp] não gravou o "já viu" no banco:', e));
+      }
+    }
     const origem = secaoDeOrigem.current;
     if (tourNavegou.current && origem && onNavigate && currentSection !== origem) {
       voltaDoTour.current = origem;
@@ -114,7 +141,7 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
       voltaDoTour.current = null;
       if (eraAVolta) return;
     }
-    if (!viuNesteAparelho('geral') || viuNesteAparelho(currentSection)) return;
+    if (!jaViu('geral') || jaViu(currentSection)) return;
     if (!help.tours[currentSection]?.length) return;
     const aba = currentSection;
     const t = setTimeout(() => setTourAtivo(atual => atual ?? aba), 400);

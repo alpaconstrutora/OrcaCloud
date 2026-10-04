@@ -13,10 +13,32 @@ export interface PortalHelpContact {
   website: string | null;
 }
 
+/** O que a identidade de quem acessa já viu (tour e checklist), gravado no banco. */
+export interface PortalTourSeen {
+  tour_id: string;
+  status: 'concluido' | 'pulado' | 'visto';
+}
+
 export interface PortalHelpPayload {
   org_id: string;
   contact: PortalHelpContact | null;
   items: PortalHelpRow[];
+  seen: PortalTourSeen[];
+}
+
+/** Uma linha do acompanhamento (portal_tour_stats). */
+export interface PortalTourStat {
+  portal: Portal;
+  /** 'link' = a empresa do link (todos que usam o link contam como um); 'email' = a pessoa */
+  acesso: 'link' | 'email';
+  quem: string | null;
+  contato: string | null;
+  tour_id: string;
+  status: PortalTourSeen['status'];
+  step_reached: number | null;
+  times: number;
+  first_seen_at: string;
+  updated_at: string;
 }
 
 export interface PortalHelpMine {
@@ -47,14 +69,41 @@ export const portalHelpService = {
     const { data, error } = await supabase.rpc(RPC_POR_PORTAL[portal], { p_token: token });
     if (error) throw error;
     if (!data?.valid) return null;
-    return { org_id: data.org_id, contact: data.contact ?? null, items: data.items ?? [] };
+    return { org_id: data.org_id, contact: data.contact ?? null, items: data.items ?? [], seen: data.seen ?? [] };
   },
 
   /** Externo logado (ou membro interno, para prévia). */
   async getMine(portal: Portal, orgId?: string | null): Promise<PortalHelpMine> {
     const { data, error } = await supabase.rpc('portal_help_get_mine', { p_portal: portal, p_org: orgId ?? null });
     if (error) throw error;
-    return { orgs: data?.orgs ?? [], help: data?.help ?? null };
+    const help = data?.help ? { ...data.help, seen: data.help.seen ?? [] } : null;
+    return { orgs: data?.orgs ?? [], help };
+  },
+
+  /**
+   * Grava "concluído/pulado/visto" de um tour (ou item do checklist) para quem
+   * está acessando: pelo link (`token`) a identidade é a empresa do link; logado,
+   * o e-mail do JWT na organização `orgId`.
+   */
+  async markTour(
+    portal: Portal,
+    acesso: { token?: string | null; orgId?: string | null },
+    tourId: string,
+    status: PortalTourSeen['status'],
+    passo?: number | null,
+  ): Promise<void> {
+    const { error } = await supabase.rpc('portal_tour_mark', {
+      p_portal: portal, p_token: acesso.token ?? null, p_org: acesso.orgId ?? null,
+      p_tour_id: tourId, p_status: status, p_step: passo ?? null,
+    });
+    if (error) throw error;
+  },
+
+  /** Acompanhamento do gestor (só owner/admin da organização; senão 42501). */
+  async tourStats(orgId: string, portal?: Portal): Promise<PortalTourStat[]> {
+    const { data, error } = await supabase.rpc('portal_tour_stats', { p_org: orgId, p_portal: portal ?? null });
+    if (error) throw error;
+    return (data ?? []) as PortalTourStat[];
   },
 
   // ── Editor (RLS: owner/admin da organização) ─────────────────────────────

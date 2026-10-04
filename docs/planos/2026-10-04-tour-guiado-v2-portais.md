@@ -1,6 +1,6 @@
 # Tour guiado v2 dos portais externos
 
-**Data:** 2026-10-04 · **Status:** F4, F5 e F6 publicadas; F7–F8 pendentes
+**Data:** 2026-10-04 · **Status:** F4 a F7 publicadas; F8 pendente
 **Antecede:** `docs/planos/2026-10-03-ajuda-portais-externos.md` (central de ajuda F1–F3)
 
 ## Pedido original (literal)
@@ -123,3 +123,28 @@ Detalhe de cada fase no plano aprovado da sessão (resumo aqui ao fechar cada um
   gravado (`modoPrevia`).
 - Testes: `portalHelpDefaults.test.ts` (passo próprio, posição, catálogo),
   `PortalHelpSettings.test.tsx` (tour, setas, novo passo, pré-visualizar).
+
+## F7 — o que entrou
+
+Pedido literal: "implementar f7 e f8".
+
+- **Banco** (`aplicar_20271004000080_portal_tour_progresso.sql`, aplicada e
+  ensaiada em ROLLBACK com 15 sondas): tabela `portal_tour_progress` — estado
+  por identidade × tour (upsert, `times` conta as vezes). Identidade do link =
+  **id da empresa do link** (workspace/fornecedor/corretor), nunca o token: nada
+  secreto na tabela e gerar link novo não faz o tour voltar. Logado = e-mail do
+  JWT. Escrita só por `portal_tour_mark` (link válido, ou e-mail com acesso
+  àquela organização; `tour_id` validado); leitura do externo pelo campo `seen`
+  das cascas e do `portal_help_get_mine`; leitura do gestor por
+  `portal_tour_stats` (só owner/admin, "quem" resolvido pelo nome). Núcleos
+  `portal_link_identidade`, `portal_help_orgs_of`, `portal_tour_seen_json` sem
+  grant.
+- **Portal**: a ajuda é lida já na montagem (é ela que traz o `seen`); o tour
+  do primeiro acesso decide depois dessa leitura — visto = marca do aparelho OU
+  do banco. Ao terminar grava no aparelho e no banco (com o passo alcançado);
+  prévia não grava; tour que nem apareceu (nenhum elemento na tela) não vai
+  para o banco, para "pulou" no acompanhamento querer dizer que a pessoa pulou.
+- **Editor**: 4º botão "Acompanhamento" — quem, acesso (link = empresa / e-mail),
+  tour, situação (Concluiu/Pulou/Viu em texto colorido), passo, vezes, última
+  vez; em "Todas" junta as organizações em que o usuário é gestor e diz quantas
+  ficaram de fora.

@@ -35,6 +35,7 @@ const saveOverride = vi.fn();
 const createCustom = vi.fn();
 const update = vi.fn();
 const remove = vi.fn();
+const tourStats = vi.fn();
 // pré-visualização: listas de quem vê cada portal
 const listWorkspaces = vi.fn(async () => [{ id: 'ws1', supplier_name: 'Álvaro Esteves' }]);
 vi.mock('../../services/partnerService', () => ({ partnerService: { listWorkspaces: (...a: unknown[]) => listWorkspaces(...a) } }));
@@ -48,6 +49,7 @@ vi.mock('../../components/partner/PartnerPortal', () => ({
 
 vi.mock('../../services/portalHelpService', () => ({
   portalHelpService: {
+    tourStats: (...a: unknown[]) => tourStats(...a),
     list: (...a: unknown[]) => list(...a),
     saveOverride: (...a: unknown[]) => saveOverride(...a),
     createCustom: (...a: unknown[]) => createCustom(...a),
@@ -271,5 +273,68 @@ describe('PortalHelpSettings', () => {
     await user.click(screen.getByRole('button', { name: /Abrir/ }));
     expect(await screen.findByText('portal do parceiro em prévia')).toBeInTheDocument();
     expect(portalDaPrevia).toHaveBeenLastCalledWith(expect.objectContaining({ previewWorkspaceId: 'ws1', forcarTour: 'documentos', userEmail: '' }));
+  });
+});
+
+describe('PortalHelpSettings › Acompanhamento (F7)', () => {
+  const LINHA = {
+    portal: 'parceiro', acesso: 'link', quem: 'Álvaro Esteves', contato: null, tour_id: 'geral', status: 'pulado',
+    step_reached: 3, times: 2, first_seen_at: '2026-10-04T10:00:00Z', updated_at: '2026-10-04T12:30:00Z',
+  };
+
+  it('com org no topo: lê o acompanhamento dela, mostra quem, acesso, tour, situação colorida e passo', async () => {
+    const user = userEvent.setup();
+    orgIdDoTopo = 'org-b';
+    list.mockResolvedValue([]);
+    tourStats.mockResolvedValue([
+      LINHA,
+      { ...LINHA, acesso: 'email', quem: 'Maria Souza', contato: 'maria@parceiro.com', tour_id: 'documentos', status: 'concluido', step_reached: 3, times: 1, updated_at: '2026-10-04T13:00:00Z' },
+    ]);
+    montar();
+    await screen.findByText(primeiro.title);
+    await user.click(screen.getByRole('button', { name: 'Acompanhamento' }));
+    await waitFor(() => expect(tourStats).toHaveBeenCalledWith('org-b', 'parceiro'));
+    const maria = (await screen.findByText('Maria Souza')).closest('tr')!;
+    expect(within(maria).getByText('maria@parceiro.com')).toBeInTheDocument();
+    expect(within(maria).getByText('E-mail')).toBeInTheDocument();
+    expect(within(maria).getByText('Como usar: Documentos')).toBeInTheDocument();
+    expect(within(maria).getByText('Concluiu')).toHaveClass('text-emerald-700');
+    const alvaro = screen.getByText('Álvaro Esteves').closest('tr')!;
+    expect(within(alvaro).getByText('Link (empresa)')).toBeInTheDocument();
+    expect(within(alvaro).getByText('Tour do portal')).toBeInTheDocument();
+    expect(within(alvaro).getByText('Pulou')).toHaveClass('text-amber-700');
+    // mais recente primeiro
+    const linhas = screen.getAllByRole('row').slice(1);
+    expect(linhas[0]).toBe(maria);
+    // conteúdo e seus botões saem de cena
+    expect(screen.queryByRole('button', { name: /Novo/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Origem' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Organização' })).not.toBeInTheDocument();
+  });
+
+  it('em "Todas": lê cada organização, junta, e conta as que recusaram (sem gestor)', async () => {
+    const user = userEvent.setup();
+    tourStats.mockImplementation(async (org: string) => {
+      if (org === 'org-a') throw { code: '42501', message: 'sem permissão' };
+      return [LINHA];
+    });
+    montar();
+    await screen.findByText(primeiro.title);
+    await user.click(screen.getByRole('button', { name: 'Acompanhamento' }));
+    await waitFor(() => expect(tourStats).toHaveBeenCalledTimes(2));
+    expect(tourStats.mock.calls.map(c => c[0]).sort()).toEqual(['org-a', 'org-b']);
+    const linha = (await screen.findByText('Álvaro Esteves')).closest('tr')!;
+    expect(within(linha).getByText('Beta')).toBeInTheDocument();
+    expect(screen.getByText(/1 organização\(ões\) em que você não é gestor não aparecem/)).toBeInTheDocument();
+  });
+
+  it('vazio: diz que ninguém passou pelo tour ainda', async () => {
+    const user = userEvent.setup();
+    orgIdDoTopo = 'org-b';
+    tourStats.mockResolvedValue([]);
+    montar();
+    await screen.findByText(primeiro.title);
+    await user.click(screen.getByRole('button', { name: 'Acompanhamento' }));
+    expect(await screen.findByText('Ninguém passou pelo tour deste portal ainda.')).toBeInTheDocument();
   });
 });

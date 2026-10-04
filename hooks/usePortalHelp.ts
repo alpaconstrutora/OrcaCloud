@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { portalHelpService, type PortalHelpContact } from '../services/portalHelpService';
+import { portalHelpService, type PortalHelpContact, type PortalTourSeen } from '../services/portalHelpService';
 import { mergePortalHelp, type MergedHelp, type Portal, type PortalHelpRow } from '../utils/portalHelpDefaults';
 
 /**
@@ -22,6 +22,10 @@ export function usePortalHelp(
   const [orgs, setOrgs] = useState<{ id: string; name: string }[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(opts.orgId ?? null);
   const [erro, setErro] = useState<string | null>(null);
+  // "já viu" gravado no banco para esta identidade + se a 1ª leitura terminou
+  // (o tour do primeiro acesso só decide depois dela)
+  const [seen, setSeen] = useState<PortalTourSeen[]>([]);
+  const [carregado, setCarregado] = useState(false);
 
   useEffect(() => { setSelectedOrgId(opts.orgId ?? null); }, [opts.orgId]);
 
@@ -33,11 +37,13 @@ export function usePortalHelp(
         const payload = await portalHelpService.getByToken(portal, opts.token);
         setRows(payload?.items ?? []);
         setContact(payload?.contact ?? null);
+        setSeen(payload?.seen ?? []);
       } else {
         const mine = await portalHelpService.getMine(portal, orgEscolhida);
         setOrgs(mine.orgs);
         setRows(mine.help?.items ?? []);
         setContact(mine.help?.contact ?? null);
+        setSeen(mine.help?.seen ?? []);
         if (mine.help?.org_id) setSelectedOrgId(mine.help.org_id);
       }
     } catch (e) {
@@ -46,8 +52,14 @@ export function usePortalHelp(
       setRows([]);
     } finally {
       setLoading(false);
+      setCarregado(true);
     }
   }, [portal, opts.token]);
+
+  /** Reflete na hora uma marca recém-gravada (sem reler do banco). */
+  const registrarVisto = useCallback((tourId: string, status: PortalTourSeen['status']) => {
+    setSeen(prev => [...prev.filter(x => x.tour_id !== tourId), { tour_id: tourId, status }]);
+  }, []);
 
   useEffect(() => {
     if (!opts.enabled) return;
@@ -74,6 +86,9 @@ export function usePortalHelp(
     orgs,
     selectedOrgId,
     selectOrg,
+    seen,
+    carregado,
+    registrarVisto,
     /** várias construtoras e nenhuma escolhida ainda */
     precisaEscolherOrg: !opts.token && orgs.length > 1 && !contact && rows !== null && rows.length === 0 && !selectedOrgId,
     reload: () => carregar(selectedOrgId),

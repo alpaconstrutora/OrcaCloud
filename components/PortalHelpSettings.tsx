@@ -9,7 +9,7 @@ import { useToast } from '../hooks/useToast';
 import { useOrgContext, useOrgWriteTarget, useWritableOrganizations, forEachTargetOrg, errorMessage, partialFailureNote } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
-import { portalHelpService, type PortalHelpRecord } from '../services/portalHelpService';
+import { portalHelpService, type PortalHelpRecord, type PortalTourStat } from '../services/portalHelpService';
 import { partnerService } from '../services/partnerService';
 import { supplierService } from '../services/supplierService';
 import { brokerService } from '../services/brokerService';
@@ -39,6 +39,10 @@ const BrokerPortalPrevia = React.lazy(() => import('./BrokerPortal'));
  * (setas — só com uma organização no topo, porque a ordem é da organização),
  * cria passos próprios escolhendo o elemento da tela num catálogo
  * (`ancorasDoTour`) e pré-visualiza o tour como o externo vê.
+ *
+ * Acompanhamento (F7): quem viu, concluiu ou pulou cada tour, lido de
+ * `portal_tour_stats` (só owner/admin). No link a "pessoa" é a empresa do
+ * link. Em "Todas", junta as organizações em que o usuário é gestor.
  */
 
 const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor'];
@@ -79,6 +83,19 @@ interface Form {
 interface Pessoa { id: string; nome: string; dado: unknown }
 interface Previa { portal: Portal; pessoa: Pessoa; tourId: TourId; orgId: string }
 
+type LinhaAcompanhamento = PortalTourStat & { orgId: string };
+
+const SITUACAO: Record<PortalTourStat['status'], { texto: string; cor: string }> = {
+  concluido: { texto: 'Concluiu', cor: 'text-emerald-700' },
+  pulado: { texto: 'Pulou', cor: 'text-amber-700' },
+  visto: { texto: 'Viu', cor: 'text-gray-500' },
+};
+
+const quando = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
 const campo = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500';
 
 const PortalHelpSettings: React.FC = () => {
@@ -99,6 +116,10 @@ const PortalHelpSettings: React.FC = () => {
   const [preview, setPreview] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [movendo, setMovendo] = React.useState(false);
+  // aba "Acompanhamento"
+  const [acompanhamento, setAcompanhamento] = React.useState(false);
+  const [estatisticas, setEstatisticas] = React.useState<LinhaAcompanhamento[] | null>(null);
+  const [orgsSemPermissao, setOrgsSemPermissao] = React.useState(0);
 
   // pré-visualização do tour
   const [previaForm, setPreviaForm] = React.useState<{ pessoaId: string; tourId: TourId } | null>(null);
@@ -118,6 +139,33 @@ const PortalHelpSettings: React.FC = () => {
 
   React.useEffect(() => { carregar(); }, [carregar]);
   React.useEffect(() => { setTourSel('geral'); }, [portal]);
+
+  // Acompanhamento: org do topo, ou todas em que o usuário é gestor (as outras
+  // devolvem 42501 e entram na contagem de "sem permissão").
+  React.useEffect(() => {
+    if (!acompanhamento) return;
+    let vivo = true;
+    setEstatisticas(null);
+    const alvos = orgId ? [orgId] : organizations.map(o => o.id);
+    Promise.allSettled(alvos.map(o => portalHelpService.tourStats(o, portal).then(rs => rs.map(r => ({ ...r, orgId: o })))))
+      .then(res => {
+        if (!vivo) return;
+        const ok = res.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
+        const falhas = res.filter(r => r.status === 'rejected');
+        setOrgsSemPermissao(falhas.length);
+        if (falhas.length === res.length && res.length > 0) {
+          showToast(errorMessage((falhas[0] as PromiseRejectedResult).reason, 'Erro ao carregar o acompanhamento.'), 'error');
+        }
+        setEstatisticas(ok.sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
+      });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acompanhamento, orgId, portal, organizations.length]);
+
+  const rotuloDoProgresso = (tourId: string) =>
+    tourId === 'checklist' ? 'Primeiros passos (ocultou o cartão)'
+      : tourId.startsWith('checklist:') ? `Primeiros passos · ${tourId.slice('checklist:'.length)}`
+      : tourLabel(portal, tourId);
 
   const nomeOrg = (id: string) => organizations.find(o => o.id === id)?.name ?? id.slice(0, 8);
   const catalogo = React.useMemo(() => ancorasDoTour(portal), [portal]);
@@ -407,6 +455,7 @@ const PortalHelpSettings: React.FC = () => {
             O que o parceiro, o fornecedor e o corretor leem na central de ajuda do portal. O texto padrão vem do sistema; edite, oculte ou acrescente itens para a sua organização.
           </p>
         </div>
+        {!acompanhamento && (
         <div className="flex items-center gap-2">
           <Button variant="secondary" onClick={restaurarTudo} title="Apaga as suas versões e volta ao texto padrão do sistema">
             <RotateCcw className="w-4 h-4" /> Restaurar padrão
@@ -418,6 +467,7 @@ const PortalHelpSettings: React.FC = () => {
           )}
           <Button onClick={abrirNovo}><Plus className="w-4 h-4" /> {ehTour ? 'Novo passo' : 'Novo item'}</Button>
         </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -431,13 +481,17 @@ const PortalHelpSettings: React.FC = () => {
         </div>
         <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
           {KINDS.map(k => (
-            <button key={k.id} type="button" onClick={() => setKind(k.id)}
-              className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${kind === k.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+            <button key={k.id} type="button" onClick={() => { setKind(k.id); setAcompanhamento(false); }}
+              className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${!acompanhamento && kind === k.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
               {k.label}
             </button>
           ))}
+          <button type="button" onClick={() => setAcompanhamento(true)}
+            className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${acompanhamento ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+            Acompanhamento
+          </button>
         </div>
-        {ehTour && (
+        {ehTour && !acompanhamento && (
           <select
             aria-label="Tour"
             value={tourSel}
@@ -449,7 +503,55 @@ const PortalHelpSettings: React.FC = () => {
         )}
       </div>
 
-      {ehTour && (
+      {acompanhamento && (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500 flex items-start gap-2"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+            Quem viu, concluiu ou pulou o tour e os primeiros passos do {PORTAL_LABELS[portal]}. No acesso pelo link a pessoa é a empresa: todos que usam o mesmo link contam como um.
+            {!orgId && orgsSemPermissao > 0 && ` ${orgsSemPermissao} organização(ões) em que você não é gestor não aparecem.`}
+          </p>
+          <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                <tr>
+                  {!orgId && <th className="px-6 py-2 border-r border-gray-100">Organização</th>}
+                  <th className="px-6 py-2 border-r border-gray-100">Quem</th>
+                  <th className="px-6 py-2 border-r border-gray-100">Acesso</th>
+                  <th className="px-6 py-2 border-r border-gray-100">Tour</th>
+                  <th className="px-6 py-2 border-r border-gray-100">Situação</th>
+                  <th className="px-6 py-2 border-r border-gray-100">Passo</th>
+                  <th className="px-6 py-2 border-r border-gray-100">Vezes</th>
+                  <th className="px-6 py-2">Última vez</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {estatisticas === null && (
+                  <tr><td colSpan={orgId ? 7 : 8} className="px-6 py-10 text-center text-sm text-gray-400">Carregando...</td></tr>
+                )}
+                {estatisticas?.length === 0 && (
+                  <tr><td colSpan={orgId ? 7 : 8} className="px-6 py-10 text-center text-sm text-gray-400">Ninguém passou pelo tour deste portal ainda.</td></tr>
+                )}
+                {(estatisticas ?? []).map((r, i) => (
+                  <tr key={`${r.orgId}:${r.acesso}:${r.contato ?? r.quem}:${r.tour_id}:${i}`} className="hover:bg-blue-50/50 transition-colors">
+                    {!orgId && <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{nomeOrg(r.orgId)}</td>}
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                      {r.quem || '—'}
+                      {r.contato && r.contato !== r.quem && <span className="block text-xs text-gray-400">{r.contato}</span>}
+                    </td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">{r.acesso === 'link' ? 'Link (empresa)' : 'E-mail'}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{rotuloDoProgresso(r.tour_id)}</td>
+                    <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${SITUACAO[r.status]?.cor ?? 'text-gray-500'}`}>{SITUACAO[r.status]?.texto ?? r.status}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{r.step_reached ?? '—'}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{r.times}</td>
+                    <td className="px-6 py-2.5 text-sm font-normal text-gray-600 whitespace-nowrap">{quando(r.updated_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {ehTour && !acompanhamento && (
         <p className="text-sm text-gray-500 flex items-start gap-2"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
           {tourSel === 'geral'
             ? 'O tour do portal abre no primeiro acesso. '
@@ -459,6 +561,7 @@ const PortalHelpSettings: React.FC = () => {
         </p>
       )}
 
+      {!acompanhamento && (
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
@@ -542,6 +645,7 @@ const PortalHelpSettings: React.FC = () => {
           </tbody>
         </table>
       </div>
+      )}
 
       <Sheet open={!!form} onClose={() => setForm(null)} size="lg">
         <SheetHeader onClose={() => setForm(null)}>

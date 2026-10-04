@@ -21,8 +21,14 @@ import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 const getByToken = vi.fn();
+const getMine = vi.fn();
+const markTour = vi.fn(async () => {});
 vi.mock('../../services/portalHelpService', () => ({
-  portalHelpService: { getByToken: (...a: unknown[]) => getByToken(...a), getMine: vi.fn() },
+  portalHelpService: {
+    getByToken: (...a: unknown[]) => getByToken(...a),
+    getMine: (...a: unknown[]) => getMine(...a),
+    markTour: (...a: unknown[]) => markTour(...a),
+  },
 }));
 
 import { PortalHelp } from '../../components/portal/PortalHelp';
@@ -81,8 +87,10 @@ describe('PortalHelp × tour', () => {
     const a = montar();
     await esperar(50);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(getByToken).not.toHaveBeenCalled();
+    // a ajuda é lida mesmo assim: é ela que traz o "já viu" do banco (F7)
+    expect(getByToken).toHaveBeenCalledWith('parceiro', 'tok');
     a.unmount();
+    getByToken.mockClear();
     localStorage.clear();
     const b = montar({ tourKey: null });
     await esperar(50);
@@ -246,6 +254,60 @@ describe('PortalHelp × tour', () => {
     await user.click(screen.getByRole('button', { name: 'usuário abre Documentos' }));
     expect(await screen.findByText(DOCS[0].title, {}, { timeout: 2000 })).toBeInTheDocument();
   });
+
+  // ── F7: "já viu" no banco ─────────────────────────────────────────────
+  it('F7: visto em OUTRO aparelho (banco) e nada neste: o tour do portal não abre', async () => {
+    getByToken.mockResolvedValue({ org_id: 'org1', contact: null, items: [], seen: [{ tour_id: 'geral', status: 'concluido' }] });
+    montar();
+    await waitFor(() => expect(getByToken).toHaveBeenCalled());
+    await esperar(80);
+    expect(screen.queryByRole('dialog', { name: 'Tour do portal' })).not.toBeInTheDocument();
+  });
+
+  it('F7: ao terminar grava no banco pelo link, com o passo alcançado', async () => {
+    const user = userEvent.setup();
+    montar();
+    await screen.findByText(GERAL[0].title);
+    await user.click(screen.getByRole('button', { name: 'Pular' }));
+    // pelo link a organização sai do próprio token no servidor
+    await waitFor(() => expect(markTour).toHaveBeenCalledWith('parceiro', expect.objectContaining({ token: 'tok' }), 'geral', 'pulado', 1));
+  });
+
+  it('F7: logado por e-mail grava na organização da ajuda (sem token)', async () => {
+    const user = userEvent.setup();
+    getMine.mockResolvedValue({ orgs: [{ id: 'org9', name: 'Alpa' }], help: { org_id: 'org9', contact: null, items: [], seen: [] } });
+    render(arvore({ token: null, tourKey: 'eu@parceiro.com' }));
+    await screen.findByText(GERAL[0].title);
+    await user.click(screen.getByRole('button', { name: 'Pular' }));
+    await waitFor(() => expect(markTour).toHaveBeenCalledWith('parceiro', { token: null, orgId: 'org9' }, 'geral', 'pulado', 1));
+  });
+
+  it('F7: mini-tour visto em outro aparelho não reabre ao trocar de aba', async () => {
+    vistoGeral();
+    getByToken.mockResolvedValue({ org_id: 'org1', contact: null, items: [], seen: [{ tour_id: 'documentos', status: 'concluido' }] });
+    const { rerender } = montar();
+    await waitFor(() => expect(getByToken).toHaveBeenCalled());
+    await esperar(50);
+    rerender(arvore({ currentSection: 'documentos' }));
+    await esperar(600);
+    expect(screen.queryByRole('dialog', { name: 'Tour do portal' })).not.toBeInTheDocument();
+  });
+
+  it('F7: prévia não grava no banco; tour que nem apareceu (sem elemento na tela) também não', async () => {
+    const user = userEvent.setup();
+    render(arvore({ tourKey: null, autoTour: false, modoPrevia: true, forcarTour: 'geral' }));
+    await screen.findByText(GERAL[0].title);
+    await user.click(screen.getByRole('button', { name: 'Pular' }));
+    await esperar(50);
+    expect(markTour).not.toHaveBeenCalled();
+  });
+
+  it('F7: tour que terminou sem aparecer (nenhum elemento na tela) marca só o aparelho, não o banco', async () => {
+    document.querySelectorAll('[data-ancoras]').forEach(el => el.remove());
+    montar();
+    await waitFor(() => expect(localStorage.getItem(chaveDoTour('parceiro', 'tok'))).toMatch(/^pulado@/), { timeout: 8000 });
+    expect(markTour).not.toHaveBeenCalled();
+  }, 12000);
 
   it('sem tourKey e fora da prévia o painel não oferece tour', async () => {
     montar({ open: true, tourKey: null });

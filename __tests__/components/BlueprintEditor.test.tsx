@@ -7073,11 +7073,20 @@ describe('BlueprintEditor · Produto em tela', () => {
     // Não é gaveta: nenhum diálogo aberto, e o editor (o ribbon) está escondido.
     expect(screen.queryAllByRole('dialog').filter((d) => !d.className.includes('pointer-events-none'))).toHaveLength(0);
     expect(screen.queryByRole('toolbar')).toBeNull();
-    // Os quatro blocos estão lá: produto, tipologias, pavimento e financeiro.
+    // Duas abas (04/10/2026): "Produto e tipologias" (produto + tabela) e "Hipóteses" (pavimento + financeiro).
+    expect(within(tela).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Produto e tipologias', 'Hipóteses']);
     expect(within(tela).getByLabelText('Padrão construtivo (CUB)')).toBeInTheDocument();
     expect(within(tela).getByRole('button', { name: /nova tipologia/i })).toBeInTheDocument();
+    expect(within(tela).queryByTestId('hipoteses-do-produto')).toBeNull();
+    await user.click(within(tela).getByRole('tab', { name: 'Hipóteses' }));
     expect(within(tela).getByTestId('hipoteses-do-produto')).toBeInTheDocument();
     expect(within(tela).getByTestId('financeiro-do-produto')).toBeInTheDocument();
+    expect(within(tela).queryByLabelText('Padrão construtivo (CUB)')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Voltar ao editor' }));
+    await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
+    // A aba escolhida volta junto ao reabrir a tela.
+    await user.click(botao(/^produto/i));
+    expect(within(await screen.findByTestId('tela-produto')).getByRole('tab', { name: 'Hipóteses' })).toHaveAttribute('aria-selected', 'true');
     await user.click(screen.getByRole('button', { name: 'Voltar ao editor' }));
     await waitFor(() => expect(screen.getByRole('toolbar')).toBeInTheDocument());
     // Pela gaveta do Estudo de massa: "Editar o produto" fecha a gaveta e abre a tela.

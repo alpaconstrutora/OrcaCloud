@@ -242,6 +242,9 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
                   ['pavimentosParaElevador', '1 elevador a partir de (pav.)', 1],
                   ['pavimentosParaSegundoElevador', '2 elevadores a partir de (pav.)', 1],
                   ['areaComumTerreoM2', 'Portaria/hall no térreo (m²)', 5],
+                  // Folgas da garagem (04/10/2026, eram fixas no lançador de vagas).
+                  ['recuoDasVagasMm', 'Vagas: afastamento do contorno (mm, mín. 100)', 50],
+                  ['folgaDaFilaMm', 'Vagas em fila: manobra entre vagas (mm)', 100],
                 ] as const
               ).map(([k, rotulo, step]) => (
                 <div key={k} className="space-y-1.5">

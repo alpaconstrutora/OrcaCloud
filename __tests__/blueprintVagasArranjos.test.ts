@@ -73,3 +73,11 @@ describe('arranjos de vagas (P2.7)', () => {
     expect(bandasFila).toBeGreaterThan(bandasDere);
   });
 });
+
+describe('manobra em fila como hipótese (04/10/2026)', () => {
+  it('a manobra entre vagas em fila sai da hipótese; ausente, o padrão de 1,00 m', () => {
+    expect(geometriaDoArranjo({ arranjo: 'PARALELA', folgaDaFilaMm: 1500 }).passoMm(2500, 5000)).toBe(6500);
+    expect(geometriaDoArranjo({ arranjo: 'PARALELA' }).passoMm(2500, 5000)).toBe(5000 + FOLGA_DA_FILA_MM);
+    expect(geometriaDoArranjo({ arranjo: 'PARALELA', folgaDaFilaMm: -300 }).passoMm(2500, 5000)).toBe(5000);
+  });
+});

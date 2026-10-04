@@ -251,3 +251,36 @@ describe('gerador de massa · folga até o recuo', () => {
     expect(gerarMassa(entrada(lote(40, 60)), 1, { tipos: ['TORRE'], margemDoEnvelopeMm: Number.NaN }).quadro).toEqual({ larguraM: 36.8, profundidadeM: 51.8 });
   });
 });
+
+/**
+ * TODAS AS FOLGAS EM HIPÓTESES (04/10/2026) — *"e aliás todas as folgas que houver devem ser incluídas em hipóteses"*:
+ * a folga na taxa de ocupação (era 0,995 por lado) e o piso de unidades ao priorizar o sol (era 80 %).
+ */
+describe('gerador de massa · folga na TO e piso do sol', () => {
+  const zona = { ...ZONA_DA_MASSA_VAZIA, taxaOcupacaoMaxPct: 70, coeficienteMax: 4, gabaritoAlturaMaxM: 18 };
+  const reguaDaPlanta: EntradaDoGeradorDeMassa['regua'] = { ...REGUA, zona, recuosBase: { FRENTE: 1500, FUNDOS: 1500, LATERAL_DIREITA: 0, LATERAL_ESQUERDA: 0 } };
+  const areaDoEmbasamentoM2 = (folgaDaTaxaDeOcupacaoPct?: number) => {
+    const r = gerarMassa(entrada(lote(12, 30), { regua: reguaDaPlanta }), 1, { tipos: ['EMBASAMENTO_E_TORRE'], ...(folgaDaTaxaDeOcupacaoPct === undefined ? {} : { folgaDaTaxaDeOcupacaoPct }) });
+    const b = r.melhores[0]?.blocos.find((x) => x.nome === 'Embasamento');
+    if (!b) throw new Error(`sem embasamento: ${r.avisos.join(' | ')}`);
+    const xs = b.pontos.map((p) => p.x);
+    const ys = b.pontos.map((p) => p.y);
+    return ((Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys))) / 1e6;
+  };
+
+  it('padrão 1 % da área: o embasamento fica com 99 % do teto da TO (252 m² → 249,5 m²)', () => {
+    expect(areaDoEmbasamentoM2()).toBeCloseTo(252 * 0.99, 0);
+  });
+
+  it('folga de 5 %: 95 % do teto (239,4 m²)', () => {
+    expect(areaDoEmbasamentoM2(5)).toBeCloseTo(252 * 0.95, 0);
+  });
+
+  it('piso do sol: a decisão diz o piso escolhido; 0 desliga', () => {
+    const sol = { latitudeGraus: -23.5, rotacaoNorteDeg: null, entorno: [], minimaH: 2 };
+    const comPiso = (pisoDeUnidadesNoSolPct: number) => gerarMassa(entrada(lote(40, 60), { objetivo: 'INSOLACAO', regua: { ...REGUA, insolacao: sol } }), 1, { tipos: ['TORRE'], pisoDeUnidadesNoSolPct });
+    expect(comPiso(50).decisoes.join(' ')).toMatch(/\(50 % do máximo da varredura/);
+    expect(comPiso(80).decisoes.join(' ')).toMatch(/\(80 % do máximo da varredura/);
+    expect(comPiso(0).decisoes.join(' ')).not.toMatch(/mantendo pelo menos/);
+  });
+});

@@ -20,6 +20,7 @@ import { AlertTriangle, Bot, Building2, Play, Square, Undo2 } from 'lucide-react
 import {
   CONFIGURACAO_DO_GERADOR_DE_MASSA_PADRAO,
   MARGEM_MAX_DO_ENVELOPE_MM,
+  FOLGA_MAX_DA_TAXA_DE_OCUPACAO_PCT,
   type ConfiguracaoDoGeradorDeMassa,
   MODOS_DE_ESTACIONAMENTO,
   OBJETIVOS_DA_MASSA,
@@ -413,6 +414,48 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
               className={campo}
             />
           </label>
+          {/* FOLGA NA TAXA DE OCUPAÇÃO (04/10/2026): era 0,995 por lado, fixo. */}
+          <label
+            className="flex flex-col gap-1"
+            title="No Embasamento + torre, o embasamento é encolhido até a taxa de ocupação máxima menos esta folga (em % da área). 1 % cobre o arredondamento ao milímetro; 0 vai ao limite exato (e o arredondamento pode fazer o cenário ser descartado); mais guarda margem para o projeto crescer."
+          >
+            Folga na TO (% da área)
+            <input
+              type="number"
+              min={0}
+              max={FOLGA_MAX_DA_TAXA_DE_OCUPACAO_PCT}
+              step={0.1}
+              value={c.hipoteses.folgaDaTaxaDeOcupacaoPct}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                if (e.target.value !== '' && Number.isFinite(v) && v >= 0 && v <= FOLGA_MAX_DA_TAXA_DE_OCUPACAO_PCT) setH({ folgaDaTaxaDeOcupacaoPct: v });
+              }}
+              aria-label="Folga na taxa de ocupação (% da área)"
+              className={campo}
+            />
+          </label>
+          {/* PISO DE UNIDADES AO PRIORIZAR O SOL (04/10/2026): era 80 %, fixo. Só vale com o objetivo "sol". */}
+          {c.objetivo === 'INSOLACAO' && (
+            <label
+              className="flex flex-col gap-1"
+              title="Com o objetivo de sol e sem meta de unidades, só concorrem cenários com pelo menos esta parte das unidades do melhor da varredura — sem piso, o sol sozinho levaria ao prédio de 1 pavimento. 0 desliga o piso."
+            >
+              Unidades mínimas no sol (%)
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                value={c.hipoteses.pisoDeUnidadesNoSolPct}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (e.target.value !== '' && Number.isFinite(v) && v >= 0 && v <= 100) setH({ pisoDeUnidadesNoSolPct: v });
+                }}
+                aria-label="Unidades mínimas ao priorizar o sol (%)"
+                className={campo}
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             Semente
             <input type="number" min={1} value={c.semente} onChange={(e) => set({ semente: Math.max(1, Math.round(Number(e.target.value) || 1)) })} aria-label="Semente" className={campo} />

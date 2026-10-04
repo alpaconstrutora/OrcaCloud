@@ -60,7 +60,7 @@ export type OrientacaoDasFileiras = 'AUTO' | 'FILEIRAS_EM_X' | 'FILEIRAS_EM_Y';
 /** O arranjo da vaga na fileira (P2.7): de ré a 90°, espinha de peixe a 45°, ou em fila (paralela). */
 export type ArranjoDasVagas = 'PERPENDICULAR' | 'ESPINHA_45' | 'PARALELA';
 export const ROTULO_DO_ARRANJO: Record<ArranjoDasVagas, string> = { PERPENDICULAR: 'De ré (90°)', ESPINHA_45: 'Espinha de peixe (45°)', PARALELA: 'Em fila (paralela)' };
-/** Folga de manobra entre vagas em fila, mm. */
+/** Folga de manobra entre vagas em fila, mm — o PADRÃO; desde 04/10/2026 é hipótese (`folgaDaFilaMm`). */
 export const FOLGA_DA_FILA_MM = 1000;
 
 export interface HipotesesDeVagas {
@@ -72,6 +72,8 @@ export interface HipotesesDeVagas {
   orientacao: OrientacaoDasFileiras;
   /** P2.7. Ausente (estado persistido antigo) = PERPENDICULAR. */
   arranjo?: ArranjoDasVagas;
+  /** Manobra entre vagas EM FILA, mm (04/10/2026, era fixa). Ausente (estado antigo) = `FOLGA_DA_FILA_MM`. */
+  folgaDaFilaMm?: number;
   /** Percentuais mínimos por tipo (0–100). PCD e idoso têm piso de 1 quando > 0. */
   pcdPct: number;
   idosoPct: number;
@@ -319,7 +321,7 @@ export function planejarVagas(model: BlueprintModel, levelId: ObjectId, hip: Hip
  * `c` da vaga: profundidade da banda, passo ao longo da fileira, onde fica o
  * centro da vaga dentro do passo e o giro relativo ao eixo da fileira.
  */
-export function geometriaDoArranjo(hip: Pick<HipotesesDeVagas, 'arranjo'>): {
+export function geometriaDoArranjo(hip: Pick<HipotesesDeVagas, 'arranjo' | 'folgaDaFilaMm'>): {
   arranjo: ArranjoDasVagas;
   profundidadeMm: (l: number, c: number) => number;
   passoMm: (l: number, c: number) => number;
@@ -343,7 +345,7 @@ export function geometriaDoArranjo(hip: Pick<HipotesesDeVagas, 'arranjo'>): {
     return {
       arranjo,
       profundidadeMm: (l) => l,
-      passoMm: (_l, c) => c + FOLGA_DA_FILA_MM,
+      passoMm: (_l, c) => c + Math.max(0, hip.folgaDaFilaMm ?? FOLGA_DA_FILA_MM),
       centroAoLongoMm: (_l, c) => Math.round(c / 2),
       giroGraus: () => 90,
     };

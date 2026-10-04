@@ -81,6 +81,12 @@ export interface HipotesesDoProduto {
   areaComumTerreoM2: number;
   /** Arranjo das vagas na garagem (E2.5/P2.7). */
   arranjoDasVagas: ArranjoDasVagas;
+  /**
+   * FOLGAS DA GARAGEM na contagem de vagas da massa (04/10/2026 — eram fixas no lançador): o afastamento das vagas ao
+   * contorno do bloco de garagem e a manobra entre vagas em fila, mm.
+   */
+  recuoDasVagasMm: number;
+  folgaDaFilaMm: number;
 }
 
 export const HIPOTESES_DO_PRODUTO_PADRAO: HipotesesDoProduto = {
@@ -92,6 +98,8 @@ export const HIPOTESES_DO_PRODUTO_PADRAO: HipotesesDoProduto = {
   pavimentosParaSegundoElevador: 9,
   areaComumTerreoM2: 60,
   arranjoDasVagas: 'PERPENDICULAR',
+  recuoDasVagasMm: 200,
+  folgaDaFilaMm: 1000,
 };
 
 /**
@@ -238,6 +246,10 @@ export function produtoDaColuna(raw: unknown): Produto {
       pavimentosParaSegundoElevador: Math.round(num(h.pavimentosParaSegundoElevador, P.pavimentosParaSegundoElevador, 1, 200)),
       areaComumTerreoM2: num(h.areaComumTerreoM2, P.areaComumTerreoM2, 0, 10000),
       arranjoDasVagas: (['PERPENDICULAR', 'ESPINHA_45', 'PARALELA'] as const).includes(h.arranjoDasVagas as ArranjoDasVagas) ? (h.arranjoDasVagas as ArranjoDasVagas) : P.arranjoDasVagas,
+      // Mínimo de 100 mm: a contagem cerca a garagem com paredes virtuais de 200 mm no eixo do contorno; abaixo da meia
+      // parede a primeira fileira bate nela e a contagem desaba (medido: 22 → 11 vagas numa garagem 30 × 20 m).
+      recuoDasVagasMm: Math.round(num(h.recuoDasVagasMm, P.recuoDasVagasMm, 100, 2000)),
+      folgaDaFilaMm: Math.round(num(h.folgaDaFilaMm, P.folgaDaFilaMm, 0, 5000)),
     },
     financeiro: {
       uf: typeof f.uf === 'string' && /^[A-Z]{2}$/.test(f.uf) ? f.uf : F.uf,
@@ -372,7 +384,12 @@ function alinharAoLadoMaisLongo(anel: Point[]): Point[] {
  * lançador da E2.5, num modelo PROVISÓRIO (paredes de 20 cm no contorno do
  * bloco). Pilares não existem ainda na massa: o número é o teto, dito assim.
  */
-export function vagasQueCabem(anelOriginal: Point[], arranjo: ArranjoDasVagas): number {
+export function vagasQueCabem(
+  anelOriginal: Point[],
+  arranjo: ArranjoDasVagas,
+  /** As folgas da garagem (hipóteses do produto); ausentes = as do lançador. */
+  folgas: { recuoDasVagasMm?: number; folgaDaFilaMm?: number } = {},
+): number {
   if (anelOriginal.length < 3) return 0;
   // O lançador corre as fileiras nos eixos do desenho: a garagem girada (lote
   // fora do norte do desenho, M5) perderia vagas que existem. Gira-se o anel
@@ -386,7 +403,22 @@ export function vagasQueCabem(anelOriginal: Point[], arranjo: ArranjoDasVagas): 
   } catch {
     return 0;
   }
-  const plano = planejarVagas(m, lv, { ...HIPOTESES_VAGAS_PADRAO, arranjo, pcdPct: 2, idosoPct: 5, motoPct: 0, exigenciaManual: null, vagasPorUnidade: null }, { tipo: 'PAVIMENTO' });
+  const plano = planejarVagas(
+    m,
+    lv,
+    {
+      ...HIPOTESES_VAGAS_PADRAO,
+      arranjo,
+      recuoMm: folgas.recuoDasVagasMm == null ? HIPOTESES_VAGAS_PADRAO.recuoMm : Math.max(100, folgas.recuoDasVagasMm),
+      folgaDaFilaMm: folgas.folgaDaFilaMm,
+      pcdPct: 2,
+      idosoPct: 5,
+      motoPct: 0,
+      exigenciaManual: null,
+      vagasPorUnidade: null,
+    },
+    { tipo: 'PAVIMENTO' },
+  );
   return plano.vagas.length;
 }
 
@@ -566,10 +598,10 @@ function produtoDoBloco(model: BlueprintModel, b: Bloco, m: MedidaDoBloco, produ
   const vazio = { blocoId: b.id, nome: b.nome, uso: b.uso, pisos: [] as PisoComUnidades[], unidades: 0, privativaM2: 0, eficienciaDoPavimentoPct: null, unidadesPorPavimento: 0, vagasPorPavimento: 0, vagas: 0, garagemM2: 0 };
 
   if (b.uso === 'GARAGEM') {
-    const chave = JSON.stringify(b.pontos) + h.arranjoDasVagas;
+    const chave = `${JSON.stringify(b.pontos)}|${h.arranjoDasVagas}|${h.recuoDasVagasMm}|${h.folgaDaFilaMm}`;
     let porPav = garagens.get(chave);
     if (porPav === undefined) {
-      porPav = vagasQueCabem(b.pontos, h.arranjoDasVagas);
+      porPav = vagasQueCabem(b.pontos, h.arranjoDasVagas, { recuoDasVagasMm: h.recuoDasVagasMm, folgaDaFilaMm: h.folgaDaFilaMm });
       garagens.set(chave, porPav);
     }
     if (porPav === 0) avisos.push(`"${b.nome}": nenhuma fileira de vagas com circulação cabe no contorno.`);

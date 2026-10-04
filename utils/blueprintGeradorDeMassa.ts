@@ -141,6 +141,18 @@ export interface HipotesesDoGeradorDeMassa {
    * lote girado; 0 encosta no recuo; mais que isso guarda a espessura do revestimento da fachada.
    */
   margemDoEnvelopeMm: number;
+  /**
+   * FOLGA NA TAXA DE OCUPAÇÃO (04/10/2026), % da ÁREA: no "Embasamento + torre" o embasamento é encolhido até a TO
+   * máxima e mais esta folga — sem ela, o arredondamento ao mm pode deixá-lo uns cm² acima do limite e a conferência
+   * da lei o descartaria. Era o fator 0,995 por lado (≈ 1 % de área), fixo no código.
+   */
+  folgaDaTaxaDeOcupacaoPct: number;
+  /**
+   * PISO DE UNIDADES AO PRIORIZAR O SOL (04/10/2026), %: com o objetivo "sol" e sem meta de unidades, só concorrem os
+   * cenários com pelo menos esta parte das unidades do melhor da varredura — sem piso, o sol sozinho levaria ao prédio
+   * de 1 pavimento. Era 80 %, fixo.
+   */
+  pisoDeUnidadesNoSolPct: number;
 }
 
 export const HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO: HipotesesDoGeradorDeMassa = {
@@ -155,6 +167,8 @@ export const HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO: HipotesesDoGeradorDeMassa = {
   estacionamento: 'AUTOMATICO',
   iteracoes: 40,
   margemDoEnvelopeMm: 100,
+  folgaDaTaxaDeOcupacaoPct: 1,
+  pisoDeUnidadesNoSolPct: 80,
 };
 
 /** Tudo o que a tela do gerador escolhe — e o que a conversa (M5c) pode mudar. */
@@ -275,6 +289,8 @@ function quadroDoLote(terreno: Terreno, limites: readonly BlueprintModel['bounda
 
 /** Teto da folga até o recuo, mm — 2 m já é projeto, não folga. */
 export const MARGEM_MAX_DO_ENVELOPE_MM = 2000;
+/** Teto da folga na taxa de ocupação, % da área. */
+export const FOLGA_MAX_DA_TAXA_DE_OCUPACAO_PCT = 20;
 const PASSO_MIN_MM = 250;
 /** Menor lado de bloco que a biblioteca aceita, mm. */
 const LADO_MIN_MM = 8000;
@@ -443,7 +459,8 @@ function montar(ctx: Contexto, p: ParametrosDoCandidato): BlocoProposto[] | null
     let W = rE.x1 - rE.x0;
     let D = rE.y1 - rE.y0;
     if (ctx.implantacaoMaxMm2 != null && W * D > ctx.implantacaoMaxMm2) {
-      const s = Math.sqrt(ctx.implantacaoMaxMm2 / (W * D)) * 0.995;
+      // A folga é de ÁREA: o fator de cada lado é a raiz (antes, 0,995 por lado ≈ 1 % de área).
+      const s = Math.sqrt((ctx.implantacaoMaxMm2 * (1 - hip.folgaDaTaxaDeOcupacaoPct / 100)) / (W * D));
       W *= s;
       D *= s;
     }
@@ -635,9 +652,16 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const hipMesclada: HipotesesDoGeradorDeMassa = { ...HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO, ...hipParcial };
   // A folga vem da tela (e de configuração antiga guardada no navegador): número inteiro de mm, entre 0 e o teto.
   const margemLida = Number(hipMesclada.margemDoEnvelopeMm);
+  const faixa = (v: unknown, min: number, max: number, padrao: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : padrao;
+  };
+  const P = HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO;
   const hip: HipotesesDoGeradorDeMassa = {
     ...hipMesclada,
-    margemDoEnvelopeMm: Number.isFinite(margemLida) ? Math.min(MARGEM_MAX_DO_ENVELOPE_MM, Math.max(0, Math.round(margemLida))) : HIPOTESES_DO_GERADOR_DE_MASSA_PADRAO.margemDoEnvelopeMm,
+    margemDoEnvelopeMm: Number.isFinite(margemLida) ? Math.min(MARGEM_MAX_DO_ENVELOPE_MM, Math.max(0, Math.round(margemLida))) : P.margemDoEnvelopeMm,
+    folgaDaTaxaDeOcupacaoPct: faixa(hipMesclada.folgaDaTaxaDeOcupacaoPct, 0, FOLGA_MAX_DA_TAXA_DE_OCUPACAO_PCT, P.folgaDaTaxaDeOcupacaoPct),
+    pisoDeUnidadesNoSolPct: faixa(hipMesclada.pisoDeUnidadesNoSolPct, 0, 100, P.pisoDeUnidadesNoSolPct),
   };
   const { model, regua, objetivo, restricoes } = entrada;
   const decisoes: string[] = [];
@@ -765,8 +789,13 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   // Sol sem meta de unidades levaria ao prédio de 1 pavimento (o baixo é o que
   // mais vê sol): o objetivo vira "o máximo de sol mantendo 80 % das unidades
   // que o lote comporta na varredura" — e a decisão diz isso.
-  const pisoDeUnidades = objetivo === 'INSOLACAO' && metaDeUnidades == null && viaveisDaGrade.length ? Math.ceil(0.8 * Math.max(...viaveisDaGrade.map((c) => c.cenario.unidades)) - 1e-9) : null;
-  const MOTIVO_DO_PISO = 'abaixo de 80 % das unidades possíveis';
+  const fracaoDoPiso = hip.pisoDeUnidadesNoSolPct / 100;
+  const pisoDeUnidades =
+    objetivo === 'INSOLACAO' && metaDeUnidades == null && viaveisDaGrade.length && fracaoDoPiso > 0
+      ? Math.ceil(fracaoDoPiso * Math.max(...viaveisDaGrade.map((c) => c.cenario.unidades)) - 1e-9)
+      : null;
+  const pctDoPiso = hip.pisoDeUnidadesNoSolPct.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const MOTIVO_DO_PISO = `abaixo de ${pctDoPiso} % das unidades possíveis`;
   const pontuar = (c: CandidatoDeMassa) => {
     c.valor = valorDoObjetivo(c.cenario, objetivo, opcoes);
     if (pisoDeUnidades != null && c.viavel && c.cenario.unidades < pisoDeUnidades) {
@@ -849,7 +878,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   decisoes.push(
     `Lote de ${f1(loteMm2 / 1e6)} m²; ${q.frenteDeclarada ? 'quadro orientado pela divisa FRENTE (a rua)' : 'sem divisa FRENTE marcada: quadro alinhado ao desenho (marque a frente em Terreno › Dados do lote)'}.`,
     `Envelope no térreo: retângulo inscrito de ${f1(W / 1000)} × ${f1(D / 1000)} m, ${hip.margemDoEnvelopeMm > 0 ? `a ${(hip.margemDoEnvelopeMm / 10).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cm da borda (folga até o recuo)` : 'encostado na borda (folga até o recuo 0)'}. Em lote irregular o retângulo perde as pontas — a implantação é conservadora.`,
-    `Objetivo: ${ROTULO_DO_OBJETIVO[objetivo].toLowerCase()}${objetivo === 'MENOR_CUSTO' ? (metaDeUnidades != null ? ` com pelo menos ${metaDeUnidades} unidades` : ' por m² vendável (sem meta de unidades, o custo total levaria ao menor prédio)') : ''}${pisoDeUnidades != null ? ` mantendo pelo menos ${pisoDeUnidades} unidades (80 % do máximo da varredura — sem meta, o sol sozinho levaria ao prédio de 1 pavimento)` : ''}.`,
+    `Objetivo: ${ROTULO_DO_OBJETIVO[objetivo].toLowerCase()}${objetivo === 'MENOR_CUSTO' ? (metaDeUnidades != null ? ` com pelo menos ${metaDeUnidades} unidades` : ' por m² vendável (sem meta de unidades, o custo total levaria ao menor prédio)') : ''}${pisoDeUnidades != null ? ` mantendo pelo menos ${pisoDeUnidades} unidades (${pctDoPiso} % do máximo da varredura — sem meta, o sol sozinho levaria ao prédio de 1 pavimento)` : ''}.`,
     `Restrições: ${[restricoes.respeitarLei ? 'CA, TO, gabarito e envelope por pavimento' : 'lei DESLIGADA (só o envelope do térreo)', restricoes.atenderVagas ? 'vagas exigidas atendidas' : 'vagas não exigidas', metaDeUnidades != null ? `mínimo de ${metaDeUnidades} unidades` : null].filter(Boolean).join('; ')}.`,
     `Pavimentos testados até ${teto.n} (limitados ${teto.por}); estacionamento: ${ROTULO_DO_ESTACIONAMENTO[hip.estacionamento].toLowerCase()}.`,
     `${avaliados} combinações medidas com a régua do estudo (${tipos.length} implantações × ${profundidades.length} profundidades × comprimentos × pavimentos × garagem); ${viaveis.length} viáveis.`,

@@ -156,3 +156,39 @@ describe('produto · coluna e problemas', () => {
     expect(problemasDoProduto(produtoSemente('MISTO'))).toEqual([]);
   });
 });
+
+/**
+ * FOLGAS DA GARAGEM EM HIPÓTESES (04/10/2026): o afastamento das vagas ao contorno e a manobra entre vagas em fila
+ * eram fixos no lançador (200 mm e 1.000 mm); agora são hipóteses do produto, que a contagem da massa usa.
+ */
+describe('vagasQueCabem · folgas da garagem', () => {
+  const garagem: Point[] = [point(0, 0), point(30000, 0), point(30000, 20000), point(0, 20000)];
+
+  it('sem folgas explícitas, conta como antes (200 mm de afastamento, 1 m de manobra em fila)', () => {
+    expect(vagasQueCabem(garagem, 'PARALELA')).toBe(vagasQueCabem(garagem, 'PARALELA', { recuoDasVagasMm: 200, folgaDaFilaMm: 1000 }));
+    expect(vagasQueCabem(garagem, 'PERPENDICULAR')).toBe(vagasQueCabem(garagem, 'PERPENDICULAR', { recuoDasVagasMm: 200 }));
+  });
+
+  it('manobra maior em fila cabe menos vagas; a manobra não muda a vaga de ré', () => {
+    const fila1 = vagasQueCabem(garagem, 'PARALELA', { folgaDaFilaMm: 1000 });
+    const fila3 = vagasQueCabem(garagem, 'PARALELA', { folgaDaFilaMm: 3000 });
+    expect(fila3).toBeLessThan(fila1);
+    expect(vagasQueCabem(garagem, 'PERPENDICULAR', { folgaDaFilaMm: 3000 })).toBe(vagasQueCabem(garagem, 'PERPENDICULAR'));
+  });
+
+  it('afastar mais as vagas do contorno cabe menos; abaixo da meia parede virtual (100 mm) vale 100', () => {
+    expect(vagasQueCabem(garagem, 'PERPENDICULAR', { recuoDasVagasMm: 2000 })).toBeLessThan(vagasQueCabem(garagem, 'PERPENDICULAR', { recuoDasVagasMm: 200 }));
+    // 0 mm faria a primeira fileira bater na parede virtual de 200 mm (medido: 11 contra 22 vagas): vira 100 mm.
+    expect(vagasQueCabem(garagem, 'PERPENDICULAR', { recuoDasVagasMm: 0 })).toBe(vagasQueCabem(garagem, 'PERPENDICULAR', { recuoDasVagasMm: 100 }));
+  });
+
+  it('o produto guarda as duas folgas (com faixa) e o padrão é o de antes', async () => {
+    const { HIPOTESES_DO_PRODUTO_PADRAO, produtoSanitizado } = (await import('../utils/blueprintProduto')) as unknown as {
+      HIPOTESES_DO_PRODUTO_PADRAO: { recuoDasVagasMm: number; folgaDaFilaMm: number };
+      produtoSanitizado?: unknown;
+    };
+    expect(HIPOTESES_DO_PRODUTO_PADRAO.recuoDasVagasMm).toBe(200);
+    expect(HIPOTESES_DO_PRODUTO_PADRAO.folgaDaFilaMm).toBe(1000);
+    void produtoSanitizado;
+  });
+});

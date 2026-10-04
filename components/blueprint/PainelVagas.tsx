@@ -10,6 +10,7 @@ import type { BlueprintModel, ObjectId, TipoDeVaga } from '../../utils/blueprint
 import { ROTULO_DO_TIPO_DE_VAGA } from '../../utils/blueprintKernel';
 import { ROTULO_DO_ARRANJO, type ArranjoDasVagas,
   ambientesCandidatos,
+  FOLGA_DA_FILA_MM,
   type HipotesesDeVagas,
   type OrientacaoDasFileiras,
   type PlanoDeVagas,
@@ -74,12 +75,23 @@ export default function PainelVagas({ model, levelId, hipoteses: h, onHipoteses,
           </label>
           <label className="flex flex-col gap-1">
             Arranjo
-            <select value={h.arranjo ?? 'PERPENDICULAR'} onChange={(e) => onHipoteses({ ...h, arranjo: e.target.value as ArranjoDasVagas })} aria-label="Arranjo das vagas na fileira" className={campo} title="De ré: a vaga perpendicular à circulação (90°). Espinha de peixe: 45°, banda mais funda e circulação mais estreita (3,50 m). Em fila: paralela à circulação, com 1,00 m de manobra entre vagas.">
+            <select value={h.arranjo ?? 'PERPENDICULAR'} onChange={(e) => onHipoteses({ ...h, arranjo: e.target.value as ArranjoDasVagas })} aria-label="Arranjo das vagas na fileira" className={campo} title="De ré: a vaga perpendicular à circulação (90°). Espinha de peixe: 45°, banda mais funda e circulação mais estreita (3,50 m). Em fila: paralela à circulação, com a manobra entre vagas abaixo (padrão 1,00 m).">
               {(Object.keys(ROTULO_DO_ARRANJO) as ArranjoDasVagas[]).map((a) => (
                 <option key={a} value={a}>{ROTULO_DO_ARRANJO[a]}</option>
               ))}
             </select>
           </label>
+          {/* FOLGAS (04/10/2026, eram fixas): afastamento do contorno e — em fila — a manobra entre vagas. */}
+          <label className="flex flex-col gap-1" title="Quanto a vaga fica afastada do contorno da região (o eixo das paredes): 200 mm descontam a meia espessura de parede.">
+            Afastamento do contorno (mm)
+            <input type="number" step={50} min={0} value={h.recuoMm} onChange={(e) => Number(e.target.value) >= 0 && num('recuoMm', e.target.value)} aria-label="Afastamento das vagas ao contorno (mm)" className={campo} />
+          </label>
+          {(h.arranjo ?? 'PERPENDICULAR') === 'PARALELA' && (
+            <label className="flex flex-col gap-1" title="O espaço livre entre duas vagas em fila, para manobrar.">
+              Manobra em fila (mm)
+              <input type="number" step={100} min={0} value={h.folgaDaFilaMm ?? FOLGA_DA_FILA_MM} onChange={(e) => Number(e.target.value) >= 0 && num('folgaDaFilaMm', e.target.value)} aria-label="Manobra entre vagas em fila (mm)" className={campo} />
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             PCD (%)
             <input type="number" step={1} min={0} value={h.pcdPct} onChange={(e) => num('pcdPct', e.target.value, false)} aria-label="Percentual mínimo de vagas PCD" className={campo} />

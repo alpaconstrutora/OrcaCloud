@@ -7229,5 +7229,28 @@ describe('BlueprintEditor · Gerar massa · folga até o recuo', () => {
     expect(JSON.parse(localStorage.getItem('blueprint:gerador-de-massa')!).hipoteses.margemDoEnvelopeMm).toBe(0);
     fireEvent.change(campo, { target: { value: '5' } });
     expect(JSON.parse(localStorage.getItem('blueprint:gerador-de-massa')!).hipoteses.margemDoEnvelopeMm).toBe(50);
+    // Folga na TO (04/10/2026): nasce 1 % e grava o que se digita.
+    const to = screen.getByLabelText('Folga na taxa de ocupação (% da área)');
+    expect(to).toHaveValue(1);
+    fireEvent.change(to, { target: { value: '3' } });
+    expect(JSON.parse(localStorage.getItem('blueprint:gerador-de-massa')!).hipoteses.folgaDaTaxaDeOcupacaoPct).toBe(3);
+    // Piso do sol: só aparece com o objetivo "sol", nascendo em 80 %.
+    expect(screen.queryByLabelText('Unidades mínimas ao priorizar o sol (%)')).toBeNull();
+    await user.selectOptions(screen.getByLabelText(/^Objetivo/), 'INSOLACAO');
+    const piso = screen.getByLabelText('Unidades mínimas ao priorizar o sol (%)');
+    expect(piso).toHaveValue(80);
+    fireEvent.change(piso, { target: { value: '60' } });
+    expect(JSON.parse(localStorage.getItem('blueprint:gerador-de-massa')!).hipoteses.pisoDeUnidadesNoSolPct).toBe(60);
+  });
+
+  it('as folgas da garagem estão nas Hipóteses do Produto', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^produto/i));
+    const tela = await screen.findByTestId('tela-produto');
+    await user.click(within(tela).getByRole('tab', { name: 'Hipóteses' }));
+    expect(within(tela).getByLabelText('Vagas: afastamento do contorno (mm, mín. 100)')).toHaveValue(200);
+    expect(within(tela).getByLabelText('Vagas em fila: manobra entre vagas (mm)')).toHaveValue(1000);
   });
 });

@@ -65,7 +65,7 @@ describe('PortalHelp', () => {
 
   it('abre a seção da aba ativa, abre o artigo (sobrescrito pela construtora) sanitizado e volta', async () => {
     const user = userEvent.setup();
-    montar({ initialSection: 'documentos' });
+    montar({ currentSection: 'documentos' });
     const link = await screen.findByRole('button', { name: /Documentos do jeito da Alpa/ });
     await user.click(link);
     expect(screen.getByRole('heading', { name: 'Documentos do jeito da Alpa' })).toBeInTheDocument();

@@ -168,7 +168,7 @@ const PartnerPortalFinanceiro: React.FC<Props> = ({
                 </PortalCard>
             )}
 
-            <KpiStrip items={kpis} />
+            <KpiStrip items={kpis} data-tour="financeiro-kpis" />
 
             {resumo.proximoVencimento && (
                 <PortalCard className="px-5 py-3.5 flex items-center gap-3">
@@ -181,7 +181,7 @@ const PartnerPortalFinanceiro: React.FC<Props> = ({
                 </PortalCard>
             )}
 
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="financeiro-parcelas">
                 <CardHeader title="Parcelas" subtitle="Parcelas dos seus contratos" />
                 <PortalTabs
                     tabs={FILTROS.map(f => ({ id: f.id, label: f.label, count: linhas.filter(l => f.fn(l.situacao)).length }))}
@@ -239,7 +239,7 @@ const PartnerPortalFinanceiro: React.FC<Props> = ({
                 </div>
             </PortalCard>
 
-            <PortalCard className="overflow-hidden">
+            <PortalCard className="overflow-hidden" data-tour="financeiro-medicoes">
                 <CardHeader title="Medições" subtitle="Saldo a faturar e nota fiscal de cada medição" />
                 <div className="overflow-x-auto border-t border-[#ECECEF]">
                     <table className="w-full min-w-[820px]">
@@ -278,6 +278,7 @@ const PartnerPortalFinanceiro: React.FC<Props> = ({
                                         ) : (
                                             <SoftButton
                                                 type="button"
+                                                data-tour="financeiro-anexar-nf"
                                                 className="relative overflow-hidden h-8 px-3"
                                                 disabled={uploadingInvoiceFor === m.id}
                                             >

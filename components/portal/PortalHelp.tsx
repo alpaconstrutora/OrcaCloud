@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PortalTour } from './PortalTour';
 import { chaveDoTour, marcarTourVisto, tourVisto } from '../../utils/portalTour';
 import { ArrowLeft, ChevronDown, ChevronRight, HelpCircle, Mail, MessageSquare, Phone, Globe, Search, BookOpen, CircleHelp, Building2, RotateCcw } from 'lucide-react';
@@ -8,8 +8,10 @@ import { usePortalHelp } from '../../hooks/usePortalHelp';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 import {
   htmlToText, sectionLabel, PORTAL_SECTIONS, PORTAL_LABELS,
-  type HelpItem, type Portal,
+  type HelpItem, type MergedTourStep, type Portal, type TourId,
 } from '../../utils/portalHelpDefaults';
+
+const SEM_PASSOS: readonly MergedTourStep[] = [];
 
 /**
  * Central de ajuda dos portais externos — painel lateral (REGRA #4) com artigos
@@ -29,8 +31,14 @@ export interface PortalHelpProps {
   orgId?: string | null;
   /** abas liberadas (ajuda de aba oculta não aparece) */
   visibleSections?: readonly string[] | null;
-  /** aba ativa — abre a central já nessa seção */
-  initialSection?: string | null;
+  /** aba ativa do portal — abre a central nessa seção e guia o tour */
+  currentSection?: string | null;
+  /** troca de aba pedida pelo tour; o portal fecha detalhe aberto antes */
+  onNavigate?: (section: string) => void;
+  /** abre este tour ao montar, ignorando "já viu" (prévia do gestor) */
+  forcarTour?: TourId | null;
+  /** prévia do gestor: tour disponível sem `tourKey` e nada é gravado */
+  modoPrevia?: boolean;
   /** só o Parceiro tem solicitações; sem a prop o botão não aparece */
   onOpenRequest?: () => void;
   /**
@@ -53,19 +61,47 @@ const ACCENT = {
 const soDigitos = (s: string) => s.replace(/\D/g, '');
 
 export const PortalHelp: React.FC<PortalHelpProps> = ({
-  open, onClose, portal, token, orgId, visibleSections, initialSection, onOpenRequest, tourKey, autoTour = false, accent = 'orange',
+  open, onClose, portal, token, orgId, visibleSections, currentSection, onNavigate, onOpenRequest,
+  tourKey, autoTour = false, forcarTour = null, modoPrevia = false, accent = 'orange',
 }) => {
   const a = ACCENT[accent];
-  const chaveTour = tourKey ? chaveDoTour(portal, tourKey) : null;
-  // Tour no primeiro acesso: abre sozinho quando este aparelho ainda não viu.
-  const [tourOpen, setTourOpen] = useState<boolean>(() => !!(autoTour && chaveTour && !tourVisto(chaveTour)));
+  const podeTour = !!tourKey || modoPrevia;
+  const viuNesteAparelho = (t: TourId) => !tourKey || tourVisto(chaveDoTour(portal, tourKey, t));
+  // Tour do portal no primeiro acesso deste aparelho; prévia abre o que o gestor pediu.
+  const [tourAtivo, setTourAtivo] = useState<TourId | null>(() =>
+    forcarTour ?? (autoTour && !modoPrevia && !viuNesteAparelho('geral') ? 'geral' : null));
+  useEffect(() => { if (forcarTour) setTourAtivo(forcarTour); }, [forcarTour]);
   const { loading, erro, help, contact, orgs, selectedOrgId, selectOrg, precisaEscolherOrg } = usePortalHelp(portal, {
-    token, orgId, visibleSections, enabled: open || tourOpen,
+    token, orgId, visibleSections, enabled: open || !!tourAtivo,
   });
+  const fimDoTour = useRef(0);
+  // aba em que o tour começou: o tour volta para ela ao terminar, e essa volta
+  // não é "o usuário abriu a aba" (não pode disparar mini-tour)
+  const secaoAntesDoTour = useRef(currentSection);
+  useEffect(() => { if (tourAtivo) secaoAntesDoTour.current = currentSection; }, [tourAtivo]); // eslint-disable-line react-hooks/exhaustive-deps
   const encerrarTour = (motivo: 'concluido' | 'pulado') => {
-    if (chaveTour) marcarTourVisto(chaveTour, motivo);
-    setTourOpen(false);
+    if (tourAtivo && tourKey && !modoPrevia) marcarTourVisto(chaveDoTour(portal, tourKey, tourAtivo), motivo);
+    fimDoTour.current = Date.now();
+    setTourAtivo(null);
   };
+
+  // Mini-tour "como usar esta tela": na PRIMEIRA visita a uma aba, depois que o
+  // tour do portal já foi visto. Só na troca de aba (o valor inicial não conta)
+  // e nunca na volta automática do fim de outro tour para a aba de origem.
+  const ultimaSecao = useRef(currentSection);
+  useEffect(() => {
+    const anterior = ultimaSecao.current;
+    ultimaSecao.current = currentSection;
+    if (!currentSection || currentSection === anterior) return;
+    if (!autoTour || modoPrevia || !tourKey || tourAtivo) return;
+    if (currentSection === secaoAntesDoTour.current && Date.now() - fimDoTour.current < 1500) return;
+    if (!viuNesteAparelho('geral') || viuNesteAparelho(currentSection)) return;
+    if (!help.tours[currentSection]?.length) return;
+    const aba = currentSection;
+    const t = setTimeout(() => setTourAtivo(atual => atual ?? aba), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSection]);
 
   const [busca, setBusca] = usePersistedState<string>(`portalHelp:${portal}:busca`, '');
   const [artigoAberto, setArtigoAberto] = useState<HelpItem | null>(null);
@@ -74,8 +110,8 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
 
   // Ao abrir, a seção da aba ativa já vem expandida.
   React.useEffect(() => {
-    if (open) { setSecaoAberta(initialSection ?? null); setArtigoAberto(null); }
-  }, [open, initialSection]);
+    if (open) { setSecaoAberta(currentSection ?? null); setArtigoAberto(null); }
+  }, [open, currentSection]);
 
   const termo = busca.trim().toLowerCase();
   const casa = (it: HelpItem) =>
@@ -137,12 +173,21 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
 
   // Sheet mantém os filhos montados quando fechado: os botões das seções
   // (ex.: "Contratos") colidiriam com os da sidebar do portal.
-  if (!open && !tourOpen) return null;
+  if (!open && !tourAtivo) return null;
+
+  const tourDestaTela = currentSection && help.tours[currentSection]?.length ? currentSection : null;
 
   return (
     <>
-    {tourOpen && !loading && (
-      <PortalTour steps={help.tour} accent={accent} onFinish={encerrarTour} />
+    {tourAtivo && !loading && (
+      <PortalTour
+        key={tourAtivo}
+        steps={help.tours[tourAtivo] ?? SEM_PASSOS}
+        accent={accent}
+        currentSection={currentSection}
+        onNavigate={onNavigate}
+        onFinish={encerrarTour}
+      />
     )}
     {open && (
     <Sheet open={open} onClose={onClose} size="md">
@@ -293,15 +338,29 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
                   </div>
                 </div>
 
-                {chaveTour && help.tour.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => { onClose(); setTourOpen(true); }}
-                    className={`inline-flex items-center gap-2 text-sm font-medium ${a.text} hover:underline`}
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Rever o tour do portal
-                  </button>
+                {podeTour && (help.tours.geral?.length > 0 || tourDestaTela) && (
+                  <div className="flex flex-col items-start gap-2">
+                    {tourDestaTela && (
+                      <button
+                        type="button"
+                        onClick={() => { onClose(); setTourAtivo(tourDestaTela); }}
+                        className={`inline-flex items-center gap-2 text-sm font-medium ${a.text} hover:underline`}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Rever o tour desta tela ({sectionLabel(portal, tourDestaTela)})
+                      </button>
+                    )}
+                    {help.tours.geral?.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { onClose(); setTourAtivo('geral'); }}
+                        className={`inline-flex items-center gap-2 text-sm font-medium ${a.text} hover:underline`}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Rever o tour do portal
+                      </button>
+                    )}
+                  </div>
                 )}
               </>
             )}

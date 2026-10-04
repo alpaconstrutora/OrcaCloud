@@ -10,7 +10,7 @@ import { useStore } from '../store/useStore';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { portalHelpService, type PortalHelpRecord } from '../services/portalHelpService';
 import {
-  PORTAL_LABELS, PORTAL_SECTIONS, DEFAULT_ITEMS, TOUR_STEPS, mergePortalHelp, sectionLabel, hashText,
+  PORTAL_LABELS, PORTAL_SECTIONS, DEFAULT_ITEMS, mergePortalHelp, sectionLabel, hashText, todosOsPassos, tourLabel,
   type Portal, type HelpKind, type HelpItem, type MergedTourStep,
 } from '../utils/portalHelpDefaults';
 
@@ -91,7 +91,7 @@ const PortalHelpSettings: React.FC = () => {
 
     const deUmaOrg = (org: string | null, recs: PortalHelpRecord[]): Linha[] => {
       const m = mergePortalHelp(portal, recs, { includeHidden: true });
-      if (kind === 'tour') return m.tour.map(t => ({ chave: t.key, item: t, kind, orgId: t.rowId ? org : null, orgName: org ? nomeOrg(org) : undefined }));
+      if (kind === 'tour') return Object.values(m.tours).flat().map(t => ({ chave: t.key, item: t, kind, orgId: t.rowId ? org : null, orgName: org ? nomeOrg(org) : undefined }));
       const lista = kind === 'artigo' ? m.articles : m.faqs;
       return lista.map(i => ({ chave: i.key ?? i.rowId!, item: i, kind, orgId: i.rowId ? org : null, orgName: org && i.rowId ? nomeOrg(org) : undefined }));
     };
@@ -141,7 +141,7 @@ const PortalHelpSettings: React.FC = () => {
     if (!defaultKey) return '';
     const d = DEFAULT_ITEMS[portal].find(x => x.key === defaultKey);
     if (d) return d.body_html;
-    return TOUR_STEPS[portal].find(x => x.key === defaultKey)?.body ?? '';
+    return todosOsPassos(portal).find(x => x.key === defaultKey)?.body ?? '';
   };
 
   const salvar = async () => {
@@ -242,6 +242,12 @@ const PortalHelpSettings: React.FC = () => {
     await carregar();
   };
 
+  // "2º · Como usar: Documentos" — posição do passo dentro do tour dele
+  const posicaoNoTour = (st: MergedTourStep) => {
+    const doTour = todosOsPassos(portal).filter(x => x.tour === st.tour);
+    return `${doTour.findIndex(x => x.key === st.key) + 1}º · ${tourLabel(portal, st.tour)}`;
+  };
+
   const origemTexto = (l: Linha) => {
     if (l.kind === 'tour') return (l.item as MergedTourStep).origin === 'personalizado' ? 'Personalizado' : 'Padrão';
     const o = (l.item as HelpItem).origin;
@@ -317,7 +323,7 @@ const PortalHelpSettings: React.FC = () => {
                 <tr key={`${l.orgId ?? 'padrao'}:${l.chave}:${i}`} className="hover:bg-blue-50/50 transition-colors">
                   {!orgId && <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{l.orgName ?? 'Padrão do sistema'}</td>}
                   <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
-                    {l.kind === 'tour' ? `${TOUR_STEPS[portal].findIndex(t => t.key === (l.item as MergedTourStep).key) + 1}º · ${sectionLabel(portal, (l.item as MergedTourStep).section)}` : sectionLabel(portal, (l.item as HelpItem).section)}
+                    {l.kind === 'tour' ? posicaoNoTour(l.item as MergedTourStep) : sectionLabel(portal, (l.item as HelpItem).section)}
                   </td>
                   <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{l.item.title}</td>
                   <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${origemCor(origem)}`}>{origem}</td>

@@ -1181,7 +1181,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {showTab('dashboard') && (
             <div className="flex flex-col gap-6">
               {/* Header Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4" data-tour="dashboard-kpis">
                 <div className="bg-white border border-gray-200 p-5 rounded-2xl flex items-center justify-between shadow-sm">
                   <div>
                     <span className="text-xs text-gray-400 font-medium">Contratos Ativos</span>
@@ -1219,7 +1219,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               {/* Grid 2 Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Timeline */}
-                <div className="bg-white border border-gray-200 p-5 rounded-2xl lg:col-span-2 shadow-sm">
+                <div className="bg-white border border-gray-200 p-5 rounded-2xl lg:col-span-2 shadow-sm" data-tour="dashboard-atividades">
                   <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                     <Activity className="w-4 h-4 text-orange-500" />
                     Atividades Recentes
@@ -1269,7 +1269,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {showTab('conversas') && (
             <div className="flex h-[calc(100vh-12rem)] bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
               {/* Canais List */}
-              <div className="w-64 border-r border-gray-100 bg-gray-50 flex flex-col">
+              <div className="w-64 border-r border-gray-100 bg-gray-50 flex flex-col" data-tour="conversas-canais">
                 <div className="p-4 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">Canais</div>
                 <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
                   {conversations.map((conv) => (
@@ -1312,7 +1312,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       })}
                       <div ref={chatEndRef}></div>
                     </div>
-                    <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2 shrink-0">
+                    <form onSubmit={handleSendMessage} data-tour="conversas-enviar" className="p-4 border-t border-gray-100 bg-gray-50 flex gap-2 shrink-0">
                       <input
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
@@ -1344,6 +1344,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <h3 className="text-base font-bold text-gray-900">Documentos Compartilhados</h3>
                   <Button
+                    data-tour="documentos-enviar"
                     onClick={() => setIsSendDocModalOpen(true)}
                     disabled={isPreview}
                     title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
@@ -1423,12 +1424,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 )}
 
                 {/* Toolbar acoplada à tabela (§5.2 do guia de UI) — busca, filtros e config de colunas */}
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden" data-tour="documentos-tabela">
                   <div className="p-2 border-b border-gray-100 bg-white space-y-3">
                     <div className="flex flex-col md:flex-row gap-2.5 items-center">
                       <div className="flex-1 relative w-full">
                         <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
+                          data-tour="documentos-busca"
                           value={docSearchQuery}
                           onChange={(e) => setDocSearchQuery(e.target.value)}
                           placeholder="Buscar documento por nome, tipo ou código..."
@@ -1908,7 +1910,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
           {showTab('contratos') && !detailContract && (
             <div className="flex flex-col gap-6">
               <h3 className="text-base font-bold text-gray-900">Seus Contratos Ativos</h3>
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4" data-tour="contratos-lista">
                 {contracts.map((contract) => (
                   <div
                     key={contract.id}
@@ -1935,6 +1937,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                       </div>
                       <button
                         type="button"
+                        data-tour="contratos-detalhes"
                         onClick={() => openContractDetail(contract)}
                         className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
                       >
@@ -1984,6 +1987,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-gray-900">Solicitações de Atendimento</h3>
                 <Button
+                  data-tour="solicitacoes-nova"
                   onClick={() => setIsNewRequestModalOpen(true)}
                   disabled={isPreview}
                   title={isPreview ? 'Indisponível no modo de pré-visualização' : undefined}
@@ -1994,7 +1998,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </Button>
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3" data-tour="solicitacoes-lista">
                 {requests.map((req) => (
                   <div key={req.id} className="bg-white border border-gray-200 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
                     <div className="flex-1 min-w-0">
@@ -2220,7 +2224,9 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         token={portalToken}
         orgId={workspace?.organization_id ?? null}
         visibleSections={enabledTabs}
-        initialSection={activeTab}
+        currentSection={activeTab}
+        onNavigate={(s) => { setDetailContract(null); setActiveTab(s as typeof activeTab); }}
+        modoPrevia={isPreview}
         accent="orange"
         tourKey={portalToken || userEmail || null}
         autoTour={!isPreview}

@@ -1,114 +1,177 @@
 // @vitest-environment jsdom
 /**
- * Tour guiado dos portais — o componente que realça e conduz.
- * F3 (04/10/2026), docs/planos/2026-10-03-ajuda-portais-externos.md
+ * Tour guiado dos portais — motor v2 (04/10/2026).
+ * docs/planos/2026-10-04-tour-guiado-v2-portais.md
  *
  * O que trava:
- *   1. passo sem âncora no DOM é pulado; passo com âncora sem área (oculta) idem;
- *   2. "Próximo" até o fim termina como 'concluido'; "Pular" termina como 'pulado';
- *   3. sem nenhuma âncora, termina sozinho como 'pulado' (não fica insistindo);
- *   4. espera a âncora aparecer (portal ainda carregando) antes de começar.
+ *   1. o passo é resolvido QUANDO o tour chega nele: passo sem âncora (e sem
+ *      `quando`) é pulado ali, e a contagem "Passo i de n" conta todos;
+ *   2. passo com `quando` e sem elemento aparece centralizado com a nota
+ *      "Disponível quando…";
+ *   3. passo de outra aba chama `onNavigate(section)` UMA vez e espera a âncora;
+ *      ao terminar, volta para a aba em que começou;
+ *   4. clique fora NÃO encerra; Escape, X, Pular e Concluir encerram;
+ *   5. sem nenhuma âncora termina como 'pulado' sem aparecer;
+ *   6. funciona dentro de um <iframe> (prévia mobile): procura no ownerDocument.
  */
 import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { createPortal } from 'react-dom';
+import { render, screen, waitFor, act, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { PortalTour } from '../../components/portal/PortalTour';
 import { posicaoDoPopover } from '../../utils/portalTour';
 import type { MergedTourStep } from '../../utils/portalHelpDefaults';
 
-const passo = (key: string, anchor: string, title: string): MergedTourStep => ({
-  key, anchor, section: null, title, body: `Texto de ${title}`, rowId: null, origin: 'padrao', hidden: false,
+const passo = (anchor: string, title: string, extra: Partial<MergedTourStep> = {}): MergedTourStep => ({
+  key: `t.${anchor}`, anchor, section: null, tour: 'geral', title, body: `Texto de ${title}`,
+  rowId: null, origin: 'padrao', hidden: false, ...extra,
 });
-const PASSOS = [passo('t.menu', 'menu', 'Bem-vindo'), passo('t.doc', 'aba-documentos', 'Documentos'), passo('t.ajuda', 'ajuda', 'Ajuda à mão')];
 
-// jsdom não mede layout: damos área aos elementos marcados com data-area
-const rectOriginal = Element.prototype.getBoundingClientRect;
-beforeEach(() => {
-  Element.prototype.getBoundingClientRect = function (this: Element) {
+// jsdom não mede layout: dá área a quem tem data-area
+const comArea = (proto: { getBoundingClientRect: () => DOMRect }) => {
+  proto.getBoundingClientRect = function (this: Element) {
     const area = Number((this as HTMLElement).getAttribute?.('data-area') ?? 0);
     return { top: 40, left: 20, width: area, height: area, right: 20 + area, bottom: 40 + area, x: 20, y: 40, toJSON: () => ({}) } as DOMRect;
   };
-});
+};
+const rectOriginal = Element.prototype.getBoundingClientRect;
+beforeEach(() => { comArea(Element.prototype); });
 afterEach(() => {
   Element.prototype.getBoundingClientRect = rectOriginal;
-  // as âncoras vão direto no body (fora do container do RTL): limpar à mão
-  document.querySelectorAll('[data-tour]').forEach(el => el.parentElement?.remove());
+  document.querySelectorAll('[data-ancoras]').forEach(el => el.remove());
 });
 
-const montarAncoras = (quais: { anchor: string; area: number }[]) => {
-  const raiz = document.createElement('div');
+const ancoras = (quais: { anchor: string; area?: number }[], doc: Document = document) => {
+  const raiz = doc.createElement('div');
+  raiz.setAttribute('data-ancoras', '');
   for (const q of quais) {
-    const el = document.createElement('button');
+    const el = doc.createElement('button');
     el.setAttribute('data-tour', q.anchor);
-    el.setAttribute('data-area', String(q.area));
-    el.textContent = q.anchor;
+    el.setAttribute('data-area', String(q.area ?? 100));
+    el.textContent = `alvo ${q.anchor}`;
     raiz.appendChild(el);
   }
-  document.body.appendChild(raiz);
+  doc.body.appendChild(raiz);
   return raiz;
 };
 
-describe('PortalTour', () => {
-  it('pula passo sem âncora e passo com âncora oculta; Próximo até o fim = concluido', async () => {
-    const user = userEvent.setup();
-    const onFinish = vi.fn();
-    montarAncoras([{ anchor: 'menu', area: 100 }, { anchor: 'aba-documentos', area: 0 }]);
-    render(<PortalTour steps={PASSOS} onFinish={onFinish} maxTentativas={1} />);
-    expect(await screen.findByRole('dialog', { name: 'Tour do portal' })).toBeInTheDocument();
-    expect(screen.getByText('Bem-vindo')).toBeInTheDocument();
-    expect(screen.getByText('Passo 1 de 1')).toBeInTheDocument();
-    expect(screen.queryByText('Documentos')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Concluir' }));
-    expect(onFinish).toHaveBeenCalledWith('concluido');
-  });
+const RAPIDO = { maxTentativas: 3, tentativasCurtas: 1, intervaloMs: 5 };
 
-  it('dois passos visíveis: Próximo avança, Anterior volta, Pular termina como pulado', async () => {
+describe('PortalTour v2', () => {
+  it('pula o passo sem âncora ao chegar nele; contagem conta todos; Concluir no último', async () => {
     const user = userEvent.setup();
     const onFinish = vi.fn();
-    montarAncoras([{ anchor: 'menu', area: 100 }, { anchor: 'ajuda', area: 24 }]);
-    render(<PortalTour steps={PASSOS} onFinish={onFinish} maxTentativas={1} />);
-    await screen.findByText('Passo 1 de 2');
+    ancoras([{ anchor: 'menu' }, { anchor: 'ajuda' }]);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('sumiu', 'Fantasma'), passo('ajuda', 'Ajuda')]} onFinish={onFinish} {...RAPIDO} />);
+    expect(await screen.findByText('Bem-vindo')).toBeInTheDocument();
+    expect(screen.getByText('Passo 1 de 3')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Próximo' }));
-    expect(screen.getByText('Ajuda à mão')).toBeInTheDocument();
-    expect(screen.getByText('Passo 2 de 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Concluir' })).toBeInTheDocument();
+    expect(await screen.findByText('Ajuda')).toBeInTheDocument();
+    expect(screen.getByText('Passo 3 de 3')).toBeInTheDocument();
+    expect(screen.queryByText('Fantasma')).not.toBeInTheDocument();
+    // o passo pulado fica marcado nos pontos
+    expect(document.querySelectorAll('[data-ponto="pulado"]')).toHaveLength(1);
+    // Anterior volta direto ao 1º (o 2º não existe)
     await user.click(screen.getByRole('button', { name: 'Anterior' }));
-    expect(screen.getByText('Passo 1 de 2')).toBeInTheDocument();
+    expect(await screen.findByText('Bem-vindo')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Próximo' }));
+    await user.click(await screen.findByRole('button', { name: 'Concluir' }));
+    expect(onFinish).toHaveBeenCalledWith('concluido', 3);
+  });
+
+  it('passo com `quando` e sem elemento aparece centralizado com a nota', async () => {
+    const user = userEvent.setup();
+    ancoras([{ anchor: 'menu' }]);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('contratos-detalhes', 'Ver Detalhes', { quando: 'quando a construtora liberar um contrato' })]} onFinish={vi.fn()} {...RAPIDO} />);
+    await screen.findByText('Bem-vindo');
+    await user.click(screen.getByRole('button', { name: 'Próximo' }));
+    expect(await screen.findByText('Ver Detalhes')).toBeInTheDocument();
+    expect(screen.getByText('Disponível quando a construtora liberar um contrato.')).toBeInTheDocument();
+    expect(screen.getByText('Passo 2 de 2')).toBeInTheDocument();
+  });
+
+  it('passo de outra aba navega uma vez, espera a âncora e, ao terminar, volta para a aba de origem', async () => {
+    const user = userEvent.setup();
+    const onFinish = vi.fn();
+    ancoras([{ anchor: 'menu' }]);
+    let secao = 'dashboard';
+    const onNavigate = vi.fn((s: string) => {
+      secao = s;
+      if (s === 'documentos') setTimeout(() => ancoras([{ anchor: 'documentos-enviar' }]), 20);
+      rerender(<PortalTour steps={steps} onFinish={onFinish} currentSection={secao} onNavigate={onNavigate} maxTentativas={20} tentativasCurtas={1} intervaloMs={10} />);
+    });
+    const steps = [passo('menu', 'Bem-vindo'), passo('documentos-enviar', 'Enviar um arquivo', { section: 'documentos' })];
+    const { rerender } = render(<PortalTour steps={steps} onFinish={onFinish} currentSection={secao} onNavigate={onNavigate} maxTentativas={20} tentativasCurtas={1} intervaloMs={10} />);
+    await screen.findByText('Bem-vindo');
+    await user.click(screen.getByRole('button', { name: 'Próximo' }));
+    expect(await screen.findByText('Enviar um arquivo')).toBeInTheDocument();
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith('documentos');
+    await user.click(screen.getByRole('button', { name: 'Concluir' }));
+    expect(onNavigate).toHaveBeenLastCalledWith('dashboard');
+    expect(onFinish).toHaveBeenCalledWith('concluido', 2);
+  });
+
+  it('clique fora não encerra; Escape encerra como pulado', async () => {
+    const onFinish = vi.fn();
+    ancoras([{ anchor: 'menu' }]);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('ajuda', 'Ajuda')]} onFinish={onFinish} {...RAPIDO} />);
+    const dialogo = await screen.findByRole('dialog', { name: 'Tour do portal' });
+    const camada = dialogo.previousElementSibling as HTMLElement;
+    fireEvent.click(camada);
+    expect(onFinish).not.toHaveBeenCalled();
+    expect(screen.getByText('Bem-vindo')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onFinish).toHaveBeenCalledWith('pulado', 1);
+  });
+
+  it('Pular e o X encerram como pulado, informando até onde chegou', async () => {
+    const user = userEvent.setup();
+    const onFinish = vi.fn();
+    ancoras([{ anchor: 'menu' }, { anchor: 'ajuda' }]);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('ajuda', 'Ajuda'), passo('conta', 'Conta')]} onFinish={onFinish} {...RAPIDO} />);
+    await screen.findByText('Bem-vindo');
+    await user.click(screen.getByRole('button', { name: 'Próximo' }));
+    await screen.findByText('Ajuda');
     await user.click(screen.getByRole('button', { name: 'Pular' }));
-    expect(onFinish).toHaveBeenCalledWith('pulado');
-    expect(onFinish).toHaveBeenCalledTimes(1);
+    expect(onFinish).toHaveBeenCalledWith('pulado', 2);
   });
 
-  it('sem nenhuma âncora termina sozinho como pulado, sem renderizar nada', async () => {
+  it('sem nenhuma âncora termina como pulado sem aparecer', async () => {
     const onFinish = vi.fn();
-    render(<PortalTour steps={PASSOS} onFinish={onFinish} maxTentativas={1} />);
-    await waitFor(() => expect(onFinish).toHaveBeenCalledWith('pulado'));
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo'), passo('ajuda', 'Ajuda')]} onFinish={onFinish} {...RAPIDO} />);
+    await waitFor(() => expect(onFinish).toHaveBeenCalledWith('pulado', 0));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('espera a âncora do primeiro passo aparecer (portal carregando)', async () => {
+  it('espera o primeiro alvo aparecer (portal carregando)', async () => {
     const onFinish = vi.fn();
-    render(<PortalTour steps={PASSOS} onFinish={onFinish} maxTentativas={10} />);
+    render(<PortalTour steps={[passo('menu', 'Bem-vindo')]} onFinish={onFinish} maxTentativas={40} intervaloMs={10} />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    await act(async () => { montarAncoras([{ anchor: 'menu', area: 100 }]); });
-    expect(await screen.findByText('Bem-vindo', {}, { timeout: 2000 })).toBeInTheDocument();
+    await act(async () => { await new Promise(r => setTimeout(r, 60)); ancoras([{ anchor: 'menu' }]); });
+    expect(await screen.findByText('Bem-vindo')).toBeInTheDocument();
     expect(onFinish).not.toHaveBeenCalled();
   });
 
-  it('Escape pula', async () => {
-    const user = userEvent.setup();
+  it('dentro de um iframe (prévia mobile) acha a âncora no documento do iframe, não no da página', async () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument!;
+    comArea((iframe.contentWindow as unknown as { Element: { prototype: { getBoundingClientRect: () => DOMRect } } }).Element.prototype);
+    // a página de fora NÃO tem a âncora; o iframe tem
+    ancoras([{ anchor: 'menu' }], doc);
     const onFinish = vi.fn();
-    montarAncoras([{ anchor: 'menu', area: 100 }]);
-    render(<PortalTour steps={PASSOS} onFinish={onFinish} maxTentativas={1} />);
-    await screen.findByText('Bem-vindo');
-    await user.keyboard('{Escape}');
-    expect(onFinish).toHaveBeenCalledWith('pulado');
+    const { unmount } = render(<>{createPortal(<PortalTour steps={[passo('menu', 'Bem-vindo no celular')]} onFinish={onFinish} {...RAPIDO} />, doc.body)}</>);
+    expect(await within(doc.body).findByText('Bem-vindo no celular')).toBeInTheDocument();
+    expect(onFinish).not.toHaveBeenCalled();
+    unmount();
+    iframe.remove();
   });
 });
 
 describe('posicaoDoPopover', () => {
-  const pop = { width: 320, height: 190 };
+  const pop = { width: 320, height: 210 };
   const janela = { width: 1400, height: 800 };
   it('à direita quando cabe', () => {
     expect(posicaoDoPopover({ top: 100, left: 0, width: 256, height: 400 }, pop, janela)).toMatchObject({ lado: 'direita', left: 272, top: 100 });

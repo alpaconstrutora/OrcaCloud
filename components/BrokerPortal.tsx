@@ -543,7 +543,9 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 token={portalToken}
                 orgId={initialOrgId || selectedOrgId || null}
                 visibleSections={enabledTabIds}
-                initialSection={currentTab}
+                currentSection={currentTab}
+                onNavigate={(s) => { setShowSimulator(false); setCurrentTab(s as PortalTab); }}
+                modoPrevia={isPreview}
                 accent="indigo"
                 tourKey={portalToken || effectiveBrokerEmail || null}
                 autoTour={isStandalone}
@@ -781,12 +783,13 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             {/* Tab Navigation — só no app autenticado; no portal público a navegação fica na sidebar da casca */}
             {!isStandalone && (
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full" data-tour="menu">
                     {navTabs.map(tab => {
                         const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
                         return (
                             <button
                                 key={tab.id}
+                                data-tour={`aba-${tab.id}`}
                                 onClick={() => { setCurrentTab(tab.id as PortalTab); setShowSimulator(false); }}
                                 className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                     currentTab === tab.id

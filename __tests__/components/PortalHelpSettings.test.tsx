@@ -152,6 +152,8 @@ describe('PortalHelpSettings', () => {
     expect(screen.getByText(/A posição dos passos na tela é fixa/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Novo item' })).not.toBeInTheDocument();
     expect(screen.getByText('Bem-vindo ao Portal do Parceiro')).toBeInTheDocument();
-    expect(screen.getByText(/^1º · Geral$/)).toBeInTheDocument();
+    expect(screen.getByText(/^1º · Tour do portal$/)).toBeInTheDocument();
+    // mini-tours por aba também aparecem para editar
+    expect(screen.getAllByText(/^1º · Como usar: Documentos$/).length).toBeGreaterThan(0);
   });
 });

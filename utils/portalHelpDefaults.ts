@@ -73,14 +73,29 @@ export interface DefaultHelpItem {
   body_html: string;
 }
 
+/** 'geral' = tour do portal; qualquer outro valor = id da aba (mini-tour "como usar esta tela"). */
+export type TourId = string;
+
 export interface TourStep {
   key: string;
   /** Valor do atributo `data-tour` no elemento do portal. Fixo no código. */
   anchor: string;
-  /** Aba em que o passo faz sentido; null = sempre. */
+  /**
+   * Aba onde o elemento está; null = cromo (sidebar, header). O tour usa para
+   * NAVEGAR até a aba antes de procurar a âncora, e `visibleSections` usa para
+   * tirar passo de aba oculta.
+   */
   section: string | null;
+  /** a que tour o passo pertence */
+  tour: TourId;
   title: string;
   body: string;
+  /**
+   * Pré-requisito em texto ("quando houver um contrato"). Com ele, se o
+   * elemento não existir (falta dado), o passo aparece centralizado com a nota
+   * "Disponível quando…"; sem ele, passo sem elemento é pulado em silêncio.
+   */
+  quando?: string;
 }
 
 const p = (...paras: string[]) => paras.map(t => `<p>${t}</p>`).join('');
@@ -379,30 +394,100 @@ export const DEFAULT_ITEMS: Record<Portal, DefaultHelpItem[]> = {
   corretor: CORRETOR,
 };
 
+type PassoSemTour = Omit<TourStep, 'tour'>;
+const tourDe = (tour: TourId, passos: PassoSemTour[]): TourStep[] => passos.map(x => ({ ...x, tour }));
+
 /**
- * Passos do tour. Âncoras = `data-tour` nos portais: `menu` (sidebar / barra
- * inferior), `aba-<id>` (botão de cada aba), `ajuda` (botão ?), `conta` (menu
- * da conta). Teste: __tests__/portalTourAnchors.test.ts.
+ * Tours guiados. `geral` = tour do portal (primeiro acesso); `porAba` =
+ * mini-tour "como usar esta tela" na primeira visita a cada aba.
+ *
+ * Âncoras = `data-tour` nos portais: `menu` (sidebar / barra inferior),
+ * `aba-<id>` (botão de cada aba), `ajuda` (botão ?), `conta` (menu da conta) e
+ * `<aba>-<elemento>` no conteúdo das abas. Teste: __tests__/portalTourAnchors.test.ts.
+ *
+ * Chaves antigas (`parceiro.tour.menu`…) foram MANTIDAS: sobrescritas já
+ * gravadas pela construtora continuam valendo. Novas: `<portal>.tour.<geral|aba>.<slug>`.
+ * Passos de telas de detalhe (dentro de um contrato/pedido/cotação) não entram
+ * no padrão: só existem depois de uma ação do usuário.
  */
-export const TOUR_STEPS: Record<Portal, TourStep[]> = {
-  parceiro: [
-    { key: 'parceiro.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Parceiro', body: 'Este menu leva às seções liberadas para a sua empresa: contratos, documentos, financeiro, solicitações e conversas.' },
-    { key: 'parceiro.tour.documentos', anchor: 'aba-documentos', section: 'documentos', title: 'Documentos', body: 'Aqui ficam os projetos e contratos que a construtora compartilhou. Também é por aqui que você envia arquivos para ela.' },
-    { key: 'parceiro.tour.solicitacoes', anchor: 'aba-solicitacoes', section: 'solicitacoes', title: 'Solicitações', body: 'Pedidos formais à construtora saem daqui, com número e status para acompanhar.' },
-    { key: 'parceiro.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
-    { key: 'parceiro.tour.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê os dados da sua empresa e do seu usuário e, no acesso por e-mail, sai do portal.' },
-  ],
-  fornecedor: [
-    { key: 'fornecedor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Fornecedor', body: 'O menu leva às seções liberadas para a sua empresa: cotações, lances, pedidos, notas fiscais e financeiro.' },
-    { key: 'fornecedor.tour.pedidos', anchor: 'aba-orders', section: 'orders', title: 'Pedidos', body: 'Aqui você acompanha os pedidos de compra e atualiza a logística de entrega.' },
-    { key: 'fornecedor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
-  ],
-  corretor: [
-    { key: 'corretor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Corretor', body: 'O menu leva às seções liberadas para você: estoque, propostas, leads, comissões, materiais e mais.' },
-    { key: 'corretor.tour.propostas', anchor: 'aba-propostas', section: 'propostas', title: 'Propostas', body: 'Envie propostas de compra e acompanhe a resposta da incorporadora por aqui.' },
-    { key: 'corretor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da incorporadora.' },
-  ],
+export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<string, TourStep[]>> }> = {
+  parceiro: {
+    geral: tourDe('geral', [
+      { key: 'parceiro.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Parceiro', body: 'Este menu leva às seções liberadas para a sua empresa: contratos, documentos, financeiro, solicitações e conversas.' },
+      { key: 'parceiro.tour.documentos', anchor: 'aba-documentos', section: 'documentos', title: 'Documentos', body: 'Aqui ficam os projetos e contratos que a construtora compartilhou. Também é por aqui que você envia arquivos para ela.' },
+      { key: 'parceiro.tour.geral.documentos-enviar', anchor: 'documentos-enviar', section: 'documentos', title: 'Enviar um arquivo', body: 'Por este botão você manda um documento para a construtora. Ele fica em "Enviados por você" até ser incluído no GED.' },
+      { key: 'parceiro.tour.geral.contratos', anchor: 'aba-contratos', section: 'contratos', title: 'Contratos', body: 'Seus contratos com a construtora: valor, prazo, medições e aditivos.' },
+      { key: 'parceiro.tour.geral.contratos-lista', anchor: 'contratos-lista', section: 'contratos', title: 'Seus contratos', body: 'Clique em um contrato para abrir a visão geral, os itens, as medições e o PDF assinado.' },
+      { key: 'parceiro.tour.solicitacoes', anchor: 'aba-solicitacoes', section: 'solicitacoes', title: 'Solicitações', body: 'Pedidos formais à construtora saem daqui, com número e status para acompanhar.' },
+      { key: 'parceiro.tour.geral.solicitacoes-nova', anchor: 'solicitacoes-nova', section: 'solicitacoes', title: 'Nova Solicitação', body: 'Prazo, escopo, documento faltante: abra o pedido por aqui e ele ganha número e status.' },
+      { key: 'parceiro.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
+      { key: 'parceiro.tour.conta', anchor: 'conta', section: null, title: 'Sua conta', body: 'No menu da conta você vê os dados da sua empresa e do seu usuário e, no acesso por e-mail, sai do portal.' },
+    ]),
+    porAba: {
+      dashboard: tourDe('dashboard', [
+        { key: 'parceiro.tour.dashboard.kpis', anchor: 'dashboard-kpis', section: 'dashboard', title: 'Seus números', body: 'Contratos ativos, solicitações abertas, documentos compartilhados e valor contratado, de relance.' },
+        { key: 'parceiro.tour.dashboard.atividades', anchor: 'dashboard-atividades', section: 'dashboard', title: 'Atividades recentes', body: 'As últimas solicitações e os últimos documentos que a construtora compartilhou com você.' },
+      ]),
+      conversas: tourDe('conversas', [
+        { key: 'parceiro.tour.conversas.canais', anchor: 'conversas-canais', section: 'conversas', title: 'Canais', body: 'Cada canal é uma conversa aberta pela construtora. Escolha um para ver as mensagens.' },
+        { key: 'parceiro.tour.conversas.enviar', anchor: 'conversas-enviar', section: 'conversas', title: 'Enviar mensagem', body: 'Escreva e envie; a equipe responde pelo mesmo canal. Pedidos formais vão pela aba Solicitações.', quando: 'quando a construtora abrir um canal' },
+      ]),
+      documentos: tourDe('documentos', [
+        { key: 'parceiro.tour.documentos.busca', anchor: 'documentos-busca', section: 'documentos', title: 'Buscar', body: 'Ache um documento por nome, tipo ou código. Ao lado ficam os filtros por pasta, disciplina e status.' },
+        { key: 'parceiro.tour.documentos.tabela', anchor: 'documentos-tabela', section: 'documentos', title: 'Documentos compartilhados', body: 'Baixe pela seta e gere a etiqueta pelo QR. A engrenagem escolhe as colunas visíveis.' },
+        { key: 'parceiro.tour.documentos.enviar', anchor: 'documentos-enviar', section: 'documentos', title: 'Enviar documento', body: 'Mande um arquivo para a construtora, com uma observação se quiser.' },
+      ]),
+      contratos: tourDe('contratos', [
+        { key: 'parceiro.tour.contratos.lista', anchor: 'contratos-lista', section: 'contratos', title: 'Seus contratos', body: 'Status, valor e prazo de cada contrato. Clique para abrir o detalhe.' },
+        { key: 'parceiro.tour.contratos.detalhes', anchor: 'contratos-detalhes', section: 'contratos', title: 'Ver Detalhes', body: 'Abre a visão geral, os itens, as medições, os aditivos e a retenção do contrato.', quando: 'quando a construtora liberar um contrato' },
+      ]),
+      financeiro: tourDe('financeiro', [
+        { key: 'parceiro.tour.financeiro.kpis', anchor: 'financeiro-kpis', section: 'financeiro', title: 'Resumo financeiro', body: 'O que você tem a receber, o que já recebeu e o que está retido de garantia.' },
+        { key: 'parceiro.tour.financeiro.parcelas', anchor: 'financeiro-parcelas', section: 'financeiro', title: 'Parcelas', body: 'Vencimento, valor e status de cada parcela. O recibo aparece quando o pagamento é feito.' },
+        { key: 'parceiro.tour.financeiro.medicoes', anchor: 'financeiro-medicoes', section: 'financeiro', title: 'Medições', body: 'Valor bruto, retenção e líquido de cada medição.' },
+        { key: 'parceiro.tour.financeiro.anexar-nf', anchor: 'financeiro-anexar-nf', section: 'financeiro', title: 'Anexar a nota fiscal', body: 'Envie a NF da medição por aqui. Sem ela a parcela não é liberada.', quando: 'quando houver uma medição sem nota fiscal' },
+      ]),
+      solicitacoes: tourDe('solicitacoes', [
+        { key: 'parceiro.tour.solicitacoes.nova', anchor: 'solicitacoes-nova', section: 'solicitacoes', title: 'Nova Solicitação', body: 'Dê um título, escolha o tipo e a prioridade e anexe arquivos se precisar.' },
+        { key: 'parceiro.tour.solicitacoes.lista', anchor: 'solicitacoes-lista', section: 'solicitacoes', title: 'Acompanhe', body: 'Cada solicitação mostra o status, que muda conforme a construtora analisa.' },
+      ]),
+    },
+  },
+  fornecedor: {
+    geral: tourDe('geral', [
+      { key: 'fornecedor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Fornecedor', body: 'O menu leva às seções liberadas para a sua empresa: cotações, lances, pedidos, notas fiscais e financeiro.' },
+      { key: 'fornecedor.tour.pedidos', anchor: 'aba-orders', section: 'orders', title: 'Pedidos', body: 'Aqui você acompanha os pedidos de compra e atualiza a logística de entrega.' },
+      { key: 'fornecedor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da construtora.' },
+    ]),
+    porAba: {},
+  },
+  corretor: {
+    geral: tourDe('geral', [
+      { key: 'corretor.tour.menu', anchor: 'menu', section: null, title: 'Bem-vindo ao Portal do Corretor', body: 'O menu leva às seções liberadas para você: estoque, propostas, leads, comissões, materiais e mais.' },
+      { key: 'corretor.tour.propostas', anchor: 'aba-propostas', section: 'propostas', title: 'Propostas', body: 'Envie propostas de compra e acompanhe a resposta da incorporadora por aqui.' },
+      { key: 'corretor.tour.ajuda', anchor: 'ajuda', section: null, title: 'Ajuda sempre à mão', body: 'Este botão abre a central de ajuda, com artigos por seção, perguntas frequentes e o contato da incorporadora.' },
+    ]),
+    porAba: {},
+  },
 };
+
+/** Compat: o tour do portal (geral). */
+export const TOUR_STEPS: Record<Portal, TourStep[]> = {
+  parceiro: TOURS.parceiro.geral,
+  fornecedor: TOURS.fornecedor.geral,
+  corretor: TOURS.corretor.geral,
+};
+
+/** Todos os passos padrão de um portal (geral + por aba), na ordem de declaração. */
+export function todosOsPassos(portal: Portal): TourStep[] {
+  const porAba = Object.values(TOURS[portal].porAba).flatMap(l => l ?? []);
+  return [...TOURS[portal].geral, ...porAba];
+}
+
+/** Nome de um tour para o usuário. */
+export function tourLabel(portal: Portal, tourId: TourId): string {
+  return tourId === 'geral' ? 'Tour do portal' : `Como usar: ${sectionLabel(portal, tourId)}`;
+}
 
 // ── Junção padrão + banco ────────────────────────────────────────────────────
 
@@ -445,7 +530,10 @@ export interface MergedTourStep extends TourStep {
 export interface MergedHelp {
   articles: HelpItem[];
   faqs: HelpItem[];
+  /** compat: = tours.geral */
   tour: MergedTourStep[];
+  /** `geral` sempre; abas só quando têm ao menos um passo visível */
+  tours: Record<TourId, MergedTourStep[]>;
 }
 
 /** Hash curto e estável (djb2) do corpo padrão — para "o padrão mudou". */
@@ -508,7 +596,7 @@ export function mergePortalHelp(
   const ordenar = (a: HelpItem, b: HelpItem) => a.sort_order - b.sort_order;
   const filtrar = (it: HelpItem) => visivel(it.section, opts.visibleSections);
 
-  const tour: MergedTourStep[] = TOUR_STEPS[portal].map((s): MergedTourStep => {
+  const juntarPasso = (s: TourStep): MergedTourStep => {
     const o = porChave.get(s.key);
     return {
       ...s,
@@ -518,12 +606,21 @@ export function mergePortalHelp(
       origin: o ? 'personalizado' : 'padrao',
       hidden: !!o && !o.is_published,
     };
-  }).filter(s => (opts.includeHidden || !s.hidden) && visivel(s.section, opts.visibleSections));
+  };
+  const passoEntra = (s: MergedTourStep) => (opts.includeHidden || !s.hidden) && visivel(s.section, opts.visibleSections);
+
+  const tours: Record<TourId, MergedTourStep[]> = { geral: TOURS[portal].geral.map(juntarPasso).filter(passoEntra) };
+  for (const [aba, passos] of Object.entries(TOURS[portal].porAba)) {
+    if (!passos || !visivel(aba, opts.visibleSections)) continue;
+    const lista = passos.map(juntarPasso).filter(passoEntra);
+    if (lista.length > 0) tours[aba] = lista;
+  }
 
   return {
     articles: itens.filter(i => i.kind === 'artigo').filter(filtrar).sort(ordenar),
     faqs: itens.filter(i => i.kind === 'faq').filter(filtrar).sort(ordenar),
-    tour,
+    tour: tours.geral,
+    tours,
   };
 }
 

@@ -12,16 +12,20 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TOUR_STEPS, DEFAULT_ITEMS, PORTAL_SECTIONS, type Portal } from '../utils/portalHelpDefaults';
+import { TOURS, TOUR_STEPS, DEFAULT_ITEMS, PORTAL_SECTIONS, todosOsPassos, type Portal } from '../utils/portalHelpDefaults';
 import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 
-const ARQUIVO: Record<Portal, string> = {
-  parceiro: 'components/partner/PartnerPortal.tsx',
-  fornecedor: 'components/SupplierDashboard.tsx',
-  corretor: 'components/BrokerPortal.tsx',
+// Arquivos onde as âncoras de cada portal podem estar: a casca + os filhos que
+// desenham o conteúdo das abas. O primeiro é o arquivo do portal.
+const ARQUIVOS: Record<Portal, string[]> = {
+  parceiro: ['components/partner/PartnerPortal.tsx', 'components/partner/PartnerPortalFinanceiro.tsx'],
+  fornecedor: ['components/SupplierDashboard.tsx'],
+  corretor: ['components/BrokerPortal.tsx'],
 };
+const fonteDe = (portal: Portal) =>
+  ARQUIVOS[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');
 const ABAS: Record<Portal, readonly string[]> = {
   parceiro: PARTNER_PORTAL_TAB_IDS,
   fornecedor: SUPPLIER_PORTAL_TAB_IDS,
@@ -31,9 +35,9 @@ const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor'];
 
 describe('âncoras do tour existem nos portais', () => {
   it.each(PORTAIS)('%s', (portal) => {
-    const fonte = readFileSync(resolve(__dirname, '..', ARQUIVO[portal]), 'utf-8');
+    const fonte = fonteDe(portal);
     expect(fonte).toContain('data-tour={`aba-${');
-    for (const passo of TOUR_STEPS[portal]) {
+    for (const passo of todosOsPassos(portal)) {
       if (passo.anchor.startsWith('aba-')) {
         expect(ABAS[portal], `${passo.key}: aba ${passo.anchor}`).toContain(passo.anchor.slice(4));
       } else {
@@ -43,6 +47,27 @@ describe('âncoras do tour existem nos portais', () => {
     // o tour sempre começa pelo menu e todo portal tem o botão de ajuda ancorado
     expect(TOUR_STEPS[portal][0].anchor).toBe('menu');
     expect(fonte).toContain('data-tour="ajuda"');
+  });
+
+  it.each(PORTAIS)('%s: mini-tours só de abas que existem, com passos da própria aba', (portal) => {
+    const abas = new Set(PORTAL_SECTIONS[portal].map(x => x.id));
+    for (const [aba, passos] of Object.entries(TOURS[portal].porAba)) {
+      expect(abas.has(aba), `mini-tour de aba inexistente: ${aba}`).toBe(true);
+      for (const passo of passos ?? []) {
+        expect(passo.tour).toBe(aba);
+        expect(passo.section, `${passo.key} aponta para outra aba`).toBe(aba);
+      }
+      // sem âncora repetida dentro do mesmo tour
+      const ancoras = (passos ?? []).map(x => x.anchor);
+      expect(new Set(ancoras).size).toBe(ancoras.length);
+    }
+    const geral = TOURS[portal].geral.map(x => x.anchor);
+    expect(new Set(geral).size).toBe(geral.length);
+  });
+
+  it.each(PORTAIS)('%s: chaves de passo únicas no portal', (portal) => {
+    const chaves = todosOsPassos(portal).map(x => x.key);
+    expect(new Set(chaves).size).toBe(chaves.length);
   });
 });
 

@@ -12,9 +12,10 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_ITEMS, PORTAL_SECTIONS, TOUR_STEPS, mergePortalHelp, htmlToText, hashText, sectionLabel,
+  DEFAULT_ITEMS, PORTAL_SECTIONS, TOUR_STEPS, TOURS, mergePortalHelp, htmlToText, hashText, sectionLabel, tourLabel,
   type Portal, type PortalHelpRow,
 } from '../utils/portalHelpDefaults';
+import { chaveDoTour } from '../utils/portalTour';
 import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 
 const PORTAIS: Portal[] = ['parceiro', 'fornecedor', 'corretor'];
@@ -140,5 +141,57 @@ describe('htmlToText / hashText', () => {
   it('hash estável e distinto', () => {
     expect(hashText('abc')).toBe(hashText('abc'));
     expect(hashText('abc')).not.toBe(hashText('abd'));
+  });
+});
+
+describe('tours: geral + por aba (v2, 04/10/2026)', () => {
+  it('TOUR_STEPS é o tour geral (compat) e merge.tour === merge.tours.geral', () => {
+    for (const p of PORTAIS) {
+      expect(TOUR_STEPS[p]).toBe(TOURS[p].geral);
+      const m = mergePortalHelp(p, null);
+      expect(m.tour).toBe(m.tours.geral);
+    }
+  });
+
+  it('tours traz o geral e só as abas com passo; cada passo sabe o seu tour', () => {
+    const m = mergePortalHelp('parceiro', null);
+    expect(Object.keys(m.tours)).toEqual(['geral', ...Object.keys(TOURS.parceiro.porAba)]);
+    expect(m.tours.documentos.every(x => x.tour === 'documentos')).toBe(true);
+    expect(m.tours.geral.every(x => x.tour === 'geral')).toBe(true);
+  });
+
+  it('visibleSections tira o mini-tour da aba oculta e os passos do geral daquela aba', () => {
+    const m = mergePortalHelp('parceiro', null, { visibleSections: ['dashboard', 'documentos'] });
+    expect(m.tours.contratos).toBeUndefined();
+    expect(m.tours.documentos).toBeDefined();
+    expect(m.tours.geral.some(x => x.section === 'contratos')).toBe(false);
+    expect(m.tours.geral.some(x => x.anchor === 'documentos-enviar')).toBe(true);
+  });
+
+  it('sobrescrita despublicada oculta o passo no tour dele; mini-tour sem passo some', () => {
+    const passos = TOURS.parceiro.porAba.dashboard!;
+    const rows = passos.map((x, i) => row({ id: `d${i}`, kind: 'tour', default_key: x.key, is_published: false }));
+    const m = mergePortalHelp('parceiro', rows);
+    expect(m.tours.dashboard).toBeUndefined();
+    expect(mergePortalHelp('parceiro', rows, { includeHidden: true }).tours.dashboard).toHaveLength(passos.length);
+  });
+
+  it('chave do "já viu": tour geral sem sufixo (marcas antigas valem); aba com sufixo', () => {
+    expect(chaveDoTour('parceiro', 'tok')).toBe('portalHelp:tour:parceiro:tok');
+    expect(chaveDoTour('parceiro', 'tok', 'geral')).toBe('portalHelp:tour:parceiro:tok');
+    expect(chaveDoTour('parceiro', 'tok', 'documentos')).toBe('portalHelp:tour:parceiro:tok:documentos');
+  });
+
+  it('tourLabel', () => {
+    expect(tourLabel('parceiro', 'geral')).toBe('Tour do portal');
+    expect(tourLabel('parceiro', 'financeiro')).toBe('Como usar: Financeiro');
+  });
+
+  it('passo com `quando` só no que depende de dado (texto começa com "quando")', () => {
+    for (const p of PORTAIS) {
+      for (const lista of [TOURS[p].geral, ...Object.values(TOURS[p].porAba)]) {
+        for (const x of lista ?? []) if (x.quando) expect(x.quando).toMatch(/^quando /);
+      }
+    }
   });
 });

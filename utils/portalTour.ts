@@ -1,4 +1,4 @@
-import type { Portal } from './portalHelpDefaults';
+import type { Portal, TourId } from './portalHelpDefaults';
 
 /**
  * Tour guiado dos portais externos — "já viu" por aparelho.
@@ -7,8 +7,12 @@ import type { Portal } from './portalHelpDefaults';
  * localStorage por portal + identidade (token ou e-mail). Logado por e-mail,
  * trocar de aparelho repete o tour uma vez — aceito nesta entrega (F4, se
  * pedirem, guarda por e-mail em tabela).
+ *
+ * O tour geral mantém a chave sem sufixo (quem já viu antes do mini-tour por
+ * aba existir não revê); cada aba ganha `:<aba>`.
  */
-export const chaveDoTour = (portal: Portal, id: string) => `portalHelp:tour:${portal}:${id}`;
+export const chaveDoTour = (portal: Portal, id: string, tourId: TourId = 'geral') =>
+  tourId === 'geral' ? `portalHelp:tour:${portal}:${id}` : `portalHelp:tour:${portal}:${id}:${tourId}`;
 
 export function tourVisto(chave: string): boolean {
   try { return !!localStorage.getItem(chave); } catch { return true; }

@@ -1745,7 +1745,15 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 token={portalToken}
                 orgId={(effectiveSupplier as { organization_id?: string | null } | null | undefined)?.organization_id ?? null}
                 visibleSections={enabledTabIds}
-                initialSection={activeTab}
+                currentSection={activeTab}
+                onNavigate={(s) => {
+                    setActiveOrderId(null);
+                    setOrderViewMode('list');
+                    setActiveQuotationId(null);
+                    setActiveNegotiationId(null);
+                    setActiveTab(s as SupplierPortalTab);
+                }}
+                modoPrevia={isPreview}
                 accent="coral"
                 tourKey={portalToken || effectiveSupplier?.email || null}
                 autoTour={isStandalone}

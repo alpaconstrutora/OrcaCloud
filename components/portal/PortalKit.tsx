@@ -72,8 +72,8 @@ export const fmtMonthShort = (d: Date) =>
     `${compact(d, { month: 'short' })}/${String(d.getFullYear()).slice(-2)}`;
 
 // ── Card ──────────────────────────────────────────────────────────────────────
-export const PortalCard: React.FC<{ className?: string; children: React.ReactNode }> = ({ className = '', children }) => (
-    <div className={`bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${className}`}>
+export const PortalCard: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...rest }) => (
+    <div {...rest} className={`bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${className}`}>
         {children}
     </div>
 );
@@ -94,8 +94,8 @@ export interface KpiItem {
     onClick?: () => void;
 }
 
-export const KpiStrip: React.FC<{ items: KpiItem[] }> = ({ items }) => (
-    <PortalCard className="overflow-hidden">
+export const KpiStrip: React.FC<{ items: KpiItem[] } & Omit<React.HTMLAttributes<HTMLDivElement>, 'children'>> = ({ items, ...rest }) => (
+    <PortalCard {...rest} className="overflow-hidden">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-[#ECECEF]">
             {items.map(item => (
                 <div

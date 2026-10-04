@@ -806,6 +806,29 @@ const App: React.FC = () => {
     );
   }
 
+  // ── Portal do Parceiro (login por e-mail) ────────────────────────────────────
+  // Mesma casca própria do acesso pelo link (cabeçalho "Partner Portal" + menu do
+  // parceiro). Até 03/10/2026 entrava pelo AppRouter, DENTRO do <Layout>: o
+  // parceiro via a sidebar do Òpura e o seletor de organizações (print do
+  // usuário). O "Sair" vem do menu de conta do próprio portal.
+  if (selectedLoginGroup === ProfileGroup.PARTNER) {
+    if (!profileSynchronized) {
+      return (
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        </div>
+      );
+    }
+    return (
+      <React.Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+        <PartnerPortalPublic
+          userEmail={session?.user?.email || ''}
+          onLogout={() => { setSelectedLoginGroup(null); setSession(null); supabase.auth.signOut(); }}
+        />
+      </React.Suspense>
+    );
+  }
+
   // ── Layout principal ─────────────────────────────────────────────────────────
   // Editar projeto ocupa o lugar do conteúdo roteado (ver o comentário no JSX).
   const editandoProjeto = isProjectModalOpen && projectModalMode === 'edit';

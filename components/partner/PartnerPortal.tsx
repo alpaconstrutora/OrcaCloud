@@ -31,6 +31,7 @@ import {
   Filter,
   MoveHorizontal,
   Building2,
+  LogOut,
   EyeOff
 } from 'lucide-react';
 import { extractTokenFromFileName } from '../../utils/dmsUtils';
@@ -82,6 +83,9 @@ interface PartnerPortalProps {
   onExitPreview?: () => void;
   /** Acesso via link público (sem login), mesmo padrão do Portal do Cliente/Investidor. */
   portalToken?: string;
+  /** Login por e-mail: o portal roda fora da casca do app e o "Sair" fica no menu
+   *  da conta. Sem a prop (link e pré-visualização), o item não aparece. */
+  onLogout?: () => void;
 }
 
 // Pasta / disciplina compartilhadas com o parceiro (subconjunto do que a RPC/serviço devolve).
@@ -124,7 +128,7 @@ const TAB_ICONS: Record<PartnerPortalTabId, React.ElementType> = {
   solicitacoes: ClipboardList,
 };
 
-export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken }) => {
+export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken, onLogout }) => {
   const isPreview = !!previewWorkspaceId;
   const isTokenMode = !!portalToken;
   const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'financeiro' | 'solicitacoes'>('dashboard');
@@ -1098,6 +1102,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <HelpCircle className="h-4 w-4 text-gray-400" />
                   <span className="flex-1">Ajuda e comandos</span>
                 </button>
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => { setIsAccountMenuOpen(false); onLogout(); }}
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                    role="menuitem"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span className="flex-1">Sair</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

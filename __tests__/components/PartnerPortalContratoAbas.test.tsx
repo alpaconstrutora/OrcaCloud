@@ -234,3 +234,29 @@ describe('PartnerPortal › detalhe do contrato — abas configuradas', () => {
         expect(screen.queryByText('Apoio mensal')).toBeNull();
     });
 });
+
+/**
+ * Login por e-mail roda FORA da casca do app (03/10/2026: o parceiro via a
+ * sidebar do Òpura e o seletor de organizações). Sem a casca, o "Sair" mora no
+ * menu da conta do portal — só quando quem monta passa `onLogout`.
+ */
+describe('PartnerPortal — "Sair" no menu da conta', () => {
+    beforeEach(() => { vi.clearAllMocks(); window.localStorage.clear(); });
+
+    it('login por e-mail: o menu tem "Sair" e ele chama onLogout', async () => {
+        const onLogout = vi.fn();
+        const user = userEvent.setup();
+        render(<ConfirmProvider><PartnerPortal userEmail="eu@parceiro.com" onLogout={onLogout} /></ConfirmProvider>);
+        await user.click(await screen.findByRole('button', { expanded: false, name: /Afonso/ }));
+        await user.click(screen.getByRole('menuitem', { name: 'Sair' }));
+        expect(onLogout).toHaveBeenCalledTimes(1);
+    });
+
+    it('link público: sem "Sair" (não há sessão para encerrar)', async () => {
+        const user = userEvent.setup();
+        render(<ConfirmProvider><PartnerPortal userEmail="" portalToken="tok123" /></ConfirmProvider>);
+        await user.click(await screen.findByRole('button', { expanded: false, name: /AFONSO/ }));
+        expect(screen.getByRole('menuitem', { name: 'Minha conta' })).toBeInTheDocument();
+        expect(screen.queryByRole('menuitem', { name: 'Sair' })).toBeNull();
+    });
+});

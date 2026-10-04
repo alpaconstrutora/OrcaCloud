@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { FileText, History } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DocumentVersionsPanel from './DocumentVersionsPanel';
+import { TabsBar } from '../ui/TabsBar';
 import { contractService } from '../../services/contractService';
+import { contractDocumentVersionService } from '../../services/contractDocumentVersionService';
 import { Contract, ContractAddendum } from '../../types';
 
 interface Props {
@@ -19,88 +20,87 @@ const fmtDate = (iso?: string) => {
 };
 
 /**
- * Aba "Documentos & Assinatura": versões do contrato e de cada aditivo, com
- * emissão ao Portal do Cliente e assinatura eletrônica por versão.
+ * Documentos do contrato (aba Emissão): versões do contrato e de cada aditivo,
+ * com emissão ao Portal do Cliente.
  *
- * Antes isso vivia espalhado: o painel de minutas só aparecia no status
- * "Minuta" e a assinatura ficava na aba Emissão — e nenhuma das duas existia
- * para contrato recorrente (locação).
+ * UMA tabela (`DocumentVersionsPanel` → `StandardTable`) com abas acopladas no
+ * topo do card (§19.1 + `toolbarTop`): "Contrato N" e uma aba por aditivo, com
+ * a contagem de versões. Até 2026-10-03 era um card por dono empilhado, cada um
+ * com a sua lista de cartões. Plano:
+ * docs/planos/2026-10-03-documentos-do-contrato-em-tabela.md
  */
 const ContractDocumentsTab: React.FC<Props> = ({ contract, onNotify, onChanged }) => {
     const [addendums, setAddendums] = useState<ContractAddendum[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [contagem, setContagem] = useState<Record<string, number>>({});
+    const [dono, setDono] = useState<string>(contract.id);
 
-    const load = useCallback(async () => {
-        setLoading(true);
+    const notifyRef = useRef(onNotify);
+    notifyRef.current = onNotify;
+
+    const carregarContagem = useCallback(async () => {
         try {
-            setAddendums(await contractService.listAddendums(contract.id));
-        } catch (e) {
-            onNotify(`Erro ao carregar aditivos: ${e instanceof Error ? e.message : ''}`, 'error');
-        } finally {
-            setLoading(false);
+            const todas = await contractDocumentVersionService.list(contract.id);
+            const c: Record<string, number> = {};
+            todas.forEach(v => { c[v.owner_id] = (c[v.owner_id] ?? 0) + 1; });
+            setContagem(c);
+        } catch {
+            // A contagem é só o número na aba — a tabela carrega e avisa por conta própria.
         }
-    }, [contract.id, onNotify]);
+    }, [contract.id]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        (async () => {
+            try {
+                setAddendums(await contractService.listAddendums(contract.id));
+            } catch (e) {
+                notifyRef.current(`Erro ao carregar aditivos: ${e instanceof Error ? e.message : ''}`, 'error');
+            }
+        })();
+        carregarContagem();
+    }, [contract.id, carregarContagem]);
 
-    return (
-        <div className="space-y-6">
-            {/* Documentos do contrato */}
-            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <h4 className="text-sm text-gray-800">Contrato {contract.number}</h4>
+    // Aditivo excluído (ou outro contrato) com a aba dele ativa: volta para o contrato.
+    const aditivo = addendums.find(a => a.id === dono) ?? null;
+    const donoEfetivo = aditivo ? aditivo.id : contract.id;
+
+    const abas = useMemo(() => [
+        { id: contract.id, label: `Contrato ${contract.number}`, badge: contagem[contract.id] },
+        ...addendums.map(a => ({ id: a.id, label: `Aditivo ${a.number}`, badge: contagem[a.id] })),
+    ], [contract.id, contract.number, addendums, contagem]);
+
+    const topo = (
+        <div className="space-y-2">
+            {/* Só o contrato, sem aditivo: uma aba sozinha não escolhe nada, mas
+                diz de quem são as versões — mesmo lugar em qualquer contrato. */}
+            <TabsBar<string> bare tabs={abas} value={donoEfetivo} onChange={setDono} />
+            {aditivo && (
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 px-1 text-sm">
+                    <span className="text-gray-500">{aditivo.description}</span>
+                    <span className="text-gray-500">
+                        {aditivo.status}
+                        {aditivo.new_start_date && (
+                            <span className="text-gray-400"> · Vigência {fmtDate(aditivo.new_start_date)} a {fmtDate(aditivo.new_end_date)}</span>
+                        )}
+                    </span>
                 </div>
-                <DocumentVersionsPanel
-                    ownerType="CONTRACT"
-                    ownerId={contract.id}
-                    contractId={contract.id}
-                    organizationId={contract.organization_id}
-                    label={`Contrato ${contract.number}`}
-                    onNotify={onNotify}
-                    onChanged={onChanged}
-                />
-            </div>
-
-            {/* Documentos por aditivo */}
-            {loading ? (
-                <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
-            ) : addendums.length === 0 ? null : (
-                addendums.map(ad => (
-                    <div key={ad.id} className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div className="flex items-center gap-2">
-                                <History className="w-4 h-4 text-blue-600" />
-                                <div>
-                                    <h4 className="text-sm text-gray-800">Aditivo {ad.number}</h4>
-                                    <p className="text-sm text-gray-500">{ad.description}</p>
-                                </div>
-                            </div>
-                            <div className="text-sm text-gray-500 text-right">
-                                <p>{ad.status}</p>
-                                {ad.new_start_date && (
-                                    <p className="text-gray-400">
-                                        Vigência {fmtDate(ad.new_start_date)} a {fmtDate(ad.new_end_date)}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                        <DocumentVersionsPanel
-                            ownerType="ADDENDUM"
-                            ownerId={ad.id}
-                            contractId={contract.id}
-                            organizationId={contract.organization_id}
-                            label={`Aditivo ${ad.number}`}
-                            kind="ADITIVO"
-                            onNotify={onNotify}
-                            onChanged={onChanged}
-                        />
-                    </div>
-                ))
             )}
         </div>
+    );
+
+    return (
+        <DocumentVersionsPanel
+            // Trocar de dono remonta a tabela: lista, busca escopada e Sheets do dono anterior somem.
+            key={donoEfetivo}
+            ownerType={aditivo ? 'ADDENDUM' : 'CONTRACT'}
+            ownerId={donoEfetivo}
+            contractId={contract.id}
+            organizationId={contract.organization_id}
+            label={aditivo ? `Aditivo ${aditivo.number}` : `Contrato ${contract.number}`}
+            kind={aditivo ? 'ADITIVO' : undefined}
+            toolbarTop={topo}
+            onNotify={onNotify}
+            onChanged={() => { carregarContagem(); onChanged?.(); }}
+        />
     );
 };
 

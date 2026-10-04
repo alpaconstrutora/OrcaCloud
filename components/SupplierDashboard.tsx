@@ -91,6 +91,8 @@ interface SupplierDashboardProps {
     isPreview?: boolean;
     /** Sobrescreve as abas habilitadas (usado pela prévia mobile). */
     overrideEnabledTabIds?: string[];
+    /** Pré-visualização do tour pelo editor da ajuda: abre este tour ao montar. */
+    forcarTour?: string | null;
 }
 
 const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
@@ -102,7 +104,8 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     onNavigate,
     portalToken,
     isPreview = false,
-    overrideEnabledTabIds
+    overrideEnabledTabIds,
+    forcarTour = null,
 }) => {
     const { localToast, showToast } = useToast();
 
@@ -1757,6 +1760,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 // a rota pública do link TAMBÉM passa isPreview (só para esconder o cromo de admin):
                 // prévia do gestor é isPreview SEM token
                 modoPrevia={isPreview && !portalToken}
+                forcarTour={forcarTour}
                 accent="coral"
                 tourKey={portalToken || effectiveSupplier?.email || null}
                 autoTour={isStandalone}

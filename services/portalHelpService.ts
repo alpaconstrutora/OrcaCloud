@@ -39,7 +39,7 @@ const RPC_POR_PORTAL: Record<Portal, string> = {
   corretor: 'broker_portal_help_get',
 };
 
-const COLS = 'id, organization_id, portal, kind, default_key, section, title, body_html, sort_order, is_published, default_hash, created_by, created_at, updated_at';
+const COLS = 'id, organization_id, portal, kind, default_key, section, title, body_html, sort_order, is_published, default_hash, created_by, created_at, updated_at, anchor, tour_id';
 
 export const portalHelpService = {
   /** Acesso pelo link: a org vem do token. `null` = token inválido/vencido. */
@@ -84,10 +84,12 @@ export const portalHelpService = {
     return data as PortalHelpRecord;
   },
 
+  /** Item próprio: artigo, pergunta ou passo de tour (este exige `anchor`). */
   async createCustom(input: {
-    organization_id: string; portal: Portal; kind: 'artigo' | 'faq';
+    organization_id: string; portal: Portal; kind: 'artigo' | 'faq' | 'tour';
     section: string | null; title: string; body_html: string; is_published?: boolean;
     sort_order?: number; created_by?: string | null;
+    anchor?: string | null; tour_id?: string | null;
   }): Promise<PortalHelpRecord> {
     const { data, error } = await supabase
       .from('portal_help_items')
@@ -98,7 +100,7 @@ export const portalHelpService = {
     return data as PortalHelpRecord;
   },
 
-  async update(id: string, patch: Partial<Pick<PortalHelpRecord, 'section' | 'title' | 'body_html' | 'is_published' | 'sort_order'>>): Promise<PortalHelpRecord> {
+  async update(id: string, patch: Partial<Pick<PortalHelpRecord, 'section' | 'title' | 'body_html' | 'is_published' | 'sort_order' | 'anchor' | 'tour_id'>>): Promise<PortalHelpRecord> {
     const { data, error } = await supabase
       .from('portal_help_items')
       .update(patch)

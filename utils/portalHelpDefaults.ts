@@ -558,6 +558,42 @@ export function tourLabel(portal: Portal, tourId: TourId): string {
   return tourId === 'geral' ? 'Tour do portal' : `Como usar: ${sectionLabel(portal, tourId)}`;
 }
 
+export interface AncoraDoTour {
+  anchor: string;
+  /** o que o gestor lê no seletor */
+  label: string;
+  /** aba onde o elemento está; null = cromo (menu, ajuda, conta) */
+  section: string | null;
+}
+
+const ANCORAS_DE_CROMO: Record<string, string> = {
+  menu: 'Menu do portal',
+  ajuda: 'Botão de ajuda (?)',
+  conta: 'Menu da conta',
+  'mobile-mais': 'Botão "Mais" (celular)',
+};
+
+/**
+ * Catálogo de elementos que um passo PRÓPRIO pode realçar. Só entra o que
+ * existe de verdade nos portais: as âncoras dos passos padrão (o teste de
+ * âncoras garante que estão no DOM) e o botão de cada aba. A construtora
+ * escolhe daqui — nunca digita um `data-tour`.
+ */
+export function ancorasDoTour(portal: Portal): AncoraDoTour[] {
+  const vistas = new Map<string, AncoraDoTour>();
+  for (const passo of todosOsPassos(portal)) {
+    if (vistas.has(passo.anchor) || passo.anchor.startsWith('aba-')) continue;
+    const label = ANCORAS_DE_CROMO[passo.anchor] ?? passo.title;
+    vistas.set(passo.anchor, { anchor: passo.anchor, label, section: passo.section });
+  }
+  for (const aba of PORTAL_SECTIONS[portal]) {
+    vistas.set(`aba-${aba.id}`, { anchor: `aba-${aba.id}`, label: `Botão da aba ${aba.label}`, section: aba.id });
+  }
+  const ordemDaSecao = (sec: string | null) => sec === null ? -1 : PORTAL_SECTIONS[portal].findIndex(x => x.id === sec);
+  return [...vistas.values()].sort((a, b) =>
+    ordemDaSecao(a.section) - ordemDaSecao(b.section) || a.label.localeCompare(b.label, 'pt-BR'));
+}
+
 // ── Junção padrão + banco ────────────────────────────────────────────────────
 
 /** Linha de `portal_help_items` como a RPC/serviço devolve. */
@@ -571,6 +607,10 @@ export interface PortalHelpRow {
   sort_order: number;
   is_published: boolean;
   updated_at?: string;
+  /** só kind=tour: `data-tour` do passo próprio */
+  anchor?: string | null;
+  /** só kind=tour: null = tour do portal; id da aba = mini-tour */
+  tour_id?: string | null;
 }
 
 export type HelpOrigin = 'padrao' | 'personalizado' | 'proprio';
@@ -590,10 +630,15 @@ export interface HelpItem {
   defaultChanged?: boolean;
 }
 
-export interface MergedTourStep extends TourStep {
+export interface MergedTourStep extends Omit<TourStep, 'key'> {
+  /** chave do passo padrão; null = passo próprio da construtora */
+  key: string | null;
   rowId: string | null;
+  /** 'personalizado' só quando o TEXTO (ou a visibilidade) mudou — mover não personaliza */
   origin: HelpOrigin;
   hidden: boolean;
+  /** posição efetiva no tour (padrão = (i+1)*10; sobrescrita/próprio podem mudar) */
+  sort_order: number;
 }
 
 export interface MergedHelp {
@@ -665,24 +710,51 @@ export function mergePortalHelp(
   const ordenar = (a: HelpItem, b: HelpItem) => a.sort_order - b.sort_order;
   const filtrar = (it: HelpItem) => visivel(it.section, opts.visibleSections);
 
-  const juntarPasso = (s: TourStep): MergedTourStep => {
+  // Tours: padrão (código) + sobrescritas (texto/oculto/posição) + passos
+  // próprios (linha kind='tour' sem default_key, com âncora).
+  const juntarPasso = (s: TourStep, i: number): MergedTourStep => {
     const o = porChave.get(s.key);
+    const titulo = o ? o.title : s.title;
+    const corpo = o ? htmlToText(o.body_html) || o.body_html : s.body;
+    const hidden = !!o && !o.is_published;
     return {
       ...s,
-      title: o ? o.title : s.title,
-      body: o ? htmlToText(o.body_html) || o.body_html : s.body,
+      title: titulo,
+      body: corpo,
       rowId: o?.id ?? null,
-      origin: o ? 'personalizado' : 'padrao',
-      hidden: !!o && !o.is_published,
+      origin: o && (hidden || titulo !== s.title || corpo !== s.body) ? 'personalizado' : 'padrao',
+      hidden,
+      sort_order: o && o.sort_order > 0 ? o.sort_order : (i + 1) * 10,
     };
   };
   const passoEntra = (s: MergedTourStep) => (opts.includeHidden || !s.hidden) && visivel(s.section, opts.visibleSections);
 
-  const tours: Record<TourId, MergedTourStep[]> = { geral: TOURS[portal].geral.map(juntarPasso).filter(passoEntra) };
+  const porTour = new Map<TourId, { passo: MergedTourStep; decl: number }[]>();
+  const pôr = (t: TourId, passo: MergedTourStep, decl: number) => {
+    porTour.set(t, [...(porTour.get(t) ?? []), { passo, decl }]);
+  };
+  TOURS[portal].geral.forEach((x, i) => pôr('geral', juntarPasso(x, i), i));
   for (const [aba, passos] of Object.entries(TOURS[portal].porAba)) {
-    if (!passos || !visivel(aba, opts.visibleSections)) continue;
-    const lista = passos.map(juntarPasso).filter(passoEntra);
-    if (lista.length > 0) tours[aba] = lista;
+    (passos ?? []).forEach((x, i) => pôr(aba, juntarPasso(x, i), i));
+  }
+  proprios.filter(r => r.kind === 'tour' && r.anchor).forEach((r, i) => {
+    const t = r.tour_id || 'geral';
+    pôr(t, {
+      key: null, rowId: r.id, anchor: r.anchor!, section: r.section, tour: t,
+      title: r.title, body: htmlToText(r.body_html) || r.body_html,
+      origin: 'proprio', hidden: !r.is_published,
+      sort_order: r.sort_order > 0 ? r.sort_order : 100000 + i,
+    }, 100000 + i);
+  });
+
+  const tours: Record<TourId, MergedTourStep[]> = { geral: [] };
+  for (const [t, lista] of porTour) {
+    if (t !== 'geral' && !visivel(t, opts.visibleSections)) continue;
+    const ordenada = [...lista]
+      .sort((a, b) => a.passo.sort_order - b.passo.sort_order || a.decl - b.decl)
+      .map(x => x.passo)
+      .filter(passoEntra);
+    if (t === 'geral' || ordenada.length > 0) tours[t] = ordenada;
   }
 
   return {

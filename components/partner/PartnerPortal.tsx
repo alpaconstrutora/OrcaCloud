@@ -88,6 +88,8 @@ interface PartnerPortalProps {
   /** Login por e-mail: o portal roda fora da casca do app e o "Sair" fica no menu
    *  da conta. Sem a prop (link e pré-visualização), o item não aparece. */
   onLogout?: () => void;
+  /** Pré-visualização do tour pelo editor da ajuda: abre este tour ao montar. */
+  forcarTour?: string | null;
 }
 
 // Pasta / disciplina compartilhadas com o parceiro (subconjunto do que a RPC/serviço devolve).
@@ -130,7 +132,7 @@ const TAB_ICONS: Record<PartnerPortalTabId, React.ElementType> = {
   solicitacoes: ClipboardList,
 };
 
-export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken, onLogout }) => {
+export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, previewWorkspaceId, onExitPreview, portalToken, onLogout, forcarTour = null }) => {
   const isPreview = !!previewWorkspaceId;
   const isTokenMode = !!portalToken;
   const [activeTab, setActiveTab] = useState<'dashboard' | 'conversas' | 'documentos' | 'contratos' | 'financeiro' | 'solicitacoes'>('dashboard');
@@ -2268,6 +2270,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         currentSection={activeTab}
         onNavigate={(s) => { setDetailContract(null); setActiveTab(s as typeof activeTab); }}
         modoPrevia={isPreview}
+        forcarTour={forcarTour}
         accent="orange"
         tourKey={portalToken || userEmail || null}
         autoTour={!isPreview}

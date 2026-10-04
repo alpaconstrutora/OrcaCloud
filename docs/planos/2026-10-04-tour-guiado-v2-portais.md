@@ -1,6 +1,6 @@
 # Tour guiado v2 dos portais externos
 
-**Data:** 2026-10-04 · **Status:** F4 e F5 publicadas; F6–F8 pendentes
+**Data:** 2026-10-04 · **Status:** F4, F5 e F6 publicadas; F7–F8 pendentes
 **Antecede:** `docs/planos/2026-10-03-ajuda-portais-externos.md` (central de ajuda F1–F3)
 
 ## Pedido original (literal)
@@ -94,3 +94,32 @@ Detalhe de cada fase no plano aprovado da sessão (resumo aqui ao fechar cada um
   o tour voltava para a aba de antes da correção, o portal corrigia de novo e
   essa correção disparava o mini-tour como se fosse um clique.
 - Teste de âncoras lê a lista de arquivos dos três portais.
+
+## F6 — o que entrou
+
+- **Banco** (`aplicar_20271004000030_portal_help_tour_passos.sql`, aplicada em
+  04/10/2026 antes do deploy): colunas `anchor` e `tour_id` em
+  `portal_help_items`; CHECK `portal_help_items_tour_proprio_ck` (passo de tour
+  sem `default_key` exige `anchor`); `portal_help_org_json` devolve as duas
+  colunas (REVOKE de PUBLIC/anon/authenticated repetido). Ensaio em ROLLBACK:
+  passo próprio com âncora entra, sem âncora 23514, corretor 42501, núcleo
+  anon 42501, casca anon devolve `anchor`/`tour_id`.
+- **Modelo**: `mergePortalHelp` junta passos padrão, sobrescritas e passos
+  próprios por tour; posição padrão `(i+1)*10`, sobrescrita com `sort_order > 0`
+  reposiciona; mover não "personaliza" (origem só muda se texto/visibilidade
+  mudar). `ancorasDoTour(portal)`: catálogo de elementos (âncoras dos passos
+  padrão + botão de cada aba), único lugar de onde sai a âncora de um passo
+  próprio.
+- **Editor** (Configurações › Ajuda dos Portais › Tour guiado): seletor de tour
+  (do portal ou "Como usar: <aba>", inclusive abas sem passo padrão), colunas
+  Posição e Elemento, setas ↑/↓ (só com uma organização no topo — a ordem é da
+  organização; em "Todas" o botão diz por quê), "Novo passo" com Tour e
+  Elemento da tela (filtrado pela aba do tour), excluir passo próprio,
+  restaurar padrão (texto e posição).
+- **Pré-visualizar tour**: escolhe parceiro/fornecedor/corretor da organização
+  e o tour; abre o portal em prévia já com o tour (`forcarTour` nos três
+  portais). Parceiro em tela cheia (como a prévia que já existia no Portal do
+  Parceiro); Fornecedor e Corretor no celular (`MobilePreviewFrame`). Nada é
+  gravado (`modoPrevia`).
+- Testes: `portalHelpDefaults.test.ts` (passo próprio, posição, catálogo),
+  `PortalHelpSettings.test.tsx` (tour, setas, novo passo, pré-visualizar).

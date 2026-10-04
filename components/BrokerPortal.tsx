@@ -43,6 +43,8 @@ interface BrokerPortalProps {
     initialBroker?: import('../types').BrokerProfile;
     /** Volta para a lista "Meus Corretores" (botão de voltar §5.3). Ausente = sem botão (ex: link público). */
     onBack?: () => void;
+    /** Pré-visualização do tour pelo editor da ajuda: abre este tour ao montar. */
+    forcarTour?: string | null;
 }
 
 // Analytics é a PRIMEIRA aba (e a default ao abrir o portal) — os KPIs de topo
@@ -75,7 +77,7 @@ const NAV_GROUPS: { label: string; tabs: PortalTab[] }[] = [
 const TAB_BY_ID: Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }> =
     Object.fromEntries(ALL_TABS.map(t => [t.id, t])) as Record<PortalTab, { id: PortalTab; label: string; icon: React.ElementType }>;
 
-const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analytics', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack }) => {
+const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analytics', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack, forcarTour = null }) => {
     const { organizations } = useStore();
     const confirm = useConfirm();
 
@@ -548,6 +550,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 // a rota pública do link TAMBÉM passa isPreview (só para esconder o cromo de admin):
                 // prévia do gestor é isPreview SEM token
                 modoPrevia={isPreview && !portalToken}
+                forcarTour={forcarTour}
                 accent="indigo"
                 tourKey={portalToken || effectiveBrokerEmail || null}
                 autoTour={isStandalone}

@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_ITEMS, PORTAL_SECTIONS, TOUR_STEPS, TOURS, mergePortalHelp, htmlToText, hashText, sectionLabel, tourLabel,
+  DEFAULT_ITEMS, PORTAL_SECTIONS, TOUR_STEPS, TOURS, mergePortalHelp, htmlToText, hashText, sectionLabel, tourLabel, ancorasDoTour, todosOsPassos,
   type Portal, type PortalHelpRow,
 } from '../utils/portalHelpDefaults';
 import { chaveDoTour } from '../utils/portalTour';
@@ -192,6 +192,58 @@ describe('tours: geral + por aba (v2, 04/10/2026)', () => {
       for (const lista of [TOURS[p].geral, ...Object.values(TOURS[p].porAba)]) {
         for (const x of lista ?? []) if (x.quando) expect(x.quando).toMatch(/^quando /);
       }
+    }
+  });
+});
+
+describe('tour: passos próprios e ordem (F6, 04/10/2026)', () => {
+  const docs = TOURS.parceiro.porAba.documentos!;
+
+  it('passo próprio (kind=tour sem default_key, com âncora) entra no tour dele, origem proprio, key null', () => {
+    const m = mergePortalHelp('parceiro', [row({ id: 'p1', kind: 'tour', anchor: 'documentos-busca', tour_id: 'documentos', section: 'documentos', title: 'Da casa', body_html: '<p>oi <strong>você</strong></p>', sort_order: 15 })]);
+    const t = m.tours.documentos;
+    expect(t.map(x => x.title)).toEqual([docs[0].title, 'Da casa', ...docs.slice(1).map(x => x.title)]);
+    const meu = t[1];
+    expect(meu).toMatchObject({ key: null, rowId: 'p1', origin: 'proprio', anchor: 'documentos-busca', tour: 'documentos', body: 'oi você' });
+    expect(m.tours.geral.some(x => x.rowId === 'p1')).toBe(false);
+  });
+
+  it('tour_id nulo = tour do portal; sem âncora o passo próprio não entra; sort_order 0 vai para o fim', () => {
+    const m = mergePortalHelp('parceiro', [
+      row({ id: 'g1', kind: 'tour', anchor: 'ajuda', tour_id: null, title: 'No fim' }),
+      row({ id: 'x', kind: 'tour', title: 'Sem âncora' }),
+    ]);
+    expect(m.tours.geral[m.tours.geral.length - 1].title).toBe('No fim');
+    expect(Object.values(m.tours).flat().some(x => x.rowId === 'x')).toBe(false);
+  });
+
+  it('passo próprio cria o "como usar" de uma aba que não tinha passo padrão', () => {
+    const m = mergePortalHelp('corretor', [row({ id: 'r1', kind: 'tour', anchor: 'aba-ranking', tour_id: 'ranking', section: 'ranking', title: 'Seu ranking' })]);
+    expect(m.tours.ranking?.map(x => x.title)).toEqual(['Seu ranking']);
+    // e some se a aba estiver oculta para o externo
+    expect(mergePortalHelp('corretor', [row({ id: 'r1', kind: 'tour', anchor: 'aba-ranking', tour_id: 'ranking', section: 'ranking', title: 'x' })], { visibleSections: ['estoque'] }).tours.ranking).toBeUndefined();
+  });
+
+  it('sobrescrita com sort_order reposiciona o padrão; 0 mantém; só mover NÃO personaliza', () => {
+    const g = TOURS.parceiro.geral;
+    const m = mergePortalHelp('parceiro', [row({ id: 'o1', kind: 'tour', default_key: g[0].key, title: g[0].title, body_html: g[0].body, sort_order: 25 })]);
+    // 25 fica entre o 2º (20) e o 3º (30)
+    expect(m.tours.geral.map(x => x.key).slice(0, 3)).toEqual([g[1].key, g[0].key, g[2].key]);
+    expect(m.tours.geral[1]).toMatchObject({ origin: 'padrao', rowId: 'o1', sort_order: 25 });
+    const zero = mergePortalHelp('parceiro', [row({ id: 'o1', kind: 'tour', default_key: g[0].key, title: 'Outro título', sort_order: 0 })]);
+    expect(zero.tours.geral[0]).toMatchObject({ key: g[0].key, title: 'Outro título', origin: 'personalizado', sort_order: 10 });
+  });
+
+  it('catálogo de âncoras: todo elemento dos passos padrão + o botão de cada aba, sem repetir', () => {
+    for (const p of PORTAIS) {
+      const cat = ancorasDoTour(p);
+      const ancoras = cat.map(c => c.anchor);
+      expect(new Set(ancoras).size).toBe(ancoras.length);
+      for (const passo of todosOsPassos(p)) expect(ancoras, `${p}: ${passo.anchor}`).toContain(passo.anchor);
+      for (const aba of PORTAL_SECTIONS[p]) expect(ancoras).toContain(`aba-${aba.id}`);
+      // cromo vem primeiro e com nome legível
+      expect(cat[0].section).toBeNull();
+      expect(cat.find(c => c.anchor === 'menu')?.label).toBe('Menu do portal');
     }
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, AlertTriangle, Download, BarChart3, ChevronRight, ChevronDown, ArrowLeftRight, TrendingUp, TrendingDown, ArrowDownUp, Activity } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Download, BarChart3, ChevronRight, ChevronDown, ArrowLeft, ArrowLeftRight, TrendingUp, TrendingDown, ArrowDownUp, Activity } from 'lucide-react';
 import {
     opuraAnalyticsService,
     type OpuraDimension,
@@ -11,7 +11,6 @@ import {
     type OpuraCompareRow,
 } from '../services/opuraAnalyticsService';
 import { useToast } from '../hooks/useToast';
-import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import Button from './ui/Button';
 import { TabsBar } from './ui/TabsBar';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
@@ -146,6 +145,27 @@ function pivotColumns(dimLabel: string, tree: boolean): StandardTableColumn[] {
     ];
 }
 
+// Extrato da linha clicada — tela in-flow (não drawer): com a largura da página,
+// as datas e os vínculos que no drawer viravam uma linha cinza ganham coluna.
+const ENTRY_COLUMNS: StandardTableColumn[] = [
+    { key: 'transaction_date', label: 'Lançamento',  sortable: true, width: 120 },
+    { key: 'due_date',         label: 'Vencimento',  sortable: true, width: 120 },
+    { key: 'payment_date',     label: 'Pagamento',   sortable: true, width: 120 },
+    { key: 'description',      label: 'Descrição',   sortable: true, width: 320 },
+    { key: 'category_name',    label: 'Categoria',   sortable: true, width: 200 },
+    { key: 'party',            label: 'Contraparte', sortable: true, width: 220 },
+    { key: 'project_name',     label: 'Obra',        sortable: true, width: 200 },
+    { key: 'account_name',     label: 'Conta',       sortable: true, width: 180, defaultHidden: true },
+    { key: 'status',           label: 'Status',      sortable: true, width: 110 },
+    { key: 'amount',           label: 'Valor',       sortable: true, width: 160, align: 'right' },
+];
+
+const ENTRIES_PAGE = 200;
+
+function fDate(d: string | null | undefined): string {
+    return d ? d.slice(0, 10).split('-').reverse().join('/') : '—';
+}
+
 function compareColumns(dimLabel: string): StandardTableColumn[] {
     return [
         { key: 'label',    label: dimLabel,    sortable: true, width: 360 },
@@ -184,10 +204,16 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
     const [dateToB, setDateToB]     = usePersistedState<string>('opuraReports:dateToB', `${now.getFullYear() - 1}-12-31`);
     const [compareRows, setCompareRows] = React.useState<OpuraCompareRow[]>([]);
 
-    // Drill-down (extrato da linha clicada)
-    const [drill, setDrill] = React.useState<{ label: string } | null>(null);
+    // Drill-down (extrato da linha clicada) — troca a tela inteira, in-flow.
+    // `filters` fica guardado para o "Carregar mais" pedir a página seguinte do
+    // MESMO recorte com que o extrato foi aberto.
+    const [drill, setDrill] = React.useState<{ key: string | null; label: string; filters: OpuraEntryFilters } | null>(null);
     const [entries, setEntries] = React.useState<OpuraEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = React.useState(false);
+    const [entriesLoadingMore, setEntriesLoadingMore] = React.useState(false);
+    // Resposta de um extrato já fechado (voltar e abrir outro antes de chegar) é descartada.
+    const drillReq = React.useRef(0);
+    const drillTop = React.useRef<HTMLDivElement>(null);
 
     const baseFilters = React.useMemo<OpuraFilters>(() => ({
         dateField,
@@ -294,21 +320,57 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
     const openDrill = React.useCallback(async (key: string | null, label: string) => {
         const patch = opuraAnalyticsService.drillFilter(dimension, key);
         if (!patch) return; // dimensão sem detalhamento (não ocorre nas dimensões atuais)
-        setDrill({ label });
+        const f: OpuraEntryFilters = { ...baseFilters, ...patch };
+        const req = ++drillReq.current;
+        setDrill({ key, label, filters: f });
         setEntries([]);
         setEntriesLoading(true);
         try {
-            const f: OpuraEntryFilters = { ...baseFilters, ...patch };
-            const data = await opuraAnalyticsService.entries(organizationId, f, 200, 0);
-            setEntries(data);
+            const data = await opuraAnalyticsService.entries(organizationId, f, ENTRIES_PAGE, 0);
+            if (req === drillReq.current) setEntries(data);
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             showToast(`Erro ao carregar extrato: ${msg}`, 'error');
             console.error('[OpuraReports/drill]', e);
         } finally {
-            setEntriesLoading(false);
+            if (req === drillReq.current) setEntriesLoading(false);
         }
     }, [dimension, baseFilters, organizationId, showToast]);
+
+    const loadMoreEntries = React.useCallback(async () => {
+        if (!drill) return;
+        const req = drillReq.current;
+        setEntriesLoadingMore(true);
+        try {
+            const data = await opuraAnalyticsService.entries(organizationId, drill.filters, ENTRIES_PAGE, entries.length);
+            if (req === drillReq.current) setEntries(prev => [...prev, ...data]);
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            showToast(`Erro ao carregar extrato: ${msg}`, 'error');
+            console.error('[OpuraReports/drill:more]', e);
+        } finally {
+            if (req === drillReq.current) setEntriesLoadingMore(false);
+        }
+    }, [drill, entries.length, organizationId, showToast]);
+
+    const closeDrill = React.useCallback(() => {
+        drillReq.current++;
+        setDrill(null);
+        setEntries([]);
+        setEntriesLoading(false);
+        setEntriesLoadingMore(false);
+    }, []);
+
+    // A lista pode estar rolada lá embaixo: a tela nova começa do topo.
+    const drillOpen = drill !== null;
+    React.useEffect(() => {
+        if (drillOpen) drillTop.current?.scrollIntoView?.({ block: 'start' });
+    }, [drillOpen]);
+
+    const entryTotals = React.useMemo(() => entries.reduce((a, e) => {
+        if (e.direction === 'DEBIT') a.saidas += e.amount; else a.entradas += e.amount;
+        return a;
+    }, { entradas: 0, saidas: 0 }), [entries]);
 
     // §9.1 — a linha inteira é a ação: grupo recolhe/expande, folha abre o extrato.
     const onRowClick = React.useCallback((r: ReportRow) => {
@@ -439,6 +501,115 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 return null;
         }
     };
+
+    const renderEntryCell = (key: string, e: OpuraEntry): React.ReactNode => {
+        switch (key) {
+            case 'transaction_date':
+            case 'due_date':
+            case 'payment_date':
+                return <span className="text-sm font-normal text-gray-600 tabular-nums">{fDate(e[key])}</span>;
+            case 'description':
+                return <span className="block truncate text-sm font-normal text-gray-700" title={e.description ?? undefined}>{e.description || '—'}</span>;
+            case 'category_name':
+            case 'project_name':
+            case 'account_name':
+                return <span className="block truncate text-sm font-normal text-gray-600" title={e[key] ?? undefined}>{e[key] || '—'}</span>;
+            case 'party': {
+                const party = e.supplier_name || e.client_name;
+                return <span className="block truncate text-sm font-normal text-gray-600" title={party ?? undefined}>{party || '—'}</span>;
+            }
+            case 'status':
+                return e.status === 'PENDING'
+                    ? <span className="text-sm font-normal text-amber-600">Previsto</span>
+                    : <span className="text-sm font-normal text-emerald-600">Realizado</span>;
+            case 'amount':
+                return (
+                    <span className={`text-sm font-medium tabular-nums ${e.direction === 'DEBIT' ? 'text-red-600' : 'text-green-600'}`}>
+                        {e.direction === 'DEBIT' ? '−' : '+'}{fBRL(e.amount)}
+                    </span>
+                );
+            default:
+                return null;
+        }
+    };
+
+    // Toast de Notificação — padrão guia seção 13 (nas duas telas)
+    const toast = localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+            localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {localToast.message}
+        </div>
+    );
+
+    // ── Tela do extrato (drill-down) — in-flow, substitui a lista ─────────────
+    // Mesmo padrão de ContractDetailView: seta voltar + h1 2xl, sem overlay.
+    if (drill) {
+        const totalCount = entries[0]?.total_count ?? entries.length;
+        const hasMore = entries.length < totalCount;
+        const dateFieldLabel = DATE_FIELDS.find(f => f.value === drill.filters.dateField)?.label ?? 'Lançamento';
+        const periodo = `${dateFieldLabel} de ${fDate(drill.filters.dateFrom)} a ${fDate(drill.filters.dateTo)}`;
+        const saldo = entryTotals.entradas - entryTotals.saidas;
+        return (
+            <div ref={drillTop} className="space-y-6 animate-in fade-in duration-300 pb-4 scroll-mt-6">
+                <div className="flex items-center gap-4">
+                    <button
+                        type="button"
+                        onClick={closeDrill}
+                        title="Voltar ao relatório"
+                        aria-label="Voltar ao relatório"
+                        className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
+                    >
+                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                    </button>
+                    <div className="min-w-0">
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight truncate" title={drill.label}>{drill.label}</h1>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                            {dimLabel} · {periodo} · {entriesLoading ? 'carregando…' : `${totalCount} ${totalCount === 1 ? 'lançamento' : 'lançamentos'}`}
+                        </p>
+                    </div>
+                </div>
+
+                <StandardTable<OpuraEntry>
+                    storageKey="opuraReports:entries"
+                    searchScope={`${dimension}:${drill.key ?? 'sem'}`}
+                    columns={ENTRY_COLUMNS}
+                    rows={entries}
+                    rowKey={e => e.id}
+                    searchText={e => [e.description, e.category_name, e.supplier_name, e.client_name, e.project_name, e.account_name].filter(Boolean).join(' ')}
+                    searchPlaceholder="Buscar por descrição, categoria, contraparte ou obra..."
+                    sortValue={(key, e) => key === 'party' ? (e.supplier_name || e.client_name || '')
+                        : key === 'amount' ? (e.direction === 'DEBIT' ? -e.amount : e.amount)
+                        : (e as unknown as Record<string, string | number | null>)[key]}
+                    renderCell={renderEntryCell}
+                    loading={entriesLoading}
+                    empty={{ icon: <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Sem lançamentos', subtitle: 'Nada nesta linha para o período.' }}
+                    footer={entries.length > 0 && !entriesLoading ? (
+                        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span>{hasMore ? `Exibindo ${entries.length} de ${totalCount}` : `${entries.length} ${entries.length === 1 ? 'lançamento' : 'lançamentos'}`}</span>
+                                {hasMore && (
+                                    <Button variant="secondary" onClick={loadMoreEntries} disabled={entriesLoadingMore}>
+                                        <RefreshCw className={`w-[15px] h-[15px] ${entriesLoadingMore ? 'animate-spin' : ''}`} />
+                                        {entriesLoadingMore ? 'Carregando…' : `Carregar mais ${Math.min(ENTRIES_PAGE, totalCount - entries.length)}`}
+                                    </Button>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 tabular-nums">
+                                {hasMore && <span className="text-xs text-gray-400">Somas dos exibidos</span>}
+                                <span>Entradas <span className="font-medium text-green-600">{fBRL(entryTotals.entradas)}</span></span>
+                                <span>Saídas <span className="font-medium text-red-600">{fBRL(entryTotals.saidas)}</span></span>
+                                <span>Saldo <span className={`font-medium ${saldo < 0 ? 'text-red-600' : 'text-gray-800'}`}>{fBRL(saldo)}</span></span>
+                            </div>
+                        </div>
+                    ) : null}
+                />
+
+                {toast}
+            </div>
+        );
+    }
 
     const scopeControl = 'h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
@@ -578,75 +749,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 />
             ))}
 
-            {/* Drill-down: extrato da linha clicada (§6.9 — tabela dentro de Sheet: px-3/px-4) */}
-            <Sheet open={drill !== null} onClose={() => setDrill(null)} size="2xl">
-                <SheetHeader onClose={() => setDrill(null)}>
-                    <SheetTitle>{drill?.label ?? 'Extrato'}</SheetTitle>
-                    <SheetDescription>
-                        {dimLabel} · {entries[0]?.total_count ?? entries.length} lançamento(s)
-                        {entries[0]?.total_count && entries[0].total_count > entries.length
-                            ? ` (exibindo ${entries.length})` : ''}
-                    </SheetDescription>
-                </SheetHeader>
-                <SheetPanel>
-                    {entriesLoading ? (
-                        <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                            <p className="mt-2 text-gray-500">Carregando extrato...</p>
-                        </div>
-                    ) : entries.length === 0 ? (
-                        <div className="text-center py-12">
-                            <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Sem lançamentos</h3>
-                            <p className="text-sm text-gray-500">Nada nesta linha para o período.</p>
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto rounded-[10px] border border-gray-100">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                                        <th className="px-3 py-2 border-r border-gray-100 w-24">Data</th>
-                                        <th className="px-4 py-2 border-r border-gray-100">Descrição</th>
-                                        <th className="px-3 py-2 text-right w-32">Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {entries.map(e => (
-                                        <tr key={e.id} className="hover:bg-blue-50/50 transition-colors">
-                                            <td className="px-3 py-2.5 border-r border-gray-100 whitespace-nowrap text-sm font-normal text-gray-600 tabular-nums">
-                                                {e.transaction_date.split('-').reverse().join('/')}
-                                            </td>
-                                            <td className="px-4 py-2.5 border-r border-gray-100 min-w-0">
-                                                <p className="block truncate text-sm font-normal text-gray-700 max-w-[320px]" title={e.description || e.category_name || undefined}>
-                                                    {e.description || e.category_name || '—'}
-                                                </p>
-                                                <p className="block truncate text-xs text-gray-400 max-w-[320px]">
-                                                    {[e.category_name, e.supplier_name || e.client_name, e.project_name]
-                                                        .filter(Boolean).join(' · ')}
-                                                    {e.status === 'PENDING' ? ' · previsto' : ''}
-                                                </p>
-                                            </td>
-                                            <td className={`px-3 py-2.5 text-right tabular-nums text-sm font-medium ${e.direction === 'DEBIT' ? 'text-red-600' : 'text-green-600'}`}>
-                                                {e.direction === 'DEBIT' ? '−' : '+'}{fBRL(e.amount)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </SheetPanel>
-            </Sheet>
-
-            {/* Toast de Notificação — padrão guia seção 13 */}
-            {localToast && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                }`}>
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    {localToast.message}
-                </div>
-            )}
+            {toast}
         </div>
     );
 };

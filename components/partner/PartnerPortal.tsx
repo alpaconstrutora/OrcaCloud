@@ -44,6 +44,7 @@ import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortal
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
+import { PortalHelp } from '../portal/PortalHelp';
 import PortalMyData from '../supplier/portal/PortalMyData';
 import PartnerPortalFinanceiro from './PartnerPortalFinanceiro';
 import {
@@ -161,6 +162,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   // Menu de conta do portal público (link do parceiro) — espelha o dropdown de perfil do sistema
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  // Central de ajuda (03/10/2026) — painel compartilhado pelos três portais.
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [showMyAccount, setShowMyAccount] = useState(false);
   // "Meus dados": o cadastro que a construtora tem deste parceiro — o mesmo de
   // Minha Organização › Meus Fornecedores. Carrega sob demanda: é a única coisa
@@ -1022,6 +1025,17 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
             {workspace?.supplier_name}
           </h1>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsHelpOpen(true)}
+            title="Ajuda"
+            aria-label="Abrir a ajuda do portal"
+            data-tour="ajuda"
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
         <div className="relative" ref={accountMenuRef}>
           <button
             type="button"
@@ -1095,12 +1109,12 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               <div className="border-t border-gray-100 p-2">
                 <button
                   type="button"
-                  onClick={() => { setIsAccountMenuOpen(false); showMenuToast('Dúvidas? Fale com a construtora responsável por esta obra.'); }}
+                  onClick={() => { setIsAccountMenuOpen(false); setIsHelpOpen(true); }}
                   className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                   role="menuitem"
                 >
                   <HelpCircle className="h-4 w-4 text-gray-400" />
-                  <span className="flex-1">Ajuda e comandos</span>
+                  <span className="flex-1">Ajuda</span>
                 </button>
                 {onLogout && (
                   <button
@@ -1116,6 +1130,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
             </div>
           )}
+        </div>
         </div>
       </header>
 
@@ -2196,6 +2211,22 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       )}
 
       {/* MODAL: MINHA CONTA */}
+      <PortalHelp
+        open={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        portal="parceiro"
+        token={portalToken}
+        orgId={workspace?.organization_id ?? null}
+        visibleSections={enabledTabs}
+        initialSection={activeTab}
+        accent="orange"
+        onOpenRequest={isPreview || !enabledTabs.includes('solicitacoes') ? undefined : () => {
+          setIsHelpOpen(false);
+          setActiveTab('solicitacoes');
+          setIsNewRequestModalOpen(true);
+        }}
+      />
+
       {showMyAccount && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" onClick={() => setShowMyAccount(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />

@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark , HelpCircle } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import NomenclaturaTable from './settings/NomenclaturaTable';
@@ -18,13 +18,14 @@ import TaxSettingsManager from './TaxSettingsManager';
 import InssBracketsSettings from './InssBracketsSettings';
 import PisRatesSettings from './PisRatesSettings';
 import CofinsRatesSettings from './CofinsRatesSettings';
+import PortalHelpSettings from './PortalHelpSettings';
 
 type SettingsLeafId =
     | 'nomenclatura'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-caracteristicas-unidade' | 'cat-financeiro' | 'cat-pagamentos'
     | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
-    | 'whatsapp' | 'email' | 'database';
+    | 'whatsapp' | 'email' | 'database' | 'ajuda-portais';
 
 interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
 interface SettingsNavNode {
@@ -58,6 +59,7 @@ const SETTINGS_NAV: SettingsNavNode[] = [
     { id: 'whatsapp', label: 'WhatsApp & Integrações', icon: MessageCircle, leafId: 'whatsapp' },
     { id: 'email', label: 'Templates de E-mail', icon: Mail, leafId: 'email' },
     { id: 'database', label: 'Banco de Dados', icon: Database, leafId: 'database' },
+    { id: 'ajuda-portais', label: 'Ajuda dos Portais', icon: HelpCircle, leafId: 'ajuda-portais' },
 ];
 
 const Settings: React.FC = () => {
@@ -449,6 +451,7 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
+            {activeLeaf === 'ajuda-portais' && <PortalHelpSettings />}
             {activeLeaf === 'cat-clientes' && <ClientCategoriesSettings />}
             {activeLeaf === 'cat-fornecedores' && <SupplierCategoriesSettings />}
             {activeLeaf === 'cat-contratos' && <ContractTypesSettings />}

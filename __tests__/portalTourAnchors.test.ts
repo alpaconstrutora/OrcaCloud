@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TOURS, TOUR_STEPS, DEFAULT_ITEMS, PORTAL_SECTIONS, todosOsPassos, type Portal } from '../utils/portalHelpDefaults';
+import { TOURS, TOUR_STEPS, DEFAULT_ITEMS, PORTAL_SECTIONS, CHECKLIST_ITEMS, todosOsPassos, type Portal } from '../utils/portalHelpDefaults';
 import { PARTNER_PORTAL_TAB_IDS } from '../utils/partnerPortalTabs';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
@@ -82,5 +82,24 @@ describe('toda seção tem artigo padrão', () => {
     const comArtigo = new Set(DEFAULT_ITEMS[portal].filter(d => d.kind === 'artigo').map(d => d.section));
     const semArtigo = PORTAL_SECTIONS[portal].filter(s => !comArtigo.has(s.id)).map(s => s.id);
     expect(semArtigo).toEqual([]);
+  });
+});
+
+describe('Primeiros passos: toda ação do checklist é avisada pelo portal (F8)', () => {
+  // onde cada portal faz as ações (o PortalHelp ouve por utils/portalEventos)
+  const ONDE_AVISA: Record<Portal, string[]> = {
+    parceiro: ['components/partner/PartnerPortal.tsx'],
+    fornecedor: ['components/SupplierDashboard.tsx', 'components/supplier/portal/PortalInvoices.tsx', 'components/QuotationResponseForm.tsx'],
+    corretor: ['components/BrokerPortal.tsx', 'components/broker/BrokerLeadManager.tsx', 'components/broker/BrokerMaterials.tsx'],
+  };
+  it.each(PORTAIS)('%s', (portal) => {
+    const fonte = ONDE_AVISA[portal].map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join('\n');
+    for (const item of CHECKLIST_ITEMS[portal]) {
+      if (!item.evento.startsWith('acao:')) continue;
+      const acao = item.evento.slice(5);
+      expect(fonte, `${item.key}: ninguém avisa '${acao}'`).toContain(`avisarAcaoDoPortal('${acao}')`);
+    }
+    // e o portal oferece o encaixe do cartão ao PortalHelp
+    expect(readFileSync(resolve(__dirname, '..', ARQUIVOS[portal][0]), 'utf-8')).toContain('checklistSlot=');
   });
 });

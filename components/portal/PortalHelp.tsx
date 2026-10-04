@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { PortalChecklist } from './PortalChecklist';
+import { ouvirAcoesDoPortal } from '../../utils/portalEventos';
 import { PortalTour } from './PortalTour';
-import { chaveDoTour, marcarTourVisto, tourVisto } from '../../utils/portalTour';
-import { ArrowLeft, ChevronDown, ChevronRight, HelpCircle, Mail, MessageSquare, Phone, Globe, Search, BookOpen, CircleHelp, Building2, RotateCcw } from 'lucide-react';
+import { chaveDoTour, esquecerTour, marcarTourVisto, tourVisto } from '../../utils/portalTour';
+import { ArrowLeft, ChevronDown, ChevronRight, HelpCircle, Mail, MessageSquare, Phone, Globe, Search, BookOpen, CircleHelp, Building2, RotateCcw, ListChecks } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 import { usePortalHelp } from '../../hooks/usePortalHelp';
@@ -40,6 +43,11 @@ export interface PortalHelpProps {
   forcarTour?: TourId | null;
   /** prévia do gestor: tour disponível sem `tourKey` e nada é gravado */
   modoPrevia?: boolean;
+  /**
+   * Onde o portal quer o cartão "Primeiros passos" (F8): um elemento vazio que
+   * ele põe no topo da primeira aba visível. Sem a prop, não há cartão.
+   */
+  checklistSlot?: HTMLElement | null;
   /** só o Parceiro tem solicitações; sem a prop o botão não aparece */
   onOpenRequest?: () => void;
   /**
@@ -63,7 +71,7 @@ const soDigitos = (s: string) => s.replace(/\D/g, '');
 
 export const PortalHelp: React.FC<PortalHelpProps> = ({
   open, onClose, portal, token, orgId, visibleSections, currentSection, onNavigate, onOpenRequest,
-  tourKey, autoTour = false, forcarTour = null, modoPrevia = false, accent = 'orange',
+  tourKey, autoTour = false, forcarTour = null, modoPrevia = false, accent = 'orange', checklistSlot = null,
 }) => {
   const a = ACCENT[accent];
   const podeTour = !!tourKey || modoPrevia;
@@ -96,6 +104,71 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
   // montar (o Corretor nasce numa aba e pula para a primeira liberada). No fim,
   // o tour volta para ela; essa volta não é "o usuário abriu a aba" e não pode
   // disparar mini-tour (`voltaDoTour`).
+  // ── Primeiros passos (F8) ──────────────────────────────────────────────
+  // Marca só quem tem identidade e não está em prévia; a prévia mostra o
+  // cartão para o gestor ver, sem gravar nada.
+  const gravaChecklist = !!tourKey && !modoPrevia;
+  const idDoItem = (key: string) => `checklist:${key}`;
+  // Feito = marca deste aparelho OU do banco. Não usa `jaViu`: sem identidade
+  // (prévia) aquele responde "visto" para tudo — certo para o tour não abrir
+  // sozinho, errado aqui (o gestor veria o cartão já completo, ou seja, nada).
+  const itemFeito = (key: string) =>
+    (!!tourKey && tourVisto(chaveDoTour(portal, tourKey, idDoItem(key)))) || seen.some(x => x.tour_id === idDoItem(key));
+  const checklistFeitos = useMemo(
+    () => new Set(help.checklist.filter(i => itemFeito(i.key)).map(i => i.key)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [help.checklist, seen, tourKey],
+  );
+  const checklistOculto = (!!tourKey && tourVisto(chaveDoTour(portal, tourKey, 'checklist')))
+    || seen.some(x => x.tour_id === 'checklist' && x.status === 'pulado');
+  const gravarMarca = (tourId: string, status: 'concluido' | 'pulado' | 'visto', passo: number | null) => {
+    registrarVisto(tourId, status);
+    portalHelpService
+      .markTour(portal, { token, orgId: selectedOrgId ?? orgId ?? null }, tourId, status, passo)
+      .catch(e => console.warn('[portalHelp] não gravou no banco:', e));
+  };
+  const concluirItem = (key: string) => {
+    if (!gravaChecklist || !tourKey || checklistFeitos.has(key)) return;
+    marcarTourVisto(chaveDoTour(portal, tourKey, idDoItem(key)), 'concluido');
+    gravarMarca(idDoItem(key), 'concluido', null);
+  };
+  const concluirPorEvento = (evento: string) => {
+    help.checklist.filter(i => i.evento === evento).forEach(i => concluirItem(i.key));
+  };
+  const concluirPorEventoRef = useRef(concluirPorEvento);
+  concluirPorEventoRef.current = concluirPorEvento;
+  // abrir a aba (o próprio usuário — não a navegação automática do tour)
+  useEffect(() => {
+    if (!currentSection || !carregado || tourAtivo) return;
+    concluirPorEventoRef.current(`aba:${currentSection}`);
+  }, [currentSection, carregado, tourAtivo]);
+  // ações avisadas pelos portais (utils/portalEventos.ts)
+  useEffect(() => ouvirAcoesDoPortal(acao => concluirPorEventoRef.current(`acao:${acao}`)), []);
+  const ocultarChecklist = () => {
+    if (!gravaChecklist || !tourKey) return;
+    marcarTourVisto(chaveDoTour(portal, tourKey, 'checklist'), 'pulado');
+    gravarMarca('checklist', 'pulado', null);
+  };
+  const mostrarChecklistDeNovo = () => {
+    if (!tourKey) return;
+    esquecerTour(chaveDoTour(portal, tourKey, 'checklist'));
+    if (gravaChecklist) gravarMarca('checklist', 'visto', null);
+  };
+  const temChecklist = help.checklist.length > 0 && (gravaChecklist || modoPrevia);
+  const cartaoChecklist = checklistSlot && temChecklist && !checklistOculto
+    ? createPortal(
+      <PortalChecklist
+        portal={portal}
+        itens={help.checklist}
+        feitos={checklistFeitos}
+        onIr={onNavigate}
+        onOcultar={gravaChecklist ? ocultarChecklist : undefined}
+        accent={accent}
+      />,
+      checklistSlot,
+    )
+    : null;
+
   const fimDoTour = useRef(0);
   const secaoDeOrigem = useRef<string | null>(currentSection ?? null);
   const tourNavegou = useRef(false);
@@ -219,12 +292,13 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
 
   // Sheet mantém os filhos montados quando fechado: os botões das seções
   // (ex.: "Contratos") colidiriam com os da sidebar do portal.
-  if (!open && !tourAtivo) return null;
+  if (!open && !tourAtivo) return cartaoChecklist;
 
   const tourDestaTela = currentSection && help.tours[currentSection]?.length ? currentSection : null;
 
   return (
     <>
+    {cartaoChecklist}
     {tourAtivo && !loading && (
       <PortalTour
         key={tourAtivo}
@@ -407,6 +481,16 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
                       </button>
                     )}
                   </div>
+                )}
+                {temChecklist && checklistOculto && gravaChecklist && (
+                  <button
+                    type="button"
+                    onClick={mostrarChecklistDeNovo}
+                    className={`inline-flex items-center gap-2 text-sm font-medium ${a.text} hover:underline`}
+                  >
+                    <ListChecks className="w-4 h-4" />
+                    Mostrar os primeiros passos de novo ({checklistFeitos.size} de {help.checklist.length} feitos)
+                  </button>
                 )}
               </>
             )}

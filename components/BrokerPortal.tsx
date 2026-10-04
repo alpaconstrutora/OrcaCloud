@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Building2, FileText, LayoutGrid, Send, CheckCircle2, DollarSign, Users, User, Briefcase, FolderOpen, Trophy, BookOpen, Calendar, MessageSquare, BarChart3, Activity, Link2, Smartphone, Settings2, Eye, EyeOff, X, Download, Share2, ChevronDown, Bell, HelpCircle } from 'lucide-react';
 import { PortalHelp } from './portal/PortalHelp';
+import { avisarAcaoDoPortal } from '../utils/portalEventos';
 import { BROKER_PORTAL_TAB_IDS } from '../utils/brokerPortalTabs';
 import { downloadProposalPdf } from '../services/proposalPdfService';
 import PropertyUnitMap from './common/PropertyUnitMap';
@@ -112,6 +113,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
     const [showMyAccount, setShowMyAccount] = useState(false);
     // Central de ajuda (F2, 04/10/2026) — mesmo painel do Portal do Parceiro.
     const [isHelpOpen, setIsHelpOpen] = useState(false);
+    // Encaixe do cartão "Primeiros passos" (F8); não aparece para o gestor personificando.
+    const [slotChecklist, setSlotChecklist] = useState<HTMLDivElement | null>(null);
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         if (!isAccountMenuOpen) return;
@@ -368,6 +371,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
             setProposals(prev => [savedProposal, ...prev.filter(p => !p.id?.startsWith('prop-'))]);
             setShowSimulator(false);
             setCart([]);
+            avisarAcaoDoPortal('enviou-proposta');
             alert('Proposta enviada com sucesso! A incorporadora irá analisar.');
         } catch (error) {
             console.error("Erro ao salvar proposta:", error);
@@ -551,6 +555,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 // prévia do gestor é isPreview SEM token
                 modoPrevia={isPreview && !portalToken}
                 forcarTour={forcarTour}
+                checklistSlot={isAdmin ? null : slotChecklist}
                 accent="indigo"
                 tourKey={portalToken || effectiveBrokerEmail || null}
                 autoTour={isStandalone}
@@ -662,6 +667,8 @@ const BrokerPortal: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analy
                 </button>
             </div>
             )}
+
+            {!isAdmin && currentTab === navTabs[0]?.id && <div ref={setSlotChecklist} className="empty:hidden" />}
 
             {/* KPI Cards — §4 (componente canônico KpiCard, cor semântica por KPI).
                 Visíveis SOMENTE na aba Analytics: são o resumo de desempenho do

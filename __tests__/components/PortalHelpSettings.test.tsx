@@ -61,7 +61,7 @@ vi.mock('../../services/portalHelpService', () => ({
 
 import PortalHelpSettings from '../../components/PortalHelpSettings';
 import { ConfirmProvider } from '../../components/ui/confirm';
-import { DEFAULT_ITEMS, TOURS } from '../../utils/portalHelpDefaults';
+import { DEFAULT_ITEMS, TOURS, CHECKLIST_ITEMS } from '../../utils/portalHelpDefaults';
 
 const primeiro = DEFAULT_ITEMS.parceiro.find(d => d.kind === 'artigo')!;
 const SOBRESCRITA = {
@@ -336,5 +336,38 @@ describe('PortalHelpSettings › Acompanhamento (F7)', () => {
     await screen.findByText(primeiro.title);
     await user.click(screen.getByRole('button', { name: 'Acompanhamento' }));
     expect(await screen.findByText('Ninguém passou pelo tour deste portal ainda.')).toBeInTheDocument();
+  });
+});
+
+describe('PortalHelpSettings › Primeiros passos (F8)', () => {
+  it('lista os itens, sem "Novo"; personalizar grava a sobrescrita kind=checklist só com título', async () => {
+    const user = userEvent.setup();
+    montar();
+    await screen.findByText(primeiro.title);
+    await user.click(screen.getByRole('button', { name: 'Primeiros passos' }));
+    const itens = CHECKLIST_ITEMS.parceiro;
+    for (const i of itens) expect(screen.getByText(i.title)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Novo/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/cada item se marca sozinho/)).toBeInTheDocument();
+    const linha = screen.getByText(itens[0].title).closest('tr')!;
+    await user.click(within(linha).getByTitle('Personalizar este texto'));
+    expect(screen.queryByLabelText('Texto do passo')).not.toBeInTheDocument();
+    const titulo = screen.getByLabelText('Título');
+    await user.clear(titulo);
+    await user.type(titulo, 'Veja os contratos da obra');
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(saveOverride).toHaveBeenCalled());
+    expect(saveOverride.mock.calls[0][0]).toMatchObject({ kind: 'checklist', default_key: itens[0].key, title: 'Veja os contratos da obra', body_html: '' });
+  });
+
+  it('acompanhamento mostra o título do item do checklist', async () => {
+    const user = userEvent.setup();
+    orgIdDoTopo = 'org-b';
+    list.mockResolvedValue([]);
+    tourStats.mockResolvedValue([{ portal: 'parceiro', acesso: 'link', quem: 'Álvaro', contato: null, tour_id: `checklist:${CHECKLIST_ITEMS.parceiro[2].key}`, status: 'concluido', step_reached: null, times: 1, first_seen_at: '2026-10-04T10:00:00Z', updated_at: '2026-10-04T10:00:00Z' }]);
+    montar();
+    await screen.findByText(primeiro.title);
+    await user.click(screen.getByRole('button', { name: 'Acompanhamento' }));
+    expect(await screen.findByText(`Primeiros passos · ${CHECKLIST_ITEMS.parceiro[2].title}`)).toBeInTheDocument();
   });
 });

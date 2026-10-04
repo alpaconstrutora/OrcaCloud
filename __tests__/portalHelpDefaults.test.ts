@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  DEFAULT_ITEMS, PORTAL_SECTIONS, TOUR_STEPS, TOURS, mergePortalHelp, htmlToText, hashText, sectionLabel, tourLabel, ancorasDoTour, todosOsPassos,
+  DEFAULT_ITEMS, PORTAL_SECTIONS, TOUR_STEPS, TOURS, CHECKLIST_ITEMS, mergePortalHelp, htmlToText, hashText, sectionLabel, tourLabel, ancorasDoTour, todosOsPassos,
   type Portal, type PortalHelpRow,
 } from '../utils/portalHelpDefaults';
 import { chaveDoTour } from '../utils/portalTour';
@@ -245,5 +245,41 @@ describe('tour: passos próprios e ordem (F6, 04/10/2026)', () => {
       expect(cat[0].section).toBeNull();
       expect(cat.find(c => c.anchor === 'menu')?.label).toBe('Menu do portal');
     }
+  });
+});
+
+describe('Primeiros passos (F8, 04/10/2026)', () => {
+  it.each(PORTAIS)('%s: itens com chave única do portal, aba existente e evento válido', (portal) => {
+    const itens = CHECKLIST_ITEMS[portal];
+    expect(itens.length).toBeGreaterThanOrEqual(3);
+    const chaves = itens.map(i => i.key);
+    expect(new Set(chaves).size).toBe(chaves.length);
+    const abas = new Set(PORTAL_SECTIONS[portal].map(x => x.id));
+    for (const i of itens) {
+      expect(i.key.startsWith(`${portal}.checklist.`)).toBe(true);
+      expect(abas.has(i.section), `${i.key}: aba ${i.section}`).toBe(true);
+      expect(i.evento).toMatch(/^(aba|acao):[a-z-]+$/);
+      if (i.evento.startsWith('aba:')) expect(abas.has(i.evento.slice(4))).toBe(true);
+    }
+    // um evento marca um item só (senão o "x de n" pula de dois em dois)
+    const eventos = itens.map(i => i.evento);
+    expect(new Set(eventos).size).toBe(eventos.length);
+  });
+
+  it('a construtora renomeia e oculta pela chave; aba oculta tira o item', () => {
+    const c = CHECKLIST_ITEMS.parceiro;
+    const m = mergePortalHelp('parceiro', [
+      row({ id: 'k1', kind: 'checklist', default_key: c[0].key, title: 'Veja os contratos da obra' }),
+      row({ id: 'k2', kind: 'checklist', default_key: c[1].key, title: c[1].title, is_published: false }),
+    ]);
+    expect(m.checklist[0]).toMatchObject({ key: c[0].key, title: 'Veja os contratos da obra', origin: 'personalizado', rowId: 'k1' });
+    expect(m.checklist.some(x => x.key === c[1].key)).toBe(false);
+    expect(mergePortalHelp('parceiro', null, { visibleSections: ['documentos'] }).checklist.map(x => x.key)).toEqual(c.filter(x => x.section === 'documentos').map(x => x.key));
+  });
+
+  it('linha kind=checklist não vira artigo nem pergunta', () => {
+    const m = mergePortalHelp('parceiro', [row({ id: 'z', kind: 'checklist', default_key: null, title: 'solto' })]);
+    expect(m.articles.some(a => a.rowId === 'z')).toBe(false);
+    expect(m.faqs.some(a => a.rowId === 'z')).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { avisarAcaoDoPortal } from '../utils/portalEventos';
 import {
     ArrowLeft, Send, Calendar, Clock, HandCoins, CheckCircle2, TrendingDown, XCircle,
     FileText, Package, Building2,
@@ -208,6 +209,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
             }
             markSaved();
             setSavedAt(Date.now());
+            avisarAcaoDoPortal('respondeu-cotacao');
             // §25 — criar fecha (a tarefa acabou); atualizar permanece na tela.
             if (existingResponse) {
                 showToast('Proposta atualizada.');

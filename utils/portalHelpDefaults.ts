@@ -17,7 +17,7 @@
  */
 
 export type Portal = 'parceiro' | 'fornecedor' | 'corretor';
-export type HelpKind = 'artigo' | 'faq' | 'tour';
+export type HelpKind = 'artigo' | 'faq' | 'tour' | 'checklist';
 
 export const PORTAL_LABELS: Record<Portal, string> = {
   parceiro: 'Portal do Parceiro',
@@ -540,6 +540,45 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
   },
 };
 
+/**
+ * Checklist "Primeiros passos" (F8). Cada item se marca sozinho quando o
+ * externo abre a aba (`aba:<id>`) ou faz a ação (`acao:<PortalAcao>`,
+ * utils/portalEventos.ts). Chaves `<portal>.checklist.<slug>`; no banco o
+ * progresso fica em portal_tour_progress com tour_id `checklist:<chave>`.
+ * A construtora só renomeia ou oculta (kind='checklist').
+ */
+export interface ChecklistItem {
+  key: string;
+  title: string;
+  /** aba para onde o "Ir" leva (e que precisa estar liberada para o item aparecer) */
+  section: string;
+  evento: string;
+}
+
+export const CHECKLIST_ITEMS: Record<Portal, ChecklistItem[]> = {
+  parceiro: [
+    { key: 'parceiro.checklist.contratos', title: 'Conheça seus contratos', section: 'contratos', evento: 'aba:contratos' },
+    { key: 'parceiro.checklist.abrir-contrato', title: 'Abra um contrato', section: 'contratos', evento: 'acao:abriu-contrato' },
+    { key: 'parceiro.checklist.enviar-documento', title: 'Envie um documento', section: 'documentos', evento: 'acao:enviou-documento' },
+    { key: 'parceiro.checklist.solicitacao', title: 'Abra uma solicitação', section: 'solicitacoes', evento: 'acao:abriu-solicitacao' },
+    { key: 'parceiro.checklist.financeiro', title: 'Veja o Financeiro', section: 'financeiro', evento: 'aba:financeiro' },
+  ],
+  fornecedor: [
+    { key: 'fornecedor.checklist.pedidos', title: 'Veja seus pedidos', section: 'orders', evento: 'aba:orders' },
+    { key: 'fornecedor.checklist.cotacao', title: 'Responda uma cotação', section: 'quotations', evento: 'acao:respondeu-cotacao' },
+    { key: 'fornecedor.checklist.logistica', title: 'Atualize a logística de um pedido', section: 'orders', evento: 'acao:atualizou-logistica' },
+    { key: 'fornecedor.checklist.nota-fiscal', title: 'Envie uma nota fiscal', section: 'documents', evento: 'acao:enviou-nf' },
+    { key: 'fornecedor.checklist.financeiro', title: 'Veja o Financeiro', section: 'financeiro', evento: 'aba:financeiro' },
+  ],
+  corretor: [
+    { key: 'corretor.checklist.estoque', title: 'Veja o estoque', section: 'estoque', evento: 'aba:estoque' },
+    { key: 'corretor.checklist.empreendimentos', title: 'Conheça os empreendimentos', section: 'empreendimentos', evento: 'aba:empreendimentos' },
+    { key: 'corretor.checklist.proposta', title: 'Envie uma proposta', section: 'propostas', evento: 'acao:enviou-proposta' },
+    { key: 'corretor.checklist.lead', title: 'Cadastre um lead', section: 'leads', evento: 'acao:criou-lead' },
+    { key: 'corretor.checklist.material', title: 'Baixe um material', section: 'materiais', evento: 'acao:baixou-material' },
+  ],
+};
+
 /** Compat: o tour do portal (geral). */
 export const TOUR_STEPS: Record<Portal, TourStep[]> = {
   parceiro: TOURS.parceiro.geral,
@@ -641,6 +680,12 @@ export interface MergedTourStep extends Omit<TourStep, 'key'> {
   sort_order: number;
 }
 
+export interface MergedChecklistItem extends ChecklistItem {
+  rowId: string | null;
+  origin: HelpOrigin;
+  hidden: boolean;
+}
+
 export interface MergedHelp {
   articles: HelpItem[];
   faqs: HelpItem[];
@@ -648,6 +693,8 @@ export interface MergedHelp {
   tour: MergedTourStep[];
   /** `geral` sempre; abas só quando têm ao menos um passo visível */
   tours: Record<TourId, MergedTourStep[]>;
+  /** itens do checklist "Primeiros passos" (só abas liberadas) */
+  checklist: MergedChecklistItem[];
 }
 
 /** Hash curto e estável (djb2) do corpo padrão — para "o padrão mudou". */
@@ -699,7 +746,7 @@ export function mergePortalHelp(
   });
   proprios.forEach((r, i) => {
     if (!r.is_published && !opts.includeHidden) return;
-    if (r.kind === 'tour') return;
+    if (r.kind !== 'artigo' && r.kind !== 'faq') return;
     itens.push({
       key: null, rowId: r.id, kind: r.kind, section: r.section,
       title: r.title, body_html: r.body_html, origin: 'proprio',
@@ -761,6 +808,14 @@ export function mergePortalHelp(
     articles: itens.filter(i => i.kind === 'artigo').filter(filtrar).sort(ordenar),
     faqs: itens.filter(i => i.kind === 'faq').filter(filtrar).sort(ordenar),
     tour: tours.geral,
+    checklist: CHECKLIST_ITEMS[portal]
+      .map((c): MergedChecklistItem => {
+        const o = porChave.get(c.key);
+        const titulo = o?.title || c.title;
+        const hidden = !!o && !o.is_published;
+        return { ...c, title: titulo, rowId: o?.id ?? null, hidden, origin: o && (hidden || titulo !== c.title) ? 'personalizado' : 'padrao' };
+      })
+      .filter(c => (opts.includeHidden || !c.hidden) && visivel(c.section, opts.visibleSections)),
     tours,
   };
 }

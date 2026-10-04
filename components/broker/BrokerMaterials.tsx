@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { avisarAcaoDoPortal } from '../../utils/portalEventos';
 import { FileImage, Video, Eye, Download, ExternalLink, Search, BookOpen, Map, Camera, Play, FileText, Table2, Plus } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import type { BrokerMaterial } from '../../types';
@@ -64,6 +65,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId }) => 
             console.error(e);
         }
 
+        avisarAcaoDoPortal('baixou-material');
         window.open(material.file_url, '_blank');
     };
 

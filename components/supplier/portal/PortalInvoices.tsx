@@ -1,4 +1,5 @@
 import React from 'react';
+import { avisarAcaoDoPortal } from '../../../utils/portalEventos';
 import { AlertCircle, Eye, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { Invoice, PurchaseOrder, Supplier } from '../../../types';
 import { invoiceService } from '../../../services/invoiceService';
@@ -74,6 +75,7 @@ const PortalInvoices: React.FC<Props> = ({ supplier, orders, portalToken, onChan
             }
             await load();
             onChanged?.();
+            avisarAcaoDoPortal('enviou-nf');
         } catch (err) {
             console.error('Erro ao enviar nota fiscal:', err);
             setError(err instanceof Error ? err.message : 'Erro ao enviar o arquivo. Tente novamente.');

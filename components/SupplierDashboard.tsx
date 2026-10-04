@@ -66,6 +66,7 @@ import SupplierFinanceiroTab from './supplier/SupplierFinanceiroTab';
 import PortalMyData from './supplier/portal/PortalMyData';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { PortalHelp } from './portal/PortalHelp';
+import { avisarAcaoDoPortal } from '../utils/portalEventos';
 import { SUPPLIER_PORTAL_TAB_IDS } from '../utils/supplierPortalTabs';
 import { SupplierBankAccount } from '../types/supplierBankAccount';
 import { supabase } from '../lib/supabase';
@@ -196,6 +197,9 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     const [showMoreSheet, setShowMoreSheet] = React.useState(false);
     // Central de ajuda (F2, 04/10/2026) — mesmo painel do Portal do Parceiro.
     const [isHelpOpen, setIsHelpOpen] = React.useState(false);
+    // Encaixe do cartão "Primeiros passos" (F8). O gestor personificando um
+    // fornecedor não vê o cartão: as ações dele não marcam o checklist do outro.
+    const [slotChecklist, setSlotChecklist] = React.useState<HTMLDivElement | null>(null);
     const [dataError, setDataError] = React.useState<string | null>(null);
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
@@ -320,6 +324,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             }
             await loadOrders();
             setIsEditingLogistics(false);
+            avisarAcaoDoPortal('atualizou-logistica');
             showToast('Logística atualizada com sucesso!', 'success');
         } catch (error: unknown) {
             console.error('Error updating logistics:', error);
@@ -1554,6 +1559,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 </main>
             ) : (
             <main className="min-h-[400px]">
+                {!isAdmin && activeTab === navTabs[0]?.id && <div ref={setSlotChecklist} className="empty:hidden mb-6" />}
                 {activeTab === 'overview' && (
                     isPublicExperience ? (
                         <PortalOverview
@@ -1761,6 +1767,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 // prévia do gestor é isPreview SEM token
                 modoPrevia={isPreview && !portalToken}
                 forcarTour={forcarTour}
+                checklistSlot={isAdmin ? null : slotChecklist}
                 accent="coral"
                 tourKey={portalToken || effectiveSupplier?.email || null}
                 autoTour={isStandalone}

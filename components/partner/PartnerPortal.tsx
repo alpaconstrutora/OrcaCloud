@@ -46,6 +46,7 @@ import { urlDoPdfDoContrato } from '../../utils/contractFileUrl';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { PortalHelp } from '../portal/PortalHelp';
+import { avisarAcaoDoPortal } from '../../utils/portalEventos';
 import PortalMyData from '../supplier/portal/PortalMyData';
 import PartnerPortalFinanceiro from './PartnerPortalFinanceiro';
 import {
@@ -167,6 +168,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   // Central de ajuda (03/10/2026) — painel compartilhado pelos três portais.
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  // Encaixe do cartão "Primeiros passos" (F8) no topo da primeira aba liberada.
+  const [slotChecklist, setSlotChecklist] = useState<HTMLDivElement | null>(null);
   const [showMyAccount, setShowMyAccount] = useState(false);
   // "Meus dados": o cadastro que a construtora tem deste parceiro — o mesmo de
   // Minha Organização › Meus Fornecedores. Carrega sob demanda: é a única coisa
@@ -328,6 +331,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
   // Abrir o detalhe de um contrato (itens/aditivos/medições) — mesmos dados que a
   // tela interna de Suprimentos > Contratos mostra, só que somente leitura.
   const openContractDetail = async (contract: Contract) => {
+    avisarAcaoDoPortal('abriu-contrato');
     setDetailContract(contract);
     setDetailTab(enabledContractTabs[0] ?? 'overview');
     setDetailLoading(true);
@@ -853,6 +857,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       }
       setRequests((prev) => [created, ...prev]);
       setIsNewRequestModalOpen(false);
+      avisarAcaoDoPortal('abriu-solicitacao');
       setNewRequest({ title: '', description: '', type: 'TECNICA', priority: 'MEDIA' });
       setNewRequestFiles([]);
     } catch (err) {
@@ -930,6 +935,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
       }
       setRequests((prev) => [created, ...prev]);
       setIsSendDocModalOpen(false);
+      avisarAcaoDoPortal('enviou-documento');
       setSendDocFile(null);
       setSendDocNote('');
       alert('Documento enviado. A equipe da construtora vai revisar e incluir no GED.');
@@ -1178,6 +1184,8 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
             </div>
           )}
+
+          {activeTab === enabledTabs[0] && <div ref={setSlotChecklist} className="empty:hidden mb-6" />}
 
           {/* TAB: DASHBOARD */}
           {showTab('dashboard') && (
@@ -2271,6 +2279,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
         onNavigate={(s) => { setDetailContract(null); setActiveTab(s as typeof activeTab); }}
         modoPrevia={isPreview}
         forcarTour={forcarTour}
+        checklistSlot={slotChecklist}
         accent="orange"
         tourKey={portalToken || userEmail || null}
         autoTour={!isPreview}

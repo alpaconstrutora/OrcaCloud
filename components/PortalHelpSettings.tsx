@@ -16,7 +16,7 @@ import { brokerService } from '../services/brokerService';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import {
   PORTAL_LABELS, PORTAL_SECTIONS, DEFAULT_ITEMS, mergePortalHelp, sectionLabel, hashText, todosOsPassos, tourLabel, ancorasDoTour,
-  type Portal, type HelpKind, type HelpItem, type MergedTourStep, type TourId,
+  type Portal, type HelpKind, type HelpItem, type MergedTourStep, type MergedChecklistItem, type TourId, CHECKLIST_ITEMS,
 } from '../utils/portalHelpDefaults';
 import type { Supplier, BrokerProfile } from '../types';
 
@@ -50,11 +50,12 @@ const KINDS: { id: HelpKind; label: string }[] = [
   { id: 'artigo', label: 'Artigos' },
   { id: 'faq', label: 'Perguntas frequentes' },
   { id: 'tour', label: 'Tour guiado' },
+  { id: 'checklist', label: 'Primeiros passos' },
 ];
 
 type Linha = {
   chave: string;                 // key do padrão ou id da linha própria
-  item: HelpItem | MergedTourStep;
+  item: HelpItem | MergedTourStep | MergedChecklistItem;
   kind: HelpKind;
   orgId: string | null;          // org da sobrescrita/item próprio (null = padrão sem sobrescrita)
   orgName?: string;
@@ -164,7 +165,7 @@ const PortalHelpSettings: React.FC = () => {
 
   const rotuloDoProgresso = (tourId: string) =>
     tourId === 'checklist' ? 'Primeiros passos (ocultou o cartão)'
-      : tourId.startsWith('checklist:') ? `Primeiros passos · ${tourId.slice('checklist:'.length)}`
+      : tourId.startsWith('checklist:') ? `Primeiros passos · ${CHECKLIST_ITEMS[portal].find(c => c.key === tourId.slice('checklist:'.length))?.title ?? tourId.slice('checklist:'.length)}`
       : tourLabel(portal, tourId);
 
   const nomeOrg = (id: string) => organizations.find(o => o.id === id)?.name ?? id.slice(0, 8);
@@ -190,6 +191,9 @@ const PortalHelpSettings: React.FC = () => {
           orgName: org && t.rowId ? nomeOrg(org) : undefined, posicao: i + 1,
         }));
       }
+      if (kind === 'checklist') {
+        return m.checklist.map(c => ({ chave: c.key, item: c, kind, orgId: c.rowId ? org : null, orgName: org && c.rowId ? nomeOrg(org) : undefined }));
+      }
       const lista = kind === 'artigo' ? m.articles : m.faqs;
       return lista.map(i => ({ chave: i.key ?? i.rowId!, item: i, kind, orgId: i.rowId ? org : null, orgName: org && i.rowId ? nomeOrg(org) : undefined }));
     };
@@ -206,7 +210,7 @@ const PortalHelpSettings: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, portal, kind, orgId, organizations, tourSel]);
 
-  const oculto = (l: Linha) => l.kind === 'tour' ? (l.item as MergedTourStep).hidden : false;
+  const oculto = (l: Linha) => (l.item as { hidden?: boolean }).hidden ?? false;
   const publicadoDaLinha = (l: Linha) => {
     if (!l.orgId) return true;
     const r = rows.find(x => x.id === (l.item as HelpItem).rowId || x.id === (l.item as MergedTourStep).rowId);
@@ -225,7 +229,7 @@ const PortalHelpSettings: React.FC = () => {
       orgId: l.orgId,
       section: passo ? passo.section : (it as HelpItem).section,
       title: it.title,
-      body: passo ? passo.body : (it as HelpItem).body_html,
+      body: passo ? passo.body : ((it as HelpItem).body_html ?? ''),
       published: rowId ? publicadoDaLinha(l) : true,
       tourId: passo ? passo.tour : 'geral',
       anchor: passo ? passo.anchor : null,
@@ -285,7 +289,8 @@ const PortalHelpSettings: React.FC = () => {
             });
           }
           return portalHelpService.createCustom({
-            organization_id: destino, portal, kind: form.kind,
+            // "Novo" não existe para os primeiros passos (cada item depende de uma ação do portal)
+            organization_id: destino, portal, kind: form.kind as 'artigo' | 'faq' | 'tour',
             section: doTour ? doTour.section : form.section, title: form.title.trim(), body_html: form.body, is_published: form.published,
             created_by: currentEmail ?? null,
             // passo novo entra no fim do tour (as setas reordenam depois)
@@ -318,7 +323,7 @@ const PortalHelpSettings: React.FC = () => {
         if (!target) return;
         await forEachTargetOrg(target, (destino) => portalHelpService.saveOverride({
           organization_id: destino, portal, kind: l.kind, default_key: key, section: l.kind === 'tour' ? (it as MergedTourStep).section : (it as HelpItem).section,
-          title: it.title, body_html: l.kind === 'tour' ? (it as MergedTourStep).body : (it as HelpItem).body_html, is_published: false,
+          title: it.title, body_html: l.kind === 'tour' ? (it as MergedTourStep).body : ((it as HelpItem).body_html ?? ''), is_published: false,
           default_hash: hashText(corpoPadrao(key)), created_by: currentEmail ?? null,
         }));
       }
@@ -465,7 +470,7 @@ const PortalHelpSettings: React.FC = () => {
               <PlayCircle className="w-4 h-4" /> Pré-visualizar tour
             </Button>
           )}
-          <Button onClick={abrirNovo}><Plus className="w-4 h-4" /> {ehTour ? 'Novo passo' : 'Novo item'}</Button>
+          {kind !== 'checklist' && <Button onClick={abrirNovo}><Plus className="w-4 h-4" /> {ehTour ? 'Novo passo' : 'Novo item'}</Button>}
         </div>
         )}
       </div>
@@ -549,6 +554,12 @@ const PortalHelpSettings: React.FC = () => {
             </table>
           </div>
         </div>
+      )}
+
+      {kind === 'checklist' && !acompanhamento && (
+        <p className="text-sm text-gray-500 flex items-start gap-2"><AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+          O cartão "Primeiros passos" aparece no início do portal e cada item se marca sozinho quando o externo abre a aba ou faz a ação. Aqui você renomeia ou oculta cada item; itens de abas ocultas para o externo não aparecem para ele.
+        </p>
       )}
 
       {ehTour && !acompanhamento && (
@@ -713,7 +724,7 @@ const PortalHelpSettings: React.FC = () => {
                     className={campo}
                   />
                 </div>
-                {form.kind !== 'tour' && (
+                {form.kind !== 'tour' && form.kind !== 'checklist' && (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">Seção</label>
                     <select
@@ -733,6 +744,7 @@ const PortalHelpSettings: React.FC = () => {
                     Visível no portal
                   </label>
                 </div>
+                {form.kind !== 'checklist' && (
                 <div className="space-y-1.5 col-span-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-slate-500" htmlFor="ajuda-corpo">{form.kind === 'tour' ? 'Texto do passo' : 'Conteúdo (HTML simples: parágrafos, listas, negrito)'}</label>
@@ -757,6 +769,7 @@ const PortalHelpSettings: React.FC = () => {
                     />
                   )}
                 </div>
+                )}
               </div>
             </SheetPanel>
             <SheetFooter>

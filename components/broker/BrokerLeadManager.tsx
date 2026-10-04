@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { avisarAcaoDoPortal } from '../../utils/portalEventos';
 import { Users, Plus, Shield, Phone, Mail, MessageSquare, Calendar, ChevronRight, Search, Clock, X, Eye } from 'lucide-react';
 import type { BrokerLead, BrokerLeadStage, BrokerLeadInteraction } from '../../types';
 
@@ -115,6 +116,7 @@ const BrokerLeadManager: React.FC<BrokerLeadManagerProps> = ({ brokerEmail }) =>
         setLeads(prev => [lead, ...prev]);
         setNewLead({ name: '', phone: '', email: '', origin: 'SITE', interest_typology: '', notes: '' });
         setShowNewLeadForm(false);
+        avisarAcaoDoPortal('criou-lead');
     };
 
     const advanceStage = (lead: BrokerLead) => {

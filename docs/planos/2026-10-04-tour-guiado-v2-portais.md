@@ -1,6 +1,6 @@
 # Tour guiado v2 dos portais externos
 
-**Data:** 2026-10-04 · **Status:** F4 a F7 publicadas; F8 pendente
+**Data:** 2026-10-04 · **Status:** F4 a F8 publicadas (plano concluído)
 **Antecede:** `docs/planos/2026-10-03-ajuda-portais-externos.md` (central de ajuda F1–F3)
 
 ## Pedido original (literal)
@@ -148,3 +148,31 @@ Pedido literal: "implementar f7 e f8".
   tour, situação (Concluiu/Pulou/Viu em texto colorido), passo, vezes, última
   vez; em "Todas" junta as organizações em que o usuário é gestor e diz quantas
   ficaram de fora.
+
+## F8 — o que entrou
+
+- **Banco** (`aplicar_20271004000090_portal_help_checklist.sql`, aplicada): o
+  CHECK de `kind` aceita `checklist` (a construtora renomeia/oculta itens).
+  Progresso no `portal_tour_progress` do F7: `checklist:<chave>` = concluído;
+  `checklist` = pulado (cartão oculto) / visto (mostrado de novo).
+- **Itens** (`CHECKLIST_ITEMS` em `utils/portalHelpDefaults.ts`), 5 por portal,
+  cada um ligado a abrir uma aba (`aba:<id>`) ou a uma ação (`acao:<ação>`):
+  Parceiro — conhecer contratos, abrir um contrato, enviar documento, abrir
+  solicitação, ver o Financeiro; Fornecedor — ver pedidos, responder cotação,
+  atualizar logística, enviar nota fiscal, ver o Financeiro; Corretor — ver
+  estoque, conhecer empreendimentos, enviar proposta, cadastrar lead, baixar
+  material. Item de aba oculta para o externo não entra.
+- **Ações**: `utils/portalEventos.ts` (canal de módulo, funciona no iframe da
+  prévia); os portais avisam no ponto de sucesso de cada ação. Teste de
+  contrato: toda `acao:` do checklist tem um `avisarAcaoDoPortal('…')` no fonte.
+- **Cartão** (`components/portal/PortalChecklist.tsx`) desenhado pelo
+  `PortalHelp` (mesma leitura da ajuda, mesmo `seen`) dentro de um encaixe que
+  cada portal põe no topo da primeira aba visível. "Ir" leva à aba; "Ocultar"
+  some com o cartão e a Ajuda oferece mostrar de novo. Navegação automática do
+  tour não conta como "abriu a aba". Gestor personificando fornecedor/corretor
+  não vê o cartão; prévia mostra sem gravar.
+- **Editor**: aba "Primeiros passos" (renomear/ocultar; sem "Novo");
+  Acompanhamento mostra o título do item.
+- Navegador (link do parceiro, gravações interceptadas): 0 de 4 → abrir
+  Contratos e "Ver Detalhes" → 2 de 4 → "Ir" no Financeiro → 3 de 4 → Ocultar
+  some e a Ajuda oferece "Mostrar os primeiros passos de novo (3 de 4 feitos)".

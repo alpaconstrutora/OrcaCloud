@@ -105,3 +105,13 @@ Estado por camada: `'VISIVEL' | 'ATENUADA' | 'OCULTA'`. Estado do grupo = deriva
 - [x] F4 — atenuar (2D: fator multiplicativo no globalAlpha + clique/laço pulam atenuados; divisas, ambientes, conexões e marcas respeitam ocultos; 3D: passada fantasma translúcida sem raycast) — prova visual na F6
 - [x] F5 — conflitos filtrados (faixa "N de M · Ver todos"; ribbon, cabeçalho, destaque 3D e BCF seguem a lista exibida; 5 testes)
 - [ ] F6 — verificação e publicação
+
+## Verificação (04/10/2026)
+- Suíte inteira (`vitest --maxWorkers=4`, JSON): 717 arquivos, 7.464 testes = 7.430 ✅ + 34 pendentes (integração/arquivo-de-prova pulados — linha de base), 0 falhas; a conta fecha.
+- `tsc --noEmit` limpo; `check-ui-standard.sh` limpo em `PainelCamadas.tsx`, `PainelConflitos.tsx`, `BlueprintEditor.tsx`.
+- Harness `docs/spikes/camadas/` (canvas, 3D e `PainelCamadas` REAIS, sem login) — `medir.mjs` é portão, 15/15 ✅:
+  pilar oculto = fundo em volta (25,8 × 23,4); meio-tom 57,4 entre visível 141,6 e oculto; clique no pilar seleciona só com a Estrutura visível;
+  "Expandir Hidráulica → Isolar Esgoto" pelo painel dá esgoto visível / arquitetura meio-tom / resto oculto; ocultar Terreno muda o desenho (divisa obedece);
+  3D: passada translúcida desenha (paredes e pilar translúcidos com o tubo aparecendo através), sem erro de console.
+- Desvio do plano registrado: a seção fica na planta e no 3D (`naVista: false`) — elevação e corte não leem o conjunto de ocultos.
+- Ainda não feito: passeio no app real com login (precisa da senha do usuário de leitura, que não fica gravada).

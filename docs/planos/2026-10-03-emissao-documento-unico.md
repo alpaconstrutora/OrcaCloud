@@ -76,14 +76,19 @@ linhas em `contract_document_versions`.
 - [x] 2 · Emissão com ContractDocumentsTab — `MinutaVersionsPanel` apagado
 - [x] 3 · Assinatura pela versão emitida — PDF assinado só-leitura no card
 - [x] 4 · .docx vira versão (`persistVersion` + `onVersionSaved`)
-- [ ] 5 · Verificação
+- [x] 5 · Verificação
   - [x] `tsc` limpo; `check-ui-standard.sh` limpo nos 2 arquivos; `check-xss-sinks.sh` limpo
   - [x] trava `__tests__/components/ContractEmissaoDocumentoUnico.test.tsx`:
         4/4 falham no código antigo, 4/4 passam no novo (o caso do drawer
         precisou ser SEM PDF — com PDF o bloco antigo não tinha input e o
         teste passava no código antigo)
   - [x] suíte inteira + build — 7254 = 7220 passou + 34 pulados, 0 falha (JSON conferido); `npm run build` ok
-  - [ ] conferência visual (`c:/tmp/pwtest/contrato-emissao.js`, só leitura)
+  - [x] conferência visual (`c:/tmp/pwtest/contrato-emissao.js`, só leitura,
+        contrato CTS-018-104-0001, 1600×1000): status → documentos → assinatura,
+        sem GED e sem "Versões da Minuta", 1 input de arquivo (o do painel),
+        link do PDF assinado presente, 0 escritas, 0 erros de console.
+        O print mostrou "Assinatura Eletrônica" duas vezes no card (rótulo
+        antigo dentro do SignaturePanel) — removido o de dentro.
 
 ## Fora do escopo (registrado, não feito)
 

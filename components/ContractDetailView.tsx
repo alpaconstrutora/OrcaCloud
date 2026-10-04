@@ -4291,15 +4291,16 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
     return (
         <div className="space-y-3 border-t border-gray-100 pt-4">
             {pdfAssinado}
-            <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-gray-500">Assinatura Eletrônica</p>
-                {hasSig && (
+            {/* Sem rótulo próprio: o card da aba Emissão já tem o título
+                "Assinatura Eletrônica" — repetido aqui, saía duas vezes. */}
+            {hasSig && (
+                <div className="flex items-center justify-end">
                     <button onClick={() => { setBusy(true); onRefreshStatus().finally(() => setBusy(false)); }} disabled={busy}
                         className="text-xs text-blue-600 hover:underline disabled:opacity-50">
                         {busy ? 'Atualizando…' : '↻ Atualizar status'}
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {hasSig && contract.signature_status && (
                 <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${SIGNATURE_STATUS_COLOR[contract.signature_status] ?? ''}`}>

@@ -1372,6 +1372,7 @@ describe('BlueprintEditor · quantitativos', () => {
     // A gaveta do estudo reparte o mix: 8 unidades por pavimento, 80 no total.
     await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tela-massa');
+    await user.click(within(gaveta).getByRole('tab', { name: 'Produto' }));
     const sec = within(gaveta).getByTestId('produto-da-massa');
     expect(sec).toHaveTextContent(/80/);
     expect(sec).toHaveTextContent(/73,9 %/);
@@ -1406,6 +1407,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await abrirAba(/^terreno$/i);
     await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tela-massa');
+    await user.click(within(gaveta).getByRole('tab', { name: 'Financeiro' }));
     const fin = await within(gaveta).findByTestId('financeiro-da-massa');
     // VGV 40 × 58 × 8.500 + 40 × 75 × 8.800 = 46,12 mi; obra 7.200 m² × (2.000 × 1,25) = 18,0 mi.
     expect(fin).toHaveTextContent(/R\$ 46,1 mi/);
@@ -1485,6 +1487,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await abrirAba(/^terreno$/i);
     await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tela-massa');
+    await user.click(within(gaveta).getByRole('tab', { name: 'Insolação' }));
     const sol = within(gaveta).getByTestId('insolacao-da-massa');
     expect(sol).toHaveTextContent(/Sol nas fachadas/);
     expect(sol).toHaveTextContent(/Fachada com pouco sol\s*\d+,\d %/);
@@ -7080,6 +7083,8 @@ describe('BlueprintEditor · Produto em tela', () => {
     // Pela gaveta do Estudo de massa: "Editar o produto" fecha a gaveta e abre a tela.
     await user.click(botao(/^estudo de massa/i));
     const gaveta = await screen.findByTestId('tela-massa');
+    // Desde as abas (03/10/2026), "Editar o produto" mora na aba Produto.
+    await user.click(within(gaveta).getByRole('tab', { name: 'Produto' }));
     await user.click(within(gaveta).getByRole('button', { name: 'Editar o produto' }));
     expect(await screen.findByTestId('tela-produto')).toBeInTheDocument();
     expect(screen.queryByTestId('tela-massa')).toBeNull();
@@ -7110,5 +7115,42 @@ describe('BlueprintEditor · Estudo de massa em tela', () => {
     await user.click(within(await screen.findByTestId('tela-massa')).getByRole('button', { name: 'Desenhar bloco' }));
     await waitFor(() => expect(screen.queryByTestId('tela-massa')).toBeNull());
     expect(botao(/^bloco$/i)).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+/**
+ * ABAS DO ESTUDO DE MASSA (03/10/2026): *"a tela Estudo de massa ficou longa e meio confusa. seria uma boa ideia
+ * agrupar assuntos em abas?"* — 5 abas (Lei e massa, Produto, Insolação, Financeiro, Hipóteses).
+ */
+describe('BlueprintEditor · abas do Estudo de massa', () => {
+  it('cinco abas, uma seção cada; sem bloco, as abas dizem o que falta; a aba escolhida sobrevive a ir ao desenho e voltar', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^estudo de massa/i));
+    const tela = await screen.findByTestId('tela-massa');
+    expect(within(tela).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Lei e massa', 'Produto', 'Insolação', 'Financeiro', 'Hipóteses']);
+    // Lei e massa: envelope e massa desenhada; nada das outras abas.
+    expect(within(tela).getByTestId('envelope-legal')).toBeInTheDocument();
+    expect(within(tela).getByTestId('indicadores-da-massa')).toBeInTheDocument();
+    expect(within(tela).queryByTestId('hipoteses-da-massa')).toBeNull();
+    // Sem bloco: Produto, Insolação e Financeiro explicam o que falta.
+    await user.click(within(tela).getByRole('tab', { name: 'Produto' }));
+    expect(within(tela).getByTestId('aba-vazia')).toHaveTextContent(/Sem bloco para repartir o produto/);
+    await user.click(within(tela).getByRole('tab', { name: 'Insolação' }));
+    expect(within(tela).getByTestId('aba-vazia')).toHaveTextContent(/Sem massa para medir o sol/);
+    await user.click(within(tela).getByRole('tab', { name: 'Financeiro' }));
+    const vazio = within(tela).getByTestId('aba-vazia');
+    expect(vazio).toHaveTextContent(/Sem unidades para avaliar/);
+    expect(within(vazio).getByRole('button', { name: 'Editar o produto' })).toBeInTheDocument();
+    // Hipóteses à parte.
+    await user.click(within(tela).getByRole('tab', { name: 'Hipóteses' }));
+    expect(within(tela).getByTestId('hipoteses-da-massa')).toBeInTheDocument();
+    expect(within(tela).queryByTestId('envelope-legal')).toBeNull();
+    // Ir ao desenho e voltar: continua em Hipóteses.
+    await user.click(screen.getByRole('button', { name: 'Voltar ao editor' }));
+    await user.click(botao(/^estudo de massa/i));
+    const outra = await screen.findByTestId('tela-massa');
+    expect(within(outra).getByRole('tab', { name: 'Hipóteses' })).toHaveAttribute('aria-selected', 'true');
   });
 });

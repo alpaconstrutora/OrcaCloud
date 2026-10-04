@@ -14,6 +14,8 @@
  * Entorno) volta ao editor, como a tela Quantitativos.
  */
 import React from 'react';
+import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
+import { usePersistedState } from '../ui/TableUtils';
 import { AlertTriangle, ArrowUpFromLine, Banknote, Building2, CarFront, CloudSun, Droplets, Gauge, Hammer, Home, Layers, LandPlot, Percent, Ruler, Scale, Send, SquareStack, Sun, SunDim, TrendingUp, Users, Wallet } from 'lucide-react';
 import { KpiCard, type KpiColor } from '../ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
@@ -116,156 +118,417 @@ function problemasDoBloco(b: MedidaDoBloco): string {
   return b.pisos.some((p) => p.cabe === null) ? 'sem lote para conferir' : 'cabe no envelope';
 }
 
+type AbaDaMassa = 'LEI' | 'PRODUTO' | 'INSOLACAO' | 'FINANCEIRO' | 'HIPOTESES';
+const ABAS_DA_MASSA: TabsBarItem<AbaDaMassa>[] = [
+  { id: 'LEI', label: 'Lei e massa' },
+  { id: 'PRODUTO', label: 'Produto' },
+  { id: 'INSOLACAO', label: 'Insolação' },
+  { id: 'FINANCEIRO', label: 'Financeiro' },
+  { id: 'HIPOTESES', label: 'Hipóteses' },
+];
+
+/** Estado vazio de uma aba (§12): ícone grande, título, o que falta — e, quando dá, o caminho. */
+function Vazio({ icone, titulo, texto, acao }: { icone: React.ReactElement<{ className?: string }>; titulo: string; texto: string; acao?: { rotulo: string; onClick: () => void } }) {
+  return (
+    <div className="rounded-[10px] border border-dashed border-gray-200 py-12 text-center" data-testid="aba-vazia">
+      {React.cloneElement(icone, { className: 'mx-auto mb-3 h-10 w-10 text-gray-300' })}
+      <p className="text-sm font-semibold text-gray-900">{titulo}</p>
+      <p className="mx-auto mt-1 max-w-xl text-xs text-gray-500">{texto}</p>
+      {acao && (
+        <button type="button" onClick={acao.onClick} className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800">
+          {acao.rotulo}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function TelaEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses, onSelecionarBloco, onDesenharBloco, produto: pr = null, onAbrirProduto, onLancarNucleo, financeiro: fi = null, envio, insolacao: sol = null, origemDoSol, onAbrirEntorno }: Props) {
   const l = r.legal;
   const campo = 'h-9 rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800';
+  const [aba, setAba] = usePersistedState<AbaDaMassa>('blueprint:massa:aba', 'LEI');
+  // O que o navegador guardou pode ser de uma versão com outras abas.
+  const abaValida: AbaDaMassa = ABAS_DA_MASSA.some((a) => a.id === aba) ? aba : 'LEI';
   return (
     <div className="space-y-6 text-sm text-gray-700" data-testid="tela-massa">
 
-      <section className="space-y-3" data-testid="envelope-legal">
-        <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Envelope legal — o que a lei deixa no lote</h3>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <KpiCard label="Lote" value={m2(l.loteM2)} icon={<LandPlot />} color="gray" />
-          <KpiCard label="Implantação máxima" value={m2(l.implantacaoEfetivaM2)} sub={l.implantacaoMaxM2 != null && l.envelopeTerreoM2 != null ? `TO ${m2(l.implantacaoMaxM2)} · envelope ${m2(l.envelopeTerreoM2)}` : undefined} icon={<SquareStack />} color="blue" />
-          <KpiCard label="Área computável máxima" value={m2(l.potencialM2)} sub="CA × lote" icon={<Scale />} color="indigo" />
-          <KpiCard
-            label="Pavimentos possíveis"
-            value={l.pavimentosPossiveis == null ? '—' : String(l.pavimentosPossiveis)}
-            sub={l.alturaMaxM != null ? `altura máxima ${n2(l.alturaMaxM)} m` : undefined}
-            icon={<Layers />}
-            color="violet"
-          />
-        </div>
-        {l.faltam.length > 0 && <p className="text-xs text-gray-500">Para completar o envelope falta: {l.faltam.join('; ')}.</p>}
-      </section>
+      {/* ABAS (03/10/2026): *"a tela Estudo de massa ficou longa e meio confusa. seria uma boa ideia agrupar assuntos
+          em abas?"* — cinco assuntos, cada um na sua aba; a escolhida fica guardada neste navegador (ir ao desenho e voltar
+          não a perde). */}
+      <TabsBar tabs={ABAS_DA_MASSA} value={abaValida} onChange={setAba} />
 
-      <section className="space-y-3" data-testid="indicadores-da-massa">
-        <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">A massa desenhada</h3>
-        {r.blocos.length === 0 ? (
-          <div className="rounded-[10px] border border-dashed border-gray-200 py-8 text-center">
-            <Building2 className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-            <p className="text-sm font-semibold text-gray-900">Nenhum bloco ainda</p>
-            <p className="mt-1 text-xs text-gray-500">Um bloco é o contorno do prédio em planta com os pavimentos — torre, podium, subsolo.</p>
-            <button type="button" onClick={onDesenharBloco} className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700">
-              Desenhar bloco
-            </button>
-          </div>
-        ) : (
-          <>
+      {abaValida === 'LEI' && (
+        <div className="space-y-6">
+          <section className="space-y-3" data-testid="envelope-legal">
+            <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Envelope legal — o que a lei deixa no lote</h3>
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <KpiCard label="Taxa de ocupação" value={r.to.usado == null ? '—' : `${n1(r.to.usado)} %`} sub={legenda(r.to, (v) => `${n1(v)} %`)} icon={<SquareStack />} color={COR_DO_ESTADO[r.to.estado]} />
-              <KpiCard label="Coeficiente (CA)" value={r.ca.usado == null ? '—' : n2(r.ca.usado)} sub={legenda(r.ca, n2)} icon={<Scale />} color={COR_DO_ESTADO[r.ca.estado]} />
-              <KpiCard label="Pavimentos" value={r.gabaritoPavimentos.usado == null ? '—' : String(r.gabaritoPavimentos.usado)} sub={legenda(r.gabaritoPavimentos, (v) => String(v))} icon={<Layers />} color={COR_DO_ESTADO[r.gabaritoPavimentos.estado]} />
-              <KpiCard label="Altura" value={r.gabaritoAltura.usado == null ? '—' : `${n2(r.gabaritoAltura.usado)} m`} sub={legenda(r.gabaritoAltura, (v) => `${n2(v)} m`)} icon={<ArrowUpFromLine />} color={COR_DO_ESTADO[r.gabaritoAltura.estado]} />
-              <KpiCard label="Área construída" value={m2(r.areaConstruidaM2)} sub={`computável ${m2(r.areaComputavelM2)} · não computável ${m2(r.areaNaoComputavelM2)}`} icon={<Building2 />} color="blue" />
+              <KpiCard label="Lote" value={m2(l.loteM2)} icon={<LandPlot />} color="gray" />
+              <KpiCard label="Implantação máxima" value={m2(l.implantacaoEfetivaM2)} sub={l.implantacaoMaxM2 != null && l.envelopeTerreoM2 != null ? `TO ${m2(l.implantacaoMaxM2)} · envelope ${m2(l.envelopeTerreoM2)}` : undefined} icon={<SquareStack />} color="blue" />
+              <KpiCard label="Área computável máxima" value={m2(l.potencialM2)} sub="CA × lote" icon={<Scale />} color="indigo" />
               <KpiCard
-                label="Aproveitamento do potencial"
-                value={r.aproveitamentoDoPotencialPct == null ? '—' : `${n1(r.aproveitamentoDoPotencialPct)} %`}
-                sub={r.aproveitamentoDoPotencialPct == null ? 'sem CA ou sem lote' : 'computável ÷ área computável máxima'}
-                icon={<Gauge />}
-                color={r.aproveitamentoDoPotencialPct != null && r.aproveitamentoDoPotencialPct > 100.05 ? 'red' : 'teal'}
-              />
-              <KpiCard
-                label="Sujeita a outorga"
-                value={r.outorga == null ? '—' : m2(r.outorga.sujeitaM2)}
-                sub={r.outorga == null ? 'a zona não informa o CA básico' : `acima do CA básico ${n2(r.outorga.caBasico)} (${m2(r.outorga.basicoM2)} de direito)`}
-                icon={<Banknote />}
-                color={r.outorga != null && r.outorga.sujeitaM2 > 0 ? 'amber' : 'gray'}
-              />
-              <KpiCard label="Área ocupada" value={m2(r.areaOcupadaM2)} sub="união das projeções acima do solo" icon={<Ruler />} color="sky" />
-              <KpiCard
-                label="Permeabilidade"
-                value={r.permeabilidade.usado == null ? '—' : `${n1(r.permeabilidade.usado)} %`}
-                sub={r.permeabilidade.estado === 'ATENDE' || r.permeabilidade.estado === 'EXCEDE' ? `mínimo ${n1(r.permeabilidade.limite!)} % · ${r.permeabilidade.estado === 'ATENDE' ? 'atende' : 'abaixo'}` : r.permeabilidade.motivo ?? undefined}
-                icon={<Droplets />}
-                color={r.permeabilidade.estado === 'EXCEDE' ? 'red' : r.permeabilidade.estado === 'ATENDE' ? 'emerald' : 'gray'}
+                label="Pavimentos possíveis"
+                value={l.pavimentosPossiveis == null ? '—' : String(l.pavimentosPossiveis)}
+                sub={l.alturaMaxM != null ? `altura máxima ${n2(l.alturaMaxM)} m` : undefined}
+                icon={<Layers />}
+                color="violet"
               />
             </div>
+            {l.faltam.length > 0 && <p className="text-xs text-gray-500">Para completar o envelope falta: {l.faltam.join('; ')}.</p>}
+          </section>
 
-            {r.avisos.length > 0 && (
-              <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-da-massa">
-                {r.avisos.map((a) => (
-                  <li key={a} className="flex gap-1.5">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    <span>{a}</span>
-                  </li>
-                ))}
-              </ul>
+          <section className="space-y-3" data-testid="indicadores-da-massa">
+            <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">A massa desenhada</h3>
+            {r.blocos.length === 0 ? (
+              <div className="rounded-[10px] border border-dashed border-gray-200 py-8 text-center">
+                <Building2 className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                <p className="text-sm font-semibold text-gray-900">Nenhum bloco ainda</p>
+                <p className="mt-1 text-xs text-gray-500">Um bloco é o contorno do prédio em planta com os pavimentos — torre, podium, subsolo.</p>
+                <button type="button" onClick={onDesenharBloco} className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700">
+                  Desenhar bloco
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <KpiCard label="Taxa de ocupação" value={r.to.usado == null ? '—' : `${n1(r.to.usado)} %`} sub={legenda(r.to, (v) => `${n1(v)} %`)} icon={<SquareStack />} color={COR_DO_ESTADO[r.to.estado]} />
+                  <KpiCard label="Coeficiente (CA)" value={r.ca.usado == null ? '—' : n2(r.ca.usado)} sub={legenda(r.ca, n2)} icon={<Scale />} color={COR_DO_ESTADO[r.ca.estado]} />
+                  <KpiCard label="Pavimentos" value={r.gabaritoPavimentos.usado == null ? '—' : String(r.gabaritoPavimentos.usado)} sub={legenda(r.gabaritoPavimentos, (v) => String(v))} icon={<Layers />} color={COR_DO_ESTADO[r.gabaritoPavimentos.estado]} />
+                  <KpiCard label="Altura" value={r.gabaritoAltura.usado == null ? '—' : `${n2(r.gabaritoAltura.usado)} m`} sub={legenda(r.gabaritoAltura, (v) => `${n2(v)} m`)} icon={<ArrowUpFromLine />} color={COR_DO_ESTADO[r.gabaritoAltura.estado]} />
+                  <KpiCard label="Área construída" value={m2(r.areaConstruidaM2)} sub={`computável ${m2(r.areaComputavelM2)} · não computável ${m2(r.areaNaoComputavelM2)}`} icon={<Building2 />} color="blue" />
+                  <KpiCard
+                    label="Aproveitamento do potencial"
+                    value={r.aproveitamentoDoPotencialPct == null ? '—' : `${n1(r.aproveitamentoDoPotencialPct)} %`}
+                    sub={r.aproveitamentoDoPotencialPct == null ? 'sem CA ou sem lote' : 'computável ÷ área computável máxima'}
+                    icon={<Gauge />}
+                    color={r.aproveitamentoDoPotencialPct != null && r.aproveitamentoDoPotencialPct > 100.05 ? 'red' : 'teal'}
+                  />
+                  <KpiCard
+                    label="Sujeita a outorga"
+                    value={r.outorga == null ? '—' : m2(r.outorga.sujeitaM2)}
+                    sub={r.outorga == null ? 'a zona não informa o CA básico' : `acima do CA básico ${n2(r.outorga.caBasico)} (${m2(r.outorga.basicoM2)} de direito)`}
+                    icon={<Banknote />}
+                    color={r.outorga != null && r.outorga.sujeitaM2 > 0 ? 'amber' : 'gray'}
+                  />
+                  <KpiCard label="Área ocupada" value={m2(r.areaOcupadaM2)} sub="união das projeções acima do solo" icon={<Ruler />} color="sky" />
+                  <KpiCard
+                    label="Permeabilidade"
+                    value={r.permeabilidade.usado == null ? '—' : `${n1(r.permeabilidade.usado)} %`}
+                    sub={r.permeabilidade.estado === 'ATENDE' || r.permeabilidade.estado === 'EXCEDE' ? `mínimo ${n1(r.permeabilidade.limite!)} % · ${r.permeabilidade.estado === 'ATENDE' ? 'atende' : 'abaixo'}` : r.permeabilidade.motivo ?? undefined}
+                    icon={<Droplets />}
+                    color={r.permeabilidade.estado === 'EXCEDE' ? 'red' : r.permeabilidade.estado === 'ATENDE' ? 'emerald' : 'gray'}
+                  />
+                </div>
+
+                {r.avisos.length > 0 && (
+                  <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-da-massa">
+                    {r.avisos.map((a) => (
+                      <li key={a} className="flex gap-1.5">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span>{a}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {/* Sem busca: são poucos blocos por estudo, e todos cabem na tela. */}
+                <StandardTable<MedidaDoBloco>
+                  storageKey="blueprint:massa:blocos"
+                  columns={COLUNAS}
+                  rows={r.blocos}
+                  rowKey={(b) => b.blocoId}
+                  dense
+                  onRowClick={(b) => onSelecionarBloco(b.blocoId)}
+                  sortValue={(key, b) =>
+                    key === 'nome' ? b.nome
+                    : key === 'uso' ? ROTULO_DO_USO_DO_BLOCO[b.uso]
+                    : key === 'pavimentos' ? b.pavimentos
+                    : key === 'projecao' ? b.projecaoM2
+                    : key === 'construida' ? b.areaConstruidaM2
+                    : key === 'computavel' ? b.areaComputavelM2
+                    : key === 'altura' ? b.alturaM
+                    : b.pisosForaDoEnvelope + b.pisosAcimaDoGabarito
+                  }
+                  renderCell={(key, b) => {
+                    if (key === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
+                    if (key === 'uso') return <span className="text-sm font-normal text-gray-700">{ROTULO_DO_USO_DO_BLOCO[b.uso]}</span>;
+                    if (key === 'pavimentos') return <span className="text-sm font-normal text-gray-600">{b.pavimentos}{b.pavimentosNoSubsolo ? ` (${b.pavimentosNoSubsolo} sub.)` : ''}</span>;
+                    if (key === 'projecao') return <span className="text-sm font-normal text-gray-600">{n2(b.projecaoM2)}</span>;
+                    if (key === 'construida') return <span className="text-sm font-normal text-gray-600">{n2(b.areaConstruidaM2)}</span>;
+                    if (key === 'computavel') return <span className="text-sm font-normal text-gray-600">{n2(b.areaComputavelM2)}</span>;
+                    if (key === 'altura') return <span className="text-sm font-normal text-gray-600">{n2(b.alturaM)}</span>;
+                    const p = problemasDoBloco(b);
+                    const ruim = b.pisosForaDoEnvelope + b.pisosAcimaDoGabarito > 0;
+                    return <span className={`block truncate text-sm font-normal ${ruim ? 'text-red-600' : 'text-emerald-700'}`} title={p}>{p}</span>;
+                  }}
+                  empty={{ title: 'Nenhum bloco' }}
+                />
+              </>
             )}
+          </section>
+        </div>
+      )}
 
-            {/* Sem busca: são poucos blocos por estudo, e todos cabem na tela. */}
-            <StandardTable<MedidaDoBloco>
-              storageKey="blueprint:massa:blocos"
-              columns={COLUNAS}
-              rows={r.blocos}
-              rowKey={(b) => b.blocoId}
-              dense
-              onRowClick={(b) => onSelecionarBloco(b.blocoId)}
-              sortValue={(key, b) =>
-                key === 'nome' ? b.nome
-                : key === 'uso' ? ROTULO_DO_USO_DO_BLOCO[b.uso]
-                : key === 'pavimentos' ? b.pavimentos
-                : key === 'projecao' ? b.projecaoM2
-                : key === 'construida' ? b.areaConstruidaM2
-                : key === 'computavel' ? b.areaComputavelM2
-                : key === 'altura' ? b.alturaM
-                : b.pisosForaDoEnvelope + b.pisosAcimaDoGabarito
-              }
-              renderCell={(key, b) => {
-                if (key === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
-                if (key === 'uso') return <span className="text-sm font-normal text-gray-700">{ROTULO_DO_USO_DO_BLOCO[b.uso]}</span>;
-                if (key === 'pavimentos') return <span className="text-sm font-normal text-gray-600">{b.pavimentos}{b.pavimentosNoSubsolo ? ` (${b.pavimentosNoSubsolo} sub.)` : ''}</span>;
-                if (key === 'projecao') return <span className="text-sm font-normal text-gray-600">{n2(b.projecaoM2)}</span>;
-                if (key === 'construida') return <span className="text-sm font-normal text-gray-600">{n2(b.areaConstruidaM2)}</span>;
-                if (key === 'computavel') return <span className="text-sm font-normal text-gray-600">{n2(b.areaComputavelM2)}</span>;
-                if (key === 'altura') return <span className="text-sm font-normal text-gray-600">{n2(b.alturaM)}</span>;
-                const p = problemasDoBloco(b);
-                const ruim = b.pisosForaDoEnvelope + b.pisosAcimaDoGabarito > 0;
-                return <span className={`block truncate text-sm font-normal ${ruim ? 'text-red-600' : 'text-emerald-700'}`} title={p}>{p}</span>;
-              }}
-              empty={{ title: 'Nenhum bloco' }}
-            />
-          </>
-        )}
-      </section>
+      {abaValida === 'PRODUTO' && (
+        <>
+          {r.blocos.length > 0 && (
+            <section className="space-y-3" data-testid="produto-da-massa">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Produto e eficiência</h3>
+                {onAbrirProduto && (
+                  <button type="button" onClick={onAbrirProduto} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                    Editar o produto
+                  </button>
+                )}
+              </div>
+              {!pr || pr.porTipologia.length === 0 ? (
+                <p className="text-xs text-gray-500">Sem produto: defina as tipologias (ou aplique uma semente) na tela Produto (Terreno › Massa › Produto) para ver unidades, eficiência e vagas.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                    <KpiCard
+                      label="Unidades"
+                      value={String(pr.unidades)}
+                      sub={pr.meta ? `meta ${pr.meta.unidades} · ${pr.meta.diferenca >= 0 ? `sobram ${pr.meta.diferenca}` : `faltam ${-pr.meta.diferenca}`}` : pr.porTipologia.filter((t) => t.unidades > 0).map((t) => `${t.unidades} × ${t.nome}`).join(' · ') || undefined}
+                      icon={<Home />}
+                      color={pr.meta && pr.meta.diferenca < 0 ? 'red' : 'blue'}
+                    />
+                    <KpiCard label="Área privativa" value={m2(pr.privativaTotalM2)} sub={pr.privativaMediaM2 != null ? `média ${n2(pr.privativaMediaM2)} m² por unidade` : undefined} icon={<SquareStack />} color="indigo" />
+                    <KpiCard label="Eficiência do pavimento" value={pr.eficienciaDoPavimentoPct == null ? '—' : `${n1(pr.eficienciaDoPavimentoPct)} %`} sub="privativa ÷ área do pavimento tipo" icon={<Percent />} color="teal" />
+                    <KpiCard label="Eficiência global" value={pr.eficienciaGlobalPct == null ? '—' : `${n1(pr.eficienciaGlobalPct)} %`} sub="privativa ÷ construída" icon={<Gauge />} color="emerald" />
+                    <KpiCard label="Área comum por unidade" value={pr.areaComumPorUnidadeM2 == null ? '—' : `${n2(pr.areaComumPorUnidadeM2)} m²`} sub={`comum ${m2(pr.areaComumM2)}`} icon={<Users />} color="violet" />
+                    <KpiCard
+                      label="Vagas"
+                      value={`${pr.vagasQueCabem} de ${pr.vagasExigidas}`}
+                      sub={pr.vagasFaltando > 0 ? `faltam ${pr.vagasFaltando}${pr.vagasDaZona != null ? ` · zona pede ${pr.vagasDaZona}` : ''}` : `atende${pr.indiceDeGaragemM2 != null ? ` · ${n2(pr.indiceDeGaragemM2)} m² de garagem por vaga` : ''}`}
+                      icon={<CarFront />}
+                      color={pr.vagasFaltando > 0 ? 'red' : 'emerald'}
+                    />
+                  </div>
+                  {pr.avisos.length > 0 && (
+                    <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-do-produto">
+                      {pr.avisos.map((a) => (
+                        <li key={a} className="flex gap-1.5">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>{a}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {/* Sem busca: poucos blocos por estudo. */}
+                  <StandardTable<ProdutoDoBloco>
+                    storageKey="blueprint:massa:produto-por-bloco"
+                    columns={COLUNAS_DO_PRODUTO}
+                    rows={pr.blocos}
+                    rowKey={(b) => b.blocoId}
+                    dense
+                    onRowClick={(b) => onSelecionarBloco(b.blocoId)}
+                    sortValue={(k, b) =>
+                      k === 'nome' ? b.nome
+                      : k === 'porPav' ? b.unidadesPorPavimento
+                      : k === 'unidades' ? b.unidades
+                      : k === 'privativa' ? b.privativaM2
+                      : k === 'eficiencia' ? b.eficienciaDoPavimentoPct ?? -1
+                      : k === 'nucleo' ? b.nucleo.m2
+                      : b.vagas
+                    }
+                    renderCell={(k, b) => {
+                      if (k === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
+                      if (k === 'porPav') return <span className="text-sm font-normal text-gray-600">{b.uso === 'GARAGEM' ? `${b.vagasPorPavimento} vagas` : b.unidadesPorPavimento}</span>;
+                      if (k === 'unidades') return <span className="text-sm font-normal text-gray-600">{b.unidades}</span>;
+                      if (k === 'privativa') return <span className="text-sm font-normal text-gray-600">{n2(b.privativaM2)}</span>;
+                      if (k === 'eficiencia') return <span className="text-sm font-normal text-gray-600">{b.eficienciaDoPavimentoPct == null ? '—' : n1(b.eficienciaDoPavimentoPct)}</span>;
+                      if (k === 'nucleo') {
+                        const rotulo = b.nucleo.origem === 'NENHUM' ? '—' : `${n2(b.nucleo.m2)} · ${b.nucleo.origem === 'DESENHADO' ? 'desenhado' : 'hipótese'}${b.nucleo.elevadores ? ` · ${b.nucleo.elevadores} elev.` : ''}`;
+                        return <span className="block truncate text-sm font-normal text-gray-600" title={b.nucleo.explicacao}>{rotulo}</span>;
+                      }
+                      return <span className="text-sm font-normal text-gray-600">{b.uso === 'GARAGEM' ? b.vagas : '—'}</span>;
+                    }}
+                    actions={
+                      onLancarNucleo
+                        ? {
+                            width: 130,
+                            render: (b) =>
+                              b.nucleo.origem === 'SUGERIDO' ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onLancarNucleo(b.blocoId, b.nucleo.elevadores);
+                                  }}
+                                  title={`Lança ${b.nucleo.elevadores} elevador(es) da ficha de 8 passageiros e um shaft no centro do bloco — peças reais, desfazíveis`}
+                                  className="rounded-lg p-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
+                                >
+                                  Lançar núcleo
+                                </button>
+                              ) : null,
+                          }
+                        : undefined
+                    }
+                    empty={{ title: 'Nenhum bloco' }}
+                  />
+                </>
+              )}
+            </section>
+          )}
+          {r.blocos.length === 0 && (
+            <Vazio icone={<Home />} titulo="Sem bloco para repartir o produto" texto="O produto (tipologias e mix) se reparte pelos blocos da massa. Desenhe um bloco na aba Lei e massa." />
+          )}
+        </>
+      )}
 
-      {r.blocos.length > 0 && (
-        <section className="space-y-3" data-testid="produto-da-massa">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <h3 className="text-sm font-semibold text-gray-900">Produto e eficiência</h3>
-            {onAbrirProduto && (
-              <button type="button" onClick={onAbrirProduto} className="text-sm font-medium text-blue-600 hover:text-blue-800">
-                Editar o produto
-              </button>
-            )}
-          </div>
-          {!pr || pr.porTipologia.length === 0 ? (
-            <p className="text-xs text-gray-500">Sem produto: defina as tipologias (ou aplique uma semente) na tela Produto (Terreno › Massa › Produto) para ver unidades, eficiência e vagas.</p>
-          ) : (
-            <>
+      {abaValida === 'INSOLACAO' && (
+        <>
+          {sol && sol.blocos.length > 0 && (
+            <section className="space-y-3" data-testid="insolacao-da-massa">
+              <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Insolação da massa — 21/06, o pior sol</h3>
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <KpiCard
-                  label="Unidades"
-                  value={String(pr.unidades)}
-                  sub={pr.meta ? `meta ${pr.meta.unidades} · ${pr.meta.diferenca >= 0 ? `sobram ${pr.meta.diferenca}` : `faltam ${-pr.meta.diferenca}`}` : pr.porTipologia.filter((t) => t.unidades > 0).map((t) => `${t.unidades} × ${t.nome}`).join(' · ') || undefined}
-                  icon={<Home />}
-                  color={pr.meta && pr.meta.diferenca < 0 ? 'red' : 'blue'}
+                  label="Sol nas fachadas"
+                  value={sol.horasInverno == null ? '—' : `${n1(sol.horasInverno)} h`}
+                  sub={`mínimo ${n1(sol.minimaH)} h`}
+                  icon={<Sun />}
+                  color={sol.horasInverno == null ? 'gray' : sol.horasInverno >= sol.minimaH ? 'emerald' : 'amber'}
                 />
-                <KpiCard label="Área privativa" value={m2(pr.privativaTotalM2)} sub={pr.privativaMediaM2 != null ? `média ${n2(pr.privativaMediaM2)} m² por unidade` : undefined} icon={<SquareStack />} color="indigo" />
-                <KpiCard label="Eficiência do pavimento" value={pr.eficienciaDoPavimentoPct == null ? '—' : `${n1(pr.eficienciaDoPavimentoPct)} %`} sub="privativa ÷ área do pavimento tipo" icon={<Percent />} color="teal" />
-                <KpiCard label="Eficiência global" value={pr.eficienciaGlobalPct == null ? '—' : `${n1(pr.eficienciaGlobalPct)} %`} sub="privativa ÷ construída" icon={<Gauge />} color="emerald" />
-                <KpiCard label="Área comum por unidade" value={pr.areaComumPorUnidadeM2 == null ? '—' : `${n2(pr.areaComumPorUnidadeM2)} m²`} sub={`comum ${m2(pr.areaComumM2)}`} icon={<Users />} color="violet" />
                 <KpiCard
-                  label="Vagas"
-                  value={`${pr.vagasQueCabem} de ${pr.vagasExigidas}`}
-                  sub={pr.vagasFaltando > 0 ? `faltam ${pr.vagasFaltando}${pr.vagasDaZona != null ? ` · zona pede ${pr.vagasDaZona}` : ''}` : `atende${pr.indiceDeGaragemM2 != null ? ` · ${n2(pr.indiceDeGaragemM2)} m² de garagem por vaga` : ''}`}
-                  icon={<CarFront />}
-                  color={pr.vagasFaltando > 0 ? 'red' : 'emerald'}
+                  label="Fachada com pouco sol"
+                  value={sol.fachadaCriticaPct == null ? '—' : `${n1(sol.fachadaCriticaPct)} %`}
+                  sub={`abaixo de ${n1(sol.minimaH)} h`}
+                  icon={<SunDim />}
+                  color={sol.fachadaCriticaPct == null ? 'gray' : sol.fachadaCriticaPct > 25 ? 'amber' : 'emerald'}
+                />
+                <KpiCard
+                  label="Lote livre com sol"
+                  value={sol.loteComSolPct == null ? '—' : `${n1(sol.loteComSolPct)} %`}
+                  sub={sol.loteHorasInverno == null ? 'sem lote' : `média ${n1(sol.loteHorasInverno)} h`}
+                  icon={<LandPlot />}
+                  color="blue"
+                />
+                <KpiCard
+                  label="Sol tirado do vizinho"
+                  value={sol.maiorPerdaDoVizinhoH == null ? '—' : `${n1(sol.maiorPerdaDoVizinhoH)} h`}
+                  sub="maior perda numa divisa"
+                  icon={<CloudSun />}
+                  color={sol.maiorPerdaDoVizinhoH == null ? 'gray' : sol.maiorPerdaDoVizinhoH >= 2 ? 'amber' : 'emerald'}
                 />
               </div>
-              {pr.avisos.length > 0 && (
-                <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-do-produto">
-                  {pr.avisos.map((a) => (
+              {sol.vizinhos.length > 0 && (
+                <ul className="space-y-0.5 text-xs text-gray-600" data-testid="sol-dos-vizinhos">
+                  {sol.vizinhos.map((v) => (
+                    <li key={v.lado}>
+                      {ROTULO_DO_LADO[v.lado]}: {n1(v.semMassaH)} h → {n1(v.comMassaH)} h{v.perdidasH > 0 ? <span className="text-amber-700"> (−{n1(v.perdidasH)} h)</span> : ' (sem perda)'}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <StandardTable<InsolacaoDoBloco>
+                storageKey="blueprint:massa:sol"
+                columns={COLUNAS_DO_SOL}
+                rows={sol.blocos}
+                rowKey={(b) => b.blocoId}
+                dense
+                onRowClick={(b) => onSelecionarBloco(b.blocoId)}
+                sortValue={(key, b) =>
+                  key === 'nome' ? b.nome
+                  : key === 'orientacao' ? (b.orientacaoPrincipal ?? '')
+                  : key === 'profundidade' ? b.profundidadeM
+                  : key === 'inverno' ? b.horasInverno
+                  : key === 'verao' ? (horasDoVerao(b) ?? -1)
+                  : b.fachadasCriticas
+                }
+                renderCell={(key, b) => {
+                  if (key === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
+                  if (key === 'orientacao') return <span className="text-sm font-normal text-gray-600">{b.orientacaoPrincipal ? ROTULO_DO_PONTO_CARDEAL[b.orientacaoPrincipal] : '—'}</span>;
+                  if (key === 'profundidade') return <span className="text-sm font-normal text-gray-600">{n2(b.profundidadeM)}</span>;
+                  if (key === 'inverno') return <span className="text-sm font-normal text-gray-600">{n1(b.horasInverno)}</span>;
+                  if (key === 'verao') {
+                    const v = horasDoVerao(b);
+                    return <span className="text-sm font-normal text-gray-600">{v == null ? '—' : n1(v)}</span>;
+                  }
+                  return (
+                    <span className={`text-sm font-normal ${b.fachadasCriticas > 0 ? 'text-amber-700' : 'text-gray-600'}`} title={b.fachadas.filter((f) => f.critica).map((f) => `${ROTULO_DO_PONTO_CARDEAL[f.orientacao]} · ${n1(f.comprimentoM)} m · ${n1(f.horasInverno)} h`).join('\n')}>
+                      {b.fachadasCriticas} de {b.fachadas.length}
+                    </span>
+                  );
+                }}
+                empty={{ title: 'Nenhum bloco com fachada útil' }}
+              />
+              {sol.avisos.length > 0 && (
+                <ul className="space-y-1 text-xs text-amber-800">
+                  {sol.avisos.map((a) => (
+                    <li key={a} className="flex items-start gap-1.5">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {a}
+                        {onAbrirEntorno && /vizinhos declarados/.test(a) && (
+                          <>
+                            {' '}
+                            <button type="button" onClick={onAbrirEntorno} className="font-medium text-blue-700 hover:underline">
+                              Declarar o entorno
+                            </button>
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-xs text-gray-500">
+                Sol nas fachadas: média pela área de fachada. Lote livre: a parte fora das projeções com {n1(sol.minimaH)} h ou mais. Vizinho: o térreo a 1 m da divisa, com a massa menos sem ela. Orientação: a fachada maior (no empate, a de mais sol).{' '}
+                Sombra do entorno declarado, dos outros blocos e do próprio bloco (a asa do L sombreia a outra); garagem e subsolo não têm fachada útil. Fachada: 3 pontos ao longo × 1º, meio e topo dos pavimentos, a 1,20 m do piso.
+                {origemDoSol ? ` Sol: ${origemDoSol}.` : ''}
+              </p>
+            </section>
+          )}
+          {!(sol && sol.blocos.length > 0) && (
+            <Vazio icone={<Sun />} titulo="Sem massa para medir o sol" texto="A insolação mede as fachadas dos blocos, o lote livre e os vizinhos no pior sol do ano (21/06). Desenhe um bloco na aba Lei e massa." />
+          )}
+        </>
+      )}
+
+      {abaValida === 'FINANCEIRO' && (
+        <div className="space-y-6">
+          {fi && pr && pr.unidades > 0 && (
+            <section className="space-y-3" data-testid="financeiro-da-massa">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Financeiro — pré-viabilidade</h3>
+                {onAbrirProduto && (
+                  <button type="button" onClick={onAbrirProduto} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                    Editar hipóteses
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <KpiCard label="VGV" value={mi(fi.vgv)} title={brl(fi.vgv)} sub={fi.semPreco.length ? `sem preço: ${fi.semPreco.join(', ')}` : `${pr.unidades} unidades · ${n2(pr.privativaTotalM2)} m²`} icon={<Banknote />} color="blue" />
+                <KpiCard
+                  label="Custo de obra"
+                  value={fi.custoObra == null ? '—' : mi(fi.custoObra)}
+                  title={fi.custoObra == null ? undefined : brl(fi.custoObra)}
+                  sub={fi.custoM2Base == null ? 'sem CUB e sem custo digitado' : `${brl(fi.custoM2Base)}/m² · ${fi.origemDoCusto === 'MANUAL' ? 'digitado' : fi.origemDoCusto === 'CUB' ? `CUB ${fi.cub?.referencia ?? ''}` : 'CUB estimado'}`}
+                  icon={<Hammer />}
+                  color={fi.custoObra == null ? 'gray' : 'orange'}
+                />
+                <KpiCard
+                  label="Custo total"
+                  value={fi.custoTotal == null ? '—' : mi(fi.custoTotal)}
+                  title={fi.custoTotal == null ? undefined : brl(fi.custoTotal)}
+                  sub={`terreno ${mi(fi.terreno)} · despesas ${mi(fi.despesasComerciais + fi.impostos + fi.outrasDespesas)}`}
+                  icon={<Wallet />}
+                  color="amber"
+                />
+                <KpiCard
+                  label="Resultado"
+                  value={fi.resultado == null ? '—' : mi(fi.resultado)}
+                  title={fi.resultado == null ? undefined : brl(fi.resultado)}
+                  sub={fi.margemPct == null ? 'sem custo, sem margem' : `margem ${n1(fi.margemPct)} % do VGV`}
+                  icon={<TrendingUp />}
+                  color={fi.resultado == null ? 'gray' : fi.resultado >= 0 ? 'emerald' : 'red'}
+                />
+                <KpiCard label="VGV ÷ custo" value={fi.vgvSobreCusto == null ? '—' : n2(fi.vgvSobreCusto)} sub="quanto cada real de custo vira de venda" icon={<Scale />} color="indigo" />
+                <KpiCard label="Obra por m² privativo" value={fi.custoPorM2Privativo == null ? '—' : brl(fi.custoPorM2Privativo)} sub="custo de obra ÷ área privativa" icon={<Ruler />} color="violet" />
+              </div>
+              {fi.avisos.length > 0 && (
+                <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-do-financeiro">
+                  {fi.avisos.map((a) => (
                     <li key={a} className="flex gap-1.5">
                       <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>{a}</span>
@@ -273,302 +536,108 @@ export default function TelaEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses
                   ))}
                 </ul>
               )}
-              {/* Sem busca: poucos blocos por estudo. */}
-              <StandardTable<ProdutoDoBloco>
-                storageKey="blueprint:massa:produto-por-bloco"
-                columns={COLUNAS_DO_PRODUTO}
-                rows={pr.blocos}
-                rowKey={(b) => b.blocoId}
-                dense
-                onRowClick={(b) => onSelecionarBloco(b.blocoId)}
-                sortValue={(k, b) =>
-                  k === 'nome' ? b.nome
-                  : k === 'porPav' ? b.unidadesPorPavimento
-                  : k === 'unidades' ? b.unidades
-                  : k === 'privativa' ? b.privativaM2
-                  : k === 'eficiencia' ? b.eficienciaDoPavimentoPct ?? -1
-                  : k === 'nucleo' ? b.nucleo.m2
-                  : b.vagas
-                }
-                renderCell={(k, b) => {
-                  if (k === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
-                  if (k === 'porPav') return <span className="text-sm font-normal text-gray-600">{b.uso === 'GARAGEM' ? `${b.vagasPorPavimento} vagas` : b.unidadesPorPavimento}</span>;
-                  if (k === 'unidades') return <span className="text-sm font-normal text-gray-600">{b.unidades}</span>;
-                  if (k === 'privativa') return <span className="text-sm font-normal text-gray-600">{n2(b.privativaM2)}</span>;
-                  if (k === 'eficiencia') return <span className="text-sm font-normal text-gray-600">{b.eficienciaDoPavimentoPct == null ? '—' : n1(b.eficienciaDoPavimentoPct)}</span>;
-                  if (k === 'nucleo') {
-                    const rotulo = b.nucleo.origem === 'NENHUM' ? '—' : `${n2(b.nucleo.m2)} · ${b.nucleo.origem === 'DESENHADO' ? 'desenhado' : 'hipótese'}${b.nucleo.elevadores ? ` · ${b.nucleo.elevadores} elev.` : ''}`;
-                    return <span className="block truncate text-sm font-normal text-gray-600" title={b.nucleo.explicacao}>{rotulo}</span>;
-                  }
-                  return <span className="text-sm font-normal text-gray-600">{b.uso === 'GARAGEM' ? b.vagas : '—'}</span>;
-                }}
-                actions={
-                  onLancarNucleo
-                    ? {
-                        width: 130,
-                        render: (b) =>
-                          b.nucleo.origem === 'SUGERIDO' ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onLancarNucleo(b.blocoId, b.nucleo.elevadores);
-                              }}
-                              title={`Lança ${b.nucleo.elevadores} elevador(es) da ficha de 8 passageiros e um shaft no centro do bloco — peças reais, desfazíveis`}
-                              className="rounded-lg p-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-800"
-                            >
-                              Lançar núcleo
-                            </button>
-                          ) : null,
-                      }
-                    : undefined
-                }
-                empty={{ title: 'Nenhum bloco' }}
-              />
-            </>
+            </section>
           )}
-        </section>
+
+          {envio && pr && pr.unidades > 0 && (
+            <section className="space-y-3" data-testid="envio-ao-empreendimento">
+              <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Enviar ao Empreendimento</h3>
+              <p className="text-xs text-gray-500">
+                Os blocos da versão <strong>publicada</strong> viram torres e o produto vira unidades no cadastro (espelho de vendas). Daí a Viabilidade recebe pelo caminho de
+                sempre. Preço e status de unidades que já existem lá não são tocados; divergências vão para a Curadoria; o que sumir do estudo é avisado, nunca apagado.
+              </p>
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-1.5">
+                  <label htmlFor="massa-empreendimento" className="text-xs font-semibold text-slate-500">Empreendimento</label>
+                  <select id="massa-empreendimento" value={envio.alvo} onChange={(e) => envio.onAlvo(e.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800">
+                    <option value="">Escolha o empreendimento…</option>
+                    {envio.empreendimentos.map((e) => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={envio.onEnviar}
+                  disabled={!envio.alvo || envio.enviando}
+                  title={!envio.alvo ? 'Escolha o empreendimento que recebe o cenário' : envio.enviando ? 'Enviando…' : 'Mostra a prévia antes de gravar'}
+                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Send className="h-[15px] w-[15px]" /> {envio.enviando ? 'Enviando…' : 'Enviar'}
+                </button>
+              </div>
+              {!envio.alvo && <p className="text-xs text-gray-500">Escolha o empreendimento para habilitar o envio.</p>}
+              {envio.resultado && (
+                <p role="status" className="text-xs text-gray-700" data-testid="resultado-do-envio">
+                  {envio.resultado}
+                </p>
+              )}
+            </section>
+          )}
+          {!(fi && pr && pr.unidades > 0) && (
+            <Vazio
+              icone={<Banknote />}
+              titulo="Sem unidades para avaliar"
+              texto="O financeiro (VGV, custo de obra, margem) e o envio ao Empreendimento precisam de blocos e de um produto com tipologias e preço/m²."
+              acao={onAbrirProduto ? { rotulo: 'Editar o produto', onClick: onAbrirProduto } : undefined}
+            />
+          )}
+        </div>
       )}
 
-      {sol && sol.blocos.length > 0 && (
-        <section className="space-y-3" data-testid="insolacao-da-massa">
-          <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Insolação da massa — 21/06, o pior sol</h3>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <KpiCard
-              label="Sol nas fachadas"
-              value={sol.horasInverno == null ? '—' : `${n1(sol.horasInverno)} h`}
-              sub={`mínimo ${n1(sol.minimaH)} h`}
-              icon={<Sun />}
-              color={sol.horasInverno == null ? 'gray' : sol.horasInverno >= sol.minimaH ? 'emerald' : 'amber'}
-            />
-            <KpiCard
-              label="Fachada com pouco sol"
-              value={sol.fachadaCriticaPct == null ? '—' : `${n1(sol.fachadaCriticaPct)} %`}
-              sub={`abaixo de ${n1(sol.minimaH)} h`}
-              icon={<SunDim />}
-              color={sol.fachadaCriticaPct == null ? 'gray' : sol.fachadaCriticaPct > 25 ? 'amber' : 'emerald'}
-            />
-            <KpiCard
-              label="Lote livre com sol"
-              value={sol.loteComSolPct == null ? '—' : `${n1(sol.loteComSolPct)} %`}
-              sub={sol.loteHorasInverno == null ? 'sem lote' : `média ${n1(sol.loteHorasInverno)} h`}
-              icon={<LandPlot />}
-              color="blue"
-            />
-            <KpiCard
-              label="Sol tirado do vizinho"
-              value={sol.maiorPerdaDoVizinhoH == null ? '—' : `${n1(sol.maiorPerdaDoVizinhoH)} h`}
-              sub="maior perda numa divisa"
-              icon={<CloudSun />}
-              color={sol.maiorPerdaDoVizinhoH == null ? 'gray' : sol.maiorPerdaDoVizinhoH >= 2 ? 'amber' : 'emerald'}
-            />
-          </div>
-          {sol.vizinhos.length > 0 && (
-            <ul className="space-y-0.5 text-xs text-gray-600" data-testid="sol-dos-vizinhos">
-              {sol.vizinhos.map((v) => (
-                <li key={v.lado}>
-                  {ROTULO_DO_LADO[v.lado]}: {n1(v.semMassaH)} h → {n1(v.comMassaH)} h{v.perdidasH > 0 ? <span className="text-amber-700"> (−{n1(v.perdidasH)} h)</span> : ' (sem perda)'}
-                </li>
+      {abaValida === 'HIPOTESES' && (
+        <>
+          <section className="space-y-3" data-testid="hipoteses-da-massa">
+            <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Hipóteses — o que não conta no CA</h3>
+            <p className="text-xs text-gray-500">Cada município escreve a sua lista. Estes valores são do estudo (ficam neste navegador) e não são norma: confira na lei da zona.</p>
+            <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+              {USOS_DO_BLOCO.map((u: UsoDoBloco) => (
+                <div key={u} className="space-y-1.5">
+                  <label htmlFor={`massa-nc-${u}`} className="text-xs font-semibold text-slate-500">
+                    {ROTULO_DO_USO_DO_BLOCO[u]} fora do CA (%)
+                  </label>
+                  <input
+                    id={`massa-nc-${u}`}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Math.round((h.naoComputavelPorUso[u] ?? 0) * 100)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (!Number.isFinite(v)) return;
+                      onHipoteses({ ...h, naoComputavelPorUso: { ...h.naoComputavelPorUso, [u]: Math.min(100, Math.max(0, v)) / 100 } });
+                    }}
+                    className={`${campo} w-full`}
+                  />
+                </div>
               ))}
-            </ul>
-          )}
-          <StandardTable<InsolacaoDoBloco>
-            storageKey="blueprint:massa:sol"
-            columns={COLUNAS_DO_SOL}
-            rows={sol.blocos}
-            rowKey={(b) => b.blocoId}
-            dense
-            onRowClick={(b) => onSelecionarBloco(b.blocoId)}
-            sortValue={(key, b) =>
-              key === 'nome' ? b.nome
-              : key === 'orientacao' ? (b.orientacaoPrincipal ?? '')
-              : key === 'profundidade' ? b.profundidadeM
-              : key === 'inverno' ? b.horasInverno
-              : key === 'verao' ? (horasDoVerao(b) ?? -1)
-              : b.fachadasCriticas
-            }
-            renderCell={(key, b) => {
-              if (key === 'nome') return <span className="block truncate text-sm font-normal text-gray-700" title={b.nome}>{b.nome}</span>;
-              if (key === 'orientacao') return <span className="text-sm font-normal text-gray-600">{b.orientacaoPrincipal ? ROTULO_DO_PONTO_CARDEAL[b.orientacaoPrincipal] : '—'}</span>;
-              if (key === 'profundidade') return <span className="text-sm font-normal text-gray-600">{n2(b.profundidadeM)}</span>;
-              if (key === 'inverno') return <span className="text-sm font-normal text-gray-600">{n1(b.horasInverno)}</span>;
-              if (key === 'verao') {
-                const v = horasDoVerao(b);
-                return <span className="text-sm font-normal text-gray-600">{v == null ? '—' : n1(v)}</span>;
-              }
-              return (
-                <span className={`text-sm font-normal ${b.fachadasCriticas > 0 ? 'text-amber-700' : 'text-gray-600'}`} title={b.fachadas.filter((f) => f.critica).map((f) => `${ROTULO_DO_PONTO_CARDEAL[f.orientacao]} · ${n1(f.comprimentoM)} m · ${n1(f.horasInverno)} h`).join('\n')}>
-                  {b.fachadasCriticas} de {b.fachadas.length}
-                </span>
-              );
-            }}
-            empty={{ title: 'Nenhum bloco com fachada útil' }}
-          />
-          {sol.avisos.length > 0 && (
-            <ul className="space-y-1 text-xs text-amber-800">
-              {sol.avisos.map((a) => (
-                <li key={a} className="flex items-start gap-1.5">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>
-                    {a}
-                    {onAbrirEntorno && /vizinhos declarados/.test(a) && (
-                      <>
-                        {' '}
-                        <button type="button" onClick={onAbrirEntorno} className="font-medium text-blue-700 hover:underline">
-                          Declarar o entorno
-                        </button>
-                      </>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="text-xs text-gray-500">
-            Sol nas fachadas: média pela área de fachada. Lote livre: a parte fora das projeções com {n1(sol.minimaH)} h ou mais. Vizinho: o térreo a 1 m da divisa, com a massa menos sem ela. Orientação: a fachada maior (no empate, a de mais sol).{' '}
-            Sombra do entorno declarado, dos outros blocos e do próprio bloco (a asa do L sombreia a outra); garagem e subsolo não têm fachada útil. Fachada: 3 pontos ao longo × 1º, meio e topo dos pavimentos, a 1,20 m do piso.
-            {origemDoSol ? ` Sol: ${origemDoSol}.` : ''}
-          </p>
-        </section>
-      )}
-
-      {fi && pr && pr.unidades > 0 && (
-        <section className="space-y-3" data-testid="financeiro-da-massa">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-            <h3 className="text-sm font-semibold text-gray-900">Financeiro — pré-viabilidade</h3>
-            {onAbrirProduto && (
-              <button type="button" onClick={onAbrirProduto} className="text-sm font-medium text-blue-600 hover:text-blue-800">
-                Editar hipóteses
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <KpiCard label="VGV" value={mi(fi.vgv)} title={brl(fi.vgv)} sub={fi.semPreco.length ? `sem preço: ${fi.semPreco.join(', ')}` : `${pr.unidades} unidades · ${n2(pr.privativaTotalM2)} m²`} icon={<Banknote />} color="blue" />
-            <KpiCard
-              label="Custo de obra"
-              value={fi.custoObra == null ? '—' : mi(fi.custoObra)}
-              title={fi.custoObra == null ? undefined : brl(fi.custoObra)}
-              sub={fi.custoM2Base == null ? 'sem CUB e sem custo digitado' : `${brl(fi.custoM2Base)}/m² · ${fi.origemDoCusto === 'MANUAL' ? 'digitado' : fi.origemDoCusto === 'CUB' ? `CUB ${fi.cub?.referencia ?? ''}` : 'CUB estimado'}`}
-              icon={<Hammer />}
-              color={fi.custoObra == null ? 'gray' : 'orange'}
-            />
-            <KpiCard
-              label="Custo total"
-              value={fi.custoTotal == null ? '—' : mi(fi.custoTotal)}
-              title={fi.custoTotal == null ? undefined : brl(fi.custoTotal)}
-              sub={`terreno ${mi(fi.terreno)} · despesas ${mi(fi.despesasComerciais + fi.impostos + fi.outrasDespesas)}`}
-              icon={<Wallet />}
-              color="amber"
-            />
-            <KpiCard
-              label="Resultado"
-              value={fi.resultado == null ? '—' : mi(fi.resultado)}
-              title={fi.resultado == null ? undefined : brl(fi.resultado)}
-              sub={fi.margemPct == null ? 'sem custo, sem margem' : `margem ${n1(fi.margemPct)} % do VGV`}
-              icon={<TrendingUp />}
-              color={fi.resultado == null ? 'gray' : fi.resultado >= 0 ? 'emerald' : 'red'}
-            />
-            <KpiCard label="VGV ÷ custo" value={fi.vgvSobreCusto == null ? '—' : n2(fi.vgvSobreCusto)} sub="quanto cada real de custo vira de venda" icon={<Scale />} color="indigo" />
-            <KpiCard label="Obra por m² privativo" value={fi.custoPorM2Privativo == null ? '—' : brl(fi.custoPorM2Privativo)} sub="custo de obra ÷ área privativa" icon={<Ruler />} color="violet" />
-          </div>
-          {fi.avisos.length > 0 && (
-            <ul className="space-y-1 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="avisos-do-financeiro">
-              {fi.avisos.map((a) => (
-                <li key={a} className="flex gap-1.5">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  <span>{a}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {envio && pr && pr.unidades > 0 && (
-        <section className="space-y-3" data-testid="envio-ao-empreendimento">
-          <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Enviar ao Empreendimento</h3>
-          <p className="text-xs text-gray-500">
-            Os blocos da versão <strong>publicada</strong> viram torres e o produto vira unidades no cadastro (espelho de vendas). Daí a Viabilidade recebe pelo caminho de
-            sempre. Preço e status de unidades que já existem lá não são tocados; divergências vão para a Curadoria; o que sumir do estudo é avisado, nunca apagado.
-          </p>
-          <div className="flex items-end gap-3">
-            <div className="flex-1 space-y-1.5">
-              <label htmlFor="massa-empreendimento" className="text-xs font-semibold text-slate-500">Empreendimento</label>
-              <select id="massa-empreendimento" value={envio.alvo} onChange={(e) => envio.onAlvo(e.target.value)} className="h-9 w-full rounded-[6px] border border-gray-200 bg-white px-2 text-sm font-normal text-gray-800">
-                <option value="">Escolha o empreendimento…</option>
-                {envio.empreendimentos.map((e) => (
-                  <option key={e.id} value={e.id}>{e.name}</option>
-                ))}
-              </select>
             </div>
-            <button
-              type="button"
-              onClick={envio.onEnviar}
-              disabled={!envio.alvo || envio.enviando}
-              title={!envio.alvo ? 'Escolha o empreendimento que recebe o cenário' : envio.enviando ? 'Enviando…' : 'Mostra a prévia antes de gravar'}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-[13px] font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Send className="h-[15px] w-[15px]" /> {envio.enviando ? 'Enviando…' : 'Enviar'}
-            </button>
-          </div>
-          {!envio.alvo && <p className="text-xs text-gray-500">Escolha o empreendimento para habilitar o envio.</p>}
-          {envio.resultado && (
-            <p role="status" className="text-xs text-gray-700" data-testid="resultado-do-envio">
-              {envio.resultado}
-            </p>
-          )}
-        </section>
-      )}
-
-      <section className="space-y-3" data-testid="hipoteses-da-massa">
-        <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Hipóteses — o que não conta no CA</h3>
-        <p className="text-xs text-gray-500">Cada município escreve a sua lista. Estes valores são do estudo (ficam neste navegador) e não são norma: confira na lei da zona.</p>
-        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-          {USOS_DO_BLOCO.map((u: UsoDoBloco) => (
-            <div key={u} className="space-y-1.5">
-              <label htmlFor={`massa-nc-${u}`} className="text-xs font-semibold text-slate-500">
-                {ROTULO_DO_USO_DO_BLOCO[u]} fora do CA (%)
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={h.subsoloNaoComputavel} onChange={(e) => onHipoteses({ ...h, subsoloNaoComputavel: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+              Subsolo fora do CA
+            </label>
+            <div className="space-y-1.5">
+              <label htmlFor="massa-pd-ref" className="text-xs font-semibold text-slate-500">
+                Piso a piso de referência para "pavimentos possíveis" (m)
               </label>
               <input
-                id={`massa-nc-${u}`}
+                id="massa-pd-ref"
                 type="number"
-                min={0}
-                max={100}
-                step={5}
-                value={Math.round((h.naoComputavelPorUso[u] ?? 0) * 100)}
+                min={2}
+                max={15}
+                step={0.05}
+                value={h.peDireitoDeReferenciaMm / 1000}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  if (!Number.isFinite(v)) return;
-                  onHipoteses({ ...h, naoComputavelPorUso: { ...h.naoComputavelPorUso, [u]: Math.min(100, Math.max(0, v)) / 100 } });
+                  if (Number.isFinite(v) && v >= 2 && v <= 15) onHipoteses({ ...h, peDireitoDeReferenciaMm: Math.round(v * 1000) });
                 }}
-                className={`${campo} w-full`}
+                className={`${campo} w-40`}
               />
             </div>
-          ))}
-        </div>
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={h.subsoloNaoComputavel} onChange={(e) => onHipoteses({ ...h, subsoloNaoComputavel: e.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
-          Subsolo fora do CA
-        </label>
-        <div className="space-y-1.5">
-          <label htmlFor="massa-pd-ref" className="text-xs font-semibold text-slate-500">
-            Piso a piso de referência para "pavimentos possíveis" (m)
-          </label>
-          <input
-            id="massa-pd-ref"
-            type="number"
-            min={2}
-            max={15}
-            step={0.05}
-            value={h.peDireitoDeReferenciaMm / 1000}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (Number.isFinite(v) && v >= 2 && v <= 15) onHipoteses({ ...h, peDireitoDeReferenciaMm: Math.round(v * 1000) });
-            }}
-            className={`${campo} w-40`}
-          />
-        </div>
-      </section>
+          </section>
+        </>
+      )}
     </div>
   );
 }

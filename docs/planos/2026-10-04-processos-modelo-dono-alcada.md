@@ -85,7 +85,8 @@ saída da etapa reprovada, gatilhos no banco.
 - [x] Item 1 — migration aplicada em 04/10 ~17:50 (12/12 etapas com `sla_hours`, FK
       SET NULL, sweep com rede de segurança, sem mojibake, ACL só postgres/service_role;
       etapa do processo `2c8d805b` rearmada) + tela ("Sem dono" em âmbar no modelo automático)
-- [ ] Item 1 — prova do aviso: próximo ciclo do cron gera notificação para a admin da org
+- [x] Item 1 — prova do aviso: cron de 04/10 18:05 gerou "Etapa atrasada: Conferência Fiscal"
+      (pedido PC-013-013-0002) para a admin da org; log STEP_OVERDUE com `notified` preenchido
 - [x] Item 2 — service (`updateTemplate`, `problemaDoModelo`, prazo/responsável lidos da
       instância) + migration + tela (editar modelo, Dono, Disparo/evento)
 - [x] Item 3 — service (`submitStepApproval` com org e valor do processo, liberação abaixo
@@ -96,7 +97,8 @@ saída da etapa reprovada, gatilhos no banco.
       check-xss-sinks limpo · testes novos derrubados por mutação (nível 1 fixo e prazo do
       modelo → 2 falhas) antes de aceitos
 - [ ] Conferido no app real com login (precisa da senha do usuário de leitura — não guardada)
-- [ ] publicado, CI verde, domínio conferido
+- [x] publicado em `2690eaec`; domínio conferido ("Salvar nova versão" e "Aprovar nível" no bundle)
+- [x] CI verde (check-run `ci` success em 2690eaec)
 
 Fora do escopo, registrado: rótulos em caixa alta no "Iniciar processo", no Dashboard e
 nas abas do módulo (§21/§19) — dívida anterior, não tocada nesta frente.

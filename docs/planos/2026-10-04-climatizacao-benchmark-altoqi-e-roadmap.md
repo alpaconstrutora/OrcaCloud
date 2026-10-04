@@ -1366,4 +1366,19 @@ reboco–bloco–reboco; sem λ diz quantas faltam; sem biblioteca não aparece)
 `BlueprintEditor.test.tsx` (o caso das premissas ganhou a Sala: padrão do uso com `*`, 1 sem
 etiqueta, declarar 3 pessoas tira o `*` e conta "1 de 2"). `check-ui-standard` limpo nos três
 `.tsx`. ⚠️ Lição: o setpoint da linha herdava os 22 °C que o mesmo teste tinha declarado no estudo
-— a expectativa errada era a minha, o comportamento era o pedido.
+— a expectativa errada era a minha, o comportamento era o pedido. Commit `db5fed12` — **com um
+erro de tipo** (`AcabamentosDoAmbiente` importado de `blueprintAcabamentos`, que não o exporta): o
+`tsc` saiu com código 2 e eu li o fim do log como verde. Corrigido no commit seguinte (import do
+kernel); a lição ficou em memória: o código de saída do `tsc` se lê por `grep "tsc exit="`, nunca
+pelo último pedaço do log.
+
+### Fecho da Etapa 0 — 04/10/2026
+
+- **Migration `aplicar_20271004000030_blueprint_study_climatizacao.sql` APLICADA** com o OK do
+  usuário (`npx supabase db query --linked -f`, pela frente `clima-e0`, linkada ao mesmo projeto).
+  Prova no banco: `relrowsecurity = true`, 1 policy, grants só `authenticated` (SELECT/INSERT/
+  UPDATE/DELETE; `anon` sem nada), 1 trigger de `updated_at`, FK composta + UNIQUE.
+- **Suíte inteira** (reporter JSON, conta fechando): 2757 arquivos, 7507 testes = 7473 ✅ + 34
+  pulados de propósito (integração) + 0 pendentes de verdade + 0 falhas.
+- Fica para a prova no app real (estudo descartável, precisa de login): a premissa gravada voltar
+  depois de recarregar — a E1 abre com esse passeio.

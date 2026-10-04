@@ -24,7 +24,8 @@
  * acabado à face do forro. A do quantitativo mede outra coisa (a altura até o
  * forro para o acabamento) e fica como está, agora com o nome que a distingue.
  */
-import { peDireitoUtilMm, type AcabamentosDoAmbiente } from './blueprintAcabamentos';
+import type { AcabamentosDoAmbiente } from './blueprintKernel';
+import { peDireitoUtilMm } from './blueprintAcabamentos';
 import { FICHA_DO_USO, USOS_DO_AMBIENTE, usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
 
 export const ATIVIDADES = ['SENTADO_REPOUSO', 'SENTADO_TRABALHO_LEVE', 'EM_PE_LEVE', 'MODERADA', 'PESADA'] as const;

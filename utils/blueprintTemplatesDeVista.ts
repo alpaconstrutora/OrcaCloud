@@ -20,6 +20,8 @@ export const ROTULO_DO_ESTILO_DA_PLANTA: Record<EstiloDaPlanta, string> = { TECN
 
 export interface CamadasDaPlanta {
   medidas: boolean;
+  /** 04/10/2026: lados do lote e dos blocos e os afastamentos dos blocos. Ausente em template antigo → ligado. */
+  medidasLoteMassa: boolean;
   camadas: boolean;
   cotas: boolean;
   cotaInterna: boolean;
@@ -55,7 +57,7 @@ export interface ConfiguracaoDeVista {
 }
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
-  planta: { medidas: false, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false, eletricaIluminacao: true, eletricaForca: true },
+  planta: { medidas: false, medidasLoteMassa: true, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false, eletricaIluminacao: true, eletricaForca: true },
   modoDeCor: 'NENHUM',
   vista3d: { laje: false, arestas: true, armadura: false, terreno: false, envelope: true },
   estilo3d: 'SOMBREADO',
@@ -98,6 +100,7 @@ export function configuracaoDaColuna(raw: unknown): ConfiguracaoDeVista {
 
 const ROTULO_PLANTA: Record<keyof CamadasDaPlanta, string> = {
   medidas: 'Medidas das paredes',
+  medidasLoteMassa: 'Medidas do lote e da massa',
   camadas: 'Camadas das paredes',
   cotas: 'Cadeias de cota',
   cotaInterna: 'Cota interna',

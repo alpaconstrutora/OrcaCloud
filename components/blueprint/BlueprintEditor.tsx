@@ -2017,6 +2017,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     false,
   );
   /**
+   * MEDIDAS DO LOTE E DA MASSA (04/10/2026): *"o desenho gerado através do menu terreno Lote e massa não tem
+   * medidas"*. Lados do lote, lados dos blocos e afastamentos — poucas etiquetas, então nasce LIGADO.
+   */
+  const [mostrarMedidasLoteMassa, setMostrarMedidasLoteMassa] = usePersistedState(
+    'blueprint:mostrarMedidasLoteMassa',
+    true,
+  );
+  /**
    * Pinta as faixas de material dentro da espessura de cada parede.
    *
    * Desligado por padrão: numa vista geral a composição vira listra sobre
@@ -3280,6 +3288,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => ({
       planta: {
         medidas: mostrarMedidas,
+        medidasLoteMassa: mostrarMedidasLoteMassa,
         camadas: mostrarCamadas,
         cotas: mostrarCotas,
         cotaInterna: mostrarCotaInterna,
@@ -3301,11 +3310,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       estiloPlanta,
       fase: filtroDeFase,
     }),
-    [mostrarMedidas, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEletricaIluminacao, mostrarEletricaForca, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
+    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEletricaIluminacao, mostrarEletricaForca, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
       setMostrarMedidas(c.planta.medidas);
+      setMostrarMedidasLoteMassa(c.planta.medidasLoteMassa);
       setMostrarCamadas(c.planta.camadas);
       setMostrarCotas(c.planta.cotas);
       setMostrarCotaInterna(c.planta.cotaInterna);
@@ -12396,6 +12406,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                             alternar: () => setMostrarPreenchimentoTerreno((v) => !v),
                             ajuda: 'A hachura do lote. O resto do recorte desta vista é fixo — volte à Planta para ligar interiores, instalações e rótulos.',
                           },
+                          {
+                            chave: 'medidas-lote-massa-vista',
+                            rotulo: 'Medidas do lote e da massa',
+                            icone: LandPlot,
+                            ligado: mostrarMedidasLoteMassa,
+                            alternar: () => setMostrarMedidasLoteMassa((v) => !v),
+                            ajuda: 'Os lados do lote e dos blocos e o afastamento de cada bloco até as divisas — o mesmo item da Planta.',
+                          },
                         ]
                       : [
                         {
@@ -12528,6 +12546,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       alternar: () => setMostrarMedidas((v) => !v),
                       ajuda:
                         'O comprimento de cada PAREDE, escrito junto dela. Mede a parede entre as faces das pontas DELA e ignora as divisórias que a cortam no meio — numa fachada que atravessa três cômodos, dá os três somados.',
+                    },
+                    {
+                      chave: 'medidas-lote-massa',
+                      rotulo: 'Medidas do lote e da massa',
+                      icone: LandPlot,
+                      ligado: mostrarMedidasLoteMassa,
+                      alternar: () => setMostrarMedidasLoteMassa((v) => !v),
+                      desabilitado: !limitesDoNivel.some((b) => b.kind === 'TERRENO') && !(editor.model.blocos ?? []).some((b) => b.levelId === levelId),
+                      ajuda:
+                        limitesDoNivel.some((b) => b.kind === 'TERRENO') || (editor.model.blocos ?? []).some((b) => b.levelId === levelId)
+                          ? 'O comprimento de cada lado do lote (com o papel: "Frente 12,00 m"), de cada lado dos blocos de massa e o afastamento de cada bloco até as divisas — por fora do contorno.'
+                          : 'Sem lote nem bloco neste pavimento: desenhe o lote (Terreno › Terreno ou Digitar) ou um bloco (Terreno › Massa › Bloco).',
                     },
                     {
                       chave: 'camadas',
@@ -13671,6 +13701,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onJuntarPontas={juntarPontas}
               ortogonal={ortogonal}
               mostrarMedidasParedes={ajusteDaVista ? false : mostrarMedidas}
+              // Também nas vistas (Situação, Implantação): é nelas que o lote e a massa mais importam.
+              mostrarMedidasLoteMassa={mostrarMedidasLoteMassa}
               mostrarCamadasParedes={ajusteDaVista ? false : mostrarCamadas}
               mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : mostrarCotas}
               mostrarCotaInterna={ajusteDaVista ? false : mostrarCotaInterna}

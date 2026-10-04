@@ -277,3 +277,50 @@ describe('aproveitamento do estudo (TO e CA de todos os pavimentos + massa)', ()
     expect(aproveitamentoDoEstudo(m, null, massa)).toBeNull();
   });
 });
+
+/**
+ * AFASTAMENTOS DO BLOCO (04/10/2026) — *"o desenho gerado através do menu terreno Lote e massa não tem medidas"*.
+ */
+describe('afastamentosDoBloco', () => {
+  const lote = [{ x: 0, y: 0 }, { x: 12000, y: 0 }, { x: 12000, y: 30000 }, { x: 0, y: 30000 }];
+  const distancias = (r: { distanciaMm: number }[]) => r.map((x) => x.distanciaMm).sort((a, b) => a - b);
+
+  it('bloco 10 × 20 dentro do lote 12 × 30: os quatro afastamentos, cada um até a divisa em frente', async () => {
+    const { afastamentosDoBloco } = await import('../utils/blueprintMassa');
+    const bloco = [{ x: 1000, y: 4000 }, { x: 11000, y: 4000 }, { x: 11000, y: 24000 }, { x: 1000, y: 24000 }];
+    const r = afastamentosDoBloco(bloco, lote);
+    expect(distancias(r)).toEqual([1000, 1000, 4000, 6000]);
+    // O da frente (lado de baixo) vai do meio do lado até y = 0.
+    const frente = r.find((x) => x.distanciaMm === 4000)!;
+    expect(frente.de).toEqual({ x: 6000, y: 4000 });
+    expect(frente.ate.y).toBeCloseTo(0, 6);
+  });
+
+  it('o sentido em que o bloco foi desenhado não muda nada', async () => {
+    const { afastamentosDoBloco } = await import('../utils/blueprintMassa');
+    const horario = [{ x: 1000, y: 4000 }, { x: 1000, y: 24000 }, { x: 11000, y: 24000 }, { x: 11000, y: 4000 }];
+    expect(distancias(afastamentosDoBloco(horario, lote))).toEqual([1000, 1000, 4000, 6000]);
+  });
+
+  it('lote girado 30°: a perpendicular acha a divisa girada', async () => {
+    const { afastamentosDoBloco } = await import('../utils/blueprintMassa');
+    const c = Math.cos(Math.PI / 6);
+    const s = Math.sin(Math.PI / 6);
+    const gira = (p: { x: number; y: number }) => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c });
+    const bloco = [{ x: 1000, y: 4000 }, { x: 11000, y: 4000 }, { x: 11000, y: 24000 }, { x: 1000, y: 24000 }].map(gira);
+    expect(distancias(afastamentosDoBloco(bloco, lote.map(gira)))).toEqual([1000, 1000, 4000, 6000]);
+  });
+
+  it('lado com o meio fora do lote fica sem afastamento; lado encostado na divisa também', async () => {
+    const { afastamentosDoBloco } = await import('../utils/blueprintMassa');
+    // Passa 2 m da lateral direita: o lado direito (meio fora) some. O de baixo encosta na frente (y = 0): some.
+    const bloco = [{ x: 2000, y: 0 }, { x: 14000, y: 0 }, { x: 14000, y: 10000 }, { x: 2000, y: 10000 }];
+    const r = afastamentosDoBloco(bloco, lote);
+    expect(distancias(r)).toEqual([2000, 20000]); // lateral esquerda 2 m; fundos 30 − 10 = 20 m
+  });
+
+  it('sem lote, nada', async () => {
+    const { afastamentosDoBloco } = await import('../utils/blueprintMassa');
+    expect(afastamentosDoBloco([{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }], null)).toEqual([]);
+  });
+});

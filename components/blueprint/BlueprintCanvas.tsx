@@ -82,9 +82,9 @@ import {
   type PontoPx,
   type Underlay,
 } from '../../utils/blueprintUnderlay';
-import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import { anelDoTerreno, medirTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import { faixaDaVia, calcadasDaVia, centroide, areaEmM2 } from '../../utils/blueprintLoteamento';
-import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
+import { afastamentosDoBloco, COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
 
 /** Identidade estável para o padrão do prop (um `new Set()` no parâmetro redesenharia a cada render). */
 const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
@@ -635,6 +635,20 @@ function rotuloDoTraco(
 }
 
 /**
+ * O `lado` do `rotuloDoTraco` que cai FORA do anel (04/10/2026): a medida de um lado do lote ou do bloco não pode
+ * sair por cima do próprio lote/bloco. Testa um ponto a alguns px do meio do traço, do lado padrão; se ele cai
+ * dentro do anel, o rótulo vai para o outro lado. Sem anel, o padrão.
+ */
+function ladoDeFora(a: PontoTela, b: PontoTela, anelTela: PontoTela[] | null): 1 | -1 {
+  if (!anelTela || anelTela.length < 3) return 1;
+  const { nx, ny } = normalDoTraco(a, b);
+  const teste = { x: (a.x + b.x) / 2 + nx * 6, y: (a.y + b.y) / 2 + ny * 6 };
+  return pointInPolygon(anelTela, teste) ? -1 : 1;
+}
+
+const metrosDoRotulo = (mm: number) => `${(Math.round(mm) / 1000).toFixed(2).replace('.', ',')} m`;
+
+/**
  * Ponto do mundo em milímetro inteiro e dentro do alcance do kernel.
  *
  * `point()` recusa fração e coordenada fora de ±1.000.000 mm com exceção, e
@@ -1014,6 +1028,12 @@ interface Props {
   ortogonal?: boolean;
   /** Escreve o comprimento de CADA parede junto dela, como uma cota de planta. */
   mostrarMedidasParedes?: boolean;
+  /**
+   * MEDIDAS DO LOTE E DA MASSA (04/10/2026): os lados do lote, os lados de cada bloco e o afastamento de cada
+   * bloco até as divisas. Separado de `mostrarMedidasParedes` porque são poucas etiquetas e são as que o estudo de
+   * massa lê — nasce LIGADO; o das paredes enche a planta e nasce desligado.
+   */
+  mostrarMedidasLoteMassa?: boolean;
   /**
    * Pinta as faixas das CAMADAS dentro da espessura da parede.
    *
@@ -1525,6 +1545,7 @@ export default function BlueprintCanvas({
   onJuntarPontas,
   ortogonal = false,
   mostrarMedidasParedes = false,
+  mostrarMedidasLoteMassa = true,
   mostrarCamadasParedes = false,
   fundo = null,
   onMoveVertex,
@@ -4758,6 +4779,16 @@ export default function BlueprintCanvas({
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.restore();
+        // BLOCO (04/10/2026): cada lado já clicado e o lado em curso com o comprimento, como a ferramenta Terreno.
+        if (tool === 'bloco') {
+          const mundo = [...anelDoLoteamento, cursor];
+          for (let i = 0; i + 1 < mundo.length; i += 1) {
+            const a = pts[i];
+            const z = pts[i + 1];
+            if (Math.hypot(z.x - a.x, z.y - a.y) < MIN_PX_COTA_PAREDE) continue;
+            rotuloDoTraco(ctx, metrosDoRotulo(Math.hypot(mundo[i + 1].x - mundo[i].x, mundo[i + 1].y - mundo[i].y)), a, z, 2, COR_PREVIA, pts.length >= 3 ? ladoDeFora(a, z, pts) : 1);
+          }
+        }
       }
       if (tool === 'via' && eixoEmCurso.length > 0 && cursor) {
         const eixo = [...eixoEmCurso, cursor];
@@ -5301,6 +5332,9 @@ export default function BlueprintCanvas({
         }
       }
 
+      // O anel do lote em tela: é por ele que o rótulo de cada lado escolhe o lado de FORA (04/10/2026).
+      const anelDoLoteNoNivel = anelDoTerreno(limitesDoNivel);
+      const anelDoLoteTela = anelDoLoteNoNivel.length >= 3 ? anelDoLoteNoNivel.map(paraTela) : null;
       for (const b of limitesDoNivel) {
         const a = paraTela(b.a);
         const z = paraTela(b.b);
@@ -5332,8 +5366,12 @@ export default function BlueprintCanvas({
         // a escritura ("frente 12,00 m"). Divisa sem papel não ganha rótulo
         // nenhum — inventar um para o que ninguém classificou faria a tela
         // afirmar algo que o modelo não guarda.
+        //
+        // 04/10/2026 (*"o desenho gerado através do menu terreno Lote e massa não tem medidas"*): o lado do LOTE
+        // aparece também com "Medidas do lote e da massa" (ligado por padrão), e por FORA do lote.
         const compPx = Math.hypot(z.x - a.x, z.y - a.y);
-        if (mostrarMedidasParedes && compPx >= MIN_PX_COTA_PAREDE) {
+        const medirEste = mostrarMedidasParedes || (mostrarMedidasLoteMassa && b.kind === 'TERRENO');
+        if (medirEste && compPx >= MIN_PX_COTA_PAREDE) {
           const mm = Math.round(Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y));
           const medida = `${(mm / 1000).toFixed(2).replace('.', ',')} m`;
           const papel = b.papel ? ROTULO_CURTO_DO_PAPEL[b.papel] : null;
@@ -5344,7 +5382,55 @@ export default function BlueprintCanvas({
             z,
             2,
             selecionado ? COR_SELECIONADA : COR_TERRENO,
+            b.kind === 'TERRENO' ? ladoDeFora(a, z, anelDoLoteTela) : 1,
           );
+        }
+      }
+
+      // MEDIDAS DA MASSA (04/10/2026): o lado de cada bloco (por fora dele) e o afastamento de cada lado até a
+      // divisa do lote. Numa passada própria, DEPOIS do lote e das divisas: desenhadas junto do bloco, o
+      // preenchimento do lote (que vem depois) passava por cima.
+      if (mostrarMedidasLoteMassa && (model.blocos ?? []).length > 0) {
+        const loteFechado = medirTerreno(limitesDoNivel.filter((x) => x.kind === 'TERRENO'))?.fechado ? anelDoLoteNoNivel : null;
+        for (const bl of model.blocos ?? []) {
+          if (bl.pontos.length < 3 || ocultos.has(bl.id) || (levelId && bl.levelId !== levelId)) continue;
+          const dMov = selecao.has(bl.id) && movendoSelecao ? movendoSelecao.delta : null;
+          const pontosDoBloco = dMov ? bl.pontos.map((q) => ({ x: q.x + dMov.x, y: q.y + dMov.y })) : bl.pontos;
+          const pts = pontosDoBloco.map(paraTela);
+          for (let i = 0; i < pts.length; i += 1) {
+            const a = pts[i];
+            const z = pts[(i + 1) % pts.length];
+            if (Math.hypot(z.x - a.x, z.y - a.y) < MIN_PX_COTA_PAREDE) continue;
+            const ma = pontosDoBloco[i];
+            const mz = pontosDoBloco[(i + 1) % pontosDoBloco.length];
+            rotuloDoTraco(ctx, metrosDoRotulo(Math.hypot(mz.x - ma.x, mz.y - ma.y)), a, z, 2, corTextoCota, ladoDeFora(a, z, pts), fundoCota);
+          }
+          // Afastamentos: linha fina tracejada do lado do bloco até a divisa, traço nas pontas, o valor no meio.
+          for (const af of afastamentosDoBloco(pontosDoBloco, loteFechado)) {
+            const de = paraTela(af.de);
+            const ate = paraTela(af.ate);
+            const comp = Math.hypot(ate.x - de.x, ate.y - de.y);
+            if (comp < MIN_PX_COTA_PAREDE) continue;
+            const ux = (ate.x - de.x) / comp;
+            const uy = (ate.y - de.y) / comp;
+            ctx.save();
+            ctx.strokeStyle = corLinhaCota;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            ctx.moveTo(de.x, de.y);
+            ctx.lineTo(ate.x, ate.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            for (const pt of [de, ate]) {
+              ctx.moveTo(pt.x - uy * 4, pt.y + ux * 4);
+              ctx.lineTo(pt.x + uy * 4, pt.y - ux * 4);
+            }
+            ctx.stroke();
+            ctx.restore();
+            escreverRotulo(ctx, metrosDoRotulo(af.distanciaMm), (de.x + ate.x) / 2, (de.y + ate.y) / 2, corTextoCota, 11, fundoCota);
+          }
         }
       }
 
@@ -8852,6 +8938,7 @@ export default function BlueprintCanvas({
     pontaEmJuncao,
     pontaSobCursor,
     mostrarMedidasParedes,
+    mostrarMedidasLoteMassa,
     fundo,
     calibP1,
     medicoesDoNivel,

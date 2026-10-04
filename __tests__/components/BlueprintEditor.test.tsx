@@ -7163,3 +7163,42 @@ describe('BlueprintEditor · abas do Estudo de massa', () => {
     expect(within(outra).getByRole('tab', { name: 'Hipóteses' })).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+/**
+ * MEDIDAS DO LOTE E DA MASSA (04/10/2026): *"o desenho gerado atraves do menu terreno Lote e massa nao tem medidas"*.
+ */
+describe('BlueprintEditor · Medidas do lote e da massa (Vista › Exibir)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('sem lote nem bloco, o item fica desligado e diz por quê', async () => {
+    await montar();
+    await abrirAba(/^vista$/i);
+    await userEvent.click(botao(/exibir/i));
+    const item = screen.getByRole('menuitemcheckbox', { name: /medidas do lote e da massa/i });
+    expect(item).toBeDisabled();
+    expect(item).toHaveAttribute('title', expect.stringMatching(/Sem lote nem bloco neste pavimento/));
+  });
+
+  it('com lote: nasce LIGADO (independe de "Medidas das paredes") e alterna a chave guardada', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        { type: 'AddBoundary', levelId: t, a: k.point(0, 0), b: k.point(12000, 0), kind: 'TERRENO' },
+        { type: 'AddBoundary', levelId: t, a: k.point(12000, 0), b: k.point(12000, 30000), kind: 'TERRENO' },
+        { type: 'AddBoundary', levelId: t, a: k.point(12000, 30000), b: k.point(0, 30000), kind: 'TERRENO' },
+        { type: 'AddBoundary', levelId: t, a: k.point(0, 30000), b: k.point(0, 0), kind: 'TERRENO' },
+      ]).model,
+    );
+    await montar();
+    await abrirAba(/^vista$/i);
+    await userEvent.click(botao(/exibir/i));
+    await waitFor(() => expect(screen.getByRole('menuitemcheckbox', { name: /medidas do lote e da massa/i })).toBeEnabled());
+    const item = screen.getByRole('menuitemcheckbox', { name: /medidas do lote e da massa/i });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemcheckbox', { name: /medidas das paredes/i })).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(item);
+    expect(localStorage.getItem('blueprint:mostrarMedidasLoteMassa')).toBe('false');
+  });
+});

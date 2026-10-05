@@ -17,10 +17,13 @@ import {
   CLIMA_POR_CIDADE,
   FONTE_DO_CLIMA,
   FONTE_DO_CONFORTO,
+  FONTE_DO_MOTOR,
   LIMITES_DE_CONFORTO,
   LIMITES_DO_CLIMA,
+  LIMITES_DO_MOTOR,
   type CondicoesExternas,
   type HipotesesClimatizacao,
+  type HipotesesDoMotor,
   type OrigemDoClima,
 } from '../../utils/blueprintClimatizacao';
 import {
@@ -74,6 +77,21 @@ const ORIGEM: Record<OrigemDoClima, string> = {
   SEM: 'sem valor',
 };
 const ORIGEM_DO_DADO: Record<OrigemDoDado, string> = { DECLARADA: 'declarado', USO: 'padrão do uso', ESTUDO: 'do estudo', SEM: 'sem uso reconhecido' };
+
+/** E2.3: os campos do motor, com rótulo, unidade e passo — a ordem é a da conta (envoltória → sol → interno → ar). */
+const CAMPOS_DO_MOTOR: { k: keyof HipotesesDoMotor; rotulo: string; unidade: string; passo: number }[] = [
+  { k: 'uParedePadraoWm2K', rotulo: 'U parede típica', unidade: 'W/m²·K', passo: 0.1 },
+  { k: 'uCoberturaPadraoWm2K', rotulo: 'U cobertura típica', unidade: 'W/m²·K', passo: 0.1 },
+  { k: 'uLajePadraoWm2K', rotulo: 'U laje típica', unidade: 'W/m²·K', passo: 0.1 },
+  { k: 'uVidroPadraoWm2K', rotulo: 'U vidro típico', unidade: 'W/m²·K', passo: 0.1 },
+  { k: 'uPortaPadraoWm2K', rotulo: 'U porta típica', unidade: 'W/m²·K', passo: 0.1 },
+  { k: 'fatorSolarPadrao', rotulo: 'Fator solar típico', unidade: '', passo: 0.01 },
+  { k: 'acrescimoSolarCoberturaK', rotulo: 'Sol na cobertura', unidade: 'K', passo: 1 },
+  { k: 'acrescimoSolarParedeK', rotulo: 'Sol na parede (oeste)', unidade: 'K', passo: 1 },
+  { k: 'fracaoDeltaTNaoClimatizado', rotulo: 'Fração ΔT p/ não climatizado', unidade: '', passo: 0.1 },
+  { k: 'trocasDeArPorHora', rotulo: 'Infiltração', unidade: 'trocas/h', passo: 0.1 },
+  { k: 'fatorDeUsoInterno', rotulo: 'Uso de luz/equipamentos', unidade: '', passo: 0.1 },
+];
 
 /** Campo numérico obrigatório com faixa: fora dela o valor não é aplicado, e a borda avisa. */
 function CampoNumero({ valor, onValor, rotulo, faixa, passo, unidade }: { valor: number; onValor: (v: number) => void; rotulo: string; faixa: { min: number; max: number }; passo: number; unidade: string }) {
@@ -282,6 +300,17 @@ export default function PainelClimatizacao({ hip, onHip, condicoes: c, ambientes
         <p className="text-[11px] text-slate-500">
           Data, hora solar e latitude suposta da insolação também são do estudo desde 04/10/2026 — ajustam-se na gaveta Insolação.
         </p>
+      </section>
+
+      {/* E2.3: as hipóteses do motor — toda folga do cálculo, editável. */}
+      <section className="space-y-1.5" data-testid="hipoteses-do-motor">
+        <h4 className="text-xs font-semibold text-slate-500">Hipóteses do motor de carga térmica</h4>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-600">
+          {CAMPOS_DO_MOTOR.map((f) => (
+            <CampoNumero key={f.k} rotulo={f.rotulo} valor={hip.motor[f.k]} onValor={(v) => onHip({ ...hip, motor: { ...hip.motor, [f.k]: v } })} faixa={LIMITES_DO_MOTOR[f.k]} passo={f.passo} unidade={f.unidade} />
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500">Entram só onde o desenho não declarou (camadas com λ, vidro); o declarado vence. {FONTE_DO_MOTOR}</p>
       </section>
 
       {/* E0.3: por ambiente — a mesma tabela compacta do painel de acabamentos (mesma gaveta, mesma família). */}

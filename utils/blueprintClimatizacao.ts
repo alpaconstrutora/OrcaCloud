@@ -242,6 +242,78 @@ export const HIPOTESES_DE_INSOLACAO_DO_ESTUDO_PADRAO: HipotesesDeInsolacaoDoEstu
 /** A chave que o navegador usava antes da E0.2 (e continua usando para os vizinhos legados). */
 export const CHAVE_DA_INSOLACAO_NO_NAVEGADOR = 'blueprint:insolacao';
 
+// ─── Hipóteses do MOTOR de carga térmica (E2) ────────────────────────────────
+
+/**
+ * Toda folga e todo "valor típico" que o motor usa quando o desenho não
+ * declarou — e que o projetista pode trocar. ⚠️ Todos são HIPÓTESE, transcritos
+ * de memória — CONFERIR NA NORMA (NBR 16655-3; NBR 16401-1 para ocupação e
+ * renovação; NBR 15220 para os U típicos). O declarado no desenho (camadas com
+ * λ, vidro) vence sempre; estes só entram onde falta declaração, e a parcela
+ * sai marcada "hipótese".
+ */
+export interface HipotesesDoMotor {
+  /** U típico de parede sem camadas/λ declarados, W/m²·K. */
+  uParedePadraoWm2K: number;
+  /** U típico de cobertura (telha + laje) sem camadas, W/m²·K. */
+  uCoberturaPadraoWm2K: number;
+  /** U típico de laje (entre pavimentos ou exposta) sem camadas, W/m²·K. */
+  uLajePadraoWm2K: number;
+  /** U típico de vidro simples com caixilho, W/m²·K. */
+  uVidroPadraoWm2K: number;
+  /** U típico de porta opaca, W/m²·K. */
+  uPortaPadraoWm2K: number;
+  /** Fator solar típico de vidro simples incolor. */
+  fatorSolarPadrao: number;
+  /** Acréscimo de temperatura equivalente da cobertura ao sol, K (temperatura sol-ar simplificada). */
+  acrescimoSolarCoberturaK: number;
+  /** Acréscimo de temperatura equivalente da parede externa ao sol, K, na orientação mais exposta; as outras seguem `PESO_SOLAR_DA_ORIENTACAO`. */
+  acrescimoSolarParedeK: number;
+  /** Fração do ΔT externo que vale para ambiente vizinho NÃO climatizado (0–1). */
+  fracaoDeltaTNaoClimatizado: number;
+  /** Renovação por infiltração, trocas de ar por hora. */
+  trocasDeArPorHora: number;
+  /** Fator de uso da iluminação e dos equipamentos (0–1). */
+  fatorDeUsoInterno: number;
+}
+
+export const HIPOTESES_DO_MOTOR_PADRAO: HipotesesDoMotor = {
+  uParedePadraoWm2K: 2.5,
+  uCoberturaPadraoWm2K: 2.0,
+  uLajePadraoWm2K: 3.0,
+  uVidroPadraoWm2K: 5.7,
+  uPortaPadraoWm2K: 2.0,
+  fatorSolarPadrao: 0.87,
+  acrescimoSolarCoberturaK: 10,
+  acrescimoSolarParedeK: 6,
+  fracaoDeltaTNaoClimatizado: 0.5,
+  trocasDeArPorHora: 0.5,
+  fatorDeUsoInterno: 1,
+};
+
+export const LIMITES_DO_MOTOR: Record<keyof HipotesesDoMotor, { min: number; max: number }> = {
+  uParedePadraoWm2K: { min: 0.1, max: 10 },
+  uCoberturaPadraoWm2K: { min: 0.1, max: 10 },
+  uLajePadraoWm2K: { min: 0.1, max: 10 },
+  uVidroPadraoWm2K: { min: 0.1, max: 10 },
+  uPortaPadraoWm2K: { min: 0.1, max: 10 },
+  fatorSolarPadrao: { min: 0.05, max: 1 },
+  acrescimoSolarCoberturaK: { min: 0, max: 30 },
+  acrescimoSolarParedeK: { min: 0, max: 20 },
+  fracaoDeltaTNaoClimatizado: { min: 0, max: 1 },
+  trocasDeArPorHora: { min: 0, max: 10 },
+  fatorDeUsoInterno: { min: 0, max: 1 },
+};
+
+export const FONTE_DO_MOTOR = 'Valores típicos de projeto, transcritos de memória. CONFERIR NA NORMA: NBR 16655-3 (cargas), NBR 16401-1 (ocupação e renovação), NBR 15220 (U típicos).';
+
+export function hipotesesDoMotorDaColuna(raw: unknown): HipotesesDoMotor {
+  const r = objeto(raw);
+  const saida = { ...HIPOTESES_DO_MOTOR_PADRAO };
+  for (const k of Object.keys(HIPOTESES_DO_MOTOR_PADRAO) as (keyof HipotesesDoMotor)[]) saida[k] = numeroNaFaixa(r[k], LIMITES_DO_MOTOR[k], HIPOTESES_DO_MOTOR_PADRAO[k]);
+  return saida;
+}
+
 // ─── O conjunto e o leitor da coluna ─────────────────────────────────────────
 
 export interface HipotesesClimatizacao {
@@ -250,6 +322,8 @@ export interface HipotesesClimatizacao {
   insolacao: HipotesesDeInsolacaoDoEstudo;
   /** E0.3: o declarado por ambiente, pelo `uid` da etiqueta (ver `blueprintClimatizacaoAmbientes`). */
   ambientes: Record<string, HipotesesDoAmbiente>;
+  /** E2: as hipóteses do motor de carga térmica. */
+  motor: HipotesesDoMotor;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
@@ -257,6 +331,7 @@ export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   clima: HIPOTESES_DE_CLIMA_PADRAO,
   insolacao: HIPOTESES_DE_INSOLACAO_DO_ESTUDO_PADRAO,
   ambientes: {},
+  motor: HIPOTESES_DO_MOTOR_PADRAO,
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -305,6 +380,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     clima: hipotesesDeClimaDaColuna(r.clima),
     insolacao: hipotesesDeInsolacaoDaColuna(r.insolacao),
     ambientes: ambientesDaColuna(r.ambientes),
+    motor: hipotesesDoMotorDaColuna(r.motor),
   };
 }
 

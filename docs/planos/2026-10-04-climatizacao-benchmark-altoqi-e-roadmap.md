@@ -1790,3 +1790,79 @@ Script no scratchpad da sessão (não entra no repositório: tem o fluxo de logi
   position:fixed — usar `checkVisibility()`); "Nova planta" com o topo em "Todas" abre o modal de
   organização; o link `#/blueprint?studyId=` não abriu o estudo neste passeio (abrir pela linha da
   lista funcionou) — anotado, não investigado.
+
+### Etapa 5.1 + 5.2 + 5.3 + 5.4 — 05/10/2026 (frente `clima-e5`, **sem bump** — desvio do roadmap, dito abaixo)
+
+**Decisão de desenho (E5.3 sem bump).** O roadmap previa `Trecho.curva {raioMm}` com bump. Não
+entrou: a geometria `a → b` do trecho não carrega raio — a curva mora no NÓ entre dois trechos
+retos, e o raio mínimo é REGRA da dobra do cobre por diâmetro, não dado do desenho. Então a E5.3
+ficou DERIVADA: a conferência conta as curvas da linha (nós JOELHO_90/JOELHO_45 de
+`conexoesDerivadas` entre trechos da linha) e diz o raio mínimo por Ø (`RAIO_MINIMO_DA_CURVA`,
+≈ 4 × D, hipótese). O desenho 2D/3D "do par isolado" também não entrou (a linha se desenha como
+tubo da disciplina, com a cor violeta da E3) — fica para a E8/E10 junto da prancha e do 3D.
+
+**Molde.** O traçado é o do eletroduto e do alimentador: `arvorePelasParedes` (eixo das paredes,
+pilar como custo) da evaporadora à condensadora, `desvioDoPilar` na reta quando não há parede ao
+alcance; os trechos nascem num `lote` com deduplicação por nó (o `addTrecho` do eletroduto). ⚠️ O nó
+da rede é por coincidência EXATA (`conexoes.ts`): a linha sobe de `(evap.at, evap.cotaMm)` à cota
+da linha e desce em `(cond.at, cond.cotaMm)` — é isso que faz as peças contarem como fim de linha.
+
+**Kernel/derivados.** `conexoes.ts`: o equipamento de climatização conta como PEÇA no nó de cada
+disciplina que a ficha admite, e a evaporadora também em `DRENO_AC` — sem isso o dreno que chega
+nela era "ponta aberta" (achado do levantamento da E5). Derivação pura (não entra no payload nem
+no hash): os goldens não mudam. `blueprintVerificacaoRede.ts`: ATRAVESSA_PILAR/CRUZA_VIGA também
+para FRIGORIGENA e DRENO_AC (critério da 5.1 "nenhum trecho atravessa pilar"); DECLIVIDADE_BAIXA
+para o dreno por gravidade (`drenosTrechoATrecho`: |Δcota|/planta, mínima 1 % hipótese; a rede
+ligada a uma BOMBA_DRENO é recalque e não é cobrada).
+
+**`utils/blueprintLinhaFrigorigena.ts`.**
+- E5.2 `FAIXAS_DA_LINHA` por capacidade (≤12k 6/10 mm · 15 m · 7 m · 15 g/m; ≤18k 6/13 · 20 · 10 · 20;
+  ≤24k 6/16 · 25 · 15 · 30; ≤36k 10/16 · 30 · 20 · 35; ≤60k 10/19 · 50 · 30 · 50) — valores
+  típicos de split R-410A transcritos de memória, **HIPÓTESE, CONFERIR com o fabricante**
+  (`FONTE_DAS_FAIXAS` aparece no painel); `isolamentoDaLinhaMm` (9/13 mm pelas hipóteses).
+- `sistemasDoNivel` (evaporadora com `condensadoraId` no mesmo pavimento — a prumada entre
+  pavimentos fica para depois), `linhaExistente` (menor caminho no grafo dos trechos FRIGORIGENA
+  entre os nós das peças).
+- E5.1 `planejarLinhasFrigorigenas(model, levelId, hip)`: por sistema sem linha CONFIRMADA, a linha
+  (sobe → corre na `cotaDaLinhaMm` → desce → sai) com `bitolaMm` = líquido, `bitolaSuccaoMm` = sucção,
+  `isolamentoMm`; E5.4 o dreno de `(evap.at, evap.cotaMm)` ao PONTO_DRENO existente mais perto ou a
+  um ponto novo ao LADO da condensadora (meia largura + 200 mm ao longo da parede, cota 0), por
+  gravidade com a queda de cada lance arredondada PARA CIMA (nenhum lance fica abaixo da mínima
+  por arredondamento) — ou, se o descarte fica acima da queda possível, com BOMBA_DRENO a 30 cm
+  da evaporadora e o dreno em recalque. Tudo `sugerido`; relançar apaga linha, dreno e peças de
+  dreno sugeridos no mesmo lote; o plano é provado numa cópia (`applyBatch`).
+- E5.2/E5.3 `linhasConferidas` (comprimento, desnível, Ø encontrados × faixa, isolamento mínimo,
+  gás adicional = (L − pré-carga) × g/m, curvas e raio mínimo, pendências) e `conferenciaDaLinha`
+  (LINHA, LIMITES, DIAMETROS, GAS, CURVAS, DRENO) em 3 estados; `drenosConferidos` (chega a um
+  ponto de dreno? com bomba?).
+- Hipóteses em `HipotesesClimatizacao.linha` {cotaDaLinhaMm 2500, raioDeEncaixeMm 600, preCargaM 5,
+  declividadeDrenoPct 1, isolamentoAte24kMm 9, isolamentoAcimaMm 13, dnDrenoMm 25} com limites e
+  leitor — toda folga editável no painel.
+
+**Editor.** Tarefa `linhaFrigorigena` ("Linha e dreno", ao lado de "Split"); `PainelLinhaFrigorigena`
+(hipóteses, tabela por sistema com linha/máximo/Ø/gás/curvas, plano, Lançar/Relançar e Aceitar —
+trechos E peças de dreno — com motivo quando desligados, conferência).
+
+**Não entrou (dito):** o par de tubos isolado desenhado como par no 2D/3D (E8/E10); a prumada da
+linha entre pavimentos (condensadora na cobertura — backlog); o DN do dreno por vazão de condensado
+(hoje hipótese fixa de 25 mm); o sifão do dreno como peça (fica no detalhe típico, E8.3).
+
+**Prova.** `blueprintLinhaFrigorigena.test.ts` (7: faixas e hipóteses; a linha do split lançado pela
+E4 — ≥3 trechos, Ø/isolamento da faixa, cota da linha e cotas das peças, caminho no grafo,
+NENHUMA ponta aberta FRIGORIGENA/DRENO_AC, dreno a ponto novo na fachada por gravidade com todo
+lance ≥ 1 %, verificação limpa; conferência LINHA/LIMITES/DIAMETROS/DRENO ok e gás/curvas; relançar
+idempotente e aceitar fixa; descarte a 2,50 m → bomba e sem cobrança de declividade, dreno quase
+plano sem bomba → DECLIVIDADE_BAIXA; 9.000 com condensadora a 30 m → LIMITES FALTA "acima do máximo
+de 15 m"), `components/PainelLinhaFrigorigena.test.tsx` (2), editor "Mecânica › Split" estendido
+(Linha e dreno: sem linha → Lançar → 1 linha(s), 1 dreno(s), Aceitar).
+
+### Fecho da Etapa 5 — 05/10/2026
+
+- Sem migration, **sem bump** (o roadmap previa bump para `Trecho.curva`; a E5.3 ficou derivada —
+  ver a decisão acima). Os goldens não mudaram: a regra nova de `conexoes.ts` é derivação.
+- **Suíte inteira**: 7635 testes = 7601 ✅ + 34 pulados de propósito + 0 falhas (fechando pelo JSON).
+- `npm run build` caiu com **segfault do Node no `tsc`** (exit 139, a queda intermitente do Node 24
+  já conhecida — nenhuma linha `error TS`); refeito em duas partes: `tsc --noEmit` isolado exit 0 e
+  `vite build` exit 0. `check-ui-standard` nos 2 `.tsx` e `check-xss-sinks` exit 0.
+- Fica para a prova no app real: lançar "Linha e dreno" depois do Split e ver a linha subindo da
+  evaporadora, correndo pela parede e descendo na condensadora, e o dreno até o ponto ao lado dela.

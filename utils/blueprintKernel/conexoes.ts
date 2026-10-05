@@ -34,6 +34,7 @@
  * planta com os trechos em outra ordem dá a mesma lista.
  */
 import type { BlueprintModel, DisciplinaDeRede, Level, ObjectId, Terminal, Trecho } from './model';
+import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from './model';
 import type { Point } from './geom';
 
 export type TipoDeConexao = 'JOELHO_90' | 'JOELHO_45' | 'TE' | 'JUNCAO_45' | 'CRUZETA' | 'LUVA' | 'REDUCAO';
@@ -215,10 +216,21 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
   const terminaisPorChave = new Map<Chave, Terminal[]>();
   for (const term of model.terminais ?? []) {
     if (!HIDRAULICAS.includes(term.disciplina)) continue;
-    const k = chave(term.levelId, term.disciplina, term.at.x, term.at.y, term.cotaMm).chave;
-    const lista = terminaisPorChave.get(k) ?? [];
-    lista.push(term);
-    terminaisPorChave.set(k, lista);
+    // CLIMATIZAÇÃO E5 (05/10/2026): o equipamento tem MAIS de uma ligação — a
+    // evaporadora (FRIGORIGENA) recebe a linha E o dreno (DRENO_AC); o personalizado,
+    // as três. Ele conta como peça no nó de cada disciplina que a ficha admite,
+    // senão o dreno que chega à evaporadora seria "ponta aberta".
+    const disciplinas = new Set<DisciplinaDeRede>([term.disciplina]);
+    if (term.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(term.tipoHidraulico)) {
+      for (const d of DISCIPLINAS_DO_PONTO_HIDRAULICO[term.tipoHidraulico]) disciplinas.add(d);
+      if ((TIPOS_DE_EVAPORADORA as readonly string[]).includes(term.tipoHidraulico)) disciplinas.add('DRENO_AC');
+    }
+    for (const d of disciplinas) {
+      const k = chave(term.levelId, d, term.at.x, term.at.y, term.cotaMm).chave;
+      const lista = terminaisPorChave.get(k) ?? [];
+      lista.push(term);
+      terminaisPorChave.set(k, lista);
+    }
   }
 
   // Caixas de esgoto, na mesma normalização da chave (a laje como encontro).

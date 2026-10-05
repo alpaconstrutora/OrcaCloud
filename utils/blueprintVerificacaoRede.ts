@@ -27,6 +27,7 @@ import { pontosDaLouca } from './blueprintPontosHidraulicos';
 import { ROTULO_DA_DISCIPLINA } from './blueprintRede';
 import type { PressoesDaRede } from './blueprintPressaoDaRede';
 import { marcasDoLancamentoDeIncendio } from './blueprintConferenciaIncendio';
+import { drenosTrechoATrecho } from './blueprintLinhaFrigorigena';
 
 export type TipoDeMarca =
   | 'PONTA_ABERTA'
@@ -142,6 +143,13 @@ export function marcasDeVerificacao(
       marcas.push({ chave: `diminui|${c.trechoId}`, tipo: 'DN_DIMINUI', levelId: c.levelId, at: aoLongo(c.trechoId, 0.7), texto: `DN ${c.dnAtualMm} depois de ${c.dnMontanteMaxMm}`, severidade: 'ERRO', alvoId: c.trechoId, disciplina: 'ESGOTO' });
     }
   }
+  // Climatização E5.4 (05/10/2026): o dreno de condensado por gravidade abaixo da declividade mínima
+  // (a rede com bomba de dreno é recalque e não entra).
+  for (const d of drenosTrechoATrecho(model)) {
+    if (d.declividadePct != null && d.declividadePct + 1e-9 < d.declividadeMinimaPct) {
+      marcas.push({ chave: `decl|${d.trechoId}`, tipo: 'DECLIVIDADE_BAIXA', levelId: d.levelId, at: aoLongo(d.trechoId, 0.3), texto: `i ${um1(d.declividadePct)} % < ${um1(d.declividadeMinimaPct)} %`, severidade: 'ERRO', alvoId: d.trechoId, disciplina: 'DRENO_AC' });
+    }
+  }
   // E5.4: o desconector sem ventilação ao alcance, e a coluna baixa ou fina.
   const vent = verificarVentilacao(model);
   const m2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -164,7 +172,8 @@ export function marcasDeVerificacao(
 
   // E5.5: tubo hidrossanitário contra a estrutura (o raspão — eixo por fora — não conta).
   // Incêndio E2.4: a tubulação de incêndio contra viga e pilar também (o "tubulação × viga" do AltoQi).
-  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO' || t.disciplina === 'INCENDIO');
+  // Climatização E5.1 (05/10/2026): a linha frigorígena e o dreno também — "nenhum trecho atravessa pilar".
+  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO' || t.disciplina === 'INCENDIO' || t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC');
   const estruturaPorId = new Map((model.structures ?? []).map((x) => [x.id, x]));
   if (hidraulicos.length > 0 && estruturaPorId.size > 0) {
     for (const c of conflitosDoModelo({ ...model, trechos: hidraulicos })) {

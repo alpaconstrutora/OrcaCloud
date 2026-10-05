@@ -5696,8 +5696,18 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     // E a conferência: equipamento em todo ambiente, sistema ligado.
     expect(within(gaveta).getByTestId('selecao-conferencia')).toHaveTextContent(/1 ambiente\(s\) com equipamento/);
     expect(within(gaveta).getByTestId('selecao-conferencia')).toHaveTextContent(/todas com condensadora/);
+    // CLIMATIZAÇÃO E5 (05/10/2026): com o split lançado, "Linha e dreno" propõe a linha pela parede
+    // e o dreno, Lançar cria tudo num lote, e a conferência passa a dizer LINHA/DRENO ok.
+    await user.click(botao(/^Linha e dreno$/));
+    const gavetaLinha = await screen.findByTestId('tarefa-linha-frigorigena');
+    expect(within(gavetaLinha).getByTestId('linha-conferencia')).toHaveTextContent(/sem linha/);
+    expect(within(gavetaLinha).getByTestId('linha-resumo')).toHaveTextContent(/Lança 1 linha/);
+    await user.click(within(gavetaLinha).getByRole('button', { name: 'Lançar linha e dreno' }));
+    await waitFor(() => expect(within(gavetaLinha).getByTestId('linha-conferencia')).toHaveTextContent(/1 linha\(s\)/));
+    expect(within(gavetaLinha).getByTestId('linha-conferencia')).toHaveTextContent(/1 dreno\(s\)/);
+    expect(within(gavetaLinha).getByRole('button', { name: /^Aceitar \(\d+\)$/ })).toBeInTheDocument();
     catalogoDeTipos.length = 0;
-  }, 60000);
+  }, 90000);
 });
 
 /**

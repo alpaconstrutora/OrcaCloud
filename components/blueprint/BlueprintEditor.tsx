@@ -258,6 +258,8 @@ import PainelCargaTermica from './PainelCargaTermica';
 import { cargaTermicaDoEstudo, cargaTermicaDoNivel, coresDaCarga } from '../../utils/blueprintCargaTermica';
 import { modelosDoCatalogo, selecaoDoNivel } from '../../utils/blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from '../../utils/blueprintPosicaoSplit';
+import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas } from '../../utils/blueprintLinhaFrigorigena';
+import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
@@ -1176,6 +1178,8 @@ const ROTULO_DA_TAREFA = {
   cargaTermica: 'Carga térmica por ambiente',
   // SELEÇÃO E POSIÇÃO DO SPLIT (04/10/2026, E4): a carga vira equipamento pelo catálogo, posicionado e ligado.
   selecaoSplit: 'Seleção e posição do split',
+  // LINHA FRIGORÍGENA E DRENO (05/10/2026, E5): da evaporadora à condensadora pela parede, dimensionada; o dreno por gravidade ou bomba.
+  linhaFrigorigena: 'Linha frigorígena e dreno',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -3084,6 +3088,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const planoDoSplit = useMemo(
     () => (selecaoSplit && cargaDoNivel ? planejarEquipamentosSplit(editor.model, selecaoSplit, cargaDoNivel, climatizacaoDoEstudo.hipoteses.selecao) : null),
     [selecaoSplit, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.selecao],
+  );
+  /** CLIMATIZAÇÃO E5 (05/10/2026): o plano da linha e do dreno do pavimento, as linhas conferidas e a conferência — só com a tarefa aberta. */
+  const planoDaLinha = useMemo(
+    () => (tarefa === 'linhaFrigorigena' && levelId ? planejarLinhasFrigorigenas(editor.model, levelId, climatizacaoDoEstudo.hipoteses.linha) : null),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.linha],
+  );
+  const linhasDoNivel = useMemo(
+    () => (tarefa === 'linhaFrigorigena' && levelId ? linhasConferidas(editor.model, levelId, climatizacaoDoEstudo.hipoteses.linha) : []),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.linha],
+  );
+  const conferenciaDaLinhaDoNivel = useMemo(
+    () => (tarefa === 'linhaFrigorigena' && levelId ? conferenciaDaLinha(editor.model, levelId, climatizacaoDoEstudo.hipoteses.linha) : []),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.linha],
   );
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
@@ -11824,6 +11841,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={() => alternarTarefa('selecaoSplit')}
                 ajuda="Seleção e posição do split: o menor modelo do catálogo que alcança a carga com a folga, a evaporadora na parede livre, a condensadora na fachada, o ponto de força com a potência da placa e o sistema ligado — num lote; confere atende / sub / superdimensionado"
               />
+              <BotaoDoRibbon
+                icone={Snowflake}
+                rotulo="Linha e dreno"
+                ativo={tarefaAberta === 'linhaFrigorigena'}
+                onClick={() => alternarTarefa('linhaFrigorigena')}
+                ajuda="Linha frigorígena da evaporadora à condensadora pela parede (desvia de pilar), com diâmetros, isolamento, comprimento e desnível pela faixa de fabricante (hipótese), e o dreno de condensado por gravidade — ou com bomba quando o descarte fica alto — num lote; conferência com gás adicional e curvas"
+              />
             </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
@@ -14928,6 +14952,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'climatizacao' && <Thermometer className="h-5 w-5 text-teal-700" />}
               {tarefaAberta === 'cargaTermica' && <Sun className="h-5 w-5 text-amber-600" />}
               {tarefaAberta === 'selecaoSplit' && <Snowflake className="h-5 w-5 text-sky-600" />}
+              {tarefaAberta === 'linhaFrigorigena' && <Snowflake className="h-5 w-5 text-violet-600" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15484,6 +15509,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onAceitar={(ids) => editor.runBatch(ids.map((terminalId) => ({ type: 'SetTerminalProps', terminalId, sugerida: false }) as Command))}
                 onSelecionar={selecionar}
                 catalogo={{ carregando: catalogoCarregando, indisponivel: catalogoIndisponivel }}
+              />
+            </div>
+          )}
+
+          {tarefaAberta === 'linhaFrigorigena' && planoDaLinha && (
+            <div data-testid="tarefa-linha-frigorigena">
+              <PainelLinhaFrigorigena
+                plano={planoDaLinha}
+                linhas={linhasDoNivel}
+                conferencia={conferenciaDaLinhaDoNivel}
+                hip={climatizacaoDoEstudo.hipoteses.linha}
+                onHip={(linha) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, linha })}
+                sugeridos={{
+                  trechos: (editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && (t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC')).map((t) => t.id),
+                  terminais: (editor.model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'DRENO_AC').map((t) => t.id),
+                }}
+                onLancar={() => {
+                  if (planoDaLinha.comandos.length) editor.runBatch(planoDaLinha.comandos);
+                }}
+                onAceitar={(s) =>
+                  editor.runBatch([
+                    ...s.trechos.map((trechoId) => ({ type: 'SetTrechoProps', trechoId, sugerido: false }) as Command),
+                    ...s.terminais.map((terminalId) => ({ type: 'SetTerminalProps', terminalId, sugerida: false }) as Command),
+                  ])
+                }
+                onSelecionar={selecionar}
               />
             </div>
           )}

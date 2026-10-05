@@ -355,6 +355,49 @@ export function hipotesesDeSelecaoDaColuna(raw: unknown): HipotesesDeSelecao {
   };
 }
 
+// ─── E5 (05/10/2026): a LINHA FRIGORÍGENA e o DRENO ──────────────────────────
+
+/**
+ * Como a linha e o dreno se traçam (E5.1/E5.4) e o que a conferência cobra
+ * (E5.2). Folgas editáveis; os limites por capacidade (diâmetros, comprimento
+ * e desnível máximos, gás adicional) são tabela de fabricante — HIPÓTESE,
+ * `FAIXAS_DA_LINHA` em `blueprintLinhaFrigorigena.ts`, CONFERIR com o modelo real.
+ */
+export interface HipotesesDaLinha {
+  /** Cota em que a linha corre pela parede (acima das portas), mm. */
+  cotaDaLinhaMm: number;
+  /** Até que distância da parede a peça é "encaixada" no eixo para a rota, mm. */
+  raioDeEncaixeMm: number;
+  /** Comprimento de linha já coberto pela carga de fábrica da condensadora, m. */
+  preCargaM: number;
+  /** Declividade mínima do dreno por gravidade, %. */
+  declividadeDrenoPct: number;
+  /** Isolamento da linha até 24.000 BTU/h e acima, mm. */
+  isolamentoAte24kMm: number;
+  isolamentoAcimaMm: number;
+  /** DN do dreno de condensado, mm. */
+  dnDrenoMm: number;
+}
+
+export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25 };
+
+export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max: number }> = {
+  cotaDaLinhaMm: { min: 300, max: 6000 },
+  raioDeEncaixeMm: { min: 50, max: 3000 },
+  preCargaM: { min: 0, max: 30 },
+  declividadeDrenoPct: { min: 0.2, max: 10 },
+  isolamentoAte24kMm: { min: 3, max: 50 },
+  isolamentoAcimaMm: { min: 3, max: 50 },
+  dnDrenoMm: { min: 15, max: 50 },
+};
+
+export function hipotesesDaLinhaDaColuna(raw: unknown): HipotesesDaLinha {
+  const r = objeto(raw);
+  const saida = { ...HIPOTESES_DA_LINHA_PADRAO };
+  for (const k of Object.keys(HIPOTESES_DA_LINHA_PADRAO) as (keyof HipotesesDaLinha)[]) saida[k] = numeroNaFaixa(r[k], LIMITES_DA_LINHA[k], HIPOTESES_DA_LINHA_PADRAO[k]);
+  return saida;
+}
+
 // ─── O conjunto e o leitor da coluna ─────────────────────────────────────────
 
 export interface HipotesesClimatizacao {
@@ -367,6 +410,8 @@ export interface HipotesesClimatizacao {
   motor: HipotesesDoMotor;
   /** E4.1: como a carga vira equipamento (folga, superdimensionamento, EER, tipo preferido). */
   selecao: HipotesesDeSelecao;
+  /** E5: a linha frigorígena e o dreno (cota, encaixe, pré-carga, declividade, isolamento, DN). */
+  linha: HipotesesDaLinha;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
@@ -376,6 +421,7 @@ export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   ambientes: {},
   motor: HIPOTESES_DO_MOTOR_PADRAO,
   selecao: HIPOTESES_DE_SELECAO_PADRAO,
+  linha: HIPOTESES_DA_LINHA_PADRAO,
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -426,6 +472,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     ambientes: ambientesDaColuna(r.ambientes),
     motor: hipotesesDoMotorDaColuna(r.motor),
     selecao: hipotesesDeSelecaoDaColuna(r.selecao),
+    linha: hipotesesDaLinhaDaColuna(r.linha),
   };
 }
 

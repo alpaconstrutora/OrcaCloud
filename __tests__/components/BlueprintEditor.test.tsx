@@ -5708,6 +5708,42 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     expect(within(gavetaLinha).getByRole('button', { name: /^Aceitar \(\d+\)$/ })).toBeInTheDocument();
     catalogoDeTipos.length = 0;
   }, 90000);
+
+  /**
+   * CLIMATIZAÇÃO E6 (05/10/2026): a gaveta do VRF liga as evaporadoras sem sistema
+   * à condensadora VRF, lança a árvore com os derivadores e a conferência passa a
+   * dizer "todas alcançadas" e "todas com derivador".
+   */
+  it('Mecânica › VRF: liga as evaporadoras à condensadora, lança a árvore e confere', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(nivel.model, [
+      w(0, 0, 20000, 0),
+      w(20000, 0, 20000, 4000),
+      w(20000, 4000, 0, 4000),
+      w(0, 4000, 0, 0),
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'VRF', tipoHidraulico: 'CONDENSADORA_VRF', at: k.point(-700, 2000), cotaMm: 850, capacidadeBtuH: 96000 } as never,
+      ...[4000, 8000, 12000, 16000].map((x) => ({ type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: `EV ${x}`, tipoHidraulico: 'EVAPORADORA_HI_WALL', at: k.point(x, 3815), cotaMm: 2200, capacidadeBtuH: 24000 }) as never),
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^VRF$/));
+    const gaveta = await screen.findByTestId('tarefa-vrf');
+    const linhaDoSistema = () => within(gaveta).getByRole('row', { name: 'Sistema CD-1' });
+    expect(linhaDoSistema()).toHaveTextContent(/^CD-1/);
+    await user.click(within(linhaDoSistema()).getByRole('button', { name: 'Ligar 4 sem sistema' }));
+    await waitFor(() => expect(within(gaveta).getByTestId('vrf-resumo')).toHaveTextContent(/Lança 1 árvore/));
+    expect(within(gaveta).getByTestId('vrf-resumo')).toHaveTextContent(/4 evaporadora\(s\), 3 derivador\(es\)/);
+    expect(linhaDoSistema()).toHaveTextContent('100 %');
+    await user.click(within(gaveta).getByRole('button', { name: 'Lançar a rede VRF' }));
+    await waitFor(() => expect(within(gaveta).getByTestId('vrf-conferencia')).toHaveTextContent(/todas alcançadas/));
+    expect(within(gaveta).getByTestId('vrf-conferencia')).toHaveTextContent(/3 derivação\(ões\), todas com derivador/);
+    expect(within(gaveta).getByRole('button', { name: /^Aceitar \(\d+\)$/ })).toBeInTheDocument();
+  }, 90000);
 });
 
 /**

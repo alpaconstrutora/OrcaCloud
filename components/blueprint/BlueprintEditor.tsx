@@ -260,6 +260,8 @@ import { modelosDoCatalogo, selecaoDoNivel } from '../../utils/blueprintSelecaoC
 import { planejarEquipamentosSplit } from '../../utils/blueprintPosicaoSplit';
 import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas } from '../../utils/blueprintLinhaFrigorigena';
 import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
+import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, ROTULO_DA_LINHA_VRF } from '../../utils/blueprintVrf';
+import PainelVrf from './PainelVrf';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
@@ -1180,6 +1182,8 @@ const ROTULO_DA_TAREFA = {
   selecaoSplit: 'Seleção e posição do split',
   // LINHA FRIGORÍGENA E DRENO (05/10/2026, E5): da evaporadora à condensadora pela parede, dimensionada; o dreno por gravidade ou bomba.
   linhaFrigorigena: 'Linha frigorígena e dreno',
+  // VRF (05/10/2026, E6): uma condensadora, N evaporadoras, a árvore com derivadores pelo somatório a jusante.
+  vrf: 'Sistema VRF',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -3101,6 +3105,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const conferenciaDaLinhaDoNivel = useMemo(
     () => (tarefa === 'linhaFrigorigena' && levelId ? conferenciaDaLinha(editor.model, levelId, climatizacaoDoEstudo.hipoteses.linha) : []),
     [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.linha],
+  );
+  /** CLIMATIZAÇÃO E6 (05/10/2026): o plano da árvore VRF, a análise de cada sistema e a conferência — só com a tarefa aberta. */
+  const planoDoVrf = useMemo(
+    () => (tarefa === 'vrf' && levelId ? planejarVrf(editor.model, levelId, climatizacaoDoEstudo.hipoteses.linha) : null),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.linha],
+  );
+  const analisesDoVrf = useMemo(() => (tarefa === 'vrf' && levelId ? analisesDoNivel(editor.model, levelId) : []), [tarefa, levelId, editor.model]);
+  const conferenciaDoVrfDoNivel = useMemo(
+    () => (tarefa === 'vrf' && levelId ? conferenciaDoVrf(editor.model, levelId, climatizacaoDoEstudo.hipoteses.vrf) : []),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.vrf],
   );
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
@@ -11848,6 +11862,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={() => alternarTarefa('linhaFrigorigena')}
                 ajuda="Linha frigorígena da evaporadora à condensadora pela parede (desvia de pilar), com diâmetros, isolamento, comprimento e desnível pela faixa de fabricante (hipótese), e o dreno de condensado por gravidade — ou com bomba quando o descarte fica alto — num lote; conferência com gás adicional e curvas"
               />
+              <BotaoDoRibbon
+                icone={Snowflake}
+                rotulo="VRF"
+                ativo={tarefaAberta === 'vrf'}
+                onClick={() => alternarTarefa('vrf')}
+                ajuda="Sistema VRF: uma condensadora com N evaporadoras; a árvore pela parede com um derivador em cada divisão e o diâmetro de cada trecho pelo somatório a jusante; taxa de combinação, comprimentos e desníveis conferidos contra os limites (hipóteses de catálogo); trocar a condensadora do sistema"
+              />
             </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
@@ -14953,6 +14974,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'cargaTermica' && <Sun className="h-5 w-5 text-amber-600" />}
               {tarefaAberta === 'selecaoSplit' && <Snowflake className="h-5 w-5 text-sky-600" />}
               {tarefaAberta === 'linhaFrigorigena' && <Snowflake className="h-5 w-5 text-violet-600" />}
+              {tarefaAberta === 'vrf' && <Snowflake className="h-5 w-5 text-indigo-600" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15522,11 +15544,50 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 hip={climatizacaoDoEstudo.hipoteses.linha}
                 onHip={(linha) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, linha })}
                 sugeridos={{
-                  trechos: (editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && (t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC')).map((t) => t.id),
+                  trechos: (editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && ((t.disciplina === 'FRIGORIGENA' && t.rotulo !== ROTULO_DA_LINHA_VRF) || t.disciplina === 'DRENO_AC')).map((t) => t.id),
                   terminais: (editor.model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'DRENO_AC').map((t) => t.id),
                 }}
                 onLancar={() => {
                   if (planoDaLinha.comandos.length) editor.runBatch(planoDaLinha.comandos);
+                }}
+                onAceitar={(s) =>
+                  editor.runBatch([
+                    ...s.trechos.map((trechoId) => ({ type: 'SetTrechoProps', trechoId, sugerido: false }) as Command),
+                    ...s.terminais.map((terminalId) => ({ type: 'SetTerminalProps', terminalId, sugerida: false }) as Command),
+                  ])
+                }
+                onSelecionar={selecionar}
+              />
+            </div>
+          )}
+
+          {tarefaAberta === 'vrf' && planoDoVrf && (
+            <div data-testid="tarefa-vrf">
+              <PainelVrf
+                analises={analisesDoVrf}
+                plano={planoDoVrf}
+                conferencia={conferenciaDoVrfDoNivel}
+                hip={climatizacaoDoEstudo.hipoteses.vrf}
+                onHip={(vrf) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, vrf })}
+                semSistema={levelId ? evaporadorasSemSistema(editor.model, levelId).map((t) => t.id) : []}
+                condensadoras={(editor.model.terminais ?? [])
+                  .filter((t) => t.levelId === levelId && (TIPOS_DE_CONDENSADORA as readonly string[]).includes(t.tipoHidraulico ?? ''))
+                  .map((t) => ({ id: t.id, nome: numerosDeClimatizacao.get(t.id)?.numero ?? t.tipo }))}
+                onLigar={(condensadoraId) => {
+                  if (!levelId) return;
+                  const cmds = comandosLigarAoVrf(condensadoraId, evaporadorasSemSistema(editor.model, levelId).map((t) => t.id));
+                  if (cmds.length) editor.runBatch(cmds);
+                }}
+                onTrocar={(deId, paraId) => {
+                  const cmds = comandosTrocarCondensadora(editor.model, deId, paraId);
+                  if (cmds.length) editor.runBatch(cmds);
+                }}
+                sugeridos={{
+                  trechos: (editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && t.rotulo === ROTULO_DA_LINHA_VRF).map((t) => t.id),
+                  terminais: (editor.model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.tipoHidraulico === 'DERIVADOR_VRF').map((t) => t.id),
+                }}
+                onLancar={() => {
+                  if (planoDoVrf.comandos.length) editor.runBatch(planoDoVrf.comandos);
                 }}
                 onAceitar={(s) =>
                   editor.runBatch([

@@ -1866,3 +1866,80 @@ de 15 m"), `components/PainelLinhaFrigorigena.test.tsx` (2), editor "Mecânica �
   `vite build` exit 0. `check-ui-standard` nos 2 `.tsx` e `check-xss-sinks` exit 0.
 - Fica para a prova no app real: lançar "Linha e dreno" depois do Split e ver a linha subindo da
   evaporadora, correndo pela parede e descendo na condensadora, e o dreno até o ponto ao lado dela.
+
+### Etapa 6.1 + 6.2 + 6.3 — 05/10/2026 (frente `clima-e6`, **sem bump** — desvio do roadmap, dito abaixo)
+
+**Decisão de desenho (sem bump).** O roadmap previa bump. Não foi preciso nada gravado novo: o
+SISTEMA é a relação `condensadoraId` da E3 (evaporadoras e derivadores apontando uma
+CONDENSADORA_VRF), o nome do sistema é o rótulo ou o número derivado da condensadora (CD-n), e os
+diâmetros por trecho usam os campos da E3 (`bitolaMm` = líquido, `bitolaSuccaoMm`, `isolamentoMm`).
+O modelo de derivador sai do somatório a jusante (derivado) e vai no `tipo` da peça.
+
+**Três conflitos resolvidos antes (achados lendo o código):**
+1. O relançar da E5 apagava TODA linha FRIGORIGENA sugerida do pavimento — levaria a árvore do VRF.
+   Agora a árvore do VRF leva o rótulo `ROTULO_DA_LINHA_VRF` (molde do `ROTULO_DO_ALIMENTADOR`) e
+   cada planejador só apaga o que é seu.
+2. O relançar do Split (E4) apagava qualquer peça de climatização sugerida — inclusive ponto e bomba
+   de dreno da E5 (defeito que já existia desde a E5) e os derivadores da E6. Agora só evaporadora,
+   condensadora de split e o ponto de força.
+3. A E5 só fazia o dreno de quem também ganhava linha: evaporadora de VRF ficaria sem dreno, e uma
+   linha aceita sem dreno nunca ganharia um. Agora são planejados SEPARADOS: a linha só para split,
+   o dreno para toda evaporadora com sistema (`LinhaPlanejada.linha` diz qual foi).
+
+**`utils/blueprintVrf.ts`.**
+- E6.1 `sistemasVrfDoNivel` (condensadora VRF → evaporadoras do pavimento, as de outro pavimento à
+  parte, derivadores), `evaporadorasSemSistema`, `comandosLigarAoVrf`, `comandosTrocarCondensadora`
+  (todo `condensadoraId` que apontava uma passa a apontar a outra — um lote).
+- E6.2 `DIAMETROS_DO_VRF` por somatório a jusante (até 19,1k 6/13 · 54,6k 10/16 · 76,4k 10/19 ·
+  112,6k 13/22 · 157k 13/29 · 238,8k 16/29 · 334k 19/35 · acima 22/41 mm) e `DERIVADORES_DO_VRF`
+  (até 22,4 / 33 / 70 kW / acima) — **HIPÓTESE de catálogo, CONFERIR** (`FONTE_DO_VRF` no painel);
+  `analisarVrf` lê a rede EXISTENTE (Dijkstra a partir do nó da condensadora com o trecho de
+  chegada): alcançadas, somatório a jusante por trecho e por nó, nós de DERIVAÇÃO (≥ 2 trechos
+  filhos usados), derivador presente em cada um, diâmetro pedido × encontrado, taxa de combinação
+  (Σ ÷ condensadora; `null` sem capacidade), comprimento total, até a mais distante, após a 1ª
+  derivação, desníveis absolutos (elevação + cota). Confere o traçado automático e o desenhado à mão.
+- E6.3 `planejarVrf`: UMA árvore de Steiner pelas paredes (`arvorePelasParedes` com todas as
+  evaporadoras como pendentes — as arestas já saem orientadas da raiz, e é isso que dá o "a
+  jusante"); a raiz encaixa mesmo longe da parede (o raio cresce até a condensadora); sem parede, a
+  rede sai em ESTRELA da condensadora (avisado). Sobe da condensadora, corre na cota da linha, um
+  ramal de cada encaixe até a evaporadora, desce; cada trecho com o Ø e o isolamento do somatório a
+  jusante; um DERIVADOR_VRF (condensadoraId = a VRF) em cada nó com ≥ 2 filhos. Sistema já ligado
+  (rede confirmada) fica; rede PARCIAL confirmada é dita e não é sobreposta. Prova numa cópia.
+- `conferenciaDoVrf`: SISTEMA, TAXA (50–130 %), ALCANCE, DERIVADORES, DIAMETROS, LIMITES (total
+  300 m, mais distante 150 m, após a 1ª 40 m, desníveis 50/15 m — hipóteses em `HipotesesClimatizacao.vrf`,
+  editáveis). Os comprimentos são de tubulação REAL; o "equivalente" do catálogo soma conexões (dito).
+- `conexoes.ts`: o DERIVADOR_VRF no nó É a conexão — não se conta tê por cima dele (derivado; goldens
+  intactos).
+
+**Editor.** Tarefa `vrf` (botão "VRF" ao lado de "Linha e dreno"); `PainelVrf` (limites, tabela por
+sistema com Σ/condensadora, taxa, comprimentos, derivações; "Ligar N sem sistema"; "Trocar
+condensadora…"; Lançar/Relançar e Aceitar com motivo; conferência). O "Aceitar" da Linha e dreno
+deixou de pegar os trechos do VRF.
+
+**Não entrou (dito):** a prumada do VRF entre pavimentos (a evaporadora de outro pavimento é
+acusada como AVISO); o comprimento EQUIVALENTE (conexões); a carga adicional de gás do VRF; o coletor
+(header) como peça — na estrela sem parede sai um derivador só na saída.
+
+**Prova.** `blueprintVrf.test.ts` (7: tabelas e hipóteses; sistema = relação da E3, ligar e TROCAR a
+condensadora por comando; **árvore com 3 níveis de derivação** no corredor 20 × 4 m com 4 × 24.000
+— derivadores em 4/8/12 m com "até 33 kW"/"até 22,4 kW"/"até 22,4 kW", Ø 13/22 → 10/19 → 10/16 →
+10/16 ao longo da parede, nenhuma ponta aberta, nenhum tê por cima de derivador, taxa 100 %, total
+22,29 m, mais distante 20,835 m, após a 1ª 12,485 m, conferência toda OK; relançar idempotente e
+aceitar para; taxa 200 % / tronco afinado / limite de 10 m / derivador apagado → FALTA com o
+motivo; estrela sem parede e condensadora sem evaporadora; convivência E5 × E6 — a E5 faz só os 4
+drenos e o relançar de uma não apaga o da outra), `components/PainelVrf.test.tsx` (2), editor
+"Mecânica › VRF" (Ligar 4 → Lança 1 árvore, 3 derivadores, 100 % → Lançar → todas alcançadas,
+todas com derivador → Aceitar). Testes da E5 ajustados ao dreno separado da linha.
+
+### Fecho da Etapa 6 — 05/10/2026
+
+- Sem migration, **sem bump** (ver a decisão acima); goldens intactos.
+- **Suíte inteira**: a primeira passada NÃO fechou (7425 + 35 de 7645, vitest exit 1 sem falha listada):
+  o worker do `BlueprintEditor.test.tsx` caiu com 41 aprovados e 186 "pendentes" — a queda
+  intermitente conhecida. O arquivo sozinho fechou **227/227**. Conta: 7645 = 7611 ✅ + 34 pulados de
+  propósito + 0 falhas.
+- Build em duas partes (o encadeado segfaulta no Node 24): `tsc --noEmit` exit 0; `vite build` caiu
+  1× com segfault ainda no "transforming" (sem erro de código) e passou na repetição (exit 0).
+  `check-ui-standard` nos 2 `.tsx` e `check-xss-sinks` exit 0.
+- Fica para a prova no app real: inserir uma Condensadora VRF, "Ligar N sem sistema", lançar a rede
+  e ver a árvore com os derivadores; conferir a taxa e os comprimentos.

@@ -81,6 +81,16 @@ export interface SistemaSplit {
   condensadora: Terminal;
 }
 
+/**
+ * E6 (05/10/2026): o rótulo dos trechos da árvore do VRF. Cada planejador só apaga
+ * o que é SEU ao relançar — a linha do split não pode levar junto a árvore do VRF.
+ */
+export const ROTULO_DA_LINHA_VRF = 'Linha VRF';
+const ehDoVrf = (t: Pick<Trecho, 'rotulo'>) => t.rotulo === ROTULO_DA_LINHA_VRF;
+
+/** O sistema é de SPLIT (uma evaporadora, uma condensadora, uma linha). O VRF é a E6. */
+export const ehSplit = (s: SistemaSplit) => s.condensadora.tipoHidraulico !== 'CONDENSADORA_VRF';
+
 /** As evaporadoras do pavimento com condensadora (no mesmo pavimento — a prumada entre pavimentos é backlog). */
 export function sistemasDoNivel(model: BlueprintModel, levelId: ObjectId): SistemaSplit[] {
   const porId = new Map((model.terminais ?? []).map((t) => [t.id, t]));
@@ -117,6 +127,8 @@ export interface LinhaPlanejada {
   evaporadoraId: ObjectId;
   condensadoraId: ObjectId;
   nome: string;
+  /** E6: `false` quando só o DRENO foi planejado (evaporadora de VRF, ou linha já confirmada). */
+  linha: boolean;
   faixa: FaixaDaLinha;
   comprimentoMm: number;
   desnivelMm: number;
@@ -138,8 +150,8 @@ export interface PlanoDaLinha {
 
 const mesmoP = (a: P2, b: P2) => a.x === b.x && a.y === b.y;
 
-/** Um planejador de trechos com deduplicação por nó (o mesmo `addTrecho` do eletroduto). */
-function lote(model: BlueprintModel) {
+/** Um planejador de trechos com deduplicação por nó (o mesmo `addTrecho` do eletroduto). A E6 (VRF) usa o mesmo. */
+export function lote(model: BlueprintModel) {
   const chave = fazerChave(model.levels);
   const comandos: Command[] = [];
   const arestas: Aresta[] = [];
@@ -202,11 +214,22 @@ function pontoDeDrenoMaisPerto(model: BlueprintModel, evap: Terminal): Terminal 
   return pontos.reduce((m, t) => (Math.hypot(t.at.x - evap.at.x, t.at.y - evap.at.y) < Math.hypot(m.at.x - evap.at.x, m.at.y - evap.at.y) ? t : m));
 }
 
+/** O dreno da evaporadora já chega a um ponto de dreno ou a uma bomba de dreno pela rede DRENO_AC? */
+function drenoDaEvaporadora(model: BlueprintModel, e: Terminal): boolean {
+  const arestas = arestasDe(model, 'DRENO_AC');
+  if (arestas.length === 0) return false;
+  const de = noDe(model, e);
+  return (model.terminais ?? [])
+    .filter((t) => t.levelId === e.levelId && (t.tipoHidraulico === 'PONTO_DRENO' || t.tipoHidraulico === 'BOMBA_DRENO'))
+    .some((t) => !!menorCaminhoEntre(de, noDe(model, t), arestas));
+}
+
 /** O plano da linha e do dreno de todos os sistemas do pavimento. */
 export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): PlanoDaLinha {
   const vazio = (motivo: string, apagar: Command[] = []): PlanoDaLinha => ({ comandos: apagar, aCriar: [], jaLigados: [], semLugar: [], apagados: apagar.length, motivo, resumo: [] });
-  // Relançar apaga o que este planejador sugeriu antes: trechos da linha e do dreno e as peças de dreno sugeridas.
-  const sugeridos = (model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && (t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC'));
+  // Relançar apaga o que este planejador sugeriu antes: trechos da linha do SPLIT e do dreno e as peças de
+  // dreno sugeridas. A árvore do VRF (rótulo próprio) é da E6 e fica.
+  const sugeridos = (model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && ((t.disciplina === 'FRIGORIGENA' && !ehDoVrf(t)) || t.disciplina === 'DRENO_AC'));
   const pecasSugeridas = (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'DRENO_AC' && (t.tipoHidraulico === 'PONTO_DRENO' || t.tipoHidraulico === 'BOMBA_DRENO'));
   const apagar: Command[] = [
     ...sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }) as Command),
@@ -230,8 +253,13 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
 
   for (const s of sistemas) {
     const nome = `${s.evaporadora.tipo}`;
-    const existente = linhaExistente(base, s);
-    if (existente && !existente.sugerida) {
+    const e = s.evaporadora;
+    const c = s.condensadora;
+    // E6: a LINHA é só do split (o VRF tem a árvore da E6); o DRENO é de TODA evaporadora com
+    // sistema. Cada um só é planejado se ainda não existe confirmado — `base` já não tem sugeridos.
+    const precisaLinha = ehSplit(s) && !linhaExistente(base, s);
+    const precisaDreno = !drenoDaEvaporadora(base, e);
+    if (!precisaLinha && !precisaDreno) {
       jaLigados.push(nome);
       continue;
     }
@@ -239,19 +267,24 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     const isolamentoMm = isolamentoDaLinhaMm(s.evaporadora.capacidadeBtuH ?? s.condensadora.capacidadeBtuH, hip);
     const avisos: string[] = [];
     const cotaLinha = Math.round(hip.cotaDaLinhaMm);
-    const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, s.condensadora.at, hip);
-    if (!caminho.pelaParede) avisos.push('sem parede ao alcance: a linha vai em reta (desviando de pilar)');
-    const baseLinha = { levelId, disciplina: 'FRIGORIGENA' as const, bitolaMm: faixa.liquidoMm, bitolaSuccaoMm: faixa.succaoMm, isolamentoMm, sugerido: true };
-    // Sobe da evaporadora à cota da linha, corre, desce à condensadora.
-    const p = caminho.pontos;
-    const e = s.evaporadora;
-    const c = s.condensadora;
-    const antes = l.comandos.length;
-    l.add(baseLinha, e.at, e.cotaMm, e.at, cotaLinha);
-    for (let i = 0; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
-    l.add(baseLinha, c.at, cotaLinha, c.at, c.cotaMm);
-    const comprimento = l.arestas.slice(antes).reduce((acc, a) => acc + a.mm, 0);
+    let comprimento = 0;
     const desnivel = Math.abs(e.cotaMm - c.cotaMm);
+    if (precisaLinha) {
+      const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, s.condensadora.at, hip);
+      if (!caminho.pelaParede) avisos.push('sem parede ao alcance: a linha vai em reta (desviando de pilar)');
+      const baseLinha = { levelId, disciplina: 'FRIGORIGENA' as const, bitolaMm: faixa.liquidoMm, bitolaSuccaoMm: faixa.succaoMm, isolamentoMm, sugerido: true };
+      // Sobe da evaporadora à cota da linha, corre, desce à condensadora.
+      const p = caminho.pontos;
+      const antes = l.comandos.length;
+      l.add(baseLinha, e.at, e.cotaMm, e.at, cotaLinha);
+      for (let i = 0; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
+      l.add(baseLinha, c.at, cotaLinha, c.at, c.cotaMm);
+      comprimento = l.arestas.slice(antes).reduce((acc, a) => acc + a.mm, 0);
+    }
+    if (!precisaDreno) {
+      aCriar.push({ evaporadoraId: e.id, condensadoraId: c.id, nome, linha: precisaLinha, faixa, comprimentoMm: comprimento, desnivelMm: desnivel, dreno: null, avisos });
+      continue;
+    }
     // E5.4 — o DRENO: ao ponto de dreno existente mais perto, senão a um ponto novo na fachada, junto da condensadora.
     const existentePonto = pontoDeDrenoMaisPerto(base, e);
     let destinoAt: P2;
@@ -319,11 +352,11 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
       });
     }
     const comprimentoDreno = l.arestas.slice(antesD).reduce((acc, a) => acc + a.mm, 0);
-    aCriar.push({ evaporadoraId: e.id, condensadoraId: c.id, nome, faixa, comprimentoMm: comprimento, desnivelMm: desnivel, dreno: { destino, comBomba, comprimentoMm: comprimentoDreno }, avisos });
+    aCriar.push({ evaporadoraId: e.id, condensadoraId: c.id, nome, linha: precisaLinha, faixa, comprimentoMm: comprimento, desnivelMm: desnivel, dreno: { destino, comBomba, comprimentoMm: comprimentoDreno }, avisos });
   }
 
   if (aCriar.length === 0) {
-    const motivo = jaLigados.length ? 'todas as evaporadoras já têm linha confirmada' : null;
+    const motivo = jaLigados.length ? 'todas as evaporadoras já têm linha (split) e dreno confirmados' : null;
     return { comandos: apagar, aCriar: [], jaLigados, semLugar, apagados: apagar.length, motivo, resumo: [] };
   }
   // Prova na cópia: o lote aplica?
@@ -334,7 +367,11 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     return vazio(`o plano não aplica: ${err instanceof Error ? err.message : String(err)}`, apagar);
   }
   const m1 = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-  const resumo = aCriar.map((x) => `${x.nome}: linha ${m1(x.comprimentoMm)} m (Ø ${x.faixa.liquidoMm}/${x.faixa.succaoMm} mm, máx. ${x.faixa.comprimentoMaxM} m)${x.dreno ? ` · dreno ${m1(x.dreno.comprimentoMm)} m ${x.dreno.comBomba ? 'com bomba' : 'por gravidade'} ${x.dreno.destino === 'PONTO_EXISTENTE' ? 'ao ponto de dreno' : 'a um ponto novo na fachada'}` : ''}${x.avisos.length ? ` — ${x.avisos.join('; ')}` : ''}`);
+  const resumo = aCriar.map((x) => {
+    const linha = x.linha ? `linha ${m1(x.comprimentoMm)} m (Ø ${x.faixa.liquidoMm}/${x.faixa.succaoMm} mm, máx. ${x.faixa.comprimentoMaxM} m)` : '';
+    const dreno = x.dreno ? `dreno ${m1(x.dreno.comprimentoMm)} m ${x.dreno.comBomba ? 'com bomba' : 'por gravidade'} ${x.dreno.destino === 'PONTO_EXISTENTE' ? 'ao ponto de dreno' : 'a um ponto novo na fachada'}` : '';
+    return `${x.nome}: ${[linha, dreno].filter(Boolean).join(' · ')}${x.avisos.length ? ` — ${x.avisos.join('; ')}` : ''}`;
+  });
   return { comandos, aCriar, jaLigados, semLugar, apagados: apagar.length, motivo: null, resumo };
 }
 
@@ -362,7 +399,8 @@ export interface LinhaConferida {
 export function linhasConferidas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): LinhaConferida[] {
   const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
   const cx = conexoesDerivadas(model);
-  return sistemasDoNivel(model, levelId).map((s) => {
+  // E6: só os sistemas de SPLIT — a árvore do VRF tem a sua conferência (`blueprintVrf.ts`).
+  return sistemasDoNivel(model, levelId).filter(ehSplit).map((s) => {
     const cap = s.evaporadora.capacidadeBtuH ?? s.condensadora.capacidadeBtuH ?? null;
     const faixa = faixaDaLinha(cap);
     const linha = linhaExistente(model, s);

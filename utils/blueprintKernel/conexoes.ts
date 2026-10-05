@@ -265,6 +265,8 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
     const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
 
     if (!manual && dentroDeCaixa(no)) continue;
+    // E6 (05/10/2026): o DERIVADOR do VRF no nó É a conexão (o refnet) — não se conta tê por cima dele.
+    if (!manual && terminais.some((t) => t.tipoHidraulico === 'DERIVADOR_VRF')) continue;
     if (manual) {
       conexoes.push({ ...base, tipo: manual, origem: 'MANUAL', ...(menor !== maior ? { paraMm: menor } : {}) });
       continue;

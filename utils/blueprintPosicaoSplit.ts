@@ -25,13 +25,16 @@
  * recalculado (ele é derivado do modelo), então os ids batem.
  */
 import type { BlueprintModel, Command, ObjectId, Point, Space, Wall } from './blueprintKernel';
-import { TIPOS_DE_CLIMATIZACAO, applyBatch } from './blueprintKernel';
+import { TIPOS_DE_EVAPORADORA, applyBatch } from './blueprintKernel';
 import { pointInPolygon, signedArea, interiorPoint } from './blueprintKernel/geom';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { ladosDePiso, trechosUtilizaveis, type LadoDoAmbiente } from './blueprintDistribuicao';
 import type { CargaTermicaDoNivel } from './blueprintCargaTermica';
 import type { HipotesesDeSelecao } from './blueprintClimatizacao';
 import { potenciaEletricaVA, type ModeloDoCatalogo, type SelecaoDoNivel } from './blueprintSelecaoClimatizacao';
+
+/** As peças de climatização que o planejador do split cria (e as únicas que o relançar dele apaga). */
+const PECAS_DO_SPLIT = [...TIPOS_DE_EVAPORADORA, 'CONDENSADORA_SPLIT'] as const;
 
 /** Folga de canto e de vão ao posicionar a evaporadora, mm. */
 export const FOLGA_DA_EVAPORADORA_MM = 300;
@@ -179,8 +182,11 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
   const vazio = (motivo: string, apagados = 0, comandos: Command[] = []): PlanoDeEquipamentosSplit => ({ comandos, aCriar: [], jaAtendidos: [], semLugar: [], apagados, motivo, resumo: [] });
   const levelId = selecao.levelId;
   // As sugestões anteriores deste planejador somem no relançar (peça de climatização sugerida + o ponto elétrico sugerido do aparelho).
+  // ⚠️ E6 (05/10/2026): só as peças que ESTE planejador cria (evaporadora, condensadora de split, ponto de
+  // força). Antes apagava qualquer peça de climatização sugerida — levava junto o ponto/bomba de dreno da E5
+  // e os derivadores do VRF da E6.
   const sugeridas = (model.terminais ?? []).filter(
-    (t) => t.levelId === levelId && !!t.sugerida && ((!!t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico)) || t.tipoEletrico === 'AR_CONDICIONADO'),
+    (t) => t.levelId === levelId && !!t.sugerida && ((!!t.tipoHidraulico && (PECAS_DO_SPLIT as readonly string[]).includes(t.tipoHidraulico)) || t.tipoEletrico === 'AR_CONDICIONADO'),
   );
   const apagar: Command[] = sugeridas.map((t) => ({ type: 'DeleteTerminal', terminalId: t.id }) as Command);
   const idsSugeridas = new Set(sugeridas.map((t) => t.id));

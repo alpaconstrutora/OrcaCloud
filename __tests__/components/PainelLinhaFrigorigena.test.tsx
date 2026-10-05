@@ -17,7 +17,7 @@ const linhas: LinhaConferida[] = [
 ];
 const plano: PlanoDaLinha = {
   comandos: [{ type: 'AddLevel', name: 'x', elevationMm: 0, defaultHeightMm: 2800 }],
-  aCriar: [{ evaporadoraId: 'e2', condensadoraId: 'c2', nome: 'Split 9k', faixa: FAIXAS_DA_LINHA[0], comprimentoMm: 6200, desnivelMm: 500, dreno: { destino: 'PONTO_NOVO_NA_FACHADA', comBomba: false, comprimentoMm: 4100 }, avisos: [] }],
+  aCriar: [{ evaporadoraId: 'e2', condensadoraId: 'c2', nome: 'Split 9k', linha: true, faixa: FAIXAS_DA_LINHA[0], comprimentoMm: 6200, desnivelMm: 500, dreno: { destino: 'PONTO_NOVO_NA_FACHADA', comBomba: false, comprimentoMm: 4100 }, avisos: [] }],
   jaLigados: ['Split 18k'],
   semLugar: [],
   apagados: 0,

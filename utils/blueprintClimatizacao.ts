@@ -398,6 +398,48 @@ export function hipotesesDaLinhaDaColuna(raw: unknown): HipotesesDaLinha {
   return saida;
 }
 
+// ─── E6 (05/10/2026): os LIMITES do VRF ──────────────────────────────────────
+
+/**
+ * Os limites do sistema VRF (E6.2/E6.3) — valores típicos de catálogo,
+ * transcritos de memória: HIPÓTESE, CONFERIR com o fabricante do equipamento.
+ * Comprimentos são de tubulação REAL (o "equivalente" de catálogo soma as
+ * conexões — a conferência diz isso).
+ */
+export interface HipotesesDoVrf {
+  /** Taxa de combinação (Σ evaporadoras ÷ condensadora), faixa aceita, %. */
+  taxaMinPct: number;
+  taxaMaxPct: number;
+  /** Comprimento total de tubulação (líquido), m. */
+  comprimentoTotalMaxM: number;
+  /** Da condensadora à evaporadora mais distante, m. */
+  ateMaisDistanteMaxM: number;
+  /** Da 1ª derivação à evaporadora mais distante, m. */
+  aposPrimeiraDerivacaoMaxM: number;
+  /** Desnível condensadora–evaporadora e entre evaporadoras, m. */
+  desnivelCondEvapMaxM: number;
+  desnivelEntreEvapMaxM: number;
+}
+
+export const HIPOTESES_DO_VRF_PADRAO: HipotesesDoVrf = { taxaMinPct: 50, taxaMaxPct: 130, comprimentoTotalMaxM: 300, ateMaisDistanteMaxM: 150, aposPrimeiraDerivacaoMaxM: 40, desnivelCondEvapMaxM: 50, desnivelEntreEvapMaxM: 15 };
+
+export const LIMITES_DO_VRF: Record<keyof HipotesesDoVrf, { min: number; max: number }> = {
+  taxaMinPct: { min: 10, max: 100 },
+  taxaMaxPct: { min: 100, max: 200 },
+  comprimentoTotalMaxM: { min: 10, max: 2000 },
+  ateMaisDistanteMaxM: { min: 5, max: 500 },
+  aposPrimeiraDerivacaoMaxM: { min: 5, max: 200 },
+  desnivelCondEvapMaxM: { min: 1, max: 200 },
+  desnivelEntreEvapMaxM: { min: 1, max: 100 },
+};
+
+export function hipotesesDoVrfDaColuna(raw: unknown): HipotesesDoVrf {
+  const r = objeto(raw);
+  const saida = { ...HIPOTESES_DO_VRF_PADRAO };
+  for (const k of Object.keys(HIPOTESES_DO_VRF_PADRAO) as (keyof HipotesesDoVrf)[]) saida[k] = numeroNaFaixa(r[k], LIMITES_DO_VRF[k], HIPOTESES_DO_VRF_PADRAO[k]);
+  return saida;
+}
+
 // ─── O conjunto e o leitor da coluna ─────────────────────────────────────────
 
 export interface HipotesesClimatizacao {
@@ -412,6 +454,8 @@ export interface HipotesesClimatizacao {
   selecao: HipotesesDeSelecao;
   /** E5: a linha frigorígena e o dreno (cota, encaixe, pré-carga, declividade, isolamento, DN). */
   linha: HipotesesDaLinha;
+  /** E6: os limites do VRF (taxa de combinação, comprimentos, desníveis). */
+  vrf: HipotesesDoVrf;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
@@ -422,6 +466,7 @@ export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   motor: HIPOTESES_DO_MOTOR_PADRAO,
   selecao: HIPOTESES_DE_SELECAO_PADRAO,
   linha: HIPOTESES_DA_LINHA_PADRAO,
+  vrf: HIPOTESES_DO_VRF_PADRAO,
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -473,6 +518,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     motor: hipotesesDoMotorDaColuna(r.motor),
     selecao: hipotesesDeSelecaoDaColuna(r.selecao),
     linha: hipotesesDaLinhaDaColuna(r.linha),
+    vrf: hipotesesDoVrfDaColuna(r.vrf),
   };
 }
 

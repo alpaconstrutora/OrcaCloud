@@ -126,11 +126,23 @@ describe('climatização E5.1/E5.2/E5.4 · linha e dreno do split lançado', () 
     const m2 = applyBatch(m1, p2.comandos).model;
     const assinatura = (mm: BlueprintModel) => trechos(mm).map((x) => [x.disciplina, x.a.x, x.a.y, x.cotaAMm, x.b.x, x.b.y, x.cotaBMm].join(',')).sort();
     expect(assinatura(m2)).toEqual(assinatura(m1));
-    const aceito = applyBatch(m2, trechos(m2).filter((x) => x.disciplina === 'FRIGORIGENA').map((x) => ({ type: 'SetTrechoProps', trechoId: x.id, sugerido: false }) as Command)).model;
+    // E6: linha e dreno são planejados SEPARADOS — aceitar só a linha deixa o dreno para o próximo
+    // lançamento (só ele, sem linha nova).
+    const soLinha = applyBatch(m2, trechos(m2).filter((x) => x.disciplina === 'FRIGORIGENA').map((x) => ({ type: 'SetTrechoProps', trechoId: x.id, sugerido: false }) as Command)).model;
+    const pDreno = planejarLinhasFrigorigenas(soLinha, t, hipLinha);
+    expect(pDreno.aCriar).toHaveLength(1);
+    expect(pDreno.aCriar[0]).toMatchObject({ linha: false });
+    expect(pDreno.aCriar[0].dreno).not.toBeNull();
+    expect(pDreno.comandos.filter((c) => c.type === 'AddTrecho' && (c as { disciplina: string }).disciplina === 'FRIGORIGENA')).toEqual([]);
+    // Aceitar tudo (linha, dreno e o ponto de dreno): o planejador não mexe mais.
+    const aceito = applyBatch(m2, [
+      ...trechos(m2).filter((x) => x.sugerido).map((x) => ({ type: 'SetTrechoProps', trechoId: x.id, sugerido: false }) as Command),
+      ...terminais(m2).filter((x) => x.sugerida && x.disciplina === 'DRENO_AC').map((x) => ({ type: 'SetTerminalProps', terminalId: x.id, sugerida: false }) as Command),
+    ]).model;
     const p3 = planejarLinhasFrigorigenas(aceito, t, hipLinha);
     expect(p3.jaLigados).toHaveLength(1);
     expect(p3.aCriar).toHaveLength(0);
-    expect(p3.motivo).toMatch(/já têm linha confirmada/);
+    expect(p3.motivo).toMatch(/já têm linha \(split\) e dreno confirmados/);
   });
 
   it('descarte ALTO: um ponto de dreno declarado a 2,50 m ganha bomba de dreno e o recalque não cobra declividade', () => {

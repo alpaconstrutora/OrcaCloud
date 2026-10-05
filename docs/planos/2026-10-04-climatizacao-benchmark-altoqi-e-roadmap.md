@@ -1566,3 +1566,11 @@ lê. Emissão com ART fica para a E8.4 (exige o CHECK da tabela de projeto execu
 **Prova.** `blueprintMemorialClimatizacao.test.ts` (3: 4 seções, CONFERIR no topo, TBS declarada,
 TOTAL da Sala igual ao da tela, insolação marcada `*`, Cozinha fora, conferência com "ok"; descritivo
 com total, NBR 16655-3, teto/piso e o encargo do responsável; sem climatizado diz isso).
+
+### Fecho da Etapa 2 — 04/10/2026
+
+- Sem migration (tudo deriva do desenho e do JSONB de premissas que já existe).
+- **Suíte inteira**: 7591 testes = 7557 ✅ + 34 pulados de propósito + 0 pendentes + 0 falhas (o
+  `BlueprintEditor.test.tsx` rodou inteiro na suíte desta vez). `npm run build` exit 0, 0 `error TS`.
+- Fica para a prova no app real: abrir Carga térmica num estudo com clima declarado e ver o mapa de
+  calor e o PDF do memorial — a E3 abre com esse passeio.

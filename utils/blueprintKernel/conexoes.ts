@@ -145,7 +145,8 @@ export interface ConexoesDoModelo {
   pontasAbertas: PontaAberta[];
 }
 
-const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'INCENDIO'];
+// Climatização E3.2 (0.92.0): a linha frigorígena, o dreno e o duto também têm curva, tê e redução derivados.
+const HIDRAULICAS: readonly DisciplinaDeRede[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'INCENDIO', 'FRIGORIGENA', 'DRENO_AC', 'MECANICA'];
 /** As redes por gravidade, que chegam a CAIXAS enterradas (E6.1: a pluvial também). */
 const POR_GRAVIDADE: readonly DisciplinaDeRede[] = ['ESGOTO', 'PLUVIAL'];
 

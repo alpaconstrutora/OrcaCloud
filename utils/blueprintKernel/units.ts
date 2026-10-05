@@ -578,7 +578,25 @@
  * o U da cobertura e da laje. Omitidas quando ausentes; os seis goldens não têm
  * telhado nem estrutura, então nada neles mudou.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.91.0';
+/**
+ * ─── 0.91.0 → 0.92.0 (04/10/2026) — O EQUIPAMENTO DE CLIMATIZAÇÃO COMO PEÇA DA REDE ──
+ *
+ * Climatização, E3 (plano `2026-10-04-climatizacao-benchmark-altoqi-e-roadmap.md`):
+ *  - 20 tipos novos em `TIPOS_DE_PONTO_HIDRAULICO` (evaporadoras, condensadoras
+ *    split/VRF, derivador, exaustor, bomba e ponto de dreno, caixa de distribuição,
+ *    terminais de ar com taxonomia, equipamento personalizado);
+ *  - as disciplinas `FRIGORIGENA` e `DRENO_AC` em `DisciplinaDeRede` (a MECANICA
+ *    continua sendo o ar);
+ *  - `Terminal.capacidadeBtuH` (declarada) e `Terminal.condensadoraId` (o sistema;
+ *    no canônico vai por ÍNDICE, `condensadora`, como `central` e `principal`);
+ *  - `Trecho.bitolaSuccaoMm` (a linha frigorígena é UM trecho com dois diâmetros)
+ *    e `Trecho.isolamentoMm`.
+ * Tudo é declaração e entra no payload e no hash; omitido quando ausente —
+ * desenho antigo só muda pela string da versão. Provado antes do bump: com a
+ * string em 0.91.0 os goldens e os testes de climatização passaram sem outra
+ * alteração.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.92.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

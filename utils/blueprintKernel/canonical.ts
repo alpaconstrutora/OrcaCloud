@@ -875,6 +875,9 @@ function projetar(model: BlueprintModel): {
       // E6.2 (0.67.0): a calha, só quando o trecho é calha.
       secaoCalha: t.secaoCalha ?? undefined,
       alturaCalhaMm: t.alturaCalhaMm ?? undefined,
+      // Climatização E3.2 (0.92.0): só quando declarados.
+      bitolaSuccaoMm: t.bitolaSuccaoMm ?? undefined,
+      isolamentoMm: t.isolamentoMm ?? undefined,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? (true as const) : undefined,
       parametros: parametrosCanonicos(t.parametros),
@@ -929,6 +932,8 @@ function projetar(model: BlueprintModel): {
       codigoPlaca: t.codigoPlaca ?? undefined,
       // Incêndio E7.3 (0.87.0): a autonomia da luminária de emergência, só quando declarada.
       autonomiaMin: t.autonomiaMin ?? undefined,
+      // Climatização E3.1 (0.92.0): a capacidade, só quando declarada; a condensadora vai por índice (segundo passo).
+      capacidadeBtuH: t.capacidadeBtuH ?? undefined,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? undefined,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -1050,6 +1055,8 @@ function projetar(model: BlueprintModel): {
     if (t.item.alvoId != null && indiceDoTerminal.has(t.item.alvoId)) (t.geom as { alvo?: number }).alvo = indiceDoTerminal.get(t.item.alvoId);
     // Incêndio E7.4: a central do laço de alarme, idem.
     if (t.item.centralAlarmeId != null && indiceDoTerminal.has(t.item.centralAlarmeId)) (t.geom as { central?: number }).central = indiceDoTerminal.get(t.item.centralAlarmeId);
+    // Climatização E3.1: a condensadora da evaporadora, idem.
+    if (t.item.condensadoraId != null && indiceDoTerminal.has(t.item.condensadoraId)) (t.geom as { condensadora?: number }).condensadora = indiceDoTerminal.get(t.item.condensadoraId);
   }
 
   // GRUPOS (0.38.0): origem por ÍNDICE nas famílias ordenadas; instâncias com a
@@ -1611,6 +1618,9 @@ export interface CanonicalPayload {
     /** A calha (0.67.0). Ausentes no tubo e sob kernel < 0.67.0. */
     secaoCalha?: string;
     alturaCalhaMm?: number;
+    /** Linha frigorígena: sucção; isolamento. Ausentes sob kernel < 0.92.0 e quando não declarados. */
+    bitolaSuccaoMm?: number;
+    isolamentoMm?: number;
     /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
     sugerido?: true;
     parametros?: Parametros;
@@ -1663,6 +1673,9 @@ export interface CanonicalPayload {
     autonomiaMin?: number;
     /** Laço de alarme: a central (índice). Ausente sob kernel < 0.88.0 e fora de laço. */
     central?: number;
+    /** Climatização: capacidade (BTU/h) e a condensadora (índice). Ausentes sob kernel < 0.92.0 e quando não declaradas. */
+    capacidadeBtuH?: number;
+    condensadora?: number;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
     /** Curva Q×H [L/min, mm], NPSH requerido e a principal da jockey (índice). Ausentes sob kernel < 0.82.0. */
@@ -2429,6 +2442,8 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       condutores: t.condutores ?? null,
       material: (t.material as MaterialDeTubo | undefined) ?? null,
       ...(t.secaoCalha ? { secaoCalha: t.secaoCalha as SecaoDeCalha, alturaCalhaMm: t.alturaCalhaMm ?? null } : {}),
+      ...(t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {}),
+      ...(t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {}),
       sugerido: t.sugerido ? true : null,
       ...(t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}),
     });
@@ -2467,6 +2482,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       capacidadeExtintora: t.capacidadeExtintora ?? null,
       codigoPlaca: t.codigoPlaca ?? null,
       autonomiaMin: t.autonomiaMin ?? null,
+      capacidadeBtuH: t.capacidadeBtuH ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -2562,6 +2578,13 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     const d = model.terminais[i];
     const c = model.terminais[t.central];
     if (d && c && c.id !== d.id) d.centralAlarmeId = c.id;
+  });
+  // Climatização E3.1: a condensadora da evaporadora, por índice — idem.
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.condensadora == null) return;
+    const e = model.terminais[i];
+    const c = model.terminais[t.condensadora];
+    if (e && c && c.id !== e.id) e.condensadoraId = c.id;
   });
   // Incêndio E7.2: o equipamento da placa, por índice — idem.
   (payload.terminais ?? []).forEach((t, i) => {

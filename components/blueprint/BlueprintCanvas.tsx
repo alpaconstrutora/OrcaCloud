@@ -53,6 +53,7 @@ import {
   type TipoDeVaga,
   degrausDaEscada,
   type Agua,
+  type Terminal,
   type Corte,
   type Eixo,
   type Escada,
@@ -159,8 +160,11 @@ const SEM_PRESSOES: readonly PressoesDaRede[] = [];
 const SEM_MARCAS: readonly MarcaDeVerificacao[] = [];
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
-import { simboloDeIncendio, temSimboloDeIncendio } from '../../utils/blueprintSimbolosIncendio';
+import { simboloDeIncendio, temSimboloDeIncendio, type PrimitivaDoSimbolo } from '../../utils/blueprintSimbolosIncendio';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
+// Climatização E3.4 (04/10/2026): o símbolo e o número (EV-1, CD-1) das peças de climatização.
+import { simboloDeClimatizacao, temSimboloDeClimatizacao } from '../../utils/blueprintSimbolosClimatizacao';
+import { numeracaoDeClimatizacao } from '../../utils/blueprintNumeracaoClimatizacao';
 import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
@@ -1560,6 +1564,16 @@ function mesmaPontaSolta(a: PontaSoltaCanvas, b: PontaSoltaCanvas): boolean {
 /** Folga entre a origem do modelo e a borda da área de desenho, em pixels. */
 const MARGEM_INICIAL_PX = 60;
 
+/**
+ * As primitivas do símbolo 2D da peça tipada — incêndio (E1.3) ou climatização
+ * (E3.4) —, ou `null` para quem se desenha como caixa/círculo.
+ */
+function primitivasDoSimboloDaPeca(t: Terminal): PrimitivaDoSimbolo[] | null {
+  if (t.disciplina === 'INCENDIO' && temSimboloDeIncendio(t.tipoHidraulico)) return simboloDeIncendio(t.tipoHidraulico, t.posicaoSprinkler);
+  if (temSimboloDeClimatizacao(t.tipoHidraulico)) return simboloDeClimatizacao(t.tipoHidraulico);
+  return null;
+}
+
 export default function BlueprintCanvas({
   model,
   tool,
@@ -2036,6 +2050,7 @@ export default function BlueprintCanvas({
   );
   /** Incêndio E1.4: H-1, SPK-3… — derivados; o rótulo declarado vence. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(model), [model]);
+  const numerosDeClimatizacao = useMemo(() => numeracaoDeClimatizacao(model), [model]);
   const terminaisReais = useMemo(
     () => (model.terminais ?? []).filter((t) => (!levelId || t.levelId === levelId) && !ocultos.has(t.id)),
     [model.terminais, levelId, ocultos],
@@ -6718,7 +6733,7 @@ export default function BlueprintCanvas({
         }
         ctx.textAlign = 'start';
         ctx.textBaseline = 'alphabetic';
-      } else if (t.disciplina === 'INCENDIO' && temSimboloDeIncendio(t.tipoHidraulico)) {
+      } else if (primitivasDoSimboloDaPeca(t)) {
         // ── A REDE DE INCÊNDIO (E1.3, 30/09/2026): o símbolo técnico, e não a
         // caixa cheia. O lado é a MAIOR medida da peça (o abrigo do hidrante tem
         // 900 mm), com mínimo de 14 px para o sprinkler de 80 mm não sumir.
@@ -6730,7 +6745,8 @@ export default function BlueprintCanvas({
         ctx.rotate((-(giroDaPeca(t) ?? 0) * Math.PI) / 180);
         ctx.lineWidth = selecionado ? 2.5 : 1.5;
         ctx.strokeStyle = cor;
-        for (const pr of simboloDeIncendio(t.tipoHidraulico!, t.posicaoSprinkler)) {
+        // Climatização E3.4: o mesmo laço desenha o símbolo de climatização (EV, CD, difusor…).
+        for (const pr of primitivasDoSimboloDaPeca(t)!) {
           ctx.beginPath();
           if (pr.tipo === 'circulo') {
             ctx.arc(pr.cx * lado, pr.cy * lado, pr.r * lado, 0, Math.PI * 2);
@@ -6785,7 +6801,8 @@ export default function BlueprintCanvas({
       }
 
       // ── O TERMINAL MECÂNICO (P2.2): o X do difusor dentro da peça ─────────
-      if (t.disciplina === 'MECANICA' && !selecionado) {
+      // (E3.3: o terminal de ar TIPADO já tem o seu símbolo acima; o X fica para o de texto livre.)
+      if (t.disciplina === 'MECANICA' && !selecionado && !temSimboloDeClimatizacao(t.tipoHidraulico)) {
         const meio = emTela(Math.min(md.larguraMm, md.profundidadeMm) / 2);
         if (meio >= 3) {
           ctx.save();
@@ -6810,7 +6827,7 @@ export default function BlueprintCanvas({
       // caixas de inspeção/gordura com o nome escrito quando cabem.
       if (t.tipoHidraulico && !selecionado && !caixaDetalhada) {
         // Incêndio E1.4: a peça numerada escreve o NÚMERO (H-2), não só a sigla.
-        const sigla = numerosDeIncendio.get(t.id)?.numero ?? SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
+        const sigla = numerosDeIncendio.get(t.id)?.numero ?? numerosDeClimatizacao.get(t.id)?.numero ?? SIGLA_DO_PONTO_HIDRAULICO[t.tipoHidraulico];
         const meio = emTela(Math.min(md.larguraMm, md.profundidadeMm) / 2);
         ctx.save();
         ctx.strokeStyle = '#ffffff';

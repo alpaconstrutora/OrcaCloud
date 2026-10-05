@@ -44,6 +44,8 @@ export const COTA_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   PLUVIAL: -300,
   // Incêndio (E1.1): a tubulação corre aparente ou no forro, junto ao teto.
   INCENDIO: 2600,
+  FRIGORIGENA: 2500,
+  DRENO_AC: 2400,
 };
 
 /**
@@ -61,6 +63,9 @@ export const BITOLA_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   PLUVIAL: 100,
   // O ramal do hidrante (DN 65 — 2½"); a coluna e o sprinkler ajustam.
   INCENDIO: 65,
+  // Linha de líquido 6 mm (1/4") — a sucção vai em `bitolaSuccaoMm`; dreno 25 mm.
+  FRIGORIGENA: 6,
+  DRENO_AC: 25,
 };
 
 /**
@@ -84,6 +89,8 @@ export const COTA_TERMINAL_PADRAO_MM: Record<DisciplinaDeRede, number> = {
   PLUVIAL: 0,
   // A válvula do hidrante na parede (E1.1) — ponto de partida, a ficha de cada tipo manda.
   INCENDIO: 1300,
+  FRIGORIGENA: 2200,
+  DRENO_AC: 2100,
 };
 
 /** Quanto uma ponta de trecho pode estar longe do terminal e ainda encaixar. */
@@ -292,6 +299,8 @@ export const COR_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   PLUVIAL: '#65a30d',
   // Laranja-avermelhado (incêndio E1.1): o vermelho puro já é a água quente.
   INCENDIO: '#ea580c',
+  FRIGORIGENA: '#7c3aed',
+  DRENO_AC: '#0891b2',
 };
 
 /**
@@ -340,6 +349,8 @@ export const NOME_DO_TRECHO: Record<DisciplinaDeRede, string> = {
   MECANICA: 'Duto',
   PLUVIAL: 'Tubulação de águas pluviais',
   INCENDIO: 'Tubulação de incêndio',
+  FRIGORIGENA: 'Linha frigorígena',
+  DRENO_AC: 'Dreno de condensado',
 };
 
 export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
@@ -350,6 +361,8 @@ export const ROTULO_DA_DISCIPLINA: Record<DisciplinaDeRede, string> = {
   MECANICA: 'Mecânica',
   PLUVIAL: 'Águas pluviais',
   INCENDIO: 'Incêndio',
+  FRIGORIGENA: 'Linha frigorígena',
+  DRENO_AC: 'Dreno (ar-condicionado)',
 };
 
 /** O comprimento REAL do trecho, em mm — em três dimensões. Ver `Trecho`. */

@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '98770f1b80ed867f7581666af8b54696436c7270dc81ae33c7a953625a177331',
+    hash: '1ffef9af700eb9f979ae7c9e0d428bc166e1bf8fbd43a60c28c692273a81a5dc',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '3319f4b176a8f3cfe02024a86237bcee74f242838030668396f24e556e271a03',
+    hash: 'ecb6ccac7accfcd55869e689f65d2fbbc191d27727cd4535cead59dca7a42b25',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '1666cbc841ae0ac73984c6b6b8703484f0fe465085e2c628fcd8ece739a5293f',
+    hash: 'f55f9ec11f38812aab51f4b9f3537265404366da11b3fca7945e6a237c202247',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '0049bb3f833e196dfbe0eb9635a83cc5701009d70a6b0592dbd49cb2d14b2db8',
+    hash: 'd6b25d4d308a300e28f65ec50df0b091ecbcfd3433c106f005ce2b3756c1b93c',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '1b516c1114493411b604ee6789ece98a30d76215483d51cd08f3e3c92a5c44d7',
+    hash: '488c23f7c680c750050552dc7316273fe78e51abe9ce7453932cdfa3c5de350a',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '5fe4910a5fa108f35a2a067fd166fc5d64ea0dc71bcd29b26c8f8d5b1a971b5f',
+    hash: '159ac2589ef6cdb966ef7a5a0ca71282bf9d128805eb8ab6c6820afba3b57109',
   },
 };
 
@@ -906,6 +906,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   refeita ANTES de tocar num hash: com a string em 0.90.0 e o vidro no código,
  *   os sete testes deste arquivo e os sete de `blueprintEsquadria` passaram sem
  *   outra alteração; as contagens (9/49/144/3/78/4) seguiram idênticas.
+ *
+ *   0.91.0 → 0.92.0 (04/10/2026): o equipamento de climatização como peça da
+ *   rede (E3): 20 tipos de ponto, as disciplinas FRIGORIGENA e DRENO_AC,
+ *   `Terminal.capacidadeBtuH`/`condensadoraId` (índice `condensadora` no
+ *   canônico) e `Trecho.bitolaSuccaoMm`/`isolamentoMm`. Nenhum dos seis casos
+ *   tem rede, e todas as chaves novas são omitidas quando ausentes — só a versão
+ *   embutida mudou. Mesma prova, refeita ANTES de tocar num hash: com a string
+ *   em 0.91.0 e a climatização no código, os sete testes deste arquivo e os
+ *   doze de `blueprintClimatizacaoTipos` passaram sem outra alteração; depois do
+ *   bump as seis falhas foram todas de hash e as contagens (9/49/144/3/78/4)
+ *   seguiram idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

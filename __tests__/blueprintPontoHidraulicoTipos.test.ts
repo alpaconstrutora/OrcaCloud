@@ -74,6 +74,10 @@ describe('taxonomia hidráulica · a lista e a ficha', () => {
         'Incêndio — hidrantes e chuveiros',
         // Incêndio E7.1 (01/10/2026): os preventivos (extintor) — não ligam em tubo.
         'Incêndio — preventivos',
+        // Climatização E3.1/E3.3 (04/10/2026): o equipamento como peça da rede, o dreno e os terminais de ar.
+        'Climatização — equipamentos',
+        'Climatização — dreno',
+        'Climatização — terminais de ar',
       ].sort(),
     );
     for (const t of ['CHUVEIRO', 'VASO_SANITARIO', 'RESERVATORIO', 'RALO_SIFONADO', 'CAIXA_INSPECAO', 'REGISTRO_GAVETA', 'CONEXAO_TE'] as const) {
@@ -86,7 +90,8 @@ describe('taxonomia hidráulica · a lista e a ficha', () => {
       const f = FICHA_DO_PONTO_HIDRAULICO[t];
       expect(ROTULO_DO_PONTO_HIDRAULICO[t], t).toBeTruthy();
       expect(SIGLA_DO_PONTO_HIDRAULICO[t], t).toBeTruthy();
-      expect(f.grupo, t).toMatch(/^(Hidráulica|Incêndio) — /);
+      // Climatização E3 (04/10/2026): os equipamentos e terminais de ar têm grupos próprios.
+      expect(f.grupo, t).toMatch(/^(Hidráulica|Incêndio|Climatização) — /);
       const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[t];
       expect(admitidas.length, t).toBeGreaterThan(0);
       expect(admitidas, t).not.toContain('ELETRICA');

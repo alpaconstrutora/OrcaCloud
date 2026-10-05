@@ -30,7 +30,11 @@ export type GrupoHidraulico =
   | 'Incêndio — hidrantes e chuveiros'
   | 'Incêndio — bombas e válvulas'
   // Incêndio E7.1 (01/10/2026): os preventivos — não ligam em tubo.
-  | 'Incêndio — preventivos';
+  | 'Incêndio — preventivos'
+  // Climatização E3.1/E3.3 (04/10/2026): equipamentos (linha), dreno e terminais de ar (duto).
+  | 'Climatização — equipamentos'
+  | 'Climatização — dreno'
+  | 'Climatização — terminais de ar';
 
 export interface FichaDoPontoHidraulico {
   rotulo: string;
@@ -70,6 +74,9 @@ const CONEXOES: GrupoHidraulico = 'Hidráulica — conexões';
 const COMBATE: GrupoHidraulico = 'Incêndio — hidrantes e chuveiros';
 const CASA_DE_BOMBAS: GrupoHidraulico = 'Incêndio — bombas e válvulas';
 const PREVENTIVOS: GrupoHidraulico = 'Incêndio — preventivos';
+const CLIMA_EQUIP: GrupoHidraulico = 'Climatização — equipamentos';
+const CLIMA_DRENO: GrupoHidraulico = 'Climatização — dreno';
+const CLIMA_AR: GrupoHidraulico = 'Climatização — terminais de ar';
 
 export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPontoHidraulico> = {
   TORNEIRA: {
@@ -677,6 +684,30 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 400 },
     ajuda: 'Equipamento de incêndio fora da lista (ventilador de pressurização da escada, motor, damper…). Nome e item comercial vêm do cadastro de tipos.',
   },
+  // ─── CLIMATIZAÇÃO (04/10/2026, E3.1/E3.3 do roadmap, kernel 0.92.0) ─────────
+  // Medidas e cotas são as da reserva de espaço da E11.1 (a peça herda o lugar);
+  // a CAPACIDADE é declarada por instância (`Terminal.capacidadeBtuH`) — a E4 a
+  // sugere pela carga térmica. DN mínimo da linha = líquido 6 mm (1/4").
+  EVAPORADORA_HI_WALL: { rotulo: 'Evaporadora hi-wall', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2200 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 900, profundidadeMm: 220, alturaMm: 300 }, ajuda: 'Unidade interna de parede, a 2,20 m; liga à condensadora pela linha frigorígena e ao dreno. A capacidade (BTU/h) se declara no painel ou vem da carga térmica (E4).' },
+  EVAPORADORA_PISO_TETO: { rotulo: 'Evaporadora piso-teto', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2300 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1200, profundidadeMm: 650, alturaMm: 240 }, ajuda: 'Unidade interna junto ao teto ou ao piso, para salões maiores.' },
+  EVAPORADORA_CASSETE: { rotulo: 'Evaporadora cassete', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 840, profundidadeMm: 840, alturaMm: 250 }, ajuda: 'Unidade interna embutida no forro, com insuflamento em quatro vias.' },
+  EVAPORADORA_DUTADA: { rotulo: 'Evaporadora dutada', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1100, profundidadeMm: 700, alturaMm: 280 }, ajuda: 'Unidade interna no forro, que insufla por dutos e difusores (E7).' },
+  CONDENSADORA_SPLIT: { rotulo: 'Condensadora (split)', sigla: 'CD', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }, ajuda: 'Unidade externa de um split; fica na fachada ou na área técnica, com folga de ar. Capacidade = a da evaporadora que serve.' },
+  CONDENSADORA_VRF: { rotulo: 'Condensadora VRF', sigla: 'CD', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 10 }, medidasMm: { larguraMm: 1240, profundidadeMm: 760, alturaMm: 1700 }, ajuda: 'Unidade externa de fluxo de refrigerante variável, que serve várias evaporadoras pelos derivadores (E6).' },
+  DERIVADOR_VRF: { rotulo: 'Derivador VRF', sigla: 'DV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 6 }, sobreOTrecho: true, ajuda: 'A derivação (refnet) da linha do VRF para um ramo; sobre o trecho.' },
+  EXAUSTOR_AR: { rotulo: 'Exaustor', sigla: 'EX', grupo: CLIMA_AR, cotaMm: { MECANICA: 2300 }, dnMinimoMm: { MECANICA: 100 }, medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 400 }, ajuda: 'Exaustor de banheiro, cozinha ou garagem; a vazão e a renovação de ar entram na E7.' },
+  BOMBA_DRENO: { rotulo: 'Bomba de dreno', sigla: 'BD', grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 2100 }, dnMinimoMm: { DRENO_AC: 20 }, medidasMm: { larguraMm: 200, profundidadeMm: 100, alturaMm: 100 }, ajuda: 'Quando o condensado não escoa por gravidade: a bomba junto da evaporadora, recalcando ao ponto de descarte (E5.4).' },
+  PONTO_DRENO: { rotulo: 'Ponto de dreno', sigla: 'PD', grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 0 }, dnMinimoMm: { DRENO_AC: 25 }, ajuda: 'Onde o condensado é descartado: ralo, caixa sifonada, esgoto ou a fachada.' },
+  CAIXA_DISTRIBUICAO_AR: { rotulo: 'Caixa de distribuição de ar', sigla: 'CX', grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 300 }, ajuda: 'A caixa que recebe o duto principal e distribui aos ramais.' },
+  DIFUSOR: { rotulo: 'Difusor', sigla: 'DF', grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 50 }, ajuda: 'Insuflamento no forro (quadrado, de 1 a 4 vias). A vazão por terminal entra na E7.' },
+  GRELHA_INSUFLAMENTO: { rotulo: 'Grelha de insuflamento', sigla: 'GI', grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 200 }, ajuda: 'Insuflamento na parede, com aletas.' },
+  GRELHA_RETORNO: { rotulo: 'Grelha de retorno', sigla: 'GR', grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 500, profundidadeMm: 50, alturaMm: 300 }, ajuda: 'O ar que volta ao equipamento.' },
+  BOCAL_AR: { rotulo: 'Bocal de insuflamento', sigla: 'BC', grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 200, profundidadeMm: 200, alturaMm: 100 }, ajuda: 'Jato de longo alcance, para pé-direito alto.' },
+  TOMADA_AR_EXTERIOR: { rotulo: 'Tomada de ar exterior', sigla: 'TA', grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 300 }, ajuda: 'A renovação de ar (NBR 16401-3) entra por aqui — vazão na E7.3.' },
+  VENEZIANA_AR: { rotulo: 'Veneziana', sigla: 'VN', grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 300 }, ajuda: 'Veneziana de exaustão ou de tomada de ar na fachada.' },
+  CAIXA_PLENUM: { rotulo: 'Caixa plenum', sigla: 'PL', grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 300 }, ajuda: 'A caixa atrás do difusor, onde o duto flexível chega.' },
+  DAMPER: { rotulo: 'Damper', sigla: 'DP', grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, sobreOTrecho: true, ajuda: 'Registro de vazão ou corta-fogo no duto; sobre o trecho.' },
+  EQUIPAMENTO_CLIMATIZACAO: { rotulo: 'Equipamento de climatização personalizado', sigla: 'EQ', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 1500, DRENO_AC: 1500, MECANICA: 1500 }, dnMinimoMm: {}, medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 }, ajuda: 'O que a lista não tem (cortina de ar, umidificador, trocador…). Nome e item comercial vêm do cadastro de tipos; a capacidade se declara.' },
 };
 
 export const ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(

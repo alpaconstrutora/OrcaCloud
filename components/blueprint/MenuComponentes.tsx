@@ -275,6 +275,10 @@ function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[
     // Incêndio E1.1: a rede de combate tem família própria no menu.
     'Incêndio — hidrantes e chuveiros': Flame,
     'Incêndio — bombas e válvulas': Gauge,
+    // Climatização E3.1/E3.3: o equipamento como peça da rede (família Mecânica).
+    'Climatização — equipamentos': Snowflake,
+    'Climatização — dreno': Droplet,
+    'Climatização — terminais de ar': AirVent,
   };
   const porGrupo = new Map<string, ItemComponente[]>();
   const acrescentar = (titulo: string, item: ItemComponente) => {
@@ -318,6 +322,22 @@ function gruposDoPontoHidraulico(): { titulo: string; itens: ItemComponente[] }[
       });
     }
   }
+  // CLIMATIZAÇÃO E3.2 (04/10/2026): a LINHA FRIGORÍGENA e o DRENO são trechos das
+  // disciplinas novas — entram junto dos equipamentos e do dreno, depois das peças.
+  acrescentar('Climatização — equipamentos', {
+    chave: 'REDE_FRIGORIGENA',
+    rotulo: 'Linha frigorígena',
+    icone: Route,
+    ajuda: 'O par líquido/sucção em cobre isolado, da evaporadora à condensadora: um trecho com dois diâmetros (líquido 6 mm de partida; a sucção no painel).',
+    escolha: { tool: 'rede', disciplina: 'FRIGORIGENA' },
+  });
+  acrescentar('Climatização — dreno', {
+    chave: 'REDE_DRENO_AC',
+    rotulo: 'Dreno de condensado',
+    icone: Route,
+    ajuda: 'O tubo de dreno da evaporadora até o ponto de descarte (PVC 25 mm, por gravidade — ou com bomba de dreno).',
+    escolha: { tool: 'rede', disciplina: 'DRENO_AC' },
+  });
   // As PRUMADAS do esgoto entram no grupo do esgoto, depois dos pontos.
   acrescentar('Hidráulica — esgoto', {
     chave: 'REDE_ESGOTO_QUEDA',
@@ -392,6 +412,10 @@ function colunaDoGrupo(titulo: string): 1 | 2 | 3 {
   if (titulo.startsWith('Mecânica — ventilação')) return 2;
   if (titulo.startsWith('Mecânica — dutos')) return 3;
   if (titulo.startsWith('Mecânica')) return 1;
+  // Climatização (E3): equipamentos e linha à esquerda, dreno no meio, terminais de ar à direita.
+  if (titulo.startsWith('Climatização — dreno')) return 2;
+  if (titulo.startsWith('Climatização — terminais')) return 3;
+  if (titulo.startsWith('Climatização')) return 1;
   // Incêndio (E1.1): hidrantes/chuveiros à esquerda, tubulação no meio, bombas e válvulas à direita.
   if (titulo.startsWith('Incêndio — hidrantes')) return 1;
   if (titulo.startsWith('Incêndio — tubulação')) return 2;
@@ -704,8 +728,10 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
   {
     titulo: 'Mecânica — climatização',
     itens: [
-      { chave: 'COMPONENTE_CONDENSADORA', rotulo: 'Condensadora', icone: Snowflake, ajuda: 'Reserva 0,85 × 0,33 × 0,70 m com 300 mm de folga em volta; peça dentro da folga, parede ou pilar dentro da caixa é conflito.', escolha: { tool: 'componente', componente: 'CONDENSADORA' } },
-      { chave: 'COMPONENTE_EVAPORADORA', rotulo: 'Evaporadora hi-wall', icone: AirVent, ajuda: 'Reserva 0,90 × 0,22 × 0,30 m a 2,20 m do piso, com 150 mm de folga.', escolha: { tool: 'componente', componente: 'EVAPORADORA' } },
+      // E3.1 (04/10/2026): estas duas são RESERVAS de espaço (legado da E11.1). O equipamento que
+      // entra na rede, com capacidade e sistema, está em "Climatização — equipamentos".
+      { chave: 'COMPONENTE_CONDENSADORA', rotulo: 'Reserva de condensadora', icone: Snowflake, ajuda: 'Reserva 0,85 × 0,33 × 0,70 m com 300 mm de folga em volta; peça dentro da folga, parede ou pilar dentro da caixa é conflito. O equipamento de verdade (com BTU/h e linha) está em Climatização — equipamentos.', escolha: { tool: 'componente', componente: 'CONDENSADORA' } },
+      { chave: 'COMPONENTE_EVAPORADORA', rotulo: 'Reserva de evaporadora', icone: AirVent, ajuda: 'Reserva 0,90 × 0,22 × 0,30 m a 2,20 m do piso, com 150 mm de folga. O equipamento de verdade está em Climatização — equipamentos.', escolha: { tool: 'componente', componente: 'EVAPORADORA' } },
     ],
   },
   {
@@ -934,6 +960,7 @@ function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
   if (/^Elétrica/.test(tituloDoGrupo)) return 'ELETRICA';
   if (/^Hidráulica/.test(tituloDoGrupo)) return 'HIDRAULICA';
   if (/^Mecânica/.test(tituloDoGrupo)) return 'MECANICA';
+  if (/^Climatização/.test(tituloDoGrupo)) return 'MECANICA';
   if (/^Incêndio/.test(tituloDoGrupo)) return 'INCENDIO';
   if (/^Mobiliário/.test(tituloDoGrupo)) return 'MOBILIARIO';
   return 'CONSTRUCAO';

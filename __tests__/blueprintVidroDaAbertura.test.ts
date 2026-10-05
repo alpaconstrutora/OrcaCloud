@@ -38,7 +38,7 @@ function paredeComJanela(): { m: BlueprintModel; openingId: string; vaoId: strin
 
 describe('vidro da abertura', () => {
   it('a versão subiu para 0.91.0 e a tabela de proteções tem um número por proteção (menos a personalizada)', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.91.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.92.0');
     for (const p of PROTECOES_SOLARES) {
       if (p === 'PERSONALIZADA') continue;
       const f = FATOR_DE_SOMBREAMENTO_DA_PROTECAO[p];

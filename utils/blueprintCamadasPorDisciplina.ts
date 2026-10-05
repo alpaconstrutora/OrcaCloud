@@ -106,6 +106,9 @@ const CAMADA_DA_DISCIPLINA: Record<Exclude<DisciplinaDeRede, 'ELETRICA'>, Camada
   PLUVIAL: 'PLUVIAL',
   INCENDIO: 'INCENDIO',
   MECANICA: 'MECANICA',
+  // Climatização E3.2 (0.92.0): linha e dreno são da mesma camada do duto e das reservas.
+  FRIGORIGENA: 'MECANICA',
+  DRENO_AC: 'MECANICA',
 };
 
 const pertencaEletrica = (c: 'COMUM' | 'ILUMINACAO' | 'FORCA'): Pertenca =>

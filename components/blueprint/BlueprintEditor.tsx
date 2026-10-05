@@ -136,7 +136,7 @@ import {
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
-import { pontoEletricoDoComponente } from '../../utils/blueprintKernel';
+import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA } from '../../utils/blueprintKernel';
 import { TIPOS_DE_AREA_PUBLICA, TIPOS_DE_AREA_DO_LOTEAMENTO, TIPOS_AMBIENTAIS, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
 import {
   numerarQuadra,
@@ -262,6 +262,7 @@ import PainelKitsDeInsercao from './PainelKitsDeInsercao';
 import { listarKits } from '../../services/blueprintKitService';
 import type { KitDeInsercao } from '../../utils/blueprintKitsDeInsercao';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
+import { numeracaoDeClimatizacao } from '../../utils/blueprintNumeracaoClimatizacao';
 import { classificarEdificacao, exigenciasDaEdificacao } from '../../utils/blueprintIncendioClassificacao';
 import { criterioDeSprinklers } from '../../utils/blueprintSprinklersIncendio';
 import { proporAreaDeOperacao } from '../../utils/blueprintAreaDeOperacao';
@@ -7922,6 +7923,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
   /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(editor.model), [editor.model]);
+  /** Climatização E3.4: EV-1, CD-1… derivados, para o painel do ponto e o seletor de condensadora. */
+  const numerosDeClimatizacao = useMemo(() => numeracaoDeClimatizacao(editor.model), [editor.model]);
   const classificacaoDeIncendio = useMemo(
     () => (tarefaAberta === 'incendio' ? classificarEdificacao(editor.model, incendioDoEstudo.hipoteses.classificacao) : null),
     [tarefaAberta, editor.model, incendioDoEstudo.hipoteses.classificacao],
@@ -9185,7 +9188,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       <PainelTrechoSelecionado
         trecho={trechoSel}
         terminal={terminalSel}
-        numeroDeIncendio={terminalSel ? numerosDeIncendio.get(terminalSel.id) ?? null : null}
+        numeroDeIncendio={terminalSel ? numerosDeIncendio.get(terminalSel.id) ?? numerosDeClimatizacao.get(terminalSel.id) ?? null : null}
+        condensadoras={(editor.model.terminais ?? []).filter((t) => (TIPOS_DE_CONDENSADORA as readonly string[]).includes(t.tipoHidraulico ?? '')).map((t) => ({ id: t.id, nome: `${numerosDeClimatizacao.get(t.id)?.numero ?? t.tipo}${t.capacidadeBtuH ? ` · ${t.capacidadeBtuH.toLocaleString('pt-BR')} BTU/h` : ''}` }))}
         nomeDoAlvo={(id) => numerosDeIncendio.get(id)?.numero ?? id}
         centraisDeAlarme={(editor.model.terminais ?? []).filter((t) => t.tipoHidraulico === 'CENTRAL_ALARME').map((t) => ({ id: t.id, nome: numerosDeIncendio.get(t.id)?.numero ?? t.id }))}
         bombasPrincipais={(editor.model.terminais ?? []).filter((t) => t.tipoHidraulico === 'BOMBA_INCENDIO').map((t) => ({ id: t.id, nome: numerosDeIncendio.get(t.id)?.numero ?? t.tipo }))}

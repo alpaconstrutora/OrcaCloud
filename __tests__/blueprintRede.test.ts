@@ -203,7 +203,7 @@ describe('os padrões de partida', () => {
     expect(COTA_PADRAO_MM.ESGOTO).toBeLessThan(0);
   });
 
-  it('as sete cores são distintas (MECANICA entrou na E11.1, PLUVIAL na E6.1 hidrossanitária, INCENDIO na E1.1 de incêndio)', () => {
-    expect(new Set(Object.values(COR_DA_DISCIPLINA)).size).toBe(7);
+  it('as nove cores são distintas (MECANICA entrou na E11.1, PLUVIAL na E6.1 hidrossanitária, INCENDIO na E1.1 de incêndio, FRIGORIGENA e DRENO_AC na E3.2 de climatização)', () => {
+    expect(new Set(Object.values(COR_DA_DISCIPLINA)).size).toBe(9);
   });
 });

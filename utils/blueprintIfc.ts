@@ -2116,6 +2116,9 @@ const SISTEMA_IFC: Record<string, string> = {
   // de hoje nasce dos equipamentos de ar-condicionado; a rede só de ventilação/exaustão ganha o
   // seu tipo quando existir como tal (E7).
   MECANICA: '.AIRCONDITIONING.',
+  // Climatização E3.2 (0.92.0): a linha é refrigeração; o dreno é drenagem.
+  FRIGORIGENA: '.REFRIGERATION.',
+  DRENO_AC: '.DRAINAGE.',
 };
 
 /**
@@ -2133,6 +2136,8 @@ const CLASSE_DO_TRECHO: Record<string, { entidade: string; predefinido: string; 
   INCENDIO: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
   ELETRICA: { entidade: 'IFCCABLECARRIERSEGMENT', predefinido: '.CONDUITSEGMENT.', qto: 'Qto_CableCarrierSegmentBaseQuantities' },
   MECANICA: { entidade: 'IFCDUCTSEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_DuctSegmentBaseQuantities' },
+  FRIGORIGENA: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
+  DRENO_AC: { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' },
 };
 const classeDoTrecho = (disciplina: string) =>
   CLASSE_DO_TRECHO[disciplina] ?? { entidade: 'IFCPIPESEGMENT', predefinido: '.RIGIDSEGMENT.', qto: 'Qto_PipeSegmentBaseQuantities' };
@@ -2531,6 +2536,42 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCVALVE', predefinido: '.CHECK.' };
     case 'HIDROMETRO':
       return { entidade: 'IFCFLOWMETER', predefinido: '.WATERMETER.' };
+    // 04/10/2026 (climatização E3.1/E3.3, kernel 0.92.0): o equipamento como peça da
+    // rede. Evaporadora/condensadora = IfcUnitaryEquipment (como a reserva já saía);
+    // exaustor = IfcFan; terminais de ar = IfcAirTerminal; damper = IfcDamper.
+    case 'EVAPORADORA_HI_WALL':
+    case 'EVAPORADORA_PISO_TETO':
+    case 'EVAPORADORA_CASSETE':
+    case 'EVAPORADORA_DUTADA':
+    case 'CONDENSADORA_SPLIT':
+      return { entidade: 'IFCUNITARYEQUIPMENT', predefinido: '.SPLITSYSTEM.' };
+    case 'CONDENSADORA_VRF':
+      return { entidade: 'IFCUNITARYEQUIPMENT', predefinido: '.AIRCONDITIONINGUNIT.' };
+    case 'DERIVADOR_VRF':
+      return { entidade: 'IFCPIPEFITTING', predefinido: '.JUNCTION.' };
+    case 'EXAUSTOR_AR':
+      return { entidade: 'IFCFAN', predefinido: '.CENTRIFUGALFORWARDCURVED.' };
+    case 'BOMBA_DRENO':
+      return { entidade: 'IFCPUMP', predefinido: '.SUBMERSIBLEPUMP.' };
+    case 'PONTO_DRENO':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.USERDEFINED.' };
+    case 'CAIXA_DISTRIBUICAO_AR':
+    case 'CAIXA_PLENUM':
+      return { entidade: 'IFCDUCTFITTING', predefinido: '.JUNCTION.' };
+    case 'DIFUSOR':
+      return { entidade: 'IFCAIRTERMINAL', predefinido: '.DIFFUSER.' };
+    case 'GRELHA_INSUFLAMENTO':
+    case 'GRELHA_RETORNO':
+      return { entidade: 'IFCAIRTERMINAL', predefinido: '.GRILLE.' };
+    case 'BOCAL_AR':
+      return { entidade: 'IFCAIRTERMINAL', predefinido: '.REGISTER.' };
+    case 'TOMADA_AR_EXTERIOR':
+    case 'VENEZIANA_AR':
+      return { entidade: 'IFCAIRTERMINAL', predefinido: '.LOUVRE.' };
+    case 'DAMPER':
+      return { entidade: 'IFCDAMPER', predefinido: '.USERDEFINED.' };
+    case 'EQUIPAMENTO_CLIMATIZACAO':
+      return { entidade: 'IFCUNITARYEQUIPMENT', predefinido: '.USERDEFINED.' };
     case 'CONEXAO_JOELHO_90':
     case 'CONEXAO_JOELHO_45':
       return { entidade: 'IFCPIPEFITTING', predefinido: '.BEND.' };

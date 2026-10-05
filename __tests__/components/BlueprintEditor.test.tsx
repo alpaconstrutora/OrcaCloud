@@ -5512,11 +5512,12 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     };
     expect(menu()).toBeTruthy();
     await user.click(menu());
-    for (const nome of ['Condensadora', 'Evaporadora hi-wall', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico', 'Duto', 'Difusor / grelha']) {
+    for (const nome of ['Reserva de condensadora', 'Reserva de evaporadora', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico', 'Duto', 'Difusor / grelha']) {
       expect(screen.getByRole('menuitemradio', { name: new RegExp(`^${nome.replace('/', '\/')}$`) })).toBeInTheDocument();
     }
-    await user.click(screen.getByRole('menuitemradio', { name: /^Condensadora$/ }));
-    expect(menu()).toHaveTextContent('Condensadora');
+    // E3.1 da climatização (04/10/2026): a reserva passou a se chamar assim — o equipamento é outra peça.
+    await user.click(screen.getByRole('menuitemradio', { name: /^Reserva de condensadora$/ }));
+    expect(menu()).toHaveTextContent('Reserva de condensadora');
     await user.click(menu());
     await user.click(screen.getByRole('menuitemradio', { name: /^Shaft mecânico$/ }));
     expect(menu()).toHaveTextContent('Shaft mecânico');

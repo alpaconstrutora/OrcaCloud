@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
+import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, TIPOS_COM_CAPACIDADE, TIPOS_DE_EVAPORADORA, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
 import { ROTULO_DO_AGENTE } from '../../utils/blueprintExtintores';
 import { CATALOGO_DE_PLACAS } from '../../utils/blueprintSinalizacao';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
@@ -76,6 +76,9 @@ interface Props {
     cotaAMm?: number;
     cotaBMm?: number;
     bitolaMm?: number;
+    /** Climatização E3.2: sucção da linha frigorígena e isolamento (linha, dreno, duto). `null` apaga. */
+    bitolaSuccaoMm?: number | null;
+    isolamentoMm?: number | null;
     itemCode?: string | null;
     rotulo?: string | null;
     circuitoIds?: string[] | null;
@@ -123,6 +126,9 @@ interface Props {
     autonomiaMin?: number | null;
     /** Incêndio E7.4: a central do laço de alarme. `null` = fora de laço. */
     centralAlarmeId?: string | null;
+    /** Climatização E3.1: a capacidade declarada (BTU/h) e a condensadora da evaporadora. `null` apaga. */
+    capacidadeBtuH?: number | null;
+    condensadoraId?: string | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
     profundidadeMm?: number | null;
@@ -137,6 +143,8 @@ interface Props {
   nomeDoAlvo?: (id: string) => string;
   /** Incêndio E7.4: as centrais de alarme do desenho, para o dispositivo escolher a do laço dele. */
   centraisDeAlarme?: { id: string; nome: string }[];
+  /** Climatização E3.1: as condensadoras do desenho (nome = número derivado), para a evaporadora escolher o sistema. */
+  condensadoras?: { id: string; nome: string }[];
   circuitos?: { id: string; nome: string; quadroNome: string; tensaoV?: number | null; ligacao?: 'FN' | 'FF' | 'FFF' | null }[];
   /** TIPO × INSTÂNCIA (E1.1): copia as propriedades de um tipo salvo para este ponto. */
   onAplicarTipoDoTerminal?: (propriedades: PropriedadesDeTerminal) => void;
@@ -196,6 +204,7 @@ export default function PainelTrechoSelecionado({
   numeroDeIncendio,
   nomeDoAlvo,
   centraisDeAlarme,
+  condensadoras,
   bombasPrincipais = [],
 }: Props) {
   if (terminal) {
@@ -438,6 +447,44 @@ export default function PainelTrechoSelecionado({
                     aria-label="Autonomia da luminária de emergência (min)"
                     className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
                   />
+                </label>
+              )}
+              {/* CLIMATIZAÇÃO E3.1 (04/10/2026): a CAPACIDADE declarada de quem troca calor e o
+                  SISTEMA da evaporadora (a condensadora que a serve). Vazio = não declarada —
+                  a E4 sugere pela carga térmica; a evaporadora sem condensadora fica avisada. */}
+              {terminal.tipoHidraulico && (TIPOS_COM_CAPACIDADE as readonly string[]).includes(terminal.tipoHidraulico) && (
+                <label className="block" data-testid="campo-capacidade">
+                  <span className="text-[11px] font-medium text-slate-600">Capacidade (BTU/h)</span>
+                  <input
+                    type="number"
+                    min={1000}
+                    step={1000}
+                    value={terminal.capacidadeBtuH ?? ''}
+                    placeholder="não declarada"
+                    onChange={(e) => {
+                      if (e.target.value === '') return onTerminal({ capacidadeBtuH: null });
+                      const x = Math.round(Number(e.target.value));
+                      if (Number.isFinite(x) && x > 0) onTerminal({ capacidadeBtuH: x });
+                    }}
+                    aria-label="Capacidade do equipamento (BTU/h)"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                  />
+                </label>
+              )}
+              {terminal.tipoHidraulico && ([...TIPOS_DE_EVAPORADORA, 'DERIVADOR_VRF'] as readonly string[]).includes(terminal.tipoHidraulico) && (
+                <label className="block" data-testid="campo-condensadora">
+                  <span className="text-[11px] font-medium text-slate-600">Condensadora (sistema)</span>
+                  <select
+                    value={terminal.condensadoraId ?? ''}
+                    onChange={(e) => onTerminal({ condensadoraId: e.target.value || null })}
+                    aria-label="Condensadora desta evaporadora"
+                    className={`mt-0.5 w-full rounded-md border px-2 py-1 text-xs ${terminal.condensadoraId ? 'border-slate-300' : 'border-red-300 text-red-700'}`}
+                  >
+                    <option value="">{(condensadoras ?? []).length ? 'Sem sistema' : 'Sem condensadora no desenho'}</option>
+                    {(condensadoras ?? []).filter((c) => c.id !== terminal.id).map((c) => (
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
+                  </select>
                 </label>
               )}
               {terminal.tipoHidraulico === 'PLACA' && (
@@ -836,6 +883,30 @@ export default function PainelTrechoSelecionado({
           aoAplicar={(v) => onTrecho({ bitolaMm: v })}
           ariaLabel="Bitola do trecho, em milímetros"
         />
+        {/* CLIMATIZAÇÃO E3.2 (04/10/2026): a linha frigorígena é UM trecho com dois diâmetros —
+            a bitola é a de líquido e esta a de sucção; o isolamento vale na linha, no dreno e no duto. */}
+        {trecho.disciplina === 'FRIGORIGENA' && (
+          <CampoMedida
+            rotulo="Sucção"
+            valor={trecho.bitolaSuccaoMm ?? trecho.bitolaMm}
+            casas={0}
+            sufixo="mm"
+            chave={`succao-${trecho.id}`}
+            aoAplicar={(v) => onTrecho({ bitolaSuccaoMm: v > 0 ? Math.round(v) : null })}
+            ariaLabel="Diâmetro da linha de sucção, em milímetros"
+          />
+        )}
+        {(trecho.disciplina === 'FRIGORIGENA' || trecho.disciplina === 'DRENO_AC' || trecho.disciplina === 'MECANICA') && (
+          <CampoMedida
+            rotulo="Isolamento"
+            valor={trecho.isolamentoMm ?? 0}
+            casas={0}
+            sufixo="mm"
+            chave={`isolamento-${trecho.id}`}
+            aoAplicar={(v) => onTrecho({ isolamentoMm: v > 0 ? Math.round(v) : null })}
+            ariaLabel="Espessura do isolamento térmico, em milímetros"
+          />
+        )}
 
         {/* MATERIAL (28/09/2026, E1.1 do roadmap hidrossanitário): só no cano de
             água, que é onde ele muda o diâmetro interno e a perda de carga. O

@@ -10,7 +10,8 @@
  * pavimento, de cima para baixo e da esquerda para a direita na planta (y do
  * modelo cresce para cima).
  */
-import type { BlueprintModel, ObjectId, Terminal, TipoDePontoHidraulico } from './blueprintKernel';
+import type { BlueprintModel, ObjectId, TipoDePontoHidraulico } from './blueprintKernel';
+import { numeracaoDerivada, type NumeroDaPeca } from './blueprintNumeracaoDerivada';
 
 /** O prefixo de cada tipo numerado. Tipos com o MESMO prefixo dividem a série (hidrante simples e duplo). */
 export const PREFIXO_DA_NUMERACAO: Partial<Record<TipoDePontoHidraulico, string>> = {
@@ -37,48 +38,12 @@ export const PREFIXO_DA_NUMERACAO: Partial<Record<TipoDePontoHidraulico, string>
   PREVENTIVO_PERSONALIZADO: 'PP',
 };
 
-export interface NumeroDaPeca {
-  numero: string;
-  origem: 'DECLARADO' | 'DERIVADO';
-}
+export type { NumeroDaPeca } from './blueprintNumeracaoDerivada';
 
-/** O número de cada peça de incêndio numerável, por id do terminal. */
+/**
+ * O número de cada peça de incêndio numerável, por id do terminal. O laço vive em
+ * `blueprintNumeracaoDerivada.ts` desde 04/10/2026 (a climatização numera igual).
+ */
 export function numeracaoDeIncendio(model: BlueprintModel): Map<ObjectId, NumeroDaPeca> {
-  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
-  const numeraveis = (model.terminais ?? []).filter(
-    (t): t is Terminal & { tipoHidraulico: TipoDePontoHidraulico } => t.disciplina === 'INCENDIO' && !!t.tipoHidraulico && !!PREFIXO_DA_NUMERACAO[t.tipoHidraulico],
-  );
-  const porPrefixo = new Map<string, typeof numeraveis>();
-  for (const t of numeraveis) {
-    const p = PREFIXO_DA_NUMERACAO[t.tipoHidraulico]!;
-    porPrefixo.set(p, [...(porPrefixo.get(p) ?? []), t]);
-  }
-  const resultado = new Map<ObjectId, NumeroDaPeca>();
-  for (const [prefixo, pecas] of porPrefixo) {
-    const doPrefixo = new RegExp(`^${prefixo}-(\\d+)$`, 'i');
-    const reservados = new Set<number>();
-    for (const t of pecas) {
-      const r = t.rotulo?.trim();
-      if (!r) continue;
-      resultado.set(t.id, { numero: r, origem: 'DECLARADO' });
-      const m = doPrefixo.exec(r);
-      if (m) reservados.add(Number(m[1]));
-    }
-    const ordenadas = pecas
-      .filter((t) => !t.rotulo?.trim())
-      .sort(
-        (a, b) =>
-          (elevacao.get(a.levelId) ?? 0) - (elevacao.get(b.levelId) ?? 0) ||
-          b.at.y - a.at.y ||
-          a.at.x - b.at.x ||
-          a.id.localeCompare(b.id),
-      );
-    let n = 1;
-    for (const t of ordenadas) {
-      while (reservados.has(n)) n++;
-      resultado.set(t.id, { numero: `${prefixo}-${n}`, origem: 'DERIVADO' });
-      n++;
-    }
-  }
-  return resultado;
+  return numeracaoDerivada(model, (t) => (t.disciplina === 'INCENDIO' && t.tipoHidraulico ? PREFIXO_DA_NUMERACAO[t.tipoHidraulico] : null));
 }

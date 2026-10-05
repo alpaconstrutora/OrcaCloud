@@ -1574,3 +1574,101 @@ com total, NBR 16655-3, teto/piso e o encargo do responsável; sem climatizado d
   `BlueprintEditor.test.tsx` rodou inteiro na suíte desta vez). `npm run build` exit 0, 0 `error TS`.
 - Fica para a prova no app real: abrir Carga térmica num estudo com clima declarado e ver o mapa de
   calor e o PDF do memorial — a E3 abre com esse passeio.
+
+### Etapa 3.1 + 3.2 + 3.3 — 04/10/2026 (frente `clima-e3`, **kernel 0.91.0 → 0.92.0**, um bump para as quatro fases)
+
+**Decisão de desenho.** O equipamento entra na taxonomia `tipoHidraulico` (como os preventivos do
+incêndio entraram na E7), e não como família nova de componente: é o que faz rede, kit, numeração,
+conexões, IFC e tipo salvo o enxergarem sem código novo em cada um. A reserva de espaço da E11.1
+(componente `CLIMATIZACAO`) continua existindo e abre igual — no menu passou a se chamar "Reserva
+de condensadora/evaporadora", apontando para o grupo novo. **"Converter reserva em equipamento" NÃO
+entrou** — fica para a E4.1, onde o posicionamento automático cria o equipamento (a conversão é o
+mesmo gesto com a posição já dada).
+
+**Kernel (`model.ts`, `commands.ts`, `canonical.ts`, `index.ts`).**
+- 20 tipos novos em `TIPOS_DE_PONTO_HIDRAULICO`: `EVAPORADORA_HI_WALL/PISO_TETO/CASSETE/DUTADA`,
+  `CONDENSADORA_SPLIT/VRF`, `DERIVADOR_VRF`, `EXAUSTOR_AR`, `BOMBA_DRENO`, `PONTO_DRENO`,
+  `CAIXA_DISTRIBUICAO_AR`, `DIFUSOR`, `GRELHA_INSUFLAMENTO`, `GRELHA_RETORNO`, `BOCAL_AR`,
+  `TOMADA_AR_EXTERIOR`, `VENEZIANA_AR`, `CAIXA_PLENUM`, `DAMPER`, `EQUIPAMENTO_CLIMATIZACAO` — com as
+  famílias `TIPOS_DE_EVAPORADORA`, `TIPOS_DE_CONDENSADORA`, `TIPOS_DE_TERMINAL_DE_AR`,
+  `TIPOS_COM_CAPACIDADE`, `TIPOS_DE_CLIMATIZACAO` exportadas.
+- `DisciplinaDeRede` += `FRIGORIGENA` (cobre) e `DRENO_AC` (PVC soldável/CPVC); `MECANICA` segue
+  sendo o ar. `DISCIPLINAS_DO_PONTO_HIDRAULICO`: evaporadora/condensadora/derivador → FRIGORIGENA;
+  bomba e ponto de dreno → DRENO_AC; exaustor, caixa e terminais de ar → MECANICA; o personalizado nas
+  três. `materialPadraoDaDisciplina` e `MATERIAIS_DA_DISCIPLINA` cobrem as duas.
+- `Terminal.capacidadeBtuH` (inteiro > 0, só em `TIPOS_COM_CAPACIDADE`) e `Terminal.condensadoraId`
+  (só evaporadora/derivador; o alvo tem de SER condensadora) — invariantes `BAD_CAPACITY` /
+  `BAD_CONDENSER`; no canônico, `capacidadeBtuH` só quando declarada e a condensadora por ÍNDICE
+  (`condensadora`, segundo passo, molde de `central`/`principal`). `limparCondensadorasOrfas` roda em
+  todo comando: apagar a condensadora (ou ela mudar de tipo) solta a evaporadora e a lista no diff.
+  `SetTerminalProps` limpa capacidade/sistema **só quando o tipo muda**; declarar BTU/h num difusor
+  sem trocar o tipo NÃO é engolido — a invariante recusa.
+- `Trecho.bitolaSuccaoMm` (só FRIGORIGENA — a linha é UM trecho com dois diâmetros; `bitolaMm` é o
+  líquido) e `Trecho.isolamentoMm` (FRIGORIGENA, DRENO_AC, MECANICA; ≥ 0) — `BAD_PIPE_SIZE` fora
+  disso; `AddTrecho`/`SetTrechoProps` arredondam; canônico omite quando ausente.
+- `conexoes.ts`: `HIDRAULICAS` += FRIGORIGENA, DRENO_AC, MECANICA — curva, tê e redução derivados
+  também na linha, no dreno e no duto (achado do benchmark: `conexoes.ts:148` excluía MECANICA).
+
+**Tabelas por disciplina** (`tsc` guiou): `blueprintRede.ts` (cota 2500/2400, bitola 6/25, cota de
+terminal 2200/2100, cor violeta/ciano, nome e rótulo), `blueprintCamadasPorDisciplina.ts` (as duas
+moram na camada MECANICA), `blueprintIfc.ts` (`SISTEMA_IFC` `.REFRIGERATION.`/`.DRAINAGE.`; trecho =
+`IFCPIPESEGMENT`; os 20 tipos no `entidadeDoPontoHidraulico`: `IfcUnitaryEquipment .SPLITSYSTEM./
+.AIRCONDITIONINGUNIT.`, `IfcFan`, `IfcPump .SUBMERSIBLEPUMP.`, `IfcAirTerminal .DIFFUSER./.GRILLE./
+.REGISTER./.LOUVRE.`, `IfcDuctFitting`, `IfcDamper`). `blueprintHidraulica.ts`: 20 fichas nos grupos
+"Climatização — equipamentos / dreno / terminais de ar" (medidas da reserva da E11.1; DN mínimo da
+linha 6 mm; `sobreOTrecho` no derivador e no damper).
+
+**Editor.** `MenuComponentes`: os três grupos novos entram na família Mecânica (`familiaDoGrupo`),
+em três colunas, com "Linha frigorígena" e "Dreno de condensado" como trechos (`tool: 'rede'`).
+`PainelTrechoSelecionado`: **Capacidade (BTU/h)** em quem troca calor, **Condensadora (sistema)** na
+evaporadora/derivador (vermelho enquanto sem sistema; nome = número derivado + BTU/h), **Sucção** na
+linha (padrão = a de líquido) e **Isolamento** na linha/dreno/duto. `blueprintTipos.ts`: a
+capacidade entra no tipo salvo (só quando declarada — assinatura dos tipos antigos intacta): o
+cadastro de equipamentos da organização nasce aqui, é a base do catálogo da E4.1.
+
+**O que da 3.3 ficou para depois (dito, não escondido):** o terminal mecânico de TEXTO LIVRE
+("Difusor / grelha") continua no menu e no canvas como estava — não foi convertido nem lido como
+legado; `especificacaoDoTerminal` ainda não escreve capacidade/vazão (E9.1). Potência elétrica do
+equipamento e o ponto elétrico automático ficam na E4.3, como o roadmap já previa.
+
+### Etapa 3.4 — 04/10/2026 (mesma frente, mesma 0.92.0)
+
+- `utils/blueprintSimbolosClimatizacao.ts` — fonte única do símbolo 2D dos 20 tipos (mesmas
+  primitivas do incêndio; `desenharSimboloDeClimatizacao` para a prancha; `idsDaClimatizacao` para a
+  vista esconder tudo). O canvas ganhou `primitivasDoSimboloDaPeca(t)` (incêndio OU climatização) no
+  lugar do teste só de incêndio; o X do difusor de texto livre segue para quem não tem símbolo.
+- Numeração derivada (EV-1, CD-1, DV-n, DF-n…): o laço do incêndio foi EXTRAÍDO para
+  `utils/blueprintNumeracaoDerivada.ts` e `numeracaoDeIncendio` passou a chamá-lo (os 3 testes do
+  incêndio provam que nada mudou); `blueprintNumeracaoClimatizacao.ts` usa a sigla da ficha como
+  prefixo — evaporadoras dividem UMA série seja qual for o tipo. Canvas escreve o número no lugar da
+  sigla; o painel mostra "Número EV-2 — derivado…"; o seletor de condensadora lista por número.
+- Kit disparado pelo equipamento: os kits da organização (`kitsDaPeca`) já casam por
+  `(disciplina, tipo)` de QUALQUER terminal — o equipamento tipado entra sem código novo. **Não
+  entrou:** kit padrão (dreno + ponto elétrico junto da evaporadora — E4.3/E5.4), marcas de
+  verificação da climatização (`blueprintVerificacaoRede.ts:91`, fica para a E5 junto com a rota) e
+  o harness do canvas/prancha (a prancha de climatização é a E8.1).
+
+**Prova.** `blueprintClimatizacaoTipos.test.ts` (12: disciplinas e materiais; 20 tipos com ficha,
+grupo e disciplina coerentes; `BAD_POINT_KIND` na linha errada; capacidade arredondada e sistema;
+invariantes de capacidade/condensadora com o modelo torto; troca de tipo limpa só o que o tipo novo
+não carrega; apagar a condensadora solta a evaporadora; canônico vai e volta e omite ausentes;
+sucção/isolamento por disciplina; conexões derivadas num L de cada disciplina),
+`blueprintSimbolosClimatizacao.test.ts` (4: 20 símbolos distintos = exatamente os tipos dos grupos de
+climatização; todas as primitivas no quadrado unitário; prancha no lugar e tamanho; ids),
+`blueprintNumeracaoClimatizacao.test.ts` (3: ordem e séries; rótulo declarado reserva; incêndio
+idêntico pelo laço extraído), `components/PainelTrechoClimatizacao.test.tsx` (3: evaporadora,
+condensadora × difusor, trecho por disciplina). Goldens: com a string em 0.91.0 e TUDO isto no
+código, os 7 passaram (prova de que desenho antigo não muda de forma); depois do bump, 6 falhas só
+de hash, contagens idênticas; 23 pinos trocados por glob; bundle `planta-api` regerado em 0.92.0.
+
+### Fecho da Etapa 3 — 04/10/2026
+
+- Sem migration (tudo é kernel + derivação; o tipo salvo já era JSONB).
+- **Suíte inteira**: 7612 testes = 7574 ✅ + 34 pulados de propósito + 4 falhas, todas de
+  EXPECTATIVA antiga que a taxonomia nova mudou (lista de grupos e regex `^(Hidráulica|Incêndio)` em
+  `blueprintPontoHidraulicoTipos`, "sete cores" → nove em `blueprintRede`, "Condensadora" → "Reserva
+  de condensadora" no `BlueprintEditor` HVAC) — corrigidas e os três arquivos rodados de novo verdes
+  (editor 225/225). `npm run build` exit 0 (tsc dentro), `tsc` isolado exit 0, `check-ui-standard`
+  nos 4 `.tsx` tocados e `check-xss-sinks` exit 0.
+- Fica para a prova no app real (junto com a da E0–E2, que ainda falta): inserir evaporadora +
+  condensadora pelo menu Mecânica, ligar o sistema no painel, ver EV-1/CD-1 no canvas.

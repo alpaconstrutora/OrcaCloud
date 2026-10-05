@@ -63,6 +63,8 @@ export interface PropriedadesDeTerminal {
    */
   fatorK?: number;
   posicaoSprinkler?: Terminal['posicaoSprinkler'];
+  /** Climatização E3.1: a capacidade (BTU/h) do equipamento — o tipo salvo é o modelo comercial. Só quando declarada. */
+  capacidadeBtuH?: number;
   /**
    * Incêndio E4.1: a curva Q×H e o NPSH requerido da bomba — o CADASTRO DE
    * BOMBAS é o tipo salvo da organização (nome = fabricante e modelo). Só
@@ -139,6 +141,7 @@ export function propriedadesDoTerminal(t: Terminal): PropriedadesDeTerminal {
     volumeL: t.volumeL ?? null,
     fatorK: t.fatorK ?? undefined,
     posicaoSprinkler: t.posicaoSprinkler ?? undefined,
+    capacidadeBtuH: t.capacidadeBtuH ?? undefined,
     curvaBomba: t.curvaBomba ? t.curvaBomba.map((p) => ({ ...p })) : undefined,
     npshrMm: t.npshrMm ?? undefined,
   };
@@ -183,7 +186,7 @@ export function resumoDoTipo(p: PropriedadesDoTipo): string {
         ? `${nomeDoTipoEstrutural(p.kind)} Ø${cm(p.larguraMm)} · ${m(p.alturaMm)} m`
         : `${nomeDoTipoEstrutural(p.kind)} ${cm(p.larguraMm)}×${cm(p.profundidadeMm || p.alturaMm)} · ${m(p.alturaMm)} m`;
     case 'TERMINAL':
-      return `${p.tipo}${p.potenciaW ? ` ${p.potenciaW} VA` : ''}${p.fatorK ? ` · K ${p.fatorK}` : ''}${p.curvaBomba ? ` · curva ${p.curvaBomba.length} pontos` : ''} · ${cm(p.cotaMm)} cm`;
+      return `${p.tipo}${p.potenciaW ? ` ${p.potenciaW} VA` : ''}${p.fatorK ? ` · K ${p.fatorK}` : ''}${p.capacidadeBtuH ? ` · ${p.capacidadeBtuH.toLocaleString('pt-BR')} BTU/h` : ''}${p.curvaBomba ? ` · curva ${p.curvaBomba.length} pontos` : ''} · ${cm(p.cotaMm)} cm`;
     case 'ESCADA':
       return `${p.tipo === 'RAMPA' ? 'Rampa' : 'Escada'} ${m(p.larguraMm)} m${p.tipo === 'ESCADA' ? ` · espelho ${p.alvoEspelhoMm} mm` : ''}`;
     case 'TELHADO':
@@ -234,6 +237,7 @@ export function camposDoTerminal(p: PropriedadesDeTerminal) {
     // O tipo SEM K aplicado a um sprinkler devolve o K da ficha — aplicar um tipo é copiar tudo.
     fatorK: p.fatorK ?? null,
     posicaoSprinkler: p.posicaoSprinkler ?? null,
+    capacidadeBtuH: p.capacidadeBtuH ?? null,
     curvaBomba: p.curvaBomba ? p.curvaBomba.map((x) => ({ ...x })) : null,
     npshrMm: p.npshrMm ?? null,
   };

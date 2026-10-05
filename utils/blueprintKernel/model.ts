@@ -2559,7 +2559,7 @@ export function nomeDoTipoDeNucleo(tipo: TipoDeNucleo): string {
  * ficam de fora só porque ninguém os pediu ainda. Acrescentar um valor é
  * acrescentar um valor — não é mexer no modelo.
  */
-export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA' | 'PLUVIAL' | 'INCENDIO';
+export type DisciplinaDeRede = 'ELETRICA' | 'AGUA_FRIA' | 'AGUA_QUENTE' | 'ESGOTO' | 'MECANICA' | 'PLUVIAL' | 'INCENDIO' | 'FRIGORIGENA' | 'DRENO_AC';
 
 /** As disciplinas, em lista — para os invariantes recusarem valor inventado. */
 export const DISCIPLINAS: DisciplinaDeRede[] = [
@@ -2576,6 +2576,12 @@ export const DISCIPLINAS: DisciplinaDeRede[] = [
   // INCÊNDIO (30/09/2026, roadmap de incêndio E1.1): a rede de combate — hidrantes,
   // mangotinhos, sprinklers, VGA, bombas — num sistema só (a rede combinada é a mesma rede).
   'INCENDIO',
+  // CLIMATIZAÇÃO (04/10/2026, E3.2 do roadmap de climatização, 0.92.0): a LINHA
+  // FRIGORÍGENA (o par líquido/sucção em cobre isolado, da evaporadora à
+  // condensadora) e o DRENO de condensado (PVC por gravidade, ou bomba de dreno).
+  // Têm física diferente do duto, que continua em MECANICA.
+  'FRIGORIGENA',
+  'DRENO_AC',
 ];
 
 /**
@@ -2635,6 +2641,9 @@ export const MATERIAIS_DA_DISCIPLINA: Partial<Record<DisciplinaDeRede, readonly 
   AGUA_FRIA: ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'],
   AGUA_QUENTE: ['PVC_SOLDAVEL', 'CPVC', 'PPR', 'COBRE'],
   INCENDIO: ['ACO_GALVANIZADO', 'ACO_CARBONO', 'CPVC_INCENDIO', 'COBRE'],
+  // Climatização E3.2 (0.92.0): a linha é cobre; o dreno é PVC (soldável ou CPVC perto do calor).
+  FRIGORIGENA: ['COBRE'],
+  DRENO_AC: ['PVC_SOLDAVEL', 'CPVC'],
 };
 
 /** A SEÇÃO da calha (E6.2, kernel 0.67.0): a meia-cana e a retangular (a da platibanda). */
@@ -2646,7 +2655,7 @@ export type SecaoDeCalha = (typeof SECOES_DE_CALHA)[number];
  * o que o lançamento automático sempre supôs. Outras redes não têm material.
  */
 export function materialPadraoDaDisciplina(d: DisciplinaDeRede): MaterialDeTubo | null {
-  return d === 'AGUA_FRIA' ? 'PVC_SOLDAVEL' : d === 'AGUA_QUENTE' ? 'CPVC' : d === 'INCENDIO' ? 'ACO_GALVANIZADO' : null;
+  return d === 'AGUA_FRIA' ? 'PVC_SOLDAVEL' : d === 'AGUA_QUENTE' ? 'CPVC' : d === 'INCENDIO' ? 'ACO_GALVANIZADO' : d === 'FRIGORIGENA' ? 'COBRE' : d === 'DRENO_AC' ? 'PVC_SOLDAVEL' : null;
 }
 
 /** O material efetivo do trecho: o declarado, senão o padrão da disciplina. */
@@ -2737,6 +2746,14 @@ export interface Trecho {
    * Omitido no canônico quando falso, como os demais campos novos.
    */
   sugerido?: boolean | null;
+  /**
+   * LINHA FRIGORÍGENA (0.92.0, E3.2): o par corre junto, então é UM trecho com
+   * dois diâmetros — `bitolaMm` é a linha de LÍQUIDO e esta é a de SUCÇÃO (mm
+   * inteiro > 0). Só em `FRIGORIGENA`; ausente = igual à de líquido.
+   */
+  bitolaSuccaoMm?: number | null;
+  /** ISOLAMENTO térmico do tubo/duto, mm inteiro ≥ 0 — FRIGORIGENA, DRENO_AC e MECANICA. Ausente = sem isolamento. */
+  isolamentoMm?: number | null;
 }
 
 /**
@@ -2955,7 +2972,40 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   // bombas — sobre o trecho) e o DETECTOR DE CHAMA (do laço, cobertura por cone).
   'MANOMETRO',
   'DETECTOR_CHAMA',
+  // 04/10/2026 (climatização E3.1, 0.92.0): o EQUIPAMENTO como peça da REDE — e não
+  // mais só reserva de espaço (achado 1 do benchmark). Evaporadoras por tipo,
+  // condensadoras split e VRF, o derivador do VRF, o exaustor, a bomba e o ponto
+  // de dreno, a caixa de distribuição e os TERMINAIS DE AR com taxonomia (E3.3),
+  // mais o equipamento personalizado (o cadastro de tipos dá nome e item).
+  'EVAPORADORA_HI_WALL',
+  'EVAPORADORA_PISO_TETO',
+  'EVAPORADORA_CASSETE',
+  'EVAPORADORA_DUTADA',
+  'CONDENSADORA_SPLIT',
+  'CONDENSADORA_VRF',
+  'DERIVADOR_VRF',
+  'EXAUSTOR_AR',
+  'BOMBA_DRENO',
+  'PONTO_DRENO',
+  'CAIXA_DISTRIBUICAO_AR',
+  'DIFUSOR',
+  'GRELHA_INSUFLAMENTO',
+  'GRELHA_RETORNO',
+  'BOCAL_AR',
+  'TOMADA_AR_EXTERIOR',
+  'VENEZIANA_AR',
+  'CAIXA_PLENUM',
+  'DAMPER',
+  'EQUIPAMENTO_CLIMATIZACAO',
 ] as const;
+
+/** Climatização E3.1: as famílias, para quem precisa decidir sem conhecer a lista. */
+export const TIPOS_DE_EVAPORADORA = ['EVAPORADORA_HI_WALL', 'EVAPORADORA_PISO_TETO', 'EVAPORADORA_CASSETE', 'EVAPORADORA_DUTADA'] as const satisfies readonly TipoDePontoHidraulico[];
+export const TIPOS_DE_CONDENSADORA = ['CONDENSADORA_SPLIT', 'CONDENSADORA_VRF'] as const satisfies readonly TipoDePontoHidraulico[];
+export const TIPOS_DE_TERMINAL_DE_AR = ['DIFUSOR', 'GRELHA_INSUFLAMENTO', 'GRELHA_RETORNO', 'BOCAL_AR', 'TOMADA_AR_EXTERIOR', 'VENEZIANA_AR', 'CAIXA_PLENUM', 'DAMPER'] as const satisfies readonly TipoDePontoHidraulico[];
+/** Os que têm CAPACIDADE (BTU/h) declarável: quem troca calor. */
+export const TIPOS_COM_CAPACIDADE = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
+export const TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF', 'EXAUSTOR_AR', 'BOMBA_DRENO', 'PONTO_DRENO', 'CAIXA_DISTRIBUICAO_AR', ...TIPOS_DE_TERMINAL_DE_AR, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
 
@@ -3064,6 +3114,27 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   AVISADOR: INC,
   CENTRAL_ALARME: INC,
   PREVENTIVO_PERSONALIZADO: INC,
+  // Climatização E3.1/E3.3 (0.92.0): o equipamento liga na LINHA; o dreno no DRENO; o ar na MECANICA.
+  EVAPORADORA_HI_WALL: ['FRIGORIGENA'],
+  EVAPORADORA_PISO_TETO: ['FRIGORIGENA'],
+  EVAPORADORA_CASSETE: ['FRIGORIGENA'],
+  EVAPORADORA_DUTADA: ['FRIGORIGENA'],
+  CONDENSADORA_SPLIT: ['FRIGORIGENA'],
+  CONDENSADORA_VRF: ['FRIGORIGENA'],
+  DERIVADOR_VRF: ['FRIGORIGENA'],
+  EXAUSTOR_AR: ['MECANICA'],
+  BOMBA_DRENO: ['DRENO_AC'],
+  PONTO_DRENO: ['DRENO_AC'],
+  CAIXA_DISTRIBUICAO_AR: ['MECANICA'],
+  DIFUSOR: ['MECANICA'],
+  GRELHA_INSUFLAMENTO: ['MECANICA'],
+  GRELHA_RETORNO: ['MECANICA'],
+  BOCAL_AR: ['MECANICA'],
+  TOMADA_AR_EXTERIOR: ['MECANICA'],
+  VENEZIANA_AR: ['MECANICA'],
+  CAIXA_PLENUM: ['MECANICA'],
+  DAMPER: ['MECANICA'],
+  EQUIPAMENTO_CLIMATIZACAO: ['FRIGORIGENA', 'DRENO_AC', 'MECANICA'],
 };
 
 /** INCÊNDIO (0.88.0, E7.4): os tipos que entram no LAÇO de uma central de alarme. */
@@ -3293,6 +3364,19 @@ export interface Terminal {
    * hashes diferentes.
    */
   rotacaoGraus?: number | null;
+  /**
+   * CLIMATIZAÇÃO (0.92.0, E3.1): a CAPACIDADE nominal declarada, BTU/h inteiro > 0 —
+   * só nos tipos de `TIPOS_COM_CAPACIDADE`. Ausente = não declarada (a E4 sugere pela
+   * carga térmica). Omitida no canônico quando ausente.
+   */
+  capacidadeBtuH?: number | null;
+  /**
+   * CLIMATIZAÇÃO (0.92.0, E3.1): a CONDENSADORA desta evaporadora (ou deste
+   * derivador VRF) — a relação que faz o sistema. Canônico por ÍNDICE
+   * (`condensadora`), segundo passo; apagar a condensadora solta a evaporadora
+   * (`limparCondensadorasOrfas`). Ausente = sem sistema.
+   */
+  condensadoraId?: ObjectId | null;
 }
 
 /**
@@ -3951,6 +4035,21 @@ export function limparLacosOrfos(model: BlueprintModel): ObjectId[] {
   for (const t of model.terminais ?? []) {
     if (t.centralAlarmeId != null && !ids.has(t.centralAlarmeId)) {
       t.centralAlarmeId = null;
+      tocadas.push(t.id);
+    }
+  }
+  return tocadas;
+}
+
+/** Climatização E3.1: a evaporadora cuja condensadora sumiu (ou deixou de ser condensadora) perde o sistema. */
+export function limparCondensadorasOrfas(model: BlueprintModel): ObjectId[] {
+  const porId = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+  const tocadas: ObjectId[] = [];
+  for (const t of model.terminais ?? []) {
+    if (t.condensadoraId == null) continue;
+    const c = porId.get(t.condensadoraId);
+    if (!c || !c.tipoHidraulico || !(TIPOS_DE_CONDENSADORA as readonly string[]).includes(c.tipoHidraulico)) {
+      t.condensadoraId = null;
       tocadas.push(t.id);
     }
   }
@@ -5100,6 +5199,32 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!st.camadas) continue;
     if (st.kind !== 'LAJE') throw new KernelError('BAD_LAYER_THICKNESS', `${st.id} (${st.kind}) não tem camadas — só a laje`);
     camadasDaPecaOk(st.camadas, `Laje ${st.id}`);
+  }
+
+  // CLIMATIZAÇÃO (0.92.0, E3.1/E3.2): capacidade, sistema evaporadora → condensadora,
+  // par de diâmetros e isolamento — cada um só onde faz sentido.
+  const porIdTerminal = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+  for (const t of model.terminais ?? []) {
+    if (t.capacidadeBtuH != null) {
+      if (!t.tipoHidraulico || !(TIPOS_COM_CAPACIDADE as readonly string[]).includes(t.tipoHidraulico)) throw new KernelError('BAD_CAPACITY', `${t.id} (${t.tipoHidraulico ?? t.tipo}) não tem capacidade`);
+      if (!Number.isInteger(t.capacidadeBtuH) || t.capacidadeBtuH <= 0) throw new KernelError('BAD_CAPACITY', `Capacidade inválida em ${t.id}: ${String(t.capacidadeBtuH)} BTU/h`);
+    }
+    if (t.condensadoraId != null) {
+      if (!t.tipoHidraulico || !([...TIPOS_DE_EVAPORADORA, 'DERIVADOR_VRF'] as readonly string[]).includes(t.tipoHidraulico)) throw new KernelError('BAD_CONDENSER', `${t.id} (${t.tipoHidraulico ?? t.tipo}) não liga em condensadora`);
+      const c = porIdTerminal.get(t.condensadoraId);
+      if (!c) throw new KernelError('BAD_CONDENSER', `Condensadora inexistente em ${t.id}: ${t.condensadoraId}`);
+      if (c.id === t.id || !c.tipoHidraulico || !(TIPOS_DE_CONDENSADORA as readonly string[]).includes(c.tipoHidraulico)) throw new KernelError('BAD_CONDENSER', `${t.condensadoraId} não é condensadora (${c.tipoHidraulico ?? c.tipo})`);
+    }
+  }
+  for (const t of model.trechos ?? []) {
+    if (t.bitolaSuccaoMm != null) {
+      if (t.disciplina !== 'FRIGORIGENA') throw new KernelError('BAD_PIPE_SIZE', `Diâmetro de sucção fora da linha frigorígena em ${t.id} (${t.disciplina})`);
+      if (!Number.isInteger(t.bitolaSuccaoMm) || t.bitolaSuccaoMm <= 0) throw new KernelError('BAD_PIPE_SIZE', `Diâmetro de sucção inválido em ${t.id}: ${String(t.bitolaSuccaoMm)}`);
+    }
+    if (t.isolamentoMm != null) {
+      if (!(['FRIGORIGENA', 'DRENO_AC', 'MECANICA'] as readonly string[]).includes(t.disciplina)) throw new KernelError('BAD_PIPE_SIZE', `Isolamento fora de linha/dreno/duto em ${t.id} (${t.disciplina})`);
+      if (!Number.isInteger(t.isolamentoMm) || t.isolamentoMm < 0) throw new KernelError('BAD_PIPE_SIZE', `Isolamento inválido em ${t.id}: ${String(t.isolamentoMm)}`);
+    }
   }
 
   // Parâmetros personalizados, nas famílias que os carregam.

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.91.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.92.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -604,7 +604,7 @@ var TIPOS_DE_AREA_DO_LOTEAMENTO = ["VERDE", "INSTITUCIONAL", "VIARIO", "RESERVA"
 var TIPOS_AMBIENTAIS = ["APP", "RESERVA_LEGAL", "VEGETACAO_NATIVA", "AREA_CONSOLIDADA", "SERVIDAO", "HIDROGRAFIA"];
 var TIPOS_DE_AREA_PUBLICA = [...TIPOS_DE_AREA_DO_LOTEAMENTO, ...TIPOS_AMBIENTAIS];
 function materialPadraoDaDisciplina(d) {
-  return d === "AGUA_FRIA" ? "PVC_SOLDAVEL" : d === "AGUA_QUENTE" ? "CPVC" : d === "INCENDIO" ? "ACO_GALVANIZADO" : null;
+  return d === "AGUA_FRIA" ? "PVC_SOLDAVEL" : d === "AGUA_QUENTE" ? "CPVC" : d === "INCENDIO" ? "ACO_GALVANIZADO" : d === "FRIGORIGENA" ? "COBRE" : d === "DRENO_AC" ? "PVC_SOLDAVEL" : null;
 }
 function materialDoTrecho(t) {
   return t.material ?? materialPadraoDaDisciplina(t.disciplina);
@@ -693,8 +693,38 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   // 01/10/2026 (incêndio pós-roadmap, Fase F, 0.89.0): o MANÔMETRO (o kit da VGA e da casa de
   // bombas — sobre o trecho) e o DETECTOR DE CHAMA (do laço, cobertura por cone).
   "MANOMETRO",
-  "DETECTOR_CHAMA"
+  "DETECTOR_CHAMA",
+  // 04/10/2026 (climatização E3.1, 0.92.0): o EQUIPAMENTO como peça da REDE — e não
+  // mais só reserva de espaço (achado 1 do benchmark). Evaporadoras por tipo,
+  // condensadoras split e VRF, o derivador do VRF, o exaustor, a bomba e o ponto
+  // de dreno, a caixa de distribuição e os TERMINAIS DE AR com taxonomia (E3.3),
+  // mais o equipamento personalizado (o cadastro de tipos dá nome e item).
+  "EVAPORADORA_HI_WALL",
+  "EVAPORADORA_PISO_TETO",
+  "EVAPORADORA_CASSETE",
+  "EVAPORADORA_DUTADA",
+  "CONDENSADORA_SPLIT",
+  "CONDENSADORA_VRF",
+  "DERIVADOR_VRF",
+  "EXAUSTOR_AR",
+  "BOMBA_DRENO",
+  "PONTO_DRENO",
+  "CAIXA_DISTRIBUICAO_AR",
+  "DIFUSOR",
+  "GRELHA_INSUFLAMENTO",
+  "GRELHA_RETORNO",
+  "BOCAL_AR",
+  "TOMADA_AR_EXTERIOR",
+  "VENEZIANA_AR",
+  "CAIXA_PLENUM",
+  "DAMPER",
+  "EQUIPAMENTO_CLIMATIZACAO"
 ];
+var TIPOS_DE_EVAPORADORA = ["EVAPORADORA_HI_WALL", "EVAPORADORA_PISO_TETO", "EVAPORADORA_CASSETE", "EVAPORADORA_DUTADA"];
+var TIPOS_DE_CONDENSADORA = ["CONDENSADORA_SPLIT", "CONDENSADORA_VRF"];
+var TIPOS_DE_TERMINAL_DE_AR = ["DIFUSOR", "GRELHA_INSUFLAMENTO", "GRELHA_RETORNO", "BOCAL_AR", "TOMADA_AR_EXTERIOR", "VENEZIANA_AR", "CAIXA_PLENUM", "DAMPER"];
+var TIPOS_COM_CAPACIDADE = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "EQUIPAMENTO_CLIMATIZACAO"];
+var TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "DERIVADOR_VRF", "EXAUSTOR_AR", "BOMBA_DRENO", "PONTO_DRENO", "CAIXA_DISTRIBUICAO_AR", ...TIPOS_DE_TERMINAL_DE_AR, "EQUIPAMENTO_CLIMATIZACAO"];
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
   const saida = [];
@@ -2191,6 +2221,9 @@ function projetar(model) {
       // E6.2 (0.67.0): a calha, só quando o trecho é calha.
       secaoCalha: t.secaoCalha ?? void 0,
       alturaCalhaMm: t.alturaCalhaMm ?? void 0,
+      // Climatização E3.2 (0.92.0): só quando declarados.
+      bitolaSuccaoMm: t.bitolaSuccaoMm ?? void 0,
+      isolamentoMm: t.isolamentoMm ?? void 0,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? true : void 0,
       parametros: parametrosCanonicos(t.parametros)
@@ -2240,6 +2273,8 @@ function projetar(model) {
       codigoPlaca: t.codigoPlaca ?? void 0,
       // Incêndio E7.3 (0.87.0): a autonomia da luminária de emergência, só quando declarada.
       autonomiaMin: t.autonomiaMin ?? void 0,
+      // Climatização E3.1 (0.92.0): a capacidade, só quando declarada; a condensadora vai por índice (segundo passo).
+      capacidadeBtuH: t.capacidadeBtuH ?? void 0,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? void 0,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -2324,6 +2359,7 @@ function projetar(model) {
     if (t.item.bombaPrincipalId != null && indiceDoTerminal.has(t.item.bombaPrincipalId)) t.geom.principal = indiceDoTerminal.get(t.item.bombaPrincipalId);
     if (t.item.alvoId != null && indiceDoTerminal.has(t.item.alvoId)) t.geom.alvo = indiceDoTerminal.get(t.item.alvoId);
     if (t.item.centralAlarmeId != null && indiceDoTerminal.has(t.item.centralAlarmeId)) t.geom.central = indiceDoTerminal.get(t.item.centralAlarmeId);
+    if (t.item.condensadoraId != null && indiceDoTerminal.has(t.item.condensadoraId)) t.geom.condensadora = indiceDoTerminal.get(t.item.condensadoraId);
   }
   const indiceDeParede = new Map(walls.map((w, i) => [w.item.uid, i]));
   const indiceDeEstruturaG = new Map(structures.map((s2, i) => [s2.item.uid, i]));
@@ -3002,6 +3038,8 @@ function modelFromCanonicalPayload(payload) {
       condutores: t.condutores ?? null,
       material: t.material ?? null,
       ...t.secaoCalha ? { secaoCalha: t.secaoCalha, alturaCalhaMm: t.alturaCalhaMm ?? null } : {},
+      ...t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {},
+      ...t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {},
       sugerido: t.sugerido ? true : null,
       ...t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}
     });
@@ -3038,6 +3076,7 @@ function modelFromCanonicalPayload(payload) {
       capacidadeExtintora: t.capacidadeExtintora ?? null,
       codigoPlaca: t.codigoPlaca ?? null,
       autonomiaMin: t.autonomiaMin ?? null,
+      capacidadeBtuH: t.capacidadeBtuH ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -3118,6 +3157,12 @@ function modelFromCanonicalPayload(payload) {
     const d = model.terminais[i];
     const c = model.terminais[t.central];
     if (d && c && c.id !== d.id) d.centralAlarmeId = c.id;
+  });
+  (payload.terminais ?? []).forEach((t, i) => {
+    if (t.condensadora == null) return;
+    const e = model.terminais[i];
+    const c = model.terminais[t.condensadora];
+    if (e && c && c.id !== e.id) e.condensadoraId = c.id;
   });
   (payload.terminais ?? []).forEach((t, i) => {
     if (t.alvo == null) return;
@@ -3261,7 +3306,7 @@ function extensaoVerticalDaCaixa(t) {
   }
   return c.cotaE === "FUNDO" ? { fundoMm: t.cotaMm, topoMm: t.cotaMm + altura } : { fundoMm: t.cotaMm - altura, topoMm: t.cotaMm };
 }
-var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL", "INCENDIO"];
+var HIDRAULICAS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL", "INCENDIO", "FRIGORIGENA", "DRENO_AC", "MECANICA"];
 var POR_GRAVIDADE = ["ESGOTO", "PLUVIAL"];
 function fazerChave(niveis) {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
@@ -4572,6 +4617,39 @@ function segmentosDoEletroduto(t, peDireitoMm) {
   ];
 }
 
+// utils/blueprintNumeracaoDerivada.ts
+function numeracaoDerivada(model, prefixoDe) {
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const porPrefixo = /* @__PURE__ */ new Map();
+  for (const t of model.terminais ?? []) {
+    const p = prefixoDe(t);
+    if (!p) continue;
+    porPrefixo.set(p, [...porPrefixo.get(p) ?? [], t]);
+  }
+  const resultado = /* @__PURE__ */ new Map();
+  for (const [prefixo, pecas] of porPrefixo) {
+    const doPrefixo = new RegExp(`^${prefixo}-(\\d+)$`, "i");
+    const reservados = /* @__PURE__ */ new Set();
+    for (const t of pecas) {
+      const r = t.rotulo?.trim();
+      if (!r) continue;
+      resultado.set(t.id, { numero: r, origem: "DECLARADO" });
+      const m = doPrefixo.exec(r);
+      if (m) reservados.add(Number(m[1]));
+    }
+    const ordenadas = pecas.filter((t) => !t.rotulo?.trim()).sort(
+      (a, b) => (elevacao.get(a.levelId) ?? 0) - (elevacao.get(b.levelId) ?? 0) || b.at.y - a.at.y || a.at.x - b.at.x || a.id.localeCompare(b.id)
+    );
+    let n4 = 1;
+    for (const t of ordenadas) {
+      while (reservados.has(n4)) n4++;
+      resultado.set(t.id, { numero: `${prefixo}-${n4}`, origem: "DERIVADO" });
+      n4++;
+    }
+  }
+  return resultado;
+}
+
 // utils/blueprintNumeracaoIncendio.ts
 var PREFIXO_DA_NUMERACAO = {
   HIDRANTE_SIMPLES: "H",
@@ -4597,37 +4675,7 @@ var PREFIXO_DA_NUMERACAO = {
   PREVENTIVO_PERSONALIZADO: "PP"
 };
 function numeracaoDeIncendio(model) {
-  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
-  const numeraveis = (model.terminais ?? []).filter(
-    (t) => t.disciplina === "INCENDIO" && !!t.tipoHidraulico && !!PREFIXO_DA_NUMERACAO[t.tipoHidraulico]
-  );
-  const porPrefixo = /* @__PURE__ */ new Map();
-  for (const t of numeraveis) {
-    const p = PREFIXO_DA_NUMERACAO[t.tipoHidraulico];
-    porPrefixo.set(p, [...porPrefixo.get(p) ?? [], t]);
-  }
-  const resultado = /* @__PURE__ */ new Map();
-  for (const [prefixo, pecas] of porPrefixo) {
-    const doPrefixo = new RegExp(`^${prefixo}-(\\d+)$`, "i");
-    const reservados = /* @__PURE__ */ new Set();
-    for (const t of pecas) {
-      const r = t.rotulo?.trim();
-      if (!r) continue;
-      resultado.set(t.id, { numero: r, origem: "DECLARADO" });
-      const m = doPrefixo.exec(r);
-      if (m) reservados.add(Number(m[1]));
-    }
-    const ordenadas = pecas.filter((t) => !t.rotulo?.trim()).sort(
-      (a, b) => (elevacao.get(a.levelId) ?? 0) - (elevacao.get(b.levelId) ?? 0) || b.at.y - a.at.y || a.at.x - b.at.x || a.id.localeCompare(b.id)
-    );
-    let n4 = 1;
-    for (const t of ordenadas) {
-      while (reservados.has(n4)) n4++;
-      resultado.set(t.id, { numero: `${prefixo}-${n4}`, origem: "DERIVADO" });
-      n4++;
-    }
-  }
-  return resultado;
+  return numeracaoDerivada(model, (t) => t.disciplina === "INCENDIO" && t.tipoHidraulico ? PREFIXO_DA_NUMERACAO[t.tipoHidraulico] : null);
 }
 
 // utils/blueprintRede.ts
@@ -4658,7 +4706,9 @@ var ROTULO_DA_DISCIPLINA = {
   ESGOTO: "Esgoto",
   MECANICA: "Mec\xE2nica",
   PLUVIAL: "\xC1guas pluviais",
-  INCENDIO: "Inc\xEAndio"
+  INCENDIO: "Inc\xEAndio",
+  FRIGORIGENA: "Linha frigor\xEDgena",
+  DRENO_AC: "Dreno (ar-condicionado)"
 };
 function comprimentoDoTrecho(t) {
   const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
@@ -6377,7 +6427,10 @@ var SISTEMA_IFC = {
   // PredefinedType `$`. É .AIRCONDITIONING. (e não .VENTILATION.) porque a disciplina mecânica
   // de hoje nasce dos equipamentos de ar-condicionado; a rede só de ventilação/exaustão ganha o
   // seu tipo quando existir como tal (E7).
-  MECANICA: ".AIRCONDITIONING."
+  MECANICA: ".AIRCONDITIONING.",
+  // Climatização E3.2 (0.92.0): a linha é refrigeração; o dreno é drenagem.
+  FRIGORIGENA: ".REFRIGERATION.",
+  DRENO_AC: ".DRAINAGE."
 };
 var CLASSE_DO_TRECHO = {
   AGUA_FRIA: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
@@ -6386,7 +6439,9 @@ var CLASSE_DO_TRECHO = {
   PLUVIAL: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   INCENDIO: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   ELETRICA: { entidade: "IFCCABLECARRIERSEGMENT", predefinido: ".CONDUITSEGMENT.", qto: "Qto_CableCarrierSegmentBaseQuantities" },
-  MECANICA: { entidade: "IFCDUCTSEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_DuctSegmentBaseQuantities" }
+  MECANICA: { entidade: "IFCDUCTSEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_DuctSegmentBaseQuantities" },
+  FRIGORIGENA: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
+  DRENO_AC: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" }
 };
 var classeDoTrecho = (disciplina) => CLASSE_DO_TRECHO[disciplina] ?? { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" };
 function solidoAoLongo(ctx, perfil, inicio, eixo, comprimento) {
@@ -6645,6 +6700,42 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCVALVE", predefinido: ".CHECK." };
     case "HIDROMETRO":
       return { entidade: "IFCFLOWMETER", predefinido: ".WATERMETER." };
+    // 04/10/2026 (climatização E3.1/E3.3, kernel 0.92.0): o equipamento como peça da
+    // rede. Evaporadora/condensadora = IfcUnitaryEquipment (como a reserva já saía);
+    // exaustor = IfcFan; terminais de ar = IfcAirTerminal; damper = IfcDamper.
+    case "EVAPORADORA_HI_WALL":
+    case "EVAPORADORA_PISO_TETO":
+    case "EVAPORADORA_CASSETE":
+    case "EVAPORADORA_DUTADA":
+    case "CONDENSADORA_SPLIT":
+      return { entidade: "IFCUNITARYEQUIPMENT", predefinido: ".SPLITSYSTEM." };
+    case "CONDENSADORA_VRF":
+      return { entidade: "IFCUNITARYEQUIPMENT", predefinido: ".AIRCONDITIONINGUNIT." };
+    case "DERIVADOR_VRF":
+      return { entidade: "IFCPIPEFITTING", predefinido: ".JUNCTION." };
+    case "EXAUSTOR_AR":
+      return { entidade: "IFCFAN", predefinido: ".CENTRIFUGALFORWARDCURVED." };
+    case "BOMBA_DRENO":
+      return { entidade: "IFCPUMP", predefinido: ".SUBMERSIBLEPUMP." };
+    case "PONTO_DRENO":
+      return { entidade: "IFCWASTETERMINAL", predefinido: ".USERDEFINED." };
+    case "CAIXA_DISTRIBUICAO_AR":
+    case "CAIXA_PLENUM":
+      return { entidade: "IFCDUCTFITTING", predefinido: ".JUNCTION." };
+    case "DIFUSOR":
+      return { entidade: "IFCAIRTERMINAL", predefinido: ".DIFFUSER." };
+    case "GRELHA_INSUFLAMENTO":
+    case "GRELHA_RETORNO":
+      return { entidade: "IFCAIRTERMINAL", predefinido: ".GRILLE." };
+    case "BOCAL_AR":
+      return { entidade: "IFCAIRTERMINAL", predefinido: ".REGISTER." };
+    case "TOMADA_AR_EXTERIOR":
+    case "VENEZIANA_AR":
+      return { entidade: "IFCAIRTERMINAL", predefinido: ".LOUVRE." };
+    case "DAMPER":
+      return { entidade: "IFCDAMPER", predefinido: ".USERDEFINED." };
+    case "EQUIPAMENTO_CLIMATIZACAO":
+      return { entidade: "IFCUNITARYEQUIPMENT", predefinido: ".USERDEFINED." };
     case "CONEXAO_JOELHO_90":
     case "CONEXAO_JOELHO_45":
       return { entidade: "IFCPIPEFITTING", predefinido: ".BEND." };
@@ -7108,6 +7199,9 @@ var CONEXOES = "Hidr\xE1ulica \u2014 conex\xF5es";
 var COMBATE = "Inc\xEAndio \u2014 hidrantes e chuveiros";
 var CASA_DE_BOMBAS = "Inc\xEAndio \u2014 bombas e v\xE1lvulas";
 var PREVENTIVOS = "Inc\xEAndio \u2014 preventivos";
+var CLIMA_EQUIP = "Climatiza\xE7\xE3o \u2014 equipamentos";
+var CLIMA_DRENO = "Climatiza\xE7\xE3o \u2014 dreno";
+var CLIMA_AR = "Climatiza\xE7\xE3o \u2014 terminais de ar";
 var FICHA_DO_PONTO_HIDRAULICO = {
   TORNEIRA: {
     rotulo: "Torneira",
@@ -7713,7 +7807,31 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: {},
     medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 400 },
     ajuda: "Equipamento de inc\xEAndio fora da lista (ventilador de pressuriza\xE7\xE3o da escada, motor, damper\u2026). Nome e item comercial v\xEAm do cadastro de tipos."
-  }
+  },
+  // ─── CLIMATIZAÇÃO (04/10/2026, E3.1/E3.3 do roadmap, kernel 0.92.0) ─────────
+  // Medidas e cotas são as da reserva de espaço da E11.1 (a peça herda o lugar);
+  // a CAPACIDADE é declarada por instância (`Terminal.capacidadeBtuH`) — a E4 a
+  // sugere pela carga térmica. DN mínimo da linha = líquido 6 mm (1/4").
+  EVAPORADORA_HI_WALL: { rotulo: "Evaporadora hi-wall", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2200 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 900, profundidadeMm: 220, alturaMm: 300 }, ajuda: "Unidade interna de parede, a 2,20 m; liga \xE0 condensadora pela linha frigor\xEDgena e ao dreno. A capacidade (BTU/h) se declara no painel ou vem da carga t\xE9rmica (E4)." },
+  EVAPORADORA_PISO_TETO: { rotulo: "Evaporadora piso-teto", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2300 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1200, profundidadeMm: 650, alturaMm: 240 }, ajuda: "Unidade interna junto ao teto ou ao piso, para sal\xF5es maiores." },
+  EVAPORADORA_CASSETE: { rotulo: "Evaporadora cassete", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 840, profundidadeMm: 840, alturaMm: 250 }, ajuda: "Unidade interna embutida no forro, com insuflamento em quatro vias." },
+  EVAPORADORA_DUTADA: { rotulo: "Evaporadora dutada", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1100, profundidadeMm: 700, alturaMm: 280 }, ajuda: "Unidade interna no forro, que insufla por dutos e difusores (E7)." },
+  CONDENSADORA_SPLIT: { rotulo: "Condensadora (split)", sigla: "CD", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }, ajuda: "Unidade externa de um split; fica na fachada ou na \xE1rea t\xE9cnica, com folga de ar. Capacidade = a da evaporadora que serve." },
+  CONDENSADORA_VRF: { rotulo: "Condensadora VRF", sigla: "CD", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 10 }, medidasMm: { larguraMm: 1240, profundidadeMm: 760, alturaMm: 1700 }, ajuda: "Unidade externa de fluxo de refrigerante vari\xE1vel, que serve v\xE1rias evaporadoras pelos derivadores (E6)." },
+  DERIVADOR_VRF: { rotulo: "Derivador VRF", sigla: "DV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 6 }, sobreOTrecho: true, ajuda: "A deriva\xE7\xE3o (refnet) da linha do VRF para um ramo; sobre o trecho." },
+  EXAUSTOR_AR: { rotulo: "Exaustor", sigla: "EX", grupo: CLIMA_AR, cotaMm: { MECANICA: 2300 }, dnMinimoMm: { MECANICA: 100 }, medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 400 }, ajuda: "Exaustor de banheiro, cozinha ou garagem; a vaz\xE3o e a renova\xE7\xE3o de ar entram na E7." },
+  BOMBA_DRENO: { rotulo: "Bomba de dreno", sigla: "BD", grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 2100 }, dnMinimoMm: { DRENO_AC: 20 }, medidasMm: { larguraMm: 200, profundidadeMm: 100, alturaMm: 100 }, ajuda: "Quando o condensado n\xE3o escoa por gravidade: a bomba junto da evaporadora, recalcando ao ponto de descarte (E5.4)." },
+  PONTO_DRENO: { rotulo: "Ponto de dreno", sigla: "PD", grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 0 }, dnMinimoMm: { DRENO_AC: 25 }, ajuda: "Onde o condensado \xE9 descartado: ralo, caixa sifonada, esgoto ou a fachada." },
+  CAIXA_DISTRIBUICAO_AR: { rotulo: "Caixa de distribui\xE7\xE3o de ar", sigla: "CX", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 300 }, ajuda: "A caixa que recebe o duto principal e distribui aos ramais." },
+  DIFUSOR: { rotulo: "Difusor", sigla: "DF", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 50 }, ajuda: "Insuflamento no forro (quadrado, de 1 a 4 vias). A vaz\xE3o por terminal entra na E7." },
+  GRELHA_INSUFLAMENTO: { rotulo: "Grelha de insuflamento", sigla: "GI", grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 200 }, ajuda: "Insuflamento na parede, com aletas." },
+  GRELHA_RETORNO: { rotulo: "Grelha de retorno", sigla: "GR", grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 500, profundidadeMm: 50, alturaMm: 300 }, ajuda: "O ar que volta ao equipamento." },
+  BOCAL_AR: { rotulo: "Bocal de insuflamento", sigla: "BC", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 200, profundidadeMm: 200, alturaMm: 100 }, ajuda: "Jato de longo alcance, para p\xE9-direito alto." },
+  TOMADA_AR_EXTERIOR: { rotulo: "Tomada de ar exterior", sigla: "TA", grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 300 }, ajuda: "A renova\xE7\xE3o de ar (NBR 16401-3) entra por aqui \u2014 vaz\xE3o na E7.3." },
+  VENEZIANA_AR: { rotulo: "Veneziana", sigla: "VN", grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 300 }, ajuda: "Veneziana de exaust\xE3o ou de tomada de ar na fachada." },
+  CAIXA_PLENUM: { rotulo: "Caixa plenum", sigla: "PL", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 300 }, ajuda: "A caixa atr\xE1s do difusor, onde o duto flex\xEDvel chega." },
+  DAMPER: { rotulo: "Damper", sigla: "DP", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, sobreOTrecho: true, ajuda: "Registro de vaz\xE3o ou corta-fogo no duto; sobre o trecho." },
+  EQUIPAMENTO_CLIMATIZACAO: { rotulo: "Equipamento de climatiza\xE7\xE3o personalizado", sigla: "EQ", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 1500, DRENO_AC: 1500, MECANICA: 1500 }, dnMinimoMm: {}, medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 600 }, ajuda: "O que a lista n\xE3o tem (cortina de ar, umidificador, trocador\u2026). Nome e item comercial v\xEAm do cadastro de tipos; a capacidade se declara." }
 };
 var ROTULO_DO_PONTO_HIDRAULICO = Object.fromEntries(
   TIPOS_DE_PONTO_HIDRAULICO.map((t) => [t, FICHA_DO_PONTO_HIDRAULICO[t].rotulo])

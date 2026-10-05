@@ -1493,3 +1493,76 @@ com **⚠ 2** — o último pavimento sem telhado E o vizinho sem etiqueta — e
   pelo `tsc` de dentro do build.
 - Fica para a prova no app real: declarar vidro numa janela, camadas num telhado, e ver a coluna
   "Teto / piso" — a E2 abre com esse passeio.
+- **Publicada em `main` em 04/10/2026** (`c92d152f..f80399e6`); domínio e CI verdes; frente
+  `clima-e1` fechada.
+
+### Etapa 2.1 + 2.2 — 04/10/2026 (frente `clima-e2`, sem bump — derivação pura)
+
+**O que entrou:**
+- `utils/blueprintCargaTermica.ts` — `cargaTermicaDoNivel(model, hip, levelId, {materiais,
+  cidadeDoContexto})` e `cargaTermicaDoEstudo`. Por ambiente: **paredes** (U das camadas com λ pela
+  NBR 15220 ou U típico; externa com ΔT + acréscimo solar pesado pela orientação; interna com fração
+  do ΔT se o vizinho não é climatizado, zero se é), **vãos** nas faces externas (janela: condução U·A·ΔT
+  + insolação A·FS·Fsomb·I por orientação; porta: condução), **teto** (cobertura: U + acréscimo solar;
+  laje exposta idem; ambiente acima: fração ou zero), **piso** (solo: zero, dito; pilotis: ΔT;
+  ambiente abaixo: fração), **pessoas** (sensível + latente por atividade), **iluminação** e
+  **equipamentos** (× fator de uso), **fonte extra**, **infiltração** (0,34·V·n·ΔT sensível; latente
+  pela umidade absoluta — psicrometria mínima: Magnus, pressão pela altitude, TBU → w, UR → w). Cada
+  parcela sai com `origem` DECLARADA / HIPOTESE / NAO_AVALIADA e a **memória** em uma frase; sem TBS
+  nada de condução é inventado (NAO_AVALIADA + pendência). Totais sensível/latente/total em W e
+  BTU/h, W/m², `conferir`.
+- `HipotesesDoMotor` em `hipoteses.motor` (11 campos com faixa: U típicos de parede/cobertura/laje/
+  vidro/porta, FS típico, acréscimos solares, fração ΔT não climatizado, trocas/h, fator de uso) —
+  **toda folga é hipótese editável**. Tabelas de memória com CONFERIR: `CALOR_POR_ATIVIDADE`,
+  `IRRADIANCIA_POR_ORIENTACAO`, `PESO_SOLAR_DA_ORIENTACAO`, os padrões do motor.
+
+**Prova.** `blueprintCargaTermica.test.ts` (5: psicrometria contra a carta — 2,34 kPa a 20 °C,
+16,5 g/kg a 34/25, 9,3 g/kg a 24 °C/50 %; sem TBS = não avaliado + internas contam; com TBS 34 cada
+parcela da Sala conferida à mão — parede S com U 2,5 e ΔTeq 11,8, divisa com a Cozinha a ½ ΔT, janela
+114 W + 209 W, cobertura 2,0·A·20, piso zero, infiltração sensível e latente, totais fecham, Cozinha
+não soma; o declarado vence — vidro 2,8/0,40 com película+cortina, cobertura U 3,74 das camadas,
+cozinha declarada climatizada zera a divisa; leitor do motor com faixa). ⚠️ Lição: a minha conta de
+cabeça do Δw (7,2) estava arredondada — 6,8 g/kg pelas funções; a asserção passou a usá-las.
+
+### Etapa 2.3 — 04/10/2026
+
+**O que entrou:**
+- `utils/blueprintConferenciaClimatizacao.ts` — 7 itens em três estados + não avaliado: TBS (FALTA
+  sem valor; AVISO da tabela), TBU, ambientes climatizados, etiquetas dos vizinhos, vidro declarado,
+  envoltória com camadas/λ, densidade plausível (40–300 W/m², hipótese). `fecha` = sem faltas.
+- `PainelCargaTermica` — condições em uso, uma linha por ambiente climatizado (área, W/m², sensível,
+  latente, total, BTU/h, `*` = hipótese, ⚠ n), "parcelas" abre a tabela com a memória de cada uma,
+  banner CONFERIR, conferência com "ver (n)". Tarefa `cargaTermica` no grupo **Carga térmica** da
+  aba Mecânica (ícone `Sun`); com a gaveta aberta a planta vira **mapa de calor** pela densidade
+  (`coresDaCarga` → `coresDosAmbientes`, azul ≤ 40 … vermelho ≥ 200 W/m²; não climatizado cinza).
+- `PainelClimatizacao` ganhou a seção **Hipóteses do motor** (os 11 campos, com faixa).
+
+**Prova.** `blueprintConferenciaClimatizacao.test.ts` (3), `PainelCargaTermica.test.tsx` (3: São
+Paulo da tabela com ΔT 7,9; só a Sala na tabela; parcelas com `*` e total W = BTU/h; sem TBS
+"Teto —" e 1 falta), `BlueprintEditor.test.tsx` (+1: o botão abre a gaveta com a Sala e a falta de
+TBS; fechar some). `check-ui-standard` e `check-xss-sinks` limpos.
+
+### Etapa 2.4 — 04/10/2026
+
+**Prova independente (fora do código).** Um teste temporário gravou em JSON as parcelas da Sala
+da casa de teste (8 × 4 m com parede no meio, janela de 2 m² ao sul, telhado; TBS 34 / TBU 25 /
+setpoint 24 / UR 50 %, hipóteses padrão) e um script Python recalculou TUDO do zero — geometria
+(4,0 × 4,0 m de eixo, 2,8 m, janela descontada da parede sul), U típicos, pesos solares,
+irradiância, calor por pessoa, Magnus + constante psicrométrica para a infiltração latente —
+e comparou: **18 de 18 parcelas batem** (parede S 271 W, N 398, O 448, divisa 140; janela 114 +
+209; cobertura 640; piso 0; pessoas 260 + 140; iluminação 80; TV 300; infiltração 76 + 127; total
+sensível 2 936, latente 267, 3 203 W = 10 929 BTU/h; 200 W/m²). O arquivo temporário foi apagado.
+⚠️ Observação para o backlog: `areaPisoM2` do motor é a área de EIXO do ambiente (16 m²), não a
+líquida (~14,8 m²) — conservador para a carga, mas o W/m² sai ~8 % menor do que seria pela área
+útil; decidir na E4 (seleção) qual área a densidade reporta.
+
+**Memorial.** `utils/blueprintMemorialClimatizacao.ts` — cálculo (condições com origem, as hipóteses
+do motor e as tabelas de memória com CONFERIR, cada ambiente climatizado com a tabela de parcelas e a
+memória, resumo por pavimento e estudo, a conferência) e descritivo (objeto, normas e método,
+condições, ambientes com teto/piso, o que fica a cargo do responsável). Prévia e PDF/DOCX pelo
+`PainelMemoriaisHidro` + `artefatosDoMemorial`, abaixo do painel da carga — a mesma função que a tela
+lê. Emissão com ART fica para a E8.4 (exige o CHECK da tabela de projeto executivo).
+
+**Prova.** `blueprintMemorialClimatizacao.test.ts` (3: 4 seções, CONFERIR no topo, TBS declarada,
+TOTAL da Sala igual ao da tela, insolação marcada `*`, Cozinha fora, conferência com "ok"; descritivo
+com total, NBR 16655-3, teto/piso e o encargo do responsável; sem climatizado diz isso).

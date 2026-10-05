@@ -253,6 +253,9 @@ import { useBlueprintClimatizacao } from '../../hooks/useBlueprintClimatizacao';
 import { condicoesExternas } from '../../utils/blueprintClimatizacao';
 import { exposicaoDoNivel } from '../../utils/blueprintExposicaoTermica';
 import PainelClimatizacao from './PainelClimatizacao';
+import PainelCargaTermica from './PainelCargaTermica';
+import { cargaTermicaDoEstudo, cargaTermicaDoNivel, coresDaCarga } from '../../utils/blueprintCargaTermica';
+import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
 import PainelKitsDeInsercao from './PainelKitsDeInsercao';
@@ -1164,6 +1167,8 @@ const ROTULO_DA_TAREFA = {
   // CLIMATIZAÇÃO (04/10/2026, E0.1): as premissas do estudo — conforto interno;
   // clima por cidade e dados por ambiente entram nas fases seguintes da E0.
   climatizacao: 'Premissas de climatização',
+  // CARGA TÉRMICA (04/10/2026, E2.3): o resultado do motor para o pavimento, com as parcelas.
+  cargaTermica: 'Carga térmica por ambiente',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -3050,6 +3055,36 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     [climatizacaoDoEstudo, insolacaoLegada.vizinhos, setInsolacaoLegada],
   );
   const latitudeDoEstudo = editor.model.georreferencia?.latitude ?? null;
+  /**
+   * E2.3: a carga térmica do pavimento ativo — só com a gaveta aberta (é cálculo
+   * por ambiente sobre a exposição inteira) — e a soma do estudo para o cabeçalho.
+   */
+  const cargaDoNivel = useMemo(
+    () => (tarefa === 'cargaTermica' && levelId ? cargaTermicaDoNivel(editor.model, climatizacaoDoEstudo.hipoteses, levelId, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name],
+  );
+  const cargaDoEstudo = useMemo(() => {
+    if (!cargaDoNivel || editor.model.levels.length < 2) return undefined;
+    const todos = cargaTermicaDoEstudo(editor.model, climatizacaoDoEstudo.hipoteses, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null });
+    return { pavimentos: todos.length, totalW: todos.reduce((s, n) => s + n.totalW, 0), totalBtuH: todos.reduce((s, n) => s + n.totalBtuH, 0) };
+  }, [cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name]);
+  const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
+  /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
+  const memoriaisClimatizacao = useMemo(() => {
+    if (!cargaDoNivel) return null;
+    const niveis = cargaTermicaDoEstudo(editor.model, climatizacaoDoEstudo.hipoteses, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null });
+    const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString(), nomeDoNivel: (id: string) => editor.model.levels.find((l) => l.id === id)?.name ?? id };
+    return { calculo: memorialDeCalculoClimatizacao(niveis, climatizacaoDoEstudo.hipoteses, ctx), descritivo: memorialDescritivoClimatizacao(niveis, climatizacaoDoEstudo.hipoteses, ctx) };
+  }, [cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name, study.name]);
+  const baixarMemorialClimatizacao = useCallback(
+    async (qual: QualMemorial, formato: FormatoDoMemorial) => {
+      if (!memoriaisClimatizacao) return;
+      const blocos = qual === 'calculo' ? memoriaisClimatizacao.calculo : memoriaisClimatizacao.descritivo;
+      const titulo = `${study.name} — memorial ${qual === 'calculo' ? 'de cálculo' : 'descritivo'} de climatização`;
+      baixarArtefatos(await artefatosDoMemorial(blocos, titulo, titulo, formato));
+    },
+    [memoriaisClimatizacao, study.name],
+  );
   /** E0.2: o clima externo em vigor — o declarado vence; o resto vem do contexto urbanístico e da georreferência. */
   const condicoesDoClima = useMemo(
     () => condicoesExternas(climatizacaoDoEstudo.hipoteses.clima, { georreferencia: editor.model.georreferencia ?? null, cidadeDoContexto: zona.cidade?.name ?? null }),
@@ -11752,6 +11787,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Condições internas de projeto (temperatura e umidade) gravadas no estudo — valem para todos os ambientes climatizados"
               />
             </GrupoDoRibbon>
+            {/* CLIMATIZAÇÃO E2.3 (04/10/2026): a carga térmica de verão por ambiente, derivada do desenho e das premissas. */}
+            <GrupoDoRibbon rotulo="Carga térmica">
+              <BotaoDoRibbon
+                icone={Sun}
+                rotulo="Carga térmica"
+                ativo={tarefaAberta === 'cargaTermica'}
+                onClick={() => alternarTarefa('cargaTermica')}
+                ajuda="Carga térmica de verão por ambiente (NBR 16655-3, simplificado): paredes, teto, piso, vidro, insolação, pessoas, luz, equipamentos e infiltração — W e BTU/h, com cada parcela e a memória; pinta a planta pela densidade"
+              />
+            </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
                 icone={AlertTriangle}
@@ -13939,7 +13984,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               // no menu: o estado é persistido, e ligar Cores e depois desligar
               // Preenchimento deixaria a combinação gravada no localStorage.
               coresPorAmbiente={(mostrarPreenchimento && arquiteturaAVista) && modoDeCor === 'AMBIENTE'}
-              coresDosAmbientes={vistaDePlanta === 'departamentos' || ((mostrarPreenchimento && arquiteturaAVista) && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined}
+              // E2.3: com a carga térmica aberta, a planta vira mapa de calor (densidade W/m²).
+              coresDosAmbientes={mapaDeCalor ?? (vistaDePlanta === 'departamentos' || ((mostrarPreenchimento && arquiteturaAVista) && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined)}
               humanizada={humanizada}
               fases={fasesDoDesenho}
               selecoesRemotas={selecoesRemotas}
@@ -14852,6 +14898,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'memoriaisIncendio' && <FileText className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'incendioPpci' && <Wand2 className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'climatizacao' && <Thermometer className="h-5 w-5 text-teal-700" />}
+              {tarefaAberta === 'cargaTermica' && <Sun className="h-5 w-5 text-amber-600" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15361,6 +15408,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   Criar matriz
                 </button>
               </div>
+            </div>
+          )}
+
+          {tarefaAberta === 'cargaTermica' && cargaDoNivel && (
+            <div data-testid="tarefa-carga-termica">
+              <PainelCargaTermica
+                nivel={cargaDoNivel}
+                nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
+                estudo={cargaDoEstudo}
+                onSelecionar={selecionar}
+              />
+              {/* E2.4: memoriais de cálculo e descritivo — prévia e PDF/DOCX pelo mesmo painel do hidro/incêndio. */}
+              {memoriaisClimatizacao && (
+                <div className="mt-4 border-t border-slate-200 pt-3">
+                  <PainelMemoriaisHidro
+                    calculo={memoriaisClimatizacao.calculo}
+                    descritivo={memoriaisClimatizacao.descritivo}
+                    onBaixar={baixarMemorialClimatizacao}
+                    textos={{
+                      calculo: 'Condições e hipóteses, cada ambiente climatizado com as parcelas e a memória, totais por pavimento e a conferência.',
+                      descritivo: 'Objeto, normas e método, condições, ambientes com teto/piso e o que fica a cargo do responsável.',
+                      vazio: 'Nenhum ambiente climatizado no desenho.',
+                      tituloVazio: 'Sem ambiente climatizado',
+                      testId: 'memoriais-climatizacao',
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

@@ -5623,6 +5623,32 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     expect(exposicaoDaSala).toHaveAttribute('title', expect.stringMatching(/Último pavimento sem telhado nem laje/));
     expect(exposicaoDaSala).toHaveAttribute('title', expect.stringMatching(/Vizinho "Ambiente" sem etiqueta/));
   }, 60000);
+
+  /**
+   * CARGA TÉRMICA (04/10/2026, E2.3): o botão da aba Mecânica abre a gaveta com
+   * o resultado do motor para o pavimento; sem clima declarado a conferência
+   * acusa a FALTA de TBS, e a Sala (climatizada pelo uso) aparece na tabela.
+   */
+  it('Mecânica › Carga térmica: abre a gaveta com a Sala na tabela e a conferência dizendo o que falta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^Carga térmica$/));
+    const gaveta = await screen.findByTestId('tarefa-carga-termica');
+    expect(within(gaveta).getByRole('row', { name: 'Carga de Sala' })).toBeInTheDocument();
+    expect(within(gaveta).getByTestId('carga-conferencia')).toHaveTextContent(/1 falta\(s\)/);
+    expect(within(gaveta).getByTestId('carga-condicoes')).toHaveTextContent(/TBS —/);
+    // Fechar devolve a planta ao estado anterior (sem mapa de calor) — a gaveta some.
+    await user.click(botao(/^Carga térmica$/));
+    expect(screen.queryByTestId('tarefa-carga-termica')).not.toBeInTheDocument();
+  }, 60000);
 });
 
 /**

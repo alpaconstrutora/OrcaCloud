@@ -1753,3 +1753,40 @@ ajustado: a semente de split se aplica a um ponto FRIGORIGENA (o tipo não troca
 - Fica para a prova no app real: abrir "Split" num estudo com TBS declarada, Lançar, ver a
   evaporadora SOPRANDO PARA DENTRO (o sinal do giro foi deduzido do canvas, não visto) e a
   condensadora do lado de fora; aceitar; conferir "atende".
+
+### Prova no app real (E0–E4) — 05/10/2026, estudo descartável, autorizada pelo usuário
+
+Playwright contra o dev server da frente (porta própria, service worker bloqueado), login real do
+`agente-leitura` (Membro), escrita só num estudo novo "Planta 05/10/2026" da organização Alpa.
+Script no scratchpad da sessão (não entra no repositório: tem o fluxo de login).
+
+- **Desenho**: "Parede em retângulo" (2 cliques) → 4 paredes, 1 ambiente (82,5 m²), renomeado para
+  "Sala" pelo lápis da seção Ambientes → "climatizado: sim *" (padrão do uso) nas premissas.
+- **E0**: TBS 34 / TBU 25 declaradas em Premissas de climatização; "Em uso: TBS 34,0 · TBU 25,0";
+  **após recarregar a página e reabrir o estudo, TBS voltou 34** — a persistência em
+  `blueprint_study_climatizacao` funciona sob RLS (1 linha no banco, conferida por SQL).
+- **E2**: Carga térmica calculou **11.090 W · 37.841 BTU/h** para a Sala (≈135 W/m², hipóteses
+  típicas, sem janela, laje exposta/sobre o solo).
+- **E4**: a gaveta do Split, com o catálogo da organização VAZIO de splits, disse exatamente isso
+  ("catálogo sem modelo de evaporadora — salve um tipo com capacidade ou semeie o catálogo") e
+  deixou "Lançar" desligado com o motivo. Como semear o catálogo é escrita na ORGANIZAÇÃO (fora da
+  autorização), os 8 modelos entraram só na LEITURA (stub de rede do GET de
+  `blueprint_element_types`; conferido por SQL: 0 tipos "Split hi-wall" na org depois). Com eles:
+  necessário 41.626 → sugestão **48.000 BTU/h**; Lançar criou evaporadora + condensadora + ponto de
+  força **num lote**; estado **atende**; "Aceitar (3)" confirmou; **após recarregar**: "todos os
+  ambientes climatizados já têm equipamento confirmado", instalado 48.000, atende. No banco: 3
+  terminais + 4 paredes no rascunho em `blueprint-kernel-ts-0.92.0`.
+- **Visual (fotos no scratchpad)**: EV-1 DENTRO da Sala, encostada na face da parede de baixo,
+  **lâminas voltadas para dentro do ambiente** — o sinal do giro estava certo; CD-1 do lado de FORA
+  da mesma parede; ponto "AC · ?" com **4700 VA** (placa do 48.000, não 1400); camadas
+  "Climatização — equipamentos 2 · Elétrica — equipamentos 1". ⚠️ Cosmético para o backlog: o símbolo
+  da hi-wall é desenhado num quadrado de lado = MAIOR medida (900), então o retângulo sai mais fundo
+  que os 220 mm reais e "monta" na parede — o ponto está certo, o desenho é maior que a peça.
+- **Limpeza**: os dois estudos descartáveis (o primeiro ficou com 4 paredes tortas de uma tentativa
+  de desenho por coordenadas) apagados por SQL com CASCADE (0 snapshots, nenhuma FK sem cascade);
+  conferido: 0 estudos, 0 ramos, 0 premissas, 0 tipos de split na org.
+- Lições do passeio (para o próximo): a gaveta da tarefa é um Sheet modal sobre o ribbon — fechar
+  pelo botão "Fechar" ANTES de clicar outro botão (e `offsetParent` é null dentro de
+  position:fixed — usar `checkVisibility()`); "Nova planta" com o topo em "Todas" abre o modal de
+  organização; o link `#/blueprint?studyId=` não abriu o estudo neste passeio (abrir pela linha da
+  lista funcionou) — anotado, não investigado.

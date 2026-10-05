@@ -1672,3 +1672,84 @@ de hash, contagens idênticas; 23 pinos trocados por glob; bundle `planta-api` r
   nos 4 `.tsx` tocados e `check-xss-sinks` exit 0.
 - Fica para a prova no app real (junto com a da E0–E2, que ainda falta): inserir evaporadora +
   condensadora pelo menu Mecânica, ligar o sistema no painel, ver EV-1/CD-1 no canvas.
+
+### Etapa 4.1 + 4.2 + 4.3 — 05/10/2026 (frente `clima-e4`, sem bump, sem migration)
+
+**Decisão de desenho.** O "catálogo de capacidades comerciais" NÃO é tabela nova: é o cadastro de
+TIPOS SALVOS da organização (`blueprint_element_types`, família TERMINAL) filtrado por
+`tipoHidraulico` que troca calor e `capacidadeBtuH > 0` — o mesmo molde do cadastro de bombas de
+incêndio (`bombasDoCatalogo`). As SEMENTES ganharam 8 splits hi-wall (9.000 a 60.000 BTU/h, com a
+potência típica de placa — HIPÓTESE, CONFERIR com o fabricante); quem tem o modelo real salva o
+seu pelo painel da peça ("salvar tipo" já leva a capacidade desde a E3).
+
+**E4.1 Seleção (`utils/blueprintSelecaoClimatizacao.ts`).** `modelosDoCatalogo(tipos)`;
+`necessarioBtuH = ⌈carga × (1 + folga)⌉`; `selecionarModelo(carga, modelos, hip)` = o MENOR modelo
+do tipo preferido que alcança o necessário (sem nenhum do tipo, qualquer evaporadora; sem nenhum
+que alcance, o motivo diz o maior do catálogo e pede dividir ou cadastrar); `avaliarCapacidade`
+(ATENDE / SUBDIMENSIONADO abaixo do necessário / SUPERDIMENSIONADO acima de carga × (1 + super) /
+SEM_CAPACIDADE); `selecaoDoNivel(model, carga, hip, modelos)` por ambiente climatizado — as
+evaporadoras DENTRO do contorno, a instalada só soma o declarado (uma sem capacidade = `null`), o
+estado, a sugestão, as pendências (carga com hipótese; evaporadora sem sistema); `conferenciaDeSelecao`
+(CATALOGO, EQUIPAMENTO, CAPACIDADE, SISTEMA) no molde da conferência da carga. Hipóteses novas em
+`HipotesesClimatizacao.selecao` {folgaPct 10, superPct 50, eerWW 3,0, tipoPreferido hi-wall} com
+`LIMITES_DE_SELECAO` e leitor — toda folga editável no painel.
+
+**E4.2 Posição (`utils/blueprintPosicaoSplit.ts`).** `planejarEquipamentosSplit(model, selecao, carga,
+hip)`: para cada ambiente climatizado sem equipamento CONFIRMADO, a evaporadora vai para uma parede
+SEM porta (`ladosDePiso` + `trechosUtilizaveis`, agora exportado), num trecho livre ≥ largura da peça
+com 300 mm de folga, EXTERNA de preferência (a exposição da carga diz qual face é externa) e, entre
+as que servem, a de maior trecho livre; no meio do trecho, recuada meia profundidade (encosta na
+face), a 2,20 m, com `rotacaoGraus` para soprar para dentro (`giroParaSoprarParaDentro`: g =
+atan2(n.x, −n.y), deduzido do `rotate(−giro)` do canvas — **confirmar visualmente no app**). A
+condensadora vai para FORA da parede externa (espessura + 300 mm de folga + meia profundidade;
+recusada se cair dentro de outro ambiente) ou, sem fachada, para um ambiente TÉCNICO do pavimento
+pelo nome (`AMBIENTE_TECNICO`: área técnica, serviço, varanda, terraço, casa de máquinas,
+cobertura, garagem, quintal, pátio); sem nada disso, o relatório pede a posição. Tudo `sugerida`;
+relançar apaga as sugestões anteriores deste planejador (peças de climatização + o ponto elétrico
+sugerido do aparelho) no mesmo lote — idempotente; aceitar fixa e o planejador não mexe mais.
+
+⚠️ **O SISTEMA no mesmo lote.** A relação evaporadora → condensadora precisa dos ids que o lote
+ainda vai criar. O caminho: aplicar `apagar + adds` numa CÓPIA (`applyBatch`, contador de ids
+determinístico — o mesmo que `conferirPlanoDaRede` usa para a prova) e ler os ids novos; o
+`SetTerminalProps { condensadoraId }` entra no fim do mesmo lote. O plano é derivado do modelo
+(useMemo), então se o modelo mudar entre planejar e lançar os ids batem de novo. É acoplamento ao
+gerador de ids — dito aqui e no cabeçalho do arquivo; a alternativa (comando `AddSplit` único no
+kernel, molde `DuplicateLevel`) exigiria bump e fica anotada para quando a E11 encadear tudo.
+
+**E4.3 Elétrica.** O planejador cria o ponto `AR_CONDICIONADO` junto da evaporadora com
+`potenciaW` = potência de placa do modelo (ou, sem placa, estimada por `capacidade ÷ 3,412 ÷ EER`) —
+não os 1400 VA fixos de `POTENCIA_TIPICA_DO_EQUIPAMENTO_VA`; `AR_CONDICIONADO` já é
+`TIPOS_DE_USO_ESPECIFICO` (circuito próprio) e curva D no motor de circuitos, então trocar o modelo
+muda a corrente e a seção pelo caminho que já existe. **Não entrou:** o ponto elétrico automático
+para uma evaporadora inserida À MÃO (só o planejador o cria) — fica na E5.4 junto do dreno.
+
+**Editor.** Tarefa `selecaoSplit` ("Seleção e posição do split", botão "Split" no grupo Carga
+térmica, ícone Snowflake); o catálogo carrega ao abrir a tarefa (mesmo efeito do incêndio);
+`cargaDoNivel` também calcula com a tarefa aberta; `PainelSelecaoSplit` (hipóteses, tabela por
+ambiente com estado e sugestão, plano com resumo/já atendidos/sem lugar, Lançar/Relançar e Aceitar
+com motivo quando desligados, conferência com seleção dos ambientes).
+
+**Prova.** `blueprintSelecaoClimatizacao.test.ts` (6: sementes → 8 modelos; sujeira fora;
+**10.500 com 10 % escolhe 12.000** e 11.000 → 18.000; sem alcance/sem catálogo o motivo; declarado
+conferido sub/super/sem capacidade; EER 12.000 → 1.172 VA; hipótese da coluna com faixa; pavimento
+com Sala sem equipamento → com 9.000 declarada = subdimensionada e sem sistema — o declarado vence
+a sugestão), `blueprintPosicaoSplit.test.ts` (5: evaporadora em parede externa sem porta, fora do
+vão, dentro da Sala, a 2,20 m; condensadora fora de todo ambiente; sistema ligado no mesmo lote;
+ponto elétrico com a potência da placa ≠ 1400; relançar idempotente (apaga 3, recria iguais);
+aceitar → "já atendido"; 9.000 não alcança → motivo, 24.000 → 2.300 VA, 60.000 → 5.900 VA, sem placa
+→ EER; sala interna → condensadora no ambiente técnico; todas as paredes com porta → motivo; giro
+por normal), `components/PainelSelecaoSplit.test.tsx` (2), editor "Mecânica › Split" (catálogo
+assíncrono → sugestão → Lançar → estado muda e Aceitar (3); sem TBS a carga é só interna e o menor
+modelo pode sair "superdimensionado" — a conferência diz, não finge). `blueprintCatalogoDeTipos.test`
+ajustado: a semente de split se aplica a um ponto FRIGORIGENA (o tipo não troca disciplina).
+
+### Fecho da Etapa 4 — 05/10/2026
+
+- Sem migration, sem bump (tudo derivação + tipos salvos que já eram JSONB).
+- **Suíte inteira**: 7626 testes = 7591 ✅ + 34 pulados de propósito + 1 falha de expectativa
+  ("18 tipo(s) padrão criados" → 26 com as 8 sementes de split; corrigida e o teste reprovado
+  verde). `npm run build` exit 0 (tsc dentro), `tsc` isolado exit 0, `check-ui-standard` nos 2
+  `.tsx` tocados e `check-xss-sinks` exit 0.
+- Fica para a prova no app real: abrir "Split" num estudo com TBS declarada, Lançar, ver a
+  evaporadora SOPRANDO PARA DENTRO (o sinal do giro foi deduzido do canvas, não visto) e a
+  condensadora do lado de fora; aceitar; conferir "atende".

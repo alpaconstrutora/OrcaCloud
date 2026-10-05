@@ -20,6 +20,8 @@ describe('catálogo de tipos (P2.3)', () => {
     m = applyBatch(m, [
       { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [point(1000, 1000)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, baseMm: 0 } as Command,
       { type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'Ponto', at: point(2000, 0), cotaMm: 300 } as Command,
+      // Climatização E4.1: as sementes de split são da linha frigorígena — o tipo se aplica a um ponto da MESMA disciplina.
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(3000, 0), cotaMm: 2200 } as Command,
     ]).model;
     for (const s of SEMENTES_DE_TIPOS) {
       if (s.propriedades.familia === 'ESTRUTURA' && s.propriedades.kind === 'PILAR') {
@@ -28,8 +30,9 @@ describe('catálogo de tipos (P2.3)', () => {
         expect(r.model.structures[0].larguraMm).toBe(s.propriedades.larguraMm);
       }
       if (s.propriedades.familia === 'TERMINAL') {
-        const r = applyCommand(m, { type: 'SetTerminalProps', terminalId: m.terminais![0].id, ...camposDoTerminal(s.propriedades as PropriedadesDeTerminal) } as Command);
-        expect(r.model.terminais![0].cotaMm).toBe(s.propriedades.cotaMm);
+        const alvo = m.terminais!.find((x) => x.disciplina === (s.propriedades as PropriedadesDeTerminal).disciplina)!;
+        const r = applyCommand(m, { type: 'SetTerminalProps', terminalId: alvo.id, ...camposDoTerminal(s.propriedades as PropriedadesDeTerminal) } as Command);
+        expect(r.model.terminais!.find((x) => x.id === alvo.id)!.cotaMm).toBe(s.propriedades.cotaMm);
       }
     }
   });

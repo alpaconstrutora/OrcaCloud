@@ -66,6 +66,22 @@ export const SEMENTES_DE_TIPOS: readonly SementeDeTipo[] = [
   { nome: 'Luz de teto 100 VA', propriedades: { familia: 'TERMINAL', disciplina: 'ELETRICA', tipo: 'Luz de teto', cotaMm: 2800, tipoEletrico: 'ILUMINACAO_TETO', potenciaW: 100 } },
   { nome: 'Escada 1,20 m · espelho 17,5', propriedades: { familia: 'ESCADA', tipo: 'ESCADA', larguraMm: 1200, alvoEspelhoMm: 175 } },
   { nome: 'Rampa 1,20 m (NBR 9050)', propriedades: { familia: 'ESCADA', tipo: 'RAMPA', larguraMm: 1200, alvoEspelhoMm: 175 } },
+  // CLIMATIZAÇÃO E4.1 (04/10/2026): as capacidades comerciais de split hi-wall — o
+  // CATÁLOGO que a seleção automática consulta. A potência elétrica é a típica de
+  // placa (HIPÓTESE, CONFERIR com o fabricante); quem tem o modelo real salva o seu.
+  ...([
+    [9000, 850],
+    [12000, 1100],
+    [18000, 1700],
+    [24000, 2300],
+    [30000, 2900],
+    [36000, 3500],
+    [48000, 4700],
+    [60000, 5900],
+  ] as const).map(([btu, va]) => ({
+    nome: `Split hi-wall ${btu.toLocaleString('pt-BR')} BTU/h`,
+    propriedades: { familia: 'TERMINAL', disciplina: 'FRIGORIGENA', tipo: `Split hi-wall ${btu.toLocaleString('pt-BR')} BTU/h`, cotaMm: 2200, tipoHidraulico: 'EVAPORADORA_HI_WALL', capacidadeBtuH: btu, potenciaW: va, larguraMm: 900, profundidadeMm: 220, alturaMm: 300 } as PropriedadesDoTipo,
+  })),
   { nome: 'Telhado cerâmico 30 %', propriedades: { familia: 'TELHADO', inclinacaoPct: 30, baseMm: 2800, espessuraMm: 150 } },
   { nome: 'Telhado fibrocimento 10 %', propriedades: { familia: 'TELHADO', inclinacaoPct: 10, baseMm: 2800, espessuraMm: 100 } },
 ];

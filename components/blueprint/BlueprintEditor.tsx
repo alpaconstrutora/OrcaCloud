@@ -50,6 +50,7 @@ import {
   ClipboardList,
   Footprints,
   Sun,
+  Snowflake,
   Gauge,
   GitBranch,
   Wand2,
@@ -136,7 +137,7 @@ import {
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
-import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA } from '../../utils/blueprintKernel';
+import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA, TIPOS_DE_CLIMATIZACAO } from '../../utils/blueprintKernel';
 import { TIPOS_DE_AREA_PUBLICA, TIPOS_DE_AREA_DO_LOTEAMENTO, TIPOS_AMBIENTAIS, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
 import {
   numerarQuadra,
@@ -255,6 +256,9 @@ import { exposicaoDoNivel } from '../../utils/blueprintExposicaoTermica';
 import PainelClimatizacao from './PainelClimatizacao';
 import PainelCargaTermica from './PainelCargaTermica';
 import { cargaTermicaDoEstudo, cargaTermicaDoNivel, coresDaCarga } from '../../utils/blueprintCargaTermica';
+import { modelosDoCatalogo, selecaoDoNivel } from '../../utils/blueprintSelecaoClimatizacao';
+import { planejarEquipamentosSplit } from '../../utils/blueprintPosicaoSplit';
+import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
@@ -1170,6 +1174,8 @@ const ROTULO_DA_TAREFA = {
   climatizacao: 'Premissas de climatização',
   // CARGA TÉRMICA (04/10/2026, E2.3): o resultado do motor para o pavimento, com as parcelas.
   cargaTermica: 'Carga térmica por ambiente',
+  // SELEÇÃO E POSIÇÃO DO SPLIT (04/10/2026, E4): a carga vira equipamento pelo catálogo, posicionado e ligado.
+  selecaoSplit: 'Seleção e posição do split',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -3061,7 +3067,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * por ambiente sobre a exposição inteira) — e a soma do estudo para o cabeçalho.
    */
   const cargaDoNivel = useMemo(
-    () => (tarefa === 'cargaTermica' && levelId ? cargaTermicaDoNivel(editor.model, climatizacaoDoEstudo.hipoteses, levelId, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
+    () => ((tarefa === 'cargaTermica' || tarefa === 'selecaoSplit') && levelId ? cargaTermicaDoNivel(editor.model, climatizacaoDoEstudo.hipoteses, levelId, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
     [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name],
   );
   const cargaDoEstudo = useMemo(() => {
@@ -3069,6 +3075,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const todos = cargaTermicaDoEstudo(editor.model, climatizacaoDoEstudo.hipoteses, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null });
     return { pavimentos: todos.length, totalW: todos.reduce((s, n) => s + n.totalW, 0), totalBtuH: todos.reduce((s, n) => s + n.totalBtuH, 0) };
   }, [cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name]);
+  /** CLIMATIZAÇÃO E4 (04/10/2026): o catálogo de modelos (tipos salvos com capacidade), a seleção por ambiente e o plano do split — só com a tarefa aberta. */
+  const modelosDeClimatizacao = useMemo(() => modelosDoCatalogo(tiposDoCatalogo), [tiposDoCatalogo]);
+  const selecaoSplit = useMemo(
+    () => (tarefa === 'selecaoSplit' && cargaDoNivel ? selecaoDoNivel(editor.model, cargaDoNivel, climatizacaoDoEstudo.hipoteses.selecao, modelosDeClimatizacao) : null),
+    [tarefa, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.selecao, modelosDeClimatizacao],
+  );
+  const planoDoSplit = useMemo(
+    () => (selecaoSplit && cargaDoNivel ? planejarEquipamentosSplit(editor.model, selecaoSplit, cargaDoNivel, climatizacaoDoEstudo.hipoteses.selecao) : null),
+    [selecaoSplit, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.selecao],
+  );
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
   const memoriaisClimatizacao = useMemo(() => {
@@ -8049,7 +8065,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   useEffect(() => {
     // O catálogo de bombas carrega quando o cálculo abre (uma vez por abertura).
-    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci') recarregarCatalogoDeTipos();
+    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit') recarregarCatalogoDeTipos();
   }, [tarefaAberta, recarregarCatalogoDeTipos]);
   /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
   const planoDaRedeDeHidrantes = useMemo(
@@ -11800,6 +11816,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={() => alternarTarefa('cargaTermica')}
                 ajuda="Carga térmica de verão por ambiente (NBR 16655-3, simplificado): paredes, teto, piso, vidro, insolação, pessoas, luz, equipamentos e infiltração — W e BTU/h, com cada parcela e a memória; pinta a planta pela densidade"
               />
+              {/* CLIMATIZAÇÃO E4 (04/10/2026): a carga vira equipamento — catálogo, posição e elétrica do split. */}
+              <BotaoDoRibbon
+                icone={Snowflake}
+                rotulo="Split"
+                ativo={tarefaAberta === 'selecaoSplit'}
+                onClick={() => alternarTarefa('selecaoSplit')}
+                ajuda="Seleção e posição do split: o menor modelo do catálogo que alcança a carga com a folga, a evaporadora na parede livre, a condensadora na fachada, o ponto de força com a potência da placa e o sistema ligado — num lote; confere atende / sub / superdimensionado"
+              />
             </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
@@ -14903,6 +14927,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'incendioPpci' && <Wand2 className="h-5 w-5 text-red-700" />}
               {tarefaAberta === 'climatizacao' && <Thermometer className="h-5 w-5 text-teal-700" />}
               {tarefaAberta === 'cargaTermica' && <Sun className="h-5 w-5 text-amber-600" />}
+              {tarefaAberta === 'selecaoSplit' && <Snowflake className="h-5 w-5 text-sky-600" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15440,6 +15465,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   />
                 </div>
               )}
+            </div>
+          )}
+
+          {tarefaAberta === 'selecaoSplit' && selecaoSplit && planoDoSplit && (
+            <div data-testid="tarefa-selecao-split">
+              <PainelSelecaoSplit
+                selecao={selecaoSplit}
+                plano={planoDoSplit}
+                hip={climatizacaoDoEstudo.hipoteses.selecao}
+                onHip={(selecao) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, selecao })}
+                sugeridas={(editor.model.terminais ?? [])
+                  .filter((t) => t.levelId === levelId && !!t.sugerida && ((!!t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico)) || t.tipoEletrico === 'AR_CONDICIONADO'))
+                  .map((t) => t.id)}
+                onLancar={() => {
+                  if (planoDoSplit.comandos.length) editor.runBatch(planoDoSplit.comandos);
+                }}
+                onAceitar={(ids) => editor.runBatch(ids.map((terminalId) => ({ type: 'SetTerminalProps', terminalId, sugerida: false }) as Command))}
+                onSelecionar={selecionar}
+                catalogo={{ carregando: catalogoCarregando, indisponivel: catalogoIndisponivel }}
+              />
             </div>
           )}
 

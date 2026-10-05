@@ -314,6 +314,47 @@ export function hipotesesDoMotorDaColuna(raw: unknown): HipotesesDoMotor {
   return saida;
 }
 
+// ─── E4.1 (04/10/2026): a SELEÇÃO do equipamento ─────────────────────────────
+
+/**
+ * Como a carga vira equipamento (E4.1). FOLGAS de projeto, editáveis — nunca
+ * constante escondida: a folga de seleção sobre a carga calculada, o quanto
+ * acima dela já é superdimensionado, a eficiência típica para estimar a potência
+ * elétrica de quem não tem placa, e o tipo de evaporadora que o planejador
+ * prefere. Tabela de fabricante é HIPÓTESE — CONFERIR com o catálogo real.
+ */
+export interface HipotesesDeSelecao {
+  /** Folga sobre a carga calculada, % (necessário = carga × (1 + folga)). */
+  folgaPct: number;
+  /** Acima de carga × (1 + super) o equipamento é SUPERDIMENSIONADO, %. */
+  superPct: number;
+  /** Eficiência típica (EER, W/W) para estimar a potência elétrica sem placa. */
+  eerWW: number;
+  /** O tipo de evaporadora que a seleção automática prefere. */
+  tipoPreferido: 'EVAPORADORA_HI_WALL' | 'EVAPORADORA_PISO_TETO' | 'EVAPORADORA_CASSETE' | 'EVAPORADORA_DUTADA';
+}
+
+export const HIPOTESES_DE_SELECAO_PADRAO: HipotesesDeSelecao = { folgaPct: 10, superPct: 50, eerWW: 3.0, tipoPreferido: 'EVAPORADORA_HI_WALL' };
+
+export const LIMITES_DE_SELECAO: Record<'folgaPct' | 'superPct' | 'eerWW', { min: number; max: number }> = {
+  folgaPct: { min: 0, max: 50 },
+  superPct: { min: 10, max: 200 },
+  eerWW: { min: 1.5, max: 7 },
+};
+
+const TIPOS_PREFERIVEIS: readonly HipotesesDeSelecao['tipoPreferido'][] = ['EVAPORADORA_HI_WALL', 'EVAPORADORA_PISO_TETO', 'EVAPORADORA_CASSETE', 'EVAPORADORA_DUTADA'];
+
+export function hipotesesDeSelecaoDaColuna(raw: unknown): HipotesesDeSelecao {
+  const r = objeto(raw);
+  const p = HIPOTESES_DE_SELECAO_PADRAO;
+  return {
+    folgaPct: numeroNaFaixa(r.folgaPct, LIMITES_DE_SELECAO.folgaPct, p.folgaPct),
+    superPct: numeroNaFaixa(r.superPct, LIMITES_DE_SELECAO.superPct, p.superPct),
+    eerWW: numeroNaFaixa(r.eerWW, LIMITES_DE_SELECAO.eerWW, p.eerWW),
+    tipoPreferido: TIPOS_PREFERIVEIS.includes(r.tipoPreferido as HipotesesDeSelecao['tipoPreferido']) ? (r.tipoPreferido as HipotesesDeSelecao['tipoPreferido']) : p.tipoPreferido,
+  };
+}
+
 // ─── O conjunto e o leitor da coluna ─────────────────────────────────────────
 
 export interface HipotesesClimatizacao {
@@ -324,6 +365,8 @@ export interface HipotesesClimatizacao {
   ambientes: Record<string, HipotesesDoAmbiente>;
   /** E2: as hipóteses do motor de carga térmica. */
   motor: HipotesesDoMotor;
+  /** E4.1: como a carga vira equipamento (folga, superdimensionamento, EER, tipo preferido). */
+  selecao: HipotesesDeSelecao;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
@@ -332,6 +375,7 @@ export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   insolacao: HIPOTESES_DE_INSOLACAO_DO_ESTUDO_PADRAO,
   ambientes: {},
   motor: HIPOTESES_DO_MOTOR_PADRAO,
+  selecao: HIPOTESES_DE_SELECAO_PADRAO,
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -381,6 +425,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     insolacao: hipotesesDeInsolacaoDaColuna(r.insolacao),
     ambientes: ambientesDaColuna(r.ambientes),
     motor: hipotesesDoMotorDaColuna(r.motor),
+    selecao: hipotesesDeSelecaoDaColuna(r.selecao),
   };
 }
 

@@ -5650,6 +5650,54 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     await user.click(botao(/^Carga térmica$/));
     expect(screen.queryByTestId('tarefa-carga-termica')).not.toBeInTheDocument();
   }, 60000);
+
+  /**
+   * CLIMATIZAÇÃO E4 (04/10/2026): a gaveta do split lê o catálogo (tipos salvos
+   * com capacidade), diz que a Sala está sem equipamento com a sugestão do menor
+   * modelo que alcança a carga, e LANÇAR cria evaporadora + condensadora + ponto
+   * de força + sistema num lote — a Sala passa a "atende" e há 3 peças a aceitar.
+   */
+  it('Mecânica › Split: sugere pelo catálogo, lança o split num lote e a Sala passa a atender', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    catalogoDeTipos.length = 0;
+    for (const btu of [9000, 12000, 18000, 24000, 36000]) {
+      catalogoDeTipos.push({
+        id: `tp_split_${btu}`,
+        organizationId: 'org_1',
+        familia: 'TERMINAL',
+        nome: `Split hi-wall ${btu.toLocaleString('pt-BR')} BTU/h`,
+        propriedades: { familia: 'TERMINAL', disciplina: 'FRIGORIGENA', tipo: `Split ${btu}`, cotaMm: 2200, tipoHidraulico: 'EVAPORADORA_HI_WALL', capacidadeBtuH: btu, potenciaW: Math.round(btu / 10), larguraMm: 900, profundidadeMm: 220, alturaMm: 300 },
+        active: true,
+        createdAt: '',
+        updatedAt: '',
+      });
+    }
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^Split$/));
+    const gaveta = await screen.findByTestId('tarefa-selecao-split');
+    const estadoDaSala = () => within(gaveta).getByTestId(`estado-${m.spaces[0].id}`);
+    expect(estadoDaSala()).toHaveTextContent('sem equipamento');
+    // O catálogo chega depois (assíncrono): a sugestão aparece com o menor modelo que alcança.
+    await waitFor(() => expect(within(gaveta).queryByTestId('plano-resumo') ?? within(gaveta).getByTestId('plano-motivo')).toHaveTextContent(/Lança 1 split/));
+    expect(within(gaveta).getByTestId('tabela-selecao')).toHaveTextContent(/Split hi-wall \d{1,2}\.000 BTU\/h/);
+    await user.click(within(gaveta).getByRole('button', { name: 'Lançar os splits' }));
+    // Sem TBS a carga é só a interna (pequena): o MENOR modelo do catálogo pode passar de carga × 1,5 — e a
+    // conferência diz "superdimensionado" em vez de fingir que atende. Com TBS declarada vira "atende".
+    await waitFor(() => expect(estadoDaSala()).toHaveTextContent(/^(atende|superdimensionado)$/));
+    expect(within(gaveta).getByRole('button', { name: 'Aceitar (3)' })).toBeInTheDocument();
+    // E a conferência: equipamento em todo ambiente, sistema ligado.
+    expect(within(gaveta).getByTestId('selecao-conferencia')).toHaveTextContent(/1 ambiente\(s\) com equipamento/);
+    expect(within(gaveta).getByTestId('selecao-conferencia')).toHaveTextContent(/todas com condensadora/);
+    catalogoDeTipos.length = 0;
+  }, 60000);
 });
 
 /**
@@ -5736,7 +5784,7 @@ describe('BlueprintEditor · catálogo de tipos (P2.3)', () => {
       await user.click(within(tela).getByTestId('semear-tipos'));
       await waitFor(() => expect(upsertElementTypes).toHaveBeenCalledWith('org_1', expect.arrayContaining([expect.objectContaining({ nome: 'Pilar 19×40' })])));
       await waitFor(() => expect(within(tela).getByText('Pilar 19×40')).toBeInTheDocument());
-      expect(within(tela).getByTestId('aviso-do-catalogo')).toHaveTextContent(/18 tipo\(s\) padrão criados/);
+      expect(within(tela).getByTestId('aviso-do-catalogo')).toHaveTextContent(/26 tipo\(s\) padrão criados/);
       expect(within(tela).getByTestId('semear-tipos')).toBeDisabled();
       const p1940 = catalogoDeTipos.find((x) => x.nome === 'Pilar 19×40')!;
       expect(within(tela).getByTestId(`usos-${p1940.id}`)).toHaveTextContent('2');

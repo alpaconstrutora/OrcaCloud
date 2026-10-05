@@ -122,7 +122,7 @@ interface Intervalo {
  * Os trechos UTILIZÁVEIS de um lado: o comprimento dele menos as aberturas da
  * parede (com folga) e menos a folga de canto nas duas pontas.
  */
-function trechosUtilizaveis(
+export function trechosUtilizaveis(
   lado: LadoDoAmbiente,
   walls: readonly Wall[],
   openings: readonly Opening[],

@@ -16,7 +16,7 @@
  */
 import type { BlueprintModel, DisciplinaDeRede, Point, Terminal, Trecho } from './blueprintKernel';
 import type { TipoDeInterruptor, TipoDePontoEletrico } from './blueprintKernel';
-import { segmentosDoEletroduto } from './blueprintKernel';
+import { segmentosDoEletroduto, TIPOS_DE_CLIMATIZACAO, type VolumeDePeca } from './blueprintKernel';
 
 /** Milímetro → metro, a mesma constante que o visualizador 3D usa. */
 export const ESCALA_3D = 0.001;
@@ -200,6 +200,19 @@ export function caixaDaPeca(
 
 /** O giro declarado da peça, em graus. Ausente = 0. */
 export const giroDaPeca = (p: { rotacaoGraus?: number | null }): number => p.rotacaoGraus ?? 0;
+
+/**
+ * E10.2 (climatização): as CAIXAS das peças de climatização para o conflito trecho × equipamento
+ * (`conflitosDoModelo(model, { pecas })`) — as medidas declaradas, senão as da ficha; a cota é o centro.
+ */
+export function volumesDasPecasDeClimatizacao(model: BlueprintModel): VolumeDePeca[] {
+  return (model.terminais ?? [])
+    .filter((t) => !!t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico))
+    .map((t) => {
+      const m = medidasDoTerminal(t);
+      return { id: t.id, uid: t.uid, levelId: t.levelId, at: t.at, larguraMm: m.larguraMm, profundidadeMm: m.profundidadeMm, alturaMm: m.alturaMm, cotaMm: t.cotaMm, rotacaoGraus: giroDaPeca(t) };
+    });
+}
 
 /**
  * Os quatro CANTOS da pegada em planta, em coordenadas do MODELO.

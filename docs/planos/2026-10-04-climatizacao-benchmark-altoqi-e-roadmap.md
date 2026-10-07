@@ -2288,3 +2288,30 @@ arquivo de outro programa (classe + enum). `PainelImportarIfc` +1 (a falha da le
 **Não entrou (dito):** a bolsa do joelho de duto no 3D DA TELA ainda é redonda (é o viewer — vai na
 10.3); `.VENTILATION.` para rede só de exaustão; o `IfcCovering` do isolamento (o envelope cumpre a
 coordenação).
+
+### Etapa 10.2 — Compatibilização da climatização · 07/10/2026 (frente `clima-e10-clash`, sem bump)
+
+- **O ENVELOPE no conflito** (`envelopeDoTrecho`, o mesmo do IFC da 10.1): o isolamento declarado soma
+  em planta e na vertical; a LINHA FRIGORÍGENA são dois tubos lado a lado — Ø6/10 isol. 9 ocupa 33 mm
+  de cada lado em planta e 14 mm na vertical (antes contava só o tubo de líquido, 3 mm: um pilar a 25 mm
+  do eixo passava).
+- **Achado: o falso conflito linha × dreno na evaporadora** (apontado no mapa da E10): os dois nascem
+  no MESMO nó, e a distância entre eixos lá é zero — todo split acusava. Agora, quando dois trechos de
+  disciplinas diferentes têm uma ponta comum, a distância é medida a partir de onde eles se SEPARAM
+  (cada um aparado do alcance + 50 mm a partir do nó) — e o encontro real mais adiante continua
+  aparecendo (teste: nascem juntos e se cruzam de novo a 2 m → REDE).
+- **Classe nova `EQUIPAMENTO`**: o trecho que atravessa a CAIXA de uma peça de climatização a que ele
+  NÃO se liga (a ponta dentro da caixa + 50 mm = é a ligação dela). As medidas vêm de quem chama
+  (`volumesDasPecasDeClimatizacao` — a ficha mora fora do kernel); sem elas, o motor faz o de sempre.
+  Lista de conflitos, BCF e frase do "nenhum conflito" conhecem a classe nova; o aceite usa a mesma
+  chave de par de uids.
+- **A marca no desenho também para o DUTO**: o "cruza viga" do duto só aparecia no relatório.
+- Linha × estrutura e dreno × viga já eram verificados (todo trecho contra a estrutura); agora com o
+  envelope.
+
+**Prova** (`blueprintConflitosClimatizacao.test.ts`, 6): o envelope; o pilar a 25 mm (sem par passa,
+com par pega); **a cena** — 4 não-conflitos (linha e dreno nascendo na evaporadora, duto terminando no
+difusor, duto 30 cm abaixo da viga, linha nascendo na condensadora) e 4 conflitos (linha atravessando a
+condensadora do vizinho → EQUIPAMENTO; dreno atravessando a viga → ESTRUTURA; duto cruzando a linha →
+REDE; linha e dreno que nascem juntos e voltam a se cruzar → REDE), exatamente 1/1/2; sem as caixas,
+o resto idêntico; a marca do duto. 24 arquivos de conflito/BCF/verificação verdes.

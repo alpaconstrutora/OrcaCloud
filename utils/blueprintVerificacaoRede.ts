@@ -173,7 +173,8 @@ export function marcasDeVerificacao(
   // E5.5: tubo hidrossanitário contra a estrutura (o raspão — eixo por fora — não conta).
   // Incêndio E2.4: a tubulação de incêndio contra viga e pilar também (o "tubulação × viga" do AltoQi).
   // Climatização E5.1 (05/10/2026): a linha frigorígena e o dreno também — "nenhum trecho atravessa pilar".
-  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO' || t.disciplina === 'INCENDIO' || t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC');
+  // E10.2 (climatização): o DUTO também — o "duto × viga" só aparecia no relatório de conflitos, não no desenho.
+  const hidraulicos = (model.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO' || t.disciplina === 'INCENDIO' || t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC' || t.disciplina === 'MECANICA');
   const estruturaPorId = new Map((model.structures ?? []).map((x) => [x.id, x]));
   if (hidraulicos.length > 0 && estruturaPorId.size > 0) {
     for (const c of conflitosDoModelo({ ...model, trechos: hidraulicos })) {

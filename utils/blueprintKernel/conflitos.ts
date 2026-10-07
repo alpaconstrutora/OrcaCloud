@@ -56,7 +56,8 @@ export interface Conflito {
   /** O outro lado: uma peça estrutural ou outro trecho. */
   outroId: ObjectId;
   outroUid: string;
-  classe: 'ESTRUTURA' | 'REDE' | 'ABERTURA' | 'PAREDE_ESTRUTURAL';
+  /** E10.2 (climatização): `EQUIPAMENTO` — o trecho atravessa a caixa de uma peça (evaporadora, condensadora…) a que NÃO se liga. */
+  classe: 'ESTRUTURA' | 'REDE' | 'ABERTURA' | 'PAREDE_ESTRUTURAL' | 'EQUIPAMENTO';
   /**
    * Quanto do trecho corre DENTRO do outro corpo, em mm.
    *
@@ -72,6 +73,39 @@ interface Ponto3 {
   x: number;
   y: number;
   z: number;
+}
+
+/**
+ * E10.2 (climatização): o VOLUME de uma peça para o conflito trecho × equipamento.
+ * As medidas vêm de quem chama (a ficha de cada tipo mora fora do kernel); a
+ * cota é o CENTRO da caixa, como no IFC e no 3D.
+ */
+export interface VolumeDePeca {
+  id: ObjectId;
+  uid: string;
+  levelId: ObjectId;
+  at: Point;
+  larguraMm: number;
+  profundidadeMm: number;
+  alturaMm: number;
+  cotaMm: number;
+  rotacaoGraus: number;
+}
+
+/**
+ * E10.2: o ENVELOPE do trecho — o que ocupa lugar: o isolamento declarado soma
+ * nos dois sentidos, o duto retangular tem meia largura em planta e meia altura
+ * na vertical, e a LINHA FRIGORÍGENA são dois tubos lado a lado (`parDaLinha` do
+ * IFC: cada centro a maior raio + 5 mm do eixo) — em planta ela ocupa 2r + 5.
+ */
+export function envelopeDoTrecho(t: Pick<Trecho, 'disciplina' | 'bitolaMm' | 'bitolaSuccaoMm' | 'alturaDutoMm' | 'isolamentoMm'>): { raioPlantaMm: number; raioVerticalMm: number } {
+  const iso = t.isolamentoMm ?? 0;
+  if (t.disciplina === 'FRIGORIGENA' && t.bitolaSuccaoMm != null) {
+    const r = Math.max(t.bitolaMm, t.bitolaSuccaoMm) / 2 + iso;
+    return { raioPlantaMm: 2 * r + 5, raioVerticalMm: r };
+  }
+  const raio = t.bitolaMm / 2 + iso;
+  return { raioPlantaMm: raio, raioVerticalMm: t.alturaDutoMm != null ? t.alturaDutoMm / 2 + iso : raio };
 }
 
 /** As duas pontas do trecho no mundo, já com a cota do pavimento somada. */
@@ -259,7 +293,7 @@ function distanciaPontoSegmento3D(p: Ponto3, a: Ponto3, b: Ponto3): number {
  * A ordem é estável — por trecho, e dentro dele por id do outro lado — para a
  * tela não reordenar a lista a cada recálculo e para o teste poder afirmar.
  */
-export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
+export function conflitosDoModelo(model: BlueprintModel, opcoes: { pecas?: readonly VolumeDePeca[] } = {}): Conflito[] {
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const trechos = model.trechos ?? [];
   const saida: Conflito[] = [];
@@ -281,10 +315,12 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
 
   for (const t of trechos) {
     const pedacos = pedacosDe(t);
-    const raio = t.bitolaMm / 2;
     // E7.1 (05/10/2026): o duto RETANGULAR tem meia ALTURA na vertical e meia LARGURA em planta —
     // o cilindro de raio largura/2 acusaria a viga 20 cm acima de um duto de 30 cm de altura.
-    const raioVertical = t.alturaDutoMm != null ? t.alturaDutoMm / 2 : raio;
+    // E10.2: e o ENVELOPE — isolamento, e a linha com os dois tubos (antes contava só o de líquido).
+    const env = envelopeDoTrecho(t);
+    const raio = env.raioPlantaMm;
+    const raioVertical = env.raioVerticalMm;
 
     // ── Contra a ESTRUTURA ───────────────────────────────────────────────
     for (const s of model.structures) {
@@ -338,11 +374,30 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       for (const [A, B] of pedacos) {
         if (A.x === B.x && A.y === B.y) continue; // a prumada no furo do bloco é prevista
         // Abaixo do topo, com o corpo do tubo inteiro: o da laje passa por cima.
-        const parte = contraPrisma(A, B, 0, anel, ew + raio, ew + w.heightMm - raio);
+        const parte = contraPrisma(A, B, 0, anel, ew + raioVertical, ew + w.heightMm - raioVertical);
         if (parte) dentro += parte.dentroMm;
       }
       if (dentro <= 0) continue;
       saida.push({ trechoId: t.id, trechoUid: t.uid, outroId: w.id, outroUid: w.uid, classe: 'PAREDE_ESTRUTURAL', comprimentoDentroMm: dentro, folgaEntreEixosMm: 0 });
+    }
+
+    // ── E10.2: contra a CAIXA de um EQUIPAMENTO a que o trecho não se liga ──
+    for (const p of opcoes.pecas ?? []) {
+      const ep = (elevacao.get(p.levelId) ?? 0) + p.cotaMm;
+      const zLo = ep - p.alturaMm / 2;
+      const zHi = ep + p.alturaMm / 2;
+      const anel = caixaGirada(p.at, p.larguraMm, p.profundidadeMm, p.rotacaoGraus);
+      // O trecho que NASCE ou TERMINA na peça é a ligação dela (a linha na evaporadora, o duto no difusor).
+      const liga = pedacos.some(([A, B]) => [A, B].some((q) => pontoNaCaixa(q, anel, zLo - 50, zHi + 50, 50)));
+      if (liga) continue;
+      let r: { dentroMm: number; folgaMm: number } | null = null;
+      for (const [A, B] of pedacos) {
+        const parte = contraPrisma(A, B, raioVertical, anel, zLo, zHi, raio);
+        if (!parte) continue;
+        r = r ? { dentroMm: r.dentroMm + parte.dentroMm, folgaMm: Math.min(r.folgaMm, parte.folgaMm) } : parte;
+      }
+      if (!r) continue;
+      saida.push({ trechoId: t.id, trechoUid: t.uid, outroId: p.id, outroUid: p.uid, classe: 'EQUIPAMENTO', comprimentoDentroMm: r.dentroMm, folgaEntreEixosMm: r.folgaMm });
     }
 
     // ── Contra OUTRA DISCIPLINA ──────────────────────────────────────────
@@ -350,10 +405,21 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       // `id` só cresce, então o par é visitado uma vez — e nunca contra si.
       if (u.id <= t.id) continue;
       if (u.disciplina === t.disciplina) continue;
+      const envU = envelopeDoTrecho(u);
+      const alcance = Math.max(raio, raioVertical) + Math.max(envU.raioPlantaMm, envU.raioVerticalMm);
+      // E10.2: os dois que NASCEM NO MESMO NÓ (a linha e o dreno na evaporadora, o duto e a linha na dutada)
+      // se encontram ali por projeto — mede-se a partir de onde eles se separam, não no nó.
+      let pedT = pedacos;
+      let pedU = pedacosDe(u);
+      const comum = noEmComum(pedT, pedU);
+      if (comum) {
+        pedT = aparar(pedT, comum, alcance + 50);
+        pedU = aparar(pedU, comum, alcance + 50);
+      }
       let folga = Infinity;
-      for (const [A, B] of pedacos) for (const [C, D] of pedacosDe(u)) folga = Math.min(folga, distanciaEntreEixos3D(A, B, C, D));
+      for (const [A, B] of pedT) for (const [C, D] of pedU) folga = Math.min(folga, distanciaEntreEixos3D(A, B, C, D));
       // E7.1: duto retangular conta pelo MAIOR meio-lado (conservador; o par de eixos não diz a orientação).
-      if (folga > Math.max(raio, raioVertical) + Math.max(u.bitolaMm, u.alturaDutoMm ?? 0) / 2) continue;
+      if (folga > alcance) continue;
       saida.push({
         trechoId: t.id,
         trechoUid: t.uid,
@@ -370,6 +436,57 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
     (x, y) => (x.trechoId < y.trechoId ? -1 : x.trechoId > y.trechoId ? 1 : 0) ||
       (x.outroId < y.outroId ? -1 : x.outroId > y.outroId ? 1 : 0),
   );
+}
+
+/** E10.2: a caixa em planta de uma peça centrada em `at`, girada de `rotacaoGraus`. */
+function caixaGirada(at: Point, largura: number, profundidade: number, rotacaoGraus: number): Point[] {
+  const r = (rotacaoGraus * Math.PI) / 180;
+  const [c, s] = [Math.cos(r), Math.sin(r)];
+  return [
+    [-largura / 2, -profundidade / 2],
+    [largura / 2, -profundidade / 2],
+    [largura / 2, profundidade / 2],
+    [-largura / 2, profundidade / 2],
+  ].map(([x, y]) => ({ x: at.x + x * c - y * s, y: at.y + x * s + y * c }) as Point);
+}
+
+/** O ponto está na caixa (o anel em planta crescido de `folga`, entre as duas cotas)? */
+function pontoNaCaixa(q: Ponto3, anel: Point[], zLo: number, zHi: number, folga: number): boolean {
+  if (q.z < zLo || q.z > zHi) return false;
+  let dentro = false;
+  for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) {
+    const [a, b] = [anel[i], anel[j]];
+    if (a.y > q.y !== b.y > q.y && q.x < ((b.x - a.x) * (q.y - a.y)) / (b.y - a.y) + a.x) dentro = !dentro;
+  }
+  if (dentro) return true;
+  for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) if (distanciaPontoSegmento({ x: q.x, y: q.y } as Point, anel[j], anel[i]) <= folga) return true;
+  return false;
+}
+
+/** A ponta comum a dois trechos (± 1 mm), se houver. */
+function noEmComum(a: [Ponto3, Ponto3][], b: [Ponto3, Ponto3][]): Ponto3 | null {
+  for (const [p0, p1] of a) for (const p of [p0, p1]) for (const [q0, q1] of b) for (const q of [q0, q1]) if (Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z) <= 1) return p;
+  return null;
+}
+
+/** Os pedaços sem o trecho a menos de `d` do ponto `p` (o que fica a menos de `d` some). */
+function aparar(pedacos: [Ponto3, Ponto3][], p: Ponto3, d: number): [Ponto3, Ponto3][] {
+  const saida: [Ponto3, Ponto3][] = [];
+  for (const [A, B] of pedacos) {
+    const L = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
+    if (!(L > 0)) continue;
+    const u = { x: (B.x - A.x) / L, y: (B.y - A.y) / L, z: (B.z - A.z) / L };
+    const perto = (q: Ponto3) => Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z) <= 1;
+    let [s0, s1] = [0, L];
+    if (perto(A)) s0 = d;
+    if (perto(B)) s1 = L - d;
+    if (s1 <= s0) continue;
+    saida.push([
+      { x: A.x + u.x * s0, y: A.y + u.y * s0, z: A.z + u.z * s0 },
+      { x: A.x + u.x * s1, y: A.y + u.y * s1, z: A.z + u.z * s1 },
+    ]);
+  }
+  return saida;
 }
 
 /** E7.2: o retângulo em planta do VÃO — ao longo do eixo, de `offset` a `offset + largura`, na espessura da parede. */

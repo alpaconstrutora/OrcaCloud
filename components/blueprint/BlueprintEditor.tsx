@@ -738,7 +738,7 @@ import {
   TOLERANCIA_ENCAIXE_MM,
   encaixarEmPecaEletrica,
 } from '../../utils/blueprintRede';
-import { MEDIDAS_PADRAO_CAIXA_DE_PASSAGEM } from '../../utils/blueprintRede';
+import { MEDIDAS_PADRAO_CAIXA_DE_PASSAGEM, volumesDasPecasDeClimatizacao } from '../../utils/blueprintRede';
 import {
   FICHA_DO_PONTO_HIDRAULICO,
   SIGLA_DO_PONTO_HIDRAULICO,
@@ -3922,7 +3922,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   /** Quem exporta — vai como autor do tópico BCF. */
   const perfil = useStore((e) => e.currentProfile);
 
-  const conflitos = useMemo(() => conflitosDoModelo(editor.model), [editor.model]);
+  // E10.2 (climatização): com as caixas das peças de climatização — o trecho que atravessa um equipamento a que não se liga.
+  const conflitos = useMemo(() => conflitosDoModelo(editor.model, { pecas: volumesDasPecasDeClimatizacao(editor.model) }), [editor.model]);
   /** Os arquitetônicos (E0.4): pilar no vão, pilar na escada, viga baixa sobre o degrau. */
   const conflitosArq = useMemo(() => conflitosArquitetonicos(editor.model), [editor.model]);
   /** MECÂNICA (E11.1): quantos conflitos são de reserva de equipamento, e quais shafts são mecânicos. */

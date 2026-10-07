@@ -193,7 +193,7 @@ export default function PainelConflitos({
       <p className="flex items-start gap-1.5 text-[11px] text-slate-500" data-testid="sem-conflitos">
         <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
         <span>
-          Nenhum conflito: instalação × estrutura, entre disciplinas, instalação × vão de porta/janela, instalação × parede estrutural, ponto/quadro × estrutura, pilar × vão, escada × estrutura.
+          Nenhum conflito: instalação × estrutura, entre disciplinas, instalação × vão de porta/janela, instalação × parede estrutural, instalação × equipamento, ponto/quadro × estrutura, pilar × vão, escada × estrutura.
           <span className="mt-0.5 block text-[10px]">
             Cano dentro de parede e pilar dentro de parede <strong>não</strong> contam — é onde eles moram.
           </span>
@@ -287,6 +287,10 @@ export default function PainelConflitos({
       const w = model.walls.find((x) => x.id === c.outroId);
       return w ? `Parede estrutural ${rotuloCurto(w.uid, 'wall')}` : c.outroId;
     }
+    if (c.classe === 'EQUIPAMENTO') {
+      const p = (model.terminais ?? []).find((x) => x.id === c.outroId);
+      return p ? `${p.tipo} ${rotuloCurto(p.uid, 'terminal')}` : c.outroId;
+    }
     const s = model.structures.find((x) => x.id === c.outroId);
     return s ? s.rotulo || rotuloCurto(s.uid, 'structural') : c.outroId;
   };
@@ -307,6 +311,7 @@ export default function PainelConflitos({
     const m = c.conflito as Conflito;
     if (m.classe === 'ABERTURA') return `${(m.comprimentoDentroMm / 1000).toFixed(3)} m dentro do vão — o tubo ficaria aparente e a esquadria não entra`;
     if (m.classe === 'PAREDE_ESTRUTURAL') return `${(m.comprimentoDentroMm / 1000).toFixed(3)} m de rasgo em parede estrutural — só com furo previsto no projeto estrutural`;
+    if (m.classe === 'EQUIPAMENTO') return m.comprimentoDentroMm > 0 ? `${(m.comprimentoDentroMm / 1000).toFixed(3)} m através da caixa do equipamento — desvie ou mude a cota` : `encosta na caixa do equipamento — ${Math.round(m.folgaEntreEixosMm)} mm do eixo`;
     // O número que decide o que fazer: atravessar 200 mm de viga é um furo;
     // roçar de raspão pode ser só um ajuste de cota.
     return m.comprimentoDentroMm > 0 ? `${(m.comprimentoDentroMm / 1000).toFixed(3)} m por dentro` : `de raspão — ${Math.round(m.folgaEntreEixosMm)} mm entre os eixos`;

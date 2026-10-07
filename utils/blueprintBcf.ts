@@ -257,7 +257,9 @@ export function topicosDeConflitos(
             ? rotuloCurto(c.outroUid, 'opening')
             : c.classe === 'PAREDE_ESTRUTURAL'
               ? rotuloCurto(c.outroUid, 'wall')
-              : rotuloCurto(c.outroUid, 'structural')
+              : c.classe === 'EQUIPAMENTO'
+                ? rotuloCurto(c.outroUid, 'terminal')
+                : rotuloCurto(c.outroUid, 'structural')
       }`,
       tipo: 'Clash' as const,
       status: 'Open' as const,
@@ -265,7 +267,7 @@ export function topicosDeConflitos(
       criadoEm: agora,
       descricao:
         `Interferência entre instalação e ${
-          c.classe === 'REDE' ? 'outra disciplina' : c.classe === 'ABERTURA' ? 'vão de porta/janela' : c.classe === 'PAREDE_ESTRUTURAL' ? 'parede estrutural (rasgo não previsto)' : 'estrutura'
+          c.classe === 'REDE' ? 'outra disciplina' : c.classe === 'ABERTURA' ? 'vão de porta/janela' : c.classe === 'PAREDE_ESTRUTURAL' ? 'parede estrutural (rasgo não previsto)' : c.classe === 'EQUIPAMENTO' ? 'equipamento (a caixa de uma peça a que o trecho não se liga)' : 'estrutura'
         }: ${como}. ` +
         'Detectado pela Planta Inteligente do ÒPURA. A geometria do trecho é o ' +
         'eixo declarado com a bitola declarada — não há detalhamento de conexão.',

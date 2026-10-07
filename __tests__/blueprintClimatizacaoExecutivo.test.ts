@@ -106,7 +106,8 @@ describe('climatização E8.4 · base e memorial', () => {
     expect(txt).toMatch(/Emitido em 07\/10\/2026/);
     expect(txt).toMatch(/MG2026000001/);
     expect(txt).toMatch(/CONFERIR NA NORMA ou HIPÓTESE/);
-    expect(txt).toMatch(/5\. Equipamentos e terminais/);
+    // O título sem número embutido (o painel e o PDF numeram — como nos outros memoriais).
+    expect(linhas).toContain('## Equipamentos e terminais');
     expect(blocosDasLinhas(linhas)).toEqual(b);
     expect([...new Set(txt)].filter((ch) => ch !== '?' && ch !== '\n' && paraWinAnsi(ch).includes('?'))).toEqual([]);
   });

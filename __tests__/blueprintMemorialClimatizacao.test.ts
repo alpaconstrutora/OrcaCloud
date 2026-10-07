@@ -39,7 +39,7 @@ describe('memorial de carga térmica', () => {
     const niveis = cargaTermicaDoEstudo(m, hip);
     const sala = niveis[0].ambientes.find((a) => a.nome === 'Sala')!;
     const b = memorialDeCalculoClimatizacao(niveis, hip, ctx);
-    expect(b.filter((x) => x.tipo === 'secao').map((x) => x.texto)).toEqual(['1. Condições de projeto', '2. Hipóteses do motor', '3. Carga por ambiente', '4. Resumo e conferência']);
+    expect(b.filter((x) => x.tipo === 'secao').map((x) => x.texto)).toEqual(['Condições de projeto', 'Hipóteses do motor', 'Carga por ambiente', 'Resumo e conferência']);
     const t = texto(b);
     expect(t).toMatch(/CONFERIR NA NORMA/);
     expect(t).toMatch(/TBS externa \| 34,0 °C \| declarada/);
@@ -83,7 +83,7 @@ describe('E8.3 · o memorial com as instalações', () => {
     const niveis = cargaTermicaDoEstudo(m, hip);
     const b = memorialDeCalculoClimatizacao(niveis, hip, ctx, m);
     const secoes = b.filter((x) => x.tipo === 'secao').map((x) => x.texto);
-    expect(secoes).toEqual(['1. Condições de projeto', '2. Hipóteses do motor', '3. Carga por ambiente', '4. Resumo e conferência', '5. Equipamentos e terminais', '6. Linha frigorígena e dreno de condensado']);
+    expect(secoes).toEqual(['Condições de projeto', 'Hipóteses do motor', 'Carga por ambiente', 'Resumo e conferência', 'Equipamentos e terminais', 'Linha frigorígena e dreno de condensado']);
     const t = texto(b);
     expect(t).toMatch(/EV-1 \| Evaporadora/);
     expect(t).toMatch(/CD-1 \| Condensadora/);
@@ -97,11 +97,19 @@ describe('E8.3 · o memorial com as instalações', () => {
   it('o descritivo conta o que o desenho instala; sem nada instalado, diz que cobre só a carga', () => {
     const m = casaInstalada();
     const t = texto(memorialDescritivoClimatizacao(cargaTermicaDoEstudo(m, hip), hip, ctx, m));
-    expect(t).toMatch(/4\. Instalações/);
+    expect(t).toMatch(/Instalações/);
     expect(t).toMatch(/1 evaporadora\(s\) \([\d.]+ BTU\/h declarados\), 1 condensadora\(s\) split e 0 VRF; [\d,]+ m de linha frigorígena/);
-    expect(t).toMatch(/5\. O que fica a cargo do responsável/);
+    expect(t).toMatch(/O que fica a cargo do responsável/);
     const vazio = casa();
     expect(texto(memorialDescritivoClimatizacao(cargaTermicaDoEstudo(vazio, hip), hip, ctx, vazio))).toMatch(/cobre só a carga térmica/);
+  });
+
+  it('o título da seção vem SEM número (o painel lista em <ol> e numerava duas vezes: "1. 1. Condições de projeto" — achado no passeio de 07/10)', () => {
+    const m = casaInstalada();
+    const niveis = cargaTermicaDoEstudo(m, hip);
+    const titulos = [...memorialDeCalculoClimatizacao(niveis, hip, ctx, m), ...memorialDescritivoClimatizacao(niveis, hip, ctx, m)].filter((x) => x.tipo === 'secao').map((x) => x.texto);
+    expect(titulos.length).toBeGreaterThan(8);
+    expect(titulos.filter((t) => /^\d/.test(t))).toEqual([]);
   });
 
   it('no PDF (WinAnsi) nenhum caractere vira "?" — o ⚠ do CONFERIR virava', () => {

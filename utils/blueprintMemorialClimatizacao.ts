@@ -63,7 +63,7 @@ export function memorialDeCalculoClimatizacao(niveis: CargaTermicaDoNivel[], hip
   if (conferir) b.push({ tipo: 'paragrafo', texto: '⚠ CONFERIR NA NORMA: as parcelas marcadas com * usam hipótese de projeto ou tabela transcrita de memória (NBR 16655-3, NBR 16401-1, NBR 15220). O resultado orienta o pré-dimensionamento e não substitui a conferência do responsável técnico.' });
 
   const c = niveis[0]?.condicoes;
-  b.push({ tipo: 'secao', texto: '1. Condições de projeto' });
+  b.push({ tipo: 'secao', texto: 'Condições de projeto' });
   if (c) {
     b.push({
       tipo: 'tabela',
@@ -80,7 +80,7 @@ export function memorialDeCalculoClimatizacao(niveis: CargaTermicaDoNivel[], hip
   }
   b.push({ tipo: 'paragrafo', texto: `${FONTE_DO_CONFORTO} ${FONTE_DO_CLIMA}` });
 
-  b.push({ tipo: 'secao', texto: '2. Hipóteses do motor' });
+  b.push({ tipo: 'secao', texto: 'Hipóteses do motor' });
   const m = hip.motor;
   b.push({
     tipo: 'tabela',
@@ -99,7 +99,7 @@ export function memorialDeCalculoClimatizacao(niveis: CargaTermicaDoNivel[], hip
   });
   b.push({ tipo: 'paragrafo', texto: `${FONTE_DO_MOTOR} ${FONTE_DO_PADRAO_POR_USO}` });
 
-  b.push({ tipo: 'secao', texto: '3. Carga por ambiente' });
+  b.push({ tipo: 'secao', texto: 'Carga por ambiente' });
   if (todos.length === 0) b.push({ tipo: 'paragrafo', texto: 'Nenhum ambiente climatizado no desenho.' });
   for (const n of niveis) {
     const clim = n.ambientes.filter((a) => a.climatizado);
@@ -111,7 +111,7 @@ export function memorialDeCalculoClimatizacao(niveis: CargaTermicaDoNivel[], hip
     }
   }
 
-  b.push({ tipo: 'secao', texto: '4. Resumo e conferência' });
+  b.push({ tipo: 'secao', texto: 'Resumo e conferência' });
   b.push({
     tipo: 'tabela',
     cabecalho: ['Pavimento', 'Sensível (W)', 'Latente (W)', 'Total (W)', 'BTU/h'],
@@ -122,7 +122,7 @@ export function memorialDeCalculoClimatizacao(niveis: CargaTermicaDoNivel[], hip
     b.push({ tipo: 'tabela', cabecalho: [`Conferência — ${ctx.nomeDoNivel(n.levelId)}`, 'Estado', 'Obtido'], linhas: conf.itens.map((i) => [i.item, i.estado.replace('_', ' ').toLowerCase(), i.obtido]) });
   }
   // E8.3 (07/10/2026): com o desenho, as instalações — equipamentos, linha e dreno, VRF e rede de ar.
-  if (model) b.push(...memorialDasInstalacoesClimatizacao(model, niveis, hip, ctx, 5));
+  if (model) b.push(...memorialDasInstalacoesClimatizacao(model, niveis, hip, ctx));
   return b;
 }
 
@@ -141,10 +141,10 @@ const ouTraco = (v: number | null | undefined, f: (x: number) => string) => (v =
  * perda, renovação). As mesmas funções dos painéis — o que a tela confere é o
  * que o memorial escreve. Cada seção só sai se o desenho tem do que falar.
  */
-export function memorialDasInstalacoesClimatizacao(model: BlueprintModel, niveis: CargaTermicaDoNivel[], hip: HipotesesClimatizacao, ctx: ContextoDoMemorial, primeira = 1): BlocoDoMemorial[] {
+export function memorialDasInstalacoesClimatizacao(model: BlueprintModel, niveis: CargaTermicaDoNivel[], hip: HipotesesClimatizacao, ctx: ContextoDoMemorial): BlocoDoMemorial[] {
   const b: BlocoDoMemorial[] = [];
-  let n = primeira;
-  const secao = (texto: string) => b.push({ tipo: 'secao', texto: `${n++}. ${texto}` });
+  // O título sem número: quem numera é quem mostra (a lista do painel; o PDF/DOCX como nos outros memoriais).
+  const secao = (texto: string) => b.push({ tipo: 'secao', texto });
   const ordem = [...model.levels].sort((a, c) => a.elevationMm - c.elevationMm);
   const numeros = numeracaoDeClimatizacao(model);
 
@@ -258,14 +258,13 @@ export function memorialDescritivoClimatizacao(niveis: CargaTermicaDoNivel[], hi
   const todos = niveis.flatMap((n) => n.ambientes.filter((a) => a.climatizado));
   const c = niveis[0]?.condicoes;
   b.push({ tipo: 'titulo', texto: `Memorial descritivo — climatização · ${ctx.nomeDoEstudo}` });
-  b.push({ tipo: 'secao', texto: '1. Objeto' });
+  b.push({ tipo: 'secao', texto: 'Objeto' });
   b.push({ tipo: 'paragrafo', texto: `Estimativa da carga térmica de verão de ${todos.length} ambiente(s) climatizado(s) em ${niveis.length} pavimento(s), para pré-dimensionamento dos equipamentos de ar-condicionado. Total: ${n0(niveis.reduce((s, n) => s + n.totalW, 0))} W (${n0(niveis.reduce((s, n) => s + n.totalBtuH, 0))} BTU/h).` });
-  b.push({ tipo: 'secao', texto: '2. Normas e método' });
+  b.push({ tipo: 'secao', texto: 'Normas e método' });
   b.push({ tipo: 'paragrafo', texto: 'NBR 16655-3 (cargas térmicas em instalações residenciais), NBR 16401-1 (parâmetros de projeto, ocupação e renovação), NBR 15220 (desempenho térmico — transmitância das camadas). Método simplificado de pico: condução pela envoltória com temperatura equivalente ao sol, insolação pelos vidros com fator solar e proteção, cargas internas de pessoas, iluminação e equipamentos, infiltração por trocas de ar. Valores não transcritos da norma estão marcados CONFERIR NA NORMA no memorial de cálculo.' });
-  b.push({ tipo: 'secao', texto: '3. Condições e ambientes' });
+  b.push({ tipo: 'secao', texto: 'Condições e ambientes' });
   b.push({ tipo: 'paragrafo', texto: c ? `Local: ${c.cidade.valor ?? 'não informado'}; TBS ${c.tbsC.valor == null ? 'não informada' : `${n1(c.tbsC.valor)} °C`}, TBU ${c.tbuC.valor == null ? 'não informada' : `${n1(c.tbuC.valor)} °C`}; interno ${n1(hip.conforto.temperaturaInternaC)} °C / ${n0(hip.conforto.umidadeRelativaPct)} %.` : 'Sem condições de projeto.' });
   if (todos.length) b.push({ tipo: 'tabela', cabecalho: ['Ambiente', 'Pavimento', 'Área (m²)', 'Teto', 'Piso', 'Total (W)', 'BTU/h'], linhas: niveis.flatMap((n) => n.ambientes.filter((a) => a.climatizado).map((a) => [a.nome, ctx.nomeDoNivel(n.levelId), n1(a.areaPisoM2), ROTULO_DA_EXPOSICAO[a.exposicao.teto.tipo], ROTULO_DA_EXPOSICAO[a.exposicao.piso.tipo], n0(a.totalW), n0(a.totalBtuH)])) });
-  let proxima = 4;
   if (model) {
     // E8.3: o que o desenho instala, em prosa.
     const pecas = (model.terminais ?? []).filter((t) => t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico));
@@ -278,7 +277,7 @@ export function memorialDescritivoClimatizacao(niveis: CargaTermicaDoNivel[], hi
     const cap = pecas.filter((t) => t.tipoHidraulico!.startsWith('EVAPORADORA')).reduce((s, t) => s + (t.capacidadeBtuH ?? 0), 0);
     const metros = (disc: string) => (model.trechos ?? []).filter((t) => t.disciplina === disc).reduce((s, t) => s + Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm), 0) / 1000;
     const temRede = metros('FRIGORIGENA') > 0 || metros('DRENO_AC') > 0 || metros('MECANICA') > 0;
-    b.push({ tipo: 'secao', texto: `${proxima++}. Instalações` });
+    b.push({ tipo: 'secao', texto: 'Instalações' });
     b.push({
       tipo: 'paragrafo',
       texto: pecas.length || temRede
@@ -286,7 +285,7 @@ export function memorialDescritivoClimatizacao(niveis: CargaTermicaDoNivel[], hi
         : 'O desenho ainda não tem equipamento nem rede de climatização: este memorial cobre só a carga térmica.',
     });
   }
-  b.push({ tipo: 'secao', texto: `${proxima}. O que fica a cargo do responsável` });
+  b.push({ tipo: 'secao', texto: 'O que fica a cargo do responsável' });
   b.push({ tipo: 'paragrafo', texto: 'Conferir as tabelas marcadas contra o texto das normas e o catálogo do fabricante do equipamento escolhido; declarar vidro, camadas de parede/cobertura e ocupação onde o cálculo usou valor típico; confirmar o equipamento pela carga total e pela razão sensível/latente, e a linha, o dreno e os dutos pelos limites do fabricante.' });
   return b;
 }

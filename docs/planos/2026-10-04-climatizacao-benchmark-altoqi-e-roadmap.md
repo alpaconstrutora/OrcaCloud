@@ -2215,3 +2215,21 @@ painel pré-isolado".
 desvio do ponto de força à condensadora → o comprimento exato do desvio + a sobra, origem
 "eletroduto"; o eletroduto que para a 1,5 m da condensadora não liga com alcance de 0,3 m e liga com 2 m
 (os 1,5 m entram); painel 600×300 de 4 m = 7,92 m² × 1,4 kg/m², sem linha de aço.
+
+### Passeio no app real, E5–E9 · 07/10/2026 (produção `b11c1ca`, estudo descartável)
+
+Login do agente-leitura (senha dada pelo usuário na sessão, não guardada), estudo novo na Alpa,
+catálogo de splits só na LEITURA (GET interceptado, nada gravado no catálogo da organização). 18/18
+passos, 0 erro de página, 0 resposta HTTP de erro: paredes em retângulo → Sala → TBS 34/TBU 25 → carga
+(11.090 W · 37.841 BTU/h) → split lançado ("atende") e aceito (3 peças) → **E5** linha e dreno lançados
+(1 linha 3,2 m / 50 m, Ø 10·19 isol. 13, gás dentro da pré-carga, 2 curvas com raio ≥ 80 mm, 1 dreno) →
+**E6/E7** gavetas VRF e Dutos abrem e conferem → **E8** memoriais na gaveta Documentos → **E9** lista de
+materiais (cobre, cabo, suportes) → **E8.4 emissão com ART gravada** ("Emitido — ART nº PROVA-E8-0001 …
+Vale para o desenho e as premissas atuais") → **TBS mudada para 35 → a emissão deixa de valer**.
+Limpeza no banco: estudo, ramo (snapshots em cascata), a emissão de prova e as premissas apagados e
+conferidos (0); fica 1 linha em `blueprint_audit_events` — imutável por gatilho, por projeto.
+
+**Achado e corrigido (frente `clima-secoes`):** os títulos das seções dos memoriais de climatização
+traziam o número no texto ("1. Condições de projeto") e o painel lista em `<ol>` — saía "1. 1." na tela.
+Os memoriais de hidro, elétrica e incêndio guardam o título sem número; a climatização passou a fazer o
+mesmo (teste de regressão: nenhum título começa com dígito).

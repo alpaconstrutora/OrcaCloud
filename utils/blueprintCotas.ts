@@ -32,7 +32,7 @@
  */
 
 import type { BlueprintModel, Boundary, Level, Point, Space, Wall } from './blueprintKernel';
-import { anelDoTerreno, medirTerreno } from './blueprintTerreno';
+import { anelDoTerreno, faixasRestritas, medirTerreno } from './blueprintTerreno';
 import {
   areCollinear,
   contornoExternoDoNivel,
@@ -869,12 +869,34 @@ export function cadeiasDoContorno(
   anelDoLote: Point[] | null,
   blocos: readonly Point[][],
   cadeiasDasParedes: readonly CadeiasDoLado[],
+  /** Os DETALHES do lote (`detalhesDoLote`): recuos, faixas de restrição, divisas internas. */
+  detalhes: readonly Point[] = [],
 ): CadeiasDoLote[] {
   if (anelDoLote && anelDoLote.length >= 3) {
-    const quebras = [...blocos.flat(), ...cadeiasDasParedes.flatMap((c) => [c.lado.a, c.lado.b, ...c.lado.intermediarios])];
+    const quebras = [...blocos.flat(), ...cadeiasDasParedes.flatMap((c) => [c.lado.a, c.lado.b, ...c.lado.intermediarios]), ...detalhes];
     return cadeiasDoLote(anelDoLote, quebras);
   }
   return blocos.filter((pts) => pts.length >= 3).flatMap((pts) => cadeiasDoLote(pts, []));
+}
+
+/**
+ * OS DETALHES DO LOTE que repartem as cotas por fora da divisa (08/10/2026) — *"as medidas e eixos contemplam início e
+ * fim do terreno e isso está correto, porém tem que considerar outros pontos. como por exemplo na imagem existe um
+ * recuo"*; e *"todos os detalhes devem ser considerados, seja recuo ou outra informação semelhante"*.
+ *
+ * Os vértices de: o ENVELOPE recuado (cada peça — os recuos e os recortes das restrições; vem de fora porque os recuos
+ * são da zona, não do modelo), o retângulo de cada FAIXA DE RESTRIÇÃO (APP, curso d'água, servidão, não edificável) e
+ * as pontas de cada DIVISA interna. Projetados em cada lado do lote por `cadeiasDoLote`: o que cai no meio do lado o
+ * reparte (o recuo de frente vira um trecho da cadeia da lateral); o que coincide com um canto não reparte nada.
+ */
+export function detalhesDoLote(limitesDoNivel: readonly Boundary[], envelopePecas: readonly Point[][] = []): Point[] {
+  const limites = [...limitesDoNivel];
+  const terreno = medirTerreno(limites.filter((x) => x.kind === 'TERRENO'));
+  return [
+    ...envelopePecas.filter((p) => p.length >= 3).flat(),
+    ...faixasRestritas(terreno, limites).flatMap((f) => f.anel),
+    ...limites.filter((b) => b.kind !== 'TERRENO').flatMap((b) => [b.a, b.b]),
+  ];
 }
 
 /** O anel do lote do nível, ou nulo quando as divisas TERRENO não fecham. */

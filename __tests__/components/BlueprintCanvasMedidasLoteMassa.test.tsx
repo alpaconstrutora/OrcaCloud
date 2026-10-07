@@ -173,4 +173,24 @@ describe('BlueprintCanvas · medidas do lote e da massa', () => {
     expect(segmentos.filter((l) => l === 32).length / desenhos).toBe(8);
     expect(segmentos.filter((l) => l === 54).length / desenhos).toBe(8);
   });
+
+  /**
+   * DETALHES DO LOTE (08/10/2026) — *"existe um recuo que deve ser incluído tanto nas medidas e eixos"*: o envelope
+   * recuado (recuo de frente 5 m, fundos 3 m) reparte a cadeia das laterais; com o envelope oculto, não.
+   */
+  it('o recuo reparte a cota da lateral (5,00 | 22,00 | 3,00); envelope oculto não reparte', () => {
+    const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: l, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as const;
+    const lote = applyBatch(m, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model;
+    const envelope = [point(0, 5000), point(10000, 5000), point(10000, 27000), point(0, 27000)];
+    desenhar(lote, { envelope });
+    const t = textos();
+    for (const x of ['5,00', '22,00', '3,00']) expect(t, x).toContain(x);
+    chamadas = [];
+    desenhar(lote, { envelope, mostrarEnvelope: false });
+    const sem = textos();
+    expect(sem).toContain('30,00');
+    for (const x of ['5,00', '22,00', '3,00']) expect(sem, x).not.toContain(x);
+  });
 });

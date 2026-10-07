@@ -8566,8 +8566,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [hipDeEixosSalvas, setHipDeEixosSalvas] = usePersistedState<Partial<HipotesesDeEixos>>('blueprint:eixosAutomaticos', HIPOTESES_EIXOS_PADRAO);
   const hipotesesDeEixos = useMemo(() => normalizarHipotesesDeEixos(hipDeEixosSalvas), [hipDeEixosSalvas]);
   const propostaDeEixosDoNivel = useMemo(
-    () => (tarefaAberta === 'eixos' && levelId ? propostaDeEixos(editor.model, levelId, hipotesesDeEixos) : null),
-    [tarefaAberta, editor.model, levelId, hipotesesDeEixos],
+    // O envelope recuado vai junto (08/10/2026): sem edificação, a linha de cada recuo também vira eixo.
+    () =>
+      tarefaAberta === 'eixos' && levelId
+        ? propostaDeEixos(editor.model, levelId, hipotesesDeEixos, { envelope: envelope?.valido ? (envelope.pecas ?? [envelope.anel]) : [] })
+        : null,
+    [tarefaAberta, editor.model, levelId, hipotesesDeEixos, envelope],
   );
   const [resultadoDeEixos, setResultadoDeEixos] = useState<{ ok: boolean; texto: string } | null>(null);
   const criarEixos = () => {

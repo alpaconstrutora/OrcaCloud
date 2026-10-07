@@ -107,6 +107,7 @@ import {
   cotasDeAmbiente,
   anelDoLoteFechado,
   cadeiasDoContorno,
+  detalhesDoLote,
   chamadasDoLado,
   LINHA_DE_CHAMADA,
   cadeiasPorLado,
@@ -5613,7 +5614,11 @@ export default function BlueprintCanvas({
       // A conta é a mesma da exportação (`cadeiasDoContorno`); a chamada nasce NA divisa (face 0).
       ctx.save();
       ctx.lineWidth = 1;
-      for (const c of cadeiasDoContorno(anelDoLoteFechado(limitesDoNivel), blocosDoNivel, cadeiasDeCota)) {
+      // Os DETALHES do lote também repartem (08/10/2026): o envelope recuado — só quando está à vista, a cota não
+      // aponta para o que não se desenha —, as faixas de restrição e as divisas internas.
+      const envelopeVisivel = mostrarEnvelope ? (envelopePecas?.length ? envelopePecas : envelope.length >= 3 ? [envelope] : []) : [];
+      const detalhes = detalhesDoLote(limitesDoNivel, envelopeVisivel);
+      for (const c of cadeiasDoContorno(anelDoLoteFechado(limitesDoNivel), blocosDoNivel, cadeiasDeCota, detalhes)) {
         const desenhadas: { segmentos: { de: number; ate: number }[]; nivel: number }[] = [];
         if (c.parcial.length > 0) desenhadas.push({ segmentos: desenharCadeia(c.lado, c.parcial, 1, 1), nivel: 1 });
         const nivelDoTotal = c.parcial.length > 0 ? 2 : 1;
@@ -9190,6 +9195,7 @@ export default function BlueprintCanvas({
     eixoEstrutural,
     anelEstrutural,
     envelope,
+    envelopePecas,
     mostrarEnvelope,
     medicaoSelecionada,
     medindo,

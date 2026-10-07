@@ -8,6 +8,7 @@ import {
   type Point,
 } from './blueprintKernel';
 import { anelDoLoteFechado } from './blueprintCotas';
+import { faixasRestritas, medirTerreno } from './blueprintTerreno';
 
 /**
  * EIXOS AUTOMÁTICOS (07/10/2026).
@@ -34,6 +35,8 @@ import { anelDoLoteFechado } from './blueprintCotas';
  *  - SEM parede nem bloco no pavimento (o estudo que só tem o lote), os lados ortogonais do LOTE fechado (08/10/2026,
  *    *"quero"* à pergunta "gerar eixos também a partir dos lados do lote quando ainda não há paredes nem bloco?").
  *    Hipótese ligável na gaveta; com edificação desenhada, o lote não entra — a malha é da estrutura, não da divisa.
+ *    E não só os lados (08/10/2026, *"todos os detalhes devem ser considerados, seja recuo ou outra informação
+ *    semelhante"*): as linhas do ENVELOPE recuado (cada peça), das FAIXAS DE RESTRIÇÃO e das DIVISAS internas.
  *
  * As três distâncias são HIPÓTESES na gaveta (memória: folga de projeto nunca fica escondida no código).
  */
@@ -86,7 +89,7 @@ export interface EixoProposto {
   a: Point;
   b: Point;
   /** De onde a linha veio. */
-  origem: 'PAREDE' | 'BLOCO' | 'PAREDE_E_BLOCO' | 'LOTE';
+  origem: 'PAREDE' | 'BLOCO' | 'PAREDE_E_BLOCO' | OrigemDoLote;
 }
 
 export interface PropostaDeEixos {
@@ -110,10 +113,21 @@ interface Linha {
   vertical: boolean;
   c: number;
   comprimento: number;
-  origem: 'PAREDE' | 'BLOCO' | 'LOTE';
+  origem: 'PAREDE' | 'BLOCO' | OrigemDoLote;
 }
 
-export function propostaDeEixos(model: BlueprintModel, levelId: ObjectId, hipEntrada: Partial<HipotesesDeEixos> = {}): PropostaDeEixos {
+/** De que detalhe do lote a linha veio (sem edificação). */
+export type OrigemDoLote = 'LOTE' | 'RECUO' | 'RESTRICAO' | 'DIVISA';
+/** Linhas juntadas de origens diferentes ficam com a primeira desta lista. */
+const PRIORIDADE_DA_ORIGEM: readonly Linha['origem'][] = ['PAREDE', 'BLOCO', 'LOTE', 'RECUO', 'RESTRICAO', 'DIVISA'];
+
+export function propostaDeEixos(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  hipEntrada: Partial<HipotesesDeEixos> = {},
+  /** O ENVELOPE recuado do pavimento (as peças) — vem de fora porque os recuos são da zona, não do modelo. */
+  extras: { envelope?: readonly Point[][] } = {},
+): PropostaDeEixos {
   const hip = normalizarHipotesesDeEixos(hipEntrada);
   const paredes = model.walls.filter((w) => w.levelId === levelId);
   const blocos = (model.blocos ?? []).filter((b) => b.levelId === levelId && b.pontos.length >= 3);
@@ -153,18 +167,27 @@ export function propostaDeEixos(model: BlueprintModel, levelId: ObjectId, hipEnt
   const vazio = (motivo: string): PropostaDeEixos => ({ eixos: [], comandos: [], paredesObliquas, paredesCurtas, jaTinhamEixo: 0, motivoVazio: motivo });
   // SÓ O LOTE (08/10/2026): sem edificação, os lados ortogonais do lote fechado — se a hipótese deixar.
   const semEdificacao = paredes.length === 0 && blocos.length === 0;
-  const anelDoLote = semEdificacao && hip.usarLadosDoLote ? anelDoLoteFechado(model.boundaries.filter((b) => b.levelId === levelId)) : null;
+  const limitesDoNivel = model.boundaries.filter((b) => b.levelId === levelId);
+  const anelDoLote = semEdificacao && hip.usarLadosDoLote ? anelDoLoteFechado(limitesDoNivel) : null;
   if (anelDoLote) {
-    for (let i = 0; i < anelDoLote.length; i++) {
-      const l = comoLinha(anelDoLote[i], anelDoLote[(i + 1) % anelDoLote.length], 'LOTE');
+    const segmento = (a: Point, b: Point, origem: OrigemDoLote) => {
+      const l = comoLinha(a, b, origem);
       if (l && l.comprimento >= hip.comprimentoMinimoDaParedeMm) linhas.push(l);
-    }
+    };
+    const anel = (pts: readonly Point[], origem: OrigemDoLote) => {
+      if (pts.length < 3) return;
+      for (let i = 0; i < pts.length; i++) segmento(pts[i], pts[(i + 1) % pts.length], origem);
+    };
+    anel(anelDoLote, 'LOTE');
+    for (const peca of extras.envelope ?? []) anel(peca, 'RECUO');
+    for (const f of faixasRestritas(medirTerreno(limitesDoNivel.filter((b) => b.kind === 'TERRENO')), limitesDoNivel)) anel(f.anel, 'RESTRICAO');
+    for (const b of limitesDoNivel.filter((x) => x.kind === 'DIVISA')) segmento(b.a, b.b, 'DIVISA');
   }
   if (semEdificacao && !anelDoLote) {
     return vazio(
       hip.usarLadosDoLote
-        ? 'Desenhe paredes, blocos ou um lote fechado neste pavimento: os eixos saem da edificação (ou, sem ela, dos lados do lote).'
-        : 'Desenhe paredes ou blocos neste pavimento — ou ligue "Usar os lados do lote" para os eixos saírem da divisa.',
+        ? 'Desenhe paredes, blocos ou um lote fechado neste pavimento: os eixos saem da edificação (ou, sem ela, do lote — lados, recuos e restrições).'
+        : 'Desenhe paredes ou blocos neste pavimento — ou ligue "Usar o lote" para os eixos saírem dos lados, recuos e restrições.',
     );
   }
   if (anelDoLote && linhas.length === 0) return vazio('O lote não tem lado horizontal ou vertical acima da "parede mínima": desenhe paredes ou blocos, ou diminua o valor.');
@@ -199,7 +222,9 @@ export function propostaDeEixos(model: BlueprintModel, levelId: ObjectId, hipEnt
     return grupos.map((g) => {
       const maior = g.reduce((m, l) => (l.comprimento > m.comprimento ? l : m), g[0]);
       const origens = new Set(g.map((l) => l.origem));
-      return { c: Math.round(maior.c), origem: (origens.size > 1 ? 'PAREDE_E_BLOCO' : maior.origem) as EixoProposto['origem'] };
+      const origem: EixoProposto['origem'] =
+        origens.has('PAREDE') && origens.has('BLOCO') ? 'PAREDE_E_BLOCO' : (PRIORIDADE_DA_ORIGEM.find((o) => origens.has(o)) ?? maior.origem);
+      return { c: Math.round(maior.c), origem };
     });
   };
 

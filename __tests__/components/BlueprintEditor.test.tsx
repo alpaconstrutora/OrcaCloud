@@ -7579,7 +7579,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     const criar = within(drawer).getByRole('button', { name: /^criar 0 eixo/i });
     expect(criar).toBeDisabled();
     expect(criar).toHaveAttribute('title', expect.stringMatching(/Desenhe paredes, blocos ou um lote fechado/));
-    expect(within(drawer).getByRole('checkbox', { name: /usar os lados do lote/i })).toBeChecked();
+    expect(within(drawer).getByRole('checkbox', { name: /usar o lote/i })).toBeChecked();
   });
 
   it('só o lote (08/10/2026): a gaveta propõe A, B / 1, 2 pelos lados; desligar "Usar os lados do lote" zera e guarda', async () => {
@@ -7601,7 +7601,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
       expect.stringMatching(/^2Horizontal.*y = 0,00/),
     ]);
     expect(within(drawer).getByRole('button', { name: /^criar 4 eixo/i })).toBeEnabled();
-    await userEvent.setup().click(within(drawer).getByRole('checkbox', { name: /usar os lados do lote/i }));
+    await userEvent.setup().click(within(drawer).getByRole('checkbox', { name: /usar o lote/i }));
     expect(within(drawer).getByRole('button', { name: /^criar 0 eixo/i })).toBeDisabled();
     expect(JSON.parse(localStorage.getItem('blueprint:eixosAutomaticos')!).usarLadosDoLote).toBe(false);
   });

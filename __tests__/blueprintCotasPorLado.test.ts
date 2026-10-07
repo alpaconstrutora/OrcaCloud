@@ -1149,3 +1149,53 @@ describe('linhas de chamada', () => {
   });
 });
 
+
+/**
+ * DETALHES DO LOTE nas cotas (08/10/2026) — *"existe um recuo que deve ser incluído tanto nas medidas e eixos"*;
+ * *"todos os detalhes devem ser considerados"*: o envelope recuado, as faixas de restrição e as divisas internas
+ * repartem a cadeia do lado do lote.
+ */
+describe('cadeias do lote pelos detalhes', () => {
+  const loteCom = (extra: Command[] = []) => {
+    const { model, levelId } = base();
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as Command;
+    return applyBatch(model, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0), ...extra]).model;
+  };
+  const rotulos = (c: { parcial: { rotulo: string }[] }) => c.parcial.map((s) => s.rotulo);
+  const ordenado = (c: { parcial: { rotulo: string }[] }) => [rotulos(c).join(' | '), [...rotulos(c)].reverse().join(' | ')];
+
+  it('o recuo reparte a lateral: 5,00 | 22,00 | 3,00; frente e fundos (sem recuo lateral) só o total', async () => {
+    const { cadeiasDoContorno, detalhesDoLote, anelDoLoteFechado } = await import('../utils/blueprintCotas');
+    const m = loteCom();
+    const envelope = [[point(0, 5000), point(10000, 5000), point(10000, 27000), point(0, 27000)]];
+    const cs = cadeiasDoContorno(anelDoLoteFechado(m.boundaries), [], [], detalhesDoLote(m.boundaries, envelope));
+    const laterais = cs.filter((c) => c.total.rotulo === '30,00');
+    expect(laterais).toHaveLength(2);
+    for (const c of laterais) expect(ordenado(c)).toContain('5,00 | 22,00 | 3,00');
+    for (const c of cs.filter((c) => c.total.rotulo === '10,00')) expect(c.parcial).toEqual([]);
+  });
+
+  it('faixa de restrição e divisa interna repartem também — e saem no PDF e no DXF', async () => {
+    const { cadeiasDoContorno, detalhesDoLote, anelDoLoteFechado } = await import('../utils/blueprintCotas');
+    const m0 = loteCom();
+    const t = m0.levels[0].id;
+    const m = applyBatch(m0, [
+      { type: 'AddBoundary', levelId: t, a: point(10000, 30000), b: point(0, 30000), kind: 'RESTRICAO', restricao: { tipo: 'APP', faixaMm: 4000 } },
+      { type: 'AddBoundary', levelId: t, a: point(6000, 0), b: point(6000, 12000), kind: 'DIVISA' },
+    ] as Command[]).model;
+    const cs = cadeiasDoContorno(anelDoLoteFechado(m.boundaries), [], [], detalhesDoLote(m.boundaries));
+    const frente = cs.find((c) => c.total.rotulo === '10,00' && c.lado.a.y === 0 && c.lado.b.y === 0)!;
+    expect(ordenado(frente)).toContain('6,00 | 4,00');
+    // A lateral: a ponta da divisa (12 m da frente) e a faixa da APP (4 m dos fundos).
+    for (const c of cs.filter((c) => c.total.rotulo === '30,00')) expect(ordenado(c)).toContain('12,00 | 14,00 | 4,00');
+    // As mesmas cotas na prancha e no CAD.
+    const papel = new DesenhistaDeProva();
+    const op = { denominador: 200, papel: PAPEIS[1], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-08T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    desenharPlanta(papel, m, op, enquadrar(m, 200, PAPEIS[1], true));
+    const dxf = gerarDxf(m, { titulo: 't', revisao: 1, hash: 'h', cotas: true });
+    for (const r of ['6,00', '4,00', '12,00', '14,00']) {
+      expect(papel.textos(), `"${r}" no PDF`).toContain(r);
+      expect(dxf.includes(`\n${r}\n`) || dxf.includes(`\r\n${r}\r\n`), `"${r}" no DXF`).toBe(true);
+    }
+  });
+});

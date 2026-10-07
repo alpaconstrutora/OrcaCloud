@@ -128,7 +128,7 @@ describe('propostaDeEixos', () => {
   it('sem edificação, o motivo do botão desligado diz o que fazer', () => {
     const { m, t } = nivel();
     expect(propostaDeEixos(m, t).motivoVazio).toMatch(/Desenhe paredes, blocos ou um lote fechado/);
-    expect(propostaDeEixos(m, t, { usarLadosDoLote: false }).motivoVazio).toMatch(/ligue "Usar os lados do lote"/);
+    expect(propostaDeEixos(m, t, { usarLadosDoLote: false }).motivoVazio).toMatch(/ligue "Usar o lote"/);
   });
 
   /** 08/10/2026 — *"quero"*: sem paredes nem blocos, os eixos saem dos lados do lote fechado. */
@@ -253,5 +253,52 @@ describe('eixos na exportação', () => {
     expect(configuracaoDaColuna({ planta: { eixos: false } }).planta.eixos).toBe(false);
     const sem = { ...CONFIGURACAO_PADRAO, planta: { ...CONFIGURACAO_PADRAO.planta, eixos: false } };
     expect(diferencas(CONFIGURACAO_PADRAO, sem).join(' ')).toMatch(/Eixos/);
+  });
+});
+
+
+/**
+ * DETALHES DO LOTE (08/10/2026) — *"as medidas e eixos contemplam início e fim do terreno e isso está correto, porém
+ * tem que considerar outros pontos. como por exemplo na imagem existe um recuo"*; *"todos os detalhes devem ser
+ * considerados, seja recuo ou outra informação semelhante"*. Sem edificação, os eixos saem também da linha de cada
+ * recuo (o envelope), das faixas de restrição e das divisas internas.
+ */
+describe('eixos pelos detalhes do lote', () => {
+  const lote10x30 = (extra: Command[] = []) => {
+    const { m, t } = nivel();
+    const d = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' });
+    return { m: applyBatch(m, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0), ...extra]).model, t };
+  };
+  /** Recuo de frente 5 m e de fundos 3 m, laterais 0 — o envelope que o editor calcula com os recuos da zona. */
+  const envelope = [[point(0, 5000), point(10000, 5000), point(10000, 27000), point(0, 27000)]];
+
+  it('a linha de cada recuo vira eixo: 1 (fundos), 2 (recuo de fundos), 3 (recuo de frente), 4 (frente)', () => {
+    const { m, t } = lote10x30();
+    const p = propostaDeEixos(m, t, {}, { envelope });
+    expect(p.eixos.map((e) => `${e.nome}@${e.coordenadaMm}:${e.origem}`)).toEqual([
+      'A@0:LOTE', // o lado do envelope com recuo lateral 0 cai sobre o lado do lote: um eixo só, "Lado do lote"
+      'B@10000:LOTE',
+      '1@30000:LOTE',
+      '2@27000:RECUO',
+      '3@5000:RECUO',
+      '4@0:LOTE',
+    ]);
+  });
+
+  it('faixa de restrição e divisa interna também viram eixo', () => {
+    const { m, t } = lote10x30();
+    const x = applyBatch(m, [
+      { type: 'AddBoundary', levelId: t, a: point(10000, 30000), b: point(0, 30000), kind: 'RESTRICAO', restricao: { tipo: 'APP', faixaMm: 4000 } },
+      { type: 'AddBoundary', levelId: t, a: point(6000, 0), b: point(6000, 12000), kind: 'DIVISA' },
+    ] as Command[]).model;
+    const p = propostaDeEixos(x, t);
+    expect(p.eixos.filter((e) => e.vertical).map((e) => `${e.coordenadaMm}:${e.origem}`)).toEqual(['0:LOTE', '6000:DIVISA', '10000:LOTE']);
+    expect(p.eixos.filter((e) => !e.vertical).map((e) => `${e.coordenadaMm}:${e.origem}`)).toEqual(['30000:LOTE', '26000:RESTRICAO', '0:LOTE']);
+  });
+
+  it('com edificação, os detalhes do lote não entram (a malha é da estrutura)', () => {
+    const { m, t } = lote10x30();
+    const comBloco = applyBatch(m, [{ type: 'AddBloco', levelId: t, nome: 'Torre', pontos: [point(1000, 6000), point(9000, 6000), point(9000, 24000), point(1000, 24000)], pavimentos: 4 }]).model;
+    expect(propostaDeEixos(comBloco, t, {}, { envelope }).eixos.every((e) => e.origem === 'BLOCO')).toBe(true);
   });
 });

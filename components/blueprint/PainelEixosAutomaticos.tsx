@@ -12,7 +12,7 @@ export interface PainelEixosAutomaticosProps {
   proposta: PropostaDeEixos;
   hipoteses: HipotesesDeEixos;
   onHipotese: (campo: DistanciaDosEixos, valorMm: number) => void;
-  /** "Usar os lados do lote" (08/10/2026). */
+  /** "Usar o lote" — lados, recuos, restrições e divisas (08/10/2026). */
   onUsarLadosDoLote: (ligado: boolean) => void;
   /** Recolhe a gaveta para ver a prévia tracejada no desenho. */
   onVerPrevia: () => void;
@@ -26,6 +26,9 @@ const ORIGEM: Record<PropostaDeEixos['eixos'][number]['origem'], string> = {
   BLOCO: 'Bloco de massa',
   PAREDE_E_BLOCO: 'Parede e bloco',
   LOTE: 'Lado do lote',
+  RECUO: 'Recuo',
+  RESTRICAO: 'Faixa de restrição',
+  DIVISA: 'Divisa',
 };
 
 export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onUsarLadosDoLote, onVerPrevia, resultado }: PainelEixosAutomaticosProps) {
@@ -60,7 +63,8 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
           <li>
             Um eixo no <strong>eixo de cada parede</strong> horizontal ou vertical do pavimento e nos lados dos{' '}
             <strong>blocos de massa</strong>. Parede oblíqua fica de fora. Sem parede nem bloco, os{' '}
-            <strong>lados do lote</strong> (se ligado abaixo).
+            <strong>lote</strong>: os lados, a linha de cada <strong>recuo</strong>, as faixas de restrição e as divisas (se
+            ligado abaixo).
           </li>
           <li>
             <strong>Letras nos verticais</strong> (A, B… da esquerda para a direita) e <strong>números nos horizontais</strong>{' '}
@@ -78,8 +82,8 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
             className="flex items-center gap-2"
             title="Para o estudo que só tem o lote: sem parede nem bloco no pavimento, um eixo em cada lado horizontal ou vertical do lote fechado. Com edificação desenhada, o lote não entra — a malha é da estrutura."
           >
-            <input type="checkbox" checked={hipoteses.usarLadosDoLote} onChange={(e) => onUsarLadosDoLote(e.target.checked)} aria-label="Usar os lados do lote sem paredes nem blocos" />
-            Usar os lados do lote (sem paredes nem blocos)
+            <input type="checkbox" checked={hipoteses.usarLadosDoLote} onChange={(e) => onUsarLadosDoLote(e.target.checked)} aria-label="Usar o lote (lados, recuos e restrições) sem paredes nem blocos" />
+            Usar o lote — lados, recuos e restrições (sem paredes nem blocos)
           </label>
           {proposta.eixos.length > 0 && (
             <button

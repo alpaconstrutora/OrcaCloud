@@ -49,6 +49,7 @@ import {
   AVISO_COTA_POR_FACE,
   anelDoLoteFechado,
   cadeiasDoContorno,
+  detalhesDoLote,
   cadeiasPorLado,
   chamadasDoLado,
   LINHA_DE_CHAMADA,
@@ -1652,7 +1653,10 @@ function desenharCotas(
     }
     // AS COTAS DO LOTE (07/10/2026), por fora da divisa — a mesma conta da tela (`cadeiasDoContorno`). Sem os blocos
     // de massa, que a prancha não desenha: o lado do lote reparte só pelo contorno das paredes.
-    for (const c of cadeiasDoContorno(anelDoLoteFechado(model.boundaries.filter((b) => b.levelId === nivel.id)), [], dasParedes)) {
+    // + as faixas de restrição e as divisas internas (08/10/2026). O envelope recuado não: os recuos são da zona, não do
+    // modelo, e a prancha não o desenha.
+    const limites = model.boundaries.filter((b) => b.levelId === nivel.id);
+    for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites))) {
       desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
     }
   }

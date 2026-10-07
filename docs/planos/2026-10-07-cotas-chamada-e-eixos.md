@@ -124,3 +124,24 @@ partir dos lados do lote quando ainda não há paredes nem bloco", *"quero"*.
 - Só vale SEM edificação no pavimento: com parede ou bloco, a malha continua saindo da estrutura (o lote não entra).
 - Lote fechado (`anelDoLoteFechado`); lado oblíquo fica de fora; lado abaixo da "parede mínima" também. Origem "Lado do lote".
 - Testes: `blueprintEixosAutomaticos` (+4, lote 10 × 30 → A, B / 1, 2), `BlueprintEditor` (+1, gaveta só com o lote).
+
+## Complemento (08/10/2026) — os DETALHES do lote nas cotas e nos eixos
+
+Pedido, com o print do lote 10 × 30 com eixos e o envelope recuado: *"as medidas e eixos contemplam inicio e fim do
+terreno e isso esta correto, porem tem que considerar outras pontos. como por exemplo na imagem existe um recuo que deve
+ser incluindo tanto nas medidas e eixos"*; e *"todos os detalhes devem ser considerados, seja recuo ou outra informacao
+semelhante"*.
+
+- `detalhesDoLote(limites, envelope)` (`utils/blueprintCotas.ts`): vértices do ENVELOPE recuado (cada peça — recuos e
+  recortes das restrições), do retângulo de cada FAIXA DE RESTRIÇÃO (APP, curso d'água, servidão, não edificável) e as
+  pontas das DIVISAS internas. Entra em `cadeiasDoContorno` como quebra: o recuo de frente vira trecho da lateral.
+- Tela: o envelope só reparte quando está À VISTA (Exibir › Envelope). PDF/DXF: restrições e divisas (estão no modelo);
+  o envelope não — os recuos são da zona e a prancha não desenha o envelope.
+- Eixos (sem edificação): além dos lados, as linhas do envelope ("Recuo"), das faixas ("Faixa de restrição") e das
+  divisas ("Divisa"). Linha juntada fica com a origem mais forte (lote > recuo > restrição > divisa). Caixa da gaveta
+  renomeada "Usar o lote — lados, recuos e restrições".
+- Corrigido junto: `envelopePecas` faltava na lista de dependências do desenho do canvas.
+- Fica de fora (a pedir se quiser): SUB-REGIÕES (grama, piso, deck…) — acabamento, não limite.
+- Prova no app: lote 10 × 30 com recuo frente 5 m / fundos 3 m → laterais 3,00 | 22,00 | 5,00; eixos A, B / 1–4
+  (2 e 3 nas linhas do recuo). Suíte: 7797 = 7763 + 34 pulados, 0 falha.
+

@@ -221,11 +221,13 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
         console.error('Erro de geocodificação na linha', i, err);
       }
 
-      // Se todas as tentativas falharem, assume a coordenada central padrão de Cambuí como fallback
-      // (Prevenindo que o ponto suma e permitindo que o usuário visualize ou corrija no mapa)
+      // Endereço não localizado fica SEM coordenada. Antes o código sorteava um ponto
+      // a até ~500 m do centro de Cambuí (para qualquer cidade) e gravava como se
+      // fosse real — o pino aparecia no mapa e entrava na estatística de raio.
+      // Sem coordenada o anúncio continua na tabela, fora do mapa e da análise.
       if (!latitude || !longitude) {
-        latitude = -22.6122 + (Math.random() - 0.5) * 0.01;
-        longitude = -46.0578 + (Math.random() - 0.5) * 0.01;
+        latitude = null;
+        longitude = null;
       }
 
       // Constrói o modelo de anúncio correspondente
@@ -285,6 +287,10 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
       let successMsg = `Importação concluída com sucesso!\n\n🔹 Anúncios salvos: ${result.importedCount}`;
       if (result.deduplicatedCount > 0) {
         successMsg += `\n🛡️ Anúncios duplicados ignorados: ${result.deduplicatedCount} (limpeza de dados ativada)`;
+      }
+      const semLocalizacao = importedListings.filter(l => l.latitude == null || l.longitude == null).length;
+      if (semLocalizacao > 0) {
+        successMsg += `\n📍 ${semLocalizacao} de ${importedListings.length} anúncios sem localização: o endereço não foi encontrado. Eles ficam na tabela, mas não aparecem no mapa nem na análise de raio.`;
       }
       alert(successMsg);
       onSuccess();

@@ -12,15 +12,18 @@ export interface OpuraMarketNeighborhood {
   id: string;
   cityId: string;
   name: string;
-  bairroScore: number;
-  ticketMedio: number;
-  pricePerM2Medio: number;
-  areaMedia: number;
+  // Indicadores do "DNA do Bairro". null = não calculado: os valores da seed de
+  // junho/2026 eram fictícios e foram apagados em 07/10/2026; o cálculo real
+  // volta depois do cadastro de bairros (plano 2026-10-07, item 2.4).
+  bairroScore: number | null;
+  ticketMedio: number | null;
+  pricePerM2Medio: number | null;
+  areaMedia: number | null;
   dominantTypology: string | null;
   predominantStandard: 'Econômico' | 'Médio' | 'Médio-Alto' | 'Alto Padrão' | 'Luxo' | null;
   saturationLevel: 'Escassez' | 'Saudável' | 'Atenção' | 'Saturado' | null;
-  potentialScore: number;
-  competitorsCount: number;
+  potentialScore: number | null;
+  competitorsCount: number | null;
   geom: any; // GeoJSON geometry (Polígono ou Limites do Bairro)
   createdAt: string;
   updatedAt: string;
@@ -76,6 +79,16 @@ export interface OpuraMarketDevelopment {
   updatedAt: string;
 }
 
+/** Saída de get_terrain_radius_statistics, como o service a devolve. */
+export interface OpuraMarketRadiusStats {
+  totalListings: number;
+  pricePerM2Avg: number;
+  ticketAvg: number;
+  areaAvg: number;
+  bedroomsAvg: number;
+  suitesAvg: number;
+}
+
 export interface OpuraMarketTerrainStudy {
   id: string;
   organizationId: string;
@@ -96,6 +109,8 @@ export interface OpuraMarketTerrainStudy {
   riskScore: number | null;
   createdBy: string;
   polygonGeom?: [number, number][] | null;
+  /** Estatísticas reais do raio no momento da análise. null = estudo salvo antes de 07/10/2026. */
+  radiusStats?: OpuraMarketRadiusStats | null;
   createdAt: string;
   updatedAt: string;
 }

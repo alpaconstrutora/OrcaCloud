@@ -922,12 +922,18 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       let layerColor = '#3B82F6'; // Azul padrão (Centro/Médio)
       let radius = 250;
 
+      // Sem indicador calculado o bairro fica cinza. Antes, "Preço" e
+      // "Oportunidades" pintavam pelo NOME do bairro (Jardim das Colinas sempre
+      // verde) e "Saturação" pintava o vazio como saudável.
+      const SEM_DADO = '#94A3B8';
       if (activeLayer === 'preco') {
-        layerColor = bairro.name === 'Jardim das Colinas' ? '#EC4899' : bairro.name === 'Vila Santo Antônio' ? '#64748B' : '#3B82F6';
+        layerColor = bairro.pricePerM2Medio == null ? SEM_DADO : '#3B82F6';
       } else if (activeLayer === 'saturacao') {
-        layerColor = bairro.saturationLevel === 'Saturado' ? '#EF4444' : bairro.saturationLevel === 'Atenção' ? '#F59E0B' : '#10B981';
+        layerColor = bairro.saturationLevel === 'Saturado' ? '#EF4444'
+          : bairro.saturationLevel === 'Atenção' ? '#F59E0B'
+          : bairro.saturationLevel ? '#10B981' : SEM_DADO;
       } else if (activeLayer === 'oportunidade') {
-        layerColor = bairro.name === 'Jardim das Colinas' ? '#10B981' : '#3B82F6';
+        layerColor = bairro.potentialScore == null ? SEM_DADO : '#10B981';
       }
 
       // Adiciona o círculo de Heatmap
@@ -940,7 +946,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         weight: 1.5,
         dashArray: '3, 4'
       })
-      .bindTooltip(`<b>${bairro.name}</b><br/>Score: ${bairro.bairroScore}/100<br/>R$ ${bairro.pricePerM2Medio}/m²`, { permanent: false, direction: 'top' })
+      .bindTooltip(
+        bairro.pricePerM2Medio == null
+          ? `<b>${bairro.name}</b><br/>Indicadores não calculados`
+          : `<b>${bairro.name}</b><br/>R$ ${Math.round(bairro.pricePerM2Medio).toLocaleString('pt-BR')}/m²${bairro.bairroScore == null ? '' : `<br/>Score: ${bairro.bairroScore}/100`}`,
+        { permanent: false, direction: 'top' })
       .addTo(markersLayer);
 
       // Adiciona um DivIcon com o nome do bairro
@@ -1208,7 +1218,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         estimatedAbsorptionVelocity: analysisResult.estimatedAbsorptionVelocity,
         riskScore: analysisResult.riskScore,
         createdBy: userEmail,
-        polygonGeom: polygonPoints ? polygonPoints.map(p => [p[1], p[0]] as [number, number]) : null
+        polygonGeom: polygonPoints ? polygonPoints.map(p => [p[1], p[0]] as [number, number]) : null,
+        radiusStats: analysisResult.stats ?? null
       });
 
       alert('Estudo territorial salvo com sucesso na sua organização!');
@@ -1270,11 +1281,16 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
-      doc.text(`Total de Concorrentes Ofertados no Entorno: ${analysisResult.stats.totalListings} unidades`, 15, 100);
-      doc.text(`Preço Médio de Oferta no Entorno: R$ ${analysisResult.stats.pricePerM2Avg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m²`, 15, 105);
-      doc.text(`Ticket Médio Geral de Vendas: R$ ${analysisResult.stats.ticketAvg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, 110);
-      doc.text(`Metragem Média Privativa: ${analysisResult.stats.areaAvg.toFixed(1)} m²`, 15, 115);
-      doc.text(`Média de Dormitórios: ${analysisResult.stats.bedroomsAvg.toFixed(1)} quartos`, 15, 120);
+      if (analysisResult.stats) {
+        doc.text(`Total de Concorrentes Ofertados no Entorno: ${analysisResult.stats.totalListings} unidades`, 15, 100);
+        doc.text(`Preço Médio de Oferta no Entorno: R$ ${analysisResult.stats.pricePerM2Avg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/m²`, 15, 105);
+        doc.text(`Ticket Médio Geral de Vendas: R$ ${analysisResult.stats.ticketAvg.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 15, 110);
+        doc.text(`Metragem Média Privativa: ${analysisResult.stats.areaAvg.toFixed(1)} m²`, 15, 115);
+        doc.text(`Média de Dormitórios: ${analysisResult.stats.bedroomsAvg.toFixed(1)} quartos`, 15, 120);
+      } else {
+        doc.text('Estatísticas do entorno não guardadas: estudo salvo antes de 07/10/2026.', 15, 100);
+        doc.text('Recalcule a vocação territorial para obter os números medidos.', 15, 105);
+      }
 
       // Seção 3
       doc.setFont('helvetica', 'bold');
@@ -1383,10 +1399,16 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       alert('Organização ativa não localizada.');
       return;
     }
+    // O preço de venda do bloco no IMOVIB vem do preço medido no raio. Antes, sem
+    // ele, o código usava R$ 3.800/m² inventado. Sem medição, não cria o estudo.
+    if (!analysisResult.stats || !(analysisResult.stats.pricePerM2Avg > 0)) {
+      alert('Este estudo não tem o preço por m² medido no raio (foi salvo antes de 07/10/2026). Clique em "Calcular Vocação Territorial" e tente de novo.');
+      return;
+    }
 
     try {
       setAnalyzing(true);
-      
+
       const { data: { user } } = await supabase.auth.getUser();
       const userEmail = user?.email || 'sistema@opura.com.br';
 
@@ -1417,7 +1439,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       const createdStudy = await imovibService.createStudy(studyPayload);
 
       // 2. Criar Bloco
-      const avgPricePerM2 = analysisResult.stats.pricePerM2Avg > 0 ? analysisResult.stats.pricePerM2Avg : 3800;
+      const avgPricePerM2 = analysisResult.stats.pricePerM2Avg;
       const blockPayload = {
         study_id: createdStudy.id,
         name: 'Bloco Principal A',
@@ -1570,17 +1592,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       mapInstanceRef.current.setView([study.latitude, study.longitude], 15);
     }
     
-    const statsMock = {
-      totalListings: study.estimatedVgv ? Math.round(study.estimatedVgv / 400000) : 5,
-      pricePerM2Avg: study.estimatedVgv ? study.estimatedVgv / (study.terrainArea * 4 * 0.82) : 3800,
-      ticketAvg: study.recommendedProductMix?.ticketSugerido || 400000,
-      areaAvg: 80,
-      bedroomsAvg: 2.5,
-      suitesAvg: 1.2
-    };
-
+    // As estatísticas do entorno vêm do que foi GRAVADO na análise. Estudo salvo
+    // antes de 07/10/2026 não as tem: fica null e a tela diz "não guardadas".
+    // Antes, este trecho inventava números (total = VGV ÷ 400 mil, área 80 m²…)
+    // e os exibia como se fossem medidos.
     setAnalysisResult({
-      stats: statsMock,
+      stats: study.radiusStats ?? null,
       recStandard: study.recommendedStandard,
       productMix: study.recommendedProductMix,
       estimatedVgv: study.estimatedVgv,
@@ -2069,7 +2086,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         </div>
                         <div className="space-y-0.5">
                           <span className="block text-[9px] text-slate-400 font-bold uppercase">Preço Estimado / m²</span>
-                          <span className="block font-black text-emerald-600">R$ {analysisResult.stats.pricePerM2Avg.toLocaleString('pt-BR')}/m²</span>
+                          {analysisResult.stats ? (
+                            <span className="block font-black text-emerald-600">R$ {analysisResult.stats.pricePerM2Avg.toLocaleString('pt-BR')}/m²</span>
+                          ) : (
+                            <span className="block font-semibold text-slate-500" title="Este estudo foi salvo antes de 07/10/2026, quando as estatísticas do raio não eram guardadas. Clique em Calcular Vocação Territorial para medir de novo.">Estatísticas não guardadas</span>
+                          )}
                         </div>
                       </div>
 
@@ -2313,67 +2334,48 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">DNA do Bairro™</h3>
                     <h2 className="text-base font-black text-slate-900 tracking-tight">🏢 Bairro: {selectedNeighborhood.name}</h2>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase">Bairro Score™</span>
-                    <span className="text-lg font-black text-slate-900 bg-slate-100 px-3 py-1 rounded-xl">
-                      {selectedNeighborhood.bairroScore} / 100
-                    </span>
-                  </div>
+                  {selectedNeighborhood.bairroScore != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase">Bairro Score™</span>
+                      <span className="text-lg font-black text-slate-900 bg-slate-100 px-3 py-1 rounded-xl">
+                        {selectedNeighborhood.bairroScore} / 100
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
-                    <span className="block font-black text-slate-400 uppercase text-[9px]">Preço Médio / m²</span>
-                    <span className="block font-black text-slate-800 text-sm">
-                      R$ {selectedNeighborhood.pricePerM2Medio.toLocaleString('pt-BR')}/m²
-                    </span>
-                  </div>
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
-                    <span className="block font-black text-slate-400 uppercase text-[9px]">Ticket Médio Geral</span>
-                    <span className="block font-black text-slate-800 text-sm">
-                      R$ {selectedNeighborhood.ticketMedio.toLocaleString('pt-BR')}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
-                    <span className="block font-black text-slate-400 uppercase text-[9px]">Tipologia Dominante</span>
-                    <span className="block font-black text-slate-800 truncate">
-                      {selectedNeighborhood.dominantTypology || 'Não disponível'}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
-                    <span className="block font-black text-slate-400 uppercase text-[9px]">Padrão predominante</span>
-                    <span className="block font-black text-slate-800">
-                      {selectedNeighborhood.predominantStandard || 'Médio'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between">
-                    <span className="font-bold text-slate-500">Saturação:</span>
-                    <span className={`font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full text-[9px] ${
-                      selectedNeighborhood.saturationLevel === 'Saturado' ? 'bg-red-50 text-red-600' :
-                      selectedNeighborhood.saturationLevel === 'Atenção' ? 'bg-amber-50 text-amber-600' :
-                      'bg-emerald-50 text-emerald-600'
-                    }`}>
-                      {selectedNeighborhood.saturationLevel || 'Saudável'}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between">
-                    <span className="font-bold text-slate-500">Concorrência Ativa:</span>
-                    <span className="font-black text-slate-800">
-                      {selectedNeighborhood.competitorsCount} Incorporações
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between">
-                    <span className="font-bold text-slate-500">Score Potencial:</span>
-                    <span className="font-black text-emerald-600">
-                      {selectedNeighborhood.potentialScore}%
-                    </span>
-                  </div>
-                </div>
+                {(() => {
+                  const b = selectedNeighborhood;
+                  const NAO = 'Não calculado';
+                  const semNenhum = [b.pricePerM2Medio, b.ticketMedio, b.dominantTypology, b.predominantStandard,
+                    b.saturationLevel, b.competitorsCount, b.potentialScore].every(v => v == null);
+                  if (semNenhum) {
+                    return (
+                      <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600 font-semibold leading-relaxed">
+                        Os indicadores deste bairro ainda não são calculados a partir dos anúncios.
+                        Os números que apareciam aqui eram de demonstração e foram removidos em 07/10/2026.
+                        O cálculo volta quando os bairros reais da cidade estiverem cadastrados.
+                      </div>
+                    );
+                  }
+                  const celula = (rotulo: string, valor: React.ReactNode) => (
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                      <span className="block font-black text-slate-400 uppercase text-[9px]">{rotulo}</span>
+                      <span className="block font-black text-slate-800 text-sm truncate">{valor}</span>
+                    </div>
+                  );
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                      {celula('Preço Médio / m²', b.pricePerM2Medio == null ? NAO : `R$ ${Math.round(b.pricePerM2Medio).toLocaleString('pt-BR')}/m²`)}
+                      {celula('Ticket Médio Geral', b.ticketMedio == null ? NAO : `R$ ${Math.round(b.ticketMedio).toLocaleString('pt-BR')}`)}
+                      {celula('Tipologia Dominante', b.dominantTypology ?? NAO)}
+                      {celula('Padrão predominante', b.predominantStandard ?? NAO)}
+                      {celula('Saturação', b.saturationLevel ?? NAO)}
+                      {celula('Concorrência Ativa', b.competitorsCount == null ? NAO : `${b.competitorsCount} incorporações`)}
+                      {celula('Score Potencial', b.potentialScore == null ? NAO : `${b.potentialScore}%`)}
+                    </div>
+                  );
+                })()}
 
                 {/* Gráfico de Evolução Temporal */}
                 <div className="border-t border-slate-100 pt-4 space-y-3">

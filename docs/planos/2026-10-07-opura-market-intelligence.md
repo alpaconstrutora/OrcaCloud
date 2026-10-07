@@ -47,6 +47,7 @@ liberada para todo perfil em `AppRouter.tsx` (`allowed = true`).
 | 07/10/2026 | D3 — Bairro Score / Saturação / Score Potencial até existir regra? | **Esconder** ("não calculado"); só preço, ticket, área e concorrentes passam a ser recalculados. |
 | 07/10/2026 | D4 — Cadastro de cidade/bairro: tela ou SQL? | **Tela ADMIN mínima já neste plano** (item 4.4). |
 | 07/10/2026 | D5 — Acesso ao módulo? | **Só ADMIN e USER** (item 6.6). |
+| 07/10/2026 | D6 — Item 2.4 não funciona como escrito: só há anúncios privados (357 da Alpa, 0 globais depois do 2.5) e 296 dos 325 não duplicados estão marcados "Centro" porque o robô joga lá todo bairro desconhecido. Como seguir? | **Adiar para depois da Fase 4.** Agora: apagar os indicadores fictícios dos 4 bairros e mostrar "não calculado". O cálculo volta na leitura, por organização, sem cron, depois que a Fase 3 parar de jogar tudo no Centro e a Fase 4 cadastrar os bairros reais. |
 
 ## Plano
 
@@ -182,6 +183,49 @@ chegar ao gatilho.
 - Como sei que terminou: as duas contagens devolvem 0; nenhum pino "Global" no mapa;
   o gráfico "Evolução" fica vazio até o primeiro refresh real (2.4).
 
+#### Fase 2 — execução (07/10/2026, frente `market-fase2`)
+
+| Item | Arquivo | Estado |
+|---|---|---|
+| 2.1 | `components/ImportListingsModal.tsx` | ✅ sem sorteio; endereço não achado grava sem coordenada; resumo diz "N de M sem localização" |
+| 2.2 | `aplicar_20271007000110_opura_market_estudo_guarda_estatistica.sql` | ✅ aplicada; coluna `radius_stats` |
+| 2.3 | `services/opuraMarketService.ts`, `types/market.ts`, `components/OpuraMarketModule.tsx` | ✅ salvar grava, reabrir lê; sem `statsMock` |
+| 2.4 | — | ⏸️ adiado para depois da Fase 4 (decisão D6) |
+| 2.5 | `aplicar_20271007000120_opura_market_apaga_seed_ficticia.sql` | ✅ aplicada |
+| D6 | `aplicar_20271007000130_opura_market_bairro_sem_indicadores_ficticios.sql` + tela | ✅ aplicada; DNA mostra "não calculado" |
+
+Os nomes de migration do plano (`20271007000001/2`) eram provisórios; os reais
+seguem a sequência `aplicar_20271007000110..130`. O 2.5 saiu em migration própria,
+separada do 2.4 adiado.
+
+**Medição e prova (banco remoto):**
+
+| Medida | Antes | Depois |
+|---|---|---|
+| Anúncios / globais | 363 / 6 (todos da seed) | 357 / 0 |
+| Filhos ou concorrentes apontando para a seed | 0 / 0 | — |
+| Linhas de histórico de bairro | 18 (todas da seed, 2025-12..2026-05) | 0 |
+| Indicadores dos 4 bairros | valores da seed (ex.: Centro score 85, R$ 4.200/m²) | NULL |
+| Raio 1 km no Centro, membro / de fora | 114 / 114 → 114 / 5 (Fase 1) | 109 / 0 |
+| Estudo com `radius_stats` gravado como usuário real (RLS) | — | grava e lê; desfeito no fim |
+
+Ensaio das migrations 110 e 120 em `BEGIN … ROLLBACK` antes de aplicar: efeito
+igual ao esperado e nada mudou após o rollback. `verificar-opura-market-rls.sh`
+segue verde com os números novos.
+
+**Além do escrito no plano, no mesmo espírito (parar de inventar):**
+- criar viabilidade no IMOVIB usava R$ 3.800/m² quando faltava preço; agora recusa
+  e pede para recalcular;
+- o PDF diz "estatísticas não guardadas" em estudo antigo em vez de quebrar;
+- as camadas "Preço" e "Oportunidades" pintavam pelo NOME do bairro (Jardim das
+  Colinas sempre verde) e "Saturação" pintava vazio como saudável; sem dado, agora
+  fica cinza;
+- o painel do DNA tinha padrões inventados para vazio ("Saudável", "Médio").
+
+**Achado para a Fase 3:** além de jogar no Centro todo bairro desconhecido, o robô
+geocodifica pelo NOME do bairro — os 159 anúncios com coordenada caem em só 58
+pontos distintos. A Edge Function do 3.1 precisa geocodificar pelo endereço.
+
 ### Fase 3 — Scraping e geocodificação saem do navegador
 
 **3.1 `supabase/functions/opura-market-scraper/index.ts`** (nova Edge Function)
@@ -252,6 +296,20 @@ chegar ao gatilho.
   clicando no mapa do painel (reusa o Leaflet já montado). Botão visível só para ADMIN.
 - Como sei que terminou: ADMIN cria uma cidade com 2 bairros pela tela → aparecem no
   seletor e no mapa; USER não vê o botão; USER forçando o INSERT recebe 42501.
+
+**4.5 DNA do Bairro calculado de verdade (o 2.4 adiado, decisão D6)**
+- O que muda: função de leitura `SECURITY INVOKER` que agrega, por bairro, os
+  anúncios ativos e não duplicados que a RLS libera a quem chama (globais + os da
+  própria organização): preço por m², ticket, área média, contagem, tipologia
+  dominante, e a série mensal pela data de captura. Sem cron e sem gravar na
+  tabela de bairros, que é lida por todas as organizações. A tela troca "não
+  calculado" pelos números quando houver anúncios no bairro. Score, saturação e
+  potencial seguem escondidos até existir regra escrita como hipótese (D3).
+- Depende de: 3.x (captura que não joga tudo no Centro e geocodifica pelo
+  endereço) e 4.4 (bairros reais cadastrados).
+- Como sei que terminou: para um bairro com anúncios, os números da tela batem
+  com o `AVG` manual sob a RLS do usuário; conta sem vínculo vê só globais; a série
+  mostra um ponto por mês com captura.
 
 ### Fase 5 — Toda folga vira hipótese editável
 
@@ -359,9 +417,9 @@ Plano aprovado em 07/10/2026. Cada fase abre como frente própria (REGRA #8), na
 ordem abaixo.
 
 - [x] Fase 1 — 4 de 4 (frente `market-fase1`, migration aplicada e provada em 07/10/2026)
-- [ ] Fase 2 — 0 de 5
+- [ ] Fase 2 — 4 de 5 (2.4 adiado para depois da Fase 4, decisão D6; frente `market-fase2`)
 - [ ] Fase 3 — 0 de 4
-- [ ] Fase 4 — 0 de 4
+- [ ] Fase 4 — 0 de 5 (4.5 = o 2.4 adiado)
 - [ ] Fase 5 — 0 de 2
 - [ ] Fase 6 — 0 de 6
 - [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)

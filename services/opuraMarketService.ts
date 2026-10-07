@@ -61,19 +61,21 @@ export const opuraMarketService = {
       throw new Error(`Failed to fetch neighborhoods: ${error.message}`);
     }
 
+    // Vazio continua vazio: "não calculado" não pode virar 0 na tela.
+    const numOuNulo = (v: unknown) => (v === null || v === undefined ? null : Number(v));
     return (data || []).map(n => ({
       id: n.id,
       cityId: n.city_id,
       name: n.name,
-      bairroScore: Number(n.bairro_score || 0),
-      ticketMedio: Number(n.ticket_medio || 0),
-      pricePerM2Medio: Number(n.price_per_m2_medio || 0),
-      areaMedia: Number(n.area_media || 0),
+      bairroScore: numOuNulo(n.bairro_score),
+      ticketMedio: numOuNulo(n.ticket_medio),
+      pricePerM2Medio: numOuNulo(n.price_per_m2_medio),
+      areaMedia: numOuNulo(n.area_media),
       dominantTypology: n.dominant_typology,
       predominantStandard: n.predominant_standard,
       saturationLevel: n.saturation_level,
-      potentialScore: Number(n.potential_score || 0),
-      competitorsCount: n.competitors_count || 0,
+      potentialScore: numOuNulo(n.potential_score),
+      competitorsCount: numOuNulo(n.competitors_count),
       geom: n.geom,
       createdAt: n.created_at,
       updatedAt: n.updated_at
@@ -255,6 +257,7 @@ export const opuraMarketService = {
       riskScore: s.risk_score ? Number(s.risk_score) : null,
       createdBy: s.created_by,
       polygonGeom: s.coefficients_zone?.polygonCoords || null,
+      radiusStats: s.radius_stats ?? null,
       createdAt: s.created_at,
       updatedAt: s.updated_at
     }));
@@ -280,6 +283,7 @@ export const opuraMarketService = {
       longitude: study.longitude,
       geom: `SRID=4326;POINT(${study.longitude} ${study.latitude})`,
       polygon_geom: study.polygonGeom ? getPolygonWkt(study.polygonGeom) : null,
+      radius_stats: study.radiusStats ?? null,
       recommended_product_mix: study.recommendedProductMix,
       recommended_standard: study.recommendedStandard,
       estimated_vgv: study.estimatedVgv,
@@ -316,6 +320,7 @@ export const opuraMarketService = {
       riskScore: data.risk_score ? Number(data.risk_score) : null,
       createdBy: data.created_by,
       polygonGeom: data.coefficients_zone?.polygonCoords || null,
+      radiusStats: data.radius_stats ?? null,
       createdAt: data.created_at,
       updatedAt: data.updated_at
     };

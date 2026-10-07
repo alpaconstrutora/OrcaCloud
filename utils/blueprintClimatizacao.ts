@@ -545,6 +545,14 @@ export interface HipotesesDosMateriais {
   folgaDoCaboM: number;
   /** Perda da chapa do duto (recortes, emendas, reforços), %. */
   perdaDaChapaPct: number;
+  /**
+   * E9b: o cabo de interligação segue o ELETRODUTO quando há um a até esta
+   * distância do ponto de força da evaporadora e da condensadora, m (o trecho
+   * fora do eletroduto entra no comprimento).
+   */
+  raioDoEletrodutoM: number;
+  /** E9b: o peso do painel pré-isolado (núcleo + as duas faces), kg/m². */
+  pesoDoPainelKgM2: number;
 }
 
 export const HIPOTESES_DOS_MATERIAIS_PADRAO: HipotesesDosMateriais = {
@@ -553,6 +561,8 @@ export const HIPOTESES_DOS_MATERIAIS_PADRAO: HipotesesDosMateriais = {
   espacamentoSuporteDutoM: 2.5,
   folgaDoCaboM: 1.5,
   perdaDaChapaPct: 10,
+  raioDoEletrodutoM: 1,
+  pesoDoPainelKgM2: 1.4,
 };
 
 export const LIMITES_DOS_MATERIAIS: Record<keyof HipotesesDosMateriais, { min: number; max: number }> = {
@@ -561,10 +571,12 @@ export const LIMITES_DOS_MATERIAIS: Record<keyof HipotesesDosMateriais, { min: n
   espacamentoSuporteDutoM: { min: 0.5, max: 6 },
   folgaDoCaboM: { min: 0, max: 10 },
   perdaDaChapaPct: { min: 0, max: 50 },
+  raioDoEletrodutoM: { min: 0.1, max: 5 },
+  pesoDoPainelKgM2: { min: 0.3, max: 15 },
 };
 
 export const FONTE_DOS_MATERIAIS =
-  'Espaçamento de suportes, sobra do cabo de interligação e perda de chapa são valores típicos de obra — HIPÓTESE. CONFERIR com o fabricante do equipamento e o padrão da instaladora.';
+  'Espaçamento de suportes, sobra do cabo de interligação, perda de chapa, alcance do eletroduto e peso do painel pré-isolado (≈ 1,4 kg/m² no painel de 20 mm com alumínio nas duas faces) são valores típicos — HIPÓTESE. CONFERIR com o fabricante do equipamento, do painel e o padrão da instaladora.';
 
 export function hipotesesDosMateriaisDaColuna(raw: unknown): HipotesesDosMateriais {
   const r = objeto(raw);

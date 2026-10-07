@@ -2186,3 +2186,32 @@ conjunto da E8 com a folha nova.
 **Não entrou (dito):** o gás do VRF; o cabo pelo traçado elétrico real (o cabo segue a linha); o
 quantitativo por pavimento da tela de quantitativos sem colunas próprias de climatização (a lista de
 materiais tem o recorte por pavimento e por sistema); peso do painel pré-isolado (só m²).
+
+### Etapa 9b — o que a E9 deixou fora · 07/10/2026 (frente `clima-e9b`, base 8c52adc1, sem bump)
+
+Pedido do usuário depois da E9: "implementar: gás do VRF, o cabo pelo traçado elétrico real e o peso do
+painel pré-isolado".
+
+- **Gás do VRF:** Σ comprimento de cada trecho da árvore × o fator do Ø de LÍQUIDO dele
+  (`FATOR_DE_GAS_DO_VRF_KG_POR_M`: 0,022 kg/m em 1/4" … 0,37 kg/m em 7/8"; acima da tabela, o último),
+  sem desconto de pré-carga — a fórmula típica de fabricante para R-410A, transcrita de memória:
+  HIPÓTESE, CONFERIR no manual. Linha própria na lista ("Carga adicional de gás refrigerante (VRF)") e
+  no sistema; o aviso "não estimada" saiu.
+- **Cabo pelo traçado elétrico real:** `caboPeloEletroduto` — o menor caminho pelos ELETRODUTOS
+  desenhados, do ponto de força da evaporadora (o `AR_CONDICIONADO` da E4.3) até a condensadora; as
+  pontas fora do eletroduto (até o alcance declarado) entram no comprimento. **Achado no teste:** com a
+  condensadora a ~0,6 m do ponto de força, as duas pontas virtuais caíam no MESMO nó e o "caminho pelo
+  eletroduto" não usava eletroduto nenhum — o grafo passou a ter duas camadas e só se chega ao lado da
+  condensadora percorrendo um trecho real. Sem eletroduto que ligue as duas peças, o cabo segue a linha
+  frigorígena e a lista diz (aviso + coluna "Cabo medido por" na aba). VRF: o cabo de comunicação
+  continua seguindo a árvore (vai de evaporadora em evaporadora).
+- **Peso do painel pré-isolado:** kg = m² com a perda × o peso por m² declarado (padrão 1,4 kg/m² — o
+  painel de 20 mm com alumínio nas duas faces, HIPÓTESE).
+- Premissas novas em `HipotesesClimatizacao.materiais` (com faixa e padrão, editáveis no painel):
+  `raioDoEletrodutoM` (1 m) e `pesoDoPainelKgM2` (1,4).
+
+**Prova** (`blueprintListaDeMateriaisClimatizacao.test.ts`, +3): VRF de 5 m em Ø3/8" + 3 m em Ø1/4" =
+0,361 kg; o split da cadeia E4→E5 sem eletroduto → cabo pela linha com aviso; com um eletroduto com
+desvio do ponto de força à condensadora → o comprimento exato do desvio + a sobra, origem
+"eletroduto"; o eletroduto que para a 1,5 m da condensadora não liga com alcance de 0,3 m e liga com 2 m
+(os 1,5 m entram); painel 600×300 de 4 m = 7,92 m² × 1,4 kg/m², sem linha de aço.

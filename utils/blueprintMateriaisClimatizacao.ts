@@ -26,6 +26,8 @@ import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import type { HipotesesClimatizacao } from './blueprintClimatizacao';
 import { linhaExistente, linhasConferidas, sistemasDoNivel, ehSplit } from './blueprintLinhaFrigorigena';
 import { analisesDoNivel } from './blueprintVrf';
+import { comprimentoMm, fazerChave, menorCaminhoEntre, type Aresta } from './blueprintGrafoDeRede';
+import type { Terminal } from './blueprintKernel';
 import { numeracaoDeClimatizacao } from './blueprintNumeracaoClimatizacao';
 import { ehEquipamentoDeClimatizacao, perimetroDoDutoM } from './blueprintBudget';
 
@@ -54,7 +56,9 @@ export interface SistemaNaLista {
   /** O caminho da linha (split) ou a árvore (VRF), m; `null` sem linha. */
   linhaM: number | null;
   caboM: number | null;
-  /** Só no split (a faixa da E5); `null` no VRF e sem linha. */
+  /** E9b: por onde o cabo foi medido — o eletroduto desenhado, ou a linha frigorígena quando não há eletroduto. */
+  origemDoCabo: 'ELETRODUTO' | 'LINHA' | null;
+  /** Split: a faixa da E5 além da pré-carga. VRF (E9b): Σ comprimento × fator do Ø de líquido. `null` sem linha. */
   gasG: number | null;
 }
 
@@ -87,6 +91,71 @@ export const ESPESSURA_DA_CHAPA: readonly { ateMm: number; espessuraMm: number; 
 ];
 export const chapaDoDuto = (b: Pick<QuantidadePorBitola, 'bitolaMm' | 'alturaDutoMm'>) => ESPESSURA_DA_CHAPA.find((c) => Math.max(b.bitolaMm, b.alturaDutoMm ?? 0) <= c.ateMm)!;
 const KG_POR_M2_POR_MM = 7.85;
+
+/**
+ * E9b: a CARGA ADICIONAL do VRF, kg por metro de linha de LÍQUIDO, pelo
+ * diâmetro (fórmula típica de fabricante para R-410A: Σ L × fator — transcrita
+ * de memória, HIPÓTESE, CONFERIR no manual do equipamento escolhido). O VRF não
+ * desconta pré-carga: a de fábrica é a da condensadora.
+ */
+export const FATOR_DE_GAS_DO_VRF_KG_POR_M: readonly { liquidoMm: number; kgPorM: number }[] = [
+  { liquidoMm: 6, kgPorM: 0.022 },
+  { liquidoMm: 10, kgPorM: 0.059 },
+  { liquidoMm: 13, kgPorM: 0.12 },
+  { liquidoMm: 16, kgPorM: 0.18 },
+  { liquidoMm: 19, kgPorM: 0.26 },
+  { liquidoMm: 22, kgPorM: 0.37 },
+];
+/** O fator do diâmetro de líquido (o da tabela igual ou logo acima; acima da tabela, o último). */
+export const fatorDeGasDoVrf = (liquidoMm: number) => (FATOR_DE_GAS_DO_VRF_KG_POR_M.find((f) => liquidoMm <= f.liquidoMm) ?? FATOR_DE_GAS_DO_VRF_KG_POR_M[FATOR_DE_GAS_DO_VRF_KG_POR_M.length - 1]).kgPorM;
+
+/**
+ * E9b: o CABO DE INTERLIGAÇÃO pelo traçado elétrico real — o menor caminho
+ * pelos ELETRODUTOS desenhados, do ponto de força da evaporadora (o
+ * AR_CONDICIONADO a até `raio` dela; sem ele, a própria evaporadora) até a
+ * condensadora. As pontas fora do eletroduto (até `raio`) entram no
+ * comprimento. `null` quando não há eletroduto que ligue as duas.
+ */
+export function caboPeloEletroduto(model: BlueprintModel, evaporadora: Terminal, condensadora: Terminal, raioMm: number): number | null {
+  const elev = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const z = (levelId: string, cota: number) => (elev.get(levelId) ?? 0) + cota;
+  const ponto = (model.terminais ?? []).find((t) => t.disciplina === 'ELETRICA' && t.tipoEletrico === 'AR_CONDICIONADO' && t.levelId === evaporadora.levelId && Math.hypot(t.at.x - evaporadora.at.x, t.at.y - evaporadora.at.y) <= raioMm);
+  const origem = ponto ?? evaporadora;
+  const eletrodutos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA');
+  if (!eletrodutos.length) return null;
+  const chave = fazerChave(model.levels);
+  // Duas CAMADAS do mesmo grafo (A = do lado da origem, B = do lado da condensadora) e só se passa
+  // de A para B PERCORRENDO um eletroduto: sem isso, com a condensadora a meio metro do ponto de
+  // força, as duas pontas caíam no mesmo nó e o "cabo pelo eletroduto" não usava eletroduto nenhum.
+  const arestas: Aresta[] = eletrodutos.flatMap((t) => {
+    const de = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm);
+    const para = chave(t.levelId, t.b.x, t.b.y, t.cotaBMm);
+    const mm = comprimentoMm(t);
+    const ref = { existente: t.id };
+    return [
+      { ref, de: `A|${de}`, para: `A|${para}`, mm },
+      { ref, de: `B|${de}`, para: `B|${para}`, mm },
+      { ref, de: `A|${de}`, para: `B|${para}`, mm },
+      { ref, de: `A|${para}`, para: `B|${de}`, mm },
+    ] as Aresta[];
+  });
+  // As pontas dos eletrodutos perto da origem e da condensadora viram arestas até dois nós virtuais.
+  const pontas = eletrodutos.flatMap((t) => [
+    { no: chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), levelId: t.levelId, x: t.a.x, y: t.a.y, z: z(t.levelId, t.cotaAMm) },
+    { no: chave(t.levelId, t.b.x, t.b.y, t.cotaBMm), levelId: t.levelId, x: t.b.x, y: t.b.y, z: z(t.levelId, t.cotaBMm) },
+  ]);
+  const ligar = (de: Terminal, virtual: string, camada: 'A' | 'B') => {
+    const zd = z(de.levelId, de.cotaMm);
+    for (const p of pontas) {
+      if (Math.hypot(p.x - de.at.x, p.y - de.at.y) > raioMm) continue;
+      arestas.push({ ref: { existente: virtual }, de: virtual, para: `${camada}|${p.no}`, mm: Math.hypot(p.x - de.at.x, p.y - de.at.y, p.z - zd) } as Aresta);
+    }
+  };
+  ligar(origem, '__origem_do_cabo', 'A');
+  ligar(condensadora, '__destino_do_cabo', 'B');
+  const r = menorCaminhoEntre('__origem_do_cabo', '__destino_do_cabo', arestas);
+  return r ? r.mm : null;
+}
 
 const nomeDaPeca = (classificacao: string | null, tipo: string) => (classificacao ? (FICHA_DO_PONTO_HIDRAULICO[classificacao as TipoDePontoHidraulico]?.rotulo ?? tipo) : tipo);
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -159,7 +228,10 @@ export function materiaisDeClimatizacao(model: BlueprintModel, hip: HipotesesCli
     const secao = medidaDaBitola({ ...b, isolamentoMm: undefined });
     const comPerda = area * (1 + hm.perdaDaChapaPct / 100);
     totais.push({ grupo: 'Dutos', item: `Chapa — duto ${secao}`, quantidade: comPerda, unidade: 'm²', itemCode: null, nota: `perímetro × comprimento = ${r2(area).toLocaleString('pt-BR')} m² + ${hm.perdaDaChapaPct} % de perda` });
-    if (b.material !== 'PAINEL_PREISOLADO') {
+    if (b.material === 'PAINEL_PREISOLADO') {
+      // E9b: o painel pelo peso por m² declarado nas premissas.
+      totais.push({ grupo: 'Dutos', item: `Painel pré-isolado — duto ${secao}`, quantidade: comPerda * hm.pesoDoPainelKgM2, unidade: 'kg', itemCode: null, nota: `${String(hm.pesoDoPainelKgM2).replace('.', ',')} kg/m² — HIPÓTESE, CONFERIR com o fabricante do painel` });
+    } else {
       const c = chapaDoDuto(b);
       totais.push({ grupo: 'Dutos', item: `Aço galvanizado ${c.bitola} (${String(c.espessuraMm).replace('.', ',')} mm) — duto ${secao}`, quantidade: comPerda * c.espessuraMm * KG_POR_M2_POR_MM, unidade: 'kg', itemCode: null, nota: 'espessura pela maior dimensão — HIPÓTESE, CONFERIR' });
     }
@@ -191,18 +263,25 @@ export function materiaisDeClimatizacao(model: BlueprintModel, hip: HipotesesCli
     for (const s of sistemasDoNivel(model, l.id).filter(ehSplit)) {
       const linha = linhaExistente(model, s);
       const linhaM = linha ? linha.mm / 1000 : null;
+      // E9b: o cabo pelo eletroduto desenhado; sem eletroduto entre as duas peças, pela linha.
+      const peloEletroduto = caboPeloEletroduto(model, s.evaporadora, s.condensadora, hm.raioDoEletrodutoM * 1000);
+      const caminhoDoCabo = peloEletroduto != null ? peloEletroduto / 1000 : linhaM;
       porSistema.push({
         nome: `${numeros.get(s.condensadora.id)?.numero ?? 'Condensadora'} ← ${numeros.get(s.evaporadora.id)?.numero ?? 'evaporadora'}`,
         tipo: 'SPLIT',
         evaporadoras: 1,
         capacidadeBtuH: s.evaporadora.capacidadeBtuH ?? null,
         linhaM,
-        caboM: linhaM != null ? linhaM + hm.folgaDoCaboM : null,
+        caboM: caminhoDoCabo != null ? caminhoDoCabo + hm.folgaDoCaboM : null,
+        origemDoCabo: peloEletroduto != null ? 'ELETRODUTO' : linhaM != null ? 'LINHA' : null,
         gasG: linha ? (gasDe.get(s.evaporadora.id) ?? null) : null,
       });
     }
     for (const a of analisesDoNivel(model, l.id)) {
       const caps = a.sistema.evaporadoras.map((e) => e.capacidadeBtuH);
+      // E9b: o gás do VRF — Σ comprimento de cada trecho × o fator do Ø de líquido dele.
+      const trechoPorId = new Map((model.trechos ?? []).map((x) => [x.id, x]));
+      const gasKg = a.trechos.reduce((acc, tr) => acc + (comprimentoMm(trechoPorId.get(tr.trechoId)!) / 1000) * fatorDeGasDoVrf(tr.liquidoMm), 0);
       porSistema.push({
         nome: numeros.get(a.sistema.condensadora.id)?.numero ?? a.sistema.nome,
         tipo: 'VRF',
@@ -211,17 +290,30 @@ export function materiaisDeClimatizacao(model: BlueprintModel, hip: HipotesesCli
         linhaM: a.comprimentoTotalM,
         // O cabo de comunicação do VRF segue a árvore: o total dela + a sobra em cada evaporadora.
         caboM: a.comprimentoTotalM != null ? a.comprimentoTotalM + hm.folgaDoCaboM * a.sistema.evaporadoras.length : null,
-        gasG: null,
+        origemDoCabo: a.comprimentoTotalM != null ? 'LINHA' : null,
+        gasG: a.trechos.length ? Math.round(gasKg * 1000) : null,
       });
     }
   }
   const comCabo = porSistema.filter((s) => s.caboM != null);
-  if (comCabo.length) totais.push({ grupo: 'Interligação e gás', item: 'Cabo de interligação (alimentação e comando) — evaporadora × condensadora', quantidade: comCabo.reduce((s, x) => s + x.caboM!, 0), unidade: 'm', itemCode: null, nota: `caminho da linha + ${String(hm.folgaDoCaboM).replace('.', ',')} m de sobra por sistema/evaporadora` });
+  const peloEletroduto = comCabo.filter((s) => s.origemDoCabo === 'ELETRODUTO').length;
+  if (comCabo.length)
+    totais.push({
+      grupo: 'Interligação e gás',
+      item: 'Cabo de interligação (alimentação e comando) — evaporadora × condensadora',
+      quantidade: comCabo.reduce((s, x) => s + x.caboM!, 0),
+      unidade: 'm',
+      itemCode: null,
+      nota: `${peloEletroduto ? `${peloEletroduto} pelo eletroduto desenhado, ` : ''}${comCabo.length - peloEletroduto ? `${comCabo.length - peloEletroduto} pelo caminho da linha, ` : ''}+ ${String(hm.folgaDoCaboM).replace('.', ',')} m de sobra por sistema/evaporadora`,
+    });
+  const pelaLinha = porSistema.filter((s) => s.tipo === 'SPLIT' && s.origemDoCabo === 'LINHA');
+  if (pelaLinha.length) avisos.push(`${pelaLinha.length} split(s) sem eletroduto desenhado entre o ponto de força e a condensadora (${pelaLinha.map((s) => s.nome).join(', ')}): o cabo seguiu a linha frigorígena.`);
   const semLinha = porSistema.filter((s) => s.linhaM == null);
   if (semLinha.length) avisos.push(`${semLinha.length} sistema(s) sem linha frigorígena traçada (${semLinha.map((s) => s.nome).join(', ')}): cabo e gás deles fora da lista.`);
-  const gas = porSistema.filter((s) => s.gasG != null).reduce((s, x) => s + x.gasG!, 0);
-  if (porSistema.some((s) => s.tipo === 'SPLIT' && s.gasG != null)) totais.push({ grupo: 'Interligação e gás', item: 'Carga adicional de gás refrigerante (split)', quantidade: gas / 1000, unidade: 'kg', itemCode: null, nota: `linha além de ${hip.linha.preCargaM} m de pré-carga × g/m da faixa — HIPÓTESE, CONFERIR com o fabricante` });
-  if (porSistema.some((s) => s.tipo === 'VRF')) avisos.push('VRF: a carga adicional de gás sai do cálculo do fabricante (não estimada aqui).');
+  const gasDo = (tipo: SistemaNaLista['tipo']) => porSistema.filter((s) => s.tipo === tipo && s.gasG != null).reduce((s, x) => s + x.gasG!, 0);
+  if (porSistema.some((s) => s.tipo === 'SPLIT' && s.gasG != null)) totais.push({ grupo: 'Interligação e gás', item: 'Carga adicional de gás refrigerante (split)', quantidade: gasDo('SPLIT') / 1000, unidade: 'kg', itemCode: null, nota: `linha além de ${hip.linha.preCargaM} m de pré-carga × g/m da faixa — HIPÓTESE, CONFERIR com o fabricante` });
+  // E9b: o VRF pela fórmula típica do fabricante (Σ L × fator do Ø de líquido).
+  if (porSistema.some((s) => s.tipo === 'VRF' && s.gasG != null)) totais.push({ grupo: 'Interligação e gás', item: 'Carga adicional de gás refrigerante (VRF)', quantidade: gasDo('VRF') / 1000, unidade: 'kg', itemCode: null, nota: 'Σ comprimento × fator do Ø de líquido (0,022 kg/m em 1/4" … 0,37 kg/m em 7/8") — HIPÓTESE, CONFERIR no manual do equipamento' });
 
   // ── Suportes pelo espaçamento ─────────────────────────────────────────────
   const metrosDe = (d: string) => bitolas.filter((b) => b.disciplina === d).reduce((s, b) => s + b.comprimentoM, 0);
@@ -271,8 +363,8 @@ export function abaDaListaDeMateriaisClimatizacao(m: MateriaisDeClimatizacao): {
       ['Grupo', 'Item', 'Quantidade', 'Unidade', 'Código', 'Como saiu'],
       ...m.totais.map((l) => [l.grupo, l.item, r2(l.quantidade), l.unidade, l.itemCode ?? '', l.nota ?? '']),
       [],
-      ['Sistema', 'Tipo', 'Evaporadoras', 'Capacidade (BTU/h)', 'Linha (m)', 'Cabo (m)', 'Gás adicional (g)'],
-      ...m.porSistema.map((s) => [s.nome, s.tipo, s.evaporadoras, s.capacidadeBtuH ?? '', s.linhaM != null ? r2(s.linhaM) : '', s.caboM != null ? r2(s.caboM) : '', s.gasG ?? '']),
+      ['Sistema', 'Tipo', 'Evaporadoras', 'Capacidade (BTU/h)', 'Linha (m)', 'Cabo (m)', 'Cabo medido por', 'Gás adicional (g)'],
+      ...m.porSistema.map((s) => [s.nome, s.tipo, s.evaporadoras, s.capacidadeBtuH ?? '', s.linhaM != null ? r2(s.linhaM) : '', s.caboM != null ? r2(s.caboM) : '', s.origemDoCabo === 'ELETRODUTO' ? 'eletroduto' : s.origemDoCabo === 'LINHA' ? 'linha frigorígena' : '', s.gasG ?? '']),
       [],
       ['Pavimento', 'Linha (m)', 'Dreno (m)', 'Duto (m)', 'Equipamentos (un)', 'Terminais (un)'],
       ...m.porPavimento.map((p) => [p.nome, r2(p.linhaM), r2(p.drenoM), r2(p.dutoM), p.equipamentos, p.terminais]),
@@ -336,7 +428,7 @@ export function desenharListaDeMateriaisClimatizacao(d: Desenhista, m: Materiais
     titulo('POR SISTEMA');
     for (const s of m.porSistema) {
       linha({ item: `${s.nome} (${s.tipo === 'VRF' ? `VRF, ${s.evaporadoras} evap.` : 'split'}) — linha`, quantidade: s.linhaM ?? 0, unidade: 'm' });
-      if (s.caboM != null) linha({ item: `${s.nome} — cabo de interligação`, quantidade: s.caboM, unidade: 'm' });
+      if (s.caboM != null) linha({ item: `${s.nome} — cabo (${s.origemDoCabo === 'ELETRODUTO' ? 'pelo eletroduto' : 'pela linha'})`, quantidade: s.caboM, unidade: 'm' });
       if (s.gasG != null) linha({ item: `${s.nome} — gás adicional`, quantidade: s.gasG, unidade: 'g' });
     }
   }

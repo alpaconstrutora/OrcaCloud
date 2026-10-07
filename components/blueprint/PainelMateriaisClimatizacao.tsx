@@ -24,6 +24,8 @@ const ROTULOS: Record<keyof HipotesesDosMateriais, string> = {
   espacamentoSuporteDutoM: 'Suporte do duto a cada (m)',
   folgaDoCaboM: 'Sobra do cabo por sistema (m)',
   perdaDaChapaPct: 'Perda da chapa do duto (%)',
+  raioDoEletrodutoM: 'Alcance do eletroduto até a peça (m)',
+  pesoDoPainelKgM2: 'Peso do painel pré-isolado (kg/m²)',
 };
 
 export default function PainelMateriaisClimatizacao({ materiais, hip, onHip }: Props) {

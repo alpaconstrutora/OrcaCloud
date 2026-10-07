@@ -12,7 +12,7 @@ import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { modelosDoCatalogo, selecaoDoNivel } from '../utils/blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from '../utils/blueprintPosicaoSplit';
 import { linhaExistente, planejarLinhasFrigorigenas, sistemasDoNivel } from '../utils/blueprintLinhaFrigorigena';
-import { abaDaListaDeMateriaisClimatizacao, chapaDoDuto, materiaisDeClimatizacao, nomeDoCobre, temMateriaisDeClimatizacao } from '../utils/blueprintMateriaisClimatizacao';
+import { abaDaListaDeMateriaisClimatizacao, caboPeloEletroduto, chapaDoDuto, fatorDeGasDoVrf, materiaisDeClimatizacao, nomeDoCobre, temMateriaisDeClimatizacao } from '../utils/blueprintMateriaisClimatizacao';
 import { DesenhistaDeProva, PAPEIS, desenharFolhaDaListaDeMateriaisClimatizacao, enquadrar, orientar } from '../utils/blueprintExport';
 import { montarQuantitativoXlsx } from '../services/blueprintExportService';
 import * as XLSX from 'xlsx';
@@ -109,6 +109,72 @@ describe('climatização E9.1 · o que a compra acrescenta', () => {
   it('as premissas dos materiais vêm da coluna com faixa e padrão', () => {
     expect(hipotesesClimatizacaoDaColuna({ materiais: { perdaDaChapaPct: 15, folgaDoCaboM: 99 } }).materiais).toEqual({ ...HIPOTESES_CLIMATIZACAO_PADRAO.materiais, perdaDaChapaPct: 15 });
     expect(hipotesesClimatizacaoDaColuna({}).materiais).toEqual(HIPOTESES_CLIMATIZACAO_PADRAO.materiais);
+  });
+});
+
+describe('climatização E9b · gás do VRF, cabo pelo eletroduto, peso do painel', () => {
+  it('o gás do VRF: Σ comprimento × o fator do Ø de líquido de cada trecho', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m0.levels[0].id;
+    let m = applyCommand(m0, { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'VRF', tipoHidraulico: 'CONDENSADORA_VRF', at: point(0, 0), cotaMm: 2500, capacidadeBtuH: 48000 } as Command).model;
+    const cd = m.terminais![0].id;
+    m = applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_CASSETE', at: point(5000, 0), cotaMm: 2500, capacidadeBtuH: 18000, condensadoraId: cd } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_CASSETE', at: point(5000, 3000), cotaMm: 2500, capacidadeBtuH: 18000, condensadoraId: cd } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'FRIGORIGENA', a: point(0, 0), b: point(5000, 0), cotaAMm: 2500, cotaBMm: 2500, bitolaMm: 10, bitolaSuccaoMm: 16 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'FRIGORIGENA', a: point(5000, 0), b: point(5000, 3000), cotaAMm: 2500, cotaBMm: 2500, bitolaMm: 6, bitolaSuccaoMm: 13 } as Command,
+    ]).model;
+    const lista = materiaisDeClimatizacao(m, hip);
+    const vrf = lista.porSistema.find((x) => x.tipo === 'VRF')!;
+    // 5 m × 0,059 + 3 m × 0,022 = 0,361 kg.
+    expect(vrf.gasG).toBe(361);
+    expect(linha(lista, /gás refrigerante \(VRF\)/)!.quantidade).toBeCloseTo(0.361, 6);
+    expect(lista.avisos.join(' ')).not.toMatch(/não estimada/);
+    expect(fatorDeGasDoVrf(6)).toBe(0.022);
+    expect(fatorDeGasDoVrf(40)).toBe(0.37);
+  });
+
+  it('⚠️ o cabo pelo eletroduto desenhado do ponto de força à condensadora; sem eletroduto, pela linha — e diz', () => {
+    const m = casa();
+    const t = m.levels[0].id;
+    const s = sistemasDoNivel(m, t)[0];
+    const ac = m.terminais!.find((x) => x.tipoEletrico === 'AR_CONDICIONADO')!;
+    const sem = materiaisDeClimatizacao(m, hip);
+    expect(sem.porSistema[0].origemDoCabo).toBe('LINHA');
+    expect(sem.avisos.join(' ')).toMatch(/sem eletroduto desenhado/);
+    // Um eletroduto com desvio (Q) do ponto de força até a condensadora — mais longo que a linha.
+    const q = point(ac.at.x + 2000, ac.at.y + 2000);
+    const eletroduto = (b: { x: number; y: number }, cotaB: number): Command[] => [
+      { type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: ac.at, b: q, cotaAMm: ac.cotaMm, cotaBMm: ac.cotaMm, bitolaMm: 20 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: q, b: point(b.x, b.y), cotaAMm: ac.cotaMm, cotaBMm: cotaB, bitolaMm: 20 } as Command,
+    ];
+    const com = applyBatch(m, eletroduto(s.condensadora.at, s.condensadora.cotaMm)).model;
+    const esperado = Math.hypot(2000, 2000) + Math.hypot(s.condensadora.at.x - q.x, s.condensadora.at.y - q.y, s.condensadora.cotaMm - ac.cotaMm);
+    expect(caboPeloEletroduto(com, s.evaporadora, s.condensadora, 1000)).toBeCloseTo(esperado, 3);
+    const lista = materiaisDeClimatizacao(com, hip);
+    expect(lista.porSistema[0].origemDoCabo).toBe('ELETRODUTO');
+    expect(lista.porSistema[0].caboM).toBeCloseTo(esperado / 1000 + hip.materiais.folgaDoCaboM, 6);
+    expect(lista.avisos.join(' ')).not.toMatch(/sem eletroduto desenhado/);
+    expect(linha(lista, /^Cabo de interligação/)!.nota).toMatch(/1 pelo eletroduto desenhado/);
+    // O eletroduto que para a 1,5 m da condensadora: com alcance de 0,3 m não liga (volta para a linha —
+    // com 1 m, a ponta no próprio ponto de força já alcançaria a condensadora, a ~0,6 m dele);
+    // com 2 m liga, e os 1,5 m fora do eletroduto entram no comprimento.
+    const curto = applyBatch(m, eletroduto({ x: s.condensadora.at.x, y: s.condensadora.at.y + 1500 }, s.condensadora.cotaMm)).model;
+    expect(materiaisDeClimatizacao(curto, { ...hip, materiais: { ...hip.materiais, raioDoEletrodutoM: 0.3 } }).porSistema[0].origemDoCabo).toBe('LINHA');
+    const alcance2 = materiaisDeClimatizacao(curto, { ...hip, materiais: { ...hip.materiais, raioDoEletrodutoM: 2 } });
+    expect(alcance2.porSistema[0].origemDoCabo).toBe('ELETRODUTO');
+    const ate = Math.hypot(2000, 2000) + Math.hypot(s.condensadora.at.x - q.x, s.condensadora.at.y + 1500 - q.y, s.condensadora.cotaMm - ac.cotaMm) + 1500;
+    expect(alcance2.porSistema[0].caboM).toBeCloseTo(ate / 1000 + hip.materiais.folgaDoCaboM, 6);
+  });
+
+  it('o painel pré-isolado sai em kg pelo peso por m² declarado (com a perda)', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const m = applyCommand(m0, { type: 'AddTrecho', levelId: m0.levels[0].id, disciplina: 'MECANICA', a: point(0, 0), b: point(4000, 0), cotaAMm: 2600, cotaBMm: 2600, bitolaMm: 600, alturaDutoMm: 300, material: 'PAINEL_PREISOLADO' } as Command).model;
+    const lista = materiaisDeClimatizacao(m, hip);
+    expect(linha(lista, /^Painel pré-isolado — duto 600×300/)!.quantidade).toBeCloseTo(7.92 * 1.4, 6);
+    expect(linha(lista, /^Aço galvanizado/)).toBeUndefined();
+    const outro = materiaisDeClimatizacao(m, { ...hip, materiais: { ...hip.materiais, pesoDoPainelKgM2: 2 } });
+    expect(linha(outro, /^Painel pré-isolado/)!.quantidade).toBeCloseTo(7.92 * 2, 6);
   });
 });
 

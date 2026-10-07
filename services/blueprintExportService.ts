@@ -13,6 +13,8 @@ import { abaDaPlanilhaDePressoes, calculoDoEstudo, caminhoCritico, planilhaDePre
 import { paraWinAnsi } from './blueprintMemorialHidroService';
 import { numeracaoDeIncendio } from '../utils/blueprintNumeracaoIncendio';
 import { numeracaoDeClimatizacao } from '../utils/blueprintNumeracaoClimatizacao';
+import { abaDaListaDeMateriaisClimatizacao, materiaisDeClimatizacao, temMateriaisDeClimatizacao } from '../utils/blueprintMateriaisClimatizacao';
+import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
 import { colunasDoModelo, nomesDasColunas } from '../utils/blueprintEsquemaVertical';
 import { DISCIPLINAS_DA_REDE, type RedeDaPrancha } from '../utils/blueprintPranchaHidro';
 import { jsPDF } from 'jspdf';
@@ -23,6 +25,7 @@ import {
   desenharFolhaDeIncendio,
   desenharFolhaDeClimatizacao,
   desenharFolhaDeDetalhesDeClimatizacao,
+  desenharFolhaDaListaDeMateriaisClimatizacao,
   desenharFolhaDePressoesDeIncendio,
   desenharFolhaDeDetalhesDeIncendio,
   desenharFolhaDaListaDeMateriaisIncendio,
@@ -605,6 +608,12 @@ export function desenharConjunto(
         folhas.push({ prancha: p, denominador: 0 });
         break;
       }
+      case 'MATERIAIS_CLIMATIZACAO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDaListaDeMateriaisClimatizacao(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
       case 'MATERIAIS_INCENDIO': {
         const enq = enquadrar(model, template.denominadorPlanta, papel, false);
         desenharFolhaDaListaDeMateriaisIncendio(d, model, comPrancha(0), enq);
@@ -1082,6 +1091,8 @@ export function montarQuantitativoXlsx(
   }
   // E9.1: a lista de materiais de incêndio — do MESMO quantitativo das outras abas.
   if (temMateriaisDeIncendio(model)) abas.push(abaDaListaDeMateriaisIncendio(materiaisDeIncendio(model, quant)));
+  // E9.3 (climatização): a lista de materiais — do MESMO quantitativo, com as premissas do estudo (ou as padrão).
+  if (temMateriaisDeClimatizacao(model)) abas.push(abaDaListaDeMateriaisClimatizacao(materiaisDeClimatizacao(model, o.hipotesesDeClimatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, quant)));
 
   const wb = XLSX.utils.book_new();
   for (const aba of abas) {

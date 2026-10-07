@@ -14,6 +14,7 @@
  * como o template de vista (E8.2) e o tipo de parede.
  */
 import { temClimatizacaoNoPavimento } from './blueprintPranchaClimatizacao';
+import { temMateriaisDeClimatizacao } from './blueprintMateriaisClimatizacao';
 import { temMateriaisDeIncendio } from './blueprintListaDeMateriaisIncendio';
 import { temIncendioNoPavimento, type FamiliaDeIncendio } from './blueprintPranchaIncendio';
 
@@ -159,7 +160,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO' | 'DETALHES_INCENDIO' | 'MATERIAIS_INCENDIO' | 'CLIMATIZACAO' | 'LEGENDA_CLIMATIZACAO' | 'DETALHES_CLIMATIZACAO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO' | 'DETALHES_INCENDIO' | 'MATERIAIS_INCENDIO' | 'CLIMATIZACAO' | 'LEGENDA_CLIMATIZACAO' | 'DETALHES_CLIMATIZACAO' | 'MATERIAIS_CLIMATIZACAO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -304,6 +305,8 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
       numerar({ tipo: 'LEGENDA_CLIMATIZACAO', titulo: 'Climatização — quadro-resumo e legenda', denominador: 0 });
       numerar({ tipo: 'DETALHES_CLIMATIZACAO', titulo: 'Climatização — isométrico e detalhes típicos', denominador: 0 });
     }
+    // E9.3: a lista de materiais da climatização, quando há tubo, duto ou peça.
+    if (temMateriaisDeClimatizacao(model)) numerar({ tipo: 'MATERIAIS_CLIMATIZACAO', titulo: 'Lista de materiais — climatização', denominador: 0 });
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });

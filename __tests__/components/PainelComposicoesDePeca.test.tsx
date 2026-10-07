@@ -60,6 +60,21 @@ describe('PainelComposicoesDePeca (E9.2)', () => {
     expect(onMudou).toHaveBeenCalled();
   });
 
+  it('climatização (E9.2): o kit do split na rede da linha frigorígena, pela especificação da capacidade', async () => {
+    const user = userEvent.setup();
+    render(<PainelComposicoesDePeca organizationId="org" onMudou={vi.fn()} />);
+    await screen.findByText(/Hidrante simples · Incêndio/);
+    const redes = [...(screen.getByLabelText('Rede da peça') as HTMLSelectElement).options].map((o) => o.value);
+    expect(redes).toEqual(expect.arrayContaining(['FRIGORIGENA', 'DRENO_AC', 'MECANICA']));
+    await user.selectOptions(screen.getByLabelText('Rede da peça'), 'FRIGORIGENA');
+    await user.selectOptions(screen.getByLabelText('Tipo da peça'), 'EVAPORADORA_HI_WALL');
+    await user.type(screen.getByLabelText('Especificação da peça'), '12.000 BTU/h');
+    await user.type(screen.getByLabelText('Código do item 1'), 'EVAP12');
+    await user.click(screen.getByRole('button', { name: 'Salvar composição' }));
+    await waitFor(() => expect(salvarComposicao).toHaveBeenCalled());
+    expect(salvarComposicao).toHaveBeenCalledWith('org', expect.objectContaining({ disciplina: 'FRIGORIGENA', tipo: 'EVAPORADORA_HI_WALL', especificacao: '12.000 BTU/h' }));
+  });
+
   it('apagar chama o serviço com a organização', async () => {
     const user = userEvent.setup();
     render(<PainelComposicoesDePeca organizationId="org" onMudou={vi.fn()} />);

@@ -267,6 +267,8 @@ import PainelRedeDeAr from './PainelRedeDeAr';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
 import { ROTULO_DO_GRUPO_DE_CLIMATIZACAO, hashDaBaseClimatizacao, memorialExecutivoClimatizacao, verificacoesClimatizacao } from '../../utils/blueprintClimatizacaoExecutivo';
+import { materiaisDeClimatizacao } from '../../utils/blueprintMateriaisClimatizacao';
+import PainelMateriaisClimatizacao from './PainelMateriaisClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
 import PainelKitsDeInsercao from './PainelKitsDeInsercao';
@@ -3147,6 +3149,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // E8.3: com o desenho, as instalações (equipamentos, linha e dreno, VRF, rede de ar) entram nos dois.
     return { calculo: memorialDeCalculoClimatizacao(cargaParaDocumentos, climatizacaoDoEstudo.hipoteses, ctx, editor.model), descritivo: memorialDescritivoClimatizacao(cargaParaDocumentos, climatizacaoDoEstudo.hipoteses, ctx, editor.model) };
   }, [cargaParaDocumentos, editor.model, climatizacaoDoEstudo.hipoteses, study.name, nomeDoNivelDoEstudo]);
+  /** E9.3: a lista de materiais (a mesma da folha e da aba do XLSX) — só com a tarefa de documentos aberta. */
+  const materiaisDaClimatizacao = useMemo(
+    () => (tarefa === 'memoriaisClimatizacao' ? materiaisDeClimatizacao(editor.model, climatizacaoDoEstudo.hipoteses) : null),
+    [tarefa, editor.model, climatizacaoDoEstudo.hipoteses],
+  );
   /** E8.4: a emissão com ART — as verificações saem das conferências das gavetas; o hash amarra desenho + premissas + materiais + cidade. */
   const executivoClimatizacao = useBlueprintProjetoExecutivo(study.id, study.organization_id, 'CLIMATIZACAO');
   const resultadoClimatizacao = useMemo(
@@ -11949,7 +11956,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 rotulo="Memoriais e ART"
                 ativo={tarefaAberta === 'memoriaisClimatizacao'}
                 onClick={() => alternarTarefa('memoriaisClimatizacao')}
-                ajuda="Memorial de cálculo e descritivo da climatização — carga térmica, equipamentos, linha e dreno, VRF e rede de ar, os mesmos números das gavetas — em PDF ou DOCX; e a emissão do projeto com ART, que só habilita com todas as verificações atendidas"
+                ajuda="Memorial de cálculo e descritivo da climatização — carga térmica, equipamentos, linha e dreno, VRF e rede de ar, os mesmos números das gavetas — em PDF ou DOCX; a lista de materiais (cobre, isolamento, chapa, cabo, gás, suportes); e a emissão do projeto com ART, que só habilita com todas as verificações atendidas"
               />
             </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
@@ -14332,6 +14339,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 key={pranchaParaExportar?.join('|') ?? 'versoes'}
                 pranchasIniciais={pranchaParaExportar}
                 hipotesesDeIncendio={incendioDoEstudo.hipoteses}
+                hipotesesDeClimatizacao={climatizacaoDoEstudo.hipoteses}
                 study={study}
                 custoPorUid={custoPorUid}
                 hipotesesEletricas={hipotesesEletricas}
@@ -15600,6 +15608,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   testId: 'memoriais-climatizacao',
                 }}
               />
+              {materiaisDaClimatizacao && (
+                <PainelMateriaisClimatizacao
+                  materiais={materiaisDaClimatizacao}
+                  hip={climatizacaoDoEstudo.hipoteses.materiais}
+                  onHip={(materiais) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, materiais })}
+                />
+              )}
               <PainelHidroExecutivo
                 textos={{ rotuloDoGrupo: ROTULO_DO_GRUPO_DE_CLIMATIZACAO, conferencia: 'a conferência (carga térmica, equipamentos, linha e dreno, VRF e rede de ar)', disciplina: 'de climatização', testId: 'climatizacao-executivo' }}
                 e={{

@@ -11,7 +11,7 @@
  * linhas fechar com a linha de total. Regra pura, sem React.
  */
 import type { BlueprintModel, ConexaoDerivada, QuantidadePorBitola, QuantidadePorCondutor, QuantidadePorConexao, QuantidadePorTerminal, computeQuantities } from './blueprintKernel';
-import { agruparPorBitola, agruparPorCondutor, agruparPorConexao, agruparPorTerminal, areaConstruidaMm2 } from './blueprintKernel';
+import { TIPOS_DE_CLIMATIZACAO, TIPOS_DE_TERMINAL_DE_AR, agruparPorBitola, agruparPorCondutor, agruparPorConexao, agruparPorTerminal, areaConstruidaMm2 } from './blueprintKernel';
 import type { ArmaduraQuantificada } from './blueprintArmadura';
 
 type Quant = ReturnType<typeof computeQuantities>;
@@ -104,6 +104,8 @@ export function reservatoriosPorVolume(model: BlueprintModel, levelId: string | 
 export function familiaDoPonto(classificacao: string | null): 'Reservatório' | 'Equipamento' | 'Caixa' | 'Ponto' {
   if (classificacao === 'RESERVATORIO') return 'Reservatório';
   if (classificacao === 'AQUECEDOR' || classificacao === 'BOMBA' || classificacao === 'HIDROMETRO') return 'Equipamento';
+  // E9.1 (climatização): evaporadora, condensadora, derivador, exaustor, bomba de dreno — equipamento; o terminal de ar segue ponto.
+  if (classificacao && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(classificacao) && !(TIPOS_DE_TERMINAL_DE_AR as readonly string[]).includes(classificacao) && classificacao !== 'PONTO_DRENO') return 'Equipamento';
   if (classificacao === 'CAIXA_INSPECAO' || classificacao === 'CAIXA_SIFONADA' || classificacao === 'CAIXA_GORDURA' || classificacao === 'RALO_SIFONADO') return 'Caixa';
   return 'Ponto';
 }

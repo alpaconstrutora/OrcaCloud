@@ -44,7 +44,7 @@ function predio(): BlueprintModel {
 
 describe('E9.1 · o quantitativo pela especificação (quant-1.24.0)', () => {
   it('⚠️ PRONTO QUANDO: a política subiu, e extintor de pó ABC 4 kg e de CO₂ 6 kg são DUAS linhas de compra', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.24.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.25.0');
     const q = computeQuantities(predio(), POLITICA_PADRAO, KERNEL_VERSION);
     const ext = q.totais.porTerminal.filter((x) => x.classificacao === 'EXTINTOR').map((x) => [x.especificacao, x.quantidade]);
     expect(ext).toEqual([['CO2 · 6 kg', 1], ['PQS_ABC · 4 kg', 2]]);

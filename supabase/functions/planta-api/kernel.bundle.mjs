@@ -805,7 +805,8 @@ var DISCIPLINAS_DO_PONTO_HIDRAULICO = {
   EVAPORADORA_HI_WALL: ["FRIGORIGENA"],
   EVAPORADORA_PISO_TETO: ["FRIGORIGENA"],
   EVAPORADORA_CASSETE: ["FRIGORIGENA"],
-  EVAPORADORA_DUTADA: ["FRIGORIGENA"],
+  // E7 (05/10/2026): a dutada também SOPRA NO DUTO — a rede de ar (MECANICA) parte dela.
+  EVAPORADORA_DUTADA: ["FRIGORIGENA", "MECANICA"],
   CONDENSADORA_SPLIT: ["FRIGORIGENA"],
   CONDENSADORA_VRF: ["FRIGORIGENA"],
   DERIVADOR_VRF: ["FRIGORIGENA"],
@@ -3928,7 +3929,14 @@ var POLITICA_PADRAO = {
   // agente × carga × capacidade, placa pelo código, sprinkler por K × posição,
   // luminária de emergência pela autonomia) e ela entra na chave do grupo. Antes
   // o extintor de pó ABC 4 kg e o de CO₂ 6 kg somavam numa linha só.
-  version: "quant-1.24.0",
+  // quant-1.25.0 (07/10/2026, E9.1 do roadmap de climatização): a linha
+  // frigorígena se compra pelos DOIS diâmetros e o isolamento — `trechos` e
+  // `porBitola` ganharam `bitolaSuccaoMm` e `isolamentoMm` (omitidos quando o
+  // trecho não declara; entram na chave do grupo); a especificação da peça
+  // ganhou a CAPACIDADE (BTU/h), a VAZÃO (m³/h) e, no terminal de ar, a MEDIDA
+  // declarada. Antes a evaporadora de 9.000 e a de 12.000 BTU/h somavam numa
+  // linha, e o par 6/10 com o 6/13.
+  version: "quant-1.25.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -4154,6 +4162,10 @@ function areaOcupadaNoAmbiente(s2, ring) {
   }
   return s2.larguraMm * s2.profundidadeMm;
 }
+function medidaDaBitola(b) {
+  const base = b.alturaDutoMm != null ? `${b.bitolaMm}\xD7${b.alturaDutoMm}` : b.bitolaSuccaoMm != null ? `\xD8${b.bitolaMm}/${b.bitolaSuccaoMm}` : `DN ${b.bitolaMm}`;
+  return b.isolamentoMm ? `${base} \xB7 isol. ${b.isolamentoMm} mm` : base;
+}
 function agruparPorBitola(trechos) {
   const porBitolaMapa = /* @__PURE__ */ new Map();
   for (const t of trechos) {
@@ -4161,6 +4173,9 @@ function agruparPorBitola(trechos) {
 ${t.material ?? ""}
 ${t.secaoCalha ?? ""}
 ${t.bitolaMm}
+${t.alturaDutoMm ?? ""}
+${t.bitolaSuccaoMm ?? ""}
+${t.isolamentoMm ?? ""}
 ${t.itemCode ?? ""}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
@@ -4172,6 +4187,9 @@ ${t.itemCode ?? ""}`;
         material: t.material ?? null,
         secaoCalha: t.secaoCalha ?? null,
         bitolaMm: t.bitolaMm,
+        ...t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {},
+        ...t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {},
+        ...t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {},
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
         trechos: 1
@@ -4179,7 +4197,7 @@ ${t.itemCode ?? ""}`;
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? "").localeCompare(y.material ?? "") || (x.secaoCalha ?? "").localeCompare(y.secaoCalha ?? "") || x.bitolaMm - y.bitolaMm
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? "").localeCompare(y.material ?? "") || (x.secaoCalha ?? "").localeCompare(y.secaoCalha ?? "") || x.bitolaMm - y.bitolaMm || (x.alturaDutoMm ?? 0) - (y.alturaDutoMm ?? 0) || (x.bitolaSuccaoMm ?? 0) - (y.bitolaSuccaoMm ?? 0) || (x.isolamentoMm ?? 0) - (y.isolamentoMm ?? 0)
   );
 }
 function especificacaoDoTerminal(t) {
@@ -4191,8 +4209,14 @@ function especificacaoDoTerminal(t) {
   if (t.fatorK != null) partes.push(`K${t.fatorK}`);
   if (t.posicaoSprinkler) partes.push(t.posicaoSprinkler);
   if (t.autonomiaMin != null) partes.push(`${t.autonomiaMin} min`);
+  if (t.capacidadeBtuH != null) partes.push(`${milhar(t.capacidadeBtuH)} BTU/h`);
+  if (t.vazaoM3h != null) partes.push(`${milhar(t.vazaoM3h)} m\xB3/h`);
+  if (t.tipoHidraulico && TIPOS_DE_TERMINAL_DE_AR.includes(t.tipoHidraulico) && t.larguraMm != null) {
+    partes.push(t.profundidadeMm != null ? `${t.larguraMm}\xD7${t.profundidadeMm} mm` : `${t.larguraMm} mm`);
+  }
   return partes.length ? partes.join(" \xB7 ") : null;
 }
+var milhar = (v) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 function agruparPorTerminal(terminais) {
   const porTerminalMapa = /* @__PURE__ */ new Map();
   for (const t of terminais) {
@@ -4598,6 +4622,11 @@ ${c.funcao}`;
       condutoresPorSecao,
       material: materialDoTrecho(t),
       secaoCalha: t.secaoCalha ?? null,
+      // E7.1 (05/10/2026): o duto retangular — omitido no redondo (a saída dos desenhos antigos não muda).
+      ...t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {},
+      // quant-1.25.0: a sucção e o isolamento — omitidos quando o trecho não declara.
+      ...t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {},
+      ...t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {},
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? "",
@@ -6581,7 +6610,7 @@ function emitirTrecho(t, ctx, localNivel, peDireitoMm) {
   );
   const centroPerfil = emitir("IFCCARTESIANPOINT((0.,0.))");
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
-  const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
+  const perfil = t.alturaDutoMm != null ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm)},${n(t.alturaDutoMm)})`) : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
   const solidos = segmentosDoEletroduto(t, peDireitoMm).map((seg) => {
     const dx = seg.b.x - seg.a.x;
     const dy = seg.b.y - seg.a.y;
@@ -7951,7 +7980,7 @@ var FICHA_DO_PONTO_HIDRAULICO = {
   EVAPORADORA_HI_WALL: { rotulo: "Evaporadora hi-wall", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2200 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 900, profundidadeMm: 220, alturaMm: 300 }, ajuda: "Unidade interna de parede, a 2,20 m; liga \xE0 condensadora pela linha frigor\xEDgena e ao dreno. A capacidade (BTU/h) se declara no painel ou vem da carga t\xE9rmica (E4)." },
   EVAPORADORA_PISO_TETO: { rotulo: "Evaporadora piso-teto", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2300 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1200, profundidadeMm: 650, alturaMm: 240 }, ajuda: "Unidade interna junto ao teto ou ao piso, para sal\xF5es maiores." },
   EVAPORADORA_CASSETE: { rotulo: "Evaporadora cassete", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 840, profundidadeMm: 840, alturaMm: 250 }, ajuda: "Unidade interna embutida no forro, com insuflamento em quatro vias." },
-  EVAPORADORA_DUTADA: { rotulo: "Evaporadora dutada", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1100, profundidadeMm: 700, alturaMm: 280 }, ajuda: "Unidade interna no forro, que insufla por dutos e difusores (E7)." },
+  EVAPORADORA_DUTADA: { rotulo: "Evaporadora dutada", sigla: "EV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600, MECANICA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6, MECANICA: 200 }, medidasMm: { larguraMm: 1100, profundidadeMm: 700, alturaMm: 280 }, ajuda: "Unidade interna no forro, que insufla por dutos e difusores (E7)." },
   CONDENSADORA_SPLIT: { rotulo: "Condensadora (split)", sigla: "CD", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }, ajuda: "Unidade externa de um split; fica na fachada ou na \xE1rea t\xE9cnica, com folga de ar. Capacidade = a da evaporadora que serve." },
   CONDENSADORA_VRF: { rotulo: "Condensadora VRF", sigla: "CD", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 10 }, medidasMm: { larguraMm: 1240, profundidadeMm: 760, alturaMm: 1700 }, ajuda: "Unidade externa de fluxo de refrigerante vari\xE1vel, que serve v\xE1rias evaporadoras pelos derivadores (E6)." },
   DERIVADOR_VRF: { rotulo: "Derivador VRF", sigla: "DV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 6 }, sobreOTrecho: true, ajuda: "A deriva\xE7\xE3o (refnet) da linha do VRF para um ramo; sobre o trecho." },
@@ -8090,8 +8119,8 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
   const nomeDoPonto = (p) => p.classificacao ? ROTULO_DO_PONTO_HIDRAULICO[p.classificacao] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao] ?? p.classificacao : `${p.tipo} (sem tipo)`;
   if ((t.porBitola ?? []).length > 0 || (t.porTerminal ?? []).length > 0) {
     totais.push([], ["INSTALA\xC7\xD5ES"]);
-    for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
-    for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} \xB7 ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, "un"]);
+    for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}` : `${nomeDaDisciplina(b.disciplina)} ${medidaDaBitola(b)}${b.itemCode ? ` \xB7 ${b.itemCode}` : ""}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), "m"]);
+    for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)}${p.especificacao ? ` (${p.especificacao})` : ""} \xB7 ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, "un"]);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""} \xB7 ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, "un"]);
     for (const c of t.porCondutor ?? []) totais.push([`Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace(".", ",")} mm\xB2` : " (circuito sem se\xE7\xE3o)"} \xB7 El\xE9trica`, n2(c.comprimentoM), "m"]);
     if ((t.quadros ?? 0) > 0) totais.push(["Quadros de distribui\xE7\xE3o", t.quadros, "un"]);

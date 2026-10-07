@@ -2122,3 +2122,67 @@ parede (a cadeia de cotas é da planta; vale também para o incêndio); no isom�
 próximas ainda podem ter os rótulos encostados (o desenho é o compartilhado com hidro/incêndio — mexer
 nele muda as pranchas deles); a prova da emissão no app real (emitir num estudo descartável e ver uma
 premissa invalidar) fica para o passeio com login, junto das E5–E7.
+
+### Etapa 9 — Quantitativo e orçamento · 07/10/2026 (frente `clima-e9`, base dccccd12, **quant-1.25.0**)
+
+**9.1 Quantitativo.** `QuantidadeTrecho`/`QuantidadePorBitola` ganharam `bitolaSuccaoMm` e
+`isolamentoMm` (omitidos quando o trecho não declara — a saída dos desenhos de sempre não muda; entram
+na chave do grupo): a linha Ø6/10 isol. 9 e a Ø6/13 isol. 13 deixaram de somar numa linha.
+`especificacaoDoTerminal` ganhou capacidade ("12.000 BTU/h" — milhar sem `Intl`, o quantitativo é
+cache por versão), vazão ("300 m³/h") e, só no terminal de ar, a medida declarada ("600×600 mm"): a
+evaporadora de 9.000 e a de 12.000 deixaram de ser uma linha. `medidaDaBitola` no kernel (L×A, Ø
+líquido/sucção, DN; o isolamento no fim) — a MESMA para a tela, a planilha e o orçamento. Pinos da
+versão: 15 testes trocados por script sobre o glob (`'quant-1.24.0'` → `'quant-1.25.0'`, 15
+ocorrências em 15 arquivos); pacote da planta-api regerado (`plantaApi.test.ts` compara a saída).
+
+**Defeitos achados e corrigidos no caminho:** a tela de quantitativos e a aba Totais diziam "Mecânica
+DN 600" para o duto 600×300; dois dutos 600×300 e 600×400 com o mesmo código tinham o MESMO id de
+lançamento (o `alturaDutoMm` não entrava na chave do tubo) e a mesma chave React; a chave do ponto na
+tela não tinha a especificação (extintores e evaporadoras repetiam chave).
+
+**O que a compra acrescenta** (`utils/blueprintMateriaisClimatizacao.ts`, fora do kernel): o cobre por
+diâmetro em polegada (cada trecho da linha são DOIS tubos — líquido e sucção), o isolamento por
+diâmetro × espessura (um por tubo; no duto, manta em m²), a chapa do duto rígido em m² (perímetro ×
+comprimento + a perda) e em kg (espessura pela maior dimensão — tabela típica #26…#18, HIPÓTESE), o
+cabo de interligação (o caminho da linha + a sobra; no VRF, a árvore + a sobra por evaporadora), a
+carga adicional de gás do split (a faixa da E5), os suportes pelo espaçamento. As folgas são premissas
+do estudo, editáveis: `HipotesesClimatizacao.materiais` (espaçamento dos suportes da linha/dreno/duto,
+sobra do cabo, perda da chapa — com faixa e padrão). O que não dá para comprar fica nos AVISOS:
+evaporadora sem capacidade, linha sem isolamento, sistema sem linha, a curva do cobre (tubo curvado,
+não joelho — sem peça), o gás do VRF (do fabricante).
+
+**9.2 Orçamento.** `FRIGORIGENA`, `DRENO_AC` e `MECANICA` em `REDES_HIDROSSANITARIAS` (grupo "de
+climatização"; o duto vai para "— dutos"); a chave do tubo ganha a seção SÓ quando existe
+(`…:6s10i9:…`, `…:600x300:…`) — o id do tubo de sempre é o mesmo de antes (teste). Medidas novas no
+de-para: `COMPRIMENTO_TUBO_FRIGORIGENA` (pelo par e o isolamento), `COMPRIMENTO_TUBO_DRENO_AC`,
+`AREA_CHAPA_DUTO` (m², perímetro × comprimento, sem perda — a perda é da lista) e
+`CONTAGEM_EQUIPAMENTOS_CLIMATIZACAO` (tipo × especificação). A evaporadora/condensadora/dreno saíram de
+"Pontos hidráulicos"; a dutada e o exaustor saíram de "Terminais de ar" (têm a medida dos
+equipamentos); o terminal de ar diz a vazão e a medida (no `ref` só quando existe). Composição por
+peça: as três redes na tela de composições — o kit do split pela especificação ("12.000 BTU/h") ou
+genérico.
+
+**9.3 Lista de materiais.** Folha `MATERIAIS_CLIMATIZACAO` no conjunto (depois do isométrico e
+detalhes; total, por sistema e por pavimento, as premissas padrão ditas quando o estudo não as envia),
+aba "Climatização — materiais" no XLSX (com a coluna "Como saiu" e os avisos) e o painel na gaveta
+Mecânica › Documentos (premissas editáveis + a mesma lista). As premissas do estudo chegam à exportação
+pela aba Versões.
+
+**Prova.** `blueprintQuantitativoClimatizacao.test.ts` (6: versão; separação pelo par e isolamento; o
+tubo de água sem campo novo; a medida de compra; evaporadora por capacidade e difusor por vazão e
+medida, extintor intacto; linhas "de climatização" por peça/tubo/duto com o id do tubo de água igual ao
+de antes e dois dutos com dois ids; as quatro medidas novas medindo — chapa 7,2 + 4 m²; evaporadora fora
+dos pontos hidráulicos, dutada fora dos terminais de ar), `blueprintListaDeMateriaisClimatizacao.test.ts`
+(7, sobre a cadeia E4→E5: cobre = 2 × linha; isolamento por tubo; chapa 7,92 m² e 40,4 kg #24; manta
+7,2 m²; perda zero = área nua; cabo = caminho + sobra; suportes 2 → 4 com espaçamento 1 m; avisos;
+premissas da coluna; **o XLSX lido de volta** com a aba, o cobre, a chapa, o sistema e o Totais dizendo
+"Mecânica 600×300"), `blueprintPreviaComposicaoClimatizacao.test.ts` (2, **pelo serviço com o catálogo
+que só responde ao pedido**: o kit de 12.000 pega só as duas de 12.000 — EVAP12 2, cabo 10 m —, a
+condensadora pela genérica — 2 e 4 mãos-francesas —, a linha pelo código 5 m, zero divergências),
+`PainelMateriaisClimatizacao` (2), `PainelComposicoesDePeca` (+1: o kit do split na linha frigorígena),
+editor "Mecânica › Memoriais e ART" (a lista com "Evaporadora hi-wall — 12.000 BTU/h"), a ordem do
+conjunto da E8 com a folha nova.
+
+**Não entrou (dito):** o gás do VRF; o cabo pelo traçado elétrico real (o cabo segue a linha); o
+quantitativo por pavimento da tela de quantitativos sem colunas próprias de climatização (a lista de
+materiais tem o recorte por pavimento e por sistema); peso do painel pré-isolado (só m²).

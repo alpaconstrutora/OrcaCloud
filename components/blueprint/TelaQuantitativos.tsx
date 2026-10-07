@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { volumeDoAmbienteM3 } from '../../utils/blueprintNumeracao';
 import { Calculator } from 'lucide-react';
-import { ROTULO_DA_CONEXAO, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type MaterialDeTubo, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
+import { ROTULO_DA_CONEXAO, medidaDaBitola, nomeDoTipoEstrutural, type BlueprintModel, type DisciplinaDeRede, type MaterialDeTubo, type TipoDePontoEletrico, type TipoDePontoHidraulico, type computeQuantities } from '../../utils/blueprintKernel';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
 import { ROTULO_DA_DISCIPLINA, ROTULO_DO_PONTO_ELETRICO } from '../../utils/blueprintRede';
 import { ROTULO_DO_CONDUTOR } from '../../utils/blueprintKernel';
@@ -51,7 +51,7 @@ type AbaDosQuantitativos = 'resumo' | 'ambientes' | 'estruturas' | 'pavimentos' 
 /** Uma linha de compra das instalações: tubo por DN, ponto por classificação, conexão por tipo × DN. */
 interface LinhaDeInstalacao {
   chave: string;
-  familia: 'Tubo' | 'Calha' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa' | 'Condutor' | 'Quadro' | 'Disjuntor' | 'DR';
+  familia: 'Tubo' | 'Duto' | 'Calha' | 'Ponto' | 'Conexão' | 'Reservatório' | 'Equipamento' | 'Caixa' | 'Condutor' | 'Quadro' | 'Disjuntor' | 'DR';
   disciplina: DisciplinaDeRede;
   item: string;
   dnMm: number | null;
@@ -286,14 +286,14 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     // INSTALAÇÕES (18/09/2026): tubo por disciplina e DN, pontos por classificação,
     // conexões deduzidas dos encontros — as linhas de compra da rede.
     for (const b of t.porBitola ?? []) {
-      add({ grupo: 'Instalações', item: b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)} · ${ROTULO_DA_DISCIPLINA.PLUVIAL}` : `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} DN ${b.bitolaMm}${nomeDoMaterial(b.material)}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
+      add({ grupo: 'Instalações', item: b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)} · ${ROTULO_DA_DISCIPLINA.PLUVIAL}` : `${ROTULO_DA_DISCIPLINA[b.disciplina as DisciplinaDeRede] ?? b.disciplina} ${medidaDaBitola(b)}${nomeDoMaterial(b.material)}`, valor: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s), comprimento real` });
     }
     for (const p of t.porTerminal ?? []) {
       // E0.3 (29/09/2026): os pontos ELÉTRICOS entram no Resumo — antes ficavam só na aba Instalações.
       // O terminal MECÂNICO (P2.2) não tem taxonomia: o nome em texto (Difusor, Grelha) É a classificação.
       const mecanico = p.disciplina === 'MECANICA';
       const nome = p.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.tipo) : mecanico ? p.tipo : `${p.tipo} (sem tipo)`;
-      add({ grupo: 'Instalações', item: `${nome} · ${ROTULO_DA_DISCIPLINA[p.disciplina as DisciplinaDeRede] ?? p.disciplina}`, valor: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : mecanico ? 'terminal de ar' : 'a classificar' });
+      add({ grupo: 'Instalações', item: `${nome}${p.especificacao ? ` (${p.especificacao})` : ''} · ${ROTULO_DA_DISCIPLINA[p.disciplina as DisciplinaDeRede] ?? p.disciplina}`, valor: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : mecanico ? 'terminal de ar' : 'a classificar' });
     }
     for (const c of t.porConexao ?? []) {
       add({ grupo: 'Instalações', item: `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${ROTULO_DA_DISCIPLINA[c.disciplina as DisciplinaDeRede] ?? c.disciplina}`, valor: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });
@@ -327,7 +327,9 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
     for (const b of t.porBitola ?? []) {
       // E6.4: a calha é linha própria, pelo nome da seção (quant-1.18.0 já as separa).
       const item = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : `${b.disciplina === 'ELETRICA' ? 'Eletroduto' : `Tubo ${nomeDaDisciplina(b.disciplina).toLowerCase()}`}${nomeDoMaterial(b.material)}`;
-      linhas.push({ chave: `tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.itemCode ?? ''}`, familia: b.secaoCalha ? 'Calha' : 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${item}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real${b.secaoCalha ? ', com o caimento' : ', com prumadas e caimento'}` });
+      // E9.1 (climatização): a seção (L×A, sucção, isolamento) na chave e no nome — dois dutos 600×300 e 600×400 eram a MESMA chave React.
+      const secao = b.alturaDutoMm != null || b.bitolaSuccaoMm != null || b.isolamentoMm ? ` ${medidaDaBitola(b)}` : '';
+      linhas.push({ chave: `tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.alturaDutoMm ?? ''}:${b.bitolaSuccaoMm ?? ''}:${b.isolamentoMm ?? ''}:${b.itemCode ?? ''}`, familia: b.secaoCalha ? 'Calha' : b.disciplina === 'MECANICA' ? 'Duto' : 'Tubo', disciplina: b.disciplina as DisciplinaDeRede, item: `${item}${secao}${b.itemCode ? ` · ${b.itemCode}` : ''}`, dnMm: b.bitolaMm, quantidade: b.comprimentoM, unidade: 'm', detalhe: `${b.trechos} trecho(s) · comprimento real${b.secaoCalha ? ', com o caimento' : ', com prumadas e caimento'}` });
     }
     // ELÉTRICA (E0.3): fio por seção do pavimento; quadros, disjuntores e DR do quadro que está no pavimento.
     for (const c of t.porCondutor ?? []) {
@@ -349,7 +351,8 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
       const nome = p.classificacao
         ? (ROTULO_DO_PONTO_HIDRAULICO[p.classificacao as TipoDePontoHidraulico] ?? ROTULO_DO_PONTO_ELETRICO[p.classificacao as TipoDePontoEletrico] ?? p.classificacao)
         : `${p.tipo} (sem tipo)`;
-      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.itemCode ?? ''}`, familia: familiaDoPonto(p.classificacao), disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : p.disciplina === 'MECANICA' ? 'terminal de ar' : 'a classificar — escolha o tipo no painel do ponto' });
+      // quant-1.24/1.25: a especificação separa compras do mesmo tipo — e a chave também (extintores e evaporadoras repetiam a chave).
+      linhas.push({ chave: `ponto:${p.disciplina}:${p.classificacao ?? p.tipo}:${p.especificacao ?? ''}:${p.itemCode ?? ''}`, familia: familiaDoPonto(p.classificacao), disciplina: p.disciplina as DisciplinaDeRede, item: `${nome}${p.especificacao ? ` (${p.especificacao})` : ''}${p.itemCode ? ` · ${p.itemCode}` : ''}`, dnMm: null, quantidade: p.quantidade, unidade: 'un', detalhe: p.classificacao ? 'ponto classificado' : p.disciplina === 'MECANICA' ? 'terminal de ar' : 'a classificar — escolha o tipo no painel do ponto' });
     }
     for (const c of t.porConexao ?? []) {
       linhas.push({ chave: `conexao:${c.disciplina}:${c.tipo}:${c.bitolaMm}:${c.paraMm ?? ''}`, familia: 'Conexão', disciplina: c.disciplina as DisciplinaDeRede, item: `${ROTULO_DA_CONEXAO[c.tipo]}${c.paraMm != null ? ` ${c.bitolaMm}→${c.paraMm}` : ''}`, dnMm: c.bitolaMm, quantidade: c.quantidade, unidade: 'un', detalhe: `${c.derivadas} deduzida(s) dos encontros${c.manuais ? ` + ${c.manuais} manual(is)` : ''}` });

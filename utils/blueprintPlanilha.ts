@@ -26,7 +26,7 @@
  */
 
 import type { BlueprintModel, Quantitativos } from './blueprintKernel';
-import { rotuloCurto } from './blueprintKernel';
+import { medidaDaBitola, rotuloCurto } from './blueprintKernel';
 import { nomeDoTipoDeAbertura, nomeDoTipoEstrutural } from './blueprintKernel';
 import { ROTULO_DA_ORIGEM, type ArmaduraQuantificada } from './blueprintArmadura';
 import { ROTULO_DA_CONEXAO, type DisciplinaDeRede, type MaterialDeTubo, type TipoDePontoEletrico, type TipoDePontoHidraulico } from './blueprintKernel';
@@ -196,8 +196,8 @@ export function abasDoQuantitativo(
       : `${p.tipo} (sem tipo)`;
   if ((t.porBitola ?? []).length > 0 || (t.porTerminal ?? []).length > 0) {
     totais.push([], ['INSTALAÇÕES']);
-    for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` · ${b.itemCode}` : ''}` : `${nomeDaDisciplina(b.disciplina)} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), 'm']);
-    for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)} · ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, 'un']);
+    for (const b of t.porBitola ?? []) totais.push([b.secaoCalha ? `${nomeDaCalha(b.secaoCalha, b.bitolaMm)}${b.itemCode ? ` · ${b.itemCode}` : ''}` : `${nomeDaDisciplina(b.disciplina)} ${medidaDaBitola(b)}${b.itemCode ? ` · ${b.itemCode}` : ''}${rotuloDoMaterial(b.material)}`, n2(b.comprimentoM), 'm']);
+    for (const p of t.porTerminal ?? []) totais.push([`${nomeDoPonto(p)}${p.especificacao ? ` (${p.especificacao})` : ''} · ${nomeDaDisciplina(p.disciplina)}`, p.quantidade, 'un']);
     for (const c of t.porConexao ?? []) totais.push([`${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''} · ${nomeDaDisciplina(c.disciplina)}`, c.quantidade, 'un']);
     // ELÉTRICA (E0.3, quant-1.19.0): fio por seção, quadros, disjuntores e DR.
     for (const c of t.porCondutor ?? []) totais.push([`Condutor ${ROTULO_DO_CONDUTOR[c.tipo]}${c.secaoMm2 != null ? ` ${String(c.secaoMm2).replace('.', ',')} mm²` : ' (circuito sem seção)'} · Elétrica`, n2(c.comprimentoM), 'm']);

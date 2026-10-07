@@ -32,7 +32,7 @@
 import type { BudgetEntry, SinapiItem } from '../types/budget';
 import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoEletrico, TipoDePontoHidraulico } from './blueprintKernel';
 import { nomeDaCalha } from './blueprintCalhas';
-import { ROTULO_DA_CONEXAO, ROTULO_DO_CONDUTOR, materialPadraoDaDisciplina, type MaterialDeTubo } from './blueprintKernel';
+import { ROTULO_DA_CONEXAO, ROTULO_DO_CONDUTOR, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_TERMINAL_DE_AR, materialPadraoDaDisciplina, medidaDaBitola, type MaterialDeTubo, type QuantidadePorBitola } from './blueprintKernel';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import {
   nomeDoTipoDeAbertura as nomeDoTipo,
@@ -384,6 +384,35 @@ export const MEDIDAS: DefinicaoMedida[] = [
     escopo: 'INSTALACAO',
     dimensao: 'M',
     descricao: 'Metros de duto da disciplina mecânica (P2.2), uma linha por diâmetro equivalente.',
+  },
+  // E9.2 do roadmap de climatização (07/10/2026): a linha, o dreno, a chapa do duto e os equipamentos.
+  {
+    id: 'COMPRIMENTO_TUBO_FRIGORIGENA',
+    rotulo: 'Linha frigorígena (cobre)',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de linha frigorígena, uma linha por par de diâmetros (Ø líquido/sucção) e isolamento — o par corre junto e se compra junto.',
+  },
+  {
+    id: 'COMPRIMENTO_TUBO_DRENO_AC',
+    rotulo: 'Dreno de condensado',
+    escopo: 'INSTALACAO',
+    dimensao: 'M',
+    descricao: 'Metros de tubo de dreno do ar-condicionado, uma linha por diâmetro (DN).',
+  },
+  {
+    id: 'AREA_CHAPA_DUTO',
+    rotulo: 'Chapa de duto (m²)',
+    escopo: 'INSTALACAO',
+    dimensao: 'M2',
+    descricao: 'Área de chapa dos dutos rígidos (galvanizada ou painel), uma linha por seção: perímetro × comprimento real, sem perdas. O duto flexível fica na medida de comprimento.',
+  },
+  {
+    id: 'CONTAGEM_EQUIPAMENTOS_CLIMATIZACAO',
+    rotulo: 'Equipamentos de climatização',
+    escopo: 'INSTALACAO',
+    dimensao: 'UN',
+    descricao: 'Evaporadoras, condensadoras, derivadores VRF, exaustores, bombas e pontos de dreno — uma linha por tipo e especificação (capacidade em BTU/h, vazão).',
   },
   // E0.4 do roadmap de climatização (04/10/2026): até aqui o difusor entrava em
   // `CONTAGEM_PONTOS_HIDRAULICOS`, que filtrava só "não elétrica". A medida mentia pelo nome.
@@ -960,6 +989,8 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     case 'COMPRIMENTO_TUBO_ESGOTO':
     case 'COMPRIMENTO_TUBO_PLUVIAL':
     case 'COMPRIMENTO_ELETRODUTO':
+    case 'COMPRIMENTO_TUBO_FRIGORIGENA':
+    case 'COMPRIMENTO_TUBO_DRENO_AC':
     case 'COMPRIMENTO_DUTO': {
       const disciplina =
         medidaId === 'COMPRIMENTO_ELETRODUTO' ? 'ELETRICA' : medidaId === 'COMPRIMENTO_DUTO' ? 'MECANICA' : medidaId.replace('COMPRIMENTO_TUBO_', '');
@@ -976,16 +1007,51 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
           const foraDoPadrao = b.material != null && b.material !== materialPadraoDaDisciplina(b.disciplina as DisciplinaDeRede);
           const nomeDoMaterial = b.material && b.material in FICHA_DO_MATERIAL ? ` · ${FICHA_DO_MATERIAL[b.material as MaterialDeTubo].rotulo}` : '';
           // E7.1: o duto retangular é LxA (a linha de compra é outra que a do redondo de mesma largura).
-          const medida = b.alturaDutoMm != null ? `${b.bitolaMm}×${b.alturaDutoMm}` : `DN ${b.bitolaMm}`;
+          // E9.2 (climatização): a linha frigorígena é Ø líquido/sucção, e o isolamento vem no fim.
+          const medida = medidaDaBitola(b);
           return { b, foraDoPadrao, rotulo: `${nome} ${medida}${b.itemCode ? ` · ${b.itemCode}` : ''}${nomeDoMaterial}` };
         })
         .filter(({ rotulo }) => combina(rotulo))
         .map(({ b, foraDoPadrao, rotulo }) => ({
-          ref: `${b.disciplina}-dn${b.bitolaMm}${b.alturaDutoMm != null ? `x${b.alturaDutoMm}` : ''}${b.itemCode ? `-${b.itemCode}` : ''}${foraDoPadrao ? `-${b.material}` : ''}`,
+          ref: `${b.disciplina}-dn${b.bitolaMm}${sufixoDaBitola(b)}${b.itemCode ? `-${b.itemCode}` : ''}${foraDoPadrao ? `-${b.material}` : ''}`,
           rotulo,
           valor: b.comprimentoM,
           formula: `Σ comprimento real dos ${b.trechos} trecho(s) DN ${b.bitolaMm}`,
           variaveis: { disciplina: b.disciplina, bitolaMm: b.bitolaMm, trechos: b.trechos, comprimentoM: b.comprimentoM },
+        }));
+    }
+
+    case 'AREA_CHAPA_DUTO': {
+      return (quant.totais.porBitola ?? [])
+        .filter((b) => b.disciplina === 'MECANICA' && b.material !== 'DUTO_FLEXIVEL' && b.comprimentoM > 0)
+        .map((b) => ({ b, rotulo: `Chapa de duto ${medidaDaBitola(b)}${b.itemCode ? ` · ${b.itemCode}` : ''}${b.material && b.material in FICHA_DO_MATERIAL ? ` · ${FICHA_DO_MATERIAL[b.material as MaterialDeTubo].rotulo}` : ''}` }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ b, rotulo }) => {
+          const perimetroM = perimetroDoDutoM(b);
+          return {
+            ref: `chapa-${b.material ?? ''}-${b.bitolaMm}${sufixoDaBitola(b)}${b.itemCode ? `-${b.itemCode}` : ''}`,
+            rotulo,
+            valor: perimetroM * b.comprimentoM,
+            formula: b.alturaDutoMm != null ? `2 × (${b.bitolaMm} + ${b.alturaDutoMm}) mm × ${b.comprimentoM.toFixed(2)} m` : `π × ${b.bitolaMm} mm × ${b.comprimentoM.toFixed(2)} m`,
+            variaveis: { larguraMm: b.bitolaMm, alturaMm: b.alturaDutoMm ?? 0, perimetroM, comprimentoM: b.comprimentoM, trechos: b.trechos },
+          };
+        });
+    }
+
+    case 'CONTAGEM_EQUIPAMENTOS_CLIMATIZACAO': {
+      return (quant.totais.porTerminal ?? [])
+        .filter((t) => ehEquipamentoDeClimatizacao(t.classificacao) && t.quantidade > 0)
+        .map((t) => ({
+          t,
+          rotulo: `${ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? t.tipo}${t.especificacao ? ` · ${t.especificacao}` : ''}${t.itemCode ? ` · ${t.itemCode}` : ''}`,
+        }))
+        .filter(({ rotulo }) => combina(rotulo))
+        .map(({ t, rotulo }) => ({
+          ref: `${t.disciplina}-${t.classificacao}${t.especificacao ? `-${t.especificacao}` : ''}${t.itemCode ? `-${t.itemCode}` : ''}`,
+          rotulo,
+          valor: t.quantidade,
+          formula: 'contagem dos equipamentos do tipo e da especificação',
+          variaveis: { disciplina: t.disciplina, classificacao: t.classificacao!, quantidade: t.quantidade },
         }));
     }
 
@@ -1097,11 +1163,13 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
     // E0.4 (04/10/2026): o terminal de ar tem medida própria abaixo — aqui só as redes hidráulicas.
     case 'CONTAGEM_TERMINAIS_DE_AR': {
       return (quant.totais.porTerminal ?? [])
-        .filter((t) => t.disciplina === 'MECANICA' && t.quantidade > 0)
-        .map((t) => ({ t, rotulo: `${t.tipo} · ${ROTULO_DA_DISCIPLINA.MECANICA}${t.itemCode ? ` · ${t.itemCode}` : ''}` }))
+        // E9.2 (climatização): o equipamento da mecânica (evaporadora dutada, exaustor) tem a medida dele.
+        .filter((t) => t.disciplina === 'MECANICA' && !ehEquipamentoDeClimatizacao(t.classificacao) && t.quantidade > 0)
+        .map((t) => ({ t, rotulo: `${t.tipo}${t.especificacao ? ` · ${t.especificacao}` : ''} · ${ROTULO_DA_DISCIPLINA.MECANICA}${t.itemCode ? ` · ${t.itemCode}` : ''}` }))
         .filter(({ rotulo }) => combina(rotulo))
         .map(({ t, rotulo }) => ({
-          ref: `${t.disciplina}-${t.tipo}${t.itemCode ? `-${t.itemCode}` : ''}`,
+          // A especificação (vazão, medida) entra no `ref` só quando existe: a linha antiga não muda de identidade.
+          ref: `${t.disciplina}-${t.tipo}${t.especificacao ? `-${t.especificacao}` : ''}${t.itemCode ? `-${t.itemCode}` : ''}`,
           rotulo,
           valor: t.quantidade,
           formula: 'contagem de terminais de ar pelo nome',
@@ -1111,7 +1179,8 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
 
     case 'CONTAGEM_PONTOS_HIDRAULICOS': {
       return (quant.totais.porTerminal ?? [])
-        .filter((t) => t.disciplina !== 'ELETRICA' && t.disciplina !== 'MECANICA' && t.quantidade > 0)
+        // E9.2 (climatização): a evaporadora, a condensadora e o dreno do AC não são "ponto hidráulico".
+        .filter((t) => t.disciplina !== 'ELETRICA' && t.disciplina !== 'MECANICA' && t.disciplina !== 'FRIGORIGENA' && t.disciplina !== 'DRENO_AC' && !ehDaClimatizacao(t.classificacao) && t.quantidade > 0)
         .map((t) => ({
           t,
           rotulo: `${t.classificacao ? (ROTULO_DO_PONTO_HIDRAULICO[t.classificacao as TipoDePontoHidraulico] ?? t.tipo) : t.tipo} · ${ROTULO_DA_DISCIPLINA[t.disciplina as DisciplinaDeRede] ?? t.disciplina}${t.itemCode ? ` · ${t.itemCode}` : ''}`,
@@ -1606,8 +1675,19 @@ export function gerarLancamentosDeGuardaCorpos(
  * ponto com código vira linha UN, eletroduto com código vira linha M.
  */
 // E9.1 (incêndio): INCENDIO entra — tubo e peça de incêndio com código viram linha do orçamento.
-const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'ELETRICA', 'INCENDIO']);
-const grupoDaRede = (d: string) => (d === 'ELETRICA' ? 'elétricas' : d === 'INCENDIO' ? 'de incêndio' : 'hidrossanitárias');
+// E9.2 (climatização, 07/10/2026): a linha frigorígena, o dreno e a mecânica entram — equipamento, tubo e duto com código viram linha.
+const REDES_HIDROSSANITARIAS = new Set(['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'ELETRICA', 'INCENDIO', 'FRIGORIGENA', 'DRENO_AC', 'MECANICA']);
+const REDES_DA_CLIMATIZACAO = new Set(['FRIGORIGENA', 'DRENO_AC', 'MECANICA']);
+const grupoDaRede = (d: string) => (d === 'ELETRICA' ? 'elétricas' : d === 'INCENDIO' ? 'de incêndio' : REDES_DA_CLIMATIZACAO.has(d) ? 'de climatização' : 'hidrossanitárias');
+
+/** O pedaço da identidade da linha que só existe quando a seção declara — vazio no tubo de sempre (o id antigo não muda). */
+const sufixoDaBitola = (b: Pick<QuantidadePorBitola, 'alturaDutoMm' | 'bitolaSuccaoMm' | 'isolamentoMm'>) =>
+  `${b.alturaDutoMm != null ? `x${b.alturaDutoMm}` : ''}${b.bitolaSuccaoMm != null ? `s${b.bitolaSuccaoMm}` : ''}${b.isolamentoMm ? `i${b.isolamentoMm}` : ''}`;
+/** O perímetro da chapa, m: 2(L + A) no retangular, πD no redondo. */
+export const perimetroDoDutoM = (b: Pick<QuantidadePorBitola, 'bitolaMm' | 'alturaDutoMm'>) => (b.alturaDutoMm != null ? (2 * (b.bitolaMm + b.alturaDutoMm)) / 1000 : (Math.PI * b.bitolaMm) / 1000);
+const ehDaClimatizacao = (c: string | null) => !!c && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(c);
+/** O equipamento (não o terminal de ar): evaporadora, condensadora, derivador, exaustor, bomba e ponto de dreno… */
+export const ehEquipamentoDeClimatizacao = (c: string | null) => ehDaClimatizacao(c) && !(TIPOS_DE_TERMINAL_DE_AR as readonly string[]).includes(c!);
 
 /**
  * Lançamentos por PEÇA das instalações hidrossanitárias (E8.2 do roadmap
@@ -1696,7 +1776,7 @@ export function gerarLancamentosDeInstalacoes(
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
   const procedencia =
-    `Gerado das peças de instalação (hidrossanitárias e elétricas) com código da planta "${ctx.studyName}", versão ${ctx.revision} ` +
+    `Gerado das peças de instalação (hidrossanitárias, elétricas, de incêndio e de climatização) com código da planta "${ctx.studyName}", versão ${ctx.revision} ` +
     `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, kernel ${quant.kernelVersion || '—'}.`;
   const nomeDaRede = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
   const conferir = (chave: string, itemCode: string, aceita: Dimensao, oQue: string): SinapiItem | null => {
@@ -1775,8 +1855,9 @@ export function gerarLancamentosDeInstalacoes(
   }
   for (const b of quant.totais.porBitola ?? []) {
     if (!b.itemCode || !REDES_HIDROSSANITARIAS.has(b.disciplina) || b.comprimentoM <= 0) continue;
-    const nome = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : b.disciplina === 'ELETRICA' ? `Eletroduto Ø${b.bitolaMm}` : `${nomeDaRede(b.disciplina)} DN ${b.bitolaMm}`;
-    const chave = `instalacao:tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}:${b.itemCode}`;
+    const nome = b.secaoCalha ? nomeDaCalha(b.secaoCalha, b.bitolaMm) : b.disciplina === 'ELETRICA' ? `Eletroduto Ø${b.bitolaMm}` : `${nomeDaRede(b.disciplina)} ${medidaDaBitola(b)}`;
+    // E9.2: a seção (L×A, sucção, isolamento) entra na chave só quando existe — o id do tubo de sempre não muda.
+    const chave = `instalacao:tubo:${b.disciplina}:${b.material ?? ''}:${b.secaoCalha ?? ''}:${b.bitolaMm}${sufixoDaBitola(b)}:${b.itemCode}`;
     const item = conferir(chave, b.itemCode, 'M', `O tubo "${nome}"`);
     if (!item) continue;
     entries.push({
@@ -1784,7 +1865,7 @@ export function gerarLancamentosDeInstalacoes(
       sinapiItem: item,
       quantity: b.comprimentoM,
       phase: '',
-      group: b.disciplina === 'ELETRICA' ? 'Instalações elétricas — eletrodutos' : `Instalações ${grupoDaRede(b.disciplina)} — ${b.secaoCalha ? 'calhas' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
+      group: b.disciplina === 'ELETRICA' ? 'Instalações elétricas — eletrodutos' : `Instalações ${grupoDaRede(b.disciplina)} — ${b.secaoCalha ? 'calhas' : b.disciplina === 'MECANICA' ? 'dutos' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
       discipline: 'Planta Inteligente',
       notes: procedencia,
       calculationMemory: {

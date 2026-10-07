@@ -5802,6 +5802,8 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     await user.click(botao(/^Memoriais e ART$/));
     const gaveta = await screen.findByTestId('tarefa-memoriais-climatizacao');
     expect(within(gaveta).getByTestId('memoriais-climatizacao')).toBeInTheDocument();
+    // E9.3: a lista de materiais na mesma gaveta, com o equipamento pela capacidade.
+    expect(within(gaveta).getByTestId('materiais-climatizacao')).toHaveTextContent(/Evaporadora hi-wall — 12\.000 BTU\/h/);
     const emissao = within(gaveta).getByTestId('climatizacao-executivo');
     const emitir = within(emissao).getByRole('button', { name: /Emitir projeto executivo de climatização \(ART\)/ });
     expect(emitir).toBeDisabled();

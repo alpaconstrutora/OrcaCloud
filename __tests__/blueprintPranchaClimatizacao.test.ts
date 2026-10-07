@@ -53,6 +53,8 @@ describe('climatização E8.1 · o conjunto e a planta', () => {
       ['CLIMATIZACAO', 'Climatização — Superior'],
       ['LEGENDA_CLIMATIZACAO', 'Climatização — quadro-resumo e legenda'],
       ['DETALHES_CLIMATIZACAO', 'Climatização — isométrico e detalhes típicos'],
+      // E9.3: a lista de materiais fecha o bloco.
+      ['MATERIAIS_CLIMATIZACAO', 'Lista de materiais — climatização'],
     ]);
     expect(planejarConjunto(m, so({})).some((p) => p.tipo.includes('CLIMATIZACAO'))).toBe(false);
     // Desenho sem climatização: a opção marcada não cria folha vazia.

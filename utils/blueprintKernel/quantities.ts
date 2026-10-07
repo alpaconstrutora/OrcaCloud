@@ -20,7 +20,7 @@
 
 import type { AcabamentosDoAmbiente, BlueprintModel, Circuito, LigacaoDoCircuito, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
-import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho } from './model';
+import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho, TIPOS_DE_TERMINAL_DE_AR } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
 import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
@@ -200,7 +200,14 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // agente × carga × capacidade, placa pelo código, sprinkler por K × posição,
   // luminária de emergência pela autonomia) e ela entra na chave do grupo. Antes
   // o extintor de pó ABC 4 kg e o de CO₂ 6 kg somavam numa linha só.
-  version: 'quant-1.24.0',
+  // quant-1.25.0 (07/10/2026, E9.1 do roadmap de climatização): a linha
+  // frigorígena se compra pelos DOIS diâmetros e o isolamento — `trechos` e
+  // `porBitola` ganharam `bitolaSuccaoMm` e `isolamentoMm` (omitidos quando o
+  // trecho não declara; entram na chave do grupo); a especificação da peça
+  // ganhou a CAPACIDADE (BTU/h), a VAZÃO (m³/h) e, no terminal de ar, a MEDIDA
+  // declarada. Antes a evaporadora de 9.000 e a de 12.000 BTU/h somavam numa
+  // linha, e o par 6/10 com o 6/13.
+  version: 'quant-1.25.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -649,6 +656,10 @@ export interface QuantidadeTrecho {
   secaoCalha: string | null;
   /** E7.1: a altura do duto retangular (a largura é a bitola). Ausente no redondo e fora da mecânica. */
   alturaDutoMm?: number;
+  /** quant-1.25.0: o diâmetro da SUCÇÃO da linha frigorígena (a bitola é o líquido). Ausente quando não declarado. */
+  bitolaSuccaoMm?: number;
+  /** quant-1.25.0: o isolamento térmico declarado, mm. Ausente = sem isolamento. */
+  isolamentoMm?: number;
   /** A projeção em planta. Zero na prumada. */
   comprimentoPlantaM: number;
   /** O que se compra: a distância real entre as duas pontas. */
@@ -745,6 +756,10 @@ export interface QuantidadePorBitola {
   bitolaMm: number;
   /** E7.1: o duto retangular (a largura é a bitola). Ausente no redondo e fora da mecânica. */
   alturaDutoMm?: number;
+  /** quant-1.25.0: a sucção da linha frigorígena (a bitola é o líquido). Ausente quando não declarada. */
+  bitolaSuccaoMm?: number;
+  /** quant-1.25.0: o isolamento, mm. Ausente = sem isolamento. */
+  isolamentoMm?: number;
   itemCode: string | null;
   comprimentoM: number;
   trechos: number;
@@ -1383,10 +1398,20 @@ function areaOcupadaNoAmbiente(s: Structural, ring: Point[]): number {
  * usar a MESMA conta — agrupar de outro jeito lá faria a soma dos pavimentos
  * não fechar com o total, calada.
  */
+/**
+ * quant-1.25.0: a MEDIDA de compra de uma linha de `porBitola` — L×A no duto
+ * retangular, Ø líquido/sucção na linha frigorígena, DN no resto; o isolamento
+ * no fim. Uma só, para a tela, a planilha e o orçamento dizerem a mesma coisa.
+ */
+export function medidaDaBitola(b: Pick<QuantidadePorBitola, 'bitolaMm' | 'alturaDutoMm' | 'bitolaSuccaoMm' | 'isolamentoMm'>): string {
+  const base = b.alturaDutoMm != null ? `${b.bitolaMm}×${b.alturaDutoMm}` : b.bitolaSuccaoMm != null ? `Ø${b.bitolaMm}/${b.bitolaSuccaoMm}` : `DN ${b.bitolaMm}`;
+  return b.isolamentoMm ? `${base} · isol. ${b.isolamentoMm} mm` : base;
+}
+
 export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): QuantidadePorBitola[] {
   const porBitolaMapa = new Map<string, QuantidadePorBitola>();
   for (const t of trechos) {
-    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.secaoCalha ?? ''}\n${t.bitolaMm}\n${t.alturaDutoMm ?? ''}\n${t.itemCode ?? ''}`;
+    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.secaoCalha ?? ''}\n${t.bitolaMm}\n${t.alturaDutoMm ?? ''}\n${t.bitolaSuccaoMm ?? ''}\n${t.isolamentoMm ?? ''}\n${t.itemCode ?? ''}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
       atual.comprimentoM += t.comprimentoM;
@@ -1398,6 +1423,8 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
         secaoCalha: t.secaoCalha ?? null,
         bitolaMm: t.bitolaMm,
         ...(t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {}),
+        ...(t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {}),
+        ...(t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {}),
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
         trechos: 1,
@@ -1405,7 +1432,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || (x.secaoCalha ?? '').localeCompare(y.secaoCalha ?? '') || x.bitolaMm - y.bitolaMm || (x.alturaDutoMm ?? 0) - (y.alturaDutoMm ?? 0),
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || (x.secaoCalha ?? '').localeCompare(y.secaoCalha ?? '') || x.bitolaMm - y.bitolaMm || (x.alturaDutoMm ?? 0) - (y.alturaDutoMm ?? 0) || (x.bitolaSuccaoMm ?? 0) - (y.bitolaSuccaoMm ?? 0) || (x.isolamentoMm ?? 0) - (y.isolamentoMm ?? 0),
   );
 }
 
@@ -1424,8 +1451,17 @@ export function especificacaoDoTerminal(t: Terminal): string | null {
   if (t.fatorK != null) partes.push(`K${t.fatorK}`);
   if (t.posicaoSprinkler) partes.push(t.posicaoSprinkler);
   if (t.autonomiaMin != null) partes.push(`${t.autonomiaMin} min`);
+  // quant-1.25.0 (climatização): capacidade, vazão e — no terminal de ar — a medida declarada.
+  if (t.capacidadeBtuH != null) partes.push(`${milhar(t.capacidadeBtuH)} BTU/h`);
+  if (t.vazaoM3h != null) partes.push(`${milhar(t.vazaoM3h)} m³/h`);
+  if (t.tipoHidraulico && (TIPOS_DE_TERMINAL_DE_AR as readonly string[]).includes(t.tipoHidraulico) && t.larguraMm != null) {
+    partes.push(t.profundidadeMm != null ? `${t.larguraMm}×${t.profundidadeMm} mm` : `${t.larguraMm} mm`);
+  }
   return partes.length ? partes.join(' · ') : null;
 }
+
+/** Milhar com ponto, sem depender do `Intl` da máquina (o quantitativo é cache por versão). */
+const milhar = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 export function agruparPorTerminal(terminais: readonly Terminal[]): QuantidadePorTerminal[] {
   const porTerminalMapa = new Map<string, QuantidadePorTerminal>();
@@ -1998,6 +2034,9 @@ export function computeQuantities(
       secaoCalha: t.secaoCalha ?? null,
       // E7.1 (05/10/2026): o duto retangular — omitido no redondo (a saída dos desenhos antigos não muda).
       ...(t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {}),
+      // quant-1.25.0: a sucção e o isolamento — omitidos quando o trecho não declara.
+      ...(t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {}),
+      ...(t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {}),
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? '',

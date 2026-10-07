@@ -30,6 +30,8 @@ import { calculoDoEstudo, desenharFolhaDePressoes } from './blueprintPlanilhaDeP
 import { desenharIncendio, desenharLegendaDeIncendio } from './blueprintPranchaIncendio';
 import { desenharClimatizacao, desenharLegendaDeClimatizacao } from './blueprintPranchaClimatizacao';
 import { desenharDetalhesDeClimatizacao, detalhesDeClimatizacao, isometricoDeClimatizacao } from './blueprintDetalhesClimatizacao';
+import { desenharListaDeMateriaisClimatizacao, materiaisDeClimatizacao } from './blueprintMateriaisClimatizacao';
+import { HIPOTESES_CLIMATIZACAO_PADRAO } from './blueprintClimatizacao';
 import { classificarEdificacao, exigenciasDaEdificacao } from './blueprintIncendioClassificacao';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { colunasDoModelo, desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
@@ -379,6 +381,12 @@ export interface OpcoesExportacao {
   numerosDeClimatizacao?: ReadonlyMap<string, { numero: string }>;
   /** As camadas de climatização no DXF (PLANTA-CLIMA*). */
   climatizacaoNoDxf?: boolean;
+  /**
+   * E9.3: as premissas de climatização do ESTUDO — a lista de materiais tira
+   * delas o gás (a faixa da linha), os suportes, a sobra do cabo e a perda da
+   * chapa. Ausentes = as premissas padrão, e a folha diz.
+   */
+  hipotesesDeClimatizacao?: import('./blueprintClimatizacao').HipotesesClimatizacao;
   /** E8.2: os trechos do caminho crítico, destacados na planta de incêndio. */
   caminhoCriticoDeIncendio?: readonly string[];
   /**
@@ -1110,6 +1118,16 @@ export function desenharFolhaDeDetalhesDeClimatizacao(d: Desenhista, model: Blue
   if (iso) desenharIsometrico(d, iso, x0, topo + 10, w - 3, alturaDeCima);
   else d.texto(x0, topo + 14, 'Sem linha frigorígena, dreno ou duto no desenho.', 2.2, '#555555');
   if (temDetalhe) desenharDetalhesDeClimatizacao(d, model, x0, topo + 10 + alturaDeCima + 4, w, alturaDosDetalhes);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/** E9.3 da climatização: a folha da LISTA DE MATERIAIS — total, por sistema e por pavimento. */
+export function desenharFolhaDaListaDeMateriaisClimatizacao(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  d.texto(x0, topo + 6, 'LISTA DE MATERIAIS — CLIMATIZAÇÃO', 3.2);
+  if (!opcoes.hipotesesDeClimatizacao) d.texto(x0, topo + 10, 'Premissas padrão (o estudo não as enviou): suportes, cabo, gás e chapa pelos valores típicos.', 1.8, '#555555');
+  desenharListaDeMateriaisClimatizacao(d, materiaisDeClimatizacao(model, opcoes.hipotesesDeClimatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO), x0, topo + 14, enq.utilLarguraMm, enq.utilAlturaMm - 18);
   desenharCarimbo(d, opcoes, enq);
 }
 

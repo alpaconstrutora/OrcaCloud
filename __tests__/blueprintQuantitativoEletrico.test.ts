@@ -53,7 +53,7 @@ function casa(): BlueprintModel {
 
 describe('quantitativo elétrico · quant-1.19.0', () => {
   it('a política subiu de versão — fio, quadro, disjuntor e DR entraram no payload', () => {
-    expect(POLITICA_PADRAO.version).toBe('quant-1.24.0');
+    expect(POLITICA_PADRAO.version).toBe('quant-1.25.0');
   });
 
   it('repartirCondutores: base por ligação, excedente no primeiro, falta nos últimos — com o índice do circuito', () => {

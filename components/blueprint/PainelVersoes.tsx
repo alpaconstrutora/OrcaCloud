@@ -67,9 +67,12 @@ export default function PainelVersoes({
   hipotesesDeArmadura,
   pranchasIniciais,
   hipotesesDeIncendio,
+  hipotesesDeClimatizacao,
 }: {
   /** E8.1: as premissas de incêndio do estudo — o quadro-resumo da folha de legenda de incêndio sai delas. */
   hipotesesDeIncendio?: import('../../utils/blueprintIncendioClassificacao').HipotesesIncendio;
+  /** E9.3: as premissas de climatização do estudo — a lista de materiais (folha e aba) sai delas. */
+  hipotesesDeClimatizacao?: import('../../utils/blueprintClimatizacao').HipotesesClimatizacao;
   study: BlueprintStudy;
   /**
    * Pranchas já marcadas ao abrir (17/09/2026): o botão "Exportar a vista
@@ -396,6 +399,7 @@ export default function PainelVersoes({
       // E8.1 da climatização: as camadas PLANTA-CLIMA-* quando a prancha "Climatização" está marcada.
       climatizacaoNoDxf: pranchas.includes('climatizacao') || undefined,
       hipotesesDeIncendio,
+      hipotesesDeClimatizacao,
       hipotesesEletricas,
       armadura: hipotesesDeArmadura,
       esquemaIfc,

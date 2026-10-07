@@ -529,6 +529,51 @@ export function hipotesesDoArDaColuna(raw: unknown): HipotesesDoAr {
   return saida;
 }
 
+// ─── E9 (07/10/2026): os MATERIAIS — o que a compra soma ao desenho ──────────
+
+/**
+ * O que a lista de materiais da climatização (E9.1/E9.3) acrescenta ao que o
+ * desenho mede: o espaçamento dos suportes, a sobra do cabo de interligação e
+ * a perda da chapa do duto. Valores típicos de obra — HIPÓTESE, editáveis.
+ */
+export interface HipotesesDosMateriais {
+  /** Um suporte (abraçadeira/perfilado) a cada N m de linha frigorígena, de dreno e de duto. */
+  espacamentoSuporteLinhaM: number;
+  espacamentoSuporteDrenoM: number;
+  espacamentoSuporteDutoM: number;
+  /** Sobra do cabo de interligação por sistema (as duas pontas e a volta no equipamento), m. */
+  folgaDoCaboM: number;
+  /** Perda da chapa do duto (recortes, emendas, reforços), %. */
+  perdaDaChapaPct: number;
+}
+
+export const HIPOTESES_DOS_MATERIAIS_PADRAO: HipotesesDosMateriais = {
+  espacamentoSuporteLinhaM: 1.5,
+  espacamentoSuporteDrenoM: 1,
+  espacamentoSuporteDutoM: 2.5,
+  folgaDoCaboM: 1.5,
+  perdaDaChapaPct: 10,
+};
+
+export const LIMITES_DOS_MATERIAIS: Record<keyof HipotesesDosMateriais, { min: number; max: number }> = {
+  espacamentoSuporteLinhaM: { min: 0.3, max: 6 },
+  espacamentoSuporteDrenoM: { min: 0.3, max: 6 },
+  espacamentoSuporteDutoM: { min: 0.5, max: 6 },
+  folgaDoCaboM: { min: 0, max: 10 },
+  perdaDaChapaPct: { min: 0, max: 50 },
+};
+
+export const FONTE_DOS_MATERIAIS =
+  'Espaçamento de suportes, sobra do cabo de interligação e perda de chapa são valores típicos de obra — HIPÓTESE. CONFERIR com o fabricante do equipamento e o padrão da instaladora.';
+
+export function hipotesesDosMateriaisDaColuna(raw: unknown): HipotesesDosMateriais {
+  const r = objeto(raw);
+  const p = HIPOTESES_DOS_MATERIAIS_PADRAO;
+  const saida: HipotesesDosMateriais = { ...p };
+  for (const k of Object.keys(LIMITES_DOS_MATERIAIS) as (keyof HipotesesDosMateriais)[]) saida[k] = numeroNaFaixa(r[k], LIMITES_DOS_MATERIAIS[k], p[k]);
+  return saida;
+}
+
 // ─── O conjunto e o leitor da coluna ─────────────────────────────────────────
 
 export interface HipotesesClimatizacao {
@@ -547,6 +592,8 @@ export interface HipotesesClimatizacao {
   vrf: HipotesesDoVrf;
   /** E7: a rede de ar (dimensionamento, perda de carga, renovação e exaustão). */
   ar: HipotesesDoAr;
+  /** E9: suportes, sobra do cabo e perda da chapa da lista de materiais. */
+  materiais: HipotesesDosMateriais;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
@@ -559,6 +606,7 @@ export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   linha: HIPOTESES_DA_LINHA_PADRAO,
   vrf: HIPOTESES_DO_VRF_PADRAO,
   ar: HIPOTESES_DO_AR_PADRAO,
+  materiais: HIPOTESES_DOS_MATERIAIS_PADRAO,
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -612,6 +660,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     linha: hipotesesDaLinhaDaColuna(r.linha),
     vrf: hipotesesDoVrfDaColuna(r.vrf),
     ar: hipotesesDoArDaColuna(r.ar),
+    materiais: hipotesesDosMateriaisDaColuna(r.materiais),
   };
 }
 

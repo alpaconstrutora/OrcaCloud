@@ -14,7 +14,8 @@ import { ROTULO_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import { ROTULO_DA_DISCIPLINA } from '../../utils/blueprintRede';
 import { apagarComposicao, listarComposicoes, salvarComposicao, type ComposicaoDaOrganizacao } from '../../services/blueprintComposicaoService';
 
-const REDES: DisciplinaDeRede[] = ['INCENDIO', 'AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
+// E9.2 (climatização, 07/10/2026): o kit do split (evaporadora/condensadora), o do dreno e o do terminal de ar.
+const REDES: DisciplinaDeRede[] = ['INCENDIO', 'AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL', 'FRIGORIGENA', 'DRENO_AC', 'MECANICA'];
 
 interface ItemEditavel {
   codigo: string;

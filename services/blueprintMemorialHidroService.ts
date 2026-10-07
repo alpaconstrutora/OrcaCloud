@@ -29,10 +29,14 @@ export function paraWinAnsi(s: string): string {
     // E5.3: o memorial elétrico usa Ω (ρ em Ω·mm²/m) e ≤ ≥ (IB ≤ In ≤ Iz, Icn ≥ Ik) — viravam "?".
     .replace(/Ω/g, 'ohm')
     .replace(/ρ/g, 'rho')
+    // E8.3 (climatização): a condutividade λ da memória de cálculo da carga térmica.
+    .replace(/λ/g, 'lambda')
     .replace(/≤/g, '<=')
     .replace(/≥/g, '>=')
     // E8.4 (incêndio): CO₂ do extintor.
     .replace(/₂/g, '2')
+    // E8.3 (climatização): o aviso de CONFERIR abria com ⚠ e saía "? CONFERIR" no PDF.
+    .replace(/\u26A0\uFE0F?/g, '(!)')
     .replace(/[^\u0000-ÿ–—‘’“”•…€]/g, '?');
 }
 

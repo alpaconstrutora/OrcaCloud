@@ -2051,3 +2051,74 @@ repetida até uma rodada completar; o script ficou no scratchpad da sessão.
 - Fica para a prova no app real: inserir uma evaporadora dutada e difusores, abrir "Dutos", lançar a
   espinha, ver os dutos retangulares no 3D (largura deitada) e o rótulo LxA na planta, e um banheiro
   sem janela acusado.
+
+### Etapa 8 — Documentação · 07/10/2026 (frente `clima-e8`, base 16f0c72d)
+
+**8.1 Prancha.** `utils/blueprintPranchaClimatizacao.ts`: uma planta por pavimento que TEM linha, dreno,
+duto ou peça (`temClimatizacaoNoPavimento`) — linha, dreno e duto na mesma folha, cada um com a cor da
+disciplina; o duto (e o tubo grosso) bifilar na largura real a partir de 0,8 mm de papel; rótulo por
+disciplina (`Ø líquido/sucção` na linha — mm inteiros, a convenção da E5: 6 = 1/4", 13 = 1/2" —,
+`DN` no dreno, `L×A` ou `Ø` no duto); prumada como círculo, com rótulo quando passa de 1 m; cada peça
+com o símbolo de prancha da E3, o NÚMERO do desenho inteiro (EV-1, CD-2, DF-3 — não renumera por
+pavimento) e a TAG da capacidade (BTU/h) ou da vazão (m³/h) quando declaradas. Folha de legenda com o
+quadro-resumo por pavimento (evaporadoras, condensadoras, capacidade instalada DECLARADA — "capacidade
+não declarada" em vermelho quando falta) e os símbolos que existem, com a quantidade.
+`TipoDePrancha` + `CLIMATIZACAO`/`LEGENDA_CLIMATIZACAO`/`DETALHES_CLIMATIZACAO`,
+`InclusaoNoConjunto.climatizacao` (ausente = falso, templates salvos não mudam), prancha avulsa
+"Climatização" na aba Versões (planta + folha de legenda, PDF e PNG), camadas DXF `PLANTA-CLIMA-LINHA`,
+`-DRENO`, `-DUTO` e `-TEXTO` (a camada sai da cor do traço; o preenchimento branco dos símbolos não vai
+para o CAD) e a linha de cobertura do DXF. Com climatização no conjunto, o corte sai com as
+instalações (o duto retangular da E7 já era cortado na meia-altura).
+
+**Achado do harness, corrigido:** o split nasce com evaporadora e condensadora coladas, uma de cada lado
+da parede — as duas tags saíam uma por cima da outra. As etiquetas agora fogem umas das outras, dos
+símbolos e do nome/área do ambiente (`posicaoLivre`: seis candidatos em volta da peça, quatro em volta
+do meio do trecho; sem lugar livre, desce até sair). Teste de regressão que falha sem o desvio.
+
+**8.2 Isométrico e detalhes.** `utils/blueprintDetalhesClimatizacao.ts`: `isometricoDeClimatizacao` —
+a rede INTEIRA, todos os pavimentos, pela mesma projeção e desenho do incêndio (`RedeDaPrancha` +
+`CLIMATIZACAO`; o segmento ganhou `rotulo` opcional para L×A e Ø líquido/sucção; o resto continua
+`øN`); detalhes típicos SÓ do que existe (instalação da evaporadora, suporte da condensadora com a maior
+capacidade do desenho, dreno com sifão, ligação do difusor com plenum), todos "sem escala — medidas:
+CONFERIR com o fabricante".
+
+**8.3 Memoriais.** O memorial de cálculo ganha, com o desenho, as seções 5–8 que existirem:
+equipamentos e terminais (número, peça, pavimento, capacidade, vazão, cota), linha e dreno (faixa como
+HIPÓTESE, comprimento/desnível contra o máximo, Ø encontrado × pedido, isolamento, gás adicional,
+curvas, declividade do dreno trecho a trecho), VRF (taxa, comprimentos, desníveis contra os limites) e
+rede de ar (vazão, perda crítica × pressão disponível, seção/velocidade/atrito por trecho, renovação e
+exaustão) — cada uma com a MESMA conferência da gaveta. O descritivo ganha "Instalações" em prosa. Os
+memoriais saíram da gaveta de carga térmica para **Mecânica › Documentos** ("Memoriais e ART").
+**PDF sem "?":** o `⚠` do CONFERIR virava "?" — agora "(!)"; e o teste que varre o texto achou mais
+um: a condutividade **λ** da memória da carga virava "?" — agora "lambda".
+
+**8.4 Emissão com ART.** `utils/blueprintClimatizacaoExecutivo.ts` no molde do incêndio: responsável e
+ART/RRT; as verificações saem das conferências das gavetas (carga, equipamento × carga — sem o item do
+catálogo, que é da organização —, linha e dreno, VRF, rede de ar): FALTA não atende, AVISO atende com o
+aviso escrito, NÃO AVALIADO não entra; sem ambiente climatizado não emite. **Hash da base = desenho +
+premissas + materiais da biblioteca + cidade do contexto** (o que a carga lê de fora do desenho).
+Capa (responsável, base, verificações, declaração com CONFERIR NA NORMA ou HIPÓTESE) + os dois
+memoriais; ida e volta em texto sem perda. Migration `aplicar_20271007000010_blueprint_climatizacao_executivo.sql`
+(CHECK + `CLIMATIZACAO`, idempotente, só alarga) **aplicada com o OK do usuário** e conferida no banco
+(`pg_get_constraintdef` com as cinco disciplinas). `DisciplinaExecutiva` e a linha do tipo alargadas.
+
+**Prova.** `blueprintPranchaClimatizacao.test.ts` (12: conjunto só com pavimentos que têm
+climatização e sem folha vazia; rótulos das três redes; cada folha com o seu pavimento, os números do
+desenho inteiro e as tags; avulsa; etiquetas que não se cobrem; quadro-resumo com e sem capacidade;
+legenda só do que existe; desenho vazio; isométrico com todos os pavimentos e a elevação somada;
+detalhes só do que existe; folha de detalhes; DXF com as quatro camadas só quando pedido),
+`blueprintMemorialClimatizacao.test.ts` (+3: seções 5–6 com a cadeia E4→E5, descritivo com e sem
+instalação, nenhum caractere vira "?" no WinAnsi), `blueprintClimatizacaoExecutivo.test.ts` (5: sem
+responsável não emite; grupos das gavetas; desenho vazio; linha apagada = FALTA trava; AVISO atende;
+hash muda com desenho, premissa, material e cidade; capa + memoriais com ida e volta e sem "?"), editor
+"Mecânica › Memoriais e ART" (memorial e emissão travada com o motivo no botão). **Harness**
+`docs/spikes/prancha-climatizacao/` no Edge: o desenho montado pela CADEIA (carga → split E4 → linha e
+dreno E5; dutada + 4 difusores → espinha E7), as 4 folhas sem erro de página. **PDF lido**
+(`pdftotext`): o conjunto e os dois memoriais com Ø, ×, ³, · e "(!)" certos — os únicos "?" são
+interrogações do próprio texto. DXF: entidades nas quatro camadas.
+
+**Não entrou (dito):** as cotas da arquitetura passam por cima da condensadora que fica fora da
+parede (a cadeia de cotas é da planta; vale também para o incêndio); no isométrico, peças muito
+próximas ainda podem ter os rótulos encostados (o desenho é o compartilhado com hidro/incêndio — mexer
+nele muda as pranchas deles); a prova da emissão no app real (emitir num estudo descartável e ver uma
+premissa invalidar) fica para o passeio com login, junto das E5–E7.

@@ -13,6 +13,7 @@
  * template é da ORGANIZAÇÃO (JSONB sanitizado em `templateDePranchaDaColuna`),
  * como o template de vista (E8.2) e o tipo de parede.
  */
+import { temClimatizacaoNoPavimento } from './blueprintPranchaClimatizacao';
 import { temMateriaisDeIncendio } from './blueprintListaDeMateriaisIncendio';
 import { temIncendioNoPavimento, type FamiliaDeIncendio } from './blueprintPranchaIncendio';
 
@@ -67,6 +68,8 @@ export interface InclusaoNoConjunto {
   eletricaSeparada?: boolean;
   /** E8.1 (incêndio): as plantas de hidrantes, sprinklers e preventivo por pavimento + a folha de legenda e quadro-resumo. Ausente → falso. */
   incendio?: boolean;
+  /** E8 (climatização, 07/10/2026): a planta de climatização por pavimento + a legenda/quadro-resumo e a folha de isométrico e detalhes. Ausente → falso. */
+  climatizacao?: boolean;
 }
 export interface TemplateDePrancha {
   papel: PapelId;
@@ -156,7 +159,7 @@ export interface Recorte {
   maxY: number;
 }
 
-export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO' | 'DETALHES_INCENDIO' | 'MATERIAIS_INCENDIO';
+export type TipoDePrancha = 'INDICE' | 'PLANTA' | 'HUMANIZADA' | 'ELETRICA' | 'QUADRO_DE_CARGAS' | 'UNIFILAR' | 'ESQUEMA_ELETRICO' | 'MATERIAIS_ELETRICA' | 'CORTE' | 'ELEVACAO' | 'AMPLIACAO' | 'TABELAS' | 'TOPOGRAFICA' | 'INCRA' | 'HIDRAULICA' | 'SANITARIA' | 'DETALHES_HIDRO' | 'ESQUEMA_HIDRO' | 'INCENDIO' | 'LEGENDA_INCENDIO' | 'PRESSOES_INCENDIO' | 'DETALHES_INCENDIO' | 'MATERIAIS_INCENDIO' | 'CLIMATIZACAO' | 'LEGENDA_CLIMATIZACAO' | 'DETALHES_CLIMATIZACAO';
 
 export interface PranchaPlanejada {
   /** "A-01". */
@@ -288,6 +291,19 @@ export function planejarConjunto(model: BlueprintModel, t: TemplateDePrancha): P
     }
     // E9.1: a lista de materiais de incêndio, quando há tubo ou peça.
     if (temMateriaisDeIncendio(model)) numerar({ tipo: 'MATERIAIS_INCENDIO', titulo: 'Lista de materiais — incêndio', denominador: 0 });
+  }
+  // CLIMATIZAÇÃO (E8 da climatização, 07/10/2026): uma planta por pavimento que TEM linha, dreno, duto ou peça; a legenda; o isométrico e os detalhes.
+  if (t.incluir.climatizacao) {
+    let alguma = false;
+    for (const n of niveis) {
+      if (!temClimatizacaoNoPavimento(model, n.id)) continue;
+      numerar({ tipo: 'CLIMATIZACAO', titulo: `Climatização — ${n.name}`, denominador: t.denominadorPlanta, levelId: n.id });
+      alguma = true;
+    }
+    if (alguma) {
+      numerar({ tipo: 'LEGENDA_CLIMATIZACAO', titulo: 'Climatização — quadro-resumo e legenda', denominador: 0 });
+      numerar({ tipo: 'DETALHES_CLIMATIZACAO', titulo: 'Climatização — isométrico e detalhes típicos', denominador: 0 });
+    }
   }
   if (t.incluir.cortes) {
     for (const c of model.sections ?? []) numerar({ tipo: 'CORTE', titulo: `Corte ${c.rotulo}`, denominador: t.denominadorCortes, corteId: c.id });

@@ -22,7 +22,7 @@ function fail(context: string, error: { message: string } | null): never {
  * de 13/09/2026): a elétrica reusa o fluxo da topografia — `topografia_*`
  * ficam nulos nela, e `hash_da_base` amarra desenho + hipóteses.
  */
-export type DisciplinaExecutiva = 'TERRAPLENAGEM' | 'ELETRICA' | 'HIDROSSANITARIA' | 'INCENDIO';
+export type DisciplinaExecutiva = 'TERRAPLENAGEM' | 'ELETRICA' | 'HIDROSSANITARIA' | 'INCENDIO' | 'CLIMATIZACAO';
 
 export interface DadosDaEmissao {
   topografia_id: string | null;

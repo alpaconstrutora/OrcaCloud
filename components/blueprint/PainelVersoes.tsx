@@ -393,6 +393,8 @@ export default function PainelVersoes({
       redesNoDxf: redesNoDxf.length ? redesNoDxf : undefined,
       // E8.1: a camada de incêndio no DXF quando a prancha "Incêndio" está marcada; e as premissas, para o quadro-resumo.
       incendioNoDxf: pranchas.includes('incendio') || undefined,
+      // E8.1 da climatização: as camadas PLANTA-CLIMA-* quando a prancha "Climatização" está marcada.
+      climatizacaoNoDxf: pranchas.includes('climatizacao') || undefined,
       hipotesesDeIncendio,
       hipotesesEletricas,
       armadura: hipotesesDeArmadura,
@@ -478,6 +480,8 @@ export default function PainelVersoes({
     // E2.1: a planta com a rede de água / de esgoto + a folha de legenda hidrossanitária.
     { id: 'hidraulica', rotulo: 'Hidráulica' },
     { id: 'incendio', rotulo: 'Incêndio' },
+    // E8.1 da climatização: linha, dreno e dutos + a folha de legenda e quadro-resumo.
+    { id: 'climatizacao', rotulo: 'Climatização' },
     { id: 'sanitaria', rotulo: 'Esgoto' },
     { id: 'frente', rotulo: 'Frente' },
     { id: 'fundos', rotulo: 'Fundos' },
@@ -495,7 +499,7 @@ export default function PainelVersoes({
       return PRANCHAS.map((p) => p.id).filter((p) => proximo.includes(p));
     });
   const elevacoesSelecionadas = pranchas.filter(
-    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada' | 'hidraulica' | 'sanitaria' | 'incendio'> => !ehPlantaDaPrancha(p),
+    (p): p is Exclude<PranchaExport, 'planta' | 'eletrica' | 'humanizada' | 'hidraulica' | 'sanitaria' | 'incendio' | 'climatizacao'> => !ehPlantaDaPrancha(p),
   );
   /** As "plantas" (técnica, humanizada, elétrica, hidráulica, esgoto) dependem da escala caber. */
   const comPlanta = pranchas.some(ehPlantaDaPrancha);

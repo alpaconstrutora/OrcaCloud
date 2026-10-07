@@ -5781,6 +5781,34 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     expect(within(gaveta).getByRole('button', { name: /^Aceitar \(\d+\)$/ })).toBeInTheDocument();
     expect(within(gaveta).getByRole('button', { name: 'Ajustar seções' })).toBeDisabled();
   }, 90000);
+
+  /**
+   * CLIMATIZAÇÃO E8.3/E8.4 (07/10/2026): Mecânica › Documentos — os memoriais
+   * com as instalações (a evaporadora entra com o número do desenho) e a
+   * emissão com ART, travada enquanto falta o responsável.
+   */
+  it('Mecânica › Memoriais e ART: o memorial lista o equipamento e a emissão fica travada sem o responsável', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    m = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'Hi-wall', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: k.point(3000, 200), cotaMm: 2200, capacidadeBtuH: 12000 } as never).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^Memoriais e ART$/));
+    const gaveta = await screen.findByTestId('tarefa-memoriais-climatizacao');
+    expect(within(gaveta).getByTestId('memoriais-climatizacao')).toBeInTheDocument();
+    const emissao = within(gaveta).getByTestId('climatizacao-executivo');
+    const emitir = within(emissao).getByRole('button', { name: /Emitir projeto executivo de climatização \(ART\)/ });
+    expect(emitir).toBeDisabled();
+    // O botão desligado diz por quê.
+    expect(emitir.getAttribute('title')).toBeTruthy();
+    expect(within(emissao).getByTestId('hidro-verificacoes')).toHaveTextContent(/Responsável técnico identificado/);
+  }, 90000);
 });
 
 /**

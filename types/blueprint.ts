@@ -127,7 +127,7 @@ export interface BlueprintProjetoExecutivoRow {
    * TERRAPLENAGEM (topografia) ou ELETRICA (NBR 5410). Um rascunho por
    * estudo POR disciplina.
    */
-  disciplina: 'TERRAPLENAGEM' | 'ELETRICA' | 'HIDROSSANITARIA' | 'INCENDIO';
+  disciplina: 'TERRAPLENAGEM' | 'ELETRICA' | 'HIDROSSANITARIA' | 'INCENDIO' | 'CLIMATIZACAO';
   responsavel: ResponsavelTecnico;
   /** Só a terraplenagem usa; a elétrica grava `{}`. */
   sondagem: Sondagem;

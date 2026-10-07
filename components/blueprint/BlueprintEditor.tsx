@@ -266,6 +266,7 @@ import { analisarRedesDeAr, comandosDeDimensionamento, conferenciaDaRedeDeAr, pl
 import PainelRedeDeAr from './PainelRedeDeAr';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
+import { ROTULO_DO_GRUPO_DE_CLIMATIZACAO, hashDaBaseClimatizacao, memorialExecutivoClimatizacao, verificacoesClimatizacao } from '../../utils/blueprintClimatizacaoExecutivo';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
 import PainelKitsDeInsercao from './PainelKitsDeInsercao';
@@ -1188,6 +1189,8 @@ const ROTULO_DA_TAREFA = {
   vrf: 'Sistema VRF',
   // DUTOS E VENTILAÇÃO (05/10/2026, E7): vazão, perda de carga, balanceamento, renovação, exaustão e o traçado no forro.
   redeDeAr: 'Dutos e ventilação',
+  // DOCUMENTOS DA CLIMATIZAÇÃO (07/10/2026, E8.3/E8.4): os memoriais com as instalações e a emissão com ART.
+  memoriaisClimatizacao: 'Memoriais e emissão — climatização',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -1363,6 +1366,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'pluvial',
   'memoriaisHidro',
   'matriz',
+  'memoriaisClimatizacao',
 ]);
 
 export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo }: Props) {
@@ -3131,12 +3135,60 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   }, [tarefa, levelId, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.ar]);
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
+  /** E8.3/E8.4: a carga do ESTUDO inteiro para os documentos — só com a tarefa de documentos aberta. */
+  const nomeDoNivelDoEstudo = useCallback((id: string) => editor.model.levels.find((l) => l.id === id)?.name ?? id, [editor.model.levels]);
+  const cargaParaDocumentos = useMemo(
+    () => (tarefa === 'memoriaisClimatizacao' ? cargaTermicaDoEstudo(editor.model, climatizacaoDoEstudo.hipoteses, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
+    [tarefa, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name],
+  );
   const memoriaisClimatizacao = useMemo(() => {
-    if (!cargaDoNivel) return null;
-    const niveis = cargaTermicaDoEstudo(editor.model, climatizacaoDoEstudo.hipoteses, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null });
-    const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString(), nomeDoNivel: (id: string) => editor.model.levels.find((l) => l.id === id)?.name ?? id };
-    return { calculo: memorialDeCalculoClimatizacao(niveis, climatizacaoDoEstudo.hipoteses, ctx), descritivo: memorialDescritivoClimatizacao(niveis, climatizacaoDoEstudo.hipoteses, ctx) };
-  }, [cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name, study.name]);
+    if (!cargaParaDocumentos) return null;
+    const ctx = { nomeDoEstudo: study.name, geradoEm: new Date().toISOString(), nomeDoNivel: nomeDoNivelDoEstudo };
+    // E8.3: com o desenho, as instalações (equipamentos, linha e dreno, VRF, rede de ar) entram nos dois.
+    return { calculo: memorialDeCalculoClimatizacao(cargaParaDocumentos, climatizacaoDoEstudo.hipoteses, ctx, editor.model), descritivo: memorialDescritivoClimatizacao(cargaParaDocumentos, climatizacaoDoEstudo.hipoteses, ctx, editor.model) };
+  }, [cargaParaDocumentos, editor.model, climatizacaoDoEstudo.hipoteses, study.name, nomeDoNivelDoEstudo]);
+  /** E8.4: a emissão com ART — as verificações saem das conferências das gavetas; o hash amarra desenho + premissas + materiais + cidade. */
+  const executivoClimatizacao = useBlueprintProjetoExecutivo(study.id, study.organization_id, 'CLIMATIZACAO');
+  const resultadoClimatizacao = useMemo(
+    () => (cargaParaDocumentos ? verificacoesClimatizacao(editor.model, cargaParaDocumentos, climatizacaoDoEstudo.hipoteses, executivoClimatizacao.responsavel, nomeDoNivelDoEstudo) : null),
+    [cargaParaDocumentos, editor.model, climatizacaoDoEstudo.hipoteses, executivoClimatizacao.responsavel, nomeDoNivelDoEstudo],
+  );
+  const hashClimatizacao = useMemo(
+    () => (tarefa === 'memoriaisClimatizacao' ? hashDaBaseClimatizacao(editor.model, climatizacaoDoEstudo.hipoteses, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
+    [tarefa, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name],
+  );
+  const emissaoClimatizacaoValida = useMemo<EmissaoExecutiva | null>(() => {
+    const row = hashClimatizacao && executivoClimatizacao.emitidos.find((r) => r.hash_da_base === hashClimatizacao.base && r.emitido_em);
+    if (!row) return null;
+    return { artNumero: row.responsavel.artNumero, responsavel: row.responsavel.nome, conselho: row.responsavel.conselho, registro: row.responsavel.registro, emitidoEm: row.emitido_em! };
+  }, [executivoClimatizacao.emitidos, hashClimatizacao]);
+  const emitirClimatizacao = useCallback(async () => {
+    if (!resultadoClimatizacao?.podeEmitir || !hashClimatizacao || !cargaParaDocumentos) return;
+    const emitidoEm = new Date().toISOString();
+    const blocos = memorialExecutivoClimatizacao(editor.model, cargaParaDocumentos, climatizacaoDoEstudo.hipoteses, executivoClimatizacao.responsavel, resultadoClimatizacao, {
+      nomeDoEstudo: study.name,
+      hashDoDesenho: hashClimatizacao.desenho,
+      hashDaBase: hashClimatizacao.base,
+      emitidoEm,
+      nomeDoNivel: nomeDoNivelDoEstudo,
+    });
+    await executivoClimatizacao.emitir({
+      topografia_id: null,
+      topografia_versao: null,
+      topografia_hash: null,
+      hash_da_base: hashClimatizacao.base,
+      verificacoes: resultadoClimatizacao.verificacoes,
+      memorial: linhasDoMemorial(blocos).join('\n'),
+      emitido_em: emitidoEm,
+    });
+  }, [resultadoClimatizacao, hashClimatizacao, cargaParaDocumentos, editor.model, climatizacaoDoEstudo.hipoteses, executivoClimatizacao, study.name, nomeDoNivelDoEstudo]);
+  const baixarMemorialEmitidoClimatizacao = useCallback(
+    async (row: BlueprintProjetoExecutivoRow, formato: FormatoDoMemorial) => {
+      const nome = `${study.name} - projeto de climatização ${row.responsavel.conselho === 'CAU' ? 'RRT' : 'ART'} ${row.responsavel.artNumero}`;
+      baixarArtefatos(await artefatosDoMemorial(blocosDasLinhas((row.memorial ?? '').split('\n')), nome, nome, formato));
+    },
+    [study.name],
+  );
   const baixarMemorialClimatizacao = useCallback(
     async (qual: QualMemorial, formato: FormatoDoMemorial) => {
       if (!memoriaisClimatizacao) return;
@@ -11890,6 +11942,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Dutos e ventilação: vazão de cada terminal (declarada ou derivada do ambiente), perda de carga e balanceamento, ajuste das seções pelo método escolhido, traçado em espinha no forro, renovação e exaustão (banheiro, cozinha e garagem sem janela pedem exaustor)"
               />
             </GrupoDoRibbon>
+            {/* CLIMATIZAÇÃO E8.3/E8.4 (07/10/2026): memoriais com as instalações e a emissão com ART. */}
+            <GrupoDoRibbon rotulo="Documentos">
+              <BotaoDoRibbon
+                icone={FileText}
+                rotulo="Memoriais e ART"
+                ativo={tarefaAberta === 'memoriaisClimatizacao'}
+                onClick={() => alternarTarefa('memoriaisClimatizacao')}
+                ajuda="Memorial de cálculo e descritivo da climatização — carga térmica, equipamentos, linha e dreno, VRF e rede de ar, os mesmos números das gavetas — em PDF ou DOCX; e a emissão do projeto com ART, que só habilita com todas as verificações atendidas"
+              />
+            </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
                 icone={AlertTriangle}
@@ -14996,6 +15058,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'linhaFrigorigena' && <Snowflake className="h-5 w-5 text-violet-600" />}
               {tarefaAberta === 'vrf' && <Snowflake className="h-5 w-5 text-indigo-600" />}
               {tarefaAberta === 'redeDeAr' && <Snowflake className="h-5 w-5 text-teal-600" />}
+              {tarefaAberta === 'memoriaisClimatizacao' && <FileText className="h-5 w-5 text-teal-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15065,6 +15128,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Encadeia os motores de incêndio a partir da classificação: só as medidas EXIGIDAS, cada uma sobre o resultado da anterior, numa prévia e num lote só. O relatório diz o que o gerador não decidiu — premissa faltando, valor de norma a conferir, bomba e reserva, ambiente sem solução — e cada verificação que ainda falta.'}
             {tarefaAberta === 'memoriaisIncendio' &&
               'O memorial de cálculo e o descritivo de segurança contra incêndio — classificação e exigências, planilha de pressões, bomba, reserva, saídas, rota de fuga e preventivos —, gerados do desenho e das premissas do estudo, os mesmos números das gavetas. A emissão com ART só habilita com todas as verificações atendidas.'}
+            {tarefaAberta === 'memoriaisClimatizacao' &&
+              'O memorial de cálculo e o descritivo da climatização — carga térmica, equipamentos, linha e dreno, VRF e rede de ar —, gerados do desenho e das premissas do estudo, os mesmos números das gavetas. A emissão com ART só habilita com todas as verificações atendidas e deixa de valer se o desenho, as premissas, os materiais ou a cidade mudarem.'}
             {tarefaAberta === 'memoriaisHidro' &&
               'O memorial de cálculo e o descritivo das instalações de água e esgoto, gerados do desenho e das premissas das gavetas de água, pressão e esgoto — os mesmos números das marcas e da verificação. Só entram as seções dos sistemas que existem.'}
             {tarefaAberta === 'agua' && (
@@ -15516,23 +15581,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 estudo={cargaDoEstudo}
                 onSelecionar={selecionar}
               />
-              {/* E2.4: memoriais de cálculo e descritivo — prévia e PDF/DOCX pelo mesmo painel do hidro/incêndio. */}
-              {memoriaisClimatizacao && (
-                <div className="mt-4 border-t border-slate-200 pt-3">
-                  <PainelMemoriaisHidro
-                    calculo={memoriaisClimatizacao.calculo}
-                    descritivo={memoriaisClimatizacao.descritivo}
-                    onBaixar={baixarMemorialClimatizacao}
-                    textos={{
-                      calculo: 'Condições e hipóteses, cada ambiente climatizado com as parcelas e a memória, totais por pavimento e a conferência.',
-                      descritivo: 'Objeto, normas e método, condições, ambientes com teto/piso e o que fica a cargo do responsável.',
-                      vazio: 'Nenhum ambiente climatizado no desenho.',
-                      tituloVazio: 'Sem ambiente climatizado',
-                      testId: 'memoriais-climatizacao',
-                    }}
-                  />
-                </div>
-              )}
+              {/* E8.3: os memoriais (cálculo e descritivo) moram em Mecânica › Documentos, com as instalações e a emissão com ART. */}
+              <p className="mt-4 border-t border-slate-200 pt-3 text-xs text-slate-500">Memoriais de cálculo e descritivo e a emissão com ART: Mecânica › Documentos.</p>
+            </div>
+          )}
+
+          {tarefaAberta === 'memoriaisClimatizacao' && memoriaisClimatizacao && (
+            <div className="space-y-3" data-testid="tarefa-memoriais-climatizacao">
+              <PainelMemoriaisHidro
+                calculo={memoriaisClimatizacao.calculo}
+                descritivo={memoriaisClimatizacao.descritivo}
+                onBaixar={baixarMemorialClimatizacao}
+                textos={{
+                  calculo: 'Condições e hipóteses, a carga de cada ambiente climatizado com as parcelas, os equipamentos com o número do desenho, a linha e o dreno, o VRF e a rede de ar — com as conferências.',
+                  descritivo: 'Objeto, normas e método, condições, ambientes, o que o desenho instala e o que fica a cargo do responsável.',
+                  vazio: 'Nenhum ambiente climatizado no desenho.',
+                  tituloVazio: 'Sem ambiente climatizado',
+                  testId: 'memoriais-climatizacao',
+                }}
+              />
+              <PainelHidroExecutivo
+                textos={{ rotuloDoGrupo: ROTULO_DO_GRUPO_DE_CLIMATIZACAO, conferencia: 'a conferência (carga térmica, equipamentos, linha e dreno, VRF e rede de ar)', disciplina: 'de climatização', testId: 'climatizacao-executivo' }}
+                e={{
+                  responsavel: executivoClimatizacao.responsavel,
+                  onResponsavel: executivoClimatizacao.setResponsavel,
+                  resultado: resultadoClimatizacao,
+                  emitidos: executivoClimatizacao.emitidos,
+                  emissaoValida: emissaoClimatizacaoValida,
+                  hashDaBaseAtual: hashClimatizacao?.base ?? '',
+                  onEmitir: () => void emitirClimatizacao(),
+                  emitindo: executivoClimatizacao.emitindo,
+                  erro: executivoClimatizacao.erro,
+                  onBaixarMemorial: (row, formato) => void baixarMemorialEmitidoClimatizacao(row, formato),
+                  persistenciaIndisponivel: executivoClimatizacao.persistenciaIndisponivel,
+                }}
+              />
             </div>
           )}
 

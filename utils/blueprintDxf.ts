@@ -32,6 +32,8 @@
  */
 
 import { desenharIncendio } from './blueprintPranchaIncendio';
+import { desenharClimatizacao } from './blueprintPranchaClimatizacao';
+import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { nomesDasColunas } from './blueprintEsquemaVertical';
 import { desenharHidrossanitaria, type RedeDaPrancha } from './blueprintPranchaHidro';
 import { type Anotacao,
@@ -158,6 +160,11 @@ export const CAMADAS = {
   /** E8.1: a rede e as peças de incêndio, e os números/DN. */
   INCENDIO: 'PLANTA-INCENDIO',
   INCENDIO_TEXTO: 'PLANTA-INCENDIO-TEXTO',
+  /** E8.1 da climatização (07/10/2026): linha frigorígena, dreno e dutos, cada um na sua camada; peças e rótulos em -TEXTO. */
+  CLIMA_LINHA: 'PLANTA-CLIMA-LINHA',
+  CLIMA_DRENO: 'PLANTA-CLIMA-DRENO',
+  CLIMA_DUTO: 'PLANTA-CLIMA-DUTO',
+  CLIMA_TEXTO: 'PLANTA-CLIMA-TEXTO',
   ESGOTO: 'PLANTA-ESGOTO',
   ESGOTO_TEXTO: 'PLANTA-ESGOTO-TEXTO',
   /**
@@ -211,6 +218,10 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.AGUA_TEXTO]: 5,
   [CAMADAS.INCENDIO]: 30,
   [CAMADAS.INCENDIO_TEXTO]: 30,
+  [CAMADAS.CLIMA_LINHA]: 6, // magenta — o roxo da linha no canvas
+  [CAMADAS.CLIMA_DRENO]: 4, // ciano
+  [CAMADAS.CLIMA_DUTO]: 3, // verde
+  [CAMADAS.CLIMA_TEXTO]: 7,
   [CAMADAS.ESGOTO]: 32, // marrom — a convenção de esgoto em prancha
   [CAMADAS.ESGOTO_TEXTO]: 32,
   [CAMADAS.UNIFILAR]: 7,
@@ -528,6 +539,8 @@ export interface OpcoesDxf {
   redes?: RedeDaPrancha[];
   /** E8.1: o incêndio inteiro (rede, hidrantes, sprinklers, preventivo) em `PLANTA-INCENDIO*`. */
   incendio?: boolean;
+  /** E8.1 da climatização: linha, dreno e dutos em `PLANTA-CLIMA-*`. */
+  climatizacao?: boolean;
 }
 
 /**
@@ -915,6 +928,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   if (o.eletrica) dxf += entidadesDeEletrica(model, o.hipotesesEletricas);
   for (const rede of o.redes ?? []) dxf += entidadesDaRedeHidro(model, rede);
   if (o.incendio) dxf += entidadesDeIncendio(model);
+  if (o.climatizacao) dxf += entidadesDeClimatizacao(model);
 
   // Elevações, uma após a outra à direita da planta. O passo entre elas é a
   // largura da mais larga mais uma folga, para não se sobreporem.
@@ -1105,6 +1119,37 @@ function entidadesDeIncendio(model: BlueprintModel): string {
   return saida;
 }
 
+/**
+ * E8.1 da climatização: o MESMO desenho da prancha num Desenhista que escreve
+ * DXF. A camada sai da COR do traço (a cor é a da disciplina): linha, dreno e
+ * duto separados, para quem plota desligar um deles.
+ */
+function entidadesDeClimatizacao(model: BlueprintModel): string {
+  let saida = '';
+  const FATOR = 50;
+  const real = (x: number, y: number) => ({ x: x * FATOR, y: -y * FATOR });
+  const camada = (cor?: string) =>
+    cor === COR_DA_DISCIPLINA.FRIGORIGENA ? CAMADAS.CLIMA_LINHA : cor === COR_DA_DISCIPLINA.DRENO_AC ? CAMADAS.CLIMA_DRENO : cor === COR_DA_DISCIPLINA.MECANICA ? CAMADAS.CLIMA_DUTO : CAMADAS.CLIMA_TEXTO;
+  const d: Desenhista = {
+    linha: (x1, y1, x2, y2, estilo) => {
+      saida += linha(camada(estilo?.cor), real(x1, y1), real(x2, y2));
+    },
+    poligono: (pontos, cor) => {
+      // O branco é o "apagar o papel" por baixo do símbolo — no CAD não há o que apagar.
+      if (cor.toLowerCase() === '#ffffff') return;
+      saida += polilinha(camada(cor), pontos.map((p) => real(p.x, p.y)));
+    },
+    texto: (x, y, t, alturaMm) => {
+      saida += texto(CAMADAS.CLIMA_TEXTO, real(x, y), t, alturaMm * FATOR);
+    },
+    retangulo: (x, y, w, h, estilo) => {
+      saida += polilinha(camada(estilo?.cor), [real(x, y), real(x + w, y), real(x + w, y + h), real(x, y + h)]);
+    },
+  };
+  desenharClimatizacao(d, model, { px: (x) => x / FATOR, py: (y) => -y / FATOR }, FATOR, null);
+  return saida;
+}
+
 function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: number; maxX: number; maxY: number } | null {
   const xs: number[] = [];
   const ys: number[] = [];
@@ -1177,6 +1222,7 @@ function entidadesDeCota(model: BlueprintModel): string {
 export const COBERTURA_DXF = [
   'Hidrossanitário (quando pedido): tubos na largura real (bifilar), conexões, caixas e pontos em PLANTA-AGUA e PLANTA-ESGOTO; ø, i % e siglas em PLANTA-AGUA-TEXTO e PLANTA-ESGOTO-TEXTO, no tamanho de papel a 1:50. A cota do tubo não está na geometria 2D — só no IFC.',
   'Elétrica (quando pedida): símbolos NBR 5444 e eletrodutos em PLANTA-ELETRICA-ILUMINACAO (luminárias, interruptores e os eletrodutos só deles) e PLANTA-ELETRICA-FORCA (tomadas, TUE, ligação direta, equipamentos, dados, entrada) — o comum (quadros, caixas, eletroduto de circuitos dos dois tipos) em PLANTA-ELETRICA —, rótulos (sigla · circuito, Ø, #seção, VA) nas camadas -TEXTO de cada uma; os símbolos têm tamanho de papel a 1:50. O quadro de cargas e a legenda saem como TEXT abaixo da planta; o diagrama unifilar (em árvore quando há hierarquia de quadros) em UNIFILAR / UNIFILAR-TEXTO, à direita da planta.',
+  'Climatização (quando pedida): linha frigorígena em PLANTA-CLIMA-LINHA, dreno em PLANTA-CLIMA-DRENO e dutos (bifilar na largura real quando cabe) em PLANTA-CLIMA-DUTO; números, Ø líquido/sucção, DN, L×A e capacidade em PLANTA-CLIMA-TEXTO. A cota não está na geometria 2D — só no IFC.',
   'Unidade: MILÍMETRO, declarada em $INSUNITS. O desenho está em 1:1 — a escala é da prancha.',
   'Paredes: sólido fechado por parede, NÃO APARADO nas junções (os retângulos se sobrepõem).',
   'Eixos: em camada própria, para reeditar as paredes.',

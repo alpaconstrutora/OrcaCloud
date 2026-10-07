@@ -7,6 +7,13 @@ import { applyBatch, applyCommand, emptyModel, point, type Command } from '../ut
 import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from '../utils/blueprintClimatizacao';
 import { cargaTermicaDoEstudo } from '../utils/blueprintCargaTermica';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../utils/blueprintMemorialClimatizacao';
+import { cargaTermicaDoNivel } from '../utils/blueprintCargaTermica';
+import { HIPOTESES_DE_SELECAO_PADRAO } from '../utils/blueprintClimatizacao';
+import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
+import { modelosDoCatalogo, selecaoDoNivel } from '../utils/blueprintSelecaoClimatizacao';
+import { planejarEquipamentosSplit } from '../utils/blueprintPosicaoSplit';
+import { planejarLinhasFrigorigenas } from '../utils/blueprintLinhaFrigorigena';
+import { paraWinAnsi } from '../services/blueprintMemorialHidroService';
 
 function casa() {
   const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
@@ -56,5 +63,53 @@ describe('memorial de carga térmica', () => {
     const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const t = texto(memorialDeCalculoClimatizacao(cargaTermicaDoEstudo(a, hip), hip, ctx));
     expect(t).toMatch(/Nenhum ambiente climatizado no desenho/);
+  });
+});
+
+describe('E8.3 · o memorial com as instalações', () => {
+  const catalogo = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
+  /** A casa com o split escolhido pela carga (E4) e a linha e o dreno lançados (E5). */
+  function casaInstalada() {
+    let m = casa();
+    const t = m.levels[0].id;
+    const carga = cargaTermicaDoNivel(m, hip, t);
+    m = applyBatch(m, planejarEquipamentosSplit(m, selecaoDoNivel(m, carga, HIPOTESES_DE_SELECAO_PADRAO, catalogo), carga, HIPOTESES_DE_SELECAO_PADRAO).comandos).model;
+    m = applyBatch(m, planejarLinhasFrigorigenas(m, t, hip.linha).comandos).model;
+    return m;
+  }
+
+  it('⚠️ PRONTO QUANDO: com o desenho, o cálculo ganha equipamentos e linha/dreno (5 e 6), com os números do desenho e a faixa como HIPÓTESE', () => {
+    const m = casaInstalada();
+    const niveis = cargaTermicaDoEstudo(m, hip);
+    const b = memorialDeCalculoClimatizacao(niveis, hip, ctx, m);
+    const secoes = b.filter((x) => x.tipo === 'secao').map((x) => x.texto);
+    expect(secoes).toEqual(['1. Condições de projeto', '2. Hipóteses do motor', '3. Carga por ambiente', '4. Resumo e conferência', '5. Equipamentos e terminais', '6. Linha frigorígena e dreno de condensado']);
+    const t = texto(b);
+    expect(t).toMatch(/EV-1 \| Evaporadora/);
+    expect(t).toMatch(/CD-1 \| Condensadora/);
+    expect(t).toMatch(/HIPÓTESE/);
+    expect(t).toMatch(/Conferência da linha — Térreo/);
+    expect(t).toMatch(/Dreno: \d+ trecho\(s\)/);
+    // Sem o desenho, o memorial é o de antes (a E2 não muda).
+    expect(memorialDeCalculoClimatizacao(niveis, hip, ctx).filter((x) => x.tipo === 'secao')).toHaveLength(4);
+  });
+
+  it('o descritivo conta o que o desenho instala; sem nada instalado, diz que cobre só a carga', () => {
+    const m = casaInstalada();
+    const t = texto(memorialDescritivoClimatizacao(cargaTermicaDoEstudo(m, hip), hip, ctx, m));
+    expect(t).toMatch(/4\. Instalações/);
+    expect(t).toMatch(/1 evaporadora\(s\) \([\d.]+ BTU\/h declarados\), 1 condensadora\(s\) split e 0 VRF; [\d,]+ m de linha frigorígena/);
+    expect(t).toMatch(/5\. O que fica a cargo do responsável/);
+    const vazio = casa();
+    expect(texto(memorialDescritivoClimatizacao(cargaTermicaDoEstudo(vazio, hip), hip, ctx, vazio))).toMatch(/cobre só a carga térmica/);
+  });
+
+  it('no PDF (WinAnsi) nenhum caractere vira "?" — o ⚠ do CONFERIR virava', () => {
+    const m = casaInstalada();
+    const niveis = cargaTermicaDoEstudo(m, hip);
+    const txt = [texto(memorialDeCalculoClimatizacao(niveis, hip, ctx, m)), texto(memorialDescritivoClimatizacao(niveis, hip, ctx, m))].join(' ');
+    expect(txt).toMatch(/⚠ CONFERIR/);
+    expect(paraWinAnsi('⚠ CONFERIR')).toBe('(!) CONFERIR');
+    expect([...new Set(txt)].filter((ch) => ch !== '?' && paraWinAnsi(ch).includes('?'))).toEqual([]);
   });
 });

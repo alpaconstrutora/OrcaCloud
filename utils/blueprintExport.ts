@@ -28,6 +28,8 @@ import { desenharListaDeMateriaisIncendio } from './blueprintListaDeMateriaisInc
 import { desenharDetalhesDeIncendio, detalhesDoModelo, isometricoDeIncendio } from './blueprintDetalhesIncendio';
 import { calculoDoEstudo, desenharFolhaDePressoes } from './blueprintPlanilhaDePressoes';
 import { desenharIncendio, desenharLegendaDeIncendio } from './blueprintPranchaIncendio';
+import { desenharClimatizacao, desenharLegendaDeClimatizacao } from './blueprintPranchaClimatizacao';
+import { desenharDetalhesDeClimatizacao, detalhesDeClimatizacao, isometricoDeClimatizacao } from './blueprintDetalhesClimatizacao';
 import { classificarEdificacao, exigenciasDaEdificacao } from './blueprintIncendioClassificacao';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { colunasDoModelo, desenharEsquemaVertical, nomesDasColunas } from './blueprintEsquemaVertical';
@@ -368,6 +370,15 @@ export interface OpcoesExportacao {
   numerosDeIncendio?: ReadonlyMap<string, { numero: string }>;
   /** E8.1: a camada de incêndio no DXF (PLANTA-INCENDIO*). */
   incendioNoDxf?: boolean;
+  /**
+   * PRANCHA DE CLIMATIZAÇÃO (E8.1 da climatização, 07/10/2026): linha
+   * frigorígena, dreno e dutos por cima da planta, com símbolo, número e tag.
+   */
+  climatizacao?: boolean;
+  /** A numeração de climatização do desenho INTEIRO (EV-1 não renumera por pavimento). */
+  numerosDeClimatizacao?: ReadonlyMap<string, { numero: string }>;
+  /** As camadas de climatização no DXF (PLANTA-CLIMA*). */
+  climatizacaoNoDxf?: boolean;
   /** E8.2: os trechos do caminho crítico, destacados na planta de incêndio. */
   caminhoCriticoDeIncendio?: readonly string[];
   /**
@@ -640,6 +651,7 @@ export function desenharPlanta(
   }
   if (opcoes.hidrossanitaria) desenharHidrossanitaria(d, model, { px, py }, opcoes.hidrossanitaria, opcoes.denominador, null, opcoes.nomesDasColunas ?? nomesDasColunas(model));
   if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio, new Set(opcoes.caminhoCriticoDeIncendio ?? []));
+  if (opcoes.climatizacao) desenharClimatizacao(d, model, { px, py }, opcoes.denominador, null, opcoes.numerosDeClimatizacao);
 
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
@@ -1064,6 +1076,40 @@ export function desenharFolhaDeDetalhesDeIncendio(d: Desenhista, model: Blueprin
   else d.texto(x0, topo + 14, 'Sem tubulação de incêndio no desenho.', 2.2, '#555555');
   if (temColuna) desenharEsquemaVertical(d, model, ['INCENDIO'], x0 + larguraDoIso + 2, topo + 10, w - larguraDoIso - 2, alturaDeCima);
   if (temDetalhe) desenharDetalhesDeIncendio(d, model, opcoes.hipotesesDeIncendio?.hidraulica, x0, topo + 10 + alturaDeCima + 4, w, alturaDosDetalhes);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * A FOLHA DE LEGENDA DE CLIMATIZAÇÃO (E8.1 da climatização, 07/10/2026): o
+ * quadro-resumo (equipamentos e capacidade declarada por pavimento), as linhas
+ * das três redes e os símbolos que existem no desenho, com a quantidade.
+ */
+export function desenharFolhaDeClimatizacao(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const y0 = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2) + 6;
+  d.texto(x0, y0, 'CLIMATIZAÇÃO — QUADRO-RESUMO E LEGENDA', 3.2);
+  desenharLegendaDeClimatizacao(d, model, x0, y0 + 9, enq.utilLarguraMm);
+  desenharCarimbo(d, opcoes, enq);
+}
+
+/**
+ * E8.2 da climatização: a FOLHA DE DETALHES — o isométrico da rede inteira
+ * (linha, dreno e dutos, todos os pavimentos) e, embaixo, os detalhes típicos
+ * do que o desenho tem (evaporadora, condensadora, dreno com sifão, difusor).
+ */
+export function desenharFolhaDeDetalhesDeClimatizacao(d: Desenhista, model: BlueprintModel, opcoes: OpcoesExportacao, enq: Enquadramento): void {
+  const x0 = enq.offsetXMm - Math.max(0, (enq.utilLarguraMm - enq.desenhoLarguraMm) / 2);
+  const topo = enq.offsetYMm - Math.max(0, (enq.utilAlturaMm - enq.desenhoAlturaMm) / 2);
+  const w = enq.utilLarguraMm;
+  d.texto(x0, topo + 6, 'CLIMATIZAÇÃO — ISOMÉTRICO E DETALHES TÍPICOS', 3.2);
+  const temDetalhe = detalhesDeClimatizacao(model).length > 0;
+  const alturaUtil = enq.utilAlturaMm - 12;
+  const alturaDosDetalhes = temDetalhe ? Math.min(78, alturaUtil * 0.42) : 0;
+  const alturaDeCima = alturaUtil - alturaDosDetalhes - (temDetalhe ? 4 : 0);
+  const iso = isometricoDeClimatizacao(model);
+  if (iso) desenharIsometrico(d, iso, x0, topo + 10, w - 3, alturaDeCima);
+  else d.texto(x0, topo + 14, 'Sem linha frigorígena, dreno ou duto no desenho.', 2.2, '#555555');
+  if (temDetalhe) desenharDetalhesDeClimatizacao(d, model, x0, topo + 10 + alturaDeCima + 4, w, alturaDosDetalhes);
   desenharCarimbo(d, opcoes, enq);
 }
 

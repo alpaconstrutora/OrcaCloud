@@ -12,6 +12,7 @@ import { abaDaListaDeMateriaisIncendio, materiaisDeIncendio, temMateriaisDeIncen
 import { abaDaPlanilhaDePressoes, calculoDoEstudo, caminhoCritico, planilhaDePressoes } from '../utils/blueprintPlanilhaDePressoes';
 import { paraWinAnsi } from './blueprintMemorialHidroService';
 import { numeracaoDeIncendio } from '../utils/blueprintNumeracaoIncendio';
+import { numeracaoDeClimatizacao } from '../utils/blueprintNumeracaoClimatizacao';
 import { colunasDoModelo, nomesDasColunas } from '../utils/blueprintEsquemaVertical';
 import { DISCIPLINAS_DA_REDE, type RedeDaPrancha } from '../utils/blueprintPranchaHidro';
 import { jsPDF } from 'jspdf';
@@ -20,6 +21,8 @@ import {
   desenharElevacao,
   desenharFolhaDeDetalhesHidro,
   desenharFolhaDeIncendio,
+  desenharFolhaDeClimatizacao,
+  desenharFolhaDeDetalhesDeClimatizacao,
   desenharFolhaDePressoesDeIncendio,
   desenharFolhaDeDetalhesDeIncendio,
   desenharFolhaDaListaDeMateriaisIncendio,
@@ -91,6 +94,8 @@ export type PranchaExport =
   | 'sanitaria'
   /** E8.1: a planta com o INCÊNDIO inteiro (hidrantes, sprinklers e preventivo numa folha). */
   | 'incendio'
+  /** E8.1 da climatização: a planta com linha, dreno e dutos + a folha de legenda e quadro-resumo. */
+  | 'climatizacao'
   | 'frente'
   | 'fundos'
   | 'lateral-esq'
@@ -116,6 +121,7 @@ const ROTULO_FIXO: Record<string, string> = {
   hidraulica: 'Planta hidráulica',
   sanitaria: 'Planta de esgoto',
   incendio: 'Planta de incêndio',
+  climatizacao: 'Planta de climatização',
   frente: 'Elevação frente',
   fundos: 'Elevação fundos',
   'lateral-esq': 'Elevação lateral esquerda',
@@ -133,7 +139,7 @@ function opcoesDaHumanizada(p: PranchaExport): Partial<OpcoesExportacao> {
 
 /** As pranchas que SÃO a planta (com ou sem uma camada por cima) — não têm projeção de elevação. */
 export function ehPlantaDaPrancha(p: PranchaExport): boolean {
-  return p === 'planta' || p === 'eletrica' || p === 'humanizada' || p === 'hidraulica' || p === 'sanitaria' || p === 'incendio';
+  return p === 'planta' || p === 'eletrica' || p === 'humanizada' || p === 'hidraulica' || p === 'sanitaria' || p === 'incendio' || p === 'climatizacao';
 }
 
 /** O que cada planta põe por cima da arquitetura (elétrica, rede hidrossanitária, humanizada). */
@@ -142,6 +148,7 @@ function opcoesDaCamada(p: PranchaExport): Partial<OpcoesExportacao> {
     eletrica: p === 'eletrica',
     hidrossanitaria: p === 'hidraulica' ? 'AGUA' : p === 'sanitaria' ? 'ESGOTO' : undefined,
     incendio: p === 'incendio' ? 'TODAS' : undefined,
+    climatizacao: p === 'climatizacao',
     ...opcoesDaHumanizada(p),
   };
 }
@@ -426,6 +433,8 @@ export function exportarPranchasPdf(
     legendaHidro?: boolean;
     /** E2.3: a folha do esquema vertical, logo depois da legenda. */
     esquemaHidro?: boolean;
+    /** E8.1 da climatização: a folha de legenda e quadro-resumo, logo depois da planta. */
+    legendaClima?: boolean;
   };
 
   // Enquadra tudo antes: uma página não pode sair e a seguinte falhar.
@@ -435,6 +444,7 @@ export function exportarPranchasPdf(
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       // A prancha elétrica são QUATRO folhas: a planta, o quadro de cargas, o unifilar e (E5.2) a lista de materiais.
       if (p === 'eletrica') return [{ p, enq, proj: null }, { p, enq, proj: null, quadroDeCargas: true }, { p, enq, proj: null, unifilar: true }, { p, enq, proj: null, materiais: true }];
+      if (p === 'climatizacao') return [{ p, enq, proj: null }, { p, enq, proj: null, legendaClima: true }];
       if (levaLegendaHidro(p, pranchas)) {
         const esquema = temColuna(model, redesDasPranchas(pranchas)) ? [{ p, enq, proj: null, esquemaHidro: true }] : [];
         return [{ p, enq, proj: null }, { p, enq, proj: null, legendaHidro: true }, ...esquema];
@@ -455,22 +465,23 @@ export function exportarPranchasPdf(
     orientation: o.papel.larguraMm > o.papel.alturaMm ? 'landscape' : 'portrait',
   });
 
-  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar, materiais, legendaHidro, esquemaHidro }, i) => {
+  enquadrados.forEach(({ p, enq, proj, quadroDeCargas, unifilar, materiais, legendaHidro, esquemaHidro, legendaClima }, i) => {
     if (i > 0) doc.addPage([o.papel.larguraMm, o.papel.alturaMm]);
     const oPagina = {
       ...o,
       // As anotações do corte/elevação viajam nas opções: a folha não recebe o modelo (E8.1).
       anotacoes: model.anotacoes ?? [],
       ...opcoesDaCamada(p),
-      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : materiais ? 'Lista de materiais — elétrica' : legendaHidro ? 'Legenda hidrossanitária' : esquemaHidro ? 'Esquema vertical' : rotuloDaPrancha(model, p)}`,
+      titulo: `${o.titulo} — ${quadroDeCargas ? 'Quadro de cargas' : unifilar ? 'Diagrama unifilar' : materiais ? 'Lista de materiais — elétrica' : legendaHidro ? 'Legenda hidrossanitária' : legendaClima ? 'Climatização — quadro-resumo e legenda' : esquemaHidro ? 'Esquema vertical' : rotuloDaPrancha(model, p)}`,
     };
     const desenhista = new DesenhistaPdf(doc);
     if (quadroDeCargas) desenharFolhaDoQuadroDeCargas(desenhista, model, oPagina, enq);
     else if (unifilar) desenharFolhaDoUnifilar(desenhista, model, oPagina, enq);
     else if (materiais) desenharFolhaDaListaDeMateriaisEletrica(desenhista, model, oPagina, enq);
+    else if (legendaClima) desenharFolhaDeClimatizacao(desenhista, model, { ...oPagina, climatizacao: false, denominador: 0 }, enq);
     else if (legendaHidro) desenharFolhaDeDetalhesHidro(desenhista, model, { ...oPagina, denominador: 0 }, enq);
     else if (esquemaHidro) desenharFolhaDoEsquemaVertical(desenhista, model, { ...oPagina, denominador: 0 }, enq, redesDasPranchas(pranchas));
-    else if (proj) desenharElevacao(desenhista, proj, { ...oPagina, instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 || pranchas.includes('incendio') }, enq);
+    else if (proj) desenharElevacao(desenhista, proj, { ...oPagina, instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 || pranchas.includes('incendio') || pranchas.includes('climatizacao') }, enq);
     else desenharPlanta(desenhista, model, oPagina, enq);
   });
 
@@ -506,6 +517,9 @@ export function desenharConjunto(
   const colunasDoDesenho = nomesDasColunas(model);
   // E8.1: idem para os números de incêndio (H-1, SPK-3).
   const numerosDoDesenho = numeracaoDeIncendio(model);
+  // E8.1 da climatização: idem (EV-1, CD-1, DF-3) — calculado só quando alguma prancha pede.
+  let numerosDeClimaCache: ReturnType<typeof numeracaoDeClimatizacao> | null = null;
+  const numerosDeClima = () => (numerosDeClimaCache ??= numeracaoDeClimatizacao(model));
   // E8.2: o caminho crítico, calculado UMA vez (o cálculo é caro) e só se alguma planta de rede pedir.
   let caminhoCache: string[] | null = null;
   const caminhoDoDesenho = () => {
@@ -564,6 +578,31 @@ export function desenharConjunto(
         const caminho = p.familiaDeIncendio === 'PREVENTIVO' ? undefined : caminhoDoDesenho();
         desenharPlanta(d, m, comPrancha(den, { incendio: p.familiaDeIncendio, numerosDeIncendio: numerosDoDesenho, caminhoCriticoDeIncendio: caminho }), enq);
         folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      // CLIMATIZAÇÃO (E8.1 da climatização): a planta do pavimento com linha, dreno e dutos; a numeração é a do desenho inteiro.
+      case 'CLIMATIZACAO': {
+        const m = modeloDoPavimento(model, p.levelId!);
+        let enq = enquadrar(m, p.denominador, papel, template.cotas);
+        let den = p.denominador;
+        if (!enq.cabe && enq.escalaSugerida) {
+          den = enq.escalaSugerida;
+          enq = enquadrar(m, den, papel, template.cotas);
+        }
+        desenharPlanta(d, m, comPrancha(den, { climatizacao: true, numerosDeClimatizacao: numerosDeClima() }), enq);
+        folhas.push({ prancha: p, denominador: den });
+        break;
+      }
+      case 'LEGENDA_CLIMATIZACAO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDeClimatizacao(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
+        break;
+      }
+      case 'DETALHES_CLIMATIZACAO': {
+        const enq = enquadrar(model, template.denominadorPlanta, papel, false);
+        desenharFolhaDeDetalhesDeClimatizacao(d, model, comPrancha(0), enq);
+        folhas.push({ prancha: p, denominador: 0 });
         break;
       }
       case 'MATERIAIS_INCENDIO': {
@@ -629,7 +668,7 @@ export function desenharConjunto(
           enq = enquadrarElevacao(proj, den, papel);
         }
         // E2.4: com prancha hidrossanitária no conjunto, o corte sai com a rede.
-        desenharElevacao(d, proj, comPrancha(den, { instalacoesNoCorte: redesDoTemplate(template).length > 0 || !!template.incluir.incendio }), enq);
+        desenharElevacao(d, proj, comPrancha(den, { instalacoesNoCorte: redesDoTemplate(template).length > 0 || !!template.incluir.incendio || !!template.incluir.climatizacao }), enq);
         folhas.push({ prancha: p, denominador: den });
         break;
       }
@@ -717,6 +756,22 @@ export function exportarPranchasPng(
       const enq = enquadrar(model, o.denominador, o.papel, o.cotas);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
       desenharPlanta(new DesenhistaCanvas(ctx, dpi), model, oArquivo, enq);
+      if (p === 'climatizacao') {
+        // E8.1 da climatização: a folha de legenda e quadro-resumo.
+        const c2 = document.createElement('canvas');
+        c2.width = canvas.width;
+        c2.height = canvas.height;
+        const ctx2 = c2.getContext('2d');
+        if (ctx2) {
+          ctx2.fillStyle = '#ffffff';
+          ctx2.fillRect(0, 0, c2.width, c2.height);
+          desenharFolhaDeClimatizacao(new DesenhistaCanvas(ctx2, dpi), model, { ...oArquivo, climatizacao: false, denominador: 0, titulo: `${o.titulo} — Climatização — quadro-resumo e legenda` }, enq);
+          const nome2 = nomeArquivo(oArquivo, 'png').replace(/\.png$/, '-legenda-climatizacao.png');
+          c2.toBlob((blob) => {
+            if (blob) baixar(blob, nome2);
+          }, 'image/png');
+        }
+      }
       if (levaLegendaHidro(p, pranchas)) {
         // E2.1: a folha de legenda hidrossanitária, uma vez só.
         const c2 = document.createElement('canvas');
@@ -795,7 +850,7 @@ export function exportarPranchasPng(
     } else {
       const enq = enquadrarElevacao(proj!, o.denominador, o.papel);
       if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
-      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [], instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 || pranchas.includes('incendio') }, enq);
+      desenharElevacao(new DesenhistaCanvas(ctx, dpi), proj!, { ...oArquivo, anotacoes: model.anotacoes ?? [], instalacoesNoCorte: redesDasPranchas(pranchas).length > 0 || pranchas.includes('incendio') || pranchas.includes('climatizacao') }, enq);
     }
 
     // `corte:abc` no nome do arquivo NAO desce no Windows: dois-pontos e
@@ -857,6 +912,7 @@ export function montarDxf(
     hipotesesEletricas: o.hipotesesEletricas,
     redes: o.redesNoDxf,
     incendio: o.incendioNoDxf,
+    climatizacao: o.climatizacaoNoDxf,
     // Elevação e corte saem no MESMO fluxo de blocos à direita da planta: numa
     // prancha os dois são vistas, e separá-los em duas faixas só faria o
     // arquivo ter dois espaçamentos diferentes para a mesma coisa.

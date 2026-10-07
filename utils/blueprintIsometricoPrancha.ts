@@ -42,12 +42,13 @@ export interface IsometricoDePrancha {
   /** A caixa do recorte, em mm do modelo. */
   recorte: Caixa;
   /** Os segmentos recortados, em mm do modelo (z = elevação do pavimento + cota). */
-  segmentos: { trechoId: ObjectId; disciplina: DisciplinaDeRede; bitolaMm: number; a: P3; b: P3 }[];
+  /** `rotulo` (E8.2 da climatização): o texto do segmento quando não é "øN" — L×A no duto, líquido/sucção na linha. */
+  segmentos: { trechoId: ObjectId; disciplina: DisciplinaDeRede; bitolaMm: number; a: P3; b: P3; rotulo?: string }[];
   pontos: { terminalId: ObjectId; sigla: string; cotaMm: number; p: P3; disciplina: DisciplinaDeRede }[];
   nos: { p: P3; disciplina: DisciplinaDeRede; tipo: TipoDeConexao }[];
 }
 
-export const ROTULO_DA_REDE: Record<RedeDaPrancha, string> = { AGUA: 'Água', ESGOTO: 'Esgoto', INCENDIO: 'Incêndio' };
+export const ROTULO_DA_REDE: Record<RedeDaPrancha, string> = { AGUA: 'Água', ESGOTO: 'Esgoto', INCENDIO: 'Incêndio', CLIMATIZACAO: 'Climatização' };
 
 function caixaDoAnel(ring: Point[], folga: number): Caixa {
   const xs = ring.map((p) => p.x);
@@ -183,7 +184,7 @@ export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: n
     const cor = COR_DA_DISCIPLINA[s.disciplina];
     d.linha(a.x, a.y, b.x, b.y, { espessuraMm: s.disciplina === 'ESGOTO' ? 0.5 : 0.35, cor });
     if (Math.hypot(b.x - a.x, b.y - a.y) >= 8) {
-      const texto = `ø${s.bitolaMm}`;
+      const texto = s.rotulo ?? `ø${s.bitolaMm}`;
       const r = posicaoDoRotulo(a, b, 0.9, texto);
       d.texto(r.x, r.y, texto, TEXTO_MM, cor);
     }

@@ -288,8 +288,33 @@ export interface Localizacao {
   precisao: 'endereco' | 'bairro';
 }
 
+const PALAVRAS_DE_LIGACAO = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
+
 /**
- * Traduz o primeiro resultado do Photon. Tipo house/street = rua; locality,
+ * Cada palavra procurada (sem "de/da/do…" e sem letra solta) tem de ser o COMEÇO
+ * de uma palavra do nome do resultado. "Davi Bueno" casa com "Rua Prefeito David
+ * Bueno" (medido em 07/10/2026: a trava por texto literal perdia esse caso);
+ * "Cap Zeferino" casa com "Capitão Zeferino"; "Padre Caramuru" não casa com
+ * "Avenida Tiradentes".
+ */
+export function nomeContem(nomeDoResultado: string, alvo: string): boolean {
+  const resultado = normalizarNome(nomeDoResultado).split(' ').filter(Boolean);
+  const procuradas = normalizarNome(alvo).split(' ').filter((p) => p.length >= 2 && !PALAVRAS_DE_LIGACAO.has(p));
+  if (procuradas.length === 0) return false;
+  return procuradas.every((p) => resultado.some((r) => r.startsWith(p)));
+}
+
+/** O primeiro resultado do Photon que passa pelas travas (a busca pede 3). */
+export function primeiraLocalizacao(resultados: ResultadoPhoton[] | null | undefined, consulta: ConsultaGeo, cidade: string): Localizacao | null {
+  for (const r of resultados ?? []) {
+    const loc = localizacaoDoResultado(r, consulta, cidade);
+    if (loc) return loc;
+  }
+  return null;
+}
+
+/**
+ * Traduz um resultado do Photon. Tipo house/street = rua; locality,
  * district = bairro/localidade; city ou maior = descartado. Travas: cidade
  * exata e nome procurado contido no nome do resultado.
  */
@@ -303,8 +328,7 @@ export function localizacaoDoResultado(r: ResultadoPhoton | null | undefined, co
   const alvoCidade = normalizarNome(cidade);
   if (normalizarNome(p.city) !== alvoCidade && normalizarNome(p.county) !== alvoCidade) return null;
 
-  const nomeDoResultado = normalizarNome(`${p.name ?? ''} ${p.street ?? ''}`);
-  if (!consulta.alvo || !nomeDoResultado.includes(consulta.alvo)) return null;
+  if (!nomeContem(`${p.name ?? ''} ${p.street ?? ''}`, consulta.alvo)) return null;
 
   const tipo = (p.type ?? '').toLowerCase();
   if (tipo === 'house' || tipo === 'street') return { lat, lng, precisao: consulta.temRua ? 'endereco' : 'bairro' };

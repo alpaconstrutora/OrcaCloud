@@ -45,7 +45,7 @@ import {
   enderecoEhSoBairro,
   lerFeedVrsync,
   consultasDeEndereco,
-  localizacaoDoResultado,
+  primeiraLocalizacao,
   urlDeFeedPermitida,
   type BairroConhecido,
   type ConsultaGeo,
@@ -89,7 +89,8 @@ function criarGeocodificador(cidade: string) {
     if (espera > 0) await new Promise((r) => setTimeout(r, espera));
     ultima = Date.now();
     try {
-      const url = `${PHOTON}?limit=1&q=${encodeURIComponent(consulta.q)}`;
+      // limit=3: o 1º resultado às vezes é de outra cidade e o 2º é o certo.
+      const url = `${PHOTON}?limit=3&q=${encodeURIComponent(consulta.q)}`;
       const r = await fetch(url, {
         headers: { 'User-Agent': AGENTE, Accept: 'application/json' },
         signal: AbortSignal.timeout(15_000),
@@ -99,7 +100,7 @@ function criarGeocodificador(cidade: string) {
         return 'adiado';
       }
       const dados = await r.json();
-      const loc = localizacaoDoResultado(Array.isArray(dados?.features) ? dados.features[0] : null, consulta, cidade);
+      const loc = primeiraLocalizacao(Array.isArray(dados?.features) ? dados.features : null, consulta, cidade);
       cache.set(consulta.q, loc);
       return loc;
     } catch (e) {

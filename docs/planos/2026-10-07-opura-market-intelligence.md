@@ -372,6 +372,27 @@ motivo quando algo fica pendente. Risco aceito: é um serviço público de uso j
 sem garantia; se cair ou bloquear, a alternativa é um provedor com chave (LocationIQ,
 Geoapify, Google), que exige conta.
 
+**Publicação e localização dos pendentes (07/10/2026, autorizadas pelo usuário).**
+Fase 3 publicada em `main` (`d251fbee`; CI verde; domínio serve o commit e os textos
+"Importar Feed XML" e "Localizar anúncios sem coordenada"). Depois, o modo
+`localizar` rodou como a conta de agente sobre os 213 pendentes da Alpa:
+
+| Passo | Resultado |
+|---|---|
+| 1ª rodada (trava de nome literal) | 51 localizados, 162 não encontrados |
+| Ajuste: nome por palavras (cada palavra procurada começa uma palavra do resultado: "Davi Bueno" → "Rua Prefeito David Bueno") e busca com 3 resultados, ficando com o 1º que passa nas travas | — |
+| 162 devolvidos à fila, 2ª rodada | +16 localizados, 146 não encontrados |
+| **Achado:** 22 pontos do robô ANTIGO estavam em outra cidade (Campinas tem um bairro "Cambuí": "Novo Horizonte", "São Domingos", "Anhumas"…; "Bela Vista" na Bahia, "Bom Sucesso" no Paraná) | migration `aplicar_20271007000210` (critério: > 20 km do centro dos bairros da cidade; reversão `fora_da_cidade`) |
+| 22 devolvidos à fila, 3ª rodada | 10 localizados, 12 não encontrados |
+
+Estado final (357 anúncios): **52 pelo endereço, 143 aproximados pelo bairro, 158
+não encontrados, 4 do script de teste antigo** (coordenada sem origem registrada);
+**0 pontos fora de Cambuí**. Os não encontrados são, na maioria, localidades rurais
+que não existem no mapa aberto (Água Comprida, Colinas do Itaim, Collen, Colinas da
+Mantiqueira…) e textos que não são endereço na planilha ("maruinho", "Celinho?",
+"Praça"). Um caso real perdido por grafia do próprio mapa: "Prefeito José Barbosa"
+está como "Bartosa" no OpenStreetMap.
+
 **Feed da Conexão 381.** O link passado pelo usuário (`https://conexao381.com.br/`)
 é o site, não um feed: `/feed.xml`, `/vrsync.xml`, `/xml/vivareal.xml`,
 `/integracao/vivareal.xml` dão 404, e o `sitemap.xml` só lista páginas. O link do

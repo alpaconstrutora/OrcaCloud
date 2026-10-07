@@ -12,6 +12,8 @@ import {
   estadoPorExtenso,
   separarNumero,
   semTipoDeVia,
+  nomeContem,
+  primeiraLocalizacao,
   localizacaoDoResultado,
   urlDeFeedPermitida,
 } from '../supabase/functions/opura-market-import/logica';
@@ -142,6 +144,25 @@ describe('resultado do Photon → precisão, com as duas travas', () => {
 
   it('trava 2 — nome procurado precisa estar no nome do resultado', () => {
     expect(localizacaoDoResultado(f('street', { name: 'Rua Padre Caramuru' }), rua, 'Cambuí')).toBeNull();
+  });
+
+  it('nome por palavras: cada palavra procurada começa uma palavra do resultado', () => {
+    expect(nomeContem('Rua Prefeito David Bueno', 'davi bueno')).toBe(true);        // caso real de 07/10/2026
+    expect(nomeContem('Rua Capitão Zeferino de Barros Lima', 'Cap Zeferino de B L')).toBe(true);
+    expect(nomeContem('Rua Manoel P. da Rosa', 'rosa')).toBe(true);
+    expect(nomeContem('Avenida Tiradentes', 'padre caramuru')).toBe(false);
+    expect(nomeContem('Rua Prefeito José Bartosa', 'prefeito jose barbosa')).toBe(false); // grafia diferente no mapa
+    expect(nomeContem('Qualquer', 'de da')).toBe(false);                             // nada sobra para comparar
+  });
+
+  it('usa o primeiro resultado que passa nas travas (o 1º pode ser de outra cidade)', () => {
+    const outraCidade = { geometry: { coordinates: [-45.5, -21.3] as [number, number] },
+      properties: { type: 'street', name: 'Avenida Prefeito José Barbosa Leão', city: 'Córrego Danta' } };
+    const certo = f('street', { name: 'Avenida Prefeito José Barbosa' });
+    const consulta = { q: 'Prefeito José Barbosa, Cambuí, Minas Gerais', alvo: 'prefeito jose barbosa', temRua: true };
+    expect(primeiraLocalizacao([outraCidade, certo], consulta, 'Cambuí')).toEqual({ lat: -22.6157, lng: -46.056, precisao: 'endereco' });
+    expect(primeiraLocalizacao([outraCidade], consulta, 'Cambuí')).toBeNull();
+    expect(primeiraLocalizacao(null, consulta, 'Cambuí')).toBeNull();
   });
 
   it('nível de cidade, sem resultado ou coordenada (0,0) → null', () => {

@@ -328,8 +328,15 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
     // banner e conteúdo sem duplicar lateral; `pb-6` no conteúdo é só o
     // respiro de fim de scroll (a caixa rola por dentro, o pb-* de <main>
     // nunca chega a ser exercitado).
+    // Editar Colaborador é TELA, não sobreposição (ver LaborEmployeeForm, bloco
+    // isEditing): o módulo some com `hidden` — sem desmontar, para a lista
+    // voltar com a busca, a rolagem e o cache intactos (§22) — e o formulário
+    // ocupa o fluxo do <main>, com o gutter dele. Criar continua modal.
+    const editandoColaborador = isEmployeeFormOpen && !!editingEmployee;
+
     return (
-        <div className="flex flex-col h-full space-y-6">
+        <>
+        <div className={`flex flex-col h-full space-y-6 ${editandoColaborador ? 'hidden' : ''}`}>
             {/* Banners — só entra no fluxo (e só então o `space-y-6` do pai conta
                 como respiro real) quando existe algo pra mostrar; senão o
                 conteúdo vira o PRIMEIRO filho e fica nos 24px do Layout, sem o
@@ -673,18 +680,19 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                         />
                     )}
             </div>
-
-            {/* Employee Form Modal */}
-            {isEmployeeFormOpen && (
-                <LaborEmployeeForm
-                    employee={editingEmployee}
-                    orgId={orgId}
-                    organizations={organizations as unknown as { id: string; name: string; [key: string]: unknown }[]}
-                    onClose={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); }}
-                    onSaved={handleEmployeeSaved}
-                />
-            )}
         </div>
+
+        {/* Formulário do colaborador — tela de edição ou modal de criação */}
+        {isEmployeeFormOpen && (
+            <LaborEmployeeForm
+                employee={editingEmployee}
+                orgId={orgId}
+                organizations={organizations as unknown as { id: string; name: string; [key: string]: unknown }[]}
+                onClose={() => { setIsEmployeeFormOpen(false); setEditingEmployee(null); }}
+                onSaved={handleEmployeeSaved}
+            />
+        )}
+        </>
     );
 };
 

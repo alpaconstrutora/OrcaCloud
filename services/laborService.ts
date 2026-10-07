@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { validateDocumentFile } from '../lib/mimeValidation';
+import { validateDocumentFile, validateImageFile } from '../lib/mimeValidation';
 import { trainingsService } from './trainingsService';
 import type { TrainingCategoria, TrainingCourse, EmployeeTraining } from '../types/academy';
 
@@ -1120,6 +1120,43 @@ export const laborService = {
             ...d,
             employee_name: d.employee?.name
         }));
+    },
+
+    // FOTO 3x4 DO COLABORADOR
+    //
+    // Mesmo bucket dos documentos (`organization-assets`) e mesmo contrato da
+    // foto de ativo (assetService): `employees.avatar_url` guarda o CAMINHO, não
+    // a URL — a URL pública é resolvida na hora de exibir. Valor que já seja URL
+    // absoluta (dado antigo) passa como está.
+    employeePhotoUrl(path?: string | null): string | null {
+        if (!path) return null;
+        if (/^https?:\/\//i.test(path)) return path;
+        return supabase.storage.from('organization-assets').getPublicUrl(path).data.publicUrl;
+    },
+
+    /** Sobe a foto e devolve o CAMINHO no bucket (é isso que vai para `avatar_url`).
+     *  A org entra no caminho porque, na criação, o colaborador ainda não tem id. */
+    async uploadEmployeePhoto(orgId: string | null | undefined, file: File): Promise<string> {
+        const validation = validateImageFile(file);
+        if (!validation.valid) throw new Error(validation.error);
+
+        const ext = file.name.toLowerCase().split('.').pop();
+        const path = `labor-photos/${orgId || 'sem-organizacao'}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage
+            .from('organization-assets')
+            .upload(path, file, { upsert: false, contentType: file.type });
+        if (error) {
+            console.error('[LaborService] Erro ao enviar foto do colaborador:', error);
+            throw new Error(`Falha ao enviar a foto: ${error.message}`);
+        }
+        return path;
+    },
+
+    /** Remove a foto do bucket. Falha aqui não é erro de negócio — só loga. */
+    async removeEmployeePhoto(path?: string | null): Promise<void> {
+        if (!path || /^https?:\/\//i.test(path)) return;
+        const { error } = await supabase.storage.from('organization-assets').remove([path]);
+        if (error) console.warn('[LaborService] Erro ao remover foto do colaborador:', error);
     },
 
     async uploadDocument(

@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import CostCenterSelect from './CostCenterSelect';
 import PlanoContasSelect from './PlanoContasSelect';
-import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, CheckCircle2, Info, AlertTriangle, CreditCard, Briefcase, AlertCircle } from 'lucide-react';
+import { X, ArrowLeft, User, Users, MapPin, Phone, Mail, FileText, DollarSign, Calendar, Building2, ChevronDown, Loader2, CheckSquare, Square, Calculator, Wallet, Check, Info, CreditCard, Briefcase, AlertCircle } from 'lucide-react';
 import { Employee, ContractType, EmployeeStatus, laborService } from '../services/laborService';
-import { payrollService, PayrollRubric } from '../services/payrollService';
+import { payrollService, PayrollRubric, CalculationType } from '../services/payrollService';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import TableSwitch from './ui/TableSwitch';
+import { TabsBar } from './ui/TabsBar';
+import LaborEmployeePhoto from './LaborEmployeePhoto';
+import LaborEmployeeBankAccounts, { EmployeeBankAccountDraft, toDraft } from './LaborEmployeeBankAccounts';
+import { employeeBankAccountService } from '../services/employeeBankAccountService';
 import { orgGovernanceService } from '../services/orgGovernanceService';
 import { OrgRole } from '../types';
 import { validateCPF } from '../lib/validators';
@@ -65,11 +71,37 @@ const TAB_SUBTITLES: Record<EmployeeTabId, string> = {
     documentos: 'RG, CTPS, título de eleitor e documentação militar.',
     endereco: 'Endereço residencial e telefone de contato.',
     organizacional: 'Empresa, matrícula, departamento, CNH e dependentes.',
-    bancario: 'Conta bancária e chave PIX para pagamento.',
+    bancario: 'Contas bancárias e chaves PIX; a principal é a usada nos pagamentos.',
     folha: 'Rubricas recorrentes incluídas automaticamente na folha.',
     salarios: 'Reajustes, promoções e dissídios com data de vigência, motivo e documento.',
     checklist: 'Checklist de admissão e observações extras.',
 };
+
+// Aba Folha de Pagamento — tabela de rubricas recorrentes (§6.10). "Incluir"
+// primeiro: é a única coluna editável e a razão de a aba existir.
+const RUBRIC_COLUMNS: StandardTableColumn[] = [
+    { key: 'incluir', label: 'Incluir', sortable: true, width: 90 },
+    { key: 'codigo', label: 'Código', sortable: true, width: 190 },
+    { key: 'nome', label: 'Rubrica', sortable: true, width: 260 },
+    { key: 'tipo', label: 'Tipo', sortable: true, width: 120 },
+    { key: 'inss', label: 'INSS', sortable: true, width: 80 },
+    { key: 'fgts', label: 'FGTS', sortable: true, width: 80 },
+    { key: 'irrf', label: 'IRRF', sortable: true, width: 80 },
+    { key: 'calculo', label: 'Cálculo', sortable: true, width: 120 },
+    { key: 'categoria', label: 'Categoria', sortable: true, width: 160 },
+];
+
+// Mesmos rótulos/cores de Rubricas (LaborRubrics.tsx) — status em texto
+// colorido, sem pílula (§8).
+const RUBRIC_TYPE_LABELS: Record<string, string> = { provento: 'Provento', desconto: 'Desconto', encargo: 'Encargo', informativa: 'Informativa' };
+const RUBRIC_TYPE_COLORS: Record<string, string> = { provento: 'text-emerald-700', desconto: 'text-rose-700', encargo: 'text-amber-700', informativa: 'text-slate-500' };
+const CALC_TYPE_LABELS: Record<CalculationType, string> = { manual: 'Manual', fixed: 'Valor fixo', percentage: 'Percentual', formula: 'Fórmula' };
+// `rubrics.category` é gravada em inglês (motor da folha); valor fora da lista aparece cru.
+const RUBRIC_CATEGORY_LABELS: Record<string, string> = {
+    base: 'Salário base', overtime: 'Horas extras', tax: 'Tributo', benefit: 'Benefício',
+    vacation: 'Férias', thirteenth: '13º salário', variable: 'Variável', termination: 'Rescisão',
+};
+const categoriaDaRubrica = (c?: string | null) => (c ? RUBRIC_CATEGORY_LABELS[c] ?? c : '');
 
 /** Membro da organização que já aceitou o convite (tem usuário em auth.users). */
 interface OrgMemberOption {
@@ -106,6 +138,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     const [allRubrics, setAllRubrics] = useState<PayrollRubric[]>([]);
     const [recurringRubrics, setRecurringRubrics] = useState<string[]>([]);
     const [loadingRubrics, setLoadingRubrics] = useState(false);
+    // Contas bancárias — lista da tela, gravada no "Salvar" (RPC atômica).
+    const [bankAccounts, setBankAccounts] = useState<EmployeeBankAccountDraft[]>([]);
+    const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
     const [companies, setCompanies] = useState<{ id: string; razao_social: string }[]>([]);
     const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
     const [orgMembers, setOrgMembers] = useState<OrgMemberOption[]>([]);
@@ -177,13 +212,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         cnh_categoria: employee?.cnh_categoria || '',
         cnh_validade: employee?.cnh_validade || '',
         num_dependentes: employee?.num_dependentes || 0,
-        // Sprint 1: Bancário
-        banco_codigo: employee?.banco_codigo || '',
-        banco_nome: employee?.banco_nome || '',
-        banco_agencia: employee?.banco_agencia || '',
-        banco_conta: employee?.banco_conta || '',
-        banco_conta_tipo: employee?.banco_conta_tipo || 'corrente',
-        banco_pix: employee?.banco_pix || '',
+        // Foto 3x4 — caminho no bucket `organization-assets` (laborService.employeePhotoUrl)
+        avatar_url: employee?.avatar_url || '',
+        // Dados bancários NÃO moram mais aqui: as colunas employees.banco_* ficaram
+        // obsoletas — a aba grava em employee_bank_accounts (várias contas, uma
+        // principal; migration aplicar_20271007000020).
     });
 
     useEffect(() => {
@@ -208,6 +241,22 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         };
 
         loadInitialData();
+    }, [isEditing, employee?.id]);
+
+    // Contas bancárias do colaborador (employee_bank_accounts).
+    useEffect(() => {
+        if (!isEditing || !employee?.id) return;
+        let cancelled = false;
+        setLoadingBankAccounts(true);
+        employeeBankAccountService.list(employee.id)
+            .then(list => { if (!cancelled) setBankAccounts(list.map(toDraft)); })
+            .catch(err => {
+                console.error('[LaborEmployeeForm] Falha ao carregar contas bancárias:', err);
+                if (!cancelled) notify('Não foi possível carregar as contas bancárias.');
+            })
+            .finally(() => { if (!cancelled) setLoadingBankAccounts(false); });
+        return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isEditing, employee?.id]);
 
     // Carrega empresas da org para o seletor de cargo catalogado
@@ -278,6 +327,50 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         setForm(prev => ({ ...prev, [key]: value }));
         markDirty();
     };
+
+    // ── Foto 3x4 ────────────────────────────────────────────────────────────
+    // O arquivo sobe na hora da escolha (para a prévia), mas `avatar_url` só é
+    // gravado no "Salvar", como o resto do formulário. Por isso dois registros:
+    //  - `fotosNaoSalvas`: enviadas nesta sessão e ainda não gravadas em
+    //    colaborador nenhum — apagadas ao trocar de novo, ao remover e ao sair
+    //    sem salvar (senão o bucket acumula órfãs, como no OpuraAssetsModule);
+    //  - `fotoGravada`: a que está no banco — só sai do bucket DEPOIS que o save
+    //    trocou a coluna (antes disso, sair sem salvar a deixaria apontando
+    //    para um arquivo apagado).
+    const [photoUploading, setPhotoUploading] = useState(false);
+    const fotosNaoSalvas = useRef<string[]>([]);
+    const fotoGravada = useRef<string | null>(employee?.avatar_url || null);
+
+    const descartarFotoNaoSalva = (path?: string | null) => {
+        if (!path || !fotosNaoSalvas.current.includes(path)) return;
+        fotosNaoSalvas.current = fotosNaoSalvas.current.filter(p => p !== path);
+        void laborService.removeEmployeePhoto(path);
+    };
+
+    const handlePhotoSelect = async (file: File) => {
+        setPhotoUploading(true);
+        try {
+            const path = await laborService.uploadEmployeePhoto(form.org_id || orgId, file);
+            fotosNaoSalvas.current.push(path);
+            descartarFotoNaoSalva(form.avatar_url);
+            setField('avatar_url', path);
+        } catch (err: any) {
+            notify(err?.message || 'Não foi possível enviar a foto.');
+        } finally {
+            setPhotoUploading(false);
+        }
+    };
+
+    const handlePhotoRemove = () => {
+        descartarFotoNaoSalva(form.avatar_url);
+        setField('avatar_url', '');
+    };
+
+    // Saiu sem salvar (Voltar/Cancelar confirmados): o que subiu e não foi
+    // gravado não tem dono — limpa o bucket.
+    useEffect(() => () => {
+        fotosNaoSalvas.current.forEach(path => { void laborService.removeEmployeePhoto(path); });
+    }, []);
     
     // Máscaras de Input (CPF e Telefone)
     const formatCPF = (value: string) => {
@@ -327,6 +420,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                 (cleanedForm as any)[field] = null;
             }
         });
+        // Sem foto = NULL, não string vazia (o portal testa `avatar_url` truthy).
+        if (cleanedForm.avatar_url === '') (cleanedForm as any).avatar_url = null;
+        // banco_* obsoletas (employee_bank_accounts): o form não as escreve mais,
+        // nem quando voltam no registro salvo (`setForm(...savedEmployee)`).
+        for (const k of ['banco_codigo', 'banco_nome', 'banco_agencia', 'banco_conta', 'banco_conta_tipo', 'banco_pix'] as const) {
+            delete cleanedForm[k];
+        }
 
         try {
             let savedEmployee: Employee;
@@ -339,11 +439,24 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             // Salvar vínculos de rubricas recorrentes
             if (savedEmployee?.id) {
                 await payrollService.updateEmployeeRecurringRubrics(
-                    savedEmployee.id, 
-                    recurringRubrics, 
+                    savedEmployee.id,
+                    recurringRubrics,
                     savedEmployee.org_id
                 );
+                // Contas bancárias: a lista inteira numa transação — devolve o
+                // estado gravado (ids novos, principal normalizada).
+                const contasGravadas = await employeeBankAccountService.saveAll(savedEmployee.id, bankAccounts);
+                setBankAccounts(contasGravadas.map(toDraft));
             }
+
+            // Foto: a gravada agora deixa de ser "não salva"; a que estava no
+            // banco antes, se foi trocada ou removida, sai do bucket.
+            const fotoAtual = savedEmployee.avatar_url || null;
+            fotosNaoSalvas.current = fotosNaoSalvas.current.filter(p => p !== fotoAtual);
+            if (fotoGravada.current && fotoGravada.current !== fotoAtual) {
+                void laborService.removeEmployeePhoto(fotoGravada.current);
+            }
+            fotoGravada.current = fotoAtual;
 
             onSaved(savedEmployee);
 
@@ -390,24 +503,21 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         ? BASE_EMPLOYEE_TABS
         : BASE_EMPLOYEE_TABS.filter(tab => tab.id !== 'salarios');
 
+    // Toolbar de abas §19.1 — componente canônico, não o snippet copiado.
     const renderTabs = () => (
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                {EMPLOYEE_TABS.map(tab => (
-                    <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
-                            activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
-                        }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-        </div>
+        <TabsBar<EmployeeTabId>
+            tabs={EMPLOYEE_TABS.map(tab => ({ id: tab.id, label: tab.label }))}
+            value={activeTab}
+            onChange={setActiveTab}
+        />
     );
+
+    // Ao abrir a edição, a tela entra no fluxo do <main> (que rola): sem isto
+    // ela apareceria na altura em que a lista estava rolada.
+    const editRootRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (isEditing) editRootRef.current?.scrollIntoView({ block: 'start' });
+    }, [isEditing]);
 
     const renderFooter = () => (
         <>
@@ -438,10 +548,20 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         <>
                     {/* Dados Pessoais */}
                     <div>
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <User className="w-3.5 h-3.5 text-indigo-500" /> Dados Pessoais
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                            <User className="w-4 h-4 text-blue-600" />
+                            <h3 className="text-sm font-semibold text-gray-900">Dados Pessoais</h3>
+                        </div>
+                        {/* Foto 3x4 no canto superior esquerdo, campos ao lado */}
+                        <div className="flex flex-col sm:flex-row gap-6">
+                        <LaborEmployeePhoto
+                            src={laborService.employeePhotoUrl(form.avatar_url)}
+                            uploading={photoUploading}
+                            name={form.name}
+                            onSelect={handlePhotoSelect}
+                            onRemove={handlePhotoRemove}
+                        />
+                        <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                             <div className="md:col-span-2">
                                 <InputGroup label="Nome Completo *">
                                     <input value={form.name} onChange={e => setField('name', e.target.value)} className={inputCls} placeholder="Nome do colaborador" />
@@ -496,14 +616,16 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 </p>
                             </InputGroup>
                         </div>
+                        </div>
                     </div>
 
                     {/* Vínculo e Função */}
                     <div>
-                        <h3 className="text-form-input font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Vínculo e Função
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                            <Building2 className="w-4 h-4 text-blue-600" />
+                            <h3 className="text-sm font-semibold text-gray-900">Vínculo e Função</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                             <InputGroup label="Organização *">
                                 <div className="relative">
                                     <select value={form.org_id} onChange={e => setField('org_id', e.target.value)} className={inputCls + ' appearance-none pr-8'}>
@@ -599,10 +721,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
                     {/* Custos */}
                     <div>
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                            <DollarSign className="w-3.5 h-3.5 text-indigo-500" /> Custo de Mão de Obra
-                        </h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                            <DollarSign className="w-4 h-4 text-blue-600" />
+                            <h3 className="text-sm font-semibold text-gray-900">Custo de Mão de Obra</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                             <InputGroup label="Custo por Dia (R$)" icon={DollarSign}>
                                 <input
                                     type="number" min="0" step="0.01"
@@ -655,12 +778,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     )}
 
                     {activeTab === 'pessoal' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Users className="w-3.5 h-3.5 text-indigo-500" /> Informações Pessoais e Filiação
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <Users className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Informações Pessoais e Filiação</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                                     <InputGroup label="Data de Nascimento">
                                         <input type="date" value={form.birth_date} onChange={e => setField('birth_date', e.target.value)} className={inputCls} />
                                     </InputGroup>
@@ -723,12 +847,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     )}
 
                     {activeTab === 'documentos' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <FileText className="w-3.5 h-3.5 text-indigo-500" /> Documentos de Identificação e Trabalho
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <FileText className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Documentos de Identificação e Trabalho</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                                     <InputGroup label="RG (Número)">
                                         <input value={form.rg_number} onChange={e => setField('rg_number', e.target.value)} className={inputCls} />
                                     </InputGroup>
@@ -777,77 +902,79 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     )}
 
                     {activeTab === 'folha' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
-                            <div className="bg-indigo-50 p-4 rounded-[10px] border border-indigo-100 flex items-start gap-4">
-                                <Wallet className="text-indigo-600 mt-1" size={20} />
-                                <div>
-                                    <h4 className="text-sm font-black text-indigo-900 tracking-tight">Rubricas Recorrentes Individuais</h4>
-                                    <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mt-1">Selecione rubricas extras que serão incluídas automaticamente para este colaborador todas as folhas.</p>
-                                </div>
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <Wallet className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Rubricas recorrentes individuais</h3>
+                                <span className="text-xs text-gray-400">
+                                    {recurringRubrics.length} de {allRubrics.length} incluída{allRubrics.length === 1 ? '' : 's'}
+                                </span>
                             </div>
+                            <p className="text-sm text-gray-500">
+                                Ligue as rubricas extras que entram automaticamente em todas as folhas deste colaborador.
+                                As marcadas como "Padrão CLT" não aparecem aqui: já entram para todo contrato CLT.
+                            </p>
 
-                            {loadingRubrics ? (
-                                <div className="flex flex-col items-center justify-center py-12 space-y-3">
-                                    <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando rubricas...</span>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-1 gap-2">
-                                        {allRubrics.length > 0 ? (
-                                            allRubrics.map(rubric => {
-                                                const isSelected = recurringRubrics.includes(rubric.code);
-                                                return (
-                                                    <button
-                                                        key={rubric.code}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setRecurringRubrics(prev =>
-                                                                isSelected
-                                                                ? prev.filter(c => c !== rubric.code)
-                                                                : [...prev, rubric.code]
-                                                            );
-                                                            markDirty();
-                                                        }}
-                                                        className={`flex items-center justify-between px-4 py-3 rounded-[10px] border transition-all text-left group
-                                                            ${isSelected 
-                                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                                                                : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300 shadow-sm'}`}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black ${isSelected ? 'bg-white/20' : 'bg-slate-100 text-slate-400'}`}>
-                                                                {rubric.code.substring(0, 3)}
-                                                            </div>
-                                                            <div>
-                                                                <p className={`text-xs font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>{rubric.name}</p>
-                                                                <p className={`text-[9px] font-bold ${isSelected ? 'text-indigo-200' : 'text-slate-400'} uppercase tracking-tight`}>{rubric.code}</p>
-                                                            </div>
-                                                        </div>
-                                                        {isSelected ? (
-                                                            <CheckCircle2 size={18} className="text-white" />
-                                                        ) : (
-                                                            <Calculator size={18} className="text-slate-200 group-hover:text-slate-400 transition-colors" />
-                                                        )}
-                                                    </button>
-                                                );
-                                            })
-                                        ) : (
-                                            <div className="text-center py-10 bg-slate-50 rounded-[10px] border border-dashed border-slate-200">
-                                                <Info className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nenhuma rubrica automática customizada disponível.</p>
-                                                <p className="text-[9px] text-slate-400 mt-1 italic">Vá em Rubricas e certifique-se de que há rubricas marcadas como "Automática" mas não como "Padrão CLT".</p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="bg-amber-50 p-4 rounded-[10px] border border-amber-100 flex items-start gap-3">
-                                        <AlertTriangle className="text-amber-600 mt-0.5" size={16} />
-                                        <p className="text-[9px] font-bold text-amber-700 leading-tight">
-                                            As rubricas marcadas como <strong className="uppercase">"Padrão CLT"</strong> na gestão de rubricas não aparecem nesta lista pois já são incluídas automaticamente para todos os colaboradores com contrato CLT.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
+                            {/* §6.10 — StandardTable traz busca persistida, engrenagem de
+                                colunas e autofit (§5.1/§6.1.2). Na criação o form é um
+                                modal estreito: `dense` (§6.9). */}
+                            <StandardTable<PayrollRubric>
+                                storageKey="rh:colaborador:folha:rubricas"
+                                columns={RUBRIC_COLUMNS}
+                                rows={allRubrics}
+                                rowKey={r => r.code}
+                                dense={!isEditing}
+                                maxHeight="60vh"
+                                loading={loadingRubrics}
+                                searchText={r => `${r.code} ${r.name} ${categoriaDaRubrica(r.category)} ${RUBRIC_TYPE_LABELS[r.type] ?? r.type}`}
+                                searchPlaceholder="Buscar rubrica por código, nome ou categoria..."
+                                sortValue={(key, r) => {
+                                    switch (key) {
+                                        case 'incluir': return recurringRubrics.includes(r.code) ? 1 : 0;
+                                        case 'tipo': return RUBRIC_TYPE_LABELS[r.type] ?? r.type;
+                                        case 'inss': return r.incidence_inss ? 1 : 0;
+                                        case 'fgts': return r.incidence_fgts ? 1 : 0;
+                                        case 'irrf': return r.incidence_irrf ? 1 : 0;
+                                        case 'calculo': return CALC_TYPE_LABELS[r.calculation_type ?? 'manual'];
+                                        case 'categoria': return categoriaDaRubrica(r.category);
+                                        case 'codigo': return r.code;
+                                        default: return r.name;
+                                    }
+                                }}
+                                renderCell={(key, r) => {
+                                    const incluida = recurringRubrics.includes(r.code);
+                                    switch (key) {
+                                        case 'incluir':
+                                            return (
+                                                <TableSwitch
+                                                    checked={incluida}
+                                                    title={incluida ? 'Incluída em todas as folhas' : 'Não incluída'}
+                                                    onChange={() => {
+                                                        setRecurringRubrics(prev => incluida ? prev.filter(c => c !== r.code) : [...prev, r.code]);
+                                                        markDirty();
+                                                    }}
+                                                />
+                                            );
+                                        case 'codigo': return <span className="block truncate text-sm font-normal text-gray-600" title={r.code}>{r.code}</span>;
+                                        case 'tipo':
+                                            return <span className={`text-sm font-normal ${RUBRIC_TYPE_COLORS[r.type] ?? 'text-gray-600'}`}>{RUBRIC_TYPE_LABELS[r.type] ?? r.type}</span>;
+                                        case 'inss': case 'fgts': case 'irrf': {
+                                            const on = key === 'inss' ? r.incidence_inss : key === 'fgts' ? r.incidence_fgts : r.incidence_irrf;
+                                            return on
+                                                ? <Check className="w-4 h-4 text-emerald-600" aria-label="Incide" />
+                                                : <span className="text-sm font-normal text-gray-400" aria-label="Não incide">—</span>;
+                                        }
+                                        case 'calculo': return <span className="text-sm font-normal text-gray-600">{CALC_TYPE_LABELS[r.calculation_type ?? 'manual']}</span>;
+                                        case 'categoria': return <span className="block truncate text-sm font-normal text-gray-600" title={categoriaDaRubrica(r.category)}>{categoriaDaRubrica(r.category) || '—'}</span>;
+                                        default: return <span className="block truncate text-sm font-normal text-gray-700" title={r.name}>{r.name}</span>;
+                                    }
+                                }}
+                                empty={{
+                                    icon: <Info className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                                    title: 'Nenhuma rubrica automática disponível',
+                                    subtitle: 'Em Rubricas, marque como "Automática" (e não como "Padrão CLT") as que podem entrar por colaborador.',
+                                }}
+                            />
                         </div>
                     )}
 
@@ -875,11 +1002,12 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     )}
 
                     {activeTab === 'endereco' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <MapPin className="w-3.5 h-3.5 text-indigo-500" /> Endereço Residencial e Contato
-                                </h3>
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <MapPin className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Endereço Residencial e Contato</h3>
+                                </div>
                                 <CityStateSelect
                                     cep={form.address_zip_code}
                                     stateCode={form.address_uf}
@@ -903,7 +1031,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     }}
                                     inputCls={inputCls}
                                 />
-                                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mt-4">
+                                <div className="grid grid-cols-1 md:grid-cols-6 gap-x-6 gap-y-4 mt-4">
                                     <div className="md:col-span-4">
                                         <InputGroup label="Rua / Logradouro">
                                             <input value={form.address_street} onChange={e => setField('address_street', e.target.value)} className={inputCls} />
@@ -935,12 +1063,13 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     )}
 
                     {activeTab === 'organizacional' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Briefcase className="w-3.5 h-3.5 text-indigo-500" /> Dados Organizacionais
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <Briefcase className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Dados Organizacionais</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                                     {companies.length > 0 && (
                                         <InputGroup label="Empresa (CNPJ)">
                                             <div className="relative">
@@ -1006,10 +1135,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-form-input font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <FileText className="w-3.5 h-3.5 text-indigo-500" /> CNH (Carteira Nacional de Habilitação)
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <FileText className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">CNH (Carteira Nacional de Habilitação)</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                                     <InputGroup label="Número CNH">
                                         <input value={form.cnh_numero} onChange={e => setField('cnh_numero', e.target.value)} className={inputCls} />
                                     </InputGroup>
@@ -1027,10 +1157,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 </div>
                             </div>
                             <div>
-                                <h3 className="text-form-input font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Users className="w-3.5 h-3.5 text-indigo-500" /> Dependentes
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <Users className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Dependentes</h3>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                                     <InputGroup label="Número de Dependentes">
                                         <input
                                             type="number" min="0" max="20"
@@ -1045,61 +1176,34 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     )}
 
                     {activeTab === 'bancario' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
-                            <div className="bg-emerald-50 p-4 rounded-[10px] border border-emerald-100 flex items-start gap-3">
-                                <CreditCard className="text-emerald-600 mt-0.5 shrink-0" size={18} />
-                                <div>
-                                    <p className="text-xs font-black text-emerald-900">Dados Bancários para Pagamento</p>
-                                    <p className="text-xs text-emerald-700 mt-0.5">Informações utilizadas para transferência de salário e benefícios.</p>
-                                </div>
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-4">
+                            <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                <CreditCard className="w-4 h-4 text-blue-600" />
+                                <h3 className="text-sm font-semibold text-gray-900">Contas bancárias e PIX</h3>
+                                <span className="text-xs text-gray-400">
+                                    {bankAccounts.length} conta{bankAccounts.length === 1 ? '' : 's'}
+                                </span>
                             </div>
-                            <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Building2 className="w-3.5 h-3.5 text-indigo-500" /> Conta Bancária
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <InputGroup label="Código do Banco">
-                                        <input value={form.banco_codigo || ''} onChange={e => setField('banco_codigo', e.target.value)} className={inputCls} placeholder="Ex: 001 (BB), 341 (Itaú)" />
-                                    </InputGroup>
-                                    <InputGroup label="Nome do Banco">
-                                        <input value={form.banco_nome || ''} onChange={e => setField('banco_nome', e.target.value)} className={inputCls} placeholder="Ex: Banco do Brasil" />
-                                    </InputGroup>
-                                    <InputGroup label="Agência">
-                                        <input value={form.banco_agencia || ''} onChange={e => setField('banco_agencia', e.target.value)} className={inputCls} placeholder="0000-0" />
-                                    </InputGroup>
-                                    <InputGroup label="Número da Conta">
-                                        <input value={form.banco_conta || ''} onChange={e => setField('banco_conta', e.target.value)} className={inputCls} placeholder="00000000-0" />
-                                    </InputGroup>
-                                    <InputGroup label="Tipo de Conta">
-                                        <div className="relative">
-                                            <select value={form.banco_conta_tipo || 'corrente'} onChange={e => setField('banco_conta_tipo', e.target.value as 'corrente' | 'poupanca')} className={inputCls + ' appearance-none pr-8'}>
-                                                <option value="corrente">Conta Corrente</option>
-                                                <option value="poupanca">Conta Poupança</option>
-                                            </select>
-                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                                        </div>
-                                    </InputGroup>
-                                </div>
-                            </div>
-                            <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <DollarSign className="w-3.5 h-3.5 text-indigo-500" /> PIX
-                                </h3>
-                                <div className="grid grid-cols-1 gap-4">
-                                    <InputGroup label="Chave PIX (CPF, e-mail, telefone ou chave aleatória)">
-                                        <input value={form.banco_pix || ''} onChange={e => setField('banco_pix', e.target.value)} className={inputCls} placeholder="Ex: 000.000.000-00 ou email@dominio.com" />
-                                    </InputGroup>
-                                </div>
-                            </div>
+                            <p className="text-sm text-gray-500">
+                                Contas para transferência de salário e benefícios. A <span className="text-emerald-700">principal</span> é a usada por padrão nos pagamentos.
+                            </p>
+                            <LaborEmployeeBankAccounts
+                                accounts={bankAccounts}
+                                onChange={next => { setBankAccounts(next); markDirty(); }}
+                                loading={loadingBankAccounts}
+                                dense={!isEditing}
+                                inputCls={inputCls}
+                            />
                         </div>
                     )}
 
                     {activeTab === 'checklist' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
                             <div>
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <CheckSquare className="w-3.5 h-3.5 text-indigo-500" /> Checklist de Admissão
-                                </h3>
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3 mb-4">
+                                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Checklist de Admissão</h3>
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                     {ADMISSION_CHECKLIST_ITEMS.map(item => {
                                         const checked = ((form.admission_checklist || []) as string[]).includes(item);
@@ -1143,9 +1247,15 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
 
     if (isEditing) {
         return (
-            <div className="absolute inset-0 z-50 bg-gray-50 flex flex-col">
-                {/* Header - padrão de tela dedicada (ver ProjectModal.tsx mode==='edit') */}
-                <div className="bg-white px-6 md:px-10 pt-6 pb-5 border-b border-gray-100 shrink-0">
+            // TELA, não sobreposição (mesmo desenho do ProjectModal mode==='edit'):
+            // o conteúdo entra no fluxo do <main>, que já dá o gutter de 24px
+            // (§20.2) e é quem rola. Era `absolute inset-0` com `px-6 md:px-10`
+            // próprio + card `p-6 md:p-10` — os campos ficavam a 80px da borda
+            // no desktop, contra os 48px (gutter + p-6 do card) do resto do app.
+            // Quem esconde a lista enquanto a edição está aberta é o LaborModule.
+            <div ref={editRootRef} className="pb-6">
+                {/* Cabeçalho de tela §20 — sem padding horizontal próprio */}
+                <div className="pb-5 border-b border-gray-100">
                     <div className="flex items-center gap-4">
                         <button
                             type="button"
@@ -1161,19 +1271,19 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                     </div>
                 </div>
 
-                {/* Toolbar de abas — anatomia canônica §19.1 */}
-                <div className="px-6 md:px-10 pt-4 shrink-0">
+                {/* Toolbar de abas §19.1 — 24px abaixo do título (§20.1); o
+                    TabsBar já traz o mb-3 até o card do formulário. */}
+                <div className="pt-6">
                     {renderTabs()}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 md:p-10">
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 md:p-10 space-y-6">
-                        {renderTabContent()}
-                    </div>
+                {/* Card do formulário — p-6 e seções a 32px (§30) */}
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 space-y-8">
+                    {renderTabContent()}
                 </div>
 
-                {/* Footer */}
-                <div className="bg-white border-t border-gray-100 flex items-center justify-end gap-2 px-6 py-4 shrink-0">
+                {/* Rodapé solto abaixo do card (§30), SaveStatus à esquerda (§25) */}
+                <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4 mt-6">
                     {renderFooter()}
                 </div>
 
@@ -1197,11 +1307,11 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                 </div>
 
                 {/* Toolbar de abas — anatomia canônica §19.1 (renderTabs já traz seu próprio card) */}
-                <div className="sticky top-0 bg-white z-10 px-6 py-3 shrink-0">
+                <div className="sticky top-0 bg-white z-10 px-6 pt-3 shrink-0">
                     {renderTabs()}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto px-6 pb-6 pt-3 space-y-8">
                     {renderTabContent()}
                 </div>
 

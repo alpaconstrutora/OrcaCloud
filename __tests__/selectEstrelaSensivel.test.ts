@@ -51,6 +51,7 @@ const TABELAS_SENSIVEIS: Record<string, string> = {
     contract_labor_questionnaires: 'q_salario_fixo',
     contractors:                   'banco_pix, cpf',
     contracts:                     'signature_token',
+    employee_bank_accounts:        'pix_key',
     employee_salary_history:       'new_salary, previous_salary',
     employees:                     'banco_pix, base_salary, cpf',
     hr_turnover_events:            'salario_entrada, salario_saida',

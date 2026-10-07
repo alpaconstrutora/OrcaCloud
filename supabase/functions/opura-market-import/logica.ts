@@ -16,7 +16,7 @@
 //      guardado — antes o robô jogava todo bairro desconhecido no "Centro".
 
 /** De onde veio a coordenada gravada. */
-export type Precisao = 'fonte' | 'endereco' | 'bairro' | 'nao_encontrado';
+export type Precisao = 'fonte' | 'endereco' | 'rua' | 'bairro' | 'nao_encontrado';
 
 export interface BairroConhecido {
   id: string;
@@ -285,7 +285,7 @@ export interface ResultadoPhoton {
 export interface Localizacao {
   lat: number;
   lng: number;
-  precisao: 'endereco' | 'bairro';
+  precisao: 'endereco' | 'rua' | 'bairro';
 }
 
 const PALAVRAS_DE_LIGACAO = new Set(['de', 'da', 'do', 'das', 'dos', 'e']);
@@ -331,7 +331,10 @@ export function localizacaoDoResultado(r: ResultadoPhoton | null | undefined, co
   if (!nomeContem(`${p.name ?? ''} ${p.street ?? ''}`, consulta.alvo)) return null;
 
   const tipo = (p.type ?? '').toLowerCase();
-  if (tipo === 'house' || tipo === 'street') return { lat, lng, precisao: consulta.temRua ? 'endereco' : 'bairro' };
+  // Número achado (house) = endereco; só a rua (street) = rua. Ponto de rua é dividido
+  // por imóveis diferentes e por isso não serve para detectar duplicado (Fase 4).
+  if (tipo === 'house') return { lat, lng, precisao: consulta.temRua ? 'endereco' : 'bairro' };
+  if (tipo === 'street') return { lat, lng, precisao: consulta.temRua ? 'rua' : 'bairro' };
   if (tipo === 'locality' || tipo === 'district') return { lat, lng, precisao: 'bairro' };
   return null;
 }

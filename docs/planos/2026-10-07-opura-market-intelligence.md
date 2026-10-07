@@ -468,6 +468,60 @@ com o arquivo.
   com o `AVG` manual sob a RLS do usuário; conta sem vínculo vê só globais; a série
   mostra um ponto por mês com captura.
 
+#### Fase 4 — execução (07/10/2026, frente `market-fase4`)
+
+Pedido: *"vamos para a fase 4"* (07/10/2026).
+
+| Item | Arquivo | Estado |
+|---|---|---|
+| 4.1 | `aplicar_20271007000300_opura_market_praca_e_dna_do_bairro.sql` | ✅ aplicada — `centroid_lat/centroid_lng` (geradas do `geom`) nos bairros; `center_lat/center_lng` nas cidades (Cambuí recebeu o centro dos seus bairros) |
+| 4.2 | `services/opuraMarketService.ts`, `types/market.ts` | ✅ cidade com centro, bairro com centróide; `listNeighborhoodHistory` saiu (a tabela de histórico só tinha seed) |
+| 4.3 | `components/OpuraMarketModule.tsx` | ✅ mapa abre no centro do Brasil e enquadra a cidade escolhida pelos bairros do banco; bairro desenhado e "bairro mais próximo do clique" pelo centróide; textos com o nome da cidade. `grep "Cambuí\|-22.6\|-46.0"` no módulo e no modal = 0 |
+| 4.4 | migration acima + `components/market/MarketPracaSheet.tsx` | ✅ gaveta "Cadastrar praça" (cidade, UF, centro e bairros marcados num mini mapa); botão só para o superadministrador |
+| 4.5 | migration acima + tela | ✅ `get_market_neighborhood_stats` e `get_market_neighborhood_series` (SECURITY INVOKER, sem cron); painel do bairro e gráfico com dados reais |
+
+**D9 — quem cadastra praça (decisão de execução, 07/10/2026).** Cidades e bairros são
+globais. O "administrador" da D4 foi lido como **superadministrador da plataforma**
+(`public.is_superadmin()`, tabela `public.superadmins`, hoje com 1 e-mail), não como
+administrador de organização: este último mexeria nos dados de todas as organizações.
+Se o usuário preferir liberar para administrador de organização, é trocar a perna
+da policy por `EXISTS (… organization_members … role IN ('owner','admin'))`, o padrão
+de `master_city_add`.
+
+**Vínculo automático.** Ao criar/renomear um bairro (ou mudar o ponto), um gatilho
+`SECURITY DEFINER` vincula os anúncios da cidade sem bairro cujo nome de origem casa
+exato (sem acento e caixa) e dá aos sem coordenada o ponto do bairro como posição
+aproximada (`bairro`). Ensaio com superadministrador simulado: cadastrar "Vale do
+Sol" vinculou 11 anúncios; usuário comum → 42501 ao criar bairro, 0 linhas ao editar
+cidade.
+
+**Achado e corrigido — duplicados por ponto aproximado (defeito da Fase 3).** Os 52
+anúncios marcados `endereco` não tinham número: a posição era a da RUA. O gatilho de
+duplicados juntava imóveis diferentes no mesmo ponto: dos 60 vínculos, 54 eram pares
+no MESMO ponto (42 de rua, 12 de bairro), 22 com preço diferente; os outros 6 vinham
+da época das coordenadas sorteadas. Agora: precisão nova `rua` (o Photon devolve
+`street` sem número), os 52 viraram `rua`, o gatilho só compara `fonte`/`endereco`,
+os 60 vínculos foram desfeitos (reversão `duplicado_por_ponto_aproximado`). A
+function `opura-market-import` foi republicada com a precisão `rua`. Com isso o raio
+de 1 km no centro voltou a 115 anúncios (os 60 deixaram de estar escondidos).
+`verificar-opura-market-rls.sh` ganhou o 7º caso: ponto só de rua não vira duplicado.
+
+**Achado e corrigido — HTML de terceiros no mapa.** Os balões do Leaflet eram
+montados com nome de bairro e endereço sem escapar; desde a Fase 3 o endereço pode vir
+de um feed de terceiros. `escHtml` no módulo. O `check-xss-sinks.sh` não pega esse
+caso (quem interpreta a string é o Leaflet).
+
+**Achado e corrigido — selo "Global".** Em "Todas as organizações", os anúncios da
+Alpa apareciam como "GLOBAL": o teste comparava o dono com a organização do topo, que
+é vazia em "Todas". Agora global = sem dono.
+
+**Verificação na tela (Playwright, conta de agente, servidor da frente):** sem erro de
+JS nem 4xx/5xx; mapa abre em Cambuí (zoom 14) com os 4 bairros nas posições do banco;
+painel do Centro com R$ 5.982/m², ticket R$ 834.427, área 205 m², "Apartamento 3 dorm.";
+tabela com o bairro de origem ("Edith Lopes", "Colinas do Itaim"…); conta de agente não
+vê "Cadastrar praça"; com só a leitura de `superadmins` simulada (escritas abortadas),
+a gaveta abre como painel lateral com o mini mapa e os bairros.
+
 ### Fase 5 — Toda folga vira hipótese editável
 
 **5.1 `utils/opuraMarketVocacao.ts`** (novo, função pura)
@@ -574,9 +628,9 @@ Plano aprovado em 07/10/2026. Cada fase abre como frente própria (REGRA #8), na
 ordem abaixo.
 
 - [x] Fase 1 — 4 de 4 (publicada em 07/10/2026, commits `8e30cd58` e `f31099ce`, CI verde)
-- [ ] Fase 2 — 4 de 5 (2.4 adiado para depois da Fase 4, decisão D6; publicada em 07/10/2026, commit `b4f8d24a`, CI verde, domínio conferido)
+- [x] Fase 2 — 5 de 5 (2.4 entregue como 4.5 na Fase 4; publicada em 07/10/2026, commit `b4f8d24a`)
 - [x] Fase 3 — 4 de 4 (revisada pela D7; geocodificador trocado pela D8; frente `market-fase3`; falta o link do feed real da Conexão 381, que depende da imobiliária)
-- [ ] Fase 4 — 0 de 5 (4.5 = o 2.4 adiado)
+- [x] Fase 4 — 5 de 5 (frente `market-fase4`; cadastro só para superadministrador, D9)
 - [ ] Fase 5 — 0 de 2
 - [ ] Fase 6 — 0 de 6
 - [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)

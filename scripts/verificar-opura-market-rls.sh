@@ -120,9 +120,9 @@ BEGIN
   LOOP
     INSERT INTO public.opura_market_listings
       (city_id, organization_id, source, property_type, area_private, price, bedrooms,
-       latitude, longitude, geom, listing_status)
+       latitude, longitude, geom, geo_precision, listing_status)
     VALUES (v_cid, r.org, '__prova_fase1__', 'Apartamento', r.area, 300000, 9,
-            -10.0, -10.0, ST_SetSRID(ST_MakePoint(-10.0, -10.0), 4326), 'active')
+            -10.0, -10.0, ST_SetSRID(ST_MakePoint(-10.0, -10.0), 4326), 'fonte', 'active')
     RETURNING id INTO v_id;
     INSERT INTO _prova VALUES (r.ordem, r.rotulo, v_id);
   END LOOP;
@@ -134,15 +134,24 @@ BEGIN
   RETURNING id INTO v_id;
   INSERT INTO _prova VALUES (6, 'privado_localizado_depois', v_id);
   UPDATE public.opura_market_listings
-     SET latitude = -10.0, longitude = -10.0, geom = ST_SetSRID(ST_MakePoint(-10.0, -10.0), 4326)
+     SET latitude = -10.0, longitude = -10.0, geom = ST_SetSRID(ST_MakePoint(-10.0, -10.0), 4326), geo_precision = 'endereco'
    WHERE id = v_id;
+  -- 7: mesmo ponto, mas só a RUA foi achada: ponto dividido por imóveis diferentes,
+  -- não pode virar duplicado (Fase 4).
+  INSERT INTO public.opura_market_listings
+    (city_id, organization_id, source, property_type, area_private, price, bedrooms,
+     latitude, longitude, geom, geo_precision, listing_status)
+  VALUES (v_cid, v_org, '__prova_fase1__', 'Apartamento', 77.1, 300000, 9,
+          -10.0, -10.0, ST_SetSRID(ST_MakePoint(-10.0, -10.0), 4326), 'rua', 'active')
+  RETURNING id INTO v_id;
+  INSERT INTO _prova VALUES (7, 'privado_so_rua', v_id);
 END \$\$;
 SELECT string_agg(p.rotulo || '=' || CASE WHEN l.parent_listing_id IS NULL THEN 'sem_pai'
                                      ELSE 'pai:' || (SELECT p2.rotulo FROM _prova p2 WHERE p2.id = l.parent_listing_id) END,
                   ' ' ORDER BY p.ordem)
 FROM _prova p JOIN public.opura_market_listings l ON l.id = p.id;"
 rodar "GATILHO         " "$GATILHO"
-ESPERADO="global=sem_pai privado_igual_global=sem_pai privado_repetido=pai:privado_igual_global privado_area_zero_a=sem_pai privado_area_zero_b=pai:privado_area_zero_a privado_localizado_depois=pai:privado_igual_global"
+ESPERADO="global=sem_pai privado_igual_global=sem_pai privado_repetido=pai:privado_igual_global privado_area_zero_a=sem_pai privado_area_zero_b=pai:privado_area_zero_a privado_localizado_depois=pai:privado_igual_global privado_so_rua=sem_pai"
 [ "$LAST" = "$ESPERADO" ] || [ "$LAST" = "\"$ESPERADO\"" ] || { echo "   ❌ gatilho: esperado [$ESPERADO]"; falhas=$((falhas+1)); }
 
 echo

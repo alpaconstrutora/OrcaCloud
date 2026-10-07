@@ -4,6 +4,9 @@ export interface OpuraMarketCity {
   state: string;
   country: string;
   isActive: boolean;
+  /** Onde o mapa abre quando a cidade é escolhida (cadastro de praça, Fase 4). */
+  centerLat: number | null;
+  centerLng: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,7 +27,10 @@ export interface OpuraMarketNeighborhood {
   saturationLevel: 'Escassez' | 'Saudável' | 'Atenção' | 'Saturado' | null;
   potentialScore: number | null;
   competitorsCount: number | null;
-  geom: any; // GeoJSON geometry (Polígono ou Limites do Bairro)
+  geom: any; // WKB hexadecimal vindo do PostgREST — a tela usa centroidLat/centroidLng
+  /** Centro do bairro, gerado do geom no banco. null = bairro sem ponto. */
+  centroidLat: number | null;
+  centroidLng: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -38,7 +44,7 @@ export interface OpuraMarketListing {
   /** Nome do bairro como veio da origem; neighborhoodId só existe quando casa exato com um cadastrado. */
   neighborhoodNameRaw?: string | null;
   /** De onde veio a coordenada: fonte (feed), endereco (rua), bairro, nao_encontrado; null sem coordenada = pendente. */
-  geoPrecision?: 'fonte' | 'endereco' | 'bairro' | 'nao_encontrado' | null;
+  geoPrecision?: 'fonte' | 'endereco' | 'rua' | 'bairro' | 'nao_encontrado' | null;
   source: string;
   sourceUrl: string | null;
   propertyType: string;
@@ -157,3 +163,21 @@ export interface OpuraMarketCityConfig {
   updatedAt?: string;
 }
 
+
+/** DNA do bairro calculado na leitura (get_market_neighborhood_stats, Fase 4.5). */
+export interface OpuraMarketNeighborhoodStats {
+  neighborhoodId: string;
+  total: number;
+  pricePerM2Avg: number | null;
+  ticketAvg: number | null;
+  areaAvg: number | null;
+  /** Tipo + dormitórios mais anunciado, ex.: "Apartamento 2 dorm.". */
+  tipologia: string | null;
+}
+
+/** Um mês da série de preço ofertado do bairro (get_market_neighborhood_series). */
+export interface OpuraMarketNeighborhoodSerie {
+  mes: string;
+  pricePerM2Avg: number | null;
+  total: number;
+}

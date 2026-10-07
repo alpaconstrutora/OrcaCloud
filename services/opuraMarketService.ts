@@ -6,9 +6,51 @@ import {
   OpuraMarketDevelopment,
   OpuraMarketTerrainStudy,
   OpuraMarketMonitoredCompetitor,
-  OpuraMarketNeighborhoodHistory,
+  OpuraMarketNeighborhoodStats,
+  OpuraMarketNeighborhoodSerie,
   OpuraMarketCityConfig
 } from '../types';
+
+const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+function mapearCidade(city: any): OpuraMarketCity {
+  return {
+    id: city.id,
+    name: city.name,
+    state: city.state,
+    country: city.country,
+    isActive: city.is_active,
+    centerLat: numOuNulo(city.center_lat),
+    centerLng: numOuNulo(city.center_lng),
+    createdAt: city.created_at,
+    updatedAt: city.updated_at
+  };
+}
+
+function mapearBairro(n: any): OpuraMarketNeighborhood {
+  return {
+    id: n.id,
+    cityId: n.city_id,
+    name: n.name,
+    bairroScore: numOuNulo(n.bairro_score),
+    ticketMedio: numOuNulo(n.ticket_medio),
+    pricePerM2Medio: numOuNulo(n.price_per_m2_medio),
+    areaMedia: numOuNulo(n.area_media),
+    dominantTypology: n.dominant_typology,
+    predominantStandard: n.predominant_standard,
+    saturationLevel: n.saturation_level,
+    potentialScore: numOuNulo(n.potential_score),
+    competitorsCount: numOuNulo(n.competitors_count),
+    geom: n.geom,
+    centroidLat: numOuNulo(n.centroid_lat),
+    centroidLng: numOuNulo(n.centroid_lng),
+    createdAt: n.created_at,
+    updatedAt: n.updated_at
+  };
+}
+
+/** Ponto em WKT para o PostgREST gravar em coluna geometry. */
+const pontoWkt = (lat: number, lng: number) => `SRID=4326;POINT(${lng} ${lat})`;
 
 function getPolygonWkt(coords: [number, number][]): string {
   if (!coords || coords.length < 3) return '';
@@ -79,16 +121,7 @@ export const opuraMarketService = {
       throw new Error(`Failed to fetch cities: ${error.message}`);
     }
 
-    // Mapeamento snake_case para camelCase
-    return (data || []).map(city => ({
-      id: city.id,
-      name: city.name,
-      state: city.state,
-      country: city.country,
-      isActive: city.is_active,
-      createdAt: city.created_at,
-      updatedAt: city.updated_at
-    }));
+    return (data || []).map(mapearCidade);
   },
 
   // Bairros
@@ -105,23 +138,90 @@ export const opuraMarketService = {
     }
 
     // Vazio continua vazio: "não calculado" não pode virar 0 na tela.
-    const numOuNulo = (v: unknown) => (v === null || v === undefined ? null : Number(v));
-    return (data || []).map(n => ({
-      id: n.id,
-      cityId: n.city_id,
-      name: n.name,
-      bairroScore: numOuNulo(n.bairro_score),
-      ticketMedio: numOuNulo(n.ticket_medio),
-      pricePerM2Medio: numOuNulo(n.price_per_m2_medio),
-      areaMedia: numOuNulo(n.area_media),
-      dominantTypology: n.dominant_typology,
-      predominantStandard: n.predominant_standard,
-      saturationLevel: n.saturation_level,
-      potentialScore: numOuNulo(n.potential_score),
-      competitorsCount: numOuNulo(n.competitors_count),
-      geom: n.geom,
-      createdAt: n.created_at,
-      updatedAt: n.updated_at
+    return (data || []).map(mapearBairro);
+  },
+
+  // ── Cadastro de praça (Fase 4.4) ──────────────────────────────────────────
+  // Cidades e bairros são globais: só o superadministrador da plataforma grava
+  // (policies com public.is_superadmin(), migration aplicar_20271007000300).
+
+  /** O usuário logado é superadministrador? Lê a própria linha em `superadmins`. */
+  async ehSuperadmin(email: string | null | undefined): Promise<boolean> {
+    if (!email) return false;
+    const { data, error } = await supabase
+      .from('superadmins')
+      .select('email')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+    if (error) return false;
+    return !!data;
+  },
+
+  async criarCidade(c: { name: string; state: string; centerLat: number; centerLng: number }): Promise<OpuraMarketCity> {
+    const { data, error } = await supabase
+      .from('opura_market_cities')
+      .insert({ name: c.name.trim(), state: c.state.trim().toUpperCase(), center_lat: c.centerLat, center_lng: c.centerLng, is_active: true })
+      .select()
+      .single();
+    if (error) throw new Error(`Falha ao criar a cidade: ${error.message}`);
+    return mapearCidade(data);
+  },
+
+  async atualizarCidade(id: string, c: { name: string; state: string; centerLat: number | null; centerLng: number | null }): Promise<OpuraMarketCity> {
+    const { data, error } = await supabase
+      .from('opura_market_cities')
+      .update({ name: c.name.trim(), state: c.state.trim().toUpperCase(), center_lat: c.centerLat, center_lng: c.centerLng, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(`Falha ao salvar a cidade: ${error.message}`);
+    return mapearCidade(data);
+  },
+
+  /** Cria o bairro. O gatilho no banco vincula os anúncios da cidade com o mesmo nome de origem. */
+  async criarBairro(b: { cityId: string; name: string; lat: number | null; lng: number | null }): Promise<OpuraMarketNeighborhood> {
+    const { data, error } = await supabase
+      .from('opura_market_neighborhoods')
+      .insert({ city_id: b.cityId, name: b.name.trim(), geom: b.lat != null && b.lng != null ? pontoWkt(b.lat, b.lng) : null })
+      .select()
+      .single();
+    if (error) throw new Error(`Falha ao criar o bairro "${b.name}": ${error.message}`);
+    return mapearBairro(data);
+  },
+
+  async atualizarBairro(id: string, b: { name: string; lat: number | null; lng: number | null }): Promise<OpuraMarketNeighborhood> {
+    const { data, error } = await supabase
+      .from('opura_market_neighborhoods')
+      .update({ name: b.name.trim(), geom: b.lat != null && b.lng != null ? pontoWkt(b.lat, b.lng) : null, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(`Falha ao salvar o bairro "${b.name}": ${error.message}`);
+    return mapearBairro(data);
+  },
+
+  // ── DNA do bairro na leitura (Fase 4.5) ───────────────────────────────────
+  // SECURITY INVOKER: cada organização vê a média do que ela enxerga.
+  async getNeighborhoodStats(cityId: string): Promise<OpuraMarketNeighborhoodStats[]> {
+    const { data, error } = await supabase.rpc('get_market_neighborhood_stats', { p_city_id: cityId });
+    if (error) throw new Error(`Falha ao calcular o DNA dos bairros: ${error.message}`);
+    return (data || []).map((r: any) => ({
+      neighborhoodId: r.neighborhood_id,
+      total: Number(r.total || 0),
+      pricePerM2Avg: numOuNulo(r.price_per_m2_avg),
+      ticketAvg: numOuNulo(r.ticket_avg),
+      areaAvg: numOuNulo(r.area_avg),
+      tipologia: r.tipologia ?? null
+    }));
+  },
+
+  async getNeighborhoodSeries(neighborhoodId: string): Promise<OpuraMarketNeighborhoodSerie[]> {
+    const { data, error } = await supabase.rpc('get_market_neighborhood_series', { p_neighborhood_id: neighborhoodId });
+    if (error) throw new Error(`Falha ao buscar a evolução do bairro: ${error.message}`);
+    return (data || []).map((r: any) => ({
+      mes: r.mes,
+      pricePerM2Avg: numOuNulo(r.price_per_m2_avg),
+      total: Number(r.total || 0)
     }));
   },
 
@@ -440,29 +540,6 @@ export const opuraMarketService = {
     }
   },
 
-  // Histórico de Bairros (Série Temporal)
-  async listNeighborhoodHistory(neighborhoodId: string): Promise<OpuraMarketNeighborhoodHistory[]> {
-    const { data, error } = await supabase
-      .from('opura_market_neighborhood_history')
-      .select('*')
-      .eq('neighborhood_id', neighborhoodId)
-      .order('recorded_date', { ascending: true });
-
-    if (error) {
-      console.error(`Error fetching neighborhood history for ${neighborhoodId}:`, error);
-      throw new Error(`Failed to fetch neighborhood history: ${error.message}`);
-    }
-
-    return (data || []).map(h => ({
-      id: h.id,
-      neighborhoodId: h.neighborhood_id,
-      recordedDate: h.recorded_date,
-      pricePerM2Medio: Number(h.price_per_m2_medio),
-      ticketMedio: Number(h.ticket_medio),
-      competitorsCount: h.competitors_count,
-      createdAt: h.created_at
-    }));
-  },
 
   // Configurações de Praça (City Configs)
   async getCityConfig(organizationId?: string, cityId?: string): Promise<OpuraMarketCityConfig | null> {

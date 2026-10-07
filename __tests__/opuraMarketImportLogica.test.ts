@@ -120,9 +120,9 @@ describe('resultado do Photon → precisão, com as duas travas', () => {
   const f = (type: string, props: Record<string, string>, lon = -46.056, lat = -22.6157) =>
     ({ geometry: { coordinates: [lon, lat] as [number, number] }, properties: { type, city: 'Cambuí', ...props } });
 
-  it('rua na cidade certa → endereco (respostas reais de 07/10/2026)', () => {
+  it('número achado → endereco; só a rua → rua (respostas reais de 07/10/2026)', () => {
     expect(localizacaoDoResultado(f('street', { name: 'Avenida Tiradentes' }), rua, 'Cambuí'))
-      .toEqual({ lat: -22.6157, lng: -46.056, precisao: 'endereco' });
+      .toEqual({ lat: -22.6157, lng: -46.056, precisao: 'rua' });
     expect(localizacaoDoResultado(f('house', { name: '80', street: 'Avenida Tiradentes' }), rua, 'Cambuí')!.precisao)
       .toBe('endereco');
   });
@@ -160,7 +160,7 @@ describe('resultado do Photon → precisão, com as duas travas', () => {
       properties: { type: 'street', name: 'Avenida Prefeito José Barbosa Leão', city: 'Córrego Danta' } };
     const certo = f('street', { name: 'Avenida Prefeito José Barbosa' });
     const consulta = { q: 'Prefeito José Barbosa, Cambuí, Minas Gerais', alvo: 'prefeito jose barbosa', temRua: true };
-    expect(primeiraLocalizacao([outraCidade, certo], consulta, 'Cambuí')).toEqual({ lat: -22.6157, lng: -46.056, precisao: 'endereco' });
+    expect(primeiraLocalizacao([outraCidade, certo], consulta, 'Cambuí')).toEqual({ lat: -22.6157, lng: -46.056, precisao: 'rua' });
     expect(primeiraLocalizacao([outraCidade], consulta, 'Cambuí')).toBeNull();
     expect(primeiraLocalizacao(null, consulta, 'Cambuí')).toBeNull();
   });

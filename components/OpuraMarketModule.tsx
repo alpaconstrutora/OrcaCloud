@@ -10,10 +10,21 @@ import {
   OpuraMarketNeighborhood,
   OpuraMarketTerrainStudy,
   OpuraMarketListing,
-  OpuraMarketNeighborhoodHistory,
+  OpuraMarketNeighborhoodStats,
+  OpuraMarketNeighborhoodSerie,
   OpuraMarketCityConfig
 } from '../types';
 import { ImportListingsModal } from './ImportListingsModal';
+import MarketPracaSheet from './market/MarketPracaSheet';
+
+/**
+ * Texto que entra em HTML do Leaflet (tooltip, divIcon). Nome de bairro e
+ * endereço podem vir de feed de terceiros (Fase 3): sem escapar, um feed
+ * conseguiria injetar HTML na tela. O check-xss-sinks.sh não enxerga esse caso
+ * porque quem interpreta a string é o Leaflet.
+ */
+const escHtml = (v: unknown): string =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]);
 import { CityRulesModal } from './CityRulesModal';
 import Button from './ui/Button';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
@@ -113,7 +124,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [selectedDetailedListing, setSelectedDetailedListing] = React.useState<OpuraMarketListing | null>(null);
   
   // Estado para o histórico do bairro
-  const [neighHistory, setNeighHistory] = React.useState<OpuraMarketNeighborhoodHistory[]>([]);
+  const [serieDoBairro, setSerieDoBairro] = React.useState<OpuraMarketNeighborhoodSerie[]>([]);
+  // DNA do bairro calculado na leitura (Fase 4.5), por id do bairro.
+  const [statsPorBairro, setStatsPorBairro] = React.useState<Record<string, OpuraMarketNeighborhoodStats>>({});
+  // Cadastro de praça (Fase 4.4): só o superadministrador da plataforma.
+  const [ehSuperadmin, setEhSuperadmin] = React.useState(false);
+  const [pracaAberta, setPracaAberta] = React.useState(false);
   const [loadingHistory, setLoadingHistory] = React.useState(false);
 
   // Configurações e regras personalizadas da praça/cidade
@@ -149,8 +165,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   // Carrega anúncios da cidade selecionada
   const loadListings = async (cityId: string) => {
     try {
-      const data = await opuraMarketService.listListings(cityId);
+      const [data, stats] = await Promise.all([
+        opuraMarketService.listListings(cityId),
+        opuraMarketService.getNeighborhoodStats(cityId),
+      ]);
       setListings(data);
+      setStatsPorBairro(Object.fromEntries(stats.map(s => [s.neighborhoodId, s])));
     } catch (err) {
       console.error('Erro ao buscar anúncios reais:', err);
     }
@@ -192,9 +212,10 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   
   const radiusMeters = analysisRadius;
 
-  // Coordenadas centrais de Cambuí - MG (Cidade Piloto)
-  const CAMBUI_LAT = -22.6122;
-  const CAMBUI_LNG = -46.0578;
+  // Cidade escolhida no seletor. Antes o módulo tinha o centro da cidade piloto,
+  // escrito no código (a Fase 4 do plano tirou isso).
+  const cidadeAtual = cities.find(c => c.id === selectedCityId) ?? null;
+  const nomeDaCidade = cidadeAtual ? `${cidadeAtual.name} - ${cidadeAtual.state}` : '';
 
   // Carregar cidades e bairros iniciais (Estritamente Leitura - Seed delegado à migração SQL)
   const loadInitialData = React.useCallback(async () => {
@@ -393,14 +414,23 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     neighborhoodsRef.current = neighborhoods;
   }, [neighborhoods]);
 
-  // Carrega o histórico de evolução do bairro selecionado
+  // Superadministrador da plataforma vê "Cadastrar praça" (Fase 4.4). O botão é
+  // só conveniência: quem barra a escrita é a policy com is_superadmin().
+  React.useEffect(() => {
+    supabase.auth.getUser()
+      .then(({ data }) => opuraMarketService.ehSuperadmin(data.user?.email))
+      .then(setEhSuperadmin)
+      .catch(() => setEhSuperadmin(false));
+  }, []);
+
+  // Carrega a evolução de preço do bairro selecionado (mês a mês, pela captura)
   React.useEffect(() => {
     const loadHistory = async () => {
       if (!selectedNeighborhood) return;
       try {
         setLoadingHistory(true);
-        const history = await opuraMarketService.listNeighborhoodHistory(selectedNeighborhood.id);
-        setNeighHistory(history);
+        const serie = await opuraMarketService.getNeighborhoodSeries(selectedNeighborhood.id);
+        setSerieDoBairro(serie);
       } catch (err) {
         console.error('Erro ao buscar histórico do bairro:', err);
       } finally {
@@ -425,10 +455,10 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   React.useEffect(() => {
     if (loading || !mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Inicializa o mapa com as coordenadas de Cambuí - MG
+    // Abre no centro do Brasil; o efeito "enquadrar a cidade" leva à praça escolhida.
     const map = L.map(mapContainerRef.current, {
-      center: [CAMBUI_LAT, CAMBUI_LNG],
-      zoom: 15,
+      center: [-15.78, -47.93],
+      zoom: 4,
       zoomControl: true
     });
 
@@ -464,10 +494,10 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         let minDistance = Infinity;
 
         currentNeighborhoods.forEach(n => {
-          const nLat = n.name === 'Centro' ? -22.6120 : n.name === 'Jardim das Colinas' ? -22.6070 : n.name === 'Vila Santo Antônio' ? -22.6190 : -22.6150;
-          const nLng = n.name === 'Centro' ? -46.0580 : n.name === 'Jardim das Colinas' ? -46.0510 : n.name === 'Vila Santo Antônio' ? -46.0650 : -46.0500;
+          if (n.centroidLat == null || n.centroidLng == null) return; // bairro sem ponto
+          // posição do bairro vem do banco (centroid_lat/centroid_lng), não do nome
           
-          const dist = Math.sqrt(Math.pow(lat - nLat, 2) + Math.pow(lng - nLng, 2));
+          const dist = Math.sqrt(Math.pow(lat - n.centroidLat, 2) + Math.pow(lng - n.centroidLng, 2));
           if (dist < minDistance) {
             minDistance = dist;
             closestBairro = n;
@@ -501,8 +531,9 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
 
     // 1. Desenhar Bairros e suas estatísticas de Heatmap
     neighborhoods.forEach(bairro => {
-      const bLat = bairro.name === 'Centro' ? -22.6120 : bairro.name === 'Jardim das Colinas' ? -22.6070 : bairro.name === 'Vila Santo Antônio' ? -22.6190 : -22.6150;
-      const bLng = bairro.name === 'Centro' ? -46.0580 : bairro.name === 'Jardim das Colinas' ? -46.0510 : bairro.name === 'Vila Santo Antônio' ? -46.0650 : -46.0500;
+      if (bairro.centroidLat == null || bairro.centroidLng == null) return; // bairro sem ponto não vai ao mapa
+      const bLat = bairro.centroidLat;
+      const bLng = bairro.centroidLng;
       
       let layerColor = '#3B82F6'; // Azul padrão (Centro/Médio)
       let radius = 250;
@@ -512,7 +543,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       // verde) e "Saturação" pintava o vazio como saudável.
       const SEM_DADO = '#94A3B8';
       if (activeLayer === 'preco') {
-        layerColor = bairro.pricePerM2Medio == null ? SEM_DADO : '#3B82F6';
+        layerColor = statsPorBairro[bairro.id]?.pricePerM2Avg == null ? SEM_DADO : '#3B82F6';
       } else if (activeLayer === 'saturacao') {
         layerColor = bairro.saturationLevel === 'Saturado' ? '#EF4444'
           : bairro.saturationLevel === 'Atenção' ? '#F59E0B'
@@ -531,16 +562,17 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         weight: 1.5,
         dashArray: '3, 4'
       })
-      .bindTooltip(
-        bairro.pricePerM2Medio == null
-          ? `<b>${bairro.name}</b><br/>Indicadores não calculados`
-          : `<b>${bairro.name}</b><br/>R$ ${Math.round(bairro.pricePerM2Medio).toLocaleString('pt-BR')}/m²${bairro.bairroScore == null ? '' : `<br/>Score: ${bairro.bairroScore}/100`}`,
-        { permanent: false, direction: 'top' })
+      .bindTooltip((() => {
+        const st = statsPorBairro[bairro.id];
+        return st?.pricePerM2Avg == null
+          ? `<b>${escHtml(bairro.name)}</b><br/>Sem anúncio ativo vinculado`
+          : `<b>${escHtml(bairro.name)}</b><br/>R$ ${Math.round(st.pricePerM2Avg).toLocaleString('pt-BR')}/m² · ${st.total} anúncios`;
+      })(), { permanent: false, direction: 'top' })
       .addTo(markersLayer);
 
       // Adiciona um DivIcon com o nome do bairro
       const textIcon = L.divIcon({
-        html: `<div class="text-[9px] font-black uppercase tracking-wider text-slate-200 text-center drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)]">${bairro.name}</div>`,
+        html: `<div class="text-[9px] font-black uppercase tracking-wider text-slate-200 text-center drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)]">${escHtml(bairro.name)}</div>`,
         className: 'border-0 bg-transparent',
         iconSize: [80, 20],
         iconAnchor: [40, 10]
@@ -553,10 +585,11 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       listings.forEach(l => {
         if (!l.latitude || !l.longitude) return;
 
-        // Se o anúncio pertencer à organização atual (importado por ela), usa verde. Senão, vermelho (global)
-        const isPrivate = l.organizationId === organizationId;
+        // Anúncio com dono (importado por uma organização) é verde; sem dono (global) é
+        // vermelho. Comparar com a organização do topo errava em "Todas", onde ela é vazia.
+        const isPrivate = l.organizationId != null;
         const colorClass = isPrivate ? 'bg-emerald-500' : 'bg-rose-500';
-        const label = `<b>${l.propertyType}</b> - ${l.address || 'Endereço não geocodificado'}<br/>R$ ${l.price.toLocaleString('pt-BR')} (${l.areaPrivate}m² | ${l.bedrooms}D)`;
+        const label = `<b>${escHtml(l.propertyType)}</b> - ${escHtml(l.address || 'Endereço não informado')}<br/>R$ ${l.price.toLocaleString('pt-BR')} (${l.areaPrivate}m² | ${l.bedrooms}D)`;
 
         const competitorIcon = L.divIcon({
           html: `<div class="w-3.5 h-3.5 rounded-full ${colorClass} border border-white shadow-md flex items-center justify-center text-[10px] text-white font-bold">🏢</div>`,
@@ -638,7 +671,25 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       .bindTooltip('Área do Terreno Desenhorada', { direction: 'top' })
       .addTo(markersLayer);
     }
-  }, [mapInstance, neighborhoods, listings, activeLayer, terrainPin, radiusMeters, isDrawingPolygon, drawingPoints, polygonPoints]);
+  }, [mapInstance, neighborhoods, listings, activeLayer, terrainPin, radiusMeters, isDrawingPolygon, drawingPoints, polygonPoints, statsPorBairro]);
+
+  // Enquadra a cidade escolhida: os bairros com ponto, ou o centro marcado no
+  // cadastro de praça. Roda ao trocar de cidade ou recarregar os bairros.
+  React.useEffect(() => {
+    const map = mapInstance;
+    if (!map) return;
+    const pontos: [number, number][] = neighborhoods
+      .filter(n => n.centroidLat != null && n.centroidLng != null)
+      .map(n => [n.centroidLat as number, n.centroidLng as number]);
+    if (pontos.length >= 2) {
+      map.fitBounds(L.latLngBounds(pontos).pad(0.25), { maxZoom: 15 });
+    } else if (cidadeAtual?.centerLat != null && cidadeAtual?.centerLng != null) {
+      map.setView([cidadeAtual.centerLat, cidadeAtual.centerLng], 14);
+    } else if (pontos.length === 1) {
+      map.setView(pontos[0], 15);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapInstance, selectedCityId, neighborhoods]);
 
   // Executar a análise de raio PostGIS
   const handleAnalyzeTerrain = async () => {
@@ -791,7 +842,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       await opuraMarketService.createTerrainStudy({
         organizationId,
         name: studyName,
-        address: selectedNeighborhood ? `Bairro ${selectedNeighborhood.name}, Cambuí - MG` : 'Cambuí - MG',
+        address: selectedNeighborhood ? `Bairro ${selectedNeighborhood.name}, ${nomeDaCidade}` : (nomeDaCidade || null),
         terrainArea: parseFloat(terrainArea),
         coefficientsZone: { zone: 'ZUM', ca: 4.0, to: 0.6 },
         analysisRadiusMeters: parseInt(radiusMeters),
@@ -1248,6 +1299,18 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           >
             ⚙️ Regras da Praça
           </Button>
+
+          {ehSuperadmin && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPracaAberta(true)}
+              className="rounded-xl text-button font-black uppercase tracking-wider shadow-xs transition-all flex items-center gap-1.5"
+              title="Cadastrar cidades e bairros. Vale para todas as organizações: só o superadministrador da plataforma vê este botão."
+            >
+              📍 Cadastrar praça
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1565,7 +1628,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                         required
                         value={studyName}
                         onChange={(e) => setStudyName(e.target.value)}
-                        placeholder="Ex: Terreno Centro - Cambuí"
+                        placeholder="Ex: Terreno do Centro"
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                       />
                     </div>
@@ -1759,7 +1822,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                   <div className="space-y-1">
                     <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Nenhum estudo localizado</h4>
                     <p className="text-[11px] text-slate-500 font-semibold max-w-xs mx-auto">
-                      Os estudos da sua organização em Cambuí serão listados aqui assim que salvos no painel lateral de vocação.
+                      Os estudos da sua organização serão listados aqui assim que salvos no painel lateral de vocação.
                     </p>
                   </div>
                 </div>
@@ -1879,34 +1942,32 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 </div>
 
                 {(() => {
-                  const b = selectedNeighborhood;
-                  const NAO = 'Não calculado';
-                  const semNenhum = [b.pricePerM2Medio, b.ticketMedio, b.dominantTypology, b.predominantStandard,
-                    b.saturationLevel, b.competitorsCount, b.potentialScore].every(v => v == null);
-                  if (semNenhum) {
+                  // DNA calculado na leitura (Fase 4.5): só o que a RLS libera a quem vê.
+                  const st = statsPorBairro[selectedNeighborhood.id];
+                  if (!st) {
                     return (
                       <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600 font-semibold leading-relaxed">
-                        Os indicadores deste bairro ainda não são calculados a partir dos anúncios.
-                        Os números que apareciam aqui eram de demonstração e foram removidos em 07/10/2026.
-                        O cálculo volta quando os bairros reais da cidade estiverem cadastrados.
+                        Nenhum anúncio ativo vinculado a este bairro. Os anúncios se vinculam pelo nome do bairro de origem quando ele está cadastrado na praça.
                       </div>
                     );
                   }
-                  const celula = (rotulo: string, valor: React.ReactNode) => (
-                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                  const NAO = 'Não calculado';
+                  const semRegra = 'Ainda sem regra de cálculo definida (decisão D3 do plano).';
+                  const celula = (rotulo: string, valor: React.ReactNode, titulo?: string) => (
+                    <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1" title={titulo}>
                       <span className="block font-black text-slate-400 uppercase text-[9px]">{rotulo}</span>
                       <span className="block font-black text-slate-800 text-sm truncate">{valor}</span>
                     </div>
                   );
                   return (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                      {celula('Preço Médio / m²', b.pricePerM2Medio == null ? NAO : `R$ ${Math.round(b.pricePerM2Medio).toLocaleString('pt-BR')}/m²`)}
-                      {celula('Ticket Médio Geral', b.ticketMedio == null ? NAO : `R$ ${Math.round(b.ticketMedio).toLocaleString('pt-BR')}`)}
-                      {celula('Tipologia Dominante', b.dominantTypology ?? NAO)}
-                      {celula('Padrão predominante', b.predominantStandard ?? NAO)}
-                      {celula('Saturação', b.saturationLevel ?? NAO)}
-                      {celula('Concorrência Ativa', b.competitorsCount == null ? NAO : `${b.competitorsCount} incorporações`)}
-                      {celula('Score Potencial', b.potentialScore == null ? NAO : `${b.potentialScore}%`)}
+                      {celula('Preço Médio / m²', st.pricePerM2Avg == null ? NAO : `R$ ${Math.round(st.pricePerM2Avg).toLocaleString('pt-BR')}/m²`)}
+                      {celula('Ticket Médio', st.ticketAvg == null ? NAO : `R$ ${Math.round(st.ticketAvg).toLocaleString('pt-BR')}`)}
+                      {celula('Área Média', st.areaAvg == null ? NAO : `${Math.round(st.areaAvg).toLocaleString('pt-BR')} m²`)}
+                      {celula('Mais Anunciado', st.tipologia ?? NAO)}
+                      {celula('Anúncios Ativos', st.total.toLocaleString('pt-BR'))}
+                      {celula('Saturação', NAO, semRegra)}
+                      {celula('Score Potencial', NAO, semRegra)}
                     </div>
                   );
                 })()}
@@ -1915,19 +1976,19 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                 <div className="border-t border-slate-100 pt-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="block font-black text-slate-400 uppercase text-[9px] tracking-wider">Evolução do Preço Ofertado (m²)</span>
-                    <span className="text-xs text-slate-500 font-semibold">Últimos 6 Meses</span>
+                    <span className="text-xs text-slate-500 font-semibold">Mês a mês, pela data de captura</span>
                   </div>
 
                   {loadingHistory ? (
                     <div className="h-40 flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-100">
                       <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
                     </div>
-                  ) : neighHistory.length > 0 ? (
+                  ) : serieDoBairro.length > 0 ? (
                     <div className="h-44 bg-slate-50/50 border border-slate-100 rounded-2xl p-4">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={neighHistory.map(h => ({
-                          mes: new Date(h.recordedDate).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-                          preco: h.pricePerM2Medio
+                        <AreaChart data={serieDoBairro.map(h => ({
+                          mes: new Date(`${h.mes}T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+                          preco: h.pricePerM2Avg == null ? null : Math.round(h.pricePerM2Avg)
                         }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                           <defs>
                             <linearGradient id="colorPreco" x1="0" y1="0" x2="0" y2="1">
@@ -1950,7 +2011,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     </div>
                   ) : (
                     <div className="h-40 flex items-center justify-center bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-400 font-semibold">
-                      Sem histórico de dados disponível para este bairro.
+                      Sem anúncio com preço por m² vinculado a este bairro.
                     </div>
                   )}
                 </div>
@@ -2019,7 +2080,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                   <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1 flex-1">
                     {filteredListings.length > 0 ? (
                       filteredListings.map(l => {
-                        const isPrivate = l.organizationId === organizationId;
+                        // Com dono = privado; sem dono = global (ver o mesmo teste no mapa).
+                        const isPrivate = l.organizationId != null;
                         return (
                           <div
                             key={l.id}
@@ -2121,6 +2183,20 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           organizationId={organizationId}
         />
       )}
+      <MarketPracaSheet
+        open={pracaAberta}
+        onClose={() => setPracaAberta(false)}
+        cidades={cities}
+        cidadeInicialId={selectedCityId || null}
+        onSalvo={async (cidadeId) => {
+          const lista = await opuraMarketService.listCities();
+          setCities(lista);
+          setSelectedCityId(cidadeId);
+          await loadNeighborhoods(cidadeId);
+          await loadListings(cidadeId);
+          await loadCityRules(cidadeId);
+        }}
+      />
       {isRulesModalOpen && (
         <CityRulesModal
           isOpen={isRulesModalOpen}
@@ -2137,7 +2213,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           }}
           organizationId={organizationId}
           cityId={selectedCityId}
-          cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
+          cityName={cidadeAtual?.name ?? ''}
           initialConfig={cityConfig}
         />
       )}
@@ -2150,7 +2226,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
               <div>
                 <span className="block text-[9px] font-black text-indigo-600 uppercase tracking-widest">Detalhes do Anúncio</span>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mt-1 truncate max-w-[340px]">
-                  {selectedDetailedListing.propertyType} em Cambuí
+                  {selectedDetailedListing.propertyType} em {cities.find(c => c.id === selectedDetailedListing.cityId)?.name ?? 'cidade não informada'}
                 </h3>
               </div>
               <button 
@@ -2187,7 +2263,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     <div>
                       <span className="block text-[9px] text-slate-400 font-bold uppercase">Cidade</span>
                       <span className="block font-extrabold text-slate-700 mt-0.5">
-                        {cities.find(c => c.id === selectedDetailedListing.cityId)?.name || 'Cambuí'} - MG
+                        {(() => { const c = cities.find(x => x.id === selectedDetailedListing.cityId); return c ? `${c.name} - ${c.state}` : 'Não informada'; })()}
                       </span>
                     </div>
                     <div>

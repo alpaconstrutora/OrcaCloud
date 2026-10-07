@@ -22,6 +22,49 @@ function getPolygonWkt(coords: [number, number][]): string {
   return `SRID=4326;POLYGON((${pointsStr}))`;
 }
 
+/** Uma linha da planilha já mapeada pelo modal — a function valida de novo. */
+export interface LinhaPlanilhaMercado {
+  endereco: string;
+  bairro?: string | null;
+  preco: number;
+  area: number;
+  tipo?: string | null;
+  quartos?: number;
+  suites?: number;
+  banheiros?: number;
+  vagas?: number;
+  padrao?: string | null;
+  descricao?: string | null;
+}
+
+export interface ResultadoImportacaoMercado {
+  novos: number;
+  duplicados: number;
+  atualizados?: number;
+  semLocalizacao: number;
+  pendentes: number;
+  invalidas?: number;
+  lidos?: number;
+  ignorados?: Record<string, number>;
+}
+
+export interface ResultadoLocalizacaoMercado {
+  localizados: number;
+  naoEncontrados: number;
+  restantes: number;
+}
+
+async function invocarImportacao<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke('opura-market-import', { body });
+  if (error) {
+    // Resposta 4xx/5xx chega como FunctionsHttpError — a mensagem útil está no corpo.
+    const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
+    throw new Error(corpo?.error || error.message || 'Falha na importação.');
+  }
+  if (data?.error) throw new Error(data.error);
+  return data as T;
+}
+
 export const opuraMarketService = {
   // Cidades
   async listCities(): Promise<OpuraMarketCity[]> {
@@ -125,6 +168,9 @@ export const opuraMarketService = {
       id: l.id,
       cityId: l.city_id,
       neighborhoodId: l.neighborhood_id,
+      // Sem este campo a tela tratava todo anúncio como "Global": o selo
+      // "Privado (Importado)" e o botão de excluir nunca apareciam.
+      organizationId: l.organization_id ?? null,
       source: l.source,
       sourceUrl: l.source_url,
       propertyType: l.property_type,
@@ -148,6 +194,8 @@ export const opuraMarketService = {
       capturedAt: l.captured_at,
       lastSeenAt: l.last_seen_at,
       parentListingId: l.parent_listing_id,
+      neighborhoodNameRaw: l.neighborhood_name_raw ?? null,
+      geoPrecision: l.geo_precision ?? null,
       createdAt: l.created_at
     }));
   },
@@ -339,35 +387,6 @@ export const opuraMarketService = {
     }
   },
 
-  // Geocodificação de endereços usando a API Nominatim (OpenStreetMap)
-  async geocodeAddress(address: string, cityName: string): Promise<{ lat: number; lng: number } | null> {
-    try {
-      const query = encodeURIComponent(`${address}, ${cityName}`);
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1`, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'OpuraMarketIntel/1.0 (contato@opura.com.br)'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Nominatim API returned HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return {
-          lat: parseFloat(data[0].lat),
-          lng: parseFloat(data[0].lon)
-        };
-      }
-      return null;
-    } catch (err) {
-      console.error('Erro ao geocodificar endereço:', err);
-      return null;
-    }
-  },
-
   // Calcula a área geodésica exata do polígono usando a RPC do Supabase
   async calculatePolygonArea(geojson: any): Promise<number> {
     const { data, error } = await supabase.rpc('calculate_polygon_area', {
@@ -382,177 +401,30 @@ export const opuraMarketService = {
     return Number(data || 0);
   },
 
-  // Importação em lote de anúncios com deduplicação automática
-  async importListingsInBatch(
-    listings: Omit<OpuraMarketListing, 'id' | 'createdAt' | 'pricePerM2'>[]
-  ): Promise<{ importedCount: number; deduplicatedCount: number }> {
-    if (!listings || listings.length === 0) {
-      return { importedCount: 0, deduplicatedCount: 0 };
-    }
+  // Importação de anúncios — roda na Edge Function `opura-market-import`
+  // (Fase 3 revisada, D7, do plano 2026-10-07-opura-market-intelligence.md).
+  // A geocodificação (OpenStreetMap) e a deduplicação (gatilho no banco) acontecem
+  // no servidor. Antes, as duas rodavam aqui no navegador, com proxies de CORS
+  // de terceiros para o robô e geocodificação pelo nome do bairro.
+  async importarPlanilha(
+    organizationId: string,
+    cityId: string,
+    linhas: LinhaPlanilhaMercado[]
+  ): Promise<ResultadoImportacaoMercado> {
+    return invocarImportacao({ modo: 'planilha', organizationId, cityId, linhas });
+  },
 
-    // "Mesma origem" = mesma organização, ou os dois globais (organization_id nulo).
-    // É a regra do gatilho fn_deduplicate_market_listing desde a Fase 1
-    // (aplicar_20271007000100): anúncio privado nunca é descartado por causa de um
-    // anúncio global ou de outra organização. String vazia conta como global.
-    const origemDe = (orgId: string | null | undefined): string | null => orgId || null;
-    const mesmoValor = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+  async importarFeed(
+    organizationId: string,
+    cityId: string,
+    origem: { feedUrl?: string; feedXml?: string }
+  ): Promise<ResultadoImportacaoMercado> {
+    return invocarImportacao({ modo: 'feed', organizationId, cityId, ...origem });
+  },
 
-    // Busca os existentes por (cidade, origem) — o mesmo recorte do gatilho.
-    // Antes a busca era por (cidade, bairro) sem olhar origem, e bairro nulo virava
-    // a string 'null' no filtro: o Postgres recusava (22P02), o erro era engolido e
-    // a deduplicação contra o banco simplesmente não acontecia.
-    const grupos = new Map<string, { cityId: string; orgId: string | null }>();
-    for (const l of listings) {
-      const orgId = origemDe(l.organizationId);
-      grupos.set(`${l.cityId}|${orgId ?? ''}`, { cityId: l.cityId, orgId });
-    }
-
-    const existingListings: any[] = [];
-    for (const { cityId, orgId } of grupos.values()) {
-      let query = supabase
-        .from('opura_market_listings')
-        .select('id, city_id, neighborhood_id, organization_id, latitude, longitude, bedrooms, area_private')
-        .eq('city_id', cityId)
-        .eq('listing_status', 'active')
-        .is('parent_listing_id', null);
-      query = orgId ? query.eq('organization_id', orgId) : query.is('organization_id', null);
-
-      const { data, error } = await query;
-      if (error) {
-        // Sem a lista de existentes, importar seria gravar duplicados às cegas.
-        throw new Error(`Falha ao buscar anúncios existentes para deduplicar: ${error.message}`);
-      }
-      existingListings.push(...(data || []));
-    }
-
-    // Função de verificação de duplicata por proximidade física, quartos e área útil (+/- 2% de tolerância)
-    const isDuplicate = (
-      lat1: number | null, lng1: number | null,
-      lat2: number | null, lng2: number | null,
-      bed1: number, bed2: number,
-      area1: number | null | undefined,
-      area2: number | null | undefined
-    ) => {
-      const a1 = Number(area1 || 0);
-      const a2 = Number(area2 || 0);
-
-      // Se não possui coordenadas geocodificadas, compara estritamente pela tipologia de área e quartos
-      if (!lat1 || !lng1 || !lat2 || !lng2) {
-        return bed1 === bed2 && Math.abs(a1 - a2) / Math.max(a1, a2, 1) <= 0.01;
-      }
-
-      // 1. Mesmo número de dormitórios
-      if (bed1 !== bed2) return false;
-
-      // 2. Área privativa próxima (+/- 2% de tolerância)
-      const areaDiffPct = Math.abs(a1 - a2) / Math.max(a1, a2, 1);
-      if (areaDiffPct > 0.02) return false;
-
-      // 3. Mesma localização aproximada (distância geográfica menor que 50 metros)
-      const dLat = lat1 - lat2;
-      const dLng = lng1 - lng2;
-      const distanceMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111000;
-
-      return distanceMeters < 50;
-    };
-
-    const uniqueListingsPayload: any[] = [];
-    let deduplicatedCount = 0;
-
-    for (const l of listings) {
-      // 1. Verificar duplicatas internas no próprio lote importado.
-      // `uniqueListingsPayload` guarda o registro JÁ convertido para snake_case
-      // (é o payload do insert), então a área ali é `area_private` — ler
-      // `ul.areaPrivate` devolvia undefined, a área virava 0 e a comparação
-      // nunca batia: duplicado dentro do mesmo lote entrava no banco.
-      // Sem coordenada, área e quartos parecidos não bastam na cidade inteira —
-      // exige também o mesmo bairro (o recorte que a busca antiga fazia).
-      const comparavel = (outro: { city_id: string; organization_id: string | null; neighborhood_id: string | null; latitude: unknown; longitude: unknown }) => {
-        if (outro.city_id !== l.cityId) return false;
-        if (!mesmoValor(outro.organization_id, origemDe(l.organizationId))) return false;
-        const semCoordenada = !l.latitude || !l.longitude || !outro.latitude || !outro.longitude;
-        return !semCoordenada || mesmoValor(outro.neighborhood_id, l.neighborhoodId);
-      };
-
-      const existsInPayload = uniqueListingsPayload.some(ul =>
-        comparavel(ul) &&
-        isDuplicate(
-          l.latitude, l.longitude,
-          ul.latitude, ul.longitude,
-          l.bedrooms, ul.bedrooms,
-          l.areaPrivate, ul.area_private
-        )
-      );
-
-      if (existsInPayload) {
-        deduplicatedCount++;
-        continue;
-      }
-
-      // Ordem dos argumentos: (…, area1, area2) — area1 é a do anúncio sendo
-      // avaliado (`l`) e area2 a do existente (`el`), como nas outras chamadas.
-      const existsInDb = existingListings.some(el =>
-        comparavel(el) &&
-        isDuplicate(
-          l.latitude, l.longitude,
-          el.latitude ? Number(el.latitude) : null,
-          el.longitude ? Number(el.longitude) : null,
-          l.bedrooms, el.bedrooms,
-          l.areaPrivate,
-          el.area_private ? Number(el.area_private) : 0
-        )
-      );
-
-      if (existsInDb) {
-        deduplicatedCount++;
-        continue;
-      }
-
-      // Anúncio validado e sem duplicatas
-      uniqueListingsPayload.push({
-        city_id: l.cityId,
-        neighborhood_id: l.neighborhoodId || null,
-        organization_id: origemDe(l.organizationId),
-        source: l.source,
-        source_url: l.sourceUrl,
-        property_type: l.propertyType,
-        address: l.address,
-        zip_code: l.zipCode,
-        area_private: l.areaPrivate,
-        area_total: l.areaTotal,
-        bedrooms: l.bedrooms,
-        suites: l.suites,
-        bathrooms: l.bathrooms,
-        parking_spaces: l.parkingSpaces,
-        price: l.price,
-        condo_fee: l.condoFee,
-        iptu: l.iptu,
-        latitude: l.latitude,
-        longitude: l.longitude,
-        geom: (l.latitude && l.longitude) ? `SRID=4326;POINT(${l.longitude} ${l.latitude})` : null,
-        description: l.description,
-        construction_standard: l.constructionStandard,
-        listing_status: l.listingStatus,
-        captured_at: l.capturedAt,
-        last_seen_at: l.lastSeenAt
-      });
-    }
-
-    if (uniqueListingsPayload.length > 0) {
-      const { error } = await supabase
-        .from('opura_market_listings')
-        .insert(uniqueListingsPayload);
-
-      if (error) {
-        console.error('Error inserting unique listings in batch:', error);
-        throw new Error(`Falha ao importar anúncios únicos: ${error.message}`);
-      }
-    }
-
-    return {
-      importedCount: uniqueListingsPayload.length,
-      deduplicatedCount
-    };
+  /** Geocodifica os anúncios da organização na cidade que ainda não têm coordenada. */
+  async localizarPendentes(organizationId: string, cityId: string): Promise<ResultadoLocalizacaoMercado> {
+    return invocarImportacao({ modo: 'localizar', organizationId, cityId });
   },
 
   // Deletar anúncio/ocorrência individual

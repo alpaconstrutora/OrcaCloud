@@ -1,16 +1,34 @@
 import React from 'react';
 import * as XLSX from 'xlsx';
-import { opuraMarketService } from '../services/opuraMarketService';
-import { OpuraMarketNeighborhood } from '../types';
+import { opuraMarketService, LinhaPlanilhaMercado } from '../services/opuraMarketService';
 
 interface ImportListingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   cityId: string;
-  cityName: string;
-  neighborhoods: OpuraMarketNeighborhood[];
   organizationId: string;
+}
+
+/**
+ * Número de uma célula da planilha. Célula numérica do Excel chega como number;
+ * texto vem no formato brasileiro ("R$ 450.000,00", "80,5 m²") ou americano
+ * ("450000.00"). Antes, "450.000,00" virava 450: a vírgula era trocada por ponto
+ * e o parseFloat parava no segundo ponto.
+ */
+export function numeroDaCelula(valor: unknown): number {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : NaN;
+  if (valor == null) return NaN;
+  let t = String(valor).replace(/[^\d.,-]/g, '');
+  if (!t) return NaN;
+  const temVirgula = t.includes(',');
+  const pontos = (t.match(/\./g) ?? []).length;
+  if (temVirgula) {
+    t = t.replace(/\./g, '').replace(',', '.');            // 450.000,00 → 450000.00
+  } else if (pontos > 1 || /^\d{1,3}\.\d{3}$/.test(t)) {
+    t = t.replace(/\./g, '');                               // 1.250.000 ou 450.000 → milhar
+  }
+  return parseFloat(t);
 }
 
 // Atributos do banco de dados que precisam ser mapeados
@@ -33,8 +51,6 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
   onClose,
   onSuccess,
   cityId,
-  cityName,
-  neighborhoods,
   organizationId
 }) => {
   const [file, setFile] = React.useState<File | null>(null);
@@ -42,10 +58,8 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
   const [rows, setRows] = React.useState<any[][]>([]);
   const [mappings, setMappings] = React.useState<Record<string, string>>({});
   
-  // Estados de progresso da geocodificação
+  // Estado da importação (feita no servidor)
   const [importing, setImporting] = React.useState(false);
-  const [progress, setProgress] = React.useState(0);
-  const [currentLine, setCurrentLine] = React.useState(0);
   const [totalLines, setTotalLines] = React.useState(0);
   const [statusMessage, setStatusMessage] = React.useState('');
 
@@ -131,173 +145,82 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
     }));
   };
 
-  // Dispara a importação, geocodificando linha por linha sequencialmente
+  // Lê e mapeia as linhas aqui; a geocodificação e a gravação acontecem no
+  // servidor (Edge Function opura-market-import, Fase 3 revisada do plano
+  // 2026-10-07-opura-market-intelligence.md). Antes este laço geocodificava no
+  // navegador, uma linha por segundo, e sorteava um ponto quando não achava.
   const handleImport = async () => {
-    // Valida campos obrigatórios
     const missingFields = MAP_FIELDS.filter(f => f.required && !mappings[f.key]);
     if (missingFields.length > 0) {
       alert(`Por favor, mapeie as colunas obrigatórias: ${missingFields.map(f => f.label).join(', ')}`);
       return;
     }
-
     if (!cityId || cityId.trim() === '') {
       alert('Erro: Nenhuma cidade válida selecionada para importação.');
       return;
     }
+    if (!organizationId) {
+      alert('Selecione uma organização no topo da tela antes de importar: o anúncio é gravado nela.');
+      return;
+    }
 
-    const cleanUUID = (uuid: string | null | undefined): string | null => {
-      if (!uuid) return null;
-      const cleaned = uuid.trim();
-      return cleaned === '' || cleaned === 'null' || cleaned === 'undefined' ? null : cleaned;
-    };
-
-    setImporting(true);
-    setTotalLines(rows.length);
-    setCurrentLine(0);
-    setProgress(0);
-
-    const importedListings: any[] = [];
-    const now = new Date().toISOString();
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      setCurrentLine(i + 1);
-      setProgress(Math.round(((i + 1) / rows.length) * 100));
-
-      // Mapeia os dados da linha com base nas colunas selecionadas
+    const linhas: LinhaPlanilhaMercado[] = [];
+    for (const row of rows) {
       const getVal = (key: string) => {
         const headerName = mappings[key];
         if (!headerName) return null;
         const headerIdx = headers.indexOf(headerName);
         return headerIdx !== -1 ? row[headerIdx] : null;
       };
+      const endereco = getVal('address') != null ? String(getVal('address')).trim() : '';
+      const preco = numeroDaCelula(getVal('price'));
+      const area = numeroDaCelula(getVal('areaPrivate'));
+      if (!endereco || !(preco > 0) || !(area > 0)) continue;   // linha sem o essencial
 
-      const rawAddress = getVal('address');
-      const addressString = rawAddress ? String(rawAddress).trim() : '';
-      const rawPrice = getVal('price');
-      const priceVal = rawPrice ? parseFloat(String(rawPrice).replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
-      const rawArea = getVal('areaPrivate');
-      const areaVal = rawArea ? parseFloat(String(rawArea).replace(/[^\d.,]/g, '').replace(',', '.')) : 0;
-
-      if (!addressString || isNaN(priceVal) || priceVal <= 0 || isNaN(areaVal) || areaVal <= 0) {
-        // Pula linhas inconsistentes ou sem dados cruciais
-        continue;
-      }
-
-      const rawNeighborhood = getVal('neighborhood');
-      const neighborhoodName = rawNeighborhood ? String(rawNeighborhood).trim() : '';
-
-      // Tenta cruzar com bairro semeado para associar neighborhoodId
-      let matchedNeighborhoodId: string | null = null;
-      if (neighborhoodName) {
-        const found = neighborhoods.find(n => n.name.toLowerCase() === neighborhoodName.toLowerCase());
-        if (found) {
-          matchedNeighborhoodId = found.id;
-        }
-      }
-
-      setStatusMessage(`Geocodificando: "${addressString}"...`);
-
-      // Geocodificação com a API do Nominatim
-      let latitude: number | null = null;
-      let longitude: number | null = null;
-
-      try {
-        const coords = await opuraMarketService.geocodeAddress(addressString, cityName);
-        if (coords) {
-          latitude = coords.lat;
-          longitude = coords.lng;
-        } else {
-          // Se não localizar o endereço específico da rua, busca pelo Bairro se mapeado
-          if (neighborhoodName) {
-            const neighborhoodCoords = await opuraMarketService.geocodeAddress(neighborhoodName, cityName);
-            if (neighborhoodCoords) {
-              latitude = neighborhoodCoords.lat;
-              longitude = neighborhoodCoords.lng;
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Erro de geocodificação na linha', i, err);
-      }
-
-      // Endereço não localizado fica SEM coordenada. Antes o código sorteava um ponto
-      // a até ~500 m do centro de Cambuí (para qualquer cidade) e gravava como se
-      // fosse real — o pino aparecia no mapa e entrava na estatística de raio.
-      // Sem coordenada o anúncio continua na tabela, fora do mapa e da análise.
-      if (!latitude || !longitude) {
-        latitude = null;
-        longitude = null;
-      }
-
-      // Constrói o modelo de anúncio correspondente
-      const rawType = getVal('propertyType');
-      const propertyType = rawType ? String(rawType) : 'Apartamento';
-      const bedroomsVal = getVal('bedrooms') ? parseInt(String(getVal('bedrooms'))) : 0;
-      const suitesVal = getVal('suites') ? parseInt(String(getVal('suites'))) : 0;
-      const bathroomsVal = getVal('bathrooms') ? parseInt(String(getVal('bathrooms'))) : 1;
-      const parkingVal = getVal('parkingSpaces') ? parseInt(String(getVal('parkingSpaces'))) : 0;
-      const standardVal = getVal('constructionStandard') ? String(getVal('constructionStandard')) : 'Médio';
-      const descVal = getVal('description') ? String(getVal('description')) : '';
-
-      importedListings.push({
-        cityId: cityId || '',
-        neighborhoodId: cleanUUID(matchedNeighborhoodId),
-        organizationId: cleanUUID(organizationId),
-        source: 'Planilha Importada',
-        sourceUrl: null,
-        propertyType,
-        address: addressString,
-        zipCode: null,
-        areaPrivate: areaVal,
-        areaTotal: areaVal,
-        bedrooms: isNaN(bedroomsVal) ? 0 : bedroomsVal,
-        suites: isNaN(suitesVal) ? 0 : suitesVal,
-        bathrooms: isNaN(bathroomsVal) ? 1 : bathroomsVal,
-        parkingSpaces: isNaN(parkingVal) ? 0 : parkingVal,
-        price: priceVal,
-        condoFee: null,
-        iptu: null,
-        latitude,
-        longitude,
-        description: descVal,
-        constructionStandard: standardVal,
-        listingStatus: 'active',
-        capturedAt: now,
-        lastSeenAt: now
+      const texto = (key: string) => {
+        const v = getVal(key);
+        return v == null || String(v).trim() === '' ? null : String(v).trim();
+      };
+      const inteiro = (key: string) => {
+        const n = numeroDaCelula(getVal(key));
+        return n > 0 ? Math.round(n) : 0;
+      };
+      linhas.push({
+        endereco,
+        bairro: texto('neighborhood'),
+        preco,
+        area,
+        tipo: texto('propertyType'),
+        quartos: inteiro('bedrooms'),
+        suites: inteiro('suites'),
+        banheiros: inteiro('bathrooms'),
+        vagas: inteiro('parkingSpaces'),
+        padrao: texto('constructionStandard'),
+        descricao: texto('description'),
       });
-
-      // Taxa Limite Nominatim: Aguardar obrigatoriamente 1000ms antes da próxima linha
-      if (i < rows.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
     }
 
-    if (importedListings.length === 0) {
-      alert('Nenhum anúncio válido foi localizado para importação.');
-      setImporting(false);
+    if (linhas.length === 0) {
+      alert('Nenhum anúncio válido foi localizado para importação (cada linha precisa de endereço, preço e área).');
       return;
     }
 
-    // Grava dados em lote com deduplicação ativa
+    setImporting(true);
+    setTotalLines(linhas.length);
+    setStatusMessage(`Enviando ${linhas.length} anúncios. O servidor localiza cerca de um endereço por segundo.`);
     try {
-      setStatusMessage(`Enviando ${importedListings.length} anúncios para o Supabase com deduplicação...`);
-      const result = await opuraMarketService.importListingsInBatch(importedListings);
-      
-      let successMsg = `Importação concluída com sucesso!\n\n🔹 Anúncios salvos: ${result.importedCount}`;
-      if (result.deduplicatedCount > 0) {
-        successMsg += `\n🛡️ Anúncios duplicados ignorados: ${result.deduplicatedCount} (limpeza de dados ativada)`;
-      }
-      const semLocalizacao = importedListings.filter(l => l.latitude == null || l.longitude == null).length;
-      if (semLocalizacao > 0) {
-        successMsg += `\n📍 ${semLocalizacao} de ${importedListings.length} anúncios sem localização: o endereço não foi encontrado. Eles ficam na tabela, mas não aparecem no mapa nem na análise de raio.`;
-      }
-      alert(successMsg);
+      const r = await opuraMarketService.importarPlanilha(organizationId, cityId, linhas);
+      const partes = ['Importação concluída.', '', `🔹 Anúncios novos: ${r.novos}`];
+      if (r.duplicados > 0) partes.push(`🛡️ Repetidos de anúncios que já existiam: ${r.duplicados} (gravados como duplicados, fora das contas)`);
+      if (r.semLocalizacao > 0) partes.push(`📍 Endereço não encontrado: ${r.semLocalizacao}. Ficam na tabela, fora do mapa e da análise de raio.`);
+      if (r.pendentes > 0) partes.push(`⏳ Ainda sem localização por limite de tempo: ${r.pendentes}. Use "Localizar anúncios sem coordenada" na aba Feed XML.`);
+      if (r.invalidas) partes.push(`⚠️ Linhas recusadas pelo servidor: ${r.invalidas}`);
+      alert(partes.join('\n'));
       onSuccess();
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert('Erro ao salvar no banco: ' + err.message);
+      alert('Erro na importação: ' + err.message);
     } finally {
       setImporting(false);
     }
@@ -326,31 +249,19 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           
           {importing ? (
-            /* Tela de progresso de geocodificação */
+            /* Importação em andamento no servidor */
             <div className="py-12 flex flex-col items-center justify-center space-y-6">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center animate-pulse">
-                <span className="text-2xl">🌍</span>
-              </div>
+              <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
               <div className="text-center space-y-2">
-                <span className="text-sm font-black text-slate-800 uppercase tracking-wider block">
-                  Geocodificando Dados ({progress}%)
+                <span className="text-sm font-black text-slate-800 block">
+                  Importando {totalLines} anúncios
                 </span>
-                <span className="text-xs text-slate-400 font-semibold block">
-                  Linha {currentLine} de {totalLines} processada
-                </span>
-                <span className="text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full font-bold inline-block border border-emerald-100 max-w-xs truncate mt-2">
+                <span className="text-xs text-slate-500 font-semibold block max-w-xs">
                   {statusMessage}
                 </span>
               </div>
-              {/* Barra de Progresso */}
-              <div className="w-full max-w-xs bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                <div 
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-300" 
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
               <p className="text-xs text-slate-400 max-w-xs text-center font-medium leading-relaxed">
-                Respeitando o limite de requisições da API do Nominatim (1s por endereço) para prevenir bloqueios de IP.
+                Pode levar até dois minutos. O que não for localizado nesse tempo fica pendente e pode ser completado depois.
               </p>
             </div>
           ) : !file ? (

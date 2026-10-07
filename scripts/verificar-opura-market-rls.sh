@@ -25,7 +25,8 @@
 #   RAIO membro    <> RAIO de fora         (enquanto existir anúncio privado no raio)
 #   ANON            → permission denied (42501)
 #   CRUZADOS        = 0
-#   GATILHO         global≠privado sem pai · privado repetido com pai · área 0 sem erro
+#   GATILHO         global≠privado sem pai · privado repetido com pai · área 0 sem erro ·
+#                   anúncio que ganha coordenada depois também é deduplicado (UPDATE OF geom)
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -125,13 +126,23 @@ BEGIN
     RETURNING id INTO v_id;
     INSERT INTO _prova VALUES (r.ordem, r.rotulo, v_id);
   END LOOP;
+  -- 6: nasce SEM coordenada e ganha depois (geocodificação posterior, Fase 3):
+  -- o gatilho precisa rodar no UPDATE OF geom e achar o pai.
+  INSERT INTO public.opura_market_listings
+    (city_id, organization_id, source, property_type, area_private, price, bedrooms, listing_status)
+  VALUES (v_cid, v_org, '__prova_fase1__', 'Apartamento', 77.2, 300000, 9, 'active')
+  RETURNING id INTO v_id;
+  INSERT INTO _prova VALUES (6, 'privado_localizado_depois', v_id);
+  UPDATE public.opura_market_listings
+     SET latitude = -10.0, longitude = -10.0, geom = ST_SetSRID(ST_MakePoint(-10.0, -10.0), 4326)
+   WHERE id = v_id;
 END \$\$;
 SELECT string_agg(p.rotulo || '=' || CASE WHEN l.parent_listing_id IS NULL THEN 'sem_pai'
                                      ELSE 'pai:' || (SELECT p2.rotulo FROM _prova p2 WHERE p2.id = l.parent_listing_id) END,
                   ' ' ORDER BY p.ordem)
 FROM _prova p JOIN public.opura_market_listings l ON l.id = p.id;"
 rodar "GATILHO         " "$GATILHO"
-ESPERADO="global=sem_pai privado_igual_global=sem_pai privado_repetido=pai:privado_igual_global privado_area_zero_a=sem_pai privado_area_zero_b=pai:privado_area_zero_a"
+ESPERADO="global=sem_pai privado_igual_global=sem_pai privado_repetido=pai:privado_igual_global privado_area_zero_a=sem_pai privado_area_zero_b=pai:privado_area_zero_a privado_localizado_depois=pai:privado_igual_global"
 [ "$LAST" = "$ESPERADO" ] || [ "$LAST" = "\"$ESPERADO\"" ] || { echo "   ❌ gatilho: esperado [$ESPERADO]"; falhas=$((falhas+1)); }
 
 echo

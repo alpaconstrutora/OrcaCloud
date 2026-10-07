@@ -35,6 +35,10 @@ export interface OpuraMarketListing {
   neighborhoodId: string | null;
   organizationId?: string | null;
   parentListingId?: string | null;
+  /** Nome do bairro como veio da origem; neighborhoodId só existe quando casa exato com um cadastrado. */
+  neighborhoodNameRaw?: string | null;
+  /** De onde veio a coordenada: fonte (feed), endereco (rua), bairro, nao_encontrado; null sem coordenada = pendente. */
+  geoPrecision?: 'fonte' | 'endereco' | 'bairro' | 'nao_encontrado' | null;
   source: string;
   sourceUrl: string | null;
   propertyType: string;

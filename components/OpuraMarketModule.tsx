@@ -2,7 +2,7 @@ import React from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { opuraMarketService } from '../services/opuraMarketService';
+import { opuraMarketService, ResultadoImportacaoMercado } from '../services/opuraMarketService';
 import { imovibService } from '../services/imovibService';
 import { supabase } from '../lib/supabase';
 import {
@@ -49,7 +49,7 @@ function renderConcorrenciaCell(key: string, l: OpuraMarketListing, neighborhood
     case 'propertyType':
       return <span className="text-sm font-normal text-gray-700 truncate">{l.propertyType}</span>;
     case 'neighborhood':
-      return <span className="text-sm font-normal text-gray-700 truncate">{neighborhoods.find(n => n.id === l.neighborhoodId)?.name || 'Desconhecido'}</span>;
+      return <span className="text-sm font-normal text-gray-700 truncate">{neighborhoods.find(n => n.id === l.neighborhoodId)?.name || l.neighborhoodNameRaw || 'Não informado'}</span>;
     case 'price':
       return <span className="text-sm font-medium text-gray-800">R$ {l.price.toLocaleString('pt-BR')}</span>;
     case 'pricePerM2':
@@ -111,8 +111,6 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [listings, setListings] = React.useState<OpuraMarketListing[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [selectedDetailedListing, setSelectedDetailedListing] = React.useState<OpuraMarketListing | null>(null);
-  const [isScraping, setIsScraping] = React.useState(false);
-  const [scrapingStatus, setScrapingStatus] = React.useState('');
   
   // Estado para o histórico do bairro
   const [neighHistory, setNeighHistory] = React.useState<OpuraMarketNeighborhoodHistory[]>([]);
@@ -122,12 +120,13 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [cityConfig, setCityConfig] = React.useState<OpuraMarketCityConfig | null>(null);
   const [loadingCityConfig, setLoadingCityConfig] = React.useState(false);
   const [isRulesModalOpen, setIsRulesModalOpen] = React.useState(false);
-  const [activeViewMode, setActiveViewMode] = React.useState<'map' | 'table' | 'scraping' | 'studies'>('map');
-  const [scraperUrl, setScraperUrl] = React.useState('https://conexao381.com.br/imoveis/a-venda/cambui-mg');
-  const [scrapedListings, setScrapedListings] = React.useState<OpuraMarketListing[]>([]);
-  const [isLocalScraping, setIsLocalScraping] = React.useState(false);
-  const [localScrapingStatus, setLocalScrapingStatus] = React.useState('');
-  const [maxPagesToScrape, setMaxPagesToScrape] = React.useState<number>(5);
+  const [activeViewMode, setActiveViewMode] = React.useState<'map' | 'table' | 'feed' | 'studies'>('map');
+  // Importação por feed XML (decisão D7 do plano 2026-10-07): substitui o robô.
+  const [feedUrl, setFeedUrl] = React.useState('');
+  const [feedArquivo, setFeedArquivo] = React.useState<File | null>(null);
+  const [importandoFeed, setImportandoFeed] = React.useState(false);
+  const [localizando, setLocalizando] = React.useState(false);
+  const [resultadoFeed, setResultadoFeed] = React.useState<string | null>(null);
   const tableColumns = useTableColumns(CONCORRENCIA_COLUMNS, 'opuraMarketConcorrenciaTable');
 
   // Carrega configurações da praça selecionada
@@ -244,485 +243,71 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     }
   }, [organizationId]);
 
-  // Função para disparar a sincronização dos anúncios da Conexão 381 via Web Scraping reativo no navegador (Onda 6)
-  const handleTriggerScraping = React.useCallback(async () => {
-    // 1. Validar se há cidade selecionada (deve ser Cambuí)
-    const activeCity = cities.find(c => c.id === selectedCityId);
-    if (!activeCity || activeCity.name !== 'Cambuí') {
-      alert('A sincronização automática por robô está disponível apenas para a cidade piloto (Cambuí - MG) no momento.');
+  // Importação por feed XML (decisão D7 do plano 2026-10-07-opura-market-intelligence.md).
+  // O robô antigo lia o portal de UMA imobiliária no navegador, por proxies de CORS de
+  // terceiros, e parou de achar anúncios quando o portal mudou. Agora a Edge Function
+  // opura-market-import lê o feed, geocodifica pelo endereço e grava no servidor.
+  const descreverResultado = (r: ResultadoImportacaoMercado): string => {
+    const partes = [`Anúncios novos: ${r.novos}`];
+    if (r.atualizados) partes.push(`já importados, com preço atualizado: ${r.atualizados}`);
+    if (r.duplicados) partes.push(`repetidos de anúncios que já existiam: ${r.duplicados}`);
+    if (r.semLocalizacao) partes.push(`endereço não encontrado: ${r.semLocalizacao}`);
+    if (r.pendentes) partes.push(`ainda sem localização por limite de tempo: ${r.pendentes} (use "Localizar anúncios sem coordenada")`);
+    const ignorados = Object.entries(r.ignorados ?? {}).map(([motivo, n]) => `${n} ${motivo}`);
+    if (ignorados.length) partes.push(`ignorados: ${ignorados.join(', ')}`);
+    return partes.join(' · ');
+  };
+
+  const handleImportarFeed = async () => {
+    if (!organizationId) {
+      alert('Selecione uma organização no topo da tela: os anúncios são gravados nela.');
       return;
     }
-
-    if (!window.confirm('Deseja iniciar a sincronização automática dos anúncios da imobiliária Conexão 381 via Web Scraping? Esse processo leva cerca de 30 segundos.')) {
+    if (!selectedCityId) {
+      alert('Selecione a cidade.');
       return;
     }
-
-    setIsScraping(true);
-    setScrapingStatus('Iniciando...');
-
+    if (!feedArquivo && !feedUrl.trim()) {
+      alert('Informe o link do feed ou escolha o arquivo .xml.');
+      return;
+    }
+    setImportandoFeed(true);
+    setResultadoFeed(null);
     try {
-      const BASE_URL = 'https://conexao381.com.br';
-      const TARGET_URL = `${BASE_URL}/imoveis/a-venda/cambui-mg`;
-      const IMOBILIARIA_NAME = 'Conexão 381';
-
-      // 1. Baixar listagens via Proxy CORS AllOrigins
-      setScrapingStatus('Conectando ao portal...');
-      const listingsBatch: any[] = [];
-       const maxPages = maxPagesToScrape;
-
-      for (let page = 1; page <= maxPages; page++) {
-        const pageUrl = `${TARGET_URL}?pagina=${page}`;
-        setScrapingStatus(`Lendo pág. ${page} de ${maxPages}...`);
-        
-        let html = '';
-        let success = false;
-        
-        // Tentativa 1: CORSProxy.io (Retorna HTML bruto)
-        try {
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(pageUrl)}`;
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
-            html = await res.text();
-            success = true;
-          }
-        } catch (e1) {
-          console.warn('Falha no CORSProxy.io, tentando fallback AllOrigins...', e1);
-        }
-
-        // Tentativa 2: Fallback AllOrigins (Retorna JSON contendo .contents)
-        if (!success) {
-          try {
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(pageUrl)}`;
-            const res = await fetch(proxyUrl);
-            if (res.ok) {
-              const responseJson = await res.json();
-              html = responseJson.contents || '';
-              success = true;
-            }
-          } catch (e2) {
-            console.error('Falha de conexão em todos os proxies de CORS', e2);
-          }
-        }
-
-        if (!success || !html) {
-          console.error(`Erro ao baixar página ${page} via proxies CORS`);
-          break;
-        }
-
-        // Higienizar e extrair JSON-LD
-        const sanitizeJsonString = (rawJson: string) => {
-          return rawJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (m, p1) => {
-            return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
-          });
-        };
-
-        const jsonLdRegex = /<script\s+type=["']application\/ld\+json["']\s*[^>]*>([\s\S]*?)<\/script>/gi;
-        let match;
-        let pageCount = 0;
-
-        while ((match = jsonLdRegex.exec(html)) !== null) {
-          try {
-            const rawText = match[1].trim();
-            let json;
-            try {
-              json = JSON.parse(rawText);
-            } catch (pe) {
-              json = JSON.parse(sanitizeJsonString(rawText));
-            }
-
-            const isProperty = json && (
-              json['@type'] === 'Product' || 
-              (Array.isArray(json['@type']) && json['@type'].includes('Product')) ||
-              (typeof json['@type'] === 'string' && json['@type'].includes('Product')) ||
-              json.offers
-            );
-
-            if (isProperty) {
-              const title = json.name || '';
-              const price = json.offers?.price ? Number(json.offers.price) : null;
-              const url = json.offers?.url || '';
-              const bedrooms = json.numberOfBedrooms ? Number(json.numberOfBedrooms) : 0;
-              const bathrooms = json.numberOfBathroomsTotal ? Number(json.numberOfBathroomsTotal) : 0;
-              const description = json.description || '';
-
-              let rawAddress = json.address?.streetAddress || '';
-              let neighborhoodName = 'Centro';
-              if (rawAddress.includes(',')) {
-                neighborhoodName = rawAddress.split(',')[0].trim();
-              } else {
-                neighborhoodName = rawAddress.replace('-MG', '').replace('Cambuí', '').trim();
-              }
-
-              const areaMatch = url.match(/-(\d+)m2-/);
-              const areaPrivate = areaMatch ? Number(areaMatch[1]) : null;
-
-              let propertyType = 'Casa';
-              if (url.includes('apartamento')) propertyType = 'Apartamento';
-              else if (url.includes('terreno') || url.includes('lote')) propertyType = 'Terreno';
-              else if (url.includes('sobrado')) propertyType = 'Casa';
-              else if (url.includes('comercial') || url.includes('sala')) propertyType = 'Comercial';
-
-              let constructionStandard = 'Médio';
-              const descLower = description.toLowerCase();
-              if (descLower.includes('alto padrão') || descLower.includes('luxo') || descLower.includes('fino acabamento')) {
-                constructionStandard = 'Alto Padrão';
-              } else if (descLower.includes('popular') || descLower.includes('minha casa minha vida') || descLower.includes('mcmv')) {
-                constructionStandard = 'Econômico';
-              }
-
-              listingsBatch.push({
-                title,
-                price,
-                url,
-                bedrooms,
-                bathrooms,
-                description,
-                neighborhoodName,
-                areaPrivate,
-                propertyType,
-                constructionStandard,
-                rawAddress
-              });
-              pageCount++;
-            }
-          } catch (e) {
-            // Ignora JSON-LDs de outra tipologia
-          }
-        }
-
-        if (pageCount === 0) break;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      if (listingsBatch.length === 0) {
-        throw new Error('Nenhum anúncio localizado no portal do parceiro.');
-      }
-
-      // 2. Geocodificação e Associação de Bairros no Supabase
-      const processedListings: any[] = [];
-      const localNeighborhoods = [...neighborhoods];
-      
-      // Cache local para geolocalização no escopo da execução
-      const geoCache: { [key: string]: { lat: number; lng: number } | null } = {};
-
-      for (let i = 0; i < listingsBatch.length; i++) {
-        const item = listingsBatch[i];
-        setScrapingStatus(`Geocodificando ${i + 1}/${listingsBatch.length}...`);
-
-        // Mapear bairro existente (busca exata)
-        let neighborhood = localNeighborhoods.find(n => n.name.toLowerCase().trim() === item.neighborhoodName.toLowerCase().trim());
-        
-        // Mapeamento flexível por busca aproximada (caso de caracteres/termos extras)
-        if (!neighborhood) {
-          neighborhood = localNeighborhoods.find(n => 
-            item.neighborhoodName.toLowerCase().trim().includes(n.name.toLowerCase().trim()) ||
-            n.name.toLowerCase().trim().includes(item.neighborhoodName.toLowerCase().trim())
-          );
-        }
-
-        let neighborhoodId = neighborhood ? neighborhood.id : '';
-
-        // Fallback seguro: mapeia para Centro ou para o primeiro bairro existente na praça, evitando INSERTs 403 por RLS
-        if (!neighborhoodId) {
-          const centroNeigh = localNeighborhoods.find(n => n.name.toLowerCase().trim() === 'centro');
-          neighborhoodId = centroNeigh ? centroNeigh.id : (neighborhoods[0]?.id || '');
-        }
-
-        // Tenta buscar no cache pelo nome do bairro
-        const cacheKey = item.neighborhoodName.trim();
-        let geo = geoCache[cacheKey];
-        if (geo === undefined) {
-          geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
-          geoCache[cacheKey] = geo;
-          // Respeita o rate-limit do Nominatim de 1 req/1.1s apenas no cache miss
-          await new Promise(resolve => setTimeout(resolve, 1100));
-        }
-
-        processedListings.push({
-          cityId: selectedCityId,
-          neighborhoodId,
-          organizationId,
-          source: IMOBILIARIA_NAME,
-          sourceUrl: item.url,
-          propertyType: item.propertyType,
-          address: item.rawAddress,
-          zipCode: null,
-          areaPrivate: item.areaPrivate,
-          areaTotal: item.areaPrivate,
-          bedrooms: item.bedrooms,
-          suites: null,
-          bathrooms: item.bathrooms,
-          parkingSpaces: null,
-          price: item.price,
-          condoFee: null,
-          iptu: null,
-          latitude: geo ? geo.lat : null,
-          longitude: geo ? geo.lng : null,
-          description: item.description,
-          constructionStandard: item.constructionStandard,
-          listingStatus: 'active',
-          capturedAt: new Date().toISOString(),
-          lastSeenAt: new Date().toISOString()
-        });
-      }
-
-      // Filtrar anúncios que não possuem preço de venda explícito para evitar violação de constraint NOT NULL
-      const validProcessedListings = processedListings.filter(l => l.price && l.price > 0);
-
-      // 3. Salvar e Deduplicar
-      setScrapingStatus('Salvando lote...');
-      const result = await opuraMarketService.importListingsInBatch(validProcessedListings);
-
-      alert(`Sincronização concluída com sucesso!\n\n- Importados: ${result.importedCount} anúncios únicos\n- Duplicados ignorados: ${result.deduplicatedCount} anúncios`);
-      
-      // 4. Recarregar as listagens na tela para renderizar os novos pins
-      const updatedListings = await opuraMarketService.listListings(selectedCityId);
-      setListings(updatedListings);
-      setActiveLayer('concorrencia'); // Foca na aba concorrência para mostrar o mapa
+      const origem = feedArquivo ? { feedXml: await feedArquivo.text() } : { feedUrl: feedUrl.trim() };
+      const r = await opuraMarketService.importarFeed(organizationId, selectedCityId, origem);
+      setResultadoFeed(descreverResultado(r));
+      await loadListings(selectedCityId);
     } catch (err: any) {
-      console.error('Falha ao acionar web scraping:', err);
-      alert(`Erro na sincronização: ${err.message || 'Falha inesperada no servidor.'}`);
+      console.error('Falha ao importar o feed:', err);
+      setResultadoFeed(`Erro: ${err.message || 'falha inesperada'}`);
     } finally {
-      setIsScraping(false);
-      setScrapingStatus('');
+      setImportandoFeed(false);
     }
-  }, [cities, selectedCityId, neighborhoods, organizationId, setNeighborhoods, setListings, maxPagesToScrape]);
+  };
 
-  // Função parametrizada de Web Scraping sob demanda (🤖 Web Scraping)
-  const handleRunScraper = React.useCallback(async (targetUrl: string) => {
-    const activeCity = cities.find(c => c.id === selectedCityId);
-    if (!activeCity || activeCity.name !== 'Cambuí') {
-      alert('A captura automática está disponível apenas para a cidade piloto (Cambuí - MG) no momento.');
-      return;
-    }
-
-    setIsLocalScraping(true);
-    setLocalScrapingStatus('Iniciando...');
-    setScrapedListings([]);
-
+  const handleLocalizarPendentes = async () => {
+    if (!organizationId || !selectedCityId) return;
+    setLocalizando(true);
+    setResultadoFeed(null);
     try {
-      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
-        throw new Error('Por favor, insira um link válido com http:// ou https://');
-      }
-
-      const BASE_URL = new URL(targetUrl).origin;
-      const IMOBILIARIA_NAME = targetUrl.includes('conexao381') ? 'Conexão 381' : 'Imobiliária Local';
-
-      setLocalScrapingStatus('Conectando ao portal...');
-      const listingsBatch: any[] = [];
-      const maxPages = maxPagesToScrape;
-
-      for (let page = 1; page <= maxPages; page++) {
-        const cleanUrl = targetUrl.split('?')[0];
-        const pageUrl = `${cleanUrl}?pagina=${page}`;
-        setLocalScrapingStatus(`Lendo pág. ${page} de ${maxPages}...`);
-        
-        let html = '';
-        let success = false;
-        
-        // Tentativa 1: CORSProxy.io
-        try {
-          const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(pageUrl)}`;
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
-            html = await res.text();
-            success = true;
-          }
-        } catch (e1) {
-          console.warn('Falha no CORSProxy.io, tentando fallback AllOrigins...', e1);
-        }
-
-        // Tentativa 2: Fallback AllOrigins
-        if (!success) {
-          try {
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(pageUrl)}`;
-            const res = await fetch(proxyUrl);
-            if (res.ok) {
-              const responseJson = await res.json();
-              html = responseJson.contents || '';
-              success = true;
-            }
-          } catch (e2) {
-            console.error('Falha de conexão em todos os proxies de CORS', e2);
-          }
-        }
-
-        if (!success || !html) {
-          console.error(`Erro ao baixar página ${page} via proxies CORS`);
-          break;
-        }
-
-        const sanitizeJsonString = (rawJson: string) => {
-          return rawJson.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (m, p1) => {
-            return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
-          });
-        };
-
-        const jsonLdRegex = /<script\s+type=["']application\/ld\+json["']\s*[^>]*>([\s\S]*?)<\/script>/gi;
-        let match;
-        let pageCount = 0;
-
-        while ((match = jsonLdRegex.exec(html)) !== null) {
-          try {
-            const rawText = match[1].trim();
-            let json;
-            try {
-              json = JSON.parse(rawText);
-            } catch (pe) {
-              json = JSON.parse(sanitizeJsonString(rawText));
-            }
-
-            const isProperty = json && (
-              json['@type'] === 'Product' || 
-              (Array.isArray(json['@type']) && json['@type'].includes('Product')) ||
-              (typeof json['@type'] === 'string' && json['@type'].includes('Product')) ||
-              json.offers
-            );
-
-            if (isProperty) {
-              const title = json.name || '';
-              const price = json.offers?.price ? Number(json.offers.price) : null;
-              const url = json.offers?.url || '';
-              const bedrooms = json.numberOfBedrooms ? Number(json.numberOfBedrooms) : 0;
-              const bathrooms = json.numberOfBathroomsTotal ? Number(json.numberOfBathroomsTotal) : 0;
-              const description = json.description || '';
-
-              let rawAddress = json.address?.streetAddress || '';
-              let neighborhoodName = 'Centro';
-              if (rawAddress.includes(',')) {
-                neighborhoodName = rawAddress.split(',')[0].trim();
-              } else {
-                neighborhoodName = rawAddress.replace('-MG', '').replace('Cambuí', '').trim();
-              }
-
-              const areaMatch = url.match(/-(\d+)m2-/);
-              const areaPrivate = areaMatch ? Number(areaMatch[1]) : null;
-
-              let propertyType = 'Casa';
-              if (url.includes('apartamento')) propertyType = 'Apartamento';
-              else if (url.includes('terreno') || url.includes('lote')) propertyType = 'Terreno';
-              else if (url.includes('sobrado')) propertyType = 'Casa';
-              else if (url.includes('comercial') || url.includes('sala')) propertyType = 'Comercial';
-
-              let constructionStandard = 'Médio';
-              const descLower = description.toLowerCase();
-              if (descLower.includes('alto padrão') || descLower.includes('luxo') || descLower.includes('fino acabamento')) {
-                constructionStandard = 'Alto Padrão';
-              } else if (descLower.includes('popular') || descLower.includes('minha casa minha vida') || descLower.includes('mcmv')) {
-                constructionStandard = 'Econômico';
-              }
-
-              listingsBatch.push({
-                title,
-                price,
-                url,
-                bedrooms,
-                bathrooms,
-                description,
-                neighborhoodName,
-                areaPrivate,
-                propertyType,
-                constructionStandard,
-                rawAddress
-              });
-              pageCount++;
-            }
-          } catch (e) {
-            // Ignora JSON-LDs de outra tipologia
-          }
-        }
-
-        if (pageCount === 0) break;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      if (listingsBatch.length === 0) {
-        throw new Error('Nenhum anúncio localizado na URL fornecida com o parser atual.');
-      }
-
-      // 2. Geocodificação e Associação de Bairros no Supabase
-      const processedListings: any[] = [];
-      const localNeighborhoods = [...neighborhoods];
-      
-      // Cache local para geolocalização no escopo da execução
-      const geoCache: { [key: string]: { lat: number; lng: number } | null } = {};
-
-      for (let i = 0; i < listingsBatch.length; i++) {
-        const item = listingsBatch[i];
-        setLocalScrapingStatus(`Geocodificando ${i + 1}/${listingsBatch.length}...`);
-
-        let neighborhood = localNeighborhoods.find(n => n.name.toLowerCase().trim() === item.neighborhoodName.toLowerCase().trim());
-        if (!neighborhood) {
-          neighborhood = localNeighborhoods.find(n => 
-            item.neighborhoodName.toLowerCase().trim().includes(n.name.toLowerCase().trim()) ||
-            n.name.toLowerCase().trim().includes(item.neighborhoodName.toLowerCase().trim())
-          );
-        }
-
-        let neighborhoodId = neighborhood ? neighborhood.id : '';
-        if (!neighborhoodId) {
-          const centroNeigh = localNeighborhoods.find(n => n.name.toLowerCase().trim() === 'centro');
-          neighborhoodId = centroNeigh ? centroNeigh.id : (neighborhoods[0]?.id || '');
-        }
-
-        // Tenta buscar no cache pelo nome do bairro
-        const cacheKey = item.neighborhoodName.trim();
-        let geo = geoCache[cacheKey];
-        if (geo === undefined) {
-          geo = await opuraMarketService.geocodeAddress(item.neighborhoodName, 'Cambuí');
-          geoCache[cacheKey] = geo;
-          // Respeita o rate-limit do Nominatim de 1 req/1.1s apenas no cache miss
-          await new Promise(resolve => setTimeout(resolve, 1100));
-        }
-
-        processedListings.push({
-          cityId: selectedCityId,
-          neighborhoodId,
-          organizationId,
-          source: IMOBILIARIA_NAME,
-          sourceUrl: item.url,
-          propertyType: item.propertyType,
-          address: item.rawAddress,
-          zipCode: null,
-          areaPrivate: item.areaPrivate,
-          areaTotal: item.areaPrivate,
-          bedrooms: item.bedrooms,
-          suites: null,
-          bathrooms: item.bathrooms,
-          parkingSpaces: null,
-          price: item.price,
-          condoFee: null,
-          iptu: null,
-          latitude: geo ? geo.lat : null,
-          longitude: geo ? geo.lng : null,
-          description: item.description,
-          constructionStandard: item.constructionStandard,
-          listingStatus: 'active',
-          capturedAt: new Date().toISOString(),
-          lastSeenAt: new Date().toISOString()
-        });
-      }
-
-      const validProcessedListings = processedListings.filter(l => l.price && l.price > 0);
-
-      // 3. Salvar e Deduplicar
-      setLocalScrapingStatus('Salvando lote...');
-      const result = await opuraMarketService.importListingsInBatch(validProcessedListings);
-
-      alert(`Captura concluída com sucesso!\n\n- Importados: ${result.importedCount} anúncios únicos\n- Duplicados ignorados: ${result.deduplicatedCount} anúncios`);
-      
-      setScrapedListings(validProcessedListings);
-
-      const updatedListings = await opuraMarketService.listListings(selectedCityId);
-      setListings(updatedListings);
+      const r = await opuraMarketService.localizarPendentes(organizationId, selectedCityId);
+      const partes = [`Localizados: ${r.localizados}`, `endereço não encontrado: ${r.naoEncontrados}`];
+      if (r.restantes) partes.push(`restantes, rode de novo: ${r.restantes}`);
+      setResultadoFeed(partes.join(' · '));
+      await loadListings(selectedCityId);
     } catch (err: any) {
-      console.error('Falha ao rodar web scraping:', err);
-      alert(`Erro na captura: ${err.message || 'Falha inesperada.'}`);
+      console.error('Falha ao localizar anúncios:', err);
+      setResultadoFeed(`Erro: ${err.message || 'falha inesperada'}`);
     } finally {
-      setIsLocalScraping(false);
-      setLocalScrapingStatus('');
+      setLocalizando(false);
     }
-  }, [selectedCityId, cities, neighborhoods, organizationId, maxPagesToScrape]);
+  };
+
+  // Anúncios da organização nesta cidade sem coordenada e sem tentativa registrada.
+  const pendentesDeLocalizacao = listings.filter(
+    l => l.organizationId === organizationId && l.latitude == null && !l.geoPrecision
+  ).length;
 
   const startDrawing = () => {
     setIsDrawingPolygon(true);
@@ -1686,12 +1271,12 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
             📋 Tabela de Ocorrências
           </button>
           <button
-            onClick={() => setActiveViewMode('scraping')}
+            onClick={() => setActiveViewMode('feed')}
             className={`px-3 py-1.5 rounded-[6px] text-[13px] font-bold transition-all ${
-              activeViewMode === 'scraping' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              activeViewMode === 'feed' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
             }`}
           >
-            🤖 Web Scraping
+            📡 Feed XML
           </button>
           <button
             onClick={() => setActiveViewMode('studies')}
@@ -1828,144 +1413,93 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
             </table>
           </div>
         </div>
-      ) : activeViewMode === 'scraping' ? (
+      ) : activeViewMode === 'feed' ? (
         <div className="bg-white rounded-[10px] border border-slate-200/60 p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <span>🤖</span> Captura de Dados (Web Scraping)
+              <span>📡</span> Importar Feed XML
             </h2>
             <p className="text-xs text-slate-500 font-semibold mt-1">
-              Insira o link da página de anúncios de uma imobiliária parceira e inicie o robô de varredura e geolocalização automática.
+              Feed no padrão VRSync, o mesmo que as imobiliárias enviam para ZAP, VivaReal e OLX. Peça o link à imobiliária parceira ou use o arquivo .xml.
+              Entram só os anúncios de venda da cidade selecionada, e reimportar o mesmo feed atualiza os preços em vez de duplicar.
             </p>
           </div>
 
           <div className="flex flex-col md:flex-row gap-3 items-center">
-            <div className="flex-1 relative w-full">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔗</span>
+            <div className="flex-1 w-full">
               <input
                 type="text"
-                value={scraperUrl}
-                onChange={(e) => setScraperUrl(e.target.value)}
-                placeholder="Insira a URL dos anúncios imobiliários (ex: https://conexao381.com.br/...)"
-                className="w-full h-9 pl-9 pr-4 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                value={feedUrl}
+                onChange={(e) => setFeedUrl(e.target.value)}
+                disabled={!!feedArquivo}
+                placeholder="https://imobiliaria.com.br/feed-vrsync.xml"
+                className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:opacity-50"
+                title={feedArquivo ? 'Um arquivo foi escolhido: o link é ignorado. Remova o arquivo para usar o link.' : undefined}
               />
             </div>
-            <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Páginas:</label>
+            <label className="h-9 px-3 flex items-center gap-1.5 bg-white border border-slate-200 rounded-[6px] text-[13px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer shrink-0">
               <input
-                type="number"
-                min="1"
-                max="30"
-                value={maxPagesToScrape}
-                onChange={(e) => setMaxPagesToScrape(Math.max(1, Math.min(30, Number(e.target.value))))}
-                className="w-16 h-9 px-2 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-bold text-center text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                type="file"
+                accept=".xml,text/xml,application/xml"
+                className="hidden"
+                onChange={(e) => setFeedArquivo(e.target.files?.[0] ?? null)}
               />
-            </div>
+              {feedArquivo ? `📄 ${feedArquivo.name}` : 'Ou escolher arquivo .xml'}
+            </label>
+            {feedArquivo && (
+              <button
+                onClick={() => setFeedArquivo(null)}
+                className="h-9 px-3 text-[13px] font-medium text-slate-500 hover:text-slate-800 shrink-0"
+              >
+                Remover arquivo
+              </button>
+            )}
             <button
-              onClick={() => handleRunScraper(scraperUrl)}
-              disabled={isLocalScraping}
-              className={`h-9 px-4 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 shrink-0
-                ${isLocalScraping
-                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm'
-                }`}
+              onClick={handleImportarFeed}
+              disabled={importandoFeed || localizando || !organizationId}
+              title={!organizationId ? 'Selecione uma organização no topo da tela: os anúncios são gravados nela.' : undefined}
+              className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
             >
-              {isLocalScraping ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-                  <span>Processando...</span>
-                </>
-              ) : (
-                <>
-                  <span>Iniciar Captura</span>
-                </>
-              )}
+              {importandoFeed ? 'Importando…' : 'Importar feed'}
             </button>
           </div>
 
-          {/* Progresso de Scraping (§11) */}
-          {isLocalScraping && (
-            <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] flex items-center gap-3">
-              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-blue-800 font-bold uppercase tracking-wider">Robô de Captura: {localScrapingStatus}</span>
+          <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="text-xs text-slate-600 font-semibold">
+              {pendentesDeLocalizacao > 0
+                ? `${pendentesDeLocalizacao} anúncios da sua organização nesta cidade ainda não têm coordenada.`
+                : 'Todos os anúncios da sua organização nesta cidade já passaram pela localização.'}
+              <span className="block text-slate-400 mt-0.5">
+                A localização usa rua, número, bairro e cidade. Cada rodada trabalha por até cerca de dois minutos.
+              </span>
+            </div>
+            <button
+              onClick={handleLocalizarPendentes}
+              disabled={localizando || importandoFeed || pendentesDeLocalizacao === 0 || !organizationId}
+              title={
+                !organizationId ? 'Selecione uma organização no topo da tela.'
+                  : pendentesDeLocalizacao === 0 ? 'Não há anúncio pendente de localização nesta cidade.'
+                  : undefined
+              }
+              className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
+            >
+              {localizando ? 'Localizando…' : 'Localizar anúncios sem coordenada'}
+            </button>
+          </div>
+
+          {(importandoFeed || localizando) && (
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] text-xs text-blue-800 font-semibold">
+              Trabalhando no servidor. Os endereços são localizados a cerca de um por segundo.
             </div>
           )}
 
-          {/* Tabela de Resultados Recentes */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Resultados da Última Execução</h3>
-              {scrapedListings.length > 0 && (
-                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold rounded-full">
-                  {scrapedListings.length} anúncios processados
-                </span>
-              )}
+          {resultadoFeed && (
+            <div className={`p-4 rounded-[10px] border text-xs font-semibold ${
+              resultadoFeed.startsWith('Erro') ? 'bg-rose-50 border-rose-100 text-rose-700' : 'bg-emerald-50 border-emerald-100 text-emerald-800'
+            }`}>
+              {resultadoFeed}
             </div>
-
-            {scrapedListings.length > 0 ? (
-              <div className="overflow-x-auto max-h-[50vh] border border-gray-100 rounded-[10px]">
-                <table className="w-full text-left border-collapse" style={{ tableLayout: 'fixed' }}>
-                  <thead className="sticky top-0 bg-slate-50 border-b border-gray-200 z-10">
-                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
-                      {tableColumns.orderedVisibleColumns.map(key => {
-                        const def = CONCORRENCIA_COLUMN_HEADERS[key];
-                        if (!def) return null;
-                        return (
-                          <SortableHeader
-                            key={key}
-                            label={def.label}
-                            colKey={key}
-                            sortable={def.sortable}
-                            sortColumn={tableColumns.sortColumn || undefined}
-                            sortDirection={tableColumns.sortDirection}
-                            onSort={tableColumns.handleColumnSort}
-                            onMoveColumn={tableColumns.moveColumn}
-                            className={def.className}
-                            uppercase={false}
-                          />
-                        );
-                      })}
-                      <th className="px-5 py-3 text-right text-xs font-bold text-slate-500">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 text-xs">
-                    {scrapedListings.map(l => (
-                      <tr
-                        key={l.id || l.sourceUrl}
-                        onClick={() => {
-                          handleFocusListing(l);
-                          setActiveViewMode('map');
-                        }}
-                        className="hover:bg-slate-50/80 cursor-pointer transition-colors"
-                      >
-                        {tableColumns.orderedVisibleColumns.map(key => (
-                          <td key={key} className="px-5 py-2.5 border-r border-gray-100 last:border-r-0">
-                            {renderConcorrenciaCell(key, l, neighborhoods)}
-                          </td>
-                        ))}
-                        <td className="px-5 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => {
-                              handleFocusListing(l);
-                              setActiveViewMode('map');
-                            }}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
-                          >
-                            Ver no Mapa
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-slate-50/50 border border-dashed border-slate-200 rounded-[10px] text-slate-400 text-xs font-semibold">
-                <span className="text-3xl block mb-2">🤖</span>
-                <span>Nenhum resultado capturado nesta sessão ainda. Insira um link acima para iniciar.</span>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       ) : activeViewMode === 'studies' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2444,292 +1978,10 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                   >
                     📥 Importar
                   </button>
-                  <button
-                    onClick={handleTriggerScraping}
-                    disabled={isScraping}
-                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-100 text-indigo-700 disabled:bg-slate-50 disabled:text-slate-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 flex items-center gap-1 shadow-sm font-sans"
-                  >
-                    {isScraping ? (
-                      <>
-                        <div className="w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span>Sincronizando...</span>
-                      </>
-                    ) : (
-                      '🤖 Sincronizar'
-                    )}
-                  </button>
                 </div>
               </div>
 
-              {false ? (
-                <div className="space-y-4">
-                  {/* Botões de importação e Web Scraping */}
-                  {!isDrawingPolygon && (
-                    <div className="flex flex-col gap-2">
-                      <button
-                        onClick={() => setIsImportModalOpen(true)}
-                        className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-100 rounded-xl text-button font-black text-emerald-700 uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        📥 Importar Planilha de Concorrência
-                      </button>
-                      <button
-                        onClick={handleTriggerScraping}
-                        disabled={isScraping}
-                        className={`w-full py-2.5 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 border
-                          ${isScraping 
-                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' 
-                            : 'bg-indigo-50 hover:bg-indigo-100/70 border-indigo-100 text-indigo-700'
-                          }`}
-                      >
-                        {isScraping ? (
-                          <>
-                            <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                            <span>{scrapingStatus}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>🤖 Sincronizar Conexão 381</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {isDrawingPolygon ? (
-                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-xs space-y-3 animate-fadeIn">
-                      <span className="block font-black text-indigo-800 uppercase text-[9px] tracking-wider">📏 Modo de Desenho Ativo</span>
-                      <p className="text-slate-600 font-semibold leading-normal text-[11px]">
-                        Clique em múltiplos pontos no mapa territorial para marcar os limites (vértices) do seu terreno. 
-                      </p>
-                      <div className="text-[10px] text-slate-500 font-bold bg-white p-3 rounded-xl border border-slate-100 space-y-1">
-                        <div>Vértices marcados: <span className="font-extrabold text-indigo-600">{drawingPoints.length}</span></div>
-                        {drawingPoints.length < 3 && <div className="text-rose-500 font-extrabold">⚠️ Mínimo de 3 pontos para formar a área.</div>}
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <button
-                          onClick={completeDrawing}
-                          disabled={drawingPoints.length < 3}
-                          className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-300 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center font-bold text-[10px]"
-                        >
-                          Concluir
-                        </button>
-                        <button
-                          onClick={cancelDrawing}
-                          className="flex-1 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 text-center font-bold text-[10px]"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  ) : terrainPin ? (
-                    <>
-                      <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl text-xs space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="block font-black text-blue-800 uppercase text-[9px] tracking-wider">Terreno Selecionado (Georreferenciado)</span>
-                          <button
-                            onClick={startDrawing}
-                            className="text-[9px] font-black uppercase tracking-wider text-indigo-600 hover:text-indigo-800 underline bg-transparent border-0 cursor-pointer"
-                          >
-                            📐 Redesenhar Lote
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 font-semibold">
-                          <span>Lat: {terrainPin?.lat?.toFixed(6)}</span>
-                          <span>Lng: {terrainPin?.lng?.toFixed(6)}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Nome do Estudo</label>
-                          <input
-                            type="text"
-                            required
-                            value={studyName}
-                            onChange={(e) => setStudyName(e.target.value)}
-                            placeholder="Ex: Terreno Centro - Cambuí"
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Área do Terreno (m²)</label>
-                          <input
-                            type="number"
-                            value={terrainArea}
-                            onChange={(e) => setTerrainArea(e.target.value)}
-                            placeholder="Ex: 1500"
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                          />
-                          <span className="text-[9px] text-slate-400 font-bold block leading-normal mt-0.5">ℹ️ Dimensão usada no cálculo do VGV e Viabilidade (abstrata no mapa)</span>
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Raio de Análise de Concorrência</label>
-                          <select
-                            value={analysisRadius}
-                            onChange={(e) => setAnalysisRadius(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
-                          >
-                            <option value="500">500m (Entorno Direto)</option>
-                            <option value="1000">1km (Raio Principal)</option>
-                            <option value="3000">3km (Região de Influência)</option>
-                            <option value="5000">5km (Macro Região)</option>
-                          </select>
-                          <span className="text-[9px] text-slate-400 font-bold block leading-normal mt-0.5">ℹ️ Altera o círculo azul no mapa para busca espacial de concorrentes</span>
-                        </div>
-
-                        <button
-                          onClick={handleAnalyzeTerrain}
-                          disabled={analyzing}
-                          className="w-full py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
-                        >
-                          {analyzing ? (
-                            <>
-                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              Analisando...
-                            </>
-                          ) : '🚀 Calcular Vocação Territorial'}
-                        </button>
-                      </div>
-
-                      {/* Exibição dos resultados espaciais de vocação do produto */}
-                      {analysisResult && (
-                        <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 space-y-4 animate-fadeIn">
-                          <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Vocação e Recomendação IA</h4>
-                          
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            <div className="space-y-0.5">
-                              <span className="block text-[9px] text-slate-400 font-bold uppercase">Padrão Recomendado</span>
-                              <span className="block font-black text-slate-800">{analysisResult.recStandard}</span>
-                            </div>
-                            <div className="space-y-0.5">
-                              <span className="block text-[9px] text-slate-400 font-bold uppercase">Preço Estimado / m²</span>
-                              <span className="block font-black text-emerald-600">R$ {analysisResult.stats.pricePerM2Avg.toLocaleString('pt-BR') || '3.500'}/m²</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase">Mix de Tipologias Recomendadas</span>
-                            <div className="space-y-1">
-                              {analysisResult.productMix.tipologias.map((tip: any, idx: number) => (
-                                <div key={idx} className="flex justify-between text-xs bg-white p-2 rounded-lg border border-slate-100 font-semibold text-slate-600">
-                                  <span>{tip.tipo} ({tip.area}m²)</span>
-                                  <span className="text-slate-800 font-bold">{tip.mix}% do VGV</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="border-t border-slate-100 pt-3 grid grid-cols-2 gap-3 text-xs font-semibold">
-                            <div>
-                              <span className="block text-[9px] text-slate-400 font-bold uppercase">VGV Potencial</span>
-                              <span className="block font-black text-slate-800 text-sm">R$ {(analysisResult.estimatedVgv || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[9px] text-slate-400 font-bold uppercase">Risco do Produto</span>
-                              <span className={`block font-black text-sm ${
-                                analysisResult.riskScore > 70 ? 'text-rose-600' :
-                                analysisResult.riskScore > 40 ? 'text-amber-600' : 'text-emerald-600'
-                              }`}>{analysisResult.riskScore}% (Score)</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2 pt-2 border-t border-slate-100">
-                            <button
-                              onClick={handleSaveStudy}
-                              disabled={analyzing}
-                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95"
-                            >
-                              💾 Salvar Estudo na Organização
-                            </button>
-
-                            <button
-                              onClick={handleExportPDF}
-                              disabled={analyzing}
-                              className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
-                            >
-                              📄 Exportar Relatório PDF
-                            </button>
-
-                            {setActiveView && (
-                              <Button
-                                variant="primary"
-                                size="md"
-                                onClick={handleCreateViability}
-                                disabled={analyzing}
-                                className="w-full rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
-                              >
-                                🏗️ Criar Viabilidade (IMOVIB)
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="space-y-3">
-                      <button
-                        onClick={startDrawing}
-                        className="w-full py-3 border border-indigo-200 bg-indigo-50/30 hover:bg-indigo-50 text-indigo-700 rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 font-bold"
-                      >
-                        📐 Desenhar Lote no Mapa
-                      </button>
-                      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs font-semibold text-center space-y-2">
-                        <span>🗺️</span>
-                        <span>Ou clique diretamente em qualquer ponto do mapa para iniciar a análise por ponto.</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : false ? (
-                /* Aba: Estudos Salvos */
-                <div className="space-y-3">
-                  {loadingStudies ? (
-                    <div className="flex justify-center py-10">
-                      <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  ) : savedStudies.length > 0 ? (
-                    <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                      {savedStudies.map(study => (
-                        <div
-                          key={study.id}
-                          className="p-3 bg-slate-50 border border-slate-100 hover:bg-slate-100/50 rounded-xl cursor-pointer transition-all flex items-center justify-between group"
-                        >
-                          <div className="flex-1 min-w-0" onClick={() => handleSelectSavedStudy(study)}>
-                            <span className="block text-xs font-bold text-slate-800 truncate">{study.name}</span>
-                            <span className="block text-[9px] text-slate-400 font-bold uppercase truncate">
-                              Área: {study.terrainArea.toLocaleString('pt-BR')}m² | Raio: {study.analysisRadiusMeters}m
-                            </span>
-                            {study.estimatedVgv && (
-                              <span className="block text-[9px] font-black text-emerald-600">
-                                VGV: R$ {study.estimatedVgv.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                              </span>
-                            )}
-                          </div>
-                          
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteStudy(study.id);
-                            }}
-                            className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-rose-500 hidden group-hover:flex items-center justify-center text-xs active:scale-90 shadow-sm"
-                            title="Deletar Estudo"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-xs font-semibold text-center space-y-2">
-                      <span>📂</span>
-                      <span>Nenhum estudo salvo encontrado nesta organização.</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
+              {(
                 /* Aba: Anúncios / Concorrência */
                 <div className="space-y-4 flex flex-col flex-1 min-h-[450px]">
                   {/* Busca e Filtros */}
@@ -2866,8 +2118,6 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           onClose={() => setIsImportModalOpen(false)}
           onSuccess={handleImportSuccess}
           cityId={selectedCityId}
-          cityName={cities.find(c => c.id === selectedCityId)?.name || 'Cambuí'}
-          neighborhoods={neighborhoods}
           organizationId={organizationId}
         />
       )}
@@ -2943,7 +2193,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                     <div>
                       <span className="block text-[9px] text-slate-400 font-bold uppercase">Bairro</span>
                       <span className="block font-extrabold text-slate-700 mt-0.5">
-                        {neighborhoods.find(n => n.id === selectedDetailedListing.neighborhoodId)?.name || 'Centro'}
+                        {neighborhoods.find(n => n.id === selectedDetailedListing.neighborhoodId)?.name || selectedDetailedListing.neighborhoodNameRaw || 'Não informado'}
                       </span>
                     </div>
                   </div>
@@ -2955,6 +2205,17 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       </span>
                     </div>
                   )}
+                  <div className="border-t border-slate-100/70 pt-2">
+                    <span className="block text-[9px] text-slate-400 font-bold uppercase">Posição no mapa</span>
+                    <span className="block text-xs font-semibold text-slate-600 mt-0.5 leading-normal">
+                      {selectedDetailedListing.geoPrecision === 'fonte' ? 'Informada pela origem do anúncio'
+                        : selectedDetailedListing.geoPrecision === 'endereco' ? 'Localizada pelo endereço'
+                        : selectedDetailedListing.geoPrecision === 'bairro' ? 'Aproximada: só o bairro era conhecido'
+                        : selectedDetailedListing.geoPrecision === 'nao_encontrado' ? 'Endereço não encontrado: fora do mapa e da análise de raio'
+                        : selectedDetailedListing.latitude != null ? 'Origem da posição não registrada'
+                        : 'Ainda não localizado'}
+                    </span>
+                  </div>
                 </div>
               </div>
 

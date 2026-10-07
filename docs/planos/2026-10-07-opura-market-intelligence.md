@@ -10,6 +10,13 @@ Depois da análise, ~14:05, na mesma sessão:
 
 > publique e faça um plano de implementacao
 
+Pedidos posteriores que mudaram o rumo (mesma sessão, 07/10/2026):
+
+> abrir fase 3 e corrigir as duas coisas que a Fase 2 encontrou
+
+("as duas coisas" = geocodificar pelo endereço, não pelo nome do bairro; e não
+jogar bairro desconhecido no "Centro".)
+
 A análise que originou este plano está publicada como página (link na sessão) e
 resumida na memória `project_opura_market_intelligence_avaliacao`. Os fatos de
 produção abaixo foram lidos no banco remoto em 07/10/2026.
@@ -47,6 +54,7 @@ liberada para todo perfil em `AppRouter.tsx` (`allowed = true`).
 | 07/10/2026 | D3 — Bairro Score / Saturação / Score Potencial até existir regra? | **Esconder** ("não calculado"); só preço, ticket, área e concorrentes passam a ser recalculados. |
 | 07/10/2026 | D4 — Cadastro de cidade/bairro: tela ou SQL? | **Tela ADMIN mínima já neste plano** (item 4.4). |
 | 07/10/2026 | D5 — Acesso ao módulo? | **Só ADMIN e USER** (item 6.6). |
+| 07/10/2026 | D7 — O portal da Conexão 381 mudou: a lista passou a ser montada no navegador (o HTML não traz mais JSON-LD por anúncio nem links), oscila com erro 1102 da Cloudflare, e nunca informou a rua — os 277 anúncios capturados têm só 65 endereços distintos, do tipo "Vale do Sol, Cambuí-MG". O que fazer com a captura automática? | **Trocar por importação de feed XML** (padrão VRSync dos portais ZAP/VivaReal, com rua e às vezes coordenada). Os botões do robô saem da tela. Depende de a imobiliária passar o link do feed; também aceita o arquivo .xml. |
 | 07/10/2026 | D6 — Item 2.4 não funciona como escrito: só há anúncios privados (357 da Alpa, 0 globais depois do 2.5) e 296 dos 325 não duplicados estão marcados "Centro" porque o robô joga lá todo bairro desconhecido. Como seguir? | **Adiar para depois da Fase 4.** Agora: apagar os indicadores fictícios dos 4 bairros e mostrar "não calculado". O cálculo volta na leitura, por organização, sem cron, depois que a Fase 3 parar de jogar tudo no Centro e a Fase 4 cadastrar os bairros reais. |
 
 ## Plano
@@ -228,6 +236,10 @@ pontos distintos. A Edge Function do 3.1 precisa geocodificar pelo endereço.
 
 ### Fase 3 — Scraping e geocodificação saem do navegador
 
+> **Revisão de 07/10/2026 (decisão D7).** Os itens 3.1–3.4 abaixo ficam como
+> estavam escritos, para registro; o que vale é a seção "Fase 3 revisada" logo
+> depois deles.
+
 **3.1 `supabase/functions/opura-market-scraper/index.ts`** (nova Edge Function)
 - O que muda: recebe `{ cityId, url, maxPages, organizationId }` com o JWT do
   usuário; valida que o usuário é membro da organização (não confiar no body);
@@ -258,6 +270,99 @@ pontos distintos. A Edge Function do 3.1 precisa geocodificar pelo endereço.
   ~230 linhas); os dois botões chamam o service; status/resultado vêm da resposta.
 - Como sei que terminou: uma única função de captura; o componente perde ≥ 450
   linhas.
+
+#### Fase 3 revisada (D7) — importação no servidor, por feed e planilha
+
+**3.1R `supabase/functions/opura-market-import/logica.ts`** (novo, módulo puro sem `import`)
+- O que muda: lê feed VRSync; normaliza e casa nome de bairro (exato, sem
+  acento/caixa, **sem coringa**); monta a consulta de geocodificação por rua +
+  número + bairro + cidade/UF; traduz o resultado do Nominatim em precisão
+  (`endereco` / `bairro`; nível de cidade é descartado); monta a linha a gravar.
+- Como sei que terminou: `__tests__/opuraMarketImportLogica.test.ts` verde,
+  incluindo "não importa nada" (vale em Deno e no Vitest).
+
+**3.2R `supabase/functions/opura-market-import/index.ts`** (nova Edge Function)
+- O que muda: `POST { modo: 'planilha' | 'feed' | 'localizar', organizationId, cityId, … }`.
+  Autoriza com `exigirMembro` (REGRA #7, pergunta 3) e grava sempre na organização
+  validada. Geocodifica no servidor (User-Agent identificado, 1 req/s, cache por
+  consulta, orçamento de ~100 s por chamada); o que não couber fica pendente para o
+  modo `localizar`. Feed: só venda, só a cidade escolhida, idempotente por
+  organização + URL do anúncio (reimportar atualiza preço e `last_seen_at`). URL do
+  feed só `https` e sem endereço interno.
+- Como sei que terminou: publicada; sem `Authorization` → 401; com a chave pública →
+  401; com usuário de outra organização → 403; com usuário membro, um feed de teste
+  e uma planilha de teste gravam e são apagados depois (conferido no banco).
+
+**3.3R `supabase/migrations/aplicar_20271007000200_opura_market_bairro_bruto_e_precisao.sql`** (nova)
+- O que muda: colunas `neighborhood_name_raw` e `geo_precision` em
+  `opura_market_listings`; nome bruto preenchido a partir do endereço dos anúncios
+  do robô; **reparo**: anúncio do robô marcado "Centro" cujo bairro de origem não é
+  Centro perde o bairro (tabela de reversão guarda o antes); `geo_precision =
+  'bairro'` nos anúncios do robô que têm coordenada; gatilho de duplicados passa a
+  rodar também quando um anúncio ganha coordenada (`UPDATE OF geom`).
+- Como sei que terminou: ensaio em `BEGIN … ROLLBACK` e aplicação com as contagens
+  registradas aqui; `verificar-opura-market-rls.sh` verde.
+
+**3.4R `services/opuraMarketService.ts` + `components/ImportListingsModal.tsx` + `components/OpuraMarketModule.tsx`**
+- O que muda: o service chama a function (`importarPlanilha`, `importarFeed`,
+  `localizarPendentes`) e perde `geocodeAddress` e `importListingsInBatch`; o modal
+  só lê e mapeia a planilha e manda as linhas; a aba do robô vira "Feed XML" (link
+  ou arquivo) com "Localizar anúncios sem coordenada"; somem as duas funções de
+  captura de ~230 linhas e o botão "Sincronizar"; o detalhe do anúncio diz a
+  precisão da localização.
+- Como sei que terminou: `grep -rn "corsproxy\|allorigins\|nominatim" components/ services/` = 0;
+  typecheck e suíte com a conta fechando.
+
+#### Fase 3 revisada — execução (07/10/2026, frente `market-fase3`)
+
+| Item | Estado |
+|---|---|
+| 3.1R `logica.ts` | ✅ 31 testes em `__tests__/opuraMarketImportLogica.test.ts`, incluindo "não importa nada" |
+| 3.2R Edge Function | ✅ publicada (`npx supabase functions deploy opura-market-import`); typecheck isolado em modo estrito sem erro; portões provados de fora. ⏳ Falta o caminho AUTORIZADO (gravar feed e planilha de teste como membro e apagar), que precisa da senha da conta de agente ou de um teste na tela |
+| 3.3R migration | ✅ ensaiada e aplicada |
+| 3.4R front | ✅ |
+
+**Portões da function (curl, de fora):**
+
+| Chamada | Resposta |
+|---|---|
+| sem `Authorization` | 401 (gateway) |
+| chave publicável como Bearer | 401 `Token inválido` — passou pelo gateway e foi recusada pelo CÓDIGO (REGRA #7, pergunta 3) |
+| JWT forjado | 401 (gateway) |
+| GET | 405 |
+
+**Medição antes do reparo e efeito (banco remoto):**
+
+| Medida | Antes | Depois |
+|---|---|---|
+| Endereços distintos nos 277 anúncios do robô | 65, todos "Bairro, Cambuí-MG"; só 2 com número | — |
+| Anúncios no "Centro" (todas as linhas) | 325 | 75 |
+| Anúncios do robô que perderam o bairro coringa (reversão `centro_coringa`) | — | 250 |
+| Coordenadas da planilha | 76, todas sorteadas: os 13 endereços aparecem com vários pontos (Tiradentes 16 linhas / 9 pontos; "Praça" e "Rosa" a 30 km) | 0 (reversão `coordenada_sorteada`) |
+| Anúncios com coordenada | 220 | 144 (140 do robô com `geo_precision = 'bairro'` + 4 do script de teste) |
+| Pendentes de localização | — | 213 |
+| Nomes de bairro de origem guardados | — | 64 distintos |
+| Raio 1 km no centro de Cambuí, membro / de fora | 109 / 0 | 55 / 0 |
+
+`verificar-opura-market-rls.sh` ganhou o 6º caso do gatilho (anúncio que GANHA
+coordenada depois é deduplicado no `UPDATE OF geom`) e passa em ensaio e aplicado.
+
+**Decisões de execução:**
+- Deduplicação sai do navegador: `importListingsInBatch` e `deduplication.test.ts`
+  foram removidos. Quem deduplica é o gatilho no banco, que vale para linhas do
+  mesmo lote (gatilho BEFORE ROW vê as linhas já inseridas pelo mesmo comando) e
+  agora também para o anúncio localizado depois.
+- O bloco de tela morto (`{false ? … : false ? …}`) saiu nesta fase, porque
+  referenciava as funções do robô; é parte do item 6.1.
+- Achados corrigidos de passagem: o service não devolvia `organizationId` do
+  anúncio, então a tela marcava todo anúncio como "Global" e nunca mostrava o
+  botão de excluir; o modal lia preço em texto brasileiro "450.000,00" como 450; o
+  modal inventava "Médio" como padrão e 1 banheiro quando a coluna faltava; a
+  tabela e o detalhe mostravam "Centro"/"Desconhecido" para bairro vazio (agora o
+  nome de origem ou "Não informado").
+- Fica para depois: anúncio que saiu do feed não é marcado inativo (um feed
+  parcial apagaria anúncios ativos); a URL do feed é checada pelo nome do host,
+  sem resolver DNS.
 
 ### Fase 4 — Tirar Cambuí do código
 
@@ -416,9 +521,9 @@ com o usuário", acima) e incorporadas nos itens 2.5, 4.4 e 6.6. Não há decis�
 Plano aprovado em 07/10/2026. Cada fase abre como frente própria (REGRA #8), na
 ordem abaixo.
 
-- [x] Fase 1 — 4 de 4 (frente `market-fase1`, migration aplicada e provada em 07/10/2026)
-- [ ] Fase 2 — 4 de 5 (2.4 adiado para depois da Fase 4, decisão D6; frente `market-fase2`)
-- [ ] Fase 3 — 0 de 4
+- [x] Fase 1 — 4 de 4 (publicada em 07/10/2026, commits `8e30cd58` e `f31099ce`, CI verde)
+- [ ] Fase 2 — 4 de 5 (2.4 adiado para depois da Fase 4, decisão D6; publicada em 07/10/2026, commit `b4f8d24a`, CI verde, domínio conferido)
+- [ ] Fase 3 — 3 de 4 (revisada pela D7; 3.2R publicada, falta provar o caminho autorizado; frente `market-fase3`)
 - [ ] Fase 4 — 0 de 5 (4.5 = o 2.4 adiado)
 - [ ] Fase 5 — 0 de 2
 - [ ] Fase 6 — 0 de 6

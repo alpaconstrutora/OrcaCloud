@@ -127,16 +127,59 @@ describe('propostaDeEixos', () => {
 
   it('sem edificação, o motivo do botão desligado diz o que fazer', () => {
     const { m, t } = nivel();
-    expect(propostaDeEixos(m, t).motivoVazio).toMatch(/Desenhe paredes ou blocos/);
+    expect(propostaDeEixos(m, t).motivoVazio).toMatch(/Desenhe paredes, blocos ou um lote fechado/);
+    expect(propostaDeEixos(m, t, { usarLadosDoLote: false }).motivoVazio).toMatch(/ligue "Usar os lados do lote"/);
+  });
+
+  /** 08/10/2026 — *"quero"*: sem paredes nem blocos, os eixos saem dos lados do lote fechado. */
+  describe('só o lote', () => {
+    const soLote = (pontos: [number, number][]) => {
+      const { m, t } = nivel();
+      const cmds: Command[] = pontos.map(([ax, ay], i) => {
+        const [bx, by] = pontos[(i + 1) % pontos.length];
+        return { type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' };
+      });
+      return { m: applyBatch(m, cmds).model, t };
+    };
+
+    it('lote 10 × 30: A e B nas laterais, 1 nos fundos e 2 na frente, passando 3 m além', () => {
+      const { m, t } = soLote([[0, 0], [10000, 0], [10000, 30000], [0, 30000]]);
+      const p = propostaDeEixos(m, t);
+      expect(p.eixos.map((e) => `${e.nome}@${e.coordenadaMm}`)).toEqual(['A@0', 'B@10000', '1@30000', '2@0']);
+      expect(p.eixos.every((e) => e.origem === 'LOTE')).toBe(true);
+      const a = p.eixos.find((e) => e.nome === 'A')!;
+      expect([a.a.y, a.b.y]).toEqual([-3000, 33000]);
+    });
+
+    it('desligado, o lote não gera eixo', () => {
+      const { m, t } = soLote([[0, 0], [10000, 0], [10000, 30000], [0, 30000]]);
+      expect(propostaDeEixos(m, t, { usarLadosDoLote: false }).eixos).toEqual([]);
+    });
+
+    it('com edificação desenhada, o lote NÃO entra (a malha é da estrutura)', () => {
+      const { m, t } = soLote([[0, 0], [10000, 0], [10000, 30000], [0, 30000]]);
+      const comBloco = applyBatch(m, [{ type: 'AddBloco', levelId: t, nome: 'Torre', pontos: [point(1000, 4000), point(9000, 4000), point(9000, 24000), point(1000, 24000)], pavimentos: 4 }]).model;
+      expect(propostaDeEixos(comBloco, t).eixos.map((e) => e.coordenadaMm)).toEqual([1000, 9000, 24000, 4000]);
+    });
+
+    it('lado oblíquo do lote fica de fora; lote aberto não gera nada e o motivo diz', () => {
+      const trapezio = soLote([[0, 0], [12000, 0], [10000, 30000], [0, 30000]]);
+      expect(propostaDeEixos(trapezio.m, trapezio.t).eixos.map((e) => e.nome)).toEqual(['A', '1', '2']);
+      const { m, t } = nivel();
+      const aberto = applyBatch(m, [{ type: 'AddBoundary', levelId: t, a: point(0, 0), b: point(10000, 0), kind: 'TERRENO' }]).model;
+      expect(propostaDeEixos(aberto, t).motivoVazio).toMatch(/lote fechado/);
+    });
   });
 
   it('hipóteses: padrão 3 m / 1,50 m / 10 cm; o que vem do navegador é validado', () => {
-    expect(HIPOTESES_EIXOS_PADRAO).toEqual({ alemDoDesenhoMm: 3000, comprimentoMinimoDaParedeMm: 1500, juntarAMenosDeMm: 100 });
-    expect(normalizarHipotesesDeEixos({ alemDoDesenhoMm: 'x', comprimentoMinimoDaParedeMm: -5, juntarAMenosDeMm: 99999 })).toEqual({
+    expect(HIPOTESES_EIXOS_PADRAO).toEqual({ alemDoDesenhoMm: 3000, comprimentoMinimoDaParedeMm: 1500, juntarAMenosDeMm: 100, usarLadosDoLote: true });
+    expect(normalizarHipotesesDeEixos({ alemDoDesenhoMm: 'x', comprimentoMinimoDaParedeMm: -5, juntarAMenosDeMm: 99999, usarLadosDoLote: 'sim' })).toEqual({
       alemDoDesenhoMm: 3000,
       comprimentoMinimoDaParedeMm: 0,
       juntarAMenosDeMm: 2000,
+      usarLadosDoLote: true,
     });
+    expect(normalizarHipotesesDeEixos({ usarLadosDoLote: false }).usarLadosDoLote).toBe(false);
   });
 });
 

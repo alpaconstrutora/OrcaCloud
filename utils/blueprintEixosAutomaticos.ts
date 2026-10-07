@@ -7,6 +7,7 @@ import {
   type ObjectId,
   type Point,
 } from './blueprintKernel';
+import { anelDoLoteFechado } from './blueprintCotas';
 
 /**
  * EIXOS AUTOMÁTICOS (07/10/2026).
@@ -30,6 +31,9 @@ import {
  *  - Linha que já tem eixo (mesma direção, a menos de `juntarAMenosDeMm`) é pulada; os nomes novos CONTINUAM depois
  *    dos já usados.
  *  - Parede oblíqua fica de fora — e a proposta diz quantas.
+ *  - SEM parede nem bloco no pavimento (o estudo que só tem o lote), os lados ortogonais do LOTE fechado (08/10/2026,
+ *    *"quero"* à pergunta "gerar eixos também a partir dos lados do lote quando ainda não há paredes nem bloco?").
+ *    Hipótese ligável na gaveta; com edificação desenhada, o lote não entra — a malha é da estrutura, não da divisa.
  *
  * As três distâncias são HIPÓTESES na gaveta (memória: folga de projeto nunca fica escondida no código).
  */
@@ -41,16 +45,22 @@ export interface HipotesesDeEixos {
   comprimentoMinimoDaParedeMm: number;
   /** Linhas paralelas mais próximas que isto viram um eixo só, mm. */
   juntarAMenosDeMm: number;
+  /** Sem parede nem bloco no pavimento, os eixos saem dos lados do lote fechado. */
+  usarLadosDoLote: boolean;
 }
 
 export const HIPOTESES_EIXOS_PADRAO: HipotesesDeEixos = {
   alemDoDesenhoMm: 3000,
   comprimentoMinimoDaParedeMm: 1500,
   juntarAMenosDeMm: 100,
+  usarLadosDoLote: true,
 };
 
+/** As hipóteses que são distância (mm). */
+export type DistanciaDosEixos = Exclude<keyof HipotesesDeEixos, 'usarLadosDoLote'>;
+
 /** Faixas aceitas de cada hipótese (o que vem do navegador é validado aqui). */
-export const FAIXAS_DAS_HIPOTESES_DE_EIXOS: Record<keyof HipotesesDeEixos, { min: number; max: number }> = {
+export const FAIXAS_DAS_HIPOTESES_DE_EIXOS: Record<DistanciaDosEixos, { min: number; max: number }> = {
   alemDoDesenhoMm: { min: 0, max: 20000 },
   comprimentoMinimoDaParedeMm: { min: 0, max: 20000 },
   juntarAMenosDeMm: { min: 0, max: 2000 },
@@ -58,7 +68,9 @@ export const FAIXAS_DAS_HIPOTESES_DE_EIXOS: Record<keyof HipotesesDeEixos, { min
 
 export function normalizarHipotesesDeEixos(h: Partial<Record<keyof HipotesesDeEixos, unknown>> | null | undefined): HipotesesDeEixos {
   const saida = { ...HIPOTESES_EIXOS_PADRAO };
-  for (const k of Object.keys(HIPOTESES_EIXOS_PADRAO) as (keyof HipotesesDeEixos)[]) {
+  const lote = h?.usarLadosDoLote;
+  if (typeof lote === 'boolean') saida.usarLadosDoLote = lote;
+  for (const k of Object.keys(FAIXAS_DAS_HIPOTESES_DE_EIXOS) as DistanciaDosEixos[]) {
     const n = Number(h?.[k]);
     const { min, max } = FAIXAS_DAS_HIPOTESES_DE_EIXOS[k];
     if (h?.[k] !== undefined && h?.[k] !== null && h?.[k] !== '' && Number.isFinite(n)) saida[k] = Math.round(Math.min(max, Math.max(min, n)));
@@ -74,7 +86,7 @@ export interface EixoProposto {
   a: Point;
   b: Point;
   /** De onde a linha veio. */
-  origem: 'PAREDE' | 'BLOCO' | 'PAREDE_E_BLOCO';
+  origem: 'PAREDE' | 'BLOCO' | 'PAREDE_E_BLOCO' | 'LOTE';
 }
 
 export interface PropostaDeEixos {
@@ -98,7 +110,7 @@ interface Linha {
   vertical: boolean;
   c: number;
   comprimento: number;
-  origem: 'PAREDE' | 'BLOCO';
+  origem: 'PAREDE' | 'BLOCO' | 'LOTE';
 }
 
 export function propostaDeEixos(model: BlueprintModel, levelId: ObjectId, hipEntrada: Partial<HipotesesDeEixos> = {}): PropostaDeEixos {
@@ -139,7 +151,23 @@ export function propostaDeEixos(model: BlueprintModel, levelId: ObjectId, hipEnt
   }
 
   const vazio = (motivo: string): PropostaDeEixos => ({ eixos: [], comandos: [], paredesObliquas, paredesCurtas, jaTinhamEixo: 0, motivoVazio: motivo });
-  if (paredes.length === 0 && blocos.length === 0) return vazio('Desenhe paredes ou blocos neste pavimento: os eixos saem da edificação.');
+  // SÓ O LOTE (08/10/2026): sem edificação, os lados ortogonais do lote fechado — se a hipótese deixar.
+  const semEdificacao = paredes.length === 0 && blocos.length === 0;
+  const anelDoLote = semEdificacao && hip.usarLadosDoLote ? anelDoLoteFechado(model.boundaries.filter((b) => b.levelId === levelId)) : null;
+  if (anelDoLote) {
+    for (let i = 0; i < anelDoLote.length; i++) {
+      const l = comoLinha(anelDoLote[i], anelDoLote[(i + 1) % anelDoLote.length], 'LOTE');
+      if (l && l.comprimento >= hip.comprimentoMinimoDaParedeMm) linhas.push(l);
+    }
+  }
+  if (semEdificacao && !anelDoLote) {
+    return vazio(
+      hip.usarLadosDoLote
+        ? 'Desenhe paredes, blocos ou um lote fechado neste pavimento: os eixos saem da edificação (ou, sem ela, dos lados do lote).'
+        : 'Desenhe paredes ou blocos neste pavimento — ou ligue "Usar os lados do lote" para os eixos saírem da divisa.',
+    );
+  }
+  if (anelDoLote && linhas.length === 0) return vazio('O lote não tem lado horizontal ou vertical acima da "parede mínima": desenhe paredes ou blocos, ou diminua o valor.');
   if (linhas.length === 0) {
     return vazio(
       paredesObliquas > 0 && paredesCurtas === 0

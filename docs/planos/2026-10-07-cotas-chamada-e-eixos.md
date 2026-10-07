@@ -114,3 +114,13 @@ O que existe (origin/main @ a5209a3e):
   `BlueprintEditor` (+4: gaveta sem/ com edificação, um Ctrl+Z, item Eixos). Suíte cheia: 7749 = 7715 + 34 pulados, 0 falha.
 - App real (estudo descartável, apagado depois): lote e paredes com chamadas; gaveta A–D / 1–2; prévia tracejada;
   criar grava os 6 no rascunho; Exibir › Eixos oculta e guarda a chave; PDF A3 1:100 com bolhas e chamadas.
+
+## Complemento (08/10/2026) — eixos pelos lados do lote
+
+Pedido: com o print de um estudo que só tem o lote 10 × 30, *"como exibir os eixos?"*; à oferta "gerar eixos também a
+partir dos lados do lote quando ainda não há paredes nem bloco", *"quero"*.
+
+- `HipotesesDeEixos.usarLadosDoLote` (padrão LIGADO), caixa "Usar os lados do lote (sem paredes nem blocos)" na gaveta.
+- Só vale SEM edificação no pavimento: com parede ou bloco, a malha continua saindo da estrutura (o lote não entra).
+- Lote fechado (`anelDoLoteFechado`); lado oblíquo fica de fora; lado abaixo da "parede mínima" também. Origem "Lado do lote".
+- Testes: `blueprintEixosAutomaticos` (+4, lote 10 × 30 → A, B / 1, 2), `BlueprintEditor` (+1, gaveta só com o lote).

@@ -7578,7 +7578,32 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     expect(within(drawer).getByRole('spinbutton', { name: /juntar linhas a menos de/i })).toHaveValue(10);
     const criar = within(drawer).getByRole('button', { name: /^criar 0 eixo/i });
     expect(criar).toBeDisabled();
-    expect(criar).toHaveAttribute('title', expect.stringMatching(/Desenhe paredes ou blocos/));
+    expect(criar).toHaveAttribute('title', expect.stringMatching(/Desenhe paredes, blocos ou um lote fechado/));
+    expect(within(drawer).getByRole('checkbox', { name: /usar os lados do lote/i })).toBeChecked();
+  });
+
+  it('só o lote (08/10/2026): a gaveta propõe A, B / 1, 2 pelos lados; desligar "Usar os lados do lote" zera e guarda', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 });
+    const t = nivel.model.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO' }) as const;
+    loadBranchModel.mockResolvedValue(k.applyBatch(nivel.model, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model);
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^eixos automáticos/i));
+    // Com lote, a gaveta das divisas também fica montada (fechada): escolher a dos eixos pelo título.
+    const drawer = (await screen.findAllByRole('dialog')).find((d) => /Eixos automáticos/.test(d.textContent ?? ''))!;
+    const linhas = within(within(drawer).getByRole('table', { name: /prévia dos eixos/i })).getAllByRole('row').slice(1);
+    expect(linhas.map((l) => l.textContent)).toEqual([
+      expect.stringMatching(/^AVertical.*x = 0,00.*Lado do lote/),
+      expect.stringMatching(/^BVertical.*x = 10,00/),
+      expect.stringMatching(/^1Horizontal.*y = 30,00/),
+      expect.stringMatching(/^2Horizontal.*y = 0,00/),
+    ]);
+    expect(within(drawer).getByRole('button', { name: /^criar 4 eixo/i })).toBeEnabled();
+    await userEvent.setup().click(within(drawer).getByRole('checkbox', { name: /usar os lados do lote/i }));
+    expect(within(drawer).getByRole('button', { name: /^criar 0 eixo/i })).toBeDisabled();
+    expect(JSON.parse(localStorage.getItem('blueprint:eixosAutomaticos')!).usarLadosDoLote).toBe(false);
   });
 
   it('com paredes: prévia A, B / 1, 2, 3; "Criar" grava num passo só e um Desfazer volta tudo', async () => {

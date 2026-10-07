@@ -11235,7 +11235,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     contagem={tarefaAberta === 'eixos' ? propostaDeEixosDoNivel?.eixos.length || undefined : undefined}
                     ativo={tarefaAberta === 'eixos'}
                     onClick={() => alternarTarefa('eixos')}
-                    ajuda="A malha de eixos a partir das paredes e dos blocos — letras nos verticais (A, B…), números nos horizontais (1, 2…); prévia antes de gravar, Ctrl+Z desfaz"
+                    ajuda="A malha de eixos a partir das paredes e dos blocos (sem eles, dos lados do lote) — letras nos verticais (A, B…), números nos horizontais (1, 2…); prévia antes de gravar, Ctrl+Z desfaz"
                   />
                   <BotaoDoRibbon
                     icone={RectangleVertical}
@@ -13010,7 +13010,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       desabilitado: (editor.model.eixos ?? []).length === 0,
                       ajuda:
                         (editor.model.eixos ?? []).length === 0
-                          ? 'Não há eixo no estudo: gere a malha em Arquitetura › Estrutural › Eixos automáticos, ou desenhe com a ferramenta Eixo.'
+                          ? 'Não há eixo no estudo: gere a malha em Arquitetura › Estrutural › Eixos automáticos (das paredes, dos blocos ou, sem eles, dos lados do lote), ou desenhe com a ferramenta Eixo.'
                           : 'Os eixos da malha — linha traço-ponto com a bolha e o nome (A, B… / 1, 2…) nas pontas. Oculto, o eixo não é desenhado nem dá encaixe, mas continua valendo para os Pilares automáticos.',
                     },
                     {
@@ -17389,6 +17389,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               proposta={propostaDeEixosDoNivel}
               hipoteses={hipotesesDeEixos}
               onHipotese={(k, v) => setHipDeEixosSalvas((h) => ({ ...h, [k]: v }))}
+              onUsarLadosDoLote={(ligado) => setHipDeEixosSalvas((h) => ({ ...h, usarLadosDoLote: ligado }))}
               onVerPrevia={() => setDrawerRecolhido(true)}
               resultado={resultadoDeEixos}
             />

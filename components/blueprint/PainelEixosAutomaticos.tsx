@@ -1,5 +1,5 @@
 import React from 'react';
-import type { HipotesesDeEixos, PropostaDeEixos } from '../../utils/blueprintEixosAutomaticos';
+import type { DistanciaDosEixos, HipotesesDeEixos, PropostaDeEixos } from '../../utils/blueprintEixosAutomaticos';
 
 /**
  * A GAVETA "Eixos automáticos" (07/10/2026) — *"veja que também tem eixos identificados com números e letras"*.
@@ -11,7 +11,9 @@ import type { HipotesesDeEixos, PropostaDeEixos } from '../../utils/blueprintEix
 export interface PainelEixosAutomaticosProps {
   proposta: PropostaDeEixos;
   hipoteses: HipotesesDeEixos;
-  onHipotese: (campo: keyof HipotesesDeEixos, valorMm: number) => void;
+  onHipotese: (campo: DistanciaDosEixos, valorMm: number) => void;
+  /** "Usar os lados do lote" (08/10/2026). */
+  onUsarLadosDoLote: (ligado: boolean) => void;
   /** Recolhe a gaveta para ver a prévia tracejada no desenho. */
   onVerPrevia: () => void;
   resultado: { ok: boolean; texto: string } | null;
@@ -23,11 +25,12 @@ const ORIGEM: Record<PropostaDeEixos['eixos'][number]['origem'], string> = {
   PAREDE: 'Parede',
   BLOCO: 'Bloco de massa',
   PAREDE_E_BLOCO: 'Parede e bloco',
+  LOTE: 'Lado do lote',
 };
 
-export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onVerPrevia, resultado }: PainelEixosAutomaticosProps) {
+export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onUsarLadosDoLote, onVerPrevia, resultado }: PainelEixosAutomaticosProps) {
   const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs';
-  const numero = (k: keyof HipotesesDeEixos, emMm: number, rotulo: string, unidade: 'm' | 'cm', title: string) => {
+  const numero = (k: DistanciaDosEixos, emMm: number, rotulo: string, unidade: 'm' | 'cm', title: string) => {
     const fator = unidade === 'm' ? 1000 : 10;
     return (
       <label className="flex items-center gap-2" title={title}>
@@ -56,7 +59,8 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
         <ul className="mt-1 list-disc space-y-0.5 pl-4">
           <li>
             Um eixo no <strong>eixo de cada parede</strong> horizontal ou vertical do pavimento e nos lados dos{' '}
-            <strong>blocos de massa</strong>. Parede oblíqua fica de fora.
+            <strong>blocos de massa</strong>. Parede oblíqua fica de fora. Sem parede nem bloco, os{' '}
+            <strong>lados do lote</strong> (se ligado abaixo).
           </li>
           <li>
             <strong>Letras nos verticais</strong> (A, B… da esquerda para a direita) e <strong>números nos horizontais</strong>{' '}
@@ -70,6 +74,13 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
           {numero('alemDoDesenhoMm', hipoteses.alemDoDesenhoMm, 'Além do desenho', 'm', 'Quanto cada eixo passa além do desenho (edificação e lote), de cada lado — para a bolha com o nome cair por fora das cotas.')}
           {numero('comprimentoMinimoDaParedeMm', hipoteses.comprimentoMinimoDaParedeMm, 'Parede mínima', 'm', 'Parede (ou lado de bloco) mais curta que isto não gera eixo — a mureta e o trecho curto não definem malha.')}
           {numero('juntarAMenosDeMm', hipoteses.juntarAMenosDeMm, 'Juntar linhas a menos de', 'cm', 'Duas linhas paralelas mais próximas que isto viram um eixo só (fica a posição da parede mais comprida).')}
+          <label
+            className="flex items-center gap-2"
+            title="Para o estudo que só tem o lote: sem parede nem bloco no pavimento, um eixo em cada lado horizontal ou vertical do lote fechado. Com edificação desenhada, o lote não entra — a malha é da estrutura."
+          >
+            <input type="checkbox" checked={hipoteses.usarLadosDoLote} onChange={(e) => onUsarLadosDoLote(e.target.checked)} aria-label="Usar os lados do lote sem paredes nem blocos" />
+            Usar os lados do lote (sem paredes nem blocos)
+          </label>
           {proposta.eixos.length > 0 && (
             <button
               type="button"

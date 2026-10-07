@@ -87,4 +87,5 @@ Tudo é feito em uma frente nova: `bash scripts/nova-frente.sh rh-editar-colabor
   - item 3 ✅ foto 300×200 (paisagem) exibida 126×169, razão 0,747, `object-cover` (recorta, não estica); ao sair sem salvar o arquivo some do bucket (conferido: 0 objetos em `labor-photos/`).
   - item 4 ✅ adicionar conta + "Tornar principal" na tela; "Tornar principal" quebrava linha → coluna 110→150px + `whitespace-nowrap`. Gravação provada pelo PostgREST com a sessão do agente (RPC com a lista atual = no-op: 200, mesmo id); chave anon → 401 na RPC e na tabela.
 - Não conferido na tela: o clique em "Salvar" com mudança real (não gravei dado de produção no passeio) — coberto pelo teste da RPC no banco e pela chamada no-op acima.
-- Itens: **4 de 4** com código, verificação mecânica e tela. Falta: publicar e fechar a frente.
+- Itens: **4 de 4** com código, verificação mecânica e tela.
+- 07/10 — publicado: `b11c1cad` em main (typecheck 0 erro, `vite build` ✓ na 2ª tentativa — a 1ª caiu num pânico nativo do rollup em `node_modules/web-ifc`, instabilidade da máquina). `conferir-producao.sh "Contas bancárias e chaves PIX; a principal"` ✅ domínio serve b11c1ca; check-run `ci` = success.

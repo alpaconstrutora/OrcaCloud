@@ -381,7 +381,8 @@ describe('IFC · a cobertura É o requisito', () => {
     // FALSO desde 20/09 — o duto, a condensadora, a evaporadora e o exaustor saem no arquivo. O que
     // continua de fora é o GÁS (e o que a climatização ainda não desenha: linha, dreno, carga).
     expect(COBERTURA_IFC.join(' ')).not.toMatch(/NÃO CONTÉM ar-condicionado/);
-    expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM a climatização MÍNIMA/);
+    // E10.1 (07/10/2026): a climatização deixou de ser "MÍNIMA" — linha, dreno, duto retangular, conexões de duto e Pset.
+    expect(COBERTURA_IFC.join(' ')).toMatch(/CONTÉM a climatização desenhada/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM gás/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM ARMADURA/);
     expect(COBERTURA_IFC.join(' ')).toMatch(/NÃO CONTÉM tipos de parede/);

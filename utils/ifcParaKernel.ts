@@ -54,6 +54,9 @@ import {
   TIPOS_DE_INTERRUPTOR,
   TIPOS_DE_PONTO_ELETRICO,
   TIPOS_DE_PONTO_HIDRAULICO,
+  TIPOS_DE_CLIMATIZACAO,
+  TIPOS_COM_CAPACIDADE,
+  TIPOS_COM_VAZAO,
   type TipoDePontoHidraulico,
   contornoEmPlanta,
   type TipoDeInterruptor,
@@ -1037,3 +1040,227 @@ export function comandosDoIncendio(
   return comandos;
 }
 
+// ─── E10.1 (07/10/2026): a CLIMATIZAÇÃO importada ────────────────────────────
+
+const TIPOS_DA_CLIMATIZACAO = new Set<string>(TIPOS_DE_CLIMATIZACAO);
+const DISCIPLINAS_DA_CLIMATIZACAO_IFC = ['FRIGORIGENA', 'DRENO_AC', 'MECANICA'] as const;
+type DisciplinaDaClimatizacao = (typeof DISCIPLINAS_DA_CLIMATIZACAO_IFC)[number];
+
+/**
+ * O tipo da peça de climatização: o `ObjectType` quando ele JÁ é um tipo do
+ * sistema (o nosso export o escreve); senão a classe e o enum pelo que a norma diz
+ * — e o que a norma não distingue (o `.SPLITSYSTEM.` é evaporadora ou
+ * condensadora?) fica `null`: a peça é recusada com o motivo, não adivinhada.
+ */
+export function tipoDoPontoDeClimatizacaoIfc(classe: string, predefinido: string | null, objectType: string | null): TipoDePontoHidraulico | null {
+  const base = (objectType ?? '').split(':')[0];
+  if (TIPOS_DA_CLIMATIZACAO.has(base)) return base as TipoDePontoHidraulico;
+  const pd = (predefinido ?? '').replace(/\./g, '');
+  switch (classe) {
+    case 'IFCAIRTERMINAL':
+      return pd === 'DIFFUSER' ? 'DIFUSOR' : pd === 'GRILLE' ? 'GRELHA_INSUFLAMENTO' : pd === 'REGISTER' ? 'BOCAL_AR' : pd === 'LOUVRE' ? 'VENEZIANA_AR' : null;
+    case 'IFCFAN':
+      return 'EXAUSTOR_AR';
+    case 'IFCDAMPER':
+      return 'DAMPER';
+    case 'IFCPUMP':
+      return 'BOMBA_DRENO';
+    case 'IFCWASTETERMINAL':
+      return 'PONTO_DRENO';
+    default:
+      return null;
+  }
+}
+
+export interface PontoDeClimatizacaoTraduzido {
+  expressID: number;
+  nome: string;
+  pavimento: number | null;
+  at: PontoMm;
+  cotaAbsMm: number;
+  tipoHidraulico: TipoDePontoHidraulico;
+  disciplina: DisciplinaDaClimatizacao;
+  capacidadeBtuH?: number;
+  vazaoM3h?: number;
+  /** O NÚMERO do desenho de origem (Numero_Derivado) e o da condensadora do sistema — é por eles que o sistema se religa. */
+  numero: string | null;
+  numeroDaCondensadora: string | null;
+}
+
+export interface TuboDeClimatizacaoTraduzido extends EletrodutoTraduzido {
+  disciplina: DisciplinaDaClimatizacao;
+  bitolaSuccaoMm?: number;
+  isolamentoMm?: number;
+  alturaDutoMm?: number;
+}
+
+const valorDoPset = (props: Record<string, string> | undefined, k: string) => (props && props[k] != null && props[k] !== '' && props[k] !== '—' ? props[k] : null);
+const inteiroPositivo = (v: string | null) => {
+  if (v == null) return null;
+  const x = Math.round(Number(v));
+  return Number.isFinite(x) && x > 0 ? x : null;
+};
+
+/**
+ * E10.1 — traduz a climatização lida do arquivo. A peça pelo centro; a disciplina pelo
+ * Pset (a dutada é linha E duto), senão pela primeira que o tipo admite. O tubo: a
+ * disciplina pelo Pset ou pelo sistema (refrigeração → linha, drenagem → dreno, duto →
+ * mecânica); a bitola, a sucção, o isolamento e a altura do duto pelo Pset (o sólido é
+ * o envelope com o isolamento); sem Pset, a medida da malha (o retângulo, no duto).
+ */
+export function traduzirClimatizacao(leitura: LeituraEletrica): { pontos: PontoDeClimatizacaoTraduzido[]; tubos: TuboDeClimatizacaoTraduzido[]; recusas: RecusaDeTraducao[] } {
+  const pontos: PontoDeClimatizacaoTraduzido[] = [];
+  const recusas: RecusaDeTraducao[] = [];
+  for (const p of leitura.pontos) {
+    const recusar = (motivo: string) => recusas.push({ expressID: p.expressID, nome: p.nome, classe: p.classe, motivo });
+    const tipo = tipoDoPontoDeClimatizacaoIfc(p.classe, p.predefinido, p.objectType);
+    if (!tipo) {
+      const reserva = /^(CONDENSADORA|EVAPORADORA|EXAUSTOR|CASA_DE_MAQUINAS)$/.test((p.objectType ?? '').split(':')[0]);
+      recusar(reserva ? 'reserva de lugar (componente antigo), não peça da rede de climatização' : `${p.classe}${p.predefinido ? ` .${p.predefinido}.` : ''} não tem equivalente entre as peças de climatização (evaporadora e condensadora só se distinguem pelo tipo)`);
+      continue;
+    }
+    if (!p.centro) {
+      recusar('a peça não tem geometria para dizer onde está');
+      continue;
+    }
+    const admitidas = DISCIPLINAS_DO_PONTO_HIDRAULICO[tipo] as readonly string[];
+    const declarada = valorDoPset(p.propriedades, 'Disciplina');
+    const disciplina = (declarada && admitidas.includes(declarada) ? declarada : admitidas[0]) as DisciplinaDaClimatizacao;
+    const capacidade = inteiroPositivo(valorDoPset(p.propriedades, 'CapacidadeBtuH_Declarada'));
+    const vazao = inteiroPositivo(valorDoPset(p.propriedades, 'VazaoM3h_Declarada'));
+    if (valorDoPset(p.propriedades, 'CapacidadeBtuH_Declarada') != null && (capacidade == null || !(TIPOS_COM_CAPACIDADE as readonly string[]).includes(tipo))) recusar(`${tipo}: capacidade "${p.propriedades!.CapacidadeBtuH_Declarada}" ignorada (fora da regra do sistema)`);
+    if (valorDoPset(p.propriedades, 'VazaoM3h_Declarada') != null && (vazao == null || !(TIPOS_COM_VAZAO as readonly string[]).includes(tipo))) recusar(`${tipo}: vazão "${p.propriedades!.VazaoM3h_Declarada}" ignorada (fora da regra do sistema)`);
+    pontos.push({
+      expressID: p.expressID,
+      nome: p.nome,
+      pavimento: p.pavimento,
+      at: arredondar(paraPlano(p.centro)),
+      cotaAbsMm: Math.round(paraCota(p.centro)),
+      tipoHidraulico: tipo,
+      disciplina,
+      ...(capacidade != null && (TIPOS_COM_CAPACIDADE as readonly string[]).includes(tipo) ? { capacidadeBtuH: capacidade } : {}),
+      ...(vazao != null && (TIPOS_COM_VAZAO as readonly string[]).includes(tipo) ? { vazaoM3h: vazao } : {}),
+      numero: valorDoPset(p.propriedades, 'Numero_Derivado'),
+      numeroDaCondensadora: valorDoPset(p.propriedades, 'Condensadora_Declarada'),
+    });
+  }
+  // A geometria do tubo: o mesmo encadeamento dos sólidos do eletroduto (o par já chega fundido num eixo).
+  const encadeados = traduzirEletrica({ pontos: [], eletrodutos: leitura.eletrodutos, recusas: [] });
+  const tubos: TuboDeClimatizacaoTraduzido[] = [];
+  for (const t of encadeados.eletrodutos) {
+    const e = leitura.eletrodutos.find((x) => x.expressID === t.expressID)!;
+    const declarada = valorDoPset(e.propriedades, 'Disciplina');
+    const disciplina: DisciplinaDaClimatizacao | null =
+      declarada && (DISCIPLINAS_DA_CLIMATIZACAO_IFC as readonly string[]).includes(declarada)
+        ? (declarada as DisciplinaDaClimatizacao)
+        : e.classe === 'IFCDUCTSEGMENT'
+          ? 'MECANICA'
+          : e.sistemas?.includes('REFRIGERATION')
+            ? 'FRIGORIGENA'
+            : e.sistemas?.includes('DRAINAGE')
+              ? 'DRENO_AC'
+              : null;
+    if (!disciplina) {
+      recusas.push({ expressID: e.expressID, nome: e.nome, classe: e.classe ?? 'IFCPIPESEGMENT', motivo: 'o tubo não diz a rede (nem Pset, nem sistema de refrigeração/drenagem)' });
+      continue;
+    }
+    const isolamento = inteiroPositivo(valorDoPset(e.propriedades, 'IsolamentoMm_Declarado'));
+    const bitolaDoPset = inteiroPositivo(valorDoPset(e.propriedades, 'BitolaMm'));
+    const altura = inteiroPositivo(valorDoPset(e.propriedades, 'AlturaDutoMm_Declarada'));
+    const succao = inteiroPositivo(valorDoPset(e.propriedades, 'BitolaSuccaoMm_Declarada'));
+    const medidoRet = disciplina === 'MECANICA' && e.retanguloM ? { largura: Math.round(e.retanguloM.largura * M_PARA_MM), altura: Math.round(e.retanguloM.altura * M_PARA_MM) } : null;
+    const alturaDuto = disciplina === 'MECANICA' ? (altura ?? medidoRet?.altura ?? null) : null;
+    tubos.push({
+      ...t,
+      bitolaMm: bitolaDoPset ?? medidoRet?.largura ?? (e.diametroM != null ? t.bitolaMm : disciplina === 'MECANICA' ? 200 : 25),
+      disciplina,
+      ...(disciplina === 'FRIGORIGENA' && succao != null ? { bitolaSuccaoMm: succao } : {}),
+      ...(isolamento != null ? { isolamentoMm: isolamento } : {}),
+      ...(alturaDuto != null ? { alturaDutoMm: alturaDuto } : {}),
+    });
+  }
+  return { pontos, tubos, recusas: [...recusas, ...encadeados.recusas.map((r) => ({ ...r, classe: 'IFCPIPESEGMENT', motivo: r.motivo.replace('eletroduto', 'tubo') }))] };
+}
+
+/**
+ * E10.1 — os comandos da climatização importada: peças e tubos nas disciplinas
+ * deles, cota relativa ao pavimento. O SISTEMA (evaporadora → condensadora) se religa
+ * pelo número do desenho de origem — ver `religarSistemasImportados`.
+ */
+export function comandosDaClimatizacao(
+  pontos: readonly PontoDeClimatizacaoTraduzido[],
+  tubos: readonly TuboDeClimatizacaoTraduzido[],
+  destino: (pavimento: number) => DestinoDaImportacao | null,
+  dx = 0,
+  dy = 0,
+): { comandos: Command[]; pecas: PontoDeClimatizacaoTraduzido[] } {
+  const comandos: Command[] = [];
+  const pecas: PontoDeClimatizacaoTraduzido[] = [];
+  for (const p of pontos) {
+    const nivel = p.pavimento == null ? null : destino(p.pavimento);
+    if (!nivel) continue;
+    pecas.push(p);
+    comandos.push({
+      type: 'AddTerminal',
+      levelId: nivel.levelId,
+      ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
+      disciplina: p.disciplina,
+      tipo: p.nome && p.nome !== '—' ? p.nome : p.tipoHidraulico,
+      tipoHidraulico: p.tipoHidraulico,
+      at: { x: p.at.x + dx, y: p.at.y + dy },
+      cotaMm: p.cotaAbsMm - nivel.elevationMm,
+      ...(p.capacidadeBtuH != null ? { capacidadeBtuH: p.capacidadeBtuH } : {}),
+      ...(p.vazaoM3h != null ? { vazaoM3h: p.vazaoM3h } : {}),
+    } as Command);
+  }
+  for (const e of tubos) {
+    const nivel = e.pavimento == null ? null : destino(e.pavimento);
+    if (!nivel) continue;
+    comandos.push({
+      type: 'AddTrecho',
+      levelId: nivel.levelId,
+      ...(nivel.levelUid ? { levelUid: nivel.levelUid } : {}),
+      disciplina: e.disciplina,
+      a: { x: e.a.x + dx, y: e.a.y + dy },
+      b: { x: e.b.x + dx, y: e.b.y + dy },
+      cotaAMm: e.cotaAAbsMm - nivel.elevationMm,
+      cotaBMm: e.cotaBAbsMm - nivel.elevationMm,
+      bitolaMm: e.bitolaMm,
+      ...(e.bitolaSuccaoMm != null ? { bitolaSuccaoMm: e.bitolaSuccaoMm } : {}),
+      ...(e.isolamentoMm != null ? { isolamentoMm: e.isolamentoMm } : {}),
+      ...(e.alturaDutoMm != null ? { alturaDutoMm: e.alturaDutoMm } : {}),
+    } as Command);
+  }
+  return { comandos, pecas };
+}
+
+/**
+ * E10.1 — RELIGA os sistemas no MESMO lote: aplica os comandos numa cópia (os ids do
+ * lote são determinísticos — o molde da E4), acha a peça nova de cada número do arquivo
+ * e acrescenta o `SetTerminalProps` da condensadora. Um Ctrl+Z desfaz tudo. Número sem
+ * par no que entrou vira aviso.
+ */
+export function religarSistemasImportados(
+  model: BlueprintModel,
+  comandos: readonly Command[],
+  pecas: readonly PontoDeClimatizacaoTraduzido[],
+  aplicar: (m: BlueprintModel, c: readonly Command[]) => BlueprintModel,
+): { comandos: Command[]; avisos: string[] } {
+  const ligar = pecas.filter((p) => p.numeroDaCondensadora);
+  if (!ligar.length) return { comandos: [...comandos], avisos: [] };
+  const antes = new Set((model.terminais ?? []).map((t) => t.id));
+  const novos = (aplicar(model, comandos).terminais ?? []).filter((t) => !antes.has(t.id));
+  // As peças de climatização são as ÚLTIMAS AddTerminal do lote, na ordem de `pecas`.
+  const daClima = novos.slice(novos.length - pecas.length);
+  const idDoNumero = new Map<string, string>();
+  pecas.forEach((p, i) => p.numero && daClima[i] && idDoNumero.set(p.numero, daClima[i].id));
+  const extras: Command[] = [];
+  const avisos: string[] = [];
+  pecas.forEach((p, i) => {
+    if (!p.numeroDaCondensadora || !daClima[i]) return;
+    const cond = idDoNumero.get(p.numeroDaCondensadora);
+    if (cond) extras.push({ type: 'SetTerminalProps', terminalId: daClima[i].id, condensadoraId: cond } as Command);
+    else avisos.push(`${p.numero ?? p.nome}: a condensadora ${p.numeroDaCondensadora} não veio no que foi importado — o sistema fica para ligar no painel`);
+  });
+  return { comandos: [...comandos, ...extras], avisos };
+}

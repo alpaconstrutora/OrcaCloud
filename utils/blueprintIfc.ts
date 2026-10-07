@@ -48,10 +48,12 @@
  */
 
 import { numeracaoDeIncendio } from './blueprintNumeracaoIncendio';
+import { numeracaoDeClimatizacao } from './blueprintNumeracaoClimatizacao';
 import {
   ehConjunto,
   ROTULO_DA_CONEXAO,
   materialDoTrecho,
+  TIPOS_DE_CLIMATIZACAO,
   type ConexaoDerivada,
   CATALOGO_DE_COMPONENTES,
   type Componente,
@@ -143,10 +145,12 @@ export const COBERTURA_IFC = [
     'distinção da NBR 5410 e NÃO do enum: a diferença vive no ObjectType. Ponto sem ' +
     'classificação, e ponto de outra disciplina, seguem como IfcFlowTerminal. ' +
     'Um IfcDistributionSystem por disciplina PRESENTE (elétrica, água ' +
-    'fria, água quente, esgoto, pluvial, incêndio, mecânica) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
+    'fria, água quente, esgoto, pluvial, incêndio, mecânica, linha frigorígena, dreno do ar-condicionado) agrupa a rede, e ele atravessa pavimentos: a coluna que ' +
     'desce três andares é UMA rede. As CONEXÕES DERIVADAS dos encontros de trechos (joelho, ' +
     'tê, junção 45°, cruzeta, luva, redução — as mesmas do quantitativo) saem como ' +
-    'IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, ' +
+    'IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca — no DUTO, ' +
+    'IfcDuctFitting com a bolsa retangular do duto retangular; na linha frigorígena a curva NÃO sai (o cobre é ' +
+    'curvado, não leva joelho) —, ' +
     'no pavimento do trecho e no sistema da rede; a conexão lançada à mão continua saindo ' +
     'pelo ponto que a representa, e não em dobro. Pset_OpuraInstalacao traz as duas cotas e, ' +
     'no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities ' +
@@ -185,7 +189,10 @@ export const COBERTURA_IFC = [
   // ⚠️ E0.4 do roadmap de climatização (04/10/2026): esta linha dizia "NÃO CONTÉM ar-condicionado nem
   // gás" — falsa desde 20/09 (E11.1/P2.2), quando o duto virou IfcDuctSegment e a condensadora,
   // a evaporadora e o exaustor passaram a sair como equipamento. O teste que a fixava foi corrigido junto.
-  'CONTÉM a climatização MÍNIMA desenhada (20/09/2026): o duto como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING., a condensadora e a evaporadora como IfcUnitaryEquipment .SPLITSYSTEM., o exaustor como IfcFan .PROPELLORAXIAL. e a casa de máquinas como IfcBuildingElementProxy .PROVISIONFORSPACE. — todos como RESERVA DE LUGAR com as medidas da ficha, sem capacidade, vazão ou modelo. NÃO CONTÉM linha frigorígena, dreno, duto retangular, conexões de duto, terminal de ar classificado (o difusor sai IfcFlowTerminal) nem carga térmica: é o escopo do roadmap de climatização (E3 em diante). NÃO CONTÉM gás.',
+  // ⚠️ E10.1 do roadmap de climatização (07/10/2026): esta linha dizia "NÃO CONTÉM linha frigorígena, dreno,
+  // duto retangular, conexões de duto, terminal de ar classificado" — falsa desde a E3/E7. Corrigida no
+  // mesmo commit que passou a emitir as conexões de duto e o Pset da climatização (e o teste que a fixava).
+  'CONTÉM a climatização desenhada: o DUTO como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING. — redondo (IfcCircleProfileDef) ou RETANGULAR (IfcRectangleProfileDef, a largura deitada) —, e as conexões de duto como IfcDuctFitting; a LINHA FRIGORÍGENA como IfcPipeSegment no sistema .REFRIGERATION. com DOIS sólidos lado a lado (líquido e sucção) e o DRENO como IfcPipeSegment no sistema .DRAINAGE. — o sólido é o ENVELOPE com o isolamento declarado (é o que ocupa lugar), e os diâmetros reais e a espessura vão no Pset; evaporadora e condensadora como IfcUnitaryEquipment (.SPLITSYSTEM., .AIRCONDITIONINGUNIT. na do VRF), derivador do VRF como IfcPipeFitting .JUNCTION., exaustor como IfcFan, bomba de dreno como IfcPump, ponto de dreno como IfcWasteTerminal, terminal de ar como IfcAirTerminal (.DIFFUSER., .GRILLE., .REGISTER., .LOUVRE.), damper como IfcDamper e plenum/caixa como IfcDuctFitting — o ObjectType leva o tipo do sistema (é por ele que a importação reconhece a peça). Pset_OpuraClimatizacao separa pelo SUFIXO: _Declarado/_Declarada é o que o projetista informou (capacidade, vazão, a condensadora do sistema; no trecho, sucção, isolamento e altura do duto); _Derivado é a numeração do desenho (EV-1, CD-2, DF-3); _Calculada é a carga do ambiente e o atende/não atende da evaporadora e a vazão derivada do terminal de ar, com as premissas do estudo — só quando o arquivo é gerado com elas. A reserva de lugar antiga (condensadora/evaporadora/exaustor/casa de máquinas como componente) continua saindo como antes. NÃO CONTÉM gás nem a memória da carga térmica (estão no memorial).',
   'NÃO CONTÉM ARMADURA. Nenhuma barra de aço, estribo ou cobrimento — a estrutura aqui é só a forma do concreto.',
   'CONTÉM tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de catálogo), com IfcRelDefinesByType ligando as instâncias — inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma família. O nome do tipo é o de projeto ("P1"); o item de catálogo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
@@ -578,6 +585,8 @@ export interface OpcoesIfc {
    * Vem PRONTO de quem gera o arquivo — o cálculo não mora no gerador de IFC.
    */
   resultadosDeIncendio?: ReadonlyMap<string, { vazaoLmin: number; pressaoNoBicoKpa: number; atende: boolean }>;
+  /** E10.1 (climatização): o calculado com as premissas do estudo, por peça — a carga do ambiente e o atende da evaporadora, a vazão derivada do terminal de ar. */
+  resultadosDeClimatizacao?: ReadonlyMap<string, ResultadoDeClimatizacaoIfc>;
 }
 
 interface Ctx {
@@ -612,6 +621,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const linhas: string[] = [];
   // E9.3: a numeração de incêndio do desenho INTEIRO (H-1, SPK-3) — a mesma das pranchas.
   const numerosDeIncendio = numeracaoDeIncendio(model);
+  // E10.1: a numeração de climatização do desenho inteiro (EV-1, CD-1) — o Pset e o religar da importação.
+  const numerosDeClimatizacao = numeracaoDeClimatizacao(model);
   let proximo = 1;
   /** Emite uma entidade e devolve a referência `#n`. */
   const emitir = (corpo: string): string => {
@@ -640,7 +651,8 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
   const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
   // As conexões DERIVADAS (a manual já sai pelo ponto dela) — E0.3.
-  const conexoesIfc = quant.conexoes.filter((c) => c.origem === 'DERIVADA' && (c.ramais?.length ?? 0) > 0);
+  // E10.1: a mudança de direção da LINHA FRIGORÍGENA é cobre curvado (E5.3), não joelho — não sai peça.
+  const conexoesIfc = quant.conexoes.filter((c) => c.origem === 'DERIVADA' && (c.ramais?.length ?? 0) > 0 && !(c.disciplina === 'FRIGORIGENA' && (c.tipo === 'JOELHO_90' || c.tipo === 'JOELHO_45')));
   const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
 
   /** Os produtos de cada disciplina, para o `IfcDistributionSystem` no fim. */
@@ -982,6 +994,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
           : []),
         ['Sugerido', { tipo: 'IFCBOOLEAN', v: !!t.sugerido }],
       ]);
+      if (t.disciplina === 'FRIGORIGENA' || t.disciplina === 'DRENO_AC' || t.disciplina === 'MECANICA') psetDoTrechoDeClimatizacao(ctx, produto, t);
       // E7.1: o ELETRODUTO entra em cada circuito que passa por ele — o circuito é o sistema dele também.
       if (t.disciplina === 'ELETRICA') {
         for (const cid of t.circuitoIds ?? []) porCircuito.set(cid, [...(porCircuito.get(cid) ?? []), produto]);
@@ -1049,6 +1062,9 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
       if (t.disciplina === 'INCENDIO') psetDeIncendio(ctx, produto, t, numerosDeIncendio.get(t.id)?.numero ?? null, o.resultadosDeIncendio?.get(t.id) ?? null);
+      if (t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico)) {
+        psetDeClimatizacao(ctx, produto, t, numerosDeClimatizacao.get(t.id)?.numero ?? null, t.condensadoraId ? (numerosDeClimatizacao.get(t.condensadoraId)?.numero ?? null) : null, o.resultadosDeClimatizacao?.get(t.id) ?? null);
+      }
       produtos.push(produto);
       porSistema.set(t.disciplina, [...(porSistema.get(t.disciplina) ?? []), produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, 'terminal'));
@@ -1381,6 +1397,39 @@ function psetDeIncendio(ctx: Ctx, produto: string, t: Terminal, numero: string |
     p.push(['Atende_Calculada', { tipo: 'IFCBOOLEAN', v: calc.atende }]);
   }
   emitirPset(ctx, produto, t.uid, 'Pset_OpuraIncendio', p);
+}
+
+/** E10.1 — o que o export de climatização recebe de fora (como o incêndio): o calculado com as premissas do estudo. */
+export interface ResultadoDeClimatizacaoIfc {
+  cargaDoAmbienteBtuH?: number;
+  atende?: boolean;
+  vazaoM3h?: number;
+}
+
+/**
+ * E10.1 — `Pset_OpuraClimatizacao` da PEÇA: o declarado (capacidade, vazão, a condensadora
+ * do sistema pelo NÚMERO dela — é por ele que a importação religa o sistema), o número do
+ * desenho e o calculado com as premissas (só quando o arquivo vem com elas). Ausente ≠ zero.
+ */
+function psetDeClimatizacao(ctx: Ctx, produto: string, t: Terminal, numero: string | null, numeroDaCondensadora: string | null, calc: ResultadoDeClimatizacaoIfc | null): void {
+  const p: [string, ValorIfc][] = [];
+  if (numero) p.push(['Numero_Derivado', { tipo: 'IFCLABEL', v: numero }]);
+  if (t.capacidadeBtuH != null) p.push(['CapacidadeBtuH_Declarada', { tipo: 'IFCINTEGER', v: t.capacidadeBtuH }]);
+  if (t.vazaoM3h != null) p.push(['VazaoM3h_Declarada', { tipo: 'IFCREAL', v: t.vazaoM3h }]);
+  if (numeroDaCondensadora) p.push(['Condensadora_Declarada', { tipo: 'IFCLABEL', v: numeroDaCondensadora }]);
+  if (calc?.cargaDoAmbienteBtuH != null) p.push(['CargaDoAmbienteBtuH_Calculada', { tipo: 'IFCINTEGER', v: Math.round(calc.cargaDoAmbienteBtuH) }]);
+  if (calc?.atende != null) p.push(['Atende_Calculada', { tipo: 'IFCBOOLEAN', v: calc.atende }]);
+  if (calc?.vazaoM3h != null) p.push(['VazaoM3h_Calculada', { tipo: 'IFCREAL', v: Math.round(calc.vazaoM3h) }]);
+  emitirPset(ctx, produto, t.uid, 'Pset_OpuraClimatizacao', p);
+}
+
+/** E10.1 — `Pset_OpuraClimatizacao` do TRECHO: a sucção, o isolamento e a altura do duto declarados. */
+function psetDoTrechoDeClimatizacao(ctx: Ctx, produto: string, t: Trecho): void {
+  const p: [string, ValorIfc][] = [];
+  if (t.bitolaSuccaoMm != null) p.push(['BitolaSuccaoMm_Declarada', { tipo: 'IFCINTEGER', v: t.bitolaSuccaoMm }]);
+  if (t.isolamentoMm != null) p.push(['IsolamentoMm_Declarado', { tipo: 'IFCINTEGER', v: t.isolamentoMm }]);
+  if (t.alturaDutoMm != null) p.push(['AlturaDutoMm_Declarada', { tipo: 'IFCINTEGER', v: t.alturaDutoMm }]);
+  emitirPset(ctx, produto, t.uid, 'Pset_OpuraClimatizacao', p);
 }
 
 /**
@@ -2213,18 +2262,27 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: numb
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
   // E7.1 (05/10/2026): o duto retangular sai com o perfil retangular — X local é horizontal e
   // perpendicular ao eixo (`solidoAoLongo`), então a largura fica deitada e a altura em pé.
+  // E10.1 (climatização): o sólido é o ENVELOPE — o isolamento declarado ocupa lugar (é com ele que se coordena).
+  const iso = t.isolamentoMm ?? 0;
   const perfil = t.alturaDutoMm != null
-    ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm)},${n(t.alturaDutoMm)})`)
-    : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
+    ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm + 2 * iso)},${n(t.alturaDutoMm + 2 * iso)})`)
+    : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2 + iso)})`);
+  // A LINHA FRIGORÍGENA: dois tubos lado a lado (líquido e sucção), simétricos em torno do eixo — o
+  // meio dos dois É o eixo do trecho (é por ele que a importação volta ao trecho único).
+  const par = t.disciplina === 'FRIGORIGENA' && t.bitolaSuccaoMm != null ? parDaLinha(t.bitolaMm, t.bitolaSuccaoMm, iso) : null;
+  const perfisDoPar = par ? par.raios.map((r) => emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(r)})`)) : [];
 
-  const solidos = segmentosDoEletroduto(t, peDireitoMm).map((seg) => {
+  const solidos = segmentosDoEletroduto(t, peDireitoMm).flatMap((seg) => {
     const dx = seg.b.x - seg.a.x;
     const dy = seg.b.y - seg.a.y;
     const dz = seg.cotaBMm - seg.cotaAMm;
     const comprimento = Math.hypot(dx, dy, dz);
     const eixo: [number, number, number] = [dx / comprimento, dy / comprimento, dz / comprimento];
     // Início do pedaço, RELATIVO à ponta A do elemento.
-    return solidoAoLongo(ctx, perfil, [seg.a.x - t.a.x, seg.a.y - t.a.y, seg.cotaAMm - t.cotaAMm], eixo, comprimento);
+    const inicio: [number, number, number] = [seg.a.x - t.a.x, seg.a.y - t.a.y, seg.cotaAMm - t.cotaAMm];
+    if (!par) return [solidoAoLongo(ctx, perfil, inicio, eixo, comprimento)];
+    const lado = ladoDoEixo(eixo);
+    return par.deslocamentos.map((d, i) => solidoAoLongo(ctx, perfisDoPar[i], [inicio[0] + lado[0] * d, inicio[1] + lado[1] * d, inicio[2] + lado[2] * d], eixo, comprimento));
   });
 
   const forma = emitir(
@@ -2238,6 +2296,21 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: numb
       `${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},` +
       `${s(rotuloCurto(t.uid, 'trecho'))},${classe.predefinido})`,
   );
+}
+
+/**
+ * E10.1: os dois tubos da linha frigorígena — os RAIOS do envelope (Ø/2 + isolamento) e os
+ * DESLOCAMENTOS laterais, simétricos: cada centro a (maior raio + 5 mm) do eixo. O meio dos dois é o eixo.
+ */
+export function parDaLinha(liquidoMm: number, succaoMm: number, isolamentoMm: number): { raios: [number, number]; deslocamentos: [number, number] } {
+  const raios: [number, number] = [liquidoMm / 2 + isolamentoMm, succaoMm / 2 + isolamentoMm];
+  const d = Math.max(...raios) + 5;
+  return { raios, deslocamentos: [-d, d] };
+}
+/** A direção LATERAL do eixo: horizontal e perpendicular a ele (na prumada, o X do mundo). */
+function ladoDoEixo(eixo: [number, number, number]): [number, number, number] {
+  const h = Math.hypot(eixo[0], eixo[1]);
+  return h < 1e-6 ? [1, 0, 0] : [-eixo[1] / h, eixo[0] / h, 0];
 }
 
 /** O `PredefinedType` do `IfcPipeFitting` pelo tipo da conexão derivada — o mesmo da conexão lançada à mão. */
@@ -2265,15 +2338,22 @@ function emitirConexao(c: ConexaoDerivada, ctx: Ctx, localNivel: string, cotaNoN
   const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
   const centroPerfil = emitir('IFCCARTESIANPOINT((0.,0.))');
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
+  // E10.1 (climatização): no DUTO a conexão é IfcDuctFitting, e a bolsa do duto retangular é retangular
+  // (antes saía IfcPipeFitting com uma bolsa redonda de 1,3 × a LARGURA — um Ø780 num duto de 600×300).
+  const duto = c.disciplina === 'MECANICA';
   const solidos = (c.ramais ?? []).map((r) => {
-    const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n((r.bitolaMm / 2) * 1.3)})`);
-    return solidoAoLongo(ctx, perfil, [0, 0, 0], r.u, Math.max(r.bitolaMm, 50));
+    const perfil = r.alturaDutoMm != null
+      ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(Math.round(r.bitolaMm * 11) / 10)},${n(Math.round(r.alturaDutoMm * 11) / 10)})`)
+      : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n((r.bitolaMm / 2) * (duto ? 1.1 : 1.3))})`);
+    return solidoAoLongo(ctx, perfil, [0, 0, 0], r.u, Math.max(duto ? Math.min(r.alturaDutoMm ?? r.bitolaMm, 300) : r.bitolaMm, 50));
   });
   const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(',')}))`);
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
-  const nome = `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `→${c.paraMm}` : ''}`;
+  const ramal = (c.ramais ?? []).find((r) => r.bitolaMm === c.bitolaMm && r.alturaDutoMm != null);
+  const medida = duto && ramal ? `${ramal.bitolaMm}×${ramal.alturaDutoMm}` : `DN ${c.bitolaMm}`;
+  const nome = `${ROTULO_DA_CONEXAO[c.tipo]} ${medida}${c.paraMm != null ? `→${c.paraMm}` : ''}`;
   return emitir(
-    `IFCPIPEFITTING(${guid(semente)},${historico},${s(nome)},$,$,${local},${produtoForma},$,${PREDEFINIDO_DA_CONEXAO[c.tipo] ?? '.NOTDEFINED.'})`,
+    `${duto ? 'IFCDUCTFITTING' : 'IFCPIPEFITTING'}(${guid(semente)},${historico},${s(nome)},$,$,${local},${produtoForma},$,${PREDEFINIDO_DA_CONEXAO[c.tipo] ?? '.NOTDEFINED.'})`,
   );
 }
 

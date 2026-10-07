@@ -94,6 +94,8 @@ export interface RamalDaConexao {
   /** Vetor unitário saindo do nó: [x, y, cota]. */
   u: [number, number, number];
   bitolaMm: number;
+  /** E10.1 (climatização): o duto retangular — a bolsa da conexão é retangular. Ausente no tubo e no duto redondo. */
+  alturaDutoMm?: number;
 }
 
 /**
@@ -261,7 +263,7 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
     const menor = Math.min(...bitolas);
     const ramais: RamalDaConexao[] = [...inc]
       .sort((x, y) => x.trecho.id.localeCompare(y.trecho.id))
-      .map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm }));
+      .map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm, ...(i.trecho.alturaDutoMm != null ? { alturaDutoMm: i.trecho.alturaDutoMm } : {}) }));
     const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
 
     if (!manual && dentroDeCaixa(no)) continue;

@@ -962,6 +962,14 @@ export interface EletrodutoIfc {
   /** O diâmetro externo medido na malha, em METRO; `null` sem geometria. */
   diametroM: number | null;
   pavimento: number | null;
+  /** E10.1: a classe IFC (o tubo da climatização vem de duas: duto e cano). */
+  classe?: string;
+  /** E10.1: os `PredefinedType` dos sistemas a que pertence (FIREPROTECTION, REFRIGERATION…). */
+  sistemas?: string[];
+  /** E10.1: a seção RETANGULAR medida (largura deitada, altura), em METRO — só quando a malha não é um cilindro. */
+  retanguloM?: { largura: number; altura: number };
+  /** E10.1: as propriedades dos Psets pedidos (Pset_OpuraInstalacao, Pset_OpuraClimatizacao). */
+  propriedades?: Record<string, string>;
 }
 
 export interface LeituraEletrica {
@@ -1002,13 +1010,52 @@ export function eDeIncendio(classe: string, predefinido: string | null, noSistem
  * sistema de incêndio (a luminária de emergência entraria duas vezes).
  */
 export async function lerEletricaParametrica(modeloId: number): Promise<LeituraEletrica> {
-  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_ELETRICO, 'IFCCABLECARRIERSEGMENT', 'eletroduto', (_classe, _pd, noSistemaDeIncendio) => !noSistemaDeIncendio);
+  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_ELETRICO, ['IFCCABLECARRIERSEGMENT'], 'eletroduto', (_classe, _pd, sistemas) => !sistemas.has('FIREPROTECTION'));
 }
 
 /** E9.3 — as peças e a tubulação de incêndio do arquivo (o tubo: só o do sistema `.FIREPROTECTION.`). */
 export async function lerIncendioParametrico(modeloId: number): Promise<LeituraEletrica> {
-  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_DE_INCENDIO, 'IFCPIPESEGMENT', 'tubo', (classe, pd, noSistema) => (classe === 'IFCPIPESEGMENT' ? noSistema : eDeIncendio(classe, pd, noSistema)), 'Pset_OpuraIncendio');
+  return lerInstalacaoParametrica(modeloId, CLASSES_DE_PONTO_DE_INCENDIO, ['IFCPIPESEGMENT'], 'tubo', (classe, pd, sistemas) => (classe === 'IFCPIPESEGMENT' ? sistemas.has('FIREPROTECTION') : eDeIncendio(classe, pd, sistemas.has('FIREPROTECTION'))), ['Pset_OpuraIncendio']);
 }
+
+/**
+ * E10.1 (climatização) — as peças, os dutos e os tubos da climatização. O tubo
+ * (`IfcPipeSegment`) só no sistema de refrigeração ou de drenagem do ar-condicionado
+ * — o esgoto é `.SEWAGE.` e o incêndio `.FIREPROTECTION.`; a conexão DERIVADA não é
+ * lida (o desenho a refaz): `IfcPipeFitting` só como derivador do VRF, `IfcDuctFitting`
+ * só como caixa/plenum — pelo ObjectType que o nosso export escreve.
+ */
+export async function lerClimatizacaoParametrica(modeloId: number): Promise<LeituraEletrica> {
+  return lerInstalacaoParametrica(
+    modeloId,
+    CLASSES_DE_PONTO_DE_CLIMATIZACAO,
+    ['IFCDUCTSEGMENT', 'IFCPIPESEGMENT'],
+    'tubo',
+    (classe, pd, sistemas, objectType) => {
+      const tipo = (objectType ?? '').split(':')[0];
+      if (sistemas.has('FIREPROTECTION')) return false;
+      switch (classe) {
+        case 'IFCDUCTSEGMENT':
+          return true;
+        case 'IFCPIPESEGMENT':
+          return sistemas.has('REFRIGERATION') || sistemas.has('DRAINAGE');
+        case 'IFCPIPEFITTING':
+          return tipo === 'DERIVADOR_VRF';
+        case 'IFCDUCTFITTING':
+          return tipo === 'CAIXA_PLENUM' || tipo === 'CAIXA_DISTRIBUICAO_AR';
+        case 'IFCPUMP':
+          return tipo === 'BOMBA_DRENO' || (pd === 'SUBMERSIBLEPUMP' && sistemas.has('DRAINAGE'));
+        case 'IFCWASTETERMINAL':
+          return tipo === 'PONTO_DRENO' || sistemas.has('DRAINAGE');
+        default:
+          return true;
+      }
+    },
+    ['Pset_OpuraClimatizacao', 'Pset_OpuraInstalacao'],
+  );
+}
+
+const CLASSES_DE_PONTO_DE_CLIMATIZACAO = ['IFCUNITARYEQUIPMENT', 'IFCAIRTERMINAL', 'IFCFAN', 'IFCDAMPER', 'IFCDUCTFITTING', 'IFCPUMP', 'IFCWASTETERMINAL', 'IFCPIPEFITTING'];
 
 /**
  * Lê as peças e os tubos de UMA instalação. Toda posição sai dos VÉRTICES da
@@ -1019,27 +1066,35 @@ export async function lerIncendioParametrico(modeloId: number): Promise<LeituraE
 async function lerInstalacaoParametrica(
   modeloId: number,
   classesDePonto: readonly string[],
-  classeDoTubo: string,
+  classesDoTubo: readonly string[],
   rotuloDoTubo: string,
-  aceitar: (classe: string, predefinido: string | null, noSistemaDeIncendio: boolean) => boolean,
-  /** C1: o Pset cujas propriedades vêm junto de cada peça (uma varredura só das relações). */
-  pset: string | null = null,
+  /** Decide por classe, enum, os sistemas a que o elemento pertence (E10.1: todos, não só o de incêndio) e o ObjectType. */
+  aceitar: (classe: string, predefinido: string | null, sistemas: ReadonlySet<string>, objectType: string | null) => boolean,
+  /** C1: os Psets cujas propriedades vêm junto de cada peça — E10.1: e de cada tubo (uma varredura só das relações). */
+  psets: readonly string[] = [],
 ): Promise<LeituraEletrica> {
   const api = await obterApi();
   const raiz = await tabelaDeTipos();
 
-  // Quem está no sistema de incêndio (IfcRelAssignsToGroup → IfcDistributionSystem .FIREPROTECTION.).
-  const noIncendio = new Set<number>();
+  // Os SISTEMAS de cada elemento (IfcRelAssignsToGroup → IfcDistributionSystem): o PredefinedType de cada um.
+  const sistemasDe = new Map<number, Set<string>>();
   const grupos = typeof raiz.IFCRELASSIGNSTOGROUP === 'number' ? api.GetLineIDsWithType(modeloId, raiz.IFCRELASSIGNSTOGROUP as number) : null;
   for (let i = 0; grupos && i < grupos.size(); i++) {
     const rel = api.GetLine(modeloId, grupos.get(i), false) as Record<string, unknown>;
     const ref = rel.RelatingGroup as { value?: number } | undefined;
     if (ref?.value === undefined) continue;
     const grupo = api.GetLine(modeloId, ref.value, false) as Record<string, unknown> & { type?: number };
-    const pd = (grupo.PredefinedType as { value?: unknown } | undefined)?.value;
-    if (grupo.type !== raiz.IFCDISTRIBUTIONSYSTEM || String(pd ?? '') !== 'FIREPROTECTION') continue;
-    for (const o of (rel.RelatedObjects ?? []) as { value?: number }[]) if (o?.value !== undefined) noIncendio.add(o.value);
+    const pd = String((grupo.PredefinedType as { value?: unknown } | undefined)?.value ?? '');
+    if (grupo.type !== raiz.IFCDISTRIBUTIONSYSTEM || !pd) continue;
+    for (const o of (rel.RelatedObjects ?? []) as { value?: number }[]) {
+      if (o?.value === undefined) continue;
+      const set = sistemasDe.get(o.value) ?? new Set<string>();
+      set.add(pd);
+      sistemasDe.set(o.value, set);
+    }
   }
+  const NENHUM: ReadonlySet<string> = new Set();
+  const classesDoTuboSet = new Set(classesDoTubo);
 
   const pavimentoDe = new Map<number, number>();
   const rels = api.GetLineIDsWithType(modeloId, raiz.IFCRELCONTAINEDINSPATIALSTRUCTURE as number);
@@ -1055,7 +1110,7 @@ async function lerInstalacaoParametrica(
 
   // Quem interessa: os pontos e os eletrodutos.
   const classeDe = new Map<number, string>();
-  for (const classe of [...classesDePonto, classeDoTubo]) {
+  for (const classe of [...classesDePonto, ...classesDoTubo]) {
     const codigo = raiz[classe] as number | undefined;
     if (typeof codigo !== 'number') continue;
     const ids = api.GetLineIDsWithType(modeloId, codigo);
@@ -1091,10 +1146,11 @@ async function lerInstalacaoParametrica(
       const v = (x as { value?: unknown } | undefined)?.value;
       return v == null ? null : String(v);
     };
-    if (!aceitar(classe, valor(el.PredefinedType), noIncendio.has(eid))) continue;
+    const sistemas = sistemasDe.get(eid) ?? NENHUM;
+    if (!aceitar(classe, valor(el.PredefinedType), sistemas, valor(el.ObjectType))) continue;
     const geos = solidos.get(eid) ?? [];
     const todos = geos.flatMap((g) => g.vertices);
-    if (classe !== classeDoTubo) {
+    if (!classesDoTuboSet.has(classe)) {
       let centro: P3m | null = null;
       if (todos.length > 0) {
         const min = { X: Infinity, Y: Infinity, Z: Infinity };
@@ -1116,6 +1172,9 @@ async function lerInstalacaoParametrica(
     // O RAIO pela MEDIANA das distâncias ao eixo: a costura do polígono do cilindro
     // tira o centróide um fio do eixo, e o máximo transformava 25 mm em 26.
     const distancias: number[] = [];
+    // E10.1: a seção pelos EXTREMOS ao longo do X e do Y locais do sólido — no cilindro dão o
+    // diâmetro; no retângulo, a largura e a altura (e o canto fica além do meio-lado).
+    let retangulo: { largura: number; altura: number } | null = null;
     for (const g of geos) {
       const ax = { X: g.matriz[8], Y: g.matriz[9], Z: g.matriz[10] };
       const na = Math.hypot(ax.X, ax.Y, ax.Z);
@@ -1134,6 +1193,39 @@ async function lerInstalacaoParametrica(
         distancias.push(Math.hypot(q.X, q.Y, q.Z));
       }
       segmentos.push({ de: { X: c.X + u.X * smin, Y: c.Y + u.Y * smin, Z: c.Z + u.Z * smin }, para: { X: c.X + u.X * smax, Y: c.Y + u.Y * smax, Z: c.Z + u.Z * smax } });
+      if (classe === 'IFCDUCTSEGMENT' && !retangulo) {
+        const ex = { X: g.matriz[0], Y: g.matriz[1], Z: g.matriz[2] };
+        const ey = { X: g.matriz[4], Y: g.matriz[5], Z: g.matriz[6] };
+        const nx = Math.hypot(ex.X, ex.Y, ex.Z);
+        const ny = Math.hypot(ey.X, ey.Y, ey.Z);
+        if (nx > 0 && ny > 0) {
+          let [x0, x1, y0, y1, dmax] = [Infinity, -Infinity, Infinity, -Infinity, 0];
+          for (const p of g.vertices) {
+            const x = ((p.X - c.X) * ex.X + (p.Y - c.Y) * ex.Y + (p.Z - c.Z) * ex.Z) / nx;
+            const y = ((p.X - c.X) * ey.X + (p.Y - c.Y) * ey.Y + (p.Z - c.Z) * ey.Z) / ny;
+            [x0, x1, y0, y1] = [Math.min(x0, x), Math.max(x1, x), Math.min(y0, y), Math.max(y1, y)];
+            dmax = Math.max(dmax, Math.hypot(x, y));
+          }
+          const [w, h] = [x1 - x0, y1 - y0];
+          if (w > 0 && h > 0 && dmax > (Math.max(w, h) / 2) * 1.05) retangulo = { largura: w, altura: h };
+        }
+      }
+    }
+    // E10.1: o PAR da linha frigorígena — dois sólidos PARALELOS de mesmo comprimento, lado a lado —
+    // é UM trecho: o eixo é o meio dos dois. (O "L" do eletroduto são sólidos perpendiculares.)
+    if (segmentos.length === 2) {
+      const [a, b] = segmentos;
+      const va = { X: a.para.X - a.de.X, Y: a.para.Y - a.de.Y, Z: a.para.Z - a.de.Z };
+      const vb = { X: b.para.X - b.de.X, Y: b.para.Y - b.de.Y, Z: b.para.Z - b.de.Z };
+      const la = Math.hypot(va.X, va.Y, va.Z);
+      const lb = Math.hypot(vb.X, vb.Y, vb.Z);
+      const paralelos = la > 0 && lb > 0 && Math.abs((va.X * vb.X + va.Y * vb.Y + va.Z * vb.Z) / (la * lb)) > 0.999 && Math.abs(la - lb) < 0.002;
+      const separados = Math.hypot(a.de.X - b.de.X, a.de.Y - b.de.Y, a.de.Z - b.de.Z) > 0.001;
+      if (paralelos && separados) {
+        const meio = (p: P3m, q: P3m): P3m => ({ X: (p.X + q.X) / 2, Y: (p.Y + q.Y) / 2, Z: (p.Z + q.Z) / 2 });
+        const mesmoSentido = va.X * vb.X + va.Y * vb.Y + va.Z * vb.Z > 0;
+        segmentos.splice(0, 2, { de: meio(a.de, mesmoSentido ? b.de : b.para), para: meio(a.para, mesmoSentido ? b.para : b.de) });
+      }
     }
     if (segmentos.length === 0) {
       recusas.push({ expressID: eid, classe, nome, motivo: `${rotuloDoTubo} sem eixo legível` });
@@ -1141,16 +1233,16 @@ async function lerInstalacaoParametrica(
     }
     distancias.sort((x, y) => x - y);
     const raio = distancias.length ? distancias[Math.floor(distancias.length / 2)] : 0;
-    eletrodutos.push({ expressID: eid, nome, globalId, segmentos, diametroM: raio > 0 ? 2 * raio : null, pavimento: pavimentoDe.get(eid) ?? null });
+    eletrodutos.push({ expressID: eid, nome, globalId, segmentos, diametroM: raio > 0 ? 2 * raio : null, pavimento: pavimentoDe.get(eid) ?? null, classe, sistemas: [...sistemas], ...(retangulo ? { retanguloM: retangulo } : {}) });
   }
-  // C1: o Pset das peças, numa varredura só de IfcRelDefinesByProperties (não uma por peça).
-  if (pset && pontos.length && typeof raiz.IFCRELDEFINESBYPROPERTIES === 'number') {
-    const porId = new Map(pontos.map((p) => [p.expressID, p]));
+  // C1: o Pset das peças — E10.1: e dos tubos —, numa varredura só de IfcRelDefinesByProperties (não uma por peça).
+  if (psets.length && (pontos.length || eletrodutos.length) && typeof raiz.IFCRELDEFINESBYPROPERTIES === 'number') {
+    const porId = new Map<number, { propriedades?: Record<string, string> }>([...pontos.map((p) => [p.expressID, p] as const), ...eletrodutos.map((e) => [e.expressID, e] as const)]);
     const rels = api.GetLineIDsWithType(modeloId, raiz.IFCRELDEFINESBYPROPERTIES as number);
     for (let i = 0; i < rels.size(); i++) {
       const rel = api.GetLine(modeloId, rels.get(i), true) as Record<string, unknown>;
       const def = rel.RelatingPropertyDefinition as Record<string, unknown> | undefined;
-      if (!def || texto(def.Name) !== pset) continue;
+      if (!def || !psets.includes(texto(def.Name))) continue;
       const props = (def.HasProperties ?? []) as Record<string, unknown>[];
       for (const o of (rel.RelatedObjects ?? []) as { value?: number; expressID?: number }[]) {
         const p = porId.get((o?.value ?? o?.expressID) as number);

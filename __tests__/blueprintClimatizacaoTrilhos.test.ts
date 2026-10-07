@@ -31,12 +31,16 @@ function cena() {
 }
 
 describe('achado 9 — a cobertura do IFC não mente sobre a climatização', () => {
-  it('diz o que CONTÉM (duto, split, exaustor como reserva) e o que não contém (gás, linha, dreno, carga)', () => {
+  it('diz o que CONTÉM (duto, linha, dreno, equipamentos, Pset) e o que não contém (gás, a memória da carga)', () => {
     const texto = COBERTURA_IFC.join(' ');
     expect(texto).not.toMatch(/NÃO CONTÉM ar-condicionado/);
-    expect(texto).toMatch(/CONTÉM a climatização MÍNIMA/);
+    // ⚠️ E10.1 (07/10/2026): "NÃO CONTÉM linha frigorígena, dreno, duto retangular…" era FALSO desde a E3/E7.
+    expect(texto).not.toMatch(/NÃO CONTÉM linha frigorígena/);
+    expect(texto).toMatch(/CONTÉM a climatização desenhada/);
     expect(texto).toMatch(/IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING./);
-    expect(texto).toMatch(/NÃO CONTÉM linha frigorígena, dreno, duto retangular/);
+    expect(texto).toMatch(/LINHA FRIGORÍGENA como IfcPipeSegment no sistema .REFRIGERATION. com DOIS sólidos/);
+    expect(texto).toMatch(/IfcDuctFitting/);
+    expect(texto).toMatch(/Pset_OpuraClimatizacao/);
     expect(texto).toMatch(/NÃO CONTÉM gás/);
   });
 });

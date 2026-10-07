@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Boxes, Check, FileUp, Loader2 } from 'lucide-react';
 import {
+  applyBatch,
   nomeDoTipoEstrutural,
   novoUid,
   type BlueprintModel,
@@ -14,6 +15,8 @@ import {
   caixaDoDesenho,
   comandosDaEletrica,
   comandosDoIncendio,
+  comandosDaClimatizacao,
+  religarSistemasImportados,
   deslocamentoDaImportacao,
   type AncoragemIfc,
   type CaixaPlana,
@@ -21,6 +24,8 @@ import {
   type ParedeTraduzida,
   type PecaTraduzida,
   type PontoDeIncendioTraduzido,
+  type PontoDeClimatizacaoTraduzido,
+  type TuboDeClimatizacaoTraduzido,
   type PontoEletricoTraduzido,
   type VaoTraduzido,
 } from '../../utils/ifcParaKernel';
@@ -92,6 +97,9 @@ interface Preparado {
   /** E9.3: o incêndio do arquivo — peças e tubos do sistema .FIREPROTECTION., cotas absolutas. */
   pecasDeIncendio: PontoDeIncendioTraduzido[];
   tubosDeIncendio: EletrodutoTraduzido[];
+  /** E10.1: a climatização — peças (equipamentos e terminais de ar) e tubos (linha, dreno, duto). */
+  pecasDeClimatizacao: PontoDeClimatizacaoTraduzido[];
+  tubosDeClimatizacao: TuboDeClimatizacaoTraduzido[];
 }
 
 /** E7.2: a caixa em planta da elétrica (E9.3: e do incêndio) que vai entrar — para a ancoragem contar a mesma história. */
@@ -187,8 +195,8 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
       setPreparado(null);
       try {
         const { obterApi } = await import('../../services/ifcViewerService');
-        const { lerPecasParametricas, lerEletricaParametrica, lerIncendioParametrico } = await import('../../services/ifcParametricoService');
-        const { traduzirPecas, traduzirParedes, traduzirVaos, traduzirEletrica, traduzirIncendio } = await import(
+        const { lerPecasParametricas, lerEletricaParametrica, lerIncendioParametrico, lerClimatizacaoParametrica } = await import('../../services/ifcParametricoService');
+        const { traduzirPecas, traduzirParedes, traduzirVaos, traduzirEletrica, traduzirIncendio, traduzirClimatizacao } = await import(
           '../../utils/ifcParaKernel'
         );
         const { encostarNasFaces } = await import('../../utils/ifcEncostarParedes');
@@ -232,12 +240,25 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
             leituraIncendio.recusas.push({ expressID: 0, classe: 'INCENDIO', nome: 'segurança contra incêndio', motivo: `não foi possível ler o incêndio do arquivo: ${e instanceof Error ? e.message : String(e)}` });
           }
           const incendio = traduzirIncendio(leituraIncendio);
+          // E10.1: a CLIMATIZAÇÃO — a mesma proteção: falhar a leitura dela não trava o resto.
+          let leituraClima: Awaited<ReturnType<typeof lerClimatizacaoParametrica>> = { pontos: [], eletrodutos: [], recusas: [] };
+          try {
+            leituraClima = await lerClimatizacaoParametrica(id);
+          } catch (e) {
+            leituraClima.recusas.push({ expressID: 0, classe: 'CLIMATIZACAO', nome: 'climatização', motivo: `não foi possível ler a climatização do arquivo: ${e instanceof Error ? e.message : String(e)}` });
+          }
+          const clima = traduzirClimatizacao(leituraClima);
+          // O sistema cuja condensadora não está no arquivo: dito antes de importar.
+          const numerosNoArquivo = new Set(clima.pontos.map((x) => x.numero).filter(Boolean));
+          const semPar = clima.pontos.filter((x) => x.numeroDaCondensadora && !numerosNoArquivo.has(x.numeroDaCondensadora));
           const p: Preparado = {
             nomeArquivo,
             pontosEletricos: eletrica.pontos,
             eletrodutos: eletrica.eletrodutos,
             pecasDeIncendio: incendio.pontos,
             tubosDeIncendio: incendio.tubos,
+            pecasDeClimatizacao: clima.pontos,
+            tubosDeClimatizacao: clima.tubos,
             pecas: traduzido.pecas,
             paredes: encostado.paredes,
             vaos: traduzidosVaos.vaos,
@@ -253,6 +274,9 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
               ...eletrica.recusas,
               ...leituraIncendio.recusas,
               ...incendio.recusas,
+              ...leituraClima.recusas,
+              ...clima.recusas,
+              ...semPar.map((x) => ({ expressID: x.expressID, nome: x.nome, classe: 'CLIMATIZACAO', motivo: `a condensadora ${x.numeroDaCondensadora} do sistema não está no arquivo — a peça entra sem sistema` })),
             ],
           };
           setPreparado(p);
@@ -298,10 +322,16 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
   /** E9.3: o incêndio que entra, pela mesma regra de pavimento. */
   const pecasDeIncendioAImportar = preparado ? preparado.pecasDeIncendio.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
   const tubosDeIncendioAImportar = preparado ? preparado.tubosDeIncendio.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
-  const totalAImportar = aImportar.length + paredesAImportar.length + pontosAImportar.length + eletrodutosAImportar.length + pecasDeIncendioAImportar.length + tubosDeIncendioAImportar.length;
+  /** E10.1: a climatização que entra, pela mesma regra de pavimento. */
+  const pecasDeClimatizacaoAImportar = preparado ? preparado.pecasDeClimatizacao.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
+  const tubosDeClimatizacaoAImportar = preparado ? preparado.tubosDeClimatizacao.filter((p) => p.pavimento !== null && casamento[p.pavimento]) : [];
+  const totalAImportar = aImportar.length + paredesAImportar.length + pontosAImportar.length + eletrodutosAImportar.length + pecasDeIncendioAImportar.length + tubosDeIncendioAImportar.length + pecasDeClimatizacaoAImportar.length + tubosDeClimatizacaoAImportar.length;
   const pegada = uniao(
-    uniao(uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar)), caixaDaEletrica(pontosAImportar, eletrodutosAImportar)),
-    caixaDaEletrica(pecasDeIncendioAImportar, tubosDeIncendioAImportar),
+    uniao(
+      uniao(uniao(caixaDasPecas(aImportar), caixaDasParedes(paredesAImportar)), caixaDaEletrica(pontosAImportar, eletrodutosAImportar)),
+      caixaDaEletrica(pecasDeIncendioAImportar, tubosDeIncendioAImportar),
+    ),
+    caixaDaEletrica(pecasDeClimatizacaoAImportar, tubosDeClimatizacaoAImportar),
   );
   const doDesenho = caixaDoDesenho(model);
   const { dx, dy } = deslocamentoDaImportacao(ancoragem, pegada, doDesenho);
@@ -414,8 +444,18 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
     comandos.push(...comandosDaEletrica(pontosAImportar, eletrodutosAImportar, destino, dx, dy));
     // E9.3 — o INCÊNDIO: peças e tubos na disciplina INCENDIO, pela mesma regra.
     comandos.push(...comandosDoIncendio(pecasDeIncendioAImportar, tubosDeIncendioAImportar, destino, dx, dy));
+    // E10.1 — a CLIMATIZAÇÃO, por ÚLTIMO (a religação conta as peças novas do fim do lote): peças e tubos
+    // nas disciplinas deles; o sistema evaporadora → condensadora religado pelo número, no MESMO lote.
+    const clima = comandosDaClimatizacao(pecasDeClimatizacaoAImportar, tubosDeClimatizacaoAImportar, destino, dx, dy);
+    comandos.push(...clima.comandos);
+    let final: Command[] = comandos;
+    try {
+      final = religarSistemasImportados(model, comandos, clima.pecas, (m, c) => applyBatch(m, [...c]).model).comandos;
+    } catch {
+      // A prévia não aplicou (o lote vai falhar do mesmo jeito e dizer por quê): entra sem religar.
+    }
 
-    if (comandos.length > 0) onImportar(comandos);
+    if (final.length > 0) onImportar(final);
     setPreparado(null);
   }
 
@@ -518,6 +558,12 @@ export default function PainelImportarIfc({ model, levelIdAtivo, onImportar }: P
                 : []),
               ...(preparado.tubosDeIncendio.length > 0
                 ? [`${preparado.tubosDeIncendio.length} tubo${preparado.tubosDeIncendio.length > 1 ? 's' : ''} de incêndio`]
+                : []),
+              ...(preparado.pecasDeClimatizacao.length > 0
+                ? [`${preparado.pecasDeClimatizacao.length} peça${preparado.pecasDeClimatizacao.length > 1 ? 's' : ''} de climatização`]
+                : []),
+              ...(preparado.tubosDeClimatizacao.length > 0
+                ? [`${preparado.tubosDeClimatizacao.length} tubo${preparado.tubosDeClimatizacao.length > 1 ? 's' : ''}/duto${preparado.tubosDeClimatizacao.length > 1 ? 's' : ''} de climatização`]
                 : []),
             ].join(' · ') || 'nenhuma peça legível'}
           </p>

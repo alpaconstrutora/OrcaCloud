@@ -2233,3 +2233,58 @@ conferidos (0); fica 1 linha em `blueprint_audit_events` — imutável por gatil
 traziam o número no texto ("1. Condições de projeto") e o painel lista em `<ol>` — saía "1. 1." na tela.
 Os memoriais de hidro, elétrica e incêndio guardam o título sem número; a climatização passou a fazer o
 mesmo (teste de regressão: nenhum título começa com dígito).
+
+### Etapa 10.1 — IFC da climatização · 07/10/2026 (frente `clima-e10-ifc`, sem bump do kernel)
+
+Pedido do usuário: "apos 1 e 2, implementar E10" (a 10.1 é a primeira das quatro fases, cada uma
+publicada à parte).
+
+**Exportar.**
+- **Achado: a cobertura do IFC mentia de novo** (o mesmo padrão do achado 9): dizia "NÃO CONTÉM linha
+  frigorígena, dreno, duto retangular, conexões de duto, terminal de ar classificado" — falso desde a
+  E3/E7 — e listava os sistemas sem a linha e o dreno. Reescrita no mesmo commit que mudou a emissão, com
+  os dois testes que a fixavam (`blueprintClimatizacaoTrilhos`, `blueprintTrocaDeArquivos`).
+- **Achado: o joelho/tê do DUTO saía `IfcPipeFitting` com bolsa redonda** de 1,3 × a LARGURA (um Ø780
+  num 600×300). Agora `IfcDuctFitting` (mesmos enums) com bolsa retangular (o ramal derivado ganhou
+  `alturaDutoMm` — derivado, fora do canônico, sem bump) e o nome com a seção.
+- **A curva da linha frigorígena não sai como peça** (cobre curvado, E5.3) — antes saía `IfcPipeFitting
+  .BEND.`.
+- **O par da linha:** um `IfcPipeSegment` com DOIS sólidos lado a lado (líquido e sucção), simétricos em
+  torno do eixo (`parDaLinha`); **o sólido é o ENVELOPE com o isolamento** declarado (linha, dreno e
+  duto) — é o que ocupa lugar na coordenação; os diâmetros reais vão no Pset.
+- **`Pset_OpuraClimatizacao`** (molde do incêndio): na peça, `Numero_Derivado`,
+  `CapacidadeBtuH_Declarada`, `VazaoM3h_Declarada`, `Condensadora_Declarada` (o NÚMERO da condensadora
+  do sistema — é por ele que a importação religa); no trecho, `BitolaSuccaoMm_Declarada`,
+  `IsolamentoMm_Declarado`, `AlturaDutoMm_Declarada`; e `_Calculada` (carga do ambiente e atende da
+  evaporadora, vazão derivada do terminal de ar) quando o arquivo é gerado com as premissas do estudo
+  (`resultadosDeClimatizacaoParaIfc` no serviço — o cálculo não mora no gerador).
+- Pacote da planta-api regerado.
+
+**Importar** (molde do incêndio E9.3): o leitor paramétrico passou a saber os SISTEMAS de cada elemento
+(não só o de incêndio), a ler vários tipos de tubo, os Psets também dos tubos, a SEÇÃO RETANGULAR pela
+malha (extremos no X e no Y locais) e a fundir o PAR paralelo da linha no eixo do trecho.
+`lerClimatizacaoParametrica` lê equipamentos, terminais de ar, exaustor, damper, bomba e ponto de dreno,
+caixa/plenum e derivador do VRF — o tubo só nos sistemas de refrigeração e drenagem (o esgoto é
+`.SEWAGE.`); a conexão derivada não é lida (o desenho a refaz). `traduzirClimatizacao`: o tipo pelo
+ObjectType, senão pela classe e o enum — e o que a norma não distingue (`.SPLITSYSTEM.` é evaporadora ou
+condensadora?) é RECUSADO com o motivo; a reserva de lugar antiga também, dita como tal. A
+**religação do sistema** é no MESMO lote (um Ctrl+Z): os comandos são aplicados numa cópia — os ids do
+lote são determinísticos, o truque da E4 — e o `SetTerminalProps` da condensadora entra no fim
+(`religarSistemasImportados`); condensadora fora do arquivo vira recusa antes de importar. No painel de
+importação, a climatização é lida protegida (falhar não trava o resto) e conta na pegada.
+
+**Prova** (`ifcImportarClimatizacao.test.ts`, 9): o joelho de duto `IfcDuctFitting` .BEND. com bolsa
+440×275; o derivador é o ÚNICO `IfcPipeFitting` (a curva da linha não sai); envelope 450×300 do duto
+isolado e os dois círculos de 12 e 14 mm; o Pset com o declarado, o número e — com premissas — o
+calculado; **web-ifc** lendo Name/ObjectType/PredefinedType no campo certo de cada classe (o árbitro
+destas, já que nenhum IFC de MEP está ao alcance — a lista `SEM_REFERENCIA` do portão de contagem fala
+disso) em IFC4 e IFC4X3; **ida e volta** em IFC4 e IFC4X3 — as MESMAS peças (tipo, posição, cota,
+capacidade, vazão, disciplina), os 5 tubos (Ø6/10 isol. 9, 400×250 isol. 25, dreno com a declividade),
+o par de volta ao eixo (± 1 mm), água/esgoto/incêndio de fora, a reserva recusada; os comandos religam
+evaporadora → condensadora e derivador → VRF no mesmo lote; a condensadora que não veio = aviso; e o
+arquivo de outro programa (classe + enum). `PainelImportarIfc` +1 (a falha da leitura vira recusa).
+37 arquivos de IFC/exportação verdes.
+
+**Não entrou (dito):** a bolsa do joelho de duto no 3D DA TELA ainda é redonda (é o viewer — vai na
+10.3); `.VENTILATION.` para rede só de exaustão; o `IfcCovering` do isolamento (o envelope cumpre a
+coordenação).

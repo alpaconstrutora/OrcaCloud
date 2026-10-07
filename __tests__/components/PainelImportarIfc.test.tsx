@@ -86,6 +86,8 @@ vi.mock('../../services/ifcParametricoService', () => ({
   lerEletricaParametrica: vi.fn(async () => ({ pontos: [], eletrodutos: [], recusas: [] })),
   // E9.3: o incêndio — vazio também.
   lerIncendioParametrico: vi.fn(async () => ({ pontos: [], eletrodutos: [], recusas: [] })),
+  // E10.1: a climatização — vazia também.
+  lerClimatizacaoParametrica: vi.fn(async () => ({ pontos: [], eletrodutos: [], recusas: [] })),
 }));
 // Duas peças nos extremos MEDIDOS do arquivo real (Igreja Divino): a pegada
 // resultante é de 19,78 × 19,18 m, nascendo quase na origem do IFC.
@@ -188,6 +190,15 @@ describe('PainelImportarIfc · onde o modelo cai', () => {
     (lerIncendioParametrico as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('sistema ilegível'));
     const { onImportar } = await abrirComArquivo();
     expect(screen.getByText(/não foi possível ler o incêndio do arquivo: sistema ilegível/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Importar 2$/ }));
+    expect((onImportar.mock.calls[0][0] as { type: string }[]).filter((c) => c.type === 'AddStructural')).toHaveLength(2);
+  });
+
+  it('⚠️ E10.1: se a leitura da CLIMATIZAÇÃO falhar, a estrutura entra mesmo assim e a falha vira recusa com o motivo', async () => {
+    const { lerClimatizacaoParametrica } = await import('../../services/ifcParametricoService');
+    (lerClimatizacaoParametrica as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('duto ilegível'));
+    const { onImportar } = await abrirComArquivo();
+    expect(screen.getByText(/não foi possível ler a climatização do arquivo: duto ilegível/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^Importar 2$/ }));
     expect((onImportar.mock.calls[0][0] as { type: string }[]).filter((c) => c.type === 'AddStructural')).toHaveLength(2);
   });

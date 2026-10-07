@@ -3491,7 +3491,7 @@ function conexoesDerivadas(model) {
     const bitolas = inc.map((i) => i.trecho.bitolaMm);
     const maior = Math.max(...bitolas);
     const menor = Math.min(...bitolas);
-    const ramais = [...inc].sort((x, y) => x.trecho.id.localeCompare(y.trecho.id)).map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm }));
+    const ramais = [...inc].sort((x, y) => x.trecho.id.localeCompare(y.trecho.id)).map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm, ...i.trecho.alturaDutoMm != null ? { alturaDutoMm: i.trecho.alturaDutoMm } : {} }));
     const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
     if (!manual && dentroDeCaixa(no)) continue;
     if (!manual && terminais.some((t) => t.tipoHidraulico === "DERIVADOR_VRF")) continue;
@@ -4819,6 +4819,34 @@ function numeracaoDeIncendio(model) {
   return numeracaoDerivada(model, (t) => t.disciplina === "INCENDIO" && t.tipoHidraulico ? PREFIXO_DA_NUMERACAO[t.tipoHidraulico] : null);
 }
 
+// utils/blueprintNumeracaoClimatizacao.ts
+var PREFIXO_DA_NUMERACAO_CLIMATIZACAO = {
+  EVAPORADORA_HI_WALL: "EV",
+  EVAPORADORA_PISO_TETO: "EV",
+  EVAPORADORA_CASSETE: "EV",
+  EVAPORADORA_DUTADA: "EV",
+  CONDENSADORA_SPLIT: "CD",
+  CONDENSADORA_VRF: "CD",
+  DERIVADOR_VRF: "DV",
+  EXAUSTOR_AR: "EX",
+  BOMBA_DRENO: "BD",
+  PONTO_DRENO: "PD",
+  CAIXA_DISTRIBUICAO_AR: "CX",
+  DIFUSOR: "DF",
+  GRELHA_INSUFLAMENTO: "GI",
+  GRELHA_RETORNO: "GR",
+  BOCAL_AR: "BC",
+  TOMADA_AR_EXTERIOR: "TA",
+  VENEZIANA_AR: "VN",
+  CAIXA_PLENUM: "PL",
+  DAMPER: "DP",
+  EQUIPAMENTO_CLIMATIZACAO: "EQ"
+};
+var ehDeClimatizacao = (t) => !!t.tipoHidraulico && TIPOS_DE_CLIMATIZACAO.includes(t.tipoHidraulico);
+function numeracaoDeClimatizacao(model) {
+  return numeracaoDerivada(model, (t) => ehDeClimatizacao(t) ? PREFIXO_DA_NUMERACAO_CLIMATIZACAO[t.tipoHidraulico] : null);
+}
+
 // utils/blueprintRede.ts
 var MEDIDAS_PADRAO_QUADRO = {
   larguraMm: 400,
@@ -5562,7 +5590,7 @@ var COBERTURA_IFC = [
   "GEORREFER\xCANCIA: quando o desenho tem lugar informado, saem IfcSite.RefLatitude/RefLongitude/RefElevation e o norte verdadeiro no contexto geom\xE9trico. IfcMapConversion + IfcProjectedCRS s\xF3 saem quando algu\xE9m informou a coordenada PROJETADA (leste, norte e o c\xF3digo do CRS) \u2014 ela NUNCA \xE9 calculada a partir de latitude e longitude, porque a conta depende do fuso e errar o fuso p\xF5e o modelo a centenas de quil\xF4metros do lugar com a forma perfeita.",
   "PAR\xC2METROS PERSONALIZADOS: a pe\xE7a que os carrega ganha Pset_OpuraPersonalizado com a chave de programa como nome da propriedade (n\xFAmero \u2192 IfcReal, sim/n\xE3o \u2192 IfcBoolean, texto \u2192 IfcLabel). O nome leg\xEDvel e a unidade s\xE3o da defini\xE7\xE3o na organiza\xE7\xE3o e N\xC3O viajam.",
   'APROVA\xC7\xC3O: quando a revis\xE3o foi aprovada no sistema, Pset_OpuraPlanta traz ApprovalStatus, ApprovedBy e ApprovedAt em cada elemento, ao lado do SnapshotHash \u2014 \xE9 o par (o que foi aprovado, quem aprovou) que vale. Revis\xE3o que n\xE3o passou por aprova\xE7\xE3o N\xC3O menciona o assunto: dizer "n\xE3o aprovado" afirmaria que algu\xE9m olhou e recusou.',
-  "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto, pluvial, inc\xEAndio, mec\xE2nica) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o, tamb\xE9m como marca de lugar: no esquema IFC4 (o padr\xE3o) sai IfcFlowController \u2014 IfcDistributionBoard, o exato, n\xE3o existe no IFC4 e os leitores n\xE3o o leem \u2014; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard (.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege \u2014, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por tipo (fase, neutro, retorno, terra) e se\xE7\xE3o de condutor do circuito, SEM geometria (o cabo corre dentro do eletroduto), com o comprimento total em Qto_CableSegmentBaseQuantities \u2014 o mesmo do quantitativo. Pset_OpuraEletrica separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista escolheu (tens\xE3o, liga\xE7\xE3o, fase, disjuntor, curva, se\xE7\xE3o, DPS, Icn); _Calculada \xE9 conta do pr\xE9-dimensionamento com as hip\xF3teses do estudo (IB, demanda do quadro); _Derivados \xE9 o que o motor de fia\xE7\xE3o deriva (a composi\xE7\xE3o dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon (normativo) s\xF3 leva FATO: RatedVoltage = a tens\xE3o declarada do circuito, e HasProtectiveEarth nas tomadas de uso geral e espec\xEDfico. N\xC3O CONT\xC9M registro, nem dimensionamento hidr\xE1ulico: bitola e cota das redes de \xE1gua e esgoto s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de perda de carga.",
+  "CONT\xC9M instala\xE7\xF5es: cada trecho sai na classe da sua rede (28/09/2026) \u2014 IfcPipeSegment .RIGIDSEGMENT. em \xE1gua fria, \xE1gua quente e esgoto, IfcCableCarrierSegment .CONDUITSEGMENT. no eletroduto e IfcDuctSegment .RIGIDSEGMENT. no duto \u2014, um cilindro na bitola declarada, ao longo do eixo, com as DUAS COTAS que o desenho tem (\xE9 o que distingue a prumada do trecho horizontal e o esgoto com caimento do sem) \u2014 e cada ponto como IfcFlowTerminal \u2014 e o ponto EL\xC9TRICO CLASSIFICADO sai na entidade que lhe cabe: IfcLightFixture para ilumina\xE7\xE3o (.USERDEFINED. com o ObjectType dizendo se \xE9 teto, arandela ou piso, porque o enum da norma fala de fotometria e o desenho n\xE3o a sabe) e IfcOutlet para tomadas e dados (.POWEROUTLET. para TUG e TUE, .TELEPHONEOUTLET., .AUDIOVISUALOUTLET. e .DATAOUTLET. para telefone, TV e rede). TUG e TUE s\xE3o distin\xE7\xE3o da NBR 5410 e N\xC3O do enum: a diferen\xE7a vive no ObjectType. Ponto sem classifica\xE7\xE3o, e ponto de outra disciplina, seguem como IfcFlowTerminal. Um IfcDistributionSystem por disciplina PRESENTE (el\xE9trica, \xE1gua fria, \xE1gua quente, esgoto, pluvial, inc\xEAndio, mec\xE2nica, linha frigor\xEDgena, dreno do ar-condicionado) agrupa a rede, e ele atravessa pavimentos: a coluna que desce tr\xEAs andares \xE9 UMA rede. As CONEX\xD5ES DERIVADAS dos encontros de trechos (joelho, t\xEA, jun\xE7\xE3o 45\xB0, cruzeta, luva, redu\xE7\xE3o \u2014 as mesmas do quantitativo) saem como IfcPipeFitting (.BEND., .JUNCTION., .CONNECTOR., .TRANSITION.) com uma bolsa por boca \u2014 no DUTO, IfcDuctFitting com a bolsa retangular do duto retangular; na linha frigor\xEDgena a curva N\xC3O sai (o cobre \xE9 curvado, n\xE3o leva joelho) \u2014, no pavimento do trecho e no sistema da rede; a conex\xE3o lan\xE7ada \xE0 m\xE3o continua saindo pelo ponto que a representa, e n\xE3o em dobro. Pset_OpuraInstalacao traz as duas cotas e, no esgoto, a declividade. O comprimento em Qto_PipeSegmentBaseQuantities (Qto_CableCarrierSegment\u2026/Qto_DuctSegment\u2026 nas outras redes) \xE9 o REAL do caminho em L: o eletroduto com desn\xEDvel SOBE pela parede e CORRE pela laje (um segmento com dois s\xF3lidos), e o comprimento \xE9 planta + prumada \u2014 nunca a diagonal, que eletroduto embutido n\xE3o faz. A prumada mede a altura que vence, n\xE3o zero. As MEDIDAS de quadro e de terminal s\xE3o as DECLARADAS no desenho. A pe\xE7a que ningu\xE9m mediu sai no padr\xE3o \u2014 quadro 400 \xD7 300 \xD7 200 mm, terminal 100 mm c\xFAbicos \u2014 e ali a caixa \xE9 MARCA DE LUGAR, n\xE3o forma: o desenho sabe onde a pe\xE7a est\xE1 e n\xE3o sabe o modelo dela. Em nenhum dos dois casos ela vira grandeza: quadro e terminal se contam por unidade. A COTA \xE9 o CENTRO da pe\xE7a, n\xE3o a base, e o quadro N\xC3O tem rota\xE7\xE3o \u2014 a caixa \xE9 girada pelo \xE2ngulo declarado (IfcAxis2Placement3D.RefDirection); sem giro declarado ela sai alinhada aos eixos e o arquivo N\xC3O menciona dire\xE7\xE3o nenhuma. CONT\xC9M o QUADRO de distribui\xE7\xE3o, tamb\xE9m como marca de lugar: no esquema IFC4 (o padr\xE3o) sai IfcFlowController \u2014 IfcDistributionBoard, o exato, n\xE3o existe no IFC4 e os leitores n\xE3o o leem \u2014; exportado em IFC4X3 (IFC 4.3 ADD2), sai IfcDistributionBoard (.DISTRIBUTIONBOARD., QGBT .SWITCHBOARD.). E os CIRCUITOS (IfcDistributionCircuit), com o quadro, os pontos e os ELETRODUTOS de cada circuito agrupados nele \u2014 \xE9 o que liga o disjuntor ao que ele protege \u2014, e os CABOS: um IfcCableSegment .CONDUCTORSEGMENT. por tipo (fase, neutro, retorno, terra) e se\xE7\xE3o de condutor do circuito, SEM geometria (o cabo corre dentro do eletroduto), com o comprimento total em Qto_CableSegmentBaseQuantities \u2014 o mesmo do quantitativo. Pset_OpuraEletrica separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista escolheu (tens\xE3o, liga\xE7\xE3o, fase, disjuntor, curva, se\xE7\xE3o, DPS, Icn); _Calculada \xE9 conta do pr\xE9-dimensionamento com as hip\xF3teses do estudo (IB, demanda do quadro); _Derivados \xE9 o que o motor de fia\xE7\xE3o deriva (a composi\xE7\xE3o dos condutores). Nenhum deles sai em Pset normativo. Pset_ElectricalDeviceCommon (normativo) s\xF3 leva FATO: RatedVoltage = a tens\xE3o declarada do circuito, e HasProtectiveEarth nas tomadas de uso geral e espec\xEDfico. N\xC3O CONT\xC9M registro, nem dimensionamento hidr\xE1ulico: bitola e cota das redes de \xE1gua e esgoto s\xE3o o que algu\xE9m desenhou, e n\xE3o resultado de c\xE1lculo de perda de carga.",
   "CONT\xC9M guarda-corpos e corrim\xE3os (IfcRailing .GUARDRAIL. / .HANDRAIL.): um s\xF3lido por trecho da polilinha \u2014 50 mm de espessura, na altura declarada, apoiado no piso do pavimento \u2014, Qto_RailingBaseQuantities.Length (comprimento da polilinha) e Pset_OpuraGuardaCorpo (material, altura, item). A espessura \xE9 MARCA DE LUGAR, n\xE3o perfil: o desenho sabe onde a prote\xE7\xE3o est\xE1 e quanto mede, n\xE3o o desenho do gradil.",
   // ⚠️ E9.3 (01/10/2026): esta linha dizia "NÃO CONTÉM os preventivos" desde a E1 — falsa desde a
   // E7, que passou a emitir extintor, placa, luminária, detecção e alarme (achado 5 do roadmap).
@@ -5570,7 +5598,10 @@ var COBERTURA_IFC = [
   // ⚠️ E0.4 do roadmap de climatização (04/10/2026): esta linha dizia "NÃO CONTÉM ar-condicionado nem
   // gás" — falsa desde 20/09 (E11.1/P2.2), quando o duto virou IfcDuctSegment e a condensadora,
   // a evaporadora e o exaustor passaram a sair como equipamento. O teste que a fixava foi corrigido junto.
-  "CONT\xC9M a climatiza\xE7\xE3o M\xCDNIMA desenhada (20/09/2026): o duto como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING., a condensadora e a evaporadora como IfcUnitaryEquipment .SPLITSYSTEM., o exaustor como IfcFan .PROPELLORAXIAL. e a casa de m\xE1quinas como IfcBuildingElementProxy .PROVISIONFORSPACE. \u2014 todos como RESERVA DE LUGAR com as medidas da ficha, sem capacidade, vaz\xE3o ou modelo. N\xC3O CONT\xC9M linha frigor\xEDgena, dreno, duto retangular, conex\xF5es de duto, terminal de ar classificado (o difusor sai IfcFlowTerminal) nem carga t\xE9rmica: \xE9 o escopo do roadmap de climatiza\xE7\xE3o (E3 em diante). N\xC3O CONT\xC9M g\xE1s.",
+  // ⚠️ E10.1 do roadmap de climatização (07/10/2026): esta linha dizia "NÃO CONTÉM linha frigorígena, dreno,
+  // duto retangular, conexões de duto, terminal de ar classificado" — falsa desde a E3/E7. Corrigida no
+  // mesmo commit que passou a emitir as conexões de duto e o Pset da climatização (e o teste que a fixava).
+  "CONT\xC9M a climatiza\xE7\xE3o desenhada: o DUTO como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING. \u2014 redondo (IfcCircleProfileDef) ou RETANGULAR (IfcRectangleProfileDef, a largura deitada) \u2014, e as conex\xF5es de duto como IfcDuctFitting; a LINHA FRIGOR\xCDGENA como IfcPipeSegment no sistema .REFRIGERATION. com DOIS s\xF3lidos lado a lado (l\xEDquido e suc\xE7\xE3o) e o DRENO como IfcPipeSegment no sistema .DRAINAGE. \u2014 o s\xF3lido \xE9 o ENVELOPE com o isolamento declarado (\xE9 o que ocupa lugar), e os di\xE2metros reais e a espessura v\xE3o no Pset; evaporadora e condensadora como IfcUnitaryEquipment (.SPLITSYSTEM., .AIRCONDITIONINGUNIT. na do VRF), derivador do VRF como IfcPipeFitting .JUNCTION., exaustor como IfcFan, bomba de dreno como IfcPump, ponto de dreno como IfcWasteTerminal, terminal de ar como IfcAirTerminal (.DIFFUSER., .GRILLE., .REGISTER., .LOUVRE.), damper como IfcDamper e plenum/caixa como IfcDuctFitting \u2014 o ObjectType leva o tipo do sistema (\xE9 por ele que a importa\xE7\xE3o reconhece a pe\xE7a). Pset_OpuraClimatizacao separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista informou (capacidade, vaz\xE3o, a condensadora do sistema; no trecho, suc\xE7\xE3o, isolamento e altura do duto); _Derivado \xE9 a numera\xE7\xE3o do desenho (EV-1, CD-2, DF-3); _Calculada \xE9 a carga do ambiente e o atende/n\xE3o atende da evaporadora e a vaz\xE3o derivada do terminal de ar, com as premissas do estudo \u2014 s\xF3 quando o arquivo \xE9 gerado com elas. A reserva de lugar antiga (condensadora/evaporadora/exaustor/casa de m\xE1quinas como componente) continua saindo como antes. N\xC3O CONT\xC9M g\xE1s nem a mem\xF3ria da carga t\xE9rmica (est\xE3o no memorial).",
   "N\xC3O CONT\xC9M ARMADURA. Nenhuma barra de a\xE7o, estribo ou cobrimento \u2014 a estrutura aqui \xE9 s\xF3 a forma do concreto.",
   'CONT\xC9M tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de cat\xE1logo), com IfcRelDefinesByType ligando as inst\xE2ncias \u2014 inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma fam\xEDlia. O nome do tipo \xE9 o de projeto ("P1"); o item de cat\xE1logo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
@@ -5676,6 +5707,7 @@ function n(v) {
 function gerarIfc(model, o) {
   const linhas = [];
   const numerosDeIncendio = numeracaoDeIncendio(model);
+  const numerosDeClimatizacao = numeracaoDeClimatizacao(model);
   let proximo = 1;
   const emitir = (corpo) => {
     const id = `#${proximo++}`;
@@ -5696,7 +5728,7 @@ function gerarIfc(model, o) {
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
   const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
-  const conexoesIfc = quant.conexoes.filter((c) => c.origem === "DERIVADA" && (c.ramais?.length ?? 0) > 0);
+  const conexoesIfc = quant.conexoes.filter((c) => c.origem === "DERIVADA" && (c.ramais?.length ?? 0) > 0 && !(c.disciplina === "FRIGORIGENA" && (c.tipo === "JOELHO_90" || c.tipo === "JOELHO_45")));
   const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
   const porSistema = /* @__PURE__ */ new Map();
   const porQuadro = /* @__PURE__ */ new Map();
@@ -5930,6 +5962,7 @@ function gerarIfc(model, o) {
         ...t.disciplina === "ESGOTO" && emPlanta > 0 ? [["DeclividadePct", { tipo: "IFCREAL", v: Math.round(Math.abs(t.cotaBMm - t.cotaAMm) / emPlanta * 1e4) / 100 }]] : [],
         ["Sugerido", { tipo: "IFCBOOLEAN", v: !!t.sugerido }]
       ]);
+      if (t.disciplina === "FRIGORIGENA" || t.disciplina === "DRENO_AC" || t.disciplina === "MECANICA") psetDoTrechoDeClimatizacao(ctx, produto, t);
       if (t.disciplina === "ELETRICA") {
         for (const cid of t.circuitoIds ?? []) porCircuito.set(cid, [...porCircuito.get(cid) ?? [], produto]);
       }
@@ -5990,6 +6023,9 @@ function gerarIfc(model, o) {
     for (const t of (model.terminais ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTerminal(t, ctx, localNivel);
       if (t.disciplina === "INCENDIO") psetDeIncendio(ctx, produto, t, numerosDeIncendio.get(t.id)?.numero ?? null, o.resultadosDeIncendio?.get(t.id) ?? null);
+      if (t.tipoHidraulico && TIPOS_DE_CLIMATIZACAO.includes(t.tipoHidraulico)) {
+        psetDeClimatizacao(ctx, produto, t, numerosDeClimatizacao.get(t.id)?.numero ?? null, t.condensadoraId ? numerosDeClimatizacao.get(t.condensadoraId)?.numero ?? null : null, o.resultadosDeClimatizacao?.get(t.id) ?? null);
+      }
       produtos.push(produto);
       porSistema.set(t.disciplina, [...porSistema.get(t.disciplina) ?? [], produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, "terminal"));
@@ -6197,6 +6233,24 @@ function psetDeIncendio(ctx, produto, t, numero, calc) {
     p.push(["Atende_Calculada", { tipo: "IFCBOOLEAN", v: calc.atende }]);
   }
   emitirPset(ctx, produto, t.uid, "Pset_OpuraIncendio", p);
+}
+function psetDeClimatizacao(ctx, produto, t, numero, numeroDaCondensadora, calc) {
+  const p = [];
+  if (numero) p.push(["Numero_Derivado", { tipo: "IFCLABEL", v: numero }]);
+  if (t.capacidadeBtuH != null) p.push(["CapacidadeBtuH_Declarada", { tipo: "IFCINTEGER", v: t.capacidadeBtuH }]);
+  if (t.vazaoM3h != null) p.push(["VazaoM3h_Declarada", { tipo: "IFCREAL", v: t.vazaoM3h }]);
+  if (numeroDaCondensadora) p.push(["Condensadora_Declarada", { tipo: "IFCLABEL", v: numeroDaCondensadora }]);
+  if (calc?.cargaDoAmbienteBtuH != null) p.push(["CargaDoAmbienteBtuH_Calculada", { tipo: "IFCINTEGER", v: Math.round(calc.cargaDoAmbienteBtuH) }]);
+  if (calc?.atende != null) p.push(["Atende_Calculada", { tipo: "IFCBOOLEAN", v: calc.atende }]);
+  if (calc?.vazaoM3h != null) p.push(["VazaoM3h_Calculada", { tipo: "IFCREAL", v: Math.round(calc.vazaoM3h) }]);
+  emitirPset(ctx, produto, t.uid, "Pset_OpuraClimatizacao", p);
+}
+function psetDoTrechoDeClimatizacao(ctx, produto, t) {
+  const p = [];
+  if (t.bitolaSuccaoMm != null) p.push(["BitolaSuccaoMm_Declarada", { tipo: "IFCINTEGER", v: t.bitolaSuccaoMm }]);
+  if (t.isolamentoMm != null) p.push(["IsolamentoMm_Declarado", { tipo: "IFCINTEGER", v: t.isolamentoMm }]);
+  if (t.alturaDutoMm != null) p.push(["AlturaDutoMm_Declarada", { tipo: "IFCINTEGER", v: t.alturaDutoMm }]);
+  emitirPset(ctx, produto, t.uid, "Pset_OpuraClimatizacao", p);
 }
 function emitirPset(ctx, produto, uidPai, nome, props) {
   if (props.length === 0) return;
@@ -6610,14 +6664,20 @@ function emitirTrecho(t, ctx, localNivel, peDireitoMm) {
   );
   const centroPerfil = emitir("IFCCARTESIANPOINT((0.,0.))");
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
-  const perfil = t.alturaDutoMm != null ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm)},${n(t.alturaDutoMm)})`) : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
-  const solidos = segmentosDoEletroduto(t, peDireitoMm).map((seg) => {
+  const iso = t.isolamentoMm ?? 0;
+  const perfil = t.alturaDutoMm != null ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm + 2 * iso)},${n(t.alturaDutoMm + 2 * iso)})`) : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2 + iso)})`);
+  const par = t.disciplina === "FRIGORIGENA" && t.bitolaSuccaoMm != null ? parDaLinha(t.bitolaMm, t.bitolaSuccaoMm, iso) : null;
+  const perfisDoPar = par ? par.raios.map((r) => emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(r)})`)) : [];
+  const solidos = segmentosDoEletroduto(t, peDireitoMm).flatMap((seg) => {
     const dx = seg.b.x - seg.a.x;
     const dy = seg.b.y - seg.a.y;
     const dz = seg.cotaBMm - seg.cotaAMm;
     const comprimento = Math.hypot(dx, dy, dz);
     const eixo = [dx / comprimento, dy / comprimento, dz / comprimento];
-    return solidoAoLongo(ctx, perfil, [seg.a.x - t.a.x, seg.a.y - t.a.y, seg.cotaAMm - t.cotaAMm], eixo, comprimento);
+    const inicio = [seg.a.x - t.a.x, seg.a.y - t.a.y, seg.cotaAMm - t.cotaAMm];
+    if (!par) return [solidoAoLongo(ctx, perfil, inicio, eixo, comprimento)];
+    const lado = ladoDoEixo(eixo);
+    return par.deslocamentos.map((d, i) => solidoAoLongo(ctx, perfisDoPar[i], [inicio[0] + lado[0] * d, inicio[1] + lado[1] * d, inicio[2] + lado[2] * d], eixo, comprimento));
   });
   const forma = emitir(
     `IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(",")}))`
@@ -6627,6 +6687,15 @@ function emitirTrecho(t, ctx, localNivel, peDireitoMm) {
   return emitir(
     `${classe.entidade}(${guidDe(t.uid, `trecho-${t.id}`)},${historico},${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},${s(rotuloCurto(t.uid, "trecho"))},${classe.predefinido})`
   );
+}
+function parDaLinha(liquidoMm, succaoMm, isolamentoMm) {
+  const raios = [liquidoMm / 2 + isolamentoMm, succaoMm / 2 + isolamentoMm];
+  const d = Math.max(...raios) + 5;
+  return { raios, deslocamentos: [-d, d] };
+}
+function ladoDoEixo(eixo) {
+  const h = Math.hypot(eixo[0], eixo[1]);
+  return h < 1e-6 ? [1, 0, 0] : [-eixo[1] / h, eixo[0] / h, 0];
 }
 var PREDEFINIDO_DA_CONEXAO = {
   JOELHO_90: ".BEND.",
@@ -6644,15 +6713,18 @@ function emitirConexao(c, ctx, localNivel, cotaNoNivelMm) {
   const local = emitir(`IFCLOCALPLACEMENT(${localNivel},${emitir(`IFCAXIS2PLACEMENT3D(${origem},$,$)`)})`);
   const centroPerfil = emitir("IFCCARTESIANPOINT((0.,0.))");
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
+  const duto = c.disciplina === "MECANICA";
   const solidos = (c.ramais ?? []).map((r) => {
-    const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(r.bitolaMm / 2 * 1.3)})`);
-    return solidoAoLongo(ctx, perfil, [0, 0, 0], r.u, Math.max(r.bitolaMm, 50));
+    const perfil = r.alturaDutoMm != null ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(Math.round(r.bitolaMm * 11) / 10)},${n(Math.round(r.alturaDutoMm * 11) / 10)})`) : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(r.bitolaMm / 2 * (duto ? 1.1 : 1.3))})`);
+    return solidoAoLongo(ctx, perfil, [0, 0, 0], r.u, Math.max(duto ? Math.min(r.alturaDutoMm ?? r.bitolaMm, 300) : r.bitolaMm, 50));
   });
   const forma = emitir(`IFCSHAPEREPRESENTATION(${ctx.subContexto},'Body','SweptSolid',(${solidos.join(",")}))`);
   const produtoForma = emitir(`IFCPRODUCTDEFINITIONSHAPE($,$,(${forma}))`);
-  const nome = `${ROTULO_DA_CONEXAO[c.tipo]} DN ${c.bitolaMm}${c.paraMm != null ? `\u2192${c.paraMm}` : ""}`;
+  const ramal = (c.ramais ?? []).find((r) => r.bitolaMm === c.bitolaMm && r.alturaDutoMm != null);
+  const medida = duto && ramal ? `${ramal.bitolaMm}\xD7${ramal.alturaDutoMm}` : `DN ${c.bitolaMm}`;
+  const nome = `${ROTULO_DA_CONEXAO[c.tipo]} ${medida}${c.paraMm != null ? `\u2192${c.paraMm}` : ""}`;
   return emitir(
-    `IFCPIPEFITTING(${guid(semente)},${historico},${s(nome)},$,$,${local},${produtoForma},$,${PREDEFINIDO_DA_CONEXAO[c.tipo] ?? ".NOTDEFINED."})`
+    `${duto ? "IFCDUCTFITTING" : "IFCPIPEFITTING"}(${guid(semente)},${historico},${s(nome)},$,$,${local},${produtoForma},$,${PREDEFINIDO_DA_CONEXAO[c.tipo] ?? ".NOTDEFINED."})`
   );
 }
 function direcaoDaPeca(graus, ctx) {

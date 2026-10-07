@@ -64,7 +64,12 @@ import {
 import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha, redesDoTemplate } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
-import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto } from '../utils/blueprintIfc';
+import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto, type ResultadoDeClimatizacaoIfc } from '../utils/blueprintIfc';
+import { TIPOS_DE_CLIMATIZACAO } from '../utils/blueprintKernel';
+import type { HipotesesClimatizacao } from '../utils/blueprintClimatizacao';
+import { cargaTermicaDoEstudo } from '../utils/blueprintCargaTermica';
+import { selecaoDoNivel } from '../utils/blueprintSelecaoClimatizacao';
+import { vazoesDosTerminais } from '../utils/blueprintRedeDeAr';
 import { COBERTURA_COLLADA, gerarCollada } from '../utils/blueprintCollada';
 import { lodPorUid } from '../utils/blueprintLod';
 import { chavesPrivadas, parametrosCalculadosDoModelo } from '../utils/blueprintFormulas';
@@ -154,6 +159,23 @@ function opcoesDaCamada(p: PranchaExport): Partial<OpcoesExportacao> {
     climatizacao: p === 'climatizacao',
     ...opcoesDaHumanizada(p),
   };
+}
+
+/**
+ * E10.1 (climatização): o calculado com as premissas do estudo, por peça — para o `_Calculada` do
+ * Pset_OpuraClimatizacao. Evaporadora: a carga do ambiente em que está e se o instalado atende
+ * (atende ou superdimensionado); terminal de ar: a vazão DERIVADA (a declarada já sai como _Declarada).
+ */
+export function resultadosDeClimatizacaoParaIfc(model: BlueprintModel, hip: HipotesesClimatizacao | undefined): Map<string, ResultadoDeClimatizacaoIfc> | undefined {
+  if (!hip || !(model.terminais ?? []).some((t) => t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico))) return undefined;
+  const r = new Map<string, ResultadoDeClimatizacaoIfc>();
+  for (const carga of cargaTermicaDoEstudo(model, hip)) {
+    for (const a of selecaoDoNivel(model, carga, hip.selecao, []).ambientes) {
+      for (const e of a.evaporadoras) r.set(e.id, { cargaDoAmbienteBtuH: a.cargaBtuH, atende: a.estado === 'ATENDE' || a.estado === 'SUPERDIMENSIONADO' });
+    }
+    for (const [id, v] of vazoesDosTerminais(model, carga, hip.ar)) if (v.origem === 'DERIVADA') r.set(id, { ...(r.get(id) ?? {}), vazaoM3h: v.vazaoM3h });
+  }
+  return r.size ? r : undefined;
 }
 
 /** E9.3: o resultado do cálculo de incêndio por peça aberta no cenário de projeto — para o Pset do IFC. */
@@ -977,6 +999,7 @@ export function montarIfc(model: BlueprintModel, o: OpcoesExportacao): ArtefatoE
     hipotesesEletricas: o.hipotesesEletricas,
     // E9.3: o calculado de incêndio (vazão e pressão no bico das peças abertas), com as premissas do estudo.
     resultadosDeIncendio: resultadosDeIncendioParaIfc(model, o.hipotesesDeIncendio),
+    resultadosDeClimatizacao: resultadosDeClimatizacaoParaIfc(model, o.hipotesesDeClimatizacao),
   });
 
   return [

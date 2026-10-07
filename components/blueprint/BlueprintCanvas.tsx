@@ -83,7 +83,7 @@ import {
   type PontoPx,
   type Underlay,
 } from '../../utils/blueprintUnderlay';
-import { anelDoTerreno, medirTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
+import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import { faixaDaVia, calcadasDaVia, centroide, areaEmM2 } from '../../utils/blueprintLoteamento';
 import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
 
@@ -105,10 +105,14 @@ import {
   AFASTAMENTO_COTA,
   ambientesNaParede,
   cotasDeAmbiente,
-  cadeiasDoLote,
+  anelDoLoteFechado,
+  cadeiasDoContorno,
+  chamadasDoLado,
+  LINHA_DE_CHAMADA,
   cadeiasPorLado,
   pontoDaCota,
   type LadoDoContorno,
+  type SegmentoDeCota,
 } from '../../utils/blueprintCotas';
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import { composicaoDaRede, trechosNumerados } from '../../utils/blueprintFiacao';
@@ -1079,6 +1083,13 @@ interface Props {
    */
   mostrarMedidasLoteMassa?: boolean;
   /**
+   * EIXOS DA MALHA (07/10/2026): *"opção de exibir ou não eixos"*. Desligado, o eixo não é desenhado, não é
+   * selecionável e não dá encaixe — continua no modelo. Padrão: ligado.
+   */
+  mostrarEixos?: boolean;
+  /** A PRÉVIA da gaveta "Eixos automáticos": tracejada em `COR_PREVIA`, com a bolha e o nome. */
+  eixosPrevistos?: readonly { a: Point; b: Point; nome: string }[];
+  /**
    * Pinta as faixas das CAMADAS dentro da espessura da parede.
    *
    * Toggle, e não sempre ligado, porque a composição é informação de detalhe:
@@ -1612,6 +1623,8 @@ export default function BlueprintCanvas({
   ortogonal = false,
   mostrarMedidasParedes = false,
   mostrarMedidasLoteMassa = true,
+  mostrarEixos = true,
+  eixosPrevistos,
   mostrarCamadasParedes = false,
   fundo = null,
   onMoveVertex,
@@ -2065,7 +2078,7 @@ export default function BlueprintCanvas({
   // corte passa enquanto se desenha o segundo piso.
   const cortes = useMemo(() => (model.sections ?? []).filter((c) => !ocultos.has(c.id)), [model.sections, ocultos]);
   /** Os EIXOS da malha (E1.4): de todo o projeto, como os cortes. */
-  const eixos = useMemo(() => (model.eixos ?? []).filter((e) => !ocultos.has(e.id)), [model.eixos, ocultos]);
+  const eixos = useMemo(() => (mostrarEixos ? (model.eixos ?? []).filter((e) => !ocultos.has(e.id)) : []), [model.eixos, ocultos, mostrarEixos]);
   /** GUARDA-CORPOS (E7.3) do pavimento. */
   const guardaCorpos = useMemo(() => (model.guardaCorpos ?? []).filter((g) => (!levelId || g.levelId === levelId) && !ocultos.has(g.id)), [model.guardaCorpos, levelId, ocultos]);
   const rodapes = useMemo(() => rodapesReais.filter((r) => (!levelId || r.levelId === levelId) && !ocultos.has(r.id)), [rodapesReais, levelId, ocultos]);
@@ -3464,6 +3477,9 @@ export default function BlueprintCanvas({
     for (const t of trechosReais) pontos.push(t.a, t.b);
     for (const t of terminaisReais) pontos.push(t.at);
     for (const q of quadrosReais) pontos.push(q.at);
+    // EIXOS (07/10/2026): passam além do desenho e a bolha mora na ponta — fora da conta, as bolhas saíam da tela.
+    // Só os visíveis (`eixos` já respeita "Eixos" de Exibir).
+    for (const e of recorteDaVista ? [] : eixos) pontos.push(e.a, e.b);
     if (pontos.length === 0 && fundo) {
       const lw = fundo.imagem.naturalWidth;
       const lh = fundo.imagem.naturalHeight;
@@ -4483,13 +4499,16 @@ export default function BlueprintCanvas({
        * número fica de fora quando não cabe — sem a linha, a cadeia parecia não começar no canto do lote.
        */
       minimoPx: number = MIN_PX_COTA_PAREDE,
-    ) => {
+    ): { de: number; ate: number }[] => {
       ctx.strokeStyle = corLinhaCota;
       const afasta = folgaBaseMm + passoMm * nivelAfastamento;
+      // Os trechos que SAÍRAM: só eles ganham linha de chamada.
+      const desenhados: { de: number; ate: number }[] = [];
       for (const seg of segmentos) {
         const a = paraTela(pontoDaCota(lado, seg.de, afasta) as Point);
         const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
         if (Math.hypot(b.x - a.x, b.y - a.y) < minimoPx) continue;
+        desenhados.push(seg);
 
         // O VÃO ganha traço mais forte: numa cadeia de esquadria o que se
         // procura é onde estão as aberturas, e sem distinção elas se perdem
@@ -4557,6 +4576,27 @@ export default function BlueprintCanvas({
         escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, Math.round(11 * fz), fundoCota);
         ctx.restore();
       }
+      return desenhados;
+    };
+
+    // LINHAS DE CHAMADA (07/10/2026) — *"veja que o início e fim das cotas encostam aonde inicia e termina a
+    // medida"*. Uma por quebra do lado: da FACE do objeto (+ folga) até um pouco além da linha de cota mais externa
+    // que quebra ali. A regra (e as folgas) mora em `LINHA_DE_CHAMADA`, a mesma do PDF e do DXF.
+    const desenharChamadas = (lado: LadoDoContorno, faceMm: number, cadeias: { segmentos: { de: number; ate: number }[]; nivel: number }[]) => {
+      ctx.strokeStyle = corLinhaCota;
+      ctx.lineWidth = 0.75;
+      const inicio = faceMm + LINHA_DE_CHAMADA.folgaTelaPx / vista.escala;
+      for (const ch of chamadasDoLado(cadeias)) {
+        const fim = folgaBaseMm + passoMm * ch.nivel + LINHA_DE_CHAMADA.ultrapassaTelaPx / vista.escala;
+        if (fim <= inicio) continue;
+        const a = paraTela(pontoDaCota(lado, ch.t, inicio) as Point);
+        const b = paraTela(pontoDaCota(lado, ch.t, fim) as Point);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 1;
     };
 
     if (mostrarCotas && cadeiasDeCota.length > 0) {
@@ -4565,10 +4605,14 @@ export default function BlueprintCanvas({
       ctx.lineWidth = 1;
 
       for (const c of cadeiasDeCota) {
-        desenharCadeia(c.lado, c.aberturas, AFASTAMENTO_COTA.aberturas);
-        desenharCadeia(c.lado, c.internas, AFASTAMENTO_COTA.internas);
-        desenharCadeia(c.lado, c.parcial, AFASTAMENTO_COTA.parcial);
-        desenharCadeia(c.lado, [c.total], AFASTAMENTO_COTA.total);
+        const cadeiasDoLado: [SegmentoDeCota[], number][] = [
+          [c.aberturas, AFASTAMENTO_COTA.aberturas],
+          [c.internas, AFASTAMENTO_COTA.internas],
+          [c.parcial, AFASTAMENTO_COTA.parcial],
+          [[c.total], AFASTAMENTO_COTA.total],
+        ];
+        const desenhadas = cadeiasDoLado.map(([segs, nivel]) => ({ segmentos: desenharCadeia(c.lado, segs, nivel), nivel }));
+        desenharChamadas(c.lado, c.faceExternaMm, desenhadas);
       }
       ctx.restore();
     }
@@ -5566,15 +5610,15 @@ export default function BlueprintCanvas({
           const dMov = selecao.has(bl.id) && movendoSelecao ? movendoSelecao.delta : null;
           return dMov ? bl.pontos.map((q) => ({ x: q.x + dMov.x, y: q.y + dMov.y })) : bl.pontos;
         });
-      const anelDoLoteParaCota = anelDoTerreno(limitesDoNivel);
-      const loteFechado = !!medirTerreno(limitesDoNivel.filter((x) => x.kind === 'TERRENO'))?.fechado && anelDoLoteParaCota.length >= 3;
-      const quebras = [...blocosDoNivel.flat(), ...cadeiasDeCota.flatMap((c) => [c.lado.a, c.lado.b, ...c.lado.intermediarios])];
-      const cadeiasDoContorno = loteFechado ? cadeiasDoLote(anelDoLoteParaCota, quebras) : blocosDoNivel.flatMap((pts) => cadeiasDoLote(pts, []));
+      // A conta é a mesma da exportação (`cadeiasDoContorno`); a chamada nasce NA divisa (face 0).
       ctx.save();
       ctx.lineWidth = 1;
-      for (const c of cadeiasDoContorno) {
-        if (c.parcial.length > 0) desenharCadeia(c.lado, c.parcial, 1, 1);
-        desenharCadeia(c.lado, [c.total], c.parcial.length > 0 ? 2 : 1, 1);
+      for (const c of cadeiasDoContorno(anelDoLoteFechado(limitesDoNivel), blocosDoNivel, cadeiasDeCota)) {
+        const desenhadas: { segmentos: { de: number; ate: number }[]; nivel: number }[] = [];
+        if (c.parcial.length > 0) desenhadas.push({ segmentos: desenharCadeia(c.lado, c.parcial, 1, 1), nivel: 1 });
+        const nivelDoTotal = c.parcial.length > 0 ? 2 : 1;
+        desenhadas.push({ segmentos: desenharCadeia(c.lado, [c.total], nivelDoTotal, 1), nivel: nivelDoTotal });
+        desenharChamadas(c.lado, 0, desenhadas);
       }
       ctx.restore();
     }
@@ -7619,14 +7663,13 @@ export default function BlueprintCanvas({
     // EIXOS DA MALHA (E1.4): traço-ponto fino, cinza-azulado, com a BOLHA e o
     // nome nas duas pontas — a convenção de prancha. Sem nome, só a linha
     // (linha de referência). Desenhados antes dos cortes, por baixo deles.
-    for (const e of eixos) {
-      const selecionado = selecao.has(e.id);
-      const cor = selecionado ? COR_SELECIONADA : COR_EIXO;
+    // A PRÉVIA da gaveta "Eixos automáticos" (07/10/2026) usa o mesmo desenho, tracejada em `COR_PREVIA`.
+    const desenharEixo = (e: { a: Point; b: Point; nome: string }, cor: string, largura: number, previa: boolean) => {
       const ta = paraTela(e.a);
       const tb = paraTela(e.b);
       ctx.strokeStyle = cor;
-      ctx.lineWidth = selecionado ? 2 : 1;
-      ctx.setLineDash([14, 4, 2, 4]);
+      ctx.lineWidth = largura;
+      ctx.setLineDash(previa ? [6, 4] : [14, 4, 2, 4]);
       ctx.beginPath();
       ctx.moveTo(ta.x, ta.y);
       ctx.lineTo(tb.x, tb.y);
@@ -7657,6 +7700,12 @@ export default function BlueprintCanvas({
           ctx.textBaseline = 'alphabetic';
         }
       }
+    };
+    for (const e of eixos) {
+      const selecionado = selecao.has(e.id);
+      desenharEixo(e, selecionado ? COR_SELECIONADA : COR_EIXO, selecionado ? 2 : 1, false);
+      const ta = paraTela(e.a);
+      const tb = paraTela(e.b);
       if (selecionado && unicoSelecionado === e.id && !movendoSelecao) {
         for (const t of [ta, tb]) {
           ctx.fillStyle = '#ffffff';
@@ -7669,6 +7718,7 @@ export default function BlueprintCanvas({
         }
       }
     }
+    for (const e of eixosPrevistos ?? []) desenharEixo(e, COR_PREVIA, 1.5, true);
     // ── GUARDA-CORPOS (E7.3): guarda-corpo = linha dupla com balaústres a cada
     // 12 cm; corrimão = linha simples grossa. Sugerido tracejado. ──
     const desenharGuardaCorpo = (pontos: Point[], tipo: TipoDeGuardaCorpo, cor: string, tracejado: boolean, largura: number) => {
@@ -9152,6 +9202,7 @@ export default function BlueprintCanvas({
     recorteDaVista,
     vistasDependentesDoNivel,
     pecasPrevistas,
+    eixosPrevistos,
     arrastoRegiao,
     mostrarCotas,
     mostrarCotaInterna,

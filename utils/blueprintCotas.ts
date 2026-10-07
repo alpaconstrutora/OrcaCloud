@@ -31,7 +31,8 @@
  * fizesse a conta sozinho.
  */
 
-import type { BlueprintModel, Level, Point, Space, Wall } from './blueprintKernel';
+import type { BlueprintModel, Boundary, Level, Point, Space, Wall } from './blueprintKernel';
+import { anelDoTerreno, medirTerreno } from './blueprintTerreno';
 import {
   areCollinear,
   contornoExternoDoNivel,
@@ -125,6 +126,11 @@ export interface CadeiasDoLado {
    * Vazia quando o lado não tem abertura, e aí o renderizador não gasta linha.
    */
   aberturas: SegmentoDeCota[];
+  /**
+   * Onde está o OBJETO cotado, medido do eixo do lado para fora, em mm: a meia espessura da parede mais grossa do
+   * lado (07/10/2026). O contorno corre pelo EIXO, mas a linha de chamada nasce na FACE — senão ela entra na parede.
+   */
+  faceExternaMm: number;
 }
 
 /** Funde arestas colineares consecutivas do anel em lados. */
@@ -323,7 +329,18 @@ export function cadeiasDoLado(
     }
   }
 
-  return { lado, comprimentoMm, total, parcial, internas, aberturas };
+  // A FACE do lado: a meia espessura da parede mais grossa que corre SOBRE ele (as duas pontas na reta do lado e
+  // algum trecho dentro dele).
+  let faceExternaMm = 0;
+  for (const w of paredes) {
+    if (!areCollinear(lado.a, lado.b, w.a) || !areCollinear(lado.a, lado.b, w.b)) continue;
+    const ta = t(w.a);
+    const tb = t(w.b);
+    if (Math.max(ta, tb) <= 0 || Math.min(ta, tb) >= comprimentoMm) continue;
+    faceExternaMm = Math.max(faceExternaMm, w.thicknessMm / 2);
+  }
+
+  return { lado, comprimentoMm, total, parcial, internas, aberturas, faceExternaMm };
 }
 
 /** Todas as cadeias de todos os lados do nível. */
@@ -411,6 +428,54 @@ export const AFASTAMENTO_COTA = {
   parcial: 3,
   total: 4,
 } as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINHAS DE CHAMADA (07/10/2026)
+//
+// *"veja que o início e fim das cotas encostam aonde inicia e termina a medida"* — na prancha de referência cada
+// quebra da cadeia tem uma linha de chamada: nasce PERTO do objeto (com uma pequena folga, para não se confundir
+// com ele), atravessa as linhas de cota e passa um pouco além da última que a usa. O tique a 45° fica no cruzamento.
+//
+// A MESMA regra nas três saídas — tela, PDF/SVG e DXF —, cada uma na sua unidade (px de tela, mm de papel, mm
+// reais). As medidas abaixo são convenção GRÁFICA (não mudam nenhum número do projeto).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const LINHA_DE_CHAMADA = {
+  /** Folga entre o objeto e o início da chamada. */
+  folgaTelaPx: 4,
+  folgaPapelMm: 1,
+  /** Quanto a chamada passa além da linha de cota mais externa que a usa. */
+  ultrapassaTelaPx: 4,
+  ultrapassaPapelMm: 1.5,
+} as const;
+
+/** Uma linha de chamada de um lado: a posição na régua dele e a linha de cota mais externa que quebra ali. */
+export interface ChamadaDeCota {
+  t: number;
+  nivel: number;
+}
+
+/** Abaixo disto (mm) duas quebras são o mesmo ponto — uma chamada só. */
+const MESMA_CHAMADA_MM = 1;
+
+/**
+ * As linhas de chamada de UM lado: uma por ponto de quebra de qualquer das cadeias dele (início e fim de cada
+ * trecho), cada uma indo até a cadeia mais externa que quebra ali. Pontos a menos de 1 mm viram um só.
+ */
+export function chamadasDoLado(
+  cadeias: readonly { segmentos: readonly { de: number; ate: number }[]; nivel: number }[],
+): ChamadaDeCota[] {
+  const pontos: ChamadaDeCota[] = [];
+  for (const c of cadeias) for (const s of c.segmentos) for (const t of [s.de, s.ate]) pontos.push({ t, nivel: c.nivel });
+  pontos.sort((x, y) => x.t - y.t);
+  const saida: ChamadaDeCota[] = [];
+  for (const p of pontos) {
+    const ultima = saida[saida.length - 1];
+    if (ultima && p.t - ultima.t < MESMA_CHAMADA_MM) ultima.nivel = Math.max(ultima.nivel, p.nivel);
+    else saida.push({ ...p });
+  }
+  return saida;
+}
 
 /**
  * Cadeias de TODOS os níveis do modelo.
@@ -792,4 +857,29 @@ export function cadeiasDoLote(anel: Point[], quebras: Point[]): CadeiasDoLote[] 
     cadeias.push({ lado, total, parcial });
   }
   return cadeias;
+}
+
+/**
+ * As cadeias por fora do contorno do nível — a MESMA conta na tela e na exportação (07/10/2026).
+ *
+ * Com o lote FECHADO: os lados do lote, repartidos pelos vértices dos blocos e do contorno das paredes. Sem lote: em
+ * volta de cada bloco. `anelDoLote` nulo = o lote não fecha.
+ */
+export function cadeiasDoContorno(
+  anelDoLote: Point[] | null,
+  blocos: readonly Point[][],
+  cadeiasDasParedes: readonly CadeiasDoLado[],
+): CadeiasDoLote[] {
+  if (anelDoLote && anelDoLote.length >= 3) {
+    const quebras = [...blocos.flat(), ...cadeiasDasParedes.flatMap((c) => [c.lado.a, c.lado.b, ...c.lado.intermediarios])];
+    return cadeiasDoLote(anelDoLote, quebras);
+  }
+  return blocos.filter((pts) => pts.length >= 3).flatMap((pts) => cadeiasDoLote(pts, []));
+}
+
+/** O anel do lote do nível, ou nulo quando as divisas TERRENO não fecham. */
+export function anelDoLoteFechado(limitesDoNivel: readonly Boundary[]): Point[] | null {
+  const anel = anelDoTerreno([...limitesDoNivel]);
+  const fechado = !!medirTerreno(limitesDoNivel.filter((x) => x.kind === 'TERRENO'))?.fechado;
+  return fechado && anel.length >= 3 ? anel : null;
 }

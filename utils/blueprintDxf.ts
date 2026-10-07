@@ -48,7 +48,18 @@ import { type Anotacao,
   type Structural,
   type Wall,
 } from './blueprintKernel';
-import { AFASTAMENTO_COTA, AVISO_COTA_POR_FACE, cadeiasDoModelo, pontoDaCota } from './blueprintCotas';
+import {
+  AFASTAMENTO_COTA,
+  AVISO_COTA_POR_FACE,
+  anelDoLoteFechado,
+  cadeiasDoContorno,
+  cadeiasPorLado,
+  chamadasDoLado,
+  LINHA_DE_CHAMADA,
+  pontoDaCota,
+  type LadoDoContorno,
+  type SegmentoDeCota,
+} from './blueprintCotas';
 import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
@@ -89,6 +100,11 @@ export const CAMADAS = {
    * planta de arquitetura desliga a cobertura para ler os ambientes.
    */
   TELHADO: 'PLANTA-TELHADO',
+  /**
+   * EIXOS DA MALHA (07/10/2026): A, B… / 1, 2…, com a bolha nas pontas. NÃO é `PLANTA-EIXOS`, que é o eixo de cada
+   * PAREDE: quem plota a fôrma liga a malha e desliga o resto.
+   */
+  MALHA_EIXOS: 'PLANTA-MALHA-EIXOS',
   /**
    * As INTERFACES entre camadas da parede — uma linha por junta, ao longo do
    * eixo, dentro do sólido que `PLANTA-PAREDES` já desenha.
@@ -189,6 +205,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ABERTURAS]: 5, // azul
   [CAMADAS.TEXTO]: 2, // amarelo
   [CAMADAS.COTAS]: 8, // cinza
+  [CAMADAS.MALHA_EIXOS]: 9, // cinza claro
   [CAMADAS.ANOTACOES]: 30, // laranja
   [CAMADAS.ESTRUTURA]: 6, // magenta — concreto, distinto do preto da alvenaria
   [CAMADAS.FUNDACAO]: 4, // ciano
@@ -524,6 +541,8 @@ export interface OpcoesDxf {
   revisao: number;
   hash: string;
   cotas?: boolean;
+  /** EIXOS DA MALHA (07/10/2026) em `PLANTA-MALHA-EIXOS`; ausente = sim (o padrão da tela). */
+  eixos?: boolean;
   /**
    * Elevações a incluir, cada uma como um bloco de geometria (u, v) deslocado
    * para a DIREITA da planta. É a convenção de prancha — elevação não é planta
@@ -916,6 +935,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     dxf += entidadesDeAgua(r);
   }
 
+  if (o.eixos !== false) dxf += entidadesDosEixosDaMalha(model);
   if (o.cotas) dxf += entidadesDeCota(model);
   // ANOTAÇÕES (E8.1) da planta, no mm do desenho.
   dxf += entidadesDeAnotacoes((model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), (p) => ({ x: p.x, y: p.y }));
@@ -1163,6 +1183,33 @@ function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: numbe
 }
 
 /**
+ * EIXOS DA MALHA (07/10/2026): a linha, a BOLHA (CIRCLE) e o nome nas duas pontas, em `PLANTA-MALHA-EIXOS`. Em mm
+ * reais, com o tamanho proporcional à planta — a mesma régua das cotas. Linha contínua: tipo de linha traço-ponto
+ * exige tabela LTYPE, e a camada própria já deixa quem recebe aplicar o seu.
+ */
+function entidadesDosEixosDaMalha(model: BlueprintModel): string {
+  const eixos = model.eixos ?? [];
+  if (eixos.length === 0) return '';
+  const escala = Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
+  const RAIO = escala * 0.5;
+  const ALTURA = escala * 0.35;
+  let saida = '';
+  for (const e of eixos) {
+    saida += linha(CAMADAS.MALHA_EIXOS, e.a, e.b);
+    if (!e.nome) continue;
+    const comp = Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y) || 1;
+    const ux = (e.b.x - e.a.x) / comp;
+    const uy = (e.b.y - e.a.y) / comp;
+    for (const [p, s] of [[e.a, -1], [e.b, 1]] as const) {
+      const c = { x: p.x + ux * s * RAIO, y: p.y + uy * s * RAIO };
+      saida += circulo(CAMADAS.MALHA_EIXOS, c, RAIO);
+      saida += texto(CAMADAS.MALHA_EIXOS, { x: c.x - e.nome.length * ALTURA * 0.3, y: c.y - ALTURA / 2 }, e.nome, ALTURA);
+    }
+  }
+  return saida;
+}
+
+/**
  * Cotas como LINE + TEXT, não como entidade DIMENSION.
  *
  * DIMENSION exige um DIMSTYLE completo e um bloco de geometria associado; se
@@ -1176,26 +1223,35 @@ function entidadesDeCota(model: BlueprintModel): string {
 
   // Afastamentos em mm REAIS — no CAD tudo é 1:1. Proporcionais ao tamanho da
   // planta para não sumirem numa casa grande nem dominarem numa pequena.
-  const escala = Math.max(500, ...model.walls.map((w) => wallLength(w))) / 10;
+  // A divisa do lote também conta (07/10/2026): sem parede nenhuma, o estudo de massa ficava com a escala mínima.
+  const escala = Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
   const PASSO = escala * 0.8;
   const FOLGA = escala * 0.6;
   const ALTURA = escala * 0.35;
+  // Tique e linha de chamada (07/10/2026), na MESMA proporção do PDF: lá o passo é 5 mm de papel, o tique 1,2 mm, a
+  // folga da chamada 1 mm e a ultrapassagem 1,5 mm (`LINHA_DE_CHAMADA`).
+  const mmPorMmDePapel = PASSO / 5;
+  const TIQUE = 1.2 * mmPorMmDePapel;
+  const FOLGA_DA_CHAMADA = LINHA_DE_CHAMADA.folgaPapelMm * mmPorMmDePapel;
+  const ULTRAPASSA = LINHA_DE_CHAMADA.ultrapassaPapelMm * mmPorMmDePapel;
 
-  for (const c of cadeiasDoModelo(model)) {
+  const desenharLado = (lado: LadoDoContorno, faceMm: number, cadeias: [SegmentoDeCota[], number][]) => {
     const desenhar = (
       segmentos: { de: number; ate: number; rotulo: string }[],
       nivel: number,
     ) => {
       const afasta = FOLGA + PASSO * nivel;
       for (const seg of segmentos) {
-        const a = pontoDaCota(c.lado, seg.de, afasta);
-        const b = pontoDaCota(c.lado, seg.ate, afasta);
+        const a = pontoDaCota(lado, seg.de, afasta);
+        const b = pontoDaCota(lado, seg.ate, afasta);
         saida += linha(CAMADAS.COTAS, a, b);
+        // Tique a 45° nas duas pontas — a marca de fim de cota que o PDF já tinha.
+        for (const p of [a, b]) saida += linha(CAMADAS.COTAS, { x: p.x - TIQUE / 2, y: p.y - TIQUE / 2 }, { x: p.x + TIQUE / 2, y: p.y + TIQUE / 2 });
         // Texto no meio, empurrado mais um pouco para fora para não montar na
         // linha. Sem rotação: o DXF guardaria o ângulo, mas o leitor que abre
         // com estilo próprio pode ignorá-lo, e número deitado é legível.
         const meio = pontoDaCota(
-          c.lado,
+          lado,
           (seg.de + seg.ate) / 2,
           afasta + ALTURA * 0.4,
         );
@@ -1203,10 +1259,30 @@ function entidadesDeCota(model: BlueprintModel): string {
       }
     };
 
-    desenhar(c.aberturas, AFASTAMENTO_COTA.aberturas - 1);
-    desenhar(c.internas, AFASTAMENTO_COTA.internas - 1);
-    desenhar(c.parcial, AFASTAMENTO_COTA.parcial - 1);
-    desenhar([c.total], AFASTAMENTO_COTA.total - 1);
+    for (const [segmentos, nivel] of cadeias) desenhar(segmentos, nivel);
+
+    // LINHAS DE CHAMADA: da face do objeto + folga até além da linha mais externa que quebra ali — a regra do PDF.
+    const inicio = faceMm + FOLGA_DA_CHAMADA;
+    for (const ch of chamadasDoLado(cadeias.map(([segmentos, nivel]) => ({ segmentos, nivel })))) {
+      const fim = FOLGA + PASSO * ch.nivel + ULTRAPASSA;
+      if (fim > inicio) saida += linha(CAMADAS.COTAS, pontoDaCota(lado, ch.t, inicio), pontoDaCota(lado, ch.t, fim));
+    }
+  };
+
+  for (const nivel of model.levels) {
+    const dasParedes = cadeiasPorLado(model, nivel);
+    for (const c of dasParedes) {
+      desenharLado(c.lado, c.faceExternaMm, [
+        [c.aberturas, AFASTAMENTO_COTA.aberturas - 1],
+        [c.internas, AFASTAMENTO_COTA.internas - 1],
+        [c.parcial, AFASTAMENTO_COTA.parcial - 1],
+        [[c.total], AFASTAMENTO_COTA.total - 1],
+      ]);
+    }
+    // As cotas do LOTE, por fora da divisa — a mesma conta da tela e do PDF.
+    for (const c of cadeiasDoContorno(anelDoLoteFechado(model.boundaries.filter((b) => b.levelId === nivel.id)), [], dasParedes)) {
+      desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
+    }
   }
 
   return saida;

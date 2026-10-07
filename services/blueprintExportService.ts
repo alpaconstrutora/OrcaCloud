@@ -259,6 +259,16 @@ class DesenhistaCanvas implements Desenhista {
     this.ctx.restore();
   }
 
+  circulo(cx: number, cy: number, raio: number, e: EstiloTraco, preenchimento: string): void {
+    this.ctx.beginPath();
+    this.ctx.arc(cx * this.k, cy * this.k, raio * this.k, 0, Math.PI * 2);
+    this.ctx.fillStyle = preenchimento;
+    this.ctx.fill();
+    this.ctx.strokeStyle = e.cor;
+    this.ctx.lineWidth = Math.max(0.5, e.espessuraMm * this.k);
+    this.ctx.stroke();
+  }
+
   linha(x1: number, y1: number, x2: number, y2: number, e: EstiloTraco): void {
     this.ctx.strokeStyle = e.cor;
     // Traço de espessura zero some; meio pixel é o mínimo que ainda aparece.
@@ -313,6 +323,13 @@ class DesenhistaPdf implements Desenhista {
   }
   fimDoRecorte(): void {
     this.doc.restoreGraphicsState();
+  }
+
+  circulo(cx: number, cy: number, raio: number, e: EstiloTraco, preenchimento: string): void {
+    this.doc.setDrawColor(e.cor);
+    this.doc.setFillColor(preenchimento);
+    this.doc.setLineWidth(Math.max(0.05, e.espessuraMm));
+    this.doc.circle(cx, cy, raio, 'FD');
   }
 
   linha(x1: number, y1: number, x2: number, y2: number, e: EstiloTraco): void {
@@ -939,6 +956,7 @@ export function montarDxf(
     revisao: o.revisao,
     hash: o.hash,
     cotas: o.cotas,
+    eixos: o.eixos,
     eletrica: o.eletrica,
     hipotesesEletricas: o.hipotesesEletricas,
     redes: o.redesNoDxf,

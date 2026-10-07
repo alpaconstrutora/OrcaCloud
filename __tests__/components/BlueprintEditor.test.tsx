@@ -7558,3 +7558,78 @@ describe('BlueprintEditor · Gerar massa · folga até o recuo', () => {
     expect(within(tela).getByLabelText('Vagas em fila: manobra entre vagas (mm)')).toHaveValue(1000);
   });
 });
+
+/**
+ * EIXOS AUTOMÁTICOS + "Eixos" em Exibir (07/10/2026): *"veja que também tem eixos identificados com números e letras.
+ * opção de exibir ou não eixos"*.
+ */
+describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('sem edificação: hipóteses na gaveta e "Criar 0 eixo(s)" desligado dizendo por quê', async () => {
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^eixos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer).toHaveTextContent(/hipóteses da malha/i);
+    expect(drawer).toHaveTextContent(/pilares automáticos/i);
+    expect(within(drawer).getByRole('spinbutton', { name: /além do desenho/i })).toHaveValue(3);
+    expect(within(drawer).getByRole('spinbutton', { name: /parede mínima/i })).toHaveValue(1.5);
+    expect(within(drawer).getByRole('spinbutton', { name: /juntar linhas a menos de/i })).toHaveValue(10);
+    const criar = within(drawer).getByRole('button', { name: /^criar 0 eixo/i });
+    expect(criar).toBeDisabled();
+    expect(criar).toHaveAttribute('title', expect.stringMatching(/Desenhe paredes ou blocos/));
+  });
+
+  it('com paredes: prévia A, B / 1, 2, 3; "Criar" grava num passo só e um Desfazer volta tudo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(0, 2000, 6000, 2000)]).model,
+    );
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    await userEvent.setup().click(botao(/^eixos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    const linhas = within(within(drawer).getByRole('table', { name: /prévia dos eixos/i })).getAllByRole('row').slice(1);
+    expect(linhas.map((l) => l.textContent)).toEqual([
+      expect.stringMatching(/^AVertical.*x = 0,00/),
+      expect.stringMatching(/^BVertical.*x = 6,00/),
+      expect.stringMatching(/^1Horizontal.*y = 4,00/),
+      expect.stringMatching(/^2Horizontal.*y = 2,00/),
+      expect.stringMatching(/^3Horizontal.*y = 0,00/),
+    ]);
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^criar 5 eixo/i }));
+    expect(drawer).toHaveTextContent(/5 eixo\(s\) criado\(s\): A, B, 1, 2, 3/);
+    expect(drawer).toHaveTextContent(/todas as linhas da edificação já têm eixo/i);
+    // UM desfazer devolve os cinco: o lote foi um passo só.
+    await userEvent.setup().click(botao(/^desfazer/i));
+    expect(within(await screen.findByRole('dialog')).getByRole('button', { name: /^criar 5 eixo/i })).toBeEnabled();
+  });
+
+  it('Exibir › "Eixos": desligado sem eixo (com o motivo); com eixo nasce ligado e alterna a chave guardada', async () => {
+    await montar();
+    await abrirAba(/^vista$/i);
+    await userEvent.click(botao(/exibir/i));
+    const semEixo = screen.getByRole('menuitemcheckbox', { name: /^eixos$/i });
+    expect(semEixo).toBeDisabled();
+    expect(semEixo).toHaveAttribute('title', expect.stringMatching(/Não há eixo no estudo/));
+  });
+
+  it('Exibir › "Eixos" com eixo no estudo: ligado por padrão; clicar grava a escolha', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    loadBranchModel.mockResolvedValue(k.applyCommand(nivel.model, { type: 'AddEixo', a: k.point(0, -1000), b: k.point(0, 5000) }).model);
+    await montar();
+    await abrirAba(/^vista$/i);
+    await userEvent.click(botao(/exibir/i));
+    await waitFor(() => expect(screen.getByRole('menuitemcheckbox', { name: /^eixos$/i })).toBeEnabled());
+    const item = screen.getByRole('menuitemcheckbox', { name: /^eixos$/i });
+    expect(item).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(item);
+    expect(localStorage.getItem('blueprint:mostrarEixos')).toBe('false');
+  });
+});

@@ -47,8 +47,13 @@ import type { ProjecaoCorte } from './blueprintCorte';
 import {
   AFASTAMENTO_COTA,
   AVISO_COTA_POR_FACE,
-  cadeiasDoModelo,
+  anelDoLoteFechado,
+  cadeiasDoContorno,
+  cadeiasPorLado,
+  chamadasDoLado,
+  LINHA_DE_CHAMADA,
   pontoDaCota,
+  type LadoDoContorno,
   type SegmentoDeCota,
 } from './blueprintCotas';
 
@@ -133,6 +138,8 @@ export function boundingBox(model: BlueprintModel): {
   const pontos: Point[] = [
     ...model.walls.flatMap((w) => [w.a, w.b]),
     ...model.boundaries.flatMap((b) => [b.a, b.b]),
+    // EIXOS (07/10/2026): eles passam além do desenho e a bolha vai à ponta — fora da caixa, a bolha sairia cortada.
+    ...(model.eixos ?? []).flatMap((e) => [e.a, e.b]),
     // LOTEAMENTO (B4). ⚠️ Sem estas quatro famílias, um loteamento — que não tem
     // parede nenhuma — dá caixa nula, e a prancha sai declarada VAZIA com o
     // desenho inteiro dentro do modelo. O enquadramento tem de ver tudo que
@@ -241,13 +248,18 @@ export interface Desenhista {
   retangulo(x: number, y: number, w: number, h: number, estilo: EstiloTraco): void;
   /** RECORTE (E8.3): tudo desenhado entre os dois fica dentro do retângulo (mm de papel). Opcional: quem não implementa desenha sem recortar. */
   recortar?(x: number, y: number, w: number, h: number): void;
+  /**
+   * CÍRCULO (07/10/2026, a bolha do eixo): contorno no `estilo`, miolo em `preenchimento`. Opcional: sem ele, quem
+   * desenha usa um polígono de 24 lados (`circuloOuPoligono`).
+   */
+  circulo?(cx: number, cy: number, raio: number, estilo: EstiloTraco, preenchimento: string): void;
   fimDoRecorte?(): void;
 }
 
 /** Registra as chamadas em vez de pintar. É como a exportação vira testável. */
 export class DesenhistaDeProva implements Desenhista {
   readonly chamadas: {
-    tipo: 'linha' | 'poligono' | 'texto' | 'retangulo' | 'recortar' | 'fimDoRecorte';
+    tipo: 'linha' | 'poligono' | 'texto' | 'retangulo' | 'recortar' | 'fimDoRecorte' | 'circulo';
     args: unknown[];
   }[] = [];
 
@@ -256,6 +268,9 @@ export class DesenhistaDeProva implements Desenhista {
   }
   fimDoRecorte(): void {
     this.chamadas.push({ tipo: 'fimDoRecorte', args: [] });
+  }
+  circulo(cx: number, cy: number, raio: number, estilo: EstiloTraco, preenchimento: string): void {
+    this.chamadas.push({ tipo: 'circulo', args: [cx, cy, raio, estilo, preenchimento] });
   }
 
   linha(x1: number, y1: number, x2: number, y2: number, estilo: EstiloTraco): void {
@@ -284,6 +299,11 @@ export class DesenhistaDeProva implements Desenhista {
 export const AVISO_HUMANIZADA = 'PLANTA HUMANIZADA — ilustrativa. Mobiliário, acabamentos e vegetação são sugestão; medidas aproximadas. Não vale para execução nem para aprovação legal.';
 
 export interface OpcoesExportacao {
+  /**
+   * EIXOS DA MALHA (07/10/2026) — a linha traço-ponto com a bolha e o nome, como na tela. Segue o "Eixos" de Vista ›
+   * Exibir; ausente = desenha (o padrão da tela). A planta humanizada nunca leva.
+   */
+  eixos?: boolean;
   /**
    * PRANCHAS (E8.3): recorte do modelo em mm (a AMPLIAÇÃO) — a planta desenha
    * só este retângulo, a escala maior, e recorta o que passar da borda.
@@ -661,6 +681,7 @@ export function desenharPlanta(
   if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio, new Set(opcoes.caminhoCriticoDeIncendio ?? []));
   if (opcoes.climatizacao) desenharClimatizacao(d, model, { px, py }, opcoes.denominador, null, opcoes.numerosDeClimatizacao);
 
+  if (opcoes.eixos !== false && !opcoes.humanizada) desenharEixosDaMalha(d, model, px, py);
   if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
 
   // ANOTAÇÕES (E8.1) da planta, por cima de tudo — a última camada, como na tela.
@@ -1474,6 +1495,61 @@ const COR_ELEV_ESCADA = '#cbd5e1';
 const COR_COTA = '#333333';
 const TEXTO_COTA_MM = 2.0;
 
+/** Círculo pelo `Desenhista`: o nativo quando há; senão um polígono de 24 lados (miolo) e o contorno em segmentos. */
+export function circuloOuPoligono(d: Desenhista, cx: number, cy: number, raio: number, estilo: EstiloTraco, preenchimento: string): void {
+  if (d.circulo) {
+    d.circulo(cx, cy, raio, estilo, preenchimento);
+    return;
+  }
+  const n = 24;
+  const pts = Array.from({ length: n }, (_, i) => ({ x: cx + raio * Math.cos((i / n) * Math.PI * 2), y: cy + raio * Math.sin((i / n) * Math.PI * 2) }));
+  d.poligono(pts, preenchimento);
+  for (let i = 0; i < n; i++) d.linha(pts[i].x, pts[i].y, pts[(i + 1) % n].x, pts[(i + 1) % n].y, estilo);
+}
+
+/** Eixo da malha na prancha: o cinza-azulado da tela, em mm de PAPEL. */
+const COR_EIXO_PRANCHA = '#64748b';
+export const BOLHA_DO_EIXO_MM = { raio: 3.5, texto: 2.5 } as const;
+/** Traço-ponto (mm de papel): traço, vazio, ponto, vazio — a convenção de eixo; o `Desenhista` não tem tracejado. */
+const TRACO_PONTO_MM: readonly [number, boolean][] = [
+  [6, true],
+  [1, false],
+  [0.5, true],
+  [1, false],
+];
+
+/**
+ * EIXOS DA MALHA na prancha (07/10/2026) — *"veja que também tem eixos identificados com números e letras"*: a linha
+ * traço-ponto e, nas duas pontas, a BOLHA com o nome (A, B… / 1, 2…), por fora da linha. Sem nome, só a linha.
+ */
+function desenharEixosDaMalha(d: Desenhista, model: BlueprintModel, px: (x: number) => number, py: (y: number) => number): void {
+  const estilo = { espessuraMm: 0.13, cor: COR_EIXO_PRANCHA };
+  for (const e of model.eixos ?? []) {
+    const a = { x: px(e.a.x), y: py(e.a.y) };
+    const b = { x: px(e.b.x), y: py(e.b.y) };
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp < 1e-6) continue;
+    const ux = (b.x - a.x) / comp;
+    const uy = (b.y - a.y) / comp;
+    let t = 0;
+    for (let k = 0; t < comp; k = (k + 1) % TRACO_PONTO_MM.length) {
+      const [tam, cheio] = TRACO_PONTO_MM[k];
+      const fim = Math.min(comp, t + tam);
+      if (cheio) d.linha(a.x + ux * t, a.y + uy * t, a.x + ux * fim, a.y + uy * fim, estilo);
+      t = fim;
+    }
+    if (!e.nome) continue;
+    const { raio, texto } = BOLHA_DO_EIXO_MM;
+    for (const [p, s] of [[a, -1], [b, 1]] as const) {
+      const cx = p.x + ux * s * raio;
+      const cy = p.y + uy * s * raio;
+      circuloOuPoligono(d, cx, cy, raio, { espessuraMm: 0.18, cor: COR_EIXO_PRANCHA }, '#ffffff');
+      // O texto do `Desenhista` ancora à esquerda, na linha de base: centra-se à mão.
+      d.texto(cx - e.nome.length * texto * 0.3, cy + texto * 0.35, e.nome, texto, COR_EIXO_PRANCHA);
+    }
+  }
+}
+
 /**
  * Cadeias de cota externas, uma por direção, mais a cota total por fora.
  *
@@ -1497,15 +1573,19 @@ function desenharCotas(
   const FOLGA = 4;
   const TIQUE = 1.2;
 
-  for (const c of cadeiasDoModelo(model)) {
+  /**
+   * As cadeias de UM lado (`[segmentos, nível]`, nível 0 = a mais perto do desenho) e as linhas de chamada delas, que
+   * nascem na FACE do objeto (`faceMm`, mm reais a partir da linha do lado) — a regra de `LINHA_DE_CHAMADA`.
+   */
+  const desenharLado = (lado: LadoDoContorno, faceMm: number, cadeias: [SegmentoDeCota[], number][]) => {
     // A DIREÇÃO PARA FORA, deduzida no espaço do PAPEL.
     //
     // O papel pode inverter o Y em relação ao modelo, então a normal do kernel
     // não serve direto aqui. Deduzi-la mapeando dois pontos — um no eixo do
     // lado, outro já afastado — funciona qualquer que seja a convenção do
     // enquadramento, e não duplica a regra de "que lado é fora".
-    const base = pontoDaCota(c.lado, 0, 0);
-    const fora = pontoDaCota(c.lado, 0, 1000);
+    const base = pontoDaCota(lado, 0, 0);
+    const fora = pontoDaCota(lado, 0, 1000);
     const bx = px(base.x);
     const by = py(base.y);
     const fx = px(fora.x) - bx;
@@ -1520,8 +1600,8 @@ function desenharCotas(
     ) => {
       const afasta = FOLGA + PASSO * nivel;
       for (const seg of segmentos) {
-        const pa = pontoDaCota(c.lado, seg.de, 0);
-        const pb = pontoDaCota(c.lado, seg.ate, 0);
+        const pa = pontoDaCota(lado, seg.de, 0);
+        const pb = pontoDaCota(lado, seg.ate, 0);
         const x1 = px(pa.x) + nx * afasta;
         const y1 = py(pa.y) + ny * afasta;
         const x2 = px(pb.x) + nx * afasta;
@@ -1543,22 +1623,37 @@ function desenharCotas(
       }
     };
 
-    desenhar(c.aberturas, AFASTAMENTO_COTA.aberturas - 1);
-    desenhar(c.internas, AFASTAMENTO_COTA.internas - 1);
-    desenhar(c.parcial, AFASTAMENTO_COTA.parcial - 1);
-    desenhar([c.total], AFASTAMENTO_COTA.total - 1);
+    for (const [segmentos, nivel] of cadeias) desenhar(segmentos, nivel);
 
-    // Linhas de chamada, ligando o desenho à cota mais externa.
-    const limite = FOLGA + PASSO * (AFASTAMENTO_COTA.total - 1);
-    const quebras = new Set<number>([c.total.de, c.total.ate, ...c.parcial.flatMap((s: SegmentoDeCota) => [s.de, s.ate])]);
-    for (const t of quebras) {
-      const p = pontoDaCota(c.lado, t, 0);
+    // LINHAS DE CHAMADA (07/10/2026): uma por quebra, da FACE do objeto + folga até um pouco além da linha de cota
+    // mais externa que quebra ali — *"o início e fim das cotas encostam aonde inicia e termina a medida"*. Antes
+    // nasciam no EIXO (dentro da parede) e paravam rente à linha mais externa, só nas quebras do total e da parcial.
+    const mmDePapelPorMmReal = norma / 1000;
+    const inicio = faceMm * mmDePapelPorMmReal + LINHA_DE_CHAMADA.folgaPapelMm;
+    for (const ch of chamadasDoLado(cadeias.map(([segmentos, nivel]) => ({ segmentos, nivel })))) {
+      const fim = FOLGA + PASSO * ch.nivel + LINHA_DE_CHAMADA.ultrapassaPapelMm;
+      if (fim <= inicio) continue;
+      const p = pontoDaCota(lado, ch.t, 0);
       const qx = px(p.x);
       const qy = py(p.y);
-      d.linha(qx, qy, qx + nx * limite, qy + ny * limite, {
-        espessuraMm: 0.08,
-        cor: '#999999',
-      });
+      d.linha(qx + nx * inicio, qy + ny * inicio, qx + nx * fim, qy + ny * fim, { espessuraMm: 0.08, cor: '#999999' });
+    }
+  };
+
+  for (const nivel of model.levels) {
+    const dasParedes = cadeiasPorLado(model, nivel);
+    for (const c of dasParedes) {
+      desenharLado(c.lado, c.faceExternaMm, [
+        [c.aberturas, AFASTAMENTO_COTA.aberturas - 1],
+        [c.internas, AFASTAMENTO_COTA.internas - 1],
+        [c.parcial, AFASTAMENTO_COTA.parcial - 1],
+        [[c.total], AFASTAMENTO_COTA.total - 1],
+      ]);
+    }
+    // AS COTAS DO LOTE (07/10/2026), por fora da divisa — a mesma conta da tela (`cadeiasDoContorno`). Sem os blocos
+    // de massa, que a prancha não desenha: o lado do lote reparte só pelo contorno das paredes.
+    for (const c of cadeiasDoContorno(anelDoLoteFechado(model.boundaries.filter((b) => b.levelId === nivel.id)), [], dasParedes)) {
+      desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
     }
   }
 }

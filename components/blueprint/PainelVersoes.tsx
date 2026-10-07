@@ -68,7 +68,10 @@ export default function PainelVersoes({
   pranchasIniciais,
   hipotesesDeIncendio,
   hipotesesDeClimatizacao,
+  mostrarEixos,
 }: {
+  /** 07/10/2026: o "Eixos" de Vista › Exibir — a prancha e o DXF levam os eixos da malha como a tela. Ausente = sim. */
+  mostrarEixos?: boolean;
   /** E8.1: as premissas de incêndio do estudo — o quadro-resumo da folha de legenda de incêndio sai delas. */
   hipotesesDeIncendio?: import('../../utils/blueprintIncendioClassificacao').HipotesesIncendio;
   /** E9.3: as premissas de climatização do estudo — a lista de materiais (folha e aba) sai delas. */
@@ -389,6 +392,7 @@ export default function PainelVersoes({
       // procedência em `Pset_OpuraPlanta`; as outras saídas ignoram.
       studyId: study.id,
       cotas,
+      eixos: mostrarEixos,
       // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
       // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
       eletrica: comEletrica || undefined,

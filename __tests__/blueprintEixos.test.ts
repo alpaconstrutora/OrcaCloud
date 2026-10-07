@@ -22,7 +22,7 @@ function nivel() {
 }
 
 describe('AddEixo · SetEixoProps · MoveEixoVertex · DeleteEixo', () => {
-  it('horizontal ganha letra (A, B…), vertical ganha número (1, 2…); nome dado vale; vazio é linha de referência', () => {
+  it('VERTICAL ganha letra (A, B…), HORIZONTAL ganha número (1, 2…) — a convenção da prancha de referência; nome dado vale; vazio é linha de referência', () => {
     let { m } = nivel();
     m = applyBatch(m, [
       { type: 'AddEixo', a: point(-1000, 0), b: point(9000, 0) },
@@ -32,7 +32,7 @@ describe('AddEixo · SetEixoProps · MoveEixoVertex · DeleteEixo', () => {
       { type: 'AddEixo', a: point(3000, -1000), b: point(3000, 5000), nome: 'B1' },
       { type: 'AddEixo', a: point(-1000, 2000), b: point(9000, 2000), nome: '' },
     ]).model;
-    expect(m.eixos.map((e) => e.nome)).toEqual(['A', 'B', '1', '2', 'B1', '']);
+    expect(m.eixos.map((e) => e.nome)).toEqual(['1', '2', 'A', 'B', 'B1', '']);
     const e1 = m.eixos[2];
     m = applyCommand(m, { type: 'SetEixoProps', eixoId: e1.id, nome: '  C  ' }).model;
     expect(m.eixos[2].nome).toBe('C');

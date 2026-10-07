@@ -1343,7 +1343,8 @@ export interface Agua {
  * está sobre o eixo B".
  *
  * `nome` é o que a prancha escreve na bolha das pontas. Convenção sugerida
- * pelo comando: horizontal ganha letra, vertical ganha número — palpite de
+ * pelo comando (desde 07/10/2026, a da planta de referência do usuário): VERTICAL ganha letra, HORIZONTAL ganha
+ * número — palpite de
  * rótulo, o usuário troca. Dois eixos com o mesmo nome não quebram nada.
  *
  * Planos e linhas de referência (P1 do roadmap) são eixos sem nome: o mesmo
@@ -4005,6 +4006,31 @@ export function findEixo(model: BlueprintModel, id: ObjectId): Eixo {
 }
 
 export const MAX_NOME_DE_EIXO = 8;
+
+/** O i-ésimo nome de LETRA de eixo (0 → A … 25 → Z, 26 → A1, 27 → B1…). */
+export function letraDoEixo(i: number): string {
+  return String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : '');
+}
+
+/**
+ * O eixo é VERTICAL (corre mais em Y que em X)? A convenção da prancha (07/10/2026, a planta de referência do
+ * usuário): vertical ganha LETRA (A, B… da esquerda para a direita), horizontal ganha NÚMERO (1, 2… de cima para baixo).
+ */
+export function eixoEhVertical(a: Point, b: Point): boolean {
+  return Math.abs(b.y - a.y) > Math.abs(b.x - a.x);
+}
+
+/** O próximo nome livre da família do eixo — letra para o vertical, número para o horizontal. */
+export function proximoNomeDeEixo(usados: ReadonlySet<string>, vertical: boolean): string {
+  if (vertical) {
+    let i = 0;
+    while (usados.has(letraDoEixo(i))) i++;
+    return letraDoEixo(i);
+  }
+  let i = 1;
+  while (usados.has(String(i))) i++;
+  return String(i);
+}
 
 export function findRestricao(model: BlueprintModel, id: ObjectId): Restricao {
   const r = (model.restricoes ?? []).find((x) => x.id === id);

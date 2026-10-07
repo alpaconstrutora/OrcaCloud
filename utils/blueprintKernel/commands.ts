@@ -177,6 +177,8 @@ import {
   MAX_NUMERO_DE_UNIDADE,
   MAX_TIPOLOGIA_DE_UNIDADE,
   MAX_NOME_DE_EIXO,
+  eixoEhVertical,
+  proximoNomeDeEixo,
   type Restricao,
   type TipoDeRestricao,
   type FamiliaRestringivel,
@@ -2225,19 +2227,9 @@ function aplicarSemHash(
       const id = nextId(next, 'eix');
       let nome = command.nome !== undefined ? command.nome.trim().slice(0, MAX_NOME_DE_EIXO) : null;
       if (nome === null) {
-        // Palpite: horizontal = letra, vertical = número, contando só os da
-        // mesma família de nome já existentes (A, B, C… / 1, 2, 3…).
-        const horizontal = Math.abs(command.b.x - command.a.x) >= Math.abs(command.b.y - command.a.y);
-        const usados = new Set((next.eixos ?? []).map((e) => e.nome));
-        if (horizontal) {
-          let i = 0;
-          while (usados.has(String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : ''))) i++;
-          nome = String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : '');
-        } else {
-          let i = 1;
-          while (usados.has(String(i))) i++;
-          nome = String(i);
-        }
+        // Palpite: VERTICAL = letra, HORIZONTAL = número (07/10/2026 — era o contrário; a planta de referência do
+        // usuário tem A–D nos verticais e 1–7 nos horizontais), contando só os da mesma família já existentes.
+        nome = proximoNomeDeEixo(new Set((next.eixos ?? []).map((e) => e.nome)), eixoEhVertical(command.a, command.b));
       }
       next.eixos = [
         ...(next.eixos ?? []),

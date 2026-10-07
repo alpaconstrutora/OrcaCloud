@@ -35,6 +35,8 @@ export interface CamadasDaPlanta {
   envelope: boolean;
   cotaAltoContraste: boolean;
   mobiliario: boolean;
+  /** 07/10/2026: os eixos da malha (linha traço-ponto com a bolha e o nome). Ausente em template antigo → ligado. */
+  eixos: boolean;
   // `eletricaIluminacao`/`eletricaForca` (E5.1) viraram subcamadas de
   // `ConfiguracaoDeVista.disciplinas` (04/10/2026). Template gravado antes
   // ainda os traz no JSONB — `configuracaoDaColuna` os converte.
@@ -60,7 +62,7 @@ export interface ConfiguracaoDeVista {
 }
 
 export const CONFIGURACAO_PADRAO: ConfiguracaoDeVista = {
-  planta: { medidas: false, medidasLoteMassa: true, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false },
+  planta: { medidas: false, medidasLoteMassa: true, camadas: false, cotas: false, cotaInterna: false, circuitos: false, rotulos: true, grade: true, preenchimento: true, preenchimentoTerreno: true, curvasDeNivel: true, envelope: true, cotaAltoContraste: false, mobiliario: false, eixos: true },
   modoDeCor: 'NENHUM',
   vista3d: { laje: false, arestas: true, armadura: false, terreno: false, envelope: true },
   estilo3d: 'SOMBREADO',
@@ -119,6 +121,7 @@ const ROTULO_PLANTA: Record<keyof CamadasDaPlanta, string> = {
   envelope: 'Envelope construtivo',
   cotaAltoContraste: 'Cota em alto contraste',
   mobiliario: 'Mobiliário mínimo',
+  eixos: 'Eixos',
 };
 const ROTULO_3D: Record<keyof Camadas3d, string> = { laje: 'Laje (3D)', arestas: 'Arestas (3D)', armadura: 'Armadura (3D)', terreno: 'Terreno (3D)', envelope: 'Envelope (3D)' };
 

@@ -364,6 +364,8 @@ import {
 } from '../../services/blueprintOpeningTypeService';
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import PainelEixoSelecionado from './PainelEixoSelecionado';
+import PainelEixosAutomaticos from './PainelEixosAutomaticos';
+import { HIPOTESES_EIXOS_PADRAO, normalizarHipotesesDeEixos, propostaDeEixos, type HipotesesDeEixos } from '../../utils/blueprintEixosAutomaticos';
 import PainelRestricoes from './PainelRestricoes';
 import FichaDoElemento from './FichaDoElemento';
 import { fichaDoElemento } from '../../utils/blueprintFicha';
@@ -1102,6 +1104,8 @@ const ROTULO_DA_TAREFA = {
   // O lançamento automático de pilares (15/09/2026): um pilar por encontro de
   // paredes e nos vãos longos; prévia tracejada no desenho, um lote, Ctrl+Z.
   pilares: 'Pilares automáticos',
+  // Eixos automáticos (07/10/2026): a malha A, B… / 1, 2… a partir das paredes e dos blocos; prévia, um lote, Ctrl+Z.
+  eixos: 'Eixos automáticos',
   // Vigas e lajes (16/09/2026): o mesmo molde, uma gaveta cada.
   vigas: 'Vigas automáticas',
   lajes: 'Lajes automáticas',
@@ -1338,6 +1342,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'eletrodutos',
   'circuitos',
   'pilares',
+  'eixos',
   'vigas',
   'lajes',
   'fundacoes',
@@ -2088,6 +2093,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     'blueprint:mostrarMedidasLoteMassa',
     true,
   );
+  /**
+   * EIXOS (07/10/2026): *"opção de exibir ou não eixos"*. Oculto, o eixo não é desenhado nem dá encaixe; continua no
+   * modelo (e nos Pilares automáticos). Nasce LIGADO — eixo é referência que quem desenhou quer ver.
+   */
+  const [mostrarEixos, setMostrarEixos] = usePersistedState('blueprint:mostrarEixos', true);
   /**
    * Pinta as faixas de material dentro da espessura de cada parede.
    *
@@ -3539,6 +3549,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         envelope: mostrarEnvelope,
         cotaAltoContraste,
         mobiliario: mostrarMobiliario,
+        eixos: mostrarEixos,
       },
       modoDeCor,
       vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
@@ -3547,7 +3558,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       fase: filtroDeFase,
       disciplinas: camadas,
     }),
-    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, camadas, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
+    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEixos, camadas, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
@@ -3565,6 +3576,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       setMostrarEnvelope(c.planta.envelope);
       setCotaAltoContraste(c.planta.cotaAltoContraste);
       setMostrarMobiliario(c.planta.mobiliario);
+      setMostrarEixos(c.planta.eixos);
       setCamadasSalvas(c.disciplinas);
       setModoDeCor(c.modoDeCor);
       setCoresPorAmbiente(c.modoDeCor === 'AMBIENTE');
@@ -8547,6 +8559,29 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * está aberta, o canvas desenha os pilares propostos tracejados; gravar é um
    * `runBatch` só, provado antes por `conferirPlanoDePilares`.
    */
+  /**
+   * EIXOS AUTOMÁTICOS (07/10/2026) — ver `blueprintEixosAutomaticos.ts`. As três distâncias são hipóteses persistidas;
+   * a proposta só é calculada com a gaveta aberta. Gravar é um `runBatch` de `AddEixo` (um Ctrl+Z).
+   */
+  const [hipDeEixosSalvas, setHipDeEixosSalvas] = usePersistedState<Partial<HipotesesDeEixos>>('blueprint:eixosAutomaticos', HIPOTESES_EIXOS_PADRAO);
+  const hipotesesDeEixos = useMemo(() => normalizarHipotesesDeEixos(hipDeEixosSalvas), [hipDeEixosSalvas]);
+  const propostaDeEixosDoNivel = useMemo(
+    () => (tarefaAberta === 'eixos' && levelId ? propostaDeEixos(editor.model, levelId, hipotesesDeEixos) : null),
+    [tarefaAberta, editor.model, levelId, hipotesesDeEixos],
+  );
+  const [resultadoDeEixos, setResultadoDeEixos] = useState<{ ok: boolean; texto: string } | null>(null);
+  const criarEixos = () => {
+    if (!propostaDeEixosDoNivel || propostaDeEixosDoNivel.comandos.length === 0) return;
+    const nomes = propostaDeEixosDoNivel.eixos.map((e) => e.nome).join(', ');
+    const criados = editor.runBatch(propostaDeEixosDoNivel.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResultadoDeEixos({ ok: criados.length > 0, texto: criados.length > 0 ? `${criados.length} eixo(s) criado(s): ${nomes} — Ctrl+Z desfaz.` : 'Nenhum eixo foi criado.' });
+  };
+  /** A prévia tracejada no canvas: só com a gaveta aberta. Identidade estável para o canvas não redesenhar em loop. */
+  const eixosPrevistos = useMemo(
+    () => (propostaDeEixosDoNivel && propostaDeEixosDoNivel.eixos.length > 0 ? propostaDeEixosDoNivel.eixos.map((e) => ({ a: e.a, b: e.b, nome: e.nome })) : undefined),
+    [propostaDeEixosDoNivel],
+  );
   const [hipDePilaresSalvas, setHipDePilaresSalvas] = usePersistedState<{
     vaoMaximoMm: number;
     secao: SecaoSugeridaId;
@@ -8871,6 +8906,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const previaRecolhida =
     drawerRecolhido && tarefaAberta === 'pilares' && planoDePilares
       ? { n: planoDePilares.pilares.length, nome: 'pilar(es)', lancar: lancarPilares, Icone: RectangleVertical }
+      : drawerRecolhido && tarefaAberta === 'eixos' && propostaDeEixosDoNivel
+      ? { n: propostaDeEixosDoNivel.eixos.length, nome: 'eixo(s)', lancar: criarEixos, Icone: Grid3x3 }
       : drawerRecolhido && tarefaAberta === 'vigas' && planoDeVigas
         ? { n: planoDeVigas.vigas.length, nome: 'viga(s)', lancar: lancarVigas, Icone: RectangleHorizontal }
         : drawerRecolhido && tarefaAberta === 'lajes' && planoDeLajes
@@ -11193,6 +11230,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       passam a olhar para ela. */}
                   <Ferramenta atual={editor.tool} valor="eixo" icone={Hash} rotulo="Eixo" onClick={editor.setTool} />
                   <BotaoDoRibbon
+                    icone={Grid3x3}
+                    rotulo="Eixos automáticos"
+                    contagem={tarefaAberta === 'eixos' ? propostaDeEixosDoNivel?.eixos.length || undefined : undefined}
+                    ativo={tarefaAberta === 'eixos'}
+                    onClick={() => alternarTarefa('eixos')}
+                    ajuda="A malha de eixos a partir das paredes e dos blocos — letras nos verticais (A, B…), números nos horizontais (1, 2…); prévia antes de gravar, Ctrl+Z desfaz"
+                  />
+                  <BotaoDoRibbon
                     icone={RectangleVertical}
                     rotulo="Pilares automáticos"
                     contagem={planoDePilares?.pilares.length || undefined}
@@ -12785,6 +12830,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                             alternar: () => setMostrarMedidasLoteMassa((v) => !v),
                             ajuda: 'Cotas por fora da divisa: cada lado repartido pela massa e o total do lado — o mesmo item da Planta.',
                           },
+                          {
+                            chave: 'eixos-vista',
+                            rotulo: 'Eixos',
+                            icone: Hash,
+                            ligado: mostrarEixos,
+                            alternar: () => setMostrarEixos((v) => !v),
+                            ajuda: 'Os eixos da malha (A, B… / 1, 2…) com a bolha nas pontas — o mesmo item da Planta.',
+                          },
                         ]
                       : [
                         {
@@ -12947,6 +13000,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       alternar: () => setMostrarCotas((v) => !v),
                       ajuda:
                         'Cota os LADOS da edificação, na borda do desenho: total pela face externa, parcial nos eixos das divisórias. Parede do miolo que não encosta no contorno não aparece aqui.',
+                    },
+                    {
+                      chave: 'eixos',
+                      rotulo: 'Eixos',
+                      icone: Hash,
+                      ligado: mostrarEixos,
+                      alternar: () => setMostrarEixos((v) => !v),
+                      desabilitado: (editor.model.eixos ?? []).length === 0,
+                      ajuda:
+                        (editor.model.eixos ?? []).length === 0
+                          ? 'Não há eixo no estudo: gere a malha em Arquitetura › Estrutural › Eixos automáticos, ou desenhe com a ferramenta Eixo.'
+                          : 'Os eixos da malha — linha traço-ponto com a bolha e o nome (A, B… / 1, 2…) nas pontas. Oculto, o eixo não é desenhado nem dá encaixe, mas continua valendo para os Pilares automáticos.',
                     },
                     {
                       chave: 'interna',
@@ -14059,6 +14124,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               mostrarMedidasParedes={ajusteDaVista ? false : (mostrarMedidas && arquiteturaAVista)}
               // Também nas vistas (Situação, Implantação): é nelas que o lote e a massa mais importam.
               mostrarMedidasLoteMassa={(mostrarMedidasLoteMassa && terrenoAVista)}
+              mostrarEixos={mostrarEixos}
+              eixosPrevistos={eixosPrevistos}
               mostrarCamadasParedes={ajusteDaVista ? false : (mostrarCamadas && arquiteturaAVista)}
               mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : (mostrarCotas && arquiteturaAVista)}
               mostrarCotaInterna={ajusteDaVista ? false : (mostrarCotaInterna && arquiteturaAVista)}
@@ -14338,6 +14405,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 // clicado noutra vista: o estado inicial é lido uma vez só.
                 key={pranchaParaExportar?.join('|') ?? 'versoes'}
                 pranchasIniciais={pranchaParaExportar}
+                mostrarEixos={mostrarEixos}
                 hipotesesDeIncendio={incendioDoEstudo.hipoteses}
                 hipotesesDeClimatizacao={climatizacaoDoEstudo.hipoteses}
                 study={study}
@@ -15040,6 +15108,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'eletrodutos' && <Cable className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'circuitos' && <CircuitBoard className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'pilares' && <RectangleVertical className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'eixos' && <Grid3x3 className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'vigas' && <RectangleHorizontal className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'lajes' && <Layers className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'acabamentos' && <Layers className="h-5 w-5 text-blue-700" />}
@@ -15097,6 +15166,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Sol por data e hora solar (latitude da georreferência), horas de sol por fachada e por ambiente nas três datas de referência, sombra dos vizinhos declarados e ventilação cruzada. Ligue "Sol e sombras no 3D" e mude a hora para ver a sombra andar.'}
             {tarefaAberta === 'grafo' &&
               'A planta do pavimento como rede: cada ambiente é um nó; parede dividida e porta são as arestas. Percursos medidos pelos centros das portas; fachada e orientação pelo norte do desenho. Só leitura.'}
+            {tarefaAberta === 'eixos' &&
+              'A malha de eixos do pavimento ativo, a partir das paredes e dos blocos de massa — letras nos verticais, números nos horizontais. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'pilares' &&
               'Pilar em cada encontro de paredes e nos vãos longos, no pavimento ativo. Prévia tracejada no desenho; gravar é um passo só, e Ctrl+Z desfaz.'}
             {tarefaAberta === 'vigas' &&
@@ -17313,6 +17384,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             </div>
           )}
 
+          {tarefaAberta === 'eixos' && propostaDeEixosDoNivel && (
+            <PainelEixosAutomaticos
+              proposta={propostaDeEixosDoNivel}
+              hipoteses={hipotesesDeEixos}
+              onHipotese={(k, v) => setHipDeEixosSalvas((h) => ({ ...h, [k]: v }))}
+              onVerPrevia={() => setDrawerRecolhido(true)}
+              resultado={resultadoDeEixos}
+            />
+          )}
+
           {tarefaAberta === 'pilares' && planoDePilares && (
             <div className="space-y-4">
               {/* As HIPÓTESES, escritas — o que é norma e o que é escolha, separados. */}
@@ -17996,6 +18077,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               </button>
             </>
           )}
+          {tarefaAberta === 'eixos' && propostaDeEixosDoNivel && (
+            <>
+              <span className="mr-auto truncate text-xs text-slate-500">
+                {propostaDeEixosDoNivel.eixos.length === 0 ? 'Nada a criar.' : `${propostaDeEixosDoNivel.eixos.map((e) => e.nome).join(', ')}.`}
+              </span>
+              {/* Botão desligado SEMPRE diz o motivo (no `title`; o corpo da gaveta também o escreve). */}
+              <button
+                type="button"
+                onClick={criarEixos}
+                disabled={propostaDeEixosDoNivel.eixos.length === 0}
+                title={propostaDeEixosDoNivel.motivoVazio ?? 'Cria os eixos propostos num passo só — Ctrl+Z desfaz'}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Grid3x3 className="h-4 w-4" />
+                Criar {propostaDeEixosDoNivel.eixos.length} eixo(s)
+              </button>
+            </>
+          )}
           {tarefaAberta === 'pilares' && planoDePilares && (
             <>
               <span className="mr-auto whitespace-nowrap text-xs text-slate-500">
@@ -18043,7 +18142,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               </button>
             </>
           )}
-          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && tarefaAberta !== 'vigas' && tarefaAberta !== 'lajes' && tarefaAberta !== 'fundacoes' && rotuloDaSelecao && (
+          {tarefaAberta !== 'tomadas' && tarefaAberta !== 'eletrodutos' && tarefaAberta !== 'circuitos' && tarefaAberta !== 'pilares' && tarefaAberta !== 'eixos' && tarefaAberta !== 'vigas' && tarefaAberta !== 'lajes' && tarefaAberta !== 'fundacoes' && rotuloDaSelecao && (
             <span className="mr-auto truncate text-xs text-slate-500">
               Selecionado: {rotuloDaSelecao}
             </span>

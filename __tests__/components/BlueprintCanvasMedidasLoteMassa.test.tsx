@@ -151,4 +151,26 @@ describe('BlueprintCanvas · medidas do lote e da massa', () => {
     desenhar(soBloco);
     expect(textos()).toEqual(expect.arrayContaining(['10,00', '20,00']));
   });
+
+  /**
+   * LINHAS DE CHAMADA (07/10/2026) — *"o início e fim das cotas encostam aonde inicia e termina a medida"*. Na escala
+   * 0,05 a chamada nasce 4 px fora da divisa e vai 4 px além da linha que usa: até a parcial (10 + 22 px) mede 32 px;
+   * até o total (10 + 44 px), 54 px.
+   */
+  it('cada quebra do lote ganha linha de chamada: 32 px até a parcial, 54 px até o total', () => {
+    desenhar(cena());
+    const segmentos: number[] = [];
+    chamadas.forEach((c, i) => {
+      const prox = chamadas[i + 1];
+      if (c.metodo !== 'moveTo' || prox?.metodo !== 'lineTo') return;
+      const [x1, y1] = c.args as number[];
+      const [x2, y2] = prox.args as number[];
+      if (Math.abs(x1 - x2) > 1e-6 && Math.abs(y1 - y2) > 1e-6) return; // só as retas (o lote é ortogonal)
+      segmentos.push(Math.round(Math.hypot(x2 - x1, y2 - y1) * 100) / 100);
+    });
+    const desenhos = textos().filter((x) => x === '30,00').length / 2;
+    // Parcial: 2 quebras da torre em cada um dos 4 lados. Total: os 2 cantos de cada lado.
+    expect(segmentos.filter((l) => l === 32).length / desenhos).toBe(8);
+    expect(segmentos.filter((l) => l === 54).length / desenhos).toBe(8);
+  });
 });

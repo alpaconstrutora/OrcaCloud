@@ -1044,3 +1044,108 @@ describe('cadeiasDoLote', () => {
     }
   });
 });
+
+/**
+ * LINHAS DE CHAMADA (07/10/2026) — *"veja que o início e fim das cotas encostam aonde inicia e termina a medida"*.
+ * Uma por quebra do lado, da FACE do objeto (+ folga) até além da linha de cota mais externa que quebra ali; a mesma
+ * regra (`LINHA_DE_CHAMADA`) na tela, no PDF e no DXF.
+ */
+describe('linhas de chamada', () => {
+  /** As LINEs de uma camada do DXF R12, lidas par a par (código / valor). */
+  function linhasDoDxf(dxf: string, camada: string): { a: { x: number; y: number }; b: { x: number; y: number } }[] {
+    const v = dxf.split(/\r?\n/).map((s) => s.trim());
+    const out: { a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+    for (let i = 0; i + 1 < v.length; i += 2) {
+      if (v[i] !== '0' || v[i + 1] !== 'LINE') continue;
+      const campos: Record<string, string> = {};
+      for (let k = i + 2; k + 1 < v.length && v[k] !== '0'; k += 2) campos[v[k]] = v[k + 1];
+      if (campos['8'] !== camada) continue;
+      out.push({ a: { x: Number(campos['10']), y: Number(campos['20']) }, b: { x: Number(campos['11']), y: Number(campos['21']) } });
+    }
+    return out;
+  }
+
+  it('faceExternaMm = meia espessura da parede mais grossa do lado', () => {
+    const { model } = tresAmbientes();
+    for (const c of cadeiasDoModelo(model)) expect(c.faceExternaMm).toBe(T / 2);
+    const { model: m0, levelId } = base();
+    const grossa = applyBatch(m0, [w(levelId, 0, 0, 5000, 0, 300), w(levelId, 5000, 0, 9000, 0), w(levelId, 9000, 0, 9000, 4000), w(levelId, 9000, 4000, 0, 4000), w(levelId, 0, 4000, 0, 0)]).model;
+    const sul = cadeiasDoModelo(grossa).find((c) => c.lado.a.y === 0 && c.lado.b.y === 0)!;
+    expect(sul.faceExternaMm).toBe(150);
+  });
+
+  it('chamadasDoLado: uma por quebra, indo até a cadeia mais externa que quebra ali', async () => {
+    const { chamadasDoLado } = await import('../utils/blueprintCotas');
+    const ch = chamadasDoLado([
+      { segmentos: [{ de: 0, ate: 3000 }, { de: 3000, ate: 9000 }], nivel: 1 },
+      { segmentos: [{ de: 0, ate: 9000.4 }], nivel: 2 },
+    ]);
+    expect(ch).toEqual([
+      { t: 0, nivel: 2 },
+      { t: 3000, nivel: 1 },
+      { t: 9000, nivel: 2 },
+    ]);
+  });
+
+  it('DXF: tique nas pontas e chamada em cada quebra, da face + folga até além da linha', async () => {
+    const { LINHA_DE_CHAMADA, AFASTAMENTO_COTA } = await import('../utils/blueprintCotas');
+    const { model } = tresAmbientes();
+    const dxf = gerarDxf(model, { cotas: true });
+    const linhas = linhasDoDxf(dxf, 'PLANTA-COTAS');
+    // Escala do DXF: o maior comprimento / 10 = 900 → passo 720, folga 540, 144 mm por "mm de papel".
+    const mmPorPapel = (900 * 0.8) / 5;
+    const inicio = -(T / 2 + LINHA_DE_CHAMADA.folgaPapelMm * mmPorPapel);
+    // As chamadas do lado SUL (y = 0, fora = −y): verticais abaixo da fachada.
+    const sul = linhas.filter((l) => Math.abs(l.a.x - l.b.x) < 1e-6 && l.a.y < 0 && l.b.y < 0);
+    const xs = [...new Set(sul.map((l) => Math.round(l.a.x)))].sort((a, b) => a - b);
+    // total (faces externas), parcial (eixos das divisórias) e internas (faces internas).
+    expect(xs).toEqual([-100, 100, 2900, 3000, 3100, 5900, 6000, 6100, 8900, 9100]);
+    for (const l of sul) expect(Math.max(l.a.y, l.b.y)).toBeCloseTo(inicio, 3); // nasce FORA da parede, com folga
+    const linhaDoTotal = -(540 + 720 * (AFASTAMENTO_COTA.total - 1));
+    const doCanto = sul.find((l) => Math.round(l.a.x) === -100)!;
+    expect(Math.min(doCanto.a.y, doCanto.b.y)).toBeCloseTo(linhaDoTotal - LINHA_DE_CHAMADA.ultrapassaPapelMm * mmPorPapel, 3);
+    // Tiques: segmentos a 45°.
+    const tiques = linhas.filter((l) => Math.abs(Math.abs(l.b.x - l.a.x) - Math.abs(l.b.y - l.a.y)) < 1e-6 && l.a.x !== l.b.x);
+    expect(tiques.length).toBeGreaterThan(0);
+  });
+
+  it('PDF: as chamadas nascem afastadas do eixo (na face + folga), não dentro da parede', () => {
+    const { model } = tresAmbientes();
+    const d = new DesenhistaDeProva();
+    const op = { denominador: 100, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-07T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    desenharPlanta(d, model, op, enquadrar(model, 100, PAPEIS[0], true));
+    const chamadas = d.chamadas.filter((c) => c.tipo === 'linha' && (c.args[4] as { cor: string }).cor === '#999999');
+    // 10 quebras em cada lado longo (sul e norte); as laterais de 4 m têm total + 2 internas = 4 quebras.
+    expect(chamadas).toHaveLength(10 + 10 + 4 + 4);
+    // Comprimento de cada uma ≥ do início (face 0,1 mm + folga 1 mm em 1:100) até além da 1ª linha (4 mm + 1,5 mm).
+    for (const c of chamadas) {
+      const [x1, y1, x2, y2] = c.args as number[];
+      expect(Math.hypot(x2 - x1, y2 - y1)).toBeGreaterThan(4 + 1.5 - 1.1 - 1e-6);
+    }
+  });
+
+  it('as cotas do LOTE saem no PDF e no DXF (por fora da divisa, com o total do lado)', () => {
+    const { model: m0, levelId } = base();
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as Command;
+    const model = applyBatch(m0, [
+      d(-2000, -3000, 11000, -3000),
+      d(11000, -3000, 11000, 10000),
+      d(11000, 10000, -2000, 10000),
+      d(-2000, 10000, -2000, -3000),
+      w(levelId, 0, 0, 9000, 0),
+      w(levelId, 9000, 0, 9000, 4000),
+      w(levelId, 9000, 4000, 0, 4000),
+      w(levelId, 0, 4000, 0, 0),
+    ]).model;
+    const papel = new DesenhistaDeProva();
+    const op = { denominador: 100, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-07T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    desenharPlanta(papel, model, op, enquadrar(model, 100, PAPEIS[0], true));
+    const dxf = gerarDxf(model, { cotas: true });
+    // O lote 13 × 13, repartido pelas paredes: 2,00 | 9,00 | 2,00 na frente; 3,00 | 4,00 | 6,00 na lateral.
+    for (const r of ['13,00', '2,00', '9,00', '3,00', '6,00']) {
+      expect(papel.textos(), `"${r}" no PDF`).toContain(r);
+      expect(dxf.includes(`\n${r}\n`) || dxf.includes(`\r\n${r}\r\n`), `"${r}" no DXF`).toBe(true);
+    }
+  });
+});
+

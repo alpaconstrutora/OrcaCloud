@@ -58,7 +58,9 @@ describe('climatização E3 · taxonomia e disciplinas', () => {
       expect(FICHA_DO_PONTO_HIDRAULICO[t].rotulo.length).toBeGreaterThan(2);
       expect(GRUPO_DO_PONTO_HIDRAULICO[t].startsWith('Climatização')).toBe(true);
     }
-    for (const t of [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF'] as const) expect(DISCIPLINAS_DO_PONTO_HIDRAULICO[t]).toEqual(['FRIGORIGENA']);
+    for (const t of [...TIPOS_DE_EVAPORADORA.filter((x) => x !== 'EVAPORADORA_DUTADA'), ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF'] as const) expect(DISCIPLINAS_DO_PONTO_HIDRAULICO[t]).toEqual(['FRIGORIGENA']);
+    // E7 (05/10/2026): a dutada também sopra no duto — a rede de ar (MECANICA) parte dela.
+    expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.EVAPORADORA_DUTADA).toEqual(['FRIGORIGENA', 'MECANICA']);
     for (const t of TIPOS_DE_TERMINAL_DE_AR) expect(DISCIPLINAS_DO_PONTO_HIDRAULICO[t]).toEqual(['MECANICA']);
     expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.BOMBA_DRENO).toEqual(['DRENO_AC']);
     expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.PONTO_DRENO).toEqual(['DRENO_AC']);

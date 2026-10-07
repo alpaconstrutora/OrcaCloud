@@ -440,6 +440,95 @@ export function hipotesesDoVrfDaColuna(raw: unknown): HipotesesDoVrf {
   return saida;
 }
 
+// ─── E7 (05/10/2026): a REDE DE AR — dutos, ventilação e exaustão ────────────
+
+/**
+ * Como a rede de ar é traçada, dimensionada e conferida (E7.2–E7.4). Toda folga
+ * é editável; os números de renovação e exaustão são valores típicos transcritos
+ * de memória — CONFERIR NA NORMA (NBR 16401-3 para a renovação; o código de obras
+ * local para a exaustão de banheiro, cozinha e garagem).
+ */
+export interface HipotesesDoAr {
+  /** Dimensionamento: por velocidade (tronco/ramal) ou por igual atrito (Pa/m). */
+  metodo: 'VELOCIDADE' | 'IGUAL_ATRITO';
+  velocidadeTroncoMs: number;
+  velocidadeRamalMs: number;
+  perdaPorAtritoPaM: number;
+  /** A seção que o traçado e o dimensionamento usam; a retangular com esta altura. */
+  secaoPadrao: 'RETANGULAR' | 'REDONDA';
+  alturaPadraoMm: number;
+  /** Folga do topo do duto ao fundo da viga mais baixa (ou do teto), mm. */
+  folgaSobVigaMm: number;
+  /** Diferença de temperatura do ar de insuflamento, K (vazão = calor sensível ÷ ρ·cp·ΔT). */
+  dtInsuflamentoK: number;
+  /** Pressão estática externa disponível do equipamento, Pa. */
+  pressaoDisponivelPa: number;
+  /** Perda no terminal (difusor/grelha), Pa. */
+  perdaTerminalPa: number;
+  /** Coeficientes de perda localizada: curva e tê/derivação. */
+  kCurva: number;
+  kTe: number;
+  /** Renovação: L/s por pessoa e por m² (NBR 16401-3 — CONFERIR o nível). */
+  renovacaoPorPessoaLs: number;
+  renovacaoPorAreaLsM2: number;
+  /** Exaustão mínima: banheiro/lavabo e cozinha em m³/h; garagem em trocas por hora. */
+  exaustaoBanheiroM3h: number;
+  exaustaoCozinhaM3h: number;
+  exaustaoGaragemTrocasH: number;
+}
+
+export const HIPOTESES_DO_AR_PADRAO: HipotesesDoAr = {
+  metodo: 'VELOCIDADE',
+  velocidadeTroncoMs: 6,
+  velocidadeRamalMs: 4,
+  perdaPorAtritoPaM: 1,
+  secaoPadrao: 'RETANGULAR',
+  alturaPadraoMm: 250,
+  folgaSobVigaMm: 100,
+  dtInsuflamentoK: 10,
+  pressaoDisponivelPa: 150,
+  perdaTerminalPa: 25,
+  kCurva: 0.3,
+  kTe: 0.6,
+  renovacaoPorPessoaLs: 2.5,
+  renovacaoPorAreaLsM2: 0.3,
+  exaustaoBanheiroM3h: 90,
+  exaustaoCozinhaM3h: 180,
+  exaustaoGaragemTrocasH: 6,
+};
+
+type ChaveNumericaDoAr = Exclude<keyof HipotesesDoAr, 'metodo' | 'secaoPadrao'>;
+export const LIMITES_DO_AR: Record<ChaveNumericaDoAr, { min: number; max: number }> = {
+  velocidadeTroncoMs: { min: 1, max: 20 },
+  velocidadeRamalMs: { min: 1, max: 15 },
+  perdaPorAtritoPaM: { min: 0.1, max: 10 },
+  alturaPadraoMm: { min: 100, max: 1500 },
+  folgaSobVigaMm: { min: 0, max: 1000 },
+  dtInsuflamentoK: { min: 3, max: 20 },
+  pressaoDisponivelPa: { min: 10, max: 2000 },
+  perdaTerminalPa: { min: 0, max: 200 },
+  kCurva: { min: 0, max: 3 },
+  kTe: { min: 0, max: 3 },
+  renovacaoPorPessoaLs: { min: 0, max: 30 },
+  renovacaoPorAreaLsM2: { min: 0, max: 5 },
+  exaustaoBanheiroM3h: { min: 0, max: 1000 },
+  exaustaoCozinhaM3h: { min: 0, max: 3000 },
+  exaustaoGaragemTrocasH: { min: 0, max: 30 },
+};
+
+export const FONTE_DO_AR =
+  'Velocidades, perdas localizadas, ΔT de insuflamento e pressão disponível são valores típicos de projeto; renovação e exaustão transcritas de memória — HIPÓTESE. CONFERIR NA NORMA: NBR 16401-3 (renovação), código de obras local (exaustão), catálogo do equipamento (pressão disponível).';
+
+export function hipotesesDoArDaColuna(raw: unknown): HipotesesDoAr {
+  const r = objeto(raw);
+  const p = HIPOTESES_DO_AR_PADRAO;
+  const saida: HipotesesDoAr = { ...p };
+  for (const k of Object.keys(LIMITES_DO_AR) as ChaveNumericaDoAr[]) saida[k] = numeroNaFaixa(r[k], LIMITES_DO_AR[k], p[k]);
+  saida.metodo = r.metodo === 'IGUAL_ATRITO' ? 'IGUAL_ATRITO' : 'VELOCIDADE';
+  saida.secaoPadrao = r.secaoPadrao === 'REDONDA' ? 'REDONDA' : 'RETANGULAR';
+  return saida;
+}
+
 // ─── O conjunto e o leitor da coluna ─────────────────────────────────────────
 
 export interface HipotesesClimatizacao {
@@ -456,6 +545,8 @@ export interface HipotesesClimatizacao {
   linha: HipotesesDaLinha;
   /** E6: os limites do VRF (taxa de combinação, comprimentos, desníveis). */
   vrf: HipotesesDoVrf;
+  /** E7: a rede de ar (dimensionamento, perda de carga, renovação e exaustão). */
+  ar: HipotesesDoAr;
 }
 
 export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
@@ -467,6 +558,7 @@ export const HIPOTESES_CLIMATIZACAO_PADRAO: HipotesesClimatizacao = {
   selecao: HIPOTESES_DE_SELECAO_PADRAO,
   linha: HIPOTESES_DA_LINHA_PADRAO,
   vrf: HIPOTESES_DO_VRF_PADRAO,
+  ar: HIPOTESES_DO_AR_PADRAO,
 };
 
 const numeroNaFaixa = (x: unknown, faixa: { min: number; max: number }, padrao: number): number =>
@@ -519,6 +611,7 @@ export function hipotesesClimatizacaoDaColuna(raw: unknown): HipotesesClimatizac
     selecao: hipotesesDeSelecaoDaColuna(r.selecao),
     linha: hipotesesDaLinhaDaColuna(r.linha),
     vrf: hipotesesDoVrfDaColuna(r.vrf),
+    ar: hipotesesDoArDaColuna(r.ar),
   };
 }
 

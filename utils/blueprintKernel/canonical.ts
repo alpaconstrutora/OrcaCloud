@@ -878,6 +878,8 @@ function projetar(model: BlueprintModel): {
       // Climatização E3.2 (0.92.0): só quando declarados.
       bitolaSuccaoMm: t.bitolaSuccaoMm ?? undefined,
       isolamentoMm: t.isolamentoMm ?? undefined,
+      // Climatização E7.1 (0.93.0): só quando o duto é retangular.
+      alturaDutoMm: t.alturaDutoMm ?? undefined,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? (true as const) : undefined,
       parametros: parametrosCanonicos(t.parametros),
@@ -934,6 +936,8 @@ function projetar(model: BlueprintModel): {
       autonomiaMin: t.autonomiaMin ?? undefined,
       // Climatização E3.1 (0.92.0): a capacidade, só quando declarada; a condensadora vai por índice (segundo passo).
       capacidadeBtuH: t.capacidadeBtuH ?? undefined,
+      // Climatização E7.2 (0.93.0): a vazão de ar, só quando declarada.
+      vazaoM3h: t.vazaoM3h ?? undefined,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? undefined,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -1621,6 +1625,8 @@ export interface CanonicalPayload {
     /** Linha frigorígena: sucção; isolamento. Ausentes sob kernel < 0.92.0 e quando não declarados. */
     bitolaSuccaoMm?: number;
     isolamentoMm?: number;
+    /** Duto retangular: a altura (a largura é a bitola). Ausente sob kernel < 0.93.0 e no duto redondo. */
+    alturaDutoMm?: number;
     /** Lançado pelo sistema e ainda não confirmado. Ausente sob kernel < 0.30.0 e quando falso. */
     sugerido?: true;
     parametros?: Parametros;
@@ -1675,6 +1681,8 @@ export interface CanonicalPayload {
     central?: number;
     /** Climatização: capacidade (BTU/h) e a condensadora (índice). Ausentes sob kernel < 0.92.0 e quando não declaradas. */
     capacidadeBtuH?: number;
+    /** Vazão de ar declarada (m³/h). Ausente sob kernel < 0.93.0 e quando não declarada. */
+    vazaoM3h?: number;
     condensadora?: number;
     /** Reserva técnica de incêndio na caixa de água fria. Ausente sob kernel < 0.81.0 e quando não declarada. */
     volumeRtiL?: number;
@@ -2444,6 +2452,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       ...(t.secaoCalha ? { secaoCalha: t.secaoCalha as SecaoDeCalha, alturaCalhaMm: t.alturaCalhaMm ?? null } : {}),
       ...(t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {}),
       ...(t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {}),
+      ...(t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {}),
       sugerido: t.sugerido ? true : null,
       ...(t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}),
     });
@@ -2483,6 +2492,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       codigoPlaca: t.codigoPlaca ?? null,
       autonomiaMin: t.autonomiaMin ?? null,
       capacidadeBtuH: t.capacidadeBtuH ?? null,
+      vazaoM3h: t.vazaoM3h ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,

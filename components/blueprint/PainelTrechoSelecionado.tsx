@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, TIPOS_COM_CAPACIDADE, TIPOS_DE_EVAPORADORA, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
+import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, TIPOS_COM_CAPACIDADE, TIPOS_COM_VAZAO, TIPOS_DE_EVAPORADORA, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
 import { ROTULO_DO_AGENTE } from '../../utils/blueprintExtintores';
 import { CATALOGO_DE_PLACAS } from '../../utils/blueprintSinalizacao';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
@@ -78,6 +78,8 @@ interface Props {
     bitolaMm?: number;
     /** Climatização E3.2: sucção da linha frigorígena e isolamento (linha, dreno, duto). `null` apaga. */
     bitolaSuccaoMm?: number | null;
+    /** Climatização E7.1: a altura do duto retangular. `null` volta a redondo. */
+    alturaDutoMm?: number | null;
     isolamentoMm?: number | null;
     itemCode?: string | null;
     rotulo?: string | null;
@@ -128,6 +130,8 @@ interface Props {
     centralAlarmeId?: string | null;
     /** Climatização E3.1: a capacidade declarada (BTU/h) e a condensadora da evaporadora. `null` apaga. */
     capacidadeBtuH?: number | null;
+    /** Climatização E7.2: a vazão de ar declarada (m³/h). `null` volta a derivada. */
+    vazaoM3h?: number | null;
     condensadoraId?: string | null;
     larguraMm?: number | null;
     alturaMm?: number | null;
@@ -452,6 +456,27 @@ export default function PainelTrechoSelecionado({
               {/* CLIMATIZAÇÃO E3.1 (04/10/2026): a CAPACIDADE declarada de quem troca calor e o
                   SISTEMA da evaporadora (a condensadora que a serve). Vazio = não declarada —
                   a E4 sugere pela carga térmica; a evaporadora sem condensadora fica avisada. */}
+              {/* CLIMATIZAÇÃO E7.2 (05/10/2026): a VAZÃO de ar declarada do terminal. Vazio = a tarefa
+                  "Dutos e ventilação" deriva do ambiente (calor sensível, renovação ou exaustão). */}
+              {terminal.tipoHidraulico && (TIPOS_COM_VAZAO as readonly string[]).includes(terminal.tipoHidraulico) && (
+                <label className="block" data-testid="campo-vazao">
+                  <span className="text-[11px] font-medium text-slate-600">Vazão de ar (m³/h)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    step={10}
+                    value={terminal.vazaoM3h ?? ''}
+                    placeholder="derivada do ambiente"
+                    onChange={(e) => {
+                      if (e.target.value === '') return onTerminal({ vazaoM3h: null });
+                      const x = Math.round(Number(e.target.value));
+                      if (Number.isFinite(x) && x > 0) onTerminal({ vazaoM3h: x });
+                    }}
+                    aria-label="Vazão de ar do terminal (m³/h)"
+                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                  />
+                </label>
+              )}
               {terminal.tipoHidraulico && (TIPOS_COM_CAPACIDADE as readonly string[]).includes(terminal.tipoHidraulico) && (
                 <label className="block" data-testid="campo-capacidade">
                   <span className="text-[11px] font-medium text-slate-600">Capacidade (BTU/h)</span>
@@ -874,8 +899,26 @@ export default function PainelTrechoSelecionado({
           </select>
         </label>
 
+        {/* CLIMATIZAÇÃO E7.1 (05/10/2026): o duto é redondo (a bitola é o diâmetro) ou
+            retangular (a bitola é a LARGURA e a altura vem ao lado). O flexível é só redondo. */}
+        {trecho.disciplina === 'MECANICA' && (
+          <label className="block">
+            <span className="text-[11px] font-medium text-slate-600">Seção do duto</span>
+            <select
+              value={trecho.alturaDutoMm != null ? 'RETANGULAR' : 'REDONDA'}
+              onChange={(e) => onTrecho({ alturaDutoMm: e.target.value === 'RETANGULAR' ? Math.max(100, Math.round(trecho.bitolaMm / 2)) : null })}
+              disabled={trecho.material === 'DUTO_FLEXIVEL'}
+              title={trecho.material === 'DUTO_FLEXIVEL' ? 'duto flexível é sempre redondo — troque o material para fazer retangular' : undefined}
+              aria-label="Seção do duto"
+              className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="REDONDA">Redonda</option>
+              <option value="RETANGULAR">Retangular</option>
+            </select>
+          </label>
+        )}
         <CampoMedida
-          rotulo="Bitola"
+          rotulo={trecho.disciplina === 'MECANICA' ? (trecho.alturaDutoMm != null ? 'Largura' : 'Diâmetro') : 'Bitola'}
           valor={trecho.bitolaMm}
           casas={0}
           sufixo="mm"
@@ -883,6 +926,17 @@ export default function PainelTrechoSelecionado({
           aoAplicar={(v) => onTrecho({ bitolaMm: v })}
           ariaLabel="Bitola do trecho, em milímetros"
         />
+        {trecho.disciplina === 'MECANICA' && trecho.alturaDutoMm != null && (
+          <CampoMedida
+            rotulo="Altura"
+            valor={trecho.alturaDutoMm}
+            casas={0}
+            sufixo="mm"
+            chave={`altura-duto-${trecho.id}`}
+            aoAplicar={(v) => onTrecho({ alturaDutoMm: v > 0 ? Math.round(v) : null })}
+            ariaLabel="Altura do duto retangular, em milímetros"
+          />
+        )}
         {/* CLIMATIZAÇÃO E3.2 (04/10/2026): a linha frigorígena é UM trecho com dois diâmetros —
             a bitola é a de líquido e esta a de sucção; o isolamento vale na linha, no dreno e no duto. */}
         {trecho.disciplina === 'FRIGORIGENA' && (
@@ -922,7 +976,8 @@ export default function PainelTrechoSelecionado({
               aria-label="Material do tubo"
               className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
             >
-              <option value="">Padrão da rede ({FICHA_DO_MATERIAL[materialPadraoDaDisciplina(trecho.disciplina)!].rotulo})</option>
+              {/* E7.1: o duto tem materiais mas NÃO tem padrão (dar um mudaria a chave de quantitativo dos dutos existentes). */}
+              <option value="">{materialPadraoDaDisciplina(trecho.disciplina) ? `Padrão da rede (${FICHA_DO_MATERIAL[materialPadraoDaDisciplina(trecho.disciplina)!].rotulo})` : 'Não declarado'}</option>
               {(MATERIAIS_DA_DISCIPLINA[trecho.disciplina] ?? []).map((m) => (
                 <option key={m} value={m}>
                   {FICHA_DO_MATERIAL[m].rotulo}

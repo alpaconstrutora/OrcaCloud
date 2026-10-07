@@ -262,6 +262,8 @@ import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas } from
 import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
 import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, ROTULO_DA_LINHA_VRF } from '../../utils/blueprintVrf';
 import PainelVrf from './PainelVrf';
+import { analisarRedesDeAr, comandosDeDimensionamento, conferenciaDaRedeDeAr, planejarRedeDeAr, ROTULO_DA_REDE_DE_AR, vazoesDosTerminais, ventilacaoDoNivel } from '../../utils/blueprintRedeDeAr';
+import PainelRedeDeAr from './PainelRedeDeAr';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
@@ -1184,6 +1186,8 @@ const ROTULO_DA_TAREFA = {
   linhaFrigorigena: 'Linha frigorígena e dreno',
   // VRF (05/10/2026, E6): uma condensadora, N evaporadoras, a árvore com derivadores pelo somatório a jusante.
   vrf: 'Sistema VRF',
+  // DUTOS E VENTILAÇÃO (05/10/2026, E7): vazão, perda de carga, balanceamento, renovação, exaustão e o traçado no forro.
+  redeDeAr: 'Dutos e ventilação',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -3075,7 +3079,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * por ambiente sobre a exposição inteira) — e a soma do estudo para o cabeçalho.
    */
   const cargaDoNivel = useMemo(
-    () => ((tarefa === 'cargaTermica' || tarefa === 'selecaoSplit') && levelId ? cargaTermicaDoNivel(editor.model, climatizacaoDoEstudo.hipoteses, levelId, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
+    () => ((tarefa === 'cargaTermica' || tarefa === 'selecaoSplit' || tarefa === 'redeDeAr') && levelId ? cargaTermicaDoNivel(editor.model, climatizacaoDoEstudo.hipoteses, levelId, { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null }) : null),
     [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name],
   );
   const cargaDoEstudo = useMemo(() => {
@@ -3116,6 +3120,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefa === 'vrf' && levelId ? conferenciaDoVrf(editor.model, levelId, climatizacaoDoEstudo.hipoteses.vrf) : []),
     [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.vrf],
   );
+  /** CLIMATIZAÇÃO E7 (05/10/2026): a rede de ar do pavimento — vazões, redes, ventilação, plano e conferência — só com a tarefa aberta. */
+  const redeDeAr = useMemo(() => {
+    if (tarefa !== 'redeDeAr' || !levelId || !cargaDoNivel) return null;
+    const hipAr = climatizacaoDoEstudo.hipoteses.ar;
+    const vazoes = vazoesDosTerminais(editor.model, cargaDoNivel, hipAr);
+    const redes = analisarRedesDeAr(editor.model, levelId, vazoes, hipAr);
+    const ventilacao = ventilacaoDoNivel(editor.model, cargaDoNivel, hipAr);
+    return { redes, ventilacao, ajustes: comandosDeDimensionamento(redes), plano: planejarRedeDeAr(editor.model, levelId, vazoes, hipAr), conferencia: conferenciaDaRedeDeAr(redes, ventilacao, hipAr) };
+  }, [tarefa, levelId, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.ar]);
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
   const memoriaisClimatizacao = useMemo(() => {
@@ -11869,6 +11882,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 onClick={() => alternarTarefa('vrf')}
                 ajuda="Sistema VRF: uma condensadora com N evaporadoras; a árvore pela parede com um derivador em cada divisão e o diâmetro de cada trecho pelo somatório a jusante; taxa de combinação, comprimentos e desníveis conferidos contra os limites (hipóteses de catálogo); trocar a condensadora do sistema"
               />
+              <BotaoDoRibbon
+                icone={Snowflake}
+                rotulo="Dutos"
+                ativo={tarefaAberta === 'redeDeAr'}
+                onClick={() => alternarTarefa('redeDeAr')}
+                ajuda="Dutos e ventilação: vazão de cada terminal (declarada ou derivada do ambiente), perda de carga e balanceamento, ajuste das seções pelo método escolhido, traçado em espinha no forro, renovação e exaustão (banheiro, cozinha e garagem sem janela pedem exaustor)"
+              />
             </GrupoDoRibbon>
             <GrupoDoRibbon rotulo="Conferência">
               <BotaoDoRibbon
@@ -14975,6 +14995,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'selecaoSplit' && <Snowflake className="h-5 w-5 text-sky-600" />}
               {tarefaAberta === 'linhaFrigorigena' && <Snowflake className="h-5 w-5 text-violet-600" />}
               {tarefaAberta === 'vrf' && <Snowflake className="h-5 w-5 text-indigo-600" />}
+              {tarefaAberta === 'redeDeAr' && <Snowflake className="h-5 w-5 text-teal-600" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15595,6 +15616,29 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     ...s.terminais.map((terminalId) => ({ type: 'SetTerminalProps', terminalId, sugerida: false }) as Command),
                   ])
                 }
+                onSelecionar={selecionar}
+              />
+            </div>
+          )}
+
+          {tarefaAberta === 'redeDeAr' && redeDeAr && (
+            <div data-testid="tarefa-rede-de-ar">
+              <PainelRedeDeAr
+                redes={redeDeAr.redes}
+                ventilacao={redeDeAr.ventilacao}
+                plano={redeDeAr.plano}
+                conferencia={redeDeAr.conferencia}
+                hip={climatizacaoDoEstudo.hipoteses.ar}
+                onHip={(ar) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, ar })}
+                ajustes={redeDeAr.ajustes.length}
+                onAjustar={() => {
+                  if (redeDeAr.ajustes.length) editor.runBatch(redeDeAr.ajustes);
+                }}
+                sugeridos={(editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && t.rotulo === ROTULO_DA_REDE_DE_AR).map((t) => t.id)}
+                onLancar={() => {
+                  if (redeDeAr.plano.comandos.length) editor.runBatch(redeDeAr.plano.comandos);
+                }}
+                onAceitar={(ids) => editor.runBatch(ids.map((trechoId) => ({ type: 'SetTrechoProps', trechoId, sugerido: false }) as Command))}
                 onSelecionar={selecionar}
               />
             </div>

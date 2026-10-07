@@ -324,6 +324,7 @@ function faceCortadaDoTrecho(
   origem: Point,
 ): ItemCortado[] {
   const raio = t.bitolaMm / 2;
+  const meiaAltura = t.alturaDutoMm != null ? t.alturaDutoMm / 2 : raio;
   const vA = elevacaoNivelMm + t.cotaAMm;
   const vB = elevacaoNivelMm + t.cotaBMm;
   const projU = (p: Point) => p.x * base.u.x + p.y * base.u.y;
@@ -366,7 +367,8 @@ function faceCortadaDoTrecho(
     return {
       id: t.id,
       familia: 'REDE' as const,
-      pontos: caixa(faixa.uMin, faixa.uMax, v - raio, v + raio),
+      // E7.1: o duto retangular ocupa meia ALTURA acima e abaixo do eixo, não meia largura.
+      pontos: caixa(faixa.uMin, faixa.uMax, v - meiaAltura, v + meiaAltura),
       vaos: [],
       enterrada: v < elevacaoNivelMm,
       rotulo: t.rotulo ?? null,

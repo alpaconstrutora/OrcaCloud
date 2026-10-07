@@ -124,6 +124,8 @@ function contraPrisma(
   anel: Point[],
   zBaixoMm: number,
   zAltoMm: number,
+  /** E7.1 (05/10/2026): o alcance EM PLANTA (o raspão). Ausente = o mesmo `raioMm` (seção redonda). */
+  raioPlantaMm: number = raioMm,
 ): { dentroMm: number; folgaMm: number } | null {
   if (anel.length < 3) return null;
 
@@ -185,7 +187,7 @@ function contraPrisma(
       distanciaEntreSegmentos(P, Q, anel[i], anel[(i + 1) % anel.length]),
     );
   }
-  return folga <= raioMm ? { dentroMm: 0, folgaMm: folga } : null;
+  return folga <= raioPlantaMm ? { dentroMm: 0, folgaMm: folga } : null;
 }
 
 /**
@@ -280,6 +282,9 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
   for (const t of trechos) {
     const pedacos = pedacosDe(t);
     const raio = t.bitolaMm / 2;
+    // E7.1 (05/10/2026): o duto RETANGULAR tem meia ALTURA na vertical e meia LARGURA em planta —
+    // o cilindro de raio largura/2 acusaria a viga 20 cm acima de um duto de 30 cm de altura.
+    const raioVertical = t.alturaDutoMm != null ? t.alturaDutoMm / 2 : raio;
 
     // ── Contra a ESTRUTURA ───────────────────────────────────────────────
     for (const s of model.structures) {
@@ -289,7 +294,7 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       // pedaços; a folga é a menor delas.
       let r: { dentroMm: number; folgaMm: number } | null = null;
       for (const [A, B] of pedacos) {
-        const parte = contraPrisma(A, B, raio, anel, es + s.baseMm, es + s.baseMm + s.alturaMm);
+        const parte = contraPrisma(A, B, raioVertical, anel, es + s.baseMm, es + s.baseMm + s.alturaMm, raio);
         if (!parte) continue;
         r = r ? { dentroMm: r.dentroMm + parte.dentroMm, folgaMm: Math.min(r.folgaMm, parte.folgaMm) } : parte;
       }
@@ -347,7 +352,8 @@ export function conflitosDoModelo(model: BlueprintModel): Conflito[] {
       if (u.disciplina === t.disciplina) continue;
       let folga = Infinity;
       for (const [A, B] of pedacos) for (const [C, D] of pedacosDe(u)) folga = Math.min(folga, distanciaEntreEixos3D(A, B, C, D));
-      if (folga > raio + u.bitolaMm / 2) continue;
+      // E7.1: duto retangular conta pelo MAIOR meio-lado (conservador; o par de eixos não diz a orientação).
+      if (folga > Math.max(raio, raioVertical) + Math.max(u.bitolaMm, u.alturaDutoMm ?? 0) / 2) continue;
       saida.push({
         trechoId: t.id,
         trechoUid: t.uid,

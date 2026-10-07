@@ -133,6 +133,7 @@ import {
   limparLacosOrfos,
   limparCondensadorasOrfas,
   TIPOS_COM_CAPACIDADE,
+  TIPOS_COM_VAZAO,
   TIPOS_DE_EVAPORADORA,
   TIPOS_DO_LACO_DE_ALARME,
   findGrupo,
@@ -721,6 +722,8 @@ export type Command =
       /** Climatização (0.92.0): sucção da linha frigorígena e isolamento. */
       bitolaSuccaoMm?: number | null;
       isolamentoMm?: number | null;
+      /** Climatização E7.1 (0.93.0): a altura do duto retangular (`null` volta a redondo). */
+      alturaDutoMm?: number | null;
       /** Gerado pelo lançamento automático — ver `Trecho.sugerido`. */
       sugerido?: boolean | null;
     }
@@ -747,6 +750,8 @@ export type Command =
       /** Climatização (0.92.0): sucção da linha frigorígena e isolamento. */
       bitolaSuccaoMm?: number | null;
       isolamentoMm?: number | null;
+      /** Climatização E7.1 (0.93.0): a altura do duto retangular (`null` volta a redondo). */
+      alturaDutoMm?: number | null;
       /** `false` aceita o caminho sugerido — ver `Trecho.sugerido`. */
       sugerido?: boolean | null;
     }
@@ -777,6 +782,8 @@ export type Command =
       tipoHidraulico?: TipoDePontoHidraulico | null;
       /** Climatização (0.92.0): capacidade declarada (BTU/h) e a condensadora da evaporadora/derivador. */
       capacidadeBtuH?: number | null;
+      /** Climatização E7.2 (0.93.0): a vazão de ar declarada, m³/h. */
+      vazaoM3h?: number | null;
       condensadoraId?: ObjectId | null;
       /** Volume em litros — só faz sentido em `RESERVATORIO`; ignorado nos demais. */
       volumeL?: number | null;
@@ -841,6 +848,8 @@ export type Command =
       tipoHidraulico?: TipoDePontoHidraulico | null;
       /** Climatização (0.92.0): capacidade declarada (BTU/h) e a condensadora da evaporadora/derivador. */
       capacidadeBtuH?: number | null;
+      /** Climatização E7.2 (0.93.0): a vazão de ar declarada, m³/h. */
+      vazaoM3h?: number | null;
       condensadoraId?: ObjectId | null;
       /** Volume em litros (reservatório). `null` apaga. */
       volumeL?: number | null;
@@ -3531,6 +3540,7 @@ function aplicarSemHash(
           ...(command.secaoCalha != null ? { secaoCalha: command.secaoCalha } : {}),
           ...(command.bitolaSuccaoMm != null ? { bitolaSuccaoMm: Math.round(command.bitolaSuccaoMm) } : {}),
           ...(command.isolamentoMm != null ? { isolamentoMm: Math.round(command.isolamentoMm) } : {}),
+          ...(command.alturaDutoMm != null ? { alturaDutoMm: Math.round(command.alturaDutoMm) } : {}),
           ...(command.alturaCalhaMm != null ? { alturaCalhaMm: assertIntegerMm(roundToMm(command.alturaCalhaMm), 'alturaCalhaMm') } : {}),
           ...(command.sugerido ? { sugerido: true } : {}),
         },
@@ -3565,6 +3575,7 @@ function aplicarSemHash(
       if (command.material !== undefined) trecho.material = command.material ?? null;
       if (command.bitolaSuccaoMm !== undefined) trecho.bitolaSuccaoMm = command.bitolaSuccaoMm == null ? null : Math.round(command.bitolaSuccaoMm);
       if (command.isolamentoMm !== undefined) trecho.isolamentoMm = command.isolamentoMm == null ? null : Math.round(command.isolamentoMm);
+      if (command.alturaDutoMm !== undefined) trecho.alturaDutoMm = command.alturaDutoMm == null ? null : Math.round(command.alturaDutoMm);
       if (command.secaoCalha !== undefined) {
         trecho.secaoCalha = command.secaoCalha ?? null;
         if (command.secaoCalha !== 'RETANGULAR') trecho.alturaCalhaMm = null;
@@ -3623,6 +3634,7 @@ function aplicarSemHash(
           ...(command.autonomiaMin != null && command.tipoHidraulico === 'LUMINARIA_EMERGENCIA' ? { autonomiaMin: Math.round(command.autonomiaMin) } : {}),
           ...(command.centralAlarmeId != null && command.tipoHidraulico && TIPOS_DO_LACO_DE_ALARME.includes(command.tipoHidraulico) ? { centralAlarmeId: command.centralAlarmeId } : {}),
           ...(command.capacidadeBtuH != null ? { capacidadeBtuH: Math.round(command.capacidadeBtuH) } : {}),
+          ...(command.vazaoM3h != null ? { vazaoM3h: Math.round(command.vazaoM3h) } : {}),
           ...(command.condensadoraId != null ? { condensadoraId: command.condensadoraId } : {}),
           ...(command.volumeRtiL != null && command.tipoHidraulico === 'RESERVATORIO' && command.disciplina === 'AGUA_FRIA' ? { volumeRtiL: Math.round(command.volumeRtiL) } : {}),
           ...(command.curvaBomba != null && (command.tipoHidraulico === 'BOMBA_INCENDIO' || command.tipoHidraulico === 'BOMBA_JOCKEY') ? { curvaBomba: curvaInteira(command.curvaBomba) } : {}),
@@ -3697,9 +3709,11 @@ function aplicarSemHash(
       // carrega (o difusor não tem BTU/h nem condensadora); declarar num tipo errado sem trocar
       // o tipo NÃO é limpado em silêncio — a invariante recusa (BAD_CAPACITY/BAD_CONDENSER).
       if (command.capacidadeBtuH !== undefined) terminal.capacidadeBtuH = command.capacidadeBtuH == null ? null : Math.round(command.capacidadeBtuH);
+      if (command.vazaoM3h !== undefined) terminal.vazaoM3h = command.vazaoM3h == null ? null : Math.round(command.vazaoM3h);
       if (command.condensadoraId !== undefined) terminal.condensadoraId = command.condensadoraId ?? null;
       if (command.tipoHidraulico !== undefined) {
         if ((!terminal.tipoHidraulico || !(TIPOS_COM_CAPACIDADE as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.capacidadeBtuH != null) terminal.capacidadeBtuH = null;
+        if ((!terminal.tipoHidraulico || !(TIPOS_COM_VAZAO as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.vazaoM3h != null) terminal.vazaoM3h = null;
         if ((!terminal.tipoHidraulico || !([...TIPOS_DE_EVAPORADORA, 'DERIVADOR_VRF'] as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.condensadoraId != null) terminal.condensadoraId = null;
       }
       // Deixar de ser do laço leva a central junto — a invariante recusaria.

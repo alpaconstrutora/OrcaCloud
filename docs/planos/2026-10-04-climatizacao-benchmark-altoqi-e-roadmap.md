@@ -1943,3 +1943,111 @@ todas com derivador → Aceitar). Testes da E5 ajustados ao dreno separado da li
   `check-ui-standard` nos 2 `.tsx` e `check-xss-sinks` exit 0.
 - Fica para a prova no app real: inserir uma Condensadora VRF, "Ligar N sem sistema", lançar a rede
   e ver a árvore com os derivadores; conferir a taxa e os comprimentos.
+
+### Etapa 7.1 — 05/10/2026 (frente `clima-e7`, **kernel 0.92.0 → 0.93.0**)
+
+**Decisão de desenho (campo próprio, não `secaoCalha`).** O roadmap dizia "generalizar `secaoCalha`".
+Lido o código: sete módulos do pluvial (orçamento `blueprintBudget.ts:946`, planilha, prancha,
+memorial, executivo, calhas, verificação) tratam como CALHA qualquer trecho com `secaoCalha`, sem
+olhar a disciplina — um duto retangular viraria "calha" no orçamento. Então: `Trecho.alturaDutoMm`
+(só MECANICA; com ela `bitolaMm` é a LARGURA; ausente = redondo, como sempre) — o mesmo molde da
+calha, sem tocar no pluvial.
+
+**Kernel 0.93.0.** `Trecho.alturaDutoMm` (inteiro > 0, só MECANICA, não no duto flexível);
+`Terminal.vazaoM3h` (vazão de ar declarada, `TIPOS_COM_VAZAO` — terminais de ar, exaustor,
+evaporadora dutada, caixa de distribuição; trocar o tipo limpa); materiais CHAPA_GALVANIZADA,
+PAINEL_PREISOLADO e DUTO_FLEXIVEL em `MATERIAIS_DA_DISCIPLINA.MECANICA` — **sem padrão de
+disciplina**: `quantities.ts:1992` agrupa o quantitativo por `materialDoTrecho`, e dar padrão ao duto
+mudaria a chave de quantitativo de todo duto já desenhado (o painel diz "Não declarado"; a perda de
+carga assume chapa galvanizada como hipótese, sem gravar). Fichas dos três em `FICHA_DO_MATERIAL`
+(rugosidade típica — HIPÓTESE). A evaporadora dutada passou a admitir também MECANICA (é ela que
+sopra no duto; ficha com cota e DN mínimo na mecânica). Ritual do bump: com a string em 0.92.0 e o
+código novo, goldens + climatização + duto + HVAC passaram (prova); bump; 23 pinos por glob; 6 hashes
+só de versão; bundle `planta-api` em 0.93.0.
+
+**Derivados do volume retangular.** Conflito (`conflitos.ts`): `contraPrisma` recebe o alcance em
+PLANTA separado do vertical — meia ALTURA na faixa de cotas, meia LARGURA no raspão; rede × rede pelo
+maior meio-lado (conservador). Corte: meia altura acima e abaixo do eixo. IFC:
+`IFCRECTANGLEPROFILEDEF(largura, altura)` (o X local de `solidoAoLongo` é horizontal e perpendicular ao
+eixo, então a largura fica deitada). 3D: `cilindroDoTrecho` devolve a base completa (largura
+horizontal, eixo, altura) e o visualizador desenha uma caixa com `makeBasis` — o `setFromUnitVectors`
+do cilindro deixaria o giro em torno do eixo ao acaso. Canvas: "600×300". Quantitativo: a altura entra
+na chave por bitola e na saída só quando há (os desenhos antigos não mudam); orçamento: "Mecânica
+600×300" e a linha de compra `…-dn600x300`. Painel do trecho: "Seção do duto" (redonda/retangular;
+travada em redonda no flexível, dizendo por quê), "Diâmetro"/"Largura" + "Altura"; painel da peça:
+"Vazão de ar (m³/h)" (vazio = derivada).
+
+### Etapa 7.2 + 7.3 + 7.4 — 05/10/2026 (mesma frente, mesma 0.93.0)
+
+**`utils/blueprintRedeDeAr.ts`.**
+- E7.2 Física (ar a ~20 °C: ρ 1,2, ν 1,5·10⁻⁵, cp 1005): área, diâmetro hidráulico, velocidade, fator
+  de Darcy por Swamee-Jain, perda por atrito, pressão dinâmica, rugosidade pelo material (sem material
+  = chapa). `secaoProposta`: por VELOCIDADE (tronco quando o trecho serve mais de um terminal, ramal
+  quando um só) ou por IGUAL ATRITO (a menor seção com perda/m ≤ a pedida); redonda pelos diâmetros
+  comerciais da chapa, retangular com a altura padrão e largura de 50 em 50 mm.
+- `vazoesDosTerminais`: DECLARADA, ou DERIVADA do ambiente — insuflamento = maior entre calor sensível
+  ÷ (ρ·cp·ΔT) e a renovação, repartido entre os terminais de insuflamento; o retorno devolve o mesmo; a
+  tomada de ar exterior traz a renovação; o exaustor, a exaustão do uso — ou SEM (pede declarar).
+- `analisarRedesDeAr`: por RAIZ (dutada ou caixa de distribuição), BFS pelos trechos MECANICA: vazão e
+  número de terminais a jusante por trecho, velocidade (alta = 25 % acima do limite), perda por
+  atrito, localizadas pelas conexões derivadas (curva: K da curva; tê/junção/cruzeta: K do tê, na
+  velocidade do trecho que sai do nó), perda de cada caminho + a do terminal, o CAMINHO CRÍTICO ×
+  pressão disponível e o BALANCEAMENTO (quanto o damper de cada terminal absorve — o "vai além").
+  `comandosDeDimensionamento`: leva cada trecho à seção proposta (um lote).
+- E7.3 `ventilacaoDoNivel` (uso pelo nome, como a E0): banheiro/lavabo, cozinha e garagem SEM janela
+  exigem exaustor (90 m³/h, 180 m³/h, 6 trocas/h — hipóteses); climatizado sem janela nem tomada de ar
+  exterior = aviso de renovação (Fp 2,5 L/s·pessoa + Fa 0,3 L/s·m² — CONFERIR NBR 16401-3).
+- E7.4 `planejarRedeDeAr`: a ESPINHA no forro (molde da espinha dos sprinklers): o tronco passa pela
+  raiz na direção em que os terminais mais se espalham, um ramal perpendicular por terminal
+  (encadeados quando dois caem na mesma linha), descidas nos nós exatos das peças; cota = fundo da
+  viga mais baixa (ou teto) − folga − meia altura; cada trecho com a seção da vazão a jusante; rótulo
+  `ROTULO_DA_REDE_DE_AR` (relançar só apaga o seu); terminais já alcançados por rede confirmada
+  ficam; os soltos vão para a raiz mais perto. As conexões (curva, tê, cruzeta) são as DERIVADAS.
+- `conferenciaDaRedeDeAr`: EXAUSTAO, RENOVACAO, REDE, VAZAO, VELOCIDADE, PRESSAO.
+- Hipóteses em `HipotesesClimatizacao.ar` (método, seção, velocidades, igual atrito, altura padrão,
+  folga sob viga, ΔT, pressão disponível, perda no terminal, K da curva e do tê, renovação, exaustão)
+  com limites e leitor — toda folga editável no painel.
+
+**Editor.** Tarefa `redeDeAr` (botão "Dutos" ao lado de "VRF"); `PainelRedeDeAr` (hipóteses, cada rede
+com vazão total, perda crítica × disponível e o damper de cada terminal, ventilação por ambiente,
+Lançar/Relançar, "Ajustar seções (N)", Aceitar — cada um com o motivo quando desligado — e a
+conferência).
+
+**Não entrou (dito):** exaustão com duto até a fachada (o exaustor é conferido no ambiente, a rede
+dele não é traçada); desvio de pilar no forro (o conflito acusa); a perda dos acessórios além de curva
+e tê (damper, plenum); o duto flexível de ligação do difusor como peça; a área de chapa (m²/kg) — E9.
+
+**Prova.** `blueprintDutoRetangular.test.ts` (6: invariantes da altura e do material; troca redondo ⇄
+retangular e canônico; vazão só nos tipos de ar, troca de tipo limpa, dutada aceita; **pilar a 27 cm
+de lado: o 600×300 pega, o Ø457 de mesma área não**; **viga 20 cm acima do eixo: o 600×300 passa por
+baixo, o Ø457 bate** — o falso conflito do cilindro; quantitativo separa 600×300 / 600×400 / Ø600 e o
+redondo não ganha a chave), `blueprintRedeDeAr.test.ts` (9: **prova independente de um ramal** —
+Darcy + Swamee-Jain calculados em Python fora do código: 500 m³/h em Ø200 por 10 m = 13,415 Pa e
+1.200 m³/h em 400×250 = 4,653 Pa; velocidade 1.000 m³/h → 200×250 no tronco / 300×250 no ramal, Ø250
+redondo; igual atrito; hipóteses; espinha numa sala 10 × 6 m com 4 difusores — seção 250×250 →
+150×250 ao longo do tronco, nenhuma ponta aberta, balanceamento com excesso zero no crítico, pressão
+de 5 Pa = FALTA; relançar idempotente e aceitar para; um trecho afinado volta à proposta; vazão
+derivada da Sala ÷ 4; **banheiro sem janela sem exaustor = FALTA**, com exaustor ou janela OK; sem
+rede, REDE não avaliado), `components/PainelRedeDeAr.test.tsx` (2), `PainelTrechoClimatizacao` +2
+(seção do duto, vazão), editor "Mecânica › Dutos" (Lança 1 rede, 4 terminais, 1.200 m³/h → Lançar →
+a rede aparece, 4 com vazão, Aceitar).
+
+**Ambiente (dito, não escondido):** nesta etapa o `tsc` passou a cair com segfault em ponto aleatório
+(até no `main` limpo, até com `--jitless`, `--single-threaded` e em worker thread) — instabilidade do
+Node 24.12 nesta máquina, não do código. Contorno: a checagem de tipos pela API do TypeScript
+arquivo por arquivo (opções + globais + sintáticos + semânticos, o mesmo conjunto do `tsc --noEmit`),
+repetida até uma rodada completar; o script ficou no scratchpad da sessão.
+
+### Fecho da Etapa 7 — 07/10/2026
+
+- Sem migration; **kernel 0.93.0** (um bump para as quatro fases).
+- **Suíte inteira**: 7665 testes = 7630 ✅ + 34 pulados de propósito + 1 falha de EXPECTATIVA antiga
+  (o teste da E3 dizia que toda evaporadora liga só na linha frigorígena; a dutada passou a ligar
+  também no duto, de propósito) — corrigida e o arquivo reprovado verde (11/11). A conta fechou pelo
+  JSON.
+- Tipos: 0 erros pela checagem arquivo por arquivo (ver "Ambiente" acima — o `tsc` nativo segfaulta
+  nesta máquina até no `main` limpo). `check-ui-standard` nos 4 `.tsx` tocados e `check-xss-sinks`
+  exit 0. `vite build` exit 0 de primeira.
+- Fica para a prova no app real: inserir uma evaporadora dutada e difusores, abrir "Dutos", lançar a
+  espinha, ver os dutos retangulares no 3D (largura deitada) e o rótulo LxA na planta, e um banheiro
+  sem janela acusado.

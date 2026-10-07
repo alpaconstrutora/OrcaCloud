@@ -647,6 +647,8 @@ export interface QuantidadeTrecho {
   material: string | null;
   /** A seção da calha (quant-1.18.0); `null` no tubo. */
   secaoCalha: string | null;
+  /** E7.1: a altura do duto retangular (a largura é a bitola). Ausente no redondo e fora da mecânica. */
+  alturaDutoMm?: number;
   /** A projeção em planta. Zero na prumada. */
   comprimentoPlantaM: number;
   /** O que se compra: a distância real entre as duas pontas. */
@@ -741,6 +743,8 @@ export interface QuantidadePorBitola {
   /** A calha (quant-1.18.0): calha e tubo da mesma bitola são compras diferentes. `null` = tubo. */
   secaoCalha: string | null;
   bitolaMm: number;
+  /** E7.1: o duto retangular (a largura é a bitola). Ausente no redondo e fora da mecânica. */
+  alturaDutoMm?: number;
   itemCode: string | null;
   comprimentoM: number;
   trechos: number;
@@ -1382,7 +1386,7 @@ function areaOcupadaNoAmbiente(s: Structural, ring: Point[]): number {
 export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): QuantidadePorBitola[] {
   const porBitolaMapa = new Map<string, QuantidadePorBitola>();
   for (const t of trechos) {
-    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.secaoCalha ?? ''}\n${t.bitolaMm}\n${t.itemCode ?? ''}`;
+    const chave = `${t.disciplina}\n${t.material ?? ''}\n${t.secaoCalha ?? ''}\n${t.bitolaMm}\n${t.alturaDutoMm ?? ''}\n${t.itemCode ?? ''}`;
     const atual = porBitolaMapa.get(chave);
     if (atual) {
       atual.comprimentoM += t.comprimentoM;
@@ -1393,6 +1397,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
         material: t.material ?? null,
         secaoCalha: t.secaoCalha ?? null,
         bitolaMm: t.bitolaMm,
+        ...(t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {}),
         itemCode: t.itemCode,
         comprimentoM: t.comprimentoM,
         trechos: 1,
@@ -1400,7 +1405,7 @@ export function agruparPorBitola(trechos: readonly QuantidadeTrecho[]): Quantida
     }
   }
   return [...porBitolaMapa.values()].sort(
-    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || (x.secaoCalha ?? '').localeCompare(y.secaoCalha ?? '') || x.bitolaMm - y.bitolaMm,
+    (x, y) => x.disciplina.localeCompare(y.disciplina) || (x.material ?? '').localeCompare(y.material ?? '') || (x.secaoCalha ?? '').localeCompare(y.secaoCalha ?? '') || x.bitolaMm - y.bitolaMm || (x.alturaDutoMm ?? 0) - (y.alturaDutoMm ?? 0),
   );
 }
 
@@ -1991,6 +1996,8 @@ export function computeQuantities(
       condutoresPorSecao,
       material: materialDoTrecho(t),
       secaoCalha: t.secaoCalha ?? null,
+      // E7.1 (05/10/2026): o duto retangular — omitido no redondo (a saída dos desenhos antigos não muda).
+      ...(t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {}),
       uid: t.uid,
       disciplina: t.disciplina,
       rotulo: t.rotulo ?? '',

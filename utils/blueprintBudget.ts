@@ -975,11 +975,13 @@ function medir(quant: Quantitativos, medidaId: string, filtro: string[], extras:
         .map((b) => {
           const foraDoPadrao = b.material != null && b.material !== materialPadraoDaDisciplina(b.disciplina as DisciplinaDeRede);
           const nomeDoMaterial = b.material && b.material in FICHA_DO_MATERIAL ? ` · ${FICHA_DO_MATERIAL[b.material as MaterialDeTubo].rotulo}` : '';
-          return { b, foraDoPadrao, rotulo: `${nome} DN ${b.bitolaMm}${b.itemCode ? ` · ${b.itemCode}` : ''}${nomeDoMaterial}` };
+          // E7.1: o duto retangular é LxA (a linha de compra é outra que a do redondo de mesma largura).
+          const medida = b.alturaDutoMm != null ? `${b.bitolaMm}×${b.alturaDutoMm}` : `DN ${b.bitolaMm}`;
+          return { b, foraDoPadrao, rotulo: `${nome} ${medida}${b.itemCode ? ` · ${b.itemCode}` : ''}${nomeDoMaterial}` };
         })
         .filter(({ rotulo }) => combina(rotulo))
         .map(({ b, foraDoPadrao, rotulo }) => ({
-          ref: `${b.disciplina}-dn${b.bitolaMm}${b.itemCode ? `-${b.itemCode}` : ''}${foraDoPadrao ? `-${b.material}` : ''}`,
+          ref: `${b.disciplina}-dn${b.bitolaMm}${b.alturaDutoMm != null ? `x${b.alturaDutoMm}` : ''}${b.itemCode ? `-${b.itemCode}` : ''}${foraDoPadrao ? `-${b.material}` : ''}`,
           rotulo,
           valor: b.comprimentoM,
           formula: `Σ comprimento real dos ${b.trechos} trecho(s) DN ${b.bitolaMm}`,

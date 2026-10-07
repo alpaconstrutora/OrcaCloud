@@ -596,7 +596,22 @@
  * string em 0.91.0 os goldens e os testes de climatização passaram sem outra
  * alteração.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.92.0';
+/**
+ * ─── 0.92.0 → 0.93.0 (05/10/2026) — O DUTO RETANGULAR E A VAZÃO DO TERMINAL ──
+ *
+ * Climatização, E7 (plano `2026-10-04-climatizacao-benchmark-altoqi-e-roadmap.md`):
+ *  - `Trecho.alturaDutoMm`: com ela o duto é RETANGULAR e `bitolaMm` é a largura
+ *    (só MECANICA, não no flexível); ausente = redondo, como sempre. Campo próprio
+ *    e não `secaoCalha`, que sete módulos do pluvial leem sem olhar a disciplina;
+ *  - `Terminal.vazaoM3h`: a vazão de ar declarada (`TIPOS_COM_VAZAO`);
+ *  - os materiais de duto CHAPA_GALVANIZADA, PAINEL_PREISOLADO e DUTO_FLEXIVEL,
+ *    SEM padrão de disciplina (o duto já desenhado não muda de chave no
+ *    quantitativo).
+ * Declarações, omitidas quando ausentes — desenho antigo só muda pela string da
+ * versão. Provado antes do bump: com a string em 0.92.0 os goldens e os testes
+ * de climatização e de duto passaram sem outra alteração.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.93.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

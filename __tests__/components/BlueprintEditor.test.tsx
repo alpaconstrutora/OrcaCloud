@@ -5744,6 +5744,43 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     expect(within(gaveta).getByTestId('vrf-conferencia')).toHaveTextContent(/3 derivação\(ões\), todas com derivador/);
     expect(within(gaveta).getByRole('button', { name: /^Aceitar \(\d+\)$/ })).toBeInTheDocument();
   }, 90000);
+
+  /**
+   * CLIMATIZAÇÃO E7 (05/10/2026): a gaveta de dutos propõe a espinha no forro da
+   * evaporadora dutada aos quatro difusores, lança num lote e a rede passa a
+   * aparecer com a vazão total e a perda crítica dentro da pressão disponível.
+   */
+  it('Mecânica › Dutos: lança a espinha no forro e a rede confere vazão e pressão', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 10000, 0), w(10000, 0, 10000, 6000), w(10000, 6000, 0, 6000), w(0, 6000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    m = k.applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Dutada', tipoHidraulico: 'EVAPORADORA_DUTADA', at: k.point(300, 3000), cotaMm: 2600 } as never,
+      ...[
+        [3000, 1500],
+        [3000, 4500],
+        [7000, 1500],
+        [7000, 4500],
+      ].map(([x, y]) => ({ type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Difusor', tipoHidraulico: 'DIFUSOR', at: k.point(x, y), cotaMm: 2600, vazaoM3h: 300 }) as never),
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^Dutos$/));
+    const gaveta = await screen.findByTestId('tarefa-rede-de-ar');
+    await waitFor(() => expect(within(gaveta).getByTestId('rede-de-ar-resumo')).toHaveTextContent(/Lança 1 rede/));
+    expect(within(gaveta).getByTestId('rede-de-ar-resumo')).toHaveTextContent(/4 terminal\(is\), 1\.200 m³\/h/);
+    expect(within(gaveta).getByTestId('rede-de-ar-conferencia')).toHaveTextContent(/nenhuma rede de dutos/);
+    await user.click(within(gaveta).getByRole('button', { name: 'Lançar os dutos' }));
+    await waitFor(() => expect(within(gaveta).getByLabelText('Rede de Dutada')).toHaveTextContent('1.200 m³/h'));
+    expect(within(gaveta).getByTestId('rede-de-ar-conferencia')).toHaveTextContent(/4 terminal\(is\) com vazão/);
+    expect(within(gaveta).getByRole('button', { name: /^Aceitar \(\d+\)$/ })).toBeInTheDocument();
+    expect(within(gaveta).getByRole('button', { name: 'Ajustar seções' })).toBeDisabled();
+  }, 90000);
 });
 
 /**

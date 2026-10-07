@@ -168,6 +168,30 @@ export const FICHA_DO_MATERIAL: Record<MaterialDeTubo, FichaDoMaterial> = {
     cHazenWilliams: 150,
     fonte: 'ASTM F442 SDR 13,5 (CPVC de sprinkler, só em risco leve); ε de plástico liso — CONFERIR NA NORMA',
   },
+  // Climatização E7.1 (05/10/2026): os DUTOS (ar). O "DN" do duto redondo é o diâmetro;
+  // a rugosidade é a do ar em duto (ASHRAE, típica) — HIPÓTESE, CONFERIR. O coeficiente
+  // de Hazen-Williams não se aplica a ar (fica por obrigação do tipo, não é usado).
+  CHAPA_GALVANIZADA: {
+    rotulo: 'Chapa galvanizada',
+    rugosidadeMm: 0.15,
+    diametros: [{ dn: 100, internoMm: 100 }, { dn: 125, internoMm: 125 }, { dn: 150, internoMm: 150 }, { dn: 200, internoMm: 200 }, { dn: 250, internoMm: 250 }, { dn: 300, internoMm: 300 }, { dn: 350, internoMm: 350 }, { dn: 400, internoMm: 400 }, { dn: 450, internoMm: 450 }, { dn: 500, internoMm: 500 }, { dn: 600, internoMm: 600 }, { dn: 700, internoMm: 700 }, { dn: 800, internoMm: 800 }, { dn: 900, internoMm: 900 }, { dn: 1000, internoMm: 1000 }],
+    cHazenWilliams: 120,
+    fonte: 'Rugosidade típica de duto de chapa galvanizada (ASHRAE Fundamentals) — HIPÓTESE, CONFERIR.',
+  },
+  PAINEL_PREISOLADO: {
+    rotulo: 'Painel pré-isolado',
+    rugosidadeMm: 0.9,
+    diametros: [{ dn: 200, internoMm: 200 }, { dn: 250, internoMm: 250 }, { dn: 300, internoMm: 300 }, { dn: 350, internoMm: 350 }, { dn: 400, internoMm: 400 }, { dn: 450, internoMm: 450 }, { dn: 500, internoMm: 500 }, { dn: 600, internoMm: 600 }, { dn: 700, internoMm: 700 }, { dn: 800, internoMm: 800 }, { dn: 900, internoMm: 900 }, { dn: 1000, internoMm: 1000 }],
+    cHazenWilliams: 120,
+    fonte: 'Rugosidade típica de painel de duto pré-isolado — HIPÓTESE, CONFERIR com o fabricante.',
+  },
+  DUTO_FLEXIVEL: {
+    rotulo: 'Duto flexível',
+    rugosidadeMm: 3,
+    diametros: [{ dn: 100, internoMm: 100 }, { dn: 125, internoMm: 125 }, { dn: 150, internoMm: 150 }, { dn: 160, internoMm: 160 }, { dn: 200, internoMm: 200 }, { dn: 250, internoMm: 250 }, { dn: 300, internoMm: 300 }, { dn: 350, internoMm: 350 }, { dn: 400, internoMm: 400 }],
+    cHazenWilliams: 120,
+    fonte: 'Rugosidade típica de duto flexível esticado — HIPÓTESE, CONFERIR (frouxo perde bem mais).',
+  },
 };
 
 /**

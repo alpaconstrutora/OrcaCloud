@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.92.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.93.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -725,6 +725,104 @@ var TIPOS_DE_CONDENSADORA = ["CONDENSADORA_SPLIT", "CONDENSADORA_VRF"];
 var TIPOS_DE_TERMINAL_DE_AR = ["DIFUSOR", "GRELHA_INSUFLAMENTO", "GRELHA_RETORNO", "BOCAL_AR", "TOMADA_AR_EXTERIOR", "VENEZIANA_AR", "CAIXA_PLENUM", "DAMPER"];
 var TIPOS_COM_CAPACIDADE = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "EQUIPAMENTO_CLIMATIZACAO"];
 var TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "DERIVADOR_VRF", "EXAUSTOR_AR", "BOMBA_DRENO", "PONTO_DRENO", "CAIXA_DISTRIBUICAO_AR", ...TIPOS_DE_TERMINAL_DE_AR, "EQUIPAMENTO_CLIMATIZACAO"];
+var AF_AQ = ["AGUA_FRIA", "AGUA_QUENTE"];
+var AF_AQ_ESG = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO"];
+var ESG = ["ESGOTO"];
+var PLU = ["PLUVIAL"];
+var TUBOS = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO", "PLUVIAL", "INCENDIO"];
+var INC = ["INCENDIO"];
+var AF_AQ_INC = ["AGUA_FRIA", "AGUA_QUENTE", "INCENDIO"];
+var DISCIPLINAS_DO_PONTO_HIDRAULICO = {
+  TORNEIRA: AF_AQ,
+  TORNEIRA_JARDIM: ["AGUA_FRIA"],
+  CHUVEIRO: AF_AQ_ESG,
+  LAVATORIO: AF_AQ_ESG,
+  PIA_COZINHA: AF_AQ_ESG,
+  TANQUE: AF_AQ_ESG,
+  MAQUINA_LAVAR: AF_AQ_ESG,
+  VASO_SANITARIO: ["AGUA_FRIA", "ESGOTO"],
+  DUCHA_HIGIENICA: AF_AQ,
+  BIDE: AF_AQ_ESG,
+  BANHEIRA: AF_AQ_ESG,
+  MICTORIO: ["AGUA_FRIA", "ESGOTO"],
+  // A válvula de descarga alimenta a bacia SEM caixa acoplada — só água fria.
+  VALVULA_DESCARGA: ["AGUA_FRIA"],
+  // A espera é ponto para o futuro, em qualquer rede.
+  PONTO_ESPERA: TUBOS,
+  // Incêndio E3.2: também a caixa SÓ de incêndio (a RTI exclusiva, fonte por gravidade).
+  RESERVATORIO: ["AGUA_FRIA", "INCENDIO"],
+  BOMBA: ["AGUA_FRIA"],
+  // O aquecedor é ALIMENTADO pela água fria e é a ORIGEM da rede quente.
+  AQUECEDOR: AF_AQ,
+  // A boia é a ENTRADA da caixa d'água: fica na água fria.
+  TORNEIRA_BOIA: ["AGUA_FRIA"],
+  RALO_SECO: ESG,
+  RALO_SIFONADO: ESG,
+  RALO_LINEAR: ESG,
+  CAIXA_SIFONADA: ESG,
+  CAIXA_INSPECAO: ESG,
+  LIGACAO_ESGOTO: ESG,
+  RALO_PLUVIAL: PLU,
+  CAIXA_AREIA: PLU,
+  LIGACAO_PLUVIAL: PLU,
+  TANQUE_SEPTICO: ESG,
+  FILTRO_ANAEROBIO: ESG,
+  SUMIDOURO: ESG,
+  CAIXA_GORDURA: ESG,
+  REGISTRO_GAVETA: AF_AQ_INC,
+  REGISTRO_PRESSAO: AF_AQ,
+  VALVULA_RETENCAO: AF_AQ_INC,
+  REGISTRO_ESFERA: AF_AQ,
+  VRP: AF_AQ,
+  HIDROMETRO: ["AGUA_FRIA"],
+  CONEXAO_JOELHO_90: TUBOS,
+  CONEXAO_JOELHO_45: TUBOS,
+  CONEXAO_TE: TUBOS,
+  CONEXAO_LUVA: TUBOS,
+  CONEXAO_REDUCAO: TUBOS,
+  HIDRANTE_SIMPLES: INC,
+  HIDRANTE_DUPLO: INC,
+  MANGOTINHO: INC,
+  HIDRANTE_RECALQUE: INC,
+  SPRINKLER: INC,
+  VGA: INC,
+  CHAVE_FLUXO: INC,
+  BOMBA_INCENDIO: INC,
+  BOMBA_JOCKEY: INC,
+  PRESSOSTATO: INC,
+  EXTINTOR: INC,
+  PLACA: INC,
+  LUMINARIA_EMERGENCIA: INC,
+  DETECTOR_FUMACA: INC,
+  DETECTOR_TEMPERATURA: INC,
+  MANOMETRO: INC,
+  DETECTOR_CHAMA: INC,
+  ACIONADOR_MANUAL: INC,
+  AVISADOR: INC,
+  CENTRAL_ALARME: INC,
+  PREVENTIVO_PERSONALIZADO: INC,
+  // Climatização E3.1/E3.3 (0.92.0): o equipamento liga na LINHA; o dreno no DRENO; o ar na MECANICA.
+  EVAPORADORA_HI_WALL: ["FRIGORIGENA"],
+  EVAPORADORA_PISO_TETO: ["FRIGORIGENA"],
+  EVAPORADORA_CASSETE: ["FRIGORIGENA"],
+  EVAPORADORA_DUTADA: ["FRIGORIGENA"],
+  CONDENSADORA_SPLIT: ["FRIGORIGENA"],
+  CONDENSADORA_VRF: ["FRIGORIGENA"],
+  DERIVADOR_VRF: ["FRIGORIGENA"],
+  EXAUSTOR_AR: ["MECANICA"],
+  BOMBA_DRENO: ["DRENO_AC"],
+  PONTO_DRENO: ["DRENO_AC"],
+  CAIXA_DISTRIBUICAO_AR: ["MECANICA"],
+  DIFUSOR: ["MECANICA"],
+  GRELHA_INSUFLAMENTO: ["MECANICA"],
+  GRELHA_RETORNO: ["MECANICA"],
+  BOCAL_AR: ["MECANICA"],
+  TOMADA_AR_EXTERIOR: ["MECANICA"],
+  VENEZIANA_AR: ["MECANICA"],
+  CAIXA_PLENUM: ["MECANICA"],
+  DAMPER: ["MECANICA"],
+  EQUIPAMENTO_CLIMATIZACAO: ["FRIGORIGENA", "DRENO_AC", "MECANICA"]
+};
 function cadeiaDeQuadros(model, quadroId) {
   const porId = new Map((model.quadros ?? []).map((q) => [q.id, q]));
   const saida = [];
@@ -2224,6 +2322,8 @@ function projetar(model) {
       // Climatização E3.2 (0.92.0): só quando declarados.
       bitolaSuccaoMm: t.bitolaSuccaoMm ?? void 0,
       isolamentoMm: t.isolamentoMm ?? void 0,
+      // Climatização E7.1 (0.93.0): só quando o duto é retangular.
+      alturaDutoMm: t.alturaDutoMm ?? void 0,
       // `true` ou AUSENTE — nunca `false`, pela razão do `sugerida` do terminal.
       sugerido: t.sugerido ? true : void 0,
       parametros: parametrosCanonicos(t.parametros)
@@ -2275,6 +2375,8 @@ function projetar(model) {
       autonomiaMin: t.autonomiaMin ?? void 0,
       // Climatização E3.1 (0.92.0): a capacidade, só quando declarada; a condensadora vai por índice (segundo passo).
       capacidadeBtuH: t.capacidadeBtuH ?? void 0,
+      // Climatização E7.2 (0.93.0): a vazão de ar, só quando declarada.
+      vazaoM3h: t.vazaoM3h ?? void 0,
       // Incêndio E3.2 (0.81.0): só quando declarada.
       volumeRtiL: t.volumeRtiL ?? void 0,
       // Incêndio E4.1 (0.82.0): a curva como pares [vazão, altura]; o NPSH; só quando declarados.
@@ -3040,6 +3142,7 @@ function modelFromCanonicalPayload(payload) {
       ...t.secaoCalha ? { secaoCalha: t.secaoCalha, alturaCalhaMm: t.alturaCalhaMm ?? null } : {},
       ...t.bitolaSuccaoMm != null ? { bitolaSuccaoMm: t.bitolaSuccaoMm } : {},
       ...t.isolamentoMm != null ? { isolamentoMm: t.isolamentoMm } : {},
+      ...t.alturaDutoMm != null ? { alturaDutoMm: t.alturaDutoMm } : {},
       sugerido: t.sugerido ? true : null,
       ...t.parametros && Object.keys(t.parametros).length > 0 ? { parametros: { ...t.parametros } } : {}
     });
@@ -3077,6 +3180,7 @@ function modelFromCanonicalPayload(payload) {
       codigoPlaca: t.codigoPlaca ?? null,
       autonomiaMin: t.autonomiaMin ?? null,
       capacidadeBtuH: t.capacidadeBtuH ?? null,
+      vazaoM3h: t.vazaoM3h ?? null,
       volumeRtiL: t.volumeRtiL ?? null,
       curvaBomba: t.curvaBomba ? t.curvaBomba.map(([q, h]) => ({ vazaoLmin: q, alturaMm: h })) : null,
       npshrMm: t.npshrMm ?? null,
@@ -3352,10 +3456,17 @@ function conexoesDerivadas(model) {
   const terminaisPorChave = /* @__PURE__ */ new Map();
   for (const term of model.terminais ?? []) {
     if (!HIDRAULICAS.includes(term.disciplina)) continue;
-    const k = chave(term.levelId, term.disciplina, term.at.x, term.at.y, term.cotaMm).chave;
-    const lista = terminaisPorChave.get(k) ?? [];
-    lista.push(term);
-    terminaisPorChave.set(k, lista);
+    const disciplinas = /* @__PURE__ */ new Set([term.disciplina]);
+    if (term.tipoHidraulico && TIPOS_DE_CLIMATIZACAO.includes(term.tipoHidraulico)) {
+      for (const d of DISCIPLINAS_DO_PONTO_HIDRAULICO[term.tipoHidraulico]) disciplinas.add(d);
+      if (TIPOS_DE_EVAPORADORA.includes(term.tipoHidraulico)) disciplinas.add("DRENO_AC");
+    }
+    for (const d of disciplinas) {
+      const k = chave(term.levelId, d, term.at.x, term.at.y, term.cotaMm).chave;
+      const lista = terminaisPorChave.get(k) ?? [];
+      lista.push(term);
+      terminaisPorChave.set(k, lista);
+    }
   }
   const caixas = (model.terminais ?? []).flatMap((term) => {
     if (!POR_GRAVIDADE.includes(term.disciplina)) return [];
@@ -3382,6 +3493,7 @@ function conexoesDerivadas(model) {
     const ramais = [...inc].sort((x, y) => x.trecho.id.localeCompare(y.trecho.id)).map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm }));
     const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
     if (!manual && dentroDeCaixa(no)) continue;
+    if (!manual && terminais.some((t) => t.tipoHidraulico === "DERIVADOR_VRF")) continue;
     if (manual) {
       conexoes.push({ ...base, tipo: manual, origem: "MANUAL", ...menor !== maior ? { paraMm: menor } : {} });
       continue;
@@ -7171,6 +7283,30 @@ var FICHA_DO_MATERIAL = {
     ],
     cHazenWilliams: 150,
     fonte: "ASTM F442 SDR 13,5 (CPVC de sprinkler, s\xF3 em risco leve); \u03B5 de pl\xE1stico liso \u2014 CONFERIR NA NORMA"
+  },
+  // Climatização E7.1 (05/10/2026): os DUTOS (ar). O "DN" do duto redondo é o diâmetro;
+  // a rugosidade é a do ar em duto (ASHRAE, típica) — HIPÓTESE, CONFERIR. O coeficiente
+  // de Hazen-Williams não se aplica a ar (fica por obrigação do tipo, não é usado).
+  CHAPA_GALVANIZADA: {
+    rotulo: "Chapa galvanizada",
+    rugosidadeMm: 0.15,
+    diametros: [{ dn: 100, internoMm: 100 }, { dn: 125, internoMm: 125 }, { dn: 150, internoMm: 150 }, { dn: 200, internoMm: 200 }, { dn: 250, internoMm: 250 }, { dn: 300, internoMm: 300 }, { dn: 350, internoMm: 350 }, { dn: 400, internoMm: 400 }, { dn: 450, internoMm: 450 }, { dn: 500, internoMm: 500 }, { dn: 600, internoMm: 600 }, { dn: 700, internoMm: 700 }, { dn: 800, internoMm: 800 }, { dn: 900, internoMm: 900 }, { dn: 1e3, internoMm: 1e3 }],
+    cHazenWilliams: 120,
+    fonte: "Rugosidade t\xEDpica de duto de chapa galvanizada (ASHRAE Fundamentals) \u2014 HIP\xD3TESE, CONFERIR."
+  },
+  PAINEL_PREISOLADO: {
+    rotulo: "Painel pr\xE9-isolado",
+    rugosidadeMm: 0.9,
+    diametros: [{ dn: 200, internoMm: 200 }, { dn: 250, internoMm: 250 }, { dn: 300, internoMm: 300 }, { dn: 350, internoMm: 350 }, { dn: 400, internoMm: 400 }, { dn: 450, internoMm: 450 }, { dn: 500, internoMm: 500 }, { dn: 600, internoMm: 600 }, { dn: 700, internoMm: 700 }, { dn: 800, internoMm: 800 }, { dn: 900, internoMm: 900 }, { dn: 1e3, internoMm: 1e3 }],
+    cHazenWilliams: 120,
+    fonte: "Rugosidade t\xEDpica de painel de duto pr\xE9-isolado \u2014 HIP\xD3TESE, CONFERIR com o fabricante."
+  },
+  DUTO_FLEXIVEL: {
+    rotulo: "Duto flex\xEDvel",
+    rugosidadeMm: 3,
+    diametros: [{ dn: 100, internoMm: 100 }, { dn: 125, internoMm: 125 }, { dn: 150, internoMm: 150 }, { dn: 160, internoMm: 160 }, { dn: 200, internoMm: 200 }, { dn: 250, internoMm: 250 }, { dn: 300, internoMm: 300 }, { dn: 350, internoMm: 350 }, { dn: 400, internoMm: 400 }],
+    cHazenWilliams: 120,
+    fonte: "Rugosidade t\xEDpica de duto flex\xEDvel esticado \u2014 HIP\xD3TESE, CONFERIR (frouxo perde bem mais)."
   }
 };
 var PES = 0.3048;

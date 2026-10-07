@@ -2211,7 +2211,11 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: numb
 
   const centroPerfil = emitir('IFCCARTESIANPOINT((0.,0.))');
   const posPerfil = emitir(`IFCAXIS2PLACEMENT2D(${centroPerfil},$)`);
-  const perfil = emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
+  // E7.1 (05/10/2026): o duto retangular sai com o perfil retangular — X local é horizontal e
+  // perpendicular ao eixo (`solidoAoLongo`), então a largura fica deitada e a altura em pé.
+  const perfil = t.alturaDutoMm != null
+    ? emitir(`IFCRECTANGLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm)},${n(t.alturaDutoMm)})`)
+    : emitir(`IFCCIRCLEPROFILEDEF(.AREA.,$,${posPerfil},${n(t.bitolaMm / 2)})`);
 
   const solidos = segmentosDoEletroduto(t, peDireitoMm).map((seg) => {
     const dx = seg.b.x - seg.a.x;

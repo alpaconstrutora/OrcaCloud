@@ -1139,10 +1139,20 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         .map(({ t, k, c }) => {
           // O `CylinderGeometry` nasce alinhado ao Y — daí a prumada ser o caso
           // trivial e a rotação sair de um `setFromUnitVectors` só.
-          const quaternion = new THREE.Quaternion().setFromUnitVectors(
-            new THREE.Vector3(0, 1, 0),
-            new THREE.Vector3(c.eixo[0], c.eixo[1], c.eixo[2]),
-          );
+          // E7.1 (05/10/2026): o duto RETANGULAR gira pela base completa (largura deitada, altura em
+          // pé) — `setFromUnitVectors` deixaria o giro em torno do eixo ao acaso.
+          const quaternion = c.retangular
+            ? new THREE.Quaternion().setFromRotationMatrix(
+                new THREE.Matrix4().makeBasis(
+                  new THREE.Vector3(...c.retangular.base.x),
+                  new THREE.Vector3(...c.retangular.base.y),
+                  new THREE.Vector3(...c.retangular.base.z),
+                ),
+              )
+            : new THREE.Quaternion().setFromUnitVectors(
+                new THREE.Vector3(0, 1, 0),
+                new THREE.Vector3(c.eixo[0], c.eixo[1], c.eixo[2]),
+              );
           return {
             // A chave do React precisa distinguir os dois pedaços; o id de
             // seleção continua sendo o do TRECHO — clicar em qualquer pedaço
@@ -1154,12 +1164,14 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             // Raio mínimo de 15 mm no desenho: um eletroduto de 25 mm tem 12 mm
             // de raio e some na tela cheia. Isto é ESPESSURA DE TRAÇO, não
             // medida — o quantitativo usa a bitola de verdade.
-            geom: new THREE.CylinderGeometry(
-              Math.max(c.raioM, 0.015),
-              Math.max(c.raioM, 0.015),
-              c.comprimentoM,
-              10,
-            ),
+            geom: c.retangular
+              ? new THREE.BoxGeometry(c.retangular.larguraM, c.comprimentoM, c.retangular.alturaM)
+              : new THREE.CylinderGeometry(
+                  Math.max(c.raioM, 0.015),
+                  Math.max(c.raioM, 0.015),
+                  c.comprimentoM,
+                  10,
+                ),
             position: new THREE.Vector3(c.centro[0], c.centro[1], c.centro[2]),
             quaternion,
           };

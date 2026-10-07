@@ -2629,6 +2629,11 @@ export const MATERIAIS_DE_TUBO = [
   'ACO_GALVANIZADO',
   'ACO_CARBONO',
   'CPVC_INCENDIO',
+  // Climatização E7.1 (05/10/2026, kernel 0.93.0): os DUTOS. Sem padrão de disciplina —
+  // o duto já desenhado não muda de chave no quantitativo; material só quando declarado.
+  'CHAPA_GALVANIZADA',
+  'PAINEL_PREISOLADO',
+  'DUTO_FLEXIVEL',
 ] as const;
 export type MaterialDeTubo = (typeof MATERIAIS_DE_TUBO)[number];
 
@@ -2644,6 +2649,8 @@ export const MATERIAIS_DA_DISCIPLINA: Partial<Record<DisciplinaDeRede, readonly 
   // Climatização E3.2 (0.92.0): a linha é cobre; o dreno é PVC (soldável ou CPVC perto do calor).
   FRIGORIGENA: ['COBRE'],
   DRENO_AC: ['PVC_SOLDAVEL', 'CPVC'],
+  // Climatização E7.1 (0.93.0): o duto é chapa, painel pré-isolado ou flexível (este, só redondo).
+  MECANICA: ['CHAPA_GALVANIZADA', 'PAINEL_PREISOLADO', 'DUTO_FLEXIVEL'],
 };
 
 /** A SEÇÃO da calha (E6.2, kernel 0.67.0): a meia-cana e a retangular (a da platibanda). */
@@ -2754,6 +2761,14 @@ export interface Trecho {
   bitolaSuccaoMm?: number | null;
   /** ISOLAMENTO térmico do tubo/duto, mm inteiro ≥ 0 — FRIGORIGENA, DRENO_AC e MECANICA. Ausente = sem isolamento. */
   isolamentoMm?: number | null;
+  /**
+   * DUTO RETANGULAR (0.93.0, climatização E7.1): a ALTURA da seção, mm inteiro > 0;
+   * com ela, `bitolaMm` é a LARGURA. Só em MECANICA e não em duto flexível.
+   * Ausente = duto redondo de diâmetro `bitolaMm` (como sempre foi). Campo
+   * próprio, e não `secaoCalha`: sete módulos do pluvial tratam como calha
+   * qualquer trecho com `secaoCalha`, sem olhar a disciplina.
+   */
+  alturaDutoMm?: number | null;
 }
 
 /**
@@ -3005,6 +3020,8 @@ export const TIPOS_DE_CONDENSADORA = ['CONDENSADORA_SPLIT', 'CONDENSADORA_VRF'] 
 export const TIPOS_DE_TERMINAL_DE_AR = ['DIFUSOR', 'GRELHA_INSUFLAMENTO', 'GRELHA_RETORNO', 'BOCAL_AR', 'TOMADA_AR_EXTERIOR', 'VENEZIANA_AR', 'CAIXA_PLENUM', 'DAMPER'] as const satisfies readonly TipoDePontoHidraulico[];
 /** Os que têm CAPACIDADE (BTU/h) declarável: quem troca calor. */
 export const TIPOS_COM_CAPACIDADE = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
+/** Climatização E7.2 (0.93.0): os tipos com VAZÃO de ar declarável. */
+export const TIPOS_COM_VAZAO = ['DIFUSOR', 'GRELHA_INSUFLAMENTO', 'GRELHA_RETORNO', 'BOCAL_AR', 'TOMADA_AR_EXTERIOR', 'VENEZIANA_AR', 'EXAUSTOR_AR', 'EVAPORADORA_DUTADA', 'CAIXA_DISTRIBUICAO_AR'] as const satisfies readonly TipoDePontoHidraulico[];
 export const TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF', 'EXAUSTOR_AR', 'BOMBA_DRENO', 'PONTO_DRENO', 'CAIXA_DISTRIBUICAO_AR', ...TIPOS_DE_TERMINAL_DE_AR, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
@@ -3118,7 +3135,8 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   EVAPORADORA_HI_WALL: ['FRIGORIGENA'],
   EVAPORADORA_PISO_TETO: ['FRIGORIGENA'],
   EVAPORADORA_CASSETE: ['FRIGORIGENA'],
-  EVAPORADORA_DUTADA: ['FRIGORIGENA'],
+  // E7 (05/10/2026): a dutada também SOPRA NO DUTO — a rede de ar (MECANICA) parte dela.
+  EVAPORADORA_DUTADA: ['FRIGORIGENA', 'MECANICA'],
   CONDENSADORA_SPLIT: ['FRIGORIGENA'],
   CONDENSADORA_VRF: ['FRIGORIGENA'],
   DERIVADOR_VRF: ['FRIGORIGENA'],
@@ -3370,6 +3388,12 @@ export interface Terminal {
    * carga térmica). Omitida no canônico quando ausente.
    */
   capacidadeBtuH?: number | null;
+  /**
+   * CLIMATIZAÇÃO (0.93.0, E7.2): a VAZÃO de ar declarada, m³/h inteiro > 0 — só nos
+   * tipos de `TIPOS_COM_VAZAO` (terminais de ar, exaustor, evaporadora dutada).
+   * Ausente = a E7 deriva (renovação/carga do ambiente repartida entre os terminais).
+   */
+  vazaoM3h?: number | null;
   /**
    * CLIMATIZAÇÃO (0.92.0, E3.1): a CONDENSADORA desta evaporadora (ou deste
    * derivador VRF) — a relação que faz o sistema. Canônico por ÍNDICE
@@ -5225,6 +5249,16 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (!(['FRIGORIGENA', 'DRENO_AC', 'MECANICA'] as readonly string[]).includes(t.disciplina)) throw new KernelError('BAD_PIPE_SIZE', `Isolamento fora de linha/dreno/duto em ${t.id} (${t.disciplina})`);
       if (!Number.isInteger(t.isolamentoMm) || t.isolamentoMm < 0) throw new KernelError('BAD_PIPE_SIZE', `Isolamento inválido em ${t.id}: ${String(t.isolamentoMm)}`);
     }
+    if (t.alturaDutoMm != null) {
+      if (t.disciplina !== 'MECANICA') throw new KernelError('BAD_PIPE_SIZE', `Duto retangular fora da mecânica em ${t.id} (${t.disciplina})`);
+      if (t.material === 'DUTO_FLEXIVEL') throw new KernelError('BAD_PIPE_SIZE', `Duto flexível não é retangular em ${t.id}`);
+      if (!Number.isInteger(t.alturaDutoMm) || t.alturaDutoMm <= 0) throw new KernelError('BAD_PIPE_SIZE', `Altura do duto inválida em ${t.id}: ${String(t.alturaDutoMm)}`);
+    }
+  }
+  for (const t of model.terminais ?? []) {
+    if (t.vazaoM3h == null) continue;
+    if (!t.tipoHidraulico || !(TIPOS_COM_VAZAO as readonly string[]).includes(t.tipoHidraulico)) throw new KernelError('BAD_FLOW', `${t.id} (${t.tipoHidraulico ?? t.tipo}) não tem vazão de ar`);
+    if (!Number.isInteger(t.vazaoM3h) || t.vazaoM3h <= 0) throw new KernelError('BAD_FLOW', `Vazão inválida em ${t.id}: ${String(t.vazaoM3h)} m³/h`);
   }
 
   // Parâmetros personalizados, nas famílias que os carregam.

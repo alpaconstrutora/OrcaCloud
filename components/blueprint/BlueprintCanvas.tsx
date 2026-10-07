@@ -6175,7 +6175,8 @@ export default function BlueprintCanvas({
           const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
           const caimento = t.disciplina === 'ESGOTO' && !prumada && compMm > 0 && desnivel > 0 ? ` · i ${((desnivel / compMm) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %` : '';
           // O duto (P2.2) é "Ø" (diâmetro equivalente); cano é DN.
-          ctx.fillText(`${t.disciplina === 'MECANICA' ? 'Ø' : 'DN'} ${t.bitolaMm}${caimento}`, c.x + 6 * fz, c.y - 5 * fz);
+          // E7.1: o duto retangular se escreve LxA.
+          ctx.fillText(`${t.disciplina === 'MECANICA' ? (t.alturaDutoMm != null ? `${t.bitolaMm}×${t.alturaDutoMm}` : `Ø ${t.bitolaMm}`) : `DN ${t.bitolaMm}`}${caimento}`, c.x + 6 * fz, c.y - 5 * fz);
         }
       }
     }

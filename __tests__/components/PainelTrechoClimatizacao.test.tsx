@@ -76,4 +76,42 @@ describe('PainelTrechoSelecionado › climatização', () => {
     expect(screen.queryByLabelText('Diâmetro da linha de sucção, em milímetros')).toBeNull();
     expect(screen.queryByLabelText('Espessura do isolamento térmico, em milímetros')).toBeNull();
   });
+
+  it('E7.1: o duto escolhe a seção — redonda (Diâmetro) ou retangular (Largura + Altura); o flexível trava em redonda dizendo por quê; o material sem padrão diz "Não declarado"', () => {
+    const onTrecho = vi.fn();
+    const r = render(<PainelTrechoSelecionado trecho={trecho('MECANICA', { bitolaMm: 600 })} terminal={null} onTrecho={onTrecho} onTerminal={() => {}} />);
+    const secao = screen.getByLabelText('Seção do duto') as HTMLSelectElement;
+    expect(secao.value).toBe('REDONDA');
+    expect(screen.getByLabelText('Bitola do trecho, em milímetros').closest('label')!.textContent).toMatch(/^Diâmetro/);
+    expect((screen.getByLabelText('Material do tubo') as HTMLSelectElement).options[0].textContent).toBe('Não declarado');
+    fireEvent.change(secao, { target: { value: 'RETANGULAR' } });
+    expect(onTrecho).toHaveBeenLastCalledWith({ alturaDutoMm: 300 });
+    r.unmount();
+    const r2 = render(<PainelTrechoSelecionado trecho={trecho('MECANICA', { bitolaMm: 600, alturaDutoMm: 300 })} terminal={null} onTrecho={onTrecho} onTerminal={() => {}} />);
+    expect(screen.getByLabelText('Bitola do trecho, em milímetros').closest('label')!.textContent).toMatch(/^Largura/);
+    const altura = screen.getByLabelText('Altura do duto retangular, em milímetros') as HTMLInputElement;
+    expect(altura.value).toBe('300');
+    fireEvent.change(altura, { target: { value: '400' } });
+    fireEvent.blur(altura);
+    expect(onTrecho).toHaveBeenLastCalledWith({ alturaDutoMm: 400 });
+    fireEvent.change(screen.getByLabelText('Seção do duto'), { target: { value: 'REDONDA' } });
+    expect(onTrecho).toHaveBeenLastCalledWith({ alturaDutoMm: null });
+    r2.unmount();
+    render(<PainelTrechoSelecionado trecho={trecho('MECANICA', { bitolaMm: 200, material: 'DUTO_FLEXIVEL' })} terminal={null} onTrecho={() => {}} onTerminal={() => {}} />);
+    const travado = screen.getByLabelText('Seção do duto') as HTMLSelectElement;
+    expect(travado.disabled).toBe(true);
+    expect(travado.title).toMatch(/flexível é sempre redondo/);
+  });
+
+  it('E7.2: o terminal de ar declara a vazão (vazio = derivada); o ponto de água não tem o campo', () => {
+    const onTerminal = vi.fn();
+    const r = render(<PainelTrechoSelecionado trecho={null} terminal={terminal('MECANICA', 'DIFUSOR')} onTrecho={() => {}} onTerminal={onTerminal} />);
+    const vazao = screen.getByLabelText('Vazão de ar do terminal (m³/h)') as HTMLInputElement;
+    expect(vazao.placeholder).toBe('derivada do ambiente');
+    fireEvent.change(vazao, { target: { value: '350' } });
+    expect(onTerminal).toHaveBeenLastCalledWith({ vazaoM3h: 350 });
+    r.unmount();
+    render(<PainelTrechoSelecionado trecho={null} terminal={terminal('AGUA_FRIA', 'LAVATORIO')} onTrecho={() => {}} onTerminal={() => {}} />);
+    expect(screen.queryByTestId('campo-vazao')).toBeNull();
+  });
 });

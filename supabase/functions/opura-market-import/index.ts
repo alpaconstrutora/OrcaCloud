@@ -26,10 +26,12 @@
 // um que venha só do corpo sem passar pela checagem.
 //
 // ─── Geocodificação ─────────────────────────────────────────────────────────
-// Nominatim (OpenStreetMap): 1 requisição por segundo, User-Agent identificado,
+// Photon (OpenStreetMap): 1 requisição por segundo, User-Agent identificado,
 // cache por consulta. Orçamento de ~100 s por chamada: o que não couber fica
 // pendente (geo_precision NULL) e o modo 'localizar' completa depois. Erro do
-// Nominatim também é "pendente", não "não encontrado".
+// geocodificador também é "pendente", não "não encontrado"; o motivo volta em
+// `falhaGeocodificacao`. O Nominatim público foi descartado: responde HTTP 403
+// a chamadas vindas da Supabase.
 
 // @ts-ignore
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -42,7 +44,7 @@ import {
   bairroDoEndereco,
   enderecoEhSoBairro,
   lerFeedVrsync,
-  consultaDeEndereco,
+  consultasDeEndereco,
   localizacaoDoResultado,
   urlDeFeedPermitida,
   type BairroConhecido,
@@ -62,7 +64,9 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
-const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+// Photon (OpenStreetMap): o Nominatim público responde HTTP 403 a chamadas
+// vindas da Supabase (medido em 07/10/2026). Ver o cabeçalho de logica.ts.
+const PHOTON = 'https://photon.komoot.io/api/';
 const AGENTE = 'OpuraMarketIntel/1.0 (OrcaCloud; contato@opura.com.br)';
 const INTERVALO_MS = 1100;
 const ORCAMENTO_MS = 100_000;
@@ -75,25 +79,46 @@ type Resultado = Localizacao | 'fonte' | null | 'adiado';
 function criarGeocodificador(cidade: string) {
   const inicio = Date.now();
   let ultima = 0;
+  let ultimaFalha: string | null = null;
   const cache = new Map<string, Localizacao | null>();
-  return async (consulta: ConsultaGeo): Promise<Localizacao | null | 'adiado'> => {
+
+  const tentar = async (consulta: ConsultaGeo): Promise<Localizacao | null | 'adiado'> => {
     if (cache.has(consulta.q)) return cache.get(consulta.q) ?? null;
     if (Date.now() - inicio > ORCAMENTO_MS) return 'adiado';
     const espera = ultima + INTERVALO_MS - Date.now();
     if (espera > 0) await new Promise((r) => setTimeout(r, espera));
     ultima = Date.now();
     try {
-      const url = `${NOMINATIM}?format=jsonv2&limit=1&countrycodes=br&q=${encodeURIComponent(consulta.q)}`;
-      const r = await fetch(url, { headers: { 'User-Agent': AGENTE, Accept: 'application/json', 'Accept-Language': 'pt-BR' } });
-      if (!r.ok) return 'adiado';
+      const url = `${PHOTON}?limit=1&q=${encodeURIComponent(consulta.q)}`;
+      const r = await fetch(url, {
+        headers: { 'User-Agent': AGENTE, Accept: 'application/json' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!r.ok) {
+        ultimaFalha = `Geocodificador respondeu HTTP ${r.status}`;
+        return 'adiado';
+      }
       const dados = await r.json();
-      const loc = localizacaoDoResultado(Array.isArray(dados) ? dados[0] : null, consulta, cidade);
+      const loc = localizacaoDoResultado(Array.isArray(dados?.features) ? dados.features[0] : null, consulta, cidade);
       cache.set(consulta.q, loc);
       return loc;
-    } catch {
+    } catch (e) {
+      ultimaFalha = `Geocodificador inacessível: ${e instanceof Error ? e.message : String(e)}`;
       return 'adiado';
     }
   };
+
+  /** Percorre as tentativas até a primeira que localiza. Falha de rede = adiado, não "não encontrado". */
+  const localizar = async (consultas: ConsultaGeo[]): Promise<Localizacao | null | 'adiado'> => {
+    for (const c of consultas) {
+      const r = await tentar(c);
+      if (r === 'adiado') return 'adiado';
+      if (r) return r;
+    }
+    return null;
+  };
+
+  return { localizar, falha: () => ultimaFalha };
 }
 
 /** Colunas de localização a partir do resultado. 'adiado' = pendente (precisão NULL). */
@@ -217,8 +242,7 @@ serve(async (req: Request) => {
         const area = Number(l?.area);
         if (!endereco || !(preco > 0) || !(area > 0)) { invalidas++; continue; }
         const bairro = textoOuNulo(l?.bairro);
-        const consulta = consultaDeEndereco({ rua: endereco, bairro, cidade: cidade.name, uf: cidade.state });
-        const loc = consulta ? await geo(consulta) : null;
+        const loc = await geo.localizar(consultasDeEndereco({ rua: endereco, bairro, cidade: cidade.name, uf: cidade.state }));
         registros.push({
           ...base,
           neighborhood_id: casarBairro(bairro, bairros),
@@ -240,7 +264,7 @@ serve(async (req: Request) => {
         });
       }
       const gravacao = await gravar(admin, registros);
-      return json({ ...gravacao, ...contarLocalizacao(registros), invalidas });
+      return json({ ...gravacao, ...contarLocalizacao(registros), invalidas, falhaGeocodificacao: geo.falha() });
     }
 
     // ── feed ───────────────────────────────────────────────────────────────
@@ -308,8 +332,7 @@ serve(async (req: Request) => {
         if (a.lat != null && a.lng != null) {
           loc = 'fonte';
         } else {
-          const consulta = consultaDeEndereco({ rua: a.rua, numero: a.numero, bairro: a.bairro, cidade: cidade.name, uf: cidade.state });
-          loc = consulta ? await geo(consulta) : null;
+          loc = await geo.localizar(consultasDeEndereco({ rua: a.rua, numero: a.numero, bairro: a.bairro, cidade: cidade.name, uf: cidade.state }));
         }
         const ruaComNumero = a.rua ? [a.rua, a.numero].filter(Boolean).join(', ') : null;
         registros.push({
@@ -336,7 +359,7 @@ serve(async (req: Request) => {
         });
       }
       const gravacao = await gravar(admin, registros);
-      return json({ ...gravacao, atualizados, ...contarLocalizacao(registros), ignorados, lidos: lido.anuncios.length });
+      return json({ ...gravacao, atualizados, ...contarLocalizacao(registros), ignorados, lidos: lido.anuncios.length, falhaGeocodificacao: geo.falha() });
     }
 
     // ── localizar ─────────────────────────────────────────────────────────
@@ -354,17 +377,16 @@ serve(async (req: Request) => {
     for (const p of pendentes ?? []) {
       const soBairro = enderecoEhSoBairro(p.address, cidade.name, cidade.state);
       const bairro = p.neighborhood_name_raw ?? (soBairro ? bairroDoEndereco(p.address) : null);
-      const consulta = soBairro
-        ? consultaDeEndereco({ bairro, cidade: cidade.name, uf: cidade.state })
-        : consultaDeEndereco({ rua: p.address, bairro, cidade: cidade.name, uf: cidade.state });
-      const loc = consulta ? await geo(consulta) : null;
+      const loc = await geo.localizar(soBairro
+        ? consultasDeEndereco({ bairro, cidade: cidade.name, uf: cidade.state })
+        : consultasDeEndereco({ rua: p.address, bairro, cidade: cidade.name, uf: cidade.state }));
       if (loc === 'adiado') { restantes++; continue; }
       const { error: e2 } = await admin.from('opura_market_listings')
         .update(colunasDeLocalizacao(loc)).eq('id', p.id).eq('organization_id', organizationId);
       if (e2) throw new Error(`Falha ao gravar localização: ${e2.message}`);
       if (loc) localizados++; else naoEncontrados++;
     }
-    return json({ localizados, naoEncontrados, restantes });
+    return json({ localizados, naoEncontrados, restantes, falhaGeocodificacao: geo.falha() });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

@@ -8,7 +8,10 @@ import {
   enderecoEhSoBairro,
   lerFeedVrsync,
   tipoDoImovel,
-  consultaDeEndereco,
+  consultasDeEndereco,
+  estadoPorExtenso,
+  separarNumero,
+  semTipoDeVia,
   localizacaoDoResultado,
   urlDeFeedPermitida,
 } from '../supabase/functions/opura-market-import/logica';
@@ -69,59 +72,82 @@ describe('bairro: casa exato ou fica sem bairro — nunca "Centro" por falta de 
   });
 });
 
-describe('consulta de geocodificação: pelo endereço, não pelo bairro', () => {
-  it('rua + número + bairro + cidade', () => {
-    expect(consultaDeEndereco({ rua: 'Rua Tiradentes', numero: '80', bairro: 'Centro', cidade: 'Cambuí', uf: 'MG' }))
-      .toEqual({ q: 'Rua Tiradentes 80, Centro, Cambuí - MG, Brasil', temRua: true });
+describe('tentativas de geocodificação: pelo endereço, e o bairro só no fim', () => {
+  it('estado por extenso, tipo de via e separação do número', () => {
+    expect(estadoPorExtenso('mg')).toBe('Minas Gerais');
+    expect(semTipoDeVia('Avenida Tiradentes')).toBe('Tiradentes');
+    expect(semTipoDeVia('Padre Caramuru')).toBe('Padre Caramuru');
+    expect(separarNumero('Rua Tiradentes, 80')).toEqual({ nome: 'Rua Tiradentes', numero: '80' });
+    expect(separarNumero('Av. do Carmo nº 100')).toEqual({ nome: 'Av. do Carmo', numero: '100' });
+    expect(separarNumero('Tiradentes')).toEqual({ nome: 'Tiradentes', numero: null });
   });
 
-  it('não repete o número quando a rua já o traz', () => {
-    expect(consultaDeEndereco({ rua: 'Rua Tiradentes, 80', numero: '80', cidade: 'Cambuí', uf: 'MG' })!.q)
-      .toBe('Rua Tiradentes, 80, Cambuí - MG, Brasil');
+  it('rua com número → rua sem número → rua sem o tipo → bairro', () => {
+    expect(consultasDeEndereco({ rua: 'Rua Tiradentes', numero: '80', bairro: 'Centro', cidade: 'Cambuí', uf: 'MG' })).toEqual([
+      { q: 'Rua Tiradentes 80, Cambuí, Minas Gerais', alvo: 'tiradentes', temRua: true },
+      { q: 'Rua Tiradentes, Cambuí, Minas Gerais', alvo: 'tiradentes', temRua: true },
+      // "Rua Tiradentes" não existe no mapa de Cambuí; "Tiradentes" acha a Avenida (medido em 07/10/2026)
+      { q: 'Tiradentes, Cambuí, Minas Gerais', alvo: 'tiradentes', temRua: true },
+      { q: 'Centro, Cambuí, Minas Gerais', alvo: 'centro', temRua: false },
+    ]);
   });
 
-  it('sem rua, cai para o bairro e marca que não há rua', () => {
-    expect(consultaDeEndereco({ bairro: 'Vale do Sol', cidade: 'Cambuí', uf: 'MG' }))
-      .toEqual({ q: 'Vale do Sol, Cambuí - MG, Brasil', temRua: false });
+  it('o número que vem dentro da rua não é repetido', () => {
+    expect(consultasDeEndereco({ rua: 'Rua Tiradentes, 80', cidade: 'Cambuí', uf: 'MG' })[0].q)
+      .toBe('Rua Tiradentes 80, Cambuí, Minas Gerais');
   });
 
-  it('sem rua e sem bairro não consulta — o centro da cidade não localiza imóvel', () => {
-    expect(consultaDeEndereco({ cidade: 'Cambuí', uf: 'MG' })).toBeNull();
+  it('rua sem tipo não gera tentativa repetida', () => {
+    expect(consultasDeEndereco({ rua: 'Padre Caramuru', cidade: 'Cambuí', uf: 'MG' }).map((c) => c.q))
+      .toEqual(['Padre Caramuru, Cambuí, Minas Gerais']);
+  });
+
+  it('sem rua, só o bairro, marcado como sem rua', () => {
+    expect(consultasDeEndereco({ bairro: 'Vale do Sol', cidade: 'Cambuí', uf: 'MG' }))
+      .toEqual([{ q: 'Vale do Sol, Cambuí, Minas Gerais', alvo: 'vale do sol', temRua: false }]);
+  });
+
+  it('sem rua e sem bairro não há tentativa — o centro da cidade não localiza imóvel', () => {
+    expect(consultasDeEndereco({ cidade: 'Cambuí', uf: 'MG' })).toEqual([]);
   });
 });
 
-describe('resultado do Nominatim → precisão', () => {
-  const comRua = { q: 'Rua Tiradentes 80, Cambuí - MG, Brasil', temRua: true };
-  const soBairro = { q: 'Vale do Sol, Cambuí - MG, Brasil', temRua: false };
-  const r = (rank: number, display = 'Rua Tiradentes, Centro, Cambuí, Minas Gerais, Brasil', lat = -22.61, lon = -46.05) =>
-    ({ lat: String(lat), lon: String(lon), place_rank: rank, display_name: display });
+describe('resultado do Photon → precisão, com as duas travas', () => {
+  const rua = { q: 'Tiradentes, Cambuí, Minas Gerais', alvo: 'tiradentes', temRua: true };
+  const bairro = { q: 'Vale do Sol, Cambuí, Minas Gerais', alvo: 'vale do sol', temRua: false };
+  const f = (type: string, props: Record<string, string>, lon = -46.056, lat = -22.6157) =>
+    ({ geometry: { coordinates: [lon, lat] as [number, number] }, properties: { type, city: 'Cambuí', ...props } });
 
-  it('rua ou número com rua na consulta → endereco', () => {
-    expect(localizacaoDoResultado(r(30), comRua, 'Cambuí')).toEqual({ lat: -22.61, lng: -46.05, precisao: 'endereco' });
-    expect(localizacaoDoResultado(r(26), comRua, 'Cambuí')!.precisao).toBe('endereco');
+  it('rua na cidade certa → endereco (respostas reais de 07/10/2026)', () => {
+    expect(localizacaoDoResultado(f('street', { name: 'Avenida Tiradentes' }), rua, 'Cambuí'))
+      .toEqual({ lat: -22.6157, lng: -46.056, precisao: 'endereco' });
+    expect(localizacaoDoResultado(f('house', { name: '80', street: 'Avenida Tiradentes' }), rua, 'Cambuí')!.precisao)
+      .toBe('endereco');
   });
 
-  it('bairro ou localidade → bairro', () => {
-    expect(localizacaoDoResultado(r(20), comRua, 'Cambuí')!.precisao).toBe('bairro');
-    expect(localizacaoDoResultado(r(22), soBairro, 'Cambuí')!.precisao).toBe('bairro');
+  it('localidade/bairro → bairro', () => {
+    expect(localizacaoDoResultado(f('locality', { name: 'Vale do Sol' }), bairro, 'Cambuí')!.precisao).toBe('bairro');
+    expect(localizacaoDoResultado(f('district', { name: 'Vale do Sol' }), bairro, 'Cambuí')!.precisao).toBe('bairro');
   });
 
   it('consulta sem rua nunca vira "endereco", mesmo que o resultado seja uma rua', () => {
-    expect(localizacaoDoResultado(r(27), soBairro, 'Cambuí')!.precisao).toBe('bairro');
+    expect(localizacaoDoResultado(f('street', { name: 'Rua Vale do Sol' }), bairro, 'Cambuí')!.precisao).toBe('bairro');
   });
 
-  it('nível de cidade ou maior é descartado', () => {
-    expect(localizacaoDoResultado(r(16, 'Cambuí, Minas Gerais, Brasil'), comRua, 'Cambuí')).toBeNull();
+  it('trava 1 — OUTRA cidade é descartada ("Rua Tiradentes 80" caiu na cidade de Tiradentes)', () => {
+    const outraCidade = { geometry: { coordinates: [-44.17, -21.10] as [number, number] },
+      properties: { type: 'house', name: '80', street: 'Rua Custódio Gomes', city: 'Tiradentes' } };
+    expect(localizacaoDoResultado(outraCidade, { ...rua, alvo: 'tiradentes' }, 'Cambuí')).toBeNull();
   });
 
-  it('resultado em OUTRA cidade é descartado (a rua "Rosa" caía a 30 km)', () => {
-    expect(localizacaoDoResultado(r(26, 'Rua Rosa, Pouso Alegre, Minas Gerais, Brasil', -22.88), comRua, 'Cambuí')).toBeNull();
+  it('trava 2 — nome procurado precisa estar no nome do resultado', () => {
+    expect(localizacaoDoResultado(f('street', { name: 'Rua Padre Caramuru' }), rua, 'Cambuí')).toBeNull();
   });
 
-  it('sem resultado, coordenada (0,0) ou rank ausente → null', () => {
-    expect(localizacaoDoResultado(null, comRua, 'Cambuí')).toBeNull();
-    expect(localizacaoDoResultado(r(30, undefined, 0, 0), comRua, 'Cambuí')).toBeNull();
-    expect(localizacaoDoResultado({ lat: '-22.6', lon: '-46.0', display_name: 'Cambuí' }, comRua, 'Cambuí')).toBeNull();
+  it('nível de cidade, sem resultado ou coordenada (0,0) → null', () => {
+    expect(localizacaoDoResultado(f('city', { name: 'Tiradentes' }), rua, 'Cambuí')).toBeNull();
+    expect(localizacaoDoResultado(null, rua, 'Cambuí')).toBeNull();
+    expect(localizacaoDoResultado(f('street', { name: 'Avenida Tiradentes' }, 0, 0), rua, 'Cambuí')).toBeNull();
   });
 });
 

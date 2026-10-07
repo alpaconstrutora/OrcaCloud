@@ -193,37 +193,93 @@ export function lerFeedVrsync(xml: string): FeedLido {
 }
 
 // ── Geocodificação ───────────────────────────────────────────────────────────
+//
+// Provedor: Photon (photon.komoot.io), geocodificador público sobre os dados do
+// OpenStreetMap. Medido em 07/10/2026: o Nominatim público responde HTTP 403 a
+// chamadas vindas da Supabase (bloqueio de IP de nuvem); o Photon responde e
+// acha as ruas e bairros de Cambuí. Mas ele APROXIMA: "Rua Tiradentes 80"
+// caiu numa rua da cidade de Tiradentes, a 200 km. Por isso duas travas:
+// a cidade do resultado tem de ser a pedida, e o nome procurado tem de estar
+// no nome do resultado.
 
 export interface ConsultaGeo {
+  /** Texto da busca. */
   q: string;
+  /** O que precisa aparecer no nome do resultado (normalizado), ex.: "tiradentes". */
+  alvo: string;
   /** A consulta tem rua? Sem rua, o melhor resultado possível é o bairro. */
   temRua: boolean;
 }
 
-/**
- * Rua + número + bairro + cidade/UF. Sem rua, cai para bairro + cidade/UF.
- * Sem rua e sem bairro não há consulta: um ponto no centro da cidade não diz
- * nada sobre a vizinhança do imóvel, e entraria na análise de raio errado.
- */
-export function consultaDeEndereco(e: {
-  rua?: string | null; numero?: string | null; bairro?: string | null; cidade: string; uf: string;
-}): ConsultaGeo | null {
-  const cidade = `${e.cidade} - ${e.uf}, Brasil`;
-  const rua = (e.rua ?? '').trim();
-  const bairro = (e.bairro ?? '').trim();
-  if (rua) {
-    const comNumero = e.numero && !/\d/.test(rua) ? `${rua} ${String(e.numero).trim()}` : rua;
-    return { q: [comNumero, bairro, cidade].filter(Boolean).join(', '), temRua: true };
-  }
-  if (bairro) return { q: `${bairro}, ${cidade}`, temRua: false };
-  return null;
+const ESTADOS: Record<string, string> = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal',
+  ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul',
+  MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí',
+  RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima',
+  SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins',
+};
+
+/** "MG" → "Minas Gerais". */
+export function estadoPorExtenso(uf: string | null | undefined): string {
+  const t = (uf ?? '').trim();
+  return ESTADOS[t.toUpperCase()] ?? t;
 }
 
-export interface ResultadoNominatim {
-  lat: string | number;
-  lon: string | number;
-  place_rank?: string | number;
-  display_name?: string;
+const TIPO_DE_VIA = /^(rua|r\.|avenida|av\.?|travessa|tv\.?|alameda|al\.|estrada|est\.|rodovia|rod\.|pra[cç]a|p[cç]a\.?|largo|beco|viela)\s+/i;
+
+/** "Avenida Tiradentes" → "Tiradentes". */
+export function semTipoDeVia(nome: string): string {
+  return nome.replace(TIPO_DE_VIA, '').trim();
+}
+
+/** "Rua Tiradentes, 80" → nome "Rua Tiradentes", número "80". O número explícito vence. */
+export function separarNumero(rua: string | null | undefined, numero?: string | null): { nome: string; numero: string | null } {
+  const t = (rua ?? '').trim();
+  const m = /^(.*?)[,\s]+(?:n[ºo°]?\.?\s*)?(\d+[a-z]?)\s*$/i.exec(t);
+  const nome = (m ? m[1] : t).replace(/[,\s]+$/, '').trim();
+  const n = (numero ?? '').toString().trim() || (m ? m[2] : '');
+  return { nome, numero: n || null };
+}
+
+/**
+ * Tentativas em ordem, da mais precisa para a menos: rua com número, rua sem
+ * número, rua sem o tipo ("Rua Tiradentes" não existe no mapa de Cambuí,
+ * "Avenida Tiradentes" sim, e "Tiradentes" acha a avenida — medido em
+ * 07/10/2026) e, por fim, o bairro. Sem rua e sem bairro não há tentativa: o
+ * centro da cidade não diz nada sobre a vizinhança do imóvel e entraria na
+ * análise de raio errado.
+ */
+export function consultasDeEndereco(e: {
+  rua?: string | null; numero?: string | null; bairro?: string | null; cidade: string; uf: string;
+}): ConsultaGeo[] {
+  const local = `${e.cidade}, ${estadoPorExtenso(e.uf)}`;
+  const lista: ConsultaGeo[] = [];
+  const { nome, numero } = separarNumero(e.rua, e.numero);
+  if (nome) {
+    const semTipo = semTipoDeVia(nome);
+    const alvo = normalizarNome(semTipo || nome);
+    if (numero) lista.push({ q: `${nome} ${numero}, ${local}`, alvo, temRua: true });
+    lista.push({ q: `${nome}, ${local}`, alvo, temRua: true });
+    if (semTipo && semTipo !== nome) lista.push({ q: `${semTipo}, ${local}`, alvo, temRua: true });
+  }
+  const bairro = (e.bairro ?? '').trim();
+  if (bairro) lista.push({ q: `${bairro}, ${local}`, alvo: normalizarNome(bairro), temRua: false });
+  return lista;
+}
+
+/** Um "feature" da resposta GeoJSON do Photon. */
+export interface ResultadoPhoton {
+  geometry?: { coordinates?: [number, number] };
+  properties?: {
+    type?: string;
+    name?: string;
+    street?: string;
+    city?: string;
+    county?: string;
+    locality?: string;
+    district?: string;
+    state?: string;
+  };
 }
 
 export interface Localizacao {
@@ -233,19 +289,26 @@ export interface Localizacao {
 }
 
 /**
- * Traduz o primeiro resultado do Nominatim. `place_rank`: 26–30 = rua/número,
- * 17–25 = bairro/localidade, ≤ 16 = cidade ou maior (descartado). O resultado
- * precisa estar na cidade pedida — sem isso, "Rosa" casava com uma rua a 30 km.
+ * Traduz o primeiro resultado do Photon. Tipo house/street = rua; locality,
+ * district = bairro/localidade; city ou maior = descartado. Travas: cidade
+ * exata e nome procurado contido no nome do resultado.
  */
-export function localizacaoDoResultado(r: ResultadoNominatim | null | undefined, consulta: ConsultaGeo, cidade: string): Localizacao | null {
-  if (!r) return null;
-  const lat = Number(r.lat);
-  const lng = Number(r.lon);
-  const rank = Number(r.place_rank);
-  if (!coordenadaValida(lat, lng) || !Number.isFinite(rank)) return null;
-  if (!normalizarNome(r.display_name).includes(normalizarNome(cidade))) return null;
-  if (rank >= 26) return { lat, lng, precisao: consulta.temRua ? 'endereco' : 'bairro' };
-  if (rank >= 17) return { lat, lng, precisao: 'bairro' };
+export function localizacaoDoResultado(r: ResultadoPhoton | null | undefined, consulta: ConsultaGeo, cidade: string): Localizacao | null {
+  const c = r?.geometry?.coordinates;
+  const p = r?.properties;
+  if (!c || !p) return null;
+  const [lng, lat] = c;
+  if (!coordenadaValida(lat, lng)) return null;
+
+  const alvoCidade = normalizarNome(cidade);
+  if (normalizarNome(p.city) !== alvoCidade && normalizarNome(p.county) !== alvoCidade) return null;
+
+  const nomeDoResultado = normalizarNome(`${p.name ?? ''} ${p.street ?? ''}`);
+  if (!consulta.alvo || !nomeDoResultado.includes(consulta.alvo)) return null;
+
+  const tipo = (p.type ?? '').toLowerCase();
+  if (tipo === 'house' || tipo === 'street') return { lat, lng, precisao: consulta.temRua ? 'endereco' : 'bairro' };
+  if (tipo === 'locality' || tipo === 'district') return { lat, lng, precisao: 'bairro' };
   return null;
 }
 

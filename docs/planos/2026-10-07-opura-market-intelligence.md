@@ -318,7 +318,7 @@ pontos distintos. A Edge Function do 3.1 precisa geocodificar pelo endereço.
 | Item | Estado |
 |---|---|
 | 3.1R `logica.ts` | ✅ 31 testes em `__tests__/opuraMarketImportLogica.test.ts`, incluindo "não importa nada" |
-| 3.2R Edge Function | ✅ publicada (`npx supabase functions deploy opura-market-import`); typecheck isolado em modo estrito sem erro; portões provados de fora. ⏳ Falta o caminho AUTORIZADO (gravar feed e planilha de teste como membro e apagar), que precisa da senha da conta de agente ou de um teste na tela |
+| 3.2R Edge Function | ✅ publicada (`npx supabase functions deploy opura-market-import`); typecheck isolado em modo estrito sem erro; portões provados de fora; caminho AUTORIZADO provado com a conta de agente (ver abaixo) |
 | 3.3R migration | ✅ ensaiada e aplicada |
 | 3.4R front | ✅ |
 
@@ -346,6 +346,37 @@ pontos distintos. A Edge Function do 3.1 precisa geocodificar pelo endereço.
 
 `verificar-opura-market-rls.sh` ganhou o 6º caso do gatilho (anúncio que GANHA
 coordenada depois é deduplicado no `UPDATE OF geom`) e passa em ensaio e aplicado.
+
+**Caminho autorizado (07/10/2026, conta de agente, membro da Alpa; senha dada pelo
+usuário só para esta sessão; registros de teste marcados `__prova_fase3__` e
+apagados — sobras conferidas no banco = 0):**
+
+| Chamada | Resposta | No banco |
+|---|---|---|
+| planilha: rua real ("Rua Tiradentes, 80"), rua inexistente, linha vazia | 200 · 2 novos, 1 inválida, 1 sem localização | rua real → `endereco` (achou a **Avenida** Tiradentes pela tentativa sem o tipo de via), bairro "Centro" casou; inexistente → `nao_encontrado`, sem ponto; bairro desconhecido sem `neighborhood_id`, nome guardado |
+| feed: 1 com coordenada, 1 só com endereço, 1 aluguel, 1 de outra cidade | 200 · 2 novos; ignorados: 1 só aluguel, 1 outra cidade | com coordenada → `fonte`, "Vila Santo Antônio" casou; só endereço → `endereco`; "Bairro Feed Novo" sem bairro, nome guardado |
+| o mesmo feed de novo | 200 · 0 novos, 2 atualizados | nenhuma linha nova |
+| organização de que o agente não é membro | 403 | — |
+| modo inválido / feed em `https://10.0.0.1` | 400 / 400 | — |
+
+**D8 — troca do geocodificador (decisão de execução, 07/10/2026).** A 1ª rodada
+autorizada devolveu tudo como "pendente": o Nominatim público responde **HTTP 403**
+a chamadas vindas da Supabase (bloqueio de IP de nuvem; daqui da máquina responde
+200). Ele também não achava rua em texto livre. Troquei pelo **Photon**
+(`photon.komoot.io`, mesmos dados do OpenStreetMap, sem chave), que responde da
+Supabase e acha as ruas e bairros de Cambuí. Como o Photon aproxima ("Rua Tiradentes
+80" caiu na cidade de Tiradentes, a 200 km; "Rosa" virou "Rua Manoel P. da Rosa"), a
+lógica tem duas travas: a cidade do resultado tem de ser a pedida, e o nome procurado
+tem de estar no nome do resultado. A function devolve `falhaGeocodificacao` com o
+motivo quando algo fica pendente. Risco aceito: é um serviço público de uso justo,
+sem garantia; se cair ou bloquear, a alternativa é um provedor com chave (LocationIQ,
+Geoapify, Google), que exige conta.
+
+**Feed da Conexão 381.** O link passado pelo usuário (`https://conexao381.com.br/`)
+é o site, não um feed: `/feed.xml`, `/vrsync.xml`, `/xml/vivareal.xml`,
+`/integracao/vivareal.xml` dão 404, e o `sitemap.xml` só lista páginas. O link do
+"XML para portais" precisa vir da imobiliária; até lá, a importação de feed funciona
+com o arquivo.
 
 **Decisões de execução:**
 - Deduplicação sai do navegador: `importListingsInBatch` e `deduplication.test.ts`
@@ -523,7 +554,7 @@ ordem abaixo.
 
 - [x] Fase 1 — 4 de 4 (publicada em 07/10/2026, commits `8e30cd58` e `f31099ce`, CI verde)
 - [ ] Fase 2 — 4 de 5 (2.4 adiado para depois da Fase 4, decisão D6; publicada em 07/10/2026, commit `b4f8d24a`, CI verde, domínio conferido)
-- [ ] Fase 3 — 3 de 4 (revisada pela D7; 3.2R publicada, falta provar o caminho autorizado; frente `market-fase3`)
+- [x] Fase 3 — 4 de 4 (revisada pela D7; geocodificador trocado pela D8; frente `market-fase3`; falta o link do feed real da Conexão 381, que depende da imobiliária)
 - [ ] Fase 4 — 0 de 5 (4.5 = o 2.4 adiado)
 - [ ] Fase 5 — 0 de 2
 - [ ] Fase 6 — 0 de 6

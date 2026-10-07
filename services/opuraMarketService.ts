@@ -385,22 +385,39 @@ export const opuraMarketService = {
       return { importedCount: 0, deduplicatedCount: 0 };
     }
 
-    // Coleta pares únicos de (city_id, neighborhood_id) para buscar dados do banco
-    const filterPairs = Array.from(new Set(listings.map(l => `${l.cityId}|${l.neighborhoodId}`)));
-    let existingListings: any[] = [];
+    // "Mesma origem" = mesma organização, ou os dois globais (organization_id nulo).
+    // É a regra do gatilho fn_deduplicate_market_listing desde a Fase 1
+    // (aplicar_20271007000100): anúncio privado nunca é descartado por causa de um
+    // anúncio global ou de outra organização. String vazia conta como global.
+    const origemDe = (orgId: string | null | undefined): string | null => orgId || null;
+    const mesmoValor = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
 
-    // Busca anúncios existentes nos bairros correspondentes
-    for (const pair of filterPairs) {
-      const [cityId, neighborhoodId] = pair.split('|');
-      const { data, error } = await supabase
+    // Busca os existentes por (cidade, origem) — o mesmo recorte do gatilho.
+    // Antes a busca era por (cidade, bairro) sem olhar origem, e bairro nulo virava
+    // a string 'null' no filtro: o Postgres recusava (22P02), o erro era engolido e
+    // a deduplicação contra o banco simplesmente não acontecia.
+    const grupos = new Map<string, { cityId: string; orgId: string | null }>();
+    for (const l of listings) {
+      const orgId = origemDe(l.organizationId);
+      grupos.set(`${l.cityId}|${orgId ?? ''}`, { cityId: l.cityId, orgId });
+    }
+
+    const existingListings: any[] = [];
+    for (const { cityId, orgId } of grupos.values()) {
+      let query = supabase
         .from('opura_market_listings')
-        .select('id, city_id, neighborhood_id, latitude, longitude, bedrooms, area_private, price')
+        .select('id, city_id, neighborhood_id, organization_id, latitude, longitude, bedrooms, area_private')
         .eq('city_id', cityId)
-        .eq('neighborhood_id', neighborhoodId);
+        .eq('listing_status', 'active')
+        .is('parent_listing_id', null);
+      query = orgId ? query.eq('organization_id', orgId) : query.is('organization_id', null);
 
-      if (!error && data) {
-        existingListings = existingListings.concat(data);
+      const { data, error } = await query;
+      if (error) {
+        // Sem a lista de existentes, importar seria gravar duplicados às cegas.
+        throw new Error(`Falha ao buscar anúncios existentes para deduplicar: ${error.message}`);
       }
+      existingListings.push(...(data || []));
     }
 
     // Função de verificação de duplicata por proximidade física, quartos e área útil (+/- 2% de tolerância)
@@ -443,7 +460,17 @@ export const opuraMarketService = {
       // (é o payload do insert), então a área ali é `area_private` — ler
       // `ul.areaPrivate` devolvia undefined, a área virava 0 e a comparação
       // nunca batia: duplicado dentro do mesmo lote entrava no banco.
+      // Sem coordenada, área e quartos parecidos não bastam na cidade inteira —
+      // exige também o mesmo bairro (o recorte que a busca antiga fazia).
+      const comparavel = (outro: { city_id: string; organization_id: string | null; neighborhood_id: string | null; latitude: unknown; longitude: unknown }) => {
+        if (outro.city_id !== l.cityId) return false;
+        if (!mesmoValor(outro.organization_id, origemDe(l.organizationId))) return false;
+        const semCoordenada = !l.latitude || !l.longitude || !outro.latitude || !outro.longitude;
+        return !semCoordenada || mesmoValor(outro.neighborhood_id, l.neighborhoodId);
+      };
+
       const existsInPayload = uniqueListingsPayload.some(ul =>
+        comparavel(ul) &&
         isDuplicate(
           l.latitude, l.longitude,
           ul.latitude, ul.longitude,
@@ -460,6 +487,7 @@ export const opuraMarketService = {
       // Ordem dos argumentos: (…, area1, area2) — area1 é a do anúncio sendo
       // avaliado (`l`) e area2 a do existente (`el`), como nas outras chamadas.
       const existsInDb = existingListings.some(el =>
+        comparavel(el) &&
         isDuplicate(
           l.latitude, l.longitude,
           el.latitude ? Number(el.latitude) : null,
@@ -478,8 +506,8 @@ export const opuraMarketService = {
       // Anúncio validado e sem duplicatas
       uniqueListingsPayload.push({
         city_id: l.cityId,
-        neighborhood_id: l.neighborhoodId,
-        organization_id: l.organizationId,
+        neighborhood_id: l.neighborhoodId || null,
+        organization_id: origemDe(l.organizationId),
         source: l.source,
         source_url: l.sourceUrl,
         property_type: l.propertyType,

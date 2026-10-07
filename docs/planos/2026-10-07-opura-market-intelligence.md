@@ -134,10 +134,10 @@ Também: `__tests__/segurancaMigrations.test.ts`, `migrationsPrefixo.test.ts` e
 `LANGUAGE sql`, `SECURITY INVOKER`, ACL sem PUBLIC/anon; índice
 `idx_opura_market_listings_geog` criado.
 
-**Fica para a Fase 7.1:** a deduplicação do SERVICE (`importListingsInBatch`) ainda
-compara o lote com tudo que a RLS mostra, incluindo os globais — um anúncio privado
-igual a um global é descartado no front antes de chegar ao gatilho. Precisa da
-mesma regra de "mesma origem".
+**Ficou para a Fase 7.1 (feito no mesmo dia, ver 7.1):** a deduplicação do SERVICE
+(`importListingsInBatch`) ainda comparava o lote com tudo que a RLS mostra, incluindo
+os globais — um anúncio privado igual a um global era descartado no front antes de
+chegar ao gatilho.
 
 ### Fase 2 — Parar de inventar dados
 
@@ -327,6 +327,17 @@ mesma regra de "mesma origem".
   de existentes (hoje vira a string `'null'` e o erro é engolido).
 - Como sei que terminou: teste verde; a suíte inteira fecha a conta (total de
   arquivos/testes igual ao esperado, não só "0 falhas" no tail).
+- ✅ Feito em 07/10/2026 na frente `market-fase1`, junto da Fase 1:
+  - o serviço busca os existentes por **cidade + origem** (só ativos e não
+    duplicados, o recorte do gatilho) e compara só a mesma origem; sem coordenada,
+    exige também o mesmo bairro, para não juntar apartamentos parecidos de bairros
+    diferentes agora que a busca é por cidade;
+  - erro na busca dos existentes **interrompe** a importação (antes era engolido e
+    o lote entrava sem deduplicação contra o banco);
+  - `organization_id` / `neighborhood_id` vazios gravam `NULL`, não `''`;
+  - teste reescrito: mock vira uma tabela falsa filtrada pelos filtros que o serviço
+    encadeia — 8 casos; contra o serviço ANTIGO, 7 falham (só o cenário original
+    passa), então os casos novos de fato pegam o defeito.
 
 **7.2 `scripts/verificar-opura-market-rls.sh`** (novo; era `.sql` no plano — virou
 `.sh` porque `db query` só imprime o último resultado e a prova precisa trocar de
@@ -347,13 +358,13 @@ com o usuário", acima) e incorporadas nos itens 2.5, 4.4 e 6.6. Não há decis�
 Plano aprovado em 07/10/2026. Cada fase abre como frente própria (REGRA #8), na
 ordem abaixo.
 
-- [x] Fase 1 — 4 de 4 (frente `market-fase1`, migration aplicada e provada em 07/10/2026; commit na branch `feat/market-fase1`, ainda não publicado em `main`)
+- [x] Fase 1 — 4 de 4 (frente `market-fase1`, migration aplicada e provada em 07/10/2026)
 - [ ] Fase 2 — 0 de 5
 - [ ] Fase 3 — 0 de 4
 - [ ] Fase 4 — 0 de 4
 - [ ] Fase 5 — 0 de 2
 - [ ] Fase 6 — 0 de 6
-- [ ] Fase 7 — 1 de 2 (7.2 feito junto com a Fase 1)
+- [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)
 
 ## Verificação de ponta a ponta (ao fim de tudo)
 

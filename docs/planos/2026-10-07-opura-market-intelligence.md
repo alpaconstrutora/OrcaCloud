@@ -666,8 +666,8 @@ ordem abaixo.
 - [x] Fase 2 — 5 de 5 (2.4 entregue como 4.5 na Fase 4; publicada em 07/10/2026, commit `b4f8d24a`)
 - [x] Fase 3 — 4 de 4 (revisada pela D7; geocodificador trocado pela D8; frente `market-fase3`; falta o link do feed real da Conexão 381, que depende da imobiliária)
 - [x] Fase 4 — 5 de 5 (frente `market-fase4`; cadastro só para superadministrador, D9)
-- [x] Fase 5 — 2 de 2 (frente `market-fase5-6`)
-- [x] Fase 6 — 6 de 6 (frente `market-fase5-6`)
+- [x] Fase 5 — 2 de 2 (frente `market-fase5-6`; publicada em 07/10/2026, commit `7005715d`)
+- [x] Fase 6 — 6 de 6 (frente `market-fase5-6`; publicada em 07/10/2026, commit `f4bb22ea`, CI verde, domínio conferido)
 - [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)
 
 ## Verificação de ponta a ponta (ao fim de tudo)

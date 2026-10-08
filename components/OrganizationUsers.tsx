@@ -8,6 +8,7 @@ import { organizationService } from '../services/organizationService';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
+import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -579,6 +580,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [editMemberEmail, setEditMemberEmail] = useState('');
     const [editMemberRole, setEditMemberRole] = useState<OrganizationRole>('member');
     const [editMemberProductContext, setEditMemberProductContext] = useState<ProductContext>('platform');
+    // Dados de SIGNATÁRIO (Documentos › Ofícios, 07/10/2026): o usuário é quem assina
+    // os documentos gerados. Gravados só na linha do membro (updateMemberSignatario).
+    const [editCargo, setEditCargo] = useState('');
+    const [editDepartmentId, setEditDepartmentId] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [editRegistro, setEditRegistro] = useState('');
+    const [editAssinaturaFile, setEditAssinaturaFile] = useState<File | null>(null);
+    const [editAssinaturaPreview, setEditAssinaturaPreview] = useState<string | null>(null);
+    const [editSalvando, setEditSalvando] = useState(false);
+    const assinaturaInputRef = React.useRef<HTMLInputElement>(null);
+    const { departamentos: departamentosDaOrg } = useDepartamentosDaOrg(organizationId ?? null);
 
     // Invite loading state
     const [isInviting, setIsInviting] = useState(false);
@@ -672,7 +684,26 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setEditMemberEmail(member.email);
         setEditMemberRole(member.role);
         setEditMemberProductContext(member.productContext || 'platform');
+        // Cargo funcional: o gravado, ou o nome do cargo customizado como sugestão.
+        setEditCargo(member.cargo ?? (member.customRoleId ? customRoles.find(r => r.id === member.customRoleId)?.name ?? '' : ''));
+        setEditDepartmentId(member.departmentId ?? '');
+        setEditPhone(member.phone ?? '');
+        setEditRegistro(member.registroProfissional ?? '');
+        setEditAssinaturaFile(null);
+        setEditAssinaturaPreview(null);
+        if (member.assinaturaPath) {
+            void organizationService.urlAssinaturaMembro(member.assinaturaPath).then(url => setEditAssinaturaPreview(url));
+        }
         setEditingMember(member);
+    };
+
+    const handleEscolherAssinatura = (file: File | null) => {
+        setEditAssinaturaFile(file);
+        if (file) {
+            const fr = new FileReader();
+            fr.onload = () => setEditAssinaturaPreview(typeof fr.result === 'string' ? fr.result : null);
+            fr.readAsDataURL(file);
+        }
     };
 
     const handleResendInvite = async (member: OrganizationMember) => {
@@ -705,14 +736,47 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         }
     };
 
-    const handleSaveEditMember = (e: React.FormEvent) => {
+    const handleSaveEditMember = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingMember) return;
+        setEditSalvando(true);
+        // 1) Dados de signatário: só a linha do membro, antes do caminho antigo
+        //    (que reescreve a organização inteira e recarrega tudo).
+        let assinaturaPath: string | null | undefined = undefined;
+        try {
+            if (editAssinaturaFile) {
+                const orgId = editingMember && organizationId ? organizationId : null;
+                if (!orgId) {
+                    notify('Selecione uma organização específica para subir a assinatura.', 'error');
+                    setEditSalvando(false);
+                    return;
+                }
+                assinaturaPath = await organizationService.uploadAssinaturaMembro(orgId, editingMember.id, editAssinaturaFile);
+            }
+            await organizationService.updateMemberSignatario(editingMember.id, {
+                cargo: editCargo.trim() || null,
+                departmentId: editDepartmentId || null,
+                phone: editPhone.trim() || null,
+                registroProfissional: editRegistro.trim() || null,
+                ...(assinaturaPath !== undefined ? { assinaturaPath } : {}),
+            });
+        } catch (error) {
+            console.error('[OrganizationUsers] Erro ao gravar dados de signatário:', error);
+            notify(error instanceof Error ? error.message : 'Não foi possível salvar os dados de assinatura.', 'error');
+            setEditSalvando(false);
+            return;
+        }
+        // 2) Nome/e-mail/função: o caminho que já existia.
         onUpdateMembers(members.map(m =>
             m.id === editingMember.id
-                ? { ...m, name: editMemberName, email: editMemberEmail.trim().toLowerCase(), role: editMemberRole, productContext: editMemberProductContext, permissions: getDefaultPermissions(editMemberRole) }
+                ? {
+                    ...m, name: editMemberName, email: editMemberEmail.trim().toLowerCase(), role: editMemberRole, productContext: editMemberProductContext, permissions: getDefaultPermissions(editMemberRole),
+                    cargo: editCargo.trim() || null, departmentId: editDepartmentId || null, phone: editPhone.trim() || null, registroProfissional: editRegistro.trim() || null,
+                    ...(assinaturaPath !== undefined ? { assinaturaPath } : {}),
+                }
                 : m
         ));
+        setEditSalvando(false);
         setEditingMember(null);
     };
 
@@ -1394,7 +1458,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             {/* Edit Member Modal */}
             {editingMember && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md animate-in fade-in zoom-in duration-200 border border-gray-200">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200 border border-gray-200">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                             <h3 className="text-lg font-bold text-gray-900">Editar Membro</h3>
                             <button onClick={() => setEditingMember(null)} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors">
@@ -1438,9 +1502,57 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     ))}
                                 </div>
                             </div>
+                            {/* Assinatura de documentos (Documentos › Ofícios) — §30: seção com título + linha,
+                                campos curtos em grade, rótulo §21. */}
+                            <div className="space-y-4 pt-2">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <h4 className="text-sm font-semibold text-gray-900">Assinatura de documentos</h4>
+                                    <span className="text-xs text-gray-400">impresso nos ofícios gerados pelo sistema</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Cargo</label>
+                                        <input value={editCargo} onChange={e => setEditCargo(e.target.value)} placeholder="Ex.: Diretor de Engenharia"
+                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Departamento</label>
+                                        <select value={editDepartmentId} onChange={e => setEditDepartmentId(e.target.value)}
+                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                                            <option value="">— Sem departamento —</option>
+                                            {departamentosDaOrg.map(d => <option key={d.id} value={d.id}>{d.nome}{d.companyNome ? ` · ${d.companyNome}` : ''}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Telefone</label>
+                                        <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="(35) 99999-0000"
+                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Registro profissional (CREA/CAU/OAB)</label>
+                                        <input value={editRegistro} onChange={e => setEditRegistro(e.target.value)} placeholder="Ex.: CREA-MG 123456/D"
+                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" />
+                                    </div>
+                                    <div className="space-y-1.5 col-span-2">
+                                        <label className="text-xs font-semibold text-slate-500">Imagem da assinatura (PNG, JPG ou WebP, até 5 MB)</label>
+                                        <div className="flex items-center gap-3">
+                                            {/* input escondido + botão: o seletor nativo muda de idioma por navegador (memória do plano de 04/10). */}
+                                            <input ref={assinaturaInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                                                onChange={e => handleEscolherAssinatura(e.target.files?.[0] ?? null)} />
+                                            <button type="button" onClick={() => assinaturaInputRef.current?.click()}
+                                                className="h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px]">
+                                                {editAssinaturaPreview ? 'Trocar imagem' : 'Escolher arquivo'}
+                                            </button>
+                                            {editAssinaturaPreview
+                                                ? <img src={editAssinaturaPreview} alt="Assinatura" className="h-12 max-w-[200px] object-contain border border-gray-100 rounded-[6px] bg-white px-2" />
+                                                : <span className="text-sm text-gray-400">Nenhuma imagem</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                                <Button type="submit">Salvar</Button>
+                                <Button type="submit" disabled={editSalvando}>{editSalvando ? 'Salvando…' : 'Salvar'}</Button>
                             </div>
                         </form>
                     </div>

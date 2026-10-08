@@ -473,6 +473,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const [isOrganizacaoOpen, setIsOrganizacaoOpen] = React.useState(() => activeView === 'organization');
+  const [isDocumentosOpen, setIsDocumentosOpen] = React.useState(() => activeView === 'opura-docs' || activeView === 'opura-oficios');
   React.useEffect(() => { if (activeView === 'organization') setIsOrganizacaoOpen(true); }, [activeView]);
   const especialidadesViews = ['pro-dashboard','offices-dashboard','reformas-dashboard','opura-cno','ecommerce-dashboard'];
   const [isEspecialidadesOpen, setIsEspecialidadesOpen] = React.useState(() => especialidadesViews.includes(activeView));
@@ -530,6 +531,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'regulatory-maps', label: 'Mapa Regulatório', group: 'Comercial', icon: Map },
       { id: 'imovib', label: 'Estudos de viabilidade', group: 'Comercial', icon: BarChart3 },
       { id: 'opura-docs', label: 'Documentos', group: 'Corporativo', icon: FolderOpen },
+      { id: 'opura-oficios', label: 'Ofícios', group: 'Corporativo', icon: FileText },
       { id: 'opura-assets', label: 'Ativos', group: 'Corporativo', icon: Package },
       { id: 'opura-processos', label: 'Processos', group: 'Corporativo', icon: ClipboardList },
       { id: 'settings', label: 'Configurações', group: 'Sistema', icon: Settings },
@@ -912,7 +914,20 @@ const Layout: React.FC<LayoutProps> = ({
                 ))}
               </NavDropdown>
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" />
-              <NavItem id="opura-docs" icon={FolderOpen} label="Gestão de Documentos" />
+              {/* Documentos: GED + Ofícios (Documentos › Ofícios, 07/10/2026). */}
+              <NavDropdown
+                label="Documentos"
+                icon={FolderOpen}
+                isOpen={isDocumentosOpen}
+                onToggle={() => {
+                  if (isCollapsed) { onChangeView('opura-docs'); }
+                  else { setIsDocumentosOpen(o => !o); }
+                }}
+                hasActiveChild={activeView === 'opura-docs' || activeView === 'opura-oficios'}
+              >
+                <DropdownItem id="opura-docs" label="Gestão de Documentos" icon={FolderOpen} />
+                <DropdownItem id="opura-oficios" label="Ofícios" icon={FileText} />
+              </NavDropdown>
               <NavItem id="opura-processos" icon={ClipboardList} label="Processos" />
 
               {(mod.obras || isDev) && (
@@ -1342,6 +1357,7 @@ const Layout: React.FC<LayoutProps> = ({
               )}
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" forceFull />
               <NavItem id="opura-docs" icon={FolderOpen} label="Gestão de Documentos" forceFull />
+              <NavItem id="opura-oficios" icon={FileText} label="Ofícios" forceFull />
 
               <NavGroup label="Suprimentos" />
               <NavItem id="fluxo-p2p" icon={Workflow} label="Fluxo Integrado (P2P)" forceFull />

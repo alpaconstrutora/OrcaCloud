@@ -724,6 +724,34 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
   }, [window.location.hash]);
 
+  // Clique numa notificação do GED (07/10/2026): `documentService` grava
+  // `/opura-docs?docId=…`, `App.handleNavigate` vira `navigateToFocus` e o foco
+  // chega aqui. A categoria vem do próprio documento (não da URL). Consumido
+  // uma vez e limpo, para não reabrir ao navegar de volta.
+  const viewFocus = useStore(s => s.viewFocus);
+  const setViewFocus = useStore(s => s.setViewFocus);
+  React.useEffect(() => {
+    if (!viewFocus?.source?.startsWith('GED_DOCUMENTO')) return;
+    const docId = viewFocus.ref;
+    const pendente = viewFocus.source === 'GED_DOCUMENTO_PENDENTE';
+    setViewFocus(null);
+    (async () => {
+      try {
+        const doc = await documentService.getDocumentById(docId);
+        if (!doc) return;
+        if (CATEGORIES.some(c => c.id === doc.categoria)) setActiveTab(doc.categoria);
+        if (pendente) setShowPendingOnly(true);
+        setSelectedDocForVersions(doc);
+        loadApprovalsForDoc(doc.id);
+        loadAuditLogsForDoc(doc.id);
+        fetchOrgMembers(doc.organization_id);
+      } catch (err) {
+        console.error('[OpuraDocsModule] Erro ao abrir documento da notificação:', err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewFocus]);
+
   // Função para criar uma pasta virtual
   const handleCreateFolderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -24,7 +24,7 @@ export const organizationService = {
         // Fetch members and custom roles in parallel
         const [membersResult, rolesResult] = await Promise.all([
             supabase.from('organization_members')
-                .select('id, code, organization_id, name, email, role, custom_role_id, joined_at, permissions')
+                .select('id, code, organization_id, name, email, role, custom_role_id, joined_at, permissions, cargo, department_id, phone, registro_profissional, assinatura_path')
                 .in('organization_id', orgIds),
             supabase.from('organization_custom_roles')
                 .select('id, organization_id, name, permissions')
@@ -161,7 +161,13 @@ export const organizationService = {
                     role: m.role,
                     customRoleId: m.custom_role_id,
                     joinedAt: m.joined_at,
-                    permissions: m.permissions || {}
+                    permissions: m.permissions || {},
+                    // Dados de signatário (Documentos › Ofícios) — ver OrganizationMember.
+                    cargo: m.cargo ?? null,
+                    departmentId: m.department_id ?? null,
+                    phone: m.phone ?? null,
+                    registroProfissional: m.registro_profissional ?? null,
+                    assinaturaPath: m.assinatura_path ?? null,
                 })),
                 resources: {
                     roles: finalRoles,
@@ -430,5 +436,64 @@ export const organizationService = {
         if (!data || data.length === 0) {
             throw new Error('Nenhum registro atualizado — você não tem permissão para gerir membros desta organização.');
         }
-    }
+    },
+
+    /**
+     * Dados de SIGNATÁRIO de um membro (Documentos › Ofícios, 07/10/2026): cargo,
+     * departamento, telefone, registro profissional e caminho da assinatura.
+     * Mesmo contrato de `updateMemberAccess`: grava SÓ a linha do membro (nunca o
+     * upsert da organização inteira) e denuncia a RLS pelo `.select('id')`.
+     * `null` apaga o campo; `undefined` deixa como está.
+     */
+    async updateMemberSignatario(
+        memberId: string,
+        patch: {
+            cargo?: string | null;
+            departmentId?: string | null;
+            phone?: string | null;
+            registroProfissional?: string | null;
+            assinaturaPath?: string | null;
+        },
+    ): Promise<void> {
+        const payload: Record<string, unknown> = {};
+        if (patch.cargo !== undefined) payload.cargo = patch.cargo;
+        if (patch.departmentId !== undefined) payload.department_id = patch.departmentId;
+        if (patch.phone !== undefined) payload.phone = patch.phone;
+        if (patch.registroProfissional !== undefined) payload.registro_profissional = patch.registroProfissional;
+        if (patch.assinaturaPath !== undefined) payload.assinatura_path = patch.assinaturaPath;
+        if (Object.keys(payload).length === 0) return;
+
+        const { data, error } = await supabase
+            .from('organization_members')
+            .update(payload)
+            .eq('id', memberId)
+            .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error('Nenhum registro atualizado — você não tem permissão para gerir membros desta organização.');
+        }
+    },
+
+    /**
+     * Sobe a imagem da assinatura do membro no bucket privado `doc-gen-assets`
+     * (`<organization_id>/assinaturas/<member_id>.<ext>`; a 1ª pasta é o que a
+     * policy do bucket confere) e devolve o caminho a gravar em `assinatura_path`.
+     */
+    async uploadAssinaturaMembro(organizationId: string, memberId: string, file: File): Promise<string> {
+        const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+        const path = `${organizationId}/assinaturas/${memberId}.${ext}`;
+        const { error } = await supabase.storage
+            .from('doc-gen-assets')
+            .upload(path, file, { cacheControl: '3600', upsert: true, contentType: file.type || undefined });
+        if (error) throw error;
+        return path;
+    },
+
+    /** URL assinada (15 min) da imagem da assinatura — para prévia na tela. */
+    async urlAssinaturaMembro(assinaturaPath: string): Promise<string | null> {
+        const { data, error } = await supabase.storage.from('doc-gen-assets').createSignedUrl(assinaturaPath, 900);
+        if (error) return null;
+        return data?.signedUrl ?? null;
+    },
 };

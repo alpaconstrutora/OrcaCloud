@@ -103,6 +103,7 @@ const EcommerceDashboard    = React.lazy(() => import('./EcommerceDashboard'));
 const EcommercePhysicalMap  = React.lazy(() => import('./EcommercePhysicalMap'));
 const EcommerceChecklists   = React.lazy(() => import('./EcommerceChecklists'));
 const OpuraDocsModule       = React.lazy(() => import('./OpuraDocsModule'));
+const OficiosModule         = React.lazy(() => import('./oficios/OficiosModule'));
 const OpuraCnoModule        = React.lazy(() => import('./OpuraCnoModule'));
 const ObraTypesManager      = React.lazy(() => import('./ObraTypesManager'));
 const OpuraMarketModule     = React.lazy(() => import('./OpuraMarketModule'));
@@ -329,7 +330,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewBudget', 'obras');
     } else if (activeView.startsWith('supplies-')) {
       allowed = isModuleAllowed('canViewOrders', 'compras');
-    } else if (activeView === 'opura-docs') {
+    } else if (activeView === 'opura-docs' || activeView === 'opura-oficios') {
       allowed = true;
     } else if (activeView === 'opura-market') {
       allowed = true;
@@ -437,6 +438,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <React.Suspense fallback={<Spinner />}>
           <OpuraDocsModule
             activeOrganizationId={activeOrganizationId}
+            projects={typedProjects}
+            currentProfile={currentProfile}
+            onChangeView={setActiveView}
+          />
+        </React.Suspense>
+      );
+
+    case 'opura-oficios':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <OficiosModule
             projects={typedProjects}
             currentProfile={currentProfile}
             onChangeView={setActiveView}

@@ -494,6 +494,19 @@ export interface OrganizationMember {
     permissions: UserPermissions;
     /** Produto Òpura que este membro utiliza (default: 'platform') */
     productContext?: ProductContext;
+
+    // ── Dados de signatário (Documentos › Ofícios, 07/10/2026) ───────────────
+    // O usuário da organização É quem assina os documentos gerados. Cargo aqui é
+    // o cargo FUNCIONAL impresso no papel — `customRoleId` é template de permissão.
+    /** Cargo impresso no bloco de assinatura ("Diretor de Engenharia"). */
+    cargo?: string | null;
+    /** `company_departments.id` */
+    departmentId?: string | null;
+    phone?: string | null;
+    /** CREA/CAU/OAB… */
+    registroProfissional?: string | null;
+    /** Caminho da imagem da assinatura no bucket privado `doc-gen-assets`. */
+    assinaturaPath?: string | null;
 }
 
 export interface Organization {

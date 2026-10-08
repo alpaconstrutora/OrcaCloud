@@ -17,4 +17,14 @@ describe('destinoDoLinkDeNotificacao', () => {
         expect(destinoDoLinkDeNotificacao('#/documentos?docId=1')).toBeNull();
         expect(destinoDoLinkDeNotificacao('/')).toBeNull();
     });
+
+    // GED (07/10/2026): o link antigo `#/documentos?…` era morto (acima). O novo abre o
+    // GED no documento; com `pending=true` abre direto na aprovação pendente.
+    it('GED: abre o documento pelo docId, e a pendência quando pending=true', () => {
+        expect(destinoDoLinkDeNotificacao('/opura-docs?docId=d-1'))
+            .toEqual({ view: 'opura-docs', foco: { ref: 'd-1', source: 'GED_DOCUMENTO' } });
+        expect(destinoDoLinkDeNotificacao('/opura-docs?docId=d-2&pending=true'))
+            .toEqual({ view: 'opura-docs', foco: { ref: 'd-2', source: 'GED_DOCUMENTO_PENDENTE' } });
+        expect(destinoDoLinkDeNotificacao('/opura-docs')).toEqual({ view: 'opura-docs' });
+    });
 });

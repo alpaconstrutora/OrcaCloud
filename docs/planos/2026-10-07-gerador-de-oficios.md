@@ -804,7 +804,7 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
    (+ row/cell/header), `@tiptap/extension-underline`, `@tiptap/extension-text-align`,
    `@tiptap/extension-link`, `pdfmake`. Ambos por `import()` dinâmico nos pontos de uso.
    **Pronto quando:** `vite build` passa e pdfmake/tiptap saem em chunks próprios.
-3. Migration `aplicar_20271007000200_doc_gen_modelos.sql` — `doc_gen_modelos`,
+3. Migration `aplicar_20271007000400_doc_gen_modelos.sql` — `doc_gen_modelos`,
    `doc_gen_modelo_versoes`, colunas novas em `organization_members` (cargo,
    department_id, phone, registro_profissional, assinatura_path), bucket `doc-gen-assets`
    (privado, 5 MB, imagem; policies com 1ª pasta = org), RLS, índices, trigger de
@@ -1007,7 +1007,47 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
 
 - [x] F1 · 1 — plano registrado nesta frente (`oficios-f1-modelos`, base `e999e3b9`);
       revisado em 07/10 ~21:10 com as 7 respostas do usuário à lista de lacunas
-- [ ] F1 · 2–16
+- [x] F1 · 2 — deps: `@tiptap/*` 3.31, `pdfmake` 0.3.11, `@types/pdfmake`. `vite build` ✓ em 45 s:
+      `OficiosModule` em chunk próprio (520 kB, TipTap dentro), `pdfmake` (1,0 MB) e `vfs_fonts`
+      (855 kB) em chunks separados, carregados só na prévia; o chunk principal não mudou
+- [x] F1 · 3 — migration `aplicar_20271007000400_doc_gen_modelos.sql` (o prefixo 000200 já era do
+      Market — `migrationsPrefixo.test` acusou) **aplicada em 07/10 ~23:50** e provada no banco:
+      `doc_gen_modelos` + `doc_gen_modelo_versoes`, 5 colunas em `organization_members`, bucket
+      `doc-gen-assets` privado (png/jpeg/webp), 6 policies nas tabelas + 4 no bucket;
+      `segurancaMigrations` ✓, `check-rls-postura.sh` ✓ (9/9 limpas)
+- [x] F1 · 4 — `types/docGen.ts` (+ `OrganizationMember` ganha cargo/departmentId/phone/
+      registroProfissional/assinaturaPath em `types/users.ts`)
+- [x] F1 · 5 — `services/docGen/catalogoCampos.ts`: 10 grupos novos em português (104 chaves) + os 12
+      legados como "Avançado"; `contextoDeExemplo` preenche 100 % dos campos novos (teste prova)
+- [x] F1 · 6 — `services/docGen/dataExtenso.ts` + `variaveis.ts` (puros, testados)
+- [x] F1 · 7 — `services/docGen/motorRender.ts` (TipTap → pdfmake; 9 testes: nós, pendências em
+      âmbar, cabeçalho/rodapé/paginação, determinismo)
+- [x] F1 · 8 — `services/docGen/pdf.ts` (`import()` dinâmico; `creationDate` fixa) — teste em node
+      prova bytes idênticos para o mesmo input e bytes diferentes ao mudar a data (o PDFKit deriva o
+      `/ID` da data de criação)
+- [x] F1 · 9 — `docGenModeloService` (update sobe `versao` e grava a cópia anterior só quando
+      conteúdo/layout mudam) + `organizationService.updateMemberSignatario`/`uploadAssinaturaMembro`/
+      `urlAssinaturaMembro` (grava SÓ a linha do membro; `.select('id')` denuncia RLS)
+- [x] F1 · 10 — `EditorRico` (TipTap: nós `variavel`/`campoLivre`/`assinaturas`/`anexos` em
+      `editorExtensoes.ts`; painel de variáveis com busca; link por campo inline, sem `prompt()`;
+      estilos em `index.css` `.editor-rico`)
+- [x] F1 · 11 — `ModeloEditorTela` (in-flow; §30; §25 salvar permanece; criar com "Todas" pergunta
+      e replica; campos obrigatórios = chaves usadas; prévia em `PreviewPdf` = `Sheet` 2xl com iframe)
+- [x] F1 · 12 — `ModelosList` (`StandardTable`, clique na linha edita, menu com duplicar/
+      ativar-inativar/excluir com `useConfirm`)
+- [x] F1 · 13 — `OrganizationUsers`: seção "Assinatura de documentos" no painel Editar Membro
+      (cargo pré-preenchido pelo cargo customizado, departamento, telefone, registro, imagem com
+      input escondido + prévia); modal alargado para `max-w-2xl`
+- [x] F1 · 14 — `OficiosModule` + `AppRouter` (`opura-oficios`) + `Layout` (`NavDropdown`
+      "Documentos" com GED e Ofícios, menu móvel, paleta)
+- [x] F1 · 15 — links de notificação do GED: `documentService` grava `/opura-docs?docId=…`,
+      `linkNotificacao` resolve `GED_DOCUMENTO[_PENDENTE]` (3 testes novos), `OpuraDocsModule`
+      consome o `viewFocus` (categoria vem do documento) e limpa o foco
+- [ ] F1 · 16 — verificação: tipos por arquivo (1ª rodada: 5 erros no motor, corrigidos; 2ª rodada
+      em andamento), `check-ui-standard` ✓ nos 7 arquivos de tela, `check-system-projects` ✓,
+      `check-project-classification` ✓, `check-xss-sinks` ✓, testes do motor 30/30 ✓, suíte inteira
+      em andamento; **falta: conferir no app com login (precisa de `PW_SENHA`) e a gravação REAL de
+      um modelo** (roteiro pronto em `C:/tmp/pwtest/oficios_f1.js`); publicação por push
 - [ ] F2
 - [ ] F3
 

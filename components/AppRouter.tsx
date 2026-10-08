@@ -257,6 +257,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
   React.useEffect(() => {
     const isDevEmail = session?.user?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
+    // ÒPURA Market: só administrador e usuário interno (decisão D5 do plano
+    // docs/planos/2026-10-07-opura-market-intelligence.md). Fica ANTES do retorno
+    // por "Todas" e por membro ausente: o perfil decide, não a organização do topo.
+    if (activeView === 'opura-market' && currentProfile.group !== ProfileGroup.USER
+        && currentProfile.group !== ProfileGroup.DEVELOPER && !isDevEmail) {
+      console.warn('[RouteGuard] ÒPURA Market é só para administrador e usuário interno. Redirecionando para dashboard.');
+      setActiveView('dashboard');
+      return;
+    }
     // Desenvolvedores sempre têm acesso total
     if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !activeOrganizationId) return;
     

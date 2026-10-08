@@ -1,6 +1,7 @@
 import React from 'react';
 import * as XLSX from 'xlsx';
 import { opuraMarketService, LinhaPlanilhaMercado } from '../services/opuraMarketService';
+import { useToast } from '../hooks/useToast';
 
 interface ImportListingsModalProps {
   isOpen: boolean;
@@ -53,6 +54,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
   cityId,
   organizationId
 }) => {
+  const { showToast } = useToast();
   const [file, setFile] = React.useState<File | null>(null);
   const [headers, setHeaders] = React.useState<string[]>([]);
   const [rows, setRows] = React.useState<any[][]>([]);
@@ -97,7 +99,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
           const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
           
           if (json.length === 0) {
-            alert('A planilha selecionada está vazia.');
+            showToast('A planilha selecionada está vazia.', 'error');
             return;
           }
 
@@ -130,7 +132,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
           setMappings(autoMappings);
         } catch (err: any) {
           console.error(err);
-          alert(`Erro ao processar planilha: ${err.message || 'Verifique se o formato está correto.'}`);
+          showToast(`Erro ao processar planilha: ${err.message || 'Verifique se o formato está correto.'}`, 'error');
         }
       }
     };
@@ -152,15 +154,15 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
   const handleImport = async () => {
     const missingFields = MAP_FIELDS.filter(f => f.required && !mappings[f.key]);
     if (missingFields.length > 0) {
-      alert(`Por favor, mapeie as colunas obrigatórias: ${missingFields.map(f => f.label).join(', ')}`);
+      showToast(`Por favor, mapeie as colunas obrigatórias: ${missingFields.map(f => f.label).join(', ')}`, 'error');
       return;
     }
     if (!cityId || cityId.trim() === '') {
-      alert('Erro: Nenhuma cidade válida selecionada para importação.');
+      showToast('Erro: Nenhuma cidade válida selecionada para importação.', 'error');
       return;
     }
     if (!organizationId) {
-      alert('Selecione uma organização no topo da tela antes de importar: o anúncio é gravado nela.');
+      showToast('Selecione uma organização no topo da tela antes de importar: o anúncio é gravado nela.', 'error');
       return;
     }
 
@@ -201,7 +203,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
     }
 
     if (linhas.length === 0) {
-      alert('Nenhum anúncio válido foi localizado para importação (cada linha precisa de endereço, preço e área).');
+      showToast('Nenhum anúncio válido foi localizado para importação (cada linha precisa de endereço, preço e área).', 'error');
       return;
     }
 
@@ -210,17 +212,17 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
     setStatusMessage(`Enviando ${linhas.length} anúncios. O servidor localiza cerca de um endereço por segundo.`);
     try {
       const r = await opuraMarketService.importarPlanilha(organizationId, cityId, linhas);
-      const partes = ['Importação concluída.', '', `🔹 Anúncios novos: ${r.novos}`];
+      const partes = [`Importação concluída. Anúncios novos: ${r.novos}`];
       if (r.duplicados > 0) partes.push(`🛡️ Repetidos de anúncios que já existiam: ${r.duplicados} (gravados como duplicados, fora das contas)`);
       if (r.semLocalizacao > 0) partes.push(`📍 Endereço não encontrado: ${r.semLocalizacao}. Ficam na tabela, fora do mapa e da análise de raio.`);
       if (r.pendentes > 0) partes.push(`⏳ Ainda sem localização por limite de tempo: ${r.pendentes}. Use "Localizar anúncios sem coordenada" na aba Feed XML.`);
       if (r.invalidas) partes.push(`⚠️ Linhas recusadas pelo servidor: ${r.invalidas}`);
-      alert(partes.join('\n'));
+      showToast(partes.join(' · '));
       onSuccess();
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert('Erro na importação: ' + err.message);
+      showToast('Erro na importação: ' + err.message, 'error');
     } finally {
       setImporting(false);
     }

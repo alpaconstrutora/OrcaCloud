@@ -2,6 +2,8 @@ import React from 'react';
 import { OpuraMarketCityConfig, OpuraMarketRule } from '../types';
 // Fonte única das regras padrão (antes havia uma cópia aqui e outra no módulo).
 import { REGRAS_PADRAO as DEFAULT_RULES } from '../utils/opuraMarketVocacao';
+import { useToast } from '../hooks/useToast';
+import { useConfirm } from './ui/confirm';
 
 interface CityRulesModalProps {
   isOpen: boolean;
@@ -23,6 +25,8 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
   cityName,
   initialConfig
 }) => {
+  const { showToast } = useToast();
+  const confirm = useConfirm();
   // Estado para armazenar as regras atuais em edição
   const [rules, setRules] = React.useState<OpuraMarketRule[]>([]);
   const [selectedStandard, setSelectedStandard] = React.useState<OpuraMarketRule['standard']>('Médio');
@@ -131,8 +135,14 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
   };
 
   // Restaura regras padrão
-  const handleRestoreDefaults = () => {
-    if (window.confirm('Tem certeza que deseja restaurar as regras padrões desta cidade? Todas as suas alterações locais serão perdidas.')) {
+  const handleRestoreDefaults = async () => {
+    const ok = await confirm({
+      title: 'Restaurar regras padrão?',
+      message: 'As alterações feitas nas regras desta praça serão perdidas.',
+      confirmLabel: 'Restaurar',
+      variant: 'warning',
+    });
+    if (ok) {
       setRules(JSON.parse(JSON.stringify(DEFAULT_RULES)));
     }
   };
@@ -141,46 +151,46 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
   const handleSave = async () => {
     // 1. Validações de faixas de preço/m²
     if (limits.ecoToMed <= 0) {
-      alert('A transição de Econômico para Médio deve ser maior que R$ 0.');
+      showToast('A transição de Econômico para Médio deve ser maior que R$ 0.', 'error');
       return;
     }
     if (limits.medToMedAlt <= limits.ecoToMed) {
-      alert('A transição de Médio para Médio-Alto deve ser maior que a transição anterior.');
+      showToast('A transição de Médio para Médio-Alto deve ser maior que a transição anterior.', 'error');
       return;
     }
     if (limits.medAltToAlto <= limits.medToMedAlt) {
-      alert('A transição de Médio-Alto para Alto Padrão deve ser maior que a transição anterior.');
+      showToast('A transição de Médio-Alto para Alto Padrão deve ser maior que a transição anterior.', 'error');
       return;
     }
     if (limits.altoToLuxo <= limits.medAltToAlto) {
-      alert('A transição de Alto Padrão para Luxo deve ser maior que a transição anterior.');
+      showToast('A transição de Alto Padrão para Luxo deve ser maior que a transição anterior.', 'error');
       return;
     }
 
     // 2. Validações de mix de tipologias por padrão construtivo
     for (const r of rules) {
       if (r.tipologias.length === 0) {
-        alert(`O padrão "${r.standard}" deve conter pelo menos uma tipologia cadastrada.`);
+        showToast(`O padrão "${r.standard}" deve conter pelo menos uma tipologia cadastrada.`, 'error');
         return;
       }
 
       const sum = r.tipologias.reduce((s, t) => s + t.mix, 0);
       if (sum !== 100) {
-        alert(`A soma das porcentagens do Mix para o padrão "${r.standard}" deve ser exatamente igual a 100%. (Soma atual: ${sum}%)`);
+        showToast(`A soma das porcentagens do Mix para o padrão "${r.standard}" deve ser exatamente igual a 100%. (Soma atual: ${sum}%)`, 'error');
         return;
       }
 
       for (const t of r.tipologias) {
         if (!t.tipo.trim()) {
-          alert(`As tipologias do padrão "${r.standard}" não podem ter nomes vazios.`);
+          showToast(`As tipologias do padrão "${r.standard}" não podem ter nomes vazios.`, 'error');
           return;
         }
         if (t.area <= 0) {
-          alert(`A metragem da tipologia "${t.tipo}" no padrão "${r.standard}" deve ser maior que zero.`);
+          showToast(`A metragem da tipologia "${t.tipo}" no padrão "${r.standard}" deve ser maior que zero.`, 'error');
           return;
         }
         if (t.mix < 0 || t.mix > 100) {
-          alert(`A porcentagem da tipologia "${t.tipo}" no padrão "${r.standard}" deve estar entre 0% e 100%.`);
+          showToast(`A porcentagem da tipologia "${t.tipo}" no padrão "${r.standard}" deve estar entre 0% e 100%.`, 'error');
           return;
         }
       }
@@ -196,7 +206,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert('Erro ao salvar configurações de vocação da praça: ' + err.message);
+      showToast('Erro ao salvar configurações de vocação da praça: ' + err.message, 'error');
     } finally {
       setSaving(false);
     }
@@ -382,8 +392,8 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   </div>
 
                   {/* Status da soma */}
-                  <div className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 ${
-                    mixSum === 100 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  <div className={`text-xs font-semibold flex items-center gap-1.5 ${
+                    mixSum === 100 ? 'text-emerald-700' : 'text-rose-700'
                   }`}>
                     <span>{mixSum === 100 ? '✓' : '⚠️'}</span>
                     <span>Soma do Mix: {mixSum}%</span>

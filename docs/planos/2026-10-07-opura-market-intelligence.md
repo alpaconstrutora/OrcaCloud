@@ -605,6 +605,22 @@ e Luxo não mudam (80, 138 e 276 m² batiam).
 - Como sei que terminou: BROKER logado não vê o item e, forçando a rota, cai no
   fallback de "sem acesso"; ADMIN e USER seguem entrando.
 
+#### Fase 6 — execução (07/10/2026, frente `market-fase5-6`)
+
+| Item | Estado |
+|---|---|
+| 6.1 quebra | ✅ `OpuraMarketModule.tsx` 2.394 → 492 linhas, só orquestra. Saíram: `components/market/` `MarketMapaPanel` (101), `MarketBairroDna` (116, busca a própria série), `MarketOfertasPanel` (136), `MarketTabelaOcorrencias` (91), `MarketFeedPanel` (162, estado e ações do feed), `MarketEstudosPanel` (306), `MarketAnuncioDetalhe` (136); `hooks/useMarketLeaflet.ts` (228), `hooks/useMarketVocacao.ts` (264, ponto/lote/hipóteses/cálculo/estudos salvos, tipo `ResultadoNaTela` no lugar do `any`); `utils/opuraMarketRelatorioPdf.ts` (156); `services/opuraMarketViabilidadeService.ts` (69). `activeTab` vestigial apagado. Maior arquivo do módulo: `CityRulesModal.tsx`, 536 |
+| 6.2 mapa persistente | ✅ o mapa é criado uma vez e fica escondido nas outras abas; enquadrar a cidade e focar um anúncio com o mapa escondido viram pendência, aplicada (com `invalidateSize`) quando ele reaparece. Provado na tela: "Ver no mapa" da tabela abre o mapa em zoom 17 com a camada Concorrência; o contêiner do Leaflet é o mesmo depois de ir ao Feed e voltar |
+| 6.3 avisos | ✅ `alert` → `useToast` e `window.confirm` → `useConfirm` no módulo, no `ImportListingsModal` e no `CityRulesModal`; pílula "Privado/Global" e a da soma do mix viraram texto colorido (§8); busca em `usePersistedState` (§3), a MESMA na tabela e no painel de ofertas. Tabela de ocorrências passou para o `StandardTable` (busca acoplada §5.2, engrenagem, autofit); Suítes e Banheiros começam escondidas porque as 12 colunas não cabem na largura (a engrenagem mostra). Abas no `TabsBar`; detalhe do anúncio no `Modal` padrão. `check-ui-standard.sh` sai 0 em todos os arquivos do módulo |
+| 6.4 motivo | ✅ em "Todas": Regras da Praça, Importar, Salvar estudo, Criar viabilidade e Importar feed desligados, cada um com o motivo no `title` (provado na tela) |
+| 6.5 PDF | ✅ cabeçalho com o nome da organização do store (provado: PDF baixado traz "Organização: Alpa Construtora e Incorporadora" e não traz o UUID). O mapa só entra no PDF se estiver à vista — como antes, já que o botão fica na aba de estudos |
+| 6.6 acesso | ✅ `AppRouter.tsx`: `opura-market` só para perfil USUARIO (o administrador da organização é USUARIO com papel admin) e desenvolvedor; a checagem fica ANTES dos retornos por "Todas" e por membro ausente, senão "Todas" deixava passar. `Layout.tsx`: o item do menu de celular passou a respeitar o perfil (os dois do menu de computador já estavam dentro do bloco USUARIO/desenvolvedor). Corretor, cliente, investidor, fornecedor e parceiro já eram desviados para o próprio portal antes do roteador; a trava nova cobre o resto (ex.: CREDOR). Prova só por leitura de código: a conta de teste é USUARIO |
+
+Achados no caminho, corrigidos na mesma fase:
+- o link "Acessar link original" do detalhe vem de feed de terceiros: só abre se for `http(s)`;
+- estudo antigo sem mix gravado quebrava a tela ao reabrir (`productMix.tipologias` de null);
+- "Ver no Mapa" dos estudos salvos não ia ao mapa (chamava `setActiveTab`, já morto): virou "Abrir estudo", que carrega o estudo no painel e marca o terreno no mapa.
+
 ### Fase 7 — Testes e verificação
 
 **7.1 `services/opuraMarketService.ts` + `__tests__/deduplication.test.ts`**
@@ -651,7 +667,7 @@ ordem abaixo.
 - [x] Fase 3 — 4 de 4 (revisada pela D7; geocodificador trocado pela D8; frente `market-fase3`; falta o link do feed real da Conexão 381, que depende da imobiliária)
 - [x] Fase 4 — 5 de 5 (frente `market-fase4`; cadastro só para superadministrador, D9)
 - [x] Fase 5 — 2 de 2 (frente `market-fase5-6`)
-- [ ] Fase 6 — 0 de 6
+- [x] Fase 6 — 6 de 6 (frente `market-fase5-6`)
 - [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)
 
 ## Verificação de ponta a ponta (ao fim de tudo)

@@ -1330,7 +1330,10 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="imovib" icon={TrendingUp} label="Estudos de Viabilidade" forceFull />
               <NavItem id="blueprint" icon={PencilRuler} label="Planta Inteligente" forceFull />
               <NavItem id="bim-viewer" icon={Boxes} label="Modelo 3D (IFC)" forceFull />
-              <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
+              {/* Só administrador e usuário interno (D5 do plano Market); o menu do computador já filtra. */}
+              {(profile.group === 'USUARIO' || isDev) && (
+                <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
+              )}
 
               <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />
 

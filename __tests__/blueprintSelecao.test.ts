@@ -303,20 +303,21 @@ describe('alinhar', () => {
     if (!primeira.ok) throw new Error(primeira.aviso);
     const ja = applyBatch(m, primeira.comandos).model;
     expect(comandosDeAlinhamento(ja, [pilar, ref], ref)).toMatchObject({ ok: false, aviso: /já está alinhado/ });
-    expect(comandosDeAlinhamento(m, [perpendicular, ref], pilar)).toMatchObject({ ok: false, aviso: /parede ou divisa/ });
+    expect(comandosDeAlinhamento(m, [perpendicular, ref], pilar)).toMatchObject({ ok: false, aviso: /parede, divisa ou trecho/ });
   });
 });
 
 describe('matriz', () => {
-  it('N−1 cópias a k·passo, num lote só; instalações ficam de fora com aviso', () => {
+  it('N−1 cópias a k·passo, num lote só; o ponto de instalação vai junto (E10.4)', () => {
     const { m, levelId, wallId, pilarId, tugId } = cena();
     const r = comandosDeMatriz(m, [wallId, pilarId, tugId], levelId, { quantidade: 4, passoXMm: 0, passoYMm: 3500 });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.comandos).toHaveLength(3);
     expect(r.comandos[2]).toMatchObject({ type: 'DuplicateEntities', delta: { x: 0, y: 10500 } });
-    expect(r.aviso).toMatch(/1 peça/);
+    expect(r.aviso).toBeNull();
     const depois = applyBatch(m, r.comandos).model;
+    expect(depois.terminais).toHaveLength(4);
     expect(depois.walls).toHaveLength(4);
     expect(depois.structures).toHaveLength(4);
     expect(depois.openings).toHaveLength(4); // a porta veio com cada parede
@@ -324,9 +325,10 @@ describe('matriz', () => {
   });
 
   it('recusa quantidade < 2, passo zero e seleção sem geometria copiável', () => {
-    const { m, levelId, wallId, tugId } = cena();
+    const { m, levelId, wallId, doorId } = cena();
     expect(comandosDeMatriz(m, [wallId], levelId, { quantidade: 1, passoXMm: 500, passoYMm: 0 }).ok).toBe(false);
     expect(comandosDeMatriz(m, [wallId], levelId, { quantidade: 3, passoXMm: 0, passoYMm: 0 }).ok).toBe(false);
-    expect(comandosDeMatriz(m, [tugId], levelId, { quantidade: 3, passoXMm: 500, passoYMm: 0 }).ok).toBe(false);
+    // Só a porta, sem a parede: não há "k·passo" ao longo de uma parede que não foi copiada.
+    expect(comandosDeMatriz(m, [doorId], levelId, { quantidade: 3, passoXMm: 500, passoYMm: 0 }).ok).toBe(false);
   });
 });

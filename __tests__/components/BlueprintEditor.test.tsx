@@ -5039,6 +5039,44 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     expect(screen.queryByRole('button', { name: /^P2 · Pilar/ })).not.toBeInTheDocument();
   });
 
+  it('distribuir (E10.4): pede 3 peças e diz por quê; com 3 pilares, o do meio vai ao meio — um Desfazer volta', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const pilar = (x: number, rotulo: string) =>
+      ({ type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [k.point(x, 1500)], larguraMm: 200, profundidadeMm: 200, alturaMm: 2800, rotulo }) as const;
+    loadBranchModel.mockResolvedValue(k.applyBatch(nivel.model, [pilar(1000, 'P1'), pilar(2000, 'P2'), pilar(7000, 'P3')]).model);
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    await abrirComponentes(user);
+    const distribuir = () => barra().getByRole('button', { name: /^distribuir com espaçamento igual/i });
+    expect(distribuir()).toBeDisabled();
+    expect(distribuir()).toHaveAccessibleName(/selecione 3 peças ou mais/);
+
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    await user.keyboard('{Shift>}');
+    await user.click(screen.getByRole('button', { name: /^P2 · Pilar/ }));
+    await user.click(screen.getByRole('button', { name: /^P3 · Pilar/ }));
+    await user.keyboard('{/Shift}');
+    expect(distribuir()).toBeEnabled();
+    expect(distribuir()).toHaveAccessibleName(/a primeira e a última ficam/);
+
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(distribuir());
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    const x = (r: string) => salvo.structures.find((e) => e.rotulo === r)!.pontos[0].x;
+    expect([x('P1'), x('P2'), x('P3')]).toEqual([1000, 4000, 7000]);
+
+    vi.mocked(saveDraft).mockClear();
+    await user.click(barra().getByRole('button', { name: /^desfazer/i }));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const desfeito = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(desfeito.structures.find((e) => e.rotulo === 'P2')!.pontos[0].x).toBe(2000);
+  });
+
   it('Ctrl+D duplica a seleção pelo teclado', async () => {
     loadBranchModel.mockResolvedValue(await comPilar());
     await montar();

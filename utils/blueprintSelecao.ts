@@ -307,6 +307,10 @@ const COS_PARALELO = Math.cos((1 * Math.PI) / 180);
  *   abertura sai do lugar. Não paralela: fica onde está, com aviso — "alinhar"
  *   uma parede perpendicular seria girá-la, e giro é outro gesto.
  * - pilar, terminal, quadro: o centro vai para a reta.
+ * - E10.4 (08/10/2026): o TRECHO de rede alinha como a parede (paralelo, pelo
+ *   meio) e o COMPONENTE (evaporadora, condensadora, reserva) como o terminal
+ *   (pelo centro). A referência também pode ser um trecho — "alinhar as
+ *   evaporadoras ao duto".
  *
  * Sai UM `TranslateEntities` por deslocamento distinto (peças que andam o mesmo
  * tanto vão juntas), com `manterJuncoes` — as vizinhas presas esticam para
@@ -317,9 +321,12 @@ export function comandosDeAlinhamento(
   selectedIds: readonly string[],
   referenciaId: ObjectId,
 ): ResultadoLote {
-  const ref = model.walls.find((w) => w.id === referenciaId) ?? model.boundaries.find((b) => b.id === referenciaId);
+  const ref =
+    model.walls.find((w) => w.id === referenciaId) ??
+    model.boundaries.find((b) => b.id === referenciaId) ??
+    (model.trechos ?? []).find((t) => t.id === referenciaId);
   if (!ref) {
-    return { ok: false, aviso: 'Escolha uma parede ou divisa como referência (a última selecionada).' };
+    return { ok: false, aviso: 'Escolha uma parede, divisa ou trecho como referência (a última selecionada).' };
   }
   const f = familiasDaSelecao(
     model,
@@ -346,20 +353,11 @@ export function comandosDeAlinhamento(
   };
   const meio = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
-  type Grupo = { delta: Point; wallIds: ObjectId[]; boundaryIds: ObjectId[]; structuralIds: ObjectId[]; terminalIds: ObjectId[]; quadroIds: ObjectId[] };
-  const grupos = new Map<string, Grupo>();
-  const grupo = (delta: Point): Grupo => {
-    const chave = `${delta.x},${delta.y}`;
-    let g = grupos.get(chave);
-    if (!g) {
-      g = { delta, wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [], quadroIds: [] };
-      grupos.set(chave, g);
-    }
-    return g;
-  };
+  const grupos = new GruposDeDeslocamento();
+  const grupo = (delta: Point) => grupos.de(delta);
   let naoParalelas = 0;
   let jaAlinhadas = 0;
-  const alinharSegmento = (a: Point, b: Point, id: ObjectId, lista: 'wallIds' | 'boundaryIds' | 'structuralIds') => {
+  const alinharSegmento = (a: Point, b: Point, id: ObjectId, lista: 'wallIds' | 'boundaryIds' | 'structuralIds' | 'trechoIds') => {
     if (!paralela(a, b)) {
       naoParalelas++;
       return;
@@ -397,12 +395,20 @@ export function comandosDeAlinhamento(
     if (d.x === 0 && d.y === 0) jaAlinhadas++;
     else grupo(d).quadroIds.push(q.id);
   }
+  for (const t of model.trechos ?? []) if (f.trechoIds.includes(t.id)) alinharSegmento(t.a, t.b, t.id, 'trechoIds');
+  const componentes = new Set(selectedIds.filter((id) => id !== referenciaId));
+  for (const c of model.componentes ?? []) {
+    if (!componentes.has(c.id)) continue;
+    const d = ateAReta(c.at);
+    if (d.x === 0 && d.y === 0) jaAlinhadas++;
+    else grupo(d).componenteIds.push(c.id);
+  }
 
   const avisos: string[] = [];
   if (naoParalelas > 0) avisos.push(`${naoParalelas} peça(s) não paralela(s) à referência ficou(aram) onde estava(m).`);
-  const ignorados = f.aguaIds.length + f.trechoIds.length + f.openingIds.length;
-  if (ignorados > 0) avisos.push(`${ignorados} peça(s) de telhado/trecho/esquadria avulsa não entram no alinhamento.`);
-  if (grupos.size === 0) {
+  const ignorados = f.aguaIds.length + f.openingIds.length;
+  if (ignorados > 0) avisos.push(`${ignorados} peça(s) de telhado/esquadria avulsa não entram no alinhamento.`);
+  if (grupos.tamanho === 0) {
     return {
       ok: false,
       aviso:
@@ -413,17 +419,106 @@ export function comandosDeAlinhamento(
             : 'Selecione a referência e pelo menos mais uma peça para alinhar.',
     };
   }
-  const comandos: Command[] = [...grupos.values()].map((g) => ({
-    type: 'TranslateEntities',
-    wallIds: g.wallIds,
-    boundaryIds: g.boundaryIds,
-    structuralIds: g.structuralIds,
-    terminalIds: g.terminalIds,
-    quadroIds: g.quadroIds,
-    delta: g.delta,
-    manterJuncoes: true,
-  }));
-  return { ok: true, comandos, aviso: avisos.length > 0 ? avisos.join(' ') : null };
+  return { ok: true, comandos: grupos.comandos(), aviso: avisos.length > 0 ? avisos.join(' ') : null };
+}
+
+/**
+ * Peças que andam o MESMO deslocamento vão no mesmo `TranslateEntities` (com
+ * `manterJuncoes`, como o arraste) — o lote inteiro é um passo de desfazer.
+ * Alinhar e distribuir usam a mesma partição.
+ */
+class GruposDeDeslocamento {
+  private readonly mapa = new Map<
+    string,
+    { delta: Point; wallIds: ObjectId[]; boundaryIds: ObjectId[]; structuralIds: ObjectId[]; trechoIds: ObjectId[]; terminalIds: ObjectId[]; quadroIds: ObjectId[]; componenteIds: ObjectId[] }
+  >();
+  de(delta: Point) {
+    const chave = `${delta.x},${delta.y}`;
+    let g = this.mapa.get(chave);
+    if (!g) {
+      g = { delta, wallIds: [], boundaryIds: [], structuralIds: [], trechoIds: [], terminalIds: [], quadroIds: [], componenteIds: [] };
+      this.mapa.set(chave, g);
+    }
+    return g;
+  }
+  get tamanho() {
+    return this.mapa.size;
+  }
+  comandos(): Command[] {
+    return [...this.mapa.values()].map((g) => ({
+      type: 'TranslateEntities',
+      wallIds: g.wallIds,
+      boundaryIds: g.boundaryIds,
+      structuralIds: g.structuralIds,
+      trechoIds: g.trechoIds,
+      terminalIds: g.terminalIds,
+      quadroIds: g.quadroIds,
+      componenteIds: g.componenteIds,
+      delta: g.delta,
+      manterJuncoes: true,
+    }));
+  }
+}
+
+export type EixoDaDistribuicao = 'X' | 'Y';
+
+/**
+ * DISTRIBUIR (E10.4, 08/10/2026 — "arranjo"): espaçamento IGUAL entre os
+ * centros, ao longo de um eixo da planta. A primeira e a última peça (na ordem
+ * do eixo) ficam; as do meio andam SÓ naquele eixo até ficarem a passos iguais —
+ * a fileira de difusores no forro, as evaporadoras ao longo do corredor.
+ *
+ * O centro de cada peça: o meio do eixo (parede, divisa, viga, trecho), o
+ * centro do contorno (pilar) ou o ponto (terminal, quadro, componente). Sem
+ * eixo dado, vale o de maior espalhamento dos centros. Precisa de 3 peças ou
+ * mais — com duas não há "do meio".
+ */
+export function comandosDeDistribuicao(
+  model: BlueprintModel,
+  selectedIds: readonly string[],
+  eixo?: EixoDaDistribuicao,
+): ResultadoLote {
+  const f = familiasDaSelecao(model, selectedIds);
+  const sel = new Set(selectedIds);
+  type Peca = { centro: Point; lista: 'wallIds' | 'boundaryIds' | 'structuralIds' | 'trechoIds' | 'terminalIds' | 'quadroIds' | 'componenteIds'; id: ObjectId };
+  const pecas: Peca[] = [];
+  const meio = (a: Point, b: Point): Point => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  for (const w of model.walls) if (f.wallIds.includes(w.id)) pecas.push({ centro: meio(w.a, w.b), lista: 'wallIds', id: w.id });
+  for (const b of model.boundaries) if (f.boundaryIds.includes(b.id)) pecas.push({ centro: meio(b.a, b.b), lista: 'boundaryIds', id: b.id });
+  for (const e of model.structures) {
+    if (!f.structuralIds.includes(e.id)) continue;
+    const c = contornoEmPlanta(e);
+    const xs = c.map((p) => p.x);
+    const ys = c.map((p) => p.y);
+    pecas.push({ centro: { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 }, lista: 'structuralIds', id: e.id });
+  }
+  for (const t of model.trechos ?? []) if (f.trechoIds.includes(t.id)) pecas.push({ centro: meio(t.a, t.b), lista: 'trechoIds', id: t.id });
+  for (const t of model.terminais ?? []) if (f.terminalIds.includes(t.id)) pecas.push({ centro: t.at, lista: 'terminalIds', id: t.id });
+  for (const q of model.quadros ?? []) if (f.quadroIds.includes(q.id)) pecas.push({ centro: q.at, lista: 'quadroIds', id: q.id });
+  for (const c of model.componentes ?? []) if (sel.has(c.id)) pecas.push({ centro: c.at, lista: 'componenteIds', id: c.id });
+
+  const ignorados = f.aguaIds.length + f.openingIds.length;
+  const avisoIgnorados = ignorados > 0 ? `${ignorados} peça(s) de telhado/esquadria avulsa não entram na distribuição.` : null;
+  if (pecas.length < 3) {
+    return { ok: false, aviso: 'Distribuir pede 3 peças ou mais (a primeira e a última ficam; as do meio se espaçam).' };
+  }
+  const espalhamento = (k: 'x' | 'y') => Math.max(...pecas.map((p) => p.centro[k])) - Math.min(...pecas.map((p) => p.centro[k]));
+  const k: 'x' | 'y' = eixo ? (eixo === 'X' ? 'x' : 'y') : espalhamento('x') >= espalhamento('y') ? 'x' : 'y';
+  const ordem = [...pecas].sort((a, b) => a.centro[k] - b.centro[k]);
+  const ini = ordem[0].centro[k];
+  const fim = ordem[ordem.length - 1].centro[k];
+  if (fim - ini <= 0) {
+    return { ok: false, aviso: `As peças estão todas na mesma ${k === 'x' ? 'coluna' : 'linha'} — não há o que espaçar nesse eixo.` };
+  }
+  const passo = (fim - ini) / (ordem.length - 1);
+  const grupos = new GruposDeDeslocamento();
+  for (let i = 1; i < ordem.length - 1; i++) {
+    const d = Math.round(ini + i * passo - ordem[i].centro[k]);
+    if (d === 0) continue;
+    grupos.de(k === 'x' ? { x: d, y: 0 } : { x: 0, y: d })[ordem[i].lista].push(ordem[i].id);
+  }
+  if (grupos.tamanho === 0) return { ok: false, aviso: 'As peças já estão igualmente espaçadas.' };
+  return { ok: true, comandos: grupos.comandos(), aviso: avisoIgnorados };
 }
 
 export interface ParametrosDaMatriz {
@@ -439,8 +534,11 @@ export interface ParametrosDaMatriz {
  * fileira de pilares, o pavimento de vagas, a bateria de banheiros. Cada cópia
  * é um `DuplicateEntities` a partir do ORIGINAL (ids conhecidos), e o lote é um
  * passo de desfazer. Abertura avulsa fica de fora: não há "k·passo" ao longo de
- * uma parede que não foi copiada. Telhado e instalações também, porque
- * `DuplicateEntities` não os copia — o aviso diz o que não foi.
+ * uma parede que não foi copiada.
+ *
+ * E10.4 (08/10/2026): pontos, trechos e quadros ENTRAM — o `DuplicateEntities`
+ * os copia desde a E1.3 do elétrico (a cópia nasce sem circuito). O componente
+ * fica de fora (o comando ainda não o copia) e o aviso diz.
  */
 export function comandosDeMatriz(
   model: BlueprintModel,
@@ -452,8 +550,17 @@ export function comandosDeMatriz(
   const quantidade = Math.floor(parametros.quantidade);
   const px = Math.round(parametros.passoXMm);
   const py = Math.round(parametros.passoYMm);
-  if (f.wallIds.length === 0 && f.boundaryIds.length === 0 && f.structuralIds.length === 0 && f.aguaIds.length === 0) {
-    return { ok: false, aviso: 'Nada que se possa repetir está selecionado (paredes, estruturas, divisas ou telhado).' };
+  const componentes = (model.componentes ?? []).filter((c) => selectedIds.includes(c.id)).length;
+  if (
+    f.wallIds.length === 0 &&
+    f.boundaryIds.length === 0 &&
+    f.structuralIds.length === 0 &&
+    f.aguaIds.length === 0 &&
+    f.trechoIds.length === 0 &&
+    f.terminalIds.length === 0 &&
+    f.quadroIds.length === 0
+  ) {
+    return { ok: false, aviso: 'Nada que se possa repetir está selecionado (paredes, estruturas, divisas, telhado ou instalações).' };
   }
   if (quantidade < 2) return { ok: false, aviso: 'A matriz precisa de pelo menos 2 exemplares.' };
   if (quantidade > 200) return { ok: false, aviso: 'No máximo 200 exemplares por matriz.' };
@@ -467,15 +574,18 @@ export function comandosDeMatriz(
       boundaryIds: f.boundaryIds,
       structuralIds: f.structuralIds,
       aguaIds: f.aguaIds,
+      terminalIds: f.terminalIds,
+      trechoIds: f.trechoIds,
+      quadroIds: f.quadroIds,
       openings: [],
       delta: { x: px * k, y: py * k },
     });
   }
-  const ignorados = f.trechoIds.length + f.terminalIds.length + f.quadroIds.length + f.openingIds.length;
+  const ignorados = componentes + f.openingIds.length;
   return {
     ok: true,
     comandos,
-    aviso: ignorados > 0 ? `${ignorados} peça(s) de instalações/esquadria avulsa não entram na matriz.` : null,
+    aviso: ignorados > 0 ? `${ignorados} componente(s)/esquadria(s) avulsa(s) não entram na matriz.` : null,
   };
 }
 

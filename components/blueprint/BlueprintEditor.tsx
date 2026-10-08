@@ -18,6 +18,7 @@ import {
   MoveRight,
   RotateCw,
   Link2,
+  AlignHorizontalDistributeCenter,
   AlignStartVertical,
   LayoutGrid,
   History,
@@ -559,6 +560,7 @@ import {
   comandoDeMover,
   comandoDeRotacao,
   comandosDeAlinhamento,
+  comandosDeDistribuicao,
   comandosDeMatriz,
   idsParaIsolar,
   type ParametrosDaMatriz,
@@ -7811,16 +7813,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     editor.run(r.comando);
     setAvisoColar(r.aviso);
   }
-  /** A referência é a ÚLTIMA parede/divisa selecionada — é a que a pessoa acabou de apontar. */
+  /**
+   * A referência é a ÚLTIMA parede/divisa/trecho selecionada — é a que a pessoa
+   * acabou de apontar. O trecho entrou na E10.4 (alinhar as evaporadoras ao duto).
+   */
   const referenciaDoAlinhamento = [...editor.selectedIds]
     .reverse()
-    .find((id) => editor.model.walls.some((w) => w.id === id) || editor.model.boundaries.some((b) => b.id === id));
+    .find(
+      (id) =>
+        editor.model.walls.some((w) => w.id === id) ||
+        editor.model.boundaries.some((b) => b.id === id) ||
+        (editor.model.trechos ?? []).some((t) => t.id === id),
+    );
   function alinhar() {
     if (!referenciaDoAlinhamento) {
-      setAvisoColar('Selecione as peças e, por último, a parede (ou divisa) que serve de referência.');
+      setAvisoColar('Selecione as peças e, por último, a parede, divisa ou trecho que serve de referência.');
       return;
     }
     const r = comandosDeAlinhamento(editor.model, editor.selectedIds, referenciaDoAlinhamento);
+    if (!r.ok) {
+      setAvisoColar(r.aviso);
+      return;
+    }
+    editor.runBatch(r.comandos);
+    setAvisoColar(r.aviso);
+  }
+  /** DISTRIBUIR (E10.4): espaçamento igual entre os centros, no eixo de maior espalhamento. Um lote = um Ctrl+Z. */
+  function distribuir() {
+    const r = comandosDeDistribuicao(editor.model, editor.selectedIds);
     if (!r.ok) {
       setAvisoColar(r.aviso);
       return;
@@ -10056,9 +10076,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 />
                 <BotaoBarra
                   icone={AlignStartVertical}
-                  rotulo="Alinhar à referência — a última parede selecionada"
+                  rotulo={
+                    editor.selectedIds.length < 2
+                      ? 'Alinhar à referência — selecione as peças e, por último, a parede, divisa ou trecho de referência'
+                      : 'Alinhar à referência — a última parede, divisa ou trecho selecionado'
+                  }
                   onClick={alinhar}
                   disabled={editor.selectedIds.length < 2}
+                />
+                <BotaoBarra
+                  icone={AlignHorizontalDistributeCenter}
+                  rotulo={
+                    editor.selectedIds.length < 3
+                      ? 'Distribuir com espaçamento igual — selecione 3 peças ou mais'
+                      : 'Distribuir com espaçamento igual — a primeira e a última ficam'
+                  }
+                  onClick={distribuir}
+                  disabled={editor.selectedIds.length < 3}
                 />
                 {/* ESTENDER ATÉ A FACE (P2.59). O usuário perguntou onde estava a
                     ferramenta: ela nascera no rodapé do painel da parede, abaixo da

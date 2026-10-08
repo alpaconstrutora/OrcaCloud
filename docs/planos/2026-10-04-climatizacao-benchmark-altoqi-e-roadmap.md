@@ -2367,3 +2367,39 @@ Transversal: vale para todas as disciplinas, não só para a climatização.
   sem as mudanças desta frente** (medido no base a2175a43): é anterior, fica registrado e não é
   corrigido aqui.
 - O mover no 3D não sobe nem desce a peça (a cota). Ela continua editada no painel.
+
+### Etapa 10.4a — Alinhar e arranjo da instalação · 08/10/2026 (frente `clima-e10-ref`, sem bump)
+
+A 10.4 sai em três publicações: **(a)** alinhar/arranjo, **(b)** IFC externo como referência no 3D e
+**(c)** DXF como fundo vetorial. Esta é a (a).
+
+- **Distribuir** (novo, `comandosDeDistribuicao`):
+  - deixa espaçamento IGUAL entre os centros, ao longo do eixo de maior espalhamento (ou do eixo dado);
+  - a primeira e a última peça ficam, e as do meio andam SÓ naquele eixo;
+  - o centro de cada peça é o meio do eixo (parede, divisa, viga, trecho), o centro do contorno (pilar)
+    ou o ponto (terminal, quadro, componente);
+  - pede 3 peças ou mais e diz por quê.
+  - Botão no grupo de edição, ao lado de Alinhar; um lote = um Ctrl+Z.
+- **Alinhar** passa a mover o **trecho** (paralelo, pelo meio, como a parede) e o **componente** (pelo
+  centro, como o terminal). Antes, os dois ficavam de fora ("não entram no alinhamento"). A referência
+  também pode ser um **trecho**: alinhar as evaporadoras ao duto.
+- **Matriz** passa a copiar **pontos, trechos e quadros**, porque o `DuplicateEntities` os copia desde a
+  E1.3 do elétrico. O **componente** fica de fora, com aviso (o comando ainda não o copia, e incluí-lo
+  pede bump).
+- Alinhar e distribuir usam a mesma partição por deslocamento (`GruposDeDeslocamento`: peças que andam
+  o mesmo tanto vão no mesmo `TranslateEntities`).
+
+**Prova:**
+
+- `blueprintArranjo.test.ts` (6 testes):
+  - distribuir em X sem mexer no y;
+  - componente e trecho pelo centro, com eixo Y dado;
+  - as três recusas;
+  - alinhar ao DUTO: duas evaporadoras, a condensadora e o trecho paralelo na reta; o perpendicular
+    fica, com aviso;
+  - matriz de evaporadora + trecho;
+  - componente fora da matriz, com aviso.
+- `blueprintSelecao.test.ts`: 3 asserções atualizadas para o comportamento novo (o ponto vai na matriz;
+  a recusa agora é a da esquadria avulsa; o aviso da referência cita o trecho).
+- `BlueprintEditor.test.tsx` (+1 teste): o botão desligado diz "selecione 3 peças ou mais"; com três
+  pilares selecionados por Shift, o do meio vai de 2000 a 4000; um Desfazer o devolve.

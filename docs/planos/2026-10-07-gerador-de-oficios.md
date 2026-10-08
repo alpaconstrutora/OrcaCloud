@@ -1064,7 +1064,12 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
       leitura é Membro, e a RLS de `organization_members` só deixa gestor gravar). O caminho é o mesmo
       de `updateMemberAccess`, que já denuncia RLS por `.select('id')`; falta um admin salvar um
       membro com cargo/assinatura e conferir a linha no banco
-- [ ] F1 · publicação por push, check-run `ci`, `conferir-producao.sh`, fechar a frente
+- [x] F1 · publicada em 08/10: `e2e4cc47` (ci **vermelho**: `npm ci` do CI — Node 20/npm 10 — recusou o
+      lock sem `@floating-ui/dom`, dependência par do TipTap que o npm 11 local omite) → corrigido em
+      `2b132196` declarando a dependência, provado antes com `npx npm@10 ci --dry-run`. Check-run `ci`
+      **success** em `2b132196`; Vercel "Deployment has completed"; `conferir-producao.sh` ✓ — o domínio
+      serve exatamente `2b13219` e o bundle contém "Modelos de ofício" e "Assinatura de documentos"
+- [ ] F1 · fechar a frente (`fechar-frente.sh oficios-f1-modelos`)
 - [ ] F2
 - [ ] F3
 

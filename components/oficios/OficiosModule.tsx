@@ -2,7 +2,6 @@ import React from 'react';
 import { FileText, Plus, LayoutTemplate } from 'lucide-react';
 import { TabsBar } from '../ui/TabsBar';
 import { usePersistedState } from '../ui/TableUtils';
-import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
@@ -33,7 +32,6 @@ const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
 
 export default function OficiosModule(_props: Props) {
     const { orgId } = useOrgContext();
-    const confirm = useConfirm();
     const { showToast } = useToast();
     const [aba, setAba] = usePersistedState<Aba>('oficios:aba', 'modelos');
     const [modelos, setModelos] = React.useState<DocGenModelo[]>([]);
@@ -84,14 +82,9 @@ export default function OficiosModule(_props: Props) {
         }
     };
 
+    // A confirmação é a do próprio menu da linha (InlineDisclosureMenu: "Excluir" → "Confirmar",
+    // §9.1/§14). Um useConfirm aqui pediria a mesma decisão duas vezes.
     const excluir = async (m: DocGenModelo) => {
-        const ok = await confirm({
-            title: 'Excluir modelo?',
-            message: `"${m.nome}" e o histórico de versões dele serão apagados. Essa ação não pode ser desfeita.`,
-            variant: 'danger',
-            confirmLabel: 'Excluir',
-        });
-        if (!ok) return;
         try {
             await docGenModeloService.remove(m.id);
             setModelos(prev => prev.filter(x => x.id !== m.id));

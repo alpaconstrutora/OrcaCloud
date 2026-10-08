@@ -172,6 +172,13 @@ export function obrasDaOrganizacao(projects: ProjectData[], orgId: string): Proj
     return projects.filter(p => (p.organization_id ?? p.settings?.organizationId) === orgId);
 }
 
+/**
+ * Colunas de `contracts` que as variáveis leem — sem `signature_token`
+ * (`selectEstrelaSensivel.test.ts` trava `select('*')` em tabela sensível).
+ * Mesmo conjunto que `contractService.listContracts` já seleciona.
+ */
+const COLUNAS_CONTRATO = 'id, organization_id, project_id, supplier_id, client_id, number, client_contract_number, title, description, contract_type, nature, direction, domain, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, empresa_id, empreendimento_id, payment_method, payment_term_type, payment_days, payment_installments, signature_status, created_at';
+
 // ─── Contexto completo do documento ──────────────────────────────────────────
 
 export interface DepsContexto {
@@ -214,7 +221,7 @@ export async function montarContexto(doc: DocGenDocumentoRascunho, deps: DepsCon
         supplierId ? supplierService.getById(supplierId) : Promise.resolve(null),
         doc.empreendimento_id ? empreendimentoService.getById(doc.empreendimento_id).catch(() => null) : Promise.resolve(null),
         doc.contract_id
-            ? supabase.from('contracts').select('*').eq('id', doc.contract_id).maybeSingle().then(r => (r.data as Contract | null) ?? null)
+            ? supabase.from('contracts').select(COLUNAS_CONTRATO).eq('id', doc.contract_id).maybeSingle().then(r => (r.data as Contract | null) ?? null)
             : Promise.resolve(null),
     ]);
 
@@ -244,6 +251,8 @@ export async function montarContexto(doc: DocGenDocumentoRascunho, deps: DepsCon
     };
 }
 
+const CHAVES_DA_TELA = ['empresa.cidade', 'documento.local_e_data'];
+
 /**
  * Valores finais das variáveis do modelo: o resolvido do cadastro, com os
  * overrides "só neste documento" por cima (override vazio não apaga o cadastro).
@@ -253,7 +262,9 @@ export function valoresDoDocumento(
     ctx: ContextoDoc,
     overrides: Record<string, string>,
 ): Record<string, string> {
-    const chaves = chavesDoModelo(modelo.conteudo, modelo.layout);
+    // + as chaves que a TELA mostra fora do texto (a dica "Cidade (local e data)"),
+    // que o modelo pode não usar.
+    const chaves = [...new Set([...chavesDoModelo(modelo.conteudo, modelo.layout), ...CHAVES_DA_TELA])];
     const valores = resolverCampos(chaves, ctx);
     for (const [k, v] of Object.entries(overrides)) if (v && v.trim()) valores[k] = v;
     return valores;

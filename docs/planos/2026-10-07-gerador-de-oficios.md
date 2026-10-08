@@ -1070,7 +1070,47 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
       **success** em `2b132196`; Vercel "Deployment has completed"; `conferir-producao.sh` ✓ — o domínio
       serve exatamente `2b13219` e o bundle contém "Modelos de ofício" e "Assinatura de documentos"
 - [ ] F1 · fechar a frente (`fechar-frente.sh oficios-f1-modelos`)
-- [ ] F2
+- [x] F2 · 1 — migration `aplicar_20271008000100_doc_gen_documentos.sql` **aplicada em 08/10** e provada:
+      `doc_gen_documentos` + `doc_gen_documento_versoes`, 6 policies, exclusão só de RASCUNHO
+      (`is_org_member AND status='RASCUNHO'`), FK do modelo `RESTRICT`, demais `SET NULL`, índice único
+      parcial do número; `segurancaMigrations` ✓, `migrationsPrefixo` ✓
+- [x] F2 · 2 — retirado (decisão de 07/10 21:10: sem coluna nova em fornecedores). No lugar:
+      `supplierService.updateCamposCadastrais` — update estreito de 10 colunas, porque `updateSupplier`
+      reescreve `broker_profiles` com `commission_rate=5` (zeraria comissão de corretor)
+- [x] F2 · 3 — `services/docGen/destinatario.ts` (puro: `snapshotDe` dos 7 tipos, mapa variável → coluna do
+      cadastro, 7 testes) + `resolverContexto.ts` (candidatos por tipo com consultas LEVES — o
+      `brokerService.listProfiles` grava antes de listar —, contexto real, valores = cadastro + overrides,
+      imagens das assinaturas, busca de documentos do GED). Achado pela suíte: `select('*')` em `contracts`
+      é travado (`selectEstrelaSensivel`, `signature_token`) → colunas explícitas
+- [x] F2 · 4 — `validarDocumento.ts` (bloqueante × aviso; número nunca é pendência no rascunho; 6 testes)
+- [x] F2 · 5 — `docGenDocumentoService` (create = v1; salvar sobe a versão com UPDATE condicionado a
+      `status='RASCUNHO'` E à versão lida — outra aba que salvou antes não é sobrescrita; remove só rascunho)
+- [x] F2 · 6 — `SeletorDestinatario` (Sheet 2xl, 7 abas, busca transitória §3.1, manual com 13 campos)
+- [x] F2 · 7 — `CamposPendentesPainel` ("Só neste documento" × "Atualizar cadastro", este só quando há UMA
+      coluna de destino)
+- [x] F2 · 8 — `NovoOficioTela` + `AnexosEditor` (do GED, enviar ao GED, descrito) + `SignatariosEditor`
+      (usuários da org, aviso de cargo/assinatura faltando) + `EscolherModeloSheet` (só modelos ativos).
+      **Decisão registrada:** "Salvar rascunho" de ofício novo NÃO fecha a tela — o §25 fecha na criação
+      porque "a tarefa acabou"; aqui o rascunho é ponto de parada no meio da redação
+- [x] F2 · 9 — `OficiosList` (4 KPIs: em elaboração, emitidos no mês, aguardando resposta, prazo vencido;
+      filtro Situação em popover §5.4) + `OficiosModule` (aba Ofícios por padrão; "Novo ofício" ligado;
+      excluir modelo usado por ofício explica a recusa em vez do erro de FK)
+- [x] F2 · 10 — **conferência no app com gravação real** (08/10, `C:/tmp/pwtest/oficios_f2.js`, conta de
+      leitura, org Alpa; dados de teste "PW —" criados e apagados por SQL): Novo ofício → modelo → assunto →
+      destinatário FORNECEDOR "PW — Prefeitura de Teste" (sem CNPJ) → pendência "CPF / CNPJ não está
+      preenchido — campo obrigatório" → **Atualizar cadastro** → banco: `suppliers.document =
+      18.675.983/0001-61` ✓ → redação, signatário, anexo descrito → "Tudo preenchido" → Salvar = v1 →
+      **prévia**: PDF com a prefeitura, o CNPJ, o texto, o signatário, "nº atribuído na emissão", cabeçalho e
+      rodapé reais da Alpa → editar e salvar = v2 → Voltar → linha na lista, **sobrevive ao F5** → reabrir traz
+      assunto, texto e signatário. **Manual**: só "Só neste documento" (sem "Atualizar cadastro"), e as únicas
+      escritas foram `doc_gen_documentos` + `doc_gen_documento_versoes`. "Emitir" desligado com o motivo
+      ("6 pendência(s) impede(m) a emissão… chega na F3"). Exclusão pelo menu da linha apagou os 2 rascunhos,
+      sem versão órfã. 0 erros de JS/console, 0 respostas 4xx/5xx. Achado e corrigido na conferência: a dica
+      "Cidade (local e data)" saía vazia quando o modelo não usava `{{empresa.cidade}}`
+- [x] F2 · tipos 0 erros; suíte 2.894 arquivos / 7.873 testes = 7.839 + 34 pendentes + 0 falhas (a 1ª rodada caiu com
+      segfault do Node, exit 139 — repetida); `check-ui-standard` ✓ nos 13 arquivos de Ofícios; system-projects,
+      classification e xss ✓
+- [ ] F2 · publicação, ci, domínio, fechar a frente
 - [ ] F3
 
 ## Verificação

@@ -1110,7 +1110,12 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
 - [x] F2 · tipos 0 erros; suíte 2.894 arquivos / 7.873 testes = 7.839 + 34 pendentes + 0 falhas (a 1ª rodada caiu com
       segfault do Node, exit 139 — repetida); `check-ui-standard` ✓ nos 13 arquivos de Ofícios; system-projects,
       classification e xss ✓
-- [ ] F2 · publicação, ci, domínio, fechar a frente
+- [x] F2 · publicada em 08/10 (`ebe7fe74` + `626af1ee`). O check-run `ci` de `626af1ee` saiu **vermelho**, mas
+      não pela F2: falhou só "Planta + 3D lado a lado (E10.3)", teste que entrou com `e989ccd6` (outra sessão) e já
+      falhava ali e em `d607c5d6`. A mesma sessão corrigiu em `56c1bc8d` — posterior aos commits da F2 e com `ci`
+      **success**. Vercel "success"; `conferir-producao.sh` ✓: o domínio serve `56c1bc8` e o bundle contém
+      "Escolher destinatário" e "Atualizar cadastro"
+- [ ] F2 · fechar a frente (`fechar-frente.sh oficios-f2-novo-oficio`)
 - [ ] F3
 
 ## Verificação

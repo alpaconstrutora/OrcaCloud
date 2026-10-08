@@ -16,6 +16,14 @@ import {
 } from '../types';
 import { ImportListingsModal } from './ImportListingsModal';
 import MarketPracaSheet from './market/MarketPracaSheet';
+import {
+  calcularVocacao,
+  validarHipoteses,
+  hipotesesDoEstudo,
+  HIPOTESES_PADRAO,
+  DESCRICAO_HIPOTESES,
+  type HipotesesVocacao,
+} from '../utils/opuraMarketVocacao';
 
 /**
  * Texto que entra em HTML do Leaflet (tooltip, divIcon). Nome de bairro e
@@ -202,6 +210,24 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
   const [analysisRadius, setAnalysisRadius] = React.useState('1000');
   const [analyzing, setAnalyzing] = React.useState(false);
   const [analysisResult, setAnalysisResult] = React.useState<any | null>(null);
+  // Folgas do cálculo de vocação, editáveis na tela (Fase 5). Padrão = os números
+  // que antes eram constantes no código.
+  const [hipoteses, setHipoteses] = React.useState<HipotesesVocacao>(HIPOTESES_PADRAO);
+  const errosHipoteses = validarHipoteses(hipoteses);
+  const hipotesesAlteradas = DESCRICAO_HIPOTESES.filter(d => hipoteses[d.chave] !== HIPOTESES_PADRAO[d.chave]).length;
+  // Hipóteses de um resultado: as que ele carrega, ou as da tela.
+  const hipotesesDoResultado = (r: any): HipotesesVocacao => r?.hipoteses ?? hipoteses;
+
+  // Mudou hipótese, área ou regra da praça: refaz o cálculo sobre as MESMAS
+  // estatísticas do raio, sem nova consulta.
+  React.useEffect(() => {
+    setAnalysisResult((prev: any) => {
+      if (!prev?.stats || validarHipoteses(hipoteses).length > 0) return prev;
+      const area = parseFloat(terrainArea);
+      if (!(area > 0)) return prev;
+      return calcularVocacao(prev.stats, area, cityConfig?.rules, hipoteses);
+    });
+  }, [hipoteses, terrainArea, cityConfig]);
   
   // Estudos salvos
   const [savedStudies, setSavedStudies] = React.useState<OpuraMarketTerrainStudy[]>([]);
@@ -713,114 +739,18 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         return;
       }
 
-      let recStandard: 'Econômico' | 'Médio' | 'Médio-Alto' | 'Alto Padrão' | 'Luxo' = 'Médio';
-      let productMix = { tipologias: [] as any[], ticketSugerido: 0 };
-      
-      const avgPricePerM2 = stats.pricePerM2Avg;
+      if (errosHipoteses.length > 0) {
+        alert('Corrija as hipóteses do cálculo:\n' + errosHipoteses.join('\n'));
+        setAnalysisResult(null);
+        return;
+      }
       const areaTerreno = parseFloat(terrainArea);
-
-      if (cityConfig && cityConfig.rules && cityConfig.rules.length > 0) {
-        // Encontra a regra que engloba avgPricePerM2
-        const matchedRule = cityConfig.rules.find(r => {
-          const min = r.minPrice;
-          const max = r.maxPrice ?? Infinity;
-          return avgPricePerM2 >= min && avgPricePerM2 < max;
-        });
-
-        if (matchedRule) {
-          recStandard = matchedRule.standard;
-          productMix = {
-            tipologias: matchedRule.tipologias.map(t => ({
-              tipo: t.tipo,
-              area: t.area,
-              mix: t.mix
-            })),
-            ticketSugerido: 0
-          };
-
-          // Calcula ticketSugerido com base na metragem média ponderada das tipologias
-          let totalMix = 0;
-          let weightedArea = 0;
-          matchedRule.tipologias.forEach(t => {
-            weightedArea += t.area * (t.mix / 100);
-            totalMix += t.mix;
-          });
-          const avgArea = totalMix > 0 ? weightedArea : 50;
-          productMix.ticketSugerido = avgPricePerM2 * avgArea;
-        } else {
-          useDefaultRules();
-        }
-      } else {
-        useDefaultRules();
+      if (!(areaTerreno > 0)) {
+        alert('Informe a área do terreno.');
+        return;
       }
-
-      function useDefaultRules() {
-        if (avgPricePerM2 < 3200) {
-          recStandard = 'Econômico';
-          productMix = {
-            tipologias: [
-              { tipo: '2 Dorms (Minha Casa Minha Vida)', area: 52, mix: 75 },
-              { tipo: '1 Dorm / Studio', area: 38, mix: 25 }
-            ],
-            ticketSugerido: avgPricePerM2 * 52
-          };
-        } else if (avgPricePerM2 >= 3200 && avgPricePerM2 < 4300) {
-          recStandard = 'Médio';
-          productMix = {
-            tipologias: [
-              { tipo: '2 Dorms c/ Suíte', area: 65, mix: 60 },
-              { tipo: '3 Dorms c/ Suíte', area: 80, mix: 40 }
-            ],
-            ticketSugerido: avgPricePerM2 * 68
-          };
-        } else if (avgPricePerM2 >= 4300 && avgPricePerM2 < 5500) {
-          recStandard = 'Médio-Alto';
-          productMix = {
-            tipologias: [
-              { tipo: '2 Dorms c/ Varanda Gourmet', area: 70, mix: 50 },
-              { tipo: '3 Dorms c/ Varanda Gourmet', area: 90, mix: 50 }
-            ],
-            ticketSugerido: avgPricePerM2 * 80
-          };
-        } else if (avgPricePerM2 >= 5500 && avgPricePerM2 < 7500) {
-          recStandard = 'Alto Padrão';
-          productMix = {
-            tipologias: [
-              { tipo: '3 Suítes Premium', area: 120, mix: 70 },
-              { tipo: '4 Suítes Duplex', area: 180, mix: 30 }
-            ],
-            ticketSugerido: avgPricePerM2 * 138
-          };
-        } else {
-          recStandard = 'Luxo';
-          productMix = {
-            tipologias: [
-              { tipo: '4 Suítes Mansão Suspensa', area: 250, mix: 80 },
-              { tipo: 'Cobertura Linear', area: 380, mix: 20 }
-            ],
-            ticketSugerido: avgPricePerM2 * 276
-          };
-        }
-      }
-
-      const coefAproveitamento = 4; 
-      const areaConstruivelPotencial = areaTerreno * coefAproveitamento;
-      const areaVendaPotencial = areaConstruivelPotencial * 0.82; 
-      
-      const vgvEstimado = areaVendaPotencial * avgPricePerM2;
-      const velocidadeVendas = avgPricePerM2 > 4500 ? 6.5 : 8.2; 
-      const scoreRisco = Math.min(Math.max(Math.round(100 - (stats.totalListings * 4) - (avgPricePerM2 / 120)), 15), 95);
-
-      setAnalysisResult({
-        stats,
-        recStandard,
-        productMix,
-        estimatedVgv: vgvEstimado,
-        estimatedAbsorptionVelocity: velocidadeVendas,
-        riskScore: scoreRisco,
-        areaConstruivel: areaConstruivelPotencial,
-        areaVenda: areaVendaPotencial
-      });
+      // Toda a conta mora em utils/opuraMarketVocacao.ts, com as hipóteses da tela.
+      setAnalysisResult(calcularVocacao(stats, areaTerreno, cityConfig?.rules, hipoteses));
     } catch (err: any) {
       console.error(err);
       alert('Erro ao realizar análise espacial: ' + err.message);
@@ -844,7 +774,13 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         name: studyName,
         address: selectedNeighborhood ? `Bairro ${selectedNeighborhood.name}, ${nomeDaCidade}` : (nomeDaCidade || null),
         terrainArea: parseFloat(terrainArea),
-        coefficientsZone: { zone: 'ZUM', ca: 4.0, to: 0.6 },
+        // As hipóteses usadas no cálculo vão junto: reabrir o estudo refaz a mesma conta.
+        coefficientsZone: {
+          zone: 'ZUM',
+          ca: (analysisResult.hipoteses ?? hipoteses).coeficienteAproveitamento,
+          to: (analysisResult.hipoteses ?? hipoteses).taxaOcupacao / 100,
+          hipoteses: analysisResult.hipoteses ?? hipoteses,
+        },
         analysisRadiusMeters: parseInt(radiusMeters),
         latitude: terrainPin.lat,
         longitude: terrainPin.lng,
@@ -1013,6 +949,22 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         }
       }
 
+      // Hipóteses usadas no cálculo (Fase 5): o leitor do relatório vê de onde vem o número.
+      const hipotesesDoRelatorio: HipotesesVocacao = analysisResult.hipoteses ?? hipoteses;
+      doc.addPage();
+      doc.setTextColor(30, 41, 59);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.text('5. Hipóteses do cálculo', 15, 20);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      let yHip = 30;
+      DESCRICAO_HIPOTESES.forEach(d => {
+        const alterada = hipotesesDoRelatorio[d.chave] !== HIPOTESES_PADRAO[d.chave];
+        doc.text(`${d.rotulo}: ${hipotesesDoRelatorio[d.chave].toLocaleString('pt-BR')} ${d.unidade}${alterada ? `  (padrão: ${HIPOTESES_PADRAO[d.chave].toLocaleString('pt-BR')})` : ''}`, 15, yHip);
+        yHip += 6;
+      });
+
       // Rodapé
       doc.setFontSize(8);
       doc.setTextColor(148, 163, 184);
@@ -1066,8 +1018,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
         zoning: selectedNeighborhood ? `ZM - Bairro ${selectedNeighborhood.name}` : 'ZM',
         needs_eiv: false,
         ca_basic: 1.0,
-        ca_max: 4.0,
-        occupancy_rate: 60,
+        ca_max: hipotesesDoResultado(analysisResult).coeficienteAproveitamento,
+        occupancy_rate: hipotesesDoResultado(analysisResult).taxaOcupacao,
         land_cost: 0
       };
 
@@ -1079,7 +1031,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       const blockPayload = {
         study_id: createdStudy.id,
         name: 'Bloco Principal A',
-        construction_cost_sqm: 2500,
+        construction_cost_sqm: hipotesesDoResultado(analysisResult).custoObraM2,
         sales_price_sqm: avgPricePerM2
       };
 
@@ -1087,8 +1039,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
       const createdBlock = await imovibService.createBlock(blockPayload);
 
       // 3. Criar Unidades do Bloco com base nas tipologias recomendadas
-      const caMax = 4.0;
-      const totalAreaVenda = areaTerreno * caMax * 0.82;
+      const hImovib = hipotesesDoResultado(analysisResult);
+      const totalAreaVenda = areaTerreno * hImovib.coeficienteAproveitamento * hImovib.eficienciaVenda;
 
       console.log('Criando tipologias de unidades recomendadas pelo mix de produto...');
       for (const tip of analysisResult.productMix.tipologias) {
@@ -1100,7 +1052,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
           name: tip.tipo,
           quantity: quant,
           private_area: tip.area,
-          common_area: Math.round(tip.area * 0.25)
+          common_area: Math.round(tip.area * hImovib.areaComumFator)
         };
 
         await imovibService.createUnit(unitPayload);
@@ -1232,16 +1184,22 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
     // antes de 07/10/2026 não as tem: fica null e a tela diz "não guardadas".
     // Antes, este trecho inventava números (total = VGV ÷ 400 mil, área 80 m²…)
     // e os exibia como se fossem medidos.
-    setAnalysisResult({
-      stats: study.radiusStats ?? null,
-      recStandard: study.recommendedStandard,
-      productMix: study.recommendedProductMix,
-      estimatedVgv: study.estimatedVgv,
-      estimatedAbsorptionVelocity: study.estimatedAbsorptionVelocity,
-      riskScore: study.riskScore,
-      areaConstruivel: study.terrainArea * 4,
-      areaVenda: study.terrainArea * 4 * 0.82
-    });
+    // As hipóteses gravadas no estudo voltam para a tela (estudo antigo: só CA e TO).
+    const hEstudo = hipotesesDoEstudo(study.coefficientsZone);
+    setHipoteses(hEstudo);
+    setAnalysisResult(study.radiusStats
+      ? calcularVocacao(study.radiusStats, study.terrainArea, cityConfig?.rules, hEstudo)
+      : {
+          stats: null,
+          recStandard: study.recommendedStandard,
+          productMix: study.recommendedProductMix,
+          estimatedVgv: study.estimatedVgv,
+          estimatedAbsorptionVelocity: study.estimatedAbsorptionVelocity,
+          riskScore: study.riskScore,
+          areaConstruivel: study.terrainArea * hEstudo.coeficienteAproveitamento,
+          areaVenda: study.terrainArea * hEstudo.coeficienteAproveitamento * hEstudo.eficienciaVenda,
+          hipoteses: hEstudo,
+        });
 
     setActiveTab('analise');
   };
@@ -1658,9 +1616,53 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({
                       </select>
                     </div>
 
+                    <details className="border border-slate-100 rounded-xl bg-slate-50/50" open={errosHipoteses.length > 0 || undefined}>
+                      <summary className="cursor-pointer select-none px-3 py-2 text-xs font-semibold text-slate-600">
+                        Hipóteses do cálculo{hipotesesAlteradas > 0 ? ` · ${hipotesesAlteradas} alterada(s)` : ' · padrão'}
+                      </summary>
+                      <div className="px-3 pb-3 space-y-3">
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                          {DESCRICAO_HIPOTESES.map(d => (
+                            <div key={d.chave} className="space-y-1.5" title={d.explicacao}>
+                              <label className="block text-[11px] font-semibold text-slate-500 leading-tight">
+                                {d.rotulo} <span className="font-normal text-slate-400">({d.unidade})</span>
+                              </label>
+                              <input
+                                type="number"
+                                step={d.passo}
+                                min={d.min}
+                                max={d.max}
+                                value={Number.isFinite(hipoteses[d.chave]) ? hipoteses[d.chave] : ''}
+                                onChange={(e) => setHipoteses(h => ({ ...h, [d.chave]: e.target.value === '' ? Number.NaN : Number(e.target.value) }))}
+                                className={`w-full px-2 h-8 bg-white border rounded-[6px] text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 ${hipoteses[d.chave] !== HIPOTESES_PADRAO[d.chave] ? 'border-amber-300' : 'border-slate-200'}`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        {errosHipoteses.length > 0 && (
+                          <ul className="text-xs text-rose-600 space-y-0.5">
+                            {errosHipoteses.map(e => <li key={e}>{e}</li>)}
+                          </ul>
+                        )}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-400">Passe o mouse sobre um campo para ver o efeito. Mudou, o resultado é refeito.</span>
+                          <button
+                            type="button"
+                            onClick={() => setHipoteses(HIPOTESES_PADRAO)}
+                            disabled={hipotesesAlteradas === 0}
+                            title={hipotesesAlteradas === 0 ? 'Todas as hipóteses já estão no padrão.' : undefined}
+                            className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 disabled:text-slate-300 disabled:cursor-not-allowed shrink-0"
+                          >
+                            Restaurar padrões
+                          </button>
+                        </div>
+                      </div>
+                    </details>
+
                     <button
                       onClick={handleAnalyzeTerrain}
-                      disabled={analyzing}
+                      disabled={analyzing || errosHipoteses.length > 0}
+                      title={errosHipoteses.length > 0 ? 'Corrija as hipóteses do cálculo antes de calcular.' : undefined}
                       className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-button font-black uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2"
                     >
                       {analyzing ? (

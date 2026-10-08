@@ -543,6 +543,25 @@ a gaveta abre como painel lateral com o mini mapa e os bairros.
 - Como sei que terminou: mudar CA de 4 para 2 reduz o VGV pela metade na tela, no
   estudo salvo e no estudo do IMOVIB criado; o PDF lista as hipóteses.
 
+#### Fase 5 — execução (07/10/2026, frente `market-fase5-6`)
+
+Pedido (07/10/2026): *"Depois disso restam a Fase 5, das hipóteses editáveis, e a Fase 6, da tela e do
+acesso só para administrador e usuário interno; implementar"*. As Fases 5 e 6 foram
+feitas numa frente só, com um commit por fase: a 6 reorganiza o mesmo componente que a
+5 altera, e frentes separadas obrigariam a publicar a 5 antes de começar a 6.
+
+| Item | Estado |
+|---|---|
+| 5.1 `utils/opuraMarketVocacao.ts` | ✅ `calcularVocacao`, `HIPOTESES_PADRAO` (13 hipóteses, padrões = constantes antigas), `DESCRICAO_HIPOTESES` (rótulo, unidade, faixa, efeito), `validarHipoteses`, `hipotesesDoEstudo`, `REGRAS_PADRAO` (fonte única; `CityRulesModal` passou a importá-la) |
+| 5.1 teste | ✅ `__tests__/opuraMarketVocacao.test.ts`, 18 casos: golden contra uma cópia do cálculo antigo (área construível, área vendável, VGV, velocidade, risco iguais em 4 cenários, incluindo o raio real de Cambuí), cada hipótese muda o que diz que muda, regras da praça × padrão, validação, leitura de estudo novo e antigo |
+| 5.2 tela | ✅ bloco "Hipóteses do cálculo" no painel de estudo (campo alterado em âmbar, efeito no `title`, "Restaurar padrões"); mudou hipótese, área ou regra → refaz o cálculo sobre as mesmas estatísticas do raio; estudo grava as hipóteses em `coefficients_zone.hipoteses` e reabrir refaz a conta com elas; PDF ganhou a página "5. Hipóteses do cálculo" (com o padrão ao lado do que foi alterado); IMOVIB usa CA, taxa de ocupação, custo de obra, eficiência e área comum das hipóteses |
+
+**Mudança de resultado documentada:** o ticket sugerido das regras PADRÃO usava
+multiplicadores fixos que não batiam com as próprias tipologias (Econômico 52 contra
+48,5 m² ponderados; Médio 68 contra 71 m²). Agora toda regra usa preço × área
+ponderada pelo mix, a conta que as regras da praça já usavam. Médio-Alto, Alto Padrão
+e Luxo não mudam (80, 138 e 276 m² batiam).
+
 ### Fase 6 — Código e UI
 
 **6.1 quebrar `components/OpuraMarketModule.tsx`**
@@ -631,7 +650,7 @@ ordem abaixo.
 - [x] Fase 2 — 5 de 5 (2.4 entregue como 4.5 na Fase 4; publicada em 07/10/2026, commit `b4f8d24a`)
 - [x] Fase 3 — 4 de 4 (revisada pela D7; geocodificador trocado pela D8; frente `market-fase3`; falta o link do feed real da Conexão 381, que depende da imobiliária)
 - [x] Fase 4 — 5 de 5 (frente `market-fase4`; cadastro só para superadministrador, D9)
-- [ ] Fase 5 — 0 de 2
+- [x] Fase 5 — 2 de 2 (frente `market-fase5-6`)
 - [ ] Fase 6 — 0 de 6
 - [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)
 

@@ -1,5 +1,7 @@
 import React from 'react';
 import { OpuraMarketCityConfig, OpuraMarketRule } from '../types';
+// Fonte única das regras padrão (antes havia uma cópia aqui e outra no módulo).
+import { REGRAS_PADRAO as DEFAULT_RULES } from '../utils/opuraMarketVocacao';
 
 interface CityRulesModalProps {
   isOpen: boolean;
@@ -11,53 +13,6 @@ interface CityRulesModalProps {
   initialConfig: OpuraMarketCityConfig | null;
 }
 
-const DEFAULT_RULES: OpuraMarketRule[] = [
-  {
-    standard: 'Econômico',
-    minPrice: 0,
-    maxPrice: 3200,
-    tipologias: [
-      { tipo: '2 Dorms (Minha Casa Minha Vida)', area: 52, mix: 75 },
-      { tipo: '1 Dorm / Studio', area: 38, mix: 25 }
-    ]
-  },
-  {
-    standard: 'Médio',
-    minPrice: 3200,
-    maxPrice: 4300,
-    tipologias: [
-      { tipo: '2 Dorms c/ Suíte', area: 65, mix: 60 },
-      { tipo: '3 Dorms c/ Suíte', area: 80, mix: 40 }
-    ]
-  },
-  {
-    standard: 'Médio-Alto',
-    minPrice: 4300,
-    maxPrice: 5500,
-    tipologias: [
-      { tipo: '2 Dorms c/ Varanda Gourmet', area: 70, mix: 50 },
-      { tipo: '3 Dorms c/ Varanda Gourmet', area: 90, mix: 50 }
-    ]
-  },
-  {
-    standard: 'Alto Padrão',
-    minPrice: 5500,
-    maxPrice: 7500,
-    tipologias: [
-      { tipo: '3 Suítes Premium', area: 120, mix: 70 },
-      { tipo: '4 Suítes Duplex', area: 180, mix: 30 }
-    ]
-  },
-  {
-    standard: 'Luxo',
-    minPrice: 7500,
-    maxPrice: null,
-    tipologias: [
-      { tipo: '4 Suítes Mansão Suspensa', area: 250, mix: 80 },
-      { tipo: 'Cobertura Linear', area: 380, mix: 20 }
-    ]
-  }
-];
 
 export const CityRulesModal: React.FC<CityRulesModalProps> = ({
   isOpen,

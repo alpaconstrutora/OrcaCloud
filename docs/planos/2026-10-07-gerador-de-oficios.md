@@ -635,6 +635,18 @@
 
 Sessão: `880e0ec8-cfb9-4a42-9417-a1dbf8f43122` · 2026-10-07 ~20:40
 
+### Pedido posterior — 2026-10-07 ~21:10, resposta à lista de lacunas da avaliação
+
+> Lacunas que a proposta assume prontas e não existem:
+>
+> Nenhum editor rich text nem PDF declarativo. O .docx atual gera PDF rasterizado: ok
+> Não há perfil de usuário com cargo ou CREA: claro que existe usuário - minha organizacao > Usuários
+> Não há cadastro de órgão público: usar os cadastros de minha organizacao > meus fornecedores ou opcao de preencher manualmente
+> A Nomenclatura não tem ano, departamento nem separador /.: criar
+> O GED não tem hash, metadados nem versão congelada: criar
+> A assinatura eletrônica está morta em produção (ZapSign nunca publicado): salvar como pendencias para criar futuramente
+> Os links de notificação do GED não levam a lugar nenhum hoje: corrigir
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -643,6 +655,11 @@ Sessão: `880e0ec8-cfb9-4a42-9417-a1dbf8f43122` · 2026-10-07 ~20:40
 | 2026-10-07 | Numeração `ENG-047/2026` com reinício anual (a Nomenclatura não tem ANO, `/` nem seq fora da última posição) | **Estender a Nomenclatura** (Configurações › Nomenclatura): tipo `OFICIO`, token `DEPARTAMENTO`, sufixo `/{ano}` com reinício anual. Não criar série paralela |
 | 2026-10-07 | Destinatário que não existe no ERP (prefeitura, concessionária, órgão público, pessoa física) | **Como fornecedor**, com tipo de contraparte. ⚠️ `counterparty_kind` existe em `debt_contracts`, não em `suppliers` — vira coluna nova `suppliers.kind` |
 | 2026-10-07 | Tamanho da primeira entrega (o MVP tem 16 itens) | **MVP em 3 frentes publicáveis**: F1 modelos+motor+preview · F2 Novo Ofício · F3 emissão. Fases 2 e 3 só planejadas |
+| 2026-10-07 ~21:10 | Signatário: cadastro próprio ou o usuário? | **O usuário de Minha Organização › Usuários** (`organization_members`). A tela ganha os campos que faltam para assinar documento: cargo (texto, pré-preenchido pelo cargo customizado), departamento, telefone, registro profissional (CREA/CAU) e imagem de assinatura. Sem tabela `doc_gen_signatarios` |
+| 2026-10-07 ~21:10 | Órgão público / concessionária / pessoa física | **Meus Fornecedores ou preenchimento manual.** Sem coluna nova em `suppliers`: o seletor de destinatário lista todos os fornecedores, e "Destinatário manual" cobre o resto. (Substitui a resposta anterior "fornecedor com counterparty_kind".) |
+| 2026-10-07 ~21:10 | Hash, metadados e versão congelada | **Criar no GED**, não só na tabela do ofício: `opura_document_versions.sha256` + `congelada` (trigger recusa UPDATE/DELETE), `opura_documents.metadados JSONB`. Todo documento gerado pelo sistema passa a nascer com hash |
+| 2026-10-07 ~21:10 | Assinatura eletrônica (ZapSign morto) | **Pendência futura**, registrada na seção "Pendências futuras" deste plano. O MVP assina com imagem + registro interno |
+| 2026-10-07 ~21:10 | Links de notificação do GED mortos | **Corrigir na F1**: `documentService` grava `/opura-docs?docId=…`, `destinoDoLinkDeNotificacao` entende `docId`, e o GED abre o documento pelo `viewFocus` |
 
 ## Avaliação da proposta contra o que já existe
 
@@ -680,23 +697,26 @@ plano abaixo nomeia as tabelas e serviços com prefixo `doc_gen_` por isso.
    `.docx` → docx-preview → html2canvas (rasterizado, sem texto). Decisão: TipTap + pdfmake.
 2. **Marcadores com ponto**: `detectTokens`/`fillDocx` só aceitam `/^\w+$/`. O motor novo
    não usa `.docx`; o catálogo `source.field` é reaproveitado como ÍNDICE de campos.
-3. **Perfil de usuário**: não há `profiles`; `organization_members` tem só name/email/role.
-   Cargo, departamento, CREA/CAU e telefone não existem para o usuário → o assinante vem
-   de cadastro próprio (`doc_gen_signatarios`), pré-preenchível a partir de `employees`.
-4. **Órgão público / concessionária / pessoa física**: sem cadastro → `suppliers.kind`.
+3. **Perfil de usuário**: Minha Organização › Usuários edita `organization_members` (name,
+   email, role, cargo customizado = template de permissões, código). Não há departamento,
+   telefone, CREA/CAU nem imagem de assinatura. **Resposta do usuário:** o signatário É esse
+   usuário → a tela ganha os campos que faltam (migration em `organization_members`).
+4. **Órgão público / concessionária / pessoa física**: sem cadastro próprio. **Resposta do
+   usuário:** Meus Fornecedores ou preenchimento manual; nenhuma coluna nova.
 5. **Nomenclatura sem ANO nem `/`**: `separator` tem CHECK `('-', '.')`, `{seq}` é sempre o
-   último bloco, não há token de departamento nem ano → extensão (F3).
-6. **GED sem metadados JSONB, número interno, hash ou congelamento**: as 5 categorias são
-   CHECK fixo; versão não é imutável (qualquer membro altera `storage_path`). O ofício
-   guarda seus metadados em tabela própria apontando para `opura_documents.id`; o
-   congelamento é trigger na tabela própria + hash do PDF.
+   último bloco, não há token de departamento nem ano. **Resposta:** criar (F3).
+6. **GED sem metadados JSONB, hash ou congelamento**: versão não é imutável (qualquer
+   membro altera `storage_path`). **Resposta:** criar no GED (F3): `sha256` e `congelada`
+   em `opura_document_versions`, `metadados` em `opura_documents`, trigger de
+   congelamento. As 5 categorias (CHECK) não mudam.
 7. **Assinatura eletrônica**: `sign-contract` (ZapSign) nunca foi publicada; não há imagem
-   de assinatura de usuário. MVP = imagem de assinatura do signatário + registro
-   "assinado eletronicamente por X em Y" + hash. ICP-Brasil/ZapSign ficam na Fase 2.
+   de assinatura de usuário. **Resposta:** pendência futura (seção própria abaixo). MVP =
+   imagem de assinatura do usuário + registro "assinado eletronicamente por X em Y" + hash.
 8. **E-mail com anexo**: Resend aceita `attachments` base64, mas nenhuma function faz →
    function nova na Fase 2.
 9. **Links de notificação do GED estão mortos** (`#/documentos?…` não começa com `/`, e
-   `documentos` é a Área do Cliente). O módulo novo usa `navigateToFocus` desde o início.
+   `documentos` é a Área do Cliente; `destinoDoLinkDeNotificacao` devolve `null`).
+   **Resposta:** corrigir (F1, item 16).
 
 ### Pontos da proposta que o plano ajusta
 
@@ -717,7 +737,8 @@ plano abaixo nomeia as tabelas e serviços com prefixo `doc_gen_` por isso.
 Documentos (sidebar: NavDropdown "Documentos")
  ├── Gestão de Documentos  (GED existente, id 'opura-docs')
  └── Ofícios               (novo, id 'opura-oficios')  →  OficiosModule
-       abas (TabsBar): Ofícios | Modelos | Signatários | Numeração (atalho p/ Nomenclatura)
+       abas (TabsBar): Ofícios | Modelos | Numeração (atalho p/ Nomenclatura)
+       signatários = Minha Organização › Usuários (sem aba própria)
 
 Fluxo: Modelo (TipTap JSON + layout) ─┐
        Contexto (org, destinatário, obra, …) ─┤→ motorRender (puro) → pdfmake docDefinition → Blob
@@ -731,9 +752,10 @@ Fluxo: Modelo (TipTap JSON + layout) ─┐
 |---|---|---|
 | `doc_gen_modelos` | id, organization_id, nome, descricao, tipo_documental, categoria_ged (CHECK nas 5 do GED), department_id → company_departments, status (rascunho/ativo/inativo), conteudo JSONB (doc TipTap), layout JSONB (cabecalho, rodape, logo, fonte, tamanho, margens mm, espacamento, paginacao, assinatura_padrao), campos_obrigatorios TEXT[], signatario_padrao_id, responsavel_email, versao INT, created_by, timestamps | F1 |
 | `doc_gen_modelo_versoes` | modelo_id, versao, conteudo, layout, created_by, created_at; UNIQUE(modelo_id, versao) | F1 |
-| `doc_gen_signatarios` | id, organization_id, employee_id?, nome, cargo, registro_profissional, department_id?, telefone, email, assinatura_path (bucket privado `doc-gen-assets`, 1ª pasta = org), ativo | F1 |
-| `suppliers.kind` | TEXT NOT NULL DEFAULT 'FORNECEDOR' CHECK IN (FORNECEDOR, INSTITUICAO_FINANCEIRA, ORGAO_PUBLICO, CONCESSIONARIA, PESSOA_FISICA, OUTRO) | F2 |
-| `doc_gen_documentos` | id, organization_id, company_id? (emitente), modelo_id, modelo_versao, tipo_documental, status (RASCUNHO → EMITIDO; Fase 2 acrescenta EM_APROVACAO/APROVADO/ASSINADO/ENVIADO/RECEBIDO/RESPONDIDO/ENCERRADO), numero (NULL até emitir), assunto NOT NULL, data_documento DATE, destinatario_tipo (CLIENTE/FORNECEDOR/ORGANIZACAO/COLABORADOR/CORRETOR/INVESTIDOR/MANUAL), destinatario_id?, destinatario_snapshot JSONB, project_id?, empreendimento_id?, contract_id?, client_id?, supplier_id?, valores JSONB (campos resolvidos + overrides "só neste documento"), conteudo JSONB (por `campoLivre`), signatarios JSONB[], anexos JSONB[] ({tipo:'GED'\|'ARQUIVO', document_id?, nome}), documento_relacionado_id?, resposta_esperada_ate?, versao INT, ged_document_id?, pdf_sha256?, emitido_por?, emitido_em?, created_by, timestamps. UNIQUE parcial (organization_id, tipo_documental, numero) WHERE numero IS NOT NULL | F2 (emissão em F3) |
+| `organization_members` (colunas novas) | cargo TEXT, department_id → company_departments (SET NULL), phone TEXT, registro_profissional TEXT (CREA/CAU), assinatura_path TEXT (bucket privado `doc-gen-assets`, 1ª pasta = org). Editadas em Minha Organização › Usuários | F1 |
+| `opura_document_versions` (colunas novas) | sha256 TEXT, congelada BOOL DEFAULT false; trigger `trg_opura_version_congelada` recusa UPDATE de `storage_path`/`sha256`/`mime_type` e DELETE quando `congelada` | F3 |
+| `opura_documents.metadados` | JSONB DEFAULT '{}' (número, assunto, destinatário, modelo, emitido_por… do ofício; livre para outros produtores) | F3 |
+| `doc_gen_documentos` | id, organization_id, company_id? (emitente), modelo_id, modelo_versao, tipo_documental, status (RASCUNHO → EMITIDO; Fase 2 acrescenta EM_APROVACAO/APROVADO/ASSINADO/ENVIADO/RECEBIDO/RESPONDIDO/ENCERRADO), numero (NULL até emitir), assunto NOT NULL, data_documento DATE, destinatario_tipo (CLIENTE/FORNECEDOR/ORGANIZACAO/COLABORADOR/CORRETOR/INVESTIDOR/MANUAL), destinatario_id?, destinatario_snapshot JSONB, project_id?, empreendimento_id?, contract_id?, client_id?, supplier_id?, valores JSONB (campos resolvidos + overrides "só neste documento"), conteudo JSONB (por `campoLivre`), signatarios JSONB[] ({member_id, nome, cargo, registro_profissional, …} — snapshot do usuário no momento), anexos JSONB[] ({tipo:'GED'\|'ARQUIVO', document_id?, nome}), documento_relacionado_id?, resposta_esperada_ate?, versao INT, ged_document_id?, ged_version_id? (o hash vive na versão do GED), emitido_por?, emitido_em?, created_by, timestamps. UNIQUE parcial (organization_id, tipo_documental, numero) WHERE numero IS NOT NULL | F2 (emissão em F3) |
 | `doc_gen_documento_versoes` | documento_id, versao, snapshot JSONB (tudo que define o PDF), autor, created_at, congelada BOOL | F2 |
 
 RLS: `is_org_member(organization_id)` em tudo (leitura e escrita), sem perna `OR` solta
@@ -753,11 +775,13 @@ services/docGen/
   pdf.ts                ← pdfmake (import dinâmico) → Blob; fontes embutidas; determinismo (CreationDate fixa + id do arquivo)
   validarDocumento.ts   ← lista de pendências — puro
   gedArquivar.ts        ← pasta Ofícios/<ano>/<departamento> sob demanda + uploadNewDocument + tags
-services/docGenModeloService.ts, docGenDocumentoService.ts, docGenSignatarioService.ts
+services/docGenModeloService.ts, docGenDocumentoService.ts
+services/organizationService.ts  ← membro ganha cargo/departamento/telefone/registro/assinatura (upload da imagem)
 components/oficios/
   OficiosModule.tsx (casca + TabsBar), OficiosList.tsx (StandardTable + KpiCard + abas),
   ModelosList.tsx, ModeloEditorTela.tsx (in-flow), EditorRico.tsx (TipTap + nós variavel/campoLivre + painel de variáveis), LayoutModeloForm.tsx,
-  NovoOficioTela.tsx (in-flow), SeletorDestinatario.tsx (drawer), CamposPendentesPainel.tsx, SignatariosList.tsx, PreviewPdf.tsx (iframe com blob URL)
+  NovoOficioTela.tsx (in-flow), SeletorDestinatario.tsx (drawer), CamposPendentesPainel.tsx, SeletorSignatario.tsx (lista os usuários da org), PreviewPdf.tsx (iframe com blob URL)
+components/OrganizationUsers.tsx  ← seção "Assinatura de documentos" no painel do membro
 ```
 
 Regras do app que cada tela respeita: REGRA #5 (`useOrgContext`, `useOrgWriteTarget`,
@@ -781,8 +805,11 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
    `@tiptap/extension-link`, `pdfmake`. Ambos por `import()` dinâmico nos pontos de uso.
    **Pronto quando:** `vite build` passa e pdfmake/tiptap saem em chunks próprios.
 3. Migration `aplicar_20271007000200_doc_gen_modelos.sql` — `doc_gen_modelos`,
-   `doc_gen_modelo_versoes`, `doc_gen_signatarios`, bucket `doc-gen-assets` (privado,
-   5 MB, imagem; policies com 1ª pasta = org), RLS, índices, trigger de `updated_at`.
+   `doc_gen_modelo_versoes`, colunas novas em `organization_members` (cargo,
+   department_id, phone, registro_profissional, assinatura_path), bucket `doc-gen-assets`
+   (privado, 5 MB, imagem; policies com 1ª pasta = org), RLS, índices, trigger de
+   `updated_at`. Ler a policy vigente de `organization_members` antes (memória
+   `feedback_policy_vigente_antes_de_reescrever`): as colunas novas não mudam policy.
    **Pronto quando:** aplicada por `db query -f`; `segurancaMigrations.test.ts` verde;
    `check-rls-postura.sh` sem achado novo.
 4. `types/docGen.ts` — tipos acima + `DocTipTap` + `LayoutModelo`.
@@ -797,8 +824,12 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 8. `services/docGen/pdf.ts` — `gerarPdf(docDefinition, {id, criadoEm}) → Blob`.
    **Pronto quando:** teste prova que dois blobs do mesmo input têm os mesmos bytes.
 9. `services/docGenModeloService.ts` (`list(orgId?)` com `.eq` condicional, `get`, `create`,
-   `update` que sobe `versao` e grava `doc_gen_modelo_versoes`, `setStatus`, `duplicate`) e
-   `services/docGenSignatarioService.ts` (CRUD + upload da imagem).
+   `update` que sobe `versao` e grava `doc_gen_modelo_versoes`, `setStatus`, `duplicate`).
+   `services/organizationService.ts` + `types/users.ts` (`OrganizationMember` ganha
+   `cargo`, `departmentId`, `phone`, `registroProfissional`, `assinaturaPath`): gravação
+   **só do membro** (caminho de `OrganizationUsers.tsx:731`, nunca o upsert da organização
+   inteira — memória `project_organizacao_upsert_inteira_a_cada_clique`) + upload da
+   imagem de assinatura no bucket `doc-gen-assets`.
 10. `components/oficios/EditorRico.tsx` — TipTap com nós `variavel {chave}` (chip
     `{{chave}}`, não editável, apagável) e `campoLivre {nome, rotulo}`; painel de variáveis
     por grupo com busca; colar com/sem formatação. Nenhum `innerHTML` manual.
@@ -807,29 +838,44 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
     valores de exemplo) em `PreviewPdf`. `useUnsavedChanges`, rodapé sticky §25.
 12. `components/oficios/ModelosList.tsx` — StandardTable (Nome · Categoria · Departamento ·
     Status · Versão · Atualizado em · Ações), busca persistida, estado local pós-ação (§22).
-13. `components/oficios/SignatariosList.tsx` + Sheet de criar/editar (pré-preencher de
-    `employees` por busca).
+13. `components/OrganizationUsers.tsx` — o painel de editar membro (≈ l.1499) ganha a seção
+    "Assinatura de documentos": cargo (pré-preenchido com o nome do cargo customizado, se
+    houver), departamento (`company_departments` da org), telefone, registro profissional
+    (CREA/CAU), imagem da assinatura (input escondido + botão "Escolher arquivo", prévia).
+    **Pronto quando:** salvar o membro grava só a linha dele; `check-ui-standard.sh` sai 0.
 14. `components/oficios/OficiosModule.tsx` + `components/AppRouter.tsx` (`case
     'opura-oficios'`, permissão ao lado de `opura-docs`) + `components/Layout.tsx` (NavItem
     "Gestão de Documentos" l.915 vira `NavDropdown` "Documentos" com os dois itens; menu
     móvel l.1341; paleta l.532).
     **Pronto quando:** sidebar mostra Documentos › Ofícios, a rota abre o módulo, e
     `check-ui-standard.sh` sai 0 nos arquivos de tela.
-15. Verificação F1 e publicação por push.
+15. **Links de notificação do GED** (pedido de 21:10):
+    - `services/documentService.ts:1396,1459,1524` — `link` passa a
+      `/opura-docs?docId=<id>[&pending=true]` (a categoria vem do documento, não da URL).
+    - `utils/linkNotificacao.ts` — `destinoDoLinkDeNotificacao` entende `docId` para a view
+      `opura-docs` → `foco: {ref: docId, source: 'GED_DOCUMENTO'}` (pending vai no `source`
+      como `GED_DOCUMENTO_PENDENTE`); teste `__tests__/linkNotificacao*.test.ts` cobre os
+      3 formatos (antigo `#/documentos` → `null`, novo sem/with pending).
+    - `components/OpuraDocsModule.tsx` — consome `viewFocus` do store (além do `hash`
+      atual, l.680-725): carrega o documento, troca a aba pela `categoria` dele, abre o
+      histórico/aprovação, e limpa o foco. Notificações antigas já gravadas continuam
+      mortas (não há backfill de `notifications.link`; registrar no plano se o usuário
+      quiser um UPDATE).
+    **Pronto quando:** clicar numa notificação de aprovação abre o GED na aba certa com o
+    documento selecionado (conferido no app).
+16. Verificação F1 e publicação por push.
 
 ### Frente F2 — `oficios-f2-novo-oficio` (criar o documento, sem número)
 
 **Entrega:** "Novo Ofício" leva do modelo ao rascunho validado com prévia de dados reais.
 
 1. Migration `aplicar_2027…_doc_gen_documentos.sql` — `doc_gen_documentos`,
-   `doc_gen_documento_versoes`, `suppliers.kind` (+ backfill: fornecedores apontados por
-   `debt_contracts.institution_supplier_id` → `INSTITUICAO_FINANCEIRA`), RLS.
-2. `types/users.ts` (`Supplier.kind`), `services/supplierService.ts`, formulário de
-   fornecedor (campo "Tipo de cadastro") e lista (coluna/filtro).
+   `doc_gen_documento_versoes`, RLS. (Sem mudança em `suppliers` — decisão de 21:10.)
+2. — (item retirado: não há coluna nova em fornecedores.)
 3. `services/docGen/resolverContexto.ts` — por `destinatario_tipo`: CLIENTE, FORNECEDOR
-   (qualquer `kind`), ORGANIZACAO, COLABORADOR, CORRETOR (`broker_profiles`), INVESTIDOR,
-   MANUAL. Devolve `destinatario_snapshot` normalizado + contexto de obra/empreendimento/
-   contrato/empresa emitente/usuário.
+   (Meus Fornecedores, todos), ORGANIZACAO, COLABORADOR, CORRETOR (`broker_profiles`),
+   INVESTIDOR, MANUAL (dados digitados ficam só no `destinatario_snapshot`). Devolve o
+   snapshot normalizado + contexto de obra/empreendimento/contrato/empresa emitente/usuário.
 4. `services/docGen/validarDocumento.ts` + teste.
 5. `services/docGenDocumentoService.ts` — `create`, `update` (grava versão a cada "Salvar"),
    `list(orgId?, {status, …})`, `get`, `remove` (só RASCUNHO), `salvarCampoNoCadastro`
@@ -841,8 +887,9 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 8. `components/oficios/NovoOficioTela.tsx` — in-flow; etapas numa só tela com âncoras:
    Modelo → Emitente → Destinatário → Obra/Empreendimento/Contrato → Campos → Assunto e
    data → Conteúdo (um `EditorRico` por `campoLivre`) → Anexos (lista; só a lista entra no
-   PDF) → Signatários (1..n) → Validação → Prévia. "Salvar rascunho" sempre; "Emitir"
-   desabilitado com o motivo até F3.
+   PDF) → Signatários (1..n, `SeletorSignatario` lista os usuários da org; usuário sem
+   cargo/assinatura aparece com a pendência e o atalho para Minha Organização › Usuários)
+   → Validação → Prévia. "Salvar rascunho" sempre; "Emitir" desabilitado com o motivo até F3.
 9. `components/oficios/OficiosList.tsx` — aba "Em elaboração" (KPIs: rascunhos, emitidos
    no mês, aguardando resposta).
 10. Verificação F2 e publicação.
@@ -869,19 +916,34 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
    UPDATE`; recusa status ≠ RASCUNHO (idempotente: já emitido devolve o número); confere
    membro; `fn_next_document_seq(org,'OFICIO',scope)`; formata pela máscara; grava
    `numero`, `status='EMITIDO'`, `emitido_por/em`; REVOKE PUBLIC/anon.
-3. RPC `doc_gen_registrar_arquivo(p_documento_id, p_ged_document_id, p_sha256)` — grava
-   `ged_document_id`, `pdf_sha256`, marca a versão `congelada`.
-4. Trigger `trg_doc_gen_congelar`: documento fora de RASCUNHO recusa UPDATE em conteúdo,
+3. **GED: hash, metadados e versão congelada** (pedido de 21:10) — migration
+   `aplicar_2027…_ged_hash_e_congelamento.sql`: `opura_document_versions.sha256 TEXT`,
+   `opura_document_versions.congelada BOOL NOT NULL DEFAULT false`,
+   `opura_documents.metadados JSONB NOT NULL DEFAULT '{}'`; trigger
+   `trg_opura_version_congelada` (BEFORE UPDATE OR DELETE: recusa mudar `storage_path`,
+   `sha256`, `mime_type` ou apagar quando `congelada`; a trava de edição existente,
+   `trg_enforce_opura_document_lock`, continua intacta). `documentService.uploadNewDocument`
+   e `uploadNewVersion` ganham `opcoes?: {sha256?, congelar?, metadados?}` e calculam o
+   SHA-256 no cliente (`crypto.subtle`, como `nfeService`) quando não vier; a tela do GED
+   mostra o hash e um cadeado na versão congelada; `renameActiveVersionExtension` recusa
+   versão congelada. **Pronto quando:** `db query` com UPDATE em `storage_path` de versão
+   congelada é recusado; `segurancaMigrations` verde; upload normal pelo GED continua
+   funcionando sem hash obrigatório.
+4. RPC `doc_gen_registrar_arquivo(p_documento_id, p_ged_document_id, p_ged_version_id)` —
+   grava os dois ids e marca a versão do ofício `congelada`.
+   Trigger `trg_doc_gen_congelar`: documento fora de RASCUNHO recusa UPDATE em conteúdo,
    valores, destinatário, signatários, anexos, modelo, assunto e data; versão congelada
    recusa UPDATE/DELETE.
 5. `services/docGen/gedArquivar.ts` — pasta `Ofícios/<ano>/<departamento>` em
    `opura_folders` (categoria do modelo) + `uploadNewDocument({nome:'OFICIO-047-2026.pdf',
    categoria, tipo_documento:'Ofício', descricao: assunto, data_emissao, tags:['oficio',
-   numero, departamento], project_id, contract_id, client_id, supplier_id, folder_id})`.
+   numero, departamento], project_id, contract_id, client_id, supplier_id, folder_id,
+   metadados:{numero, assunto, destinatario, modelo, emitido_por, departamento}},
+   arquivo, email, {sha256, congelar:true})`.
 6. `docGenDocumentoService.emitir(id)` — validar → RPC emitir → render final com número →
-   SHA-256 → GED → RPC registrar. Falha após numerar: número consumido, EMITIDO sem PDF e
-   botão "Regerar PDF" (buraco > duplicidade). "Nova revisão" = `duplicate` com
-   `documento_relacionado_id`.
+   SHA-256 → GED (versão congelada com hash) → RPC registrar. Falha após numerar: número
+   consumido, EMITIDO sem PDF e botão "Regerar PDF" (buraco > duplicidade). "Nova revisão"
+   = `duplicate` com `documento_relacionado_id`.
 7. Tela: "Emitir" habilitado quando a validação passa (senão o motivo), `useConfirm`;
    pós-emissão: número no cabeçalho, Baixar PDF (`documentService.generateDownloadUrl`),
    Imprimir, abrir no GED (`navigateToFocus`), histórico de versões congeladas. Aba
@@ -893,8 +955,8 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 - **Aprovação**: colunas `approval_*` em `doc_gen_documentos`; entidade em
   `approvalService.ENTITY_META`; ramo em `fn_approval_action_queue` (recriar a função a
   partir do ARQUIVO); modelo define se exige aprovação; `semFaixa: 'exigir1'`.
-- **Assinatura**: imagem do signatário (F1) + registro "assinado eletronicamente por <nome>
-  em <data>" (status ASSINADO). ZapSign só se `sign-contract` for publicada; ICP-Brasil fora.
+- **Assinatura interna**: imagem do usuário (F1) + registro "assinado eletronicamente por
+  <nome> em <data>" (status ASSINADO). Assinatura eletrônica externa → "Pendências futuras".
 - **Envio e protocolo**: Edge Function `doc-gen-enviar` (Resend com `attachments`, gate
   `exigirMembro`, prova 401 sem header); WhatsApp só link `wa.me`; tabela `doc_gen_envios`
   (canal, para, enviado_por, enviado_em, comprovante_path, protocolo, recebido_em).
@@ -908,13 +970,27 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
   RPC pública com REVOKE e sem expor `storage_path` (a `fn_get_document_status_public`
   atual expõe o caminho ao anon — não copiar).
 - **Anexos dentro do PDF**: rasterizar com pdfjs (como `relatorioRateioPdf`); sem `pdf-lib`.
-- Consertar os links de notificação do GED (`#/documentos` → `navigateToFocus`).
+- (Links de notificação do GED: antecipado para a F1, item 15.)
 
 ### Fase 3 (planejada)
 
 Nó `condicional {expressao}` (avaliador puro, sem `eval`); nó `tabelaDinamica {fonte}` com
 resolvedores; `doc_gen_blocos`; campos calculados como resolvedores do catálogo;
 assistente de redação via API Claude em Edge Function (ler a skill `claude-api` antes).
+
+## Pendências futuras (fora do MVP e das Fases 2–3, por decisão de 2026-10-07)
+
+- **Assinatura eletrônica externa do ofício** (ZapSign / ICP-Brasil / certificado):
+  depende de publicar a Edge Function `sign-contract` (nunca foi publicada — memória
+  `project_edge_function_sign_contract_nao_publicada`, decisão de 2026-07-26 de não
+  ativar) e de estendê-la para aceitar `docGenDocumentoId` (hoje aceita `dealId`,
+  `contractId`, `addendumId`, `documentVersionId`). Quando chegar a hora: secret
+  `ZAPSIGN_API_TOKEN`, webhook, status ASSINADO alimentado pelo retorno, e o PDF assinado
+  vira nova versão congelada no GED.
+- Backfill de `notifications.link` antigas do GED (`#/documentos…`), se o usuário quiser
+  que notificações já emitidas passem a abrir.
+- PDF/A e saída DOCX do ofício.
+- Fonte livre (upload de `.ttf`) nos modelos.
 
 ## Riscos e decisões de projeto
 
@@ -929,8 +1005,9 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
 
 ## Estado
 
-- [x] F1 · 1 — plano registrado nesta frente (`oficios-f1-modelos`, base `e999e3b9`)
-- [ ] F1 · 2–15
+- [x] F1 · 1 — plano registrado nesta frente (`oficios-f1-modelos`, base `e999e3b9`);
+      revisado em 07/10 ~21:10 com as 7 respostas do usuário à lista de lacunas
+- [ ] F1 · 2–16
 - [ ] F2
 - [ ] F3
 
@@ -953,13 +1030,21 @@ Na interface (skill `rodar-app`, Playwright com `serviceWorkers: 'block'`):
   texto selecionável (extrair com pdfjs e achar "ALPA"), 2 páginas quando estoura, rodapé
   "Página 1 de 2". Salvar → versão 1; editar → versão 2 em `doc_gen_modelo_versoes`.
   Console e Network sem 4xx/5xx.
-- **F2**: Novo Ofício com destinatário FORNECEDOR `kind=ORGAO_PUBLICO` sem CNPJ → "CNPJ do
-  destinatário não cadastrado" → "Atualizar cadastro" grava `suppliers.document` (conferir
-  no banco) → validação passa → rascunho em "Em elaboração"; F5 preserva; "Emitir"
-  desabilitado com motivo.
+- **F1 (links)**: solicitar aprovação de um documento no GED → a notificação gerada tem
+  `link` começando por `/opura-docs?docId=` → clicar abre o GED na aba da categoria com o
+  histórico do documento aberto.
+- **F1 (usuário)**: Minha Organização › Usuários → editar um membro → preencher cargo,
+  departamento, CREA e subir a assinatura → conferir no banco que só a linha dele mudou.
+- **F2**: Novo Ofício com destinatário FORNECEDOR (uma prefeitura cadastrada em Meus
+  Fornecedores) sem CNPJ → "CNPJ do destinatário não cadastrado" → "Atualizar cadastro"
+  grava `suppliers.document` (conferir no banco) → validação passa → rascunho em "Em
+  elaboração"; F5 preserva; "Emitir" desabilitado com motivo. Repetir com "Destinatário
+  manual": nada é gravado fora de `doc_gen_documentos`.
 - **F3**: Emitir → `OF-ENG-001/2026` (conferir `document_number_counters` e a linha em
-  `opura_documents` com `folder_id` de `Ofícios/2026/Engenharia`); `pdf_sha256` igual ao
-  SHA-256 do arquivo baixado; UPDATE em `conteudo` do emitido recusado pelo trigger;
-  segundo clique devolve o mesmo número; `scope_key` do ano seguinte reinicia em 001.
+  `opura_documents` com `folder_id` de `Ofícios/2026/Engenharia` e `metadados.numero`);
+  `opura_document_versions.sha256` igual ao SHA-256 do arquivo baixado e `congelada=true`;
+  UPDATE em `storage_path` dessa versão e em `conteudo` do ofício recusados pelos
+  triggers; segundo clique devolve o mesmo número; `scope_key` do ano seguinte reinicia
+  em 001.
 - Publicação: `git push origin HEAD:main`, ler o check-run `ci`,
   `bash scripts/conferir-producao.sh "Novo Ofício"`, depois `fechar-frente.sh`.

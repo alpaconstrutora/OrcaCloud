@@ -1043,11 +1043,28 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
 - [x] F1 · 15 — links de notificação do GED: `documentService` grava `/opura-docs?docId=…`,
       `linkNotificacao` resolve `GED_DOCUMENTO[_PENDENTE]` (3 testes novos), `OpuraDocsModule`
       consome o `viewFocus` (categoria vem do documento) e limpa o foco
-- [ ] F1 · 16 — verificação: tipos por arquivo (1ª rodada: 5 erros no motor, corrigidos; 2ª rodada
-      em andamento), `check-ui-standard` ✓ nos 7 arquivos de tela, `check-system-projects` ✓,
-      `check-project-classification` ✓, `check-xss-sinks` ✓, testes do motor 30/30 ✓, suíte inteira
-      em andamento; **falta: conferir no app com login (precisa de `PW_SENHA`) e a gravação REAL de
-      um modelo** (roteiro pronto em `C:/tmp/pwtest/oficios_f1.js`); publicação por push
+- [x] F1 · 16 — verificação mecânica: tipos por arquivo 0 erros (3ª rodada; as duas primeiras acharam
+      6 erros de tipo do pdfmake no motor, corrigidos), `check-ui-standard` ✓ nos 7 arquivos de tela,
+      `check-system-projects` ✓, `check-project-classification` ✓, `check-xss-sinks` ✓, suíte inteira
+      2.877 arquivos / 7.823 testes = 7.789 + 34 pendentes + 0 falhas (conta fechando), `vite build` ✓
+- [x] F1 · 16 — **conferência no app com login** (08/10 ~00:10, `C:/tmp/pwtest/oficios_f1.js`, conta
+      de leitura, org Alpa, gravação autorizada pelo usuário): sidebar Documentos › Gestão de Documentos /
+      Ofícios; abas Ofícios e Modelos; "Novo ofício" desligado com o motivo; editor de modelo é TELA
+      (0 `[role=dialog]` envolvendo o `h1`), nasce com 5 variáveis + 1 campo livre + assinaturas + anexos
+      e 5 obrigatórias; busca "cnpj" no painel de variáveis acha 13; inserir `{{empresa.cnpj}}` vira chip;
+      **prévia**: PDF de 1 página no `Sheet`, texto extraído pelo pdf.js com logo, endereço e CNPJ reais
+      da Alpa, assinatura, anexos e "Página 1 de 1"; **gravação real**: criar → volta à lista com a
+      linha; editar descrição → permanece na tela (§25) e NÃO sobe a versão (só conteúdo/layout sobem);
+      repetir o mesmo texto deixa "Salvar" desligado com o motivo; excluir pelo menu da linha apagou as
+      4 linhas de teste (3 sobras de rodadas interrompidas) — banco conferido depois: 0 modelos, 0
+      versões. Usuários › Editar Membro mostra "Assinatura de documentos" com os 34 departamentos.
+      0 erros de JS/console, 0 respostas 4xx/5xx do PostgREST. Achado e corrigido: excluir pedia
+      confirmação duas vezes (`useConfirm` por cima do "Excluir → Confirmar" do menu)
+- [ ] F1 · 16 — **NÃO exercitado**: gravar os dados de signatário de um membro pela tela (a conta de
+      leitura é Membro, e a RLS de `organization_members` só deixa gestor gravar). O caminho é o mesmo
+      de `updateMemberAccess`, que já denuncia RLS por `.select('id')`; falta um admin salvar um
+      membro com cargo/assinatura e conferir a linha no banco
+- [ ] F1 · publicação por push, check-run `ci`, `conferir-producao.sh`, fechar a frente
 - [ ] F2
 - [ ] F3
 

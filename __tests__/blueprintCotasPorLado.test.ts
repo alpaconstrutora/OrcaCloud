@@ -1199,3 +1199,29 @@ describe('cadeias do lote pelos detalhes', () => {
     }
   });
 });
+
+/** 08/10/2026 — o número do trecho curto vai para FORA dele também no PDF. */
+describe('PDF: rótulo do trecho curto por fora', () => {
+  it('a faixa de 1,50 m (APP) em 1:500: o "1,50" fica além da ponta do lado do lote', () => {
+    const { model: m0 } = base();
+    const t = m0.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as Command;
+    const m = applyBatch(m0, [
+      d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0),
+      { type: 'AddBoundary', levelId: t, a: point(10000, 30000), b: point(0, 30000), kind: 'RESTRICAO', restricao: { tipo: 'APP', faixaMm: 1500 } } as Command,
+    ]).model;
+    const papel = new DesenhistaDeProva();
+    const op = { denominador: 500, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-08T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    desenharPlanta(papel, m, op, enquadrar(m, 500, PAPEIS[0], true));
+    const textos = papel.chamadas.filter((c) => c.tipo === 'texto');
+    const de150 = textos.filter((c) => c.args[2] === '1,50').map((c) => c.args[1] as number);
+    const de2850 = textos.filter((c) => c.args[2] === '28,50').map((c) => c.args[1] as number);
+    expect(de150).toHaveLength(2);
+    expect(de2850).toHaveLength(2);
+    // O lado tem 60 mm de papel; o trecho de 1,50 m tem 3 mm, menos que o texto (~4,4 mm): o número sai além da
+    // ponta do lado — mais longe do meio do lado do que a metade dele.
+    const meio = de2850.reduce((a, b) => a + b, 0) / 2;
+    for (const y of de150) expect(Math.abs(y - meio)).toBeGreaterThan(30);
+  });
+});
+

@@ -4493,6 +4493,8 @@ export default function BlueprintCanvas({
     // A FAIXA OCUPADA PELAS COTAS neste quadro (px de tela) — os eixos, desenhados depois, põem a bolha por fora dela
     // (08/10/2026, *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*).
     const faixaDasCotas = faixaVazia();
+    // As caixas dos rótulos de cota já escritos neste quadro (px): o rótulo POR FORA não pode cair em cima de outro.
+    const rotulosDeCotaPostos: { x0: number; y0: number; x1: number; y1: number }[] = [];
 
     const desenharCadeia = (
       lado: LadoDoContorno,
@@ -4509,7 +4511,7 @@ export default function BlueprintCanvas({
       const afasta = folgaBaseMm + passoMm * nivelAfastamento;
       // Os trechos que SAÍRAM: só eles ganham linha de chamada.
       const desenhados: { de: number; ate: number }[] = [];
-      for (const seg of segmentos) {
+      for (const [indice, seg] of segmentos.entries()) {
         const a = paraTela(pontoDaCota(lado, seg.de, afasta) as Point);
         const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
         if (Math.hypot(b.x - a.x, b.y - a.y) < minimoPx) continue;
@@ -4534,15 +4536,14 @@ export default function BlueprintCanvas({
           ctx.stroke();
         }
 
-        // O RÓTULO SÓ SAI SE COUBER NO TRECHO.
-        //
-        // Cota que não se lê não é cota — e é pior que a ausência dela,
-        // porque suja o desenho fingindo informar. A linha e os tiques FICAM:
-        // eles ainda mostram onde a cadeia quebra.
+        // O RÓTULO QUE NÃO CABE NO TRECHO VAI PARA FORA (08/10/2026, *"quero sim"* à oferta de escrever o número ao
+        // lado do trecho curto, como na prancha — o recuo de 1,50 m em zoom afastado só mostrava os tiques). No 1º
+        // trecho da cadeia, antes do início; no último, depois do fim; no meio, do outro lado da linha. Se ainda assim
+        // cair em cima de outro rótulo, fica de fora: cota ilegível suja o desenho fingindo informar.
         const compPx = Math.hypot(b.x - a.x, b.y - a.y);
         ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
         const larguraTexto = ctx.measureText(seg.rotulo).width;
-        if (compPx < larguraTexto + 10) continue;
+        const cabe = compPx >= larguraTexto + 10;
 
         // O TEXTO ACOMPANHA O LADO.
         //
@@ -4574,10 +4575,33 @@ export default function BlueprintCanvas({
         const fy = foraPx.y - meioPx.y;
         const cf = Math.hypot(fx, fy) || 1;
 
-        ctx.save();
         // 7 px PARA DENTRO da linha, do lado do desenho — o mesmo lugar em que
         // o rótulo já caía nos três lados que estavam certos.
-        ctx.translate(meioPx.x - (fx / cf) * 7, meioPx.y - (fy / cf) * 7);
+        let centro = { x: meioPx.x - (fx / cf) * 7, y: meioPx.y - (fy / cf) * 7 };
+        if (!cabe) {
+          const dx = (b.x - a.x) / (compPx || 1);
+          const dy = (b.y - a.y) / (compPx || 1);
+          const recuo = larguraTexto / 2 + 8;
+          const primeiro = indice === 0 && segmentos.length > 1;
+          const ultimo = indice === segmentos.length - 1;
+          centro = primeiro
+            ? { x: a.x - dx * recuo - (fx / cf) * 7, y: a.y - dy * recuo - (fy / cf) * 7 }
+            : ultimo
+              ? { x: b.x + dx * recuo - (fx / cf) * 7, y: b.y + dy * recuo - (fy / cf) * 7 }
+              : { x: meioPx.x + (fx / cf) * 9, y: meioPx.y + (fy / cf) * 9 };
+        }
+        // A caixa do rótulo na tela (girado de `ang`), para não escrever um sobre o outro.
+        const altura = Math.round(11 * fz) + 2;
+        const meiaL = (Math.abs(Math.cos(ang)) * larguraTexto + Math.abs(Math.sin(ang)) * altura) / 2;
+        const meiaA = (Math.abs(Math.sin(ang)) * larguraTexto + Math.abs(Math.cos(ang)) * altura) / 2;
+        const caixa = { x0: centro.x - meiaL, y0: centro.y - meiaA, x1: centro.x + meiaL, y1: centro.y + meiaA };
+        if (!cabe && rotulosDeCotaPostos.some((r) => r.x0 < caixa.x1 && caixa.x0 < r.x1 && r.y0 < caixa.y1 && caixa.y0 < r.y1)) continue;
+        rotulosDeCotaPostos.push(caixa);
+        // O rótulo de fora também ocupa a faixa das cotas: a bolha do eixo vai além dele.
+        if (!cabe) crescerFaixa(faixaDasCotas, { x: caixa.x0, y: caixa.y0 }, { x: caixa.x1, y: caixa.y1 });
+
+        ctx.save();
+        ctx.translate(centro.x, centro.y);
         ctx.rotate(ang);
         escreverRotulo(ctx, seg.rotulo, 0, 0, corTextoCota, Math.round(11 * fz), fundoCota);
         ctx.restore();

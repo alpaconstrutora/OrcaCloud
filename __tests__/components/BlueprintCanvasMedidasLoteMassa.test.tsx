@@ -193,4 +193,28 @@ describe('BlueprintCanvas · medidas do lote e da massa', () => {
     expect(sem).toContain('30,00');
     for (const x of ['5,00', '22,00', '3,00']) expect(sem, x).not.toContain(x);
   });
+
+  /**
+   * 08/10/2026 — *"quero sim"*: o número do trecho curto vai para FORA dele (antes só os tiques). Escala 0,01: o recuo
+   * de 1,50 m tem 15 px, menos que o texto (10 px no contexto falso) + 10.
+   */
+  it('trecho curto: o número sai por fora (antes do início no 1º, depois do fim no último)', () => {
+    const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: l, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as const;
+    const lote = applyBatch(m, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model;
+    const envelope = [point(0, 1500), point(10000, 1500), point(10000, 28500), point(0, 28500)];
+    desenhar(lote, { envelope, escala: 0.01 });
+    const t = textos();
+    expect(t).toContain('27,00');
+    expect(t).toContain('1,50');
+    // Cada lateral tem os dois recuos: 4 rótulos "1,50" por desenho.
+    const desenhos = t.filter((x) => x === '30,00').length / 2;
+    expect(t.filter((x) => x === '1,50').length / desenhos).toBe(4);
+    // E por FORA do trecho: as âncoras dos "1,50" ficam além das pontas do lote (300 px de altura).
+    const ys = ancorasDe('1,50').map((p) => p.y);
+    const ysLote = ancorasDe('27,00').map((p) => p.y);
+    const meio = ysLote.reduce((a, b) => a + b, 0) / ysLote.length;
+    for (const y of ys) expect(Math.abs(y - meio)).toBeGreaterThan(150);
+  });
 });

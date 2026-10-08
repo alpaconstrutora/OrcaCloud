@@ -172,3 +172,13 @@ encostavam).
   para fora), e a linha do eixo vai até ela. Zigue-zague: 1 dentro, 2 fora, 3 dentro…
 - Tela (eixos do modelo e da prévia juntos), PDF e DXF usam a mesma regra.
 
+
+## Complemento (08/10/2026) — número do trecho curto por fora
+
+Pedido: *"quero sim"* (à oferta: com zoom afastado, o recuo de 1,50 m só mostrava os tiques; escrever o número ao lado
+do trecho quando não cabe, como na prancha).
+
+- Tela (`desenharCadeia`) e PDF (`desenharCotas`): o número que não cabe vai para fora — antes do início no 1º trecho
+  da cadeia, depois do fim no último, do outro lado da linha num trecho do meio. Na tela, se ainda assim cair em cima
+  de outro rótulo, fica de fora. O rótulo de fora entra na faixa das cotas (as bolhas dos eixos vão além dele).
+- DXF: o texto já saía sempre (o CAD não esconde texto por tamanho).

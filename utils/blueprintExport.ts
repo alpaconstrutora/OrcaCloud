@@ -1622,7 +1622,7 @@ function desenharCotas(
       nivel: number,
     ) => {
       const afasta = FOLGA + PASSO * nivel;
-      for (const seg of segmentos) {
+      for (const [indice, seg] of segmentos.entries()) {
         const pa = pontoDaCota(lado, seg.de, 0);
         const pb = pontoDaCota(lado, seg.ate, 0);
         const x1 = px(pa.x) + nx * afasta;
@@ -1641,8 +1641,30 @@ function desenharCotas(
         // Texto centrado e deitado: o `Desenhista` não gira texto, e número
         // deitado continua legível. Fica ao LADO da linha, deslocado pela
         // normal, para não montar em cima dela.
-        const mx = (x1 + x2) / 2 + nx * 2;
-        const my = (y1 + y2) / 2 + ny * 2;
+        //
+        // NÃO CABE NO TRECHO (08/10/2026): vai para fora — antes do início no 1º trecho, depois do fim no último, do
+        // outro lado da linha no meio. A largura do texto é estimada (0,55 da altura por caractere, o mesmo fator do
+        // centramento acima): o `Desenhista` não mede texto.
+        const largura = seg.rotulo.length * TEXTO_COTA_MM * 0.55;
+        const comp = Math.hypot(x2 - x1, y2 - y1);
+        let mx = (x1 + x2) / 2 + nx * 2;
+        let my = (y1 + y2) / 2 + ny * 2;
+        if (comp < largura + 1) {
+          const ux = (x2 - x1) / (comp || 1);
+          const uy = (y2 - y1) / (comp || 1);
+          const recuo = largura / 2 + 1.5;
+          if (indice === 0 && segmentos.length > 1) {
+            mx = x1 - ux * recuo + nx * 2;
+            my = y1 - uy * recuo + ny * 2;
+          } else if (indice === segmentos.length - 1) {
+            mx = x2 + ux * recuo + nx * 2;
+            my = y2 + uy * recuo + ny * 2;
+          } else {
+            mx = (x1 + x2) / 2 - nx * 2.5;
+            my = (y1 + y2) / 2 - ny * 2.5;
+          }
+          crescerFaixa(faixa, { x: mx - largura / 2, y: my - TEXTO_COTA_MM }, { x: mx + largura / 2, y: my + TEXTO_COTA_MM / 2 });
+        }
         d.texto(mx - seg.rotulo.length * 0.55, my, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
       }
     };

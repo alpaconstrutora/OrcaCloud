@@ -148,3 +148,69 @@ export interface DestinatarioSnapshot {
     contato_email?: string | null;
     contato_telefone?: string | null;
 }
+
+// ─── F2: o documento (ofício) ────────────────────────────────────────────────
+export type DocGenDocumentoStatus = 'RASCUNHO' | 'EMITIDO' | 'CANCELADO';
+export type DestinatarioTipo = DestinatarioSnapshot['tipo'];
+
+/** Anexo listado no documento. Do GED aponta o documento; descrito é só o nome. */
+export interface AnexoDoc {
+    tipo: 'GED' | 'DESCRITO';
+    nome: string;
+    documentId?: string | null;
+}
+
+export interface DocGenDocumento {
+    id: string;
+    organization_id: string;
+    company_id: string | null;
+    modelo_id: string;
+    modelo_versao: number;
+    tipo_documental: DocGenTipoDocumental;
+    status: DocGenDocumentoStatus;
+    numero: string | null;
+    assunto: string;
+    /** `YYYY-MM-DD`; null = data automática (a da emissão). */
+    data_documento: string | null;
+    cidade: string | null;
+    department_id: string | null;
+    destinatario_tipo: DestinatarioTipo | null;
+    destinatario_id: string | null;
+    destinatario_snapshot: DestinatarioSnapshot | null;
+    project_id: string | null;
+    empreendimento_id: string | null;
+    contract_id: string | null;
+    client_id: string | null;
+    supplier_id: string | null;
+    /** Só os overrides "preencher só neste documento" (chave → valor). */
+    valores: Record<string, string>;
+    /** Texto de cada campo livre do modelo (nome → documento TipTap). */
+    conteudo: Record<string, DocTipTap>;
+    signatarios: SignatarioDoc[];
+    anexos: AnexoDoc[];
+    documento_relacionado_id: string | null;
+    resposta_esperada_ate: string | null;
+    versao: number;
+    ged_document_id: string | null;
+    ged_version_id: string | null;
+    emitido_por: string | null;
+    emitido_em: string | null;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+/** O que o formulário edita (tudo menos o que o banco/serviço controla). */
+export type DocGenDocumentoRascunho = Omit<DocGenDocumento,
+    'id' | 'status' | 'numero' | 'versao' | 'ged_document_id' | 'ged_version_id' | 'emitido_por' | 'emitido_em' | 'created_by' | 'created_at' | 'updated_at'>;
+
+export interface DocGenDocumentoVersao {
+    id: string;
+    documento_id: string;
+    organization_id: string;
+    versao: number;
+    snapshot: DocGenDocumentoRascunho;
+    autor: string | null;
+    congelada: boolean;
+    created_at: string;
+}

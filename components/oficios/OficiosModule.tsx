@@ -6,13 +6,18 @@ import { useToast } from '../../hooks/useToast';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
 import { docGenModeloService } from '../../services/docGenModeloService';
-import type { DocGenModelo } from '../../types/docGen';
+import { docGenDocumentoService } from '../../services/docGenDocumentoService';
+import { useStore } from '../../store/useStore';
+import type { DocGenDocumento, DocGenModelo } from '../../types/docGen';
 import ModelosList from './ModelosList';
 import ModeloEditorTela from './ModeloEditorTela';
+import OficiosList from './OficiosList';
+import NovoOficioTela from './NovoOficioTela';
+import EscolherModeloSheet from './EscolherModeloSheet';
 
 /**
- * Documentos › Ofícios — casca do módulo (F1: aba Modelos funcional; a aba
- * Ofícios chega na F2 com "Novo ofício").
+ * Documentos › Ofícios — casca do módulo. F1: aba Modelos. F2: aba Ofícios
+ * (rascunhos com destinatário, redação, anexos, signatários e validação).
  * Plano: docs/planos/2026-10-07-gerador-de-oficios.md.
  *
  * Organização: `useOrgContext()` (REGRA #5) — nunca a prop crua do AppRouter.
@@ -33,19 +38,25 @@ const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
 export default function OficiosModule(_props: Props) {
     const { orgId } = useOrgContext();
     const { showToast } = useToast();
-    const [aba, setAba] = usePersistedState<Aba>('oficios:aba', 'modelos');
+    const [aba, setAba] = usePersistedState<Aba>('oficios:aba', 'oficios');
     const [modelos, setModelos] = React.useState<DocGenModelo[]>([]);
+    const [documentos, setDocumentos] = React.useState<DocGenDocumento[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [editor, setEditor] = React.useState<{ aberto: boolean; modelo: DocGenModelo | null }>({ aberto: false, modelo: null });
+    const [oficio, setOficio] = React.useState<{ modelo: DocGenModelo; documento: DocGenDocumento | null } | null>(null);
+    const [escolhendoModelo, setEscolhendoModelo] = React.useState(false);
     const { nomePorId } = useDepartamentosDaOrg(orgId);
+    const organizations = useStore(s => s.organizations);
 
     const carregar = React.useCallback(async () => {
         setLoading(true);
         try {
-            setModelos(await docGenModeloService.list(orgId));
+            const [m, d] = await Promise.all([docGenModeloService.list(orgId), docGenDocumentoService.list(orgId)]);
+            setModelos(m);
+            setDocumentos(d);
         } catch (e) {
-            console.error('[OficiosModule] Erro ao carregar modelos:', e);
-            showToast('Não foi possível carregar os modelos.', 'error');
+            console.error('[OficiosModule] Erro ao carregar ofícios/modelos:', e);
+            showToast('Não foi possível carregar os ofícios.', 'error');
         } finally {
             setLoading(false);
         }
@@ -85,6 +96,12 @@ export default function OficiosModule(_props: Props) {
     // A confirmação é a do próprio menu da linha (InlineDisclosureMenu: "Excluir" → "Confirmar",
     // §9.1/§14). Um useConfirm aqui pediria a mesma decisão duas vezes.
     const excluir = async (m: DocGenModelo) => {
+        // O banco recusa (FK RESTRICT) apagar modelo com ofício — explica antes, em vez do erro cru.
+        const usos = documentos.filter(d => d.modelo_id === m.id).length;
+        if (usos > 0) {
+            showToast(`"${m.nome}" é usado por ${usos} ofício(s) e não pode ser excluído. Inative o modelo para tirá-lo de uso.`, 'error');
+            return;
+        }
         try {
             await docGenModeloService.remove(m.id);
             setModelos(prev => prev.filter(x => x.id !== m.id));
@@ -93,6 +110,48 @@ export default function OficiosModule(_props: Props) {
             showToast(e instanceof Error ? e.message : 'Falha ao excluir.', 'error');
         }
     };
+
+    // ── Ofícios ──
+    const abrirOficio = async (d: DocGenDocumento) => {
+        const modelo = modelos.find(m => m.id === d.modelo_id);
+        if (!modelo) { showToast('O modelo deste ofício não está disponível.', 'error'); return; }
+        try {
+            const completo = await docGenDocumentoService.get(d.id);   // a lista vem sem o texto
+            if (completo) setOficio({ modelo, documento: completo });
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao abrir o ofício.', 'error');
+        }
+    };
+
+    // §22 — atualiza a linha local.
+    const oficioSalvo = (doc: DocGenDocumento) => {
+        setDocumentos(prev => {
+            const existe = prev.some(x => x.id === doc.id);
+            return existe ? prev.map(x => (x.id === doc.id ? doc : x)) : [doc, ...prev];
+        });
+    };
+
+    const excluirOficio = async (d: DocGenDocumento) => {
+        try {
+            await docGenDocumentoService.remove(d.id);
+            setDocumentos(prev => prev.filter(x => x.id !== d.id));
+            showToast('Rascunho excluído.', 'success');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao excluir.', 'error');
+        }
+    };
+
+    if (oficio) {
+        return (
+            <NovoOficioTela
+                key={oficio.documento?.id ?? `novo-${oficio.modelo.id}`}
+                modelo={oficio.modelo}
+                documento={oficio.documento}
+                onClose={() => setOficio(null)}
+                onSaved={oficioSalvo}
+            />
+        );
+    }
 
     if (editor.aberto) {
         return (
@@ -116,7 +175,7 @@ export default function OficiosModule(_props: Props) {
 
             <TabsBar<Aba>
                 tabs={[
-                    { id: 'oficios', label: 'Ofícios', icon: <FileText className="w-4 h-4" /> },
+                    { id: 'oficios', label: 'Ofícios', icon: <FileText className="w-4 h-4" />, badge: documentos.length },
                     { id: 'modelos', label: 'Modelos', icon: <LayoutTemplate className="w-4 h-4" />, badge: modelos.length },
                 ]}
                 value={aba}
@@ -128,9 +187,8 @@ export default function OficiosModule(_props: Props) {
                         <Plus className="w-[15px] h-[15px]" /> Novo modelo
                     </button>
                 ) : (
-                    /* Botão desligado SEMPRE diz o motivo (memória feedback_botao_desligado_sempre_diz_por_que). */
-                    <button type="button" disabled title="A criação de ofícios chega na próxima entrega (F2). Prepare os modelos enquanto isso."
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] font-medium text-[13px] opacity-50 cursor-not-allowed">
+                    <button type="button" onClick={() => setEscolhendoModelo(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">
                         <Plus className="w-[15px] h-[15px]" /> Novo ofício
                     </button>
                 )}
@@ -147,19 +205,24 @@ export default function OficiosModule(_props: Props) {
                     onExcluir={excluir}
                 />
             ) : (
-                <div className="text-center py-12 bg-white rounded-[10px] shadow-sm border border-gray-100">
-                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum ofício ainda</h3>
-                    <p className="text-sm text-gray-500 max-w-md mx-auto">
-                        A elaboração de ofícios (destinatário, redação, validação e emissão numerada) chega na próxima entrega.
-                        Enquanto isso, prepare os modelos na aba ao lado.
-                    </p>
-                    <button type="button" onClick={() => setAba('modelos')}
-                        className="mt-4 h-9 px-3.5 text-sm font-medium text-blue-700 bg-blue-50 rounded-[6px] hover:bg-blue-100">
-                        Ir para Modelos
-                    </button>
-                </div>
+                <OficiosList
+                    documentos={documentos}
+                    modelos={modelos}
+                    loading={loading}
+                    onAbrir={abrirOficio}
+                    onExcluir={excluirOficio}
+                />
             )}
+
+            <EscolherModeloSheet
+                open={escolhendoModelo}
+                onClose={() => setEscolhendoModelo(false)}
+                modelos={modelos}
+                nomeOrganizacao={id => organizations.find(o => o.id === id)?.name ?? ''}
+                multiplasOrgs={!orgId}
+                onEscolher={m => setOficio({ modelo: m, documento: null })}
+                onIrParaModelos={() => setAba('modelos')}
+            />
         </div>
     );
 }

@@ -548,6 +548,27 @@ export const supplierService = {
      *  updateSupplier de propósito: ele dispara syncRealEstateBrokerProfile,
      *  que reescreve broker_profiles com commission_rate=5 fixo — resetaria a
      *  comissão de fornecedores da categoria Corretor de Imóveis. */
+    /**
+     * Atualiza SÓ campos cadastrais simples (documento, endereço, contato) — o
+     * "Atualizar cadastro do destinatário" do Gerador de Ofícios (08/10/2026).
+     * Não passa por updateSupplier pelo mesmo motivo de updateSupplierSettings
+     * (abaixo): aquele reescreve broker_profiles e zera a comissão. Lista
+     * fechada de colunas para ninguém usar isto como update genérico.
+     * `.select('id')` denuncia a RLS: 0 linhas = sem permissão, não sucesso mudo.
+     */
+    updateCamposCadastrais: async (
+        id: string,
+        patch: Partial<Pick<Supplier, 'name' | 'nickname' | 'document' | 'neighborhood' | 'city' | 'state' | 'zip_code' | 'contact_name' | 'email' | 'phone'>>,
+    ): Promise<void> => {
+        const permitidas = ['name', 'nickname', 'document', 'neighborhood', 'city', 'state', 'zip_code', 'contact_name', 'email', 'phone'] as const;
+        const payload: Record<string, unknown> = {};
+        for (const k of permitidas) if (patch[k] !== undefined) payload[k] = patch[k];
+        if (Object.keys(payload).length === 0) return;
+        const { data, error } = await supabase.from('suppliers').update(payload).eq('id', id).select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) throw new Error('Nenhum fornecedor atualizado — sem permissão para editar este cadastro.');
+    },
+
     updateSupplierSettings: async (id: string, settings: SupplierPortalSettings): Promise<Supplier> => {
         const { data, error } = await supabase
             .from('suppliers')

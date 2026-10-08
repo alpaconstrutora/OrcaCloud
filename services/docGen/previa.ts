@@ -73,3 +73,38 @@ export async function previaDoModelo(e: EntradaPrevia): Promise<Blob> {
     // Data fixa: a prévia do mesmo modelo é sempre o mesmo arquivo.
     return gerarPdfBlob(def, { id: 'previa-do-modelo', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
 }
+
+// ─── F2: prévia do DOCUMENTO (dados reais) ───────────────────────────────────
+
+export interface EntradaPreviaDocumento {
+    conteudoModelo: DocTipTap;
+    layout: LayoutModelo;
+    titulo: string;
+    /** Valores finais (cadastro + overrides). */
+    valores: Record<string, string>;
+    camposLivres: Record<string, DocTipTap>;
+    assinaturas: { nome: string; cargo?: string | null; registroProfissional?: string | null; imagemDataUrl?: string | null }[];
+    anexos: string[];
+    organization?: Organization | null;
+    /** Número já emitido; no rascunho, o texto avisa que ele nasce na emissão. */
+    numero?: string | null;
+}
+
+export const NUMERO_NO_RASCUNHO = 'nº atribuído na emissão';
+
+export async function previaDoDocumento(e: EntradaPreviaDocumento): Promise<Blob> {
+    const logoDataUrl = e.layout.cabecalho.logo === 'organizacao'
+        ? await logoComoDataUrl(e.organization?.logoUrl ?? null)
+        : null;
+    const def = montarDocDefinition({
+        conteudo: e.conteudoModelo,
+        layout: e.layout,
+        valores: { ...e.valores, 'documento.numero': e.numero || NUMERO_NO_RASCUNHO },
+        camposLivres: e.camposLivres,
+        assinaturas: e.assinaturas,
+        anexos: e.anexos,
+        logoDataUrl,
+        titulo: e.titulo,
+    });
+    return gerarPdfBlob(def, { id: 'previa-do-documento', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
+}

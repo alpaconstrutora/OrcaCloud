@@ -3691,7 +3691,8 @@ describe('BlueprintEditor · ribbon', () => {
     await montar();
     const user = userEvent.setup();
     const barra = () => within(screen.getByRole('toolbar'));
-    const canvas = screen.getByRole('application', { name: /área de desenho da planta/i });
+    // A planta pode chegar depois do montar() (na CI chegou): esperar por ela.
+    const canvas = await screen.findByRole('application', { name: /área de desenho da planta/i }, { timeout: 5000 });
     expect(screen.queryByTestId('lado-a-lado-3d')).toBeNull();
 
     await user.click(barra().getByRole('button', { name: 'Planta + 3D lado a lado' }));

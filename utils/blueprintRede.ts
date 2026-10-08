@@ -457,6 +457,15 @@ function secaoRetangular3D(
   eixo: [number, number, number],
 ): { retangular?: { larguraM: number; alturaM: number; base: { x: [number, number, number]; y: [number, number, number]; z: [number, number, number] } } } {
   if (t.alturaDutoMm == null) return {};
+  return { retangular: { larguraM: t.bitolaMm * ESCALA_3D, alturaM: t.alturaDutoMm * ESCALA_3D, base: baseRetangular3D(eixo) } };
+}
+
+/**
+ * A base de uma seção retangular ao longo de `eixo` (3D, Y para cima): X = o lado
+ * da largura (horizontal e perpendicular ao eixo), Y = o eixo, Z = o lado da altura.
+ * E10.3: exportada — a BOLSA da conexão do duto gira exatamente como o duto.
+ */
+export function baseRetangular3D(eixo: [number, number, number]): { x: [number, number, number]; y: [number, number, number]; z: [number, number, number] } {
   // O "para cima" do visualizador é Y; na prumada (eixo ≈ Y) a largura fica ao longo de X.
   const cima: [number, number, number] = Math.abs(eixo[1]) > 0.999 ? [1, 0, 0] : [0, 1, 0];
   const cruz = (a: [number, number, number], b: [number, number, number]): [number, number, number] => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -466,7 +475,7 @@ function secaoRetangular3D(
   };
   const x = unit(cruz(eixo, cima));
   const z = unit(cruz(x, eixo));
-  return { retangular: { larguraM: t.bitolaMm * ESCALA_3D, alturaM: t.alturaDutoMm * ESCALA_3D, base: { x, y: eixo, z } } };
+  return { x, y: eixo, z };
 }
 
 /** Onde o terminal fica no 3D, na convenção do visualizador. */

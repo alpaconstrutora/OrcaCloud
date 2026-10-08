@@ -21,8 +21,8 @@
  * altura, metros; a cota soma a elevação do pavimento.
  */
 import type { BlueprintModel, ConexaoDerivada, DisciplinaDeRede, ObjectId, Terminal, Trecho, Wall } from './blueprintKernel';
-import { CAIXAS_DE_ESGOTO, conexoesDerivadas, extensaoVerticalDaCaixa, pointInPolygon } from './blueprintKernel';
-import { COR_DA_DISCIPLINA, ESCALA_3D } from './blueprintRede';
+import { CAIXAS_DE_ESGOTO, conexaoViraPeca, conexoesDerivadas, extensaoVerticalDaCaixa, pointInPolygon } from './blueprintKernel';
+import { COR_DA_DISCIPLINA, ESCALA_3D, baseRetangular3D } from './blueprintRede';
 
 type V3 = [number, number, number];
 
@@ -41,6 +41,8 @@ export interface Cilindro3D {
   eixo: V3;
   raioM: number;
   comprimentoM: number;
+  /** E10.3: a bolsa do DUTO RETANGULAR — a caixa com a base de `baseRetangular3D` (o duto e a bolsa giram igual). */
+  retangular?: { larguraM: number; alturaM: number; base: { x: V3; y: V3; z: V3 } };
 }
 
 export interface PecaDaConexao3D {
@@ -78,23 +80,28 @@ const para3D = (x: number, y: number, zMm: number): V3 => [x * ESCALA_3D, zMm * 
 
 export function pecasDasConexoes3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>): PecaDaConexao3D[] {
   return conexoesDerivadas(model)
-    .conexoes.filter((c) => c.ramais && c.ramais.length > 0 && (!idsVisiveis || idsVisiveis.has(c.levelId)))
+    // E10.3: a curva da linha frigorígena não é peça (cobre curvado) — o MESMO predicado do IFC.
+    .conexoes.filter((c) => c.ramais && c.ramais.length > 0 && (!idsVisiveis || idsVisiveis.has(c.levelId)) && conexaoViraPeca(c))
     .map((c) => {
       const z = elevacaoDe(model, c.levelId) + c.cotaMm;
       const no = para3D(c.no.x, c.no.y, z);
+      // E10.3: no DUTO a bolsa é a do IFC — 1,1 × a seção (retangular quando o duto é), comprimento até 300 mm.
+      const duto = c.disciplina === 'MECANICA';
       const bolsas = c.ramais!.map((r) => {
-        const comprimentoMm = Math.max(r.bitolaMm, BOLSA_MINIMA_MM);
+        const comprimentoMm = duto ? Math.max(Math.min(r.alturaDutoMm ?? r.bitolaMm, 300), BOLSA_MINIMA_MM) : Math.max(r.bitolaMm, BOLSA_MINIMA_MM);
         // [x, y, cota] do modelo → [x, cota, y] do 3D.
         const eixo: V3 = [r.u[0], r.u[2], r.u[1]];
         const meio = (comprimentoMm / 2) * ESCALA_3D;
         return {
           centro: [no[0] + eixo[0] * meio, no[1] + eixo[1] * meio, no[2] + eixo[2] * meio] as V3,
           eixo,
-          raioM: Math.max(((r.bitolaMm / 2) * FATOR_DA_BOLSA) * ESCALA_3D, RAIO_MINIMO_DA_BOLSA_M),
+          raioM: Math.max(((r.bitolaMm / 2) * (duto ? 1.1 : FATOR_DA_BOLSA)) * ESCALA_3D, RAIO_MINIMO_DA_BOLSA_M),
           comprimentoM: comprimentoMm * ESCALA_3D,
+          ...(duto && r.alturaDutoMm != null ? { retangular: { larguraM: Math.round(r.bitolaMm * 11) / 10 * ESCALA_3D, alturaM: Math.round(r.alturaDutoMm * 11) / 10 * ESCALA_3D, base: baseRetangular3D(eixo) } } : {}),
         };
       });
-      const temCorpo = c.tipo !== 'LUVA' && c.tipo !== 'REDUCAO';
+      // A esfera no nó lê como peça de tubo; no duto (como no IFC) a peça são as bolsas.
+      const temCorpo = !duto && c.tipo !== 'LUVA' && c.tipo !== 'REDUCAO';
       return {
         chave: `${c.disciplina}|${c.levelId}|${c.no.x},${c.no.y}|${c.cotaMm}`,
         tipo: c.tipo,

@@ -2315,3 +2315,55 @@ difusor, duto 30 cm abaixo da viga, linha nascendo na condensadora) e 4 conflito
 condensadora do vizinho → EQUIPAMENTO; dreno atravessando a viga → ESTRUTURA; duto cruzando a linha →
 REDE; linha e dreno que nascem juntos e voltam a se cruzar → REDE), exatamente 1/1/2; sem as caixas,
 o resto idêntico; a marca do duto. 24 arquivos de conflito/BCF/verificação verdes.
+
+### Etapa 10.3 — Editor no 3D · 08/10/2026 (frente `clima-e10-3d`, sem bump)
+
+Transversal: vale para todas as disciplinas, não só para a climatização.
+
+- **Seleção múltipla no 3D**: Shift, Ctrl ou ⌘ somam à seleção, e o segundo clique tira a peça
+  (`selecaoDoClique`, a mesma regra do 2D). A seleção é a MESMA do canvas: as quatro famílias que
+  tinham `onClick` próprio passaram pelo mesmo clique.
+- **Mover no 3D**: uma alça (`PivotControls` do drei) aparece no centro em planta da seleção, a meio
+  pé-direito, só com as setas X e Z (sem rotação, sem escala, sem subir). Durante o arraste, uma prévia
+  translúcida da seleção acompanha. Ao soltar, o deslocamento vira mm no plano da planta
+  (`deltaDoMundoParaModelo`: X do 3D = x, Z do 3D = y, sem troca de sinal; passo de 10 mm). Ele vira o
+  MESMO `TranslateEntities` do mover do 2D (`comandoDeMover`): é um passo de Ctrl+Z, e respeita o modo de
+  junção da barra. Parede, terminal, componente, núcleo, vaga e bloco se movem juntos.
+- **Caixa de corte**: um botão na barra do 3D, e seis planos com controle deslizante por eixo. O corte é
+  LOCAL por material (`Recortado`), não global. Assim o contorno da caixa e a alça não são recortados, e
+  a sombra continua certa. A caixa nasce do enquadramento com folga; "Centralizar" não mexe nela.
+- **Planta + 3D lado a lado**: um botão no grupo Vistas, só na planta (e nas vistas dependentes, que são a
+  planta). Numa elevação o botão desliga, e o rótulo diz por quê. O 3D ao lado é a MESMA cena da aba 3D
+  (`renderCena3d`), com a mesma seleção. O canvas da planta não remonta ao ligar (zoom e ferramenta
+  ficam). A escolha é persistida (`blueprint:vista3dLadoALado`).
+- **A bolsa do joelho de duto no 3D da tela** (o que tinha ficado da 10.1): agora é RETANGULAR, 1,1× a
+  seção (440×275 para o duto 400×250), com a base do duto daquele lado. O duto não tem corpo esférico no
+  nó. A curva da linha frigorígena não é peça, pelo mesmo predicado do IFC (`conexaoViraPeca`, agora no
+  kernel e usado pelos dois). O tê dela continua.
+
+**Prova:**
+
+- `blueprint3dEditor.test.ts` (10 testes):
+  - a seleção por modificador;
+  - o sinal do arraste conferido contra o eixo de um trecho a +y;
+  - os seis planos da caixa;
+  - o mover de parede + terminal + componente em UM comando, e o desfazer que devolve o desenho;
+  - a alça a meio pé-direito;
+  - sem comando para deslocamento zero;
+  - as bolsas retangulares;
+  - a curva frigorígena fora.
+- `BlueprintEditor.test.tsx` (+1 teste): o lado a lado entra ao lado do canvas (o MESMO nó); o botão
+  desliga na elevação; a escolha é persistida.
+- **Harness do 3D** (`docs/spikes/blueprint-3d/passeio.mjs`, modo novo `?editar=1` com o `ModelHistory`
+  do kernel):
+  - **caixa de corte**: 4,1 % de geometria sem a caixa, 4,0 % com ela recém-ligada, 1,8 % com o plano
+    leste–oeste no meio;
+  - **mover**: o passeio acha a seta X da alça pelos pixels, arrasta ao longo dela, e a parede vai de
+    0,0 a 4760,0 (só em x); o **Ctrl+Z** a devolve a 0,0.
+
+**Não entrou (dito):**
+
+- O portão antigo `cena=estrutura` do mesmo passeio dá 2,33 % (o mínimo é 3 %). O valor é **idêntico
+  sem as mudanças desta frente** (medido no base a2175a43): é anterior, fica registrado e não é
+  corrigido aqui.
+- O mover no 3D não sobe nem desce a peça (a cota). Ela continua editada no painel.

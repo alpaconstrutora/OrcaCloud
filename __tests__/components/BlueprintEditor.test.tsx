@@ -3687,6 +3687,32 @@ describe('BlueprintEditor · ribbon', () => {
     expect(barra().getByRole('button', { name: /^ferramenta: selecionar$/i })).toBeInTheDocument();
   });
 
+  it('Planta + 3D lado a lado (E10.3): o 3D entra AO LADO do canvas, que continua montado; fora da planta o botão desliga e diz por quê', async () => {
+    await montar();
+    const user = userEvent.setup();
+    const barra = () => within(screen.getByRole('toolbar'));
+    const canvas = screen.getByRole('application', { name: /área de desenho da planta/i });
+    expect(screen.queryByTestId('lado-a-lado-3d')).toBeNull();
+
+    await user.click(barra().getByRole('button', { name: 'Planta + 3D lado a lado' }));
+    const lado = await screen.findByTestId('lado-a-lado-3d');
+    expect(within(lado).getByTestId('cena-3d')).toBeInTheDocument();
+    // O MESMO nó do canvas: ligar o lado a lado não remonta a planta (zoom e ferramenta ficam).
+    expect(screen.getByRole('application', { name: /área de desenho da planta/i })).toBe(canvas);
+    expect(barra().getByRole('button', { name: 'Fechar o 3D ao lado da planta' })).toHaveAttribute('aria-pressed', 'true');
+    expect(JSON.parse(localStorage.getItem('blueprint:vista3dLadoALado')!)).toBe(true);
+
+    // Numa elevação não há planta para pôr ao lado: o botão desliga com o motivo no rótulo.
+    await user.click(barra().getByRole('button', { name: 'Vista: Frente' }));
+    expect(screen.queryByTestId('lado-a-lado-3d')).toBeNull();
+    expect(barra().getByRole('button', { name: /só na planta/ })).toBeDisabled();
+
+    await user.click(barra().getByRole('button', { name: 'Vista: Planta' }));
+    expect(await screen.findByTestId('lado-a-lado-3d')).toBeInTheDocument();
+    await user.click(barra().getByRole('button', { name: 'Fechar o 3D ao lado da planta' }));
+    expect(screen.queryByTestId('lado-a-lado-3d')).toBeNull();
+  });
+
   it('Situação, Implantação e Cobertura (E0.3): vistas fixas, read-only, com faixa que diz o pavimento e o recorte', async () => {
     await montar();
     const user = userEvent.setup();

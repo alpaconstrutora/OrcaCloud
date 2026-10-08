@@ -108,7 +108,7 @@ export {
   type CargaDoQuadro,
   type CargaDoCircuito,
 } from './quadroDeCargas';
-export { conexoesDerivadas, tipoDeConexaoManual, ROTULO_DA_CONEXAO, CAIXAS_DE_ESGOTO, extensaoVerticalDaCaixa } from './conexoes';
+export { conexoesDerivadas, conexaoViraPeca, tipoDeConexaoManual, ROTULO_DA_CONEXAO, CAIXAS_DE_ESGOTO, extensaoVerticalDaCaixa } from './conexoes';
 export type { ConexaoDerivada, ConexoesDoModelo, PontaAberta, RamalDaConexao, TipoDeConexao } from './conexoes';
 export { furosDoNucleo, medirNucleo, type FuroDoNucleo, type MedidaDoNucleo } from './nucleo';
 // E2.3 (29/09/2026): grafo da rede, comandos, condutores (Tab. 58) e fiação derivada — no kernel,

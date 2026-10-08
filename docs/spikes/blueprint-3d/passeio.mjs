@@ -329,6 +329,113 @@ console.log(
   `modo percorrer: W mudou ${(fracaoDiferente * 100).toFixed(1)}% da tela (mínimo 5%)`,
 );
 
+/**
+ * A CAIXA DE CORTE (E10.3, 08/10/2026).
+ *
+ * Três quadros da mesma câmera: sem caixa, com a caixa recém-ligada (nasce
+ * envolvendo tudo — a geometria não pode sumir) e com o fim leste–oeste puxado
+ * até o meio (metade da casa sai). O sinal é a fração de pixels de geometria,
+ * não a igualdade de PNG (ver o modo percorrer acima).
+ */
+await cena('laje=1&arestas=1', 'caixa-sem');
+const semCaixa = await fracaoPintada();
+await page.click('button[title*="Caixa de corte"]');
+await page.waitForTimeout(600);
+if ((await page.locator('[data-testid="caixa-de-corte"]').count()) !== 1) {
+  erros.push('ligar a caixa de corte não abriu o painel dos planos');
+}
+const caixaInteira = await fracaoPintada();
+await page.evaluate(() => {
+  const el = document.querySelector('[aria-label="Leste–oeste (X) fim"]');
+  const meio = (Number(el.min) + Number(el.max)) / 2;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, String(meio));
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+await page.waitForTimeout(600);
+await page.screenshot({ path: path.join(aqui, 'saida-caixa-cortada.png') });
+const caixaCortada = await fracaoPintada();
+if (caixaInteira < semCaixa * 0.8) {
+  erros.push(`a caixa recém-ligada já cortou geometria: ${(semCaixa * 100).toFixed(1)}% → ${(caixaInteira * 100).toFixed(1)}%`);
+}
+if (caixaCortada > caixaInteira * 0.8) {
+  erros.push(`puxar o plano até o meio não cortou: ${(caixaInteira * 100).toFixed(1)}% → ${(caixaCortada * 100).toFixed(1)}%`);
+}
+console.log(
+  `caixa de corte: ${(semCaixa * 100).toFixed(1)}% sem · ${(caixaInteira * 100).toFixed(1)}% inteira · ` +
+    `${(caixaCortada * 100).toFixed(1)}% cortada ao meio`,
+);
+
+/**
+ * MOVER NO 3D E DESFAZER (E10.3).
+ *
+ * A alça é o `PivotControls` do drei: seta VERMELHA = X do 3D = x da planta.
+ * O passeio acha a seta pelos pixels (#ff2060), agarra o centro dela e arrasta
+ * ao longo da própria seta. Pronto quando: a parede andou em x e NÃO em y (a
+ * seta é de um eixo só) e o Ctrl+Z a devolveu a 0,0 — um passo de histórico.
+ */
+await cena('editar=1', 'mover-antes', 2200);
+const lerParede = async () => {
+  const m = /PAREDE: (-?\d+),(-?\d+)/.exec(await page.locator('#barra').innerText());
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+};
+const antesDeMover = await lerParede();
+const quadro = await page.locator('canvas').boundingBox();
+const png = (await page.locator('canvas').screenshot()).toString('base64');
+const seta = await page.evaluate(async (b64) => {
+  const img = new Image();
+  await new Promise((ok) => {
+    img.onload = ok;
+    img.src = `data:image/png;base64,${b64}`;
+  });
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext('2d').drawImage(img, 0, 0);
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const pts = [];
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] > 215 && d[i + 1] < 90 && d[i + 2] > 50 && d[i + 2] < 150) pts.push([(i / 4) % c.width, Math.floor(i / 4 / c.width)]);
+  }
+  if (pts.length < 30) return { n: pts.length };
+  const mx = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+  const my = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const [x, y] of pts) {
+    sxx += (x - mx) ** 2;
+    syy += (y - my) ** 2;
+    sxy += (x - mx) * (y - my);
+  }
+  const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy);
+  return { n: pts.length, mx, my, dx: Math.cos(ang), dy: Math.sin(ang), escala: img.width };
+}, png);
+if (!antesDeMover || antesDeMover.x !== 0 || antesDeMover.y !== 0) {
+  erros.push(`editar=1 não nasceu com a parede em 0,0 — barra: "${await page.locator('#barra').innerText()}"`);
+} else if (!seta.mx) {
+  erros.push(`a alça de mover não apareceu (pixels vermelhos da seta X: ${seta.n})`);
+} else {
+  const k = quadro.width / seta.escala;
+  const px = quadro.x + seta.mx * k;
+  const py = quadro.y + seta.my * k;
+  await page.mouse.move(px, py);
+  await page.mouse.down();
+  await page.mouse.move(px + seta.dx * 90, py + seta.dy * 90, { steps: 15 });
+  await page.screenshot({ path: path.join(aqui, 'saida-mover-arrastando.png') });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  const depoisDeMover = await lerParede();
+  await page.screenshot({ path: path.join(aqui, 'saida-mover-depois.png') });
+  if (!depoisDeMover || depoisDeMover.x === 0 || depoisDeMover.y !== 0) {
+    erros.push(`arrastar a seta X não moveu a parede só em x — antes 0,0, depois ${JSON.stringify(depoisDeMover)}`);
+  }
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(400);
+  const desfeito = await lerParede();
+  if (!desfeito || desfeito.x !== 0 || desfeito.y !== 0) {
+    erros.push(`Ctrl+Z não desfez o mover do 3D — ficou ${JSON.stringify(desfeito)}`);
+  }
+  console.log(`mover no 3D: parede 0,0 → ${depoisDeMover?.x},${depoisDeMover?.y} → Ctrl+Z → ${desfeito?.x},${desfeito?.y}`);
+}
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

@@ -45,6 +45,7 @@ import {
   Building2,
   CarFront,
   Box,
+  Columns2,
   Home,
   Scale,
   ClipboardList,
@@ -555,6 +556,7 @@ import {
 import {
   comandoDeDuplicacao,
   comandoDeEspelhamento,
+  comandoDeMover,
   comandoDeRotacao,
   comandosDeAlinhamento,
   comandosDeMatriz,
@@ -1698,6 +1700,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   /** RÓTULOS ø das redes no 3D (27/09/2026, isométrico sanitário). Nasce ligado. */
   const [mostrarRotulosDeRede3d, setMostrarRotulosDeRede3d] = usePersistedState<boolean>('blueprint:vista3dRotulosDeRede', true);
+  /**
+   * PLANTA + 3D LADO A LADO (E10.3, 08/10/2026). Só na planta (e nas vistas
+   * dependentes, que SÃO a planta): o 3D ao lado é a mesma cena da aba 3D, com
+   * a mesma seleção — clicar num lado marca a peça no outro.
+   */
+  const [ladoALado3d, setLadoALado3d] = usePersistedState<boolean>('blueprint:vista3dLadoALado', false);
   const [mostrarTerreno3d, setMostrarTerreno3d] = usePersistedState(
     'blueprint:vista3dTerreno',
     false,
@@ -9913,6 +9921,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           {VISTAS_FIXAS.map((v) => (
             <BotaoBarra key={v.id} icone={v.icone} rotulo={`Vista: ${v.rotulo}`} onClick={() => setVista(v.id)} ativo={vista === v.id} />
           ))}
+          <BotaoBarra
+            icone={Columns2}
+            rotulo={emVista ? 'Planta + 3D lado a lado — só na planta' : ladoALado3d ? 'Fechar o 3D ao lado da planta' : 'Planta + 3D lado a lado'}
+            onClick={() => setLadoALado3d(!ladoALado3d)}
+            ativo={ladoALado3d && !emVista}
+            disabled={emVista}
+          />
         </>
       ),
     },
@@ -10119,6 +10134,49 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       ),
     },
   ];
+
+  /** A cena 3D: a aba 3D e o painel do lado a lado são a MESMA (E10.3). */
+  const renderCena3d = () => (
+    <Blueprint3DTab
+      model={editor.model}
+      levelIds={levelIdsDaVista}
+      mostrarLaje={mostrarLaje3d}
+      mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
+      mostrarRotulosDeRede={mostrarRotulosDeRede3d}
+      estilo={estilo3d}
+      armadura={mostrarArmadura3d && estruturaAVista ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
+      // A guarda vive aqui, e não só no menu: o estado é persistido, e
+      // ligar o terreno num estudo que tem lote e depois abrir outro que
+      // não tem deixaria a combinação gravada no localStorage.
+      // CAMADAS: com o Terreno oculto, relevo, envelope e massa saem juntos (não são peça do modelo).
+      mostrarTerreno={mostrarTerreno3d && temTerreno && terrenoAVista}
+      envelope={mostrarEnvelope3d && temTerreno && terrenoAVista ? envelope3d?.prismas : undefined}
+      massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3d : undefined}
+      sol={solNo3d}
+      entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
+      relevo={mostrarTerreno3d && terrenoAVista ? relevo3d : null}
+      relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
+      alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
+      extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevo3d : null}
+      extrasChave={extrasDoRelevo3dChave}
+      ocultos={ocultosNo3d}
+      atenuados={idsDasCamadas.atenuados}
+      terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}
+      coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
+      // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
+      // uma parede no 3D e voltar para a planta tem de mostrar a mesma
+      // peça marcada. Duas seleções paralelas seriam duas verdades.
+      selecionados={new Set(editor.selectedIds)}
+      onSelecionar={selecionarEAbrir}
+      // MOVER NO 3D: a alça devolve o deslocamento em mm no plano da planta, e
+      // ele vira o MESMO TranslateEntities do mover do 2D — um passo de Ctrl+Z,
+      // com o mesmo modo de junção (manter/soltar) que a barra mostra.
+      onMover={(d) => {
+        const cmd = comandoDeMover(editor.model, editor.selectedIds, d, modoJuncao === 'MANTER');
+        if (cmd) editor.run(cmd);
+      }}
+    />
+  );
 
   return (
     <>
@@ -14058,38 +14116,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando planta…
             </div>
           ) : vista === '3d' ? (
-            <Blueprint3DTab
-              model={editor.model}
-              levelIds={levelIdsDaVista}
-              mostrarLaje={mostrarLaje3d}
-              mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
-              mostrarRotulosDeRede={mostrarRotulosDeRede3d}
-              estilo={estilo3d}
-              armadura={mostrarArmadura3d && estruturaAVista ? { pecas: armadura.pecas, hipoteses: hipotesesDeArmadura } : undefined}
-              // A guarda vive aqui, e não só no menu: o estado é persistido, e
-              // ligar o terreno num estudo que tem lote e depois abrir outro que
-              // não tem deixaria a combinação gravada no localStorage.
-              // CAMADAS: com o Terreno oculto, relevo, envelope e massa saem juntos (não são peça do modelo).
-              mostrarTerreno={mostrarTerreno3d && temTerreno && terrenoAVista}
-              envelope={mostrarEnvelope3d && temTerreno && terrenoAVista ? envelope3d?.prismas : undefined}
-              massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3d : undefined}
-              sol={solNo3d}
-              entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
-              relevo={mostrarTerreno3d && terrenoAVista ? relevo3d : null}
-              relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
-              alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
-              extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevo3d : null}
-              extrasChave={extrasDoRelevo3dChave}
-              ocultos={ocultosNo3d}
-              atenuados={idsDasCamadas.atenuados}
-              terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}
-              coresPorUid={coresPorUid.size > 0 ? coresPorUid : undefined}
-              // A MESMA seleção do canvas 2D, e o mesmo `selecionar`: escolher
-              // uma parede no 3D e voltar para a planta tem de mostrar a mesma
-              // peça marcada. Duas seleções paralelas seriam duas verdades.
-              selecionados={new Set(editor.selectedIds)}
-              onSelecionar={selecionarEAbrir}
-            />
+            renderCena3d()
           ) : vistaEhProjecao ? (
             <ElevationCanvas
               model={editor.model}
@@ -14109,276 +14136,287 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${JSON.stringify(terraplenagem.parametros)}:${JSON.stringify(inclinacaoDoPlato)}`}
             />
           ) : (
-            <BlueprintCanvas
-              pressoesDaAgua={pressoesDaAgua}
-              marcasDoCalculo={coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio}
-              encaixesAtivos={encaixesAtivos}
-              mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos && eletricaAVista}
-              model={editor.model}
-              tool={vistaDePlanta ? 'selecionar' : editor.tool}
-              levelId={nivelDaVistaDePlanta ? nivelDaVistaDePlanta.id : levelId}
-              selectedIds={editor.selectedIds}
-              // Clique no desenho abre as propriedades no Sheet sem véu
-              // (17/09/2026: *"o mesmo comportamento deve ocorrer quando eu
-              // clico em um componente na planta"*); o desenho segue vivo.
-              onSelecionar={selecionarEAbrir}
-              onSelecionarPeca={(id) => {
-                selecionarSoAPeca(id);
-                setPropriedadesEmSheet(true);
-              }}
-              onMoverSelecao={moverSelecao}
-              onMoverMedicoes={moverMedicoes}
-              manterJuncoes={modoJuncao === 'MANTER'}
-              destaqueDePonta={
-                paredeSel && pontaDestacada ? { wallId: paredeSel.id, end: pontaDestacada } : null
-              }
-              onAddWall={adicionarParede}
-              alinhamento={alinhamento}
-              ladosPoligono={ladosPoligono}
-              onAddPoligono={adicionarPoligono}
-              onInverterLado={() => setAlinhamento(inverterLado)}
-              onAddOpening={adicionarAbertura}
-              larguraAberturaMm={larguraAbertura}
-              onDelete={removerSelecionada}
-              onCopiar={copiar}
-              onColar={colar}
-              espessuraMm={espessura}
-              passoGradeMm={passoGrade}
-              onPassoEfetivo={setPassoEmVigor}
-              vaos={vaosCandidatos.vaos}
-              // O cursor na lista manda; na falta dele, quem acende é a
-              // SELEÇÃO. Sem a segunda metade, clicar "Vão 3" selecionava as
-              // duas paredes e o vão entre elas — que é justamente o assunto da
-              // linha — continuava apagado no desenho.
-              vaoEmDestaque={vaoEmDestaque ?? primeiroVaoDaSelecao}
-              pontasSoltas={vaosCandidatos.soltas}
-              pontaEmJuncao={pontaEmJuncao}
-              onEscolherPontaJuncao={(ponta) => {
-                setPontaEmJuncao(ponta);
-                // Escolher de novo limpa a recusa anterior: o aviso é sobre o par
-                // que falhou, e ele deixou de existir.
-                setAvisoJuncao(null);
-              }}
-              onJuntarPontas={juntarPontas}
-              ortogonal={ortogonal}
-              mostrarMedidasParedes={ajusteDaVista ? false : (mostrarMedidas && arquiteturaAVista)}
-              // Também nas vistas (Situação, Implantação): é nelas que o lote e a massa mais importam.
-              mostrarMedidasLoteMassa={(mostrarMedidasLoteMassa && terrenoAVista)}
-              mostrarEixos={mostrarEixos}
-              eixosPrevistos={eixosPrevistos}
-              mostrarCamadasParedes={ajusteDaVista ? false : (mostrarCamadas && arquiteturaAVista)}
-              mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : (mostrarCotas && arquiteturaAVista)}
-              mostrarCotaInterna={ajusteDaVista ? false : (mostrarCotaInterna && arquiteturaAVista)}
-              mostrarRotulosAmbiente={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarRotulos && arquiteturaAVista)}
-              rotulosDeAmbiente={rotulosDeAmbiente}
-              ambientesComForro={plantaDeForro?.comForro}
-              etiquetasDeAbertura={etiquetasDeAbertura}
-              paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
-              mobiliario={arquiteturaAVista ? mobiliarioParaOCanvas : undefined}
-              mostrarGrade={ajusteDaVista ? false : mostrarGrade}
-              mostrarPreenchimentoAmbientes={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarPreenchimento && arquiteturaAVista)}
-              mostrarPreenchimentoTerreno={(mostrarPreenchimentoTerreno && terrenoAVista)}
-              curvasDeNivel={(mostrarCurvasDeNivel && terrenoAVista) ? topografia.selecionada?.curvas : undefined}
-              // Os pontos aparecem enquanto se digita, só na fonte que os usa:
-              // com o DEM escolhido, pontos antigos na tela seriam ruído.
-              pontosCotados={
-                (mostrarCurvasDeNivel && terrenoAVista) && topografia.fonte.tipo === 'LOCAL'
-                  ? topografia.pontosCotados
-                  : undefined
-              }
-              feicoesDoLevantamento={(mostrarFeicoes && terrenoAVista) && topografia.fonte.tipo === 'LOCAL' ? feicoesNoCanvas : null}
-              declividade={
-                (mostrarDeclividade && terrenoAVista) && declividade && topografia.selecionada
-                  ? { grade: topografia.selecionada.grade, faixaDaCelula: declividade.faixaDaCelula }
-                  : null
-              }
-              terraplenagem={
-                (mostrarTerraplenagem && terrenoAVista) && terraplenagemCalc && topografia.selecionada
-                  ? {
-                      grade: topografia.selecionada.grade,
-                      ladoDaCelula: terraplenagemCalc.ladoDaCelula,
-                      muros: terraplenagemCalc.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
-                    }
-                  : null
-              }
-              drenagem={
-                (mostrarCurvasDeNivel && terrenoAVista) && terraplenagem.drenagem.length > 0
-                  ? { linhas: terraplenagem.drenagem, ativa: drenagemAtiva, atende: atendeDrenagem }
-                  : null
-              }
-              onDrenagemTracada={(pontos) => {
-                const id = terraplenagem.adicionarDrenagem(pontos);
-                if (id) setDrenagemAtiva(id);
-                editor.setTool('selecionar');
-              }}
-              eixosDeVia={viasDeProjeto.length > 0 && terrenoAVista ? eixosNoCanvas : null}
-              onEixoDeViaTracado={(pontos) => {
-                const id = vias.adicionar(pontos);
-                if (id) setRelatorio('vias');
-                editor.setTool('selecionar');
-              }}
-              hipsometria={
-                // A3: a mancha de inundação usa a mesma pintura por célula, em azul, e passa na frente.
-                manchaDeCheia && terrenoAVista && topografia.selecionada
-                  ? { grade: topografia.selecionada.grade, classeDaCelula: manchaDeCheia.classeDaCelula, cores: ['#2563eb'] }
-                  : (mostrarHipsometria && terrenoAVista) && hipsometria && topografia.selecionada
-                  ? {
-                      grade: topografia.selecionada.grade,
-                      classeDaCelula: hipsometria.classeDaCelula,
-                      cores: hipsometria.classes.map((c) => c.cor),
-                    }
-                  : null
-              }
-              corDaCurva={(mostrarCurvasDeNivel && terrenoAVista) && curvasPelaCota && topografia.selecionada ? corDaCota : null}
-              nosDaGrade={
-                (mostrarNosDaGrade && terrenoAVista) && topografia.selecionada ? { grade: topografia.selecionada.grade, cor: corDaCota } : null
-              }
-              curvaEmDestaque={(mostrarCurvasDeNivel && terrenoAVista) ? curvaEmDestaque : null}
-              centroDeCargas={centroNaPlanta}
-              onClicarCurva={(indice, ponto) =>
-                setCurvaEmDestaque(indice === null ? null : { indice, ponto })
-              }
-              linhasDoPerfil={(mostrarCurvasDeNivel && terrenoAVista) ? linhasDoPerfil : null}
-              linhaDoPerfilAtiva={usaLinhaDesenhada ? indiceDaLinha : null}
-              onPerfilTracado={(pontos) => {
-                const indice = terraplenagem.adicionarLinhaDoPerfil(pontos);
-                if (indice >= 0) {
-                  setLinhaDoPerfilIndice(indice);
-                  setOrigemDoPerfil('LINHA');
-                }
-                // A linha nasceu: volta à seleção, como fecha-se o lote.
-                editor.setTool('selecionar');
-              }}
-              // Só colore se houver preenchimento. A guarda vive aqui, e não só
-              // no menu: o estado é persistido, e ligar Cores e depois desligar
-              // Preenchimento deixaria a combinação gravada no localStorage.
-              coresPorAmbiente={(mostrarPreenchimento && arquiteturaAVista) && modoDeCor === 'AMBIENTE'}
-              // E2.3: com a carga térmica aberta, a planta vira mapa de calor (densidade W/m²).
-              coresDosAmbientes={mapaDeCalor ?? (vistaDePlanta === 'departamentos' || ((mostrarPreenchimento && arquiteturaAVista) && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined)}
-              humanizada={humanizada}
-              fases={fasesDoDesenho}
-              selecoesRemotas={selecoesRemotas}
-              pisosHumanizados={(mostrarPreenchimento && arquiteturaAVista) ? pisosDoDesenho : undefined}
-              vegetacao={vegetacaoDoDesenho}
-              cotaAltoContraste={cotaAltoContraste}
-              passoMoverMm={passoMover === 'grade' ? null : passoMover}
-              onMoveVertex={moverPonta}
-              envelope={envelope?.valido ? envelope.anel : []}
-              envelopePecas={envelope?.valido ? envelope.pecas : undefined}
-              mostrarEnvelope={(ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope) && terrenoAVista}
-              onAddLimite={adicionarLimite}
-              kindDaDivisa={kindDaDivisa}
-              faixasRestritas={faixasRestritasDoNivel}
-              onMoveBoundaryVertex={moverPontaLimite}
-              limiteEmDestaque={limiteEmDestaque}
-              onMoveOpening={moverAbertura}
-              estruturalKind={tipoEstrutural}
-              onAddEstrutural={adicionarEstrutural}
-              onMoveStructuralVertex={moverPontaEstrutural}
-              onAddAgua={adicionarAgua}
-              onMoveAguaVertex={moverPontaAgua}
-              onAddCorte={adicionarCorte}
-              onAddEixo={adicionarEixo}
-              onMoveCorteVertex={moverPontaCorte}
-              onAddEscada={adicionarEscada}
-              nucleos={nucleosDoNivelAtivo}
-              onAddNucleo={adicionarNucleo}
-              rodapes={editor.model.rodapes ?? []}
-              onAddRodape={adicionarRodape}
-              subRegioes={(editor.model.subRegioes ?? []).filter((s) => s.levelId === levelId)}
-              materialDaSubRegiao={materialDaSubRegiao}
-              onAddSubRegiao={adicionarSubRegiao}
-              larguraDaVia={larguraDaVia}
-              lotesPropostos={tarefaAberta === 'lotear' ? (propostaDeSubdivisao?.lotes.map((l) => l.pontos) ?? null) : null}
-              onAddQuadra={adicionarQuadra}
-              onAddLote={adicionarLote}
-              onAddVia={adicionarVia}
-              onAddAreaPublica={adicionarAreaPublica}
-              onAddAreaDeOperacao={adicionarAreaDeOperacao}
-              onAddBloco={adicionarBloco}
-              blocosComProblema={blocosComProblema}
-              rotasDeFuga={tarefaAberta === 'incendio' ? rotasDeFugaDoCanvas : null}
-              vagas={vagasDoNivelAtivo}
-              tipoDeVaga={tipoDeVaga}
-              onAddVaga={adicionarVaga}
-              componentes={componentesDoNivelAtivo}
-              tipoDeComponente={tipoDeComponente}
-              onAddComponente={adicionarComponente}
-              tipoDeGuardaCorpo={tipoDeGuardaCorpo}
-              onAddGuardaCorpo={adicionarGuardaCorpo}
-              onAddParedeCurva={adicionarParedeCurva}
-              onAddCoberturaExtrusao={adicionarCoberturaExtrusao}
-              vaoDaExtrusaoMm={perfilDaExtrusao.vaoMm}
-              anotacoes={anotacoesDoNivelAtivo}
-              tipoDeAnotacao={tipoDeAnotacao}
-              onAddAnotacao={adicionarAnotacao}
-              onAddTrecho={adicionarTrecho}
-              redeEmUmClique={prumadaDeRede != null}
-              onAddTerminal={adicionarTerminal}
-              onAddQuadro={adicionarQuadro}
-              onMoveEscadaVertex={moverPontaEscada}
-              fundo={
-                fundo.imagem && fundo.underlay
-                  ? {
-                      imagem: fundo.imagem,
-                      underlay: fundo.underlay,
-                      opacidade: fundo.opacidade,
-                    }
-                  : null
-              }
-              // O id da prancha ATIVA, e não um gatilho de "enquadre agora":
-              // importar e trocar de prancha mudam o id (e devem enquadrar),
-              // aferir a escala mantém o id (e não deve — recalibrar pivota
-              // em `p1` justamente para o traçado não se mexer).
-              enquadrarPrancha={fundo.ativaId}
-              navegacao={navegacao}
-              onVistaMudou={setLimitesDaVista}
-              // A arma morre junto com a TAREFA (era: junto com a seção; antes,
-              // com a aba). Sem este recorte, armar e fechar "Do PDF" deixaria
-              // o próximo arraste em QUALQUER ferramenta virar uma marcação de
-              // região invisível — o botão que a armou não está mais na tela
-              // para explicar o que aconteceu.
-              regiaoArmada={((tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf') && regiaoArmada) || recorteArmado !== null}
-              recorteDaVista={vistaDependenteAtual ? { ...vistaDependenteAtual.recorte, nome: vistaDependenteAtual.nome, denominador: vistaDependenteAtual.denominador } : null}
-              vistasDependentesDoNivel={vistaDependenteAtual ? [] : (editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId)}
-              // A região só aparece com a tarefa que a usa aberta. Desenhá-la
-              // sempre deixaria um retângulo violeta sobre a planta enquanto se
-              // traça parede, sem nada na tela explicando de onde ele veio.
-              regiao={tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf' ? regiao : null}
-              pecasPrevistas={pecasPrevistas}
-              ocultos={ocultosNoCanvas}
-              atenuados={idsDasCamadas.atenuados}
-              terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}
-              onRegiaoDefinida={(r) => {
-                // VISTA DEPENDENTE (P2.17): o arraste armado pelo botão cria (ou
-                // redefine) o recorte; nada a ver com a região de geração.
-                if (recorteArmado !== null) {
-                  const alvo = recorteArmado;
-                  setRecorteArmado(null);
-                  if (!r || !levelId) return;
-                  const recorte = { minX: Math.round(r.x0), minY: Math.round(r.y0), maxX: Math.round(r.x1), maxY: Math.round(r.y1) };
-                  if (alvo === 'nova') {
-                    const n = (editor.model.vistasDependentes ?? []).length + 1;
-                    const criados = editor.run({ type: 'AddVistaDependente', levelId, nome: `Vista ${n}`, recorte, denominador: 50 });
-                    const id = criados.find((x) => x.startsWith('vdp'));
-                    if (id) setVista(`dependente:${id}`);
-                  } else {
-                    editor.run({ type: 'SetVistaDependenteProps', vistaId: alvo, recorte });
+            // O wrapper existe SEMPRE (ligar o lado a lado não remonta o canvas e
+            // não perde o zoom); o 3D é só um irmão que entra e sai.
+            <div className="flex h-full">
+              <div className="relative h-full min-w-0 flex-1">
+                <BlueprintCanvas
+                  pressoesDaAgua={pressoesDaAgua}
+                  marcasDoCalculo={coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio}
+                  encaixesAtivos={encaixesAtivos}
+                  mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos && eletricaAVista}
+                  model={editor.model}
+                  tool={vistaDePlanta ? 'selecionar' : editor.tool}
+                  levelId={nivelDaVistaDePlanta ? nivelDaVistaDePlanta.id : levelId}
+                  selectedIds={editor.selectedIds}
+                  // Clique no desenho abre as propriedades no Sheet sem véu
+                  // (17/09/2026: *"o mesmo comportamento deve ocorrer quando eu
+                  // clico em um componente na planta"*); o desenho segue vivo.
+                  onSelecionar={selecionarEAbrir}
+                  onSelecionarPeca={(id) => {
+                    selecionarSoAPeca(id);
+                    setPropriedadesEmSheet(true);
+                  }}
+                  onMoverSelecao={moverSelecao}
+                  onMoverMedicoes={moverMedicoes}
+                  manterJuncoes={modoJuncao === 'MANTER'}
+                  destaqueDePonta={
+                    paredeSel && pontaDestacada ? { wallId: paredeSel.id, end: pontaDestacada } : null
                   }
-                  return;
-                }
-                // `null` = desistiu do gesto. Só desarma — apagar a região
-                // confirmada por causa de um Escape seria perder trabalho.
-                setRegiaoArmada(false);
-                if (r) setRegiao(r);
-                // O drawer do "Do PDF" volta, com ou sem região marcada.
-                setDrawerRecolhido(false);
-              }}
-              onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
-              medicoes={medicoesVisiveis}
-              medicaoSelecionada={medicoes.selecionada}
-              onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
-            />
+                  onAddWall={adicionarParede}
+                  alinhamento={alinhamento}
+                  ladosPoligono={ladosPoligono}
+                  onAddPoligono={adicionarPoligono}
+                  onInverterLado={() => setAlinhamento(inverterLado)}
+                  onAddOpening={adicionarAbertura}
+                  larguraAberturaMm={larguraAbertura}
+                  onDelete={removerSelecionada}
+                  onCopiar={copiar}
+                  onColar={colar}
+                  espessuraMm={espessura}
+                  passoGradeMm={passoGrade}
+                  onPassoEfetivo={setPassoEmVigor}
+                  vaos={vaosCandidatos.vaos}
+                  // O cursor na lista manda; na falta dele, quem acende é a
+                  // SELEÇÃO. Sem a segunda metade, clicar "Vão 3" selecionava as
+                  // duas paredes e o vão entre elas — que é justamente o assunto da
+                  // linha — continuava apagado no desenho.
+                  vaoEmDestaque={vaoEmDestaque ?? primeiroVaoDaSelecao}
+                  pontasSoltas={vaosCandidatos.soltas}
+                  pontaEmJuncao={pontaEmJuncao}
+                  onEscolherPontaJuncao={(ponta) => {
+                    setPontaEmJuncao(ponta);
+                    // Escolher de novo limpa a recusa anterior: o aviso é sobre o par
+                    // que falhou, e ele deixou de existir.
+                    setAvisoJuncao(null);
+                  }}
+                  onJuntarPontas={juntarPontas}
+                  ortogonal={ortogonal}
+                  mostrarMedidasParedes={ajusteDaVista ? false : (mostrarMedidas && arquiteturaAVista)}
+                  // Também nas vistas (Situação, Implantação): é nelas que o lote e a massa mais importam.
+                  mostrarMedidasLoteMassa={(mostrarMedidasLoteMassa && terrenoAVista)}
+                  mostrarEixos={mostrarEixos}
+                  eixosPrevistos={eixosPrevistos}
+                  mostrarCamadasParedes={ajusteDaVista ? false : (mostrarCamadas && arquiteturaAVista)}
+                  mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : (mostrarCotas && arquiteturaAVista)}
+                  mostrarCotaInterna={ajusteDaVista ? false : (mostrarCotaInterna && arquiteturaAVista)}
+                  mostrarRotulosAmbiente={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarRotulos && arquiteturaAVista)}
+                  rotulosDeAmbiente={rotulosDeAmbiente}
+                  ambientesComForro={plantaDeForro?.comForro}
+                  etiquetasDeAbertura={etiquetasDeAbertura}
+                  paredesGeminadas={quadroDeUnidadesDoModelo.paredesGeminadas}
+                  mobiliario={arquiteturaAVista ? mobiliarioParaOCanvas : undefined}
+                  mostrarGrade={ajusteDaVista ? false : mostrarGrade}
+                  mostrarPreenchimentoAmbientes={ajusteDaVista ? vistaDePlanta === 'departamentos' : (mostrarPreenchimento && arquiteturaAVista)}
+                  mostrarPreenchimentoTerreno={(mostrarPreenchimentoTerreno && terrenoAVista)}
+                  curvasDeNivel={(mostrarCurvasDeNivel && terrenoAVista) ? topografia.selecionada?.curvas : undefined}
+                  // Os pontos aparecem enquanto se digita, só na fonte que os usa:
+                  // com o DEM escolhido, pontos antigos na tela seriam ruído.
+                  pontosCotados={
+                    (mostrarCurvasDeNivel && terrenoAVista) && topografia.fonte.tipo === 'LOCAL'
+                      ? topografia.pontosCotados
+                      : undefined
+                  }
+                  feicoesDoLevantamento={(mostrarFeicoes && terrenoAVista) && topografia.fonte.tipo === 'LOCAL' ? feicoesNoCanvas : null}
+                  declividade={
+                    (mostrarDeclividade && terrenoAVista) && declividade && topografia.selecionada
+                      ? { grade: topografia.selecionada.grade, faixaDaCelula: declividade.faixaDaCelula }
+                      : null
+                  }
+                  terraplenagem={
+                    (mostrarTerraplenagem && terrenoAVista) && terraplenagemCalc && topografia.selecionada
+                      ? {
+                          grade: topografia.selecionada.grade,
+                          ladoDaCelula: terraplenagemCalc.ladoDaCelula,
+                          muros: terraplenagemCalc.muros.map((m) => ({ a: m.a, b: m.b, normal: m.normal })),
+                        }
+                      : null
+                  }
+                  drenagem={
+                    (mostrarCurvasDeNivel && terrenoAVista) && terraplenagem.drenagem.length > 0
+                      ? { linhas: terraplenagem.drenagem, ativa: drenagemAtiva, atende: atendeDrenagem }
+                      : null
+                  }
+                  onDrenagemTracada={(pontos) => {
+                    const id = terraplenagem.adicionarDrenagem(pontos);
+                    if (id) setDrenagemAtiva(id);
+                    editor.setTool('selecionar');
+                  }}
+                  eixosDeVia={viasDeProjeto.length > 0 && terrenoAVista ? eixosNoCanvas : null}
+                  onEixoDeViaTracado={(pontos) => {
+                    const id = vias.adicionar(pontos);
+                    if (id) setRelatorio('vias');
+                    editor.setTool('selecionar');
+                  }}
+                  hipsometria={
+                    // A3: a mancha de inundação usa a mesma pintura por célula, em azul, e passa na frente.
+                    manchaDeCheia && terrenoAVista && topografia.selecionada
+                      ? { grade: topografia.selecionada.grade, classeDaCelula: manchaDeCheia.classeDaCelula, cores: ['#2563eb'] }
+                      : (mostrarHipsometria && terrenoAVista) && hipsometria && topografia.selecionada
+                      ? {
+                          grade: topografia.selecionada.grade,
+                          classeDaCelula: hipsometria.classeDaCelula,
+                          cores: hipsometria.classes.map((c) => c.cor),
+                        }
+                      : null
+                  }
+                  corDaCurva={(mostrarCurvasDeNivel && terrenoAVista) && curvasPelaCota && topografia.selecionada ? corDaCota : null}
+                  nosDaGrade={
+                    (mostrarNosDaGrade && terrenoAVista) && topografia.selecionada ? { grade: topografia.selecionada.grade, cor: corDaCota } : null
+                  }
+                  curvaEmDestaque={(mostrarCurvasDeNivel && terrenoAVista) ? curvaEmDestaque : null}
+                  centroDeCargas={centroNaPlanta}
+                  onClicarCurva={(indice, ponto) =>
+                    setCurvaEmDestaque(indice === null ? null : { indice, ponto })
+                  }
+                  linhasDoPerfil={(mostrarCurvasDeNivel && terrenoAVista) ? linhasDoPerfil : null}
+                  linhaDoPerfilAtiva={usaLinhaDesenhada ? indiceDaLinha : null}
+                  onPerfilTracado={(pontos) => {
+                    const indice = terraplenagem.adicionarLinhaDoPerfil(pontos);
+                    if (indice >= 0) {
+                      setLinhaDoPerfilIndice(indice);
+                      setOrigemDoPerfil('LINHA');
+                    }
+                    // A linha nasceu: volta à seleção, como fecha-se o lote.
+                    editor.setTool('selecionar');
+                  }}
+                  // Só colore se houver preenchimento. A guarda vive aqui, e não só
+                  // no menu: o estado é persistido, e ligar Cores e depois desligar
+                  // Preenchimento deixaria a combinação gravada no localStorage.
+                  coresPorAmbiente={(mostrarPreenchimento && arquiteturaAVista) && modoDeCor === 'AMBIENTE'}
+                  // E2.3: com a carga térmica aberta, a planta vira mapa de calor (densidade W/m²).
+                  coresDosAmbientes={mapaDeCalor ?? (vistaDePlanta === 'departamentos' || ((mostrarPreenchimento && arquiteturaAVista) && modoDeCor !== 'NENHUM') ? coresDoDesenho.porAmbiente : undefined)}
+                  humanizada={humanizada}
+                  fases={fasesDoDesenho}
+                  selecoesRemotas={selecoesRemotas}
+                  pisosHumanizados={(mostrarPreenchimento && arquiteturaAVista) ? pisosDoDesenho : undefined}
+                  vegetacao={vegetacaoDoDesenho}
+                  cotaAltoContraste={cotaAltoContraste}
+                  passoMoverMm={passoMover === 'grade' ? null : passoMover}
+                  onMoveVertex={moverPonta}
+                  envelope={envelope?.valido ? envelope.anel : []}
+                  envelopePecas={envelope?.valido ? envelope.pecas : undefined}
+                  mostrarEnvelope={(ajusteDaVista ? ajusteDaVista.mostrarEnvelope : mostrarEnvelope) && terrenoAVista}
+                  onAddLimite={adicionarLimite}
+                  kindDaDivisa={kindDaDivisa}
+                  faixasRestritas={faixasRestritasDoNivel}
+                  onMoveBoundaryVertex={moverPontaLimite}
+                  limiteEmDestaque={limiteEmDestaque}
+                  onMoveOpening={moverAbertura}
+                  estruturalKind={tipoEstrutural}
+                  onAddEstrutural={adicionarEstrutural}
+                  onMoveStructuralVertex={moverPontaEstrutural}
+                  onAddAgua={adicionarAgua}
+                  onMoveAguaVertex={moverPontaAgua}
+                  onAddCorte={adicionarCorte}
+                  onAddEixo={adicionarEixo}
+                  onMoveCorteVertex={moverPontaCorte}
+                  onAddEscada={adicionarEscada}
+                  nucleos={nucleosDoNivelAtivo}
+                  onAddNucleo={adicionarNucleo}
+                  rodapes={editor.model.rodapes ?? []}
+                  onAddRodape={adicionarRodape}
+                  subRegioes={(editor.model.subRegioes ?? []).filter((s) => s.levelId === levelId)}
+                  materialDaSubRegiao={materialDaSubRegiao}
+                  onAddSubRegiao={adicionarSubRegiao}
+                  larguraDaVia={larguraDaVia}
+                  lotesPropostos={tarefaAberta === 'lotear' ? (propostaDeSubdivisao?.lotes.map((l) => l.pontos) ?? null) : null}
+                  onAddQuadra={adicionarQuadra}
+                  onAddLote={adicionarLote}
+                  onAddVia={adicionarVia}
+                  onAddAreaPublica={adicionarAreaPublica}
+                  onAddAreaDeOperacao={adicionarAreaDeOperacao}
+                  onAddBloco={adicionarBloco}
+                  blocosComProblema={blocosComProblema}
+                  rotasDeFuga={tarefaAberta === 'incendio' ? rotasDeFugaDoCanvas : null}
+                  vagas={vagasDoNivelAtivo}
+                  tipoDeVaga={tipoDeVaga}
+                  onAddVaga={adicionarVaga}
+                  componentes={componentesDoNivelAtivo}
+                  tipoDeComponente={tipoDeComponente}
+                  onAddComponente={adicionarComponente}
+                  tipoDeGuardaCorpo={tipoDeGuardaCorpo}
+                  onAddGuardaCorpo={adicionarGuardaCorpo}
+                  onAddParedeCurva={adicionarParedeCurva}
+                  onAddCoberturaExtrusao={adicionarCoberturaExtrusao}
+                  vaoDaExtrusaoMm={perfilDaExtrusao.vaoMm}
+                  anotacoes={anotacoesDoNivelAtivo}
+                  tipoDeAnotacao={tipoDeAnotacao}
+                  onAddAnotacao={adicionarAnotacao}
+                  onAddTrecho={adicionarTrecho}
+                  redeEmUmClique={prumadaDeRede != null}
+                  onAddTerminal={adicionarTerminal}
+                  onAddQuadro={adicionarQuadro}
+                  onMoveEscadaVertex={moverPontaEscada}
+                  fundo={
+                    fundo.imagem && fundo.underlay
+                      ? {
+                          imagem: fundo.imagem,
+                          underlay: fundo.underlay,
+                          opacidade: fundo.opacidade,
+                        }
+                      : null
+                  }
+                  // O id da prancha ATIVA, e não um gatilho de "enquadre agora":
+                  // importar e trocar de prancha mudam o id (e devem enquadrar),
+                  // aferir a escala mantém o id (e não deve — recalibrar pivota
+                  // em `p1` justamente para o traçado não se mexer).
+                  enquadrarPrancha={fundo.ativaId}
+                  navegacao={navegacao}
+                  onVistaMudou={setLimitesDaVista}
+                  // A arma morre junto com a TAREFA (era: junto com a seção; antes,
+                  // com a aba). Sem este recorte, armar e fechar "Do PDF" deixaria
+                  // o próximo arraste em QUALQUER ferramenta virar uma marcação de
+                  // região invisível — o botão que a armou não está mais na tela
+                  // para explicar o que aconteceu.
+                  regiaoArmada={((tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf') && regiaoArmada) || recorteArmado !== null}
+                  recorteDaVista={vistaDependenteAtual ? { ...vistaDependenteAtual.recorte, nome: vistaDependenteAtual.nome, denominador: vistaDependenteAtual.denominador } : null}
+                  vistasDependentesDoNivel={vistaDependenteAtual ? [] : (editor.model.vistasDependentes ?? []).filter((v) => v.levelId === levelId)}
+                  // A região só aparece com a tarefa que a usa aberta. Desenhá-la
+                  // sempre deixaria um retângulo violeta sobre a planta enquanto se
+                  // traça parede, sem nada na tela explicando de onde ele veio.
+                  regiao={tarefaAberta === 'gerar-paredes' || tarefaAberta === 'importar-dxf' ? regiao : null}
+                  pecasPrevistas={pecasPrevistas}
+                  ocultos={ocultosNoCanvas}
+                  atenuados={idsDasCamadas.atenuados}
+                  terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}
+                  onRegiaoDefinida={(r) => {
+                    // VISTA DEPENDENTE (P2.17): o arraste armado pelo botão cria (ou
+                    // redefine) o recorte; nada a ver com a região de geração.
+                    if (recorteArmado !== null) {
+                      const alvo = recorteArmado;
+                      setRecorteArmado(null);
+                      if (!r || !levelId) return;
+                      const recorte = { minX: Math.round(r.x0), minY: Math.round(r.y0), maxX: Math.round(r.x1), maxY: Math.round(r.y1) };
+                      if (alvo === 'nova') {
+                        const n = (editor.model.vistasDependentes ?? []).length + 1;
+                        const criados = editor.run({ type: 'AddVistaDependente', levelId, nome: `Vista ${n}`, recorte, denominador: 50 });
+                        const id = criados.find((x) => x.startsWith('vdp'));
+                        if (id) setVista(`dependente:${id}`);
+                      } else {
+                        editor.run({ type: 'SetVistaDependenteProps', vistaId: alvo, recorte });
+                      }
+                      return;
+                    }
+                    // `null` = desistiu do gesto. Só desarma — apagar a região
+                    // confirmada por causa de um Escape seria perder trabalho.
+                    setRegiaoArmada(false);
+                    if (r) setRegiao(r);
+                    // O drawer do "Do PDF" volta, com ou sem região marcada.
+                    setDrawerRecolhido(false);
+                  }}
+                  onCalibrar={(p1, p2) => setAfericao({ p1, p2 })}
+                  medicoes={medicoesVisiveis}
+                  medicaoSelecionada={medicoes.selecionada}
+                  onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
+                />
+              </div>
+              {ladoALado3d && !emVista && (
+                <div className="h-full min-w-0 flex-1 border-l border-slate-200" data-testid="lado-a-lado-3d">
+                  {renderCena3d()}
+                </div>
+              )}
+            </div>
           )}
 
           {/* PRÉVIA DOS PILARES NO DESENHO (15/09/2026). A gaveta é modal e

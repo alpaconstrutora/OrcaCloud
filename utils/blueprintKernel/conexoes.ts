@@ -89,6 +89,15 @@ export interface ConexaoDerivada {
   ramais?: RamalDaConexao[];
 }
 
+/**
+ * E10.3: a conexão derivada VIRA PEÇA (no IFC e no 3D da tela)? A mudança de
+ * direção da LINHA FRIGORÍGENA é cobre curvado (E5.3), não joelho — não é peça.
+ * Um predicado só, para o arquivo e a tela não divergirem.
+ */
+export function conexaoViraPeca(c: Pick<ConexaoDerivada, 'disciplina' | 'tipo'>): boolean {
+  return !(c.disciplina === 'FRIGORIGENA' && (c.tipo === 'JOELHO_90' || c.tipo === 'JOELHO_45'));
+}
+
 export interface RamalDaConexao {
   trechoId: ObjectId;
   /** Vetor unitário saindo do nó: [x, y, cota]. */

@@ -26,6 +26,40 @@ export interface FamiliasDaSelecao {
   quadroIds: ObjectId[];
 }
 
+/**
+ * E10.3 (climatização): o `TranslateEntities` de uma seleção — o mover do 3D. As
+ * famílias de `familiasDaSelecao` e mais núcleo, vaga, componente e bloco (o que o
+ * 2D também move). `null` quando nada da seleção se move ou o deslocamento é zero.
+ * Um comando = um passo de Ctrl+Z.
+ */
+export function comandoDeMover(model: BlueprintModel, selectedIds: readonly string[], delta: { x: number; y: number }, manterJuncoes: boolean): Command | null {
+  if (!delta.x && !delta.y) return null;
+  const f = familiasDaSelecao(model, selectedIds);
+  const sel = new Set(selectedIds);
+  const nucleoIds = (model.nucleos ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
+  const vagaIds = (model.vagas ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
+  const componenteIds = (model.componentes ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
+  const blocoIds = (model.blocos ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
+  const total = f.wallIds.length + f.boundaryIds.length + f.structuralIds.length + f.aguaIds.length + f.trechoIds.length + f.terminalIds.length + f.quadroIds.length + nucleoIds.length + vagaIds.length + componenteIds.length + blocoIds.length;
+  if (!total) return null;
+  return {
+    type: 'TranslateEntities',
+    wallIds: f.wallIds,
+    boundaryIds: f.boundaryIds,
+    structuralIds: f.structuralIds,
+    aguaIds: f.aguaIds,
+    trechoIds: f.trechoIds,
+    terminalIds: f.terminalIds,
+    quadroIds: f.quadroIds,
+    nucleoIds,
+    vagaIds,
+    componenteIds,
+    blocoIds,
+    delta: { x: delta.x, y: delta.y } as Point,
+    manterJuncoes,
+  } as Command;
+}
+
 export function familiasDaSelecao(model: BlueprintModel, selectedIds: readonly string[]): FamiliasDaSelecao {
   const sel = new Set(selectedIds);
   const wallIds = model.walls.filter((w) => sel.has(w.id)).map((w) => w.id);
@@ -60,6 +94,34 @@ export function tamanhoDasFamilias(f: FamiliasDaSelecao): number {
  * A caixa envolvente do que está selecionado, em mm — `null` quando nada tem
  * geometria no plano (seleção só de aberturas avulsas, por exemplo).
  */
+/**
+ * E10.3: onde fica a ALÇA de mover no 3D (METRO, Y para cima): o centro em planta
+ * da seleção (as famílias de `familiasDaSelecao`; os componentes também) e, na
+ * altura, o piso do pavimento da primeira peça + metade do pé-direito (até 1,5 m).
+ * `null` quando nada da seleção tem posição.
+ */
+export function pontoDaAlca(model: BlueprintModel, selectedIds: readonly string[]): [number, number, number] | null {
+  const sel = new Set(selectedIds);
+  const f = familiasDaSelecao(model, selectedIds);
+  const caixa = caixaDaSelecao(model, f);
+  const comps = (model.componentes ?? []).filter((c) => sel.has(c.id));
+  let minX = caixa?.minX ?? Infinity;
+  let minY = caixa?.minY ?? Infinity;
+  let maxX = caixa?.maxX ?? -Infinity;
+  let maxY = caixa?.maxY ?? -Infinity;
+  for (const c of comps) {
+    minX = Math.min(minX, c.at.x);
+    maxX = Math.max(maxX, c.at.x);
+    minY = Math.min(minY, c.at.y);
+    maxY = Math.max(maxY, c.at.y);
+  }
+  if (!Number.isFinite(minX)) return null;
+  const comNivel = [...model.walls, ...(model.terminais ?? []), ...(model.trechos ?? []), ...model.structures, ...(model.componentes ?? []), ...(model.quadros ?? [])].find((x) => sel.has(x.id)) as { levelId?: string } | undefined;
+  const nivel = model.levels.find((l) => l.id === comNivel?.levelId) ?? model.levels[0];
+  const altura = (nivel?.elevationMm ?? 0) + Math.min((nivel?.defaultHeightMm ?? 2800) / 2, 1500);
+  return [((minX + maxX) / 2) / 1000, altura / 1000, ((minY + maxY) / 2) / 1000];
+}
+
 export function caixaDaSelecao(
   model: BlueprintModel,
   f: FamiliasDaSelecao,

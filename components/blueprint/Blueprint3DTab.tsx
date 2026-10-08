@@ -57,6 +57,14 @@ interface Props {
   onSelecionar?: (ids: string[]) => void;
   /** As barras do esquema de armadura, como linhas; o concreto fica translúcido. Ver `Blueprint3DViewer`. */
   armadura?: { pecas: readonly ArmaduraDaPeca[]; hipoteses: HipotesesDeArmadura };
+  /**
+   * E10.3 (climatização): MOVER no 3D — com seleção, a alça de setas (só em planta) aparece; ao
+   * soltar, o deslocamento em mm do modelo chega aqui para virar UM `TranslateEntities` (um Ctrl+Z).
+   * Ausente = sem alça.
+   */
+  onMover?: (delta: { x: number; y: number }) => void;
+  /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
+  caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
 }
 
 const Carregando = () => (

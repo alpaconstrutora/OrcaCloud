@@ -54,6 +54,7 @@ import {
   ROTULO_DA_CONEXAO,
   materialDoTrecho,
   TIPOS_DE_CLIMATIZACAO,
+  conexaoViraPeca,
   type ConexaoDerivada,
   CATALOGO_DE_COMPONENTES,
   type Componente,
@@ -652,7 +653,7 @@ export function gerarIfc(model: BlueprintModel, o: OpcoesIfc): string {
   const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
   // As conexões DERIVADAS (a manual já sai pelo ponto dela) — E0.3.
   // E10.1: a mudança de direção da LINHA FRIGORÍGENA é cobre curvado (E5.3), não joelho — não sai peça.
-  const conexoesIfc = quant.conexoes.filter((c) => c.origem === 'DERIVADA' && (c.ramais?.length ?? 0) > 0 && !(c.disciplina === 'FRIGORIGENA' && (c.tipo === 'JOELHO_90' || c.tipo === 'JOELHO_45')));
+  const conexoesIfc = quant.conexoes.filter((c) => c.origem === 'DERIVADA' && (c.ramais?.length ?? 0) > 0 && conexaoViraPeca(c));
   const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
 
   /** Os produtos de cada disciplina, para o `IfcDistributionSystem` no fim. */

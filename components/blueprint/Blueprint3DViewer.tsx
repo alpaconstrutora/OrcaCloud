@@ -15,8 +15,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, PointerLockControls, Grid, Edges } from '@react-three/drei';
-import { RotateCcw, Maximize, Minimize, Footprints } from 'lucide-react';
+import { OrbitControls, PointerLockControls, Grid, Edges, PivotControls } from '@react-three/drei';
+import { RotateCcw, Maximize, Minimize, Footprints, BoxSelect } from 'lucide-react';
 import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
 import {
   ehConjunto,
@@ -47,7 +47,8 @@ import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
-import { ehClique } from '../../utils/blueprint3dSelecao';
+import { caixaInicial, deltaDoMundoParaModelo, ehClique, limitarCaixa, planosDaCaixaDeCorte, selecaoDoClique, type CaixaDeCorte } from '../../utils/blueprint3dSelecao';
+import { pontoDaAlca } from '../../utils/blueprintSelecao';
 import { prismasDoNucleo } from '../../utils/blueprintNucleo3d';
 import {
   SEM_TECLAS,
@@ -155,6 +156,14 @@ interface Props {
    * cobrimento. É o desenho do pré-quantitativo — sem dobras nem ancoragem.
    */
   armadura?: { pecas: readonly ArmaduraDaPeca[]; hipoteses: HipotesesDeArmadura };
+  /**
+   * E10.3 (climatização): MOVER no 3D — com seleção, a alça de setas (só em planta) aparece; ao
+   * soltar, o deslocamento em mm do modelo chega aqui para virar UM `TranslateEntities` (um Ctrl+Z).
+   * Ausente = sem alça.
+   */
+  onMover?: (delta: { x: number; y: number }) => void;
+  /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
+  caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
 }
 
 /** Cores das barras: longitudinal em ferro-oxidado, transversal (estribo/espiral/malha) em vermelho. */
@@ -889,7 +898,7 @@ const COR_SELECIONADA = '#2563eb';
  * peças ATRÁS da clicada, e a última a responder ganharia — selecionando algo
  * que a pessoa nem vê.
  */
-function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
+function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?: Set<string>) {
   const inicio = useRef<{ x: number; y: number } | null>(null);
   return (id: string) =>
     onSelecionar
@@ -900,13 +909,17 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void) {
           onPointerUp: (e: {
             clientX: number;
             clientY: number;
+            shiftKey?: boolean;
+            ctrlKey?: boolean;
+            metaKey?: boolean;
             stopPropagation: () => void;
           }) => {
             const i = inicio.current;
             inicio.current = null;
             if (!ehClique(i, { x: e.clientX, y: e.clientY })) return;
             e.stopPropagation();
-            onSelecionar([id]);
+            // E10.3: Shift, Ctrl ou ⌘ ACUMULAM (a mesma regra do 2D) — `selecaoDoClique`.
+            onSelecionar(selecaoDoClique(selecionados ?? [], id, e));
           },
           onPointerOver: (e: { stopPropagation: () => void }) => {
             e.stopPropagation();
@@ -972,7 +985,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   const chaveOcultos = ocultos ? [...ocultos].sort().join(',') : '';
   const escondida = (id: string) => !!ocultos?.has(id);
 
-  const cliqueDe = usarCliqueDePeca(onSelecionar);
+  const cliqueDe = usarCliqueDePeca(onSelecionar, selecionados);
 
   const paredes = useMemo(
     () =>
@@ -1234,7 +1247,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         ...p,
         bolsas: p.bolsas.map((b) => ({
           ...b,
-          quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(b.eixo[0], b.eixo[1], b.eixo[2])),
+          // E10.3: a bolsa do duto RETANGULAR gira pela base completa (a mesma do duto) — ver `pecasDasConexoes3D`.
+          quaternion: b.retangular
+            ? new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...b.retangular.base.x), new THREE.Vector3(...b.retangular.base.y), new THREE.Vector3(...b.retangular.base.z)))
+            : new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(b.eixo[0], b.eixo[1], b.eixo[2])),
         })),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1436,17 +1452,17 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   return (
     <group>
       {caixasDeComponentes.map((c) => (
-        <mesh key={`componente-${c.id}`} geometry={c.geom} position={c.pos} rotation={[0, c.rot, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([c.id]); }}>
+        <mesh key={`componente-${c.id}`} geometry={c.geom} position={c.pos} rotation={[0, c.rot, 0]} castShadow receiveShadow {...cliqueDe(c.id)}>
           <meshStandardMaterial color={selecionados?.has(c.id) ? '#2563eb' : c.cor} transparent={c.sugerido} opacity={c.sugerido ? 0.55 : 1} roughness={0.85} />
         </mesh>
       ))}
       {paineisDeGuardaCorpo.map((g) => (
-        <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([g.id]); }}>
+        <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow {...cliqueDe(g.id)}>
           <meshStandardMaterial color={selecionados?.has(g.id) ? '#2563eb' : g.material === 'VIDRO' ? '#bae6fd' : g.material === 'MADEIRA' ? '#a16207' : g.material === 'ALVENARIA' ? '#e7e5e4' : '#334155'} transparent={g.material === 'VIDRO' || g.sugerido} opacity={g.sugerido ? 0.45 : g.material === 'VIDRO' ? 0.4 : 1} roughness={g.material === 'INOX' ? 0.2 : 0.7} metalness={g.material === 'INOX' || g.material === 'METALICO' ? 0.6 : 0} />
         </mesh>
       ))}
       {prismasDeNucleo.map((p) => (
-        <mesh key={`nucleo-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} onClick={(e) => { e.stopPropagation(); onSelecionar?.([p.id]); }}>
+        <mesh key={`nucleo-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} {...cliqueDe(p.id)}>
           <meshStandardMaterial color={selecionados?.has(p.id) ? '#2563eb' : p.cor} transparent={p.opacidade < 1} opacity={selecionados?.has(p.id) ? Math.max(0.35, p.opacidade) : p.opacidade} depthWrite={p.opacidade >= 1} side={THREE.DoubleSide} roughness={0.8} />
           <Edges color={p.arestas} />
         </mesh>
@@ -1460,7 +1476,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       {prismasDaMassa.map((p) => {
         const sel = selecionados?.has(p.id) ?? false;
         return (
-          <mesh key={`massa-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onSelecionar?.([p.id]); }}>
+          <mesh key={`massa-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} castShadow receiveShadow {...cliqueDe(p.id)}>
             <meshStandardMaterial color={sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} />
             <Edges color={sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#475569'} />
           </mesh>
@@ -1687,7 +1703,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           )}
           {p.bolsas.map((b, i) => (
             <mesh key={i} position={b.centro} quaternion={b.quaternion} castShadow>
-              <cylinderGeometry args={[b.raioM, b.raioM, b.comprimentoM, 16]} />
+              {b.retangular ? <boxGeometry args={[b.retangular.larguraM, b.comprimentoM, b.retangular.alturaM]} /> : <cylinderGeometry args={[b.raioM, b.raioM, b.comprimentoM, 16]} />}
               <meshStandardMaterial color={p.cor} roughness={0.45} metalness={0.1} />
             </mesh>
           ))}
@@ -1959,6 +1975,47 @@ function Fantasma({ children }: { children: React.ReactNode }) {
   return <group ref={ref}>{children}</group>;
 }
 
+/**
+ * E10.3 — a CAIXA DE CORTE: tudo o que está neste grupo é recortado pelos seis
+ * planos (clipping LOCAL — `localClippingEnabled` no renderer). A grade, o
+ * contorno da caixa e a alça de mover ficam FORA do grupo e não se cortam. O
+ * material é conferido a cada quadro (o R3F e o meio-tom trocam material), e a
+ * lista de planos é UMA só, mutada no lugar — a identidade é o que diz "já pus".
+ */
+function Recortado({ caixa, children }: { caixa: CaixaDeCorte | null; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const planos = useMemo(() => Array.from({ length: 6 }, () => new THREE.Plane()), []);
+  const vazio = useMemo<THREE.Plane[]>(() => [], []);
+  useEffect(() => {
+    if (!caixa) return;
+    planosDaCaixaDeCorte(caixa).forEach((pl, i) => planos[i].set(new THREE.Vector3(...pl.normal), pl.constante));
+  }, [caixa, planos]);
+  useFrame(() => {
+    const alvo = caixa ? planos : vazio;
+    ref.current?.traverse((o) => {
+      const atual = o.material;
+      if (!atual) return;
+      for (const m of Array.isArray(atual) ? atual : [atual]) {
+        if (m.clippingPlanes === alvo) continue;
+        m.clippingPlanes = alvo;
+        m.clipShadows = true;
+        m.needsUpdate = true;
+      }
+    });
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
+/** O contorno da caixa de corte (fora do grupo recortado). */
+function ContornoDaCaixa({ caixa }: { caixa: CaixaDeCorte }) {
+  const geom = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(caixa.max[0] - caixa.min[0], caixa.max[1] - caixa.min[1], caixa.max[2] - caixa.min[2])), [caixa]);
+  return (
+    <lineSegments geometry={geom} position={[(caixa.min[0] + caixa.max[0]) / 2, (caixa.min[1] + caixa.max[1]) / 2, (caixa.min[2] + caixa.max[2]) / 2]}>
+      <lineBasicMaterial color="#2563eb" />
+    </lineSegments>
+  );
+}
+
 /** Todo id de peça do modelo — para a passada fantasma esconder o que NÃO está em meio-tom. */
 function idsDoModelo(model: Props['model']): Set<string> {
   const ids = new Set<string>();
@@ -1998,6 +2055,22 @@ export default function Blueprint3DViewer(props: Props) {
   const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
   /** Modo de percorrer o desenho a pé. Ver `Percorrer`. */
   const [andando, setAndando] = useState(false);
+  /** E10.3: a caixa de corte (null = sem corte). Nasce do enquadramento; "Centralizar" não mexe nela. */
+  const [caixa, setCaixa] = useState<CaixaDeCorte | null>(props.caixaDeCorteInicial ?? null);
+  const ajustarCaixa = (eixo: 0 | 1 | 2, lado: 'min' | 'max', v: number) =>
+    setCaixa((c) => {
+      if (!c) return c;
+      const n = { min: [...c.min] as [number, number, number], max: [...c.max] as [number, number, number] };
+      n[lado][eixo] = v;
+      return limitarCaixa(n);
+    });
+  const limites = useMemo(() => caixaInicial({ centro, raio }, 1), [centro, raio]);
+  /** E10.3: mover no 3D — a alça aparece com seleção e `onMover`; a prévia só durante o arraste. */
+  const { onMover, selecionados } = props;
+  const alca = useMemo(() => (onMover && selecionados && selecionados.size > 0 ? pontoDaAlca(model, [...selecionados]) : null), [onMover, selecionados, model]);
+  const [arrastando, setArrastando] = useState(false);
+  const [chaveDaAlca, setChaveDaAlca] = useState(0);
+  const deslocamentoRef = useRef<[number, number, number]>([0, 0, 0]);
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-50">
@@ -2024,6 +2097,15 @@ export default function Blueprint3DViewer(props: Props) {
           >
             <Footprints className="h-4 w-4" />
           </button>
+          <button
+            type="button"
+            onClick={() => setCaixa((c) => (c ? null : caixaInicial({ centro, raio }, 0.3)))}
+            className={`ml-1 rounded border-l border-slate-100 p-1.5 pl-2 transition-colors hover:bg-slate-100 ${caixa ? 'text-blue-700' : 'text-slate-600'}`}
+            title={caixa ? 'Tirar a caixa de corte' : 'Caixa de corte — recorta o 3D por seis planos'}
+            aria-pressed={!!caixa}
+          >
+            <BoxSelect className="h-4 w-4" />
+          </button>
           {onToggleFullscreen && (
             <button
               onClick={onToggleFullscreen}
@@ -2036,6 +2118,30 @@ export default function Blueprint3DViewer(props: Props) {
         </div>
       </div>
 
+      {caixa && (
+        <div className="absolute right-4 top-16 z-10 w-56 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-600 shadow-sm" data-testid="caixa-de-corte">
+          <p className="mb-1 font-semibold text-slate-700">Caixa de corte</p>
+          {([['Leste–oeste (X)', 0], ['Altura (Y)', 1], ['Norte–sul (Z)', 2]] as const).map(([rotulo, eixo]) => (
+            <div key={eixo} className="mb-1">
+              <span>{rotulo}</span>
+              {(['min', 'max'] as const).map((lado) => (
+                <input
+                  key={lado}
+                  type="range"
+                  min={limites.min[eixo]}
+                  max={limites.max[eixo]}
+                  step={0.05}
+                  value={caixa[lado][eixo]}
+                  onChange={(e) => ajustarCaixa(eixo, lado, Number(e.target.value))}
+                  aria-label={`${rotulo} ${lado === 'min' ? 'início' : 'fim'}`}
+                  className="block w-full"
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur">
         {/* A DICA TEM DE DIZER O QUE VALE AGORA. Em modo de percorrer, "arraste
             para orbitar" está simplesmente errado — a órbita saiu de cena —, e
@@ -2043,12 +2149,18 @@ export default function Blueprint3DViewer(props: Props) {
             quebrou. */}
         {andando
           ? 'WASD ou setas para andar · mouse para olhar · Esc para sair'
-          : 'Arraste para orbitar · scroll para zoom · botão direito para mover'}
+          : alca
+            ? 'Arraste as setas da alça para mover a seleção · Shift+clique soma à seleção · Ctrl+Z desfaz'
+            : 'Arraste para orbitar · scroll para zoom · botão direito para mover · Shift+clique soma à seleção'}
       </div>
 
       <Canvas
         shadows
         dpr={[1, 2]}
+        onCreated={(s) => {
+          // E10.3: a caixa de corte recorta por material (clipping local).
+          s.gl.localClippingEnabled = true;
+        }}
         camera={{
           position: [centro[0] + spread * 1.1, alturaTopo + spread * 0.8, centro[2] + spread * 1.3],
           fov: 45,
@@ -2096,6 +2208,7 @@ export default function Blueprint3DViewer(props: Props) {
           position={[centro[0], cotaDaGrade, centro[2]]}
           infiniteGrid
         />
+        <Recortado caixa={caixa}>
         {(() => {
           // CAMADAS EM MEIO-TOM: a principal esconde os atenuados; o fantasma mostra só eles.
           const { atenuados, terrenoEmMeioTom, ocultos } = props;
@@ -2123,10 +2236,65 @@ export default function Blueprint3DViewer(props: Props) {
             </>
           );
         })()}
+        </Recortado>
+        {caixa && <ContornoDaCaixa caixa={caixa} />}
+        {/* E10.3 — a ALÇA de mover: só em planta (X e Z); a prévia translúcida acompanha durante o arraste;
+            ao soltar, UM comando (TranslateEntities) — um Ctrl+Z. */}
+        {alca && !andando && (
+          <group key={chaveDaAlca} position={alca}>
+            <PivotControls
+              activeAxes={[true, false, true]}
+              disableRotations
+              disableScaling
+              disableSliders
+              depthTest={false}
+              fixed
+              scale={90}
+              onDragStart={() => {
+                deslocamentoRef.current = [0, 0, 0];
+                setArrastando(true);
+              }}
+              onDrag={(l) => {
+                const v = new THREE.Vector3().setFromMatrixPosition(l);
+                deslocamentoRef.current = [v.x, v.y, v.z];
+              }}
+              onDragEnd={() => {
+                setArrastando(false);
+                const d = deltaDoMundoParaModelo(deslocamentoRef.current);
+                // A alça volta à origem (remonta); o desenho é que se move, pelo comando.
+                setChaveDaAlca((k) => k + 1);
+                if (d.x || d.y) onMover?.(d);
+              }}
+            >
+              {arrastando && (
+                <group position={[-alca[0], -alca[1], -alca[2]]}>
+                  <Fantasma>
+                    <Cena
+                      {...props}
+                      ocultos={(() => {
+                        const o = new Set(idsDoModelo(props.model));
+                        for (const id of selecionados ?? []) o.delete(id);
+                        return o;
+                      })()}
+                      mostrarRotulosDeRede={false}
+                      selecionados={undefined}
+                      onSelecionar={undefined}
+                      armadura={undefined}
+                      mostrarTerreno={false}
+                      envelope={undefined}
+                      massa={undefined}
+                      entorno={undefined}
+                    />
+                  </Fantasma>
+                </group>
+              )}
+            </PivotControls>
+          </group>
+        )}
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}
         {!andando && (
-          <OrbitControls ref={controlsRef} target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
+          <OrbitControls ref={controlsRef} makeDefault target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
         )}
         <Percorrer ativo={andando} centro={centro} alturaDoChao={alturaDoChao} onSair={() => setAndando(false)} />
         <Enquadrar

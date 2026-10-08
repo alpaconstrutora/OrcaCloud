@@ -9,18 +9,20 @@
  * Abrir em: /docs/spikes/blueprint-3d/index.html?laje=1&arestas=1
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
 import {
   applyBatch,
   applyCommand,
   emptyModel,
+  ModelHistory,
   modelFromCanonicalPayload,
   point,
   type BlueprintModel,
   type Command,
 } from '../../../utils/blueprintKernel';
+import { comandoDeMover } from '../../../utils/blueprintSelecao';
 
 const T = 150;
 const H = 2800;
@@ -683,4 +685,55 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('raiz')!).render(<App />);
+/**
+ * O EDITOR NO 3D (`?editar=1`, E10.3 de 08/10/2026).
+ *
+ * O que o teste de unidade não alcança: a ALÇA de verdade sob o mouse virando
+ * um TranslateEntities, e o Ctrl+Z desfazendo esse passo. O histórico aqui é o
+ * `ModelHistory` do kernel (o mesmo do editor), e o mover é o `comandoDeMover`
+ * que o editor chama — o harness só não tem o resto da tela.
+ *
+ * A primeira parede nasce selecionada (a alça aparece sem precisar de clique) e
+ * a barra mostra o canto `a` dela, para o passeio afirmar o antes, o depois e o
+ * desfeito sem inspecionar a cena.
+ */
+function AppEditar() {
+  const [historico] = useState(() => new ModelHistory(model));
+  const [m, setM] = useState(model);
+  const [selecionados, setSelecionados] = useState<string[]>([model.walls[0].id]);
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        historico.undo();
+        setM(historico.current);
+      }
+    };
+    window.addEventListener('keydown', tecla);
+    return () => window.removeEventListener('keydown', tecla);
+  }, [historico]);
+  const parede = m.walls.find((w) => w.id === model.walls[0].id)!;
+  return (
+    <>
+      <div id="barra">
+        EDITAR · SELECIONADO: {selecionados.join(',') || '(nenhum)'} · PAREDE: {parede.a.x},{parede.a.y}
+      </div>
+      <div id="tela">
+        <Blueprint3DTab
+          model={m}
+          levelIds={[terreoId]}
+          mostrarArestas
+          selecionados={new Set(selecionados)}
+          onSelecionar={setSelecionados}
+          onMover={(d) => {
+            const cmd = comandoDeMover(m, selecionados, d, false);
+            if (!cmd) return;
+            historico.apply(cmd);
+            setM(historico.current);
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+createRoot(document.getElementById('raiz')!).render(params.get('editar') === '1' ? <AppEditar /> : <App />);

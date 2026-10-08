@@ -474,7 +474,7 @@ async function abrirAba(nome: RegExp, abrirMenus = true) {
  * seletor casa com qualquer um dos nomes possíveis.
  */
 const NOMES_DO_BOTAO =
-  /^(Componentes|Parede|Parede curva|Parede em retângulo|Parede em polígono|Cobertura por extrusão|Rodapé (trecho)|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
+  /^(Componentes|Elementos|Parede|Parede curva|Parede em retângulo|Parede em polígono|Cobertura por extrusão|Rodapé (trecho)|Porta|Porta de correr|Janela|Vão livre|Pilar|Viga|Laje|Estaca|Bloco de coroamento|Viga de fundação|Shaft|Elevador|Vaga|Vaga PCD|Vaga idoso|Vaga de moto|Guarda-corpo|Corrimão)$/;
 
 /**
  * O botão do menu.
@@ -508,29 +508,20 @@ describe('BlueprintEditor · ações oferecidas', () => {
     expect(screen.getByRole('region', { name: /^ambientes$/i })).toBeInTheDocument();
   });
 
-  it('o menu reúne alvenaria, esquadria, estrutura e fundação', async () => {
+  it('o menu reúne alvenaria e esquadria; estrutura e fundação estão na aba Estrutural (08/10/2026)', async () => {
     await montar();
-    await userEvent.setup().click(botaoComponentes());
+    const user = userEvent.setup();
+    await user.click(botaoComponentes());
 
-    // Os ONZE tipos, num lugar só. Antes eram dois lugares e um select
+    // Alvenaria e esquadria num lugar só. Antes eram dois lugares e um select
     // escondido: quem procurava "janela" tinha de saber que ela morava dentro
     // de um seletor ao lado de um botão chamado "Abertura".
-    for (const nome of [
-      /^Parede$/,
-      /^Parede em retângulo$/,
-      /^Parede em polígono$/,
-      /^Porta$/,
-      /^Porta de correr$/,
-      /^Janela$/,
-      /^Vão livre$/,
-      /^Pilar$/,
-      /^Viga$/,
-      /^Laje$/,
-      /^Estaca$/,
-      /^Bloco de coroamento$/,
-      /^Viga de fundação$/,
-    ]) {
+    for (const nome of [/^Parede$/, /^Parede em retângulo$/, /^Parede em polígono$/, /^Porta$/, /^Porta de correr$/, /^Janela$/, /^Vão livre$/]) {
       expect(screen.getByRole('menuitemradio', { name: nome })).toBeInTheDocument();
+    }
+    // A estrutura e a fundação foram para a aba Estrutural › Elementos.
+    for (const nome of [/^Pilar$/, /^Viga$/, /^Laje$/, /^Estaca$/, /^Bloco de coroamento$/, /^Viga de fundação$/]) {
+      expect(screen.queryByRole('menuitemradio', { name: nome })).not.toBeInTheDocument();
     }
   });
 
@@ -710,8 +701,8 @@ describe('BlueprintEditor · regressões relatadas em uso', () => {
     await montar();
     expect(botaoComponentes()).toHaveTextContent('Parede');
 
-    await escolherComponente(/^Pilar$/);
-    expect(botaoComponentes()).toHaveTextContent('Pilar');
+    await escolherComponente(/^Janela$/);
+    expect(botaoComponentes()).toHaveTextContent('Janela');
 
     // E com uma ferramenta que NÃO é componente, o botão volta ao nome do grupo.
     await userEvent.setup().click(botao(/^selecionar$/i));
@@ -912,7 +903,7 @@ describe('BlueprintEditor · quantitativos', () => {
     listParameterDefinitions.mockResolvedValue([]);
   });
 
-  it('eixos da malha (E1.4): a ferramenta Eixo está no grupo Estrutural e Pilares automáticos contam os cruzamentos', async () => {
+  it('eixos da malha (E1.4): a ferramenta Eixo está na aba Estrutural e Pilares automáticos contam os cruzamentos', async () => {
     const k = await import('../../utils/blueprintKernel');
     const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
     const t = nivel.model.levels[0].id;
@@ -924,6 +915,7 @@ describe('BlueprintEditor · quantitativos', () => {
     ]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
+    await abrirAba(/^estrutural$/i);
     const user = userEvent.setup();
     expect(botao(/^eixo$/i)).toBeInTheDocument();
     await user.click(botao(/^eixo$/i));
@@ -3610,12 +3602,12 @@ describe('BlueprintEditor · menu Exibir', () => {
 describe('BlueprintEditor · ribbon', () => {
   beforeEach(() => localStorage.clear());
 
-  it('nasce em Arquitetura, com as dez abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
+  it('nasce em Arquitetura, com as onze abas da planta baixa (uma por disciplina MEP) e o seletor de vista fora delas', async () => {
     await montar();
     const abas = screen.getAllByRole('tab').map((t) => t.textContent);
     // 17/09/2026: "Instalações" virou Elétrica + Hidráulica; 20/09/2026 (E11.1): Mecânica entrou com a disciplina no kernel;
-    // 30/09/2026 (incêndio E0): Incêndio entrou com a classificação e as exigências.
-    expect(abas).toEqual(['Arquitetura', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Incêndio', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
+    // 30/09/2026 (incêndio E0): Incêndio entrou com a classificação e as exigências; 08/10/2026: a aba Estrutural.
+    expect(abas).toEqual(['Arquitetura', 'Estrutural', 'Terreno', 'Elétrica', 'Hidráulica', 'Mecânica', 'Incêndio', 'Inserir', 'Analisar', 'Colaborar', 'Vista']);
     expect(screen.getByRole('tab', { name: 'Arquitetura' })).toHaveAttribute('aria-selected', 'true');
     // O seletor de vista continua dentro da barra, mas não é aba: usa-se o tempo todo.
     expect(within(screen.getByRole('toolbar')).getByRole('button', { name: /^planta$/i })).toBeInTheDocument();
@@ -4114,9 +4106,9 @@ describe('BlueprintEditor · ribbon', () => {
   });
 
   // ── Pilares automáticos (15/09/2026) ─────────────────────────────────────
-  it('"Pilares automáticos" (aba Arquitetura › Estrutural) sem parede: hipóteses, o que não faz, e "Lançar 0" apagado', async () => {
+  it('"Pilares automáticos" (aba Estrutural) sem parede: hipóteses, o que não faz, e "Lançar 0" apagado', async () => {
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^pilares automáticos/i));
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
@@ -4141,7 +4133,7 @@ describe('BlueprintEditor · ribbon', () => {
     ]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     expect(botao(/^pilares automáticos/i)).toHaveTextContent('9');
 
     await userEvent.setup().click(botao(/^pilares automáticos/i));
@@ -4173,7 +4165,7 @@ describe('BlueprintEditor · ribbon', () => {
     const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^pilares automáticos/i));
     const drawer = await screen.findByRole('dialog');
     // Antes de lançar não há o que relançar.
@@ -4200,7 +4192,7 @@ describe('BlueprintEditor · ribbon', () => {
   // ── Vigas e lajes automáticas (16/09/2026) ───────────────────────────────
   it('"Vigas automáticas" sem parede: hipóteses, "lance os pilares antes", e "Lançar 0" apagado', async () => {
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^vigas automáticas/i));
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
@@ -4223,7 +4215,7 @@ describe('BlueprintEditor · ribbon', () => {
     ]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     expect(botao(/^vigas automáticas/i)).toHaveTextContent('5');
     await userEvent.setup().click(botao(/^vigas automáticas/i));
     const drawer = await screen.findByRole('dialog');
@@ -4263,7 +4255,7 @@ describe('BlueprintEditor · ribbon', () => {
     m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala', tipoDeAmbiente: 'SALA_DORMITORIO' }).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     expect(botao(/^lajes automáticas/i)).toHaveTextContent('2');
     await userEvent.setup().click(botao(/^lajes automáticas/i));
     const drawer = await screen.findByRole('dialog');
@@ -4287,7 +4279,7 @@ describe('BlueprintEditor · ribbon', () => {
   // ── Fundações automáticas (16/09/2026) ───────────────────────────────────
   it('"Fundações automáticas" sem pilar: pede os pilares, hipóteses, "Lançar 0" apagado', async () => {
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^fundações automáticas/i));
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/hipóteses do lançamento/i);
@@ -4308,7 +4300,7 @@ describe('BlueprintEditor · ribbon', () => {
     const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     // Sem pilar, o botão não tem contagem.
     expect(botao(/^fundações automáticas/i)).not.toHaveTextContent('8');
     await userEvent.setup().click(botao(/^pilares automáticos/i));
@@ -4351,7 +4343,7 @@ describe('BlueprintEditor · ribbon', () => {
     const m = k.applyBatch(nivel.model, [w(0, 0, 4000, 0), w(4000, 0, 4000, 3000), w(4000, 3000, 0, 3000), w(0, 3000, 0, 0)]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^pilares automáticos/i));
     let drawer = await screen.findByRole('dialog');
     await userEvent.setup().click(within(drawer).getByRole('button', { name: /^lançar 4 pilar/i }));
@@ -4388,7 +4380,7 @@ describe('BlueprintEditor · ribbon', () => {
     const m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
     loadBranchModel.mockResolvedValue(m);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     expect(botao(/^pilares automáticos/i)).toHaveTextContent('6'); // 4 cantos + 2 intermediários (paredes de 6 m)
     await userEvent.setup().click(botao(/^pilares automáticos/i));
     const drawer = await screen.findByRole('dialog');
@@ -4714,12 +4706,17 @@ describe('BlueprintEditor · abertura nasce selecionada', () => {
 describe('BlueprintEditor · componentes de estrutura', () => {
   beforeEach(() => localStorage.clear());
 
-  it('os SEIS elementos estruturais estão no menu Componentes', async () => {
-    // O grupo nasceu como menu próprio "Estrutural" em 30/08/2026 e foi
-    // absorvido pelo menu Componentes no dia seguinte, a pedido do usuário.
-    // O que se afirma continua sendo o mesmo: os seis são alcançáveis.
+  it('os SEIS elementos estruturais estão no menu Elementos da aba Estrutural — e não mais em Arquitetura › Componentes', async () => {
+    // O grupo nasceu como menu próprio "Estrutural" em 30/08/2026, foi absorvido pelo menu Componentes no dia seguinte
+    // e, em 08/10/2026, foi para a aba Estrutural (*"vamos criar um novo menu chamado estrutural"*).
     await montar();
-    await userEvent.setup().click(botaoComponentes());
+    const user = userEvent.setup();
+    await user.click(botaoComponentes());
+    expect(screen.queryByRole('menuitemradio', { name: /^Pilar$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /^Janela$/ })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await abrirAba(/^estrutural$/i);
+    await user.click(botaoComponentes());
 
     for (const nome of [
       /^Pilar$/,
@@ -4735,6 +4732,7 @@ describe('BlueprintEditor · componentes de estrutura', () => {
 
   it('cada tipo traz as MEDIDAS dele, e os campos seguem a forma geométrica', async () => {
     await montar();
+    await abrirAba(/^estrutural$/i);
     await escolherComponente(/^Pilar$/);
 
     // PONTO: largura E profundidade (as duas dimensões em planta).
@@ -4752,6 +4750,7 @@ describe('BlueprintEditor · componentes de estrutura', () => {
 
   it('a ESTACA nasce redonda e abaixo do piso', async () => {
     await montar();
+    await abrirAba(/^estrutural$/i);
     await escolherComponente(/^Estaca$/);
 
     expect(screen.getByRole('spinbutton', { name: /di[âa]metro/i })).toHaveValue(300);
@@ -4764,6 +4763,7 @@ describe('BlueprintEditor · componentes de estrutura', () => {
 
   it('trocar de tipo troca as medidas INTEIRAS — não mistura viga com pilar', async () => {
     await montar();
+    await abrirAba(/^estrutural$/i);
     await escolherComponente(/^Pilar$/);
     expect(screen.getByRole('spinbutton', { name: /largura/i })).toHaveValue(200);
 
@@ -6881,7 +6881,7 @@ describe('BlueprintEditor · estender parede até a face', () => {
    * A aba Arquitetura passou a ter DOIS grupos: Construir (à vista, é o que se
    * usa a cada minuto) e Projeto, com quatro menus. E o ribbon inteiro recolhe.
    */
-  it('a aba Arquitetura tem Construir à vista e quatro menus em Projeto; recolher tira o painel e o acesso rápido', async () => {
+  it('a aba Arquitetura tem Construir à vista e três menus em Projeto; recolher tira o painel e o acesso rápido', async () => {
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^arquitetura$/i, false);
@@ -6889,17 +6889,17 @@ describe('BlueprintEditor · estender parede até a face', () => {
     // Construir NÃO virou menu: Selecionar continua a um clique.
     expect(within(screen.getByRole('group', { name: 'Construir' })).getByRole('button', { name: /^selecionar$/i })).toBeInTheDocument();
     const projeto = screen.getByRole('group', { name: 'Projeto' });
+    // O menu Estrutural saiu daqui em 08/10/2026 — virou a aba Estrutural.
     expect([...projeto.querySelectorAll('[data-menu-do-ribbon]')].map((b) => b.getAttribute('data-menu-do-ribbon'))).toEqual([
-      'Estrutural',
       'Reforma',
       'Acabamentos',
       'Vistas',
     ]);
 
     // Fechado, o comando não está no DOM; abrir o menu o traz.
-    expect(screen.queryByRole('button', { name: /^pilares automáticos/i })).not.toBeInTheDocument();
-    await user.click(within(projeto).getByRole('button', { name: /^Estrutural/ }));
-    expect(screen.getByRole('button', { name: /^pilares automáticos/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^piso e forro/i })).not.toBeInTheDocument();
+    await user.click(within(projeto).getByRole('button', { name: /^Acabamentos/ }));
+    expect(screen.getByRole('button', { name: /^piso e forro/i })).toBeInTheDocument();
     await user.keyboard('{Escape}');
 
     // RECOLHER: some o painel (e o acesso rápido junto); as abas ficam.
@@ -7568,7 +7568,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
 
   it('sem edificação: hipóteses na gaveta e "Criar 0 eixo(s)" desligado dizendo por quê', async () => {
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^eixos automáticos/i));
     const drawer = await screen.findByRole('dialog');
     expect(drawer).toHaveTextContent(/hipóteses da malha/i);
@@ -7590,7 +7590,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO' }) as const;
     loadBranchModel.mockResolvedValue(k.applyBatch(nivel.model, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model);
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^eixos automáticos/i));
     // Com lote, a gaveta das divisas também fica montada (fechada): escolher a dos eixos pelo título.
     const drawer = (await screen.findAllByRole('dialog')).find((d) => /Eixos automáticos/.test(d.textContent ?? ''))!;
@@ -7617,7 +7617,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
       k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0), w(0, 2000, 6000, 2000)]).model,
     );
     await montar();
-    await abrirAba(/^arquitetura$/i);
+    await abrirAba(/^estrutural$/i);
     await userEvent.setup().click(botao(/^eixos automáticos/i));
     const drawer = await screen.findByRole('dialog');
     const linhas = within(within(drawer).getByRole('table', { name: /prévia dos eixos/i })).getAllByRole('row').slice(1);
@@ -7659,3 +7659,36 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     expect(localStorage.getItem('blueprint:mostrarEixos')).toBe('false');
   });
 });
+
+/**
+ * ABA ESTRUTURAL (08/10/2026) — *"o menu arquitetura ficou um pouco misturado elementos voltados mais a arquitetura e
+ * outros mais a Estrutural. Vamos criar um novo menu chamado estrutural"*. Decisões: os elementos só na Estrutural; a
+ * Armadura nos dois lugares; a laje na Estrutural.
+ */
+describe('BlueprintEditor · aba Estrutural', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('vem logo depois de Arquitetura, com Malha, Elementos, Lançamento automático e Análise', async () => {
+    await montar();
+    const abas = screen.getAllByRole('tab').map((t) => t.textContent?.trim());
+    expect(abas.slice(0, 3)).toEqual(['Arquitetura', 'Estrutural', 'Terreno']);
+    await abrirAba(/^estrutural$/i, false);
+    for (const g of ['Malha', 'Elementos', 'Lançamento automático', 'Análise']) expect(screen.getByRole('group', { name: g })).toBeInTheDocument();
+    const malha = screen.getByRole('group', { name: 'Malha' });
+    expect(within(malha).getByRole('button', { name: /^eixo$/i })).toBeInTheDocument();
+    expect(within(malha).getByRole('button', { name: /^eixos automáticos/i })).toBeInTheDocument();
+    const lancamento = screen.getByRole('group', { name: 'Lançamento automático' });
+    for (const n of [/^pilares automáticos/i, /^vigas automáticas/i, /^lajes automáticas/i, /^fundações automáticas/i]) expect(within(lancamento).getByRole('button', { name: n })).toBeInTheDocument();
+    expect(within(screen.getByRole('group', { name: 'Análise' })).getByRole('button', { name: /^armadura/i })).toBeInTheDocument();
+  });
+
+  it('a Armadura continua também em Analisar › Quantidades; Arquitetura não tem mais lançamento automático', async () => {
+    await montar();
+    await abrirAba(/^arquitetura$/i);
+    expect(screen.queryByRole('button', { name: /^pilares automáticos/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^eixos automáticos/i })).not.toBeInTheDocument();
+    await abrirAba(/^analisar$/i);
+    expect(screen.getByRole('button', { name: /^armadura/i })).toBeInTheDocument();
+  });
+});
+

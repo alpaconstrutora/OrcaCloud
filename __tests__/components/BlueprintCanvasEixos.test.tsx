@@ -102,7 +102,7 @@ describe('BlueprintCanvas · eixos', () => {
   });
 
   /**
-   * 09/10/2026 — *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*. Lote 10 × 30 (cotas por fora, ligadas
+   * 08/10/2026 — *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*. Lote 10 × 30 (cotas por fora, ligadas
    * por padrão) e um eixo que passa só 0,5 m além: na escala 0,05 o fim dele (y = −1525 px) cai dentro da faixa das
    * cotas (o total a 32 px da divisa, a chamada a 36 px). A bolha tem de sair por fora: centro além de −1536 − 8 − 12.
    */

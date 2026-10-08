@@ -14,7 +14,7 @@ export interface PainelEixosAutomaticosProps {
   onHipotese: (campo: DistanciaDosEixos, valorMm: number) => void;
   /** "Usar o lote" — lados, recuos, restrições e divisas (08/10/2026). */
   onUsarLadosDoLote: (ligado: boolean) => void;
-  /** "Renumerar os existentes" (09/10/2026). */
+  /** "Renumerar os existentes" (08/10/2026). */
   onRenumerar: (ligado: boolean) => void;
   /** Recolhe a gaveta para ver a prévia tracejada no desenho. */
   onVerPrevia: () => void;

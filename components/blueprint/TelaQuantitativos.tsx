@@ -563,7 +563,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           searchText={(s) => `${s.rotulo} ${nomeDoTipoEstrutural(s.kind)} ${pavimentoDe(s.structuralId)} ${s.formula}`}
           searchPlaceholder="Buscar peça..."
           onRowClick={onSelecionarPeca ? (s) => onSelecionarPeca(s.structuralId) : undefined}
-          empty={{ title: 'Nenhuma peça estrutural na planta', subtitle: 'Lance pilares, vigas, lajes ou fundações (Arquitetura › Estrutural).' }}
+          empty={{ title: 'Nenhuma peça estrutural na planta', subtitle: 'Lance pilares, vigas, lajes ou fundações (aba Estrutural).' }}
           renderTotals={(n) => (
             <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">

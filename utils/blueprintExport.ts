@@ -683,7 +683,7 @@ export function desenharPlanta(
   if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio, new Set(opcoes.caminhoCriticoDeIncendio ?? []));
   if (opcoes.climatizacao) desenharClimatizacao(d, model, { px, py }, opcoes.denominador, null, opcoes.numerosDeClimatizacao);
 
-  // As cotas ANTES dos eixos (09/10/2026): os eixos põem a bolha por fora da faixa que as cotas ocuparam.
+  // As cotas ANTES dos eixos (08/10/2026): os eixos põem a bolha por fora da faixa que as cotas ocuparam.
   const faixaDasCotas = opcoes.cotas ? desenharCotas(d, model, opcoes, enq, px, py) : null;
   if (opcoes.eixos !== false && !opcoes.humanizada) desenharEixosDaMalha(d, model, px, py, faixaDasCotas);
 
@@ -1530,7 +1530,7 @@ function desenharEixosDaMalha(
   model: BlueprintModel,
   px: (x: number) => number,
   py: (y: number) => number,
-  /** A faixa que as cotas ocuparam (mm de papel): a bolha fica por fora dela (09/10/2026). */
+  /** A faixa que as cotas ocuparam (mm de papel): a bolha fica por fora dela (08/10/2026). */
   faixaDasCotas: FaixaDasCotas | null = null,
 ): void {
   const estilo = { espessuraMm: 0.13, cor: COR_EIXO_PRANCHA };
@@ -1587,7 +1587,7 @@ function desenharCotas(
   py: (y: number) => number,
 ): FaixaDasCotas {
   const fino = { espessuraMm: 0.1, cor: COR_COTA };
-  /** O que as cotas ocupam no papel — os eixos põem a bolha por fora (09/10/2026). */
+  /** O que as cotas ocupam no papel — os eixos põem a bolha por fora (08/10/2026). */
   const faixa = faixaVazia();
 
   // Distâncias em MILÍMETRO DE PAPEL: a cota tem o mesmo tamanho em qualquer

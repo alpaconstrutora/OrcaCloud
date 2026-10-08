@@ -954,7 +954,7 @@ const TOOLS_DE_COMPONENTE: BlueprintTool[] = [
  * mesmo catálogo, filtrado — e não três catálogos — para a ficha do componente
  * (`fichaDoComponente`) continuar única.
  */
-export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO' | 'MECANICA' | 'INCENDIO';
+export type FamiliaDeComponentes = 'CONSTRUCAO' | 'ESTRUTURA' | 'ELETRICA' | 'HIDRAULICA' | 'MOBILIARIO' | 'MECANICA' | 'INCENDIO';
 
 function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
   if (/^Elétrica/.test(tituloDoGrupo)) return 'ELETRICA';
@@ -963,6 +963,8 @@ function familiaDoGrupo(tituloDoGrupo: string): FamiliaDeComponentes {
   if (/^Climatização/.test(tituloDoGrupo)) return 'MECANICA';
   if (/^Incêndio/.test(tituloDoGrupo)) return 'INCENDIO';
   if (/^Mobiliário/.test(tituloDoGrupo)) return 'MOBILIARIO';
+  // ESTRUTURA (08/10/2026): pilar, viga, laje e a fundação moram na aba Estrutural — saíram de Arquitetura.
+  if (/^(Estrutura|Fundação)/.test(tituloDoGrupo)) return 'ESTRUTURA';
   return 'CONSTRUCAO';
 }
 
@@ -1092,7 +1094,11 @@ export default function MenuComponentes(props: Props) {
                   ? 'Reservas de espaço de climatização e ventilação, e o shaft mecânico'
                   : familia === 'INCENDIO'
                     ? 'Rede de incêndio — tubulação, hidrantes, mangotinhos, sprinklers, VGA e bombas'
-                    : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
+                    : familia === 'ESTRUTURA'
+                      ? 'Pilar, viga e laje; estaca, bloco de coroamento e viga baldrame — desenho peça a peça'
+                      : familia === 'CONSTRUCAO'
+                        ? 'Parede, esquadria, cobertura, circulação e vagas — a estrutura está na aba Estrutural'
+                        : 'Parede, esquadria, estrutura, fundação e cobertura — tudo que o desenho constrói'
         }
         className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
           ativo

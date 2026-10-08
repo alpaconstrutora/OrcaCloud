@@ -301,7 +301,7 @@ export default function TelaArmadura({ hipoteses: h, onHipoteses, armadura, onSe
           onRowClick={onSelecionarPeca ? (p) => onSelecionarPeca(p.structuralId) : undefined}
           empty={{
             title: 'Nenhuma peça estrutural na planta',
-            subtitle: 'Lance pilares, vigas, lajes ou fundações (aba Arquitetura › Estrutural) para ver o aço.',
+            subtitle: 'Lance pilares, vigas, lajes ou fundações (aba Estrutural) para ver o aço.',
           }}
           renderTotals={(n) => (
             <tr className="bg-gray-50 text-sm font-semibold text-gray-700">

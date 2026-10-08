@@ -312,7 +312,7 @@ describe('eixos pelos detalhes do lote', () => {
 });
 
 /**
- * RENUMERAR (09/10/2026) — print do usuário: o lote com os eixos 1 e 2 já criados e o recuo sem eixo. Gerar de novo
+ * RENUMERAR (08/10/2026) — print do usuário: o lote com os eixos 1 e 2 já criados e o recuo sem eixo. Gerar de novo
  * dava "3" e "4" ENTRE o 1 e o 2; com `renumerar`, a sequência fica em ordem de cima para baixo.
  */
 describe('renumerar os eixos existentes', () => {
@@ -427,7 +427,7 @@ describe('bolhasDoEixo — a bolha por fora das cotas', () => {
   });
 });
 
-/** ESCALONAR (09/10/2026) — *"escalonar bolhas"*: bolhas vizinhas que se encostariam vão para a fileira de fora. */
+/** ESCALONAR (08/10/2026) — *"escalonar bolhas"*: bolhas vizinhas que se encostariam vão para a fileira de fora. */
 describe('bolhasDosEixos — escalonadas', () => {
   // Quatro horizontais como no lote 10 × 30 com recuo de 1,5 m, vistos de longe: 0, 3, 57 e 60 px (raio 10).
   const horizontais = [60, 57, 3, 0].map((y, i) => ({ a: { x: 0, y }, b: { x: 200, y }, nome: String(i + 1) }));

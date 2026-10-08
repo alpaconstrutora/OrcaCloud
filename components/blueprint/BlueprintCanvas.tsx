@@ -4491,7 +4491,7 @@ export default function BlueprintCanvas({
     const passoMm = passoPx / vista.escala;
     const folgaBaseMm = 10 / vista.escala;
     // A FAIXA OCUPADA PELAS COTAS neste quadro (px de tela) — os eixos, desenhados depois, põem a bolha por fora dela
-    // (09/10/2026, *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*).
+    // (08/10/2026, *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*).
     const faixaDasCotas = faixaVazia();
 
     const desenharCadeia = (
@@ -7680,7 +7680,7 @@ export default function BlueprintCanvas({
       ? { minX: faixaDasCotas.minX - 8, minY: faixaDasCotas.minY - 8, maxX: faixaDasCotas.maxX + 8, maxY: faixaDasCotas.maxY + 8 }
       : null;
     const RAIO_DA_BOLHA = 10;
-    // AS BOLHAS DE TODOS OS EIXOS DE UMA VEZ (09/10/2026): por fora das cotas e ESCALONADAS — a que encostaria na
+    // AS BOLHAS DE TODOS OS EIXOS DE UMA VEZ (08/10/2026): por fora das cotas e ESCALONADAS — a que encostaria na
     // vizinha vai para a fileira de fora. Os do modelo e os da prévia juntos (um não pode cair em cima do outro).
     const eixosNaTela = [...eixos, ...(eixosPrevistos ?? [])].map((e) => ({ a: paraTela(e.a), b: paraTela(e.b), nome: e.nome }));
     const bolhasNaTela = bolhasDosEixos(eixosNaTela, RAIO_DA_BOLHA, faixaDosEixos, 2);

@@ -1059,6 +1059,10 @@ function proximoNumero(atual: string): string {
 
 const ABAS_DO_RIBBON = [
   { id: 'arquitetura', rotulo: 'Arquitetura', naVista: false },
+  // ESTRUTURAL (08/10/2026): *"o menu arquitetura ficou um pouco misturado elementos voltados mais a arquitetura e outros
+  // mais a Estrutural. Vamos criar um novo menu chamado estrutural"*. Malha de eixos, peças estruturais e de fundação,
+  // lançamento automático e o atalho da armadura.
+  { id: 'estrutural', rotulo: 'Estrutural', naVista: false },
   { id: 'terreno', rotulo: 'Terreno', naVista: false },
   // UMA ABA POR DISCIPLINA MEP (17/09/2026: *"menubar Instalações está
   // agrupando todas as disciplinas. Melhor separar um menu para cada disciplina
@@ -11226,62 +11230,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 muito da tela"*. Viraram quatro menus numa fileira só; o que se usa
                 a cada minuto (Construir) ficou de fora, à vista. */}
             <GrupoDoRibbon rotulo="Projeto">
-              {/* ESTRUTURAL (15/09/2026): o lançamento automático de pilares. O
-                  pilar avulso continua no menu Componentes; aqui é a proposta em
-                  lote — prévia tracejada no desenho, um passo de desfazer. */}
-              {!emVista && (
-                <MenuDoRibbon
-                  rotulo="Estrutural"
-                  icone={RectangleVertical}
-                  ajuda="Eixos da malha e lançamento automático de pilares, vigas, lajes e fundações — sempre com prévia tracejada antes de gravar"
-                >
-                  {/* EIXO da malha (E1.4): a linha nomeada que o calculista risca
-                      antes do pilar. Dois cliques; o ímã e os pilares automáticos
-                      passam a olhar para ela. */}
-                  <Ferramenta atual={editor.tool} valor="eixo" icone={Hash} rotulo="Eixo" onClick={editor.setTool} />
-                  <BotaoDoRibbon
-                    icone={Grid3x3}
-                    rotulo="Eixos automáticos"
-                    contagem={tarefaAberta === 'eixos' ? propostaDeEixosDoNivel?.novos || undefined : undefined}
-                    ativo={tarefaAberta === 'eixos'}
-                    onClick={() => alternarTarefa('eixos')}
-                    ajuda="A malha de eixos a partir das paredes e dos blocos (sem eles, dos lados do lote) — letras nos verticais (A, B…), números nos horizontais (1, 2…); prévia antes de gravar, Ctrl+Z desfaz"
-                  />
-                  <BotaoDoRibbon
-                    icone={RectangleVertical}
-                    rotulo="Pilares automáticos"
-                    contagem={planoDePilares?.pilares.length || undefined}
-                    ativo={tarefaAberta === 'pilares'}
-                    onClick={() => alternarTarefa('pilares')}
-                    ajuda="Um pilar em cada encontro de paredes (canto, T, cruzamento) e intermediários quando o vão passa do máximo — prévia antes de gravar, Ctrl+Z desfaz"
-                  />
-                  <BotaoDoRibbon
-                    icone={RectangleHorizontal}
-                    rotulo="Vigas automáticas"
-                    contagem={planoDeVigas?.vigas.length || undefined}
-                    ativo={tarefaAberta === 'vigas'}
-                    onClick={() => alternarTarefa('vigas')}
-                    ajuda="Uma viga por parede, de pilar a pilar, com a largura da parede e altura pelo maior vão (L/10) — prévia antes de gravar, Ctrl+Z desfaz"
-                  />
-                  <BotaoDoRibbon
-                    icone={Layers}
-                    rotulo="Lajes automáticas"
-                    contagem={planoDeLajes?.lajes.length || undefined}
-                    ativo={tarefaAberta === 'lajes'}
-                    onClick={() => alternarTarefa('lajes')}
-                    ajuda="Uma laje por ambiente fechado, apoiada no topo das paredes — prévia antes de gravar, Ctrl+Z desfaz"
-                  />
-                  <BotaoDoRibbon
-                    icone={SquareStack}
-                    rotulo="Fundações automáticas"
-                    contagem={planoDeFundacoes ? planoDeFundacoes.blocos.length + planoDeFundacoes.baldrames.length || undefined : undefined}
-                    ativo={tarefaAberta === 'fundacoes'}
-                    onClick={() => alternarTarefa('fundacoes')}
-                    ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
-                  />
-                </MenuDoRibbon>
-              )}
-
               {/* FASES DE REFORMA (20/09/2026, E10.2): marca a seleção como existente,
                   a demolir ou novo (kernel 0.46.0); o filtro da vista está no menu
                   Vista; Antes/Depois é tela com as duas miniaturas. */}
@@ -11449,6 +11397,88 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ajuda="Arraste um retângulo na planta: vira uma vista com nome e escala próprios (recorte da planta-mãe), que sai como prancha"
                 />
               </MenuDoRibbon>
+            </GrupoDoRibbon>
+          </>
+        )}
+
+        {aba === 'estrutural' && (
+          <>
+            {/* ESTRUTURAL (08/10/2026) — *"o menu arquitetura ficou um pouco misturado elementos voltados mais a
+                arquitetura e outros mais a Estrutural. Vamos criar um novo menu chamado estrutural"*. Veio de
+                Arquitetura: o menu Estrutural (eixos e lançamentos automáticos) e as seções Estrutura e Fundação do
+                menu Componentes. A Armadura é atalho — continua em Analisar › Quantidades. */}
+            <GrupoDoRibbon rotulo="Malha">
+              {/* EIXO da malha (E1.4): a linha nomeada que o calculista risca
+                  antes do pilar. Dois cliques; o ímã e os pilares automáticos
+                  passam a olhar para ela. */}
+              <Ferramenta atual={editor.tool} valor="eixo" icone={Hash} rotulo="Eixo" onClick={editor.setTool} />
+              <BotaoDoRibbon
+                icone={Grid3x3}
+                rotulo="Eixos automáticos"
+                contagem={tarefaAberta === 'eixos' ? propostaDeEixosDoNivel?.novos || undefined : undefined}
+                ativo={tarefaAberta === 'eixos'}
+                onClick={() => alternarTarefa('eixos')}
+                ajuda="A malha de eixos a partir das paredes e dos blocos (sem eles, dos lados do lote) — letras nos verticais (A, B…), números nos horizontais (1, 2…); prévia antes de gravar, Ctrl+Z desfaz"
+              />
+            </GrupoDoRibbon>
+            <GrupoDoRibbon rotulo="Elementos">
+              <MenuComponentes
+                tool={editor.tool}
+                tipoAbertura={tipoAbertura}
+                tipoEstrutural={tipoEstrutural}
+                tipoCirculacao={tipoCirculacao}
+                tipoDeNucleo={tipoDeNucleo}
+                disciplinaDoNucleo={disciplinaDoNucleo}
+                tipoDeVaga={tipoDeVaga}
+                tipoDeGuardaCorpo={tipoDeGuardaCorpo}
+                familia="ESTRUTURA"
+                rotulo="Elementos"
+                onEscolher={escolherComponente}
+              />
+            </GrupoDoRibbon>
+            <GrupoDoRibbon rotulo="Lançamento automático">
+              <BotaoDoRibbon
+                icone={RectangleVertical}
+                rotulo="Pilares automáticos"
+                contagem={planoDePilares?.pilares.length || undefined}
+                ativo={tarefaAberta === 'pilares'}
+                onClick={() => alternarTarefa('pilares')}
+                ajuda="Um pilar em cada encontro de paredes (canto, T, cruzamento) e intermediários quando o vão passa do máximo — prévia antes de gravar, Ctrl+Z desfaz"
+              />
+              <BotaoDoRibbon
+                icone={RectangleHorizontal}
+                rotulo="Vigas automáticas"
+                contagem={planoDeVigas?.vigas.length || undefined}
+                ativo={tarefaAberta === 'vigas'}
+                onClick={() => alternarTarefa('vigas')}
+                ajuda="Uma viga por parede, de pilar a pilar, com a largura da parede e altura pelo maior vão (L/10) — prévia antes de gravar, Ctrl+Z desfaz"
+              />
+              <BotaoDoRibbon
+                icone={Layers}
+                rotulo="Lajes automáticas"
+                contagem={planoDeLajes?.lajes.length || undefined}
+                ativo={tarefaAberta === 'lajes'}
+                onClick={() => alternarTarefa('lajes')}
+                ajuda="Uma laje por ambiente fechado, apoiada no topo das paredes — prévia antes de gravar, Ctrl+Z desfaz"
+              />
+              <BotaoDoRibbon
+                icone={SquareStack}
+                rotulo="Fundações automáticas"
+                contagem={planoDeFundacoes ? planoDeFundacoes.blocos.length + planoDeFundacoes.baldrames.length || undefined : undefined}
+                ativo={tarefaAberta === 'fundacoes'}
+                onClick={() => alternarTarefa('fundacoes')}
+                ajuda="Um bloco de coroamento sob cada pilar do pavimento, com uma ou duas estacas — prévia antes de gravar, Ctrl+Z desfaz"
+              />
+            </GrupoDoRibbon>
+            <GrupoDoRibbon rotulo="Análise">
+              <BotaoDoRibbon
+                icone={Grip}
+                rotulo="Armadura"
+                contagem={armadura.pecas.length || undefined}
+                ativo={telaAberta === 'armadura'}
+                onClick={() => alternarTela('armadura')}
+                ajuda="Aço por peça e por família — mínimos da NBR 6118 + taxa de referência; hipóteses do estudo"
+              />
             </GrupoDoRibbon>
           </>
         )}
@@ -13020,7 +13050,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                       desabilitado: (editor.model.eixos ?? []).length === 0,
                       ajuda:
                         (editor.model.eixos ?? []).length === 0
-                          ? 'Não há eixo no estudo: gere a malha em Arquitetura › Estrutural › Eixos automáticos (das paredes, dos blocos ou, sem eles, dos lados do lote), ou desenhe com a ferramenta Eixo.'
+                          ? 'Não há eixo no estudo: gere a malha em Estrutural › Eixos automáticos (das paredes, dos blocos ou, sem eles, dos lados do lote), ou desenhe com a ferramenta Eixo.'
                           : 'Os eixos da malha — linha traço-ponto com a bolha e o nome (A, B… / 1, 2…) nas pontas. Oculto, o eixo não é desenhado nem dá encaixe, mas continua valendo para os Pilares automáticos.',
                     },
                     {

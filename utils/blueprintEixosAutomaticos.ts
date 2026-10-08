@@ -29,7 +29,7 @@ import { faixasRestritas, medirTerreno } from './blueprintTerreno';
  *  - Linhas a menos de `juntarAMenosDeMm` viram UMA (fica a posição da mais comprida — a que mais representa).
  *  - Cada eixo atravessa o desenho inteiro (edificação ∪ lote) e passa `alemDoDesenhoMm` de cada lado. A BOLHA fica
  *    por fora das cotas em qualquer zoom: quem desenha a empurra para além da faixa das cotas (`bolhasDoEixo`).
- *  - Linha que já tem eixo (mesma direção, a menos de `juntarAMenosDeMm`) não ganha outro. Com `renumerar` (09/10/2026,
+ *  - Linha que já tem eixo (mesma direção, a menos de `juntarAMenosDeMm`) não ganha outro. Com `renumerar` (08/10/2026,
  *    *"recuos ficou sem eixos"* — gerar de novo dava "3" e "4" ENTRE o 1 e o 2), a sequência inteira é renomeada
  *    na ordem: os eixos existentes de nome automático (A, B1, 7…) ganham o nome da sua posição (`SetEixoProps`, no
  *    mesmo lote). Nome dado à mão ("P-1", "Eixo X") e linha de referência sem nome ficam como estão, e o nome à mão
@@ -356,7 +356,7 @@ export function crescerFaixa(f: FaixaDasCotas, ...pontos: { x: number; y: number
 }
 
 /**
- * ONDE FICAM AS BOLHAS DE UM EIXO (09/10/2026) — *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*.
+ * ONDE FICAM AS BOLHAS DE UM EIXO (08/10/2026) — *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*.
  *
  * O eixo passa uma distância fixa EM MM além do desenho, mas as cotas ficam a uma distância fixa EM PIXEL (ou em mm de
  * papel): com zoom afastado os 3 m viravam poucos pixels e a bolha caía em cima das cadeias. Aqui a bolha é empurrada,
@@ -414,7 +414,7 @@ export function bolhasDoEixo(
 export type BolhasDoEixo = ReturnType<typeof bolhasDoEixo>;
 
 /**
- * AS BOLHAS DE TODOS OS EIXOS, ESCALONADAS (09/10/2026) — pedido: *"escalonar bolhas"*. Com zoom afastado, dois eixos
+ * AS BOLHAS DE TODOS OS EIXOS, ESCALONADAS (08/10/2026) — pedido: *"escalonar bolhas"*. Com zoom afastado, dois eixos
  * a ~1,5 m um do outro (o lado do lote e a linha do recuo) punham as bolhas uma sobre a outra.
  *
  * Primeiro cada bolha vai para fora das cotas (`bolhasDoEixo`). Depois, em cada LADO (as pontas que saem para cima,

@@ -937,7 +937,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     dxf += entidadesDeAgua(r);
   }
 
-  // As cotas antes dos eixos (09/10/2026): a bolha do eixo fica por fora da faixa que as cotas ocuparam.
+  // As cotas antes dos eixos (08/10/2026): a bolha do eixo fica por fora da faixa que as cotas ocuparam.
   const faixaDasCotas = faixaVazia();
   if (o.cotas) dxf += entidadesDeCota(model, faixaDasCotas);
   if (o.eixos !== false) dxf += entidadesDosEixosDaMalha(model, o.cotas ? faixaDasCotas : null);
@@ -1197,7 +1197,7 @@ function entidadesDosEixosDaMalha(model: BlueprintModel, faixaDasCotas: FaixaDas
   const escala = Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
   const RAIO = escala * 0.5;
   const ALTURA = escala * 0.35;
-  // A bolha fica por fora da faixa das cotas (09/10/2026), com um respiro proporcional.
+  // A bolha fica por fora da faixa das cotas (08/10/2026), com um respiro proporcional.
   const respiro = escala * 0.3;
   const faixa = faixaDasCotas && Number.isFinite(faixaDasCotas.minX)
     ? { minX: faixaDasCotas.minX - respiro, minY: faixaDasCotas.minY - respiro, maxX: faixaDasCotas.maxX + respiro, maxY: faixaDasCotas.maxY + respiro }

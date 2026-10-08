@@ -145,7 +145,7 @@ semelhante"*.
 - Prova no app: lote 10 × 30 com recuo frente 5 m / fundos 3 m → laterais 3,00 | 22,00 | 5,00; eixos A, B / 1–4
   (2 e 3 nas linhas do recuo). Suíte: 7797 = 7763 + 34 pulados, 0 falha.
 
-## Complemento (09/10/2026) — eixos por fora das cotas e renumeração
+## Complemento (08/10/2026) — eixos por fora das cotas e renumeração
 
 Pedido, com o print do lote 10 × 30 com os eixos A, B, 1, 2 e o recuo: *"1. cotas e eixo se sobrepondo. eixos devem
 ficar mais externos. 2. recuos ficou sem eixos. qual o criteio usado para criar eixos?"*
@@ -161,7 +161,7 @@ ficar mais externos. 2. recuos ficou sem eixos. qual o criteio usado para criar 
   vertical com número (convenção anterior a 07/10) vira letra.
 - Gaveta: a tabela mostra a sequência inteira ("Já existe — era 2"); botão "Criar N eixo(s) e renumerar M".
 
-## Complemento (09/10/2026) — bolhas escalonadas
+## Complemento (08/10/2026) — bolhas escalonadas
 
 Pedido: *"1. escalonar bolhas"* (depois de avisado que, em zoom afastado, as bolhas de eixos a ~1,5 m um do outro se
 encostavam).

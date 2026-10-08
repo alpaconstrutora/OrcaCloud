@@ -311,7 +311,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
   );
 
   return (
-    <div className="p-6 space-y-6 bg-[#F8FAFC] min-h-screen">
+    <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           {onBack && (

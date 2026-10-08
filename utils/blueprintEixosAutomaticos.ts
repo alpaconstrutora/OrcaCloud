@@ -410,3 +410,68 @@ export function bolhasDoEixo(
   const ponto = (l: number) => ({ x: a.x + ux * l, y: a.y + uy * l });
   return { centroA: ponto(lA), centroB: ponto(lB), linhaA: ponto(lA + raio), linhaB: ponto(lB - raio) };
 }
+
+export type BolhasDoEixo = ReturnType<typeof bolhasDoEixo>;
+
+/**
+ * AS BOLHAS DE TODOS OS EIXOS, ESCALONADAS (09/10/2026) — pedido: *"escalonar bolhas"*. Com zoom afastado, dois eixos
+ * a ~1,5 m um do outro (o lado do lote e a linha do recuo) punham as bolhas uma sobre a outra.
+ *
+ * Primeiro cada bolha vai para fora das cotas (`bolhasDoEixo`). Depois, em cada LADO (as pontas que saem para cima,
+ * para baixo, para a esquerda ou para a direita — só eixos horizontais/verticais), em ordem ao longo do lado: a bolha
+ * que encostaria numa já posta vai para a fileira seguinte, `2 × raio + respiro` mais para fora, e a linha do eixo vai
+ * até ela. A primeira que cabe na fileira de dentro fica nela — o resultado é o zigue-zague da prancha (1 dentro, 2
+ * fora, 3 dentro…). Sem nome, o eixo não tem bolha: devolve `null` na posição dele.
+ */
+export function bolhasDosEixos(
+  eixos: readonly { a: { x: number; y: number }; b: { x: number; y: number }; nome: string }[],
+  raio: number,
+  faixa: FaixaDasCotas | null,
+  folga = 0,
+  respiro = raio * 0.4,
+): (BolhasDoEixo | null)[] {
+  const saida: (BolhasDoEixo | null)[] = eixos.map((e) => (e.nome ? bolhasDoEixo(e.a, e.b, raio, faixa, folga) : null));
+  type Ponta = { i: number; ponta: 'A' | 'B'; centro: { x: number; y: number }; dx: number; dy: number };
+  const lados = new Map<string, Ponta[]>();
+  eixos.forEach((e, i) => {
+    const b = saida[i];
+    if (!b) return;
+    const comp = Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y);
+    if (comp < 1e-9) return;
+    const ux = (e.b.x - e.a.x) / comp;
+    const uy = (e.b.y - e.a.y) / comp;
+    // Só os ortogonais escalonam: oblíquo não tem "lado" comum com os outros.
+    const ortogonal = Math.abs(ux) < 1e-6 || Math.abs(uy) < 1e-6;
+    if (!ortogonal) return;
+    for (const [ponta, dx, dy, centro] of [
+      ['A', -ux, -uy, b.centroA],
+      ['B', ux, uy, b.centroB],
+    ] as const) {
+      const chave = `${Math.round(dx)},${Math.round(dy)}`;
+      const lista = lados.get(chave) ?? [];
+      lista.push({ i, ponta, centro, dx, dy });
+      lados.set(chave, lista);
+    }
+  });
+  const passo = 2 * raio + respiro;
+  for (const lista of lados.values()) {
+    // Ao longo do lado: pela coordenada perpendicular à saída.
+    lista.sort((p, q) => (Math.abs(p.dx) > 0.5 ? p.centro.y - q.centro.y : p.centro.x - q.centro.x));
+    const postas: { x: number; y: number }[] = [];
+    for (const p of lista) {
+      let fileira = 0;
+      let c = p.centro;
+      while (postas.some((q) => Math.hypot(q.x - c.x, q.y - c.y) < passo - 1e-9) && fileira < 8) {
+        fileira++;
+        c = { x: p.centro.x + p.dx * passo * fileira, y: p.centro.y + p.dy * passo * fileira };
+      }
+      postas.push(c);
+      if (fileira === 0) continue;
+      const atual = saida[p.i]!;
+      const linha = { x: c.x - p.dx * raio, y: c.y - p.dy * raio };
+      saida[p.i] = p.ponta === 'A' ? { ...atual, centroA: c, linhaA: linha } : { ...atual, centroB: c, linhaB: linha };
+    }
+  }
+  return saida;
+}
+

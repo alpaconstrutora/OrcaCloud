@@ -535,7 +535,7 @@ function entidadesDeAgua(r: Agua): string {
 import type { Desenhista } from './blueprintExport';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { desenharEletrica, linhasDoQuadroDeCargas } from './blueprintPranchaEletrica';
-import { bolhasDoEixo, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
+import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import { desenharUnifilar, desenharUnifilarEmArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 
 export interface OpcoesDxf {
@@ -1203,12 +1203,14 @@ function entidadesDosEixosDaMalha(model: BlueprintModel, faixaDasCotas: FaixaDas
     ? { minX: faixaDasCotas.minX - respiro, minY: faixaDasCotas.minY - respiro, maxX: faixaDasCotas.maxX + respiro, maxY: faixaDasCotas.maxY + respiro }
     : null;
   let saida = '';
-  for (const e of eixos) {
-    if (!e.nome) {
+  // Por fora das cotas e ESCALONADAS (a que encostaria na vizinha vai para a fileira de fora).
+  const todas = bolhasDosEixos(eixos, RAIO, faixa);
+  for (const [i, e] of eixos.entries()) {
+    const bolhas = todas[i];
+    if (!bolhas) {
       saida += linha(CAMADAS.MALHA_EIXOS, e.a, e.b);
       continue;
     }
-    const bolhas = bolhasDoEixo(e.a, e.b, RAIO, faixa);
     saida += linha(CAMADAS.MALHA_EIXOS, bolhas.linhaA, bolhas.linhaB);
     for (const c of [bolhas.centroA, bolhas.centroB]) {
       saida += circulo(CAMADAS.MALHA_EIXOS, c, RAIO);

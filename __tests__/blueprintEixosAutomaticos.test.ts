@@ -427,3 +427,60 @@ describe('bolhasDoEixo — a bolha por fora das cotas', () => {
   });
 });
 
+/** ESCALONAR (09/10/2026) — *"escalonar bolhas"*: bolhas vizinhas que se encostariam vão para a fileira de fora. */
+describe('bolhasDosEixos — escalonadas', () => {
+  // Quatro horizontais como no lote 10 × 30 com recuo de 1,5 m, vistos de longe: 0, 3, 57 e 60 px (raio 10).
+  const horizontais = [60, 57, 3, 0].map((y, i) => ({ a: { x: 0, y }, b: { x: 200, y }, nome: String(i + 1) }));
+
+  it('zigue-zague: 1 dentro, 2 fora, 3 dentro, 4 fora — nos dois lados; a linha vai até a bolha', async () => {
+    const { bolhasDosEixos } = await import('../utils/blueprintEixosAutomaticos');
+    const b = bolhasDosEixos(horizontais, 10, null, 2, 4);
+    const passo = 2 * 10 + 4;
+    const direita = b.map((x) => x!.centroB.x);
+    const esquerda = b.map((x) => x!.centroA.x);
+    // Ordenadas por y (0, 3, 57, 60): a de y=0 fica dentro, a de y=3 encostaria → fora; 57 dentro; 60 fora.
+    expect(direita).toEqual([212 + passo, 212, 212 + passo, 212]);
+    expect(esquerda).toEqual([-12 - passo, -12, -12 - passo, -12]);
+    expect(b[0]!.linhaB.x).toBeCloseTo(212 + passo - 10, 6);
+  });
+
+  it('bolhas afastadas não se mexem; eixo sem nome não tem bolha', async () => {
+    const { bolhasDosEixos } = await import('../utils/blueprintEixosAutomaticos');
+    const b = bolhasDosEixos(
+      [
+        { a: { x: 0, y: 0 }, b: { x: 0, y: 100 }, nome: 'A' },
+        { a: { x: 50, y: 0 }, b: { x: 50, y: 100 }, nome: 'B' },
+        { a: { x: 60, y: 0 }, b: { x: 60, y: 100 }, nome: '' },
+      ],
+      10,
+      null,
+      2,
+    );
+    expect(b[0]!.centroB).toEqual({ x: 0, y: 112 });
+    expect(b[1]!.centroB).toEqual({ x: 50, y: 112 });
+    expect(b[2]).toBeNull();
+  });
+
+  it('PDF: no lote com recuo de 1,5 m em 1:500, as bolhas dos eixos vizinhos não se sobrepõem', async () => {
+    const { DesenhistaDeProva, desenharPlanta, enquadrar, PAPEIS } = await import('../utils/blueprintExport');
+    const { m } = nivel();
+    const t = m.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' });
+    const x = applyBatch(m, [
+      d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0),
+      ...[30000, 28500, 1500, 0].map((y) => ({ type: 'AddEixo', a: point(-3000, y), b: point(13000, y) }) as Command),
+    ]).model;
+    const papel = new DesenhistaDeProva();
+    const op = { denominador: 500, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-09T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    desenharPlanta(papel, x, op, enquadrar(x, 500, PAPEIS[0], true));
+    const circulos = papel.chamadas.filter((c) => c.tipo === 'circulo').map((c) => ({ x: c.args[0] as number, y: c.args[1] as number, r: c.args[2] as number }));
+    expect(circulos).toHaveLength(8);
+    for (let i = 0; i < circulos.length; i++)
+      for (let j = i + 1; j < circulos.length; j++) {
+        const p = circulos[i];
+        const q = circulos[j];
+        expect(Math.hypot(p.x - q.x, p.y - q.y), `bolhas ${i} e ${j}`).toBeGreaterThanOrEqual(p.r + q.r - 1e-6);
+      }
+  });
+});
+

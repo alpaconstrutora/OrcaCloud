@@ -43,7 +43,7 @@ import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
-import { bolhasDoEixo, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
+import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import type { ProjecaoCorte } from './blueprintCorte';
 import {
   AFASTAMENTO_COTA,
@@ -1539,12 +1539,15 @@ function desenharEixosDaMalha(
   const faixa = faixaDasCotas && Number.isFinite(faixaDasCotas.minX)
     ? { minX: faixaDasCotas.minX - 1.5, minY: faixaDasCotas.minY - 1.5, maxX: faixaDasCotas.maxX + 1.5, maxY: faixaDasCotas.maxY + 1.5 }
     : null;
-  for (const e of model.eixos ?? []) {
-    const pa = { x: px(e.a.x), y: py(e.a.y) };
-    const pb = { x: px(e.b.x), y: py(e.b.y) };
+  const noPapel = (model.eixos ?? []).map((e) => ({ a: { x: px(e.a.x), y: py(e.a.y) }, b: { x: px(e.b.x), y: py(e.b.y) }, nome: e.nome }));
+  // Por fora das cotas e ESCALONADAS (a que encostaria na vizinha vai para a fileira de fora).
+  const todas = bolhasDosEixos(noPapel, raio, faixa);
+  for (const [i, e] of (model.eixos ?? []).entries()) {
+    const pa = noPapel[i].a;
+    const pb = noPapel[i].b;
     if (Math.hypot(pb.x - pa.x, pb.y - pa.y) < 1e-6) continue;
     // Com nome, a linha vai até a borda da bolha — que fica além da faixa das cotas.
-    const bolhas = e.nome ? bolhasDoEixo(pa, pb, raio, faixa) : null;
+    const bolhas = todas[i];
     const a = bolhas ? bolhas.linhaA : pa;
     const b = bolhas ? bolhas.linhaB : pb;
     const comp = Math.hypot(b.x - a.x, b.y - a.y);

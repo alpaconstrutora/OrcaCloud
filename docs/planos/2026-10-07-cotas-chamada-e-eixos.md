@@ -161,3 +161,14 @@ ficar mais externos. 2. recuos ficou sem eixos. qual o criteio usado para criar 
   vertical com número (convenção anterior a 07/10) vira letra.
 - Gaveta: a tabela mostra a sequência inteira ("Já existe — era 2"); botão "Criar N eixo(s) e renumerar M".
 
+## Complemento (09/10/2026) — bolhas escalonadas
+
+Pedido: *"1. escalonar bolhas"* (depois de avisado que, em zoom afastado, as bolhas de eixos a ~1,5 m um do outro se
+encostavam).
+
+- `bolhasDosEixos` (`utils/blueprintEixosAutomaticos.ts`): primeiro cada bolha vai para fora das cotas
+  (`bolhasDoEixo`); depois, em cada lado (pontas que saem para cima, baixo, esquerda, direita — só eixos ortogonais), em
+  ordem ao longo do lado, a bolha que encostaria numa já posta vai para a fileira seguinte (`2 × raio + respiro` mais
+  para fora), e a linha do eixo vai até ela. Zigue-zague: 1 dentro, 2 fora, 3 dentro…
+- Tela (eixos do modelo e da prévia juntos), PDF e DXF usam a mesma regra.
+

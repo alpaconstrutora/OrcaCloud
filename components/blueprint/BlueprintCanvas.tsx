@@ -118,7 +118,7 @@ import {
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import { composicaoDaRede, trechosNumerados } from '../../utils/blueprintFiacao';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
-import { bolhasDoEixo, crescerFaixa, faixaVazia } from '../../utils/blueprintEixosAutomaticos';
+import { bolhasDosEixos, crescerFaixa, faixaVazia, type BolhasDoEixo } from '../../utils/blueprintEixosAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
   curvaDoTrecho,
@@ -7679,12 +7679,15 @@ export default function BlueprintCanvas({
     const faixaDosEixos = Number.isFinite(faixaDasCotas.minX)
       ? { minX: faixaDasCotas.minX - 8, minY: faixaDasCotas.minY - 8, maxX: faixaDasCotas.maxX + 8, maxY: faixaDasCotas.maxY + 8 }
       : null;
-    const desenharEixo = (e: { a: Point; b: Point; nome: string }, cor: string, largura: number, previa: boolean) => {
-      const raio = 10;
+    const RAIO_DA_BOLHA = 10;
+    // AS BOLHAS DE TODOS OS EIXOS DE UMA VEZ (09/10/2026): por fora das cotas e ESCALONADAS — a que encostaria na
+    // vizinha vai para a fileira de fora. Os do modelo e os da prévia juntos (um não pode cair em cima do outro).
+    const eixosNaTela = [...eixos, ...(eixosPrevistos ?? [])].map((e) => ({ a: paraTela(e.a), b: paraTela(e.b), nome: e.nome }));
+    const bolhasNaTela = bolhasDosEixos(eixosNaTela, RAIO_DA_BOLHA, faixaDosEixos, 2);
+    const desenharEixo = (e: { a: Point; b: Point; nome: string }, cor: string, largura: number, previa: boolean, bolhas: BolhasDoEixo | null) => {
+      const raio = RAIO_DA_BOLHA;
       const ta = paraTela(e.a);
       const tb = paraTela(e.b);
-      // A BOLHA POR FORA DAS COTAS (09/10/2026): com nome, a linha vai até a bolha, que fica além da faixa das cotas.
-      const bolhas = e.nome ? bolhasDoEixo(ta, tb, raio, faixaDosEixos, 2) : null;
       const ini = bolhas ? bolhas.linhaA : ta;
       const fim = bolhas ? bolhas.linhaB : tb;
       ctx.strokeStyle = cor;
@@ -7714,9 +7717,9 @@ export default function BlueprintCanvas({
         }
       }
     };
-    for (const e of eixos) {
+    eixos.forEach((e, i) => {
       const selecionado = selecao.has(e.id);
-      desenharEixo(e, selecionado ? COR_SELECIONADA : COR_EIXO, selecionado ? 2 : 1, false);
+      desenharEixo(e, selecionado ? COR_SELECIONADA : COR_EIXO, selecionado ? 2 : 1, false, bolhasNaTela[i]);
       const ta = paraTela(e.a);
       const tb = paraTela(e.b);
       if (selecionado && unicoSelecionado === e.id && !movendoSelecao) {
@@ -7730,8 +7733,8 @@ export default function BlueprintCanvas({
           ctx.stroke();
         }
       }
-    }
-    for (const e of eixosPrevistos ?? []) desenharEixo(e, COR_PREVIA, 1.5, true);
+    });
+    (eixosPrevistos ?? []).forEach((e, i) => desenharEixo(e, COR_PREVIA, 1.5, true, bolhasNaTela[eixos.length + i]));
     // ── GUARDA-CORPOS (E7.3): guarda-corpo = linha dupla com balaústres a cada
     // 12 cm; corrimão = linha simples grossa. Sugerido tracejado. ──
     const desenharGuardaCorpo = (pontos: Point[], tipo: TipoDeGuardaCorpo, cor: string, tracejado: boolean, largura: number) => {

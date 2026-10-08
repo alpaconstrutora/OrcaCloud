@@ -43,6 +43,7 @@ import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
+import { bolhasDoEixo, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import type { ProjecaoCorte } from './blueprintCorte';
 import {
   AFASTAMENTO_COTA,
@@ -682,8 +683,9 @@ export function desenharPlanta(
   if (opcoes.incendio) desenharIncendio(d, model, { px, py }, opcoes.incendio, opcoes.denominador, null, opcoes.numerosDeIncendio, new Set(opcoes.caminhoCriticoDeIncendio ?? []));
   if (opcoes.climatizacao) desenharClimatizacao(d, model, { px, py }, opcoes.denominador, null, opcoes.numerosDeClimatizacao);
 
-  if (opcoes.eixos !== false && !opcoes.humanizada) desenharEixosDaMalha(d, model, px, py);
-  if (opcoes.cotas) desenharCotas(d, model, opcoes, enq, px, py);
+  // As cotas ANTES dos eixos (09/10/2026): os eixos põem a bolha por fora da faixa que as cotas ocuparam.
+  const faixaDasCotas = opcoes.cotas ? desenharCotas(d, model, opcoes, enq, px, py) : null;
+  if (opcoes.eixos !== false && !opcoes.humanizada) desenharEixosDaMalha(d, model, px, py, faixaDasCotas);
 
   // ANOTAÇÕES (E8.1) da planta, por cima de tudo — a última camada, como na tela.
   desenharAnotacoes(d, (model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), opcoes.denominador, px, py);
@@ -1523,15 +1525,31 @@ const TRACO_PONTO_MM: readonly [number, boolean][] = [
  * EIXOS DA MALHA na prancha (07/10/2026) — *"veja que também tem eixos identificados com números e letras"*: a linha
  * traço-ponto e, nas duas pontas, a BOLHA com o nome (A, B… / 1, 2…), por fora da linha. Sem nome, só a linha.
  */
-function desenharEixosDaMalha(d: Desenhista, model: BlueprintModel, px: (x: number) => number, py: (y: number) => number): void {
+function desenharEixosDaMalha(
+  d: Desenhista,
+  model: BlueprintModel,
+  px: (x: number) => number,
+  py: (y: number) => number,
+  /** A faixa que as cotas ocuparam (mm de papel): a bolha fica por fora dela (09/10/2026). */
+  faixaDasCotas: FaixaDasCotas | null = null,
+): void {
   const estilo = { espessuraMm: 0.13, cor: COR_EIXO_PRANCHA };
+  const { raio, texto } = BOLHA_DO_EIXO_MM;
+  // 1,5 mm de respiro além dos tiques e das chamadas.
+  const faixa = faixaDasCotas && Number.isFinite(faixaDasCotas.minX)
+    ? { minX: faixaDasCotas.minX - 1.5, minY: faixaDasCotas.minY - 1.5, maxX: faixaDasCotas.maxX + 1.5, maxY: faixaDasCotas.maxY + 1.5 }
+    : null;
   for (const e of model.eixos ?? []) {
-    const a = { x: px(e.a.x), y: py(e.a.y) };
-    const b = { x: px(e.b.x), y: py(e.b.y) };
+    const pa = { x: px(e.a.x), y: py(e.a.y) };
+    const pb = { x: px(e.b.x), y: py(e.b.y) };
+    if (Math.hypot(pb.x - pa.x, pb.y - pa.y) < 1e-6) continue;
+    // Com nome, a linha vai até a borda da bolha — que fica além da faixa das cotas.
+    const bolhas = e.nome ? bolhasDoEixo(pa, pb, raio, faixa) : null;
+    const a = bolhas ? bolhas.linhaA : pa;
+    const b = bolhas ? bolhas.linhaB : pb;
     const comp = Math.hypot(b.x - a.x, b.y - a.y);
-    if (comp < 1e-6) continue;
-    const ux = (b.x - a.x) / comp;
-    const uy = (b.y - a.y) / comp;
+    const ux = (b.x - a.x) / (comp || 1);
+    const uy = (b.y - a.y) / (comp || 1);
     let t = 0;
     for (let k = 0; t < comp; k = (k + 1) % TRACO_PONTO_MM.length) {
       const [tam, cheio] = TRACO_PONTO_MM[k];
@@ -1539,11 +1557,10 @@ function desenharEixosDaMalha(d: Desenhista, model: BlueprintModel, px: (x: numb
       if (cheio) d.linha(a.x + ux * t, a.y + uy * t, a.x + ux * fim, a.y + uy * fim, estilo);
       t = fim;
     }
-    if (!e.nome) continue;
-    const { raio, texto } = BOLHA_DO_EIXO_MM;
-    for (const [p, s] of [[a, -1], [b, 1]] as const) {
-      const cx = p.x + ux * s * raio;
-      const cy = p.y + uy * s * raio;
+    if (!bolhas) continue;
+    for (const c of [bolhas.centroA, bolhas.centroB]) {
+      const cx = c.x;
+      const cy = c.y;
       circuloOuPoligono(d, cx, cy, raio, { espessuraMm: 0.18, cor: COR_EIXO_PRANCHA }, '#ffffff');
       // O texto do `Desenhista` ancora à esquerda, na linha de base: centra-se à mão.
       d.texto(cx - e.nome.length * texto * 0.3, cy + texto * 0.35, e.nome, texto, COR_EIXO_PRANCHA);
@@ -1565,8 +1582,10 @@ function desenharCotas(
   enq: Enquadramento,
   px: (x: number) => number,
   py: (y: number) => number,
-): void {
+): FaixaDasCotas {
   const fino = { espessuraMm: 0.1, cor: COR_COTA };
+  /** O que as cotas ocupam no papel — os eixos põem a bolha por fora (09/10/2026). */
+  const faixa = faixaVazia();
 
   // Distâncias em MILÍMETRO DE PAPEL: a cota tem o mesmo tamanho em qualquer
   // escala, senão em 1:200 ela vira um risco e em 1:25 domina a folha.
@@ -1609,6 +1628,7 @@ function desenharCotas(
         const y2 = py(pb.y) + ny * afasta;
 
         d.linha(x1, y1, x2, y2, fino);
+        crescerFaixa(faixa, { x: x1, y: y1 }, { x: x2, y: y2 });
 
         // Tique a 45° — a marca de fim de cota do desenho de arquitetura.
         for (const [tx, ty] of [[x1, y1], [x2, y2]]) {
@@ -1638,6 +1658,7 @@ function desenharCotas(
       const qx = px(p.x);
       const qy = py(p.y);
       d.linha(qx + nx * inicio, qy + ny * inicio, qx + nx * fim, qy + ny * fim, { espessuraMm: 0.08, cor: '#999999' });
+      crescerFaixa(faixa, { x: qx + nx * fim, y: qy + ny * fim });
     }
   };
 
@@ -1660,6 +1681,7 @@ function desenharCotas(
       desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
     }
   }
+  return faixa;
 }
 
 

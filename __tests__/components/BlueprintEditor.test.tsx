@@ -7580,6 +7580,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     expect(criar).toBeDisabled();
     expect(criar).toHaveAttribute('title', expect.stringMatching(/Desenhe paredes, blocos ou um lote fechado/));
     expect(within(drawer).getByRole('checkbox', { name: /usar o lote/i })).toBeChecked();
+    expect(within(drawer).getByRole('checkbox', { name: /renumerar os eixos existentes/i })).toBeChecked();
   });
 
   it('só o lote (08/10/2026): a gaveta propõe A, B / 1, 2 pelos lados; desligar "Usar os lados do lote" zera e guarda', async () => {
@@ -7629,7 +7630,7 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     ]);
     await userEvent.setup().click(within(drawer).getByRole('button', { name: /^criar 5 eixo/i }));
     expect(drawer).toHaveTextContent(/5 eixo\(s\) criado\(s\): A, B, 1, 2, 3/);
-    expect(drawer).toHaveTextContent(/todas as linhas da edificação já têm eixo/i);
+    expect(drawer).toHaveTextContent(/todas as linhas já têm eixo, e os nomes já estão em ordem/i);
     // UM desfazer devolve os cinco: o lote foi um passo só.
     await userEvent.setup().click(botao(/^desfazer/i));
     expect(within(await screen.findByRole('dialog')).getByRole('button', { name: /^criar 5 eixo/i })).toBeEnabled();

@@ -145,3 +145,19 @@ semelhante"*.
 - Prova no app: lote 10 × 30 com recuo frente 5 m / fundos 3 m → laterais 3,00 | 22,00 | 5,00; eixos A, B / 1–4
   (2 e 3 nas linhas do recuo). Suíte: 7797 = 7763 + 34 pulados, 0 falha.
 
+## Complemento (09/10/2026) — eixos por fora das cotas e renumeração
+
+Pedido, com o print do lote 10 × 30 com os eixos A, B, 1, 2 e o recuo: *"1. cotas e eixo se sobrepondo. eixos devem
+ficar mais externos. 2. recuos ficou sem eixos. qual o criteio usado para criar eixos?"*
+
+- Causa do 1: o eixo passa 3 m (mm do MODELO) além do desenho, e a cota fica a distância fixa em PIXEL (ou mm de
+  papel) — em zoom afastado os 3 m viram poucos pixels e a bolha caía nas cadeias. Agora a bolha é empurrada NA HORA DE
+  DESENHAR para além da faixa que as cotas ocuparam (`bolhasDoEixo`, `faixaVazia/crescerFaixa`): canvas (px), PDF (mm
+  de papel; as cotas passaram a ser desenhadas antes dos eixos) e DXF (mm reais). Vale em qualquer zoom.
+- Causa do 2: eixo só nasce no clique em "Eixos automáticos", e os do print foram criados antes da versão que conta os
+  recuos. Gerar de novo dava "3" e "4" ENTRE o 1 e o 2. Nova hipótese `renumerar` (padrão ligado): a sequência é
+  remontada em ordem e os existentes de nome automático (A…, B1…, 1, 2…) ganham o nome da posição (`SetEixoProps`, no
+  mesmo lote, um Ctrl+Z). Nome dado à mão e linha de referência sem nome ficam; o nome à mão não é reusado. Eixo
+  vertical com número (convenção anterior a 07/10) vira letra.
+- Gaveta: a tabela mostra a sequência inteira ("Já existe — era 2"); botão "Criar N eixo(s) e renumerar M".
+

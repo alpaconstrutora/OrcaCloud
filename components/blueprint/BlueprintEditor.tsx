@@ -8576,14 +8576,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [resultadoDeEixos, setResultadoDeEixos] = useState<{ ok: boolean; texto: string } | null>(null);
   const criarEixos = () => {
     if (!propostaDeEixosDoNivel || propostaDeEixosDoNivel.comandos.length === 0) return;
-    const nomes = propostaDeEixosDoNivel.eixos.map((e) => e.nome).join(', ');
+    const { novos, renomeados } = propostaDeEixosDoNivel;
+    const nomes = propostaDeEixosDoNivel.eixos.filter((e) => !e.existenteId).map((e) => e.nome).join(', ');
     const criados = editor.runBatch(propostaDeEixosDoNivel.comandos);
     if (criados.length > 0) selecionar(criados);
-    setResultadoDeEixos({ ok: criados.length > 0, texto: criados.length > 0 ? `${criados.length} eixo(s) criado(s): ${nomes} — Ctrl+Z desfaz.` : 'Nenhum eixo foi criado.' });
+    const partes = [novos > 0 ? `${novos} eixo(s) criado(s): ${nomes}` : null, renomeados > 0 ? `${renomeados} renumerado(s)` : null].filter(Boolean);
+    setResultadoDeEixos({ ok: true, texto: `${partes.join(' · ')} — Ctrl+Z desfaz.` });
   };
   /** A prévia tracejada no canvas: só com a gaveta aberta. Identidade estável para o canvas não redesenhar em loop. */
   const eixosPrevistos = useMemo(
-    () => (propostaDeEixosDoNivel && propostaDeEixosDoNivel.eixos.length > 0 ? propostaDeEixosDoNivel.eixos.map((e) => ({ a: e.a, b: e.b, nome: e.nome })) : undefined),
+    () =>
+      propostaDeEixosDoNivel && propostaDeEixosDoNivel.novos > 0
+        ? propostaDeEixosDoNivel.eixos.filter((e) => !e.existenteId).map((e) => ({ a: e.a, b: e.b, nome: e.nome }))
+        : undefined,
     [propostaDeEixosDoNivel],
   );
   const [hipDePilaresSalvas, setHipDePilaresSalvas] = usePersistedState<{
@@ -8911,7 +8916,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     drawerRecolhido && tarefaAberta === 'pilares' && planoDePilares
       ? { n: planoDePilares.pilares.length, nome: 'pilar(es)', lancar: lancarPilares, Icone: RectangleVertical }
       : drawerRecolhido && tarefaAberta === 'eixos' && propostaDeEixosDoNivel
-      ? { n: propostaDeEixosDoNivel.eixos.length, nome: 'eixo(s)', lancar: criarEixos, Icone: Grid3x3 }
+      ? { n: propostaDeEixosDoNivel.novos, nome: 'eixo(s)', lancar: criarEixos, Icone: Grid3x3 }
       : drawerRecolhido && tarefaAberta === 'vigas' && planoDeVigas
         ? { n: planoDeVigas.vigas.length, nome: 'viga(s)', lancar: lancarVigas, Icone: RectangleHorizontal }
         : drawerRecolhido && tarefaAberta === 'lajes' && planoDeLajes
@@ -11236,7 +11241,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   <BotaoDoRibbon
                     icone={Grid3x3}
                     rotulo="Eixos automáticos"
-                    contagem={tarefaAberta === 'eixos' ? propostaDeEixosDoNivel?.eixos.length || undefined : undefined}
+                    contagem={tarefaAberta === 'eixos' ? propostaDeEixosDoNivel?.novos || undefined : undefined}
                     ativo={tarefaAberta === 'eixos'}
                     onClick={() => alternarTarefa('eixos')}
                     ajuda="A malha de eixos a partir das paredes e dos blocos (sem eles, dos lados do lote) — letras nos verticais (A, B…), números nos horizontais (1, 2…); prévia antes de gravar, Ctrl+Z desfaz"
@@ -17394,6 +17399,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               hipoteses={hipotesesDeEixos}
               onHipotese={(k, v) => setHipDeEixosSalvas((h) => ({ ...h, [k]: v }))}
               onUsarLadosDoLote={(ligado) => setHipDeEixosSalvas((h) => ({ ...h, usarLadosDoLote: ligado }))}
+              onRenumerar={(ligado) => setHipDeEixosSalvas((h) => ({ ...h, renumerar: ligado }))}
               onVerPrevia={() => setDrawerRecolhido(true)}
               resultado={resultadoDeEixos}
             />
@@ -18085,18 +18091,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           {tarefaAberta === 'eixos' && propostaDeEixosDoNivel && (
             <>
               <span className="mr-auto truncate text-xs text-slate-500">
-                {propostaDeEixosDoNivel.eixos.length === 0 ? 'Nada a criar.' : `${propostaDeEixosDoNivel.eixos.map((e) => e.nome).join(', ')}.`}
+                {propostaDeEixosDoNivel.novos + propostaDeEixosDoNivel.renomeados === 0 ? 'Nada a criar.' : `${propostaDeEixosDoNivel.eixos.map((e) => e.nome).join(', ')}.`}
               </span>
               {/* Botão desligado SEMPRE diz o motivo (no `title`; o corpo da gaveta também o escreve). */}
               <button
                 type="button"
                 onClick={criarEixos}
-                disabled={propostaDeEixosDoNivel.eixos.length === 0}
-                title={propostaDeEixosDoNivel.motivoVazio ?? 'Cria os eixos propostos num passo só — Ctrl+Z desfaz'}
+                disabled={propostaDeEixosDoNivel.novos + propostaDeEixosDoNivel.renomeados === 0}
+                title={propostaDeEixosDoNivel.motivoVazio ?? 'Cria os eixos propostos (e renumera os existentes) num passo só — Ctrl+Z desfaz'}
                 className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Grid3x3 className="h-4 w-4" />
-                Criar {propostaDeEixosDoNivel.eixos.length} eixo(s)
+                {propostaDeEixosDoNivel.novos === 0 && propostaDeEixosDoNivel.renomeados > 0
+                  ? `Renumerar ${propostaDeEixosDoNivel.renomeados} eixo(s)`
+                  : `Criar ${propostaDeEixosDoNivel.novos} eixo(s)${propostaDeEixosDoNivel.renomeados > 0 ? ` e renumerar ${propostaDeEixosDoNivel.renomeados}` : ''}`}
               </button>
             </>
           )}

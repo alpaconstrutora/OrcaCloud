@@ -107,17 +107,24 @@ describe('propostaDeEixos', () => {
     expect([a.a.y, a.b.y]).toEqual([-3000, 33000]);
   });
 
-  it('linha que já tem eixo é pulada; os nomes continuam depois dos usados', () => {
+  it('linha que já tem eixo não ganha outro; o existente entra na sequência; sem renumerar, os novos continuam depois dos usados', () => {
     const { m, t } = casa();
     const comA = applyCommand(m, { type: 'AddEixo', a: point(0, -1000), b: point(0, 16000) }).model; // nasce "A"
     expect(comA.eixos[0].nome).toBe('A');
     const p = propostaDeEixos(comA, t);
     expect(p.jaTinhamEixo).toBe(1);
-    expect(p.eixos.filter((e) => e.vertical).map((e) => [e.nome, e.coordenadaMm])).toEqual([
-      ['B', 4000],
-      ['C', 7000],
-      ['D', 10000],
+    expect(p.eixos.filter((e) => e.vertical).map((e) => [e.nome, e.coordenadaMm, e.existenteId ? 'existente' : 'novo'])).toEqual([
+      ['A', 0, 'existente'],
+      ['B', 4000, 'novo'],
+      ['C', 7000, 'novo'],
+      ['D', 10000, 'novo'],
     ]);
+    expect(p.novos).toBe(7);
+    expect(p.renomeados).toBe(0);
+    // Sem renumerar (o comportamento de antes): só os novos, com nome depois dos usados.
+    const semRenumerar = propostaDeEixos(comA, t, { renumerar: false });
+    expect(semRenumerar.eixos.filter((e) => e.vertical).map((e) => e.nome)).toEqual(['B', 'C', 'D']);
+    expect(semRenumerar.comandos.every((c) => c.type === 'AddEixo')).toBe(true);
     // Tudo gerado: nada a criar, e o motivo diz por quê.
     const tudo = applyBatch(m, propostaDeEixos(m, t).comandos).model;
     const de_novo = propostaDeEixos(tudo, t);
@@ -172,12 +179,13 @@ describe('propostaDeEixos', () => {
   });
 
   it('hipóteses: padrão 3 m / 1,50 m / 10 cm; o que vem do navegador é validado', () => {
-    expect(HIPOTESES_EIXOS_PADRAO).toEqual({ alemDoDesenhoMm: 3000, comprimentoMinimoDaParedeMm: 1500, juntarAMenosDeMm: 100, usarLadosDoLote: true });
+    expect(HIPOTESES_EIXOS_PADRAO).toEqual({ alemDoDesenhoMm: 3000, comprimentoMinimoDaParedeMm: 1500, juntarAMenosDeMm: 100, usarLadosDoLote: true, renumerar: true });
     expect(normalizarHipotesesDeEixos({ alemDoDesenhoMm: 'x', comprimentoMinimoDaParedeMm: -5, juntarAMenosDeMm: 99999, usarLadosDoLote: 'sim' })).toEqual({
       alemDoDesenhoMm: 3000,
       comprimentoMinimoDaParedeMm: 0,
       juntarAMenosDeMm: 2000,
       usarLadosDoLote: true,
+      renumerar: true,
     });
     expect(normalizarHipotesesDeEixos({ usarLadosDoLote: false }).usarLadosDoLote).toBe(false);
   });
@@ -302,3 +310,120 @@ describe('eixos pelos detalhes do lote', () => {
     expect(propostaDeEixos(comBloco, t, {}, { envelope }).eixos.every((e) => e.origem === 'BLOCO')).toBe(true);
   });
 });
+
+/**
+ * RENUMERAR (09/10/2026) — print do usuário: o lote com os eixos 1 e 2 já criados e o recuo sem eixo. Gerar de novo
+ * dava "3" e "4" ENTRE o 1 e o 2; com `renumerar`, a sequência fica em ordem de cima para baixo.
+ */
+describe('renumerar os eixos existentes', () => {
+  const lote10x30 = () => {
+    const { m, t } = nivel();
+    const d = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' });
+    return { m: applyBatch(m, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model, t };
+  };
+  const envelope = [[point(0, 1500), point(10000, 1500), point(10000, 28500), point(0, 28500)]];
+
+  it('o caso do print: 1 e 2 já existem; os recuos entram como 2 e 3 e o antigo "2" vira 4 — um lote só', () => {
+    const { m, t } = lote10x30();
+    const antes = applyBatch(m, propostaDeEixos(m, t).comandos).model; // A, B, 1, 2 — sem recuo
+    expect(antes.eixos.map((e) => e.nome).sort()).toEqual(['1', '2', 'A', 'B']);
+    const p = propostaDeEixos(antes, t, {}, { envelope });
+    expect(p.eixos.filter((e) => !e.vertical).map((e) => `${e.nome}@${e.coordenadaMm}${e.nomeAnterior ? ` (era ${e.nomeAnterior})` : ''}`)).toEqual([
+      '1@30000',
+      '2@28500',
+      '3@1500',
+      '4@0 (era 2)',
+    ]);
+    expect([p.novos, p.renomeados]).toEqual([2, 1]);
+    const depois = applyBatch(antes, p.comandos).model;
+    const horizontais = depois.eixos.filter((e) => e.a.y === e.b.y).sort((x, y) => y.a.y - x.a.y);
+    expect(horizontais.map((e) => e.nome)).toEqual(['1', '2', '3', '4']);
+    // E não há mais nada a fazer.
+    expect(propostaDeEixos(depois, t, {}, { envelope }).motivoVazio).toMatch(/já estão em ordem/);
+  });
+
+  it('nome dado à mão fica como está (e não é reusado); linha de referência sem nome também', () => {
+    const { m, t } = lote10x30();
+    const x = applyBatch(m, [
+      { type: 'AddEixo', a: point(-3000, 30000), b: point(13000, 30000), nome: 'Divisa' },
+      { type: 'AddEixo', a: point(-3000, 15000), b: point(13000, 15000), nome: '' },
+      { type: 'AddEixo', a: point(-3000, 0), b: point(13000, 0), nome: '7' },
+    ]).model;
+    const p = propostaDeEixos(x, t, {}, { envelope });
+    const h = p.eixos.filter((e) => !e.vertical).map((e) => `${e.nome}@${e.coordenadaMm}${e.existenteId ? '*' : ''}`);
+    // "Divisa" (y=30000) e a linha sem nome não entram na sequência; o "7" vira o último número.
+    expect(h).toEqual(['1@28500', '2@1500', '3@0*']);
+    expect(p.eixos.find((e) => e.nomeAnterior === '7')?.nome).toBe('3');
+  });
+
+  it('eixo vertical com número (a convenção antiga, antes de 07/10) é renomeado para letra', () => {
+    const { m, t } = casa();
+    const velho = applyCommand(m, { type: 'AddEixo', a: point(0, -1000), b: point(0, 16000), nome: '1' }).model;
+    const p = propostaDeEixos(velho, t);
+    expect(p.eixos.find((e) => e.existenteId)?.nome).toBe('A');
+    expect(p.eixos.find((e) => e.existenteId)?.nomeAnterior).toBe('1');
+  });
+});
+
+describe('bolhasDoEixo — a bolha por fora das cotas', () => {
+  it('sem cotas: a bolha fica a raio + folga da ponta', async () => {
+    const { bolhasDoEixo } = await import('../utils/blueprintEixosAutomaticos');
+    const b = bolhasDoEixo({ x: 0, y: 0 }, { x: 0, y: 100 }, 10, null, 2);
+    expect(b.centroA).toEqual({ x: 0, y: -12 });
+    expect(b.centroB).toEqual({ x: 0, y: 112 });
+    expect(b.linhaA).toEqual({ x: 0, y: -2 });
+  });
+
+  it('a ponta cai dentro da faixa das cotas: a bolha sai inteira por fora dela', async () => {
+    const { bolhasDoEixo } = await import('../utils/blueprintEixosAutomaticos');
+    const faixa = { minX: -50, minY: -40, maxX: 150, maxY: 160 };
+    const b = bolhasDoEixo({ x: 0, y: 0 }, { x: 0, y: 100 }, 10, faixa, 2);
+    expect(b.centroA.y).toBeCloseTo(-40 - 12, 6);
+    expect(b.centroB.y).toBeCloseTo(160 + 12, 6);
+    expect(b.linhaB.y).toBeCloseTo(160 + 2, 6); // a linha vai até a borda da bolha
+  });
+
+  it('eixo longe da faixa (não a cruza): fica como sempre', async () => {
+    const { bolhasDoEixo } = await import('../utils/blueprintEixosAutomaticos');
+    const b = bolhasDoEixo({ x: 500, y: 0 }, { x: 500, y: 100 }, 10, { minX: -50, minY: -40, maxX: 150, maxY: 160 }, 2);
+    expect(b.centroA).toEqual({ x: 500, y: -12 });
+  });
+
+  it('PDF e DXF: a bolha fica por fora das cotas do lote', async () => {
+    const { DesenhistaDeProva, desenharPlanta, enquadrar, PAPEIS } = await import('../utils/blueprintExport');
+    const { gerarDxf } = await import('../utils/blueprintDxf');
+    const { m, t } = (() => {
+      const { m, t } = nivel();
+      const d = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' });
+      return { m: applyBatch(m, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model, t };
+    })();
+    // Um eixo que passa só 0,5 m além do lote: com as cotas do lote, a bolha cairia em cima delas.
+    const x = applyCommand(m, { type: 'AddEixo', a: point(0, -500), b: point(0, 30500) }).model;
+    void t;
+    const papel = new DesenhistaDeProva();
+    const op = { denominador: 200, papel: PAPEIS[1], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-09T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    desenharPlanta(papel, x, op, enquadrar(x, 200, PAPEIS[1], true));
+    const cotaYs = papel.chamadas.filter((c) => c.tipo === 'linha' && ['#333333', '#999999'].includes((c.args[4] as { cor: string }).cor)).flatMap((c) => [c.args[1] as number, c.args[3] as number]);
+    const circulos = papel.chamadas.filter((c) => c.tipo === 'circulo').map((c) => ({ y: c.args[1] as number, r: c.args[2] as number }));
+    expect(circulos).toHaveLength(2);
+    const [topo, base] = [...circulos].sort((p, q) => p.y - q.y);
+    expect(topo.y + topo.r).toBeLessThan(Math.min(...cotaYs));
+    expect(base.y - base.r).toBeGreaterThan(Math.max(...cotaYs));
+    // DXF: os centros das bolhas ficam além da cota mais externa (mm reais, Y para cima).
+    const dxf = gerarDxf(x, { titulo: 't', revisao: 1, hash: 'h', cotas: true });
+    const v = dxf.split(/\r?\n/).map((s) => s.trim());
+    const centros: number[] = [];
+    const cotas: number[] = [];
+    for (let i = 0; i + 1 < v.length; i += 2) {
+      if (v[i] !== '0') continue;
+      const campos: Record<string, string> = {};
+      for (let k = i + 2; k + 1 < v.length && v[k] !== '0'; k += 2) campos[v[k]] = v[k + 1];
+      if (v[i + 1] === 'CIRCLE' && campos['8'] === 'PLANTA-MALHA-EIXOS') centros.push(Number(campos['20']));
+      if (v[i + 1] === 'LINE' && campos['8'] === 'PLANTA-COTAS') cotas.push(Number(campos['20']), Number(campos['21']));
+    }
+    expect(centros).toHaveLength(2);
+    expect(Math.max(...centros)).toBeGreaterThan(Math.max(...cotas));
+    expect(Math.min(...centros)).toBeLessThan(Math.min(...cotas));
+  });
+});
+

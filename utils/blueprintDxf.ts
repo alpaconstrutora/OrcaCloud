@@ -535,6 +535,7 @@ function entidadesDeAgua(r: Agua): string {
 import type { Desenhista } from './blueprintExport';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { desenharEletrica, linhasDoQuadroDeCargas } from './blueprintPranchaEletrica';
+import { bolhasDoEixo, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import { desenharUnifilar, desenharUnifilarEmArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 
 export interface OpcoesDxf {
@@ -936,8 +937,10 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     dxf += entidadesDeAgua(r);
   }
 
-  if (o.eixos !== false) dxf += entidadesDosEixosDaMalha(model);
-  if (o.cotas) dxf += entidadesDeCota(model);
+  // As cotas antes dos eixos (09/10/2026): a bolha do eixo fica por fora da faixa que as cotas ocuparam.
+  const faixaDasCotas = faixaVazia();
+  if (o.cotas) dxf += entidadesDeCota(model, faixaDasCotas);
+  if (o.eixos !== false) dxf += entidadesDosEixosDaMalha(model, o.cotas ? faixaDasCotas : null);
   // ANOTAÇÕES (E8.1) da planta, no mm do desenho.
   dxf += entidadesDeAnotacoes((model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), (p) => ({ x: p.x, y: p.y }));
 
@@ -1188,21 +1191,26 @@ function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: numbe
  * reais, com o tamanho proporcional à planta — a mesma régua das cotas. Linha contínua: tipo de linha traço-ponto
  * exige tabela LTYPE, e a camada própria já deixa quem recebe aplicar o seu.
  */
-function entidadesDosEixosDaMalha(model: BlueprintModel): string {
+function entidadesDosEixosDaMalha(model: BlueprintModel, faixaDasCotas: FaixaDasCotas | null = null): string {
   const eixos = model.eixos ?? [];
   if (eixos.length === 0) return '';
   const escala = Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
   const RAIO = escala * 0.5;
   const ALTURA = escala * 0.35;
+  // A bolha fica por fora da faixa das cotas (09/10/2026), com um respiro proporcional.
+  const respiro = escala * 0.3;
+  const faixa = faixaDasCotas && Number.isFinite(faixaDasCotas.minX)
+    ? { minX: faixaDasCotas.minX - respiro, minY: faixaDasCotas.minY - respiro, maxX: faixaDasCotas.maxX + respiro, maxY: faixaDasCotas.maxY + respiro }
+    : null;
   let saida = '';
   for (const e of eixos) {
-    saida += linha(CAMADAS.MALHA_EIXOS, e.a, e.b);
-    if (!e.nome) continue;
-    const comp = Math.hypot(e.b.x - e.a.x, e.b.y - e.a.y) || 1;
-    const ux = (e.b.x - e.a.x) / comp;
-    const uy = (e.b.y - e.a.y) / comp;
-    for (const [p, s] of [[e.a, -1], [e.b, 1]] as const) {
-      const c = { x: p.x + ux * s * RAIO, y: p.y + uy * s * RAIO };
+    if (!e.nome) {
+      saida += linha(CAMADAS.MALHA_EIXOS, e.a, e.b);
+      continue;
+    }
+    const bolhas = bolhasDoEixo(e.a, e.b, RAIO, faixa);
+    saida += linha(CAMADAS.MALHA_EIXOS, bolhas.linhaA, bolhas.linhaB);
+    for (const c of [bolhas.centroA, bolhas.centroB]) {
       saida += circulo(CAMADAS.MALHA_EIXOS, c, RAIO);
       saida += texto(CAMADAS.MALHA_EIXOS, { x: c.x - e.nome.length * ALTURA * 0.3, y: c.y - ALTURA / 2 }, e.nome, ALTURA);
     }
@@ -1219,7 +1227,11 @@ function entidadesDosEixosDaMalha(model: BlueprintModel): string {
  * é o que importa: cota que diverge entre o papel e o CAD é pior que cota
  * nenhuma.
  */
-function entidadesDeCota(model: BlueprintModel): string {
+function entidadesDeCota(
+  model: BlueprintModel,
+  /** Cresce com o que as cotas ocupam (mm reais) — os eixos põem a bolha por fora. */
+  faixa: FaixaDasCotas = faixaVazia(),
+): string {
   let saida = '';
 
   // Afastamentos em mm REAIS — no CAD tudo é 1:1. Proporcionais ao tamanho da
@@ -1246,6 +1258,7 @@ function entidadesDeCota(model: BlueprintModel): string {
         const a = pontoDaCota(lado, seg.de, afasta);
         const b = pontoDaCota(lado, seg.ate, afasta);
         saida += linha(CAMADAS.COTAS, a, b);
+        crescerFaixa(faixa, a, b);
         // Tique a 45° nas duas pontas — a marca de fim de cota que o PDF já tinha.
         for (const p of [a, b]) saida += linha(CAMADAS.COTAS, { x: p.x - TIQUE / 2, y: p.y - TIQUE / 2 }, { x: p.x + TIQUE / 2, y: p.y + TIQUE / 2 });
         // Texto no meio, empurrado mais um pouco para fora para não montar na
@@ -1266,7 +1279,11 @@ function entidadesDeCota(model: BlueprintModel): string {
     const inicio = faceMm + FOLGA_DA_CHAMADA;
     for (const ch of chamadasDoLado(cadeias.map(([segmentos, nivel]) => ({ segmentos, nivel })))) {
       const fim = FOLGA + PASSO * ch.nivel + ULTRAPASSA;
-      if (fim > inicio) saida += linha(CAMADAS.COTAS, pontoDaCota(lado, ch.t, inicio), pontoDaCota(lado, ch.t, fim));
+      if (fim > inicio) {
+        const ponta = pontoDaCota(lado, ch.t, fim);
+        saida += linha(CAMADAS.COTAS, pontoDaCota(lado, ch.t, inicio), ponta);
+        crescerFaixa(faixa, ponta);
+      }
     }
   };
 

@@ -100,4 +100,24 @@ describe('BlueprintCanvas · eixos', () => {
     expect(t.filter((x) => x === 'B').length).toBeGreaterThan(0);
     expect(t).not.toContain('A');
   });
+
+  /**
+   * 09/10/2026 — *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*. Lote 10 × 30 (cotas por fora, ligadas
+   * por padrão) e um eixo que passa só 0,5 m além: na escala 0,05 o fim dele (y = −1525 px) cai dentro da faixa das
+   * cotas (o total a 32 px da divisa, a chamada a 36 px). A bolha tem de sair por fora: centro além de −1536 − 8 − 12.
+   */
+  it('a bolha fica POR FORA das cotas do lote, mesmo com o eixo curto', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m0.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: l, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as const;
+    const m = applyBatch(m0, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0), { type: 'AddEixo', a: point(0, -500), b: point(0, 30500) }]).model;
+    desenhar(m);
+    const ys = chamadas.filter((c) => c.metodo === 'fillText' && c.args[0] === 'A').map((c) => Number(c.args[2]));
+    expect(ys.length).toBeGreaterThan(0);
+    const topo = Math.min(...ys);
+    const base = Math.max(...ys);
+    // A vista não nasce na origem: mede-se a DISTÂNCIA entre as bolhas. O lote tem 1500 px; cada bolha fica a
+    // 36 (cota + chamada) + 8 (respiro) + 12 (raio + folga) px da divisa. Sem a correção seriam 1550 + 2 × 12 = 1574.
+    expect(base - topo).toBeGreaterThanOrEqual(1500 + 2 * (36 + 8 + 12) - 1e-6);
+  });
 });

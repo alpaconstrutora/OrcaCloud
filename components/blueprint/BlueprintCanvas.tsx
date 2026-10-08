@@ -118,6 +118,7 @@ import {
 import { condutoresDoEletroduto, numeroDoCircuito, tracosDoCondutor, type TipoDeCondutor } from '../../utils/blueprintCondutores';
 import { composicaoDaRede, trechosNumerados } from '../../utils/blueprintFiacao';
 import { pegadaDaPecaPrevista, type PecaPrevista } from '../../utils/blueprintPilaresAutomaticos';
+import { bolhasDoEixo, crescerFaixa, faixaVazia } from '../../utils/blueprintEixosAutomaticos';
 import { idsDoGrupo } from '../../utils/blueprintGrupoDeFundacao';
 import {
   curvaDoTrecho,
@@ -4489,6 +4490,9 @@ export default function BlueprintCanvas({
     const passoPx = 22;
     const passoMm = passoPx / vista.escala;
     const folgaBaseMm = 10 / vista.escala;
+    // A FAIXA OCUPADA PELAS COTAS neste quadro (px de tela) — os eixos, desenhados depois, põem a bolha por fora dela
+    // (09/10/2026, *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*).
+    const faixaDasCotas = faixaVazia();
 
     const desenharCadeia = (
       lado: LadoDoContorno,
@@ -4510,6 +4514,7 @@ export default function BlueprintCanvas({
         const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
         if (Math.hypot(b.x - a.x, b.y - a.y) < minimoPx) continue;
         desenhados.push(seg);
+        crescerFaixa(faixaDasCotas, a, b);
 
         // O VÃO ganha traço mais forte: numa cadeia de esquadria o que se
         // procura é onde estão as aberturas, e sem distinção elas se perdem
@@ -4596,6 +4601,7 @@ export default function BlueprintCanvas({
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
+        crescerFaixa(faixaDasCotas, b);
       }
       ctx.lineWidth = 1;
     };
@@ -7669,26 +7675,28 @@ export default function BlueprintCanvas({
     // nome nas duas pontas — a convenção de prancha. Sem nome, só a linha
     // (linha de referência). Desenhados antes dos cortes, por baixo deles.
     // A PRÉVIA da gaveta "Eixos automáticos" (07/10/2026) usa o mesmo desenho, tracejada em `COR_PREVIA`.
+    // A faixa das cotas com a folga dos tiques e das chamadas (4 px além da linha) e mais um respiro.
+    const faixaDosEixos = Number.isFinite(faixaDasCotas.minX)
+      ? { minX: faixaDasCotas.minX - 8, minY: faixaDasCotas.minY - 8, maxX: faixaDasCotas.maxX + 8, maxY: faixaDasCotas.maxY + 8 }
+      : null;
     const desenharEixo = (e: { a: Point; b: Point; nome: string }, cor: string, largura: number, previa: boolean) => {
+      const raio = 10;
       const ta = paraTela(e.a);
       const tb = paraTela(e.b);
+      // A BOLHA POR FORA DAS COTAS (09/10/2026): com nome, a linha vai até a bolha, que fica além da faixa das cotas.
+      const bolhas = e.nome ? bolhasDoEixo(ta, tb, raio, faixaDosEixos, 2) : null;
+      const ini = bolhas ? bolhas.linhaA : ta;
+      const fim = bolhas ? bolhas.linhaB : tb;
       ctx.strokeStyle = cor;
       ctx.lineWidth = largura;
       ctx.setLineDash(previa ? [6, 4] : [14, 4, 2, 4]);
       ctx.beginPath();
-      ctx.moveTo(ta.x, ta.y);
-      ctx.lineTo(tb.x, tb.y);
+      ctx.moveTo(ini.x, ini.y);
+      ctx.lineTo(fim.x, fim.y);
       ctx.stroke();
       ctx.setLineDash([]);
-      if (e.nome) {
-        const dx = tb.x - ta.x;
-        const dy = tb.y - ta.y;
-        const comp = Math.hypot(dx, dy) || 1;
-        const ux = dx / comp;
-        const uy = dy / comp;
-        const raio = 10;
-        for (const [t, s] of [[ta, -1], [tb, 1]] as const) {
-          const q = { x: t.x + ux * s * (raio + 2), y: t.y + uy * s * (raio + 2) };
+      if (bolhas) {
+        for (const q of [bolhas.centroA, bolhas.centroB]) {
           ctx.beginPath();
           ctx.arc(q.x, q.y, raio, 0, Math.PI * 2);
           ctx.fillStyle = '#ffffff';

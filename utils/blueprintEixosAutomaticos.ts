@@ -1,6 +1,6 @@
 import {
   eixoEhVertical,
-  proximoNomeDeEixo,
+  letraDoEixo,
   wallLength,
   type BlueprintModel,
   type Command,
@@ -27,10 +27,13 @@ import { faixasRestritas, medirTerreno } from './blueprintTerreno';
  *    trecho curto não definem malha).
  *  - Dos lados ortogonais dos BLOCOS de massa do pavimento (o estudo de massa ainda não tem parede).
  *  - Linhas a menos de `juntarAMenosDeMm` viram UMA (fica a posição da mais comprida — a que mais representa).
- *  - Cada eixo atravessa o desenho inteiro (edificação ∪ lote) e passa `alemDoDesenhoMm` de cada lado, para a bolha
- *    cair por fora das cotas.
- *  - Linha que já tem eixo (mesma direção, a menos de `juntarAMenosDeMm`) é pulada; os nomes novos CONTINUAM depois
- *    dos já usados.
+ *  - Cada eixo atravessa o desenho inteiro (edificação ∪ lote) e passa `alemDoDesenhoMm` de cada lado. A BOLHA fica
+ *    por fora das cotas em qualquer zoom: quem desenha a empurra para além da faixa das cotas (`bolhasDoEixo`).
+ *  - Linha que já tem eixo (mesma direção, a menos de `juntarAMenosDeMm`) não ganha outro. Com `renumerar` (09/10/2026,
+ *    *"recuos ficou sem eixos"* — gerar de novo dava "3" e "4" ENTRE o 1 e o 2), a sequência inteira é renomeada
+ *    na ordem: os eixos existentes de nome automático (A, B1, 7…) ganham o nome da sua posição (`SetEixoProps`, no
+ *    mesmo lote). Nome dado à mão ("P-1", "Eixo X") e linha de referência sem nome ficam como estão, e o nome à mão
+ *    não é reusado. Sem `renumerar`, os nomes novos continuam depois dos usados.
  *  - Parede oblíqua fica de fora — e a proposta diz quantas.
  *  - SEM parede nem bloco no pavimento (o estudo que só tem o lote), os lados ortogonais do LOTE fechado (08/10/2026,
  *    *"quero"* à pergunta "gerar eixos também a partir dos lados do lote quando ainda não há paredes nem bloco?").
@@ -50,6 +53,8 @@ export interface HipotesesDeEixos {
   juntarAMenosDeMm: number;
   /** Sem parede nem bloco no pavimento, os eixos saem dos lados do lote fechado. */
   usarLadosDoLote: boolean;
+  /** Renomeia os eixos existentes (de nome automático) para a sequência ficar em ordem com os novos. */
+  renumerar: boolean;
 }
 
 export const HIPOTESES_EIXOS_PADRAO: HipotesesDeEixos = {
@@ -57,10 +62,11 @@ export const HIPOTESES_EIXOS_PADRAO: HipotesesDeEixos = {
   comprimentoMinimoDaParedeMm: 1500,
   juntarAMenosDeMm: 100,
   usarLadosDoLote: true,
+  renumerar: true,
 };
 
 /** As hipóteses que são distância (mm). */
-export type DistanciaDosEixos = Exclude<keyof HipotesesDeEixos, 'usarLadosDoLote'>;
+export type DistanciaDosEixos = Exclude<keyof HipotesesDeEixos, 'usarLadosDoLote' | 'renumerar'>;
 
 /** Faixas aceitas de cada hipótese (o que vem do navegador é validado aqui). */
 export const FAIXAS_DAS_HIPOTESES_DE_EIXOS: Record<DistanciaDosEixos, { min: number; max: number }> = {
@@ -73,6 +79,8 @@ export function normalizarHipotesesDeEixos(h: Partial<Record<keyof HipotesesDeEi
   const saida = { ...HIPOTESES_EIXOS_PADRAO };
   const lote = h?.usarLadosDoLote;
   if (typeof lote === 'boolean') saida.usarLadosDoLote = lote;
+  const renumerar = h?.renumerar;
+  if (typeof renumerar === 'boolean') saida.renumerar = renumerar;
   for (const k of Object.keys(FAIXAS_DAS_HIPOTESES_DE_EIXOS) as DistanciaDosEixos[]) {
     const n = Number(h?.[k]);
     const { min, max } = FAIXAS_DAS_HIPOTESES_DE_EIXOS[k];
@@ -89,12 +97,22 @@ export interface EixoProposto {
   a: Point;
   b: Point;
   /** De onde a linha veio. */
-  origem: 'PAREDE' | 'BLOCO' | 'PAREDE_E_BLOCO' | OrigemDoLote;
+  origem: 'PAREDE' | 'BLOCO' | 'PAREDE_E_BLOCO' | OrigemDoLote | 'EXISTENTE';
+  /** Eixo que JÁ existe (entra na sequência para a ordem dos nomes); ausente = eixo novo. */
+  existenteId?: ObjectId;
+  /** O nome que o eixo existente tinha, quando a renumeração o muda. */
+  nomeAnterior?: string;
 }
 
 export interface PropostaDeEixos {
-  /** Verticais (A, B… da esquerda para a direita) e depois horizontais (1, 2… de cima para baixo). */
+  /**
+   * A SEQUÊNCIA inteira, em ordem: verticais (A, B… da esquerda para a direita) e depois horizontais (1, 2… de cima
+   * para baixo) — os novos e, com `renumerar`, os existentes de nome automático.
+   */
   eixos: EixoProposto[];
+  /** Quantos eixos novos; quantos existentes mudam de nome. */
+  novos: number;
+  renomeados: number;
   comandos: Command[];
   /** Paredes oblíquas do pavimento, fora da malha. */
   paredesObliquas: number;
@@ -164,7 +182,7 @@ export function propostaDeEixos(
     }
   }
 
-  const vazio = (motivo: string): PropostaDeEixos => ({ eixos: [], comandos: [], paredesObliquas, paredesCurtas, jaTinhamEixo: 0, motivoVazio: motivo });
+  const vazio = (motivo: string): PropostaDeEixos => ({ eixos: [], novos: 0, renomeados: 0, comandos: [], paredesObliquas, paredesCurtas, jaTinhamEixo: 0, motivoVazio: motivo });
   // SÓ O LOTE (08/10/2026): sem edificação, os lados ortogonais do lote fechado — se a hipótese deixar.
   const semEdificacao = paredes.length === 0 && blocos.length === 0;
   const limitesDoNivel = model.boundaries.filter((b) => b.levelId === levelId);
@@ -228,43 +246,167 @@ export function propostaDeEixos(
     });
   };
 
-  const existentes = model.eixos ?? [];
-  const jaTem = (vertical: boolean, c: number) =>
-    existentes.some((e) => {
-      const dx = Math.abs(e.b.x - e.a.x);
-      const dy = Math.abs(e.b.y - e.a.y);
-      if (vertical) return dx <= TOLERANCIA_ORTOGONAL_MM && dy > 0 && Math.abs((e.a.x + e.b.x) / 2 - c) < Math.max(hip.juntarAMenosDeMm, TOLERANCIA_ORTOGONAL_MM);
-      return dy <= TOLERANCIA_ORTOGONAL_MM && dx > 0 && Math.abs((e.a.y + e.b.y) / 2 - c) < Math.max(hip.juntarAMenosDeMm, TOLERANCIA_ORTOGONAL_MM);
-    });
+  // Os eixos que já existem, ortogonais, com a sua coordenada. Os de nome AUTOMÁTICO entram na sequência (com
+  // `renumerar`); os de nome à mão e as linhas de referência sem nome ficam fora dela — e o nome à mão fica reservado.
+  const existentes = (model.eixos ?? []).flatMap((e) => {
+    const dx = Math.abs(e.b.x - e.a.x);
+    const dy = Math.abs(e.b.y - e.a.y);
+    if (dx <= TOLERANCIA_ORTOGONAL_MM && dy > 0) return [{ e, vertical: true, c: (e.a.x + e.b.x) / 2 }];
+    if (dy <= TOLERANCIA_ORTOGONAL_MM && dx > 0) return [{ e, vertical: false, c: (e.a.y + e.b.y) / 2 }];
+    return [];
+  });
+  const tolerancia = Math.max(hip.juntarAMenosDeMm, TOLERANCIA_ORTOGONAL_MM);
+  const naSequencia = (nome: string) => hip.renumerar && nomeAutomaticoDeEixo(nome);
+  const reservados = new Set((model.eixos ?? []).map((e) => e.nome).filter((n) => !naSequencia(n)));
 
   let jaTinhamEixo = 0;
-  const usados = new Set(existentes.map((e) => e.nome));
   const eixos: EixoProposto[] = [];
-  // Verticais da esquerda para a direita (A, B…); horizontais de CIMA para baixo (o Y do modelo cresce para cima).
-  const ordem: [boolean, { c: number; origem: EixoProposto['origem'] }[]][] = [
-    [true, juntar(true)],
-    [false, juntar(false).reverse()],
-  ];
-  for (const [vertical, grupos] of ordem) {
-    for (const g of grupos) {
-      if (jaTem(vertical, g.c)) {
+  for (const vertical of [true, false]) {
+    type Item = { c: number; novo?: { origem: EixoProposto['origem'] }; existente?: (typeof existentes)[number] };
+    const itens: Item[] = [];
+    for (const g of juntar(vertical)) {
+      if (existentes.some((x) => x.vertical === vertical && Math.abs(x.c - g.c) < tolerancia)) {
         jaTinhamEixo++;
         continue;
       }
-      const a = vertical ? { x: g.c, y: Math.round(minY) } : { x: Math.round(minX), y: g.c };
-      const b = vertical ? { x: g.c, y: Math.round(maxY) } : { x: Math.round(maxX), y: g.c };
-      const nome = proximoNomeDeEixo(usados, eixoEhVertical(a, b));
-      usados.add(nome);
-      eixos.push({ nome, vertical, coordenadaMm: g.c, a, b, origem: g.origem });
+      itens.push({ c: g.c, novo: { origem: g.origem } });
+    }
+    for (const x of existentes) if (x.vertical === vertical && naSequencia(x.e.nome)) itens.push({ c: x.c, existente: x });
+    // Verticais da esquerda para a direita (A, B…); horizontais de CIMA para baixo (o Y do modelo cresce para cima).
+    itens.sort((p, q) => (vertical ? p.c - q.c : q.c - p.c));
+
+    // Sem renumerar: os nomes novos continuam depois de TODOS os usados (o comportamento de antes).
+    const usados = new Set(hip.renumerar ? reservados : (model.eixos ?? []).map((e) => e.nome));
+    let i = vertical ? 0 : 1;
+    const proximo = () => {
+      for (;;) {
+        const nome = vertical ? letraDoEixo(i) : String(i);
+        i++;
+        if (!usados.has(nome)) {
+          usados.add(nome);
+          return nome;
+        }
+      }
+    };
+    for (const it of itens) {
+      if (it.existente) {
+        const e = it.existente.e;
+        const nome = proximo();
+        eixos.push({
+          nome,
+          vertical,
+          coordenadaMm: Math.round(it.c),
+          a: e.a,
+          b: e.b,
+          origem: 'EXISTENTE',
+          existenteId: e.id,
+          ...(nome !== e.nome ? { nomeAnterior: e.nome } : {}),
+        });
+        continue;
+      }
+      const a = vertical ? { x: it.c, y: Math.round(minY) } : { x: Math.round(minX), y: it.c };
+      const b = vertical ? { x: it.c, y: Math.round(maxY) } : { x: Math.round(maxX), y: it.c };
+      eixos.push({ nome: proximo(), vertical: eixoEhVertical(a, b), coordenadaMm: it.c, a, b, origem: it.novo!.origem });
     }
   }
 
+  const novos = eixos.filter((e) => !e.existenteId);
+  const renomeados = eixos.filter((e) => e.nomeAnterior !== undefined);
   return {
     eixos,
-    comandos: eixos.map((e) => ({ type: 'AddEixo', a: e.a, b: e.b, nome: e.nome }) as Command),
+    novos: novos.length,
+    renomeados: renomeados.length,
+    comandos: [
+      ...novos.map((e) => ({ type: 'AddEixo', a: e.a, b: e.b, nome: e.nome }) as Command),
+      ...renomeados.map((e) => ({ type: 'SetEixoProps', eixoId: e.existenteId!, nome: e.nome }) as Command),
+    ],
     paredesObliquas,
     paredesCurtas,
     jaTinhamEixo,
-    motivoVazio: eixos.length === 0 ? 'Todas as linhas da edificação já têm eixo.' : null,
+    motivoVazio: novos.length === 0 && renomeados.length === 0 ? 'Todas as linhas já têm eixo, e os nomes já estão em ordem.' : null,
   };
+}
+
+/** Nome que o próprio sistema dá a eixo (A, B… Z, A1…; 1, 2…) — o que a renumeração pode trocar. */
+export function nomeAutomaticoDeEixo(nome: string): boolean {
+  return /^[A-Z]\d*$/.test(nome) || /^\d+$/.test(nome);
+}
+
+/** Retângulo alinhado aos eixos, na unidade de quem desenha (px de tela, mm de papel, mm reais). */
+export interface FaixaDasCotas {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** Um retângulo vazio, que `crescerFaixa` vai abrindo. */
+export function faixaVazia(): FaixaDasCotas {
+  return { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+}
+
+export function crescerFaixa(f: FaixaDasCotas, ...pontos: { x: number; y: number }[]): void {
+  for (const p of pontos) {
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    f.minX = Math.min(f.minX, p.x);
+    f.minY = Math.min(f.minY, p.y);
+    f.maxX = Math.max(f.maxX, p.x);
+    f.maxY = Math.max(f.maxY, p.y);
+  }
+}
+
+/**
+ * ONDE FICAM AS BOLHAS DE UM EIXO (09/10/2026) — *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*.
+ *
+ * O eixo passa uma distância fixa EM MM além do desenho, mas as cotas ficam a uma distância fixa EM PIXEL (ou em mm de
+ * papel): com zoom afastado os 3 m viravam poucos pixels e a bolha caía em cima das cadeias. Aqui a bolha é empurrada,
+ * NA HORA DE DESENHAR, para além da faixa das cotas (`faixa`, já com folga): o centro de cada bolha fica no ponto da
+ * reta do eixo em que ela inteira já saiu do retângulo. Sem cota (ou eixo que não cruza a faixa), a bolha fica onde
+ * sempre ficou: `folga` além da ponta. Devolve os dois centros e onde a linha do eixo termina (na borda da bolha).
+ */
+export function bolhasDoEixo(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  raio: number,
+  faixa: FaixaDasCotas | null,
+  folga = 0,
+): { centroA: { x: number; y: number }; centroB: { x: number; y: number }; linhaA: { x: number; y: number }; linhaB: { x: number; y: number } } {
+  const comp = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const ux = (b.x - a.x) / comp;
+  const uy = (b.y - a.y) / comp;
+  let lA = -(raio + folga);
+  let lB = comp + raio + folga;
+  if (faixa && Number.isFinite(faixa.minX) && Number.isFinite(faixa.maxX)) {
+    // A faixa crescida do raio + folga: o CENTRO fora dela = a bolha inteira fora da faixa.
+    const g = raio + folga;
+    const x0 = faixa.minX - g;
+    const x1 = faixa.maxX + g;
+    const y0 = faixa.minY - g;
+    const y1 = faixa.maxY + g;
+    // Reta × retângulo pelo método das faixas (slab).
+    let tIn = -Infinity;
+    let tOut = Infinity;
+    for (const [o, d, lo, hi] of [
+      [a.x, ux, x0, x1],
+      [a.y, uy, y0, y1],
+    ] as const) {
+      if (Math.abs(d) < 1e-12) {
+        if (o < lo || o > hi) {
+          tIn = Infinity;
+          tOut = -Infinity;
+        }
+        continue;
+      }
+      const t1 = (lo - o) / d;
+      const t2 = (hi - o) / d;
+      tIn = Math.max(tIn, Math.min(t1, t2));
+      tOut = Math.min(tOut, Math.max(t1, t2));
+    }
+    if (tIn <= tOut) {
+      lA = Math.min(lA, tIn);
+      lB = Math.max(lB, tOut);
+    }
+  }
+  const ponto = (l: number) => ({ x: a.x + ux * l, y: a.y + uy * l });
+  return { centroA: ponto(lA), centroB: ponto(lB), linhaA: ponto(lA + raio), linhaB: ponto(lB - raio) };
 }

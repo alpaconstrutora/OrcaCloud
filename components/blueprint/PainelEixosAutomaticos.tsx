@@ -14,6 +14,8 @@ export interface PainelEixosAutomaticosProps {
   onHipotese: (campo: DistanciaDosEixos, valorMm: number) => void;
   /** "Usar o lote" — lados, recuos, restrições e divisas (08/10/2026). */
   onUsarLadosDoLote: (ligado: boolean) => void;
+  /** "Renumerar os existentes" (09/10/2026). */
+  onRenumerar: (ligado: boolean) => void;
   /** Recolhe a gaveta para ver a prévia tracejada no desenho. */
   onVerPrevia: () => void;
   resultado: { ok: boolean; texto: string } | null;
@@ -29,9 +31,10 @@ const ORIGEM: Record<PropostaDeEixos['eixos'][number]['origem'], string> = {
   RECUO: 'Recuo',
   RESTRICAO: 'Faixa de restrição',
   DIVISA: 'Divisa',
+  EXISTENTE: 'Já existe',
 };
 
-export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onUsarLadosDoLote, onVerPrevia, resultado }: PainelEixosAutomaticosProps) {
+export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onUsarLadosDoLote, onRenumerar, onVerPrevia, resultado }: PainelEixosAutomaticosProps) {
   const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs';
   const numero = (k: DistanciaDosEixos, emMm: number, rotulo: string, unidade: 'm' | 'cm', title: string) => {
     const fator = unidade === 'm' ? 1000 : 10;
@@ -68,7 +71,8 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
           </li>
           <li>
             <strong>Letras nos verticais</strong> (A, B… da esquerda para a direita) e <strong>números nos horizontais</strong>{' '}
-            (1, 2… de cima para baixo); os nomes continuam depois dos que já existem, e linha que já tem eixo é pulada.
+            (1, 2… de cima para baixo). Linha que já tem eixo não ganha outro; com <strong>Renumerar</strong>, os existentes
+            de nome automático são renomeados para a sequência ficar em ordem.
           </li>
           <li>
             Os eixos são de verdade: editáveis, e os <strong>Pilares automáticos</strong> passam a usar os cruzamentos deles.
@@ -85,7 +89,14 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
             <input type="checkbox" checked={hipoteses.usarLadosDoLote} onChange={(e) => onUsarLadosDoLote(e.target.checked)} aria-label="Usar o lote (lados, recuos e restrições) sem paredes nem blocos" />
             Usar o lote — lados, recuos e restrições (sem paredes nem blocos)
           </label>
-          {proposta.eixos.length > 0 && (
+          <label
+            className="flex items-center gap-2"
+            title="Com eixos já criados, os novos entram na posição certa e os existentes de nome automático (A, B… / 1, 2…) são renomeados para a sequência continuar em ordem. Nome dado à mão fica como está."
+          >
+            <input type="checkbox" checked={hipoteses.renumerar} onChange={(e) => onRenumerar(e.target.checked)} aria-label="Renumerar os eixos existentes para manter a ordem" />
+            Renumerar os existentes para manter a ordem
+          </label>
+          {proposta.novos > 0 && (
             <button
               type="button"
               onClick={onVerPrevia}
@@ -98,7 +109,7 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
         </div>
       </div>
 
-      {proposta.eixos.length === 0 ? (
+      {proposta.novos + proposta.renomeados === 0 ? (
         <p className="text-sm text-slate-500">{proposta.motivoVazio}</p>
       ) : (
         <table className="w-full table-fixed text-xs" aria-label="Prévia dos eixos">
@@ -112,13 +123,16 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
           </thead>
           <tbody className="divide-y divide-slate-100">
             {proposta.eixos.map((e) => (
-              <tr key={`${e.vertical ? 'v' : 'h'}${e.coordenadaMm}`}>
-                <td className="py-1.5 pr-2 font-medium text-slate-700">{e.nome}</td>
+              <tr key={e.existenteId ?? `${e.vertical ? 'v' : 'h'}${e.coordenadaMm}`}>
+                <td className={`py-1.5 pr-2 font-medium ${e.existenteId ? 'text-slate-500' : 'text-slate-700'}`}>{e.nome}</td>
                 <td className="py-1.5 pr-2 text-slate-600">{e.vertical ? 'Vertical' : 'Horizontal'}</td>
                 <td className="py-1.5 pr-2 text-right tabular-nums text-slate-600">
                   {e.vertical ? 'x' : 'y'} = {metros(e.coordenadaMm)}
                 </td>
-                <td className="py-1.5 pl-4 text-slate-600">{ORIGEM[e.origem]}</td>
+                <td className="py-1.5 pl-4 text-slate-600">
+                  {ORIGEM[e.origem]}
+                  {e.nomeAnterior !== undefined ? ` — era ${e.nomeAnterior}` : ''}
+                </td>
               </tr>
             ))}
           </tbody>

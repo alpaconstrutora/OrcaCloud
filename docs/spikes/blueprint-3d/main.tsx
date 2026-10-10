@@ -22,7 +22,7 @@ import {
   type BlueprintModel,
   type Command,
 } from '../../../utils/blueprintKernel';
-import { comandoDeMover } from '../../../utils/blueprintSelecao';
+import { comandoDeMover, comandosDeElevar } from '../../../utils/blueprintSelecao';
 import { gerarIfc } from '../../../utils/blueprintIfc';
 import { matrizDaReferencia } from '../../../utils/blueprintReferenciaExterna';
 
@@ -722,10 +722,21 @@ const referencias = params.get('referencia') === '1'
  * a barra mostra o canto `a` dela, para o passeio afirmar o antes, o depois e o
  * desfeito sem inspecionar a cena.
  */
+/**
+ * `?peca=ponto` (10/10/2026): um ponto de rede (evaporadora a 2,20 m) no meio da
+ * casa, já selecionado — para a seta VERDE (subir/descer) ter o que mudar. A barra
+ * mostra a cota dele.
+ */
+const comPonto = params.get('peca') === 'ponto';
+const modeloDeEditar = comPonto
+  ? applyCommand(model, { type: 'AddTerminal', levelId: terreoId, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(2000, 2500), cotaMm: 2200 } as Command).model
+  : model;
+const idInicial = comPonto ? modeloDeEditar.terminais![0].id : (model.walls[0]?.id ?? '');
+
 function AppEditar() {
-  const [historico] = useState(() => new ModelHistory(model));
-  const [m, setM] = useState(model);
-  const [selecionados, setSelecionados] = useState<string[]>([model.walls[0].id]);
+  const [historico] = useState(() => new ModelHistory(modeloDeEditar));
+  const [m, setM] = useState(modeloDeEditar);
+  const [selecionados, setSelecionados] = useState<string[]>([idInicial]);
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -737,10 +748,12 @@ function AppEditar() {
     return () => window.removeEventListener('keydown', tecla);
   }, [historico]);
   const parede = m.walls.find((w) => w.id === model.walls[0].id)!;
+  const ponto = comPonto ? m.terminais!.find((x) => x.id === idInicial)! : null;
   return (
     <>
       <div id="barra">
         EDITAR · SELECIONADO: {selecionados.join(',') || '(nenhum)'} · PAREDE: {parede.a.x},{parede.a.y}
+        {ponto && ` · COTA: ${ponto.cotaMm}`}
       </div>
       <div id="tela">
         <Blueprint3DTab
@@ -753,6 +766,12 @@ function AppEditar() {
             const cmd = comandoDeMover(m, selecionados, d, false);
             if (!cmd) return;
             historico.apply(cmd);
+            setM(historico.current);
+          }}
+          onElevar={(dz) => {
+            const r = comandosDeElevar(m, selecionados, dz);
+            if (!r.ok) return;
+            historico.applyMany(r.comandos);
             setM(historico.current);
           }}
         />

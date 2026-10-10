@@ -183,6 +183,16 @@ export interface BlueprintIncendioRow {
 }
 
 /** `blueprint_study_climatizacao` — premissas de climatização do estudo (E0.1 do roadmap de climatização, 04/10/2026). */
+/** As REFERÊNCIAS EXTERNAS do 3D de um estudo (10/10/2026) — `ReferenciaExterna[]` na coluna, lido sem confiança. */
+export interface BlueprintReferenciasRow {
+  id: string;
+  study_id: string;
+  organization_id: string;
+  referencias: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BlueprintClimatizacaoRow {
   id: string;
   study_id: string;

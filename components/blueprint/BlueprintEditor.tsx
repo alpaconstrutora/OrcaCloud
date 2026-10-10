@@ -353,7 +353,8 @@ import PainelReferenciasExternas from './PainelReferenciasExternas';
 import { fundoVetorialDoDesenho, type FundoVetorial } from '../../utils/dxfParaFundo';
 import { prepararDxf } from '../../utils/dxfParaKernel';
 import { baixarArquivo } from '../../services/digitalFileService';
-import { chaveDasReferencias, lerReferencias, matrizDaReferencia, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
+import { matrizDaReferencia, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
+import { useBlueprintReferencias } from '../../hooks/useBlueprintReferencias';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
 import PainelComentarios from './PainelComentarios';
@@ -564,6 +565,7 @@ import {
   comandoDeDuplicacao,
   comandoDeEspelhamento,
   comandoDeMover,
+  comandosDeElevar,
   comandoDeRotacao,
   comandosDeAlinhamento,
   comandosDeDistribuicao,
@@ -1718,11 +1720,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const [ladoALado3d, setLadoALado3d] = usePersistedState<boolean>('blueprint:vista3dLadoALado', false);
   /**
    * REFERÊNCIAS EXTERNAS (E10.4b, 08/10/2026): os IFC de outras disciplinas no 3D.
-   * A lista mora no navegador, por estudo (fora do modelo e do hash); os bytes
-   * são baixados da biblioteca só quando a referência está visível, uma vez.
+   * Desde 10/10/2026 a lista mora no ESTUDO (`blueprint_study_referencias`) —
+   * quem abre a Planta vê as mesmas; fora do modelo e do hash. Os bytes são
+   * baixados da biblioteca só quando a referência está visível, uma vez.
    */
-  const [referenciasGuardadas, setReferenciasGuardadas] = usePersistedState<unknown>(chaveDasReferencias(study.id), []);
-  const referenciasExternas = useMemo(() => lerReferencias(referenciasGuardadas), [referenciasGuardadas]);
+  const {
+    referencias: referenciasExternas,
+    setReferencias: setReferenciasGuardadas,
+    soNoNavegador: referenciasSoNoNavegador,
+  } = useBlueprintReferencias(study.id, study.organization_id);
   const [bytesDasReferencias, setBytesDasReferencias] = useState<Record<string, ArrayBuffer>>({});
   const [carregandoReferencias, setCarregandoReferencias] = useState<ReadonlySet<string>>(() => new Set());
   const [errosDasReferencias, setErrosDasReferencias] = useState<Record<string, string>>({});
@@ -10289,6 +10295,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         const cmd = comandoDeMover(editor.model, editor.selectedIds, d, modoJuncao === 'MANTER');
         if (cmd) editor.run(cmd);
       }}
+      // SUBIR/DESCER (10/10/2026): a seta verde muda a COTA de ponto, trecho, quadro
+      // e componente — um lote, um Ctrl+Z; o que não tem cota própria é dito.
+      onElevar={(dz) => {
+        const r = comandosDeElevar(editor.model, editor.selectedIds, dz);
+        if (!r.ok) {
+          setAvisoColar(r.aviso);
+          return;
+        }
+        editor.runBatch(r.comandos);
+        setAvisoColar(r.aviso);
+      }}
     />
   );
 
@@ -18021,6 +18038,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onMudar={setReferenciasGuardadas}
               carregando={carregandoReferencias}
               erros={errosDasReferencias}
+              soNoNavegador={referenciasSoNoNavegador}
             />
           )}
 

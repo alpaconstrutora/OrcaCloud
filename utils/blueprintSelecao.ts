@@ -60,6 +60,54 @@ export function comandoDeMover(model: BlueprintModel, selectedIds: readonly stri
   } as Command;
 }
 
+/**
+ * ELEVAR no 3D (10/10/2026, pendência da E10.3): soma `dzMm` à COTA de tudo da
+ * seleção que tem cota — ponto, trecho (as duas pontas), quadro e componente. Um
+ * `Set*Props` por peça, e o lote é um passo de Ctrl+Z.
+ *
+ * - O componente não desce abaixo do piso (cota ≥ 0 é invariante dele); o que
+ *   bateu no piso é dito.
+ * - Parede, divisa, estrutura e telhado não têm cota própria (a altura é do
+ *   pavimento) — ficam onde estão, com aviso.
+ * - O trecho LIGADO a um selecionado que não está na seleção não acompanha: a
+ *   prumada abriria um degrau. O aviso diz quantos, para a pessoa selecionar a
+ *   rede inteira.
+ */
+export function comandosDeElevar(model: BlueprintModel, selectedIds: readonly string[], dzMm: number): ResultadoLote {
+  const dz = Math.round(dzMm);
+  if (!dz) return { ok: false, aviso: 'Deslocamento vertical zero.' };
+  const sel = new Set(selectedIds);
+  const comandos: Command[] = [];
+  for (const t of model.terminais ?? []) if (sel.has(t.id)) comandos.push({ type: 'SetTerminalProps', terminalId: t.id, cotaMm: t.cotaMm + dz } as Command);
+  const trechos = (model.trechos ?? []).filter((t) => sel.has(t.id));
+  for (const t of trechos) comandos.push({ type: 'SetTrechoProps', trechoId: t.id, cotaAMm: t.cotaAMm + dz, cotaBMm: t.cotaBMm + dz } as Command);
+  for (const q of model.quadros ?? []) if (sel.has(q.id)) comandos.push({ type: 'SetQuadroProps', quadroId: q.id, cotaMm: q.cotaMm + dz } as Command);
+  let noPiso = 0;
+  for (const c of model.componentes ?? []) {
+    if (!sel.has(c.id)) continue;
+    const alvo = (c.cotaMm ?? 0) + dz;
+    if (alvo < 0) noPiso++;
+    comandos.push({ type: 'SetComponenteProps', componenteId: c.id, cotaMm: Math.max(0, alvo) } as Command);
+  }
+  const semCota =
+    model.walls.filter((w) => sel.has(w.id)).length +
+    model.boundaries.filter((b) => sel.has(b.id)).length +
+    model.structures.filter((e) => sel.has(e.id)).length +
+    (model.roofs ?? []).filter((r) => sel.has(r.id)).length;
+  if (comandos.length === 0) {
+    return { ok: false, aviso: 'Nada da seleção tem cota própria para subir ou descer (parede, divisa, estrutura e telhado seguem a altura do pavimento).' };
+  }
+  const avisos: string[] = [];
+  if (semCota > 0) avisos.push(`${semCota} peça(s) sem cota própria (parede, divisa, estrutura, telhado) ficou(aram) onde estava(m).`);
+  if (noPiso > 0) avisos.push(`${noPiso} componente(s) parou(aram) no piso (cota 0).`);
+  const pontas = new Set(trechos.flatMap((t) => [`${t.levelId}|${t.a.x},${t.a.y}`, `${t.levelId}|${t.b.x},${t.b.y}`]));
+  const soltos = (model.trechos ?? []).filter(
+    (t) => !sel.has(t.id) && (pontas.has(`${t.levelId}|${t.a.x},${t.a.y}`) || pontas.has(`${t.levelId}|${t.b.x},${t.b.y}`)),
+  ).length;
+  if (soltos > 0) avisos.push(`${soltos} trecho(s) ligado(s) fora da seleção ficou(aram) na cota antiga — selecione a rede inteira para ela subir junta.`);
+  return { ok: true, comandos, aviso: avisos.length > 0 ? avisos.join(' ') : null };
+}
+
 export function familiasDaSelecao(model: BlueprintModel, selectedIds: readonly string[]): FamiliasDaSelecao {
   const sel = new Set(selectedIds);
   const wallIds = model.walls.filter((w) => sel.has(w.id)).map((w) => w.id);
@@ -537,8 +585,9 @@ export interface ParametrosDaMatriz {
  * uma parede que não foi copiada.
  *
  * E10.4 (08/10/2026): pontos, trechos e quadros ENTRAM — o `DuplicateEntities`
- * os copia desde a E1.3 do elétrico (a cópia nasce sem circuito). O componente
- * fica de fora (o comando ainda não o copia) e o aviso diz.
+ * os copia desde a E1.3 do elétrico (a cópia nasce sem circuito). E os
+ * COMPONENTES também (10/10/2026): o comando passou a copiá-los — a fileira de
+ * condensadoras, o mobiliário repetido.
  */
 export function comandosDeMatriz(
   model: BlueprintModel,
@@ -550,7 +599,7 @@ export function comandosDeMatriz(
   const quantidade = Math.floor(parametros.quantidade);
   const px = Math.round(parametros.passoXMm);
   const py = Math.round(parametros.passoYMm);
-  const componentes = (model.componentes ?? []).filter((c) => selectedIds.includes(c.id)).length;
+  const componenteIds = (model.componentes ?? []).filter((c) => selectedIds.includes(c.id)).map((c) => c.id);
   if (
     f.wallIds.length === 0 &&
     f.boundaryIds.length === 0 &&
@@ -558,9 +607,10 @@ export function comandosDeMatriz(
     f.aguaIds.length === 0 &&
     f.trechoIds.length === 0 &&
     f.terminalIds.length === 0 &&
-    f.quadroIds.length === 0
+    f.quadroIds.length === 0 &&
+    componenteIds.length === 0
   ) {
-    return { ok: false, aviso: 'Nada que se possa repetir está selecionado (paredes, estruturas, divisas, telhado ou instalações).' };
+    return { ok: false, aviso: 'Nada que se possa repetir está selecionado (paredes, estruturas, divisas, telhado, instalações ou componentes).' };
   }
   if (quantidade < 2) return { ok: false, aviso: 'A matriz precisa de pelo menos 2 exemplares.' };
   if (quantidade > 200) return { ok: false, aviso: 'No máximo 200 exemplares por matriz.' };
@@ -577,15 +627,15 @@ export function comandosDeMatriz(
       terminalIds: f.terminalIds,
       trechoIds: f.trechoIds,
       quadroIds: f.quadroIds,
+      componenteIds,
       openings: [],
       delta: { x: px * k, y: py * k },
     });
   }
-  const ignorados = componentes + f.openingIds.length;
   return {
     ok: true,
     comandos,
-    aviso: ignorados > 0 ? `${ignorados} componente(s)/esquadria(s) avulsa(s) não entram na matriz.` : null,
+    aviso: f.openingIds.length > 0 ? `${f.openingIds.length} esquadria(s) avulsa(s) não entram na matriz.` : null,
   };
 }
 

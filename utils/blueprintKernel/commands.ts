@@ -1467,6 +1467,14 @@ export type Command =
       terminalIds?: ObjectId[];
       trechoIds?: ObjectId[];
       quadroIds?: ObjectId[];
+      /**
+       * COMPONENTES copiados (10/10/2026, pendência da E10.4 — a matriz de
+       * evaporadoras, condensadoras, reservas e mobiliário). Uid novo, sem a marca
+       * de "sugerido"; o filho de CONJUNTO aponta para a cópia do pai quando o pai
+       * também foi copiado, e fica solto quando não foi — a mesma regra do
+       * `DuplicateLevel`. Opcional pela razão de `aguaIds`.
+       */
+      componenteIds?: ObjectId[];
       openings: { openingId: ObjectId; wallId: ObjectId; offsetMm: number }[];
       delta: Point;
     };
@@ -5416,6 +5424,11 @@ function aplicarSemHash(
         if (!q) throw new KernelError('BOARD_NOT_FOUND', `Quadro não encontrado: ${id}`);
         return q;
       });
+      const componentesCopiados = (command.componenteIds ?? []).map((id) => {
+        const c = (next.componentes ?? []).find((x) => x.id === id);
+        if (!c) throw new KernelError('COMPONENT_NOT_FOUND', `Componente não encontrado: ${id}`);
+        return c;
+      });
       const avulsas = command.openings.map((alvo) => {
         const original = next.openings.find((o) => o.id === alvo.openingId);
         if (!original) {
@@ -5432,7 +5445,8 @@ function aplicarSemHash(
         avulsas.length === 0 &&
         terminais.length === 0 &&
         trechosCopiados.length === 0 &&
-        quadrosCopiados.length === 0
+        quadrosCopiados.length === 0 &&
+        componentesCopiados.length === 0
       ) {
         throw new KernelError('NOTHING_TO_DUPLICATE', 'Nada selecionado para copiar');
       }
@@ -5538,13 +5552,26 @@ function aplicarSemHash(
         next.quadros = [...(next.quadros ?? []), { ...q, id, uid: novoUid(), levelId: command.levelId, at: deslocar(q.at), drs: null, quadroPaiId: null }];
         diff.created.push(id);
       }
+      const terminalCopiado = new Map<ObjectId, ObjectId>();
       for (const t of terminais) {
         const id = nextId(next, 'trm');
+        terminalCopiado.set(t.id, id);
         const { circuitoId: _circuito, sugerida: _sugerida, ...resto } = t;
         void _circuito;
         void _sugerida;
         next.terminais = [...(next.terminais ?? []), { ...resto, id, uid: novoUid(), levelId: command.levelId, at: deslocar(t.at) }];
         diff.created.push(id);
+      }
+      // O SISTEMA da climatização (10/10/2026): a evaporadora copiada JUNTO com a
+      // condensadora dela passa a apontar para a CÓPIA — senão a matriz de splits
+      // penduraria N evaporadoras novas na condensadora do primeiro. Copiada
+      // sozinha, continua no sistema de origem (é o caso do VRF: mais uma
+      // evaporadora na mesma condensadora).
+      for (const t of next.terminais ?? []) {
+        if (!terminalCopiado.has(t.id) && t.condensadoraId != null && [...terminalCopiado.values()].includes(t.id)) {
+          const daCopia = terminalCopiado.get(t.condensadoraId);
+          if (daCopia) t.condensadoraId = daCopia;
+        }
       }
       for (const t of trechosCopiados) {
         const id = nextId(next, 'trc');
@@ -5553,6 +5580,26 @@ function aplicarSemHash(
         void _sugerido;
         next.trechos = [...(next.trechos ?? []), { ...resto, id, uid: novoUid(), levelId: command.levelId, a: deslocar(t.a), b: deslocar(t.b) }];
         diff.created.push(id);
+      }
+      if (componentesCopiados.length > 0) {
+        const uidCopiado = new Map<ElementUid, ElementUid>();
+        const copias: NonNullable<typeof next.componentes>[number][] = [];
+        for (const c of componentesCopiados) {
+          const id = nextId(next, 'cmp');
+          const uid = novoUid();
+          uidCopiado.set(c.uid, uid);
+          const { sugerido: _sugerido, ...resto } = c;
+          void _sugerido;
+          copias.push({ ...resto, id, uid, levelId: command.levelId, at: deslocar(c.at) });
+          diff.created.push(id);
+        }
+        for (const c of copias) {
+          if (!c.paiUid) continue;
+          const pai = uidCopiado.get(c.paiUid);
+          if (pai) c.paiUid = pai;
+          else delete c.paiUid;
+        }
+        next.componentes = [...(next.componentes ?? []), ...copias];
       }
       break;
     }

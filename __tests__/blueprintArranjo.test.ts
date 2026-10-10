@@ -98,10 +98,56 @@ describe('E10.4 · matriz da instalação', () => {
     expect(depois.trechos!.map((x) => x.a.x).sort((a, b) => a - b)).toEqual([0, 4000, 8000]);
   });
 
-  it('o componente ainda não se copia: fica de fora e o aviso diz', () => {
+  it('o COMPONENTE também se copia (10/10/2026): uid novo, deslocado, sem a marca de sugerido', () => {
     const { m, t } = nivel();
-    const base = applyBatch(m, [evap(t, 1000, 1000), { type: 'AddComponente', levelId: t, tipoId: 'CONDENSADORA', at: point(3000, 0) } as Command]).model;
-    const r = comandosDeMatriz(base, [base.terminais![0].id, base.componentes![0].id], t, { quantidade: 2, passoXMm: 4000, passoYMm: 0 });
-    expect(r).toMatchObject({ ok: true, aviso: /1 componente/ });
+    const base = applyBatch(m, [{ type: 'AddComponente', levelId: t, tipoId: 'CONDENSADORA', at: point(3000, 0) } as Command]).model;
+    const original = base.componentes![0];
+    const r = comandosDeMatriz(base, [original.id], t, { quantidade: 3, passoXMm: 0, passoYMm: 2500 });
+    if (!r.ok) throw new Error(r.aviso);
+    expect(r.aviso).toBeNull();
+    const depois = applyBatch(base, r.comandos).model;
+    expect(depois.componentes!.map((c) => c.at.y)).toEqual([0, 2500, 5000]);
+    expect(depois.componentes!.every((c) => c.tipoId === 'CONDENSADORA' && !c.sugerido)).toBe(true);
+    expect(new Set(depois.componentes!.map((c) => c.uid)).size).toBe(3);
+  });
+
+  it('⚠️ split copiado inteiro: a evaporadora da cópia liga na condensadora da CÓPIA; copiada sozinha, fica no sistema de origem (VRF)', () => {
+    const { m, t } = nivel();
+    let base = applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'CD', tipoHidraulico: 'CONDENSADORA_SPLIT', at: point(5000, 0), cotaMm: 300 } as Command).model;
+    const cd = base.terminais![0].id;
+    base = applyCommand(base, { ...(evap(t, 1000, 1000) as object), condensadoraId: cd } as Command).model;
+    const ev = base.terminais![1].id;
+    const inteiro = comandosDeMatriz(base, [cd, ev], t, { quantidade: 2, passoXMm: 0, passoYMm: 4000 });
+    if (!inteiro.ok) throw new Error(inteiro.aviso);
+    const d1 = applyBatch(base, inteiro.comandos).model;
+    const cdCopia = d1.terminais!.find((x) => x.tipoHidraulico === 'CONDENSADORA_SPLIT' && x.id !== cd)!;
+    const evCopia = d1.terminais!.find((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL' && x.id !== ev)!;
+    expect(evCopia.condensadoraId).toBe(cdCopia.id);
+    expect(d1.terminais!.find((x) => x.id === ev)!.condensadoraId).toBe(cd);
+
+    const soEvap = comandosDeMatriz(base, [ev], t, { quantidade: 2, passoXMm: 0, passoYMm: 4000 });
+    if (!soEvap.ok) throw new Error(soEvap.aviso);
+    const d2 = applyBatch(base, soEvap.comandos).model;
+    expect(d2.terminais!.filter((x) => x.condensadoraId === cd)).toHaveLength(2);
+  });
+
+  it('o conjunto copiado inteiro leva os filhos para a cópia do pai; o filho copiado sozinho fica solto', async () => {
+    const { m, t } = nivel();
+    const base = applyCommand(m, { type: 'AddConjunto', levelId: t, tipoId: 'CONJUNTO_JANTAR', at: point(5000, 4000) } as Command).model;
+    const pai = base.componentes!.find((c) => c.tipoId === 'CONJUNTO_JANTAR')!;
+    const todos = base.componentes!.map((c) => c.id);
+    const r = comandosDeMatriz(base, todos, t, { quantidade: 2, passoXMm: 6000, passoYMm: 0 });
+    if (!r.ok) throw new Error(r.aviso);
+    const depois = applyBatch(base, r.comandos).model;
+    const paiCopia = depois.componentes!.find((c) => c.tipoId === 'CONJUNTO_JANTAR' && c.id !== pai.id)!;
+    expect(depois.componentes!.filter((c) => c.paiUid === paiCopia.uid)).toHaveLength(5);
+    expect(depois.componentes!.filter((c) => c.paiUid === pai.uid)).toHaveLength(5);
+
+    const mesa = base.componentes!.find((c) => c.tipoId === 'MESA_JANTAR')!;
+    const so = comandosDeMatriz(base, [mesa.id], t, { quantidade: 2, passoXMm: 6000, passoYMm: 0 });
+    if (!so.ok) throw new Error(so.aviso);
+    const d2 = applyBatch(base, so.comandos).model;
+    const mesaCopia = d2.componentes!.find((c) => c.tipoId === 'MESA_JANTAR' && c.id !== mesa.id)!;
+    expect(mesaCopia.paiUid).toBeUndefined();
   });
 });

@@ -47,7 +47,7 @@ import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
-import { caixaInicial, deltaDoMundoParaModelo, ehClique, limitarCaixa, planosDaCaixaDeCorte, selecaoDoClique, type CaixaDeCorte } from '../../utils/blueprint3dSelecao';
+import { caixaInicial, deltaDoMundoParaModelo, deltaVerticalMm, ehClique, limitarCaixa, planosDaCaixaDeCorte, selecaoDoClique, type CaixaDeCorte } from '../../utils/blueprint3dSelecao';
 import { pontoDaAlca } from '../../utils/blueprintSelecao';
 import { prismasDoNucleo } from '../../utils/blueprintNucleo3d';
 import {
@@ -162,6 +162,12 @@ interface Props {
    * Ausente = sem alça.
    */
   onMover?: (delta: { x: number; y: number }) => void;
+  /**
+   * Subir/descer a seleção pela seta VERDE da alça (10/10/2026): o deslocamento
+   * vertical em mm chega aqui para virar a nova cota (um lote = um Ctrl+Z).
+   * Ausente = a alça só anda em planta.
+   */
+  onElevar?: (dzMm: number) => void;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**
@@ -2142,7 +2148,7 @@ export default function Blueprint3DViewer(props: Props) {
     });
   const limites = useMemo(() => caixaInicial({ centro, raio }, 1), [centro, raio]);
   /** E10.3: mover no 3D — a alça aparece com seleção e `onMover`; a prévia só durante o arraste. */
-  const { onMover, selecionados } = props;
+  const { onMover, onElevar, selecionados } = props;
   const alca = useMemo(() => (onMover && selecionados && selecionados.size > 0 ? pontoDaAlca(model, [...selecionados]) : null), [onMover, selecionados, model]);
   const [arrastando, setArrastando] = useState(false);
   const [chaveDaAlca, setChaveDaAlca] = useState(0);
@@ -2226,7 +2232,7 @@ export default function Blueprint3DViewer(props: Props) {
         {andando
           ? 'WASD ou setas para andar · mouse para olhar · Esc para sair'
           : alca
-            ? 'Arraste as setas da alça para mover a seleção · Shift+clique soma à seleção · Ctrl+Z desfaz'
+            ? `Arraste as setas da alça para mover a seleção${onElevar ? ' (a verde sobe e desce)' : ''} · Shift+clique soma à seleção · Ctrl+Z desfaz`
             : 'Arraste para orbitar · scroll para zoom · botão direito para mover · Shift+clique soma à seleção'}
       </div>
 
@@ -2320,7 +2326,7 @@ export default function Blueprint3DViewer(props: Props) {
         {alca && !andando && (
           <group key={chaveDaAlca} position={alca}>
             <PivotControls
-              activeAxes={[true, false, true]}
+              activeAxes={[true, !!onElevar, true]}
               disableRotations
               disableScaling
               disableSliders
@@ -2338,9 +2344,11 @@ export default function Blueprint3DViewer(props: Props) {
               onDragEnd={() => {
                 setArrastando(false);
                 const d = deltaDoMundoParaModelo(deslocamentoRef.current);
+                const dz = deltaVerticalMm(deslocamentoRef.current);
                 // A alça volta à origem (remonta); o desenho é que se move, pelo comando.
                 setChaveDaAlca((k) => k + 1);
                 if (d.x || d.y) onMover?.(d);
+                if (dz) onElevar?.(dz);
               }}
             >
               {arrastando && (

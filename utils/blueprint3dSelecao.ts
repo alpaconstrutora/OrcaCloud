@@ -64,6 +64,14 @@ export function deltaDoMundoParaModelo(d: readonly [number, number, number], pas
   return { x: r(d[0]), y: r(d[2]) };
 }
 
+/**
+ * SUBIR/DESCER no 3D (10/10/2026, pendência da E10.3): o Y do arraste (metro)
+ * vira milímetro de COTA, arredondado ao mesmo passo do arraste em planta.
+ */
+export function deltaVerticalMm(d: readonly [number, number, number], passoMm = 10): number {
+  return Math.round((d[1] * 1000) / passoMm) * passoMm + 0;
+}
+
 /** A CAIXA DE CORTE, em METRO no 3D (Y = altura). */
 export interface CaixaDeCorte {
   min: [number, number, number];

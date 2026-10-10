@@ -438,6 +438,18 @@ Sessão de 04/10/2026 (VS Code, Claude Code), transcrita literalmente:
 - **Entregável agora:** este benchmark + roadmap. A execução é depois, uma frente por etapa
   (`clima-e<N>`).
 
+**Pedido de 10/10/2026** (depois da E10 publicada), transcrito literalmente:
+
+```
+implementar:
+1
+Implementar o que Ficou de fora:
+1. Componente na matriz: pedir que componentes também se copiem exige mudar o kernel; hoje eles ficam de fora, com aviso.
+2. Altura no 3D: mover pela alça só desloca em planta; a cota continua sendo ajustada no painel.
+3. Decisão sua: a lista de referências IFC de um estudo está guardada no navegador de quem a montou, porque guardá-la no estudo, para todos verem, pede uma tabela nova (migration), e isso só com o seu OK. Quer que eu crie essa tabela? sim
+4. depois seguir para o próximo passo do roteiro é a E11, o gerador de climatização. Começo quando você mandar.
+```
+
 ## Critério e legenda
 
 **Critério do grau: paridade com o AltoQi Builder Climatização, mais o ciclo fechado.** Um item é
@@ -2466,3 +2478,56 @@ A 10.4 sai em três publicações: **(a)** alinhar/arranjo, **(b)** IFC externo 
   - A caixa do traço com o PNG e com o vetor difere em **1 px**.
   - Depois do mesmo zoom forte, o PNG tem **3,77 %** da tela escura e o vetor **0,18 %**. Os prints
     mostram as mesmas três linhas, grossas no PNG e finas no vetor.
+
+### Pendências da E10 · 10/10/2026 (frente `clima-e10-pendencias`)
+
+Os três itens do pedido de 10/10/2026 (acima, junto do pedido original).
+
+1. **Componente na matriz.**
+   - O `DuplicateEntities` do kernel ganhou `componenteIds`:
+     - uid novo, sem a marca de "sugerido";
+     - o filho de conjunto aponta para a cópia do pai quando o pai também vai, e fica solto quando não
+       vai (a regra do `DuplicateLevel`).
+   - **E o sistema da climatização acompanha:** a evaporadora copiada junto com a condensadora dela
+     passa a apontar para a CÓPIA (antes, a matriz de splits penduraria N evaporadoras na primeira
+     condensadora). Copiada sozinha, a evaporadora fica no sistema de origem — o caso do VRF.
+   - **Sem bump:** a versão do kernel acompanha o formato do MODELO, e comando não é gravado nem
+     reproduzido (o `componenteIds` do `TranslateEntities`, P2.4, também entrou sem bump). O pacote
+     da `planta-api` não aplica comandos, então não foi reconstruído.
+   - O Ctrl+D (duplicar) continua sem instalações e componentes: não foi pedido, e os testes dele
+     fixam esse comportamento.
+2. **Subir e descer no 3D.**
+   - A alça ganhou a seta VERDE (Y) quando o editor oferece `onElevar`. O Y do arraste vira mm de
+     cota (`deltaVerticalMm`, passo de 10 mm).
+   - `comandosDeElevar` gera um `Set*Props` por peça: ponto, trecho (as duas pontas), quadro e
+     componente. É um lote, portanto um Ctrl+Z.
+   - O componente para no piso. Parede, divisa, estrutura e telhado não têm cota própria e ficam onde
+     estão, com aviso. O trecho ligado que ficou fora da seleção também é dito: a rede abriria um
+     degrau.
+3. **Referências IFC no ESTUDO** (aprovado pelo usuário).
+   - Migration `aplicar_20271010002100_blueprint_study_referencias.sql`, **aplicada** em 10/10/2026
+     (`db query -f`). Conferida no banco: RLS ligada, 1 policy (`is_org_member`, uma perna só) e `anon`
+     sem SELECT.
+   - Uma linha por estudo com a lista em JSONB (CHECK de array); a FK `(study_id, organization_id)`
+     amarra a organização à do estudo.
+   - Hook `useBlueprintReferencias`, no molde da climatização:
+     - o estudo com lista → vale a lista do estudo;
+     - o estudo sem lista → **adota a que o navegador já tinha** e grava (quem montou antes não perde);
+     - a tabela não respondeu → segue no navegador, e o painel avisa.
+
+**Prova:**
+
+- `blueprintArranjo.test.ts`:
+  - o componente copiado;
+  - o split copiado inteiro (a evaporadora da cópia liga na condensadora da cópia) e só a evaporadora
+    (as duas no mesmo sistema);
+  - o conjunto inteiro × o filho sozinho.
+- `blueprint3dEditor.test.ts` (+3 testes): o Y do arraste; ponto, trecho e componente sobem num lote e
+  um Ctrl+Z desce tudo; o piso, a parede e o trecho ligado.
+- `BlueprintEditor.test.tsx`:
+  - a lista é gravada no estudo (`save` com a lista; o olho e a lixeira também);
+  - o navegador é adotado quando o estudo não tem lista;
+  - a lista do estudo vence a do navegador.
+- **Harness do 3D** (`?editar=1&peca=ponto`): o passeio acha a seta verde pelos pixels e arrasta para
+  cima. A cota foi de **2200 → 6770**, e o **Ctrl+Z** a devolveu a **2200**. Achado no caminho: o
+  `idInicial` do harness lia `model.walls[0]` no carregamento e derrubava a cena sem paredes — corrigido.

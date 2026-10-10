@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ModelHistory, applyBatch, applyCommand, conexaoViraPeca, emptyModel, point, type Command } from '../utils/blueprintKernel';
-import { caixaInicial, deltaDoMundoParaModelo, dentroDaCaixa, limitarCaixa, planosDaCaixaDeCorte, selecaoDoClique } from '../utils/blueprint3dSelecao';
-import { comandoDeMover, pontoDaAlca } from '../utils/blueprintSelecao';
+import { caixaInicial, deltaDoMundoParaModelo, deltaVerticalMm, dentroDaCaixa, limitarCaixa, planosDaCaixaDeCorte, selecaoDoClique } from '../utils/blueprint3dSelecao';
+import { comandoDeMover, comandosDeElevar, pontoDaAlca } from '../utils/blueprintSelecao';
 import { pecasDasConexoes3D } from '../utils/blueprintIsometrico';
 import { cilindroDoTrecho } from '../utils/blueprintRede';
 
@@ -132,3 +132,54 @@ describe('E10.3 · as bolsas do 3D da tela = as do IFC', () => {
     expect(pecasDasConexoes3D(te).map((x) => x.tipo)).toEqual(['TE']);
   });
 });
+
+describe('pendência da E10.3 (10/10/2026) · subir e descer pela seta verde', () => {
+  it('o Y do arraste vira mm de cota, ao passo de 10 mm; X e Z não entram', () => {
+    expect(deltaVerticalMm([3, 0.5, -2])).toBe(500);
+    expect(deltaVerticalMm([0, -0.1234, 0])).toBe(-120);
+    expect(deltaVerticalMm([0, 0.004, 0])).toBe(0);
+  });
+
+  it('ponto, trecho (as duas pontas), quadro e componente sobem juntos num lote; um Ctrl+Z desce tudo', () => {
+    const { m, t } = nivel();
+    const base = applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(2000, 3000), cotaMm: 2200 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'MECANICA', a: point(0, 0), b: point(3000, 0), cotaAMm: 2600, cotaBMm: 2500, bitolaMm: 400, alturaDutoMm: 250 } as Command,
+      { type: 'AddComponente', levelId: t, tipoId: 'CONDENSADORA', at: point(6000, 0) } as Command,
+    ]).model;
+    const ids = [base.terminais![0].id, base.trechos![0].id, base.componentes![0].id];
+    const r = comandosDeElevar(base, ids, 300);
+    if (!r.ok) throw new Error(r.aviso);
+    expect(r.aviso).toBeNull();
+    const h = new ModelHistory(base);
+    h.applyMany(r.comandos);
+    expect(h.current.terminais![0].cotaMm).toBe(2500);
+    expect([h.current.trechos![0].cotaAMm, h.current.trechos![0].cotaBMm]).toEqual([2900, 2800]);
+    expect(h.current.componentes![0].cotaMm).toBe((base.componentes![0].cotaMm ?? 0) + 300);
+    h.undo();
+    expect(h.current.terminais![0].cotaMm).toBe(2200);
+    expect(h.current.trechos![0].cotaAMm).toBe(2600);
+  });
+
+  it('o componente para no piso; parede não tem cota própria; o trecho ligado fora da seleção é dito', () => {
+    const { m, t } = nivel();
+    const base = applyBatch(m, [
+      { type: 'AddComponente', levelId: t, tipoId: 'SOFA', at: point(6000, 0) } as Command,
+      { type: 'AddWall', levelId: t, a: point(0, 0), b: point(4000, 0), thicknessMm: 150, heightMm: 2800 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'MECANICA', a: point(0, 2000), b: point(3000, 2000), cotaAMm: 2600, cotaBMm: 2600, bitolaMm: 400, alturaDutoMm: 250 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'MECANICA', a: point(3000, 2000), b: point(3000, 5000), cotaAMm: 2600, cotaBMm: 2600, bitolaMm: 400, alturaDutoMm: 250 } as Command,
+    ]).model;
+    const sofa = base.componentes![0].id;
+    const desce = comandosDeElevar(base, [sofa, base.walls[0].id], -500);
+    if (!desce.ok) throw new Error(desce.aviso);
+    expect(desce.aviso).toMatch(/1 peça\(s\) sem cota própria/);
+    expect(desce.aviso).toMatch(/parou\(aram\) no piso/);
+    expect(applyBatch(base, desce.comandos).model.componentes![0].cotaMm ?? 0).toBe(0);
+
+    expect(comandosDeElevar(base, [base.walls[0].id], 300)).toMatchObject({ ok: false, aviso: /Nada da seleção tem cota própria/ });
+    const umTrecho = comandosDeElevar(base, [base.trechos![0].id], 200);
+    expect(umTrecho).toMatchObject({ ok: true, aviso: /1 trecho\(s\) ligado\(s\) fora da seleção/ });
+    expect(comandosDeElevar(base, base.trechos!.map((x) => x.id), 200)).toMatchObject({ ok: true, aviso: null });
+  });
+});
+

@@ -63,6 +63,8 @@ interface Props {
    * Ausente = sem alça.
    */
   onMover?: (delta: { x: number; y: number }) => void;
+  /** Subir/descer a seleção pela seta verde (ver `Blueprint3DViewer`). */
+  onElevar?: (dzMm: number) => void;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**

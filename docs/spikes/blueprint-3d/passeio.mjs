@@ -488,6 +488,68 @@ if (mudouEmCima > mudouAoLado / 2) {
 }
 console.log(`referência IFC: ao lado mudou ${(mudouAoLado * 100).toFixed(1)}% · em cima mudou ${(mudouEmCima * 100).toFixed(1)}%`);
 
+/**
+ * SUBIR E DESCER NO 3D (10/10/2026, pendência da E10.3).
+ *
+ * `?peca=ponto`: uma evaporadora a 2,20 m, selecionada. A seta VERDE da alça
+ * (#20df80, que a luz clareia — o filtro é "verde dominante") é o Y. O passeio a
+ * acha pelos pixels e arrasta PARA CIMA na tela.
+ * Pronto quando a cota subiu e o Ctrl+Z a devolveu a 2200.
+ */
+await cena('editar=1&peca=ponto', 'elevar-antes', 2200);
+const lerCota = async () => {
+  const m = /COTA: (-?\d+)/.exec(await page.locator('#barra').innerText());
+  return m ? Number(m[1]) : null;
+};
+const cotaAntes = await lerCota();
+const quadroElevar = await page.locator('canvas').boundingBox();
+const pngElevar = (await page.locator('canvas').screenshot()).toString('base64');
+const setaY = await page.evaluate(async (b64) => {
+  const img = new Image();
+  await new Promise((ok) => {
+    img.onload = ok;
+    img.src = `data:image/png;base64,${b64}`;
+  });
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext('2d').drawImage(img, 0, 0);
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const pts = [];
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 1] > 150 && d[i + 1] - d[i] > 50 && d[i + 1] - d[i + 2] > 30) pts.push([(i / 4) % c.width, Math.floor(i / 4 / c.width)]);
+  }
+  if (pts.length < 30) return { n: pts.length };
+  const mx = pts.reduce((a, p) => a + p[0], 0) / pts.length;
+  const my = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+  return { n: pts.length, mx, my, escala: img.width };
+}, pngElevar);
+if (cotaAntes !== 2200) {
+  erros.push(`peca=ponto não nasceu com a cota 2200 — barra: "${await page.locator('#barra').innerText()}"`);
+} else if (!setaY.mx) {
+  erros.push(`a seta verde (subir/descer) não apareceu na alça (pixels: ${setaY.n})`);
+} else {
+  const k = quadroElevar.width / setaY.escala;
+  const px = quadroElevar.x + setaY.mx * k;
+  const py = quadroElevar.y + setaY.my * k;
+  await page.mouse.move(px, py);
+  await page.mouse.down();
+  await page.mouse.move(px, py - 70, { steps: 15 });
+  await page.screenshot({ path: path.join(aqui, 'saida-elevar-arrastando.png') });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  const cotaDepois = await lerCota();
+  await page.screenshot({ path: path.join(aqui, 'saida-elevar-depois.png') });
+  if (!(cotaDepois > 2200)) erros.push(`arrastar a seta verde para cima não subiu o ponto — cota ${cotaDepois}`);
+  const parede = /PAREDE: (-?\d+),(-?\d+)/.exec(await page.locator('#barra').innerText());
+  if (!parede || parede[1] !== '0' || parede[2] !== '0') erros.push('subir o ponto mexeu na parede');
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(400);
+  const cotaDesfeita = await lerCota();
+  if (cotaDesfeita !== 2200) erros.push(`Ctrl+Z não desfez o subir do 3D — cota ${cotaDesfeita}`);
+  console.log(`subir no 3D: cota 2200 → ${cotaDepois} → Ctrl+Z → ${cotaDesfeita}`);
+}
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

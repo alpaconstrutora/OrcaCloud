@@ -7,7 +7,8 @@
  * não entram na versão (a regra mora em `utils/blueprintReferenciaExterna.ts`).
  *
  * O painel só edita a lista; quem baixa o arquivo e quem desenha é o editor e o
- * viewer. A lista fica guardada neste navegador, por estudo.
+ * viewer. A lista fica no ESTUDO (10/10/2026) — no navegador só se a tabela não
+ * responder, e então o painel diz.
  */
 import { useEffect, useState } from 'react';
 import { Boxes, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
@@ -22,9 +23,11 @@ interface Props {
   carregando: ReadonlySet<string>;
   /** Erro de download/leitura por arquivo. */
   erros: Readonly<Record<string, string>>;
+  /** A lista vale só neste navegador (a tabela do estudo não respondeu). */
+  soNoNavegador?: boolean;
 }
 
-export default function PainelReferenciasExternas({ referencias, onMudar, carregando, erros }: Props) {
+export default function PainelReferenciasExternas({ referencias, onMudar, carregando, erros, soNoNavegador = false }: Props) {
   const { orgId } = useOrgContext();
   const [biblioteca, setBiblioteca] = useState<ArquivoDigital[] | null>(null);
 
@@ -59,8 +62,13 @@ export default function PainelReferenciasExternas({ referencias, onMudar, carreg
     <div className="space-y-3 px-4 py-3" data-testid="painel-referencias-externas">
       <p className="text-xs text-slate-500">
         Modelos IFC de outras disciplinas, só para olhar no 3D e coordenar. Não viram desenho e não entram na
-        versão. A lista fica guardada neste navegador, para este estudo.
+        versão. A lista fica no estudo: quem abrir esta Planta vê as mesmas referências.
       </p>
+      {soNoNavegador && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+          Não foi possível gravar no estudo agora — a lista vale só neste navegador até a conexão voltar.
+        </p>
+      )}
 
       {referencias.length === 0 ? (
         <p className="text-xs text-slate-400">Nenhum modelo de referência ainda. Escolha um da biblioteca abaixo.</p>

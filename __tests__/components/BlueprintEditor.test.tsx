@@ -347,6 +347,14 @@ vi.mock('../../services/digitalFileService', () => ({
   ]),
   baixarArquivo: (...a: unknown[]) => baixarArquivoIfc(...(a as [])),
 }));
+// 10/10/2026: a lista de referências mora no ESTUDO (`blueprint_study_referencias`).
+const referenciasDoEstudo = { get: vi.fn(async () => null as unknown), save: vi.fn(async () => ({})) };
+vi.mock('../../services/blueprintReferenciasService', () => ({
+  blueprintReferenciasService: {
+    get: (...a: unknown[]) => referenciasDoEstudo.get(...(a as [])),
+    save: (...a: unknown[]) => referenciasDoEstudo.save(...(a as [])),
+  },
+}));
 
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
 // tamanho do container.
@@ -5089,6 +5097,8 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
 
   it('Referência 3D (E10.4b): o IFC da biblioteca entra na lista do estudo, baixa uma vez, e o olho e a lixeira mexem só na lista', async () => {
     baixarArquivoIfc.mockClear();
+    referenciasDoEstudo.get.mockResolvedValue(null);
+    referenciasDoEstudo.save.mockClear();
     await montar();
     const user = userEvent.setup();
     await abrirAba(/^inserir$/i);
@@ -5100,16 +5110,39 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     const item = await within(painel).findByTestId('referencia-externa');
     expect(item).toHaveTextContent('Estrutural rev. 2');
     await waitFor(() => expect(baixarArquivoIfc).toHaveBeenCalledWith('org_1/est.ifc'));
-    // Guardado por estudo, fora do modelo.
-    expect(JSON.parse(localStorage.getItem('blueprint:referenciasExternas:std_1')!)).toMatchObject([{ arquivoId: 'df_1', visivel: true }]);
+    // Guardado NO ESTUDO (10/10/2026), fora do modelo — a gravação respira 500 ms.
+    await waitFor(() => expect(referenciasDoEstudo.save).toHaveBeenLastCalledWith('std_1', 'org_1', [expect.objectContaining({ arquivoId: 'df_1', visivel: true })]), { timeout: 3000 });
     // Já na lista: o botão da biblioteca desliga e diz por quê.
     expect(within(painel).getByTitle('Já está nas referências')).toBeDisabled();
 
     await user.click(within(item).getByRole('button', { name: 'Ocultar Estrutural rev. 2 no 3D' }));
-    expect(JSON.parse(localStorage.getItem('blueprint:referenciasExternas:std_1')!)[0].visivel).toBe(false);
+    await waitFor(() => expect(referenciasDoEstudo.save).toHaveBeenLastCalledWith('std_1', 'org_1', [expect.objectContaining({ visivel: false })]), { timeout: 3000 });
     await user.click(within(item).getByRole('button', { name: 'Tirar Estrutural rev. 2 das referências' }));
     expect(within(painel).queryByTestId('referencia-externa')).toBeNull();
     expect(baixarArquivoIfc).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(referenciasDoEstudo.save).toHaveBeenLastCalledWith('std_1', 'org_1', []), { timeout: 3000 });
+  });
+
+  it('Referência 3D (10/10/2026): o estudo sem lista ADOTA a que este navegador já tinha e grava; com lista no estudo, vale a do estudo', async () => {
+    referenciasDoEstudo.save.mockClear();
+    referenciasDoEstudo.get.mockResolvedValue(null);
+    localStorage.setItem('blueprint:referenciasExternas:std_1', JSON.stringify([{ arquivoId: 'df_9', nome: 'Antiga', storagePath: 'org_1/antiga.ifc' }]));
+    await montar();
+    await waitFor(() => expect(referenciasDoEstudo.save).toHaveBeenCalledWith('std_1', 'org_1', [expect.objectContaining({ arquivoId: 'df_9' })]));
+    cleanup();
+
+    referenciasDoEstudo.save.mockClear();
+    referenciasDoEstudo.get.mockResolvedValue({ referencias: [{ arquivoId: 'df_1', nome: 'Do estudo', storagePath: 'org_1/est.ifc' }] });
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^inserir$/i);
+    await user.click(botao(/^referência 3d/i));
+    const painel = await screen.findByTestId('painel-referencias-externas');
+    // O navegador ainda tinha a 'Antiga': a do estudo chega e vence.
+    expect(await within(painel).findByText('Do estudo')).toBeInTheDocument();
+    expect(within(painel).queryByText('Antiga')).toBeNull();
+    expect(referenciasDoEstudo.save).not.toHaveBeenCalled();
+    referenciasDoEstudo.get.mockResolvedValue(null);
   });
 
   it('Ctrl+D duplica a seleção pelo teclado', async () => {

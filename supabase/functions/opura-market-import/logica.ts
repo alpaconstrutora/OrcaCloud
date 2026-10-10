@@ -378,3 +378,79 @@ export function anunciosQueSairam(
   if (presentes.size === 0) return { ids: [], ignorado: 'o feed não trouxe nenhum anúncio desta cidade; saídas não registradas' };
   return { ids: ativos.filter((a) => a.url && !presentes.has(a.url)).map((a) => a.id), ignorado: null };
 }
+
+// ── Item 2 do plano 2026-10-10-opura-market-pendencias: localização ─────────
+
+/**
+ * O `address` gravado do feed é "rua, número, bairro" (ver `gravarFeed`). Até
+ * 10/10/2026 o modo 'localizar' mandava esse texto inteiro como RUA: o número
+ * não era separado (não está no fim) e as palavras do bairro iam para a trava de
+ * nome, que então não casava com resultado nenhum. Aqui o bairro conhecido sai
+ * do fim e o número é separado.
+ */
+export function partesDoEndereco(endereco: string | null | undefined, bairro: string | null | undefined): { rua: string | null; numero: string | null } {
+  const partes = (endereco ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+  const bairroNorm = normalizarNome(bairro);
+  // O bairro sai do fim — e, se for a ÚNICA parte, não sobra rua: buscar o nome do
+  // bairro como rua casaria com uma "Rua do Centro" qualquer, com precisão errada.
+  if (bairroNorm && partes.length > 0 && normalizarNome(partes[partes.length - 1]) === bairroNorm) partes.pop();
+  let numero: string | null = null;
+  if (partes.length > 1 && /^(?:n[ºo°]?\.?\s*)?\d+[a-z]?$/i.test(partes[partes.length - 1])) {
+    numero = (partes.pop() as string).replace(/^n[ºo°]?\.?\s*/i, '');
+  }
+  const rua = partes.join(', ').trim();
+  return { rua: rua || null, numero };
+}
+
+/** Da mais exata para a menos. 'manual' é a posição que um usuário marcou no mapa. */
+export const ORDEM_DE_PRECISAO = ['fonte', 'manual', 'endereco', 'rua', 'bairro', 'nao_encontrado'] as const;
+export type PrecisaoGravada = (typeof ORDEM_DE_PRECISAO)[number];
+
+/** A nova posição é melhor que a atual? Nunca troca por igual nem por pior. */
+export function precisaoMelhor(nova: string | null | undefined, atual: string | null | undefined): boolean {
+  const i = ORDEM_DE_PRECISAO.indexOf(nova as PrecisaoGravada);
+  if (i < 0) return false;
+  const j = ORDEM_DE_PRECISAO.indexOf(atual as PrecisaoGravada);
+  return j < 0 || i < j;
+}
+
+/** "37600-000" → "37600000"; qualquer coisa que não tenha 8 dígitos → null. */
+export function cepValido(cep: string | null | undefined): string | null {
+  const d = (cep ?? '').replace(/\D/g, '');
+  return d.length === 8 && !/^0+$/.test(d) ? d : null;
+}
+
+/**
+ * Rua e bairro a partir da resposta de CEP — ViaCEP (`logradouro`, `bairro`,
+ * `localidade`) ou BrasilAPI (`street`, `neighborhood`, `city`). O CEP nunca
+ * vira coordenada: só dá o NOME da rua para a busca. CEP de outra cidade é
+ * descartado (feed com CEP errado não pode puxar o anúncio para longe).
+ */
+export function ruaDoCep(resposta: Record<string, unknown> | null | undefined, cidade: string): { rua: string | null; bairro: string | null } | null {
+  if (!resposta || resposta.erro) return null;
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const cidadeDoCep = texto(resposta.localidade) ?? texto(resposta.city);
+  if (!cidadeDoCep || normalizarNome(cidadeDoCep) !== normalizarNome(cidade)) return null;
+  const rua = texto(resposta.logradouro) ?? texto(resposta.street);
+  const bairro = texto(resposta.bairro) ?? texto(resposta.neighborhood);
+  if (!rua && !bairro) return null;
+  return { rua, bairro };
+}
+
+/**
+ * Tentativas em ordem: a rua do próprio anúncio, a rua do CEP (se for outra) e,
+ * por último, o bairro. Sem repetir a mesma busca.
+ */
+export function consultasComCep(e: {
+  rua?: string | null; numero?: string | null; bairro?: string | null; cidade: string; uf: string;
+  cep?: { rua: string | null; bairro: string | null } | null;
+}): ConsultaGeo[] {
+  const pelaRua = consultasDeEndereco({ rua: e.rua, numero: e.numero, cidade: e.cidade, uf: e.uf });
+  const ruaCep = e.cep?.rua ?? null;
+  const pelaRuaDoCep = ruaCep && normalizarNome(semTipoDeVia(ruaCep)) !== normalizarNome(semTipoDeVia(separarNumero(e.rua).nome))
+    ? consultasDeEndereco({ rua: ruaCep, numero: e.numero, cidade: e.cidade, uf: e.uf })
+    : [];
+  const pelaBairro = consultasDeEndereco({ bairro: e.bairro || e.cep?.bairro || null, cidade: e.cidade, uf: e.uf });
+  const vistas = new Set<string>();
+  return [...pelaRua, ...pelaRuaDoCep, ...pelaBairro].filter((c) => (vistas.has(c.q) ? false : (vistas.add(c.q), true)));
+}

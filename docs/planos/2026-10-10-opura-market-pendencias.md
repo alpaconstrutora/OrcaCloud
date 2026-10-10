@@ -172,6 +172,35 @@ Medir antes e depois: contagem por `geo_precision` (hoje 52 / 143 / 158).
 - **Pronto:** testes de `partesDoEndereco` e da ordem de precisão; tabela antes/depois no plano;
   ajuste manual provado no navegador e conferido no banco; CI verde.
 
+#### Item 2 — execução (10/10/2026, frente `market-localizacao`)
+
+**Diagnóstico antes de codificar (mudou o item):** nenhum anúncio tinha CEP e nenhum veio de
+feed. Os 277 da Conexão 381 vieram do robô antigo, que só sabia o nome do bairro. Os 134
+"não encontrados" deles estão em **38 bairros que não existem no mapa aberto** e não estão no
+cadastro da praça, que só tem 4. Testado no Photon: as travas estão certas, porque o candidato
+é outro lugar ("Fazenda do Itaim" ≠ "Colinas do Itaim", "Lopes" ≠ "Edith Lopes"). O usuário
+decidiu (10/10): **ajustar o item 2 e manter o CEP**.
+
+- ✅ `logica.ts`: `partesDoEndereco` (bairro sai do fim; se o endereço é só o bairro, NÃO vira rua — buscaria uma "Rua do Centro" qualquer), `precisaoMelhor` (fonte > manual > endereco > rua > bairro > nao_encontrado), `cepValido`, `ruaDoCep` (ViaCEP ou BrasilAPI; CEP de outra cidade descartado; nunca vira coordenada), `consultasComCep`. 12 testes novos (50 no arquivo).
+- ✅ Edge Function: CEP com reserva (ViaCEP → BrasilAPI) em todos os modos; reserva pelo **ponto do bairro cadastrado só quando o anúncio traz o nome do bairro** (vínculo sem nome de origem pode ser o antigo "Centro" coringa); novo modo `relocalizar` (só grava se melhorar; anúncio que só tem bairro e já está no bairro nem consulta); `localizar` e planilha usam `partesDoEndereco`. Republicada com `--no-verify-jwt`; 401 sem cabeçalho conferido.
+- ✅ Migration `aplicar_20271010000800_opura_market_localizacao.sql` **aplicada** (ensaio antes): `manual` aceito no CHECK; gatilho de duplicados roda também quando a posição MELHORA para exata (`manual` conta como exata); RPC `get_market_bairros_sem_cadastro` (INVOKER, sem anon). A função de duplicados do banco foi comparada com a do arquivo antes de reescrever.
+- ✅ Tela: "Tentar localizar de novo" no painel do feed; "📍 Ajustar posição no mapa" no detalhe do anúncio (desligado com motivo para anúncio global, de outra organização ou em "Todas"); aviso "Clique no mapa onde fica o imóvel…" sobre o mapa; gaveta da praça com "Bairros citados nos anúncios e sem cadastro" (contagem e "Adicionar e marcar").
+- ✅ Provas com organização `ZZ Teste E2E` (agente como membro temporário), feed num bucket público temporário, tudo apagado depois (contagens zero):
+
+  | Prova | Resultado |
+  |---|---|
+  | Anúncio com rua + CEP, sem coordenada | localizado pela rua; **ViaCEP respondeu de dentro da Supabase** (1 consulta, 0 sem resposta). Cambuí tem CEP único (37600-000, sem rua): o CEP nunca ajuda lá, só em cidades com CEP por rua |
+  | Bairro inexistente | "não encontrado" (correto) |
+  | Bairro cadastrado | ponto do bairro |
+  | "Tentar de novo" na tela | 0 melhorados, 2 sem como melhorar (correto) |
+  | Posição manual na tela | aviso, clique, "Posição do anúncio gravada"; banco: `manual` com as coordenadas clicadas; única escrita foi esse PATCH |
+  | Anúncio de outra organização | botão desligado: "Este anúncio é de outra organização…" |
+  | Gaveta da praça (superadmin simulado) | "Agua Comprida 15 · 14 sem posição", "Colinas do Itaim 13", "Collen 13"… |
+
+- **Antes/depois nos dados da Alpa** ("Tentar de novo" para a Alpa): 158 não encontrado / 143 bairro / 52 rua / 4 pendentes → **sem mudança** (0 melhorados, 301 sem como melhorar, 0 restantes). Esperado pelo diagnóstico: para os dados de hoje, a melhora vem de **cadastrar os 38 bairros** na praça (ação do superadministrador; cada bairro marcado posiciona os anúncios dele pelo gatilho que já existia).
+- ⚠️ Achado, não mexido: **16 anúncios ligados ao bairro "Centro" sem nome de bairro de origem**, todos na tabela de reparo (12 "coordenada sorteada", 4 "duplicado por ponto aproximado"). O vínculo é quase certamente o antigo coringa, e eles contam no DNA do Centro. Decidir com o usuário se o vínculo deve ser desfeito.
+- ⚠️ `PainelVersoes.test.tsx` estourou o tempo de novo na suíte completa (3ª vez em 10/10); passa isolado.
+
 ## Item 3 — Saturação e Score Potencial (frente `market-indicadores`)
 
 - **Banco:** RPC `get_market_neighborhood_dinamica(p_city_id, p_meses)`, SECURITY INVOKER (só

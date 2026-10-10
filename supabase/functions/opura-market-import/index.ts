@@ -18,6 +18,9 @@
 //   modo 'feed'      + feedUrl (https, host público) OU feedXml (conteúdo do .xml)
 //   modo 'localizar' — geocodifica os anúncios da organização na cidade que ainda
 //                      não têm coordenada nem tentativa registrada.
+//   modo 'relocalizar' — tenta de novo os anúncios 'bairro' e 'nao_encontrado' da
+//                      organização na cidade; só grava se a posição MELHORAR
+//                      (item 2 do plano 2026-10-10-opura-market-pendencias).
 //   modo 'agendado'  — SÓ o cron diário (opura-market-feeds-diario), autenticado
 //                      pelo CRON_SECRET. Reimporta cada feed salvo em
 //                      opura_market_feeds. Sem organizationId no corpo: a
@@ -61,6 +64,11 @@ import {
   primeiraLocalizacao,
   urlDeFeedPermitida,
   anunciosQueSairam,
+  partesDoEndereco,
+  precisaoMelhor,
+  cepValido,
+  ruaDoCep,
+  consultasComCep,
   type BairroConhecido,
   type ConsultaGeo,
   type Localizacao,
@@ -91,7 +99,14 @@ const LOTE = 200;
 
 type Resultado = Localizacao | 'fonte' | null | 'adiado';
 
-function criarGeocodificador(cidade: string, inicio = Date.now()) {
+/** Bairro cadastrado na praça, com o ponto marcado no cadastro (pode faltar). */
+interface BairroComPonto extends BairroConhecido { centroid_lat?: number | null; centroid_lng?: number | null }
+
+/** O que se sabe do endereço de um anúncio na hora de localizar. */
+interface EnderecoDoAnuncio { rua?: string | null; numero?: string | null; bairro?: string | null; cep?: string | null; soBairro?: boolean }
+
+function criarGeocodificador(praca: { name: string; state: string }, inicio = Date.now(), bairros: BairroComPonto[] = []) {
+  const cidade = praca.name;
   let ultima = 0;
   let ultimaFalha: string | null = null;
   const cache = new Map<string, Localizacao | null>();
@@ -133,7 +148,58 @@ function criarGeocodificador(cidade: string, inicio = Date.now()) {
     return null;
   };
 
-  return { localizar, falha: () => ultimaFalha };
+  // CEP (item 2): ViaCEP e, se ele não responder, BrasilAPI. O CEP só dá o NOME
+  // da rua para a busca; nunca vira coordenada sozinho.
+  const cacheCep = new Map<string, Record<string, unknown> | null>();
+  const usoCep = { consultados: 0, viacep: 0, brasilapi: 0, semResposta: 0 };
+  const buscarCep = async (cep: string): Promise<Record<string, unknown> | null> => {
+    if (cacheCep.has(cep)) return cacheCep.get(cep) ?? null;
+    usoCep.consultados++;
+    const fontes: [keyof typeof usoCep, string][] = [
+      ['viacep', `https://viacep.com.br/ws/${cep}/json/`],
+      ['brasilapi', `https://brasilapi.com.br/api/cep/v1/${cep}`],
+    ];
+    for (const [nome, url] of fontes) {
+      try {
+        const r = await fetch(url, { headers: { 'User-Agent': AGENTE, Accept: 'application/json' }, signal: AbortSignal.timeout(8_000) });
+        if (r.status === 404 || r.status === 400) { usoCep[nome]++; cacheCep.set(cep, null); return null; }
+        if (!r.ok) continue;
+        const dados = await r.json();
+        usoCep[nome]++;
+        cacheCep.set(cep, dados);
+        return dados;
+      } catch {
+        // tenta a próxima fonte
+      }
+    }
+    usoCep.semResposta++;
+    cacheCep.set(cep, null);
+    return null;
+  };
+
+  /**
+   * Localiza um anúncio: rua do anúncio, rua do CEP, bairro. Se o geocodificador
+   * não achar nada e o anúncio TRAZ o nome de um bairro cadastrado com ponto, usa
+   * o ponto do bairro (precisão 'bairro'). Só pelo nome: vínculo de bairro sem
+   * nome de origem pode ser resto do antigo "Centro" coringa.
+   */
+  const anuncio = async (a: EnderecoDoAnuncio): Promise<Localizacao | null | 'adiado'> => {
+    const cep = a.soBairro ? null : cepValido(a.cep);
+    const infoCep = cep ? ruaDoCep(await buscarCep(cep), cidade) : null;
+    const consultas = a.soBairro
+      ? consultasDeEndereco({ bairro: a.bairro, cidade, uf: praca.state })
+      : consultasComCep({ rua: a.rua, numero: a.numero, bairro: a.bairro, cidade, uf: praca.state, cep: infoCep });
+    const loc = await localizar(consultas);
+    if (loc !== null) return loc;
+    const idDoBairro = casarBairro(a.bairro, bairros);
+    const b = idDoBairro ? bairros.find((x) => x.id === idDoBairro) : undefined;
+    if (b && b.centroid_lat != null && b.centroid_lng != null) {
+      return { lat: Number(b.centroid_lat), lng: Number(b.centroid_lng), precisao: 'bairro' };
+    }
+    return null;
+  };
+
+  return { localizar, anuncio, falha: () => ultimaFalha, usoCep: () => ({ ...usoCep }) };
 }
 
 /** Colunas de localização a partir do resultado. 'adiado' = pendente (precisão NULL). */
@@ -219,7 +285,7 @@ interface Cidade { id: string; name: string; state: string }
 async function gravarFeed(admin: Admin, p: {
   organizationId: string;
   cidade: Cidade;
-  bairros: BairroConhecido[];
+  bairros: BairroComPonto[];
   geo: ReturnType<typeof criarGeocodificador>;
   lido: FeedLido;
   origem: string;
@@ -268,7 +334,7 @@ async function gravarFeed(admin: Admin, p: {
     if (a.lat != null && a.lng != null) {
       loc = 'fonte';
     } else {
-      loc = await geo.localizar(consultasDeEndereco({ rua: a.rua, numero: a.numero, bairro: a.bairro, cidade: cidade.name, uf: cidade.state }));
+      loc = await geo.anuncio({ rua: a.rua, numero: a.numero, bairro: a.bairro, cep: a.cep });
     }
     const ruaComNumero = a.rua ? [a.rua, a.numero].filter(Boolean).join(', ') : null;
     registros.push({
@@ -321,7 +387,7 @@ async function gravarFeed(admin: Admin, p: {
 
   return {
     ...gravacao, atualizados, reativados, saidas, saidasIgnoradas,
-    ...contarLocalizacao(registros), ignorados, lidos: lido.anuncios.length, falhaGeocodificacao: geo.falha(),
+    ...contarLocalizacao(registros), ignorados, lidos: lido.anuncios.length, falhaGeocodificacao: geo.falha(), cep: geo.usoCep(),
   };
 }
 
@@ -357,10 +423,10 @@ async function rodarAgendado(admin: Admin) {
       const v = urlDeFeedPermitida(feed.url);
       if (!v.ok) throw new Error(v.motivo);
       const lido = lerFeedVrsync(await baixarFeed(v.url));
-      const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name').eq('city_id', cidade.id);
+      const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name, centroid_lat, centroid_lng').eq('city_id', cidade.id);
       const resultado = await gravarFeed(admin, {
         organizationId: feed.organization_id, cidade, bairros: bairrosDb ?? [],
-        geo: criarGeocodificador(cidade.name, inicio), lido, origem: `Feed ${v.url.hostname}`,
+        geo: criarGeocodificador(cidade, inicio, bairrosDb ?? []), lido, origem: `Feed ${v.url.hostname}`,
         feedId: feed.id, agora: new Date().toISOString(),
       });
       await registrarExecucao(admin, feed.id, resultado, null);
@@ -408,8 +474,8 @@ serve(async (req: Request) => {
   if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
   const modo = corpo?.modo;
-  if (!['planilha', 'feed', 'localizar'].includes(modo)) {
-    return json({ error: "modo deve ser 'planilha', 'feed' ou 'localizar'." }, 400);
+  if (!['planilha', 'feed', 'localizar', 'relocalizar'].includes(modo)) {
+    return json({ error: "modo deve ser 'planilha', 'feed', 'localizar' ou 'relocalizar'." }, 400);
   }
 
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
@@ -420,9 +486,9 @@ serve(async (req: Request) => {
     .from('opura_market_cities').select('id, name, state').eq('id', corpo?.cityId ?? '').maybeSingle();
   if (!cidade) return json({ error: 'Cidade não encontrada.' }, 400);
 
-  const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name').eq('city_id', cidade.id);
-  const bairros: BairroConhecido[] = bairrosDb ?? [];
-  const geo = criarGeocodificador(cidade.name);
+  const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name, centroid_lat, centroid_lng').eq('city_id', cidade.id);
+  const bairros: BairroComPonto[] = bairrosDb ?? [];
+  const geo = criarGeocodificador(cidade, Date.now(), bairros);
   const agora = new Date().toISOString();
   const base = { city_id: cidade.id, organization_id: organizationId, listing_status: 'active', captured_at: agora, last_seen_at: agora };
 
@@ -441,7 +507,8 @@ serve(async (req: Request) => {
         const area = Number(l?.area);
         if (!endereco || !(preco > 0) || !(area > 0)) { invalidas++; continue; }
         const bairro = textoOuNulo(l?.bairro);
-        const loc = await geo.localizar(consultasDeEndereco({ rua: endereco, bairro, cidade: cidade.name, uf: cidade.state }));
+        const partes = partesDoEndereco(endereco, bairro);
+        const loc = await geo.anuncio({ rua: partes.rua, numero: partes.numero, bairro });
         registros.push({
           ...base,
           neighborhood_id: casarBairro(bairro, bairros),
@@ -512,10 +579,43 @@ serve(async (req: Request) => {
       return json(resultado);
     }
 
+    // ── relocalizar ───────────────────────────────────────────────────────
+    if (modo === 'relocalizar') {
+      const { data: aproximados, error: eAprox } = await admin
+        .from('opura_market_listings')
+        .select('id, address, neighborhood_name_raw, zip_code, geo_precision')
+        .eq('organization_id', organizationId).eq('city_id', cidade.id)
+        .in('geo_precision', ['nao_encontrado', 'bairro'])
+        .order('geo_precision', { ascending: false })   // 'nao_encontrado' primeiro
+        .limit(1000);
+      if (eAprox) throw new Error(`Falha ao buscar anúncios aproximados: ${eAprox.message}`);
+
+      let melhorados = 0;
+      let semMudanca = 0;
+      let restantes = 0;
+      for (const p of aproximados ?? []) {
+        const soBairro = enderecoEhSoBairro(p.address, cidade.name, cidade.state);
+        const bairro = p.neighborhood_name_raw ?? (soBairro ? bairroDoEndereco(p.address) : null);
+        // Só o bairro é conhecido e o anúncio já está no bairro: não há o que melhorar.
+        if (soBairro && p.geo_precision === 'bairro') { semMudanca++; continue; }
+        const partes = partesDoEndereco(p.address, p.neighborhood_name_raw);
+        const loc = await geo.anuncio(soBairro
+          ? { bairro, soBairro: true }
+          : { rua: partes.rua, numero: partes.numero, bairro, cep: p.zip_code });
+        if (loc === 'adiado') { restantes++; continue; }
+        if (!loc || !precisaoMelhor(loc.precisao, p.geo_precision)) { semMudanca++; continue; }
+        const { error: eUp } = await admin.from('opura_market_listings')
+          .update(colunasDeLocalizacao(loc)).eq('id', p.id).eq('organization_id', organizationId);
+        if (eUp) throw new Error(`Falha ao gravar localização: ${eUp.message}`);
+        melhorados++;
+      }
+      return json({ melhorados, semMudanca, restantes, cep: geo.usoCep(), falhaGeocodificacao: geo.falha() });
+    }
+
     // ── localizar ─────────────────────────────────────────────────────────
     const { data: pendentes, error } = await admin
       .from('opura_market_listings')
-      .select('id, address, neighborhood_name_raw')
+      .select('id, address, neighborhood_name_raw, zip_code')
       .eq('organization_id', organizationId).eq('city_id', cidade.id)
       .is('geom', null).is('geo_precision', null)
       .limit(1000);
@@ -527,16 +627,18 @@ serve(async (req: Request) => {
     for (const p of pendentes ?? []) {
       const soBairro = enderecoEhSoBairro(p.address, cidade.name, cidade.state);
       const bairro = p.neighborhood_name_raw ?? (soBairro ? bairroDoEndereco(p.address) : null);
-      const loc = await geo.localizar(soBairro
-        ? consultasDeEndereco({ bairro, cidade: cidade.name, uf: cidade.state })
-        : consultasDeEndereco({ rua: p.address, bairro, cidade: cidade.name, uf: cidade.state }));
+      // O address do feed é "rua, número, bairro": separar antes de buscar (item 2).
+      const partes = partesDoEndereco(p.address, p.neighborhood_name_raw);
+      const loc = await geo.anuncio(soBairro
+        ? { bairro, soBairro: true }
+        : { rua: partes.rua, numero: partes.numero, bairro, cep: p.zip_code });
       if (loc === 'adiado') { restantes++; continue; }
       const { error: e2 } = await admin.from('opura_market_listings')
         .update(colunasDeLocalizacao(loc)).eq('id', p.id).eq('organization_id', organizationId);
       if (e2) throw new Error(`Falha ao gravar localização: ${e2.message}`);
       if (loc) localizados++; else naoEncontrados++;
     }
-    return json({ localizados, naoEncontrados, restantes, falhaGeocodificacao: geo.falha() });
+    return json({ localizados, naoEncontrados, restantes, cep: geo.usoCep(), falhaGeocodificacao: geo.falha() });
   } catch (e) {
     return json({ error: e instanceof Error ? e.message : String(e) }, 500);
   }

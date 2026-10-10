@@ -5,7 +5,7 @@ import { Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import Button from '../ui/Button';
 import { useToast } from '../../hooks/useToast';
-import { opuraMarketService } from '../../services/opuraMarketService';
+import { opuraMarketService, type BairroSemCadastro } from '../../services/opuraMarketService';
 import type { OpuraMarketCity } from '../../types';
 
 /**
@@ -77,6 +77,9 @@ const MarketPracaSheet: React.FC<Props> = ({ open, onClose, cidades, cidadeInici
   const [carregando, setCarregando] = React.useState(false);
   const [salvando, setSalvando] = React.useState(false);
   const [sujo, setSujo] = React.useState(false);
+  // Bairros citados nos anúncios e sem cadastro (plano 2026-10-10, item 2): cada
+  // um que ganhar ponto aqui posiciona os anúncios dele no ponto do bairro.
+  const [faltando, setFaltando] = React.useState<BairroSemCadastro[]>([]);
 
   const mapaRef = React.useRef<HTMLDivElement>(null);
   const mapa = React.useRef<L.Map | null>(null);
@@ -94,8 +97,12 @@ const MarketPracaSheet: React.FC<Props> = ({ open, onClose, cidades, cidadeInici
       setUf('');
       setCentro(null);
       setBairros([]);
+      setFaltando([]);
       return;
     }
+    opuraMarketService.getBairrosSemCadastro(cidadeId)
+      .then(setFaltando)
+      .catch((e) => { console.error('Falha ao listar bairros sem cadastro:', e); setFaltando([]); });
     const c = cidades.find((x) => x.id === cidadeId);
     setNome(c?.name ?? '');
     setUf(c?.state ?? '');
@@ -185,6 +192,17 @@ const MarketPracaSheet: React.FC<Props> = ({ open, onClose, cidades, cidadeInici
 
   const editarBairro = (i: number, mudanca: Partial<BairroEditavel>) => {
     setBairros((lista) => lista.map((b, j) => (j === i ? { ...b, ...mudanca } : b)));
+    setSujo(true);
+  };
+
+  // Nomes já na lista (gravados ou acrescentados agora) saem da lista de faltantes.
+  const normalizar = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  const nomesNaLista = new Set(bairros.map((b) => normalizar(b.nome)));
+  const faltandoVisiveis = faltando.filter((f) => !nomesNaLista.has(normalizar(f.nome)));
+
+  const adicionarFaltante = (nomeDoBairro: string) => {
+    setBairros((lista) => [...lista, { nome: nomeDoBairro, lat: null, lng: null }]);
+    setAlvo(bairros.length);   // o próximo clique no mapa marca este bairro
     setSujo(true);
   };
 
@@ -332,6 +350,37 @@ const MarketPracaSheet: React.FC<Props> = ({ open, onClose, cidades, cidadeInici
               </div>
             )}
           </Secao>
+
+          {cidadeId !== 'nova' && (
+            <Secao titulo="Bairros citados nos anúncios e sem cadastro">
+              {faltandoVisiveis.length === 0 ? (
+                <p className="text-xs text-gray-500">Todo bairro citado nos anúncios desta cidade já está cadastrado.</p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500">
+                    Esses nomes vêm dos anúncios e não existem no mapa aberto nem no cadastro, por isso os anúncios deles ficam sem posição. Adicione o bairro e clique no mapa onde ele fica.
+                  </p>
+                  {faltandoVisiveis.map((f) => (
+                    <div key={f.nome} className="flex items-center justify-between gap-3 py-1.5 border-b border-gray-50 last:border-b-0">
+                      <span className="text-sm text-gray-700 truncate" title={f.nome}>{f.nome}</span>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-gray-500">
+                          {f.anuncios} anúncio{f.anuncios === 1 ? '' : 's'}{f.semPosicao > 0 ? ` · ${f.semPosicao} sem posição` : ''}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => adicionarFaltante(f.nome)}
+                          className="h-8 px-3 rounded-[6px] text-[13px] font-medium bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                        >
+                          Adicionar e marcar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Secao>
+          )}
         </div>
       </SheetPanel>
 

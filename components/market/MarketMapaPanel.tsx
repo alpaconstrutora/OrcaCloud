@@ -14,6 +14,8 @@ interface Props {
   /** Há terreno marcado: mostra o atalho para o painel de estudo. */
   temTerreno: boolean;
   onIrParaEstudo: () => void;
+  /** Modo "clique no mapa para posicionar" (posição manual de anúncio, plano 2026-10-10 item 2). */
+  avisoDeClique?: { texto: string; onCancelar: () => void } | null;
 }
 
 const ROTULO: Record<CamadaMercado, string> = {
@@ -24,7 +26,7 @@ const ROTULO: Record<CamadaMercado, string> = {
 };
 
 export default function MarketMapaPanel({
-  containerRef, camada, onCamada, desenhando, vertices, ocupado, onConcluirDesenho, onCancelarDesenho, temTerreno, onIrParaEstudo,
+  containerRef, camada, onCamada, desenhando, vertices, ocupado, onConcluirDesenho, onCancelarDesenho, temTerreno, onIrParaEstudo, avisoDeClique,
 }: Props) {
   return (
     <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm space-y-4">
@@ -84,7 +86,15 @@ export default function MarketMapaPanel({
       </div>
 
       <div className="relative w-full h-[400px] rounded-2xl overflow-hidden shadow-inner border border-slate-200/80">
-        {!desenhando && temTerreno && (
+        {avisoDeClique && (
+          <div className="absolute top-4 left-14 right-4 z-[1000] flex items-center justify-between gap-3 px-4 py-2.5 bg-white/95 border border-blue-200 rounded-[10px] shadow-md">
+            <span className="text-[13px] font-medium text-blue-800">{avisoDeClique.texto}</span>
+            <button onClick={avisoDeClique.onCancelar} className="h-8 px-3 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shrink-0">
+              Cancelar
+            </button>
+          </div>
+        )}
+        {!desenhando && !avisoDeClique && temTerreno && (
           <div className="absolute top-4 right-4 z-[1000]">
             <button
               onClick={onIrParaEstudo}

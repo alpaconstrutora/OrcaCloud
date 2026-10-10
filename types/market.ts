@@ -44,7 +44,8 @@ export interface OpuraMarketListing {
   /** Nome do bairro como veio da origem; neighborhoodId só existe quando casa exato com um cadastrado. */
   neighborhoodNameRaw?: string | null;
   /** De onde veio a coordenada: fonte (feed), endereco (rua), bairro, nao_encontrado; null sem coordenada = pendente. */
-  geoPrecision?: 'fonte' | 'endereco' | 'rua' | 'bairro' | 'nao_encontrado' | null;
+  /** 'manual' = posição marcada por um usuário no mapa (plano 2026-10-10, item 2). */
+  geoPrecision?: 'fonte' | 'manual' | 'endereco' | 'rua' | 'bairro' | 'nao_encontrado' | null;
   source: string;
   sourceUrl: string | null;
   propertyType: string;

@@ -9,10 +9,15 @@ interface Props {
   cities: OpuraMarketCity[];
   neighborhoods: OpuraMarketNeighborhood[];
   onClose: () => void;
+  /** Abre o mapa para o usuário clicar onde fica o imóvel (precisão 'manual'). */
+  onAjustarPosicao?: (a: OpuraMarketListing) => void;
+  /** Por que não pode ajustar (anúncio global, de outra organização, "Todas"…). */
+  motivoSemAjuste?: string;
 }
 
 const POSICAO: Record<string, string> = {
   fonte: 'Informada pela origem do anúncio',
+  manual: 'Marcada por um usuário no mapa',
   endereco: 'Localizada pelo endereço',
   rua: 'Aproximada: só a rua foi encontrada',
   bairro: 'Aproximada: só o bairro era conhecido',
@@ -28,7 +33,7 @@ function Ficha({ rotulo, valor }: { rotulo: string; valor: React.ReactNode }) {
   );
 }
 
-export default function MarketAnuncioDetalhe({ anuncio: a, cities, neighborhoods, onClose }: Props) {
+export default function MarketAnuncioDetalhe({ anuncio: a, cities, neighborhoods, onClose, onAjustarPosicao, motivoSemAjuste }: Props) {
   if (!a) return null;
   const cidade = cities.find(c => c.id === a.cityId);
   const posicao = a.geoPrecision ? POSICAO[a.geoPrecision] ?? 'Origem da posição não registrada'
@@ -113,6 +118,16 @@ export default function MarketAnuncioDetalhe({ anuncio: a, cities, neighborhoods
         </div>
       </ModalBody>
       <ModalFooter>
+        {onAjustarPosicao && (
+          <button
+            onClick={() => onAjustarPosicao(a)}
+            disabled={!!motivoSemAjuste}
+            title={motivoSemAjuste ?? 'Abre o mapa: clique onde fica o imóvel.'}
+            className="h-9 px-4 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-[6px] text-[13px] font-medium transition-all mr-auto disabled:text-slate-400 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          >
+            📍 Ajustar posição no mapa
+          </button>
+        )}
         <button
           onClick={onClose}
           className="h-9 px-4 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-[6px] text-[13px] font-medium transition-all"

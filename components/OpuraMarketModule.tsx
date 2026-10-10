@@ -94,6 +94,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
   const [busca, setBusca] = usePersistedState<string>('opuraMarket:busca', '');
   const [filterSource, setFilterSource] = React.useState('Todos');
   const [detalhe, setDetalhe] = React.useState<OpuraMarketListing | null>(null);
+  // Anúncio esperando o clique no mapa para ganhar posição manual (plano 2026-10-10, item 2).
+  const [posicionando, setPosicionando] = React.useState<OpuraMarketListing | null>(null);
   const [importAberto, setImportAberto] = React.useState(false);
   const [regrasAbertas, setRegrasAbertas] = React.useState(false);
   // Cadastro de praça (Fase 4.4): só o superadministrador da plataforma.
@@ -189,6 +191,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
     drawingPoints: v.drawingPoints,
     polygonPoints: v.polygonPoints,
     onClique: (p) => {
+      if (posicionando) { gravarPosicaoManual(posicionando, p); return; }
       if (v.isDrawingPolygon) { v.adicionarVertice(p); return; }
       v.marcarPonto(p);
       const bairro = bairroMaisProximo(neighborhoods, p);
@@ -205,6 +208,33 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
     focar({ lat: l.latitude, lng: l.longitude }, 17);
     setCamada('concorrencia');
     if (abrirMapa) setAba('map');
+  };
+
+  /** Por que este anúncio não pode ter a posição ajustada (ou undefined se pode). */
+  const motivoSemAjuste = (l: OpuraMarketListing): string | undefined =>
+    l.organizationId == null ? 'Anúncio global: não pertence a nenhuma organização, não é editável.'
+      : !organizationId ? SEM_ORG
+      : l.organizationId !== organizationId ? 'Este anúncio é de outra organização: selecione-a no topo da tela.'
+      : undefined;
+
+  const ajustarPosicao = (l: OpuraMarketListing) => {
+    setDetalhe(null);
+    setPosicionando(l);
+    setCamada('concorrencia');
+    setAba('map');
+    if (l.latitude != null && l.longitude != null) focar({ lat: l.latitude, lng: l.longitude }, 17);
+  };
+
+  const gravarPosicaoManual = async (l: OpuraMarketListing, p: Ponto) => {
+    try {
+      await opuraMarketService.atualizarPosicaoDoAnuncio(l.id, p.lat, p.lng);
+      showToast('Posição do anúncio gravada.');
+      setPosicionando(null);
+      if (selectedCityId) await loadListings(selectedCityId);
+    } catch (err: any) {
+      console.error('Falha ao gravar a posição:', err);
+      showToast(err.message || 'Falha ao gravar a posição.', 'error');
+    }
   };
 
   const desenharLote = () => {
@@ -416,6 +446,10 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
                 onConcluirDesenho={concluirDesenho}
                 onCancelarDesenho={v.cancelarDesenho}
                 temTerreno={!!v.terrainPin}
+                avisoDeClique={posicionando ? {
+                  texto: `Clique no mapa onde fica o imóvel: ${posicionando.propertyType} — ${posicionando.address || 'sem endereço'}`,
+                  onCancelar: () => setPosicionando(null),
+                } : null}
                 onIrParaEstudo={() => setAba('studies')}
               />
               {selectedNeighborhood && (
@@ -484,7 +518,14 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
         />
       )}
 
-      <MarketAnuncioDetalhe anuncio={detalhe} cities={cities} neighborhoods={neighborhoods} onClose={() => setDetalhe(null)} />
+      <MarketAnuncioDetalhe
+        anuncio={detalhe}
+        cities={cities}
+        neighborhoods={neighborhoods}
+        onClose={() => setDetalhe(null)}
+        onAjustarPosicao={ajustarPosicao}
+        motivoSemAjuste={detalhe ? motivoSemAjuste(detalhe) : undefined}
+      />
     </div>
   );
 };

@@ -124,6 +124,20 @@ export interface ResultadoLocalizacaoMercado {
   restantes: number;
 }
 
+/** Modo 'relocalizar': só grava quando a posição melhora (plano 2026-10-10, item 2). */
+export interface ResultadoRelocalizacaoMercado {
+  melhorados: number;
+  semMudanca: number;
+  restantes: number;
+}
+
+/** Bairro citado nos anúncios e ainda não cadastrado na praça. */
+export interface BairroSemCadastro {
+  nome: string;
+  anuncios: number;
+  semPosicao: number;
+}
+
 async function invocarImportacao<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('opura-market-import', { body });
   if (error) {
@@ -580,6 +594,35 @@ export const opuraMarketService = {
   /** Geocodifica os anúncios da organização na cidade que ainda não têm coordenada. */
   async localizarPendentes(organizationId: string, cityId: string): Promise<ResultadoLocalizacaoMercado> {
     return invocarImportacao({ modo: 'localizar', organizationId, cityId });
+  },
+
+  /** Tenta de novo os anúncios só no bairro ou não encontrados; nunca piora uma posição. */
+  async relocalizarAproximados(organizationId: string, cityId: string): Promise<ResultadoRelocalizacaoMercado> {
+    return invocarImportacao({ modo: 'relocalizar', organizationId, cityId });
+  },
+
+  /**
+   * Posição marcada pelo usuário no mapa (precisão 'manual'). A RLS de UPDATE só
+   * deixa membros da organização dona do anúncio; anúncio global não é editável.
+   */
+  async atualizarPosicaoDoAnuncio(id: string, lat: number, lng: number): Promise<void> {
+    const { data, error } = await supabase
+      .from('opura_market_listings')
+      .update({ latitude: lat, longitude: lng, geom: pontoWkt(lat, lng), geo_precision: 'manual' })
+      .eq('id', id)
+      .select('id');
+    if (error) throw new Error(`Falha ao gravar a posição: ${error.message}`);
+    if (!data || data.length === 0) throw new Error('Sem permissão para alterar este anúncio (ele não é da organização selecionada).');
+  },
+
+  /** Bairros citados nos anúncios da cidade e ainda não cadastrados (RPC SECURITY INVOKER). */
+  async getBairrosSemCadastro(cityId: string): Promise<BairroSemCadastro[]> {
+    if (!cityId) return [];
+    const { data, error } = await supabase.rpc('get_market_bairros_sem_cadastro', { p_city_id: cityId });
+    if (error) throw new Error(`Falha ao listar bairros sem cadastro: ${error.message}`);
+    return (data ?? []).map((r: { nome: string; anuncios: number; sem_posicao: number }) => ({
+      nome: r.nome, anuncios: Number(r.anuncios), semPosicao: Number(r.sem_posicao),
+    }));
   },
 
   // Deletar anúncio/ocorrência individual

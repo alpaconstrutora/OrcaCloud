@@ -38,6 +38,7 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
   const [feedArquivo, setFeedArquivo] = React.useState<File | null>(null);
   const [importando, setImportando] = React.useState(false);
   const [localizando, setLocalizando] = React.useState(false);
+  const [relocalizando, setRelocalizando] = React.useState(false);
   const [resultado, setResultado] = React.useState<string | null>(null);
   // Feed salvo desta organização + cidade, reimportado todo dia pelo cron
   // (plano 2026-10-10-opura-market-pendencias, item 1).
@@ -59,6 +60,12 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
   React.useEffect(() => {
     carregarSalvo().then((f) => setFeedUrl(f?.url ?? ''));
   }, [carregarSalvo]);
+
+  // Anúncios da organização só no ponto do bairro ou não encontrados (item 2 do
+  // plano 2026-10-10): o modo 'relocalizar' tenta de novo e nunca piora.
+  const aproximados = listings.filter(
+    l => l.organizationId === organizationId && (l.geoPrecision === 'bairro' || l.geoPrecision === 'nao_encontrado')
+  ).length;
 
   // Anúncios da organização nesta cidade sem coordenada e sem tentativa registrada.
   const pendentes = listings.filter(
@@ -106,6 +113,24 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
       setResultado(`Erro: ${err.message || 'falha ao salvar o feed'}`);
     } finally {
       setSalvando(false);
+    }
+  };
+
+  const relocalizar = async () => {
+    if (!organizationId || !cityId) return;
+    setRelocalizando(true);
+    setResultado(null);
+    try {
+      const r = await opuraMarketService.relocalizarAproximados(organizationId, cityId);
+      const partes = [`Com posição melhor: ${r.melhorados}`, `sem como melhorar: ${r.semMudanca}`];
+      if (r.restantes) partes.push(`restantes por limite de tempo, rode de novo: ${r.restantes}`);
+      setResultado(partes.join(' · '));
+      await onAtualizado();
+    } catch (err: any) {
+      console.error('Falha ao tentar de novo:', err);
+      setResultado(`Erro: ${err.message || 'falha inesperada'}`);
+    } finally {
+      setRelocalizando(false);
     }
   };
 
@@ -229,7 +254,26 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
         </button>
       </div>
 
-      {(importando || localizando) && (
+      <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="text-xs text-slate-600 font-semibold">
+          {aproximados > 0
+            ? `${aproximados} anúncios da sua organização nesta cidade estão só no ponto do bairro ou com o endereço não encontrado.`
+            : 'Nenhum anúncio da sua organização nesta cidade está só no ponto do bairro ou sem endereço encontrado.'}
+          <span className="block text-slate-400 font-normal mt-0.5">
+            Tenta de novo pela rua, pelo CEP e pelo bairro cadastrado. Só troca a posição quando a nova for mais exata. Bairro que não existe no mapa precisa ser cadastrado na praça.
+          </span>
+        </div>
+        <button
+          onClick={relocalizar}
+          disabled={relocalizando || localizando || importando || aproximados === 0 || !organizationId}
+          title={!organizationId ? SEM_ORG : aproximados === 0 ? 'Não há anúncio aproximado nesta cidade.' : (localizando || importando) ? 'Aguarde a operação em andamento.' : undefined}
+          className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
+        >
+          {relocalizando ? 'Tentando…' : 'Tentar localizar de novo'}
+        </button>
+      </div>
+
+      {(importando || localizando || relocalizando) && (
         <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] text-xs text-blue-800 font-semibold">
           Trabalhando no servidor. Os endereços são localizados a cerca de um por segundo.
         </div>

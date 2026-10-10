@@ -17,6 +17,11 @@ import {
   localizacaoDoResultado,
   urlDeFeedPermitida,
   anunciosQueSairam,
+  partesDoEndereco,
+  precisaoMelhor,
+  cepValido,
+  ruaDoCep,
+  consultasComCep,
 } from '../supabase/functions/opura-market-import/logica';
 
 /**
@@ -298,5 +303,74 @@ describe('anúncios que saíram do feed salvo (item 1 do plano 2026-10-10)', () 
 
   it('anúncio sem URL nunca é dado como saído', () => {
     expect(anunciosQueSairam(ativos, ['https://imob/9']).ids).toEqual(['a', 'b']);
+  });
+});
+
+describe('localização · item 2 do plano 2026-10-10', () => {
+  describe('partesDoEndereco — o address gravado do feed é "rua, número, bairro"', () => {
+    it('separa rua e número e tira o bairro do fim', () => {
+      expect(partesDoEndereco('Rua Tiradentes, 80, Centro', 'Centro')).toEqual({ rua: 'Rua Tiradentes', numero: '80' });
+    });
+    it('bairro com acento diferente também sai', () => {
+      expect(partesDoEndereco('Rua A, 12, Jardim Por do Sol', 'Jardim Pôr do Sol')).toEqual({ rua: 'Rua A', numero: '12' });
+    });
+    it('sem número', () => {
+      expect(partesDoEndereco('Avenida Brasil, Centro', 'Centro')).toEqual({ rua: 'Avenida Brasil', numero: null });
+    });
+    it('"nº 80" vira 80', () => {
+      expect(partesDoEndereco('Rua B, nº 80', null)).toEqual({ rua: 'Rua B', numero: '80' });
+    });
+    it('texto só com o bairro não vira rua (buscaria uma "Rua do Centro" qualquer)', () => {
+      expect(partesDoEndereco('Centro', 'Centro')).toEqual({ rua: null, numero: null });
+      expect(partesDoEndereco('Jardim Por do Sol', 'Jardim Pôr do Sol')).toEqual({ rua: null, numero: null });
+      expect(partesDoEndereco('', 'Centro')).toEqual({ rua: null, numero: null });
+    });
+  });
+
+  describe('precisaoMelhor — nunca piora a posição', () => {
+    it('ordem fonte > manual > endereco > rua > bairro > nao_encontrado', () => {
+      expect(precisaoMelhor('endereco', 'bairro')).toBe(true);
+      expect(precisaoMelhor('bairro', 'nao_encontrado')).toBe(true);
+      expect(precisaoMelhor('rua', 'endereco')).toBe(false);
+      expect(precisaoMelhor('bairro', 'bairro')).toBe(false);
+      expect(precisaoMelhor('endereco', 'manual')).toBe(false);
+      expect(precisaoMelhor('fonte', 'manual')).toBe(true);
+    });
+    it('sem posição atual, qualquer precisão válida serve; valor estranho nunca', () => {
+      expect(precisaoMelhor('bairro', null)).toBe(true);
+      expect(precisaoMelhor('qualquer', null)).toBe(false);
+    });
+  });
+
+  describe('CEP — só ajuda a montar a busca', () => {
+    it('cepValido', () => {
+      expect(cepValido('37600-000')).toBe('37600000');
+      expect(cepValido('3760')).toBeNull();
+      expect(cepValido('00000-000')).toBeNull();
+      expect(cepValido(null)).toBeNull();
+    });
+    it('ViaCEP e BrasilAPI dão rua e bairro; cidade diferente é descartada', () => {
+      expect(ruaDoCep({ logradouro: 'Rua Tiradentes', bairro: 'Centro', localidade: 'Cambuí', uf: 'MG' }, 'Cambui')).toEqual({ rua: 'Rua Tiradentes', bairro: 'Centro' });
+      expect(ruaDoCep({ street: 'Avenida Brasil', neighborhood: 'Centro', city: 'Cambuí', state: 'MG' }, 'Cambuí')).toEqual({ rua: 'Avenida Brasil', bairro: 'Centro' });
+      expect(ruaDoCep({ logradouro: 'Rua X', localidade: 'Campinas' }, 'Cambuí')).toBeNull();
+      expect(ruaDoCep({ erro: true }, 'Cambuí')).toBeNull();
+      expect(ruaDoCep({ localidade: 'Cambuí' }, 'Cambuí')).toBeNull();
+    });
+    it('consultasComCep: rua do anúncio, depois rua do CEP, depois bairro, sem repetir', () => {
+      const c = consultasComCep({ rua: 'Rua A', numero: '10', bairro: 'Centro', cidade: 'Cambuí', uf: 'MG', cep: { rua: 'Rua B', bairro: 'Centro' } });
+      const qs = c.map((x) => x.q);
+      expect(qs[0]).toBe('Rua A 10, Cambuí, Minas Gerais');
+      expect(qs.indexOf('Rua B 10, Cambuí, Minas Gerais')).toBeGreaterThan(qs.indexOf('Rua A, Cambuí, Minas Gerais'));
+      expect(qs[qs.length - 1]).toBe('Centro, Cambuí, Minas Gerais');
+      expect(new Set(qs).size).toBe(qs.length);
+    });
+    it('sem rua no anúncio, a rua do CEP vira a busca principal', () => {
+      const c = consultasComCep({ rua: null, numero: null, bairro: null, cidade: 'Cambuí', uf: 'MG', cep: { rua: 'Rua B', bairro: 'Vila Ramos' } });
+      expect(c.map((x) => x.q)).toEqual(['Rua B, Cambuí, Minas Gerais', 'B, Cambuí, Minas Gerais', 'Vila Ramos, Cambuí, Minas Gerais']);
+    });
+    it('CEP com a mesma rua do anúncio não duplica tentativa', () => {
+      const c = consultasComCep({ rua: 'Rua A', numero: null, bairro: null, cidade: 'Cambuí', uf: 'MG', cep: { rua: 'R. A', bairro: null } });
+      expect(c.filter((x) => x.temRua).length).toBe(consultasDeEndereco({ rua: 'Rua A', cidade: 'Cambuí', uf: 'MG' }).length);
+    });
   });
 });

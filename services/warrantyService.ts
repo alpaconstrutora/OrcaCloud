@@ -4,7 +4,7 @@ import type {
     WarrantyClaim, WarrantyClaimInsert, WarrantyClaimVisit, WarrantyClaimVisitInsert,
     WarrantyClaimEvidence, WarrantyClaimEvent, WarrantyTerm, WarrantyKPIs,
     OpenWarrantyClaimCommand, TriageClaimCommand, ScheduleVisitCommand, CloseClaimCommand,
-    ClassifyClaimCommand, ClaimFilters,
+    ClassifyClaimCommand, ClaimFilters, WarrantyUnitOption,
 } from '../types/warranty';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 import { computeWarrantyKPIs, type WarrantyKPIRow } from '../utils/warrantyAnalytics';
@@ -82,9 +82,24 @@ export const warrantyService = {
             p_opened_by:         cmd.opened_by,
             p_taxonomy:          cmd.taxonomy ?? null,
             p_origin:            cmd.origin ?? null,
+            p_unit_id:           cmd.unit_id ?? null,
         });
         if (error) throw error;
         return data as { id: string; version: number };
+    },
+
+    /**
+     * Diretório de unidades da organização (`warranty_unit_directory`): cada
+     * unidade com empreendimento, obra, clientes atuais e data de entrega. É o
+     * que deixa o formulário do chamado se preencher ao escolher cliente ou
+     * unidade. SECURITY INVOKER — a RLS recorta como em qualquer leitura.
+     */
+    async getUnitDirectory(organizationId: string): Promise<WarrantyUnitOption[]> {
+        const { data, error } = await supabase.rpc('warranty_unit_directory', {
+            p_organization_id: organizationId,
+        });
+        if (error) throw error;
+        return ((data ?? []) as WarrantyUnitOption[]).map(u => ({ ...u, clients: u.clients ?? [] }));
     },
 
     /** Classifica um chamado já aberto (o que entrou por telefone, sem taxonomia). */

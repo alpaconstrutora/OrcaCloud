@@ -4,11 +4,12 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { warrantyService } from '../services/warrantyService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { clientService } from '../services/clientService';
+import { clientEmpreendimentoService } from '../services/clientEmpreendimentoService';
 import { useToast } from '../hooks/useToast';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import type { WarrantyClaim, ClaimState, ClaimOrigin, WarrantyKPIs, ClaimFilters } from '../types/warranty';
+import type { WarrantyClaim, ClaimState, ClaimOrigin, WarrantyKPIs, ClaimFilters, WarrantyUnitOption } from '../types/warranty';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 import {
     breakdownPor, computeWarrantyKPIs, fluxoMensal, slaVencido,
@@ -18,6 +19,12 @@ import { formatMonthLabel } from './ui/Format';
 import ActionIconButton from './ui/ActionIconButton';
 import { FilterPopover } from './ui/FilterPopover';
 import ClientSelect, { type ClientOption } from './ClientSelect';
+import UnitSelect from './UnitSelect';
+import {
+    applyClientChoice, applyUnitChoice, entregaDoChamado, markManual, resolveWarrantyExpiry, unitsOfClient,
+    ENTREGA_FONTE_LABELS,
+    type AutoFilled, type AutofillResult, type ClaimLinkField, type ClaimLinkFields,
+} from '../utils/warrantyAutofill';
 import KpiCard from './ui/KpiCard';
 
 // ── Sub-componentes inline ────────────────────────────────────────────────────
@@ -643,7 +650,12 @@ interface TaxonomyLabels {
 const EMPTY_TAXONOMY_LABELS: TaxonomyLabels = { systems: {}, pathologies: {} };
 
 /** Catálogo id → nome, usado pelos selects e pelas colunas de vínculo. */
-export interface WarrantyCatalogOption { id: string; name: string; }
+export interface WarrantyCatalogOption {
+    id: string;
+    name: string;
+    /** Obra principal do empreendimento — preenche a Obra quando só o empreendimento é conhecido. */
+    project_id?: string | null;
+}
 
 type WarrantyView = 'chamados' | 'analise';
 
@@ -757,7 +769,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
             empreendimentoService.mapObrasToEmpreendimentos(orgId).catch(e => { console.error('[WarrantyModule] mapa obra→empreendimento', e); return {}; }),
         ]).then(([emps, cls, mapa]) => {
             if (cancelled) return;
-            setDevelopments(emps.map(e => ({ id: e.id, name: e.name })));
+            setDevelopments(emps.map(e => ({ id: e.id, name: e.name, project_id: e.project_id ?? null })));
             // Documento/e-mail/cidade alimentam a busca e as colunas do drawer
             // de seleção (`ClientSelect`); o resto do cadastro fica de fora.
             setClients((cls as ClientOption[]).map(c => ({
@@ -1153,6 +1165,204 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
     );
 };
 
+// ── Autopreenchimento por cliente / unidade ───────────────────────────────────
+//
+// Pedido de 2026-10-10: "carregar todos os dados ao selecionar uma cliente e ou
+// unidades. Regra geral: se o app já tem as informações não vamos obrigar o
+// usuário preencher manualmente". A decisão do que preencher mora em
+// utils/warrantyAutofill.ts (pura, testada); aqui só se liga ao formulário.
+
+/**
+ * Diretório de unidades da organização do chamado (`warranty_unit_directory`).
+ * Precisa de UMA organização (o chamado é sempre de uma só — REGRA #5, modo
+ * 'single'); sem ela o diretório é vazio e o formulário cai no texto livre.
+ */
+function useUnitDirectory(orgId: string | null | undefined) {
+    const [dir, setDir] = React.useState<WarrantyUnitOption[]>([]);
+    React.useEffect(() => {
+        let cancelled = false;
+        if (orgId) {
+            warrantyService.getUnitDirectory(orgId)
+                .then(d => { if (!cancelled) setDir(d); })
+                .catch(e => console.error('[WarrantyModule] diretório de unidades', e));
+        } else {
+            setDir([]);
+        }
+        return () => { cancelled = true; };
+    }, [orgId]);
+    return dir;
+}
+
+interface ClaimAutofill {
+    auto: AutoFilled;
+    hint: string | null;
+    onClient: (clientId: string) => void;
+    onUnit: (unit: WarrantyUnitOption | null) => void;
+    onManual: (field: ClaimLinkField, value: string) => void;
+    reset: () => void;
+}
+
+/**
+ * Liga as escolhas de cliente/unidade ao formulário. Lê o formulário por ref
+ * (não pelo updater do setState): as regras devolvem o próximo `auto` junto do
+ * próximo form, e um updater rodado duas vezes (StrictMode) aplicaria o
+ * conjunto já avançado sobre o form antigo.
+ */
+function useClaimAutofill<F extends ClaimLinkFields>(
+    form: F, setForm: (f: F) => void, dir: WarrantyUnitOption[], developments: WarrantyCatalogOption[],
+): ClaimAutofill {
+    const [auto, setAuto] = React.useState<AutoFilled>(() => new Set());
+    const [hint, setHint] = React.useState<string | null>(null);
+    const formRef = React.useRef(form);
+    formRef.current = form;
+    const autoRef = React.useRef(auto);
+    autoRef.current = auto;
+
+    const commit = (r: AutofillResult<F>) => {
+        formRef.current = r.form;
+        autoRef.current = r.auto;
+        setForm(r.form);
+        setAuto(r.auto);
+        setHint(r.hint);
+    };
+
+    const onClient = (clientId: string) => {
+        const r = applyClientChoice(formRef.current, autoRef.current, clientId, dir);
+        commit(r);
+        if (!clientId || r.form.unit_id || unitsOfClient(dir, clientId).length > 0) return;
+        // Cliente sem unidade: o vínculo direto de Meus Clientes ainda pode
+        // dizer o empreendimento (e, por ele, a obra principal).
+        clientEmpreendimentoService.listIdsByClient(clientId)
+            .then(ids => {
+                if (ids.length !== 1 || formRef.current.client_id !== clientId) return;
+                const emp = developments.find(d => d.id === ids[0]);
+                commit(applyClientChoice(formRef.current, autoRef.current, clientId, dir,
+                    [{ id: ids[0], project_id: emp?.project_id ?? null }]));
+            })
+            .catch(e => console.error('[WarrantyModule] empreendimentos do cliente', e));
+    };
+
+    return {
+        auto,
+        hint,
+        onClient,
+        onUnit: unit => commit(applyUnitChoice(formRef.current, autoRef.current, unit)),
+        onManual: (field, value) => {
+            const next = { ...formRef.current, [field]: value };
+            formRef.current = next;
+            setForm(next);
+            const a = markManual(autoRef.current, field);
+            autoRef.current = a;
+            setAuto(a);
+        },
+        reset: () => { setAuto(new Set()); setHint(null); },
+    };
+}
+
+const AutoNote: React.FC<{ show: boolean }> = ({ show }) =>
+    show ? <p className="text-xs text-gray-400 mt-1">Preenchido automaticamente</p> : null;
+
+/**
+ * Os quatro vínculos do chamado, na ordem em que se decide: Cliente e Unidade
+ * (o que o usuário escolhe) e logo abaixo Empreendimento e Obra (o que se
+ * deduz — continuam editáveis). Compartilhado por abrir e editar.
+ */
+function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
+    form, autofill, dir, clients, developments, projects, clientRequired, clientNote,
+}: {
+    form: F;
+    autofill: ClaimAutofill;
+    dir: WarrantyUnitOption[];
+    clients: ClientOption[];
+    developments: WarrantyCatalogOption[];
+    projects: ProjectOption[];
+    clientRequired: boolean;
+    clientNote?: React.ReactNode;
+}) {
+    // Unidade fora do cadastro (empreendimento sem unidades lançadas, chamado
+    // antigo digitado à mão) continua possível em texto livre.
+    const [digitar, setDigitar] = React.useState(() => !form.unit_id && !!form.unidade_ref);
+    const temCadastro = dir.length > 0;
+    const unidadesDoCliente = React.useMemo(
+        () => unitsOfClient(dir, form.client_id).map(u => u.unit_id), [dir, form.client_id]);
+    const nomeDoCliente = clients.find(c => c.id === form.client_id)?.name;
+
+    return (
+        <>
+            <div className="col-span-2">
+                {/* Drawer com busca, não `<select>`: uma organização tem dezenas
+                    de clientes (pedido de 2026-09-12). */}
+                <label className={LABEL_CLASS}>Cliente{clientRequired && ' *'}</label>
+                <ClientSelect
+                    clients={clients}
+                    value={form.client_id}
+                    onChange={autofill.onClient}
+                    triggerClassName={FIELD_CLASS}
+                />
+                {clients.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
+                )}
+                {clientNote}
+                <AutoNote show={autofill.auto.has('client_id')} />
+            </div>
+            <div className="col-span-2">
+                <label className={LABEL_CLASS}>Unidade</label>
+                {temCadastro && !digitar ? (
+                    <UnitSelect
+                        units={dir}
+                        value={form.unit_id}
+                        onChange={autofill.onUnit}
+                        triggerClassName={FIELD_CLASS}
+                        preferredIds={unidadesDoCliente}
+                        preferredLabel={nomeDoCliente}
+                        fallbackLabel={form.unit_id ? form.unidade_ref || undefined : undefined}
+                    />
+                ) : (
+                    <input
+                        value={form.unidade_ref}
+                        onChange={e => autofill.onManual('unidade_ref', e.target.value)}
+                        className={FIELD_CLASS}
+                        placeholder="Ex: Apt 302 Torre A"
+                    />
+                )}
+                {autofill.hint && <p className="text-xs text-amber-600 mt-1">{autofill.hint}</p>}
+                {temCadastro && !form.unit_id && (
+                    <button
+                        type="button"
+                        onClick={() => setDigitar(d => !d)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"
+                    >
+                        {digitar ? 'Escolher unidade cadastrada' : 'Unidade não cadastrada? Digitar'}
+                    </button>
+                )}
+            </div>
+            <div>
+                <LinkSelect
+                    label="Empreendimento"
+                    icon={Landmark}
+                    value={form.development_id}
+                    onChange={v => autofill.onManual('development_id', v)}
+                    options={developments}
+                    placeholder="Sem empreendimento"
+                    emptyHint="Nenhum empreendimento cadastrado nesta organização."
+                />
+                <AutoNote show={autofill.auto.has('development_id')} />
+            </div>
+            <div>
+                <LinkSelect
+                    label="Obra"
+                    icon={Building2}
+                    value={form.project_id}
+                    onChange={v => autofill.onManual('project_id', v)}
+                    options={projects}
+                    placeholder="Sem obra vinculada"
+                />
+                <AutoNote show={autofill.auto.has('project_id')} />
+            </div>
+        </>
+    );
+}
+
 // ── Modal: Abrir Chamado ──────────────────────────────────────────────────────
 
 interface WarrantyClaimModalProps {
@@ -1219,6 +1429,7 @@ export function WarrantyClaimModal({
         project_id: '',
         development_id: '',
         client_id: '',
+        unit_id: '',
         sistema_descricao: '',
         local_afetado: '',
         descricao: '',
@@ -1237,6 +1448,9 @@ export function WarrantyClaimModal({
             warrantyService.getTaxonomySystems().then(setSystems).catch(console.error);
         }
     }, [systemsProp]);
+
+    const dir = useUnitDirectory(organizationId);
+    const autofill = useClaimAutofill(form, setForm, dir, developments);
 
     const addFiles = (selected: File[]) => {
         setFiles(prev => {
@@ -1270,6 +1484,7 @@ export function WarrantyClaimModal({
                 organization_id:    organizationId,
                 project_id:         form.project_id || undefined,
                 development_id:     form.development_id || undefined,
+                unit_id:            form.unit_id || undefined,
                 client_id:          form.client_id,
                 sistema_descricao:  form.sistema_descricao,
                 local_afetado:      form.local_afetado || undefined,
@@ -1326,41 +1541,20 @@ export function WarrantyClaimModal({
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        {/* Os três vínculos, juntos: é a mesma pergunta ("a que
-                            este chamado pertence?"). Empreendimento é campo
+                        {/* Os vínculos, juntos: é a mesma pergunta ("a que este
+                            chamado pertence?"). Cliente e Unidade preenchem o
+                            resto (pedido de 2026-10-10). Empreendimento é campo
                             próprio, não derivado da obra — pós-obra acontece
                             depois de a obra encerrar. */}
-                        <LinkSelect
-                            label="Empreendimento"
-                            icon={Landmark}
-                            value={form.development_id}
-                            onChange={v => setForm(f => ({ ...f, development_id: v }))}
-                            options={developments}
-                            placeholder="Sem empreendimento"
-                            emptyHint="Nenhum empreendimento cadastrado nesta organização."
+                        <ClaimLinkFieldsBlock
+                            form={form}
+                            autofill={autofill}
+                            dir={dir}
+                            clients={clients}
+                            developments={developments}
+                            projects={projects}
+                            clientRequired
                         />
-                        <LinkSelect
-                            label="Obra"
-                            icon={Building2}
-                            value={form.project_id}
-                            onChange={v => setForm(f => ({ ...f, project_id: v }))}
-                            options={projects}
-                            placeholder="Sem obra vinculada"
-                        />
-                        <div className="col-span-2">
-                            {/* Drawer com busca, não `<select>`: uma organização
-                                tem dezenas de clientes (pedido de 2026-09-12). */}
-                            <label className={LABEL_CLASS}>Cliente *</label>
-                            <ClientSelect
-                                clients={clients}
-                                value={form.client_id}
-                                onChange={v => setForm(f => ({ ...f, client_id: v }))}
-                                triggerClassName={FIELD_CLASS}
-                            />
-                            {clients.length === 0 && (
-                                <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
-                            )}
-                        </div>
                         <div className="col-span-2">
                             <label className={LABEL_CLASS}>Sistema afetado *</label>
                             <input
@@ -1429,15 +1623,6 @@ export function WarrantyClaimModal({
                                 onChange={e => setForm(f => ({ ...f, local_afetado: e.target.value }))}
                                 className={FIELD_CLASS}
                                 placeholder="Ex: Banheiro suíte"
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className={LABEL_CLASS}>Unidade / Apt</label>
-                            <input
-                                value={form.unidade_ref}
-                                onChange={e => setForm(f => ({ ...f, unidade_ref: e.target.value }))}
-                                className={FIELD_CLASS}
-                                placeholder="Ex: Apt 302 Torre A"
                             />
                         </div>
                         <div className="col-span-2">
@@ -1577,13 +1762,28 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         severity:          claim.severity as string,
         client_id:         claim.client_id || '',
         unidade_ref:       claim.unidade_ref || '',
+        unit_id:           claim.unit_id || '',
         project_id:        claim.project_id || '',
         development_id:    claim.development_id || '',
     }), [claim]);
     const [editForm, setEditForm] = React.useState(editInitial);
+    const dir = useUnitDirectory(organizationId);
+    const autofill = useClaimAutofill(editForm, setEditForm, dir, developments);
+    const resetAutofill = autofill.reset;
     // O chamado é recarregado depois de classificar/triar/salvar; fora da
     // edição o formulário acompanha, para não reabrir com valores velhos.
-    React.useEffect(() => { if (!editMode) setEditForm(editInitial); }, [editInitial, editMode]);
+    React.useEffect(() => {
+        if (!editMode) { setEditForm(editInitial); resetAutofill(); }
+    }, [editInitial, editMode]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Vencimento da garantia conta da ENTREGA (unidade → empreendimento), não
+    // do dia da triagem — o comentário da coluna sempre disse
+    // "data_entrega + prazo_meses" (20260708000000:72).
+    const entrega = React.useMemo(() => entregaDoChamado(claim, dir), [claim, dir]);
+    const prazoMeses = claim.warranty_term?.prazo_meses;
+    const vencimentoPelaEntrega = resolveWarrantyExpiry(entrega?.data, prazoMeses);
+    const hojeIso = new Date().toLocaleDateString('sv-SE');
+    const dentroDoPrazo = vencimentoPelaEntrega ? hojeIso <= vencimentoPelaEntrega : null;
     // §25 — Salvar só desabilita sem alteração; o que é obrigatório valida no
     // clique, com a razão escrita na tela. Snapshot por JSON como em ProjectModal.
     const editDirty = JSON.stringify(editForm) !== JSON.stringify(editInitial);
@@ -1664,6 +1864,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 client_id:         editForm.client_id || undefined,
                 client_name:       editForm.client_id ? clients.find(c => c.id === editForm.client_id)?.name : undefined,
                 unidade_ref:       editForm.unidade_ref || undefined,
+                unit_id:           editForm.unit_id || null,
                 project_id:        (editForm.project_id || null) as string | undefined,
                 development_id:    (editForm.development_id || null) as string | undefined,
             });
@@ -1708,9 +1909,14 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
             const term = claim.warranty_term;
             let expires: string | undefined;
             if (inWarranty && term) {
-                const exp = new Date(today);
-                exp.setMonth(exp.getMonth() + term.prazo_meses);
-                expires = exp.toISOString().slice(0, 10);
+                // Sem data de entrega cadastrada (nem da unidade nem do
+                // empreendimento), o prazo cai no comportamento antigo — a
+                // partir de hoje — e o card de triagem avisa isso antes do clique.
+                expires = vencimentoPelaEntrega ?? (() => {
+                    const exp = new Date(today);
+                    exp.setMonth(exp.getMonth() + term.prazo_meses);
+                    return exp.toLocaleDateString('sv-SE');
+                })();
             }
             const sla = new Date(today);
             sla.setDate(sla.getDate() + (claim.severity === 'critica' ? 2 : claim.severity === 'alta' ? 5 : 15));
@@ -1847,38 +2053,19 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                         <div className="space-y-3">
                             <p className="text-xs font-black text-blue-700 uppercase tracking-wider">Editando chamado</p>
                             <div className="grid grid-cols-2 gap-3">
-                                <LinkSelect
-                                    label="Empreendimento"
-                                    icon={Landmark}
-                                    value={editForm.development_id}
-                                    onChange={v => setEditForm(f => ({ ...f, development_id: v }))}
-                                    options={developments}
-                                    placeholder="Sem empreendimento"
-                                />
-                                <LinkSelect
-                                    label="Obra"
-                                    icon={Building2}
-                                    value={editForm.project_id}
-                                    onChange={v => setEditForm(f => ({ ...f, project_id: v }))}
-                                    options={projects}
-                                    placeholder="Sem obra vinculada"
-                                />
-                                <div className="col-span-2">
-                                    <label className={LABEL_CLASS}>Cliente{clientRequired && ' *'}</label>
-                                    <ClientSelect
-                                        clients={clients}
-                                        value={editForm.client_id}
-                                        onChange={v => setEditForm(f => ({ ...f, client_id: v }))}
-                                        triggerClassName={FIELD_CLASS}
-                                    />
-                                    {clients.length === 0 && (
-                                        <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
-                                    )}
-                                    {/* Chamado antigo sem vínculo: diz de quem se trata
-                                        (quando o nome foi digitado à mão), para quem
-                                        edita não escolher o cliente errado — e deixa
-                                        claro que dá para salvar sem escolher. */}
-                                    {!editForm.client_id && !clientRequired && (
+                                <ClaimLinkFieldsBlock
+                                    form={editForm}
+                                    autofill={autofill}
+                                    dir={dir}
+                                    clients={clients}
+                                    developments={developments}
+                                    projects={projects}
+                                    clientRequired={clientRequired}
+                                    clientNote={!editForm.client_id && !clientRequired && (
+                                        // Chamado antigo sem vínculo: diz de quem se trata
+                                        // (quando o nome foi digitado à mão), para quem
+                                        // edita não escolher o cliente errado — e deixa
+                                        // claro que dá para salvar sem escolher.
                                         <p className="text-xs text-amber-600 mt-1">
                                             {claim.client_name
                                                 ? `Registrado como “${claim.client_name}”, sem cliente cadastrado vinculado.`
@@ -1886,7 +2073,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                             {' '}Vincular é opcional.
                                         </p>
                                     )}
-                                </div>
+                                />
                             </div>
                             <div>
                                 <label className={LABEL_CLASS}>Sistema afetado *</label>
@@ -1919,14 +2106,6 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                         className={FIELD_CLASS}
                                     />
                                 </div>
-                                <div className="col-span-2">
-                                    <label className={LABEL_CLASS}>Unidade / Apt</label>
-                                    <input
-                                        value={editForm.unidade_ref}
-                                        onChange={e => setEditForm(f => ({ ...f, unidade_ref: e.target.value }))}
-                                        className={FIELD_CLASS}
-                                    />
-                                </div>
                             </div>
                             <div>
                                 <label className={LABEL_CLASS}>Descrição do problema *</label>
@@ -1950,7 +2129,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 >
                                     {saving ? 'Salvando...' : 'Salvar alterações'}
                                 </button>
-                                <button onClick={() => { setEditMode(false); setEditForm(editInitial); setEditError(null); }} className={BTN_SECONDARY}>
+                                <button onClick={() => { setEditMode(false); setEditForm(editInitial); autofill.reset(); setEditError(null); }} className={BTN_SECONDARY}>
                                     Cancelar
                                 </button>
                             </div>
@@ -1981,6 +2160,15 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     <span className="text-gray-500 font-medium">Local afetado</span>
                                     <span className="text-gray-900 font-semibold">{claim.local_afetado || '—'}</span>
                                 </div>
+                                {entrega && (
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500 font-medium shrink-0">Entrega</span>
+                                        <span className="text-gray-900 font-semibold text-right" title={`Fonte: ${ENTREGA_FONTE_LABELS[entrega.fonte]}`}>
+                                            {new Date(entrega.data + 'T00:00:00').toLocaleDateString('pt-BR')}
+                                            <span className="font-normal text-gray-400"> · {ENTREGA_FONTE_LABELS[entrega.fonte]}</span>
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between">
                                     <span className="text-gray-500 font-medium">Garantia expira</span>
                                     <span className="text-gray-900 font-semibold">
@@ -2135,6 +2323,17 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             {claim.state === 'ABERTO' && (
                                 <div className="border border-blue-100 rounded-[10px] p-4 space-y-3">
                                     <p className="text-xs font-semibold text-blue-700">Triagem</p>
+                                    <p className="text-xs text-gray-500">
+                                        {entrega
+                                            ? `Entrega em ${new Date(entrega.data + 'T00:00:00').toLocaleDateString('pt-BR')} (${ENTREGA_FONTE_LABELS[entrega.fonte]}).`
+                                            : 'Sem data de entrega cadastrada para a unidade nem para o empreendimento.'}
+                                        {' '}
+                                        {!prazoMeses
+                                            ? 'Chamado sem prazo de garantia escolhido — o vencimento não será calculado.'
+                                            : vencimentoPelaEntrega
+                                                ? <>Prazo de {prazoMeses} meses vence em {new Date(vencimentoPelaEntrega + 'T00:00:00').toLocaleDateString('pt-BR')} — <span className={dentroDoPrazo ? 'text-green-700' : 'text-red-700'}>{dentroDoPrazo ? 'dentro do prazo' : 'prazo vencido'}</span>.</>
+                                                : `Prazo de ${prazoMeses} meses contado a partir de hoje.`}
+                                    </p>
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => handleTriage(true)}

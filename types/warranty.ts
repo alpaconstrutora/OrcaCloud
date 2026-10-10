@@ -89,6 +89,12 @@ export interface WarrantyClaim {
    * pela obra, para leitura, sem gravar.
    */
   development_id?: string;
+  /**
+   * Unidade cadastrada (`empreendimento_units`) — `aplicar_20271010000200`.
+   * `unidade_ref` continua gravado como instantâneo do rótulo: é o que a lista
+   * lê, e o que sobra se a unidade for renomeada ou removida.
+   */
+  unit_id?: string | null;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;
@@ -222,6 +228,7 @@ export interface OpenWarrantyClaimCommand {
   organization_id: string;
   project_id?: string;
   development_id?: string;
+  unit_id?: string;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;
@@ -233,6 +240,41 @@ export interface OpenWarrantyClaimCommand {
   opened_by: ActorReference;
   taxonomy?: TaxonomyReference;
   origin?: ClaimOrigin;
+}
+
+/**
+ * Uma linha de `warranty_unit_directory(org)` — a unidade com tudo que o app já
+ * sabe dela, para o formulário do chamado se preencher sozinho.
+ */
+export interface WarrantyUnitClient {
+  client_id: string;
+  client_name: string | null;
+  /** PROPRIETARIO | INQUILINO | MORADOR | RESPONSAVEL_FINANCEIRO */
+  role: string;
+  since: string | null;
+  /** De onde o vínculo veio: ocupação do condomínio ou negociação efetivada. */
+  fonte: 'ocupacao' | 'negociacao';
+}
+
+/** Fonte da data de entrega, na ordem em que a função as tenta. */
+export type WarrantyEntregaFonte =
+  | 'posse_proprietario' | 'habite_se' | 'condominio_instalado' | 'previsao_entrega';
+
+export interface WarrantyUnitOption {
+  unit_id: string;
+  unit_name: string;
+  unit_floor: number | null;
+  quadra: string | null;
+  lote: string | null;
+  tower_name: string | null;
+  empreendimento_id: string;
+  empreendimento_name: string;
+  /** Obra da torre, ou a principal do empreendimento. */
+  project_id: string | null;
+  /** Clientes atuais, o papel mais forte primeiro (PROPRIETARIO antes de INQUILINO). */
+  clients: WarrantyUnitClient[];
+  entrega_data: string | null;
+  entrega_fonte: WarrantyEntregaFonte | null;
 }
 
 export interface ClassifyClaimCommand {

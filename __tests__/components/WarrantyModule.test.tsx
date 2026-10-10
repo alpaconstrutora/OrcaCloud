@@ -20,6 +20,16 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const listClaims = vi.fn();
 
+// Diretório de unidades (`warranty_unit_directory`) — pedido de 2026-10-10:
+// escolher o cliente preenche unidade, empreendimento e obra.
+const DIRETORIO = [{
+    unit_id: 'u302', unit_name: '302', unit_floor: 3, quadra: null, lote: null,
+    tower_name: 'Torre A', empreendimento_id: 'emp1', empreendimento_name: 'Edifício Ferraz',
+    project_id: 'obraA',
+    clients: [{ client_id: 'cli1', client_name: 'Maria Silva', role: 'PROPRIETARIO', since: '2020-01-10', fonte: 'ocupacao' }],
+    entrega_data: '2020-01-10', entrega_fonte: 'posse_proprietario',
+}];
+
 vi.mock('../../services/warrantyService', () => ({
     warrantyService: {
         list: (...args: unknown[]) => listClaims(...args),
@@ -34,7 +44,12 @@ vi.mock('../../services/warrantyService', () => ({
         triage: vi.fn(async () => ({})),
         close: vi.fn(async () => ({})),
         delete: vi.fn(async () => undefined),
+        getUnitDirectory: vi.fn(async () => DIRETORIO),
     },
+}));
+
+vi.mock('../../services/clientEmpreendimentoService', () => ({
+    clientEmpreendimentoService: { listIdsByClient: vi.fn(async () => []) },
 }));
 
 vi.mock('../../services/empreendimentoService', () => ({
@@ -334,5 +349,24 @@ describe('Pós-Obra & Garantia · abas', () => {
         // Uma consulta só: o filtro não voltou ao servidor.
         expect(listClaims).toHaveBeenCalledTimes(1);
         expect(listClaims.mock.calls[0][0]).not.toHaveProperty('state');
+    });
+});
+
+describe('Pós-Obra & Garantia · escolher o cliente preenche o resto (2026-10-10)', () => {
+    it('cliente com uma unidade preenche unidade, empreendimento e obra na edição', async () => {
+        const user = userEvent.setup();
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Esquadria da sacada')).toBeInTheDocument());
+        await user.click(screen.getByText('Esquadria da sacada'));
+        await user.click(await screen.findByTitle('Editar chamado'));
+
+        await user.click(screen.getByRole('button', { name: /Selecionar cliente/i }));
+        await user.click(await screen.findByText('Maria Silva'));
+
+        await waitFor(() => expect(screen.getByRole('button', { name: /Torre A · 302/ })).toBeInTheDocument());
+        const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
+        expect(selects.some(s => s.value === 'emp1')).toBe(true);
+        expect(selects.some(s => s.value === 'obraA')).toBe(false);   // obraB era escolha do chamado — não se sobrescreve
+        expect(screen.getAllByText('Preenchido automaticamente').length).toBeGreaterThan(0);
     });
 });

@@ -129,10 +129,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
     }, []);
     // "Dados gerais" foi desmembrada em 2026-09-21: Condições Climáticas e
     // Atividades do Dia (efetivo + atividades) viraram abas próprias. O valor
-    // persistido 'geral' cai na primeira delas.
+    // persistido 'geral' cai na primeira delas. Desde 2026-10-10 a primeira aba
+    // é Atividades do Dia (trocou de lugar com Condições Climáticas).
     const [activeTab, setActiveTab] = useState<DiaryEditorTab>(() => {
         const salvo = localStorage.getItem('diary_active_tab') as DiaryEditorTab | 'geral' | null;
-        return salvo && salvo !== 'geral' ? salvo : 'clima';
+        return salvo && salvo !== 'geral' ? salvo : 'atividades';
     });
     const [isProjectSelectorOpen, setIsProjectSelectorOpen] = useState(false);
     const [isLinkingPlanningOpen, setIsLinkingPlanningOpen] = useState(false);
@@ -523,11 +524,11 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         resetForm();
         setEditingId(null);
         setIsAdding(true);
-        setActiveTab('clima');
+        setActiveTab('atividades');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
-    const handleEdit = (entry: DiaryEntry, targetTab: DiaryEditorTab = 'clima') => {
+    const handleEdit = (entry: DiaryEntry, targetTab: DiaryEditorTab = 'atividades') => {
         setFormData(entry);
         setEditingId(entry.id);
         setIsAdding(true);
@@ -884,8 +885,8 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
             {isAdding && (
                 <TabsBar
                     tabs={[
-                        { id: 'clima', label: 'Condições Climáticas' },
                         { id: 'atividades', label: 'Atividades do Dia', badge: (formData.labor?.length || 0) + (formData.activities?.length || 0) },
+                        { id: 'clima', label: 'Condições Climáticas' },
                         { id: 'comentarios', label: 'Comentários' },
                         { id: 'arquivos', label: 'Arquivos', badge: (formData.images?.length || 0) + (formData.videos?.length || 0) + (formData.documents?.length || 0) },
                     ]}

@@ -39,6 +39,7 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
     { key: 'client_name', label: 'Cliente', sortable: true },
     { key: 'empreendimento_name', label: 'Empreendimento', sortable: true },
     { key: 'description', label: 'Descrição', sortable: true },
+    { key: 'competencia', label: 'Competência', sortable: true },
     { key: 'due_date', label: 'Vencimento', sortable: true },
     { key: 'amount', label: 'Valor', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
@@ -48,7 +49,7 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     party_name: 200, category: 150, client_name: 200, empreendimento_name: 220,
-    description: 240, due_date: 150, amount: 130, status: 130, actions: 220,
+    description: 240, competencia: 140, due_date: 150, amount: 130, status: 130, actions: 220,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -61,6 +62,7 @@ const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     client_name: { label: 'Cliente', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     empreendimento_name: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
+    competencia: { label: 'Competência', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     due_date: { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     amount: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
@@ -77,6 +79,7 @@ function buildAdvancedFilterFields(rows: TaxPayable[]): FilterFieldConfig[] {
         { key: 'client_name', label: 'Cliente', type: 'text', options: dasLinhas('client_name') },
         { key: 'empreendimento_name', label: 'Empreendimento', type: 'text', options: dasLinhas('empreendimento_name') },
         { key: 'description', label: 'Descrição', type: 'text' },
+        { key: 'competencia', label: 'Competência', type: 'text', options: dasLinhas('competencia') },
         { key: 'amount', label: 'Valor', type: 'number' },
         { key: 'due_date', label: 'Vencimento', type: 'date' },
         { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
@@ -91,6 +94,7 @@ function getAdvancedFilterValue(r: TaxPayable, key: string): unknown {
         case 'empreendimento_name': return r.empreendimento_name ?? '';
         case 'description': return r.description ?? '';
         case 'amount': return r.amount ?? null;
+        case 'competencia': return fmtCompetencia(r.transaction_date);
         case 'due_date': return r.due_date ?? null;
         case 'status': return r.effective_status;
         default: return null;
@@ -107,6 +111,12 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function today() { return new Date().toISOString().slice(0, 10); }
+
+/** Competência = mês do fato gerador (transaction_date) — `aaaa-mm-dd` → `mm/aaaa`. */
+function fmtCompetencia(iso?: string | null): string {
+    const m = /^(\d{4})-(\d{2})/.exec(iso ?? '');
+    return m ? `${m[2]}/${m[1]}` : '';
+}
 
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
@@ -135,6 +145,8 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean): Reac
             );
         case 'description':
             return <span className="text-sm font-normal text-gray-700 truncate block" title={r.description ?? undefined}>{r.description ?? '—'}</span>;
+        case 'competencia':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{fmtCompetencia(r.transaction_date) || '—'}</span>;
         case 'due_date':
             return <span className={`text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>{fmtDate(r.due_date)}</span>;
         case 'amount':
@@ -381,7 +393,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     // Largura total = soma exata das colunas visíveis + checkbox fixo de 40px. NUNCA
     // w-full/100% junto com table-layout:fixed (§6.1).
     const tableTotalWidth = 40
-        + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'due_date', 'amount', 'status'] as const)
+        + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'competencia', 'due_date', 'amount', 'status'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
     const advancedFields = useMemo(() => buildAdvancedFilterFields(rows), [rows]);
@@ -577,6 +589,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                     case 'empreendimento_name':
                                           va = (a.empreendimento_name ?? '').toLowerCase(); vb = (b.empreendimento_name ?? '').toLowerCase(); break;
                     case 'description':   va = (a.description ?? '').toLowerCase();   vb = (b.description ?? '').toLowerCase();   break;
+                    case 'competencia':   va = (a.transaction_date ?? '').slice(0, 7); vb = (b.transaction_date ?? '').slice(0, 7); break;
                     case 'due_date':      va = a.due_date ?? '';                      vb = b.due_date ?? '';                      break;
                     case 'amount':        va = a.amount ?? 0;                         vb = b.amount ?? 0;                         break;
                     case 'status':        va = a.effective_status;                    vb = b.effective_status;                    break;

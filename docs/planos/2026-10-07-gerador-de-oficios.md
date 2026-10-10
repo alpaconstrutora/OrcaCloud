@@ -1211,7 +1211,8 @@ pendências futuras na seção própria.
 
 ### F4 — tramitação (frente `oficios-f4-tramitacao`, base `ad7bd9eb`)
 
-- [x] F4 · 1 — migration `aplicar_20271010000300_oficio_tramitacao.sql` **aplicada em 10/10** e provada no banco como
+- [x] F4 · 1 — migration `aplicar_20271010000500_oficio_tramitacao.sql` (nasceu `…000300`; renomeada no rebase porque o Market
+      tomou o mesmo prefixo — o banco não guarda o nome, foi aplicada por `db query`) **aplicada em 10/10** e provada no banco como
       `authenticated` com o JWT do usuário de leitura, numa transação desfeita (nada persistiu — contador continuou 0):
       emitir sem aprovação / em aprovação / sem assinatura → recusado com a mensagem certa; editar em aprovação →
       recusado; aprovado e editado → volta a RASCUNHO; ofício PENDENTE aparece na `fn_approval_action_queue`; forjar

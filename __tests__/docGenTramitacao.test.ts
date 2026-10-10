@@ -14,11 +14,11 @@ import { LAYOUT_PADRAO, type DocGenAssinatura, type DocGenDocumento, type DocGen
 
 /**
  * F4 — tramitação do ofício (Fase 2 da proposta). As regras moram no banco
- * (aplicar_20271010000300_oficio_tramitacao.sql); aqui se trava o que a tela
+ * (aplicar_20271010000500_oficio_tramitacao.sql); aqui se trava o que a tela
  * espelha delas e o que é puro.
  */
 
-const MIGRATION = readFileSync(path.join(process.cwd(), 'supabase', 'migrations', 'aplicar_20271010000300_oficio_tramitacao.sql'), 'utf8');
+const MIGRATION = readFileSync(path.join(process.cwd(), 'supabase', 'migrations', 'aplicar_20271010000500_oficio_tramitacao.sql'), 'utf8');
 
 const doc = (p: Partial<DocGenDocumento>): DocGenDocumento => ({
     id: 'd1', organization_id: 'o', company_id: null, modelo_id: 'm', modelo_versao: 1, tipo_documental: 'OFICIO', status: 'EMITIDO',

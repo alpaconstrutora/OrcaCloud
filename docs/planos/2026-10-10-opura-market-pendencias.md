@@ -94,7 +94,7 @@ até no `tsc`). Foram 8 timeouts + 1 asserção de relógio, não 14.
 
 ## Item 1 — feed salvo e importado todo dia (frente `market-feed-agendado`)
 
-**Banco** (`supabase/migrations/aplicar_20271010000100_opura_market_feeds.sql`):
+**Banco** (`supabase/migrations/aplicar_20271010000300_opura_market_feeds.sql`):
 - Tabela `opura_market_feeds`: `id`, `organization_id`, `city_id`, `url`, `ativo`,
   `ultima_execucao`, `ultimo_resultado jsonb`, `ultimo_erro`, timestamps, `UNIQUE(org, city)`.
   RLS para membros da organização, no mesmo molde de `opura_market_city_configs`
@@ -128,7 +128,7 @@ até no `tsc`). Foram 8 timeouts + 1 asserção de relógio, não 14.
 
 #### Item 1 — execução (10/10/2026, frente `market-feed-agendado`)
 
-- ✅ Migration `aplicar_20271010000200_opura_market_feeds.sql` **aplicada** (ensaio em BEGIN/ROLLBACK antes): tabela `opura_market_feeds` com RLS de membro e sem acesso anon; `feed_id` e `removed_at` em `opura_market_listings`; cron `opura-market-feeds-diario` às 09:20 UTC (06:20 em Brasília; 09:00 já tinha outro job).
+- ✅ Migration `aplicar_20271010000300_opura_market_feeds.sql` **aplicada** (ensaio em BEGIN/ROLLBACK antes): tabela `opura_market_feeds` com RLS de membro e sem acesso anon; `feed_id` e `removed_at` em `opura_market_listings`; cron `opura-market-feeds-diario` às 09:20 UTC (06:20 em Brasília; 09:00 já tinha outro job).
 - ✅ `logica.ts`: `anunciosQueSairam` (feed sem nenhum anúncio da cidade não derruba ninguém; anúncio sem URL nunca sai), 3 testes. A checagem de `https` + host público já existia (`urlDeFeedPermitida`, também nos redirecionamentos).
 - ✅ Edge Function: importação de feed extraída para `gravarFeed`; novo modo `agendado` por `chamadaDeCron`, com a organização lida da linha do feed; importar manualmente o MESMO link do feed salvo conta como execução dele. **Publicada com `--no-verify-jwt`** (o cron não manda JWT; antes estava `verify_jwt=true`). Sondas: sem cabeçalho → 401 em todos os modos e com corpo vazio ou inválido; Bearer falso no modo agendado → 401; chave pública do app → 401 nos dois tipos de modo.
 - ✅ Prova do ciclo pelo próprio comando do cron, com organização `ZZ Teste E2E` sem membros e XML num bucket público temporário:

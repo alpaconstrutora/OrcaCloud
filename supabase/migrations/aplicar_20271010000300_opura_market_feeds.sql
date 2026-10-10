@@ -1,5 +1,10 @@
 -- ============================================================================
--- aplicar_20271010000200_opura_market_feeds
+-- aplicar_20271010000300_opura_market_feeds
+--
+-- ⚠️ NASCEU COMO aplicar_20271010000200_opura_market_feeds e JÁ FOI APLICADA no banco
+-- remoto em 10/10/2026 com aquele nome. Renomeada porque outra frente publicou
+-- aplicar_20271010000200_warranty_unit_link no mesmo dia (migrationsPrefixo.test.ts).
+-- É idempotente, mas não há motivo para rodá-la de novo.
 -- ÒPURA Market — feed salvo por organização + cidade, importado todo dia.
 -- Plano: docs/planos/2026-10-10-opura-market-pendencias.md, item 1.
 --

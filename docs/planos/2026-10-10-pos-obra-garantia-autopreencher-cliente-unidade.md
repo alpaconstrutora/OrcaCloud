@@ -23,6 +23,18 @@ Sessão de 2026-10-10, ~07:40. Mensagem do usuário, transcrita literalmente:
 (Os prints eram da versão anterior, ainda servida quando foram tirados; os dois pedidos
 valem para a nova — ver Item 8.)
 
+### Terceiro pedido — 2026-10-10, mesma sessão
+
+> 1. vamos ordenar na seguinte ordem o drawer Abrir chamado de garantia:
+> primeiro: empreendimento.
+> segundo: Obra.
+> terceiro: unidade
+> Quarto: cliente
+>
+> 2. falta centro de custo e plano de contas
+
+(Ver Itens 9 e 10.)
+
 ---
 
 ## Contexto
@@ -142,6 +154,37 @@ Feedback "se o app já tem a informação, não obrigar o usuário a preencher".
 - ⚠️ Observado: as obras "Bella Vista - Assistência Técnica" e "Condomínio - Bella Vista" NÃO
   são vinculadas ao empreendimento 007 no cadastro (nem como obra principal nem de torre), então
   não aparecem no recorte. Se devem aparecer, o vínculo é em Incorporação › Empreendimento.
+
+## Item 9 — Ordem Empreendimento › Obra › Unidade › Cliente ✅
+
+- `ClaimLinkFieldsBlock` (abrir e editar) na ordem pedida, seguida de Centro de custo e Plano
+  de contas.
+- A lista de Unidade abre recortada pelo empreendimento escolhido (e pelo cliente, se houver),
+  com "Ver todas as unidades".
+- Unidade de outro empreendimento que o escolhido à mão passa a mandar: empreendimento e obra
+  seguem a unidade (os campos não podem se contradizer). Mesmo empreendimento: obra manual fica.
+- **Pronto quando / conferido:** testes da regra (2 casos novos); navegador mostra os rótulos na
+  ordem Empreendimento | Obra | Unidade | Cliente | Centro de custo | Plano de contas.
+
+## Item 10 — Centro de custo e Plano de contas ✅
+
+- `aplicar_20271010001000_warranty_cc_plano_de_contas.sql`: `warranty_claims.cost_center_id`
+  (→ `cost_centers_v2`) e `plano_de_contas_id` (→ `plano_de_contas`), FKs `ON DELETE SET NULL`,
+  índices; `open_warranty_claim` dropada (15) e recriada com 17 args a partir da vigente, com
+  trava de organização para os dois; REVOKE PUBLIC/anon.
+- Tela: `CostCenterSelect` / `PlanoContasSelect` (drawer padrão §7.1.1) com as linhas cruas de
+  `costCenterService.list(org)` / `financialRegistryService.listPlanoContas(org)`; painel de
+  informações mostra os dois.
+- **CC sugerido** (`centroDeCustoSugerido`/`applyCostCenterSuggestion`, puros): o CC-filho da
+  obra; sem CC de obra, o do empreendimento; só quando há UM. Manual nunca é trocado.
+- **Plano de contas é manual:** o app não tem de onde deduzi-lo (nenhum padrão por obra, CC ou
+  empreendimento; o resolvedor de categoria é do DRE, outra dimensão).
+- **Conferido em 10/10:** migration aplicada; `pg_proc` = 1 função, 17 args, ACL sem PUBLIC/anon;
+  RPC num bloco que aborta no fim gravou os dois (`cc_ok=t pc_ok=t`) e recusou CC de outra org
+  (`InvariantViolation`); total de chamados seguiu 5. Testes: regra 29/29, componente 18/18 (CC
+  da obra aparece ao escolher o empreendimento). Navegador: "006 - Coronel Lambert 316" →
+  obra e CC "022 Comercial › Coronel Lambert 316" preenchidos; "007 - Bella Vista" (3 CCs na
+  obra) → sem chute, sugerido anterior limpo; Plano de contas abre em accordion; 0 erro.
 
 ---
 

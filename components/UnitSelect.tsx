@@ -14,7 +14,7 @@ import { ROLE_LABELS, unitLabel } from '../utils/warrantyAutofill';
  * não vamos obrigar o usuário preencher manualmente"): a unidade deixou de ser
  * texto livre, e escolhê-la preenche empreendimento, obra e cliente.
  *
- * `preferredIds` restringe a lista às unidades de um cliente já escolhido, com
+ * `preferredIds` restringe a lista ao que já foi escolhido (empreendimento, cliente), com
  * "Ver todas as unidades" para sair do recorte — o recorte nunca esconde nada
  * sem dizer.
  *
@@ -27,9 +27,9 @@ interface Props {
     placeholder?: string;
     disabled?: boolean;
     triggerClassName?: string;
-    /** Unidades do cliente escolhido. Vazio/ausente = sem recorte. */
+    /** Unidades do recorte (empreendimento e/ou cliente já escolhidos). Vazio/ausente = sem recorte. */
     preferredIds?: string[];
-    /** Quem é o recorte, para o aviso ("Unidades de Fulano"). */
+    /** O recorte em palavras, com a preposição ("de Fulano em 007 - Bella Vista"). */
     preferredLabel?: string;
     /** Rótulo gravado quando a unidade não está na lista (chamado antigo, outra organização). */
     fallbackLabel?: string;
@@ -167,7 +167,7 @@ const UnitSelect: React.FC<Props> = ({
                         <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
                             <span>
                                 {recortado
-                                    ? `Mostrando as ${recorte.size} unidade(s)${preferredLabel ? ` de ${preferredLabel}` : ' do cliente'}.`
+                                    ? `Mostrando as ${recorte.size} unidade(s)${preferredLabel ? ` ${preferredLabel}` : ''}.`
                                     : `Mostrando todas as ${linhas.length} unidades.`}
                             </span>
                             <button
@@ -175,7 +175,7 @@ const UnitSelect: React.FC<Props> = ({
                                 onClick={() => setVerTodas(v => !v)}
                                 className="text-blue-600 hover:text-blue-800 font-medium"
                             >
-                                {recortado ? 'Ver todas as unidades' : 'Só as do cliente'}
+                                {recortado ? 'Ver todas as unidades' : 'Voltar ao recorte'}
                             </button>
                         </div>
                     )}

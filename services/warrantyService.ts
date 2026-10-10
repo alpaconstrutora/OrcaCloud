@@ -83,6 +83,8 @@ export const warrantyService = {
             p_taxonomy:          cmd.taxonomy ?? null,
             p_origin:            cmd.origin ?? null,
             p_unit_id:           cmd.unit_id ?? null,
+            p_cost_center_id:    cmd.cost_center_id ?? null,
+            p_plano_de_contas_id: cmd.plano_de_contas_id ?? null,
         });
         if (error) throw error;
         return data as { id: string; version: number };

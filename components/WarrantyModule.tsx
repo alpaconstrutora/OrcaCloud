@@ -20,10 +20,14 @@ import ActionIconButton from './ui/ActionIconButton';
 import { FilterPopover } from './ui/FilterPopover';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import UnitSelect from './UnitSelect';
+import CostCenterSelect from './CostCenterSelect';
+import PlanoContasSelect from './PlanoContasSelect';
+import { costCenterService } from '../services/costCenterService';
+import { financialRegistryService } from '../services/financialRegistryService';
 import {
-    applyClientChoice, applyDevelopmentChoice, applyUnitChoice, entregaDoChamado, obrasDoEmpreendimento, markManual, resolveWarrantyExpiry, unitsOfClient,
+    applyClientChoice, applyCostCenterSuggestion, applyDevelopmentChoice, applyUnitChoice, entregaDoChamado, obrasDoEmpreendimento, markManual, resolveWarrantyExpiry, unitsOfClient,
     ENTREGA_FONTE_LABELS,
-    type AutoFilled, type AutofillResult, type ClaimLinkField, type ClaimLinkFields,
+    type AutoFilled, type AutofillResult, type ClaimLinkField, type ClaimLinkFields, type CostCenterLink,
 } from '../utils/warrantyAutofill';
 import KpiCard from './ui/KpiCard';
 
@@ -1200,6 +1204,42 @@ function useUnitDirectory(orgId: string | null | undefined) {
     return dir;
 }
 
+/** Centro de custo com o que a sugestão precisa (obra/empreendimento) e o que o drawer precisa (árvore). */
+interface CentroDeCustoOpcao extends CostCenterLink {
+    name: string;
+    code?: string | null;
+    organization_id?: string | null;
+}
+interface PlanoDeContasOpcao { id: string; name: string; code?: string | null; organization_id?: string | null; }
+
+/**
+ * Centros de custo e plano de contas da organização do chamado (pedido de
+ * 2026-10-10: "falta centro de custo e plano de contas"). Linhas CRUAS, com
+ * `parent_id`/`organization_id`: sem elas o drawer cai no modo antigo, plano.
+ */
+function useClassificacaoFinanceira(orgId: string | null | undefined) {
+    const [centros, setCentros] = React.useState<CentroDeCustoOpcao[]>([]);
+    const [planos, setPlanos] = React.useState<PlanoDeContasOpcao[]>([]);
+    React.useEffect(() => {
+        let cancelled = false;
+        if (orgId) {
+            Promise.all([
+                costCenterService.list(orgId).catch(e => { console.error('[WarrantyModule] centros de custo', e); return []; }),
+                financialRegistryService.listPlanoContas(orgId).catch(e => { console.error('[WarrantyModule] plano de contas', e); return []; }),
+            ]).then(([cc, pc]) => {
+                if (cancelled) return;
+                setCentros(cc as CentroDeCustoOpcao[]);
+                setPlanos(pc as PlanoDeContasOpcao[]);
+            });
+        } else {
+            setCentros([]);
+            setPlanos([]);
+        }
+        return () => { cancelled = true; };
+    }, [orgId]);
+    return { centros, planos };
+}
+
 interface ClaimAutofill {
     auto: AutoFilled;
     hint: string | null;
@@ -1218,6 +1258,7 @@ interface ClaimAutofill {
  */
 function useClaimAutofill<F extends ClaimLinkFields>(
     form: F, setForm: (f: F) => void, dir: WarrantyUnitOption[], developments: WarrantyCatalogOption[],
+    centros: readonly CostCenterLink[] = [],
 ): ClaimAutofill {
     const [auto, setAuto] = React.useState<AutoFilled>(() => new Set());
     const [hint, setHint] = React.useState<string | null>(null);
@@ -1226,11 +1267,13 @@ function useClaimAutofill<F extends ClaimLinkFields>(
     const autoRef = React.useRef(auto);
     autoRef.current = auto;
 
+    // Toda mudança de obra/empreendimento reavalia o centro de custo sugerido.
     const commit = (r: AutofillResult<F>) => {
-        formRef.current = r.form;
-        autoRef.current = r.auto;
-        setForm(r.form);
-        setAuto(r.auto);
+        const c = applyCostCenterSuggestion(r.form, r.auto, centros);
+        formRef.current = c.form;
+        autoRef.current = c.auto;
+        setForm(c.form);
+        setAuto(c.auto);
         setHint(r.hint);
     };
 
@@ -1258,10 +1301,15 @@ function useClaimAutofill<F extends ClaimLinkFields>(
         onDevelopment: (developmentId, obras) =>
             commit(applyDevelopmentChoice(formRef.current, autoRef.current, developmentId, obras, dir)),
         onManual: (field, value) => {
-            const next = { ...formRef.current, [field]: value };
+            let next = { ...formRef.current, [field]: value };
+            let a = markManual(autoRef.current, field);
+            if (field === 'project_id' || field === 'development_id') {
+                const c = applyCostCenterSuggestion(next, a, centros);
+                next = c.form;
+                a = c.auto;
+            }
             formRef.current = next;
             setForm(next);
-            const a = markManual(autoRef.current, field);
             autoRef.current = a;
             setAuto(a);
         },
@@ -1273,15 +1321,18 @@ const AutoNote: React.FC<{ show: boolean }> = ({ show }) =>
     show ? <p className="text-xs text-gray-400 mt-1">Preenchido automaticamente</p> : null;
 
 /**
- * Os quatro vínculos do chamado, na ordem em que se decide: Cliente e Unidade
- * (o que o usuário escolhe) e logo abaixo Empreendimento e Obra (o que se
- * deduz — continuam editáveis). Compartilhado por abrir e editar.
+ * Os vínculos do chamado: Empreendimento, Obra, Unidade e Cliente (ordem
+ * pedida em 2026-10-10). Compartilhado por abrir e editar.
  */
 function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
     form, autofill, dir, clients, developments, projects, obraToDevelopment, clientRequired, clientNote,
+    centros, planos, onPlanoDeContas,
 }: {
-    form: F;
+    form: F & { plano_de_contas_id: string };
     autofill: ClaimAutofill;
+    centros: CentroDeCustoOpcao[];
+    planos: PlanoDeContasOpcao[];
+    onPlanoDeContas: (id: string) => void;
     dir: WarrantyUnitOption[];
     clients: ClientOption[];
     developments: WarrantyCatalogOption[];
@@ -1294,9 +1345,21 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
     // antigo digitado à mão) continua possível em texto livre.
     const [digitar, setDigitar] = React.useState(() => !form.unit_id && !!form.unidade_ref);
     const temCadastro = dir.length > 0;
-    const unidadesDoCliente = React.useMemo(
-        () => unitsOfClient(dir, form.client_id).map(u => u.unit_id), [dir, form.client_id]);
+    // A lista de unidades abre recortada pelo que já foi escolhido acima dela
+    // (empreendimento) e pelo cliente, se houver — "Ver todas" desfaz.
     const nomeDoCliente = clients.find(c => c.id === form.client_id)?.name;
+    const nomeDoEmpreendimento = developments.find(d => d.id === form.development_id)?.name;
+    const unidadesRecortadas = React.useMemo(() => {
+        if (!form.development_id && !form.client_id) return [];
+        const doCliente = form.client_id ? new Set(unitsOfClient(dir, form.client_id).map(u => u.unit_id)) : null;
+        return dir
+            .filter(u => !form.development_id || u.empreendimento_id === form.development_id)
+            .filter(u => !doCliente || doCliente.has(u.unit_id))
+            .map(u => u.unit_id);
+    }, [dir, form.development_id, form.client_id]);
+    const rotuloDoRecorte = nomeDoCliente
+        ? `de ${nomeDoCliente}${nomeDoEmpreendimento ? ` em ${nomeDoEmpreendimento}` : ''}`
+        : nomeDoEmpreendimento ? `de ${nomeDoEmpreendimento}` : undefined;
     // Obra mostra só as obras do empreendimento escolhido (pedido de
     // 2026-10-10). A obra já gravada que não está no recorte (chamado antigo)
     // continua visível para o select não mentir sobre o valor atual.
@@ -1309,55 +1372,11 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
     const escolherEmpreendimento = (id: string) => autofill.onDevelopment(
         id, obrasDoEmpreendimento(projects, obraToDevelopment, id).map(p => p.id));
 
+    // Ordem pedida em 2026-10-10: Empreendimento, Obra, Unidade, Cliente — do
+    // mais largo ao mais específico. Escolher qualquer um continua preenchendo
+    // os outros (unidade → empreendimento/obra/cliente; cliente → unidade…).
     return (
         <>
-            <div className="col-span-2">
-                {/* Drawer com busca, não `<select>`: uma organização tem dezenas
-                    de clientes (pedido de 2026-09-12). */}
-                <label className={LABEL_CLASS}>Cliente{clientRequired && ' *'}</label>
-                <ClientSelect
-                    clients={clients}
-                    value={form.client_id}
-                    onChange={autofill.onClient}
-                    triggerClassName={FIELD_CLASS}
-                />
-                {clients.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
-                )}
-                {clientNote}
-                <AutoNote show={autofill.auto.has('client_id')} />
-            </div>
-            <div className="col-span-2">
-                <label className={LABEL_CLASS}>Unidade</label>
-                {temCadastro && !digitar ? (
-                    <UnitSelect
-                        units={dir}
-                        value={form.unit_id}
-                        onChange={autofill.onUnit}
-                        triggerClassName={FIELD_CLASS}
-                        preferredIds={unidadesDoCliente}
-                        preferredLabel={nomeDoCliente}
-                        fallbackLabel={form.unit_id ? form.unidade_ref || undefined : undefined}
-                    />
-                ) : (
-                    <input
-                        value={form.unidade_ref}
-                        onChange={e => autofill.onManual('unidade_ref', e.target.value)}
-                        className={FIELD_CLASS}
-                        placeholder="Ex: Apt 302 Torre A"
-                    />
-                )}
-                {autofill.hint && <p className="text-xs text-amber-600 mt-1">{autofill.hint}</p>}
-                {temCadastro && !form.unit_id && (
-                    <button
-                        type="button"
-                        onClick={() => setDigitar(d => !d)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"
-                    >
-                        {digitar ? 'Escolher unidade cadastrada' : 'Unidade não cadastrada? Digitar'}
-                    </button>
-                )}
-            </div>
             <div>
                 <LinkSelect
                     label="Empreendimento"
@@ -1383,6 +1402,79 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
                         : undefined}
                 />
                 <AutoNote show={autofill.auto.has('project_id')} />
+            </div>
+            <div className="col-span-2">
+                <label className={LABEL_CLASS}>Unidade</label>
+                {temCadastro && !digitar ? (
+                    <UnitSelect
+                        units={dir}
+                        value={form.unit_id}
+                        onChange={autofill.onUnit}
+                        triggerClassName={FIELD_CLASS}
+                        preferredIds={unidadesRecortadas}
+                        preferredLabel={rotuloDoRecorte}
+                        fallbackLabel={form.unit_id ? form.unidade_ref || undefined : undefined}
+                    />
+                ) : (
+                    <input
+                        value={form.unidade_ref}
+                        onChange={e => autofill.onManual('unidade_ref', e.target.value)}
+                        className={FIELD_CLASS}
+                        placeholder="Ex: Apt 302 Torre A"
+                    />
+                )}
+                {autofill.hint && <p className="text-xs text-amber-600 mt-1">{autofill.hint}</p>}
+                {temCadastro && !form.unit_id && (
+                    <button
+                        type="button"
+                        onClick={() => setDigitar(d => !d)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"
+                    >
+                        {digitar ? 'Escolher unidade cadastrada' : 'Unidade não cadastrada? Digitar'}
+                    </button>
+                )}
+            </div>
+            <div className="col-span-2">
+                {/* Drawer com busca, não `<select>`: uma organização tem dezenas
+                    de clientes (pedido de 2026-09-12). */}
+                <label className={LABEL_CLASS}>Cliente{clientRequired && ' *'}</label>
+                <ClientSelect
+                    clients={clients}
+                    value={form.client_id}
+                    onChange={autofill.onClient}
+                    triggerClassName={FIELD_CLASS}
+                />
+                {clients.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">Nenhum cliente cadastrado — cadastre em Minha Organização › Meus Clientes.</p>
+                )}
+                {clientNote}
+                <AutoNote show={autofill.auto.has('client_id')} />
+            </div>
+            {/* Classificação financeira (pedido de 2026-10-10). Drawer padrão do
+                app, nunca `<select>` (§7.1.1). O CC vem da obra/empreendimento
+                quando há um só; o plano de contas não tem de onde vir — é do usuário. */}
+            <div>
+                <label className={LABEL_CLASS}>Centro de custo</label>
+                <CostCenterSelect
+                    costCenters={centros}
+                    value={form.cost_center_id}
+                    onChange={v => autofill.onManual('cost_center_id', v)}
+                    placeholder="Sem centro de custo"
+                    triggerClassName={FIELD_CLASS}
+                    fallbackLabel={form.cost_center_id && !centros.some(c => c.id === form.cost_center_id) ? '— outra organização —' : undefined}
+                />
+                <AutoNote show={autofill.auto.has('cost_center_id')} />
+            </div>
+            <div>
+                <label className={LABEL_CLASS}>Plano de contas</label>
+                <PlanoContasSelect
+                    planoContas={planos}
+                    value={form.plano_de_contas_id}
+                    onChange={onPlanoDeContas}
+                    placeholder="Sem plano de contas"
+                    triggerClassName={FIELD_CLASS}
+                    fallbackLabel={form.plano_de_contas_id && !planos.some(p => p.id === form.plano_de_contas_id) ? '— outra organização —' : undefined}
+                />
             </div>
         </>
     );
@@ -1459,6 +1551,8 @@ export function WarrantyClaimModal({
         development_id: '',
         client_id: '',
         unit_id: '',
+        cost_center_id: '',
+        plano_de_contas_id: '',
         sistema_descricao: '',
         local_afetado: '',
         descricao: '',
@@ -1479,7 +1573,8 @@ export function WarrantyClaimModal({
     }, [systemsProp]);
 
     const dir = useUnitDirectory(organizationId);
-    const autofill = useClaimAutofill(form, setForm, dir, developments);
+    const { centros, planos } = useClassificacaoFinanceira(organizationId);
+    const autofill = useClaimAutofill(form, setForm, dir, developments, centros);
 
     const addFiles = (selected: File[]) => {
         setFiles(prev => {
@@ -1514,6 +1609,8 @@ export function WarrantyClaimModal({
                 project_id:         form.project_id || undefined,
                 development_id:     form.development_id || undefined,
                 unit_id:            form.unit_id || undefined,
+                cost_center_id:     form.cost_center_id || undefined,
+                plano_de_contas_id: form.plano_de_contas_id || undefined,
                 client_id:          form.client_id,
                 sistema_descricao:  form.sistema_descricao,
                 local_afetado:      form.local_afetado || undefined,
@@ -1584,6 +1681,9 @@ export function WarrantyClaimModal({
                             projects={projects}
                             obraToDevelopment={obraToDevelopment}
                             clientRequired
+                            centros={centros}
+                            planos={planos}
+                            onPlanoDeContas={v => setForm(f => ({ ...f, plano_de_contas_id: v }))}
                         />
                         <div className="col-span-2">
                             <label className={LABEL_CLASS}>Sistema afetado *</label>
@@ -1794,12 +1894,18 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         client_id:         claim.client_id || '',
         unidade_ref:       claim.unidade_ref || '',
         unit_id:           claim.unit_id || '',
+        cost_center_id:    claim.cost_center_id || '',
+        plano_de_contas_id: claim.plano_de_contas_id || '',
         project_id:        claim.project_id || '',
         development_id:    claim.development_id || '',
     }), [claim]);
     const [editForm, setEditForm] = React.useState(editInitial);
     const dir = useUnitDirectory(organizationId);
-    const autofill = useClaimAutofill(editForm, setEditForm, dir, developments);
+    const { centros, planos } = useClassificacaoFinanceira(organizationId);
+    const autofill = useClaimAutofill(editForm, setEditForm, dir, developments, centros);
+    const nomeDoCentro = centros.find(c => c.id === claim.cost_center_id)?.name ?? null;
+    const planoDoChamado = planos.find(p => p.id === claim.plano_de_contas_id);
+    const nomeDoPlano = planoDoChamado ? [planoDoChamado.code, planoDoChamado.name].filter(Boolean).join(' · ') : null;
     const resetAutofill = autofill.reset;
     // O chamado é recarregado depois de classificar/triar/salvar; fora da
     // edição o formulário acompanha, para não reabrir com valores velhos.
@@ -1896,6 +2002,8 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 client_name:       editForm.client_id ? clients.find(c => c.id === editForm.client_id)?.name : undefined,
                 unidade_ref:       editForm.unidade_ref || undefined,
                 unit_id:           editForm.unit_id || null,
+                cost_center_id:    editForm.cost_center_id || null,
+                plano_de_contas_id: editForm.plano_de_contas_id || null,
                 project_id:        (editForm.project_id || null) as string | undefined,
                 development_id:    (editForm.development_id || null) as string | undefined,
             });
@@ -2092,6 +2200,9 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     developments={developments}
                                     projects={projects}
                                     obraToDevelopment={obraToDevelopment}
+                                    centros={centros}
+                                    planos={planos}
+                                    onPlanoDeContas={v => setEditForm(f => ({ ...f, plano_de_contas_id: v }))}
                                     clientRequired={clientRequired}
                                     clientNote={!editForm.client_id && !clientRequired && (
                                         // Chamado antigo sem vínculo: diz de quem se trata
@@ -2186,6 +2297,18 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     <div className="flex justify-between gap-4">
                                         <span className="text-gray-500 font-medium shrink-0">Obra</span>
                                         <span className="text-blue-600 font-semibold text-right">{obraName}</span>
+                                    </div>
+                                )}
+                                {nomeDoCentro && (
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500 font-medium shrink-0">Centro de custo</span>
+                                        <span className="text-gray-900 font-semibold text-right">{nomeDoCentro}</span>
+                                    </div>
+                                )}
+                                {nomeDoPlano && (
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-gray-500 font-medium shrink-0">Plano de contas</span>
+                                        <span className="text-gray-900 font-semibold text-right">{nomeDoPlano}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between">

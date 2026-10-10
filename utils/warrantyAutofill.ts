@@ -24,6 +24,8 @@ export interface ClaimLinkFields {
     unidade_ref: string;
     development_id: string;
     project_id: string;
+    /** Sugerido pela obra/empreendimento — ver `applyCostCenterSuggestion`. */
+    cost_center_id: string;
 }
 
 export type ClaimLinkField = keyof ClaimLinkFields;
@@ -131,6 +133,14 @@ function fillFromUnit<F extends ClaimLinkFields>(
     // unidade vinculada ele sempre acompanha a unidade.
     next = { ...next, unidade_ref: unitLabel(unit) };
     auto.add('unidade_ref');
+    // A unidade é o vínculo mais específico: empreendimento escolhido à mão que
+    // não é o dela sai (com a obra, que dependia dele) — os campos não podem
+    // se contradizer, mesma regra de applyDevelopmentChoice.
+    if (next.development_id && next.development_id !== unit.empreendimento_id) {
+        next = { ...next, development_id: '', project_id: '' };
+        auto.delete('development_id');
+        auto.delete('project_id');
+    }
     next = fill(next, auto, 'development_id', unit.empreendimento_id);
     next = fill(next, auto, 'project_id', unit.project_id);
     let hint: string | null = null;
@@ -252,6 +262,60 @@ export function obrasDoEmpreendimento<P extends { id: string }>(
 ): P[] {
     if (!developmentId) return [...projects];
     return projects.filter(p => obraToDevelopment[p.id]?.id === developmentId);
+}
+
+// ── Centro de custo ──────────────────────────────────────────────────────────
+
+/** O que basta de um centro de custo (`cost_centers_v2`) para sugeri-lo. */
+export interface CostCenterLink {
+    id: string;
+    parent_id?: string | null;
+    project_id?: string | null;
+    empreendimento_id?: string | null;
+}
+
+/**
+ * Centro de custo que o app já sabe para o chamado (pedido de 2026-10-10:
+ * "falta centro de custo e plano de contas"): o CC da obra; sem CC de obra, o
+ * do empreendimento. Só centros-FILHO (grupo não recebe lançamento —
+ * costCenterService.ts) e só quando há exatamente UM: obra com dois CCs é
+ * escolha do usuário, e não cai para o do empreendimento.
+ */
+export function centroDeCustoSugerido(
+    ccs: readonly CostCenterLink[], projectId: string, developmentId: string,
+): string | null {
+    const folhas = ccs.filter(c => c.parent_id);
+    if (projectId) {
+        const daObra = folhas.filter(c => c.project_id === projectId);
+        if (daObra.length === 1) return daObra[0].id;
+        if (daObra.length > 1) return null;
+    }
+    if (developmentId) {
+        const doEmp = folhas.filter(c => c.empreendimento_id === developmentId);
+        if (doEmp.length === 1) return doEmp[0].id;
+    }
+    return null;
+}
+
+/**
+ * Reaplica a sugestão de CC depois de qualquer mudança de obra/empreendimento.
+ * CC escolhido à mão fica; o que a sugestão tinha posto é trocado ou limpo.
+ */
+export function applyCostCenterSuggestion<F extends ClaimLinkFields>(
+    form: F, auto: AutoFilled, ccs: readonly CostCenterLink[],
+): { form: F; auto: AutoFilled } {
+    if (form.cost_center_id && !auto.has('cost_center_id')) return { form, auto };
+    const sugerido = centroDeCustoSugerido(ccs, form.project_id, form.development_id);
+    const a = new Set(auto);
+    if (sugerido) {
+        a.add('cost_center_id');
+        return { form: { ...form, cost_center_id: sugerido }, auto: a };
+    }
+    if (a.has('cost_center_id')) {
+        a.delete('cost_center_id');
+        return { form: { ...form, cost_center_id: '' }, auto: a };
+    }
+    return { form, auto };
 }
 
 // ── Vencimento da garantia ───────────────────────────────────────────────────

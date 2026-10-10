@@ -95,6 +95,10 @@ export interface WarrantyClaim {
    * lê, e o que sobra se a unidade for renomeada ou removida.
    */
   unit_id?: string | null;
+  /** Centro de custo (`cost_centers_v2`) — `aplicar_20271010001000`. */
+  cost_center_id?: string | null;
+  /** Plano de contas (`plano_de_contas`, não a categoria do DRE). */
+  plano_de_contas_id?: string | null;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;
@@ -229,6 +233,8 @@ export interface OpenWarrantyClaimCommand {
   project_id?: string;
   development_id?: string;
   unit_id?: string;
+  cost_center_id?: string;
+  plano_de_contas_id?: string;
   client_id?: string;
   client_name?: string;
   unidade_ref?: string;

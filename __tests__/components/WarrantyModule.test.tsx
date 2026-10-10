@@ -48,6 +48,22 @@ vi.mock('../../services/warrantyService', () => ({
     },
 }));
 
+// Centro de custo da obra B (filho de um grupo) — a tela o sugere quando a obra
+// é escolhida (pedido de 2026-10-10: "falta centro de custo e plano de contas").
+vi.mock('../../services/costCenterService', () => ({
+    costCenterService: {
+        list: vi.fn(async () => [
+            { id: 'ccGrupo', name: 'Obras', code: '1', parent_id: null, organization_id: 'org1' },
+            { id: 'ccBeta', name: 'CC Residencial Beta', code: '1.2', parent_id: 'ccGrupo', project_id: 'obraB', organization_id: 'org1' },
+        ]),
+    },
+}));
+vi.mock('../../services/financialRegistryService', () => ({
+    financialRegistryService: {
+        listPlanoContas: vi.fn(async () => [{ id: 'pc1', name: 'Assistência técnica', code: '4.1', organization_id: 'org1' }]),
+    },
+}));
+
 vi.mock('../../services/clientEmpreendimentoService', () => ({
     clientEmpreendimentoService: { listIdsByClient: vi.fn(async () => []) },
 }));
@@ -387,6 +403,10 @@ describe('Pós-Obra & Garantia · Empreendimento ordenado e Obra recortada (2026
         await user.selectOptions(selEmp, 'emp2');
         await waitFor(() => expect(selObra.value).toBe('obraB'));
         expect(Array.from(selObra.options).map(o => o.text)).toEqual(['Sem obra vinculada', 'Residencial Beta']);
+        // …e a obra, por sua vez, traz o centro de custo dela.
+        await waitFor(() => expect(screen.getByText('CC Residencial Beta')).toBeInTheDocument());
+        expect(screen.getByText('Centro de custo')).toBeInTheDocument();
+        expect(screen.getByText('Plano de contas')).toBeInTheDocument();
         expect(screen.getAllByText('Preenchido automaticamente').length).toBeGreaterThan(0);
     });
 });

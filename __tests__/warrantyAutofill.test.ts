@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    applyClientChoice, applyDevelopmentChoice, applyUnitChoice, obrasDoEmpreendimento, clientToFill, entregaDoChamado, markManual,
+    applyClientChoice, applyCostCenterSuggestion, applyDevelopmentChoice, applyUnitChoice, centroDeCustoSugerido,
+    obrasDoEmpreendimento, clientToFill, entregaDoChamado, markManual,
     resolveWarrantyExpiry, unitLabel, unitsOfClient, type ClaimLinkFields,
 } from '../utils/warrantyAutofill';
 import type { WarrantyUnitOption, WarrantyUnitClient } from '../types/warranty';
@@ -14,7 +15,7 @@ const unit = (unit_id: string, over: Partial<WarrantyUnitOption> = {}): Warranty
     project_id: 'obra1', clients: [], entrega_data: null, entrega_fonte: null, ...over,
 });
 
-const vazio: ClaimLinkFields = { client_id: '', unit_id: '', unidade_ref: '', development_id: '', project_id: '' };
+const vazio: ClaimLinkFields = { client_id: '', unit_id: '', unidade_ref: '', development_id: '', project_id: '', cost_center_id: '' };
 const nada = new Set<never>();
 
 const DIR: WarrantyUnitOption[] = [
@@ -49,7 +50,7 @@ describe('unitsOfClient / clientToFill', () => {
 describe('applyClientChoice', () => {
     it('cliente com 1 unidade preenche unidade, empreendimento e obra', () => {
         const r = applyClientChoice(vazio, nada, 'ana', DIR);
-        expect(r.form).toEqual({ client_id: 'ana', unit_id: '31', unidade_ref: 'Torre A · 31', development_id: 'emp1', project_id: 'obra1' });
+        expect(r.form).toEqual({ client_id: 'ana', unit_id: '31', unidade_ref: 'Torre A · 31', development_id: 'emp1', project_id: 'obra1', cost_center_id: '' });
         expect(r.hint).toBeNull();
         expect(r.auto.has('client_id')).toBe(false);
     });
@@ -96,7 +97,7 @@ describe('applyClientChoice', () => {
 describe('applyUnitChoice', () => {
     it('unidade com 1 cliente preenche tudo, inclusive o cliente', () => {
         const r = applyUnitChoice(vazio, nada, DIR[0]);
-        expect(r.form).toEqual({ client_id: 'ana', unit_id: '31', unidade_ref: 'Torre A · 31', development_id: 'emp1', project_id: 'obra1' });
+        expect(r.form).toEqual({ client_id: 'ana', unit_id: '31', unidade_ref: 'Torre A · 31', development_id: 'emp1', project_id: 'obra1', cost_center_id: '' });
     });
 
     it('casal: preenche o resto e pede o cliente', () => {
@@ -104,6 +105,17 @@ describe('applyUnitChoice', () => {
         expect(r.form.client_id).toBe('');
         expect(r.form.development_id).toBe('emp1');
         expect(r.hint).toMatch(/2 clientes/);
+    });
+
+    it('unidade de outro empreendimento substitui empreendimento e obra escolhidos à mão', () => {
+        const r = applyUnitChoice({ ...vazio, development_id: 'emp9', project_id: 'obra9' }, nada, DIR[0]);
+        expect(r.form.development_id).toBe('emp1');
+        expect(r.form.project_id).toBe('obra1');
+    });
+
+    it('unidade do mesmo empreendimento mantém a obra escolhida à mão', () => {
+        const r = applyUnitChoice({ ...vazio, development_id: 'emp1', project_id: 'obraTorre' }, nada, DIR[0]);
+        expect(r.form.project_id).toBe('obraTorre');
     });
 
     it('não troca cliente escolhido à mão', () => {
@@ -114,7 +126,7 @@ describe('applyUnitChoice', () => {
     it('trocar a unidade limpa empreendimento/obra/cliente que a anterior preencheu', () => {
         const a = applyUnitChoice(vazio, nada, DIR[0]);
         const b = applyUnitChoice(a.form, a.auto, DIR[2]);
-        expect(b.form).toEqual({ client_id: 'bia', unit_id: '41', unidade_ref: 'Torre A · 41', development_id: 'emp2', project_id: '' });
+        expect(b.form).toEqual({ client_id: 'bia', unit_id: '41', unidade_ref: 'Torre A · 41', development_id: 'emp2', project_id: '', cost_center_id: '' });
     });
 
     it('limpar a unidade limpa o que ela preencheu', () => {
@@ -183,5 +195,45 @@ describe('empreendimento recorta a obra (pedido seguinte, 2026-10-10)', () => {
         const a = applyDevelopmentChoice(vazio, nada, 'emp2', ['obra2']);
         expect(applyDevelopmentChoice(a.form, a.auto, '', []).form.project_id).toBe('');
         expect(applyDevelopmentChoice({ ...vazio, project_id: 'solta' }, nada, '', []).form.project_id).toBe('solta');
+    });
+});
+
+describe('centro de custo sugerido pela obra / empreendimento (2026-10-10)', () => {
+    const CCS = [
+        { id: 'grupo', parent_id: null, project_id: 'obra1' },              // grupo não conta
+        { id: 'ccObra1', parent_id: 'grupo', project_id: 'obra1' },
+        { id: 'ccObra2a', parent_id: 'grupo', project_id: 'obra2' },
+        { id: 'ccObra2b', parent_id: 'grupo', project_id: 'obra2' },
+        { id: 'ccEmp1', parent_id: 'grupo', empreendimento_id: 'emp1' },
+        { id: 'ccEmp3a', parent_id: 'grupo', empreendimento_id: 'emp3' },
+        { id: 'ccEmp3b', parent_id: 'grupo', empreendimento_id: 'emp3' },
+    ];
+
+    it('um CC da obra → ele; vários → nenhum (e não cai para o do empreendimento)', () => {
+        expect(centroDeCustoSugerido(CCS, 'obra1', 'emp1')).toBe('ccObra1');
+        expect(centroDeCustoSugerido(CCS, 'obra2', 'emp1')).toBeNull();
+    });
+
+    it('obra sem CC → o do empreendimento, se for um só', () => {
+        expect(centroDeCustoSugerido(CCS, 'obraSemCC', 'emp1')).toBe('ccEmp1');
+        expect(centroDeCustoSugerido(CCS, '', 'emp1')).toBe('ccEmp1');
+        expect(centroDeCustoSugerido(CCS, '', 'emp3')).toBeNull();
+        expect(centroDeCustoSugerido(CCS, '', '')).toBeNull();
+    });
+
+    it('preenche, troca quando a obra muda e limpa quando não há sugestão', () => {
+        const a = applyCostCenterSuggestion({ ...vazio, project_id: 'obra1' }, nada, CCS);
+        expect(a.form.cost_center_id).toBe('ccObra1');
+        expect(a.auto.has('cost_center_id')).toBe(true);
+        const b = applyCostCenterSuggestion({ ...a.form, project_id: 'obraSemCC', development_id: 'emp1' }, a.auto, CCS);
+        expect(b.form.cost_center_id).toBe('ccEmp1');
+        const c = applyCostCenterSuggestion({ ...b.form, project_id: 'obra2', development_id: '' }, b.auto, CCS);
+        expect(c.form.cost_center_id).toBe('');
+        expect(c.auto.has('cost_center_id')).toBe(false);
+    });
+
+    it('CC escolhido à mão nunca é trocado', () => {
+        const r = applyCostCenterSuggestion({ ...vazio, project_id: 'obra1', cost_center_id: 'meu' }, nada, CCS);
+        expect(r.form.cost_center_id).toBe('meu');
     });
 });

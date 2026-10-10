@@ -88,7 +88,35 @@ export interface ResultadoImportacaoMercado {
   invalidas?: number;
   lidos?: number;
   ignorados?: Record<string, number>;
+  /** Feed salvo: anúncios que tinham saído e voltaram. */
+  reativados?: number;
+  /** Feed salvo: anúncios que deixaram de vir no XML (vendidos ou retirados). */
+  saidas?: number;
+  /** Por que as saídas não foram registradas nesta execução, se não foram. */
+  saidasIgnoradas?: string | null;
 }
+
+/**
+ * Feed salvo por organização + cidade, reimportado todo dia pelo cron
+ * (plano 2026-10-10-opura-market-pendencias, item 1).
+ */
+export interface FeedSalvoMercado {
+  id: string;
+  url: string;
+  ativo: boolean;
+  ultimaExecucao: string | null;
+  ultimoResultado: ResultadoImportacaoMercado | null;
+  ultimoErro: string | null;
+}
+
+const mapearFeed = (d: any): FeedSalvoMercado => ({
+  id: d.id,
+  url: d.url,
+  ativo: !!d.ativo,
+  ultimaExecucao: d.ultima_execucao ?? null,
+  ultimoResultado: d.ultimo_resultado ?? null,
+  ultimoErro: d.ultimo_erro ?? null,
+});
 
 export interface ResultadoLocalizacaoMercado {
   localizados: number;
@@ -520,6 +548,33 @@ export const opuraMarketService = {
     origem: { feedUrl?: string; feedXml?: string }
   ): Promise<ResultadoImportacaoMercado> {
     return invocarImportacao({ modo: 'feed', organizationId, cityId, ...origem });
+  },
+
+  /** Feed salvo da organização nesta cidade (null se não houver). */
+  async getFeedSalvo(organizationId: string, cityId: string): Promise<FeedSalvoMercado | null> {
+    if (!organizationId || !cityId) return null;
+    const { data, error } = await supabase
+      .from('opura_market_feeds')
+      .select('id, url, ativo, ultima_execucao, ultimo_resultado, ultimo_erro')
+      .eq('organization_id', organizationId)
+      .eq('city_id', cityId)
+      .maybeSingle();
+    if (error) throw new Error(`Falha ao ler o feed salvo: ${error.message}`);
+    return data ? mapearFeed(data) : null;
+  },
+
+  /** Guarda o link e liga/desliga a importação diária. Um feed por organização + cidade. */
+  async salvarFeed(organizationId: string, cityId: string, url: string, ativo: boolean, email: string | null): Promise<FeedSalvoMercado> {
+    const { data, error } = await supabase
+      .from('opura_market_feeds')
+      .upsert(
+        { organization_id: organizationId, city_id: cityId, url: url.trim(), ativo, created_by: email, updated_at: new Date().toISOString() },
+        { onConflict: 'organization_id,city_id' },
+      )
+      .select('id, url, ativo, ultima_execucao, ultimo_resultado, ultimo_erro')
+      .single();
+    if (error) throw new Error(`Falha ao salvar o feed: ${error.message}`);
+    return mapearFeed(data);
   },
 
   /** Geocodifica os anúncios da organização na cidade que ainda não têm coordenada. */

@@ -357,3 +357,24 @@ export function urlDeFeedPermitida(texto: string): { ok: true; url: URL } | { ok
   if (interno) return { ok: false, motivo: 'Use o endereço público do feed (nome de domínio, não IP ou endereço interno).' };
   return { ok: true, url };
 }
+
+/**
+ * Anúncios de um feed SALVO que deixaram de vir no XML (item 1 do plano
+ * docs/planos/2026-10-10-opura-market-pendencias.md). A saída de anúncio é a
+ * medida de demanda dos indicadores do bairro (item 3): anúncio que some do feed
+ * foi vendido ou retirado — não temos dado de venda, só isso.
+ *
+ * ⚠️ Feed que chega sem NENHUM anúncio da cidade não derruba ninguém: é muito
+ * mais provável o feed ter quebrado ou mudado do que a praça inteira ter sido
+ * vendida num dia. Marcar tudo como saída inventaria demanda.
+ *
+ * Anúncio sem URL não tem como ser reconhecido no feed seguinte: fica como está.
+ */
+export function anunciosQueSairam(
+  ativos: { id: string; url: string | null }[],
+  urlsNoFeed: (string | null | undefined)[],
+): { ids: string[]; ignorado: string | null } {
+  const presentes = new Set(urlsNoFeed.filter((u): u is string => !!u));
+  if (presentes.size === 0) return { ids: [], ignorado: 'o feed não trouxe nenhum anúncio desta cidade; saídas não registradas' };
+  return { ids: ativos.filter((a) => a.url && !presentes.has(a.url)).map((a) => a.id), ignorado: null };
+}

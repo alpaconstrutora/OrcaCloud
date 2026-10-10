@@ -126,6 +126,23 @@ até no `tsc`). Foram 8 timeouts + 1 asserção de relógio, não 14.
   - Uma execução forçada do modo `agendado` com o feed de teste do item 6 grava resultado.
   - CI verde.
 
+#### Item 1 — execução (10/10/2026, frente `market-feed-agendado`)
+
+- ✅ Migration `aplicar_20271010000200_opura_market_feeds.sql` **aplicada** (ensaio em BEGIN/ROLLBACK antes): tabela `opura_market_feeds` com RLS de membro e sem acesso anon; `feed_id` e `removed_at` em `opura_market_listings`; cron `opura-market-feeds-diario` às 09:20 UTC (06:20 em Brasília; 09:00 já tinha outro job).
+- ✅ `logica.ts`: `anunciosQueSairam` (feed sem nenhum anúncio da cidade não derruba ninguém; anúncio sem URL nunca sai), 3 testes. A checagem de `https` + host público já existia (`urlDeFeedPermitida`, também nos redirecionamentos).
+- ✅ Edge Function: importação de feed extraída para `gravarFeed`; novo modo `agendado` por `chamadaDeCron`, com a organização lida da linha do feed; importar manualmente o MESMO link do feed salvo conta como execução dele. **Publicada com `--no-verify-jwt`** (o cron não manda JWT; antes estava `verify_jwt=true`). Sondas: sem cabeçalho → 401 em todos os modos e com corpo vazio ou inválido; Bearer falso no modo agendado → 401; chave pública do app → 401 nos dois tipos de modo.
+- ✅ Prova do ciclo pelo próprio comando do cron, com organização `ZZ Teste E2E` sem membros e XML num bucket público temporário:
+
+  | Execução | Feed | Resultado |
+  |---|---|---|
+  | 1 | A, B, C | 3 novos, `feed_id` gravado |
+  | 2 | A, C | 1 saída: B `inactive` com `removed_at` |
+  | 3 | A, B, C | B reativado (`reativados: 1`), `removed_at` volta a nulo |
+
+  Tudo apagado em seguida (organização, feed, anúncios, `task_statuses` criados pelo gatilho de organização, arquivos e bucket): contagens zero conferidas. ⚠️ O link público do Storage fica em cache: trocar o arquivo no mesmo caminho continuou servindo a versão antiga; o teste usou caminhos/versões diferentes.
+- ✅ Tela (`MarketFeedPanel`): link preenchido pelo feed salvo; interruptor "Importar este link todo dia às 6h" (`TableSwitch`); "Trocar pelo link acima" quando o link digitado difere do salvo; linha "Última importação" com saídas e voltas. Em "Todas", desligado com o motivo; falha ao gravar aparece na tela. Verificado com Playwright (`c:/tmp/pwtest/market_feed_agendado.js`, leitura do feed salvo simulada, escrita abortada).
+- ⚠️ Achado: `__tests__/components/PainelVersoes.test.tsx` estoura o tempo na suíte completa local (2 vezes em 10/10), passa isolado. Mesmo caso do item 5; não mexido aqui.
+
 ## Item 2 — localização dos anúncios (frente `market-localizacao`)
 
 Medir antes e depois: contagem por `geo_precision` (hoje 52 / 143 / 158).

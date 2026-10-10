@@ -16,6 +16,7 @@ import {
   primeiraLocalizacao,
   localizacaoDoResultado,
   urlDeFeedPermitida,
+  anunciosQueSairam,
 } from '../supabase/functions/opura-market-import/logica';
 
 /**
@@ -274,5 +275,28 @@ describe('URL do feed: só https e host público', () => {
     ['não é url', 'inválido'],
   ])('recusa %s', (url) => {
     expect(urlDeFeedPermitida(url).ok).toBe(false);
+  });
+});
+
+describe('anúncios que saíram do feed salvo (item 1 do plano 2026-10-10)', () => {
+  const ativos = [
+    { id: 'a', url: 'https://imob/1' },
+    { id: 'b', url: 'https://imob/2' },
+    { id: 'c', url: null },
+  ];
+
+  it('quem não veio no feed sai; quem veio fica', () => {
+    expect(anunciosQueSairam(ativos, ['https://imob/1', 'https://imob/9'])).toEqual({ ids: ['b'], ignorado: null });
+  });
+
+  it('feed sem nenhum anúncio da cidade não derruba ninguém e diz por quê', () => {
+    const r = anunciosQueSairam(ativos, []);
+    expect(r.ids).toEqual([]);
+    expect(r.ignorado).toMatch(/nenhum anúncio/);
+    expect(anunciosQueSairam(ativos, [null, undefined]).ids).toEqual([]);
+  });
+
+  it('anúncio sem URL nunca é dado como saído', () => {
+    expect(anunciosQueSairam(ativos, ['https://imob/9']).ids).toEqual(['a', 'b']);
   });
 });

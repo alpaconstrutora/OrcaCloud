@@ -439,20 +439,28 @@ if (!antesDeMover || antesDeMover.x !== 0 || antesDeMover.y !== 0) {
 /**
  * A REFERÊNCIA EXTERNA (E10.4b, 08/10/2026).
  *
- * O IFC da própria casa, lido no navegador (web-ifc + wasm) e posto 9 m ao lado
- * pela `matrizDaReferencia`. Dois sinais: a tela MUDA com a referência (a segunda
- * casa apareceu — e o console ficou limpo, senão o wasm não carregou) e, com a
- * referência em cima do desenho (dx = 0), quase nada muda (caiu no lugar certo).
+ * O IFC da própria casa, lido no navegador (web-ifc + wasm) e posto pela
+ * `matrizDaReferencia`. A pergunta é ONDE a referência aparece, e não quanto da
+ * tela muda: em cima do desenho (dx = 0), a malha IFC (outra cor, faces
+ * coincidentes brigando) muda muitos pixels SEM sair do lugar. A primeira versão
+ * deste portão media "fração que mudou" e só passava porque o canvas estava
+ * espremido sem o CSS do app (10/10/2026).
+ *
+ * A medida: a CAIXA DA CASA sai da imagem sem referência — colunas e linhas com
+ * mais de 5 % de pixels escuros (a grade é fina e não passa nesse corte) — e
+ * olha-se onde caem os pixels que MUDARAM com a referência. 9 m ao lado: mais da
+ * metade deles fora da caixa. Em cima: quase todos dentro (no máximo 10 % fora).
+ * O console limpo prova que o wasm carregou.
  */
-async function fracaoQueMudou(a, b) {
-  return page.evaluate(async ([x, y]) => {
-    const carregar = (b64) =>
+async function ondeMudou(semB64, comB64) {
+  return page.evaluate(async ([a, b]) => {
+    const carregar = (x) =>
       new Promise((ok) => {
         const img = new Image();
         img.onload = () => ok(img);
-        img.src = `data:image/png;base64,${b64}`;
+        img.src = `data:image/png;base64,${x}`;
       });
-    const [ia, ib] = await Promise.all([carregar(x), carregar(y)]);
+    const [ia, ib] = await Promise.all([carregar(a), carregar(b)]);
     const pintar = (img) => {
       const c = document.createElement('canvas');
       c.width = img.width;
@@ -460,33 +468,47 @@ async function fracaoQueMudou(a, b) {
       c.getContext('2d').drawImage(img, 0, 0);
       return c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     };
-    if (ia.width !== ib.width || ia.height !== ib.height) return 1;
+    const W = ia.width;
+    const H = ia.height;
     const da = pintar(ia);
     const db = pintar(ib);
-    let n = 0;
+    const col = new Array(W).fill(0);
+    const lin = new Array(H).fill(0);
     for (let i = 0; i < da.length; i += 4) {
-      if (Math.abs(da[i] - db[i]) > 8 || Math.abs(da[i + 1] - db[i + 1]) > 8 || Math.abs(da[i + 2] - db[i + 2]) > 8) n++;
+      if (Math.max(da[i], da[i + 1], da[i + 2]) >= 175) continue;
+      col[(i / 4) % W]++;
+      lin[Math.floor(i / 4 / W)]++;
     }
-    return n / (da.length / 4);
-  }, [a, b]);
+    const xs = col.map((n, x) => (n > 0.05 * H ? x : -1)).filter((x) => x >= 0);
+    const ys = lin.map((n, y) => (n > 0.05 * W ? y : -1)).filter((y) => y >= 0);
+    const folga = 0.02;
+    const caixa = [Math.min(...xs) - folga * W, Math.min(...ys) - folga * H, Math.max(...xs) + folga * W, Math.max(...ys) + folga * H];
+    let mudou = 0;
+    let fora = 0;
+    for (let i = 0; i < da.length; i += 4) {
+      if (Math.abs(da[i] - db[i]) <= 8 && Math.abs(da[i + 1] - db[i + 1]) <= 8 && Math.abs(da[i + 2] - db[i + 2]) <= 8) continue;
+      mudou++;
+      const x = (i / 4) % W;
+      const y = Math.floor(i / 4 / W);
+      if (x < caixa[0] || x > caixa[2] || y < caixa[1] || y > caixa[3]) fora++;
+    }
+    return { mudou: mudou / (W * H), fora: mudou ? fora / mudou : 0 };
+  }, [semB64, comB64]);
 }
-await cena('niveis=terreo&arestas=1', 'referencia-sem', 2200);
-const semReferencia = (await page.locator('canvas').screenshot()).toString('base64');
-await cena('niveis=terreo&arestas=1&referencia=1&dx=9000', 'referencia-ao-lado', 4500);
-const aoLado = (await page.locator('canvas').screenshot()).toString('base64');
-await cena('niveis=terreo&arestas=1&referencia=1&dx=0', 'referencia-em-cima', 4500);
-const emCima = (await page.locator('canvas').screenshot()).toString('base64');
-const mudouAoLado = await fracaoQueMudou(semReferencia, aoLado);
-const mudouEmCima = await fracaoQueMudou(semReferencia, emCima);
-if (mudouAoLado < 0.03) {
-  erros.push(`a referência IFC 9 m ao lado não apareceu — só ${(mudouAoLado * 100).toFixed(2)}% da tela mudou (mínimo 3%)`);
+const fotografar = async () => (await page.locator('canvas').screenshot()).toString('base64');
+await cena('arestas=1', 'referencia-sem', 2200);
+const semReferencia = await fotografar();
+await cena('arestas=1&referencia=1&dx=9000', 'referencia-ao-lado', 4500);
+const aoLado = await ondeMudou(semReferencia, await fotografar());
+await cena('arestas=1&referencia=1&dx=0', 'referencia-em-cima', 4500);
+const emCima = await ondeMudou(semReferencia, await fotografar());
+if (!(aoLado.mudou > 0.03 && aoLado.fora > 0.5)) {
+  erros.push(`a referência IFC 9 m ao lado não apareceu ao lado: ${(aoLado.mudou * 100).toFixed(1)}% da tela mudou, ${(aoLado.fora * 100).toFixed(0)}% disso fora da casa (mínimos 3% e 50%)`);
 }
-if (mudouEmCima > mudouAoLado / 2) {
-  erros.push(
-    `a referência em dx=0 não caiu em cima do desenho: mudou ${(mudouEmCima * 100).toFixed(1)}% (ao lado: ${(mudouAoLado * 100).toFixed(1)}%)`,
-  );
+if (!(emCima.mudou > 0.01 && emCima.fora <= 0.1)) {
+  erros.push(`a referência em dx=0 não caiu em cima do desenho: ${(emCima.mudou * 100).toFixed(1)}% mudou, ${(emCima.fora * 100).toFixed(0)}% fora da casa (máximo 10%)`);
 }
-console.log(`referência IFC: ao lado mudou ${(mudouAoLado * 100).toFixed(1)}% · em cima mudou ${(mudouEmCima * 100).toFixed(1)}%`);
+console.log(`referência IFC: ao lado ${(aoLado.fora * 100).toFixed(0)}% do que mudou ficou fora da casa · em cima ${(emCima.fora * 100).toFixed(1)}% (mudou ${(emCima.mudou * 100).toFixed(1)}% da tela)`);
 
 /**
  * SUBIR E DESCER NO 3D (10/10/2026, pendência da E10.3).

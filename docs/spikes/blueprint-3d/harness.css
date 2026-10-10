@@ -1,0 +1,10 @@
+/*
+ * O CSS do app no harness do 3D (10/10/2026). O viewer se dimensiona e posiciona a
+ * barra, o painel da caixa de corte e a dica por classes do Tailwind (`h-full`,
+ * `absolute`…). Sem o CSS, o canvas caía na altura padrão — a cena espremida numa
+ * faixa e o portão `cena=estrutura` medindo 2,33 % de geometria, como se o
+ * enquadramento tivesse errado.
+ */
+@import "../../../index.css";
+/* O Tailwind v4 procura classes a partir da raiz do Vite (a pasta do spike): aponta a dos componentes. */
+@source "../../../components/blueprint";

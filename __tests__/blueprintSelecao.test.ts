@@ -94,11 +94,33 @@ describe('duplicar', () => {
     if (!naoCabe.ok) expect(naoCabe.aviso).toMatch(/não cabe/);
   });
 
-  it('seleção vazia ou só de tomada não duplica, e diz por quê', () => {
+  it('seleção vazia não duplica e diz por quê; a TOMADA duplica (10/10/2026), sem circuito, com o aviso', () => {
     const { m, levelId, tugId } = cena();
-    expect(comandoDeDuplicacao(m, [], levelId, 500).ok).toBe(false);
+    expect(comandoDeDuplicacao(m, [], levelId, 500)).toMatchObject({ ok: false, aviso: /Nada que se possa duplicar/ });
     const r = comandoDeDuplicacao(m, [tugId], levelId, 500);
-    expect(r.ok).toBe(false);
+    expect(r).toMatchObject({ ok: true, aviso: /nasce sem circuito/ });
+    if (!r.ok) return;
+    const depois = applyCommand(m, r.comando).model;
+    expect(depois.terminais).toHaveLength(2);
+    const copia = depois.terminais!.find((t) => t.id !== tugId)!;
+    expect(copia.at).toEqual({ x: 3500, y: 500 });
+  });
+
+  it('o componente e o telhado também duplicam (10/10/2026); a evaporadora com a condensadora liga na cópia dela', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const lv = m.levels[0].id;
+    m = applyCommand(m, { type: 'AddComponente', levelId: lv, tipoId: 'SOFA', at: point(2000, 2000) }).model;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: lv, disciplina: 'FRIGORIGENA', tipo: 'CD', tipoHidraulico: 'CONDENSADORA_SPLIT', at: point(5000, 0), cotaMm: 300 } as never).model;
+    const cd = m.terminais![0].id;
+    m = applyCommand(m, { type: 'AddTerminal', levelId: lv, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(1000, 1000), cotaMm: 2200, condensadoraId: cd } as never).model;
+    const ev = m.terminais![1].id;
+    const r = comandoDeDuplicacao(m, [m.componentes![0].id, cd, ev], lv, 500);
+    if (!r.ok) throw new Error(r.aviso);
+    const depois = applyCommand(m, r.comando).model;
+    expect(depois.componentes).toHaveLength(2);
+    expect(depois.componentes![1].at).toEqual({ x: 2500, y: 1500 });
+    const cdCopia = depois.terminais!.find((t) => t.tipoHidraulico === 'CONDENSADORA_SPLIT' && t.id !== cd)!;
+    expect(depois.terminais!.find((t) => t.tipoHidraulico === 'EVAPORADORA_HI_WALL' && t.id !== ev)!.condensadoraId).toBe(cdCopia.id);
   });
 });
 

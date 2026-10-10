@@ -450,6 +450,15 @@ Implementar o que Ficou de fora:
 4. depois seguir para o próximo passo do roteiro é a E11, o gerador de climatização. Começo quando você mandar.
 ```
 
+**Pedido de 10/10/2026, depois da E11 publicada**, transcrito literalmente:
+
+```
+Implementar os dois itens que ficaram de fora !
+```
+
+(Os dois itens eram: o Ctrl+D sem instalações e componentes, e o portão `cena=estrutura` do harness 3D
+em 2,33 %.)
+
 ## Critério e legenda
 
 **Critério do grau: paridade com o AltoQi Builder Climatização, mais o ciclo fechado.** Um item é
@@ -2594,3 +2603,31 @@ ids no desenho de agora).
   - o lançado: idêntico à prévia;
   - o **Ctrl+Z**: volta a zero;
   - o relatório traz a única verificação em falta, que é real: a Cozinha sem janela pede exaustão.
+
+### Os dois itens que ficaram de fora · 10/10/2026 (frente `clima-e10-sobras`)
+
+1. **Ctrl+D (duplicar) com tudo o que o kernel copia.** `comandoDeDuplicacao` passa a mandar ao
+   `DuplicateEntities`, além de paredes, divisas, estruturas e esquadrias:
+   - as águas do telhado;
+   - as instalações (ponto, trecho e quadro). A cópia nasce sem circuito, e o aviso diz;
+   - os componentes. A evaporadora duplicada com a condensadora liga na cópia dela.
+
+   O teste antigo "só de tomada não duplica" virou "a tomada duplica, sem circuito, com o aviso". Há
+   um teste novo de componente + split.
+2. **O portão `cena=estrutura` do harness 3D (2,33 % < 3 %) não era o enquadramento.** O harness não
+   carregava o CSS do app, e o viewer se dimensiona por classes do Tailwind (`h-full`, `absolute`).
+   Assim o canvas caía na altura padrão, e a cena ficava espremida numa faixa. A correção foi um
+   `harness.css` que importa o `index.css` e aponta o Tailwind para os componentes (o mesmo do harness
+   do gerador de PPCI). Com a tela do tamanho certo:
+   - `cena=estrutura` mede **10,1 %** (o histórico era 8,4 %);
+   - todos os outros portões continuam verdes.
+
+   **Achado no caminho:** o portão da referência IFC (10.4b) só passava por causa do canvas espremido.
+   Ele media "quanto da tela muda", e com a tela inteira a malha em cima do desenho muda 17 % sem sair
+   do lugar (outra cor, as faces coincidentes brigando, o 2º pavimento). Ele foi reescrito para medir
+   ONDE muda:
+   - a caixa da casa sai da imagem sem referência;
+   - **ao lado**, 71 % dos pixels que mudaram caem fora da casa (mínimo 50 %);
+   - **em cima**, 0 % (máximo 10 %).
+
+   **Defeito plantado:** com a referência girada 180°, o portão acusou (57 % fora da casa).

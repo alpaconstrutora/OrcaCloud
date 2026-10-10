@@ -213,8 +213,11 @@ export type Resultado = { ok: true; comando: Command; aviso: string | null } | {
  * que é a diferença para Ctrl+V. Aberturas avulsas são copiadas NA MESMA
  * PAREDE, logo depois do vão original; a que não couber fica de fora, com aviso.
  *
- * Águas e instalações ficam de fora porque `DuplicateEntities` não as copia
- * (só paredes, limites, estruturas e aberturas) — o aviso diz o que não foi.
+ * Desde 10/10/2026 vai TUDO o que o `DuplicateEntities` copia: além de paredes,
+ * limites, estruturas e aberturas, as águas do telhado, as instalações (ponto,
+ * trecho e quadro — a cópia nasce sem circuito) e os componentes (a
+ * evaporadora copiada com a condensadora liga na cópia dela). Antes, telhado e
+ * instalações ficavam de fora com aviso.
  */
 export function comandoDeDuplicacao(
   model: BlueprintModel,
@@ -238,19 +241,21 @@ export function comandoDeDuplicacao(
     }
     openings.push({ openingId: o.id, wallId: w.id, offsetMm: Math.round(offset) });
   }
-  if (f.wallIds.length === 0 && f.boundaryIds.length === 0 && f.structuralIds.length === 0 && openings.length === 0) {
+  const componenteIds = (model.componentes ?? []).filter((c) => selectedIds.includes(c.id)).map((c) => c.id);
+  const algo =
+    f.wallIds.length + f.boundaryIds.length + f.structuralIds.length + openings.length + f.aguaIds.length + f.terminalIds.length + f.trechoIds.length + f.quadroIds.length + componenteIds.length;
+  if (algo === 0) {
     return {
       ok: false,
       aviso:
         deFora > 0
           ? 'A abertura não cabe duplicada na mesma parede.'
-          : 'Nada que se possa duplicar está selecionado (paredes, esquadrias, estruturas ou divisas).',
+          : 'Nada que se possa duplicar está selecionado (paredes, esquadrias, estruturas, divisas, telhado, instalações ou componentes).',
     };
   }
-  const ignorados = f.aguaIds.length + f.trechoIds.length + f.terminalIds.length + f.quadroIds.length;
   const avisos: string[] = [];
   if (deFora > 0) avisos.push(`${deFora} abertura(s) não coube(ram) na mesma parede e ficou(aram) de fora.`);
-  if (ignorados > 0) avisos.push(`${ignorados} peça(s) de telhado/instalações não entram na duplicação.`);
+  if (f.terminalIds.length + f.trechoIds.length > 0) avisos.push('A instalação copiada nasce sem circuito — ligue pelo planejador de circuitos.');
   return {
     ok: true,
     comando: {
@@ -259,6 +264,11 @@ export function comandoDeDuplicacao(
       wallIds: f.wallIds,
       boundaryIds: f.boundaryIds,
       structuralIds: f.structuralIds,
+      aguaIds: f.aguaIds,
+      terminalIds: f.terminalIds,
+      trechoIds: f.trechoIds,
+      quadroIds: f.quadroIds,
+      componenteIds,
       openings,
       delta: { x: passo, y: -passo },
     },

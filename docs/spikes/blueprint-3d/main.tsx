@@ -9,6 +9,7 @@
  * Abrir em: /docs/spikes/blueprint-3d/index.html?laje=1&arestas=1
  */
 
+import './harness.css';
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';

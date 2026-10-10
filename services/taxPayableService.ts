@@ -5,6 +5,7 @@ import { taxSettingsService } from './taxSettingsService';
 import { pisRatesService } from './pisRatesService';
 import { cofinsRatesService } from './cofinsRatesService';
 import { inssBracketsService } from './inssBracketsService';
+import { numerarParcelas, descricaoTributo } from '../utils/tributoDescricao';
 import {
     categoriaDoTributo, resolverCategoriaPorNomes,
     CATEGORIA_IMPOSTO_SOBRE_RECEITA, CATEGORIA_IMPOSTO_SOBRE_RESULTADO,
@@ -128,6 +129,7 @@ function competenceFromDue(dueIso: string, offsetMonths: number): string {
 interface DealParcel {
     reference_id: string;
     amount: number;
+    vencimento: string; // vencimento da parcela no Contas a Receber (vai na descrição)
     fato_gerador: string; // data-base do tributo (venc./pagamento da parcela)
 }
 
@@ -519,7 +521,6 @@ export const taxPayableService = {
         // Regime da org (recebido do backfill em lote ou resolvido aqui p/ chamada avulsa).
         const recognitionRegime = regime ?? await this.getRecognitionRegime(organizationId);
 
-        const origin = deal.type === 'SALE' ? 'Venda de Ativo' : 'Locação';
         const shortId = deal.id.substring(0, 8);
 
         // Regime de COMPETÊNCIA em VENDA: a receita é auferida no mês do contrato
@@ -548,24 +549,17 @@ export const taxPayableService = {
             }
         }
 
-        // Cliente do negócio — vai na descrição no lugar do nome do tributo
-        // (o tributo já tem coluna própria na tela). Sem cliente, cai no nome do tributo.
-        let clientName: string | null = null;
+        // Código do negócio — só para a descrição da parcela que não vem de um
+        // contrato da Gestão de Contratos (série legada `tx-{dealId}-*`).
+        let dealCode = `Deal #${shortId}`;
         {
             const { data: d } = await supabase
                 .from('commercial_deals')
-                .select('client_id')
+                .select('contract_number, code')
                 .eq('id', deal.id)
                 .maybeSingle();
-            const clientId = (d as { client_id?: string | null } | null)?.client_id ?? null;
-            if (clientId) {
-                const { data: c } = await supabase
-                    .from('clients')
-                    .select('name')
-                    .eq('id', clientId)
-                    .maybeSingle();
-                clientName = (c as { name?: string | null } | null)?.name || null;
-            }
+            const dd = d as { contract_number?: string | null; code?: string | null } | null;
+            dealCode = dd?.contract_number?.trim() || dd?.code?.trim() || dealCode;
         }
 
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
@@ -585,9 +579,15 @@ export const taxPayableService = {
         //     Contas a Receber.
         const { data: linkedContracts } = await supabase
             .from('contracts')
-            .select('id')
+            .select('id, number')
             .eq('deal_id', deal.id);
         const contractIds = (linkedContracts || []).map((c: { id: string }) => c.id);
+        const contractNumberById = new Map<string, string>(
+            (linkedContracts || []).map((c: { id: string; number?: string | null }) => [c.id, c.number?.trim() || '']),
+        );
+        // Grupo da parcela para numerar "n/total": o contrato dela, ou a série legada do negócio.
+        const legacyPrefix = `tx-${deal.id}-`;
+        const contractOf = (referenceId: string) => contractIds.find(id => referenceId.startsWith(id));
 
         const refPatterns = [`tx-${deal.id}-%`, ...contractIds.map(id => `${id}%`)];
         const { data: parcels, error: pErr } = await supabase
@@ -604,6 +604,7 @@ export const taxPayableService = {
             .map((p: { reference_id: string; amount: number; due_date?: string; transaction_date?: string }) => ({
                 reference_id: p.reference_id,
                 amount: Number(p.amount) || 0,
+                vencimento: (p.due_date || p.transaction_date || '').slice(0, 10),
                 // Venda+Competência: mês do contrato (saleAccrualDate).
                 // Locação+Competência: mês do vencimento recuado pela defasagem do contrato.
                 // Demais casos (Caixa): data de recebimento da parcela.
@@ -612,9 +613,12 @@ export const taxPayableService = {
                     : (recognitionRegime === 'COMPETENCIA' && deal.type === 'RENTAL')
                         ? competenceFromDue(p.due_date || p.transaction_date || today(), rentalOffsetMonths)
                         : (p.due_date || p.transaction_date || today()).slice(0, 10),
-            }))
-            .filter(p => p.amount > 0);
-        if (validParcels.length === 0) return;
+            }));
+        // Numeração sobre todas as parcelas não canceladas do contrato (inclusive
+        // as de valor zero), para "3/12" bater com o que o contrato mostra.
+        const parcelNumbers = numerarParcelas(validParcels, p => contractOf(p.reference_id) ?? legacyPrefix);
+        const taxableParcels = validParcels.filter(p => p.amount > 0);
+        if (taxableParcels.length === 0) return;
 
         // Conta Financeira do tributo — até 2026-09-20 gravava `category: origin`
         // ('Locação'/'Venda'), nome que não existe no plano, e a DRE deixava o
@@ -634,8 +638,8 @@ export const taxPayableService = {
             const categoria = categoriaDe(taxName);
             // Deriva um sufixo curto do reference_id da parcela, qualquer que seja a
             // origem: `tx-{dealId}-p1` → `p1`; `{contractId}-p2021-01-15` → `p2021-01-15`.
-            const legacyPrefix = `tx-${deal.id}-`;
-            const contractPrefix = contractIds.find(id => parcel.reference_id.startsWith(id));
+            const contractPrefix = contractOf(parcel.reference_id);
+            const contractCode = (contractPrefix && contractNumberById.get(contractPrefix)) || dealCode;
             const instSuffix = parcel.reference_id.startsWith(legacyPrefix)
                 ? parcel.reference_id.slice(legacyPrefix.length)
                 : contractPrefix
@@ -652,7 +656,7 @@ export const taxPayableService = {
                 due_date:        taxDueDate(taxName, parcel.fato_gerador),
                 amount:          Number(amount.toFixed(2)),
                 direction:       'DEBIT',
-                description:     `${clientName || taxName} s/ ${origin} (${instSuffix}) — Deal #${shortId}`,
+                description:     descricaoTributo(contractCode, taxName, parcelNumbers.get(parcel.reference_id), parcel.vencimento),
                 party_name:      taxName,
                 party_type:      TAX_PARTY_TYPE,
                 project_id:      null,
@@ -668,7 +672,7 @@ export const taxPayableService = {
             const taxes = (await taxSettingsService.list(organizationId))
                 .filter(t => t.ativo && t.aliquota != null && t.aliquota > 0 && t.aplica_venda_ativo);
             if (taxes.length === 0) return;
-            for (const parcel of validParcels) {
+            for (const parcel of taxableParcels) {
                 for (const t of taxes) {
                     pushRow(parcel, t.id, t.nome, parcel.amount * (t.aliquota as number) / 100);
                 }
@@ -687,7 +691,7 @@ export const taxPayableService = {
             if (!regimeLabel) {
                 console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);
             }
-            for (const parcel of validParcels) {
+            for (const parcel of taxableParcels) {
                 const year = parseLocal(parcel.fato_gerador).getFullYear();
                 if (regimeLabel) {
                     const pis = rateForYear(pisRates, regimeLabel, year);

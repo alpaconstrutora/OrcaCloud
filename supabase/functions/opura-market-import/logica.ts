@@ -1385,3 +1385,16 @@ export function juntarDetalheConexao381(daLista: AnuncioLido, doDetalhe: Anuncio
     bairro: daLista.bairro ?? doDetalhe.bairro,
   };
 }
+
+/**
+ * Tipos de fonte que NUNCA têm coleta diária, só "Importar agora". A Conexão 381
+ * entra aqui por decisão do usuário (10/10/2026): os termos do site proíbem
+ * extração automatizada sem autorização. O banco também trava
+ * (CHECK opura_market_feeds_c381_so_sob_comando).
+ */
+export const FONTES_SO_SOB_COMANDO: readonly string[] = ['api_conexao381'];
+
+/** A fonte deste tipo pode ser lida pelo cron diário? */
+export function fonteTemColetaDiaria(tipo: string | null | undefined): boolean {
+  return !FONTES_SO_SOB_COMANDO.includes(String(tipo ?? ''));
+}

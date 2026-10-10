@@ -14,7 +14,7 @@ import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
 import MarketAnuncioLinkSheet from './MarketAnuncioLinkSheet';
 import { codigoDoFavorito, type CapturaDoNavegador } from '../../utils/opuraMarketCaptura';
-import { maxDetalhesDaFonte, fonteEhConexao381 } from '../../supabase/functions/opura-market-import/logica';
+import { maxDetalhesDaFonte, fonteEhConexao381, fonteTemColetaDiaria } from '../../supabase/functions/opura-market-import/logica';
 
 /**
  * Fontes de anúncios da praça (plano 2026-10-10-opura-market-fontes, Fase A).
@@ -260,9 +260,9 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
     setResultado(null);
     try {
       const { data } = await supabase.auth.getUser();
-      // Decisão F2 do plano: a Conexão 381 nasce SEM coleta diária, até a imobiliária autorizar.
+      // A Conexão 381 nunca tem coleta diária (decisão de 10/10/2026; o banco também trava).
       const f = await opuraMarketService.criarFonte({
-        organizationId, cityId, tipo: novoTipo, url: linkNovo, ativo: novoTipo !== 'api_conexao381', email: data.user?.email ?? null,
+        organizationId, cityId, tipo: novoTipo, url: linkNovo, ativo: fonteTemColetaDiaria(novoTipo), email: data.user?.email ?? null,
       });
       setFontes((lista) => [...lista, f]);
       setNovoLink('');
@@ -275,15 +275,7 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
   };
 
   const ligar = async (f: FonteMercado) => {
-    if (f.tipo === 'api_conexao381' && !f.ativo) {
-      const ok = await confirm({
-        title: 'Ligar a coleta diária da Conexão 381?',
-        message: 'Os termos de uso do site (item 8) proíbem a extração automatizada sem autorização. Ligue só depois que a Conexão 381 autorizar a coleta.',
-        confirmLabel: 'Ligar coleta diária',
-        variant: 'danger',
-      });
-      if (!ok) return;
-    }
+    if (!fonteTemColetaDiaria(f.tipo)) return;
     setOcupada(f.id);
     try {
       trocarFonte(await opuraMarketService.ligarFonte(f.id, !f.ativo));
@@ -484,14 +476,23 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
                   <span className="block text-xs text-slate-500 truncate" title={f.url}>{f.url}</span>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <TableSwitch
-                    checked={f.ativo}
-                    onChange={() => ligar(f)}
-                    disabled={!!motivo || ocupada === f.id}
-                    title={motivo ?? (f.ativo ? 'Importada todo dia de manhã. Clique para desligar.' : 'Só importa quando você clica "Importar agora". Clique para ligar a importação diária.')}
-                    onLabel="Todo dia"
-                    offLabel="Desligada"
-                  />
+                  {fonteTemColetaDiaria(f.tipo) ? (
+                    <TableSwitch
+                      checked={f.ativo}
+                      onChange={() => ligar(f)}
+                      disabled={!!motivo || ocupada === f.id}
+                      title={motivo ?? (f.ativo ? 'Importada todo dia de manhã. Clique para desligar.' : 'Só importa quando você clica "Importar agora". Clique para ligar a importação diária.')}
+                      onLabel="Todo dia"
+                      offLabel="Desligada"
+                    />
+                  ) : (
+                    <span
+                      className="text-xs font-semibold text-slate-500"
+                      title="Esta fonte não tem coleta diária: só é lida quando você clica &quot;Importar agora&quot;."
+                    >
+                      Só sob comando
+                    </span>
+                  )}
                   <button
                     onClick={() => importarAgora(f)}
                     disabled={!!motivo || ocupada === f.id}
@@ -512,10 +513,8 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
               </div>
               {f.tipo === 'api_conexao381' && (
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <p className={`text-xs ${f.ativo ? 'text-slate-500' : 'text-amber-700'}`}>
-                    {f.ativo
-                      ? 'Coleta diária ligada. Lê a lista de anúncios de venda da cidade no site; o endereço é buscado só dos anúncios novos.'
-                      : 'Coleta diária desligada: ligue quando a Conexão 381 autorizar (os termos do site proíbem extração automatizada sem autorização). "Importar agora" lê sob seu comando.'}
+                  <p className="text-xs text-slate-500">
+                    Sem coleta diária: a Conexão 381 só é lida quando você clica &quot;Importar agora&quot;. Cada leitura traz a lista de anúncios de venda da cidade; o endereço é buscado só dos anúncios novos.
                   </p>
                   <AjusteMaxDetalhes
                     fonte={f}

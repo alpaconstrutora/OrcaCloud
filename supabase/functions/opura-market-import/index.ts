@@ -96,6 +96,7 @@ import {
   urlDaListaConexao381,
   urlDoDetalheConexao381,
   fonteEhConexao381,
+  fonteTemColetaDiaria,
   type AnuncioDaPagina,
   type BairroConhecido,
   type ConsultaGeo,
@@ -602,6 +603,11 @@ async function rodarAgendado(admin: Admin) {
 
   const relatorio: { fonte: string; tipo: string; ok: boolean; detalhe: string }[] = [];
   for (const fonte of (fontes ?? []) as Fonte[]) {
+    // Conexão 381: só sob comando, nunca pelo cron (o banco também trava `ativo`).
+    if (!fonteTemColetaDiaria(fonte.tipo)) {
+      relatorio.push({ fonte: fonte.id, tipo: fonte.tipo, ok: false, detalhe: 'fonte só sob comando: o cron não lê' });
+      continue;
+    }
     if (Date.now() - inicio > ORCAMENTO_MS) {
       relatorio.push({ fonte: fonte.id, tipo: fonte.tipo, ok: false, detalhe: 'fica para a próxima janela (tempo esgotado)' });
       continue;

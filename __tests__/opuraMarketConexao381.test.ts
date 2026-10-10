@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   lerListaConexao381,
   juntarDetalheConexao381,
@@ -8,6 +10,8 @@ import {
   urlDaListaConexao381,
   urlDoDetalheConexao381,
   fonteEhConexao381,
+  fonteTemColetaDiaria,
+  FONTES_SO_SOB_COMANDO,
 } from '../supabase/functions/opura-market-import/logica';
 
 /**
@@ -112,5 +116,20 @@ describe('fonte e limites', () => {
     expect(fonteEhConexao381('https://www.conexao381.com.br/')).toBe(true);
     expect(fonteEhConexao381('https://conexao381.com.br.evil.com')).toBe(false);
     expect(fonteEhConexao381('x')).toBe(false);
+  });
+});
+
+describe('Conexão 381 só sob comando (decisão de 10/10/2026)', () => {
+  it('nunca tem coleta diária; as outras fontes podem ter', () => {
+    expect(fonteTemColetaDiaria('api_conexao381')).toBe(false);
+    expect(fonteTemColetaDiaria('vrsync')).toBe(true);
+    expect(FONTES_SO_SOB_COMANDO).toContain('api_conexao381');
+  });
+
+  it('o banco trava (CHECK) e o cron pula o tipo', () => {
+    const migration = readFileSync(resolve(__dirname, '../supabase/migrations/aplicar_20271010004200_opura_market_c381_so_sob_comando.sql'), 'utf-8');
+    expect(migration).toMatch(/CHECK \(tipo <> 'api_conexao381' OR NOT ativo\)/);
+    const fn = readFileSync(resolve(__dirname, '../supabase/functions/opura-market-import/index.ts'), 'utf-8');
+    expect(fn).toMatch(/if \(!fonteTemColetaDiaria\(fonte\.tipo\)\)/);
   });
 });

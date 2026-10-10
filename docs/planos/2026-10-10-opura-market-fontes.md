@@ -33,6 +33,20 @@ Levantamento de 10/10/2026 (só GET, 1 requisição por segundo):
 | F3 | Varredura automática das listagens de ZAP, VivaReal e OLX | **Sim.** O risco dos termos de uso foi assumido pela Alpa; há interruptor por praça |
 | F4 | Quais conectores | Os quatro: colar link, API do site, captura no navegador e avaliação de dados pagos |
 
+### Revisão das decisões (10/10/2026, depois das Fases A–D)
+
+Pedido literal do usuário:
+
+> Ligar a coleta diária da Conexão 381: só depois que a imobiliária autorizar: nao ligar coleta diária. apenas com botao de coleta única.
+> Fase E (varredura automática de ZAP, VivaReal e OLX): proponho cancelar. […] ok
+> Fase F (dados pagos): […] manter como pendencia para implementacao futura
+
+| # | Antes | Agora |
+|---|---|---|
+| F2 | Coleta diária da Conexão 381 desligada até a autorização | **Nunca há coleta diária**, nem com autorização. Só "Importar agora". Travado em três níveis: no banco (CHECK `opura_market_feeds_c381_so_sob_comando`), no cron (`fonteTemColetaDiaria`) e na tela (rótulo "Só sob comando", sem interruptor) |
+| F3 | Varrer ZAP, VivaReal e OLX | **Fase E cancelada.** Os portais respondem 403 ao servidor e mostram o desafio do Cloudflare ao navegador automatizado. Para portal fica o favorito "Enviar ao ÒPURA" (Fase C) |
+| F4 | Avaliar dados pagos | **Fase F vira pendência futura**, sem data |
+
 ## Arquitetura
 
 Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Function
@@ -50,9 +64,9 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
 | A | `market-fontes-base` | Fontes múltiplas por praça (`tipo`, `config`), cron em 4 janelas, busca pública com corte de bytes no fluxo e charset, painel "Fontes" |
 | B | `market-colar-link` | `lerAnuncioDaPagina` (extratores específicos → JSON-LD → OpenGraph), modos `ler-anuncio` e `gravar-anuncio`, gaveta de conferência |
 | C | `market-captura-navegador` | Bookmarklet "Enviar ao ÒPURA" → `#/opura-market?anuncio=…` → mesma gaveta |
-| D | `market-conector-c381` | Conector da API da Conexão 381, desligado por padrão (F2) |
-| E | `market-conector-portais` | Varredura de ZAP/VivaReal e OLX (F3), com detecção de bloqueio |
-| F | — | Documento comparando fornecedores de dados pagos |
+| D | `market-conector-c381` + `market-c381-so-manual` | Conector da API da Conexão 381, só sob comando (F2 revista) |
+| E | — | ~~Varredura de ZAP/VivaReal e OLX~~ — **cancelada** (revisão de 10/10) |
+| F | — | Documento comparando fornecedores de dados pagos — **pendência futura** |
 
 ## Fase A — execução (10/10/2026, frente `market-fontes-base`)
 
@@ -170,6 +184,11 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
 - [x] Fase A
 - [x] Fase B (captura no navegador passa a ser o caminho para portal; ver o achado acima)
 - [x] Fase C (falta o clique num navegador de verdade, nos portais ao vivo)
-- [x] Fase D (fonte desligada até a Conexão 381 autorizar)
-- [ ] Fase E
-- [ ] Fase F
+- [x] Fase D (só sob comando: o banco recusa coleta diária da Conexão 381; migration `aplicar_20271010004200`, aplicada)
+- [ ] ~~Fase E~~ — cancelada (revisão de 10/10/2026)
+- [ ] Fase F — pendência para implementação futura
+
+**Pendências que ficam:**
+- Clicar no favorito "Enviar ao ÒPURA" num navegador de verdade, nos portais ao vivo (com o usuário).
+- Fase F: comparar fornecedores de dados pagos.
+- De antes deste plano: cadastrar os 38 bairros que faltam na praça e decidir os 16 anúncios do "Centro" sem nome de bairro de origem.

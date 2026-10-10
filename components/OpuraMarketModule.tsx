@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { useToast } from '../hooks/useToast';
 import { useMarketVocacao, type Ponto } from '../hooks/useMarketVocacao';
 import { useMarketLeaflet, type CamadaMercado } from '../hooks/useMarketLeaflet';
+import { useMarketIndicadores } from '../hooks/useMarketIndicadores';
 import { gerarRelatorioVocacaoPdf } from '../utils/opuraMarketRelatorioPdf';
 import type {
   OpuraMarketCity,
@@ -20,6 +21,7 @@ import { CityRulesModal } from './CityRulesModal';
 import MarketPracaSheet from './market/MarketPracaSheet';
 import MarketMapaPanel from './market/MarketMapaPanel';
 import MarketBairroDna from './market/MarketBairroDna';
+import MarketHipotesesIndicadores from './market/MarketHipotesesIndicadores';
 import MarketOfertasPanel from './market/MarketOfertasPanel';
 import MarketTabelaOcorrencias, { textoDeBusca } from './market/MarketTabelaOcorrencias';
 import MarketFeedPanel from './market/MarketFeedPanel';
@@ -103,6 +105,9 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
   const [pracaAberta, setPracaAberta] = React.useState(false);
 
   const v = useMarketVocacao(organizationId, cityConfig?.rules);
+  const ind = useMarketIndicadores({
+    organizationId, cityId: selectedCityId, cityConfig, onConfigSalva: setCityConfig, listings, motivoSemOrg: SEM_ORG,
+  });
 
   const cidadeAtual = cities.find(c => c.id === selectedCityId) ?? null;
   const nomeDaCidade = cidadeAtual ? `${cidadeAtual.name} - ${cidadeAtual.state}` : '';
@@ -184,6 +189,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
     neighborhoods,
     listings,
     statsPorBairro,
+    indicadoresPorBairro: ind.indicadores,
     camada,
     terrainPin: v.terrainPin,
     raioMetros: v.analysisRadius,
@@ -453,7 +459,13 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
                 onIrParaEstudo={() => setAba('studies')}
               />
               {selectedNeighborhood && (
-                <MarketBairroDna bairro={selectedNeighborhood} stats={statsPorBairro[selectedNeighborhood.id]} />
+                <MarketBairroDna
+                  bairro={selectedNeighborhood}
+                  stats={statsPorBairro[selectedNeighborhood.id]}
+                  indicadores={ind.indicadores[selectedNeighborhood.id] ?? null}
+                >
+                  <MarketHipotesesIndicadores ind={ind} />
+                </MarketBairroDna>
               )}
             </div>
             <MarketOfertasPanel

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import type { DinamicaDoBairro } from '../utils/opuraMarketIndicadores';
 import {
   OpuraMarketCity,
   OpuraMarketNeighborhood,
@@ -255,6 +256,25 @@ export const opuraMarketService = {
       areaAvg: numOuNulo(r.area_avg),
       tipologia: r.tipologia ?? null
     }));
+  },
+
+  /**
+   * Por bairro: ativos, saídas na janela, preço por m² atual e no início da
+   * janela, e o início do histórico de feed salvo na cidade (plano 2026-10-10,
+   * item 3). RPC SECURITY INVOKER.
+   */
+  async getDinamicaDosBairros(cityId: string, meses: number): Promise<Record<string, DinamicaDoBairro>> {
+    if (!cityId) return {};
+    const { data, error } = await supabase.rpc('get_market_neighborhood_dinamica', { p_city_id: cityId, p_meses: meses });
+    if (error) throw new Error(`Falha ao ler a dinâmica dos bairros: ${error.message}`);
+    const num = (v: unknown) => (v == null ? null : Number(v));
+    return Object.fromEntries((data ?? []).map((r: any) => [r.neighborhood_id, {
+      ativos: Number(r.ativos) || 0,
+      saidas: Number(r.saidas) || 0,
+      precoAtual: num(r.preco_m2_atual),
+      precoInicioJanela: num(r.preco_m2_inicio),
+      inicioHistorico: r.inicio_historico ?? null,
+    } as DinamicaDoBairro]));
   },
 
   async getNeighborhoodSeries(neighborhoodId: string): Promise<OpuraMarketNeighborhoodSerie[]> {
@@ -661,18 +681,21 @@ export const opuraMarketService = {
       organizationId: data.organization_id,
       cityId: data.city_id,
       rules: data.rules,
+      hipotesesIndicadores: data.hipoteses_indicadores ?? null,
       createdAt: data.created_at,
       updatedAt: data.updated_at
     };
   },
 
   async saveCityConfig(config: OpuraMarketCityConfig): Promise<OpuraMarketCityConfig> {
-    const dbPayload = {
+    const dbPayload: Record<string, unknown> = {
       organization_id: config.organizationId,
       city_id: config.cityId,
       rules: config.rules,
       updated_at: new Date().toISOString()
     };
+    // Só vai no upsert quando foi informado: salvar as regras não apaga as hipóteses.
+    if (config.hipotesesIndicadores !== undefined) dbPayload.hipoteses_indicadores = config.hipotesesIndicadores;
 
     const { data, error } = await supabase
       .from('opura_market_city_configs')
@@ -693,6 +716,7 @@ export const opuraMarketService = {
       organizationId: data.organization_id,
       cityId: data.city_id,
       rules: data.rules,
+      hipotesesIndicadores: data.hipoteses_indicadores ?? null,
       createdAt: data.created_at,
       updatedAt: data.updated_at
     };

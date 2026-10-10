@@ -160,6 +160,8 @@ export interface OpuraMarketCityConfig {
   organizationId: string;
   cityId: string;
   rules: OpuraMarketRule[];
+  /** Hipóteses de Saturação e Score Potencial (utils/opuraMarketIndicadores.ts). null = padrão. */
+  hipotesesIndicadores?: Record<string, unknown> | null;
   createdAt?: string;
   updatedAt?: string;
 }

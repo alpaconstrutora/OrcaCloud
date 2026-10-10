@@ -2,6 +2,7 @@ import React from 'react';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { opuraMarketService } from '../../services/opuraMarketService';
 import type { OpuraMarketNeighborhood, OpuraMarketNeighborhoodSerie, OpuraMarketNeighborhoodStats } from '../../types';
+import type { IndicadoresDoBairro } from '../../utils/opuraMarketIndicadores';
 
 /**
  * DNA do bairro (Fase 4.5): números calculados na leitura, só com o que a RLS
@@ -10,10 +11,25 @@ import type { OpuraMarketNeighborhood, OpuraMarketNeighborhoodSerie, OpuraMarket
 interface Props {
   bairro: OpuraMarketNeighborhood;
   stats: OpuraMarketNeighborhoodStats | undefined;
+  /** Saturação e Score Potencial (plano 2026-10-10, item 3). Ausente = ainda lendo. */
+  indicadores?: IndicadoresDoBairro | null;
+  /** Bloco de hipóteses dos indicadores, logo abaixo dos números. */
+  children?: React.ReactNode;
 }
 
 const NAO = 'Não calculado';
-const SEM_REGRA = 'Ainda sem regra de cálculo definida (decisão D3 do plano).';
+const pct = (v: number | null) => (v == null ? 'sem dado' : `${Math.round(v * 100)}%`);
+const numero = (v: number, casas = 1) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas, minimumFractionDigits: 0 });
+
+/** Texto do `title` do Score: de onde veio cada parte. */
+function explicarScore(i: IndicadoresDoBairro): string {
+  const partes = [
+    `Estoque baixo: ${pct(i.partes.estoque)}${i.mesesDeEstoque != null ? ` (${numero(i.mesesDeEstoque)} meses de estoque)` : ''}`,
+    `Alta de preço: ${pct(i.partes.tendencia)}${i.variacaoPreco != null ? ` (variação de ${numero(i.variacaoPreco)}% na janela)` : ''}`,
+    `Preço abaixo da praça: ${pct(i.partes.precoRelativo)}${i.diferencaPraca != null ? ` (${numero(i.diferencaPraca)}% ${i.diferencaPraca >= 0 ? 'abaixo' : 'acima'} da média)` : ''}`,
+  ];
+  return partes.join(' · ') + '. Pesos e tetos nas hipóteses abaixo.';
+}
 
 function Celula({ rotulo, valor, titulo }: { rotulo: string; valor: React.ReactNode; titulo?: string }) {
   return (
@@ -24,7 +40,7 @@ function Celula({ rotulo, valor, titulo }: { rotulo: string; valor: React.ReactN
   );
 }
 
-export default function MarketBairroDna({ bairro, stats: st }: Props) {
+export default function MarketBairroDna({ bairro, stats: st, indicadores: ind, children }: Props) {
   const [serie, setSerie] = React.useState<OpuraMarketNeighborhoodSerie[]>([]);
   const [carregando, setCarregando] = React.useState(false);
 
@@ -64,10 +80,22 @@ export default function MarketBairroDna({ bairro, stats: st }: Props) {
           <Celula rotulo="Área Média" valor={st.areaAvg == null ? NAO : `${Math.round(st.areaAvg).toLocaleString('pt-BR')} m²`} />
           <Celula rotulo="Mais Anunciado" valor={st.tipologia ?? NAO} />
           <Celula rotulo="Anúncios Ativos" valor={st.total.toLocaleString('pt-BR')} />
-          <Celula rotulo="Saturação" valor={NAO} titulo={SEM_REGRA} />
-          <Celula rotulo="Score Potencial" valor={NAO} titulo={SEM_REGRA} />
+          <Celula
+            rotulo="Saturação"
+            valor={ind?.saturacao ? `${ind.saturacao} · ${numero(ind.mesesDeEstoque ?? 0)} meses` : NAO}
+            titulo={ind?.saturacao
+              ? 'Meses de estoque = anúncios ativos ÷ saídas por mês (anúncios que sumiram do feed salvo). Faixas nas hipóteses abaixo.'
+              : ind?.motivo ?? 'Lendo a dinâmica do bairro…'}
+          />
+          <Celula
+            rotulo="Score Potencial"
+            valor={ind?.score != null ? `${ind.score} / 100` : NAO}
+            titulo={ind?.score != null ? explicarScore(ind) : ind?.motivo ?? 'Lendo a dinâmica do bairro…'}
+          />
         </div>
       )}
+
+      {children}
 
       <div className="border-t border-slate-100 pt-4 space-y-3">
         <div className="flex items-center justify-between">

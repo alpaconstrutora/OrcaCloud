@@ -243,6 +243,15 @@ decidiu (10/10): **ajustar o item 2 e manter o CEP**.
   - Sem histórico, mostra "Sem histórico de saídas".
   - CI verde.
 
+#### Item 3 — execução (10/10/2026, frente `market-indicadores`)
+
+- ✅ `utils/opuraMarketIndicadores.ts` (puro): 10 hipóteses com padrão, descrição, validação (faixas crescentes, pelo menos um peso) e leitura do que foi gravado; `calcularIndicadoresDoBairro` (meses de estoque = ativos ÷ saídas por mês; sem feed, histórico curto, sem ativo ou sem saída → sem número e com o motivo); Score = média ponderada das partes que têm dado (parte sem dado sai da média, não vale zero); `precoMedioDaPraca` ponderada por ativos. Hipótese nova além do plano: **"desconto que vale nota máxima" (20%)** — a parte "preço abaixo da praça" precisava de uma escala, e escala escondida seria folga. `__tests__/opuraMarketIndicadores.test.ts`: 17 casos.
+- ✅ Migration `aplicar_20271010001200_opura_market_indicadores.sql` **aplicada** (ensaio antes): `hipoteses_indicadores jsonb` em `opura_market_city_configs`; RPC `get_market_neighborhood_dinamica` (INVOKER, sem anon). Salvar as regras da praça não apaga as hipóteses (o campo só vai no upsert quando informado).
+- ✅ Tela: `hooks/useMarketIndicadores.ts` (lê a dinâmica, calcula, edita e salva); `MarketBairroDna` mostra Saturação (faixa + meses) e Score (com as partes no `title`); bloco "Hipóteses dos indicadores" (`MarketHipotesesIndicadores`) com "Restaurar padrões" e "Salvar para a praça" (desligado com motivo: sem organização, hipótese inválida ou nada mudou); camadas Saturação e Oportunidades do mapa pelos valores calculados (Oportunidades sem faixa escondida: a intensidade do verde acompanha o Score). Bairro Score continua escondido.
+- ✅ Prova com organização `ZZ Teste E2E` e histórico retroativo no Jardim Pôr do Sol (bairro sem anúncio da Alpa): 12 ativos a R$ 4.000/m² capturados há 8 meses; 12 saídas há 2 meses, capturadas no primeiro mês da janela a R$ 3.636/m². Esperado pela conta à mão e **visto na tela**: "Escassez · 6 meses"; Score **87** (estoque 67%, alta 100% com +10%, praça 100% com 29,4% abaixo da média); "Escassez até" = 5 → "Saudável" na hora; salvar gravou `escassezAte = 5` só para a praça de teste e o botão desligou com "Nada mudou…"; camada Oportunidades: o bairro verde com intensidade 0,515 (= 0,08 + 0,5 × 0,87), os outros cinza. Tudo apagado depois (contagens zero).
+- ⚠️ **Em produção hoje todo bairro mostra "Sem histórico de saídas"**: nenhum feed salvo foi importado ainda. Os números aparecem depois de 3 meses (hipótese) de feed diário.
+- ⚠️ Armadilha no teste de tela: a porta 3100 estava ocupada pelo vite de OUTRA sessão (`oficios-f8-saidas`); com `--strictPort` em segundo plano, o meu não subiu e o primeiro roteiro testou o código da outra frente. A prova valida foi feita na porta 3117.
+
 ## Item 6 — provas de ponta a ponta com dados reais (frente `market-prova-e2e`)
 
 Gravações combinadas com o usuário (10/10/2026), todas com `-f` e prefixo `ZZ Teste E2E`.

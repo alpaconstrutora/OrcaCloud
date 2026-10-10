@@ -8,6 +8,7 @@ import type {
   OpuraMarketNeighborhoodStats,
 } from '../types';
 import type { Ponto } from './useMarketVocacao';
+import type { IndicadoresDoBairro } from '../utils/opuraMarketIndicadores';
 
 /**
  * Texto que entra em HTML do Leaflet (tooltip, divIcon). Nome de bairro e
@@ -30,6 +31,8 @@ interface OpcoesMapa {
   neighborhoods: OpuraMarketNeighborhood[];
   listings: OpuraMarketListing[];
   statsPorBairro: Record<string, OpuraMarketNeighborhoodStats>;
+  /** Saturação e Score calculados por organização (plano 2026-10-10, item 3). */
+  indicadoresPorBairro: Record<string, IndicadoresDoBairro>;
   camada: CamadaMercado;
   terrainPin: Ponto | null;
   raioMetros: string;
@@ -146,21 +149,30 @@ export function useMarketLeaflet(o: OpcoesMapa) {
     o.neighborhoods.forEach(bairro => {
       if (bairro.centroidLat == null || bairro.centroidLng == null) return;
       const st = o.statsPorBairro[bairro.id];
+      const ind = o.indicadoresPorBairro[bairro.id];
       let cor = '#3B82F6';
+      let opacidade = 0.25;
       if (o.camada === 'preco') {
         cor = st?.pricePerM2Avg == null ? SEM_DADO : '#3B82F6';
       } else if (o.camada === 'saturacao') {
-        cor = bairro.saturationLevel === 'Saturado' ? '#EF4444'
-          : bairro.saturationLevel === 'Atenção' ? '#F59E0B'
-          : bairro.saturationLevel ? '#10B981' : SEM_DADO;
+        // Calculado na leitura, por organização. As colunas saturation_level e
+        // potential_score de opura_market_neighborhoods são globais e ficam nulas.
+        cor = ind?.saturacao === 'Saturado' ? '#EF4444'
+          : ind?.saturacao === 'Atenção' ? '#F59E0B'
+          : ind?.saturacao ? '#10B981' : SEM_DADO;
       } else if (o.camada === 'oportunidade') {
-        cor = bairro.potentialScore == null ? SEM_DADO : '#10B981';
+        // Sem faixa escondida: a intensidade do verde acompanha o Score (0–100).
+        cor = ind?.score == null ? SEM_DADO : '#10B981';
+        if (ind?.score != null) opacidade = 0.08 + 0.5 * (ind.score / 100);
       }
-      const dica = st?.pricePerM2Avg == null
+      const linhaIndicadores = ind?.saturacao
+        ? `<br/>${escHtml(ind.saturacao)} · Score ${ind.score ?? '—'}`
+        : (o.camada === 'saturacao' || o.camada === 'oportunidade') ? '<br/>Saturação e Score: sem histórico de saídas' : '';
+      const dica = (st?.pricePerM2Avg == null
         ? `<b>${escHtml(bairro.name)}</b><br/>Sem anúncio ativo vinculado`
-        : `<b>${escHtml(bairro.name)}</b><br/>R$ ${Math.round(st.pricePerM2Avg).toLocaleString('pt-BR')}/m² · ${st.total} anúncios`;
+        : `<b>${escHtml(bairro.name)}</b><br/>R$ ${Math.round(st.pricePerM2Avg).toLocaleString('pt-BR')}/m² · ${st.total} anúncios`) + linhaIndicadores;
       L.circle([bairro.centroidLat, bairro.centroidLng], {
-        color: cor, fillColor: cor, fillOpacity: 0.25, radius: 250, stroke: true, weight: 1.5, dashArray: '3, 4',
+        color: cor, fillColor: cor, fillOpacity: opacidade, radius: 250, stroke: true, weight: 1.5, dashArray: '3, 4',
       }).bindTooltip(dica, { permanent: false, direction: 'top' }).addTo(grupo);
       L.marker([bairro.centroidLat, bairro.centroidLng], {
         interactive: false,
@@ -222,7 +234,7 @@ export function useMarketLeaflet(o: OpcoesMapa) {
         .bindTooltip('Área do terreno desenhada', { direction: 'top' })
         .addTo(grupo);
     }
-  }, [mapa, o.neighborhoods, o.listings, o.camada, o.terrainPin, o.raioMetros, o.isDrawingPolygon, o.drawingPoints, o.polygonPoints, o.statsPorBairro]);
+  }, [mapa, o.neighborhoods, o.listings, o.camada, o.terrainPin, o.raioMetros, o.isDrawingPolygon, o.drawingPoints, o.polygonPoints, o.statsPorBairro, o.indicadoresPorBairro]);
 
   return { mapa, focar };
 }

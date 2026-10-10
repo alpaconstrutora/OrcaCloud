@@ -35,7 +35,8 @@ export type ApprovalEntity =
     | 'purchase_order'
     | 'process_step'
     | 'blueprint_snapshot'
-    | 'purchase_request';
+    | 'purchase_request'
+    | 'doc_gen_documento';
 
 interface EntityMeta {
     /** Tabela no banco. */
@@ -69,6 +70,10 @@ const ENTITY_META: Record<ApprovalEntity, EntityMeta> = {
     // `purchaseRequestService` passa organizationId e amount explícitos — e
     // `semFaixa: 'exigir1'`: SC sem preço (valor 0) ainda precisa de aprovação.
     purchase_request:   { table: 'purchase_requests',   valueField: 'estimated_total' },
+    // OFÍCIO (Documentos › Ofícios, 10/10/2026). Não tem valor: o serviço sempre
+    // chama submit() com `amount: 0`, `organizationId` explícito e
+    // `semFaixa: 'exigir1'` — `valueField` aponta para coluna inexistente e nunca é lido.
+    doc_gen_documento:  { table: 'doc_gen_documentos',  valueField: 'amount' },
 };
 
 export interface ResolvedLevels {

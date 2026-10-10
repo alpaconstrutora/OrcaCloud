@@ -12,6 +12,7 @@ import { blueprintApprovalService } from '../services/blueprintApprovalService';
 import { contractService } from '../services/contractService';
 import { orderService } from '../services/orderService';
 import { purchaseRequestService } from '../services/purchaseRequestService';
+import { docGenDocumentoService } from '../services/docGenDocumentoService';
 import { approvalService, type ApprovalPendingSummary, type ActionQueueItem } from '../services/approvalService';
 import type {
     FinancialApprovalConfig, ApprovalStep,
@@ -30,6 +31,7 @@ export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     process_step:   'Processo',
     blueprint_snapshot: 'Planta',
     purchase_request: 'Solicitação',
+    doc_gen_documento: 'Ofício',
 };
 
 // ⚠️ Toda entidade nova PRECISA aparecer nos três dispatches abaixo. O `return`
@@ -42,6 +44,11 @@ function dispatchSubmit(item: ActionQueueItem, organizationId: string): Promise<
     if (item.entity === 'contract')       return contractService.submitForApproval(item.id);
     if (item.entity === 'purchase_order') return orderService.submitForApproval(item.id, organizationId);
     if (item.entity === 'purchase_request') return purchaseRequestService.submitForApproval(item.id);
+    if (item.entity === 'doc_gen_documento')
+        return docGenDocumentoService.get(item.id).then(d => {
+            if (!d) throw new Error('Ofício não encontrado.');
+            return docGenDocumentoService.enviarParaAprovacao(d);
+        });
     return financialApprovalService.submitForApproval(item.id, organizationId);
 }
 
@@ -55,6 +62,8 @@ function dispatchApprove(
     if (item.entity === 'purchase_order') return orderService.approveOrder(item.id, level, userEmail, notes);
     if (item.entity === 'purchase_request')
         return purchaseRequestService.approve(item.id, level, userEmail, labels, notes);
+    if (item.entity === 'doc_gen_documento')
+        return docGenDocumentoService.aprovar(item.id, level, userEmail, labels, notes);
     return financialApprovalService.approve(item.id, level, userEmail, labels, notes);
 }
 
@@ -64,6 +73,7 @@ function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string
     if (item.entity === 'contract')       return contractService.rejectContract(item.id, userEmail, reason);
     if (item.entity === 'purchase_order') return orderService.rejectOrder(item.id, userEmail, reason);
     if (item.entity === 'purchase_request') return purchaseRequestService.reject(item.id, userEmail, reason);
+    if (item.entity === 'doc_gen_documento') return docGenDocumentoService.rejeitar(item.id, userEmail, reason);
     return financialApprovalService.reject(item.id, userEmail, reason);
 }
 
@@ -594,6 +604,7 @@ const ENTITY_LABEL: Record<string, string> = {
     contract:    'contratos',
     purchase_order: 'compras',
     purchase_request: 'solicitações de compra',
+    doc_gen_documento: 'ofícios',
 };
 
 function SoftPendingBanner({ organizationId }: { organizationId: string }) {

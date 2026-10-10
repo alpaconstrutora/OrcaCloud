@@ -1,4 +1,5 @@
 import type { OpuraDocumentCategoria } from './documents';
+import type { ApprovalStep } from './financial';
 
 /**
  * Motor de documentos parametrizados (Documentos › Ofícios).
@@ -97,6 +98,10 @@ export interface DocGenModelo {
     campos_obrigatorios: string[];
     signatario_member_id: string | null;
     responsavel_email: string | null;
+    /** F4: ofício deste modelo só é emitido depois de aprovado (fila de aprovação). */
+    exige_aprovacao: boolean;
+    /** F4: ofício deste modelo só é emitido com a assinatura eletrônica de todos os signatários. */
+    exige_assinatura: boolean;
     versao: number;
     created_by: string | null;
     created_at: string;
@@ -150,7 +155,11 @@ export interface DestinatarioSnapshot {
 }
 
 // ─── F2: o documento (ofício) ────────────────────────────────────────────────
-export type DocGenDocumentoStatus = 'RASCUNHO' | 'EMITIDO' | 'CANCELADO';
+/** F4: depois de EMITIDO, a situação anda só pela tramitação (`doc_gen_tramitar`). */
+export type DocGenDocumentoStatus = 'RASCUNHO' | 'EMITIDO' | 'ENVIADO' | 'RECEBIDO' | 'RESPONDIDO' | 'ENCERRADO' | 'CANCELADO';
+/** Situações depois da emissão para as quais a tramitação leva. */
+export type DocGenSituacaoTramitacao = Exclude<DocGenDocumentoStatus, 'RASCUNHO' | 'EMITIDO'>;
+export type DocGenAprovacaoStatus = 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';
 export type DestinatarioTipo = DestinatarioSnapshot['tipo'];
 
 /** Anexo listado no documento. Do GED aponta o documento; descrito é só o nome. */
@@ -195,14 +204,21 @@ export interface DocGenDocumento {
     ged_version_id: string | null;
     emitido_por: string | null;
     emitido_em: string | null;
+    /** F4 — aprovação pela primitiva única (`approvalService`, entidade `doc_gen_documento`). */
+    approval_status: DocGenAprovacaoStatus;
+    approval_chain: ApprovalStep[];
+    approval_required_levels: number;
     created_by: string | null;
     created_at: string;
     updated_at: string;
 }
 
+/** Campos que o banco/serviço controla — o formulário nunca os grava. */
+export type CamposControlados = 'id' | 'status' | 'numero' | 'versao' | 'ged_document_id' | 'ged_version_id' | 'emitido_por' | 'emitido_em'
+    | 'approval_status' | 'approval_chain' | 'approval_required_levels' | 'created_by' | 'created_at' | 'updated_at';
+
 /** O que o formulário edita (tudo menos o que o banco/serviço controla). */
-export type DocGenDocumentoRascunho = Omit<DocGenDocumento,
-    'id' | 'status' | 'numero' | 'versao' | 'ged_document_id' | 'ged_version_id' | 'emitido_por' | 'emitido_em' | 'created_by' | 'created_at' | 'updated_at'>;
+export type DocGenDocumentoRascunho = Omit<DocGenDocumento, CamposControlados>;
 
 export interface DocGenDocumentoVersao {
     id: string;
@@ -213,4 +229,55 @@ export interface DocGenDocumentoVersao {
     autor: string | null;
     congelada: boolean;
     created_at: string;
+}
+
+// ─── F4: tramitação ──────────────────────────────────────────────────────────
+
+/** Assinatura eletrônica interna — vale para a `versao` do rascunho que foi assinada. */
+export interface DocGenAssinatura {
+    id: string;
+    documento_id: string;
+    member_id: string;
+    nome: string;
+    email: string | null;
+    versao: number;
+    assinado_em: string;
+}
+
+/** Linha do tempo do documento (gravada só pelo banco). */
+export interface DocGenEvento {
+    id: string;
+    documento_id: string;
+    tipo: string;
+    dados: Record<string, unknown>;
+    autor: string | null;
+    created_at: string;
+}
+
+export type DocGenVinculoTipo = 'RESPONDE' | 'ENCAMINHA' | 'RETIFICA' | 'REFERENCIA';
+
+/** "DE <tipo> PARA" — cada ponta é um ofício do sistema OU um documento do GED. */
+export interface DocGenVinculo {
+    id: string;
+    organization_id: string;
+    de_documento_id: string | null;
+    de_ged_id: string | null;
+    para_documento_id: string | null;
+    para_ged_id: string | null;
+    tipo: DocGenVinculoTipo;
+    observacao: string | null;
+    created_by: string | null;
+    created_at: string;
+}
+
+/** Ofício RECEBIDO de terceiro: um documento do GED com `metadados.tipo = 'OFICIO_RECEBIDO'`. */
+export interface MetadadosOficioRecebido {
+    tipo: 'OFICIO_RECEBIDO';
+    numero: string | null;
+    assunto: string;
+    remetente: string;
+    remetente_supplier_id?: string | null;
+    data_documento?: string | null;
+    recebido_em: string;
+    responder_ate?: string | null;
 }

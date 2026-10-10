@@ -20,6 +20,8 @@ export interface AssinaturaRender {
     cargo?: string | null;
     registroProfissional?: string | null;
     imagemDataUrl?: string | null;
+    /** F4: quando assinou eletronicamente (texto já formatado, "10/10/2026 14:32"). Sem ele, só a linha. */
+    assinadoEm?: string | null;
 }
 
 export interface EntradaRender {
@@ -226,6 +228,9 @@ function blocoAssinaturas(st: Estado): Content | null {
         stack.push({ text: a.nome, bold: true, alignment: 'center', margin: [0, 4, 0, 0] });
         if (a.cargo) stack.push({ text: a.cargo, alignment: 'center', color: COR_SUAVE });
         if (a.registroProfissional) stack.push({ text: a.registroProfissional, alignment: 'center', color: COR_SUAVE });
+        if (a.assinadoEm) {
+            stack.push({ text: `Assinado eletronicamente por ${a.nome} em ${a.assinadoEm}`, alignment: 'center', color: COR_SUAVE, fontSize: 7, italics: true, margin: [0, 3, 0, 0] });
+        }
         return { stack, width: '*' };
     });
     // Até 3 por linha; mais que isso quebra em novas linhas de colunas.

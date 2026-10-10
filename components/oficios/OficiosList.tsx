@@ -9,40 +9,56 @@ import type { DocGenDocumento, DocGenDocumentoStatus, DocGenModelo } from '../..
 import { ROTULO_TIPO } from '../../services/docGen/destinatario';
 import { dataCurta, hojeIso } from '../../services/docGen/dataExtenso';
 import { formatarDataHora } from './rotulos';
+import { SITUACOES_EM_CURSO } from '../../services/docGenDocumentoService';
+import { ROTULO_SITUACAO } from '../../services/docGen/tramitacao';
 
 /**
  * Documentos › Ofícios › aba Ofícios (F2). KPIs da situação, filtro de
  * situação em popover (§5.4), tabela padrão (§6.10). Clicar na linha abre
  * o ofício (§9.1); a coluna de ações só tem a exclusão do rascunho.
  */
-export type FiltroSituacao = '' | 'RASCUNHO' | 'EMITIDO' | 'AGUARDANDO';
+export type FiltroSituacao = '' | 'RASCUNHO' | 'EM_APROVACAO' | 'EMITIDO' | 'AGUARDANDO' | 'CONCLUIDOS';
 
 const OPCOES_SITUACAO: { value: FiltroSituacao; label: string }[] = [
     { value: '', label: 'Todos' },
     { value: 'RASCUNHO', label: 'Em elaboração' },
-    { value: 'EMITIDO', label: 'Emitidos' },
+    { value: 'EM_APROVACAO', label: 'Em aprovação' },
+    { value: 'EMITIDO', label: 'Emitidos (em curso)' },
     { value: 'AGUARDANDO', label: 'Aguardando resposta' },
+    { value: 'CONCLUIDOS', label: 'Respondidos / encerrados / cancelados' },
 ];
 
-const STATUS: Record<DocGenDocumentoStatus, { label: string; className: string }> = {
-    RASCUNHO: { label: 'Em elaboração', className: 'text-gray-600' },
-    EMITIDO: { label: 'Emitido', className: 'text-green-700' },
-    CANCELADO: { label: 'Cancelado', className: 'text-red-600' },
+const COR_STATUS: Record<DocGenDocumentoStatus, string> = {
+    RASCUNHO: 'text-gray-600',
+    EMITIDO: 'text-green-700',
+    ENVIADO: 'text-green-700',
+    RECEBIDO: 'text-green-700',
+    RESPONDIDO: 'text-emerald-700',
+    ENCERRADO: 'text-slate-600',
+    CANCELADO: 'text-red-600',
 };
+
+/** Rótulo da situação — o rascunho mostra também a aprovação. */
+function situacaoDe(d: DocGenDocumento): { label: string; className: string } {
+    if (d.status === 'RASCUNHO' && d.approval_status === 'PENDENTE') return { label: 'Em aprovação', className: 'text-amber-700' };
+    if (d.status === 'RASCUNHO' && d.approval_status === 'APROVADO') return { label: 'Aprovado (a emitir)', className: 'text-blue-700' };
+    if (d.status === 'RASCUNHO' && d.approval_status === 'REJEITADO') return { label: 'Rejeitado', className: 'text-red-600' };
+    return { label: ROTULO_SITUACAO[d.status], className: COR_STATUS[d.status] };
+}
 
 // Soma alvo ≈ 1.180 px (memória: soma das larguras ≤ ~1270 px com a sidebar aberta).
 const COLUMNS: StandardTableColumn[] = [
     { key: 'numero', label: 'Número', sortable: true, width: 140 },
-    { key: 'assunto', label: 'Assunto', sortable: true, width: 300 },
+    { key: 'assunto', label: 'Assunto', sortable: true, width: 270 },
     { key: 'destinatario', label: 'Destinatário', sortable: true, width: 220 },
     { key: 'modelo', label: 'Modelo', sortable: true, width: 170 },
-    { key: 'status', label: 'Situação', sortable: true, width: 120 },
+    { key: 'status', label: 'Situação', sortable: true, width: 150 },
     { key: 'resposta', label: 'Resposta até', sortable: true, width: 110 },
     { key: 'updated_at', label: 'Atualizado em', sortable: true, width: 140 },
 ];
 
-/** "Aguardando resposta": tem prazo e ainda não é rascunho cancelado. */
-const aguardando = (d: DocGenDocumento) => !!d.resposta_esperada_ate && d.status !== 'CANCELADO';
+/** "Aguardando resposta": emitido, ainda em curso (não respondido/encerrado/cancelado) e com prazo. */
+const aguardando = (d: DocGenDocumento) => !!d.resposta_esperada_ate && SITUACOES_EM_CURSO.includes(d.status);
 
 interface Props {
     documentos: DocGenDocumento[];
@@ -64,7 +80,7 @@ export default function OficiosList({ documentos, modelos, loading, onAbrir, onE
     const mes = hoje.slice(0, 7);
     const kpis = React.useMemo(() => ({
         rascunhos: documentos.filter(d => d.status === 'RASCUNHO').length,
-        emitidosMes: documentos.filter(d => d.status === 'EMITIDO' && (d.emitido_em ?? '').slice(0, 7) === mes).length,
+        emitidosMes: documentos.filter(d => d.status !== 'CANCELADO' && (d.emitido_em ?? '').slice(0, 7) === mes).length,
         aguardando: documentos.filter(aguardando).length,
         vencidos: documentos.filter(d => aguardando(d) && (d.resposta_esperada_ate ?? '') < hoje).length,
     }), [documentos, mes, hoje]);
@@ -72,6 +88,9 @@ export default function OficiosList({ documentos, modelos, loading, onAbrir, onE
     // Array estável (§6.7): o recorte de escopo vem de fora da tabela.
     const linhas = React.useMemo(() => {
         if (situacao === 'AGUARDANDO') return documentos.filter(aguardando);
+        if (situacao === 'EM_APROVACAO') return documentos.filter(d => d.status === 'RASCUNHO' && d.approval_status === 'PENDENTE');
+        if (situacao === 'EMITIDO') return documentos.filter(d => SITUACOES_EM_CURSO.includes(d.status));
+        if (situacao === 'CONCLUIDOS') return documentos.filter(d => ['RESPONDIDO', 'ENCERRADO', 'CANCELADO'].includes(d.status));
         if (situacao) return documentos.filter(d => d.status === situacao);
         return documentos;
     }, [documentos, situacao]);
@@ -100,7 +119,7 @@ export default function OficiosList({ documentos, modelos, loading, onAbrir, onE
                         case 'assunto': return d.assunto;
                         case 'destinatario': return d.destinatario_snapshot?.razao_social ?? '';
                         case 'modelo': return nomeModelo[d.modelo_id] ?? '';
-                        case 'status': return STATUS[d.status].label;
+                        case 'status': return situacaoDe(d).label;
                         case 'resposta': return d.resposta_esperada_ate ?? '';
                         case 'updated_at': return d.updated_at;
                         default: return null;
@@ -129,12 +148,12 @@ export default function OficiosList({ documentos, modelos, loading, onAbrir, onE
                         case 'modelo':
                             return <span className="block truncate text-sm font-normal text-gray-700" title={nomeModelo[d.modelo_id]}>{nomeModelo[d.modelo_id] ?? '—'}</span>;
                         case 'status': {
-                            const s = STATUS[d.status];
-                            return <span className={`text-sm font-normal ${s.className}`}>{s.label}</span>;
+                            const s = situacaoDe(d);
+                            return <span className={`block truncate text-sm font-normal ${s.className}`} title={s.label}>{s.label}</span>;
                         }
                         case 'resposta': {
                             if (!d.resposta_esperada_ate) return <span className="text-sm font-normal text-gray-400">—</span>;
-                            const vencido = d.resposta_esperada_ate < hoje && d.status !== 'CANCELADO';
+                            const vencido = d.resposta_esperada_ate < hoje && SITUACOES_EM_CURSO.includes(d.status);
                             return <span className={`text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`} title={vencido ? 'Prazo vencido' : undefined}>{dataCurta(d.resposta_esperada_ate)}</span>;
                         }
                         case 'updated_at':

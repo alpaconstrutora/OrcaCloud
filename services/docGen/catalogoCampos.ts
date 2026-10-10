@@ -35,6 +35,8 @@ export interface DadosDocumento {
     cidade?: string | null;
     /** Nomes dos anexos, na ordem. */
     anexos?: string[] | null;
+    /** F4: "Ofício nº 123/2026 da Prefeitura de Cambuí, de 02/10/2026". */
+    emRespostaA?: string | null;
 }
 
 export interface ContextoDoc extends ResolveContext {
@@ -165,6 +167,7 @@ export const GRUPOS_DOC: GrupoDoc[] = [
             { chave: 'documento.local_e_data', rotulo: 'Local e data ("Cidade, 7 de outubro de 2026")', get: c => localEData(s(c.documento?.cidade) || s(enderecoEmitente(c).cidade), dataDoDocumento(c)) },
             { chave: 'documento.ano', rotulo: 'Ano do documento', get: c => { const d = dataDoDocumento(c); return d ? d.slice(0, 4) : ''; } },
             { chave: 'documento.anexos', rotulo: 'Lista de anexos (numerada)', get: c => (c.documento?.anexos ?? []).map((a, i) => `${i + 1}. ${a}`).join('\n') },
+            { chave: 'documento.em_resposta_a', rotulo: 'Em resposta a (ofício vinculado)', get: c => s(c.documento?.emRespostaA) },
         ],
     },
     {
@@ -329,7 +332,7 @@ export function contextoDeExemplo(hoje = '2026-10-07'): ContextoDoc {
         },
         assinante: { nome: 'João da Silva', cargo: 'Diretor de Engenharia', registroProfissional: 'CREA-MG 123456/D', departamento: 'Engenharia', email: 'joao@exemplo.com.br', telefone: '(35) 99999-0000' },
         usuario: { nome: 'Maria Souza', email: 'maria@exemplo.com.br', cargo: 'Analista', departamento: 'Engenharia', telefone: '(35) 98888-0000' },
-        documento: { numero: 'OF-ENG-047/2026', assunto: 'Solicitação de ligação definitiva de energia – Residencial Central', data: hoje, anexos: ['Memorial Descritivo', 'Planta Arquitetônica', 'ART nº 1234567'] },
+        documento: { numero: 'OF-ENG-047/2026', assunto: 'Solicitação de ligação definitiva de energia – Residencial Central', data: hoje, anexos: ['Memorial Descritivo', 'Planta Arquitetônica', 'ART nº 1234567'], emRespostaA: 'Ofício nº 312/2026 da Companhia de Energia, de 30/09/2026' },
         project: {
             name: 'Residencial Central', code: 'RES01', street: 'Av. Brasil', number: '1500', complement: 'Quadra B', neighborhood: 'Jardim Europa',
             city: 'Cambuí', state: 'MG', zipCode: '37600-000', matriculaCNO: '12.345.67890/01', artRrt: 'ART 2026-0001', alvara: 'ALV 45/2026',

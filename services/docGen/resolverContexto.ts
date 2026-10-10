@@ -189,6 +189,8 @@ export interface DepsContexto {
     nomeDepartamento: (id: string | null | undefined) => string;
     /** E-mail de quem está redigindo. */
     emailUsuario?: string | null;
+    /** F4: texto do "em resposta a" (vínculo RESPONDE), já resolvido. */
+    emRespostaA?: string | null;
 }
 
 /** Membro da organização → signatário (snapshot). */
@@ -247,6 +249,7 @@ export async function montarContexto(doc: DocGenDocumentoRascunho, deps: DepsCon
             data: doc.data_documento ?? hojeIso(),
             cidade: doc.cidade,
             anexos: doc.anexos.map(a => a.nome),
+            emRespostaA: deps.emRespostaA ?? null,
         },
     };
 }

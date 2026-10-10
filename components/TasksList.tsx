@@ -61,6 +61,7 @@ const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
   financeiro:  { label: 'Financeiro',  cls: 'text-emerald-700' },
   rh:          { label: 'RH',          cls: 'text-purple-700' },
   compras:     { label: 'Compras',     cls: 'text-indigo-700' },
+  oficios:     { label: 'Ofícios',     cls: 'text-sky-700' },
 }
 
 // ── Colunas (visibilidade, ordem arrastável e ordenação via useTableColumns) ──

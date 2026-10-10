@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Plus, LayoutTemplate } from 'lucide-react';
+import { FileText, Plus, LayoutTemplate, Inbox, FileUp } from 'lucide-react';
 import { TabsBar } from '../ui/TabsBar';
 import { usePersistedState } from '../ui/TableUtils';
 import { useToast } from '../../hooks/useToast';
@@ -8,21 +8,25 @@ import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
 import { docGenModeloService } from '../../services/docGenModeloService';
 import { docGenDocumentoService } from '../../services/docGenDocumentoService';
 import { useStore } from '../../store/useStore';
-import type { DocGenDocumento, DocGenModelo } from '../../types/docGen';
+import type { DocGenDocumento, DocGenModelo, DocGenVinculo } from '../../types/docGen';
+import { listarRecebidos, urlDoRecebido, type OficioRecebido } from '../../services/docGen/tramitacao';
 import ModelosList from './ModelosList';
 import ModeloEditorTela from './ModeloEditorTela';
 import OficiosList from './OficiosList';
 import NovoOficioTela from './NovoOficioTela';
 import EscolherModeloSheet from './EscolherModeloSheet';
+import RecebidosList from './RecebidosList';
+import RegistrarRecebidoSheet from './RegistrarRecebidoSheet';
 
 /**
  * Documentos › Ofícios — casca do módulo. F1: aba Modelos. F2: aba Ofícios
  * (rascunhos com destinatário, redação, anexos, signatários e validação).
+ * F4: aba Recebidos (ofícios de terceiros arquivados no GED) e "Responder".
  * Plano: docs/planos/2026-10-07-gerador-de-oficios.md.
  *
  * Organização: `useOrgContext()` (REGRA #5) — nunca a prop crua do AppRouter.
  */
-type Aba = 'oficios' | 'modelos';
+type Aba = 'oficios' | 'recebidos' | 'modelos';
 
 interface Props {
     projects: unknown[];
@@ -32,6 +36,7 @@ interface Props {
 
 const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
     oficios: { titulo: 'Ofícios', subtitulo: 'Correspondência oficial da organização: elaboração, emissão numerada e arquivo no GED.' },
+    recebidos: { titulo: 'Ofícios recebidos', subtitulo: 'O que chegou de prefeituras, concessionárias e órgãos: arquivo no GED, prazo de resposta e o ofício que respondeu.' },
     modelos: { titulo: 'Modelos de ofício', subtitulo: 'Modelos com cabeçalho, variáveis do sistema e campos de redação livre.' },
 };
 
@@ -43,17 +48,26 @@ export default function OficiosModule(_props: Props) {
     const [documentos, setDocumentos] = React.useState<DocGenDocumento[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [editor, setEditor] = React.useState<{ aberto: boolean; modelo: DocGenModelo | null }>({ aberto: false, modelo: null });
-    const [oficio, setOficio] = React.useState<{ modelo: DocGenModelo; documento: DocGenDocumento | null } | null>(null);
+    const [oficio, setOficio] = React.useState<{ modelo: DocGenModelo; documento: DocGenDocumento | null; respondendoA?: OficioRecebido | null } | null>(null);
     const [escolhendoModelo, setEscolhendoModelo] = React.useState(false);
+    const [recebidos, setRecebidos] = React.useState<OficioRecebido[]>([]);
+    const [vinculosRecebidos, setVinculosRecebidos] = React.useState<DocGenVinculo[]>([]);
+    const [registrandoRecebido, setRegistrandoRecebido] = React.useState(false);
+    // "Responder" um recebido: guarda o alvo enquanto o usuário escolhe o modelo.
+    const [respondendoA, setRespondendoA] = React.useState<OficioRecebido | null>(null);
+    const emailUsuario = useStore(s => s.currentProfile?.email ?? null);
+    const navigateToFocus = useStore(s => s.navigateToFocus);
     const { nomePorId } = useDepartamentosDaOrg(orgId);
     const organizations = useStore(s => s.organizations);
 
     const carregar = React.useCallback(async () => {
         setLoading(true);
         try {
-            const [m, d] = await Promise.all([docGenModeloService.list(orgId), docGenDocumentoService.list(orgId)]);
+            const [m, d, r] = await Promise.all([docGenModeloService.list(orgId), docGenDocumentoService.list(orgId), listarRecebidos(orgId)]);
             setModelos(m);
             setDocumentos(d);
+            setRecebidos(r);
+            setVinculosRecebidos(await docGenDocumentoService.listVinculosDoGed(r.map(x => x.documento.id)));
         } catch (e) {
             console.error('[OficiosModule] Erro ao carregar ofícios/modelos:', e);
             showToast('Não foi possível carregar os ofícios.', 'error');
@@ -131,6 +145,30 @@ export default function OficiosModule(_props: Props) {
         });
     };
 
+    const abrirOficioPorId = (id: string) => {
+        const d = documentos.find(x => x.id === id);
+        if (d) void abrirOficio(d);
+        else showToast('Este ofício não está na lista da organização selecionada.', 'error');
+    };
+
+    const abrirPdfRecebido = async (r: OficioRecebido) => {
+        try {
+            window.open(await urlDoRecebido(r, emailUsuario), '_blank', 'noopener');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao abrir o PDF.', 'error');
+        }
+    };
+
+    const recebidoRegistrado = async (r: OficioRecebido, respondeu: DocGenDocumento | null) => {
+        const lista = [r, ...recebidos.filter(x => x.documento.id !== r.documento.id)];
+        setRecebidos(lista);
+        if (respondeu) {
+            const relido = await docGenDocumentoService.get(respondeu.id).catch(() => null);
+            if (relido) oficioSalvo(relido);
+        }
+        docGenDocumentoService.listVinculosDoGed(lista.map(x => x.documento.id)).then(setVinculosRecebidos).catch(() => {});
+    };
+
     const excluirOficio = async (d: DocGenDocumento) => {
         try {
             await docGenDocumentoService.remove(d.id);
@@ -147,8 +185,18 @@ export default function OficiosModule(_props: Props) {
                 key={oficio.documento?.id ?? `novo-${oficio.modelo.id}`}
                 modelo={oficio.modelo}
                 documento={oficio.documento}
-                onClose={() => setOficio(null)}
+                respondendoA={oficio.respondendoA ?? null}
+                documentos={documentos}
+                recebidos={recebidos}
+                onClose={() => { setOficio(null); void carregar(); }}
                 onSaved={oficioSalvo}
+                onAbrirOficio={id => {
+                    const d = documentos.find(x => x.id === id);
+                    const modelo = d ? modelos.find(m => m.id === d.modelo_id) : null;
+                    if (!d || !modelo) { showToast('Ofício não encontrado na organização selecionada.', 'error'); return; }
+                    void docGenDocumentoService.get(d.id).then(c => c && setOficio({ modelo, documento: c }));
+                }}
+                onRecebidoRegistrado={r => setRecebidos(prev => [r, ...prev.filter(x => x.documento.id !== r.documento.id)])}
             />
         );
     }
@@ -176,12 +224,19 @@ export default function OficiosModule(_props: Props) {
             <TabsBar<Aba>
                 tabs={[
                     { id: 'oficios', label: 'Ofícios', icon: <FileText className="w-4 h-4" />, badge: documentos.length },
+                    { id: 'recebidos', label: 'Recebidos', icon: <Inbox className="w-4 h-4" />, badge: recebidos.length },
                     { id: 'modelos', label: 'Modelos', icon: <LayoutTemplate className="w-4 h-4" />, badge: modelos.length },
                 ]}
                 value={aba}
                 onChange={setAba}
             >
-                {aba === 'modelos' ? (
+                {aba === 'recebidos' ? (
+                    <button type="button" onClick={() => setRegistrandoRecebido(true)} disabled={!orgId}
+                        title={!orgId ? 'Escolha uma organização no topo para registrar o ofício recebido' : undefined}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <FileUp className="w-[15px] h-[15px]" /> Registrar recebido
+                    </button>
+                ) : aba === 'modelos' ? (
                     <button type="button" onClick={() => setEditor({ aberto: true, modelo: null })}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">
                         <Plus className="w-[15px] h-[15px]" /> Novo modelo
@@ -194,7 +249,18 @@ export default function OficiosModule(_props: Props) {
                 )}
             </TabsBar>
 
-            {aba === 'modelos' ? (
+            {aba === 'recebidos' ? (
+                <RecebidosList
+                    recebidos={recebidos}
+                    vinculos={vinculosRecebidos}
+                    documentos={documentos}
+                    loading={loading}
+                    onAbrirPdf={abrirPdfRecebido}
+                    onAbrirGed={r => navigateToFocus('opura-docs', r.documento.id, 'GED_DOCUMENTO')}
+                    onResponder={r => { setRespondendoA(r); setEscolhendoModelo(true); }}
+                    onAbrirOficio={d => void abrirOficio(d)}
+                />
+            ) : aba === 'modelos' ? (
                 <ModelosList
                     modelos={modelos}
                     loading={loading}
@@ -214,13 +280,24 @@ export default function OficiosModule(_props: Props) {
                 />
             )}
 
+            {orgId && (
+                <RegistrarRecebidoSheet
+                    open={registrandoRecebido}
+                    onClose={() => setRegistrandoRecebido(false)}
+                    organizationId={orgId}
+                    emitidos={documentos.filter(d => ['EMITIDO', 'ENVIADO', 'RECEBIDO'].includes(d.status))}
+                    emailUsuario={emailUsuario}
+                    onRegistrado={(r, respondeu) => void recebidoRegistrado(r, respondeu)}
+                />
+            )}
+
             <EscolherModeloSheet
                 open={escolhendoModelo}
-                onClose={() => setEscolhendoModelo(false)}
-                modelos={modelos}
+                onClose={() => { setEscolhendoModelo(false); }}
+                modelos={respondendoA ? modelos.filter(m => m.organization_id === respondendoA.documento.organization_id) : modelos}
                 nomeOrganizacao={id => organizations.find(o => o.id === id)?.name ?? ''}
                 multiplasOrgs={!orgId}
-                onEscolher={m => setOficio({ modelo: m, documento: null })}
+                onEscolher={m => { setOficio({ modelo: m, documento: null, respondendoA }); setRespondendoA(null); }}
                 onIrParaModelos={() => setAba('modelos')}
             />
         </div>

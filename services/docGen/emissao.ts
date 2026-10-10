@@ -1,16 +1,20 @@
 import { supabase } from '../../lib/supabase';
 import { documentService } from '../documentService';
-import { docGenDocumentoService } from '../docGenDocumentoService';
+import { docGenDocumentoService, rascunhoDoDocumento } from '../docGenDocumentoService';
 import { getNumberingConfig } from '../documentNumbering';
 import { variablesInUse } from '../documentNumbering/format';
 import { resolveVariables } from '../documentNumbering/resolvers';
 import type { VariableToken } from '../documentNumbering/types';
-import type { DocGenDocumento, DocGenDocumentoRascunho, DocGenModelo } from '../../types/docGen';
-import type { OpuraDocumentCategoria } from '../../types/documents';
+import type { DocGenAssinatura, DocGenDocumento, DocGenModelo, SignatarioDoc } from '../../types/docGen';
 import { montarContexto, valoresDoDocumento, imagensDasAssinaturas, type DepsContexto } from './resolverContexto';
 import { previaDoDocumento } from './previa';
 import { sha256DoBlob } from './pdf';
 import { ROTULO_TIPO } from './destinatario';
+import { anoDe, garantirPasta } from './gedPastas';
+import { dataHoraCurta } from './dataExtenso';
+import { textoEmRespostaA } from './tramitacao';
+
+export { anoDe, garantirPasta };
 
 /**
  * Emissão do ofício (F3). Plano: docs/planos/2026-10-07-gerador-de-oficios.md.
@@ -39,14 +43,29 @@ export function caminhoDaPasta(ano: string, departamento: string | null | undefi
     return ['Ofícios', ano, (departamento ?? '').trim() || 'Sem departamento'];
 }
 
-/** Ano de `YYYY-MM-DD`. Puro. */
-export const anoDe = (data: string | null | undefined): string => (data ?? '').slice(0, 4) || String(new Date().getFullYear());
+/**
+ * Assinaturas que valem: as da VERSÃO do documento (salvar de novo invalida as
+ * anteriores), na ordem dos signatários. Puro.
+ */
+export function assinaturasValidas(signatarios: SignatarioDoc[], assinaturas: DocGenAssinatura[], versao: number): (DocGenAssinatura | null)[] {
+    return signatarios.map(s => assinaturas.find(a => a.versao === versao && !!s.memberId && a.member_id === s.memberId) ?? null);
+}
 
-/** Rascunho a partir do documento gravado (para montar o contexto). */
-function rascunhoDe(doc: DocGenDocumento): DocGenDocumentoRascunho {
-    const { id: _id, status: _s, numero: _n, versao: _v, ged_document_id: _g, ged_version_id: _gv, emitido_por: _ep, emitido_em: _ee,
-        created_by: _cb, created_at: _ca, updated_at: _ua, ...resto } = doc;
-    return resto;
+/** Bloco de assinaturas do PDF: imagem (se houver) e o carimbo da assinatura eletrônica. */
+export async function assinaturasParaPdf(
+    doc: Pick<DocGenDocumento, 'id' | 'versao' | 'signatarios'>,
+    organization: DepsContexto['organization'],
+    assinaturas?: DocGenAssinatura[],
+) {
+    const [imagens, lista] = await Promise.all([
+        imagensDasAssinaturas(doc.signatarios, organization),
+        assinaturas ? Promise.resolve(assinaturas) : docGenDocumentoService.listAssinaturas(doc.id).catch(() => [] as DocGenAssinatura[]),
+    ]);
+    const validas = assinaturasValidas(doc.signatarios, lista, doc.versao);
+    return doc.signatarios.map((s, i) => ({
+        nome: s.nome, cargo: s.cargo, registroProfissional: s.registroProfissional, imagemDataUrl: imagens[i],
+        assinadoEm: validas[i] ? dataHoraCurta(validas[i]!.assinado_em) : null,
+    }));
 }
 
 /** Códigos das variáveis da máscara do ofício que o cliente resolve (o banco faz DEPARTAMENTO e ORGANIZACAO). */
@@ -61,22 +80,6 @@ export async function valoresDaNumeracao(doc: Pick<DocGenDocumento, 'organizatio
         supplierId: doc.supplier_id,
         departmentId: doc.department_id,
     });
-}
-
-/** Garante a pasta (e as do caminho) no GED, na categoria do modelo. Devolve o id da última. */
-async function garantirPasta(orgId: string, categoria: OpuraDocumentCategoria, caminho: string[]): Promise<string> {
-    let paiId: string | null = null;
-    for (const nome of caminho) {
-        let q = supabase.from('opura_folders').select('id')
-            .eq('organization_id', orgId).eq('categoria', categoria).eq('name', nome).is('project_id', null);
-        q = paiId ? q.eq('parent_id', paiId) : q.is('parent_id', null);
-        const { data, error } = await q.limit(1);
-        if (error) throw error;
-        if (data && data.length > 0) { paiId = (data[0] as { id: string }).id; continue; }
-        const criada = await documentService.createFolder({ organization_id: orgId, name: nome, categoria, parent_id: paiId ?? undefined });
-        paiId = criada.id;
-    }
-    return paiId!;
 }
 
 export interface DepsEmissao extends DepsContexto {
@@ -95,16 +98,17 @@ export async function emitirOficio(doc: DocGenDocumento, deps: DepsEmissao): Pro
 export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Promise<DocGenDocumento> {
     const doc = await docGenDocumentoService.get(documentoId);
     if (!doc) throw new Error('Documento não encontrado.');
-    if (doc.status !== 'EMITIDO') throw new Error('Só documento emitido é arquivado no GED.');
+    if (doc.status === 'RASCUNHO' || doc.status === 'CANCELADO') throw new Error('Só documento emitido é arquivado no GED.');
     if (doc.ged_document_id) return doc;
     if (!doc.numero || !doc.emitido_em) throw new Error('Documento emitido sem número — reabra e tente de novo.');
 
     const { modelo } = deps;
-    const rascunho = rascunhoDe(doc);
-    const ctx = await montarContexto(rascunho, deps);
+    const rascunho = rascunhoDoDocumento(doc);
+    const vinculos = await docGenDocumentoService.listVinculosDoDocumento(doc.id).catch(() => []);
+    const ctx = await montarContexto(rascunho, { ...deps, emRespostaA: await textoEmRespostaA(vinculos, doc.id) });
     if (ctx.documento) ctx.documento.numero = doc.numero;
     const valores = valoresDoDocumento(modelo, ctx, doc.valores);
-    const imagens = await imagensDasAssinaturas(doc.signatarios, deps.organization);
+    const assinaturas = await assinaturasParaPdf(doc, deps.organization);
 
     const blob = await previaDoDocumento({
         conteudoModelo: modelo.conteudo,
@@ -112,7 +116,7 @@ export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Pro
         titulo: `Ofício ${doc.numero} — ${doc.assunto}`,
         valores,
         camposLivres: doc.conteudo,
-        assinaturas: doc.signatarios.map((s, i) => ({ nome: s.nome, cargo: s.cargo, registroProfissional: s.registroProfissional, imagemDataUrl: imagens[i] })),
+        assinaturas,
         anexos: doc.anexos.map(a => a.nome),
         organization: deps.organization,
         numero: doc.numero,
@@ -156,6 +160,7 @@ export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Pro
             emitido_por: doc.emitido_por,
             emitido_em: doc.emitido_em,
             signatarios: doc.signatarios.map(s => s.nome),
+            assinado_eletronicamente: assinaturas.filter(a => a.assinadoEm).map(a => ({ nome: a.nome, em: a.assinadoEm })),
         },
     });
 
@@ -176,8 +181,9 @@ export async function urlDoPdf(doc: DocGenDocumento, emailUsuario?: string | nul
 }
 
 /** Cancela o ofício e marca o arquivo do GED como cancelado (arquivado + etiqueta) — nada é apagado. */
-export async function cancelarOficio(doc: DocGenDocumento): Promise<DocGenDocumento> {
-    const cancelado = await docGenDocumentoService.cancelar(doc.id);
+export async function cancelarOficio(doc: DocGenDocumento, motivo?: string): Promise<DocGenDocumento> {
+    const cancelado = await docGenDocumentoService.cancelar(doc.id, motivo);
+    await docGenDocumentoService.concluirTarefaDePrazo(doc.id);
     if (doc.ged_document_id) {
         const { data } = await supabase.from('opura_documents').select('tags').eq('id', doc.ged_document_id).maybeSingle();
         const tags = Array.from(new Set([...(((data as { tags?: string[] } | null)?.tags) ?? []), 'cancelado']));

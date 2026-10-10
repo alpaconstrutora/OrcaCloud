@@ -1,6 +1,9 @@
 import React from 'react';
-import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Ban, Lock } from 'lucide-react';
-import type { DestinatarioSnapshot, DocGenDocumento, DocGenDocumentoRascunho, DocGenModelo, DocTipTap } from '../../types/docGen';
+import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Lock, ShieldCheck } from 'lucide-react';
+import type {
+    DestinatarioSnapshot, DocGenAssinatura, DocGenDocumento, DocGenDocumentoRascunho, DocGenEvento, DocGenModelo, DocGenVinculo,
+    DocGenVinculoTipo, DocTipTap,
+} from '../../types/docGen';
 import { DOC_TIPTAP_VAZIO } from '../../types/docGen';
 import { useStore } from '../../store/useStore';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
@@ -9,19 +12,25 @@ import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
 import { useToast } from '../../hooks/useToast';
 import SaveStatus from '../ui/SaveStatus';
 import { useConfirm } from '../ui/confirm';
-import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio } from '../../services/docGen/emissao';
+import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio, assinaturasParaPdf, assinaturasValidas } from '../../services/docGen/emissao';
+import { ROTULO_SITUACAO, referenciaDeOficio, type OficioRecebido } from '../../services/docGen/tramitacao';
+import AprovacaoAssinaturaCard from './AprovacaoAssinaturaCard';
+import TramitacaoCard from './TramitacaoCard';
+import VinculosPainel, { type AlvoVinculo, type VinculoPendente } from './VinculosPainel';
+import HistoricoDocumento from './HistoricoDocumento';
+import RegistrarRecebidoSheet from './RegistrarRecebidoSheet';
 import EditorRico from './EditorRico';
 import PreviewPdf from './PreviewPdf';
 import SeletorDestinatario from './SeletorDestinatario';
 import CamposPendentesPainel from './CamposPendentesPainel';
 import AnexosEditor from './AnexosEditor';
 import SignatariosEditor from './SignatariosEditor';
-import { docGenDocumentoService, rascunhoDoModelo } from '../../services/docGenDocumentoService';
+import { docGenDocumentoService, rascunhoDoDocumento, rascunhoDoModelo } from '../../services/docGenDocumentoService';
 import { camposLivresDoModelo } from '../../services/docGen/motorRender';
 import { validarDocumento, temBloqueante, type Pendencia } from '../../services/docGen/validarDocumento';
 import { previaDoDocumento } from '../../services/docGen/previa';
 import {
-    atualizarCadastroDestinatario, imagensDasAssinaturas, lerDestinatario, listarContratos, listarEmpreendimentos,
+    atualizarCadastroDestinatario, lerDestinatario, listarContratos, listarEmpreendimentos,
     montarContexto, obrasDaOrganizacao, valoresDoDocumento, type OpcaoSimples,
 } from '../../services/docGen/resolverContexto';
 import { ROTULO_TIPO, resumoDoDestinatario, snapshotComCampo } from '../../services/docGen/destinatario';
@@ -39,12 +48,22 @@ import { CATEGORIA_GED_LABEL } from './rotulos';
  *
  * A organização é a do MODELO (o ofício herda o dono do modelo) — nunca se
  * pergunta (REGRA #5 regra 4: registro operacional de uma organização só).
+ *
+ * F4: aprovação e assinaturas (rascunho), tramitação e prazo (emitido),
+ * documentos relacionados ("em resposta a") e histórico.
  */
 interface Props {
     modelo: DocGenModelo;
     documento: DocGenDocumento | null;
+    /** "Responder" um ofício recebido: o novo nasce vinculado (em resposta a). */
+    respondendoA?: OficioRecebido | null;
+    /** Ofícios e recebidos da organização — para o "em resposta a" e os vínculos. */
+    documentos: DocGenDocumento[];
+    recebidos: OficioRecebido[];
     onClose: () => void;
     onSaved: (doc: DocGenDocumento) => void;
+    onAbrirOficio: (id: string) => void;
+    onRecebidoRegistrado: (r: OficioRecebido) => void;
 }
 
 const INPUT = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-500';
@@ -52,14 +71,21 @@ const LABEL = 'text-xs font-semibold text-slate-500';
 
 
 
-function draftDe(modelo: DocGenModelo, doc: DocGenDocumento | null, empresaAtiva: string | null): DocGenDocumentoRascunho {
-    if (!doc) return rascunhoDoModelo(modelo, { company_id: empresaAtiva });
-    const { id: _id, status: _s, numero: _n, versao: _v, ged_document_id: _g, ged_version_id: _gv, emitido_por: _ep, emitido_em: _ee,
-        created_by: _cb, created_at: _ca, updated_at: _ua, ...resto } = doc;
-    return resto;
+function draftDe(modelo: DocGenModelo, doc: DocGenDocumento | null, empresaAtiva: string | null, respondendoA?: OficioRecebido | null): DocGenDocumentoRascunho {
+    if (doc) return rascunhoDoDocumento(doc);
+    if (!respondendoA) return rascunhoDoModelo(modelo, { company_id: empresaAtiva });
+    // Resposta a um ofício recebido: destinatário = quem enviou (o cadastro é relido ao abrir).
+    const m = respondendoA.meta;
+    return rascunhoDoModelo(modelo, {
+        company_id: empresaAtiva,
+        assunto: `Resposta ao ${referenciaDeOficio({ numero: m.numero, remetente: m.remetente })}`,
+        destinatario_tipo: 'MANUAL',
+        destinatario_snapshot: { tipo: 'MANUAL', razao_social: m.remetente },
+        project_id: respondendoA.documento.project_id ?? null,
+    });
 }
 
-export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: Props) {
+export default function NovoOficioTela({ modelo, documento, respondendoA, documentos, recebidos, onClose, onSaved, onAbrirOficio, onRecebidoRegistrado }: Props) {
     const raiz = React.useRef<HTMLDivElement>(null);
     useScrollAoTopo(raiz);
     const { showToast } = useToast();
@@ -76,7 +102,7 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
     const [atual, setAtual] = React.useState<DocGenDocumento | null>(documento);
     const [draft, setDraft] = React.useState<DocGenDocumentoRascunho>(() => {
         const empresa = companies.find(c => c.id === activeEmpresaId && c.org_id === modelo.organization_id)?.id ?? null;
-        const d = draftDe(modelo, documento, empresa);
+        const d = draftDe(modelo, documento, empresa, respondendoA);
         // Rascunho segue o modelo ATUAL (prévia e emissão usam o texto de hoje do
         // modelo); a versão que valeu fica gravada ao salvar e congela na emissão.
         return documento && documento.status !== 'RASCUNHO' ? d : { ...d, modelo_versao: modelo.versao };
@@ -86,7 +112,105 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
     const [erro, setErro] = React.useState<string | null>(null);
     const [seletorAberto, setSeletorAberto] = React.useState(false);
 
-    const somenteLeitura = !!atual && atual.status !== 'RASCUNHO';
+    // Em aprovação o texto trava (o banco também recusa) — retira-se da aprovação para editar.
+    const emAprovacao = !!atual && atual.status === 'RASCUNHO' && atual.approval_status === 'PENDENTE';
+    const somenteLeitura = !!atual && (atual.status !== 'RASCUNHO' || emAprovacao);
+    const ehRascunho = !atual || atual.status === 'RASCUNHO';
+
+    // ── F4: vínculos, assinaturas e histórico do documento gravado ──
+    const [vinculos, setVinculos] = React.useState<DocGenVinculo[]>([]);
+    const [pendentes, setPendentes] = React.useState<VinculoPendente[]>(
+        () => (!documento && respondendoA ? [{ tipo: 'RESPONDE', alvo: { gedId: respondendoA.documento.id } }] : []),
+    );
+    const [assinaturas, setAssinaturas] = React.useState<DocGenAssinatura[]>([]);
+    const [eventos, setEventos] = React.useState<DocGenEvento[]>([]);
+    const [carregandoExtras, setCarregandoExtras] = React.useState(false);
+    const [registrandoResposta, setRegistrandoResposta] = React.useState(false);
+    const atualId = atual?.id ?? null;
+    const recarregarExtras = React.useCallback(async () => {
+        if (!atualId) return;
+        setCarregandoExtras(true);
+        try {
+            const [v, a, e] = await Promise.all([
+                docGenDocumentoService.listVinculosDoDocumento(atualId),
+                docGenDocumentoService.listAssinaturas(atualId),
+                docGenDocumentoService.listEventos(atualId),
+            ]);
+            setVinculos(v);
+            setAssinaturas(a);
+            setEventos(e);
+        } catch (e) {
+            console.error('[NovoOficioTela] Falha ao carregar vínculos/assinaturas/histórico:', e);
+        } finally {
+            setCarregandoExtras(false);
+        }
+    }, [atualId]);
+    React.useEffect(() => { void recarregarExtras(); }, [recarregarExtras, atual?.status, atual?.approval_status, atual?.versao]);
+
+    // Resposta a ofício recebido de fornecedor cadastrado: destinatário vem do cadastro.
+    React.useEffect(() => {
+        const sid = !documento ? respondendoA?.meta.remetente_supplier_id : null;
+        if (!sid) return;
+        let vivo = true;
+        lerDestinatario('FORNECEDOR', sid, organizations).then(snap => {
+            if (!vivo || !snap) return;
+            setDraft(d => ({ ...d, destinatario_tipo: 'FORNECEDOR', destinatario_id: snap.id ?? null, destinatario_snapshot: snap, supplier_id: snap.id ?? null }));
+        }).catch(() => {});
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    /** Texto do {{documento.em_resposta_a}} — do vínculo RESPONDE (gravado ou ainda pendente). */
+    const emRespostaA = React.useMemo(() => {
+        const gravado = vinculos.find(v => v.tipo === 'RESPONDE' && v.de_documento_id === atualId);
+        const pend = pendentes.find(p => p.tipo === 'RESPONDE');
+        const docId = gravado?.para_documento_id ?? (pend && 'documentoId' in pend.alvo ? pend.alvo.documentoId : null);
+        const gedId = gravado?.para_ged_id ?? (pend && 'gedId' in pend.alvo ? pend.alvo.gedId : null);
+        if (docId) {
+            const d = documentos.find(x => x.id === docId);
+            return d ? referenciaDeOficio({ numero: d.numero, data: d.data_documento, nome: d.assunto }) : '';
+        }
+        if (gedId) {
+            const r = recebidos.find(x => x.documento.id === gedId);
+            return r ? referenciaDeOficio({ numero: r.meta.numero, remetente: r.meta.remetente, data: r.meta.data_documento ?? r.meta.recebido_em }) : '';
+        }
+        return '';
+    }, [vinculos, pendentes, atualId, documentos, recebidos]);
+
+    const adicionarVinculo = async (tipo: DocGenVinculoTipo, alvo: AlvoVinculo) => {
+        if (!atual) { setPendentes(p => [...p, { tipo, alvo }]); markDirty(); return; }
+        try {
+            await docGenDocumentoService.vincular({
+                organization_id: atual.organization_id, de: { documentoId: atual.id },
+                para: 'documentoId' in alvo ? { documentoId: alvo.documentoId } : { gedId: alvo.gedId }, tipo,
+            });
+            await recarregarExtras();
+            showToast('Documento vinculado.', 'success');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao vincular.', 'error');
+        }
+    };
+
+    const removerVinculo = async (v: DocGenVinculo | VinculoPendente) => {
+        if (!('id' in v)) { setPendentes(p => p.filter(x => x !== v)); return; }
+        try {
+            await docGenDocumentoService.desvincular(v.id);
+            setVinculos(l => l.filter(x => x.id !== v.id));
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao desfazer o vínculo.', 'error');
+        }
+    };
+
+    /** Vínculos escolhidos antes do primeiro "Salvar" — gravados quando o ofício passa a existir. */
+    const gravarPendentes = async (doc: DocGenDocumento) => {
+        for (const p of pendentes) {
+            await docGenDocumentoService.vincular({
+                organization_id: doc.organization_id, de: { documentoId: doc.id },
+                para: 'documentoId' in p.alvo ? { documentoId: p.alvo.documentoId } : { gedId: p.alvo.gedId }, tipo: p.tipo,
+            }).catch(e => showToast(e instanceof Error ? e.message : 'Falha ao gravar o vínculo.', 'error'));
+        }
+        setPendentes([]);
+    };
     const orgId = draft.organization_id;
     const organization = React.useMemo(() => organizations.find(o => o.id === orgId) ?? null, [organizations, orgId]);
     const companiesDaOrg = React.useMemo(() => companies.filter(c => c.org_id === orgId), [companies, orgId]);
@@ -120,7 +244,7 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
         setCalculando(true);
         const t = setTimeout(async () => {
             try {
-                const ctx = await montarContexto(draft, { organization, companies, projects, nomeDepartamento, emailUsuario });
+                const ctx = await montarContexto(draft, { organization, companies, projects, nomeDepartamento, emailUsuario, emRespostaA });
                 if (minha !== seq.current) return;      // resposta fora de ordem
                 const v = valoresDoDocumento(modelo, ctx, draft.valores);
                 setValores(v);
@@ -139,7 +263,7 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
             }
         }, 400);
         return () => clearTimeout(t);
-    }, [draft, organization, companies, projects, nomeDepartamento, emailUsuario, modelo]);
+    }, [draft, organization, companies, projects, nomeDepartamento, emailUsuario, modelo, emRespostaA]);
 
     // ── Destinatário ──
     const escolherDestinatario = (snap: DestinatarioSnapshot) => {
@@ -193,10 +317,19 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
         setSalvando(true);
         try {
             const doc = atual ? await docGenDocumentoService.salvar(atual, draft) : await docGenDocumentoService.create(draft);
+            if (!atual) await gravarPendentes(doc);
             setAtual(doc);
             markSaved();
             setSavedAt(Date.now());
-            showToast(atual ? `Rascunho salvo (versão ${doc.versao}).` : 'Rascunho criado.', 'success');
+            const perdeuAprovacao = atual?.approval_status === 'APROVADO' && doc.approval_status !== 'APROVADO';
+            const tinhaAssinatura = !!atual && assinaturasValidas(atual.signatarios, assinaturas, atual.versao).some(Boolean);
+            showToast(
+                !atual ? 'Rascunho criado.'
+                    : perdeuAprovacao || tinhaAssinatura
+                        ? `Rascunho salvo (versão ${doc.versao}). O texto mudou: ${[perdeuAprovacao ? 'a aprovação' : '', tinhaAssinatura ? 'as assinaturas' : ''].filter(Boolean).join(' e ')} precisa(m) ser refeita(s).`
+                        : `Rascunho salvo (versão ${doc.versao}).`,
+                'success',
+            );
             onSaved(doc);
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Falha ao salvar o rascunho.';
@@ -209,7 +342,7 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
 
     // ── Emissão (F3) ──
     const [emitindo, setEmitindo] = React.useState(false);
-    const depsEmissao = () => ({ modelo, organization, companies, projects, nomeDepartamento, emailUsuario });
+    const depsEmissao = () => ({ modelo, organization, companies, projects, nomeDepartamento, emailUsuario, emRespostaA });
 
     const emitir = async () => {
         const ok = await confirm({
@@ -225,13 +358,29 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
             // Emite o que está na tela: salva antes se houver pendência de gravação.
             let base = atual;
             if (!base || dirty) {
+                const novo = !base;
                 base = base ? await docGenDocumentoService.salvar(base, draft) : await docGenDocumentoService.create(draft);
+                if (novo) await gravarPendentes(base);
                 setAtual(base);
                 markSaved();
             }
             const emitido = await emitirOficio(base, depsEmissao());
             setAtual(emitido);
             onSaved(emitido);
+            if (emitido.resposta_esperada_ate) {
+                await docGenDocumentoService.garantirTarefaDePrazo({
+                    id: emitido.id, organizationId: emitido.organization_id, prazo: emitido.resposta_esperada_ate,
+                    titulo: `Cobrar resposta do ofício ${emitido.numero ?? ''}`.trim(),
+                    descricao: `${emitido.assunto} — ${emitido.destinatario_snapshot?.razao_social ?? ''}`,
+                }).catch(e => console.warn('[NovoOficioTela] tarefa do prazo não criada:', e));
+            }
+            // Respondeu um ofício recebido: a tarefa "Responder…" daquele recebido acabou.
+            const respondidos = await docGenDocumentoService.listVinculosDoDocumento(emitido.id).catch(() => []);
+            for (const v of respondidos) {
+                if (v.tipo === 'RESPONDE' && v.de_documento_id === emitido.id && v.para_ged_id) {
+                    await docGenDocumentoService.concluirTarefaDePrazo(v.para_ged_id, 'oficio_recebido');
+                }
+            }
             showToast(`Ofício ${emitido.numero} emitido e arquivado no GED.`, 'success');
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Falha ao emitir.';
@@ -304,16 +453,19 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
         setPreviaCarregando(true);
         setPreviaErro(null);
         try {
-            const ctx = await montarContexto(draft, { organization, companies, projects, nomeDepartamento, emailUsuario });
+            const ctx = await montarContexto(draft, { organization, companies, projects, nomeDepartamento, emailUsuario, emRespostaA });
             const v = valoresDoDocumento(modelo, ctx, draft.valores);
-            const imagens = await imagensDasAssinaturas(draft.signatarios, organization);
+            // Assinatura só vale para a versão salva: com alteração pendente, a prévia sai sem o carimbo.
+            const blocoAssinaturas = await assinaturasParaPdf(
+                { id: atual?.id ?? '', versao: atual?.versao ?? 0, signatarios: draft.signatarios }, organization, dirty || !atual ? [] : assinaturas,
+            );
             setPreviaBlob(await previaDoDocumento({
                 conteudoModelo: modelo.conteudo,
                 layout: modelo.layout,
                 titulo: draft.assunto || modelo.nome,
                 valores: v,
                 camposLivres: draft.conteudo,
-                assinaturas: draft.signatarios.map((s, i) => ({ nome: s.nome, cargo: s.cargo, registroProfissional: s.registroProfissional, imagemDataUrl: imagens[i] })),
+                assinaturas: blocoAssinaturas,
                 anexos: draft.anexos.map(a => a.nome),
                 organization,
                 numero: atual?.numero ?? null,
@@ -333,15 +485,20 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
 
     const titulo = atual?.numero ? `Ofício ${atual.numero}` : atual ? 'Ofício em elaboração' : 'Novo ofício';
     const emitidoEm = atual?.emitido_em ? new Date(atual.emitido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-    const subtitulo = atual?.status === 'EMITIDO'
-        ? `Emitido em ${emitidoEm} por ${atual.emitido_por ?? '—'} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
-        : atual?.status === 'CANCELADO'
-            ? `Cancelado · emitido em ${emitidoEm} por ${atual.emitido_por ?? '—'}`
-            : atual
-                ? `Rascunho · versão ${atual.versao} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
-                : `Modelo "${modelo.nome}" · ${CATEGORIA_GED_LABEL[modelo.categoria_ged]}`;
+    const subtitulo = atual && atual.status !== 'RASCUNHO'
+        ? `${ROTULO_SITUACAO[atual.status]} · emitido em ${emitidoEm} por ${atual.emitido_por ?? '—'} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
+        : atual
+            ? `Rascunho · versão ${atual.versao}${emAprovacao ? ' · em aprovação' : atual.approval_status === 'APROVADO' ? ' · aprovado' : ''} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
+            : `Modelo "${modelo.nome}" · ${CATEGORIA_GED_LABEL[modelo.categoria_ged]}`;
+    const faltamAssinar = atual
+        ? draft.signatarios.filter((_, i) => !assinaturasValidas(atual.signatarios, assinaturas, atual.versao)[i]).map(s => s.nome)
+        : draft.signatarios.map(s => s.nome);
     const motivoEmitir = calculando ? 'Conferindo os dados…'
         : bloqueado ? `${qtdPendencias} pendência(s) impede(m) a emissão — veja a Validação.`
+        : emAprovacao ? 'O ofício está em aprovação — aguarde a decisão para emitir.'
+        : (modelo.exige_aprovacao || modelo.exige_assinatura) && (dirty || !atual) ? 'Salve o rascunho antes — a aprovação e as assinaturas valem para a versão salva.'
+        : modelo.exige_aprovacao && atual?.approval_status !== 'APROVADO' ? 'Este modelo exige aprovação antes da emissão — envie para aprovação.'
+        : modelo.exige_assinatura && faltamAssinar.length ? `Falta a assinatura de: ${faltamAssinar.join(', ')}.`
         : undefined;
 
     return (
@@ -363,7 +520,7 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                 </div>
             )}
 
-            {atual?.status === 'EMITIDO' && !atual.ged_document_id && (
+            {atual && atual.status !== 'RASCUNHO' && atual.status !== 'CANCELADO' && !atual.ged_document_id && (
                 <div className="flex flex-wrap items-center gap-3 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span className="flex-1 min-w-[240px]">O número {atual.numero} foi emitido, mas o PDF ainda não está no GED.</span>
@@ -371,6 +528,12 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50">
                         {emitindo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FolderOpen className="w-[15px] h-[15px]" />} Gerar PDF e arquivar no GED
                     </button>
+                </div>
+            )}
+            {emAprovacao && (
+                <div className="flex items-start gap-2 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                    <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" />
+                    Ofício em aprovação: o texto está travado até a decisão. Para alterar, use "Retirar da aprovação" na seção Aprovação e assinaturas.
                 </div>
             )}
             {atual && atual.status !== 'RASCUNHO' && atual.ged_document_id && (
@@ -557,8 +720,8 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                 </div>
             </div>
 
-            {/* Validação — card próprio: tem estado (§30, "bloco com estado ganha card"). */}
-            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+            {/* Validação — card próprio: tem estado (§30, "bloco com estado ganha card"). Só antes de emitir. */}
+            {ehRascunho && <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                     <h3 className="text-sm font-semibold text-gray-900">Validação</h3>
                     <span className="text-xs text-gray-400">o que falta para emitir</span>
@@ -573,7 +736,68 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                     onGravarNoCadastro={gravarNoCadastro}
                     onIrPara={irPara}
                 />
+            </div>}
+
+            {(!atual || atual.status === 'RASCUNHO') && (
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4" id="secao-aprovacao">
+                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <h3 className="text-sm font-semibold text-gray-900">Aprovação e assinaturas</h3>
+                    </div>
+                    <AprovacaoAssinaturaCard
+                        documento={atual}
+                        modelo={modelo}
+                        dirty={dirty}
+                        membros={organization?.members ?? []}
+                        emailUsuario={emailUsuario}
+                        assinaturas={assinaturas}
+                        onDocumento={doc => { setAtual(doc); onSaved(doc); }}
+                        onAssinaturasMudaram={() => void recarregarExtras()}
+                    />
+                </div>
+            )}
+
+            {atual && atual.status !== 'RASCUNHO' && (
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <h3 className="text-sm font-semibold text-gray-900">Tramitação</h3>
+                        <span className="text-xs text-gray-400">envio, protocolo, resposta e prazo</span>
+                    </div>
+                    <TramitacaoCard
+                        documento={atual}
+                        onDocumento={doc => { setAtual(doc); onSaved(doc); void recarregarExtras(); }}
+                        onCancelar={cancelar}
+                        onArquivarResposta={() => setRegistrandoResposta(true)}
+                    />
+                </div>
+            )}
+
+            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                    <h3 className="text-sm font-semibold text-gray-900">Documentos relacionados</h3>
+                    {emRespostaA && <span className="text-xs text-gray-400 truncate" title={emRespostaA}>em resposta a: {emRespostaA}</span>}
+                </div>
+                <VinculosPainel
+                    documentoId={atual?.id ?? null}
+                    vinculos={vinculos}
+                    pendentes={pendentes}
+                    documentos={documentos}
+                    recebidos={recebidos}
+                    rascunho={!somenteLeitura}
+                    onAdicionar={(tipo, alvo) => void adicionarVinculo(tipo, alvo)}
+                    onRemover={v => void removerVinculo(v)}
+                    onAbrirOficio={async id => { if (await confirmDiscard()) onAbrirOficio(id); }}
+                    onAbrirGed={id => navigateToFocus('opura-docs', id, 'GED_DOCUMENTO')}
+                />
             </div>
+
+            {atual && (
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <h3 className="text-sm font-semibold text-gray-900">Histórico</h3>
+                    </div>
+                    <HistoricoDocumento eventos={eventos} carregando={carregandoExtras && eventos.length === 0} />
+                </div>
+            )}
 
             <div className="sticky bottom-0 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-white/95 backdrop-blur border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
                 {atual && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
@@ -584,18 +808,12 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95">
                     <Eye className="w-[15px] h-[15px]" /> Prévia em PDF
                 </button>
-                {!somenteLeitura && (
-                    <button type="button" onClick={salvar} disabled={salvando || (!!atual && !dirty)}
-                        title={atual && !dirty ? 'Nada alterado desde o último salvamento' : undefined}
+                {ehRascunho && (
+                    <button type="button" onClick={salvar} disabled={salvando || emAprovacao || (!!atual && !dirty)}
+                        title={emAprovacao ? 'Em aprovação — retire da aprovação para editar' : atual && !dirty ? 'Nada alterado desde o último salvamento' : undefined}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-blue-200 text-blue-700 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                         {salvando ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Save className="w-[15px] h-[15px]" />}
                         {salvando ? 'Salvando…' : 'Salvar rascunho'}
-                    </button>
-                )}
-                {atual?.status === 'EMITIDO' && (
-                    <button type="button" onClick={cancelar}
-                        className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-[6px]">
-                        <Ban className="w-[15px] h-[15px]" /> Cancelar ofício
                     </button>
                 )}
                 {atual?.ged_document_id && (
@@ -610,7 +828,7 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                         </button>
                     </>
                 )}
-                {!somenteLeitura && (
+                {ehRascunho && (
                     /* Desligado SEMPRE com o motivo (memória feedback_botao_desligado_sempre_diz_por_que). */
                     <button type="button" onClick={emitir} disabled={!!motivoEmitir || emitindo || salvando}
                         title={motivoEmitir ?? 'Atribui o número oficial, gera o PDF e arquiva no GED'}
@@ -631,6 +849,22 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
             />
             <PreviewPdf open={previaAberta} onClose={() => setPreviaAberta(false)} titulo={draft.assunto || modelo.nome}
                 blob={previaBlob} carregando={previaCarregando} erro={previaErro} />
+            {atual && atual.status !== 'RASCUNHO' && (
+                <RegistrarRecebidoSheet
+                    open={registrandoResposta}
+                    onClose={() => setRegistrandoResposta(false)}
+                    organizationId={atual.organization_id}
+                    emitidos={[atual]}
+                    respostaA={atual}
+                    emailUsuario={emailUsuario}
+                    onRegistrado={async r => {
+                        onRecebidoRegistrado(r);
+                        const relido = await docGenDocumentoService.get(atual.id).catch(() => null);
+                        if (relido) { setAtual(relido); onSaved(relido); }
+                        void recarregarExtras();
+                    }}
+                />
+            )}
         </div>
     );
 }

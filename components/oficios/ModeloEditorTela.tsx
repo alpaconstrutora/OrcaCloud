@@ -47,6 +47,8 @@ interface Draft {
     campos_obrigatorios: string[];
     conteudo: DocTipTap;
     layout: LayoutModelo;
+    exige_aprovacao: boolean;
+    exige_assinatura: boolean;
 }
 
 const texto = (t: string) => ({ type: 'text', text: t });
@@ -79,10 +81,12 @@ function draftDe(m: DocGenModelo | null): Draft {
         nome: m.nome, descricao: m.descricao ?? '', categoria_ged: m.categoria_ged, department_id: m.department_id,
         status: m.status, responsavel_email: m.responsavel_email ?? '', signatario_member_id: m.signatario_member_id,
         campos_obrigatorios: m.campos_obrigatorios, conteudo: m.conteudo, layout: m.layout,
+        exige_aprovacao: !!m.exige_aprovacao, exige_assinatura: !!m.exige_assinatura,
     } : {
         nome: '', descricao: '', categoria_ged: 'juridico', department_id: null, status: 'rascunho', responsavel_email: '',
         signatario_member_id: null, campos_obrigatorios: ['destinatario.razao_social', 'documento.assunto'],
         conteudo: CONTEUDO_INICIAL_OFICIO, layout: LAYOUT_PADRAO,
+        exige_aprovacao: false, exige_assinatura: false,
     };
 }
 
@@ -134,6 +138,8 @@ export default function ModeloEditorTela({ modelo, organizationId, onClose, onSa
         campos_obrigatorios: draft.campos_obrigatorios.filter(c => chaves.includes(c)),
         signatario_member_id: draft.signatario_member_id,
         responsavel_email: draft.responsavel_email.trim() || null,
+        exige_aprovacao: draft.exige_aprovacao,
+        exige_assinatura: draft.exige_assinatura,
     });
 
     const salvar = async () => {
@@ -258,6 +264,31 @@ export default function ModeloEditorTela({ modelo, organizationId, onClose, onSa
                             </select>
                             <p className="text-xs text-gray-400">Os usuários vêm de Minha Organização › Usuários; cargo, registro e assinatura são editados lá.</p>
                         </div>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                        <h3 className="text-sm font-semibold text-gray-900">Antes de emitir</h3>
+                        <span className="text-xs text-gray-400">o que o ofício deste modelo precisa ter para receber número</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                        <label className="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" checked={draft.exige_aprovacao} onChange={e => set('exige_aprovacao', e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600" />
+                            <span>
+                                <span className="block">Exige aprovação</span>
+                                <span className="block text-xs text-gray-400">O ofício vai para a fila de aprovação (Central de Controle) e só é emitido depois de aprovado. Alterar o texto depois de aprovado pede nova aprovação.</span>
+                            </span>
+                        </label>
+                        <label className="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" checked={draft.exige_assinatura} onChange={e => set('exige_assinatura', e.target.checked)}
+                                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600" />
+                            <span>
+                                <span className="block">Exige a assinatura eletrônica de todos os signatários</span>
+                                <span className="block text-xs text-gray-400">Cada signatário assina pelo próprio usuário; o PDF traz "assinado eletronicamente por… em…".</span>
+                            </span>
+                        </label>
                     </div>
                 </div>
 

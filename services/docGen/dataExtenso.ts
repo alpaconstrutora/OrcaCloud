@@ -49,6 +49,21 @@ export function localEData(cidade: string | null | undefined, data: string | Dat
     return c ? `${c}, ${extenso}` : extenso;
 }
 
+/**
+ * "10/10/2026 14:32" de um instante ISO, SEMPRE no fuso de Brasília — vai
+ * impresso no PDF (assinatura eletrônica), então não pode depender do fuso da
+ * máquina de quem emite.
+ */
+export function dataHoraCurta(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const p = Object.fromEntries(new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(d).map(x => [x.type, x.value]));
+    return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+}
+
 /** Hoje em `YYYY-MM-DD`, no horário local. */
 export function hojeIso(agora: Date = new Date()): string {
     return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;

@@ -673,6 +673,22 @@ primeiro ofício real também sair `001/2026`.
 | 2026-10-08 | Documento emitido (versão congelada) pode ser excluído do GED? | **Não — só cancelado.** A trava vale para todo documento do GED que nascer congelado |
 | 2026-10-08 | A prova da emissão consome numeração real | **Autorizado:** emitir ofício de teste, apagar e zerar o contador depois |
 
+### Pedido posterior — 2026-10-10, depois do MVP no ar
+
+> implementar fases 2 e 3
+
+A sessão foi retomada com a instrução de seguir sem novas perguntas. Decisões tomadas por
+padrão (registradas aqui para o usuário corrigir se quiser):
+
+| Data | Pergunta | Decisão (padrão, sem perguntar) |
+|---|---|---|
+| 2026-10-10 | Como dividir as Fases 2 e 3 | **4 frentes publicáveis:** F4 tramitação (aprovação, assinatura interna, envio/recebimento/resposta/encerramento, prazo com tarefa, vínculos, ofício-resposta, ofícios recebidos) · F5 envio por e-mail/WhatsApp + QR/validação pública + anexos dentro do PDF · F6 motor avançado (condicional, tabela dinâmica, blocos, campos calculados) · F7 assistente de IA |
+| 2026-10-10 | Prova do envio por e-mail | Para `delivered@resend.dev` (destinatário de teste do próprio Resend) — nenhuma pessoa real recebe e-mail de teste |
+| 2026-10-10 | Chave da IA | **Não existe** `ANTHROPIC_API_KEY` nos segredos do projeto (o `bi-narrative` também está sem). A F7 sai pronta e responde "IA não configurada" até a chave ser cadastrada — cadastrar é decisão (e custo) do usuário |
+| 2026-10-10 | Dados de teste da conferência | Mesma autorização da F3: dados "PW —" na Alpa, apagados no fim, contador zerado |
+| 2026-10-10 | Protocolo (`doc_gen_envios` do plano) | **Não virou tabela:** envio, recebimento (protocolo, quem recebeu), resposta e encerramento são eventos da tramitação (`doc_gen_eventos.dados`), gravados pela RPC que muda a situação — um lugar só, e ninguém grava evento à mão |
+| 2026-10-10 | Situação ASSINADO do plano | **Não virou situação:** a assinatura vale para a VERSÃO salva do rascunho (salvar de novo invalida) e aparece por signatário; o modelo diz se a emissão exige todas |
+
 ## Avaliação da proposta contra o que já existe
 
 Árvore lida: `C:\D\frentes\market-fase4` no topo de `origin/main` (`11d42ec7`, 07/10). O
@@ -962,33 +978,52 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
    "Emitidos"; busca por número/assunto/destinatário; filtros.
 8. Verificação F3 e publicação.
 
-### Fase 2 (planejada; cada item vira frente própria com plano filho)
+### Fase 2 — frentes F4 e F5 (pedido de 10/10: "implementar fases 2 e 3")
 
-- **Aprovação**: colunas `approval_*` em `doc_gen_documentos`; entidade em
-  `approvalService.ENTITY_META`; ramo em `fn_approval_action_queue` (recriar a função a
-  partir do ARQUIVO); modelo define se exige aprovação; `semFaixa: 'exigir1'`.
-- **Assinatura interna**: imagem do usuário (F1) + registro "assinado eletronicamente por
-  <nome> em <data>" (status ASSINADO). Assinatura eletrônica externa → "Pendências futuras".
-- **Envio e protocolo**: Edge Function `doc-gen-enviar` (Resend com `attachments`, gate
-  `exigirMembro`, prova 401 sem header); WhatsApp só link `wa.me`; tabela `doc_gen_envios`
-  (canal, para, enviado_por, enviado_em, comprovante_path, protocolo, recebido_em).
-- **Recebimento / respondido / encerrado**: transições manuais + `doc_gen_envios`.
-- **Prazo de resposta**: `resposta_esperada_ate` → RPC `create_task` (source_module
-  'oficios') + aba "Aguardando resposta".
-- **Relacionamento e ofício-resposta**: `doc_gen_documentos_vinculos` (RESPONDE/ENCAMINHA/
-  RETIFICA); "Responder" cria rascunho com `documento.em_resposta_a`; ofício RECEBIDO =
-  registro com PDF externo no GED.
-- **QR + hash**: QR no rodapé (padrão Academia), rota `/publico/validar-documento/:uuid`,
-  RPC pública com REVOKE e sem expor `storage_path` (a `fn_get_document_status_public`
-  atual expõe o caminho ao anon — não copiar).
-- **Anexos dentro do PDF**: rasterizar com pdfjs (como `relatorioRateioPdf`); sem `pdf-lib`.
-- (Links de notificação do GED: antecipado para a F1, item 15.)
+**F4 — `oficios-f4-tramitacao`** (estado na seção Estado):
 
-### Fase 3 (planejada)
+- **Aprovação**: `approval_status/approval_chain/approval_required_levels` em `doc_gen_documentos`;
+  entidade `doc_gen_documento` no `approvalService` (`amount: 0`, `semFaixa: 'exigir1'`); ramo na
+  `fn_approval_action_queue` (critério da planta/SC: está na fila o que alguém ENVIOU); o modelo diz se
+  exige (`exige_aprovacao`). Banco: em aprovação o texto não muda; aprovado e alterado volta a RASCUNHO;
+  a emissão recusa em aprovação e sem a aprovação exigida.
+- **Assinatura interna**: `doc_gen_assinaturas` + RPC `doc_gen_assinar` — o próprio usuário assina a
+  VERSÃO salva, só se for signatário; salvar de novo invalida. PDF: "Assinado eletronicamente por X em
+  dd/mm/aaaa hh:mm" (hora de Brasília). Modelo pode exigir todas (`exige_assinatura`). Externa
+  (ZapSign/ICP) continua em "Pendências futuras".
+- **Recebimento / respondido / encerrado**: situações ENVIADO, RECEBIDO, RESPONDIDO, ENCERRADO só pela
+  RPC `doc_gen_tramitar` (grafo validado no banco), com os dados no histórico (`doc_gen_eventos`, gravado
+  por gatilho e pelas RPCs; sem policy de escrita). O protocolo do destinatário é o evento RECEBIDO.
+- **Prazo de resposta**: `resposta_esperada_ate` (livre também depois da emissão) → `create_task`
+  (`source_module 'oficios'`), concluída ao responder/encerrar/cancelar; filtro "Aguardando resposta".
+- **Relacionamento e ofício-resposta**: `doc_gen_vinculos` (DE <tipo> PARA; cada ponta é ofício do
+  sistema ou documento do GED; RESPONDE/ENCAMINHA/RETIFICA/REFERENCIA). Ofício RECEBIDO = documento do
+  GED com `metadados.tipo = 'OFICIO_RECEBIDO'`, congelado com hash; "Responder" cria o rascunho vinculado e
+  `{{documento.em_resposta_a}}` imprime a referência.
 
-Nó `condicional {expressao}` (avaliador puro, sem `eval`); nó `tabelaDinamica {fonte}` com
-resolvedores; `doc_gen_blocos`; campos calculados como resolvedores do catálogo;
-assistente de redação via API Claude em Edge Function (ler a skill `claude-api` antes).
+**F5 — `oficios-f5-envio-validacao`** (planejada):
+
+- **Envio por e-mail**: Edge Function `doc-gen-enviar` (Resend com o PDF em `attachments` base64, gate
+  `exigirMembro`, prova 401 sem header e 403 de outra org; prova de envio para `delivered@resend.dev`);
+  registra o envio como evento (ENVIADO na 1ª vez; reenvio também fica no histórico).
+- **WhatsApp**: só link `wa.me` com o texto e o link de validação (sem provedor).
+- **QR + hash**: QR no rodapé do PDF definitivo (padrão `academyCertificadoService`), rota pública
+  `/publico/validar-documento/:uuid`, RPC pública SECURITY DEFINER com REVOKE que devolve número,
+  emitente, data, situação e SHA-256 — sem `storage_path` (a `fn_get_document_status_public` expõe o
+  caminho ao anon, não copiar); a página confere o hash de um PDF escolhido pelo visitante no navegador.
+- **Anexos dentro do PDF**: PDFs do GED rasterizados com pdfjs e anexados depois do ofício (como
+  `relatorioRateioPdf`); sem `pdf-lib`.
+
+### Fase 3 — frentes F6 e F7 (planejadas)
+
+- **F6 — `oficios-f6-motor-avancado`**: nó `condicional {expressao}` no TipTap (avaliador puro, sem
+  `eval`: comparações de variável com texto/número, e/ou/não); nó `tabelaDinamica {fonte}` com
+  resolvedores (`medicoes_pendentes`, `parcelas_em_aberto`, `anexos`); biblioteca `doc_gen_blocos` por
+  organização (inserir no editor); campos calculados como resolvedores do catálogo (`contrato.saldo`,
+  `obra.percentual_executado`, `documento.dias_ate_prazo`).
+- **F7 — `oficios-f7-ia`**: assistente de redação e de resposta via API Claude numa Edge Function
+  (`exigirMembro`, ler a skill `claude-api` antes); sem `ANTHROPIC_API_KEY` responde 503 "IA não
+  configurada" e o botão diz o motivo.
 
 ## Pendências futuras (fora do MVP e das Fases 2–3, por decisão de 2026-10-07)
 
@@ -1173,6 +1208,46 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
 
 **MVP do Gerador de Ofícios (F1 + F2 + F3) no ar em 10/10/2026.** Fases 2 e 3 da proposta seguem planejadas acima;
 pendências futuras na seção própria.
+
+### F4 — tramitação (frente `oficios-f4-tramitacao`, base `ad7bd9eb`)
+
+- [x] F4 · 1 — migration `aplicar_20271010000300_oficio_tramitacao.sql` **aplicada em 10/10** e provada no banco como
+      `authenticated` com o JWT do usuário de leitura, numa transação desfeita (nada persistiu — contador continuou 0):
+      emitir sem aprovação / em aprovação / sem assinatura → recusado com a mensagem certa; editar em aprovação →
+      recusado; aprovado e editado → volta a RASCUNHO; ofício PENDENTE aparece na `fn_approval_action_queue`; forjar
+      assinatura ou evento por INSERT → RLS recusa; status por PATCH → recusado; transição fora do grafo (ENVIADO→EMITIDO,
+      RESPONDIDO→CANCELADO) → recusada; 2º clique em emitir devolve o número; histórico com 10 eventos e os dados; anon
+      sem EXECUTE nas 3 RPCs. A fila foi reescrita do ARQUIVO depois de conferir que o corpo no banco era igual
+- [x] F4 · 2 — serviços: `docGenDocumentoService` (tramitar, cancelar pela tramitação, prazo, eventos, assinaturas,
+      aprovação pela primitiva única, vínculos, tarefa do prazo idempotente por `uq_tasks_source_open`), `approvalService`
+      (entidade `doc_gen_documento`), `docGen/tramitacao.ts` (rótulos, histórico legível, "em resposta a", ofícios
+      recebidos no GED), `docGen/gedPastas.ts` (pastas do GED fora da emissão, sem import circular), `emissao.ts`
+      (carimbo da assinatura no PDF, `{{documento.em_resposta_a}}`, tarefa do recebido concluída ao emitir a resposta),
+      `dataHoraCurta` sempre no fuso de Brasília (vai impresso)
+- [x] F4 · 3 — telas: card "Aprovação e assinaturas" (enviar/retirar/aprovar/rejeitar, assinar a própria linha, motivo
+      em todo botão desligado), card "Tramitação" (envio com canal/rastreio, recebimento com protocolo, resposta com PDF
+      arquivado ou só marcação, encerrar, cancelar, prazo com tarefa), "Documentos relacionados", "Histórico"; aba
+      **Recebidos** (registrar ofício recebido: PDF no GED congelado com hash em `Ofícios/<ano>/Recebidos`, prazo vira
+      tarefa, "Responder" abre ofício novo já vinculado e com o remetente como destinatário); modelo ganha "Exige
+      aprovação" e "Exige assinatura"; Central de Controle e Aprovações mostram "Ofício"; Tarefas mostra "Ofícios"
+- [x] F4 · 4 — testes `docGenTramitacao.test.ts` (16): grafo de transições da tela = o do SQL (lido do arquivo),
+      CHECK de situações = rótulos, todo evento do gatilho tem descrição, assinatura vale só na versão, hora de Brasília,
+      PDF com "assinado eletronicamente" só para quem assinou, REVOKE nas funções novas. Tipos 0 erros (1.612 arquivos);
+      suíte 2.925 arquivos / 7.937 testes = 7.903 + 34 pendentes + 0 falhas; check-ui 0 nos 10 arquivos de tela;
+      sistema/classificação/XSS/seletor de org limpos
+- [x] F4 · 5 — **conferência no app com gravação real** (`C:/tmp/pwtest/oficios_f4.js`): registrar recebido (PDF) →
+      Responder (assunto e destinatário preenchidos, vínculo pendente gravado ao salvar) → Emitir desligado com o motivo
+      certo em cada etapa → enviar para aprovação (texto trava, banner) → aprovar → assinar → emitir `OF-0001/2026` →
+      envio Correios → recebimento com protocolo → prazo 15/11 → resposta arquivada pelo próprio ofício (Respondido) →
+      encerrar. PDF baixado traz "Em resposta ao Ofício nº 312/2026 de PW — Prefeitura de Teste, de 02/10/2026" e
+      "Assinado eletronicamente por Claude Code em 10/10/2026 08:48". Banco: 3 PDFs no GED congelados com hash, vínculos
+      nas duas direções, as duas tarefas concluídas. 0 erros de JS, 0 respostas 4xx/5xx. **Achados corrigidos na
+      conferência:** Emitir/Salvar sumiam durante a aprovação (agora ficam, desligados com o motivo); painéis fechados
+      deixavam o conteúdo no DOM (devolvem `null`); a tarefa "Responder…" do recebido ficava aberta depois da resposta
+      emitida; o recebido que é resposta a um ofício nosso aparecia "Sem prazo" (agora "Resposta ao OF-…"); "Validação —
+      pronto para emitir" aparecia em ofício já emitido
+- [x] F4 · 6 — limpeza: ofício, recebidos, PDFs (Storage), pastas, tarefas, modelo de teste apagados; contador zerado
+
 
 ## Verificação
 

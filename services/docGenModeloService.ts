@@ -11,7 +11,7 @@ import {
  * REGRA #5: `list(orgId)` só aplica `.eq('organization_id')` quando há
  * organização; com "Todas" a RLS recorta pelas organizações do usuário.
  */
-const COLUNAS = 'id, organization_id, nome, descricao, tipo_documental, categoria_ged, department_id, status, conteudo, layout, campos_obrigatorios, signatario_member_id, responsavel_email, versao, created_by, created_at, updated_at';
+const COLUNAS = 'id, organization_id, nome, descricao, tipo_documental, categoria_ged, department_id, status, conteudo, layout, campos_obrigatorios, signatario_member_id, responsavel_email, exige_aprovacao, exige_assinatura, versao, created_by, created_at, updated_at';
 
 /** Layout gravado pode vir de versão anterior do app: completa com o padrão, campo a campo. */
 export function normalizarLayout(l: Partial<LayoutModelo> | null | undefined): LayoutModelo {
@@ -123,6 +123,8 @@ export const docGenModeloService = {
             campos_obrigatorios: modelo.campos_obrigatorios,
             signatario_member_id: modelo.signatario_member_id,
             responsavel_email: modelo.responsavel_email,
+            exige_aprovacao: modelo.exige_aprovacao,
+            exige_assinatura: modelo.exige_assinatura,
         });
     },
 

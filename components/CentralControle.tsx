@@ -58,6 +58,7 @@ const ENTITY_LABEL_PLURAL: Record<ApprovalEntity, string> = {
     process_step:    'etapas de processo',
     blueprint_snapshot: 'revisões de planta',
     purchase_request: 'solicitações de compra',
+    doc_gen_documento: 'ofícios',
 };
 
 const ENTITY_LABEL_SINGULAR: Record<ApprovalEntity, string> = {
@@ -67,6 +68,7 @@ const ENTITY_LABEL_SINGULAR: Record<ApprovalEntity, string> = {
     process_step:    'Etapa de processo',
     blueprint_snapshot: 'Revisão de planta',
     purchase_request: 'Solicitação de compra',
+    doc_gen_documento: 'Ofício',
 };
 
 function fBRL(v: number | null | undefined): string {

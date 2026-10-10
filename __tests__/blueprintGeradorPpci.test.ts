@@ -3,12 +3,18 @@
  * de 8 pavimentos: um lote, os mesmos ids na reaplicação, e o relatório com a
  * LISTA EXATA do que ainda falta (zero FALTA ou cada uma dita).
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, snapshotHash, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { HIPOTESES_INCENDIO_PADRAO, type HipotesesIncendio } from '../utils/blueprintIncendioClassificacao';
 import { conferirDasPremissas, conferirPlanoDoPpci, gerarPpci } from '../utils/blueprintGeradorPpci';
 import { ROTULO_DO_GRUPO_DE_INCENDIO, analisesDeIncendio, verificacoesIncendio } from '../utils/blueprintIncendioExecutivo';
 import { RESPONSAVEL_VAZIO } from '../utils/blueprintTopografiaExecutivo';
+
+// Teto de tempo por ARQUIVO (padrão de __tests__/components/BlueprintEditor.test.tsx).
+// Em 08/10/2026 a CI do commit 9c53b2c0 rodou ~1,6x mais lenta (até o tsc) e casos
+// pesados deste arquivo passaram dos 5 s padrão; na reexecução, passaram. É contenção
+// da máquina, não regressão. Subir AQUI mantém o teto curto no resto da suíte.
+vi.setConfig({ testTimeout: 30_000 });
 
 const H: HipotesesIncendio = { ...HIPOTESES_INCENDIO_PADRAO, classificacao: { ...HIPOTESES_INCENDIO_PADRAO.classificacao, divisao: 'A-2' } };
 

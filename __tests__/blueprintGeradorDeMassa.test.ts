@@ -4,7 +4,7 @@
  * exemplo do pedido (torre única, duas torres, bloco longitudinal) saem do
  * gerador para um lote de prova, reprodutíveis pela semente; Pareto testado.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { produtoSemente, vagasQueCabem } from '../utils/blueprintProduto';
@@ -21,6 +21,12 @@ import {
   type CandidatoDeMassa,
   type EntradaDoGeradorDeMassa,
 } from '../utils/blueprintGeradorDeMassa';
+
+// Teto de tempo por ARQUIVO (padrão de __tests__/components/BlueprintEditor.test.tsx).
+// Em 08/10/2026 a CI do commit 9c53b2c0 rodou ~1,6x mais lenta (até o tsc) e casos
+// pesados deste arquivo passaram dos 5 s padrão; na reexecução, passaram. É contenção
+// da máquina, não regressão. Subir AQUI mantém o teto curto no resto da suíte.
+vi.setConfig({ testTimeout: 30_000 });
 
 type Papel = 'FRENTE' | 'FUNDOS' | 'LATERAL_DIREITA' | 'LATERAL_ESQUERDA';
 

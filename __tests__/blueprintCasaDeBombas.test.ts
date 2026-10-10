@@ -5,7 +5,7 @@
  * fria × bomba / gravidade), o lugar que o relatório pede (D-1), a bomba sem
  * curva (D-2) e a curva do catálogo.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { HIPOTESES_INCENDIO_PADRAO, type HipotesesIncendio } from '../utils/blueprintIncendioClassificacao';
 import { gerarPpci } from '../utils/blueprintGeradorPpci';
@@ -14,6 +14,12 @@ import { RESPONSAVEL_VAZIO } from '../utils/blueprintTopografiaExecutivo';
 import { redeDeIncendio } from '../utils/blueprintCalculoIncendio';
 import { moduloComercialL } from '../utils/blueprintCasaDeBombas';
 import { hipotesesDoBombeamentoDaColuna } from '../utils/blueprintBombeamentoIncendio';
+
+// Teto de tempo por ARQUIVO (padrão de __tests__/components/BlueprintEditor.test.tsx).
+// Em 08/10/2026 a CI do commit 9c53b2c0 rodou ~1,6x mais lenta (até o tsc) e casos
+// pesados deste arquivo passaram dos 5 s padrão; na reexecução, passaram. É contenção
+// da máquina, não regressão. Subir AQUI mantém o teto curto no resto da suíte.
+vi.setConfig({ testTimeout: 30_000 });
 
 const hip = (alimentacao: 'BOMBA' | 'GRAVIDADE', reserva: 'PROPRIA' | 'PARCELA'): HipotesesIncendio => ({
   ...HIPOTESES_INCENDIO_PADRAO,

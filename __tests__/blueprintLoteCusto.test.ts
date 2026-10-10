@@ -22,6 +22,7 @@ import {
   emptyModel,
   geradorSequencial,
   point,
+  snapshotHash,
   usarGeradorDeUid,
   type BlueprintModel,
   type Command,
@@ -95,16 +96,32 @@ describe('applyBatch · semântica preservada', () => {
 });
 
 describe('applyBatch · custo', () => {
-  it('NÃO é quadrático: 1.000 peças em muito menos que o dobro de 500', () => {
-    // Medida de FUMAÇA, não benchmark. Os números reais depois da correção são
-    // ~40 ms para 500 e ~150 ms para 1.000; antes eram 1,2 s e 4,9 s. O limite
-    // de 3 s tem ~20× de folga sobre o valor atual e ainda fica abaixo do valor
-    // ANTIGO para 1.000 — ou seja, discrimina a volta do O(n²) sem depender da
-    // velocidade da máquina.
+  it('NÃO paga um hash por comando: 1.000 peças custam menos que 150 hashes do modelo final', () => {
+    // A trava compara o lote com o PRÓPRIO hash do modelo final, medido na mesma
+    // rodada: máquina lenta desacelera os dois juntos. Até 08/10/2026 a trava era
+    // "1.000 peças em menos de 3 s", e uma CI ~1,6x mais lenta levou o lote a 4,8 s
+    // (run 37719915108): falha falsa.
+    //
+    // Por que 150: o defeito pagava um `snapshotHash` por comando sobre um modelo
+    // que cresce, ~n/2 = 500 hashes do modelo final para 1.000 peças. Medido em
+    // 10/10/2026, o lote atual custa 18 a 31 hashes do modelo final. O teto fica com
+    // folga de ~5x sobre hoje e ~3x abaixo do defeito.
+    //
+    // ⚠️ Medido também em 10/10/2026: dobrar as peças ainda multiplica o tempo do
+    // lote por ~3,8 a 4,5 (500 → 1.000 → 2.000). O lote continua crescendo quase
+    // quadrático, só que com constante bem menor. Esta trava NÃO prova que ele é
+    // linear; prova só que o hash por comando não voltou.
     const { model, levelId } = comNivel();
-    const t = Date.now();
-    applyBatch(model, pilares(levelId, 1000));
-    const ms = Date.now() - t;
-    expect(ms, `applyBatch de 1.000 peças levou ${ms}ms`).toBeLessThan(3000);
+    const cmds = pilares(levelId, 1000);
+    const t = performance.now();
+    const r = applyBatch(model, cmds);
+    const lote = performance.now() - t;
+
+    const t2 = performance.now();
+    for (let k = 0; k < 5; k++) snapshotHash(r.model);
+    const umHash = (performance.now() - t2) / 5;
+
+    const razao = lote / umHash;
+    expect(razao, `lote de 1.000 peças = ${lote.toFixed(0)} ms = ${razao.toFixed(1)} hashes do modelo final (${umHash.toFixed(1)} ms cada)`).toBeLessThan(150);
   }, 30000);
 });

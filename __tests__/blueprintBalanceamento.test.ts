@@ -15,13 +15,19 @@
  *   mexe no MENOR número de circuitos (o eletricista refaz menos no quadro);
  * · arranjo manual já tão bom quanto o balanceado: nada é proposto.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command, type FaseDoCircuito, type LigacaoDoCircuito } from '../utils/blueprintKernel';
 import { HIPOTESES_PADRAO, preDimensionarQuadroCompleto } from '../utils/blueprintEletricaDimensionamento';
 import { desequilibrioDasFases, fasesOcupadas, opcoesDeFase, rotuloDaFase, somarPorFase } from '../utils/blueprintFasesEletricas';
 import { balancearFases, conferirPlanoDeBalanceamento, planoDeBalanceamento } from '../utils/blueprintBalanceamento';
 import { montarUnifilar } from '../utils/blueprintUnifilar';
 import { DesenhistaDeProva, PAPEIS, desenharFolhaDoQuadroDeCargas, enquadrar, orientar } from '../utils/blueprintExport';
+
+// Teto de tempo por ARQUIVO (padrão de __tests__/components/BlueprintEditor.test.tsx).
+// Em 08/10/2026 a CI do commit 9c53b2c0 rodou ~1,6x mais lenta (até o tsc) e casos
+// pesados deste arquivo passaram dos 5 s padrão; na reexecução, passaram. É contenção
+// da máquina, não regressão. Subir AQUI mantém o teto curto no resto da suíte.
+vi.setConfig({ testTimeout: 30_000 });
 
 type Circ = { ligacao?: LigacaoDoCircuito; fase?: FaseDoCircuito; va: number; tensaoV?: number };
 

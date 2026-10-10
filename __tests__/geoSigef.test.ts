@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type TipoDeLimite } from '../utils/blueprintKernel';
 import {
   cartasDeAnuencia,
@@ -33,6 +33,12 @@ import {
 import { DesenhistaDeProva, type Enquadramento } from '../utils/blueprintExport';
 import { desenharPlantaTopografica } from '../utils/blueprintPranchaTopografica';
 import { planejarConjunto, TEMPLATE_DE_PRANCHA_PADRAO } from '../utils/blueprintPranchas';
+
+// Teto de tempo por ARQUIVO (padrão de __tests__/components/BlueprintEditor.test.tsx).
+// Em 08/10/2026 a CI do commit 9c53b2c0 rodou ~1,6x mais lenta (até o tsc) e casos
+// pesados deste arquivo passaram dos 5 s padrão; na reexecução, passaram. É contenção
+// da máquina, não regressão. Subir AQUI mantém o teto curto no resto da suíte.
+vi.setConfig({ testTimeout: 30_000 });
 
 const MODELO = readFileSync(path.join(__dirname, '..', 'public', 'sigef', 'sigef_planilha_modelo_1.4_rc5.ods'));
 

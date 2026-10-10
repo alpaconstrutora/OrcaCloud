@@ -14,13 +14,17 @@
  *   3. listMyPendingSteps traz a etapa do grupo com `via_group`, só a EM_ANDAMENTO,
  *      e deixa de trazer depois que alguém assume;
  *   4. setGroupMembers faz o diff (insere os novos, remove os que saíram);
- *   5. listGroups monta departamentos + cargos com empresa e membros.
+ *   5. listGroups monta departamentos + cargos com empresa e membros;
+ *   6. (10/10/2026) o embed etapa → processo NOMEIA a FK: há duas relações entre as tabelas e,
+ *      sem o nome, o PostgREST recusa com PGRST201 ("Pendente Comigo" não carregava).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 type Linha = Record<string, any>;
 const db: Record<string, Linha[]> = {};
 let seq = 0;
+/** Texto de cada `.select()` pedido, por tabela — o mock não interpreta embed, então o teste lê o pedido. */
+const selects: Array<{ tabela: string; colunas: string }> = [];
 
 const get = (row: Linha, path: string) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), row as any);
 
@@ -38,7 +42,8 @@ function query(tabela: string) {
         if (pendingDelete) { const alvo = new Set(rows()); db[tabela] = (db[tabela] ?? []).filter(r => !alvo.has(r)); pendingDelete = false; }
     };
     Object.assign(q, {
-        select: chain, order: chain, limit: chain, not: chain,
+        select: (colunas?: string) => { if (colunas) selects.push({ tabela, colunas }); return q; },
+        order: chain, limit: chain, not: chain,
         eq: (c: string, v: unknown) => { filtros.push(r => get(r, c) === v); return q; },
         is: (c: string, v: unknown) => { filtros.push(r => (get(r, c) ?? null) === v); return q; },
         in: (c: string, vs: unknown[]) => { filtros.push(r => vs.includes(get(r, c))); return q; },
@@ -152,6 +157,15 @@ describe('listMyPendingSteps — fila do grupo', () => {
     it('usuário sem grupo: só a fila pessoal', async () => {
         const lista = await processService.listMyPendingSteps('org', 'bruno');
         expect(lista).toEqual([]);
+    });
+
+    it('o embed do processo nomeia a FK da etapa (sem ela, PGRST201 derruba a fila)', async () => {
+        selects.length = 0;
+        await processService.listMyPendingSteps('org', 'ana');
+        await processService.listMyPendingApprovals('org').catch(() => {});
+        const comEmbed = selects.filter(s => s.tabela === 'process_instance_steps' && s.colunas.includes('process_instances'));
+        expect(comEmbed.length).toBeGreaterThanOrEqual(3);   // pessoal + grupo + aprovações
+        for (const s of comEmbed) expect(s.colunas).toContain('process_instances!process_instance_steps_process_instance_id_fkey!inner(');
     });
 });
 

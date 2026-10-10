@@ -103,6 +103,34 @@ saída da etapa reprovada, gatilhos no banco.
 Fora do escopo, registrado: rótulos em caixa alta no "Iniciar processo", no Dashboard e
 nas abas do módulo (§21/§19) — dívida anterior, não tocada nesta frente.
 
+## Pedido posterior — 2026-10-10: link das notificações de SLA
+
+> corrigir: Fora do escopo: 4 notificações do módulo Processos ("Etapa atrasada…") têm o link opura-processos sem a barra inicial e por isso não abrem ao clicar. Não mexi nelas; se quiser, corrijo.
+
+(Achado ao fechar o módulo Ofícios — ver docs/planos/2026-10-07-gerador-de-oficios.md, F10.)
+
+| Data | Pergunta | Decisão (padrão, sem perguntar) |
+|---|---|---|
+| 2026-10-10 | Só pôr a barra? | Não: o aviso passa a abrir O PROCESSO — `/opura-processos?instance=<id>`, foco `PROCESSO_INSTANCIA` (mesmo padrão do GED, `/opura-docs?docId=`) |
+| 2026-10-10 | As 4 antigas | Não guardam qual processo era → `/opura-processos` (abre a tela); o app também aceita nome de tela sem barra |
+| 2026-10-10 | "Pendente Comigo" quebrada (achado na conferência) | Corrigida junto: está no caminho que a notificação abre |
+
+- [x] Origem: `fn_process_sla_sweep` (cron `process-sla-sweep`) gravava `'opura-processos'` nos 4 INSERTs (atraso
+      pessoa/grupo/rede de segurança e escalonamento). Migration `aplicar_20271010004100_processos_sla_link_notificacao.sql`
+      **aplicada** (corpo do arquivo `…000070`, igual ao banco; acento conferido no banco), ACL só postgres/service_role,
+      `UPDATE` das 4 antigas → `/opura-processos`. **Prova** em transação desfeita: etapa do pedido PC-013-013-0002 vencida
+      → sweep `atrasadas: 1`, 1 aviso com `/opura-processos?instance=2c8d805b…`; nada gravado
+- [x] App: `utils/linkNotificacao.ts` (regra `opura-processos` → `instance`; nome de tela sem barra vira rota) +
+      `ProcessosModule` consome o foco e abre o detalhe. Testes em `linkNotificacao.test.ts`
+- [x] **Achado na conferência:** "Pendente Comigo" não carregava em produção — `process_instances!inner(...)` é ambíguo
+      (FK etapa→processo E `process_instances.current_step_id`→etapa, ambas desde 07/2026) → PGRST201. Os 3 embeds de
+      `listMyPendingSteps`/`listMyPendingApprovals` nomeiam a FK `process_instance_steps_process_instance_id_fkey`.
+      Provado com a sessão real do usuário de leitura: consulta antiga → PGRST201; nova → 3 etapas com o título do
+      processo. Teste novo em `processServiceResponsavelGrupo.test.ts` (derrubado por mutação antes de aceito)
+- [x] **Conferido no app** (`C:/tmp/pwtest/processos_link.js`): notificação com o link novo → "Ver Detalhes" abre
+      Processos com o detalhe do pedido PC-013-013-0002; link antigo sem barra → abre a tela; "Pendente Comigo" carrega;
+      0 erros de JS e de rede. Notificações de teste apagadas
+
 ## Verificação
 
 1. `npx vitest run __tests__/processService*.test.ts __tests__/segurancaMigrations.test.ts`

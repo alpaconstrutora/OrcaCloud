@@ -32,6 +32,21 @@ describe('destinoDoLinkDeNotificacao', () => {
 
     // 10/10/2026: o aviso de validade gravava `#/documentos?tab=<cat>&docId=<id>` até a migration
     // aplicar_20271010004000. Um link desses que ainda exista abre o GED no documento.
+    // 10/10/2026: o aviso de SLA de Processos gravava `opura-processos` (sem a barra) e não abria.
+    it('Processos: abre o processo pela instância; o link antigo sem barra abre a tela', () => {
+        expect(destinoDoLinkDeNotificacao('/opura-processos?instance=i-1'))
+            .toEqual({ view: 'opura-processos', foco: { ref: 'i-1', source: 'PROCESSO_INSTANCIA' } });
+        expect(destinoDoLinkDeNotificacao('opura-processos')).toEqual({ view: 'opura-processos' });
+        expect(destinoDoLinkDeNotificacao('opura-processos?instance=i-2'))
+            .toEqual({ view: 'opura-processos', foco: { ref: 'i-2', source: 'PROCESSO_INSTANCIA' } });
+        expect(destinoDoLinkDeNotificacao('/opura-processos')).toEqual({ view: 'opura-processos' });
+    });
+    it('link sem barra que não é nome de tela continua sem navegar', () => {
+        expect(destinoDoLinkDeNotificacao('https://exemplo.com/opura-processos')).toBeNull();
+        expect(destinoDoLinkDeNotificacao('pasta/arquivo')).toBeNull();
+        expect(destinoDoLinkDeNotificacao('')).toBeNull();
+    });
+
     it('GED legado: #/documentos com docId abre o GED no documento (e a pendência)', () => {
         expect(destinoDoLinkDeNotificacao('#/documentos?tab=juridico&docId=d-3'))
             .toEqual({ view: 'opura-docs', foco: { ref: 'd-3', source: 'GED_DOCUMENTO' } });

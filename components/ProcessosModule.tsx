@@ -1301,6 +1301,18 @@ export default function ProcessosModule({ organizationId = '', userId = '', user
     const [openInstanceId, setOpenInstanceId] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
 
+    // Clique numa notificação de SLA (10/10/2026): `fn_process_sla_sweep` grava
+    // `/opura-processos?instance=<id>`, `App.handleNavigate` vira `navigateToFocus` e o foco chega
+    // aqui — abre o detalhe do processo. Consumido uma vez e limpo, para não reabrir ao voltar.
+    const viewFocus = useStore(s => s.viewFocus);
+    const setViewFocus = useStore(s => s.setViewFocus);
+    useEffect(() => {
+        if (viewFocus?.source !== 'PROCESSO_INSTANCIA') return;
+        setOpenInstanceId(viewFocus.ref);
+        setViewFocus(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewFocus]);
+
     const handleStartProcess = async () => {
         const target = await resolveWriteOrg('single');
         if (!target || target.kind !== 'org') return;

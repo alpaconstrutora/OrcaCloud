@@ -17,11 +17,17 @@
  * Links antigos (10/10/2026): o aviso diário de validade (`fn_opura_docs_vencimento_alerts`) ainda gravava
  * `#/documentos?tab=<categoria>&docId=<id>` — corrigido na migration `aplicar_20271010004000`, que também
  * reescreve as linhas antigas. Por garantia, um `#/documentos?…docId=` que ainda exista abre o GED.
+ *
+ * Processos (10/10/2026): o aviso de SLA (`fn_process_sla_sweep`) gravava `opura-processos` — sem a barra,
+ * este resolvedor devolvia `null` e o clique não fazia nada. Passa a gravar
+ * `/opura-processos?instance=<id>` (foco `PROCESSO_INSTANCIA`, que `ProcessosModule` consome abrindo o
+ * detalhe). Rota interna sem a barra (`opura-processos`) também é aceita, por garantia.
  */
 const FOCO_POR_VIEW: Record<string, { param: string; source: string; sourcePendente?: string }> = {
     'contas-a-receber': { param: 'tx', source: 'CONTA_RECEBER' },
     'contas-a-pagar': { param: 'tx', source: 'CONTA_PAGAR' },
     'opura-docs': { param: 'docId', source: 'GED_DOCUMENTO', sourcePendente: 'GED_DOCUMENTO_PENDENTE' },
+    'opura-processos': { param: 'instance', source: 'PROCESSO_INSTANCIA' },
 };
 
 export interface DestinoDoLink {
@@ -34,6 +40,9 @@ export function destinoDoLinkDeNotificacao(link: string): DestinoDoLink | null {
     // Só o GED legado é traduzido: `#/documentos` sem `docId` não tem como saber que era o GED
     // (`documentos` também é a Área do Cliente) e continua sem navegar.
     if (link.startsWith('#/documentos?') && /[?&]docId=/.test(link)) link = `/opura-docs?${link.split('?')[1]}`;
+    // Nome de tela sem a barra (`opura-processos`): rota interna. URL (`https:`), âncora (`#`) e
+    // caminho relativo com `/` no meio continuam fora.
+    if (/^[a-z][a-z0-9-]*(\?|$)/.test(link)) link = `/${link}`;
     if (!link.startsWith('/')) return null;
     const [caminho, query = ''] = link.substring(1).split('?');
     if (!caminho) return null;

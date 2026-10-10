@@ -997,11 +997,15 @@ export const processService = {
      * Etapas com o usuário: as dele (responsible_user_id) + as dos grupos dele
      * que ninguém assumiu ainda (F3.2) — só a etapa ATUAL do grupo
      * (EM_ANDAMENTO), porque a pendente futura ainda não é trabalho de ninguém.
+     *
+     * O embed nomeia a FK (`process_instance_steps_process_instance_id_fkey`): há duas relações
+     * entre as tabelas (a etapa → seu processo; `process_instances.current_step_id` → a etapa atual)
+     * e, sem o nome, o PostgREST recusa com PGRST201 — "Pendente Comigo" não carregava (10/10/2026).
      */
     async listMyPendingSteps(organizationId: string | null, userId: string): Promise<PendingStepItem[]> {
         let q = supabase
             .from('process_instance_steps')
-            .select('*, process_instances!inner(title, status, priority, organization_id)')
+            .select('*, process_instances!process_instance_steps_process_instance_id_fkey!inner(title, status, priority, organization_id)')
             .eq('responsible_user_id', userId)
             .in('status', ['PENDENTE', 'EM_ANDAMENTO']);
         if (organizationId) q = q.eq('process_instances.organization_id', organizationId);
@@ -1029,7 +1033,7 @@ export const processService = {
 
         let gq = supabase
             .from('process_instance_steps')
-            .select('*, process_instances!inner(title, status, priority, organization_id)')
+            .select('*, process_instances!process_instance_steps_process_instance_id_fkey!inner(title, status, priority, organization_id)')
             .is('responsible_user_id', null)
             .in('responsible_type', ['DEPARTMENT', 'ROLE'])
             .in('responsible_ref_id', refs)
@@ -1060,7 +1064,7 @@ export const processService = {
     async listMyPendingApprovals(organizationId: string | null): Promise<PendingStepItem[]> {
         let q = supabase
             .from('process_instance_steps')
-            .select('*, process_instances!inner(title, status, priority, organization_id)')
+            .select('*, process_instances!process_instance_steps_process_instance_id_fkey!inner(title, status, priority, organization_id)')
             .eq('step_type', 'approval')
             .eq('approval_status', 'PENDENTE');
         if (organizationId) q = q.eq('process_instances.organization_id', organizationId);

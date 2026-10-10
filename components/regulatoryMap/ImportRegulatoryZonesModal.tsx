@@ -106,7 +106,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
                             </div>
                         ) : maps.length === 0 ? (
                             <p className="text-sm text-gray-500 py-2">
-                                Nenhum mapa regulatório cadastrado para {city.name}. Cadastre em Incorporação → Mapa Regulatório.
+                                Nenhum mapa regulatório cadastrado para {city.name}. Cadastre em Incorporação → Planta Inteligente, aba Mapa Regulatório.
                             </p>
                         ) : (
                             <div>

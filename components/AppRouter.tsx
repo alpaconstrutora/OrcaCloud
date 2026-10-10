@@ -11,6 +11,7 @@ interface CurrentProfile {
   email?: string;
 }
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
+import { useStore } from '../store/useStore';
 
 // Views — lazy (carregadas apenas quando acessadas)
 const FpaModule             = React.lazy(() => import('./fpa/FpaModule'));
@@ -112,7 +113,6 @@ const OpuraAssetsModule     = React.lazy(() => import('./OpuraAssetsModule'));
 const EmpreendimentoModule  = React.lazy(() => import('./empreendimento/EmpreendimentoModule'));
 const CondominiosModule     = React.lazy(() => import('./condominio/CondominiosModule'));
 const PortalCondominoAdmin  = React.lazy(() => import('./condominio/PortalCondominoAdmin'));
-const RegulatoryMapModule   = React.lazy(() => import('./regulatoryMap/RegulatoryMapModule'));
 const InventoryModule       = React.lazy(() => import('./InventoryModule').then(m => ({ default: m.InventoryModule })));
 const ProcurementModule     = React.lazy(() => import('./ProcurementModule').then(m => ({ default: m.ProcurementModule })));
 const P2PFlowBoard          = React.lazy(() => import('./P2PFlowBoard').then(m => ({ default: m.P2PFlowBoard })));
@@ -256,25 +256,18 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     return activeOrg.members.find(m => m.email.toLowerCase() === session?.user?.email?.toLowerCase()) || null;
   }, [activeOrg, session?.user?.email]);
 
-  React.useEffect(() => {
-    const isDevEmail = session?.user?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
-    // ÒPURA Market: só administrador e usuário interno (decisão D5 do plano
-    // docs/planos/2026-10-07-opura-market-intelligence.md). Fica ANTES do retorno
-    // por "Todas" e por membro ausente: o perfil decide, não a organização do topo.
-    if (activeView === 'opura-market' && currentProfile.group !== ProfileGroup.USER
-        && currentProfile.group !== ProfileGroup.DEVELOPER && !isDevEmail) {
-      console.warn('[RouteGuard] ÒPURA Market é só para administrador e usuário interno. Redirecionando para dashboard.');
-      setActiveView('dashboard');
-      return;
-    }
+  const isDevEmail = session?.user?.email?.toLowerCase() === 'altair.rosa@alpaconstrutora.com.br';
+
+  // Fora do guard de rota porque também decide o que aparece DENTRO de uma tela:
+  // a aba Mapa Regulatório da Planta Inteligente leva a mesma trava que a rota
+  // `regulatory-maps` levava — a regra mora aqui uma vez só, não copiada no módulo.
+  const isModuleAllowed = React.useCallback((userPermKey: string, matrixKey: string): boolean => {
     // Desenvolvedores sempre têm acesso total
-    if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !activeOrganizationId) return;
-    
-    // Se não há membro correspondente na organização selecionada, não redireciona (pode estar carregando)
-    if (!currentMember) return;
-    
+    if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !activeOrganizationId) return true;
+    // Sem membro correspondente na organização selecionada (pode estar carregando)
+    if (!currentMember) return true;
     // Admins da organização sempre têm acesso total
-    if (currentMember.role === 'admin') return;
+    if (currentMember.role === 'admin') return true;
 
     const roleId = currentMember.customRoleId || currentMember.role;
     const matrix = activeOrg?.settings?.module_visibility || {};
@@ -289,16 +282,35 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     }
     const roleConfig = productMatrix[roleId] || {};
 
-    const isModuleAllowed = (userPermKey: string, matrixKey: string): boolean => {
-      const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;
-      if (userPerm !== undefined) {
-        return !!userPerm;
-      }
-      if (roleConfig[matrixKey] !== undefined) {
-        return !!roleConfig[matrixKey];
-      }
-      return true; // Default true
-    };
+    const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;
+    if (userPerm !== undefined) {
+      return !!userPerm;
+    }
+    if (roleConfig[matrixKey] !== undefined) {
+      return !!roleConfig[matrixKey];
+    }
+    return true; // Default true
+  }, [currentProfile.group, isDevEmail, activeOrganizationId, currentMember, activeOrg]);
+
+  // O Mapa Regulatório deixou de ser item de menu e virou aba da Planta
+  // Inteligente (docs/planos/2026-10-10-mapa-regulatorio-dentro-da-planta.md). O
+  // endereço antigo continua chegando — URL, `orca_activeView` salvo no navegador,
+  // busca rápida do menu — e cai na Planta com a aba aberta, em vez de numa tela vazia.
+  const navigateToFocus = useStore(s => s.navigateToFocus);
+  React.useEffect(() => {
+    if (activeView === 'regulatory-maps') navigateToFocus('blueprint', 'mapa-regulatorio', 'PLANTA_ABA');
+  }, [activeView, navigateToFocus]);
+
+  React.useEffect(() => {
+    // ÒPURA Market: só administrador e usuário interno (decisão D5 do plano
+    // docs/planos/2026-10-07-opura-market-intelligence.md). Fica ANTES do retorno
+    // por "Todas" e por membro ausente: o perfil decide, não a organização do topo.
+    if (activeView === 'opura-market' && currentProfile.group !== ProfileGroup.USER
+        && currentProfile.group !== ProfileGroup.DEVELOPER && !isDevEmail) {
+      console.warn('[RouteGuard] ÒPURA Market é só para administrador e usuário interno. Redirecionando para dashboard.');
+      setActiveView('dashboard');
+      return;
+    }
 
     // Mapear activeView para suas respectivas permissões
     let allowed = true;
@@ -320,7 +332,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       // em Permissões Detalhadas, trocar aqui — não criar chave declarada que
       // ninguém lê (o app já tem ~85 módulos listados e só ~11 chaves aplicadas).
       allowed = isModuleAllowed('canViewSales', 'crm');
-    } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao' || activeView === 'regulatory-maps') {
+    } else if (activeView === 'imovib' || activeView === 'empreendimentos' || activeView === 'laudo-avaliacao') {
       allowed = isModuleAllowed('canViewImovib', 'incorporacao');
     } else if (activeView === 'fiscal-nfe') {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
@@ -348,7 +360,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       console.warn(`[RouteGuard] Acesso bloqueado para a rota: ${activeView}. Redirecionando para dashboard.`);
       setActiveView('dashboard');
     }
-  }, [activeView, currentMember, activeOrg, activeOrganizationId, currentProfile.group, setActiveView]);
+  }, [activeView, isModuleAllowed, isDevEmail, currentProfile.group, setActiveView]);
 
   // ── Render interno (envolto em Suspense para lazy components) ───────────────
   const renderContent = () => {
@@ -531,16 +543,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         </React.Suspense>
       );
 
-    case 'regulatory-maps':
-      return (
-        <React.Suspense fallback={<Spinner />}>
-          <RegulatoryMapModule
-            activeOrganizationId={activeOrganizationId}
-            onChangeView={setActiveView}
-          />
-        </React.Suspense>
-      );
-
     case 'planta-ai':
       return (
         <React.Suspense fallback={<Spinner />}>
@@ -551,7 +553,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'blueprint':
       return (
         <React.Suspense fallback={<Spinner />}>
-          <BlueprintModule />
+          {/* A aba Mapa Regulatório leva a trava que a rota `regulatory-maps` levava. */}
+          <BlueprintModule podeVerMapaRegulatorio={isModuleAllowed('canViewImovib', 'incorporacao')} />
         </React.Suspense>
       );
 

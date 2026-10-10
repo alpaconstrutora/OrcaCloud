@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, PencilRuler, Loader2, AlertCircle, Search, MoveHorizontal } from 'lucide-react';
+import { useStore } from '../../store/useStore';
 import { useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { archiveStudy, createStudy, duplicateStudy, listBranches, listStudies, ramoPrincipal } from '../../services/blueprintService';
 import type { BlueprintStudy } from '../../types/blueprint';
 import BlueprintEditor from './BlueprintEditor';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InlineDisclosureMenu } from '../ui/inline-disclosure-menu';
+import { TabsBar } from '../ui/TabsBar';
+import RegulatoryMapModule from '../regulatoryMap/RegulatoryMapModule';
 import {
   ColumnConfig,
   useTableColumns,
@@ -24,6 +27,8 @@ const COLUMNS: ColumnConfig[] = [
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = { name: 340, status: 140, updated_at: 160, actions: 100 };
 
+type Aba = 'plantas' | 'mapa-regulatorio';
+
 const StatusBadge = ({ status }: { status: BlueprintStudy['status'] }) => (
   <span className={`text-sm font-normal ${status === 'PUBLICADO' ? 'text-emerald-700' : 'text-gray-600'}`}>
     {status === 'PUBLICADO' ? 'Publicada' : 'Rascunho'}
@@ -38,9 +43,26 @@ const StatusBadge = ({ status }: { status: BlueprintStudy['status'] }) => (
  * filtro, deixando a RLS recortar — nunca bloquear a tela por causa de null.
  * Na ESCRITA, `resolveWriteOrg` decide: com uma organização no topo usa ela sem
  * perguntar; em "Todas" abre o modal.
+ *
+ * Aba Mapa Regulatório: o cadastro do zoneamento por cidade, que o editor lê
+ * (painel de zona, recuos e limites). Morava num item de menu próprio até
+ * 10/10/2026 — ver docs/planos/2026-10-10-mapa-regulatorio-dentro-da-planta.md.
+ * `podeVerMapaRegulatorio` vem do AppRouter, com a mesma trava que a rota tinha.
  */
-export default function BlueprintModule() {
+export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { podeVerMapaRegulatorio?: boolean }) {
   const { orgId } = useOrgContext();
+  const [aba, setAba] = usePersistedState<Aba>('blueprintModule:aba', 'plantas');
+  // Aba persistida que o usuário deixou de poder ver cai na primeira (§19.5).
+  const abaEfetiva: Aba = podeVerMapaRegulatorio ? aba : 'plantas';
+
+  // Deep-link: a rota antiga `regulatory-maps` chega aqui pelo store (AppRouter).
+  const viewFocus = useStore((s) => s.viewFocus);
+  const setViewFocus = useStore((s) => s.setViewFocus);
+  useEffect(() => {
+    if (viewFocus?.source !== 'PLANTA_ABA') return;
+    if (viewFocus.ref === 'mapa-regulatorio' || viewFocus.ref === 'plantas') setAba(viewFocus.ref);
+    setViewFocus(null);
+  }, [viewFocus, setAba, setViewFocus]);
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
 
   const [studies, setStudies] = useState<BlueprintStudy[]>([]);
@@ -177,6 +199,18 @@ export default function BlueprintModule() {
     0,
   );
 
+  // Sem permissão para a outra aba, não há o que alternar: a barra não aparece.
+  const barraDeAbas = podeVerMapaRegulatorio ? (
+    <TabsBar<Aba>
+      tabs={[
+        { id: 'plantas', label: 'Plantas' },
+        { id: 'mapa-regulatorio', label: 'Mapa Regulatório' },
+      ]}
+      value={abaEfetiva}
+      onChange={setAba}
+    />
+  ) : null;
+
   if (aberto) {
     return (
       <BlueprintEditor
@@ -194,9 +228,20 @@ export default function BlueprintModule() {
     );
   }
 
+  if (abaEfetiva === 'mapa-regulatorio') {
+    // A tela do mapa é dona do próprio título; a barra entra entre ele e os KPIs (§19.3).
+    return (
+      <div className="pb-20">
+        <RegulatoryMapModule activeOrganizationId={orgId} tabsSlot={barraDeAbas} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex items-start justify-between gap-4">
+      {/* Mesmo alinhamento do cabeçalho da aba Mapa Regulatório: com outro, o botão
+          primário pulava de altura ao trocar de aba. */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Planta Inteligente</h1>
           <p className="mt-1.5 text-sm text-gray-400 font-medium">
@@ -214,6 +259,8 @@ export default function BlueprintModule() {
           Nova planta
         </button>
       </div>
+
+      {barraDeAbas}
 
       {erro && (
         <div

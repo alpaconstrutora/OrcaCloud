@@ -18,7 +18,9 @@ import RegulatoryMapDetail from './RegulatoryMapDetail';
 
 interface Props {
     activeOrganizationId: string | null;
-    onChangeView: (view: string) => void;
+    /** Abas da tela que hospeda este cadastro (Planta Inteligente) — entram entre o
+     *  título e os KPIs, na ordem do §19.3. Ausente = sem abas. */
+    tabsSlot?: React.ReactNode;
 }
 
 const STATUS_LABELS: Record<RegulatoryMapStatus, string> = {
@@ -89,7 +91,7 @@ function renderMapCell(key: string, item: RegulatoryMapWithCity): React.ReactNod
     }
 }
 
-export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) => {
+export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tabsSlot }) => {
     const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
     const orgIdParam = isAllOrgs ? undefined : activeOrganizationId as string;
 
@@ -186,9 +188,9 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
     // ── Lista ──────────────────────────────────────────────────────────────────
     return (
         <div className="space-y-6">
-            {/* Cabeçalho §20 — h1 + p direto, sem card/banda/ícone. A migalha "Comercial /
-                Incorporação" saiu por ser caminho de módulo estático (§18/§23): a sidebar já
-                mostra o grupo Comercial com "Mapa Regulatório" ativo. */}
+            {/* Cabeçalho §20 — h1 + p direto, sem card/banda/ícone. Sem migalha (§18/§23):
+                desde 10/10/2026 este cadastro é aba da Planta Inteligente, e a sidebar já
+                mostra Incorporação › Planta Inteligente ativo. */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Mapa Regulatório</h1>
@@ -204,6 +206,8 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId }) =
                     <Plus className="w-[15px] h-[15px]" /> Novo mapa
                 </button>
             </div>
+
+            {tabsSlot}
 
             {/* mb-3 — §20.1: entre KPIs e a toolbar acoplada o respiro é 12px (mesma
                 tarefa), não os 24px do space-y-6 que separa título de cromo. */}

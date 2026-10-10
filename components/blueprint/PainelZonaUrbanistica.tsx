@@ -29,7 +29,7 @@ import {
  * ─── O QUE ELE NÃO FAZ ──────────────────────────────────────────────────────
  *
  * Não CADASTRA zona nem importa para o empreendimento. Isso já existe em
- * **Incorporação › Mapa Regulatório** e no botão "Importar de mapa cadastrado"
+ * **Planta Inteligente › aba Mapa Regulatório** e no botão "Importar de mapa cadastrado"
  * da aba do empreendimento — duplicar aquele fluxo aqui criaria um segundo lugar
  * para a mesma lei divergir. Aqui só se LÊ.
  *
@@ -266,7 +266,7 @@ export default function PainelZonaUrbanistica({
           <Map className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Este mapa não tem zona cadastrada. Cadastre em{' '}
-            <strong className="font-semibold">Incorporação › Mapa Regulatório</strong>.
+            a aba <strong className="font-semibold">Mapa Regulatório</strong> da lista de plantas.
           </span>
         </p>
       )}

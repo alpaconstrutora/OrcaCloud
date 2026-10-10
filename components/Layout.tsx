@@ -528,6 +528,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'credit-rooms', label: 'Portal de crédito (Credit Room)', group: 'Financeiro', icon: Landmark },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
       { id: 'empreendimentos', label: 'Empreendimentos', group: 'Comercial', icon: Building2 },
+      // Aba da Planta Inteligente desde 10/10/2026 — o AppRouter redireciona o id antigo.
       { id: 'regulatory-maps', label: 'Mapa Regulatório', group: 'Comercial', icon: Map },
       { id: 'imovib', label: 'Estudos de viabilidade', group: 'Comercial', icon: BarChart3 },
       { id: 'opura-docs', label: 'Documentos', group: 'Corporativo', icon: FolderOpen },
@@ -1150,10 +1151,9 @@ const Layout: React.FC<LayoutProps> = ({
                     icon={Building2}
                     isOpen={isDesenvolvimentoImobOpen}
                     onToggle={() => setIsDesenvolvimentoImobOpen(o => !o)}
-                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','regulatory-maps','area-engine','laudo-avaliacao'].includes(activeView)}
+                    hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','area-engine','laudo-avaliacao'].includes(activeView)}
                   >
                     <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
-                    <DropdownItem id="regulatory-maps" label="Mapa Regulatório" icon={Map} />
                     <DropdownItem id="opportunities" label="Oportunidades" icon={Building2} />
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
                     {/* ESTUDO DE MASSA (01/10/2026): saiu daqui o Planta AI v1 (lote retangular,

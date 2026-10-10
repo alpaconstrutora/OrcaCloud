@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Ban, Lock } from 'lucide-react';
 import type { DestinatarioSnapshot, DocGenDocumento, DocGenDocumentoRascunho, DocGenModelo, DocTipTap } from '../../types/docGen';
 import { DOC_TIPTAP_VAZIO } from '../../types/docGen';
 import { useStore } from '../../store/useStore';
@@ -8,6 +8,8 @@ import { useScrollAoTopo } from '../../hooks/useScrollAoTopo';
 import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
 import { useToast } from '../../hooks/useToast';
 import SaveStatus from '../ui/SaveStatus';
+import { useConfirm } from '../ui/confirm';
+import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio } from '../../services/docGen/emissao';
 import EditorRico from './EditorRico';
 import PreviewPdf from './PreviewPdf';
 import SeletorDestinatario from './SeletorDestinatario';
@@ -48,7 +50,7 @@ interface Props {
 const INPUT = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:bg-gray-50 disabled:text-gray-500';
 const LABEL = 'text-xs font-semibold text-slate-500';
 
-const MOTIVO_EMITIR = 'A emissão (número oficial, PDF arquivado no GED com hash) chega na próxima entrega (F3).';
+
 
 function draftDe(modelo: DocGenModelo, doc: DocGenDocumento | null, empresaAtiva: string | null): DocGenDocumentoRascunho {
     if (!doc) return rascunhoDoModelo(modelo, { company_id: empresaAtiva });
@@ -62,6 +64,8 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
     useScrollAoTopo(raiz);
     const { showToast } = useToast();
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+    const confirm = useConfirm();
+    const navigateToFocus = useStore(s => s.navigateToFocus);
 
     const organizations = useStore(s => s.organizations);
     const companies = useStore(s => s.companies);
@@ -72,7 +76,10 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
     const [atual, setAtual] = React.useState<DocGenDocumento | null>(documento);
     const [draft, setDraft] = React.useState<DocGenDocumentoRascunho>(() => {
         const empresa = companies.find(c => c.id === activeEmpresaId && c.org_id === modelo.organization_id)?.id ?? null;
-        return draftDe(modelo, documento, empresa);
+        const d = draftDe(modelo, documento, empresa);
+        // Rascunho segue o modelo ATUAL (prévia e emissão usam o texto de hoje do
+        // modelo); a versão que valeu fica gravada ao salvar e congela na emissão.
+        return documento && documento.status !== 'RASCUNHO' ? d : { ...d, modelo_versao: modelo.versao };
     });
     const [salvando, setSalvando] = React.useState(false);
     const [savedAt, setSavedAt] = React.useState<number | null>(null);
@@ -200,6 +207,93 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
         }
     };
 
+    // ── Emissão (F3) ──
+    const [emitindo, setEmitindo] = React.useState(false);
+    const depsEmissao = () => ({ modelo, organization, companies, projects, nomeDepartamento, emailUsuario });
+
+    const emitir = async () => {
+        const ok = await confirm({
+            title: 'Emitir o ofício?',
+            message: 'O número oficial é atribuído agora e não volta. O PDF é arquivado no GED com o hash, e o documento fica congelado — alterar depois só com nova revisão.',
+            variant: 'warning',
+            confirmLabel: 'Emitir',
+        });
+        if (!ok) return;
+        setErro(null);
+        setEmitindo(true);
+        try {
+            // Emite o que está na tela: salva antes se houver pendência de gravação.
+            let base = atual;
+            if (!base || dirty) {
+                base = base ? await docGenDocumentoService.salvar(base, draft) : await docGenDocumentoService.create(draft);
+                setAtual(base);
+                markSaved();
+            }
+            const emitido = await emitirOficio(base, depsEmissao());
+            setAtual(emitido);
+            onSaved(emitido);
+            showToast(`Ofício ${emitido.numero} emitido e arquivado no GED.`, 'success');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Falha ao emitir.';
+            // Se o número já saiu, o ofício está EMITIDO mesmo sem arquivo — a tela tem de mostrar isso.
+            if (atual?.id) {
+                const relido = await docGenDocumentoService.get(atual.id).catch(() => null);
+                if (relido) { setAtual(relido); onSaved(relido); }
+            }
+            setErro(msg);
+            showToast(msg, 'error');
+        } finally {
+            setEmitindo(false);
+        }
+    };
+
+    const arquivarDeNovo = async () => {
+        if (!atual) return;
+        setErro(null);
+        setEmitindo(true);
+        try {
+            const final = await arquivarNoGed(atual.id, depsEmissao());
+            setAtual(final);
+            onSaved(final);
+            showToast('PDF gerado e arquivado no GED.', 'success');
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'Falha ao arquivar.';
+            setErro(msg);
+            showToast(msg, 'error');
+        } finally {
+            setEmitindo(false);
+        }
+    };
+
+    const abrirPdf = async () => {
+        if (!atual) return;
+        try {
+            window.open(await urlDoPdf(atual, emailUsuario), '_blank', 'noopener');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao abrir o PDF.', 'error');
+        }
+    };
+
+    const cancelar = async () => {
+        if (!atual) return;
+        const ok = await confirm({
+            title: `Cancelar o ofício ${atual.numero}?`,
+            message: 'O número continua usado e o arquivo continua no GED, marcado como cancelado. Nada é apagado.',
+            variant: 'danger',
+            confirmLabel: 'Cancelar ofício',
+            cancelLabel: 'Voltar',
+        });
+        if (!ok) return;
+        try {
+            const c = await cancelarOficio(atual);
+            setAtual(c);
+            onSaved(c);
+            showToast(`Ofício ${c.numero} cancelado.`, 'success');
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao cancelar.', 'error');
+        }
+    };
+
     // ── Prévia ──
     const [previaAberta, setPreviaAberta] = React.useState(false);
     const [previaBlob, setPreviaBlob] = React.useState<Blob | null>(null);
@@ -238,9 +332,17 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
     const cidadePadrao = valores['empresa.cidade'] || '';
 
     const titulo = atual?.numero ? `Ofício ${atual.numero}` : atual ? 'Ofício em elaboração' : 'Novo ofício';
-    const subtitulo = atual
-        ? `Rascunho · versão ${atual.versao} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
-        : `Modelo "${modelo.nome}" · ${CATEGORIA_GED_LABEL[modelo.categoria_ged]}`;
+    const emitidoEm = atual?.emitido_em ? new Date(atual.emitido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const subtitulo = atual?.status === 'EMITIDO'
+        ? `Emitido em ${emitidoEm} por ${atual.emitido_por ?? '—'} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
+        : atual?.status === 'CANCELADO'
+            ? `Cancelado · emitido em ${emitidoEm} por ${atual.emitido_por ?? '—'}`
+            : atual
+                ? `Rascunho · versão ${atual.versao} · modelo "${modelo.nome}" (v${draft.modelo_versao})`
+                : `Modelo "${modelo.nome}" · ${CATEGORIA_GED_LABEL[modelo.categoria_ged]}`;
+    const motivoEmitir = calculando ? 'Conferindo os dados…'
+        : bloqueado ? `${qtdPendencias} pendência(s) impede(m) a emissão — veja a Validação.`
+        : undefined;
 
     return (
         <div ref={raiz} className="space-y-6 animate-in fade-in duration-300 pb-24">
@@ -258,6 +360,25 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
             {erro && (
                 <div className="flex items-start gap-2 rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
                     <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}
+                </div>
+            )}
+
+            {atual?.status === 'EMITIDO' && !atual.ged_document_id && (
+                <div className="flex flex-wrap items-center gap-3 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span className="flex-1 min-w-[240px]">O número {atual.numero} foi emitido, mas o PDF ainda não está no GED.</span>
+                    <button type="button" onClick={arquivarDeNovo} disabled={emitindo}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50">
+                        {emitindo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FolderOpen className="w-[15px] h-[15px]" />} Gerar PDF e arquivar no GED
+                    </button>
+                </div>
+            )}
+            {atual && atual.status !== 'RASCUNHO' && atual.ged_document_id && (
+                <div className="flex items-start gap-2 rounded-[10px] bg-slate-50 border border-slate-100 px-4 py-3 text-sm text-slate-600">
+                    <Lock className="w-4 h-4 mt-0.5 shrink-0" />
+                    {atual.status === 'CANCELADO'
+                        ? 'Ofício cancelado. O número continua usado e o arquivo continua no GED, marcado como cancelado.'
+                        : 'Documento emitido e congelado: o PDF oficial está no GED com o hash SHA-256. Alterar exige nova revisão.'}
                 </div>
             )}
 
@@ -471,12 +592,31 @@ export default function NovoOficioTela({ modelo, documento, onClose, onSaved }: 
                         {salvando ? 'Salvando…' : 'Salvar rascunho'}
                     </button>
                 )}
+                {atual?.status === 'EMITIDO' && (
+                    <button type="button" onClick={cancelar}
+                        className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-[6px]">
+                        <Ban className="w-[15px] h-[15px]" /> Cancelar ofício
+                    </button>
+                )}
+                {atual?.ged_document_id && (
+                    <>
+                        <button type="button" onClick={() => navigateToFocus('opura-docs', atual.ged_document_id!, 'GED_DOCUMENTO')}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px]">
+                            <FolderOpen className="w-[15px] h-[15px]" /> Abrir no GED
+                        </button>
+                        <button type="button" onClick={abrirPdf} title="Abre o PDF oficial numa nova aba — para baixar ou imprimir"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95">
+                            <FileDown className="w-[15px] h-[15px]" /> Abrir PDF
+                        </button>
+                    </>
+                )}
                 {!somenteLeitura && (
                     /* Desligado SEMPRE com o motivo (memória feedback_botao_desligado_sempre_diz_por_que). */
-                    <button type="button" disabled
-                        title={bloqueado ? `${qtdPendencias} pendência(s) impede(m) a emissão. ${MOTIVO_EMITIR}` : MOTIVO_EMITIR}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] font-medium text-[13px] opacity-50 cursor-not-allowed">
-                        <Send className="w-[15px] h-[15px]" /> Emitir
+                    <button type="button" onClick={emitir} disabled={!!motivoEmitir || emitindo || salvando}
+                        title={motivoEmitir ?? 'Atribui o número oficial, gera o PDF e arquiva no GED'}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {emitindo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Send className="w-[15px] h-[15px]" />}
+                        {emitindo ? 'Emitindo…' : 'Emitir'}
                     </button>
                 )}
             </div>

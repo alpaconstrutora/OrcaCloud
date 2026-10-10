@@ -19,6 +19,17 @@ import {
 import { notificationService } from './notificationService';
 import { storageService } from './storageService';
 
+/** SHA-256 (hex) de um arquivo, no navegador. Falha → null (o envio não depende do hash). */
+async function sha256DoArquivo(file: Blob): Promise<string | null> {
+  try {
+    const buf = await file.arrayBuffer();
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
 export interface OpuraDmsDiscipline {
   id: string;
   organization_id: string;
@@ -689,8 +700,15 @@ export const documentService = {
   async uploadNewDocument(
     docData: OpuraDocumentInsert,
     file: File,
-    uploadedByEmail?: string
+    uploadedByEmail?: string,
+    /**
+     * Ofícios (08/10/2026): `sha256` já calculado (senão é calculado aqui),
+     * `congelar` = versão oficial (não muda, não é apagada, o documento não
+     * recebe outra), `metadados` do produtor.
+     */
+    opcoes?: { sha256?: string | null; congelar?: boolean; metadados?: Record<string, unknown> }
   ): Promise<OpuraDocument> {
+    const sha256 = opcoes?.sha256 ?? (await sha256DoArquivo(file));
     // 1. Criar o registro do documento na base (sem active_version_id inicialmente)
     const { data: newDoc, error: docError } = await supabase
       .from('opura_documents')
@@ -717,6 +735,7 @@ export const documentService = {
         client_id: docData.client_id || null,
         investor_id: docData.investor_id || null,
         folder_id: docData.folder_id || null,
+        ...(opcoes?.metadados ? { metadados: opcoes.metadados } : {}),
       })
       .select()
       .single();
@@ -753,6 +772,7 @@ export const documentService = {
           tamanho: file.size,
           mime_type: file.type || 'application/octet-stream',
           criado_por: uploadedByEmail || 'sistema',
+          sha256,
         })
         .select()
         .single();
@@ -769,13 +789,24 @@ export const documentService = {
 
       if (updateError) throw updateError;
 
+      // Congela por ÚLTIMO: até aqui o rollback abaixo ainda consegue apagar
+      // documento e versão (versão congelada recusa DELETE — trg_opura_versao_congelada).
+      if (opcoes?.congelar) {
+        const { error: congelarError } = await supabase
+          .from('opura_document_versions')
+          .update({ congelada: true })
+          .eq('id', newVersion.id);
+        if (congelarError) throw congelarError;
+        (finalDoc as OpuraDocument).active_version = { ...(finalDoc as OpuraDocument).active_version!, congelada: true };
+      }
+
       // Registrar auditoria (Onda 4)
       await this.logDocumentAction(
         docData.organization_id,
         documentId,
         (newDoc as any).criado_por || 'sistema',
         'criado',
-        `Arquivo inicial: ${file.name}`
+        `Arquivo inicial: ${file.name}${sha256 ? ` · SHA-256 ${sha256.slice(0, 12)}…` : ''}${opcoes?.congelar ? ' · versão congelada' : ''}`
       );
 
       return finalDoc as OpuraDocument;
@@ -798,6 +829,7 @@ export const documentService = {
   ): Promise<OpuraDocumentVersion> {
     const versionId = generateUUID();
     const storagePath = `${organizationId}/${documentId}/${versionId}_${file.name}`;
+    const sha256 = await sha256DoArquivo(file);
 
     // 1. Upload do arquivo físico
     const { error: uploadError } = await supabase.storage
@@ -824,6 +856,7 @@ export const documentService = {
           tamanho: file.size,
           mime_type: file.type || 'application/octet-stream',
           criado_por: uploadedByEmail,
+          sha256,
         })
         .select()
         .single();
@@ -907,6 +940,9 @@ export const documentService = {
     const version = document.active_version;
     if (!version) {
       throw new Error('Documento sem versão ativa — não há arquivo para renomear.');
+    }
+    if (version.congelada) {
+      throw new Error('Documento emitido (versão congelada): o arquivo não pode ser renomeado.');
     }
 
     const oldPath = version.storage_path;
@@ -1153,6 +1189,23 @@ export const documentService = {
 
   // ─── DELETAR DOCUMENTO COMPLETO (BANCO + STORAGE) ────────────
   async deleteDocument(id: string, organizationId: string): Promise<void> {
+    // Documento emitido (versão congelada) não se exclui — decisão de 08/10/2026.
+    // A trava do banco (trg_opura_documento_congelado) recusaria o DELETE, mas só
+    // DEPOIS de o código abaixo já ter apagado os arquivos do Storage: o registro
+    // ficaria apontando para um PDF que não existe mais. Por isso a recusa vem aqui,
+    // antes de tocar em qualquer arquivo.
+    {
+      const { data: congeladas, error: errCongeladas } = await supabase
+        .from('opura_document_versions')
+        .select('id')
+        .eq('document_id', id)
+        .eq('congelada', true)
+        .limit(1);
+      if (errCongeladas) throw errCongeladas;
+      if (congeladas && congeladas.length > 0) {
+        throw new Error('Documento emitido não se exclui — cancele-o no módulo de origem (ex.: Ofícios).');
+      }
+    }
     // 1. Obter todas as versões existentes para saber os caminhos no Storage
     const { data: versions, error: versionsError } = await supabase
       .from('opura_document_versions')

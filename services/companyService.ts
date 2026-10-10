@@ -393,7 +393,7 @@ export const companyService = {
     async listDepartments(companyId: string): Promise<CompanyDepartment[]> {
         const { data, error } = await supabase
             .from('company_departments')
-            .select('id, company_id, parent_id, nome, descricao, responsavel_nome, cor, ordem, ativo, created_at')
+            .select('id, company_id, parent_id, nome, sigla, descricao, responsavel_nome, cor, ordem, ativo, created_at')
             .eq('company_id', companyId)
             .order('ordem');
         if (error) throw error;

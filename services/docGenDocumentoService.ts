@@ -183,6 +183,31 @@ export const docGenDocumentoService = {
         return (data ?? []) as DocGenDocumentoVersao[];
     },
 
+    /**
+     * Registra o PDF arquivado no GED (F3). O gatilho de congelamento deixa
+     * gravar só estes dois campos num documento emitido, e uma vez só.
+     */
+    async registrarArquivo(id: string, gedDocumentId: string, gedVersionId: string): Promise<void> {
+        const { data, error } = await supabase.from('doc_gen_documentos')
+            .update({ ged_document_id: gedDocumentId, ged_version_id: gedVersionId })
+            .eq('id', id)
+            .select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) throw new Error('Não foi possível registrar o arquivo do GED no documento.');
+    },
+
+    /** Emitido → cancelado (a única transição que o congelamento aceita). */
+    async cancelar(id: string): Promise<DocGenDocumento> {
+        const { data, error } = await supabase.from('doc_gen_documentos')
+            .update({ status: 'CANCELADO' })
+            .eq('id', id)
+            .eq('status', 'EMITIDO')
+            .select(COLUNAS);
+        if (error) throw error;
+        if (!data || data.length === 0) throw new Error('Só documento emitido pode ser cancelado.');
+        return normalizar(data[0] as unknown as Record<string, unknown>);
+    },
+
     /** Quantos documentos usam o modelo — para a exclusão de modelo explicar a recusa. */
     async contarPorModelo(modeloId: string): Promise<number> {
         const { count, error } = await supabase.from('doc_gen_documentos').select('id', { count: 'exact', head: true }).eq('modelo_id', modeloId);

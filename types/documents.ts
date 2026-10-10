@@ -47,6 +47,9 @@ export interface OpuraDocument {
   locked_at?: string | null;
   locked_version?: number | null;
 
+  /** Metadados do produtor (ofício: número, assunto, destinatário…). Ofícios, 08/10/2026. */
+  metadados?: Record<string, unknown> | null;
+
   // Joins opcionais carregados pelo service
   // Nome da obra de `project_id`, resolvido no banco pela RPC do Portal do
   // Parceiro (partner_ws_shared_documents): pelo link público a sessão é anon e
@@ -84,6 +87,10 @@ export interface OpuraDocumentVersion {
   mime_type: string;
   criado_por: string;
   created_at: string;
+  /** SHA-256 (hex) do arquivo, calculado no envio. Versões antigas: null. */
+  sha256?: string | null;
+  /** Versão oficial (documento emitido): não muda, não é apagada, o documento não recebe outra. */
+  congelada?: boolean;
 }
 
 export type OpuraDocumentInsert = Omit<

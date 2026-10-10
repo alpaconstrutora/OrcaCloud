@@ -29,7 +29,11 @@ export type SlotToken =
     | 'CENTRO_CUSTO'
     | 'INVESTIDOR'
     | 'ORCAMENTO'
-    | 'PLANEJAMENTO';
+    | 'PLANEJAMENTO'
+    // Ofícios (08/10/2026): `company_departments.sigla`. Oferecido só aos tipos
+    // que declaram `extraVariables` no catálogo — os outros fluxos não têm
+    // departamento, e a variável sairia sempre vazia.
+    | 'DEPARTAMENTO';
 
 /** As variáveis reais (exclui EMPTY/PREFIX) — o que cada doc_type pode oferecer. */
 export type VariableToken = Exclude<SlotToken, 'EMPTY' | 'PREFIX'>;
@@ -63,13 +67,20 @@ export type DocType =
     | 'SALE_DEAL'            // Comercial › Vendas de Unidades (código da negociação)
     | 'RENTAL_DEAL'          // Comercial › Locações (código da negociação)
     | 'CONDO_RATEIO'         // Comercial › Condomínios (rateio fechado)
-    | 'PURCHASE_REQUEST';    // Suprimentos › Solicitações de Compra (2026-09-26)
+    | 'PURCHASE_REQUEST'     // Suprimentos › Solicitações de Compra (2026-09-26)
+    | 'OFICIO';              // Documentos › Ofícios (2026-10-08) — número só na emissão
 
 export interface NumberingConfig {
     slots: SlotToken[];
     prefix: string;
     separator: '-' | '.';
     seqPadding: number;
+    /**
+     * Termina o número em "/<ano>" e REINICIA a sequência a cada ano (o ano
+     * entra no scope_key). Ausente/false = comportamento de antes (os 12 tipos
+     * anteriores não usam). Ofícios, 08/10/2026.
+     */
+    yearSuffix?: boolean;
 }
 
 /**
@@ -99,6 +110,8 @@ export interface NumberingContext {
     orcamentoProjectId?: string | null;
     /** Resolve PLANEJAMENTO (idem, classificação PLANEJAMENTO). */
     planejamentoProjectId?: string | null;
+    /** Resolve DEPARTAMENTO (`company_departments.sigla`). */
+    departmentId?: string | null;
 }
 
 export class MissingCodeError extends Error {

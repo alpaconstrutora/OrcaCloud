@@ -92,7 +92,11 @@ export interface EntradaPreviaDocumento {
 
 export const NUMERO_NO_RASCUNHO = 'nº atribuído na emissão';
 
-export async function previaDoDocumento(e: EntradaPreviaDocumento): Promise<Blob> {
+export async function previaDoDocumento(
+    e: EntradaPreviaDocumento,
+    /** PDF DEFINITIVO (emissão): id do documento e data da emissão — o mesmo registro dá os mesmos bytes. */
+    oficial?: { id: string; criadoEm: Date },
+): Promise<Blob> {
     const logoDataUrl = e.layout.cabecalho.logo === 'organizacao'
         ? await logoComoDataUrl(e.organization?.logoUrl ?? null)
         : null;
@@ -106,5 +110,5 @@ export async function previaDoDocumento(e: EntradaPreviaDocumento): Promise<Blob
         logoDataUrl,
         titulo: e.titulo,
     });
-    return gerarPdfBlob(def, { id: 'previa-do-documento', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
+    return gerarPdfBlob(def, oficial ?? { id: 'previa-do-documento', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
 }

@@ -12,9 +12,11 @@ import { NumberingConfig, SlotToken, VariableToken } from './types';
  * separador de borda); o `{seq}` é sempre o último bloco.
  */
 export function formatDocumentNumber(
-    config: Pick<NumberingConfig, 'slots' | 'prefix' | 'separator' | 'seqPadding'>,
+    config: Pick<NumberingConfig, 'slots' | 'prefix' | 'separator' | 'seqPadding' | 'yearSuffix'>,
     values: Partial<Record<VariableToken, string>>,
     seq: number,
+    /** Ano do documento — só usado quando `config.yearSuffix` (Ofícios). */
+    year?: number,
 ): string {
     const separator = config.separator || '-';
     const padding = Math.max(1, Number(config.seqPadding) || 1);
@@ -32,7 +34,9 @@ export function formatDocumentNumber(
     }
     parts.push(String(seq).padStart(padding, '0'));
 
-    return parts.join(separator);
+    const base = parts.join(separator);
+    // Espelha `fn_format_document_number` de 8 argumentos (aplicar_20271008000200).
+    return config.yearSuffix && year ? `${base}/${year}` : base;
 }
 
 /**
@@ -42,11 +46,18 @@ export function formatDocumentNumber(
  * 2026-08-17) — mudar a máscara muda o escopo. Slots `EMPTY`/`PREFIX` não
  * entram (não são variável).
  */
-export function buildScopeKey(slots: SlotToken[], values: Partial<Record<VariableToken, string>>): string {
-    return slots
+export function buildScopeKey(
+    slots: SlotToken[],
+    values: Partial<Record<VariableToken, string>>,
+    /** Com `yearSuffix`, o ano entra no escopo: a sequência reinicia todo ano. */
+    yearSuffix?: { year: number },
+): string {
+    const base = slots
         .filter((t): t is VariableToken => t !== 'EMPTY' && t !== 'PREFIX')
         .map(t => values[t] ?? '')
         .join('|');
+    if (!yearSuffix) return base;
+    return base ? `${base}|${yearSuffix.year}` : String(yearSuffix.year);
 }
 
 /** As variáveis que a máscara efetivamente usa (para saber o que resolver). */

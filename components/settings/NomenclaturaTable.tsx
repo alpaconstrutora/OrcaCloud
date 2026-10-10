@@ -48,6 +48,7 @@ const TOKEN_LABEL: Record<VariableToken, string> = {
     ORCAMENTO: 'Orçamento',
     PLANEJAMENTO: 'Planejamento',
     UNIDADE: 'Unidade', // não oferecido no seletor (ver ALL_VARIABLE_TOKENS) — só para configs antigas
+    DEPARTAMENTO: 'Departamento', // só nos tipos com `extraVariables` (Ofícios)
 };
 
 /** Valores fictícios para a pré-visualização. */
@@ -62,7 +63,11 @@ const PREVIEW_VALUES: Record<VariableToken, string> = {
     INVESTIDOR: 'INV002',
     ORCAMENTO: 'ORC01',
     PLANEJAMENTO: 'PLN01',
+    DEPARTAMENTO: 'ENG',
 };
+
+/** Ano da prévia — o número real usa o ano do documento. */
+const ANO_PREVIA = new Date().getFullYear();
 
 const FREE_SLOTS = 7;
 
@@ -70,6 +75,8 @@ interface RowState {
     prefix: string;
     /** As 7 posições livres — slots[0] ('PREFIX') fica fora, é implícito. */
     freeSlots: SlotToken[];
+    /** "/<ano>" no fim e sequência que reinicia a cada ano (Ofícios, 08/10/2026). Por linha. */
+    yearSuffix: boolean;
 }
 
 const padFreeSlots = (slots: SlotToken[]): SlotToken[] => {
@@ -82,12 +89,13 @@ const rowFromConfig = (cfg: NumberingConfig): RowState => ({
     prefix: cfg.prefix,
     // slots[0] é sempre 'PREFIX' pelo padrão novo — descarta e usa o resto.
     freeSlots: padFreeSlots(cfg.slots.slice(1)),
+    yearSuffix: !!cfg.yearSuffix,
 });
 
 const rowToConfig = (row: RowState, shared: { separator: '-' | '.'; seqPadding: number }): NumberingConfig => {
     const slots: SlotToken[] = ['PREFIX', ...row.freeSlots];
     while (slots.length > 1 && slots[slots.length - 1] === 'EMPTY') slots.pop();
-    return { slots, prefix: row.prefix, separator: shared.separator, seqPadding: shared.seqPadding };
+    return { slots, prefix: row.prefix, separator: shared.separator, seqPadding: shared.seqPadding, yearSuffix: row.yearSuffix };
 };
 
 const ALL_DOC_TYPES: DocType[] = [...MAIN_DOC_TYPES, ...ADVANCED_DOC_TYPES];
@@ -162,6 +170,14 @@ const NomenclaturaTable: React.FC = () => {
         });
     };
 
+    const setRowYear = (dt: DocType, yearSuffix: boolean) => {
+        setRows(prev => {
+            const row = prev[dt];
+            if (!row) return prev;
+            return { ...prev, [dt]: { ...row, yearSuffix } };
+        });
+    };
+
     const handleSave = async () => {
         const target = await resolveWriteOrg('all-allowed');
         if (!target) return;
@@ -209,7 +225,8 @@ const NomenclaturaTable: React.FC = () => {
         const row = rows[dt];
         if (!row) return null;
         const usedTokens = new Set(row.freeSlots.filter(t => t !== 'EMPTY'));
-        const preview = formatDocumentNumber(rowToConfig(row, shared), PREVIEW_VALUES, 1);
+        const preview = formatDocumentNumber(rowToConfig(row, shared), PREVIEW_VALUES, 1, ANO_PREVIA);
+        const opcoes: VariableToken[] = [...ALL_VARIABLE_TOKENS, ...(DOC_TYPE_CATALOG[dt].extraVariables ?? [])];
 
         return (
             <tr key={dt} className="hover:bg-blue-50/50 transition-colors">
@@ -235,7 +252,7 @@ const NomenclaturaTable: React.FC = () => {
                             }`}
                         >
                             <option value="EMPTY">— vazio —</option>
-                            {ALL_VARIABLE_TOKENS.map(v => (
+                            {opcoes.map(v => (
                                 <option key={v} value={v} disabled={usedTokens.has(v) && token !== v}>
                                     {TOKEN_LABEL[v]}
                                 </option>
@@ -243,6 +260,16 @@ const NomenclaturaTable: React.FC = () => {
                         </select>
                     </td>
                 ))}
+                <td className="px-6 py-2.5 border-r border-gray-100 text-center">
+                    <input
+                        type="checkbox"
+                        checked={row.yearSuffix}
+                        onChange={e => setRowYear(dt, e.target.checked)}
+                        title="Termina o número em /ano e reinicia a sequência a cada ano"
+                        aria-label={`${DOC_TYPE_CATALOG[dt].label}: terminar em /ano e reiniciar a cada ano`}
+                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 cursor-pointer"
+                    />
+                </td>
                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                     {preview}
                 </td>
@@ -263,6 +290,7 @@ const NomenclaturaTable: React.FC = () => {
                 {Array.from({ length: FREE_SLOTS }).map((_, i) => (
                     <th key={i} className="px-6 py-2 border-r border-gray-100 text-left min-w-[150px]">Livre</th>
                 ))}
+                <th className="px-6 py-2 border-r border-gray-100 text-center whitespace-nowrap" title="Termina o número em /ano e reinicia a sequência a cada ano">/Ano</th>
                 <th className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap">Prévia</th>
                 <th className="px-6 py-2 text-right">Ações</th>
             </tr>
@@ -279,7 +307,8 @@ const NomenclaturaTable: React.FC = () => {
                     <h2 className="text-lg font-semibold text-gray-800">Nomenclatura</h2>
                     <p className="text-sm text-gray-500 mt-1">
                         Monte o número de cada módulo escolhendo, para as posições livres, uma variável do sistema ou deixe vazio.
-                        O Prefixo é sempre o 1º segmento do número; o sequencial reinicia para cada combinação diferente de variáveis.
+                        O Prefixo é sempre o 1º segmento do número; o sequencial reinicia para cada combinação diferente de variáveis
+                        e, com "/Ano" marcado, também a cada ano.
                     </p>
                 </div>
             </div>

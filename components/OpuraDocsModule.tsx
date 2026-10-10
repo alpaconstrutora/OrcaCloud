@@ -215,6 +215,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // `null` no store = nenhuma obra escolhida, que aqui é o escopo 'all'.
   const selectedProjectId = useStore(s => s.projectId) ?? 'all';
   const [activeTab, setActiveTab] = React.useState<OpuraDocumentCategoria>('engenharia');
+  const [hashCopiado, setHashCopiado] = React.useState<string | null>(null);
   const [documents, setDocuments] = React.useState<OpuraDocument[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = usePersistedState<string>('opuraDocs:search', '');
@@ -3021,7 +3022,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           <ActionIconButton kind="share" onClick={() => openShareModal([doc.id])} />
                         )}
                         {isOrgAdmin && !doc.is_integrated && (
-                          <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
+                          doc.active_version?.congelada
+                            /* Documento emitido não se exclui (decisão de 08/10/2026) — botão desligado com o motivo. */
+                            ? <ActionIconButton kind="delete" disabled title="Documento emitido (versão congelada): não se exclui — cancele no módulo de origem" onClick={() => undefined} />
+                            : <ActionIconButton kind="delete" onClick={() => handleDeleteDoc(doc.id)} />
                         )}
                       </InlineActionTray>
                     </>
@@ -3454,8 +3458,15 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             )}
 
             <div className="p-6 space-y-6">
+              {/* Documento emitido: a versão oficial é congelada e não recebe outra (08/10/2026). */}
+              {selectedDocForVersions.active_version?.congelada && (
+                <p className="flex items-start gap-2 text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-[10px] px-4 py-3">
+                  <Lock className="w-4 h-4 mt-0.5 text-slate-500 shrink-0" />
+                  Documento emitido: a versão oficial está congelada — não recebe nova versão nem é excluído. Alterações viram nova revisão no módulo de origem.
+                </p>
+              )}
               {/* Form para Upload de Nova Versão / Renovação */}
-              {canAccessTab(selectedDocForVersions.categoria) && (
+              {canAccessTab(selectedDocForVersions.categoria) && !selectedDocForVersions.active_version?.congelada && (
                 <form onSubmit={handleUploadVersionSubmit} className="bg-slate-50 p-4 rounded-[10px] border border-slate-100 space-y-4">
                   <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
                     <Upload className="w-4 h-4" />
@@ -3518,6 +3529,33 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             <p className="text-xs text-slate-400 font-semibold">
                               Por {ver.criado_por || 'Sistema'} em {ver.created_at ? new Date(ver.created_at).toLocaleString() : ''}
                             </p>
+                            {/* §27 — identificador técnico: rótulo curto, valor inteiro no title, botão de copiar. */}
+                            {(ver.sha256 || ver.congelada) && (
+                              <div className="mt-1 flex items-center gap-2">
+                                {ver.congelada && (
+                                  <span className="flex items-center gap-1 text-xs text-slate-500" title="Versão oficial: não muda e não é apagada">
+                                    <Lock className="w-3 h-3" /> Congelada
+                                  </span>
+                                )}
+                                {ver.sha256 && (
+                                  <>
+                                    <span className="text-xs font-semibold text-slate-500">SHA-256</span>
+                                    <span className="font-mono text-[10px] text-slate-400" title={ver.sha256}>{ver.sha256.slice(0, 12)}…</span>
+                                    <ActionIconButton
+                                      kind="duplicate"
+                                      size="sm"
+                                      title="Copiar o SHA-256 completo"
+                                      icon={hashCopiado === ver.id ? <Check className="w-3.5 h-3.5" /> : undefined}
+                                      onClick={() => {
+                                        void navigator.clipboard?.writeText(ver.sha256 ?? '');
+                                        setHashCopiado(ver.id);
+                                        setTimeout(() => setHashCopiado(c => (c === ver.id ? null : c)), 2000);
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         <button

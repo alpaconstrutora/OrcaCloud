@@ -1,4 +1,4 @@
-import { DocType, NumberingConfig } from './types';
+import { DocType, NumberingConfig, VariableToken } from './types';
 
 export interface DocTypeCatalogEntry {
     label: string;
@@ -11,6 +11,11 @@ export interface DocTypeCatalogEntry {
     advanced?: true;
     /** Preserva o comportamento atual até a organização reconfigurar. */
     default: NumberingConfig;
+    /**
+     * Variáveis além das 9 comuns que só este tipo oferece (ex.: DEPARTAMENTO
+     * no Ofício). Tipos sem esta lista oferecem só `ALL_VARIABLE_TOKENS`.
+     */
+    extraVariables?: VariableToken[];
 }
 
 /**
@@ -57,6 +62,15 @@ export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
         label: 'Condomínios',
         default: { slots: ['PREFIX', 'EMPREENDIMENTO'], prefix: 'CTC', separator: '-', seqPadding: 4 },
     },
+    OFICIO: {
+        label: 'Ofícios',
+        // OF-ENG-047/2026: prefixo, sigla do departamento, sequencial de 3
+        // dígitos e o ano — reinicia a cada ano. ESPELHADO no padrão de
+        // `doc_gen_emitir` (aplicar_20271008000200_oficio_emissao.sql): se mudar
+        // aqui, mude lá.
+        default: { slots: ['PREFIX', 'DEPARTAMENTO'], prefix: 'OF', separator: '-', seqPadding: 3, yearSuffix: true },
+        extraVariables: ['DEPARTAMENTO'],
+    },
     SERVICE_CONTRACT: {
         label: 'Contratos de Serviço',
         // Legado era 3 dígitos sem prefixo (MAX+1 no navegador); ganha prefixo
@@ -97,7 +111,7 @@ export const DOC_TYPE_CATALOG: Record<DocType, DocTypeCatalogEntry> = {
 /** Ordem de exibição das duas tabelas — DOC_TYPE_CATALOG é um Record, sem ordem própria garantida. */
 export const MAIN_DOC_TYPES: DocType[] = [
     'PURCHASE_REQUEST', 'PURCHASE_ORDER', 'QUOTATION', 'SUPPLY_CONTRACT',
-    'UNIT_SALE_CONTRACT', 'RENTAL_CONTRACT', 'CONDO_RATEIO', 'SERVICE_CONTRACT',
+    'UNIT_SALE_CONTRACT', 'RENTAL_CONTRACT', 'CONDO_RATEIO', 'SERVICE_CONTRACT', 'OFICIO',
 ];
 
 export const ADVANCED_DOC_TYPES: DocType[] = [

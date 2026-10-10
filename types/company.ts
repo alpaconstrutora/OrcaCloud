@@ -217,6 +217,8 @@ export interface CompanyDepartment {
   company_id: string;
   parent_id?: string;
   nome: string;
+  /** Código curto usado no número dos ofícios (OF-ENG-047/2026). Ofícios, 08/10/2026. */
+  sigla?: string | null;
   descricao?: string;
   responsavel_nome?: string;
   cor: string;

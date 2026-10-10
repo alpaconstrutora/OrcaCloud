@@ -30,7 +30,10 @@ export async function generateDocumentNumber(
     const tokens = variablesInUse(config.slots);
 
     const values = await resolveVariables(tokens, { ...ctx, organizationId });
-    const scopeKey = buildScopeKey(config.slots, values);
+    // `yearSuffix` (Ofícios): o ano entra no escopo e no fim do número. Os 12 tipos
+    // anteriores não usam — para eles nada muda.
+    const year = new Date().getFullYear();
+    const scopeKey = buildScopeKey(config.slots, values, config.yearSuffix ? { year } : undefined);
 
     const { data: seq, error } = await supabase.rpc('fn_next_document_seq', {
         p_org_id: organizationId,
@@ -39,5 +42,5 @@ export async function generateDocumentNumber(
     });
     if (error) throw new Error(`Falha ao gerar o número do documento: ${error.message}`);
 
-    return formatDocumentNumber(config, values, Number(seq));
+    return formatDocumentNumber(config, values, Number(seq), year);
 }

@@ -183,5 +183,13 @@ export async function resolveVariables(
         if (code) values.PLANEJAMENTO = code;
     }
 
+    // Ofícios (08/10/2026). A emissão (`doc_gen_emitir`) resolve a sigla de novo
+    // no banco — este valor serve à PRÉVIA do número na tela.
+    if (need.has('DEPARTAMENTO') && ctx.departmentId) {
+        const { data } = await supabase.from('company_departments').select('id, sigla').eq('id', ctx.departmentId).maybeSingle();
+        const sigla = clean((data as { sigla?: string | null } | null)?.sigla).toUpperCase();
+        if (sigla) values.DEPARTAMENTO = sigla;
+    }
+
     return values;
 }

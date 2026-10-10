@@ -9,6 +9,7 @@ interface Row {
     prefix: string;
     separator: NumberingConfig['separator'];
     seq_padding: number;
+    year_suffix?: boolean | null;
 }
 
 const toConfig = (row: Row): NumberingConfig => ({
@@ -16,13 +17,14 @@ const toConfig = (row: Row): NumberingConfig => ({
     prefix: row.prefix ?? '',
     separator: row.separator ?? '-',
     seqPadding: row.seq_padding ?? 4,
+    yearSuffix: !!row.year_suffix,
 });
 
 /** Config de um único doc_type. Sem linha no banco → default do catálogo. */
 export async function getNumberingConfig(organizationId: string, docType: DocType): Promise<NumberingConfig> {
     const { data, error } = await supabase
         .from('document_numbering_settings')
-        .select('organization_id, doc_type, slots, prefix, separator, seq_padding')
+        .select('organization_id, doc_type, slots, prefix, separator, seq_padding, year_suffix')
         .eq('organization_id', organizationId)
         .eq('doc_type', docType)
         .maybeSingle();
@@ -35,7 +37,7 @@ export async function getNumberingConfig(organizationId: string, docType: DocTyp
 export async function listNumberingConfigs(organizationId: string): Promise<Partial<Record<DocType, NumberingConfig>>> {
     const { data, error } = await supabase
         .from('document_numbering_settings')
-        .select('organization_id, doc_type, slots, prefix, separator, seq_padding')
+        .select('organization_id, doc_type, slots, prefix, separator, seq_padding, year_suffix')
         .eq('organization_id', organizationId);
     if (error) throw error;
 
@@ -58,6 +60,7 @@ export async function saveNumberingConfig(
         prefix: config.prefix,
         separator: config.separator,
         seq_padding: config.seqPadding,
+            year_suffix: !!config.yearSuffix,
         updated_at: new Date().toISOString(),
     }, { onConflict: 'organization_id,doc_type' });
     if (error) throw error;

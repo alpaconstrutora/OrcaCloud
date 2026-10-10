@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { companyService } from '../services/companyService';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 
 interface Props {
     companyId: string;
@@ -44,8 +45,8 @@ function buildTree(depts: CompanyDepartment[]): DeptNode[] {
 
 // ─── Form inline ─────────────────────────────────────────────
 
-type FormData = { nome: string; descricao: string; responsavel_nome: string; cor: string };
-const EMPTY_FORM: FormData = { nome: '', descricao: '', responsavel_nome: '', cor: '#374151' };
+type FormData = { nome: string; sigla: string; descricao: string; responsavel_nome: string; cor: string };
+const EMPTY_FORM: FormData = { nome: '', sigla: '', descricao: '', responsavel_nome: '', cor: '#374151' };
 
 const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
@@ -67,6 +68,8 @@ const InlineForm: React.FC<InlineFormProps> = ({ initial = EMPTY_FORM, onSave, o
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <input className={cls} placeholder="Nome do departamento *"
                     value={form.nome} onChange={e => set('nome', e.target.value)} />
+                <input className={cls} placeholder="Sigla (ex.: ENG) — usada no número dos ofícios" maxLength={12}
+                    value={form.sigla} onChange={e => set('sigla', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
                 <input className={cls} placeholder="Responsável"
                     value={form.responsavel_nome} onChange={e => set('responsavel_nome', e.target.value)} />
                 <input className={cls} placeholder="Descrição (opcional)"
@@ -110,7 +113,7 @@ interface NodeProps {
     activeFormType: 'add' | 'edit' | null;
     formData: FormData;
     formSaving: boolean;
-    onFormSave: () => Promise<void>;
+    onFormSave: (dados?: FormData) => Promise<void>;
     onFormCancel: () => void;
     onFormChange: (f: FormData) => void;
 }
@@ -148,6 +151,7 @@ const DeptNode: React.FC<NodeProps> = ({
                 <div className="flex-1 min-w-0">
                     <span className={`text-sm font-black text-gray-900 ${depth === 0 ? 'text-base' : depth === 1 ? 'text-sm' : 'text-xs'}`}>
                         {node.nome}
+                        {node.sigla && <span className="ml-1.5 text-xs font-normal text-gray-400" title="Sigla usada no número dos ofícios">{node.sigla}</span>}
                     </span>
                     {node.responsavel_nome && (
                         <span className="ml-2 text-xs font-black uppercase tracking-wide text-gray-400">
@@ -176,7 +180,7 @@ const DeptNode: React.FC<NodeProps> = ({
                     <InlineForm
                         title="Novo Subdepartamento"
                         initial={{ ...EMPTY_FORM, cor: node.cor }}
-                        onSave={async () => { await onFormSave(); }}
+                        onSave={async f => { await onFormSave(f); }}
                         onCancel={onFormCancel}
                         saving={formSaving} />
                 </div>
@@ -188,7 +192,7 @@ const DeptNode: React.FC<NodeProps> = ({
                     <InlineForm
                         title="Editar Departamento"
                         initial={formData}
-                        onSave={async () => { await onFormSave(); }}
+                        onSave={async f => { await onFormSave(f); }}
                         onCancel={onFormCancel}
                         saving={formSaving} />
                 </div>
@@ -220,6 +224,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
     const [activeFormId, setActiveFormId] = useState<string | null>(null);   // nó alvo
     const [activeFormType, setActiveFormType] = useState<'add' | 'edit' | 'root' | null>(null);
     const [formData, setFormData] = useState<FormData>(EMPTY_FORM);
+    const confirmar = useConfirm();
     const [formSaving, setFormSaving] = useState(false);
 
     const load = useCallback(async () => {
@@ -252,11 +257,15 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
     const openEdit = (dept: CompanyDepartment) => {
         setActiveFormId(dept.id);
         setActiveFormType('edit');
-        setFormData({ nome: dept.nome, descricao: dept.descricao ?? '', responsavel_nome: dept.responsavel_nome ?? '', cor: dept.cor });
+        setFormData({ nome: dept.nome, sigla: dept.sigla ?? '', descricao: dept.descricao ?? '', responsavel_nome: dept.responsavel_nome ?? '', cor: dept.cor });
     };
     const closeForm = () => { setActiveFormId(null); setActiveFormType(null); setError(null); };
 
-    const handleFormSave = async () => {
+    // `dados` = o que o formulário embutido tem na tela. Antes este handler lia
+    // `formData` (estado do pai, nunca atualizado pelo formulário): criar saía
+    // com nome vazio e desistia calado; editar regravava os valores antigos.
+    const handleFormSave = async (dados: FormData = formData) => {
+        const formData = dados;
         if (!formData.nome.trim()) return;
         setFormSaving(true);
         setError(null);
@@ -264,6 +273,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             if (activeFormType === 'edit' && activeFormId) {
                 await companyService.updateDepartment(activeFormId, {
                     nome: formData.nome.trim(),
+                    sigla: formData.sigla.trim() || null,
                     descricao: formData.descricao.trim() || undefined,
                     responsavel_nome: formData.responsavel_nome.trim() || undefined,
                     cor: formData.cor,
@@ -276,6 +286,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
                     company_id: companyId,
                     parent_id: parentId,
                     nome: formData.nome.trim(),
+                    sigla: formData.sigla.trim() || null,
                     descricao: formData.descricao.trim() || undefined,
                     responsavel_nome: formData.responsavel_nome.trim() || undefined,
                     cor: formData.cor,
@@ -295,7 +306,8 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
         const msg = hasChildren
             ? `Excluir "${dept.nome}" e todos os seus subdepartamentos?`
             : `Excluir "${dept.nome}"?`;
-        if (!confirm(msg)) return;
+        // §14 — confirmação do app, não o `confirm()` nativo.
+        if (!await confirmar({ title: 'Excluir departamento?', message: msg, variant: 'danger', confirmLabel: 'Excluir' })) return;
         try {
             await companyService.removeDepartment(dept.id);
             await load();
@@ -303,7 +315,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
     };
 
     const handleSeed = async () => {
-        if (depts.length > 0 && !confirm('Já existem departamentos. Adicionar a estrutura padrão sobre eles?')) return;
+        if (depts.length > 0 && !await confirmar({ title: 'Pré-carregar estrutura?', message: 'Já existem departamentos. Adicionar a estrutura padrão sobre eles?', variant: 'warning', confirmLabel: 'Adicionar' })) return;
         setSeeding(true);
         setError(null);
         try {
@@ -350,7 +362,7 @@ const CompanyDepartmentsTab: React.FC<Props> = ({ companyId }) => {
             {activeFormType === 'root' && (
                 <InlineForm
                     title="Novo Departamento Raiz"
-                    onSave={async () => { await handleFormSave(); }}
+                    onSave={async f => { await handleFormSave(f); }}
                     onCancel={closeForm}
                     saving={formSaving} />
             )}

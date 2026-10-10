@@ -661,6 +661,18 @@ Sessão: `880e0ec8-cfb9-4a42-9417-a1dbf8f43122` · 2026-10-07 ~20:40
 | 2026-10-07 ~21:10 | Assinatura eletrônica (ZapSign morto) | **Pendência futura**, registrada na seção "Pendências futuras" deste plano. O MVP assina com imagem + registro interno |
 | 2026-10-07 ~21:10 | Links de notificação do GED mortos | **Corrigir na F1**: `documentService` grava `/opura-docs?docId=…`, `destinoDoLinkDeNotificacao` entende `docId`, e o GED abre o documento pelo `viewFocus` |
 
+### Pedido posterior — 2026-10-08, ao abrir a F3
+
+> 1. de acordo
+> 2. autorizado
+
+Respostas às duas perguntas feitas antes da F3: (1) "documento emitido no GED não se exclui, só se cancela";
+(2) emitir um ofício de teste na Alpa (que consome o `001/2026`), depois apagá-lo e zerar o contador para o
+primeiro ofício real também sair `001/2026`.
+
+| 2026-10-08 | Documento emitido (versão congelada) pode ser excluído do GED? | **Não — só cancelado.** A trava vale para todo documento do GED que nascer congelado |
+| 2026-10-08 | A prova da emissão consome numeração real | **Autorizado:** emitir ofício de teste, apagar e zerar o contador depois |
+
 ## Avaliação da proposta contra o que já existe
 
 Árvore lida: `C:\D\frentes\market-fase4` no topo de `origin/main` (`11d42ec7`, 07/10). O

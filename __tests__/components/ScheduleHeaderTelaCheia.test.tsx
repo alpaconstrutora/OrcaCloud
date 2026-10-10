@@ -97,31 +97,48 @@ describe('ScheduleHeader — Tela cheia', () => {
     expect(screen.queryByRole('button', { name: /^tela cheia$/i })).toBeNull();
   });
 
-  it('título §20: h1 2xl solto (sem card) + subtítulo; "Voltar" no vestuário de tela-detalhe', () => {
-    const onBack = vi.fn();
-    render(<ScheduleHeader {...props({ onBack })} />);
-    const h1 = screen.getByRole('heading', { level: 1, name: 'Planejamento Físico-Financeiro' });
-    expect(h1.className).toMatch(/text-2xl/);
-    expect(h1.closest('[class*="shadow-sm"]')).toBeNull(); // não está dentro de card
-    expect(screen.getByText(/Orçamento X/).className).toMatch(/mt-1\.5/); // subtítulo §20
-    const voltar = screen.getByTitle('Voltar para Gestão de Planejamento');
-    expect(voltar.className).toMatch(/rounded-\[6px\]/);
+  // Sem faixa de título (10/10/2026) — o mesmo da Planta Inteligente: *"a fim de
+  // ganhar mais espaço vertical, decidmos nao exibir o título e o botao voltar foi
+  // para o menubar na planta inteligente. implemente o mesmo em engenharia >
+  // planejamento"*. Substitui o teste do título §20 solto + subtítulo.
+  it('sem título visível: h1 só para leitor de tela, com o nome do planejamento', () => {
+    render(<ScheduleHeader {...props({ settings: { id: 'plan1', name: 'Plano 2026' } as unknown as ProjectSettings })} />);
+    const h1 = screen.getByRole('heading', { level: 1 });
+    expect(h1).toHaveTextContent('Planejamento Físico-Financeiro — Plano 2026');
+    expect(h1.className).toMatch(/\bsr-only\b/);
   });
 
-  it('subtítulo diz qual planejamento é e de qual orçamento ele lê (sem seletor que sai da tela)', () => {
+  it('o voltar mora no ribbon: só ícone, nome acessível com o planejamento, e chama onBack', async () => {
+    const onBack = vi.fn();
+    render(<ScheduleHeader {...props({ onBack, settings: { id: 'plan1', name: 'Plano 2026' } as unknown as ProjectSettings })} />);
+    const voltar = screen.getByRole('button', { name: 'Voltar para Gestão de Planejamento — Plano 2026' });
+    expect(screen.getByRole('toolbar', { name: 'Ferramentas do planejamento' })).toContainElement(voltar);
+    expect(voltar).toHaveTextContent(/^$/);
+    await userEvent.setup().click(voltar);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('sem onBack, não há botão de voltar', () => {
+    render(<ScheduleHeader {...props()} />);
+    expect(screen.queryByRole('button', { name: /^Voltar para Gestão de Planejamento/ })).toBeNull();
+  });
+
+  it('o orçamento vinculado aparece na dica de "Sincronizar" (aba Orçamento), sem seletor que sai da tela', async () => {
     const projects = [
       { id: 'orc1', name: 'Orçamento X', settings: { classification: 'ORCAMENTO' } },
       { id: 'o1', name: 'Obra Z', settings: { classification: 'OBRA' } },
     ];
     const settings = { id: 'plan1', name: 'Plano 2026', linkedProjectId: 'orc1' } as unknown as ProjectSettings;
     render(<ScheduleHeader {...props({ projects, settings })} />);
-    expect(screen.getByText(/Plano 2026/)).toHaveTextContent('Orçamento vinculado: Orçamento X');
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Orçamento' }));
+    expect(screen.getByRole('button', { name: /Sincronizar/ })).toHaveAttribute('title', expect.stringContaining('Orçamento vinculado: Orçamento X'));
     expect(screen.queryByRole('button', { name: /^Orçamento/ })).toBeNull();
   });
 
-  it('sem vínculo, o subtítulo diz "Sem orçamento vinculado"', () => {
+  it('sem vínculo, a dica de "Sincronizar" diz "Sem orçamento vinculado"', async () => {
     render(<ScheduleHeader {...props({ settings: { id: 'plan1', name: 'Plano' } as unknown as ProjectSettings })} />);
-    expect(screen.getByText(/Plano/)).toHaveTextContent('Sem orçamento vinculado');
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Orçamento' }));
+    expect(screen.getByRole('button', { name: /Sincronizar/ })).toHaveAttribute('title', expect.stringContaining('Sem orçamento vinculado'));
   });
 
   it('o botão está à vista em toda vista — inclusive nas que escondem a barra de opções', () => {

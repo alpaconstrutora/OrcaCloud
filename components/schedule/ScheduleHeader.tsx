@@ -230,6 +230,9 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         ? projects.find((p) => p.id === settings.linkedProjectId && isOrcamentoOuLegado(p))
         : undefined;
 
+    const nomeDoPlanejamento = settings.name || 'Planejamento';
+    const rotuloDoOrcamentoVinculado = orcamentoVinculado ? `Orçamento vinculado: ${orcamentoVinculado.name}` : 'Sem orçamento vinculado';
+
     const emGrade = viewMode === 'table' || viewMode === 'gantt';
     const noGantt = viewMode === 'gantt';
 
@@ -250,36 +253,14 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         : 'Baseline';
 
     return (
-        // §20 / §20.1: o título fica SOLTO (sem card) e o `space-y-6` da raiz dá os
-        // 24px até o ribbon. Mesmo cabeçalho de tela-detalhe com "Voltar" de
-        // `ContractDetailView.tsx` — h1 2xl, não 3xl (3xl é só lista-raiz).
+        // Sem faixa de título (10/10/2026): o mesmo da Planta Inteligente (P2.62/P2.63) —
+        // *"a fim de ganhar mais espaço vertical, decidmos nao exibir o título e o
+        // botao voltar foi para o menubar na planta inteligente. implemente o mesmo em
+        // engenharia > planejamento"*. O voltar entra no ribbon, só ícone; o nome
+        // continua no `title` da seta e num `h1` para leitor de tela; o orçamento
+        // vinculado foi para a dica de "Sincronizar" (aba Orçamento), onde se lê
+        // de qual orçamento o planejamento puxa.
         <>
-        <div className="flex items-center gap-4">
-            {onBack && (
-                <button
-                    type="button"
-                    onClick={onBack}
-                    title="Voltar para Gestão de Planejamento"
-                    className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
-                >
-                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                </button>
-            )}
-            <div>
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Planejamento Físico-Financeiro</h1>
-                {/* Contexto só-leitura, no lugar do antigo seletor "Orçamento: ›" —
-                    aquele NÃO era escopo: escolher outro orçamento saía desta tela e
-                    abria o orçamento no editor (`handleLoadProject` → 'analytic').
-                    O que o usuário precisa ler aqui é qual planejamento é este e
-                    de qual orçamento ele lê (`settings.linkedProjectId`). */}
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                    {settings.name || 'Planejamento'}
-                    <span className="mx-2 text-gray-300">·</span>
-                    {orcamentoVinculado ? `Orçamento vinculado: ${orcamentoVinculado.name}` : 'Sem orçamento vinculado'}
-                </p>
-            </div>
-        </div>
-
         {/* RIBBON (§19.5) — o mesmo da Planta Inteligente, aqui dentro do card
             de cromo da tela (§19.1): seletor de vista à esquerda, abas de
             comandos, acesso rápido à direita e, em Tabela/Gantt, a barra de
@@ -293,12 +274,30 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 onEscolher={setAbaSalva}
                 ariaLabel="Ferramentas do planejamento"
                 esquerda={
-                    <MenuDeVistas
-                        vista={viewMode}
-                        onEscolher={setViewMode}
-                        grupos={VISTAS_DO_PLANEJAMENTO}
-                        ariaLabel="Vista do planejamento"
-                    />
+                    <>
+                        {/* Mesmo controle do voltar da Planta (`BotaoBarra` em
+                            BlueprintEditor.tsx): só ícone, `title` + `aria-label`. */}
+                        {onBack && (
+                            <button
+                                type="button"
+                                onClick={onBack}
+                                title={`Voltar para Gestão de Planejamento — ${nomeDoPlanejamento}`}
+                                aria-label={`Voltar para Gestão de Planejamento — ${nomeDoPlanejamento}`}
+                                className="shrink-0 rounded-md border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:bg-slate-50"
+                            >
+                                <ArrowLeft className="h-4 w-4" />
+                            </button>
+                        )}
+                        {/* Some da tela, não do app: leitor de tela precisa de um
+                            título de nível 1 para saber onde está. */}
+                        <h1 className="sr-only">Planejamento Físico-Financeiro — {nomeDoPlanejamento}</h1>
+                        <MenuDeVistas
+                            vista={viewMode}
+                            onEscolher={setViewMode}
+                            grupos={VISTAS_DO_PLANEJAMENTO}
+                            ariaLabel="Vista do planejamento"
+                        />
+                    </>
                 }
                 direita={
                     <>
@@ -400,7 +399,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                             rotulo="Sincronizar"
                             contagem={syncDiffCount > 0 ? syncDiffCount : undefined}
                             onClick={onSyncBudget}
-                            ajuda={syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'}
+                            ajuda={`${syncDiffCount > 0 ? `${syncDiffCount} alteração(ões) no orçamento pendentes` : 'Planejamento sincronizado com o orçamento'} · ${rotuloDoOrcamentoVinculado}`}
                         />
                         <BotaoDoRibbon
                             icone={History}

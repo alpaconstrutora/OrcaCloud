@@ -1038,7 +1038,7 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
   (`exigirMembro`, ler a skill `claude-api` antes); sem `ANTHROPIC_API_KEY` responde 503 "IA não
   configurada" e o botão diz o motivo.
 
-## Pendências futuras (fora do MVP e das Fases 2–3, por decisão de 2026-10-07)
+## Pendências futuras (atualizado em 2026-10-10 — resumo no "Status consolidado" da seção Estado)
 
 - **Ligar o assistente de IA (F7)** — decisão do usuário em 2026-10-10 ("Não fazer nada: manter como
   pendência futura"). O código está no ar (Edge Function `doc-gen-ia` + botão "Assistente de IA"); falta só a
@@ -1057,6 +1057,9 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
   que notificações já emitidas passem a abrir.
 - ~~PDF/A e saída DOCX do ofício~~ — feitos na F8 (10/10).
 - ~~Fonte livre (upload de `.ttf`) nos modelos~~ — feita na F9 (10/10).
+- **Pesquisa avançada completa (item 30)** — achado em 10/10 ao consolidar o status: faltam os filtros por período,
+  emitente/empresa, obra, empreendimento, departamento, autor e assinante na lista de ofícios (hoje: busca por
+  número/assunto/destinatário/modelo + filtro Situação). Sem migration — as colunas existem em `doc_gen_documentos`.
 
 ## Riscos e decisões de projeto
 
@@ -1070,6 +1073,42 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 - **Gravação real**: cada frente prova o INSERT/upload no banco, não só leitura em harness.
 
 ## Estado
+
+### Status consolidado — 10/10/2026
+
+**O módulo inteiro está no ar** (MVP + Fases 2 e 3 + os itens que tinham ficado pendentes). Só há uma parte
+desligada por decisão (a IA), um item da proposta entregue só em parte (a pesquisa avançada) e duas pendências
+futuras que dependem de decisão do usuário. No banco, em 10/10:
+0 modelos, 0 ofícios, 0 blocos, 0 fontes e contador de numeração zerado — os testes foram apagados e o
+módulo ainda não teve uso real.
+
+| Frente | O que entrega | Commit | Situação |
+|---|---|---|---|
+| F1 | Modelos: editor (TipTap), variáveis do sistema, layout, prévia em PDF | `28e80601` · `e69e6535` | ✅ no ar |
+| F2 | Novo ofício: destinatário (Meus Fornecedores ou manual), campos pendentes, redação, anexos, signatários, validação | `ebe7fe74` · `626af1ee` | ✅ no ar |
+| F3 | Emissão: número pela Nomenclatura (`OF-…/ano`), PDF oficial, hash SHA-256, arquivo e congelamento no GED | `75238af6` · `10f1ae41` | ✅ no ar |
+| F4 | Tramitação: aprovação, assinatura eletrônica interna, envio/recebimento/resposta, prazo com tarefa, vínculos, ofícios recebidos | `904637fd` · `994db947` | ✅ no ar |
+| F5 | E-mail com o PDF oficial (Resend), WhatsApp, QR Code com validação pública, anexos dentro do PDF | `62cb9b7f` | ✅ no ar |
+| F6 | Motor avançado: condições, tabelas dinâmicas, campos calculados, biblioteca de blocos | `5a8d8cc0` | ✅ no ar |
+| F7 | Assistente de IA: redigir, revisar, responder ofício recebido | `dc06d051` | ⏸ código no ar, **desligado por decisão** (sem `ANTHROPIC_API_KEY`) |
+| F8 | Signatário (cargo, registro, imagem da assinatura) provado com conta de admin; PDF/A-2b em todo PDF; saída em Word | `a8ca2567` | ✅ no ar |
+| F9 | Fonte livre: `.ttf`/`.otf` da organização, embutidas no PDF/A e com o nome no Word | `c12c8909` | ✅ no ar |
+
+**Pendências futuras** (detalhe em "Pendências futuras" acima; nenhuma bloqueia o uso):
+
+1. **Ligar o assistente de IA** — decisão de 10/10: manter desligado. Falta só a chave da API do Claude.
+2. **Assinatura eletrônica externa** (ZapSign / ICP-Brasil) — depende de publicar `sign-contract`, adiada desde 26/07.
+3. **Backfill de links antigos de notificação do GED** — só se o usuário quiser que as notificações já emitidas abram.
+4. **Pesquisa avançada completa (item 30 da proposta)** — achado ao consolidar este status: a lista de ofícios tem a
+   busca por número, assunto, destinatário e modelo e o filtro de Situação; **faltam** os filtros por período,
+   emitente/empresa, obra, empreendimento, departamento, autor e assinante. O plano da F3 dizia só "filtros" e nenhuma
+   frente registrou o corte. É trabalho de tela + service (as colunas já existem em `doc_gen_documentos`), sem migration.
+
+Conferência contra os 30 itens do pedido original: 1–28 entregues; **29 (IA)** com código no ar e desligado por
+decisão; **30 (pesquisa avançada)** parcial, como acima. No item 9/18, a assinatura eletrônica interna (registro,
+data e hash) está no ar; a com certificado/ZapSign é a pendência 2.
+
+### Histórico por frente
 
 - [x] F1 · 1 — plano registrado nesta frente (`oficios-f1-modelos`, base `e999e3b9`);
       revisado em 07/10 ~21:10 com as 7 respostas do usuário à lista de lacunas
@@ -1409,6 +1448,7 @@ pendências futuras na seção própria.
       Storage. 0 erros de JS e de rede
 - [x] F8/F9 · limpeza — a organização descartável e tudo dela (2 ofícios emitidos, PDFs congelados do GED, pastas,
       assinatura, membros, contador) apagados; 0 arquivos restantes no Storage; travas religadas
+- [x] F9 · publicada em 10/10 (`c12c8909`): ci verde, domínio conferido ("Fontes da organização" no bundle), frente fechada
 
 
 ## Verificação

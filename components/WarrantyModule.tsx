@@ -21,7 +21,7 @@ import { FilterPopover } from './ui/FilterPopover';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import UnitSelect from './UnitSelect';
 import {
-    applyClientChoice, applyUnitChoice, entregaDoChamado, markManual, resolveWarrantyExpiry, unitsOfClient,
+    applyClientChoice, applyDevelopmentChoice, applyUnitChoice, entregaDoChamado, obrasDoEmpreendimento, markManual, resolveWarrantyExpiry, unitsOfClient,
     ENTREGA_FONTE_LABELS,
     type AutoFilled, type AutofillResult, type ClaimLinkField, type ClaimLinkFields,
 } from '../utils/warrantyAutofill';
@@ -769,7 +769,12 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
             empreendimentoService.mapObrasToEmpreendimentos(orgId).catch(e => { console.error('[WarrantyModule] mapa obra→empreendimento', e); return {}; }),
         ]).then(([emps, cls, mapa]) => {
             if (cancelled) return;
-            setDevelopments(emps.map(e => ({ id: e.id, name: e.name, project_id: e.project_id ?? null })));
+            // Ordenado por nome (pedido de 2026-10-10): o serviço devolve na ordem
+            // de cadastro, e o select lia "014, 017, 016, 012…". `numeric` põe
+            // "007" antes de "010".
+            setDevelopments(emps
+                .map(e => ({ id: e.id, name: e.name, project_id: e.project_id ?? null }))
+                .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true })));
             // Documento/e-mail/cidade alimentam a busca e as colunas do drawer
             // de seleção (`ClientSelect`); o resto do cadastro fica de fora.
             setClients((cls as ClientOption[]).map(c => ({
@@ -927,6 +932,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                 organizationId={selected.organization_id}
                 projects={projects}
                 developments={developments}
+                obraToDevelopment={obraToDevelopment}
                 clients={clients}
                 systems={systems}
                 taxonomyLabels={taxonomyLabels}
@@ -1153,6 +1159,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                     organizationId={createOrgId}
                     projects={projects}
                     developments={developments}
+                    obraToDevelopment={obraToDevelopment}
                     clients={clients}
                     systems={systems}
                     onClose={() => setShowModal(false)}
@@ -1198,6 +1205,7 @@ interface ClaimAutofill {
     hint: string | null;
     onClient: (clientId: string) => void;
     onUnit: (unit: WarrantyUnitOption | null) => void;
+    onDevelopment: (developmentId: string, obrasDoEmpreendimento: string[]) => void;
     onManual: (field: ClaimLinkField, value: string) => void;
     reset: () => void;
 }
@@ -1247,6 +1255,8 @@ function useClaimAutofill<F extends ClaimLinkFields>(
         hint,
         onClient,
         onUnit: unit => commit(applyUnitChoice(formRef.current, autoRef.current, unit)),
+        onDevelopment: (developmentId, obras) =>
+            commit(applyDevelopmentChoice(formRef.current, autoRef.current, developmentId, obras, dir)),
         onManual: (field, value) => {
             const next = { ...formRef.current, [field]: value };
             formRef.current = next;
@@ -1268,7 +1278,7 @@ const AutoNote: React.FC<{ show: boolean }> = ({ show }) =>
  * deduz — continuam editáveis). Compartilhado por abrir e editar.
  */
 function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
-    form, autofill, dir, clients, developments, projects, clientRequired, clientNote,
+    form, autofill, dir, clients, developments, projects, obraToDevelopment, clientRequired, clientNote,
 }: {
     form: F;
     autofill: ClaimAutofill;
@@ -1276,6 +1286,7 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
     clients: ClientOption[];
     developments: WarrantyCatalogOption[];
     projects: ProjectOption[];
+    obraToDevelopment: ObraToDevelopment;
     clientRequired: boolean;
     clientNote?: React.ReactNode;
 }) {
@@ -1286,6 +1297,17 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
     const unidadesDoCliente = React.useMemo(
         () => unitsOfClient(dir, form.client_id).map(u => u.unit_id), [dir, form.client_id]);
     const nomeDoCliente = clients.find(c => c.id === form.client_id)?.name;
+    // Obra mostra só as obras do empreendimento escolhido (pedido de
+    // 2026-10-10). A obra já gravada que não está no recorte (chamado antigo)
+    // continua visível para o select não mentir sobre o valor atual.
+    const obrasDoEmp = React.useMemo(
+        () => obrasDoEmpreendimento(projects, obraToDevelopment, form.development_id),
+        [projects, obraToDevelopment, form.development_id]);
+    const obraAtualFora = form.project_id && !obrasDoEmp.some(p => p.id === form.project_id)
+        ? projects.find(p => p.id === form.project_id) : undefined;
+    const obraOptions = obraAtualFora ? [...obrasDoEmp, obraAtualFora] : obrasDoEmp;
+    const escolherEmpreendimento = (id: string) => autofill.onDevelopment(
+        id, obrasDoEmpreendimento(projects, obraToDevelopment, id).map(p => p.id));
 
     return (
         <>
@@ -1341,7 +1363,7 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
                     label="Empreendimento"
                     icon={Landmark}
                     value={form.development_id}
-                    onChange={v => autofill.onManual('development_id', v)}
+                    onChange={escolherEmpreendimento}
                     options={developments}
                     placeholder="Sem empreendimento"
                     emptyHint="Nenhum empreendimento cadastrado nesta organização."
@@ -1354,8 +1376,11 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
                     icon={Building2}
                     value={form.project_id}
                     onChange={v => autofill.onManual('project_id', v)}
-                    options={projects}
+                    options={obraOptions}
                     placeholder="Sem obra vinculada"
+                    emptyHint={form.development_id
+                        ? 'Nenhuma obra vinculada a este empreendimento — vincule em Incorporação › Empreendimento.'
+                        : undefined}
                 />
                 <AutoNote show={autofill.auto.has('project_id')} />
             </div>
@@ -1365,10 +1390,14 @@ function ClaimLinkFieldsBlock<F extends ClaimLinkFields>({
 
 // ── Modal: Abrir Chamado ──────────────────────────────────────────────────────
 
+/** obra → empreendimento (`mapObrasToEmpreendimentos`) — recorta a lista de Obra. */
+type ObraToDevelopment = Record<string, { id: string; name: string }>;
+
 interface WarrantyClaimModalProps {
     organizationId: string;
     projects?: ProjectOption[];
     developments?: WarrantyCatalogOption[];
+    obraToDevelopment?: ObraToDevelopment;
     clients?: ClientOption[];
     systems?: TaxonomySystem[];
     initialClaimId?: string;
@@ -1418,7 +1447,7 @@ function LinkSelect({ label, icon: Icon, value, onChange, options, placeholder, 
 }
 
 export function WarrantyClaimModal({
-    organizationId, projects = [], developments = [], clients = [], systems: systemsProp, onClose, onSaved,
+    organizationId, projects = [], developments = [], obraToDevelopment = {}, clients = [], systems: systemsProp, onClose, onSaved,
 }: WarrantyClaimModalProps) {
     const { showToast } = useToast();
     const [terms, setTerms] = React.useState<import('../types/warranty').WarrantyTerm[]>([]);
@@ -1553,6 +1582,7 @@ export function WarrantyClaimModal({
                             clients={clients}
                             developments={developments}
                             projects={projects}
+                            obraToDevelopment={obraToDevelopment}
                             clientRequired
                         />
                         <div className="col-span-2">
@@ -1703,6 +1733,7 @@ interface WarrantyClaimDetailProps {
     organizationId: string;
     projects?: ProjectOption[];
     developments?: WarrantyCatalogOption[];
+    obraToDevelopment?: ObraToDevelopment;
     clients?: ClientOption[];
     systems?: TaxonomySystem[];
     taxonomyLabels?: TaxonomyLabels;
@@ -1724,7 +1755,7 @@ interface WarrantyClaimDetailProps {
 }
 
 export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
-    claim, organizationId, projects = [], developments = [], clients = [],
+    claim, organizationId, projects = [], developments = [], obraToDevelopment = {}, clients = [],
     systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS, initialEditMode = false,
     developmentLabel, onClose, onRefresh, onDeleted,
 }) => {
@@ -2060,6 +2091,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     clients={clients}
                                     developments={developments}
                                     projects={projects}
+                                    obraToDevelopment={obraToDevelopment}
                                     clientRequired={clientRequired}
                                     clientNote={!editForm.client_id && !clientRequired && (
                                         // Chamado antigo sem vínculo: diz de quem se trata

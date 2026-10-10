@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    applyClientChoice, applyUnitChoice, clientToFill, entregaDoChamado, markManual,
+    applyClientChoice, applyDevelopmentChoice, applyUnitChoice, obrasDoEmpreendimento, clientToFill, entregaDoChamado, markManual,
     resolveWarrantyExpiry, unitLabel, unitsOfClient, type ClaimLinkFields,
 } from '../utils/warrantyAutofill';
 import type { WarrantyUnitOption, WarrantyUnitClient } from '../types/warranty';
@@ -141,5 +141,47 @@ describe('vencimento a partir da entrega', () => {
         expect(entregaDoChamado({ development_id: 'emp1' }, dir)).toEqual({ data: '2019-06-01', fonte: 'habite_se' });
         expect(entregaDoChamado({ development_id: 'emp1' }, [dir[0]])).toBeNull();
         expect(entregaDoChamado({}, dir)).toBeNull();
+    });
+});
+
+describe('empreendimento recorta a obra (pedido seguinte, 2026-10-10)', () => {
+    const MAPA = { obra1: { id: 'emp1' }, obra1b: { id: 'emp1' }, obra2: { id: 'emp2' } };
+    const OBRAS = [{ id: 'obra1' }, { id: 'obra1b' }, { id: 'obra2' }, { id: 'solta' }];
+
+    it('lista só as obras do empreendimento; sem empreendimento, todas', () => {
+        expect(obrasDoEmpreendimento(OBRAS, MAPA, 'emp1').map(o => o.id)).toEqual(['obra1', 'obra1b']);
+        expect(obrasDoEmpreendimento(OBRAS, MAPA, 'emp9')).toEqual([]);
+        expect(obrasDoEmpreendimento(OBRAS, MAPA, '')).toHaveLength(4);
+    });
+
+    it('trocar o empreendimento tira a obra que não é dele, mesmo escolhida à mão', () => {
+        const r = applyDevelopmentChoice({ ...vazio, project_id: 'obra2' }, nada, 'emp1', ['obra1', 'obra1b']);
+        expect(r.form.development_id).toBe('emp1');
+        expect(r.form.project_id).toBe('');
+    });
+
+    it('mantém a obra que é do empreendimento', () => {
+        const r = applyDevelopmentChoice({ ...vazio, project_id: 'obra1b' }, nada, 'emp1', ['obra1', 'obra1b']);
+        expect(r.form.project_id).toBe('obra1b');
+    });
+
+    it('com uma obra só, preenche a obra', () => {
+        const r = applyDevelopmentChoice(vazio, nada, 'emp2', ['obra2']);
+        expect(r.form.project_id).toBe('obra2');
+        expect(r.auto.has('project_id')).toBe(true);
+    });
+
+    it('tira a unidade de outro empreendimento', () => {
+        const a = applyUnitChoice(vazio, nada, DIR[0]);                // emp1, obra1
+        const r = applyDevelopmentChoice(a.form, a.auto, 'emp2', ['obra2'], DIR);
+        expect(r.form.unit_id).toBe('');
+        expect(r.form.unidade_ref).toBe('');
+        expect(r.form.project_id).toBe('obra2');
+    });
+
+    it('limpar o empreendimento limpa só a obra que ele tinha preenchido', () => {
+        const a = applyDevelopmentChoice(vazio, nada, 'emp2', ['obra2']);
+        expect(applyDevelopmentChoice(a.form, a.auto, '', []).form.project_id).toBe('');
+        expect(applyDevelopmentChoice({ ...vazio, project_id: 'solta' }, nada, '', []).form.project_id).toBe('solta');
     });
 });

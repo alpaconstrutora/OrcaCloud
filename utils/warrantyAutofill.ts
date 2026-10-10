@@ -207,6 +207,53 @@ export function applyUnitChoice<F extends ClaimLinkFields>(
     return { form: r.form, auto: a, hint: r.hint };
 }
 
+/**
+ * O usuário escolheu (ou limpou) o empreendimento à mão.
+ *
+ * Pedido de 2026-10-10: a Obra mostra só as obras vinculadas ao empreendimento
+ * escolhido. Então os dois campos não podem se contradizer: a obra que não é
+ * deste empreendimento sai, mesmo escolhida à mão — e a unidade de outro
+ * empreendimento também. Com UMA obra vinculada, ela é preenchida (regra
+ * geral: o app já sabe).
+ */
+export function applyDevelopmentChoice<F extends ClaimLinkFields>(
+    form: F,
+    auto: AutoFilled,
+    developmentId: string,
+    obrasDoEmpreendimento: readonly string[],
+    dir: readonly WarrantyUnitOption[] = [],
+): AutofillResult<F> {
+    const a = new Set(auto);
+    a.delete('development_id');
+    let next: F = { ...form, development_id: developmentId };
+    if (developmentId) {
+        if (next.project_id && !obrasDoEmpreendimento.includes(next.project_id)) {
+            next = { ...next, project_id: '' };
+            a.delete('project_id');
+        }
+        const unidade = dir.find(u => u.unit_id === next.unit_id);
+        if (unidade && unidade.empreendimento_id !== developmentId) {
+            next = { ...next, unit_id: '', unidade_ref: '' };
+            a.delete('unit_id');
+            a.delete('unidade_ref');
+        }
+        if (obrasDoEmpreendimento.length === 1) next = fill(next, a, 'project_id', obrasDoEmpreendimento[0]);
+    } else {
+        next = clearAuto(next, a, ['project_id']);
+    }
+    return { form: next, auto: a, hint: null };
+}
+
+/** Obras que a lista de Obra oferece: só as do empreendimento escolhido (todas, sem ele). */
+export function obrasDoEmpreendimento<P extends { id: string }>(
+    projects: readonly P[],
+    obraToDevelopment: Readonly<Record<string, { id: string }>>,
+    developmentId: string,
+): P[] {
+    if (!developmentId) return [...projects];
+    return projects.filter(p => obraToDevelopment[p.id]?.id === developmentId);
+}
+
 // ── Vencimento da garantia ───────────────────────────────────────────────────
 
 /**

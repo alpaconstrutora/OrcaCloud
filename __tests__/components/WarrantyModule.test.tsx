@@ -54,7 +54,8 @@ vi.mock('../../services/clientEmpreendimentoService', () => ({
 
 vi.mock('../../services/empreendimentoService', () => ({
     empreendimentoService: {
-        list: vi.fn(async () => [{ id: 'emp1', name: 'Edifício Ferraz' }]),
+        // Fora de ordem de propósito: a tela ordena por nome (pedido de 2026-10-10).
+        list: vi.fn(async () => [{ id: 'emp1', name: 'Edifício Ferraz' }, { id: 'emp2', name: 'Coronel Lambert 316', project_id: 'obraB' }]),
         mapObrasToEmpreendimentos: vi.fn(async () => ({
             obraB: { id: 'emp2', name: 'Coronel Lambert 316' },
         })),
@@ -367,6 +368,25 @@ describe('Pós-Obra & Garantia · escolher o cliente preenche o resto (2026-10-1
         const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
         expect(selects.some(s => s.value === 'emp1')).toBe(true);
         expect(selects.some(s => s.value === 'obraA')).toBe(false);   // obraB era escolha do chamado — não se sobrescreve
+        expect(screen.getAllByText('Preenchido automaticamente').length).toBeGreaterThan(0);
+    });
+});
+
+describe('Pós-Obra & Garantia · Empreendimento ordenado e Obra recortada (2026-10-10)', () => {
+    it('empreendimentos em ordem de nome; escolher um mostra só as obras dele e preenche a única', async () => {
+        const user = userEvent.setup();
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
+        await user.click(screen.getByText('Impermeabilização da laje'));
+        await user.click(await screen.findByTitle('Editar chamado'));
+
+        const [selEmp, selObra] = screen.getAllByRole('combobox') as HTMLSelectElement[];
+        expect(Array.from(selEmp.options).map(o => o.text))
+            .toEqual(['Sem empreendimento', 'Coronel Lambert 316', 'Edifício Ferraz']);
+
+        await user.selectOptions(selEmp, 'emp2');
+        await waitFor(() => expect(selObra.value).toBe('obraB'));
+        expect(Array.from(selObra.options).map(o => o.text)).toEqual(['Sem obra vinculada', 'Residencial Beta']);
         expect(screen.getAllByText('Preenchido automaticamente').length).toBeGreaterThan(0);
     });
 });

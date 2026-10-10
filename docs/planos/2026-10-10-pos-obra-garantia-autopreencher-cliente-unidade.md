@@ -14,6 +14,15 @@ Sessão de 2026-10-10, ~07:40. Mensagem do usuário, transcrita literalmente:
 | Como o chamado guarda a unidade? | **Vínculo real**: `warranty_claims.unit_id` + `p_unit_id` na RPC; o texto `unidade_ref` fica como instantâneo |
 | Corrigir o vencimento (hoje = HOJE + prazo)? | **Sim, junto**: entrega da unidade + prazo, com a fonte da data exibida |
 
+### Pedido seguinte — 2026-10-10, mesma sessão (com dois prints do drawer)
+
+> No drawer Abrir chamado de garantia (veja prints):
+> 1. ordenar os itens do  dropdown empreendimento
+> 2. vincular o dropdown obra ao empreendimento, ou seja, ao selecionar determinado empreendimento, traga somente as obras vinculadas ao empreendimento selecionar
+
+(Os prints eram da versão anterior, ainda servida quando foram tirados; os dois pedidos
+valem para a nova — ver Item 8.)
+
 ---
 
 ## Contexto
@@ -112,6 +121,27 @@ pelas unidades do cliente escolhido com "Ver todas as unidades".
 ## Item 7 — Memória ✅
 
 Feedback "se o app já tem a informação, não obrigar o usuário a preencher".
+
+## Item 8 — Empreendimento ordenado; Obra recortada pelo empreendimento (pedido seguinte) ✅
+
+- `WarrantyModule`: catálogo de empreendimentos ordenado por nome (`localeCompare` pt-BR,
+  numérico — "007" antes de "010").
+- Obra mostra só as obras do empreendimento escolhido, pelo mesmo mapa que a tela já carrega
+  (`mapObrasToEmpreendimentos`: `empreendimentos.project_id` + `empreendimento_towers.project_id`).
+  Sem empreendimento → todas. Empreendimento sem obra vinculada → só "Sem obra vinculada", com
+  o aviso de onde vincular.
+- `applyDevelopmentChoice` (puro): trocar o empreendimento tira a obra que não é dele e a
+  unidade que não é dele; com UMA obra vinculada, preenche a obra (regra geral do pedido 1).
+- **Pronto quando:** testes da regra verdes; componente mostra só as obras do empreendimento;
+  navegador confere ordenação e recorte; publicado e conferido.
+- Conferido em 10/10: `warrantyAutofill.test.ts` 23/23; `WarrantyModule.test.tsx` 18/18 (caso
+  novo: ordem dos empreendimentos e Obra só com "Residencial Beta" ao escolher emp2); tsc 0;
+  check-ui-standard 0. Navegador (Alpa, sem salvar): 14 empreendimentos em ordem 004→018;
+  "007 - Bella Vista" → só a obra "Bella Vista" (de 15); "012 - Edifício Ferraz" → nenhuma, com o
+  aviso; sem empreendimento → as 15 de volta; 0 erro de console/HTTP.
+- ⚠️ Observado: as obras "Bella Vista - Assistência Técnica" e "Condomínio - Bella Vista" NÃO
+  são vinculadas ao empreendimento 007 no cadastro (nem como obra principal nem de torre), então
+  não aparecem no recorte. Se devem aparecer, o vínculo é em Incorporação › Empreendimento.
 
 ---
 

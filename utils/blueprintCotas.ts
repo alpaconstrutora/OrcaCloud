@@ -33,6 +33,7 @@
 
 import type { BlueprintModel, Boundary, Level, Point, Space, Wall } from './blueprintKernel';
 import { anelDoTerreno, faixasRestritas, medirTerreno } from './blueprintTerreno';
+import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
   areCollinear,
   contornoExternoDoNivel,
@@ -131,6 +132,44 @@ export interface CadeiasDoLado {
    * lado (07/10/2026). O contorno corre pelo EIXO, mas a linha de chamada nasce na FACE — senão ela entra na parede.
    */
   faceExternaMm: number;
+  /**
+   * C12 (10/10/2026): até onde as PEÇAS do lado de fora (condensadora, reserva, bomba de recalque…)
+   * avançam, medido do eixo do lado para fora, em mm; 0 quando não há. A cadeia de cotas daquele lado
+   * vai além disto — antes passava por cima da condensadora encostada na fachada.
+   */
+  pecasForaMm: number;
+}
+
+/** Até quantos mm da fachada uma peça de fora ainda empurra a cadeia de cotas. */
+const ALCANCE_DAS_PECAS_DE_FORA_MM = 2500;
+
+/**
+ * C12: o avanço das peças de fora do lado — terminais com ficha de medidas (equipamentos) e
+ * componentes —, do eixo do lado até a borda mais afastada, pela meia diagonal da peça.
+ */
+export function pecasForaDoLado(model: BlueprintModel, level: Level, lado: LadoDoContorno): number {
+  const { ux, uy, nx, ny } = referencialDoLado(lado);
+  const comp = Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y);
+  const pecas: { p: Point; larg: number; prof: number }[] = [];
+  for (const t of model.terminais ?? []) {
+    if (t.levelId !== level.id || !t.tipoHidraulico) continue;
+    const m = FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico]?.medidasMm;
+    const larg = t.larguraMm ?? m?.larguraMm ?? 0;
+    const prof = t.profundidadeMm ?? m?.profundidadeMm ?? 0;
+    if (larg > 0 && prof > 0) pecas.push({ p: t.at, larg, prof });
+  }
+  for (const c of model.componentes ?? []) if (c.levelId === level.id) pecas.push({ p: c.at, larg: c.larguraMm, prof: c.profundidadeMm });
+  let alcance = 0;
+  for (const { p, larg, prof } of pecas) {
+    const r = Math.hypot(larg, prof) / 2;
+    const dx = p.x - lado.a.x;
+    const dy = p.y - lado.a.y;
+    const ao = dx * ux + dy * uy;
+    const fora = dx * nx + dy * ny;
+    if (ao < -r || ao > comp + r || fora <= 0 || fora - r > ALCANCE_DAS_PECAS_DE_FORA_MM) continue;
+    alcance = Math.max(alcance, fora + r);
+  }
+  return Math.round(alcance);
 }
 
 /** Funde arestas colineares consecutivas do anel em lados. */
@@ -340,7 +379,7 @@ export function cadeiasDoLado(
     faceExternaMm = Math.max(faceExternaMm, w.thicknessMm / 2);
   }
 
-  return { lado, comprimentoMm, total, parcial, internas, aberturas, faceExternaMm };
+  return { lado, comprimentoMm, total, parcial, internas, aberturas, faceExternaMm, pecasForaMm: pecasForaDoLado(model, level, lado) };
 }
 
 /** Todas as cadeias de todos os lados do nível. */

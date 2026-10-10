@@ -49,7 +49,7 @@ function linhasDasParcelas(a: CargaDoAmbiente): string[][] {
   l.push([`Equipamentos${marca(a.equipamentos)}`, w(a.equipamentos), wl(a.equipamentos), a.equipamentos.memoria]);
   if (a.fonteExtra.sensivelW || a.fonteExtra.latenteW) l.push(['Fonte extra', w(a.fonteExtra), wl(a.fonteExtra), a.fonteExtra.memoria]);
   l.push([`Infiltração${marca(a.infiltracao)}`, w(a.infiltracao), wl(a.infiltracao), a.infiltracao.memoria]);
-  l.push(['TOTAL', n0(a.sensivelW), n0(a.latenteW), `${n0(a.totalW)} W = ${n0(a.totalBtuH)} BTU/h · ${a.wPorM2} W/m²`]);
+  l.push(['TOTAL', n0(a.sensivelW), n0(a.latenteW), `${n0(a.totalW)} W = ${n0(a.totalBtuH)} BTU/h · ${a.wPorM2} W/m² de área útil (${n2(a.areaUtilM2)} m²)`]);
   return l;
 }
 

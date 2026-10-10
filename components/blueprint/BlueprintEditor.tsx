@@ -265,7 +265,7 @@ import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas } from
 import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
 import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, ROTULO_DA_LINHA_VRF } from '../../utils/blueprintVrf';
 import PainelVrf from './PainelVrf';
-import { analisarRedesDeAr, comandosDeDimensionamento, conferenciaDaRedeDeAr, planejarRedeDeAr, ROTULO_DA_REDE_DE_AR, vazoesDosTerminais, ventilacaoDoNivel } from '../../utils/blueprintRedeDeAr';
+import { analisarRedesDeAr, comandosDeConverterTerminaisAntigos, comandosDeDimensionamento, terminaisDeArAntigos, conferenciaDaRedeDeAr, planejarRedeDeAr, ROTULO_DA_REDE_DE_AR, vazoesDosTerminais, ventilacaoDoNivel } from '../../utils/blueprintRedeDeAr';
 import PainelRedeDeAr from './PainelRedeDeAr';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
@@ -12216,6 +12216,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 disciplinaDeRede={disciplinaDeRede}
                 tipoDePontoEletrico={tipoDePontoEletrico}
                 tipoDeInterruptor={tipoDeInterruptor}
+                // D2 (10/10/2026): sem ele, a peça tipada escolhida neste menu (evaporadora, difusor…) nunca aparecia como a ativa.
+                tipoDePontoHidraulico={tipoDePontoHidraulico}
                 familia="MECANICA"
                 rotulo="Mecânica"
                 onEscolher={escolherComponente}
@@ -16113,6 +16115,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 }}
                 onAceitar={(ids) => editor.runBatch(ids.map((trechoId) => ({ type: 'SetTrechoProps', trechoId, sugerido: false }) as Command))}
                 onSelecionar={selecionar}
+                antigos={terminaisDeArAntigos(editor.model).length}
+                onConverterAntigos={() => {
+                  const cmds = comandosDeConverterTerminaisAntigos(editor.model);
+                  if (cmds.length) editor.runBatch(cmds);
+                }}
               />
             </div>
           )}

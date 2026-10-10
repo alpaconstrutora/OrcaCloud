@@ -3389,6 +3389,9 @@ function tipoDeConexaoManual(tipoHidraulico) {
       return null;
   }
 }
+function conexaoViraPeca(c) {
+  return !(c.disciplina === "FRIGORIGENA" && (c.tipo === "JOELHO_90" || c.tipo === "JOELHO_45"));
+}
 var CAIXAS_DE_ESGOTO = {
   CAIXA_INSPECAO: { cotaE: "FUNDO", alturaPadraoMm: 600, larguraPadraoMm: 600 },
   CAIXA_GORDURA: { cotaE: "FUNDO", alturaPadraoMm: 500, larguraPadraoMm: 400 },
@@ -5601,7 +5604,7 @@ var COBERTURA_IFC = [
   // ⚠️ E10.1 do roadmap de climatização (07/10/2026): esta linha dizia "NÃO CONTÉM linha frigorígena, dreno,
   // duto retangular, conexões de duto, terminal de ar classificado" — falsa desde a E3/E7. Corrigida no
   // mesmo commit que passou a emitir as conexões de duto e o Pset da climatização (e o teste que a fixava).
-  "CONT\xC9M a climatiza\xE7\xE3o desenhada: o DUTO como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING. \u2014 redondo (IfcCircleProfileDef) ou RETANGULAR (IfcRectangleProfileDef, a largura deitada) \u2014, e as conex\xF5es de duto como IfcDuctFitting; a LINHA FRIGOR\xCDGENA como IfcPipeSegment no sistema .REFRIGERATION. com DOIS s\xF3lidos lado a lado (l\xEDquido e suc\xE7\xE3o) e o DRENO como IfcPipeSegment no sistema .DRAINAGE. \u2014 o s\xF3lido \xE9 o ENVELOPE com o isolamento declarado (\xE9 o que ocupa lugar), e os di\xE2metros reais e a espessura v\xE3o no Pset; evaporadora e condensadora como IfcUnitaryEquipment (.SPLITSYSTEM., .AIRCONDITIONINGUNIT. na do VRF), derivador do VRF como IfcPipeFitting .JUNCTION., exaustor como IfcFan, bomba de dreno como IfcPump, ponto de dreno como IfcWasteTerminal, terminal de ar como IfcAirTerminal (.DIFFUSER., .GRILLE., .REGISTER., .LOUVRE.), damper como IfcDamper e plenum/caixa como IfcDuctFitting \u2014 o ObjectType leva o tipo do sistema (\xE9 por ele que a importa\xE7\xE3o reconhece a pe\xE7a). Pset_OpuraClimatizacao separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista informou (capacidade, vaz\xE3o, a condensadora do sistema; no trecho, suc\xE7\xE3o, isolamento e altura do duto); _Derivado \xE9 a numera\xE7\xE3o do desenho (EV-1, CD-2, DF-3); _Calculada \xE9 a carga do ambiente e o atende/n\xE3o atende da evaporadora e a vaz\xE3o derivada do terminal de ar, com as premissas do estudo \u2014 s\xF3 quando o arquivo \xE9 gerado com elas. A reserva de lugar antiga (condensadora/evaporadora/exaustor/casa de m\xE1quinas como componente) continua saindo como antes. N\xC3O CONT\xC9M g\xE1s nem a mem\xF3ria da carga t\xE9rmica (est\xE3o no memorial).",
+  "CONT\xC9M a climatiza\xE7\xE3o desenhada: o DUTO como IfcDuctSegment .RIGIDSEGMENT. no sistema .AIRCONDITIONING. (a rede S\xD3 de exaust\xE3o \u2014 exaustor e nenhum insuflamento \u2014 em sistema pr\xF3prio .VENTILATION.) \u2014 redondo (IfcCircleProfileDef) ou RETANGULAR (IfcRectangleProfileDef, a largura deitada) \u2014, e as conex\xF5es de duto como IfcDuctFitting; a LINHA FRIGOR\xCDGENA como IfcPipeSegment no sistema .REFRIGERATION. com DOIS s\xF3lidos lado a lado (l\xEDquido e suc\xE7\xE3o) e o DRENO como IfcPipeSegment no sistema .DRAINAGE. \u2014 o s\xF3lido \xE9 o ENVELOPE com o isolamento declarado (\xE9 o que ocupa lugar), e os di\xE2metros reais e a espessura v\xE3o no Pset; o isolamento declarado tamb\xE9m sai como IfcCovering .WRAPPING. ligado ao tubo (IfcRelCoversBldgElements, a espessura em Pset_OpuraIsolamento, sem geometria pr\xF3pria \u2014 o envelope j\xE1 a ocupa); evaporadora e condensadora como IfcUnitaryEquipment (.SPLITSYSTEM., .AIRCONDITIONINGUNIT. na do VRF), derivador do VRF como IfcPipeFitting .JUNCTION., exaustor como IfcFan, bomba de dreno como IfcPump, ponto de dreno como IfcWasteTerminal, terminal de ar como IfcAirTerminal (.DIFFUSER., .GRILLE., .REGISTER., .LOUVRE.), damper como IfcDamper e plenum/caixa como IfcDuctFitting \u2014 o ObjectType leva o tipo do sistema (\xE9 por ele que a importa\xE7\xE3o reconhece a pe\xE7a). Pset_OpuraClimatizacao separa pelo SUFIXO: _Declarado/_Declarada \xE9 o que o projetista informou (capacidade, vaz\xE3o, a condensadora do sistema; no trecho, suc\xE7\xE3o, isolamento e altura do duto); _Derivado \xE9 a numera\xE7\xE3o do desenho (EV-1, CD-2, DF-3); _Calculada \xE9 a carga do ambiente e o atende/n\xE3o atende da evaporadora e a vaz\xE3o derivada do terminal de ar, com as premissas do estudo \u2014 s\xF3 quando o arquivo \xE9 gerado com elas. A reserva de lugar antiga (condensadora/evaporadora/exaustor/casa de m\xE1quinas como componente) continua saindo como antes. N\xC3O CONT\xC9M g\xE1s nem a mem\xF3ria da carga t\xE9rmica (est\xE3o no memorial).",
   "N\xC3O CONT\xC9M ARMADURA. Nenhuma barra de a\xE7o, estribo ou cobrimento \u2014 a estrutura aqui \xE9 s\xF3 a forma do concreto.",
   'CONT\xC9M tipos de porta e janela: um IfcDoorType/IfcWindowType por ASSINATURA (kind, largura, altura, nome de projeto e item de cat\xE1logo), com IfcRelDefinesByType ligando as inst\xE2ncias \u2014 inclusive as SEM nome, agrupadas por medida, como o Revit pensa uma fam\xEDlia. O nome do tipo \xE9 o de projeto ("P1"); o item de cat\xE1logo vai em Pset_OpuraPlanta.ItemCode do tipo.',
   // ⚠️ Esta linha dizia também "nem classificação (IfcClassificationReference)",
@@ -5728,8 +5731,10 @@ function gerarIfc(model, o) {
   const qAmbiente = new Map(quant.ambientes.map((q) => [q.spaceId, q]));
   const qAgua = new Map(quant.telhados.map((q) => [q.aguaId, q]));
   const qTrecho = new Map(quant.trechos.map((q) => [q.trechoId, q]));
-  const conexoesIfc = quant.conexoes.filter((c) => c.origem === "DERIVADA" && (c.ramais?.length ?? 0) > 0 && !(c.disciplina === "FRIGORIGENA" && (c.tipo === "JOELHO_90" || c.tipo === "JOELHO_45")));
+  const conexoesIfc = quant.conexoes.filter((c) => c.origem === "DERIVADA" && (c.ramais?.length ?? 0) > 0 && conexaoViraPeca(c));
   const nivelDoTrecho = new Map((model.trechos ?? []).map((t) => [t.id, t.levelId]));
+  const daExaustao = idsDaRedeDeExaustao(model);
+  const sistemaDe = (id, disciplina) => daExaustao.has(id) ? "MECANICA_VENTILACAO" : disciplina;
   const porSistema = /* @__PURE__ */ new Map();
   const porQuadro = /* @__PURE__ */ new Map();
   const porCircuito = /* @__PURE__ */ new Map();
@@ -5950,7 +5955,8 @@ function gerarIfc(model, o) {
     for (const t of (model.trechos ?? []).filter((x) => x.levelId === nivel.id)) {
       const produto = emitirTrecho(t, ctx, localNivel, nivel.defaultHeightMm);
       produtos.push(produto);
-      porSistema.set(t.disciplina, [...porSistema.get(t.disciplina) ?? [], produto]);
+      const sistemaDoTrecho = sistemaDe(t.id, t.disciplina);
+      porSistema.set(sistemaDoTrecho, [...porSistema.get(sistemaDoTrecho) ?? [], produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, "trecho"));
       const emPlanta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
       emitirPset(ctx, produto, t.uid, "Pset_OpuraInstalacao", [
@@ -5963,6 +5969,17 @@ function gerarIfc(model, o) {
         ["Sugerido", { tipo: "IFCBOOLEAN", v: !!t.sugerido }]
       ]);
       if (t.disciplina === "FRIGORIGENA" || t.disciplina === "DRENO_AC" || t.disciplina === "MECANICA") psetDoTrechoDeClimatizacao(ctx, produto, t);
+      if ((t.isolamentoMm ?? 0) > 0) {
+        const cobertura = emitir(
+          `IFCCOVERING(${guid(`isol-${t.id}`)},${historico},${s(`Isolamento ${t.isolamentoMm} mm`)},$,${s("ISOLAMENTO_TERMICO")},$,$,$,.WRAPPING.)`
+        );
+        emitir(`IFCRELCOVERSBLDGELEMENTS(${guid(`rel-isol-${t.id}`)},${historico},$,$,${produto},(${cobertura}))`);
+        emitirPset(ctx, cobertura, void 0, "Pset_OpuraIsolamento", [
+          ["EspessuraMm", { tipo: "IFCINTEGER", v: t.isolamentoMm }],
+          ["Disciplina", { tipo: "IFCLABEL", v: t.disciplina }]
+        ]);
+        produtos.push(cobertura);
+      }
       if (t.disciplina === "ELETRICA") {
         for (const cid of t.circuitoIds ?? []) porCircuito.set(cid, [...porCircuito.get(cid) ?? [], produto]);
       }
@@ -5985,7 +6002,8 @@ function gerarIfc(model, o) {
       const elevDaChave = model.levels.find((l) => l.id === c.levelId)?.elevationMm ?? nivel.elevationMm;
       const produto = emitirConexao(c, ctx, localNivel, c.cotaMm + elevDaChave - nivel.elevationMm);
       produtos.push(produto);
-      porSistema.set(c.disciplina, [...porSistema.get(c.disciplina) ?? [], produto]);
+      const sistemaDaConexao = c.trechoIds.length > 0 ? sistemaDe(c.trechoIds[0], c.disciplina) : c.disciplina;
+      porSistema.set(sistemaDaConexao, [...porSistema.get(sistemaDaConexao) ?? [], produto]);
       emitirPset(ctx, produto, void 0, "Pset_OpuraConexao", [
         ["Tipo", { tipo: "IFCLABEL", v: c.tipo }],
         ["Disciplina", { tipo: "IFCLABEL", v: c.disciplina }],
@@ -6027,7 +6045,8 @@ function gerarIfc(model, o) {
         psetDeClimatizacao(ctx, produto, t, numerosDeClimatizacao.get(t.id)?.numero ?? null, t.condensadoraId ? numerosDeClimatizacao.get(t.condensadoraId)?.numero ?? null : null, o.resultadosDeClimatizacao?.get(t.id) ?? null);
       }
       produtos.push(produto);
-      porSistema.set(t.disciplina, [...porSistema.get(t.disciplina) ?? [], produto]);
+      const sistemaDoTerminal = sistemaDe(t.id, t.disciplina);
+      porSistema.set(sistemaDoTerminal, [...porSistema.get(sistemaDoTerminal) ?? [], produto]);
       psetOpura(produto, t.uid, rotuloCurto(t.uid, "terminal"));
       emitirPset(ctx, produto, t.uid, "Pset_OpuraInstalacao", [
         ["Disciplina", { tipo: "IFCLABEL", v: t.disciplina }],
@@ -6085,7 +6104,7 @@ function gerarIfc(model, o) {
   for (const [disciplina, membros] of porSistema) {
     if (membros.length === 0) continue;
     const sistema = emitir(
-      `IFCDISTRIBUTIONSYSTEM(${guid(`sist-${disciplina}`)},${historico},${s(disciplina)},$,$,$,${SISTEMA_IFC[disciplina] ?? "$"})`
+      `IFCDISTRIBUTIONSYSTEM(${guid(`sist-${disciplina}`)},${historico},${s(disciplina === "MECANICA_VENTILACAO" ? "MECANICA (exaust\xE3o)" : disciplina)},$,$,$,${SISTEMA_IFC[disciplina] ?? "$"})`
     );
     emitir(
       `IFCRELASSIGNSTOGROUP(${guid(`rel-sist-${disciplina}`)},${historico},$,$,(${membros.join(",")}),$,${sistema})`
@@ -6623,10 +6642,53 @@ var SISTEMA_IFC = {
   // de hoje nasce dos equipamentos de ar-condicionado; a rede só de ventilação/exaustão ganha o
   // seu tipo quando existir como tal (E7).
   MECANICA: ".AIRCONDITIONING.",
+  // C14 (10/10/2026): a rede de duto SÓ de exaustão (exaustor e nenhum insuflamento) é ventilação.
+  MECANICA_VENTILACAO: ".VENTILATION.",
   // Climatização E3.2 (0.92.0): a linha é refrigeração; o dreno é drenagem.
   FRIGORIGENA: ".REFRIGERATION.",
   DRENO_AC: ".DRAINAGE."
 };
+var INSUFLAM_AR = /* @__PURE__ */ new Set(["DIFUSOR", "GRELHA_INSUFLAMENTO", "BOCAL_AR", "EVAPORADORA_DUTADA", "CAIXA_DISTRIBUICAO_AR"]);
+function idsDaRedeDeExaustao(model) {
+  const trechos = (model.trechos ?? []).filter((t) => t.disciplina === "MECANICA");
+  const terminais = (model.terminais ?? []).filter((t) => t.disciplina === "MECANICA");
+  if (!terminais.some((t) => t.tipoHidraulico === "EXAUSTOR_AR")) return /* @__PURE__ */ new Set();
+  const pai = /* @__PURE__ */ new Map();
+  const raiz = (k) => {
+    let r = k;
+    while (pai.get(r) !== r) r = pai.get(r);
+    pai.set(k, r);
+    return r;
+  };
+  const no = (k) => {
+    if (!pai.has(k)) pai.set(k, k);
+    return k;
+  };
+  const unir = (a, b) => pai.set(raiz(no(a)), raiz(no(b)));
+  const chave = (levelId, p) => `${levelId}|${p.x},${p.y}`;
+  for (const t of trechos) {
+    unir(`trc:${t.id}`, chave(t.levelId, t.a));
+    unir(`trc:${t.id}`, chave(t.levelId, t.b));
+  }
+  for (const t of terminais) unir(`trm:${t.id}`, chave(t.levelId, t.at));
+  const grupos = /* @__PURE__ */ new Map();
+  const grupo = (k) => {
+    const r = raiz(k);
+    let g = grupos.get(r);
+    if (!g) grupos.set(r, g = { exaustor: false, insufla: false, ids: [] });
+    return g;
+  };
+  for (const t of trechos) grupo(`trc:${t.id}`).ids.push(t.id);
+  for (const t of terminais) {
+    const g = grupo(`trm:${t.id}`);
+    g.ids.push(t.id);
+    if (t.tipoHidraulico === "EXAUSTOR_AR") g.exaustor = true;
+    if (t.tipoHidraulico && INSUFLAM_AR.has(t.tipoHidraulico)) g.insufla = true;
+  }
+  const saida = /* @__PURE__ */ new Set();
+  for (const g of grupos.values()) if (g.exaustor && !g.insufla && g.ids.length > 1) g.ids.forEach((id) => saida.add(id));
+  return saida;
+}
 var CLASSE_DO_TRECHO = {
   AGUA_FRIA: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },
   AGUA_QUENTE: { entidade: "IFCPIPESEGMENT", predefinido: ".RIGIDSEGMENT.", qto: "Qto_PipeSegmentBaseQuantities" },

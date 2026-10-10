@@ -43,9 +43,21 @@ export interface QuantitativoDoPavimento {
   eletrodutoM: number;
   condutorM: number;
   pontosEletricos: number;
+  /**
+   * CLIMATIZAÇÃO (10/10/2026, pendência C16): linha frigorígena, dreno e duto (m), os
+   * equipamentos (evaporadora, condensadora, exaustor, bomba de dreno…) e os
+   * terminais de ar do pavimento. Saem dos pontos hidráulicos, onde se misturavam.
+   */
+  linhaFrigorigenaM: number;
+  drenoAcM: number;
+  dutoM: number;
+  equipamentosClimatizacao: number;
+  terminaisDeAr: number;
 }
 
 const HIDRAULICAS = ['AGUA_FRIA', 'AGUA_QUENTE', 'ESGOTO', 'PLUVIAL'];
+const DA_CLIMATIZACAO = new Set<string>(TIPOS_DE_CLIMATIZACAO);
+const DE_AR = new Set<string>(TIPOS_DE_TERMINAL_DE_AR);
 
 /** As linhas de compra da rede de UM pavimento — ou do projeto inteiro, com `levelId` nulo. */
 export interface RedeDoPavimento {
@@ -163,11 +175,17 @@ export function quantitativosPorPavimento(
       areaFormaM2: estruturas.reduce((s, e) => s + e.areaFormaM2, 0),
       acoKg: estruturas.reduce((s, e) => s + (acoPorPeca.get(e.structuralId) ?? 0), 0),
       tuboHidraulicoM: rede.porBitola.filter((b) => HIDRAULICAS.includes(b.disciplina)).reduce((s, b) => s + b.comprimentoM, 0),
-      pontosHidraulicos: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && t.tipoHidraulico != null).length,
+      // C16: os pontos da CLIMATIZAÇÃO saem daqui — têm coluna própria.
+      pontosHidraulicos: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && t.tipoHidraulico != null && !DA_CLIMATIZACAO.has(t.tipoHidraulico)).length,
       conexoesHidraulicas: rede.porConexao.filter((c) => HIDRAULICAS.includes(c.disciplina)).reduce((s, c) => s + c.quantidade, 0),
       eletrodutoM: rede.porBitola.filter((b) => b.disciplina === 'ELETRICA').reduce((s, b) => s + b.comprimentoM, 0),
       condutorM: rede.porCondutor.reduce((s, c) => s + c.comprimentoM, 0),
       pontosEletricos: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && t.disciplina === 'ELETRICA').length,
+      linhaFrigorigenaM: rede.porBitola.filter((b) => b.disciplina === 'FRIGORIGENA').reduce((s, b) => s + b.comprimentoM, 0),
+      drenoAcM: rede.porBitola.filter((b) => b.disciplina === 'DRENO_AC').reduce((s, b) => s + b.comprimentoM, 0),
+      dutoM: rede.porBitola.filter((b) => b.disciplina === 'MECANICA').reduce((s, b) => s + b.comprimentoM, 0),
+      equipamentosClimatizacao: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && !!t.tipoHidraulico && DA_CLIMATIZACAO.has(t.tipoHidraulico) && !DE_AR.has(t.tipoHidraulico)).length,
+      terminaisDeAr: (model.terminais ?? []).filter((t) => t.levelId === nivel.id && !!t.tipoHidraulico && DE_AR.has(t.tipoHidraulico)).length,
     };
   });
 }

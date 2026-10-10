@@ -5645,22 +5645,27 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
     };
     expect(menu()).toBeTruthy();
     await user.click(menu());
-    for (const nome of ['Reserva de condensadora', 'Reserva de evaporadora', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico', 'Duto', 'Difusor / grelha']) {
-      expect(screen.getByRole('menuitemradio', { name: new RegExp(`^${nome.replace('/', '\/')}$`) })).toBeInTheDocument();
+    // D2 (10/10/2026): o "Difusor" do menu é UM só — o tipado, em "Climatização — terminais de ar".
+    // O teste abre todos os menus do ribbon de uma vez; a busca fica DENTRO do menu da Mecânica.
+    const doMenu = () => within(screen.getByRole('menuitemradio', { name: /^Duto$/ }).closest('[role="menu"]') as HTMLElement);
+    for (const nome of ['Reserva de condensadora', 'Reserva de evaporadora', 'Exaustor / ventilação', 'Casa de máquinas', 'Shaft mecânico', 'Duto', 'Difusor']) {
+      expect(doMenu().getByRole('menuitemradio', { name: new RegExp(`^${nome.replace('/', '\/')}$`) })).toBeInTheDocument();
     }
+    expect(doMenu().getAllByRole('menuitemradio', { name: /^Difusor$/ })).toHaveLength(1);
     // E3.1 da climatização (04/10/2026): a reserva passou a se chamar assim — o equipamento é outra peça.
     await user.click(screen.getByRole('menuitemradio', { name: /^Reserva de condensadora$/ }));
     expect(menu()).toHaveTextContent('Reserva de condensadora');
     await user.click(menu());
     await user.click(screen.getByRole('menuitemradio', { name: /^Shaft mecânico$/ }));
     expect(menu()).toHaveTextContent('Shaft mecânico');
-    // P2.2: o duto arma a rede MECANICA e o difusor arma o terminal com o nome "Difusor".
+    // P2.2: o duto arma a rede MECANICA; D2 (10/10/2026): o difusor é o TIPADO da E7 (não mais texto livre).
     await user.click(menu());
     await user.click(screen.getByRole('menuitemradio', { name: /^Duto$/ }));
     expect(menu()).toHaveTextContent('Duto');
     await user.click(menu());
-    await user.click(screen.getByRole('menuitemradio', { name: /^Difusor \/ grelha$/ }));
-    expect(menu()).toHaveTextContent('Difusor / grelha');
+    await user.click(doMenu().getByRole('menuitemradio', { name: /^Difusor$/ }));
+    expect(menu()).toHaveTextContent('Difusor');
+    expect(screen.queryByRole('menuitemradio', { name: /Difusor \/ grelha/ })).toBeNull();
     // O clash da reserva: pilar dentro da condensadora — conta no ribbon e abre a lista.
     const conflitos = botao(/^Conflitos das reservas/);
     expect(conflitos).toHaveTextContent('1');

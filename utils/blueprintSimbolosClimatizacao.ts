@@ -53,25 +53,65 @@ export function temSimboloDeClimatizacao(tipo: TipoDePontoHidraulico | null | un
   return !!tipo && TIPOS_COM_SIMBOLO_DE_CLIMATIZACAO.includes(tipo);
 }
 
-/** O símbolo do tipo, em primitivas no quadrado unitário. */
-export function simboloDeClimatizacao(tipo: TipoDePontoHidraulico): PrimitivaDoSimbolo[] {
+/**
+ * Os equipamentos RETANGULARES (10/10/2026, pendência D1): o símbolo é desenhado
+ * nas proporções da peça — largura × profundidade —, e não num quadrado do lado da
+ * maior medida. A hi-wall de 900 × 220 saía 900 × 360 e "montava" na parede.
+ */
+export const TIPOS_COM_SIMBOLO_PROPORCIONAL: readonly TipoDePontoHidraulico[] = [
+  'EVAPORADORA_HI_WALL',
+  'EVAPORADORA_PISO_TETO',
+  'EVAPORADORA_DUTADA',
+  'CONDENSADORA_SPLIT',
+  'CONDENSADORA_VRF',
+];
+
+/**
+ * Profundidade ÷ largura da peça, para os tipos proporcionais (entre 0,15 e 1);
+ * `null` para os demais — e então o símbolo é o do quadrado, como sempre.
+ */
+export function proporcaoDoSimbolo(tipo: TipoDePontoHidraulico | null | undefined, larguraMm: number, profundidadeMm: number): number | null {
+  if (!tipo || !TIPOS_COM_SIMBOLO_PROPORCIONAL.includes(tipo)) return null;
+  if (!(larguraMm > 0) || !(profundidadeMm > 0)) return null;
+  return Math.min(1, Math.max(0.15, profundidadeMm / larguraMm));
+}
+
+/**
+ * O símbolo do tipo, em primitivas no quadrado unitário. Com `proporcao`
+ * (`proporcaoDoSimbolo`), o equipamento retangular ocupa 1 × `proporcao` — o lado
+ * passa a ser a LARGURA da peça. Sem ela, a forma de sempre (a legenda usa assim).
+ */
+export function simboloDeClimatizacao(tipo: TipoDePontoHidraulico, proporcao: number | null = null): PrimitivaDoSimbolo[] {
+  const h = proporcao;
   switch (tipo) {
     // Evaporadoras: o retângulo da unidade; o detalhe diz o tipo.
     case 'EVAPORADORA_HI_WALL':
-      // Deitada na parede, com as lâminas de insuflamento embaixo.
+      // Deitada na parede, com as lâminas de insuflamento embaixo (o jato sai para fora da peça).
+      if (h != null) return [poligono(RET(1, h)), ...laminas(2, 1, h), linha(-0.3, h / 2, -0.3, h * 0.95), linha(0, h / 2, 0, h * 0.95), linha(0.3, h / 2, 0.3, h * 0.95)];
       return [poligono(RET(1, 0.4)), ...laminas(2, 1, 0.4), linha(-0.3, 0.2, -0.3, 0.38), linha(0, 0.2, 0, 0.38), linha(0.3, 0.2, 0.3, 0.38)];
     case 'EVAPORADORA_PISO_TETO':
+      if (h != null) return [poligono(RET(1, h)), linha(-0.5, 0, 0.5, 0), ...seta(0, 0, 0, -h * 0.9, Math.min(0.12, h * 0.3)), ...seta(0, 0, 0, h * 0.9, Math.min(0.12, h * 0.3))];
       return [poligono(RET(1, 0.5)), linha(-0.5, 0, 0.5, 0), ...seta(0, 0, 0, -0.45), ...seta(0, 0, 0, 0.45)];
     case 'EVAPORADORA_CASSETE':
       // Quadrada no forro, quatro vias: o quadrado, o miolo e as quatro setas.
       return [quadrado(1), quadrado(0.36), ...seta(0.18, 0, 0.46, 0), ...seta(-0.18, 0, -0.46, 0), ...seta(0, 0.18, 0, 0.46), ...seta(0, -0.18, 0, -0.46)];
     case 'EVAPORADORA_DUTADA':
       // A caixa e o duto saindo pela direita.
+      if (h != null) return [poligono(RET(0.8, h), false), linha(0.4, -h * 0.24, 0.5, -h * 0.24), linha(0.4, h * 0.24, 0.5, h * 0.24), ...seta(0.1, 0, 0.42, 0, Math.min(0.12, h * 0.3)), texto('EV', Math.min(0.26, h * 0.5), -0.12, 0)];
       return [poligono(RET(0.8, 0.5), false), linha(0.4, -0.12, 0.5, -0.12), linha(0.4, 0.12, 0.5, 0.12), ...seta(0.1, 0, 0.42, 0), texto('EV', 0.26, -0.12, 0)];
     // Condensadoras: o quadrado com a hélice (círculo) — uma no split, duas no VRF.
     case 'CONDENSADORA_SPLIT':
+      if (h != null) {
+        // A hélice num dos lados (como a unidade real), no círculo que cabe na profundidade.
+        const r = h * 0.4;
+        return [poligono(RET(1, h)), circulo(r, false, 0.18), circulo(r * 0.18, true, 0.18), linha(0.18 - r, 0, 0.18 + r, 0), linha(0.18, -r, 0.18, r)];
+      }
       return [quadrado(1), circulo(0.32), circulo(0.06, true), linha(-0.32, 0, 0.32, 0), linha(0, -0.32, 0, 0.32)];
     case 'CONDENSADORA_VRF':
+      if (h != null) {
+        const r = Math.min(h * 0.4, 0.22);
+        return [poligono(RET(1, h)), circulo(r, false, -0.24, 0), circulo(r, false, 0.24, 0), circulo(r * 0.2, true, -0.24, 0), circulo(r * 0.2, true, 0.24, 0)];
+      }
       return [quadrado(1), circulo(0.2, false, -0.24, 0), circulo(0.2, false, 0.24, 0), circulo(0.04, true, -0.24, 0), circulo(0.04, true, 0.24, 0), texto('VRF', 0.2, 0, 0.36)];
     case 'DERIVADOR_VRF':
       // O "Y" da derivação (refnet), sobre o trecho.
@@ -126,15 +166,18 @@ function circuloComoPoligono(cx: number, cy: number, r: number, lados = 24): { x
   });
 }
 
-/** Desenha o símbolo na PRANCHA: centro (x, y) e lado `ladoMm`, em mm de papel (mesmo contrato do incêndio). */
-export function desenharSimboloDeClimatizacao(d: Desenhista, tipo: TipoDePontoHidraulico, x: number, y: number, ladoMm: number, estilo: EstiloTraco): void {
+/**
+ * Desenha o símbolo na PRANCHA: centro (x, y) e lado `ladoMm`, em mm de papel (mesmo contrato do incêndio).
+ * Com `proporcao`, o lado é a LARGURA da peça (ver `proporcaoDoSimbolo`).
+ */
+export function desenharSimboloDeClimatizacao(d: Desenhista, tipo: TipoDePontoHidraulico, x: number, y: number, ladoMm: number, estilo: EstiloTraco, proporcao: number | null = null): void {
   const P = (px: number, py: number) => ({ x: x + px * ladoMm, y: y + py * ladoMm });
   const contorno = (pts: { x: number; y: number }[]) =>
     pts.forEach((p, i) => {
       const q = pts[(i + 1) % pts.length];
       d.linha(p.x, p.y, q.x, q.y, estilo);
     });
-  for (const pr of simboloDeClimatizacao(tipo)) {
+  for (const pr of simboloDeClimatizacao(tipo, proporcao)) {
     if (pr.tipo === 'linha') {
       const a = P(pr.x1, pr.y1);
       const b = P(pr.x2, pr.y2);

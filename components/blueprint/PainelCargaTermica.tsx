@@ -73,7 +73,7 @@ function Parcelas({ a }: { a: CargaDoAmbiente }) {
           <td className="py-1 pr-2 text-slate-800">Total</td>
           <td className="py-1 pr-2 text-right tabular-nums">{n0(a.sensivelW)}</td>
           <td className="py-1 pr-2 text-right tabular-nums">{n0(a.latenteW)}</td>
-          <td className="py-1 text-[11px] text-slate-600">{n0(a.totalW)} W = {n0(a.totalBtuH)} BTU/h · {a.wPorM2} W/m² · {n1(a.volumeM3)} m³ a {n1(a.temperaturaInternaC)} °C</td>
+          <td className="py-1 text-[11px] text-slate-600">{n0(a.totalW)} W = {n0(a.totalBtuH)} BTU/h · {a.wPorM2} W/m² (área útil {n1(a.areaUtilM2)} m²) · {n1(a.volumeM3)} m³ a {n1(a.temperaturaInternaC)} °C</td>
         </tr>
       </tbody>
     </table>
@@ -115,7 +115,7 @@ export default function PainelCargaTermica({ nivel: n, nomeDoPavimento, estudo, 
               <tr className="text-left text-slate-500">
                 <th className="py-1 pr-2 font-medium">Ambiente</th>
                 <th className="py-1 pr-2 text-right font-medium">Área (m²)</th>
-                <th className="py-1 pr-2 text-right font-medium">W/m²</th>
+                <th className="py-1 pr-2 text-right font-medium" title="Densidade pela área útil (da face das paredes para dentro)">W/m² útil</th>
                 <th className="py-1 pr-2 text-right font-medium">Sensível (W)</th>
                 <th className="py-1 pr-2 text-right font-medium">Latente (W)</th>
                 <th className="py-1 pr-2 text-right font-medium">Total (W)</th>

@@ -12,12 +12,14 @@ import { cargaTermicaDoNivel } from '../utils/blueprintCargaTermica';
 import {
   ROTULO_DA_REDE_DE_AR,
   analisarRedesDeAr,
+  comandosDeConverterTerminaisAntigos,
   comandosDeDimensionamento,
   conferenciaDaRedeDeAr,
   cotaDoDutoNoForro,
   perdaPorAtritoPa,
   planejarRedeDeAr,
   secaoProposta,
+  terminaisDeArAntigos,
   ventilacaoDoNivel,
   vazoesDosTerminais,
 } from '../utils/blueprintRedeDeAr';
@@ -161,3 +163,22 @@ describe('climatização E7.3 · exaustão e renovação', () => {
     expect(conf.find((c) => c.codigo === 'REDE')?.estado).toBe('NAO_AVALIADO');
   });
 });
+
+describe('pendência D2 (10/10/2026) · o terminal de ar antigo, de texto livre, vira o tipado', () => {
+  it('acha os antigos pelo nome, converte num lote, e o convertido passa a contar como terminal da rede', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m0.levels[0].id;
+    const m = applyBatch(m0, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Difusor', at: point(1000, 1000), cotaMm: 2600 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Grelha de retorno', at: point(3000, 1000), cotaMm: 2600 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Tomada de ar exterior', at: point(5000, 1000), cotaMm: 2600 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Coisa que ninguém sabe', at: point(7000, 1000), cotaMm: 2600 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Difusor', tipoHidraulico: 'DIFUSOR', at: point(9000, 1000), cotaMm: 2600 } as Command,
+    ]).model;
+    expect(terminaisDeArAntigos(m).map((x) => x.para)).toEqual(['DIFUSOR', 'GRELHA_RETORNO', 'TOMADA_AR_EXTERIOR']);
+    const depois = applyBatch(m, comandosDeConverterTerminaisAntigos(m)).model;
+    expect(terminaisDeArAntigos(depois)).toEqual([]);
+    expect(depois.terminais!.map((x) => x.tipoHidraulico ?? null)).toEqual(['DIFUSOR', 'GRELHA_RETORNO', 'TOMADA_AR_EXTERIOR', null, 'DIFUSOR']);
+  });
+});
+

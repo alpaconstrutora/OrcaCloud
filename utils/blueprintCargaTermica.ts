@@ -29,7 +29,7 @@
  * memorial dizem CONFERIR enquanto houver hipótese.
  */
 import type { BlueprintModel, ObjectId, CamadaParede } from './blueprintKernel';
-import { acabamentosDoAmbiente, fatorDeSombreamento } from './blueprintKernel';
+import { acabamentosDoAmbiente, areaRecuada, fatorDeSombreamento } from './blueprintKernel';
 import { desempenhoTermico, type Material } from './blueprintMateriais';
 import type { PontoCardeal } from './blueprintGrafoEspacial';
 import { condicoesExternas, type CondicoesExternas, type HipotesesClimatizacao } from './blueprintClimatizacao';
@@ -106,7 +106,14 @@ export interface CargaDoAmbiente {
   latenteW: number;
   totalW: number;
   totalBtuH: number;
-  /** W por m² de piso — a conferência rápida do projetista. */
+  /**
+   * Área ÚTIL do piso, m² — da face das paredes para dentro (a área recuada do
+   * quantitativo, menos as ilhas). A carga continua pela área de EIXO
+   * (`areaPisoM2`, conservadora); a DENSIDADE reporta pela útil (pendência D3,
+   * 10/10/2026): é a área que o projetista mede e compara.
+   */
+  areaUtilM2: number;
+  /** W por m² de ÁREA ÚTIL — a conferência rápida do projetista. */
   wPorM2: number;
   /** Alguma parcela usou hipótese ou tabela de memória. */
   conferir: boolean;
@@ -194,6 +201,10 @@ export function cargaTermicaDoNivel(model: BlueprintModel, hip: HipotesesClimati
 
   const ambientes: CargaDoAmbiente[] = exposicao.map((e) => {
     const p = premissasPorSpace.get(e.spaceId)!;
+    const espaco = model.spaces.find((x) => x.id === e.spaceId);
+    const areaUtil = espaco
+      ? Math.max(0, (areaRecuada(espaco.ring, model.walls).areaMm2 - espaco.holes.reduce((soma, h) => soma + areaRecuada(h, model.walls).areaMm2, 0)) / 1e6)
+      : 0;
     const pendencias: string[] = [...e.pendencias];
     const tAmb = p.temperaturaInternaC.valor;
     const dT = tbs != null ? tbs - tAmb : null;
@@ -359,7 +370,8 @@ export function cargaTermicaDoNivel(model: BlueprintModel, hip: HipotesesClimati
       latenteW,
       totalW,
       totalBtuH: r0(totalW * W_PARA_BTUH),
-      wPorM2: e.areaPisoM2 > 0 ? r0(totalW / e.areaPisoM2) : 0,
+      areaUtilM2: r2(areaUtil),
+      wPorM2: areaUtil > 0 ? r0(totalW / areaUtil) : e.areaPisoM2 > 0 ? r0(totalW / e.areaPisoM2) : 0,
       conferir,
       pendencias,
     };

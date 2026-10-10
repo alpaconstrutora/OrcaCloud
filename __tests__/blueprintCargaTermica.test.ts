@@ -108,7 +108,10 @@ describe('carga térmica da sala', () => {
     const soma = [...sala.paredes.map((p) => p.parcela), ...sala.vaos.flatMap((v) => [v.conducao, v.insolacao]), sala.teto, sala.piso, sala.pessoas, sala.iluminacao, sala.equipamentos, sala.fonteExtra, sala.infiltracao];
     expect(sala.sensivelW).toBe(soma.reduce((s, x) => s + x.sensivelW, 0));
     expect(sala.latenteW).toBe(soma.reduce((s, x) => s + x.latenteW, 0));
-    expect(sala.wPorM2).toBe(Math.round(sala.totalW / sala.areaPisoM2));
+    // D3 (10/10/2026): a densidade é pela ÁREA ÚTIL (da face das paredes para dentro), menor que a de eixo da carga.
+    expect(sala.areaUtilM2).toBeLessThan(sala.areaPisoM2);
+    expect(sala.areaUtilM2).toBeGreaterThan(sala.areaPisoM2 * 0.85);
+    expect(sala.wPorM2).toBe(Math.round(sala.totalW / sala.areaUtilM2));
     expect(sala.conferir).toBe(true);
     // A Cozinha não é climatizada: entra na lista com carga zero e não soma no pavimento.
     const cozinha = n.ambientes.find((a) => a.nome === 'Cozinha')!;

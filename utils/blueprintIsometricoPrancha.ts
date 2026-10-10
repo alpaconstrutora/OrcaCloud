@@ -157,7 +157,46 @@ export function isometricosDoModelo(model: BlueprintModel): IsometricoDePrancha[
  * Desenha um isométrico na caixa `(x, y, w, h)` do papel: título, escala, a
  * rede e os rótulos. Devolve o denominador usado.
  */
+/** A caixa (mm de papel) de um texto ancorado à esquerda na linha de base — largura estimada (0,55 × altura por letra). */
+export function caixaDoTexto(x: number, y: number, texto: string, altura: number): Caixa {
+  return { minX: x, minY: y - altura, maxX: x + texto.length * altura * 0.55, maxY: y + altura * 0.2 };
+}
+const sobrepoe = (a: Caixa, b: Caixa) => a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+
+/**
+ * C13 (10/10/2026): onde o rótulo cabe SEM encostar nos já escritos. Tenta a posição de sempre
+ * e as alternativas em volta, nessa ordem; nenhuma livre → a que menos sobrepõe. Marca a escolhida.
+ */
+export function lugarDoRotulo(candidatos: { x: number; y: number }[], texto: string, altura: number, ocupadas: Caixa[]): { x: number; y: number } {
+  let melhor = candidatos[0];
+  let menor = Infinity;
+  for (const c of candidatos) {
+    const caixa = caixaDoTexto(c.x, c.y, texto, altura);
+    const choques = ocupadas.filter((o) => sobrepoe(caixa, o)).length;
+    if (choques < menor) {
+      menor = choques;
+      melhor = c;
+    }
+    if (choques === 0) break;
+  }
+  ocupadas.push(caixaDoTexto(melhor.x, melhor.y, texto, altura));
+  return melhor;
+}
+
+/** As posições em volta de uma âncora: a de sempre e, a passos de uma altura de texto, acima, abaixo, à esquerda e à direita. */
+function emVolta(base: { x: number; y: number }, texto: string, altura: number): { x: number; y: number }[] {
+  const w = texto.length * altura * 0.55;
+  const p = altura * 1.3;
+  const out = [base];
+  for (let k = 1; k <= 3; k++) {
+    out.push({ x: base.x, y: base.y - p * k }, { x: base.x, y: base.y + p * k }, { x: base.x - w - 1, y: base.y + p * (k - 1) }, { x: base.x + 1.5 * k, y: base.y - p * k });
+  }
+  return out;
+}
+
 export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: number, y: number, w: number, h: number): number {
+  // C13: as caixas dos rótulos já escritos neste isométrico — ninguém escreve em cima de ninguém.
+  const ocupadas: Caixa[] = [];
   d.retangulo(x, y, w, h, { espessuraMm: 0.18, cor: COR_FRACA });
   const pts = [...iso.segmentos.flatMap((s) => [s.a, s.b]), ...iso.pontos.map((p) => p.p)].map(projetarIsometrico);
   const minU = Math.min(...pts.map((p) => p.u));
@@ -185,7 +224,7 @@ export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: n
     d.linha(a.x, a.y, b.x, b.y, { espessuraMm: s.disciplina === 'ESGOTO' ? 0.5 : 0.35, cor });
     if (Math.hypot(b.x - a.x, b.y - a.y) >= 8) {
       const texto = s.rotulo ?? `ø${s.bitolaMm}`;
-      const r = posicaoDoRotulo(a, b, 0.9, texto);
+      const r = lugarDoRotulo(emVolta(posicaoDoRotulo(a, b, 0.9, texto), texto, TEXTO_MM), texto, TEXTO_MM, ocupadas);
       d.texto(r.x, r.y, texto, TEXTO_MM, cor);
     }
   }
@@ -196,7 +235,9 @@ export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: n
       COR_DA_DISCIPLINA[n.disciplina],
     );
     // E2.4: a peça no nó, pela sigla (a legenda da folha diz o nome).
-    d.texto(c.x - 2.2, c.y + 2.4, SIGLA_DA_CONEXAO[n.tipo], TEXTO_MM * 0.8, COR_FRACA);
+    const sigla = SIGLA_DA_CONEXAO[n.tipo];
+    const q = lugarDoRotulo(emVolta({ x: c.x - 2.2, y: c.y + 2.4 }, sigla, TEXTO_MM * 0.8), sigla, TEXTO_MM * 0.8, ocupadas);
+    d.texto(q.x, q.y, sigla, TEXTO_MM * 0.8, COR_FRACA);
   }
   for (const p of iso.pontos) {
     const c = papel(p.p);
@@ -205,7 +246,11 @@ export function desenharIsometrico(d: Desenhista, iso: IsometricoDePrancha, x: n
       const a1 = ((i + 1) / 12) * Math.PI * 2;
       d.linha(c.x + 0.8 * Math.cos(a0), c.y + 0.8 * Math.sin(a0), c.x + 0.8 * Math.cos(a1), c.y + 0.8 * Math.sin(a1), { espessuraMm: 0.25, cor: COR });
     }
-    d.texto(c.x + 1.3, c.y - 0.9, `${p.sigla} · h ${cotaComSinal(p.cotaMm).replace('+', '')}`, TEXTO_MM, COR);
+    const texto = `${p.sigla} · h ${cotaComSinal(p.cotaMm).replace('+', '')}`;
+    const q = lugarDoRotulo(emVolta({ x: c.x + 1.3, y: c.y - 0.9 }, texto, TEXTO_MM), texto, TEXTO_MM, ocupadas);
+    // Afastado da peça: uma linha fina leva o olho do rótulo até ela.
+    if (Math.hypot(q.x - (c.x + 1.3), q.y - (c.y - 0.9)) > 0.5) d.linha(c.x, c.y, q.x, q.y - TEXTO_MM * 0.4, { espessuraMm: 0.1, cor: COR_FRACA });
+    d.texto(q.x, q.y, texto, TEXTO_MM, COR);
   }
   return den;
 }

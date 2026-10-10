@@ -98,6 +98,20 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
     const h = typeof window !== 'undefined' ? window.location.hash : '';
     return h.includes('?') ? new URLSearchParams(h.split('?')[1]).get('studyId') : null;
   });
+  // D4 (10/10/2026): o link que chega com o módulo JÁ montado (a lista de plantas na
+  // tela). A vista continua "blueprint" — o roteador não remonta nada —, então o
+  // pedido só era lido na montagem e ficava sem efeito. Agora a troca de endereço
+  // também vale.
+  useEffect(() => {
+    const aoMudar = () => {
+      const h = window.location.hash;
+      if (!h.startsWith('#/blueprint?')) return;
+      const id = new URLSearchParams(h.split('?')[1]).get('studyId');
+      if (id) setEstudoPedido(id);
+    };
+    window.addEventListener('hashchange', aoMudar);
+    return () => window.removeEventListener('hashchange', aoMudar);
+  }, []);
   useEffect(() => {
     if (!estudoPedido || loading) return;
     const alvo = studies.find((s) => s.id === estudoPedido);

@@ -58,7 +58,6 @@ import {
   Server,
   Wind,
   Route,
-  Grid3x3,
   Spline,
   Tent,
   CloudRain,
@@ -742,13 +741,14 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
       { chave: 'SHAFT_MECANICO', rotulo: 'Shaft mecânico', icone: Wind, ajuda: 'Shaft (dois cantos) com a disciplina MECÂNICA: a prumada de dutos e linhas frigorígenas; fura a laje e acusa estrutura dentro.', escolha: { tool: 'nucleo', nucleo: 'SHAFT', disciplina: 'MECANICA' } },
     ],
   },
-  // DUTOS E TERMINAIS (20/09/2026, backlog P2 — P2.2): o duto é um TRECHO da
-  // disciplina MECANICA (mesma geometria dos canos: dois cliques, duas cotas,
-  // "bitola" = diâmetro equivalente), e o difusor/grelha é um TERMINAL com o
-  // nome em texto — sem taxonomia nem carga térmica (isso é o HVAC completo do
-  // P3/P4). Entra no clash de instalação × estrutura como as outras disciplinas.
+  // DUTOS (20/09/2026, backlog P2 — P2.2): o duto é um TRECHO da disciplina
+  // MECANICA (mesma geometria dos canos: dois cliques, duas cotas, "bitola" =
+  // diâmetro equivalente). Entra no clash de instalação × estrutura como as
+  // outras disciplinas. D2 (10/10/2026): o antigo "Difusor / grelha" de texto
+  // livre SAIU daqui — o difusor tipado (E7) já está neste mesmo menu, em
+  // "Climatização — terminais de ar"; dois "Difusor" lado a lado confundiam.
   {
-    titulo: 'Mecânica — dutos e terminais',
+    titulo: 'Mecânica — dutos',
     itens: [
       {
         chave: 'REDE_MECANICA',
@@ -756,13 +756,6 @@ const GRUPOS: { titulo: string; itens: ItemComponente[] }[] = [
         icone: Route,
         ajuda: 'O trecho de duto, com dois cliques, no forro (2,60 m). A bitola é o diâmetro equivalente (200 mm de partida). Conflita com viga e laje como os canos.',
         escolha: { tool: 'rede', disciplina: 'MECANICA' },
-      },
-      {
-        chave: 'PONTO_MECANICA',
-        rotulo: 'Difusor / grelha',
-        icone: Grid3x3,
-        ajuda: 'Terminal de ar no forro: difusor de insuflamento, grelha de retorno ou tomada de ar exterior — o nome se troca no painel. 300 × 300 mm.',
-        escolha: { tool: 'terminal', disciplina: 'MECANICA', tipoTexto: 'Difusor' },
       },
     ],
   },

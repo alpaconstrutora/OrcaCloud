@@ -1316,3 +1316,25 @@ describe('DXF e texto (pendências 3, 4 e 5)', () => {
   });
 });
 
+describe('C12 (10/10/2026) · a cadeia de cotas vai além da condensadora na fachada', () => {
+  it('o lado com a condensadora encostada por fora mede o avanço dela; os outros lados e a peça de dentro não', async () => {
+    const k = await import('../utils/blueprintKernel');
+    const { cadeiasPorLado, pecasForaDoLado } = await import('../utils/blueprintCotas');
+    const m0 = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m0.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const m = k.applyBatch(m0, [
+      w(0, 0, 8000, 0), w(8000, 0, 8000, 4000), w(8000, 4000, 0, 4000), w(0, 4000, 0, 0),
+      // A condensadora 850 × 330 a 500 mm da fachada de y = 0, POR FORA; a evaporadora por dentro.
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'CD', tipoHidraulico: 'CONDENSADORA_SPLIT', at: k.point(3000, -500), cotaMm: 300 } as never,
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: k.point(3000, 300), cotaMm: 2200 } as never,
+    ]).model;
+    const cadeias = cadeiasPorLado(m, m.levels[0]);
+    const doLadoSul = cadeias.find((c) => c.lado.a.y === 0 && c.lado.b.y === 0)!;
+    const raio = Math.hypot(850, 330) / 2;
+    expect(doLadoSul.pecasForaMm).toBe(Math.round(500 + raio));
+    for (const c of cadeias) if (c !== doLadoSul) expect(c.pecasForaMm).toBe(0);
+    expect(pecasForaDoLado(m, m.levels[0], doLadoSul.lado)).toBe(doLadoSul.pecasForaMm);
+  });
+});
+

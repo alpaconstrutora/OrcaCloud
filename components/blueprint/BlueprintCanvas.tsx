@@ -173,7 +173,7 @@ import { SIGLA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 import { simboloDeIncendio, temSimboloDeIncendio, type PrimitivaDoSimbolo } from '../../utils/blueprintSimbolosIncendio';
 import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 // Climatização E3.4 (04/10/2026): o símbolo e o número (EV-1, CD-1) das peças de climatização.
-import { simboloDeClimatizacao, temSimboloDeClimatizacao } from '../../utils/blueprintSimbolosClimatizacao';
+import { proporcaoDoSimbolo, simboloDeClimatizacao, temSimboloDeClimatizacao } from '../../utils/blueprintSimbolosClimatizacao';
 import { numeracaoDeClimatizacao } from '../../utils/blueprintNumeracaoClimatizacao';
 import {
   ROTULO_DO_ENCAIXE,
@@ -1594,9 +1594,9 @@ const MARGEM_INICIAL_PX = 60;
  * As primitivas do símbolo 2D da peça tipada — incêndio (E1.3) ou climatização
  * (E3.4) —, ou `null` para quem se desenha como caixa/círculo.
  */
-function primitivasDoSimboloDaPeca(t: Terminal): PrimitivaDoSimbolo[] | null {
+function primitivasDoSimboloDaPeca(t: Terminal, md?: { larguraMm: number; profundidadeMm: number }): PrimitivaDoSimbolo[] | null {
   if (t.disciplina === 'INCENDIO' && temSimboloDeIncendio(t.tipoHidraulico)) return simboloDeIncendio(t.tipoHidraulico, t.posicaoSprinkler);
-  if (temSimboloDeClimatizacao(t.tipoHidraulico)) return simboloDeClimatizacao(t.tipoHidraulico);
+  if (temSimboloDeClimatizacao(t.tipoHidraulico)) return simboloDeClimatizacao(t.tipoHidraulico, md ? proporcaoDoSimbolo(t.tipoHidraulico, md.larguraMm, md.profundidadeMm) : null);
   return null;
 }
 
@@ -4672,8 +4672,10 @@ export default function BlueprintCanvas({
           [c.parcial, AFASTAMENTO_COTA.parcial],
           [[c.total], AFASTAMENTO_COTA.total],
         ];
-        const desenhadas = cadeiasDoLado.map(([segs, nivel]) => ({ segmentos: desenharCadeia(c.lado, segs, nivel), nivel }));
-        desenharChamadas(c.lado, c.faceExternaMm, desenhadas);
+        // C12 (10/10/2026): a cadeia vai além das peças de fora (a condensadora na fachada) — 150 mm de respiro.
+        const alemDasPecas = c.pecasForaMm > 0 ? Math.max(0, c.pecasForaMm + 150 - folgaBaseMm) : 0;
+        const desenhadas = cadeiasDoLado.map(([segs, nivel]) => ({ segmentos: desenharCadeia(c.lado, segs, nivel, MIN_PX_COTA_PAREDE, alemDasPecas), nivel }));
+        desenharChamadas(c.lado, c.faceExternaMm, desenhadas, alemDasPecas);
       }
       ctx.restore();
     }
@@ -6863,7 +6865,10 @@ export default function BlueprintCanvas({
         // ── A REDE DE INCÊNDIO (E1.3, 30/09/2026): o símbolo técnico, e não a
         // caixa cheia. O lado é a MAIOR medida da peça (o abrigo do hidrante tem
         // 900 mm), com mínimo de 14 px para o sprinkler de 80 mm não sumir.
-        const lado = Math.max(emTela(Math.max(md.larguraMm, md.profundidadeMm)), 14);
+        // D1 (10/10/2026): o equipamento de climatização retangular desenha na proporção
+        // da peça — o lado é a LARGURA, e o símbolo vem com a profundidade relativa.
+        const proporcional = proporcaoDoSimbolo(t.tipoHidraulico, md.larguraMm, md.profundidadeMm) != null;
+        const lado = Math.max(emTela(proporcional ? md.larguraMm : Math.max(md.larguraMm, md.profundidadeMm)), 14);
         const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
         ctx.save();
         ctx.setLineDash([]);
@@ -6872,7 +6877,7 @@ export default function BlueprintCanvas({
         ctx.lineWidth = selecionado ? 2.5 : 1.5;
         ctx.strokeStyle = cor;
         // Climatização E3.4: o mesmo laço desenha o símbolo de climatização (EV, CD, difusor…).
-        for (const pr of primitivasDoSimboloDaPeca(t)!) {
+        for (const pr of primitivasDoSimboloDaPeca(t, md)!) {
           ctx.beginPath();
           if (pr.tipo === 'circulo') {
             ctx.arc(pr.cx * lado, pr.cy * lado, pr.r * lado, 0, Math.PI * 2);

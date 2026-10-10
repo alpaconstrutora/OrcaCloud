@@ -17,7 +17,7 @@ import { TIPOS_DE_CLIMATIZACAO, TIPOS_DE_CONDENSADORA, TIPOS_DE_EVAPORADORA } fr
 import type { Desenhista } from './blueprintExport';
 import { COR_DA_DISCIPLINA } from './blueprintRede';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
-import { desenharSimboloDeClimatizacao } from './blueprintSimbolosClimatizacao';
+import { desenharSimboloDeClimatizacao, proporcaoDoSimbolo } from './blueprintSimbolosClimatizacao';
 import { numeracaoDeClimatizacao } from './blueprintNumeracaoClimatizacao';
 
 /** As disciplinas da climatização na prancha. */
@@ -120,10 +120,14 @@ export function desenharClimatizacao(
   for (const t of model.terminais ?? []) {
     if (!ehDaClimatizacao(t) || (levelId && t.levelId !== levelId)) continue;
     const ficha = FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!];
-    const medida = Math.max(t.larguraMm ?? ficha.medidasMm?.larguraMm ?? 0, t.profundidadeMm ?? ficha.medidasMm?.profundidadeMm ?? 0);
+    const larguraMm = t.larguraMm ?? ficha.medidasMm?.larguraMm ?? 0;
+    const profundidadeMm = t.profundidadeMm ?? ficha.medidasMm?.profundidadeMm ?? 0;
+    // D1 (10/10/2026): o equipamento retangular na proporção da peça — o lado é a largura.
+    const proporcao = proporcaoDoSimbolo(t.tipoHidraulico, larguraMm, profundidadeMm);
+    const medida = proporcao != null ? larguraMm : Math.max(larguraMm, profundidadeMm);
     const lado = Math.max(medida / denominador, LADO_MINIMO_DO_SIMBOLO_MM);
     const c = { x: px(t.at.x), y: py(t.at.y) };
-    desenharSimboloDeClimatizacao(d, t.tipoHidraulico!, c.x, c.y, lado, { espessuraMm: FINA, cor: COR_DA_DISCIPLINA[t.disciplina] ?? COR_EQUIPAMENTO });
+    desenharSimboloDeClimatizacao(d, t.tipoHidraulico!, c.x, c.y, lado, { espessuraMm: FINA, cor: COR_DA_DISCIPLINA[t.disciplina] ?? COR_EQUIPAMENTO }, proporcao);
     ocupadas.push({ x0: c.x - lado / 2, y0: c.y - lado / 2, x1: c.x + lado / 2, y1: c.y + lado / 2 });
     const tag = tagDaPecaDeClimatizacao(t, numeros);
     const w = larguraDoTexto(tag);

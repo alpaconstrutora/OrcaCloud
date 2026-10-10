@@ -1366,12 +1366,14 @@ function entidadesDeCota(
     pontosDasCotas.length = 0;
     const dasParedes = cadeiasPorLado(model, nivel);
     for (const c of dasParedes) {
+      // C12 (10/10/2026): a cadeia vai além das peças de fora (a condensadora na fachada), 150 mm de respiro.
+      const alemDasPecas = c.pecasForaMm > 0 ? Math.max(0, c.pecasForaMm + 150 - FOLGA) : 0;
       desenharLado(c.lado, c.faceExternaMm, [
         [c.aberturas, AFASTAMENTO_COTA.aberturas - 1],
         [c.internas, AFASTAMENTO_COTA.internas - 1],
         [c.parcial, AFASTAMENTO_COTA.parcial - 1],
         [[c.total], AFASTAMENTO_COTA.total - 1],
-      ]);
+      ], alemDasPecas);
     }
     // As cotas do LOTE, por fora da divisa — a mesma conta da tela e do PDF.
     // + as faixas de restrição e as divisas internas (08/10/2026). O envelope recuado não: os recuos são da zona, não do

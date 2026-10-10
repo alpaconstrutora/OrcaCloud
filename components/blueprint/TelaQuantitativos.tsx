@@ -119,6 +119,8 @@ const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
   { key: 'areaFormaM2', label: 'Fôrma (m²)', width: 110, align: 'right' },
   { key: 'acoKg', label: 'Aço (kg)', width: 100, align: 'right' },
   { key: 'instalacoes', label: 'Instalações', width: 230, align: 'right' },
+  // C16 (10/10/2026): a climatização do pavimento em coluna própria.
+  { key: 'climatizacao', label: 'Climatização', width: 230, align: 'right' },
 ];
 const COLUNAS_INSTALACAO: StandardTableColumn[] = [
   { key: 'familia', label: 'Família', width: 100 },
@@ -602,6 +604,12 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                 return <span className="block text-right text-xs tabular-nums text-gray-600">{p.portas} porta(s), {p.janelas} janela(s) · {fmt(p.areaAberturasM2)} m²</span>;
               case 'instalacoes':
                 return <span className="block text-right text-xs tabular-nums text-gray-600">{fmt(p.tuboHidraulicoM)} m de tubo · {p.pontosHidraulicos} ponto(s) · {p.conexoesHidraulicas} conexão(ões) · {fmt(p.eletrodutoM)} m de eletroduto · {fmt(p.condutorM)} m de fio · {p.pontosEletricos} ponto(s) elétrico(s)</span>;
+              case 'climatizacao':
+                return (
+                  <span className="block text-right text-xs tabular-nums text-gray-600">
+                    {fmt(p.linhaFrigorigenaM)} m de linha · {fmt(p.drenoAcM)} m de dreno · {fmt(p.dutoM)} m de duto · {p.equipamentosClimatizacao} equipamento(s) · {p.terminaisDeAr} terminal(is) de ar
+                  </span>
+                );
               case 'areaConstruidaM2':
               case 'areaParedeDuasFacesM2':
               case 'volumeAlvenariaM3':
@@ -613,7 +621,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
                 return null;
             }
           }}
-          sortValue={(key, p) => (key === 'nome' ? p.nome : key === 'aberturas' ? p.portas + p.janelas : key === 'instalacoes' ? p.tuboHidraulicoM : (p as unknown as Record<string, number>)[key])}
+          sortValue={(key, p) => (key === 'nome' ? p.nome : key === 'aberturas' ? p.portas + p.janelas : key === 'instalacoes' ? p.tuboHidraulicoM : key === 'climatizacao' ? p.linhaFrigorigenaM + p.dutoM : (p as unknown as Record<string, number>)[key])}
           searchText={(p) => p.nome}
           searchPlaceholder="Buscar pavimento..."
           empty={{ title: 'Nenhum pavimento', subtitle: 'Adicione um pavimento no painel Pavimentos.' }}

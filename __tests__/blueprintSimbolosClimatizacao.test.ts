@@ -10,6 +10,7 @@ import {
   TIPOS_COM_SIMBOLO_DE_CLIMATIZACAO,
   desenharSimboloDeClimatizacao,
   idsDaClimatizacao,
+  proporcaoDoSimbolo,
   simboloDeClimatizacao,
   temSimboloDeClimatizacao,
 } from '../utils/blueprintSimbolosClimatizacao';
@@ -69,3 +70,47 @@ describe('climatização E3.4 · símbolos', () => {
     expect(ids).not.toContain(m.terminais!.find((x) => x.tipoHidraulico === 'LAVATORIO')!.id);
   });
 });
+
+describe('pendência D1 (10/10/2026) · o equipamento retangular na proporção da peça', () => {
+  const caixa = (prims: ReturnType<typeof simboloDeClimatizacao>, lado: number) => {
+    const contorno = prims.find((p) => p.tipo === 'poligono')!;
+    if (contorno.tipo !== 'poligono') throw new Error('sem contorno');
+    const xs = contorno.pontos.map(([x]) => x * lado);
+    const ys = contorno.pontos.map(([, y]) => y * lado);
+    return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+  };
+
+  it('a hi-wall de 900 × 220 desenha 900 × 220 (antes: 900 × 360, no quadrado da maior medida)', () => {
+    const p = proporcaoDoSimbolo('EVAPORADORA_HI_WALL', 900, 220)!;
+    const c = caixa(simboloDeClimatizacao('EVAPORADORA_HI_WALL', p), 900);
+    expect(c.w).toBeCloseTo(900, 6);
+    expect(c.h).toBeCloseTo(220, 6);
+    // Sem proporção (a legenda), a forma de sempre.
+    expect(caixa(simboloDeClimatizacao('EVAPORADORA_HI_WALL'), 900).h).toBeCloseTo(360, 6);
+  });
+
+  it('a condensadora e as outras retangulares também; a hélice cabe na profundidade', () => {
+    const p = proporcaoDoSimbolo('CONDENSADORA_SPLIT', 850, 330)!;
+    const prims = simboloDeClimatizacao('CONDENSADORA_SPLIT', p);
+    expect(caixa(prims, 850).h).toBeCloseTo(330, 6);
+    for (const c of prims) if (c.tipo === 'circulo') expect(Math.abs(c.cy) + c.r).toBeLessThanOrEqual(p / 2 + 1e-9);
+    for (const t of ['EVAPORADORA_PISO_TETO', 'EVAPORADORA_DUTADA', 'CONDENSADORA_VRF'] as const) expect(proporcaoDoSimbolo(t, 1000, 400)).toBeCloseTo(0.4, 9);
+  });
+
+  it('os demais tipos (difusor, cassete, bomba) continuam no quadrado; medida estragada também', () => {
+    expect(proporcaoDoSimbolo('DIFUSOR', 600, 600)).toBeNull();
+    expect(proporcaoDoSimbolo('EVAPORADORA_CASSETE', 840, 840)).toBeNull();
+    expect(proporcaoDoSimbolo('EVAPORADORA_HI_WALL', 0, 220)).toBeNull();
+    expect(proporcaoDoSimbolo('EVAPORADORA_HI_WALL', 900, 10)).toBe(0.15);
+  });
+
+  it('a prancha desenha a hi-wall com a largura como lado (o contorno tem a profundidade da peça)', () => {
+    const d = new DesenhistaDeProva();
+    desenharSimboloDeClimatizacao(d, 'EVAPORADORA_HI_WALL', 0, 0, 18, { cor: '#000', espessuraMm: 0.25 }, 220 / 900);
+    const poligono = d.chamadas.find((c) => c.tipo === 'poligono');
+    expect(poligono).toBeTruthy();
+    const ys = (poligono!.args[0] as { x: number; y: number }[]).map((q) => q.y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo((18 * 220) / 900, 6);
+  });
+});
+

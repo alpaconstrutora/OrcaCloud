@@ -141,3 +141,27 @@ describe('instalações por pavimento (28/09/2026, E0.2 do roadmap hidrossanitá
   });
 });
 
+describe('C16 (10/10/2026) · a climatização do pavimento em coluna própria', () => {
+  it('linha, dreno e duto em metros, equipamentos e terminais de ar contados — e fora dos pontos hidráulicos', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m0.levels[0].id;
+    const m = applyBatch(m0, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(0, 0), cotaMm: 2200 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'CD', tipoHidraulico: 'CONDENSADORA_SPLIT', at: point(4000, 0), cotaMm: 300 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'DIFUSOR', tipoHidraulico: 'DIFUSOR', at: point(0, 3000), cotaMm: 2600 } as Command,
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'LAV', tipoHidraulico: 'LAVATORIO', at: point(6000, 0), cotaMm: 600 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'FRIGORIGENA', a: point(0, 0), b: point(4000, 0), cotaAMm: 2500, cotaBMm: 2500, bitolaMm: 6, bitolaSuccaoMm: 10 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'DRENO_AC', a: point(0, 100), b: point(2000, 100), cotaAMm: 2100, cotaBMm: 2080, bitolaMm: 25 } as Command,
+      { type: 'AddTrecho', levelId: t, disciplina: 'MECANICA', a: point(0, 3000), b: point(3000, 3000), cotaAMm: 2600, cotaBMm: 2600, bitolaMm: 200 } as Command,
+    ]).model;
+    const [p] = quantitativosPorPavimento(m, computeQuantities(m, POLITICA_PADRAO));
+    expect(p.linhaFrigorigenaM).toBeCloseTo(4, 2);
+    expect(p.drenoAcM).toBeCloseTo(2, 2);
+    expect(p.dutoM).toBeCloseTo(3, 2);
+    expect(p.equipamentosClimatizacao).toBe(2);
+    expect(p.terminaisDeAr).toBe(1);
+    // O lavatório é o único ponto hidráulico: a evaporadora, a condensadora e o difusor saíram de lá.
+    expect(p.pontosHidraulicos).toBe(1);
+  });
+});
+

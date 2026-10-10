@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, recomputeSpaces, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { DesenhistaDeProva, PAPEIS, desenharFolhaDeDetalhesHidro, enquadrar, orientar, type OpcoesExportacao } from '../utils/blueprintExport';
-import { desenharIsometrico, desenharIsometricos, isometricosDoModelo, projetarIsometrico, recortarNaCaixa } from '../utils/blueprintIsometricoPrancha';
+import { caixaDoTexto, desenharIsometrico, desenharIsometricos, isometricosDoModelo, lugarDoRotulo, projetarIsometrico, recortarNaCaixa, type IsometricoDePrancha } from '../utils/blueprintIsometricoPrancha';
 
 /** Banheiro (0–2000) e área (2000–4500) no térreo; a CI lá fora, a 1,5 m da casa. */
 function casa(): BlueprintModel {
@@ -109,3 +109,46 @@ describe('E2.2 — no papel', () => {
     expect(desenharIsometricos(new DesenhistaDeProva(), isos, 0, 0, 200, 100)).toEqual({ desenhados: 2, deFora: 0 });
   });
 });
+
+describe('C13 (10/10/2026) · rótulos do isométrico que não encostam', () => {
+  it('a posição de sempre quando está livre; a próxima livre quando não; marca o que escreveu', () => {
+    const ocupadas: ReturnType<typeof caixaDoTexto>[] = [];
+    expect(lugarDoRotulo([{ x: 0, y: 0 }, { x: 0, y: 5 }], 'EV · h 2,20', 1.8, ocupadas)).toEqual({ x: 0, y: 0 });
+    expect(lugarDoRotulo([{ x: 0, y: 0 }, { x: 0, y: 5 }], 'CD · h 0,30', 1.8, ocupadas)).toEqual({ x: 0, y: 5 });
+    expect(ocupadas).toHaveLength(2);
+  });
+
+  it('três peças a 10 cm umas das outras: nenhum par de rótulos se sobrepõe no papel', () => {
+    const iso: IsometricoDePrancha = {
+      chave: 'k',
+      titulo: 'Linha — teste',
+      rede: 'FRIGORIGENA' as IsometricoDePrancha['rede'],
+      levelId: 'lvl',
+      recorte: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 },
+      segmentos: [
+        { trechoId: 't1', disciplina: 'FRIGORIGENA', bitolaMm: 6, a: { x: 0, y: 0, z: 2500 }, b: { x: 3000, y: 0, z: 2500 }, rotulo: 'ø6/10' },
+        { trechoId: 't2', disciplina: 'FRIGORIGENA', bitolaMm: 6, a: { x: 0, y: 100, z: 2500 }, b: { x: 3000, y: 100, z: 2500 }, rotulo: 'ø6/10' },
+      ],
+      nos: [],
+      pontos: [
+        { p: { x: 0, y: 0, z: 2200 }, sigla: 'EV', cotaMm: 2200 },
+        { p: { x: 100, y: 0, z: 2200 }, sigla: 'EV', cotaMm: 2200 },
+        { p: { x: 0, y: 100, z: 2200 }, sigla: 'CD', cotaMm: 300 },
+      ],
+    } as unknown as IsometricoDePrancha;
+    const d = new DesenhistaDeProva();
+    desenharIsometrico(d, iso, 0, 0, 120, 80);
+    const textos = d.chamadas.filter((c) => c.tipo === 'texto').map((c) => c.args as [number, number, string, number]).filter(([, , t]) => !t.startsWith('Isométrico') && !t.startsWith('Linha —'));
+    expect(textos.length).toBeGreaterThanOrEqual(5);
+    const caixas = textos.map(([x, y, t, h]) => caixaDoTexto(x, y, t, h));
+    for (let i = 0; i < caixas.length; i++) {
+      for (let j = i + 1; j < caixas.length; j++) {
+        const a = caixas[i];
+        const b = caixas[j];
+        const sobrepoe = a.minX < b.maxX && b.minX < a.maxX && a.minY < b.maxY && b.minY < a.maxY;
+        expect(sobrepoe, `${textos[i][2]} × ${textos[j][2]}`).toBe(false);
+      }
+    }
+  });
+});
+

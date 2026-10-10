@@ -28,6 +28,9 @@ interface Props {
   onLancar: () => void;
   onAceitar: (ids: ObjectId[]) => void;
   onSelecionar?: (ids: string[]) => void;
+  /** D2: quantos terminais de ar ANTIGOS (texto livre) o desenho tem, e o lote que os converte. */
+  antigos?: number;
+  onConverterAntigos?: () => void;
 }
 
 const campo = 'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums';
@@ -58,11 +61,23 @@ function IconeDoEstado({ estado }: { estado: EstadoDaConferencia }) {
   return <AlertTriangle className={`h-3.5 w-3.5 ${estado === 'FALTA' ? 'text-red-600' : 'text-amber-600'}`} aria-label={estado === 'FALTA' ? 'falta' : 'aviso'} />;
 }
 
-export default function PainelRedeDeAr({ redes, ventilacao, plano, conferencia, hip, onHip, ajustes, onAjustar, sugeridos, onLancar, onAceitar, onSelecionar }: Props) {
+export default function PainelRedeDeAr({ redes, ventilacao, plano, conferencia, hip, onHip, ajustes, onAjustar, sugeridos, onLancar, onAceitar, onSelecionar, antigos = 0, onConverterAntigos }: Props) {
   const motivoDeLancar = plano.motivo ?? (plano.aCriar.length === 0 && plano.apagados === 0 ? 'nada a lançar' : null);
   const relevantes = ventilacao.filter((v) => v.exaustaoM3h > 0 || v.climatizado);
   return (
     <div className="space-y-3" data-testid="rede-de-ar">
+      {antigos > 0 && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800" data-testid="terminais-antigos">
+          <span>
+            {antigos} terminal(is) de ar antigo(s), de texto livre, fora da vazão e da rede — converta para o tipo (difusor, grelha, tomada de ar).
+          </span>
+          {onConverterAntigos && (
+            <button type="button" onClick={onConverterAntigos} className={`shrink-0 border-amber-300 bg-white text-amber-800 hover:bg-amber-100 ${botao}`}>
+              Converter ({antigos})
+            </button>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs text-slate-600 sm:grid-cols-2">
         <label className="flex items-center justify-between gap-2">
           <span>Dimensionamento</span>

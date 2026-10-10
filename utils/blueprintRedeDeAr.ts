@@ -28,7 +28,7 @@
  * Tudo DERIVADO, nada gravado além do que o lote do traçado/dimensionamento cria.
  * Física (ar a ~20 °C): ρ = 1,2 kg/m³, ν = 1,5·10⁻⁵ m²/s, cp = 1005 J/kg·K.
  */
-import type { BlueprintModel, Command, ObjectId, Terminal, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Terminal, TipoDePontoHidraulico, Trecho } from './blueprintKernel';
 import { applyBatch } from './blueprintKernel';
 import { pointInPolygon } from './blueprintKernel/geom';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
@@ -51,6 +51,34 @@ export const TERMINAIS_DE_INSUFLAMENTO = ['DIFUSOR', 'GRELHA_INSUFLAMENTO', 'BOC
 export const TERMINAIS_DA_REDE_DE_AR = [...TERMINAIS_DE_INSUFLAMENTO, 'GRELHA_RETORNO', 'TOMADA_AR_EXTERIOR'] as const;
 
 const ehDe = (lista: readonly string[], t: Terminal) => !!t.tipoHidraulico && lista.includes(t.tipoHidraulico);
+
+/**
+ * OS TERMINAIS DE AR ANTIGOS (10/10/2026, pendência D2). Até a E7 o menu inseria o
+ * terminal mecânico de TEXTO LIVRE ("Difusor", "Grelha de retorno", "Tomada de ar
+ * exterior" — P2.2), sem tipo: a vazão, a rede de dutos, o quantitativo e o IFC só
+ * enxergam os TIPADOS. Aqui está o de-para; o painel de dutos oferece converter,
+ * num lote (um Ctrl+Z) — nada muda sozinho no desenho de ninguém.
+ */
+const DE_PARA_DO_TERMINAL_ANTIGO: Record<string, TipoDePontoHidraulico> = {
+  difusor: 'DIFUSOR',
+  'grelha de retorno': 'GRELHA_RETORNO',
+  'grelha de insuflamento': 'GRELHA_INSUFLAMENTO',
+  grelha: 'GRELHA_INSUFLAMENTO',
+  'tomada de ar exterior': 'TOMADA_AR_EXTERIOR',
+};
+
+export function terminaisDeArAntigos(model: BlueprintModel): { terminalId: ObjectId; de: string; para: TipoDePontoHidraulico }[] {
+  return (model.terminais ?? [])
+    .filter((t) => t.disciplina === 'MECANICA' && !t.tipoHidraulico)
+    .flatMap((t) => {
+      const para = DE_PARA_DO_TERMINAL_ANTIGO[(t.tipo ?? '').trim().toLowerCase()];
+      return para ? [{ terminalId: t.id, de: t.tipo, para }] : [];
+    });
+}
+
+export function comandosDeConverterTerminaisAntigos(model: BlueprintModel): Command[] {
+  return terminaisDeArAntigos(model).map((x) => ({ type: 'SetTerminalProps', terminalId: x.terminalId, tipoHidraulico: x.para }) as Command);
+}
 
 // ─── Física ──────────────────────────────────────────────────────────────────
 

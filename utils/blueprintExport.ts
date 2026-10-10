@@ -1771,13 +1771,16 @@ function desenharCotas(
   for (const nivel of model.levels) {
     pontosDasCotas.length = 0;
     const dasParedes = cadeiasPorLado(model, nivel);
+    // C12 (10/10/2026): mm de papel por mm do modelo — a cadeia vai além das peças de fora (150 mm de respiro).
+    const papelPorMm = Math.abs(px(1000) - px(0)) / 1000;
     for (const c of dasParedes) {
+      const alemDasPecas = c.pecasForaMm > 0 ? Math.max(0, (c.pecasForaMm + 150) * papelPorMm - FOLGA) : 0;
       desenharLado(c.lado, c.faceExternaMm, [
         [c.aberturas, AFASTAMENTO_COTA.aberturas - 1],
         [c.internas, AFASTAMENTO_COTA.internas - 1],
         [c.parcial, AFASTAMENTO_COTA.parcial - 1],
         [[c.total], AFASTAMENTO_COTA.total - 1],
-      ]);
+      ], alemDasPecas);
     }
     // AS COTAS DO LOTE (07/10/2026), por fora da divisa — a mesma conta da tela (`cadeiasDoContorno`). Sem os blocos
     // de massa, que a prancha não desenha: o lado do lote reparte só pelo contorno das paredes.

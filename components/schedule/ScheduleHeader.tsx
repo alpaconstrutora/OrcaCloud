@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+    AlertTriangle,
     ArrowLeft,
     BadgeCheck,
     CalendarCheck,
@@ -39,6 +40,8 @@ import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from 
 import MenuDeVistas, { GrupoDeVistas } from '../ui/MenuDeVistas';
 import MenuDoRibbon from '../ui/MenuDoRibbon';
 import { usePersistedState } from '../ui/TableUtils';
+import ActionIconButton from '../ui/ActionIconButton';
+import { RiscoDeAbastecimento, rotuloDoRisco } from './PainelRiscoAbastecimento';
 import { isOrcamentoOuLegado } from '../../utils/projectClassification';
 import { TASK_NATURE_META } from '../../utils/taskNature';
 import { ProjectSchedule, ProjectSettings, ItemScheduleDetails } from '../../types';
@@ -88,6 +91,11 @@ interface ScheduleHeaderProps {
     /** Modo tela cheia (`hooks/useTelaCheia.ts`) — aceso enquanto vale, com `aria-pressed`. */
     telaCheia: boolean;
     onAlternarTelaCheia: () => void;
+    /** Etapas em risco de abastecimento — `null`/ausente quando não há nenhuma.
+        Era um banner fixo entre o ribbon e a grade (10/10/2026); virou o ícone
+        com contador do §5.3 do guia, e o clique abre `PainelRiscoAbastecimento`. */
+    riscoDeAbastecimento?: RiscoDeAbastecimento | null;
+    onAbrirRiscoDeAbastecimento?: () => void;
 
     /* ─── O que veio do cabeçalho das grades para o ribbon (21/09/2026) ─── */
     /** Aba Estrutura › Novo grupo — a raiz da EAP. */
@@ -211,6 +219,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     onAutoSchedule,
     telaCheia,
     onAlternarTelaCheia,
+    riscoDeAbastecimento,
+    onAbrirRiscoDeAbastecimento,
     onAddRootGroup,
     collapsedCols,
     ganttCollapsedCols,
@@ -301,6 +311,27 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                 }
                 direita={
                     <>
+                        {/* Aviso de abastecimento (§5.3 do guia): aviso que é estado
+                            normal da tela não é banner — é ícone com contador, o
+                            detalhe no `title`, o clique abre o painel. Mesmo desenho do
+                            "Memória técnica pendente" de BudgetEditor.tsx; aqui em h-9
+                            para alinhar com a tela cheia e a ação primária. */}
+                        {riscoDeAbastecimento && riscoDeAbastecimento.etapas > 0 && onAbrirRiscoDeAbastecimento && (
+                            <div className="relative shrink-0">
+                                <ActionIconButton
+                                    kind="view"
+                                    tone="danger"
+                                    icon={<AlertTriangle className="w-4 h-4" />}
+                                    title={`${rotuloDoRisco(riscoDeAbastecimento)}. Clique para ver as etapas.`}
+                                    aria-label={`Ver ${riscoDeAbastecimento.etapas} ${riscoDeAbastecimento.etapas === 1 ? 'etapa em risco' : 'etapas em risco'} de abastecimento`}
+                                    onClick={onAbrirRiscoDeAbastecimento}
+                                    className="flex h-9 w-9 items-center justify-center"
+                                />
+                                <span className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white tabular-nums">
+                                    {riscoDeAbastecimento.etapas}
+                                </span>
+                            </div>
+                        )}
                         {/* Tela cheia — o mesmo botão de MODO da Planta: ícone só,
                             `aria-pressed`, aceso enquanto vale. À vista em qualquer
                             aba porque é o único caminho para SAIR do modo. */}

@@ -36,6 +36,7 @@ import { LevelingDecisionModal } from './schedule/LevelingDecisionModal';
 import { PredecessorModal } from './schedule/PredecessorModal';
 import { ResourceAllocationModal } from './schedule/ResourceAllocationModal';
 import { ScheduleGantt } from './schedule/ScheduleGantt';
+import PainelRiscoAbastecimento from './schedule/PainelRiscoAbastecimento';
 import { SchedulingEngine, DEFAULT_CREW_CLASSIFICATION, ensureFullScheduleList } from '../utils/schedulingEngine';
 import * as outlineOps from '../utils/scheduleOutline';
 import { exportScheduleToXlsx, exportScheduleToCsv } from '../utils/scheduleExport';
@@ -74,8 +75,6 @@ import {
     TIMELINE_PX_PER_DAY,
 } from '../utils/scheduleTimeline';
 import {
-    ChevronDown,
-    AlertTriangle,
     TrendingUp,
     Camera,
     X,
@@ -1831,7 +1830,13 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         return { totalAlerts, totalMissingItems, totalMissingCost };
     }, [taskInsights, hierarchy, orders]);
 
-    const [isRiskPanelExpanded, setIsRiskPanelExpanded] = React.useState(false);
+    const [isRiskPanelOpen, setIsRiskPanelOpen] = React.useState(false);
+    const riscoDeAbastecimento = React.useMemo(
+        () => insightSummary.totalAlerts > 0
+            ? { etapas: insightSummary.totalAlerts, insumos: insightSummary.totalMissingItems, custo: insightSummary.totalMissingCost }
+            : null,
+        [insightSummary]
+    );
 
     // Auto-expand all nodes on first load
     const hasAutoExpanded = React.useRef(false);
@@ -3934,6 +3939,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 onBack={onBack}
                 telaCheia={telaCheia}
                 onAlternarTelaCheia={alternarTelaCheia}
+                riscoDeAbastecimento={riscoDeAbastecimento}
+                onAbrirRiscoDeAbastecimento={() => setIsRiskPanelOpen(true)}
                 settings={settings}
                 projects={projects}
                 viewMode={viewMode}
@@ -4288,64 +4295,16 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 onSaveAsScenario={handleSaveAsScenario}
             />
 
-            {/* Supply Risk Summary Panel */}
-            {insightSummary.totalAlerts > 0 && (
-                <div className="bg-gradient-to-r from-red-50 via-orange-50 to-amber-50 border border-red-200/60 rounded-2xl shadow-sm overflow-hidden transition-all duration-300">
-                    <button
-                        onClick={() => setIsRiskPanelExpanded(prev => !prev)}
-                        className="w-full flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-red-100/30 transition-colors"
-                    >
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-red-100 text-red-600 shadow-sm">
-                                <AlertTriangle className="w-5 h-5" />
-                            </div>
-                            <div className="text-left">
-                                <p className="text-sm font-bold text-red-800">
-                                    {insightSummary.totalAlerts} {insightSummary.totalAlerts === 1 ? 'etapa em risco' : 'etapas em risco'} de abastecimento
-                                </p>
-                                <p className="text-xs text-red-600/80 mt-0.5">
-                                    {insightSummary.totalMissingItems} insumos sem pedido de compra — Custo estimado: <strong>R$ {insightSummary.totalMissingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-red-500 uppercase tracking-wider">{isRiskPanelExpanded ? 'Ocultar' : 'Ver detalhes'}</span>
-                            <ChevronDown className={`w - 4 h - 4 text - red - 400 transition - transform duration - 200 ${isRiskPanelExpanded ? 'rotate-180' : ''} `} />
-                        </div>
-                    </button>
-
-                    {isRiskPanelExpanded && (
-                        <div className="px-5 pb-4 pt-1 border-t border-red-100">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-                                {Object.entries(taskInsights).map(([id, insight]) => {
-                                    const findName = (nodes: HierarchyNode[]): string => {
-                                        for (const n of nodes) {
-                                            if (n.id === id) return n.name || n.data?.sinapiItem?.description || id;
-                                            if (n.children) {
-                                                const found = findName(n.children);
-                                                if (found) return found;
-                                            }
-                                        }
-                                        return '';
-                                    };
-                                    const name = findName(hierarchy);
-                                    return (
-                                        <div key={id} className="flex items-start gap-2.5 bg-white/70 backdrop-blur-sm rounded-xl px-3.5 py-2.5 border border-red-100/60 shadow-xs">
-                                            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                                            <div className="min-w-0">
-                                                <p className="text-xs font-semibold text-gray-800 truncate" title={name}>{name}</p>
-                                                <p className="text-xs text-gray-500 mt-0.5">
-                                                    {insight.missingItems} {insight.missingItems === 1 ? 'insumo' : 'insumos'} sem pedido — R$ {insight.missingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
+            {/* Etapas em risco de abastecimento — painel lateral aberto pelo ícone
+                com contador do ribbon. Era um banner fixo aqui, sem como ocultar
+                (10/10/2026); ver PainelRiscoAbastecimento.tsx. */}
+            <PainelRiscoAbastecimento
+                open={isRiskPanelOpen}
+                onClose={() => setIsRiskPanelOpen(false)}
+                resumo={riscoDeAbastecimento ?? { etapas: 0, insumos: 0, custo: 0 }}
+                taskInsights={taskInsights}
+                hierarchy={hierarchy}
+            />
 
             {/* Main Content: Chart + Table */}
             <div ref={exportRef} className="flex flex-col gap-6 bg-white p-2 rounded-xl">

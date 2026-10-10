@@ -25,6 +25,8 @@
 //                      ("Importar agora" na tela; plano 2026-10-10-opura-market-fontes).
 //   modo 'ler-anuncio' + url — baixa a página de UM anúncio (link colado) e
 //                      devolve os campos achados, sem gravar (Fase B do plano de fontes).
+//                      Com `pacote` (Fase C, favorito "Enviar ao ÒPURA"), lê os pedaços
+//                      que o NAVEGADOR tirou da página, sem baixar nada.
 //   modo 'gravar-anuncio' + anuncio (conferido na tela) + site — grava esse
 //                      anúncio; colar o mesmo link de novo atualiza, não duplica.
 //   modo 'agendado'  — SÓ o cron diário (opura-market-feeds-diario), autenticado
@@ -81,6 +83,8 @@ import {
   consultasComCep,
   urlDeLeitura,
   lerAnuncioDaPagina,
+  lerAnuncioDosPedacos,
+  pedacosDoPacote,
   lerAnuncioConexao381,
   anuncioEmBranco,
   anuncioConferido,
@@ -605,17 +609,27 @@ serve(async (req: Request) => {
       if (!v.ok) return json({ error: v.motivo }, 400);
       const colada = v.url.toString();
       const alvo = urlDeLeitura(colada);
-      let lido: AnuncioDaPagina;
+      // Fase C: o favorito "Enviar ao ÒPURA" já leu a página NO NAVEGADOR (onde os
+      // portais abrem) e manda os pedaços. Sem pacote, ou pacote sem anúncio
+      // (ex.: a página da Conexão 381 é montada por JavaScript), o servidor busca.
+      if (corpo.pacote != null && JSON.stringify(corpo.pacote).length > MAX_PAGINA_BYTES) {
+        return json({ error: 'O pacote do navegador passa de 5 MB.' }, 413);
+      }
+      const pedacos = corpo.pacote != null ? pedacosDoPacote(corpo.pacote) : null;
+      let lido: AnuncioDaPagina | null = pedacos ? lerAnuncioDosPedacos(pedacos, colada) : null;
       let falhaLeitura: string | null = null;
-      try {
-        const texto = await buscarUrlPublica(new URL(alvo.url), {
-          accept: alvo.formato === 'html' ? 'text/html,application/xhtml+xml,*/*;q=0.8' : 'application/json',
-          maxBytes: MAX_PAGINA_BYTES, timeoutMs: 20_000, rotulo: 'A página do anúncio',
-        });
-        lido = alvo.formato === 'json-conexao381' ? lerAnuncioConexao381(JSON.parse(texto), colada) : lerAnuncioDaPagina(texto, colada);
-      } catch (e) {
-        falhaLeitura = e instanceof Error ? e.message : String(e);
-        lido = anuncioEmBranco(colada);
+      if (!lido || lido.leitor === 'nenhum') {
+        try {
+          const texto = await buscarUrlPublica(new URL(alvo.url), {
+            accept: alvo.formato === 'html' ? 'text/html,application/xhtml+xml,*/*;q=0.8' : 'application/json',
+            maxBytes: MAX_PAGINA_BYTES, timeoutMs: 20_000, rotulo: 'A página do anúncio',
+          });
+          lido = alvo.formato === 'json-conexao381' ? lerAnuncioConexao381(JSON.parse(texto), colada) : lerAnuncioDaPagina(texto, colada);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          falhaLeitura = pedacos ? `A página aberta no navegador não trouxe os dados do anúncio, e o servidor também não conseguiu lê-la (${msg})` : msg;
+          lido = lido ?? anuncioEmBranco(colada);
+        }
       }
       // Sem campo bairro: um bairro CADASTRADO citado no título vira sugestão.
       if (!lido.anuncio.bairro) {

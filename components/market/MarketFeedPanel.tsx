@@ -13,6 +13,7 @@ import type { OpuraMarketCity, OpuraMarketListing } from '../../types';
 import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
 import MarketAnuncioLinkSheet from './MarketAnuncioLinkSheet';
+import { codigoDoFavorito, type CapturaDoNavegador } from '../../utils/opuraMarketCaptura';
 
 /**
  * Fontes de anúncios da praça (plano 2026-10-10-opura-market-fontes, Fase A).
@@ -69,9 +70,12 @@ interface Props {
   cidade: OpuraMarketCity | null;
   listings: OpuraMarketListing[];
   onAtualizado: () => Promise<void>;
+  /** Anúncio enviado pelo favorito "Enviar ao ÒPURA" (Fase C), esperando leitura. */
+  captura?: CapturaDoNavegador | null;
+  onCapturaUsada?: () => void;
 }
 
-export default function MarketFeedPanel({ organizationId, cityId, cidade, listings, onAtualizado }: Props) {
+export default function MarketFeedPanel({ organizationId, cityId, cidade, listings, onAtualizado, captura = null, onCapturaUsada }: Props) {
   const confirm = useConfirm();
   // Colar link de anúncio (Fase B do plano de fontes): lê no servidor e abre a conferência.
   const [linkAnuncio, setLinkAnuncio] = React.useState('');
@@ -121,6 +125,46 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
       setResultado(`Erro: ${err.message || 'falha ao ler o anúncio'}`);
     } finally {
       setLendoAnuncio(false);
+    }
+  };
+
+  // Anúncio enviado pelo favorito (Fase C): lido assim que houver organização e
+  // praça. A ref impede ler o mesmo pacote duas vezes (efeito repetido do StrictMode).
+  const capturaLida = React.useRef<CapturaDoNavegador | null>(null);
+  React.useEffect(() => {
+    if (!captura || !organizationId || !cityId || capturaLida.current === captura) return;
+    capturaLida.current = captura;
+    setLendoAnuncio(true);
+    setResultado(null);
+    opuraMarketService.lerAnuncioPorLink(organizationId, cityId, captura.url, captura.pacote)
+      .then(setLeitura)
+      .catch((err: any) => {
+        console.error('Falha ao ler o anúncio enviado pelo navegador:', err);
+        setResultado(`Erro: ${err.message || 'falha ao ler o anúncio enviado pelo navegador'}`);
+      })
+      .finally(() => {
+        setLendoAnuncio(false);
+        onCapturaUsada?.();
+      });
+  }, [captura, organizationId, cityId, onCapturaUsada]);
+
+  // O favorito: `javascript:` com a captura e o endereço deste app. O React
+  // bloqueia `javascript:` no `href` do JSX, então o endereço entra pelo DOM.
+  const codigoFavorito = React.useMemo(
+    () => (typeof window !== 'undefined' ? codigoDoFavorito(window.location.href.split('#')[0]) : ''),
+    []
+  );
+  const favoritoRef = React.useRef<HTMLAnchorElement>(null);
+  React.useEffect(() => {
+    favoritoRef.current?.setAttribute('href', codigoFavorito);
+  }, [codigoFavorito]);
+
+  const copiarFavorito = async () => {
+    try {
+      await navigator.clipboard.writeText(codigoFavorito);
+      setResultado('Código do favorito copiado. Crie um favorito no navegador e cole este código no campo do endereço (URL).');
+    } catch {
+      setResultado('Erro: o navegador não deixou copiar. Arraste o botão "Enviar ao ÒPURA" para a barra de favoritos.');
     }
   };
 
@@ -305,6 +349,50 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
             className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
           >
             {lendoAnuncio ? 'Lendo…' : 'Ler anúncio'}
+          </button>
+        </div>
+      </div>
+
+      {captura && (!organizationId || !cityId) && (
+        <div className="p-4 bg-amber-50 border border-amber-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="text-xs text-amber-800 font-semibold min-w-0">
+            Anúncio recebido do navegador, esperando para ser lido.
+            <span className="block font-normal mt-0.5 truncate" title={captura.url}>{captura.url}</span>
+            <span className="block font-normal mt-0.5">{!organizationId ? SEM_ORG : 'Selecione a cidade da praça.'}</span>
+          </div>
+          <button
+            onClick={() => onCapturaUsada?.()}
+            className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shrink-0"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
+
+      <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="text-xs text-slate-600 font-semibold">
+          Capturar no navegador (ZAP, VivaReal, OLX)
+          <span className="block text-slate-400 font-normal mt-0.5">
+            Esses portais bloqueiam a leitura pelo servidor. Arraste o botão para a barra de favoritos do navegador (uma vez só, no computador).
+            Depois, na página de um anúncio, clique no favorito: o app abre com o anúncio para conferir. Fotos não são copiadas.
+          </span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <a
+            ref={favoritoRef}
+            onClick={(e) => e.preventDefault()}
+            draggable
+            title="Arraste para a barra de favoritos. Clicar aqui não faz nada: o favorito funciona na página do anúncio."
+            className="h-9 px-4 inline-flex items-center rounded-[6px] text-[13px] font-medium bg-white border border-dashed border-blue-300 text-blue-700 cursor-grab select-none"
+          >
+            Enviar ao ÒPURA
+          </a>
+          <button
+            onClick={copiarFavorito}
+            title="Para criar o favorito à mão: copia o código para colar no endereço (URL) do favorito"
+            className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+          >
+            Copiar código
           </button>
         </div>
       </div>

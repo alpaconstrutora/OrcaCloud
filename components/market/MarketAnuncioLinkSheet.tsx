@@ -182,9 +182,11 @@ const MarketAnuncioLinkSheet: React.FC<Props> = ({ open, onClose, leitura, organ
                 <div className="flex items-center gap-2 min-w-0">
                   <Link2 className="w-4 h-4 text-slate-400 shrink-0" />
                   <span className="text-sm text-slate-700 truncate" title={c.url}>{c.url}</span>
-                  <a href={c.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-600 hover:text-blue-700" title="Abrir o anúncio no site">
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
+                  {/^https?:\/\//i.test(c.url) && (
+                    <a href={c.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-blue-600 hover:text-blue-700" title="Abrir o anúncio no site">
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  )}
                 </div>
               </Campo>
               <Campo label="Título" className="col-span-2">

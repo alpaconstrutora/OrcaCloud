@@ -668,8 +668,14 @@ export const opuraMarketService = {
    * 2026-10-10-opura-market-fontes). Site que bloqueia a leitura não é erro:
    * volta o anúncio em branco e `falhaLeitura` diz o motivo.
    */
-  async lerAnuncioPorLink(organizationId: string, cityId: string, url: string): Promise<LeituraDeAnuncio> {
-    return invocarImportacao({ modo: 'ler-anuncio', organizationId, cityId, url });
+  async lerAnuncioPorLink(
+    organizationId: string,
+    cityId: string,
+    url: string,
+    /** Pedaços da página tirados no NAVEGADOR pelo favorito (Fase C); sem eles, o servidor baixa a página. */
+    pacote?: Record<string, unknown>
+  ): Promise<LeituraDeAnuncio> {
+    return invocarImportacao({ modo: 'ler-anuncio', organizationId, cityId, url, ...(pacote ? { pacote } : {}) });
   },
 
   /** Grava o anúncio conferido na tela. O mesmo link de novo atualiza, não duplica. */

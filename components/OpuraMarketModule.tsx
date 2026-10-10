@@ -8,6 +8,7 @@ import { useMarketVocacao, type Ponto } from '../hooks/useMarketVocacao';
 import { useMarketLeaflet, type CamadaMercado } from '../hooks/useMarketLeaflet';
 import { useMarketIndicadores } from '../hooks/useMarketIndicadores';
 import { gerarRelatorioVocacaoPdf } from '../utils/opuraMarketRelatorioPdf';
+import { pacoteDoHash, type CapturaDoNavegador } from '../utils/opuraMarketCaptura';
 import type {
   OpuraMarketCity,
   OpuraMarketNeighborhood,
@@ -91,6 +92,25 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
 
   // Tela
   const [aba, setAba] = React.useState<Aba>('map');
+  // Fase C do plano 2026-10-10-opura-market-fontes: o favorito "Enviar ao ÒPURA"
+  // abre o app com o anúncio no hash (#/opura-market?anuncio=…). Lido uma vez, sai
+  // do endereço (recarregar não reabre) e vai para a aba Fontes, que abre a conferência.
+  const [captura, setCaptura] = React.useState<CapturaDoNavegador | null>(() =>
+    typeof window !== 'undefined' ? pacoteDoHash(window.location.hash) : null
+  );
+  React.useEffect(() => {
+    const aoMudar = () => {
+      const c = pacoteDoHash(window.location.hash);
+      if (c) setCaptura(c);
+    };
+    window.addEventListener('hashchange', aoMudar);
+    return () => window.removeEventListener('hashchange', aoMudar);
+  }, []);
+  React.useEffect(() => {
+    if (!captura) return;
+    setAba('feed');
+    if (window.location.hash.startsWith('#/opura-market?')) window.history.replaceState(null, '', '#/opura-market');
+  }, [captura]);
   const [camada, setCamada] = React.useState<CamadaMercado>('preco');
   // Mesmo termo na tabela e no painel de ofertas; sobrevive à navegação (§3).
   const [busca, setBusca] = usePersistedState<string>('opuraMarket:busca', '');
@@ -425,6 +445,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
               cidade={cidadeAtual}
               listings={listings}
               onAtualizado={() => loadListings(selectedCityId)}
+              captura={captura}
+              onCapturaUsada={() => setCaptura(null)}
             />
           )}
 

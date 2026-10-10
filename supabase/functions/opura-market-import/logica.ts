@@ -780,6 +780,32 @@ export function bairroNoTexto(texto: string | null | undefined, bairros: BairroC
   return melhor;
 }
 
+/**
+ * Os pedaços da página de que a leitura precisa. O SERVIDOR tira os pedaços do
+ * HTML baixado (`pedacosDoHtml`); a CAPTURA NO NAVEGADOR (Fase C, favorito
+ * "Enviar ao ÒPURA") tira os mesmos pedaços da página aberta e manda ao app.
+ * A leitura (`lerAnuncioDosPedacos`) é uma só para os dois caminhos.
+ */
+export interface PedacosDaPagina {
+  canonica: string | null;
+  ogUrl: string | null;
+  ogSiteName: string | null;
+  /** og:title, ou o <title> da página. */
+  ogTitulo: string | null;
+  /** og:description, ou a meta description. */
+  ogDescricao: string | null;
+  /** product:price:amount / og:price:amount. */
+  precoMeta: string | null;
+  /** Blocos JSON-LD já lidos. */
+  ld: unknown[];
+  /** ZAP Imóveis e VivaReal: o objeto `listing` do payload do Next.js. */
+  zap: unknown;
+  /** OLX: o objeto `ad` do `initial-data`. */
+  olx: unknown;
+  /** Sites Arbo: `props.pageProps.imovel` do `__NEXT_DATA__`. */
+  arbo: unknown;
+}
+
 function metaDe(html: string, nome: string): string | null {
   for (const m of html.matchAll(/<meta\b[^>]*>/gi)) {
     const tagMeta = m[0];
@@ -798,35 +824,100 @@ function canonicaDe(html: string): string | null {
   return null;
 }
 
-// ZAP Imóveis e VivaReal: o anúncio inteiro está no payload do Next.js
-// (self.__next_f.push), como texto JSON escapado dentro de strings.
-function lerGrupoZap(html: string, avisos: string[]): Parcial | null {
+/** Os pedaços de uma página HTML baixada pelo servidor. */
+export function pedacosDoHtml(html: string): PedacosDaPagina {
+  // ZAP e VivaReal: o anúncio está no payload do Next.js (self.__next_f.push),
+  // como texto JSON escapado dentro de strings.
+  let zap: unknown = null;
   let payload = '';
   for (const m of html.matchAll(/self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g)) {
     try { payload += JSON.parse(m[1]); } catch { /* pedaço que não é texto */ }
   }
   const i = payload.indexOf('"listing":{');
-  if (i < 0) return null;
+  if (i >= 0) {
+    try { zap = JSON.parse(objetoJsonEm(payload, i + '"listing":'.length) ?? ''); } catch { zap = null; }
+  }
+  // OLX: `<script id="initial-data" data-json="…">` (JSON num atributo HTML).
+  let olx: unknown = null;
+  const mOlx = /<script\b[^>]*\bid="initial-data"[^>]*\bdata-json="([^"]*)"/i.exec(html);
+  if (mOlx) {
+    try { olx = JSON.parse(textoDeHtml(mOlx[1]))?.ad ?? null; } catch { olx = null; }
+  }
+  // Arbo: `__NEXT_DATA__` com o imóvel em campos imv_*.
+  let arbo: unknown = null;
+  const mArbo = /<script\b[^>]*\bid="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
+  if (mArbo) {
+    try { arbo = JSON.parse(mArbo[1])?.props?.pageProps?.imovel ?? null; } catch { arbo = null; }
+  }
+  const ld: unknown[] = [];
+  for (const m of html.matchAll(/<script\b[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { ld.push(JSON.parse(m[1].trim())); } catch { /* bloco inválido: segue */ }
+  }
+  return {
+    canonica: canonicaDe(html),
+    ogUrl: metaDe(html, 'og:url'),
+    ogSiteName: metaDe(html, 'og:site_name'),
+    ogTitulo: metaDe(html, 'og:title') ?? textoLimpo(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1], 300),
+    ogDescricao: metaDe(html, 'og:description') ?? metaDe(html, 'description'),
+    precoMeta: metaDe(html, 'product:price:amount') ?? metaDe(html, 'og:price:amount'),
+    ld,
+    zap,
+    olx,
+    arbo,
+  };
+}
+
+const ehObjeto = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Pacote que chega do NAVEGADOR (Fase C): qualquer um pode montar um link
+ * `#/opura-market?anuncio=…`, então nada aqui é confiável. Fica só o que tem a
+ * forma esperada; o resto vira null. Os textos ainda passam por `textoLimpo` na
+ * leitura, e a gravação passa por `anuncioConferido`.
+ */
+export function pedacosDoPacote(x: unknown): PedacosDaPagina | null {
+  if (!ehObjeto(x)) return null;
+  const t = (v: unknown, max = 2000) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  return {
+    canonica: t(x.canonica),
+    ogUrl: t(x.ogUrl),
+    ogSiteName: t(x.ogSiteName, 200),
+    ogTitulo: t(x.ogTitulo, 500),
+    ogDescricao: t(x.ogDescricao, 5000),
+    precoMeta: t(x.precoMeta, 50),
+    ld: Array.isArray(x.ld) ? x.ld.filter((n) => n && typeof n === 'object').slice(0, 30) : [],
+    zap: ehObjeto(x.zap) ? x.zap : null,
+    olx: ehObjeto(x.olx) ? x.olx : null,
+    arbo: ehObjeto(x.arbo) ? x.arbo : null,
+  };
+}
+
+// ZAP Imóveis e VivaReal: o objeto `listing`.
+// deno-lint-ignore no-explicit-any
+function lerGrupoZap(l: any, avisos: string[]): Parcial | null {
+  if (!ehObjeto(l)) return null;
+  const venda = ehObjeto(l.prices) ? (l.prices as Record<string, unknown>).sale : null;
   // deno-lint-ignore no-explicit-any
-  let l: any;
-  try { l = JSON.parse(objetoJsonEm(payload, i + '"listing":'.length) ?? ''); } catch { return null; }
-  const venda = l?.prices?.sale;
-  if (!venda) avisos.push('O anúncio não tem preço de venda no site (pode ser só aluguel).');
-  const am = l?.amenities ?? {};
-  const ad = l?.address ?? {};
-  const primeiro = (v: unknown) => (Array.isArray(v) ? v[0] : v);
-  const coordenadas = ad.coordinates && typeof ad.coordinates === 'object' ? ad.coordinates : null;
+  const v: any = ehObjeto(venda) ? venda : null;
+  if (!v) avisos.push('O anúncio não tem preço de venda no site (pode ser só aluguel).');
+  // deno-lint-ignore no-explicit-any
+  const am: any = ehObjeto(l.amenities) ? l.amenities : {};
+  // deno-lint-ignore no-explicit-any
+  const ad: any = ehObjeto(l.address) ? l.address : {};
+  const primeiro = (x: unknown) => (Array.isArray(x) ? x[0] : x);
+  const coordenadas = ehObjeto(ad.coordinates) ? ad.coordinates : null;
   // Posição "aproximada" é o centro do bairro que o portal mostra: não é do imóvel.
   const pos = ad.isApproximateLocation === false && coordenadas ? posicao(coordenadas.lat, coordenadas.lon ?? coordenadas.lng) : { lat: null, lng: null };
   if (ad.isApproximateLocation !== false) avisos.push('O portal mostra só a localização aproximada: a posição será buscada pelo endereço ou pelo bairro.');
+  const id = typeof l.id === 'string' || typeof l.id === 'number' ? String(l.id) : '';
   return {
-    url: l?.id ? urlDoGrupoZap(String(l.id)) : null,
-    titulo: textoLimpo(l?.title, 300),
-    descricao: textoLimpo(l?.description, 5000),
-    tipo: l?.unitType ? tipoDoImovel(String(l.unitType)) : undefined,
-    preco: positivo(venda?.value) ?? undefined,
-    condominio: positivo(venda?.condominium),
-    iptu: positivo(venda?.iptu),
+    url: /^\d{5,}$/.test(id) ? urlDoGrupoZap(id) : null,
+    titulo: textoLimpo(l.title, 300),
+    descricao: textoLimpo(l.description, 5000),
+    tipo: typeof l.unitType === 'string' ? tipoDoImovel(l.unitType) : undefined,
+    preco: positivo(v?.value) ?? undefined,
+    condominio: positivo(v?.condominium),
+    iptu: positivo(v?.iptu),
     area: positivo(primeiro(am.usableAreas)),
     areaTotal: positivo(primeiro(am.totalAreas)),
     quartos: positivo(primeiro(am.bedrooms)) ?? undefined,
@@ -843,19 +934,16 @@ function lerGrupoZap(html: string, avisos: string[]): Parcial | null {
   };
 }
 
-// OLX: `<script id="initial-data" data-json="…">` com o anúncio (atributo HTML).
-function lerOlx(html: string, avisos: string[]): Parcial | null {
-  const m = /<script\b[^>]*\bid="initial-data"[^>]*\bdata-json="([^"]*)"/i.exec(html);
-  if (!m) return null;
-  // deno-lint-ignore no-explicit-any
-  let ad: any;
-  try { ad = JSON.parse(textoDeHtml(m[1]))?.ad; } catch { return null; }
-  if (!ad) return null;
+// OLX: o objeto `ad`.
+// deno-lint-ignore no-explicit-any
+function lerOlx(ad: any, avisos: string[]): Parcial | null {
+  if (!ehObjeto(ad)) return null;
   const props: Record<string, string> = {};
-  for (const p of Array.isArray(ad.properties) ? ad.properties : []) if (p?.name) props[p.name] = String(p.value ?? '');
+  for (const p of Array.isArray(ad.properties) ? ad.properties : []) if (ehObjeto(p) && typeof p.name === 'string') props[p.name] = String(p.value ?? '');
   const negocio = props.real_estate_type ?? '';
   if (/alug|temporada/i.test(negocio) && !/venda/i.test(negocio)) avisos.push(`O anúncio é de "${negocio}", não de venda.`);
-  const loc = ad.location ?? {};
+  // deno-lint-ignore no-explicit-any
+  const loc: any = ehObjeto(ad.location) ? ad.location : {};
   // Sem rua, o ponto da OLX é o do CEP (ou o centro da cidade): não é do imóvel.
   const rua = textoLimpo(loc.address);
   const pos = rua ? posicao(loc.mapLati, loc.mapLong) : { lat: null, lng: null };
@@ -863,7 +951,7 @@ function lerOlx(html: string, avisos: string[]): Parcial | null {
     url: textoLimpo(ad.canonicalUrl, 1000) ?? textoLimpo(ad.friendlyUrl, 1000),
     titulo: textoLimpo(ad.subject, 300),
     descricao: textoLimpo(ad.body, 5000),
-    tipo: tipoDoTexto(`${ad.categoryName ?? ''} ${props.re_types ?? ''} ${negocio}`) ?? undefined,
+    tipo: tipoDoTexto(`${textoLimpo(ad.categoryName) ?? ''} ${props.re_types ?? ''} ${negocio}`) ?? undefined,
     preco: positivo(ad.priceValue) ?? undefined,
     condominio: positivo(props.condominio),
     iptu: positivo(props.iptu),
@@ -880,14 +968,10 @@ function lerOlx(html: string, avisos: string[]): Parcial | null {
   };
 }
 
-// Sites de imobiliária na plataforma Arbo: `__NEXT_DATA__` com o imóvel em campos imv_*.
-function lerArbo(html: string, avisos: string[], precoOculto: { valor: boolean }): Parcial | null {
-  const m = /<script\b[^>]*\bid="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
-  if (!m) return null;
-  // deno-lint-ignore no-explicit-any
-  let imv: any;
-  try { imv = JSON.parse(m[1])?.props?.pageProps?.imovel; } catch { return null; }
-  if (!imv || typeof imv !== 'object' || !('imv_preco_venda' in imv)) return null;
+// Sites de imobiliária na plataforma Arbo: o objeto `imovel` (campos imv_*).
+// deno-lint-ignore no-explicit-any
+function lerArbo(imv: any, avisos: string[], precoOculto: { valor: boolean }): Parcial | null {
+  if (!imv || typeof imv !== 'object' || Array.isArray(imv) || !('imv_preco_venda' in imv)) return null;
   const negocio = textoLimpo(imv.tipo_negocio?.tpng_nome) ?? '';
   if (negocio && !/venda/i.test(negocio)) avisos.push(`O anúncio é de "${negocio}", não de venda.`);
   if (imv.imv_ocultar_preco === true) precoOculto.valor = true;
@@ -897,7 +981,7 @@ function lerArbo(html: string, avisos: string[], precoOculto: { valor: boolean }
     url: textoLimpo(imv.url_amiga, 1000),
     titulo: textoLimpo(imv.imv_titulo, 300),
     descricao: textoLimpo(imv.imv_obs, 5000),
-    tipo: tipoDoTexto(imv.tipo_imovel?.timv_nome ?? imv.imv_titulo) ?? undefined,
+    tipo: tipoDoTexto(textoLimpo(imv.tipo_imovel?.timv_nome) ?? textoLimpo(imv.imv_titulo)) ?? undefined,
     preco: positivo(imv.imv_preco_venda) ?? undefined,
     condominio: positivo(imv.imv_preco_cond),
     iptu: positivo(imv.imv_preco_iptu),
@@ -920,30 +1004,28 @@ const LD_DO_ANUNCIANTE = /^(Organization|RealEstateAgent|LocalBusiness|Corporati
 const LD_DE_IMOVEL: Record<string, string> = { Apartment: 'Apartamento', House: 'Casa', SingleFamilyResidence: 'Casa' };
 
 // deno-lint-ignore no-explicit-any
-function nosDoLd(html: string): any[] {
+function nosDoLd(raizes: unknown[]): any[] {
   // deno-lint-ignore no-explicit-any
   const nos: any[] = [];
   // deno-lint-ignore no-explicit-any
-  const visitar = (n: any) => {
-    if (!n || typeof n !== 'object') return;
-    if (Array.isArray(n)) { n.forEach(visitar); return; }
-    if (Array.isArray(n['@graph'])) n['@graph'].forEach(visitar);
+  const visitar = (n: any, prof: number) => {
+    if (!n || typeof n !== 'object' || prof > 6) return;
+    if (Array.isArray(n)) { n.forEach((x) => visitar(x, prof + 1)); return; }
+    if (Array.isArray(n['@graph'])) n['@graph'].forEach((x: unknown) => visitar(x, prof + 1));
     const tipos = ([] as unknown[]).concat(n['@type'] ?? []).map(String);
     // O endereço e o telefone da IMOBILIÁRIA não são do imóvel; e a lista de
     // anúncios de uma página de busca não é "o" anúncio.
     if (tipos.some((t) => LD_DO_ANUNCIANTE.test(t))) return;
     nos.push(n);
-    for (const k of ['object', 'Object', 'itemOffered', 'mainEntity']) visitar(n[k]);
+    for (const k of ['object', 'Object', 'itemOffered', 'mainEntity']) visitar(n[k], prof + 1);
   };
-  for (const m of html.matchAll(/<script\b[^>]*application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
-    try { visitar(JSON.parse(m[1].trim())); } catch { /* bloco inválido: segue */ }
-  }
+  for (const r of raizes) visitar(r, 0);
   return nos;
 }
 
 // Dados estruturados (schema.org): RealEstateListing, Product, BuyAction, Apartment…
-function lerJsonLd(html: string): Parcial | null {
-  const nos = nosDoLd(html);
+function lerJsonLd(raizes: unknown[]): Parcial | null {
+  const nos = nosDoLd(raizes);
   if (nos.length === 0) return null;
   const partes: Parcial[] = nos.map((n) => {
     const tipos = ([] as unknown[]).concat(n['@type'] ?? []).map(String);
@@ -1043,31 +1125,38 @@ export function anuncioEmBranco(url: string): AnuncioDaPagina {
   return { anuncio, site: nomeDoSite(url), leitor: 'nenhum', faltando: camposFaltando(anuncio), avisos: [] };
 }
 
-/** Lê o anúncio de uma página HTML. `url` é o link que o usuário colou. */
-export function lerAnuncioDaPagina(html: string, url: string): AnuncioDaPagina {
+/** Lê o anúncio dos pedaços da página. `url` é o link do anúncio (colado ou o da aba do navegador). */
+export function lerAnuncioDosPedacos(pd: PedacosDaPagina, url: string): AnuncioDaPagina {
   const avisos: string[] = [];
   const precoOculto = { valor: false };
   const especificos: [string, Parcial | null][] = [
-    ['zap', lerGrupoZap(html, avisos)],
-    ['olx', lerOlx(html, avisos)],
-    ['arbo', lerArbo(html, avisos, precoOculto)],
+    ['zap', lerGrupoZap(pd.zap, avisos)],
+    ['olx', lerOlx(pd.olx, avisos)],
+    ['arbo', lerArbo(pd.arbo, avisos, precoOculto)],
   ];
   const especifico = especificos.find(([, p]) => p);
-  const ld = lerJsonLd(html);
-  const ogTitulo = metaDe(html, 'og:title') ?? textoLimpo(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1], 300);
+  const ld = lerJsonLd(pd.ld);
+  const ogTitulo = textoLimpo(pd.ogTitulo, 300);
   const og: Parcial = {
     titulo: ogTitulo,
-    descricao: metaDe(html, 'og:description') ?? metaDe(html, 'description'),
-    preco: positivo(metaDe(html, 'product:price:amount') ?? metaDe(html, 'og:price:amount')) ?? undefined,
+    descricao: textoLimpo(pd.ogDescricao, 5000),
+    preco: positivo(pd.precoMeta) ?? undefined,
   };
   const p = juntar(especifico?.[1], ld, og, dadosDoTitulo(especifico?.[1]?.titulo ?? ld?.titulo ?? ogTitulo));
   // O link: o do leitor específico (estável por id) ou o canônico da página.
-  p.url = especifico?.[1]?.url ?? urlEstavel(url, canonicaDe(html) ?? metaDe(html, 'og:url'));
+  // Só http(s): o pacote do navegador pode ter sido montado à mão ("javascript:…").
+  const urlDoSite = especifico?.[1]?.url;
+  p.url = urlDoSite && /^https?:\/\//i.test(urlDoSite) ? urlDoSite : urlEstavel(url, pd.canonica ?? pd.ogUrl);
   if (p.url && especifico?.[0] === 'olx') p.url = urlEstavel(p.url);
   const leitor = especifico?.[0] ?? (ld && (ld.preco || ld.area) ? 'json-ld' : (p.preco || p.area ? 'titulo' : 'nenhum'));
   const anuncio = completar(p, url, precoOculto.valor);
   if (anuncio.precoOcultoNaFonte) avisos.push('O site esconde o preço deste anúncio; o valor veio dos dados da página.');
-  return { anuncio, site: nomeDoSite(url, metaDe(html, 'og:site_name')), leitor, faltando: camposFaltando(anuncio), avisos };
+  return { anuncio, site: nomeDoSite(url, pd.ogSiteName), leitor, faltando: camposFaltando(anuncio), avisos };
+}
+
+/** Lê o anúncio de uma página HTML baixada pelo servidor. `url` é o link que o usuário colou. */
+export function lerAnuncioDaPagina(html: string, url: string): AnuncioDaPagina {
+  return lerAnuncioDosPedacos(pedacosDoHtml(html), url);
 }
 
 /** Rua da Conexão 381 que é link do Google Maps ou Plus Code não é rua. */

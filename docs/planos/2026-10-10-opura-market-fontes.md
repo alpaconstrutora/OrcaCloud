@@ -106,11 +106,34 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
   - **Sem duplicar:** 6 anúncios gravados, nenhum duplicado. O VivaReal colado depois do ZAP reconheceu o mesmo anúncio e atualizou o preço. Conexão 381 e ImobiBrasil colados de novo deram "já estava na base: dados atualizados", e a suíte corrigida foi gravada.
   - O WordPress chama o terreno (600 m²) de `floorSize`: é para isso que existe a conferência.
 
+## Fase C — execução (10/10/2026, frente `market-captura-navegador`)
+
+- **Leitura em duas etapas** em `logica.ts`:
+  - `PedacosDaPagina` reúne o `listing` do ZAP, o `ad` da OLX, o `imovel` do Arbo, os blocos JSON-LD, o canônico e o OpenGraph.
+  - O servidor tira esses pedaços do HTML (`pedacosDoHtml`); o favorito tira os mesmos pedaços da página aberta.
+  - A leitura é uma só, `lerAnuncioDosPedacos`, e o "Colar link" da Fase B passou a usá-la sem mudar de resultado (os mesmos 32 testes).
+- **`pedacosDoPacote`:** o pacote que chega do navegador não é confiável, porque qualquer pessoa monta um link `#/opura-market?anuncio=…`. Fica só o que tem a forma esperada. Um link `javascript:` nunca vira o link do anúncio, e a gaveta só mostra link http(s).
+- **Favorito "Enviar ao ÒPURA"** (`utils/opuraMarketCaptura.ts`):
+  - É uma função autocontida, transformada em texto por `toString()`. Junta os pedaços e abre o app em `#/opura-market?anuncio=<base64url>`.
+  - Leva só as chaves que interessam: sem telefone nem nome do anunciante, sem fotos (toda chave de imagem sai) e com teto de 1,5 milhão de caracteres.
+  - O ZAP lê o global `self.__next_f` e, se o anúncio não estiver lá (pedaço que chegou depois da hidratação), lê os `<script>` da página.
+  - O React bloqueia `javascript:` no `href`, então o endereço do favorito entra pelo DOM. O botão "Copiar código" serve para criar o favorito à mão.
+- **App:**
+  - O módulo lê o pacote do hash uma vez, limpa o endereço e vai para a aba Fontes.
+  - A aba Fontes manda o pacote ao modo `ler-anuncio` e abre a mesma gaveta de conferência.
+  - Em "Todas", um aviso âmbar diz o motivo e o anúncio espera, com o botão "Descartar".
+- **Servidor:** o modo `ler-anuncio` aceita `pacote`. Com ele, não baixa nada. Se o pacote não tiver o anúncio, como na Conexão 381, cuja página é montada por JavaScript, busca como antes.
+- **Testes:** `__tests__/opuraMarketCaptura.test.ts`, 11 casos em jsdom. O favorito roda a partir do TEXTO do `javascript:`, como faz o navegador.
+- **Prova** com o build de PRODUÇÃO (minificado) e a organização `ZZ Teste E2E Market (navegador)`, apagada depois:
+  - **Chrome automatizado nos portais reais:** o favorito abriu o app e o servidor recebeu o pacote. Mas o Cloudflare mostrou "Attention Required" ao Chrome automatizado nos três portais. Driblar essa detecção está fora.
+  - **Replay com as páginas reais baixadas em 10/10:** ZAP, VivaReal e OLX lidos por inteiro, com pacotes de cerca de 5 mil caracteres. O VivaReal e o ZAP repetido deram "já estava na base: dados atualizados". No banco: 2 anúncios, nenhum duplicado.
+  - **Pendente:** clicar no favorito num navegador de verdade, nos portais ao vivo. Fica com o usuário.
+
 ## Estado
 
 - [x] Fase A
 - [x] Fase B (captura no navegador passa a ser o caminho para portal; ver o achado acima)
-- [ ] Fase C
+- [x] Fase C (falta o clique num navegador de verdade, nos portais ao vivo)
 - [ ] Fase D
 - [ ] Fase E
 - [ ] Fase F

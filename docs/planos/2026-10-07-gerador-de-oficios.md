@@ -1040,6 +1040,12 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 
 ## Pendências futuras (fora do MVP e das Fases 2–3, por decisão de 2026-10-07)
 
+- **Ligar o assistente de IA (F7)** — decisão do usuário em 2026-10-10 ("Não fazer nada: manter como
+  pendência futura"). O código está no ar (Edge Function `doc-gen-ia` + botão "Assistente de IA"); falta só a
+  chave da API do Claude, que é conta e custo da organização: criar em console.anthropic.com e rodar
+  `npx supabase secrets set ANTHROPIC_API_KEY=<chave>`. Até lá o botão responde "IA não configurada" e o resto
+  do módulo funciona igual. A mesma chave liga o `bi-narrative`. Ao ligar: provar uma sugestão real (redigir e
+  responder a um ofício recebido) e registrar aqui.
 - **Assinatura eletrônica externa do ofício** (ZapSign / ICP-Brasil / certificado):
   depende de publicar a Edge Function `sign-contract` (nunca foi publicada — memória
   `project_edge_function_sign_contract_nao_publicada`, decisão de 2026-07-26 de não
@@ -1351,7 +1357,7 @@ pendências futuras na seção própria.
       resolvido mesmo que o modelo não use essas variáveis
 - [x] F7 · 3 — testes `docGenIa.test.ts` (5) e conferência no app (`oficios_f7.js`, sem salvar): o drawer abre, as três
       ações desligam com o motivo certo, "Gerar sugestão" mostra o aviso de IA não configurada; nenhuma escrita
-- [ ] F7 · **pendente do usuário** — cadastrar a chave: `npx supabase secrets set ANTHROPIC_API_KEY=<chave>` (o mesmo
+- [ ] F7 · **pendência futura (decisão de 10/10: manter desligada)** — cadastrar a chave: `npx supabase secrets set ANTHROPIC_API_KEY=<chave>` (o mesmo
       segredo liga também o `bi-narrative`, que hoje responde "IA não configurada"). Custo: Claude Opus 5.5 a US$ 4 / 20
       por milhão de tokens de entrada / saída; um trecho de ofício fica na casa de centavos de real. Até lá a IA não roda —
       a prova com resposta real fica para depois da chave

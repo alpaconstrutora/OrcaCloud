@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
     Plus, X, Search,
-    Building2, BarChart as BarChartIcon, AlertTriangle, Users, TrendingUp, CheckCircle,
-    ChevronDown, ChevronRight
+    Building2, BarChart as BarChartIcon, AlertTriangle, Users,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useOrgContext } from '../hooks/useOrgContext';
@@ -12,6 +11,9 @@ import {
 import { SchedulingEngine } from '../utils/schedulingEngine';
 import { ResourceRole, ResourceWorker, ResourceTeam, ResourceMaterial, Organization, ItemScheduleDetails, ResourceAllocation, BudgetEntry } from '../types';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
+import { usePersistedState } from './ui/TableUtils';
+import { TabelaFuncoes, TabelaTrabalhadores, TabelaAlocacao, SmartAssignment, PeriodoDaAlocacao } from './RecursosTabelas';
 
 // Local types for capacity histogram data
 interface CapacityResourceEntry {
@@ -62,22 +64,7 @@ const ResourceCalendarField: React.FC<{ initialWorkDays?: number[] }> = ({ initi
     );
 };
 
-type AllocationStatus = 'CONFIRMED' | 'SUGGESTION' | 'GAP';
-type AllocationSource = 'COMPOSITION' | 'MANUAL';
-
-interface SmartAssignment {
-    taskId: string;
-    taskName: string;
-    roleId: string | null | undefined;
-    roleName: string;
-    allocationId?: string;
-    worker?: ResourceWorker;
-    suggestion?: ResourceWorker;
-    status: AllocationStatus;
-    source: AllocationSource;
-    compIdx?: number;
-    budgetedCost?: number;
-}
+// SmartAssignment / status / origem moram em RecursosTabelas.tsx (a tabela de Alocação os lê).
 
 interface BottleneckEntry {
     name: string;
@@ -135,7 +122,8 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [capacityScale, setCapacityScale] = useState<'day' | 'week' | 'month'>('week');
     const [selectedResourceId, setSelectedResourceId] = useState<string>('all');
-    const [allocationFilter, setAllocationFilter] = useState<'all' | 'thisWeek' | 'next15Days' | 'thisMonth'>('all');
+    const [allocationFilter, setAllocationFilter] = usePersistedState<PeriodoDaAlocacao>('planejamento:recursos:alocacao:periodo', 'all');
+    const confirmar = useConfirm();
 
     // --- Capacity Calculation Logic ---
     const capacityData = useMemo(() => {
@@ -454,17 +442,6 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         return list;
     }, [itemSchedules, resources, budget]);
 
-    // --- Aggregated Views (Grouped by Name) ---
-    const groupedRoles = useMemo(() => {
-        const groups: Record<string, ResourceRole[]> = {};
-        resources.roles.forEach(r => {
-            const name = r.name.toUpperCase().trim();
-            if (!groups[name]) groups[name] = [];
-            groups[name].push(r);
-        });
-        return Object.entries(groups).map(([name, items]) => ({ name, items, id: items[0].id }));
-    }, [resources.roles]);
-
     const filteredAssignments = useMemo(() => {
         if (allocationFilter === 'all') return smartAssignments;
 
@@ -492,16 +469,6 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
             return (taskStart <= filterEnd) && (taskEnd >= startOfToday);
         });
     }, [smartAssignments, allocationFilter, itemSchedules]);
-
-    const groupedAssignments = useMemo(() => {
-        const groups: Record<string, SmartAssignment[]> = {};
-        (filteredAssignments || []).forEach(a => {
-            const role = a?.roleName || 'Sem Cargo';
-            if (!groups[role]) groups[role] = [];
-            groups[role].push(a);
-        });
-        return groups;
-    }, [filteredAssignments]);
 
     const workerConflicts = useMemo(() => {
         const conflicts: Record<string, string[]> = {}; 
@@ -645,27 +612,40 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
         setIsAdding(false); setEditingId(null);
     };
 
-    const handleDeleteMaterial = (id: string) => {
-        if (!confirm('Excluir material?')) return;
+    const handleDeleteMaterial = async (id: string) => {
+        const ok = await confirmar({ title: 'Excluir material?', message: 'O material sai dos recursos deste planejamento.', variant: 'danger', confirmLabel: 'Excluir material' });
+        if (!ok) return;
         onUpdateResources({ ...resources, materials: (resources.materials || []).filter(m => m.id !== id) });
     };
 
     const handleEditMaterial = (m: ResourceMaterial) => { setEditingId(m.id); setIsAdding(true); };
 
-    const handleDeleteRole = (id: string) => {
-        if (!confirm('Excluir função?')) return;
+    const handleDeleteRole = async (id: string) => {
+        const nome = resources.roles.find(r => r.id === id)?.name;
+        const ok = await confirmar({ title: 'Excluir função?', message: nome ? `"${nome}" sai dos recursos deste planejamento.` : 'A função sai dos recursos deste planejamento.', variant: 'danger', confirmLabel: 'Excluir função' });
+        if (!ok) return;
         onUpdateResources({ ...resources, roles: resources.roles.filter(r => r.id !== id) });
     };
 
-    const handleDeleteWorker = (id: string) => {
-        if (!confirm('Excluir trabalhador?')) return;
+    const handleDeleteWorker = async (id: string) => {
+        const nome = resources.workers.find(w => w.id === id)?.name;
+        const ok = await confirmar({ title: 'Excluir trabalhador?', message: nome ? `"${nome}" sai dos recursos deste planejamento.` : 'O trabalhador sai dos recursos deste planejamento.', variant: 'danger', confirmLabel: 'Excluir trabalhador' });
+        if (!ok) return;
         onUpdateResources({ ...resources, workers: resources.workers.filter(w => w.id !== id) });
     };
 
-    const handleDeleteTeam = (id: string) => {
-        if (!confirm('Excluir equipe?')) return;
+    const handleDeleteTeam = async (id: string) => {
+        const ok = await confirmar({ title: 'Excluir equipe?', message: 'A equipe sai dos recursos deste planejamento.', variant: 'danger', confirmLabel: 'Excluir equipe' });
+        if (!ok) return;
         onUpdateResources({ ...resources, teams: resources.teams.filter(t => t.id !== id) });
     };
+
+    // O formulário fica no topo da aba; editando pela linha da tabela (que pode estar
+    // lá embaixo), rolar até ele — senão o clique parece não fazer nada.
+    const formularioRef = React.useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (isAdding) formularioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, [isAdding, editingId]);
 
     const handleEditRole = (r: ResourceRole) => { setEditingId(r.id); setIsAdding(true); };
     const handleEditWorker = (w: ResourceWorker) => { setEditingId(w.id); setIsAdding(true); };
@@ -673,23 +653,6 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
 
     // --- Import Modal Logic ---
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [expandedRoles, setExpandedRoles] = useState<Record<string, boolean>>({});
-
-    const toggleAllAssignments = (expanded: boolean) => {
-        const nextState: Record<string, boolean> = {};
-        Object.keys(groupedAssignments || {}).forEach(name => {
-            nextState[name] = expanded;
-        });
-        setExpandedRoles(nextState);
-    };
-
-    const toggleGroup = (roleName: string) => {
-        setExpandedRoles(prev => ({
-            ...prev,
-            [roleName]: !prev[roleName]
-        }));
-    };
-
     const handleConfirmImport = (rIds: string[], wIds: string[], tIds: string[], orgId: string) => {
         const selectedOrg = organizations.find(o => o.id === orgId);
         if (!selectedOrg || !selectedOrg.resources) return;
@@ -802,7 +765,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
 
             <div className="flex-1 overflow-y-auto p-6">
                 {isAdding && (
-                    <div className="mb-6 bg-white p-6 rounded-3xl border shadow-sm">
+                    <div ref={formularioRef} className="mb-6 bg-white p-6 rounded-3xl border shadow-sm">
                         <form onSubmit={activeTab === 'roles' ? handleSaveRole : activeTab === 'workers' ? handleSaveWorker : activeTab === 'materials' ? handleSaveMaterial : handleSaveTeam} className="space-y-4">
                             <input name="name" defaultValue={editingRole?.name || editingWorker?.name || editingTeam?.name || editingMaterial?.name || ''} placeholder="Nome" className="w-full p-3 border rounded-xl" required />
                             {activeTab === 'roles' && (
@@ -837,56 +800,25 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                 )}
 
                 {activeTab === 'roles' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {groupedRoles.map(group => (
-                            <div key={group.name} className="bg-white p-6 rounded-3xl border border-gray-100 hover:border-blue-300 transition-all shadow-sm flex flex-col group">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 className="font-black text-gray-900 text-base">{group.name}</h4>
-                                        <div className="flex flex-wrap gap-1.5 mt-2">
-                                            {group.items.map(item => (
-                                                <span key={item.id} className="text-[9px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-black uppercase tracking-tight">
-                                                    {item.description?.includes('Código') ? item.description.split(':').pop()?.trim() : (item.source || 'Local')}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {group.items.length === 1 && (
-                                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <ActionIconButton kind="edit" size="sm" onClick={() => handleEditRole(group.items[0])} />
-                                            <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteRole(group.items[0].id)} />
-                                        </div>
-                                    )}
-                                </div>
-                                {group.items.length > 1 && (
-                                    <div className="mt-auto pt-4 border-t border-gray-50 flex justify-between items-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                                        <span>{group.items.length} variações SINAPI</span>
-                                        <button onClick={() => { setActiveTab('roles'); /* Futuro: Abrir modal de detalhamento */ }} className="text-blue-600 hover:underline">Ver Todos</button>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                    <TabelaFuncoes
+                        roles={resources.roles}
+                        workers={resources.workers}
+                        localLabel={localLabel}
+                        onEdit={handleEditRole}
+                        onDelete={(r) => handleDeleteRole(r.id)}
+                    />
                 )}
-
                 {activeTab === 'workers' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {resources.workers.map(w => (
-                            <div key={w.id} className="bg-white p-5 rounded-2xl border hover:border-blue-300 transition-all flex justify-between items-start shadow-sm">
-                                <div>
-                                    <h4 className="font-bold">{w.name}</h4>
-                                    <p className="text-xs text-blue-600 font-medium">{resources.roles.find(r => r.id === w.roleId)?.name}</p>
-                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{w.source || 'Local'}</span>
-                                </div>
-                                <div className="flex gap-1.5">
-                                    <ActionIconButton kind="edit" size="sm" onClick={() => handleEditWorker(w)} />
-                                    <ActionIconButton kind="delete" size="sm" onClick={() => handleDeleteWorker(w.id)} />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <TabelaTrabalhadores
+                        workers={resources.workers}
+                        roles={resources.roles}
+                        teams={resources.teams}
+                        itemSchedules={itemSchedules}
+                        localLabel={localLabel}
+                        onEdit={handleEditWorker}
+                        onDelete={(w) => handleDeleteWorker(w.id)}
+                    />
                 )}
-
                 {activeTab === 'teams' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {resources.teams.map(team => (
@@ -896,7 +828,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     <p className="text-xs text-gray-500 font-medium">
                                         {team.memberIds.length} {team.memberIds.length === 1 ? 'membro' : 'membros'}
                                     </p>
-                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{team.source || 'Local'}</span>
+                                    <span className="mt-2 block text-sm font-normal text-gray-500">{team.source || 'Local'}</span>
                                 </div>
                                 <div className="flex gap-1.5">
                                     <ActionIconButton kind="edit" size="sm" onClick={() => handleEditTeam(team)} />
@@ -922,7 +854,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                     <p className="text-xs text-gray-500 font-medium">
                                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.costPerUnit)} / {m.unit}
                                     </p>
-                                    <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase mt-2 inline-block">{m.source || 'Local'}</span>
+                                    <span className="mt-2 block text-sm font-normal text-gray-500">{m.source || 'Local'}</span>
                                 </div>
                                 <div className="flex gap-1.5">
                                     <ActionIconButton kind="edit" size="sm" onClick={() => handleEditMaterial(m)} />
@@ -1043,7 +975,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="block text-sm font-black text-blue-900">{h.roleName}</span>
-                                                    {h.roleName.includes('Contratar') && <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-black uppercase">Falta no Orçamento</span>}
+                                                    {h.roleName.includes('Contratar') && <span className="text-sm font-normal text-red-600">Falta no orçamento</span>}
                                                 </div>
                                                 <div className="flex gap-2 mt-1">
                                                     {Array.from(h.periods).slice(0, 3).map(p => (
@@ -1064,161 +996,15 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                 )}
 
                 {activeTab === 'allocation' && (
-                    <div className="space-y-6">
-                        <div className="bg-blue-600 p-8 rounded-[2.5rem] text-white shadow-xl shadow-blue-600/20 relative overflow-hidden">
-                            <div className="relative z-10">
-                                <h3 className="text-2xl font-black mb-2">Motor de Alocação Inteligente</h3>
-                                <p className="text-blue-100 text-sm font-medium max-w-xl">
-                                    Otimize sua equipe cruzando as necessidades do cronograma com a disponibilidade dos seus colaboradores físicos.
-                                </p>
-                            </div>
-                            <div className="absolute right-0 top-0 h-full w-1/3 bg-white/10 skew-x-12 translate-x-12" />
-                        </div>
-
-                        {/* Controles Globais */}
-                        <div className="flex justify-end items-center gap-3 px-2">
-                             <select 
-                                value={allocationFilter}
-                                onChange={(e) => setAllocationFilter(e.target.value as 'all' | 'thisWeek' | 'next15Days' | 'thisMonth')}
-                                className="text-xs font-black uppercase text-gray-600 bg-white border border-gray-200 px-4 py-2.5 rounded-2xl outline-none focus:border-blue-300 transition-all hover:bg-gray-50"
-                             >
-                                <option value="all">Todo o Cronograma</option>
-                                <option value="thisWeek">Esta Semana</option>
-                                <option value="next15Days">Próximos 15 dias</option>
-                                <option value="thisMonth">Este Mês</option>
-                             </select>
-                             <button 
-                                onClick={() => toggleAllAssignments(true)}
-                                className="text-xs font-black uppercase text-blue-600 bg-blue-50 px-5 py-2.5 rounded-2xl border border-blue-100/50 hover:bg-blue-100 transition-all flex items-center gap-2"
-                             >
-                                <ChevronDown className="w-3.5 h-3.5" /> Expandir Tudo
-                             </button>
-                             <button 
-                                onClick={() => toggleAllAssignments(false)}
-                                className="text-xs font-black uppercase text-gray-500 bg-gray-50 px-5 py-2.5 rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all flex items-center gap-2"
-                             >
-                                <ChevronRight className="w-3.5 h-3.5" /> Recolher Tudo
-                             </button>
-                        </div>
-
-                        <div className="space-y-8 pb-12">
-                            {Object.entries(groupedAssignments || {}).map(([roleName, assignments]) => {
-                                const isExpanded = expandedRoles[roleName] !== false; // Default expanded
-                                return (
-                                    <div key={roleName} className="space-y-4">
-                                        <button 
-                                            onClick={() => toggleGroup(roleName)}
-                                            className="w-full flex items-center justify-between px-6 py-4 bg-gray-50/50 rounded-2xl hover:bg-gray-100/50 transition-all border border-transparent hover:border-gray-200"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-1.5 h-6 rounded-full transition-colors ${isExpanded ? 'bg-blue-600' : 'bg-gray-300'}`} />
-                                                <h3 className="text-lg font-black text-gray-900 uppercase tracking-wide">{roleName}</h3>
-                                                <span className="text-xs font-bold text-gray-400 bg-white/80 px-3 py-1 rounded-full border border-gray-100 shadow-sm">
-                                                    {(assignments || []).length} requisitos
-                                                </span>
-                                            </div>
-                                            {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-400" />}
-                                        </button>
-
-                                        {isExpanded && (
-                                            <div className="grid grid-cols-1 gap-4 px-2">
-                                                {(assignments || []).map((item, idx) => (
-                                                    <div key={idx} className={`p-6 rounded-[2rem] border transition-all hover:shadow-lg ${item?.status === 'CONFIRMED' ? 'bg-emerald-50/20 border-emerald-100/50' : 'bg-white border-gray-100 shadow-sm'}`}>
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="flex items-center gap-5">
-                                                                <div className={`p-4 rounded-2xl ${item?.status === 'CONFIRMED' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
-                                                                    {item?.status === 'CONFIRMED' ? <Users className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
-                                                                </div>
-                                                                <div>
-                                                                    <h4 className="font-black text-gray-900 text-base leading-tight">{item?.taskName || 'Tarefa'}</h4>
-                                                                    <div className="flex items-center gap-3 mt-1.5">
-                                                                        <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-tighter ${item?.source === 'COMPOSITION' ? 'bg-indigo-50 text-indigo-500' : 'bg-gray-50 text-gray-500'}`}>
-                                                                            {item?.source === 'COMPOSITION' ? 'Técnico / Orçado' : 'Adição Manual'}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-6">
-                                                                {item?.status === 'CONFIRMED' ? (
-                                                                    <div className="flex items-center gap-4 px-6 py-2 bg-emerald-50 rounded-2xl border border-emerald-100/50">
-                                                                        <div className="text-right">
-                                                                            <span className="block text-xs font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Alocado</span>
-                                                                            <div className="flex flex-col items-end">
-                                                                                <span className="text-sm font-bold text-emerald-900 underline decoration-emerald-200">{item?.worker?.name || '---'}</span>
-                                                                                {workerConflicts[item.taskId] && (
-                                                                                    <div className="flex items-center gap-1.5 mt-1 text-red-500 bg-red-50 px-2 py-0.5 rounded-full border border-red-100 animate-pulse" title={`Conflito com: ${workerConflicts[item.taskId].join(', ')}`}>
-                                                                                        <AlertTriangle className="w-3 h-3" />
-                                                                                        <span className="text-[9px] font-black uppercase">Sobrecarga</span>
-                                                                                    </div>
-                                                                                )}
-                                                                                {/* Indicador Financeiro */}
-                                                                                {(() => {
-                                                                                    const workerRole = resources.roles.find(r => r.id === item.worker?.roleId);
-                                                                                    const actualCost = workerRole?.costPerHour || 0;
-                                                                                    const budgetCost = item.budgetedCost || 0;
-                                                                                    
-                                                                                    if (item.source === 'MANUAL' && !item.budgetedCost) {
-                                                                                        return <span className="text-[8px] mt-1 bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-black uppercase">Custo Adicional</span>;
-                                                                                    }
-                                                                                    
-                                                                                    if (actualCost > budgetCost && budgetCost > 0) {
-                                                                                        return (
-                                                                                            <span className="text-[8px] mt-1 bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full font-black uppercase border border-red-100">
-                                                                                                + R$ {(actualCost - budgetCost).toFixed(2)}/h
-                                                                                            </span>
-                                                                                        );
-                                                                                    }
-                                                                                    return <span className="text-[8px] mt-1 bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full font-black uppercase border border-emerald-100">Meta Atingida</span>;
-                                                                                })()}
-                                                                            </div>
-                                                                        </div>
-                                                                        <CheckCircle className="w-5 h-5 text-emerald-500" />
-                                                                    </div>
-                                                                ) : item?.status === 'SUGGESTION' ? (
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="text-right">
-                                                                            <span className="block text-xs font-black text-blue-600 uppercase tracking-widest leading-none mb-1">Dica do Sistema</span>
-                                                                            <span className="text-sm font-bold text-gray-900">{item?.suggestion?.name || '---'}</span>
-                                                                        </div>
-                                                                        <button 
-                                                                            onClick={() => handleConfirmSuggestion(item)}
-                                                                            className="flex items-center gap-3 px-8 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all hover:-translate-y-0.5 shadow-xl shadow-emerald-600/20 active:translate-y-0"
-                                                                        >
-                                                                            Confirmar
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="text-right px-5 bg-red-50 py-2.5 rounded-2xl border border-red-100/50">
-                                                                            <span className="block text-xs font-black text-red-600 uppercase tracking-widest">Equipe Incompleta</span>
-                                                                            <span className="text-xs font-bold text-red-400">Cargo não preenchido</span>
-                                                                        </div>
-                                                                        <button className="px-8 py-3 border-2 border-dashed border-gray-200 text-gray-400 rounded-2xl text-xs font-black uppercase tracking-widest hover:border-blue-300 hover:text-blue-500 transition-all">
-                                                                            Escolher / Contratar
-                                                                        </button>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                            {smartAssignments.length === 0 && (
-                                <div className="text-center py-24 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-                                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <Search className="w-10 h-10 text-gray-300" />
-                                    </div>
-                                    <h3 className="text-xl font-black text-gray-400">Nenhum requisito de mão de obra</h3>
-                                    <p className="text-sm font-bold text-gray-300 mt-2">Adicione cargos às suas tarefas no cronograma para iniciar.</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    <TabelaAlocacao
+                        assignments={filteredAssignments}
+                        itemSchedules={itemSchedules}
+                        roles={resources.roles}
+                        workerConflicts={workerConflicts}
+                        periodo={allocationFilter}
+                        onPeriodo={setAllocationFilter}
+                        onConfirmar={handleConfirmSuggestion}
+                    />
                 )}
             </div>
 
@@ -1247,6 +1033,8 @@ const ResourceImportModal: React.FC<{
     // Ver hooks/useOrgContext.tsx.
     const { orgId: contextOrgId } = useOrgContext();
     const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ?? '');
+    // §3.1 do guia: busca de SELETOR dentro de modal de escolha (fecha ao confirmar e
+    // não filtra a lista da tela) é transitória de propósito — o checador acusa mesmo assim.
     const [search, setSearch] = useState('');
     const [selRoles, setSelRoles] = useState<Set<string>>(new Set());
     const [selWorkers, setSelWorkers] = useState<Set<string>>(new Set());

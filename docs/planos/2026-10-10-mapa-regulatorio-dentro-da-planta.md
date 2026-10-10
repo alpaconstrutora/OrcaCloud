@@ -10,6 +10,14 @@ Sessão de 10/10/2026, 07:35:
 (Não havia trabalho anterior registrado para este pedido — nenhuma frente, plano ou
 estado de trabalho; o "continue" foi lido como "pode seguir".)
 
+Mesma sessão, 10/10/2026, depois da publicação de `4e4e0042`:
+
+> incluir botao de ajuste automatica de largura de colunas
+
+Lido como: a tabela desta área que ainda não tinha o botão — as listas de Plantas e de
+Mapas já tinham o ↔ (§6.1.2); faltava a tabela de **zonas** (`RegulatoryZoneTable`), que
+abre ao entrar num mapa e é a mesma da aba Mapa Regulatório do Empreendimento.
+
 ## Leitura do pedido
 
 Hoje o menu **Incorporação** tem dois itens separados: *Mapa Regulatório* (cadastro do
@@ -51,6 +59,13 @@ o cadastro passa a morar dentro da tela da Planta, como aba.
 7. **Verificação** — `check-ui-standard.sh` nos arquivos tocados, `orgContextGuard`,
    tsc, testes da Planta, conferência na tela, publicar.
 
+8. **Tabela de zonas: redimensionar + ajuste automático de largura** (§6.1/§6.1.2) —
+   larguras em px (as mesmas das antigas classes `w-*`), alça em todo cabeçalho,
+   espaçador antes de Ações nas três listas, botão ↔ ao lado da engrenagem; larguras
+   persistidas por `tableId` (cadastro por cidade e empreendimento ficam separados).
+   *Pronto quando:* no navegador, o botão alarga a coluna de texto longo até o valor
+   caber e a largura sobrevive ao recarregar.
+
 ## Estado
 
 - Itens 1–6: feitos.
@@ -79,3 +94,9 @@ o cadastro passa a morar dentro da tela da Planta, como aba.
       `md:items-center` do Mapa — o portão agora confere a mesma altura.
   - Suíte inteira: 7897 = 7863 + 34 pendentes, 0 falhas; 769 arquivos = 769 no disco.
   - Passeio na tela com login: **não feito** — exige a senha do usuário de leitura.
+- Item 8: feito. `check-ui-standard` limpo em `RegulatoryZoneTable.tsx`. Harness
+  (`?zonas`) 16/16: botão presente; "Uso permitido" 160 → 418 px e o valor mais longo
+  cabe inteiro no campo; "Zona" 112 → 107 px; tabela rolável (26 colunas) com Ações no
+  fim; largura persiste ao recarregar. Fotos antes/depois: valores cortados
+  ("Urbanização Co…") e cabeçalhos em 3 linhas → tudo inteiro, cabeçalho em 1 linha.
+  `blueprintZonaMapaRegulatorio` + teste das abas: 11/11.

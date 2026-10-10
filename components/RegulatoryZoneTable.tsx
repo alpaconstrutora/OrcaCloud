@@ -6,10 +6,10 @@
 // (empreendimento_regulatory_zones × regulatory_map_zones) mas o mesmo shape de 21 campos —
 // este componente não sabe de onde vêm os dados, só recebe callbacks.
 import React from 'react';
-import { Plus, Loader2, Map, Search } from 'lucide-react';
+import { Plus, Loader2, Map, Search, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 
 export type ZoneField =
     | 'macroarea' | 'zona' | 'ca_minimo' | 'ca_basico' | 'ca_maximo'
@@ -34,39 +34,48 @@ export const ZONE_SELECT_OPTIONS: Partial<Record<ZoneField, readonly string[]>> 
     nivel_confianca: ['Baixo', 'Médio', 'Alto', 'Validado por profissional', 'Validado na prefeitura'],
 };
 
-interface ColDef { key: ZoneField; label: string; width: string; type: 'select' | 'text'; placeholder?: string; }
+/** `width` em px — largura inicial da coluna (padding incluso); o usuário redimensiona e o autoFit (§6.1.2) mede o conteúdo. */
+interface ColDef { key: ZoneField; label: string; width: number; type: 'select' | 'text'; placeholder?: string; }
 
 export const ZONE_COLUMNS: ColDef[] = [
-    { key: 'macroarea',                  label: 'Macroárea',           width: 'w-44', type: 'select' },
-    { key: 'zona',                       label: 'Zona',                width: 'w-28', type: 'select' },
-    { key: 'uso_permitido',              label: 'Uso permitido',       width: 'w-40', type: 'text', placeholder: 'Residencial, misto…' },
-    { key: 'ca_minimo',                  label: 'C.A. mínimo',         width: 'w-28', type: 'select' },
-    { key: 'ca_basico',                  label: 'C.A. básico',         width: 'w-28', type: 'select' },
-    { key: 'ca_maximo',                  label: 'C.A. máximo',         width: 'w-28', type: 'select' },
-    { key: 'taxa_ocupacao_maxima',       label: 'T.O. máx.',           width: 'w-24', type: 'select' },
-    { key: 'taxa_permeabilidade_minima', label: 'T.perm. mín.',        width: 'w-24', type: 'select' },
-    { key: 'gabarito_altura_maxima',     label: 'Gabarito (m)',        width: 'w-28', type: 'select' },
-    { key: 'gabarito_pavimentos',        label: 'Gabarito (pav.)',     width: 'w-28', type: 'text', placeholder: 'nº' },
-    { key: 'recuo_frente',               label: 'Recuo frente (m)',    width: 'w-28', type: 'text', placeholder: '0' },
-    { key: 'recuo_fundos',               label: 'Recuo fundos (m)',    width: 'w-28', type: 'text', placeholder: '0' },
-    { key: 'recuo_lateral_direita',      label: 'Recuo lat. dir. (m)', width: 'w-32', type: 'text', placeholder: '0' },
-    { key: 'recuo_lateral_esquerda',     label: 'Recuo lat. esq. (m)', width: 'w-32', type: 'text', placeholder: '0' },
-    { key: 'regra_vagas',                label: 'Regra de vagas',      width: 'w-40', type: 'text', placeholder: 'por unidade, por m²…' },
-    { key: 'vagas_por_unidade',          label: 'Vagas / unidade',     width: 'w-28', type: 'text', placeholder: '0' },
-    { key: 'area_minima_unidade',        label: 'Área mín. unid. (m²)', width: 'w-32', type: 'text', placeholder: '0' },
-    { key: 'testada_minima',             label: 'Testada mín. (m)',    width: 'w-28', type: 'text', placeholder: '0' },
-    { key: 'area_minima_lote',           label: 'Área mín. lote (m²)', width: 'w-32', type: 'text', placeholder: '0' },
-    { key: 'insolacao_minima',           label: 'Insolação mín. (h)',  width: 'w-28', type: 'text', placeholder: '2 h' },
-    { key: 'afastamento_progressivo',    label: 'Afastamento progressivo', width: 'w-56', type: 'text', placeholder: 'acima de 6 m: (H − 6)/10' },
-    { key: 'recuo_frente_escalonado',    label: 'Recuo frente escalonado', width: 'w-56', type: 'text', placeholder: '5 m a partir do 3º pavimento' },
-    { key: 'lei_referencia',             label: 'Lei de referência',   width: 'w-44', type: 'text', placeholder: 'Lei nº…' },
-    { key: 'documento_fonte',            label: 'Documento fonte',     width: 'w-44', type: 'text' },
-    { key: 'nivel_confianca',            label: 'Nível de confiança',  width: 'w-48', type: 'select' },
-    { key: 'observacoes',                label: 'Observações',         width: 'w-56', type: 'text' },
+    { key: 'macroarea',                  label: 'Macroárea',           width: 176, type: 'select' },
+    { key: 'zona',                       label: 'Zona',                width: 112, type: 'select' },
+    { key: 'uso_permitido',              label: 'Uso permitido',       width: 160, type: 'text', placeholder: 'Residencial, misto…' },
+    { key: 'ca_minimo',                  label: 'C.A. mínimo',         width: 112, type: 'select' },
+    { key: 'ca_basico',                  label: 'C.A. básico',         width: 112, type: 'select' },
+    { key: 'ca_maximo',                  label: 'C.A. máximo',         width: 112, type: 'select' },
+    { key: 'taxa_ocupacao_maxima',       label: 'T.O. máx.',           width: 96, type: 'select' },
+    { key: 'taxa_permeabilidade_minima', label: 'T.perm. mín.',        width: 96, type: 'select' },
+    { key: 'gabarito_altura_maxima',     label: 'Gabarito (m)',        width: 112, type: 'select' },
+    { key: 'gabarito_pavimentos',        label: 'Gabarito (pav.)',     width: 112, type: 'text', placeholder: 'nº' },
+    { key: 'recuo_frente',               label: 'Recuo frente (m)',    width: 112, type: 'text', placeholder: '0' },
+    { key: 'recuo_fundos',               label: 'Recuo fundos (m)',    width: 112, type: 'text', placeholder: '0' },
+    { key: 'recuo_lateral_direita',      label: 'Recuo lat. dir. (m)', width: 128, type: 'text', placeholder: '0' },
+    { key: 'recuo_lateral_esquerda',     label: 'Recuo lat. esq. (m)', width: 128, type: 'text', placeholder: '0' },
+    { key: 'regra_vagas',                label: 'Regra de vagas',      width: 160, type: 'text', placeholder: 'por unidade, por m²…' },
+    { key: 'vagas_por_unidade',          label: 'Vagas / unidade',     width: 112, type: 'text', placeholder: '0' },
+    { key: 'area_minima_unidade',        label: 'Área mín. unid. (m²)', width: 128, type: 'text', placeholder: '0' },
+    { key: 'testada_minima',             label: 'Testada mín. (m)',    width: 112, type: 'text', placeholder: '0' },
+    { key: 'area_minima_lote',           label: 'Área mín. lote (m²)', width: 128, type: 'text', placeholder: '0' },
+    { key: 'insolacao_minima',           label: 'Insolação mín. (h)',  width: 112, type: 'text', placeholder: '2 h' },
+    { key: 'afastamento_progressivo',    label: 'Afastamento progressivo', width: 224, type: 'text', placeholder: 'acima de 6 m: (H − 6)/10' },
+    { key: 'recuo_frente_escalonado',    label: 'Recuo frente escalonado', width: 224, type: 'text', placeholder: '5 m a partir do 3º pavimento' },
+    { key: 'lei_referencia',             label: 'Lei de referência',   width: 176, type: 'text', placeholder: 'Lei nº…' },
+    { key: 'documento_fonte',            label: 'Documento fonte',     width: 176, type: 'text' },
+    { key: 'nivel_confianca',            label: 'Nível de confiança',  width: 192, type: 'select' },
+    { key: 'observacoes',                label: 'Observações',         width: 224, type: 'text' },
 ];
 
 // §2 do guia: mesmas colunas, só na forma que useTableColumns/ColumnConfigButton esperam.
 const COLUMNS_FOR_CONFIG: ColumnConfig[] = ZONE_COLUMNS.map(c => ({ key: c.key, label: c.label, sortable: true }));
+
+// §6.1: larguras iniciais por coluna (as mesmas de antes, quando eram classes `w-*`),
+// mais a de Ações. Soma ~4.300 px — a tabela rola na horizontal de propósito: são 26
+// parâmetros da lei, e esconder coluna é escolha do usuário na engrenagem.
+const ZONE_COL_WIDTHS: Record<string, number> = {
+    ...Object.fromEntries(ZONE_COLUMNS.map(c => [c.key, c.width])),
+    actions: 80,
+};
 
 // Busca por texto — campos onde faz sentido localizar uma zona rapidamente entre muitas.
 const SEARCHABLE_FIELDS: ZoneField[] = ['macroarea', 'zona', 'uso_permitido', 'lei_referencia', 'documento_fonte'];
@@ -129,6 +138,7 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState<string>(`${tableId}:search`, '');
     const tableColumns = useTableColumns(COLUMNS_FOR_CONFIG, `${tableId}Columns`);
+    const cols = useResizableColumns(ZONE_COL_WIDTHS, `${tableId}ColWidths`);
 
     const handleDelete = async (id: string) => {
         const ok = await confirm({
@@ -217,6 +227,15 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         onToggleColumn={tableColumns.toggleColumn}
                         onReset={tableColumns.resetColumns}
                     />
+                    {/* Ajustar largura ao conteúdo — §6.1.2. Mede o VALOR de cada campo
+                        editável, não a caixa do input. */}
+                    <button
+                        onClick={() => cols.autoFit()}
+                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                        title="Ajustar largura das colunas ao conteúdo"
+                    >
+                        <MoveHorizontal className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
 
@@ -234,7 +253,23 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                 </div>
             ) : (
                 <div className="overflow-auto max-h-[70vh]">
-                    <table className="text-left border-collapse min-w-max">
+                    <table
+                        ref={cols.tableRef}
+                        className="text-left border-collapse"
+                        style={{
+                            tableLayout: 'fixed',
+                            width: visibleColumnDefs.reduce((soma, c) => soma + cols.getWidth(c.key), 0) + cols.getWidth('actions'),
+                            minWidth: '100%',
+                        }}
+                    >
+                        <colgroup>
+                            {visibleColumnDefs.map(col => (
+                                <col key={col.key} data-col-key={col.key} style={{ width: `${cols.getWidth(col.key)}px` }} />
+                            ))}
+                            {/* espaçador — absorve a folga ANTES de Ações (§6.1.1) */}
+                            <col />
+                            <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+                        </colgroup>
                         <thead>
                             <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
                                 {visibleColumnDefs.map(col => (
@@ -247,17 +282,20 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                                         sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
                                         onMoveColumn={tableColumns.moveColumn}
-                                        className={`px-6 py-2 border-r border-gray-100 ${col.width}`}
-                                    />
+                                        className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                    >
+                                        <cols.ResizeHandle colKey={col.key} />
+                                    </SortableHeader>
                                 ))}
-                                <th className="px-6 py-2 w-12 text-right text-sm font-semibold text-gray-500">Ações</th>
+                                <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                <th className="px-6 py-2 text-right text-sm font-semibold text-gray-500">Ações</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {visibleZones.map(zone => (
                                 <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}>
                                     {visibleColumnDefs.map(col => (
-                                        <td key={col.key} className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${col.width}`}>
+                                        <td key={col.key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             {col.type === 'select' ? (
                                                 <SelectCell
                                                     value={zone[col.key] as string | undefined}
@@ -275,6 +313,7 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                                             )}
                                         </td>
                                     ))}
+                                    <td aria-hidden="true"></td>
                                     <td className="px-6 py-2.5 text-right">
                                         <div onClick={(e) => e.stopPropagation()}>
                                             <ActionIconButton kind="delete" title="Excluir zona" onClick={() => handleDelete(zone.id)} />

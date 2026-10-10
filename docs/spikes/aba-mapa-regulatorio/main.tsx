@@ -11,16 +11,33 @@ import '../../../index.css';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import BlueprintModule from '../../../components/blueprint/BlueprintModule';
+import RegulatoryZoneTable from '../../../components/RegulatoryZoneTable';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 
-const semPermissao = new URLSearchParams(location.search).has('sem-permissao');
+const params = new URLSearchParams(location.search);
+const semPermissao = params.has('sem-permissao');
+
+// `?zonas`: a tabela de zonas do detalhe do mapa, para medir o ajuste de largura.
+const ZONAS = [
+  { id: 'z1', macroarea: 'Urbanização Consolidada', zona: 'ZM 1', uso_permitido: 'Residencial multifamiliar, comércio de bairro e serviços', ca_basico: '2', ca_maximo: '4', recuo_frente: '5', lei_referencia: 'LC 208/2018, art. 41' },
+  { id: 'z2', macroarea: 'Qualificação Urbana', zona: 'ZC', uso_permitido: 'Misto', ca_basico: '2,5', ca_maximo: '6', recuo_frente: '4', lei_referencia: 'LC 208/2018' },
+];
 
 createRoot(document.getElementById('raiz')!).render(
   <ConfirmProvider>
     <div className="flex h-screen">
       <aside className="w-64 shrink-0 bg-white border-r border-gray-200" />
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        <BlueprintModule podeVerMapaRegulatorio={!semPermissao} />
+        {params.has('zonas') ? (
+          <RegulatoryZoneTable
+            tableId="harnessZonas"
+            title="Zonas" subtitle="Parâmetros por zona"
+            zones={ZONAS} loading={false} adding={false} savingId={null}
+            onAdd={() => {}} onUpdate={() => {}} onDelete={() => {}}
+          />
+        ) : (
+          <BlueprintModule podeVerMapaRegulatorio={!semPermissao} />
+        )}
       </main>
     </div>
   </ConfirmProvider>,

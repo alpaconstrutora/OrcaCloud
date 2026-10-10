@@ -86,6 +86,36 @@ await page.getByText('Planta Torre A').waitFor();
 conferir((await page.getByRole('tablist').count()) === 0, 'sem permissão: sem barra de abas, mesmo com a aba salva');
 await page.screenshot({ path: `${saida}/sem-permissao.png` });
 
+// ── Tabela de zonas: botão de ajuste de largura (§6.1.2) ──
+await page.goto(`${ALVO}?zonas`);
+await page.evaluate(() => localStorage.clear());
+await page.reload();
+await page.locator('table').waitFor();
+const largura = (rotulo) => page.locator('th', { hasText: rotulo }).first().evaluate((th) => Math.round(th.getBoundingClientRect().width));
+const usoAntes = await largura('Uso permitido');
+const zonaAntes = await largura('Zona');
+await page.screenshot({ path: `${saida}/zonas-antes.png` });
+const botao = page.getByTitle('Ajustar largura das colunas ao conteúdo');
+conferir((await botao.count()) === 1, 'tabela de zonas tem o botão de ajuste de largura');
+await botao.click();
+await page.waitForTimeout(300);
+const usoDepois = await largura('Uso permitido');
+const zonaDepois = await largura('Zona');
+await page.screenshot({ path: `${saida}/zonas-depois.png` });
+conferir(usoDepois > usoAntes, `"Uso permitido" (texto longo) alarga: ${usoAntes} → ${usoDepois} px`);
+const textoCabe = await page.locator('input[value^="Residencial multifamiliar"]').evaluate((i) => i.scrollWidth <= i.clientWidth + 1);
+conferir(textoCabe, 'o uso permitido mais longo cabe inteiro no campo depois do ajuste');
+conferir(zonaDepois > 0, `"Zona" continua visível: ${zonaAntes} → ${zonaDepois} px`);
+const ancorada = await page.evaluate(() => {
+  const th = [...document.querySelectorAll('th')].find((t) => t.textContent.trim() === 'Ações');
+  const wrap = th.closest('.overflow-auto');
+  return { th: Math.round(th.getBoundingClientRect().right), dentro: Math.round(wrap.getBoundingClientRect().right), rolavel: wrap.scrollWidth > wrap.clientWidth };
+});
+conferir(ancorada.rolavel || Math.abs(ancorada.th - ancorada.dentro) <= 1, `Ações na borda direita ou tabela rolável (${JSON.stringify(ancorada)})`);
+await page.reload();
+await page.locator('table').waitFor();
+conferir((await largura('Uso permitido')) === usoDepois, 'largura ajustada persiste ao recarregar');
+
 conferir(escritas.length === 0, `nenhuma escrita tentada (${escritas.length})`);
 conferir(erros.length === 0, `sem erro de página (${erros.join(' | ')})`);
 await browser.close();

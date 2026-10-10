@@ -34,11 +34,16 @@ export interface DocTipTap {
 
 export const DOC_TIPTAP_VAZIO: DocTipTap = { type: 'doc', content: [{ type: 'paragraph' }] };
 
-/** Fontes embutidas no PDF (vfs do pdfmake). Fonte livre fica para a Fase 3. */
-export type FonteDocumento = 'Roboto';
+/**
+ * Fonte do modelo: 'Roboto' (embutida no pdfmake) ou o `id` de uma fonte da
+ * organização (`doc_gen_fontes`, F9). O PDF embute a fonte (PDF/A).
+ */
+export type FonteDocumento = 'Roboto' | (string & {});
 
 export interface LayoutModelo {
     fonte: FonteDocumento;
+    /** Nome da família quando `fonte` é uma fonte da organização — o Word usa o nome (F9). */
+    fonteNome?: string | null;
     /** Tamanho do corpo, em pt. */
     tamanhoFonte: number;
     /** Entrelinha relativa (1 = simples, 1.15, 1.5). */
@@ -296,4 +301,18 @@ export interface DocGenBloco {
     created_by: string | null;
     created_at: string;
     updated_at: string;
+}
+
+// ─── F9: fontes da organização ───────────────────────────────────────────────
+
+export type VariacaoFonte = 'normal' | 'bold' | 'italics' | 'bolditalics';
+
+/** Fonte enviada pela organização — os arquivos ficam no bucket privado `doc-gen-assets`. */
+export interface DocGenFonte {
+    id: string;
+    organization_id: string;
+    nome: string;
+    arquivos: Partial<Record<VariacaoFonte, string>> & { normal: string };
+    created_by: string | null;
+    created_at: string;
 }

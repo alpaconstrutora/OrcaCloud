@@ -1049,8 +1049,8 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
   vira nova versão congelada no GED.
 - Backfill de `notifications.link` antigas do GED (`#/documentos…`), se o usuário quiser
   que notificações já emitidas passem a abrir.
-- PDF/A e saída DOCX do ofício.
-- Fonte livre (upload de `.ttf`) nos modelos.
+- ~~PDF/A e saída DOCX do ofício~~ — feitos na F8 (10/10).
+- ~~Fonte livre (upload de `.ttf`) nos modelos~~ — feita na F9 (10/10).
 
 ## Riscos e decisões de projeto
 
@@ -1380,6 +1380,29 @@ pendências futuras na seção própria.
       emitido → `OF-…-editavel.docx` com a nota "Cópia editável… o documento oficial é o PDF/A arquivado no GED".
       Teste `docGenDocx.test.ts` lê o XML do .docx gerado. No app: os dois downloads conferidos (texto, imagens, nota,
       paginação)
+- [x] F8 · publicada em 10/10 (`a8ca2567`)
+
+### F9 — fonte livre nos modelos (frente `oficios-f9-fontes`)
+
+- [x] F9 · 1 — migration `aplicar_20271010003100_doc_gen_fontes.sql` **aplicada**: `doc_gen_fontes` (nome da família,
+      caminhos das até 4 variações; RLS de membro; "Roboto" reservado) e o bucket `doc-gen-assets` passa a aceitar
+      `font/ttf` e `font/otf`
+- [x] F9 · 2 — `docGenFonteService`: confere TrueType/OpenType pelos BYTES (WOFF e outros recusados com o motivo), até
+      5 MB, sobe com o tipo certo (o navegador manda .ttf sem tipo — o bucket recusava com 400; achado na conferência,
+      corrigido reembrulhando o arquivo), desfaz o envio parcial; `pdf.ts` registra a fonte no pdfmake (o id é o nome
+      da família; variação ausente usa a Regular) e o PDF a EMBUTE; o Word recebe o NOME da família
+- [x] F9 · 3 — tela: select "Fonte" do layout do modelo com Roboto + as fontes da organização e o drawer **Fontes…**
+      (enviar, listar, excluir — travado com o motivo enquanto o modelo usa a fonte; aviso de licença); modelo com
+      fonte excluída mostra o aviso e a prévia/emissão param com a mensagem
+- [x] F9 · 4 — testes `docGenFontes.test.ts` com a Liberation Sans (SIL OFL, já vem no pdfjs-dist): bytes, família,
+      PDF com a fonte embutida (PDF/A, determinístico; veraPDF PASS), Word com o nome
+- [x] F9 · 5 — **conferência no app** (`oficios_f9_fontes.js` + `oficios_f9_excluir.js`, organização descartável):
+      PNG como fonte → recusado com o motivo; Liberation (Regular, Negrito, Itálico) enviada e escolhida → PRÉVIA do
+      modelo e PDF OFICIAL emitido com `LiberationSans` e `LiberationSans-Bold` embutidas, veraPDF **PASS** nos dois;
+      Word com "Liberation Sans Teste"; excluir travado em uso, e depois de voltar à Roboto a fonte sai do banco e do
+      Storage. 0 erros de JS e de rede
+- [x] F8/F9 · limpeza — a organização descartável e tudo dela (2 ofícios emitidos, PDFs congelados do GED, pastas,
+      assinatura, membros, contador) apagados; 0 arquivos restantes no Storage; travas religadas
 
 
 ## Verificação

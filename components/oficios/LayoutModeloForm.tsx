@@ -1,5 +1,8 @@
 import React from 'react';
-import type { LayoutModelo } from '../../types/docGen';
+import { Type } from 'lucide-react';
+import type { DocGenFonte, LayoutModelo } from '../../types/docGen';
+import { docGenFonteService } from '../../services/docGenFonteService';
+import FontesSheet from './FontesSheet';
 
 /**
  * Página do modelo: logo, fonte, margens, cabeçalho e rodapé. Segue a malha do
@@ -9,14 +12,30 @@ import type { LayoutModelo } from '../../types/docGen';
 interface Props {
     value: LayoutModelo;
     onChange: (next: LayoutModelo) => void;
+    /** F9: organização do modelo — de onde vêm as fontes. Sem ela, só a Roboto. */
+    organizationId?: string | null;
 }
 
 const INPUT = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 const LABEL = 'text-xs font-semibold text-slate-500';
 const TEXTAREA = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
-export default function LayoutModeloForm({ value, onChange }: Props) {
+export default function LayoutModeloForm({ value, onChange, organizationId }: Props) {
     const set = <K extends keyof LayoutModelo>(k: K, v: LayoutModelo[K]) => onChange({ ...value, [k]: v });
+    const [fontes, setFontes] = React.useState<DocGenFonte[]>([]);
+    const [fontesAberto, setFontesAberto] = React.useState(false);
+    React.useEffect(() => {
+        if (!organizationId) { setFontes([]); return; }
+        let vivo = true;
+        docGenFonteService.list(organizationId).then(l => { if (vivo) setFontes(l); }).catch(() => { if (vivo) setFontes([]); });
+        return () => { vivo = false; };
+    }, [organizationId]);
+    const escolherFonte = (id: string) => {
+        const f = fontes.find(x => x.id === id);
+        onChange({ ...value, fonte: f ? f.id : 'Roboto', fonteNome: f ? f.nome : null });
+    };
+    // Fonte gravada no modelo que não existe mais: aparece como opção, para a pessoa ver e trocar.
+    const fonteSumiu = value.fonte !== 'Roboto' && !fontes.some(f => f.id === value.fonte);
     const setMargem = (k: keyof LayoutModelo['margens'], v: number) => onChange({ ...value, margens: { ...value.margens, [k]: v } });
     const setCab = <K extends keyof LayoutModelo['cabecalho']>(k: K, v: LayoutModelo['cabecalho'][K]) => onChange({ ...value, cabecalho: { ...value.cabecalho, [k]: v } });
     const setRod = <K extends keyof LayoutModelo['rodape']>(k: K, v: LayoutModelo['rodape'][K]) => onChange({ ...value, rodape: { ...value.rodape, [k]: v } });
@@ -24,16 +43,37 @@ export default function LayoutModeloForm({ value, onChange }: Props) {
 
     return (
         <div className="space-y-8">
+            {organizationId && (
+                <FontesSheet
+                    aberto={fontesAberto}
+                    onClose={() => setFontesAberto(false)}
+                    organizationId={organizationId}
+                    fontes={fontes}
+                    emUso={value.fonte !== 'Roboto' ? value.fonte : null}
+                    onCriada={f => { setFontes(l => [...l, f].sort((a, b) => a.nome.localeCompare(b.nome))); onChange({ ...value, fonte: f.id, fonteNome: f.nome }); }}
+                    onExcluida={id => setFontes(l => l.filter(x => x.id !== id))}
+                />
+            )}
             <div className="space-y-4">
                 <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                     <h3 className="text-sm font-semibold text-gray-900">Texto e margens</h3>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
                     <div className="space-y-1.5">
-                        <label className={LABEL}>Fonte</label>
-                        <select value={value.fonte} onChange={e => set('fonte', e.target.value as LayoutModelo['fonte'])} className={INPUT}>
-                            <option value="Roboto">Roboto</option>
+                        <div className="flex items-center justify-between gap-2">
+                            <label className={LABEL} htmlFor="layout-fonte">Fonte</label>
+                            {organizationId && (
+                                <button type="button" onClick={() => setFontesAberto(true)} className="flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline" title="Enviar ou excluir fontes da organização">
+                                    <Type className="w-3.5 h-3.5" /> Fontes…
+                                </button>
+                            )}
+                        </div>
+                        <select id="layout-fonte" value={value.fonte} onChange={e => escolherFonte(e.target.value)} className={INPUT}>
+                            <option value="Roboto">Roboto (padrão)</option>
+                            {fontes.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                            {fonteSumiu && <option value={value.fonte}>{value.fonteNome ? `${value.fonteNome} (excluída)` : 'Fonte excluída'}</option>}
                         </select>
+                        {fonteSumiu && <p className="text-[11px] text-red-600">A fonte deste modelo foi excluída — escolha outra, senão a prévia e a emissão param.</p>}
                     </div>
                     <div className="space-y-1.5">
                         <label className={LABEL}>Tamanho (pt)</label>

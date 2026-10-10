@@ -294,7 +294,7 @@ export default function ModeloEditorTela({ modelo, organizationId, onClose, onSa
                     </div>
                 </div>
 
-                <LayoutModeloForm value={draft.layout} onChange={l => set('layout', l)} />
+                <LayoutModeloForm value={draft.layout} onChange={l => set('layout', l)} organizationId={orgDoModelo} />
 
                 <div className="space-y-4">
                     <div className="flex items-center gap-2 border-b border-gray-100 pb-3">

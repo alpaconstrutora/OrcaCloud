@@ -330,7 +330,8 @@ export function montarDocx(e: EntradaDocx): Document {
     return new Document({
         title: e.titulo ?? 'Documento',
         creator: 'ÒPURA',
-        styles: { default: { document: { run: { font: e.layout.fonte, size: meioPonto(e.layout.tamanhoFonte) } } } },
+        // Fonte da organização: o Word usa o NOME da família (o id só serve ao PDF); aparece igual se estiver instalada.
+        styles: { default: { document: { run: { font: e.layout.fonte === 'Roboto' ? 'Roboto' : (e.layout.fonteNome || 'Calibri'), size: meioPonto(e.layout.tamanhoFonte) } } } },
         numbering: {
             config: [
                 { reference: 'marcadores', levels: nivelLista(LevelFormat.BULLET, ['•', '◦', '▪']) },

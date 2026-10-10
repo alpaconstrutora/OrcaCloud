@@ -61,12 +61,9 @@ export default function MarketBairroDna({ bairro, stats: st, indicadores: ind, c
           <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">DNA do Bairro™</h3>
           <h2 className="text-base font-black text-slate-900 tracking-tight">🏢 Bairro: {bairro.name}</h2>
         </div>
-        {bairro.bairroScore != null && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-400 uppercase">Bairro Score™</span>
-            <span className="text-lg font-black text-slate-900 bg-slate-100 px-3 py-1 rounded-xl">{bairro.bairroScore} / 100</span>
-          </div>
-        )}
+        {/* Bairro Score não é exibido: não tem regra de cálculo (decisão D3). Até
+            10/10/2026 aparecia "0 / 100" em todo bairro cadastrado pela gaveta, porque
+            a coluna nascia com DEFAULT 0.0 (migration aplicar_20271010001400). */}
       </div>
 
       {!st ? (

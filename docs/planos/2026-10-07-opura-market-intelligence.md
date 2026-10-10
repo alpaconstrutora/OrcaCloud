@@ -688,6 +688,18 @@ Nada do plano está aberto. O que sobra:
 | 5 | Testes da Planta estouram 5 s na CI | outra frente | Em 08/10 a CI do commit `9c53b2c0` falhou por 14 testes com timeout (`blueprint*`, `geoSigef`) e passou na reexecução. Sem relação com o Market, mas já derrubou um commit |
 | 6 | Verificação de ponta a ponta, itens 1 e 5 | teste | Item 1 (duas organizações, contagens diferentes): só existe a organização Alpa, então a prova da Fase 1 usou JWT simulado sem vínculo. Item 5 (cidade de teste em outro estado, mapa abre nela): não há registro de prova feita; a Fase 4 foi verificada com Cambuí e com a leitura de superadmin simulada para abrir a gaveta de cadastro |
 
+**Atualização de 10/10/2026:** os 6 itens foram tratados pelo plano
+`docs/planos/2026-10-10-opura-market-pendencias.md`:
+
+| # | Situação |
+|---|---|
+| 1 | ✅ Feed salvo por praça, importado todo dia pelo cron, com as saídas de anúncio registradas. O link real da Conexão 381 continua dependendo da imobiliária: basta colar o link |
+| 2 | ✅ "Tentar de novo", posição manual, CEP e lista de bairros sem cadastro. Nos dados de hoje não houve mudança: a melhora depende de cadastrar os 38 bairros que faltam (superadministrador) |
+| 3 | ✅ Saturação (meses de estoque pelas saídas do feed) e Score Potencial, com hipóteses editáveis. Até haver 3 meses de feed, todo bairro mostra "Sem histórico de saídas" |
+| 4 | ✅ Regra numa função só, testada para os 8 grupos, e prova com conta real de corretor |
+| 5 | ✅ Teto de tempo por arquivo e trava de custo relativa ao hash |
+| 6 | ✅ Itens 1 e 5 da verificação de ponta a ponta provados com dados reais: segundo usuário e cidade em Goiás, tudo apagado depois |
+
 
 ## Verificação de ponta a ponta (ao fim de tudo)
 

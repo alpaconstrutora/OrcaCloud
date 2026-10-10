@@ -282,6 +282,36 @@ Antes, guardar os IDs criados para a limpeza.
   - limpeza conferida;
   - itens 1 e 5 da "Verificação de ponta a ponta" marcados como provados de verdade.
 
+#### Item 6 — execução (10/10/2026, frente `market-prova-e2e`)
+
+- **Segundo usuário de teste:** a API de administração do Auth ficou fora de alcance. As chaves legadas estão desativadas no projeto desde 04/06/2026 ("Legacy API keys are disabled"), e a CLI devolve a chave secreta nova mascarada. O cadastro público recusou `@example.com`, e com endereço real ele mandaria e-mail de confirmação. Por isso o usuário `zz-e2e-market@alpaconstrutora.com.br` foi criado direto em `auth.users` + `auth.identities`, no molde do `agente-leitura`: confirmado, senha cifrada pelo `crypt` do Postgres, tokens como texto vazio, sem e-mail enviado. A senha aleatória ficou num arquivo temporário da sessão, apagado depois. **Login real provado** (password grant).
+- ✅ **Prova 1 — duas organizações, contagens diferentes, com logins reais e a RLS de verdade:**
+
+  | Quem | Organizações | RPC de raio (1 km) | Verdade em SQL |
+  |---|---|---|---|
+  | `agente-leitura` | Alpa + 2 outras | 119 anúncios | 119 |
+  | usuário de teste | só `ZZ Teste E2E Market (prova 1)` | 3 anúncios | 3 |
+
+  Na tela, no mesmo ponto (-22,612981; -46,057505): agente R$ 4.733,58/m²; usuário de teste R$ 4.443,73/m². O SQL no mesmo ponto deu 108 a R$ 4.733,58 e 3 a R$ 4.443,73 — **iguais**. Antes, a prova da Fase 1 usava JWT simulado.
+- ✅ **Prova 5 — cidade em outro estado:** `ZZ Teste E2E - GO` (Goiânia) com 2 bairros. Ao escolher a cidade, os 2 círculos ficam dentro do mapa, que abre em Goiânia. Um clique ao lado de "ZZ Setor Bueno" selecionou esse bairro no DNA.
+- ✅ Execução forçada do cron com feed de teste: já feita no item 1 (importa → sai → volta).
+- ✅ **Limpeza** (conferida com SELECT, tudo zero): organização, anúncios, vínculos, `task_statuses`, cidade, bairros, configuração, usuário e identidade no Auth, arquivo de senha. A linha de corretor do item 4 é permanente e ficou.
+- ⚠️ **Achado corrigido nesta frente:** o bairro criado pela gaveta mostrou "Bairro Score™ 0 / 100". Seis colunas de indicador de `opura_market_neighborhoods` têm `DEFAULT 0.0` desde o MVP. A Fase 2 anulou os valores dos 4 bairros, mas não o padrão, e todo bairro novo nascia com zeros que parecem medidos. A migration `aplicar_20271010001400_opura_market_bairro_sem_zero_padrao.sql` (**aplicada**) tira os padrões. O DNA deixa de exibir Bairro Score, que não tem regra.
+
+## Estado (10/10/2026)
+
+- [x] Item 5 — publicado (`ad8c8019`)
+- [x] Item 4 — publicado (`a85a966e`)
+- [x] Item 1 — publicado (`f09a1c3b` + `064898b0`)
+- [x] Item 2 — publicado (`b9df5d8b`), ajustado com o usuário (CEP mantido)
+- [x] Item 3 — publicado (`01b46243`)
+- [x] Item 6 — provas feitas e dados apagados; correção do Bairro Score nesta frente
+
+**O que continua dependendo de fora:**
+- o link do feed real da Conexão 381;
+- o cadastro dos 38 bairros que faltam na praça, que só o superadministrador pode fazer;
+- a decisão sobre os 16 anúncios ligados ao "Centro" sem nome de bairro de origem.
+
 ---
 
 ## Verificação geral

@@ -283,3 +283,17 @@ export interface MetadadosOficioRecebido {
     recebido_em: string;
     responder_ate?: string | null;
 }
+
+// ─── F6: biblioteca de blocos ────────────────────────────────────────────────
+
+/** Trecho pronto da organização — inserir copia o conteúdo para o modelo/ofício. */
+export interface DocGenBloco {
+    id: string;
+    organization_id: string;
+    nome: string;
+    descricao: string | null;
+    conteudo: DocTipTap;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+}

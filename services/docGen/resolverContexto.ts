@@ -14,6 +14,7 @@ import type {
     AnexoDoc, DestinatarioSnapshot, DestinatarioTipo, DocGenDocumentoRascunho, DocGenModelo, SignatarioDoc,
 } from '../../types/docGen';
 import { resolverCampos, type ContextoDoc, type DadosUsuario } from './catalogoCampos';
+import type { FinanceiroContrato } from './financeiroContrato';
 import { chavesDoModelo } from './motorRender';
 import { hojeIso } from './dataExtenso';
 import { colunaNoCadastro, snapshotDe, type LinhaCadastro } from './destinatario';
@@ -218,13 +219,15 @@ export async function montarContexto(doc: DocGenDocumentoRascunho, deps: DepsCon
     const clientId = doc.client_id ?? (doc.destinatario_tipo === 'CLIENTE' ? doc.destinatario_id : null);
     const supplierId = doc.supplier_id ?? (doc.destinatario_tipo === 'FORNECEDOR' ? doc.destinatario_id : null);
 
-    const [client, supplier, empreendimento, contract] = await Promise.all([
+    const [client, supplier, empreendimento, contract, financeiroContrato] = await Promise.all([
         clientId ? clientService.getById(clientId) : Promise.resolve(null),
         supplierId ? supplierService.getById(supplierId) : Promise.resolve(null),
         doc.empreendimento_id ? empreendimentoService.getById(doc.empreendimento_id).catch(() => null) : Promise.resolve(null),
         doc.contract_id
             ? supabase.from('contracts').select(COLUNAS_CONTRATO).eq('id', doc.contract_id).maybeSingle().then(r => (r.data as Contract | null) ?? null)
             : Promise.resolve(null),
+        // F6: parcelas e medições — campos calculados e tabelas dinâmicas. Falha → sem os números, não sem o documento.
+        doc.contract_id ? carregarFinanceiroContrato(doc.contract_id).catch(() => null) : Promise.resolve(null),
     ]);
 
     const membro = deps.organization?.members?.find(m => m.email?.toLowerCase() === (deps.emailUsuario ?? '').toLowerCase()) ?? null;
@@ -243,6 +246,7 @@ export async function montarContexto(doc: DocGenDocumentoRascunho, deps: DepsCon
         contract,
         assinantes: doc.signatarios,
         usuario,
+        financeiroContrato,
         documento: {
             numero: null,
             assunto: doc.assunto,
@@ -250,9 +254,60 @@ export async function montarContexto(doc: DocGenDocumentoRascunho, deps: DepsCon
             cidade: doc.cidade,
             anexos: doc.anexos.map(a => a.nome),
             emRespostaA: deps.emRespostaA ?? null,
+            respostaAte: doc.resposta_esperada_ate,
         },
     };
 }
+
+// ─── F6: financeiro do contrato (campos calculados e tabelas dinâmicas) ────────
+// Lido uma vez por contrato a cada minuto: a tela refaz o contexto a cada pausa de
+// digitação, e o financeiro não muda nesse ritmo.
+const cacheFinanceiro = new Map<string, { em: number; p: Promise<FinanceiroContrato> }>();
+const VALIDADE_MS = 60_000;
+
+async function buscarFinanceiro(contractId: string): Promise<FinanceiroContrato> {
+    const [lanc, med] = await Promise.all([
+        supabase.from('internal_transactions')
+            .select('due_date, transaction_date, description, amount, status')
+            .eq('contract_id', contractId)
+            .neq('status', 'CANCELLED')
+            .order('due_date', { ascending: true, nullsFirst: false })
+            .limit(500),
+        supabase.from('contract_measurements')
+            .select('number, period_start, period_end, measurement_date, status, total_value')
+            .eq('contract_id', contractId)
+            .order('measurement_date', { ascending: true, nullsFirst: false })
+            .limit(200),
+    ]);
+    if (lanc.error) throw lanc.error;
+    if (med.error) throw med.error;
+    return {
+        parcelas: ((lanc.data ?? []) as Record<string, unknown>[]).map(l => ({
+            vencimento: (l.due_date as string | null) ?? (l.transaction_date as string | null) ?? null,
+            descricao: String(l.description ?? ''),
+            valor: Number(l.amount) || 0,
+            quitada: l.status !== 'PENDING',
+        })),
+        medicoes: ((med.data ?? []) as Record<string, unknown>[]).map(m => ({
+            numero: String(m.number ?? ''),
+            inicio: (m.period_start as string | null) ?? null,
+            fim: (m.period_end as string | null) ?? null,
+            data: (m.measurement_date as string | null) ?? null,
+            situacao: String(m.status ?? ''),
+            valor: Number(m.total_value) || 0,
+        })),
+    };
+}
+
+export function carregarFinanceiroContrato(contractId: string): Promise<FinanceiroContrato> {
+    const agora = Date.now();
+    const c = cacheFinanceiro.get(contractId);
+    if (c && agora - c.em < VALIDADE_MS) return c.p;
+    const p = buscarFinanceiro(contractId).catch(e => { cacheFinanceiro.delete(contractId); throw e; });
+    cacheFinanceiro.set(contractId, { em: agora, p });
+    return p;
+}
+
 
 const CHAVES_DA_TELA = ['empresa.cidade', 'documento.local_e_data'];
 

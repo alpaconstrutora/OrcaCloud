@@ -70,6 +70,8 @@ export const CONTEUDO_INICIAL_OFICIO: DocTipTap = {
         paragrafo([texto('Atenciosamente,')]),
         { type: 'assinaturas' },
         { type: 'anexos' },
+        // Parágrafo vazio no fim: sem ele não há onde digitar depois do último bloco fixo.
+        paragrafo([]),
     ] as DocTipTap['content'],
 };
 
@@ -298,7 +300,7 @@ export default function ModeloEditorTela({ modelo, organizationId, onClose, onSa
                     <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
                         <h3 className="text-sm font-semibold text-gray-900">Conteúdo do modelo</h3>
                     </div>
-                    <EditorRico value={draft.conteudo} onChange={doc => set('conteudo', doc)} modo="modelo" />
+                    <EditorRico value={draft.conteudo} onChange={doc => set('conteudo', doc)} modo="modelo" organizationId={orgDoModelo} />
                 </div>
 
                 <div className="space-y-4">

@@ -14,6 +14,7 @@ import { anoDe, garantirPasta } from './gedPastas';
 import { dataHoraCurta } from './dataExtenso';
 import { textoEmRespostaA } from './tramitacao';
 import { urlDeValidacao } from './envio';
+import { tabelasDoDocumento } from './tabelasDinamicas';
 
 export { anoDe, garantirPasta };
 
@@ -122,6 +123,7 @@ export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Pro
         organization: deps.organization,
         numero: doc.numero,
         validacaoUrl: urlDeValidacao(doc.id),
+        tabelas: tabelasDoDocumento(modelo, ctx),
         // Import dinâmico: pdfjs (e o worker) só carregam quando o ofício leva anexos dentro.
         paginasAnexas: doc.anexos_no_pdf
             ? await import('./anexosNoPdf').then(m => m.rasterizarAnexos(doc.organization_id, doc.anexos))

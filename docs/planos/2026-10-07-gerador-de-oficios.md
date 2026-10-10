@@ -1014,7 +1014,7 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 - **Anexos dentro do PDF**: PDFs do GED rasterizados com pdfjs e anexados depois do ofício (como
   `relatorioRateioPdf`); sem `pdf-lib`.
 
-### Fase 3 — frentes F6 e F7 (planejadas)
+### Fase 3 — frentes F6 e F7 (F6 no ar; estado na seção Estado)
 
 - **F6 — `oficios-f6-motor-avancado`**: nó `condicional {expressao}` no TipTap (avaliador puro, sem
   `eval`: comparações de variável com texto/número, e/ou/não); nó `tabelaDinamica {fonte}` com
@@ -1285,6 +1285,39 @@ pendências futuras na seção própria.
       "Documento cancelado pelo emitente". 0 erros de JS, 0 respostas 4xx/5xx
 - [x] F5 · 7 — limpeza: ofício, anexo do GED, PDFs (Storage), ofício de outra organização, modelos de teste apagados;
       contador zerado; travas religadas
+- [x] F5 · publicada em 10/10 (`62cb9b7f`): check-run `ci` **success**; o domínio serve `62cb9b7` com "Copiar link de
+      validação"; `https://orcacloud.vercel.app/publico/validar-documento/<id>` responde 200 (rota pública); frente fechada
+
+### F6 — motor avançado (frente `oficios-f6-motor-avancado`, base `62cb9b7f`)
+
+- [x] F6 · 1 — **condições** (`services/docGen/condicional.ts`): analisador próprio, sem `eval` — variáveis, textos entre
+      aspas, números brasileiros ("R$ 1.250.000,00", "35%"), `= != > < >= <= contém`, `preenchido`/`vazio`, `e`/`ou`/`não`
+      e parênteses. Inválida: o bloco não entra, a prévia mostra `[[condição inválida: … — motivo]]` e a Validação
+      BLOQUEIA a emissão (defeito do modelo). Variável citada só em condição é resolvida mas não é cobrada como pendência
+- [x] F6 · 2 — **tabelas dinâmicas** (`tabelasDinamicas.ts`): parcelas em aberto, parcelas quitadas, medições do
+      contrato e anexos; com linha de total; sem contrato → "Sem contrato vinculado". Parcelas = `internal_transactions`
+      do contrato (PENDING aberta, CONCILIATED quitada, CANCELLED fora); medições = `contract_measurements`
+- [x] F6 · 3 — **campos calculados** no catálogo: `contrato.valor_pago`, `valor_em_aberto`, `saldo_a_pagar` (valor −
+      pago), `percentual_pago`, `valor_medido` (medição pendente/rejeitada não conta), `percentual_medido`,
+      `dias_para_terminar`, `documento.prazo_resposta`, `documento.dias_para_resposta`. Sem contrato ou sem o
+      financeiro → vazio (pendente), nunca zero inventado. O financeiro é lido uma vez por contrato por minuto
+      (a redação refaz o contexto a cada pausa)
+- [x] F6 · 4 — **biblioteca de blocos**: migration `aplicar_20271010000700_doc_gen_blocos.sql` **aplicada** (RLS de membro,
+      sem função); aba **Blocos** (criar/editar no drawer com o editor, excluir pelo menu da linha); no editor (modelo e
+      redação) o botão **Blocos** insere uma CÓPIA e salva a seleção como bloco novo
+- [x] F6 · 5 — editor: nós `condicional` (envolve o trecho selecionado; "Alterar condição"/"Tirar a condição" quando o
+      cursor está dentro; validação ao digitar) e `tabelaDinamica`; corrigidos de passagem: hook depois de `return`
+      no `EditorRico` (ordem de hooks) e o modelo inicial passa a terminar num parágrafo (antes não havia onde digitar
+      depois do último bloco fixo)
+- [x] F6 · 6 — testes `docGenMotorAvancado.test.ts` (13): gramática e precedência, números brasileiros, erros explicados,
+      campos calculados com o contexto de exemplo, tabelas com total e vazias, PDF (verdadeira entra, falsa some, inválida
+      só na prévia), validação. 107 testes dos ofícios verdes
+- [x] F6 · 7 — **conferência no app** (`oficios_f6.js` + `oficios_f6_documento.js`): bloco criado na aba Blocos → modelo
+      novo com duas condições (a inválida mostra "A condição terminou no meio — falta um valor."), tabela de parcelas e
+      o bloco inserido pela biblioteca → prévia: condição verdadeira impressa, falsa ausente, tabela "Vencimento Descrição
+      Valor … Total em aberto R$ 187.500,00", fecho do bloco. Ofício (sem salvar) ligado a um contrato REAL da Alpa com 6
+      parcelas em aberto: a tabela traz as 6 parcelas reais e a condição `contrato.saldo_a_pagar > 0` vale; nenhuma
+      escrita; 0 erros de JS e de rede. Limpeza: bloco e modelo de teste apagados
 
 
 ## Verificação

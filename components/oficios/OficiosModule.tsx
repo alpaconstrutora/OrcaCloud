@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Plus, LayoutTemplate, Inbox, FileUp } from 'lucide-react';
+import { FileText, Plus, LayoutTemplate, Inbox, FileUp, Library } from 'lucide-react';
 import { TabsBar } from '../ui/TabsBar';
 import { usePersistedState } from '../ui/TableUtils';
 import { useToast } from '../../hooks/useToast';
@@ -8,7 +8,9 @@ import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
 import { docGenModeloService } from '../../services/docGenModeloService';
 import { docGenDocumentoService } from '../../services/docGenDocumentoService';
 import { useStore } from '../../store/useStore';
-import type { DocGenDocumento, DocGenModelo, DocGenVinculo } from '../../types/docGen';
+import type { DocGenBloco, DocGenDocumento, DocGenModelo, DocGenVinculo } from '../../types/docGen';
+import { docGenBlocoService } from '../../services/docGenBlocoService';
+import BlocosList from './BlocosList';
 import { listarRecebidos, urlDoRecebido, type OficioRecebido } from '../../services/docGen/tramitacao';
 import ModelosList from './ModelosList';
 import ModeloEditorTela from './ModeloEditorTela';
@@ -26,7 +28,7 @@ import RegistrarRecebidoSheet from './RegistrarRecebidoSheet';
  *
  * Organização: `useOrgContext()` (REGRA #5) — nunca a prop crua do AppRouter.
  */
-type Aba = 'oficios' | 'recebidos' | 'modelos';
+type Aba = 'oficios' | 'recebidos' | 'modelos' | 'blocos';
 
 interface Props {
     projects: unknown[];
@@ -38,6 +40,7 @@ const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
     oficios: { titulo: 'Ofícios', subtitulo: 'Correspondência oficial da organização: elaboração, emissão numerada e arquivo no GED.' },
     recebidos: { titulo: 'Ofícios recebidos', subtitulo: 'O que chegou de prefeituras, concessionárias e órgãos: arquivo no GED, prazo de resposta e o ofício que respondeu.' },
     modelos: { titulo: 'Modelos de ofício', subtitulo: 'Modelos com cabeçalho, variáveis do sistema e campos de redação livre.' },
+    blocos: { titulo: 'Biblioteca de blocos', subtitulo: 'Trechos prontos da organização para inserir nos modelos e na redação dos ofícios.' },
 };
 
 export default function OficiosModule(_props: Props) {
@@ -55,6 +58,8 @@ export default function OficiosModule(_props: Props) {
     const [registrandoRecebido, setRegistrandoRecebido] = React.useState(false);
     // "Responder" um recebido: guarda o alvo enquanto o usuário escolhe o modelo.
     const [respondendoA, setRespondendoA] = React.useState<OficioRecebido | null>(null);
+    const [blocos, setBlocos] = React.useState<DocGenBloco[]>([]);
+    const [blocoEditando, setBlocoEditando] = React.useState<DocGenBloco | 'novo' | null>(null);
     const emailUsuario = useStore(s => s.currentProfile?.email ?? null);
     const navigateToFocus = useStore(s => s.navigateToFocus);
     const { nomePorId } = useDepartamentosDaOrg(orgId);
@@ -63,7 +68,8 @@ export default function OficiosModule(_props: Props) {
     const carregar = React.useCallback(async () => {
         setLoading(true);
         try {
-            const [m, d, r] = await Promise.all([docGenModeloService.list(orgId), docGenDocumentoService.list(orgId), listarRecebidos(orgId)]);
+            const [m, d, r, b] = await Promise.all([docGenModeloService.list(orgId), docGenDocumentoService.list(orgId), listarRecebidos(orgId), docGenBlocoService.list(orgId)]);
+            setBlocos(b);
             setModelos(m);
             setDocumentos(d);
             setRecebidos(r);
@@ -226,11 +232,18 @@ export default function OficiosModule(_props: Props) {
                     { id: 'oficios', label: 'Ofícios', icon: <FileText className="w-4 h-4" />, badge: documentos.length },
                     { id: 'recebidos', label: 'Recebidos', icon: <Inbox className="w-4 h-4" />, badge: recebidos.length },
                     { id: 'modelos', label: 'Modelos', icon: <LayoutTemplate className="w-4 h-4" />, badge: modelos.length },
+                    { id: 'blocos', label: 'Blocos', icon: <Library className="w-4 h-4" />, badge: blocos.length },
                 ]}
                 value={aba}
                 onChange={setAba}
             >
-                {aba === 'recebidos' ? (
+                {aba === 'blocos' ? (
+                    <button type="button" onClick={() => setBlocoEditando('novo')} disabled={!orgId}
+                        title={!orgId ? 'Escolha uma organização no topo para criar o bloco' : undefined}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Plus className="w-[15px] h-[15px]" /> Novo bloco
+                    </button>
+                ) : aba === 'recebidos' ? (
                     <button type="button" onClick={() => setRegistrandoRecebido(true)} disabled={!orgId}
                         title={!orgId ? 'Escolha uma organização no topo para registrar o ofício recebido' : undefined}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -249,7 +262,17 @@ export default function OficiosModule(_props: Props) {
                 )}
             </TabsBar>
 
-            {aba === 'recebidos' ? (
+            {aba === 'blocos' ? (
+                <BlocosList
+                    blocos={blocos}
+                    loading={loading}
+                    organizationId={orgId}
+                    editando={blocoEditando}
+                    onEditar={setBlocoEditando}
+                    onSalvo={b => setBlocos(prev => [...prev.filter(x => x.id !== b.id), b].sort((x, y) => x.nome.localeCompare(y.nome)))}
+                    onExcluido={id => setBlocos(prev => prev.filter(x => x.id !== id))}
+                />
+            ) : aba === 'recebidos' ? (
                 <RecebidosList
                     recebidos={recebidos}
                     vinculos={vinculosRecebidos}

@@ -1,5 +1,6 @@
 import type { DocTipTap, NoTipTap } from '../../types/docGen';
-import { camposLivresDoModelo, chavesDoModelo, modeloTem } from './motorRender';
+import { camposLivresDoModelo, chavesDoModelo, condicoesDoModelo, modeloTem } from './motorRender';
+import { erroDaCondicao } from './condicional';
 import { rotuloDaChave } from './catalogoCampos';
 import type { LayoutModelo } from '../../types/docGen';
 
@@ -73,8 +74,20 @@ export function validarDocumento(e: EntradaValidacao): Pendencia[] {
         }
     }
 
+    // F6: condição com erro de escrita é defeito do MODELO — não se emite sem saber o que entra.
+    condicoesDoModelo(e.modelo.conteudo).forEach((expr, i) => {
+        const erro = erroDaCondicao(expr);
+        if (erro) {
+            out.push({
+                chave: `condicao:${i}`, rotulo: 'Condição do modelo', severidade: 'bloqueante',
+                mensagem: `A condição "${expr || '(vazia)'}" do modelo não é válida: ${erro} Corrija o modelo.`,
+            });
+        }
+    });
+
     const obrigatorias = new Set(e.modelo.campos_obrigatorios);
-    for (const chave of chavesDoModelo(e.modelo.conteudo, e.modelo.layout)) {
+    // Só as variáveis IMPRESSAS: as citadas apenas em condições não saem no texto.
+    for (const chave of chavesDoModelo(e.modelo.conteudo, e.modelo.layout, false)) {
         if (NUNCA_PENDENTES.has(chave)) continue;
         const v = e.valores[chave];
         if (v && v.trim()) continue;

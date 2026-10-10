@@ -1,6 +1,8 @@
 import type { Column, Content, ContentColumns, ContentText, TDocumentDefinitions, Alignment } from 'pdfmake/interfaces';
 import type { DocTipTap, LayoutModelo, NoTipTap } from '../../types/docGen';
 import { chavesNoTexto, substituirVariaveis } from './variaveis';
+import { avaliarCondicao, chavesDaCondicao } from './condicional';
+import type { TabelaRender } from './tabelasDinamicas';
 
 /**
  * Motor de render: documento TipTap + valores das variáveis + layout →
@@ -13,6 +15,8 @@ import { chavesNoTexto, substituirVariaveis } from './variaveis';
  *   - `campoLivre` (block,  atom)  attrs { nome, rotulo }  → conteúdo digitado no documento
  *   - `assinaturas`(block,  atom)                          → bloco com os signatários
  *   - `anexos`     (block,  atom)                          → "Anexos" numerados
+ *   - `condicional`(block, com conteúdo) attrs { expressao } → o conteúdo só entra se a condição valer (F6)
+ *   - `tabelaDinamica` (block, atom) attrs { fonte }       → tabela montada do documento (F6)
  */
 
 export interface AssinaturaRender {
@@ -39,6 +43,13 @@ export interface EntradaRender {
     validacao?: { url: string } | null;
     /** F5: anexos do GED DENTRO do PDF — páginas já rasterizadas, uma por imagem, depois do texto. */
     paginasAnexas?: AnexoRasterizado[] | null;
+    /** F6: tabelas dinâmicas do documento, por fonte (`tabelasDinamicas.tabelasDoDocumento`). */
+    tabelas?: Record<string, TabelaRender> | null;
+    /**
+     * F6: como tratar condição inválida. Na prévia ela aparece marcada; no PDF
+     * oficial o bloco só não entra (a validação já impediu emitir com ela).
+     */
+    marcarCondicaoInvalida?: boolean;
 }
 
 /** Um anexo pronto para entrar no PDF: título e as páginas como imagem (data URL). */
@@ -69,15 +80,28 @@ function percorrer(no: NoTipTap | undefined, visita: (n: NoTipTap) => void): voi
     no.content?.forEach(filho => percorrer(filho, visita));
 }
 
-/** Chaves de variável que o modelo usa (nós + cabeçalho + rodapé), sem repetição. */
-export function chavesDoModelo(conteudo: DocTipTap, layout?: LayoutModelo): string[] {
+/**
+ * Chaves de variável que o modelo usa (nós + cabeçalho + rodapé), sem repetição.
+ * `incluirCondicoes` (padrão) soma as variáveis citadas só nas condições — elas
+ * precisam ser resolvidas, mas não são impressas (a validação não as cobra).
+ */
+export function chavesDoModelo(conteudo: DocTipTap, layout?: LayoutModelo, incluirCondicoes = true): string[] {
     const chaves = new Set<string>();
     percorrer(conteudo, n => {
         if (n.type === 'variavel' && typeof n.attrs?.chave === 'string') chaves.add(n.attrs.chave);
+        // F6: as variáveis das condições também precisam estar resolvidas para avaliar.
+        if (incluirCondicoes && n.type === 'condicional' && typeof n.attrs?.expressao === 'string') chavesDaCondicao(n.attrs.expressao).forEach(c => chaves.add(c));
     });
     if (layout?.cabecalho.mostrar) chavesNoTexto(layout.cabecalho.texto).forEach(c => chaves.add(c));
     if (layout?.rodape.mostrar) chavesNoTexto(layout.rodape.texto).forEach(c => chaves.add(c));
     return [...chaves];
+}
+
+/** Condições do modelo, na ordem em que aparecem (F6). */
+export function condicoesDoModelo(conteudo: DocTipTap): string[] {
+    const out: string[] = [];
+    percorrer(conteudo, n => { if (n.type === 'condicional') out.push(String(n.attrs?.expressao ?? '')); });
+    return out;
 }
 
 /** Campos livres declarados no modelo, na ordem em que aparecem. */
@@ -207,6 +231,50 @@ function tabela(n: NoTipTap, st: Estado): Content {
     };
 }
 
+/** F6 — o conteúdo do bloco só entra quando a condição vale para o documento. */
+function condicional(n: NoTipTap, st: Estado): Content | null {
+    const expressao = String(n.attrs?.expressao ?? '').trim();
+    const r = avaliarCondicao(expressao, st.e.valores);
+    if (r.erro) {
+        return st.e.marcarCondicaoInvalida
+            ? { text: `[[condição inválida: ${expressao || '(vazia)'} — ${r.erro}]]`, italics: true, color: COR_PENDENTE, background: FUNDO_PENDENTE, margin: [0, 0, 0, st.e.layout.espacoParagrafo] }
+            : null;
+    }
+    if (!r.valor) return null;
+    const filhos = (n.content ?? []).map(f => bloco(f, st)).filter((b): b is Content => b !== null);
+    return filhos.length ? { stack: filhos } : null;
+}
+
+/** F6 — tabela montada do documento (parcelas, medições, anexos…). */
+function tabelaDinamica(n: NoTipTap, st: Estado): Content {
+    const fonte = String(n.attrs?.fonte ?? '');
+    const t = st.e.tabelas?.[fonte];
+    if (!t) {
+        return { text: `[[tabela: ${fonte || '?'}]]`, italics: true, color: COR_PENDENTE, background: FUNDO_PENDENTE, margin: [0, 0, 0, st.e.layout.espacoParagrafo] };
+    }
+    if (!t.linhas.length) {
+        return { text: t.vazia || 'Sem dados.', italics: true, color: COR_SUAVE, margin: [0, 0, 0, st.e.layout.espacoParagrafo] };
+    }
+    const cel = (texto: string, i: number, extra: Record<string, unknown> = {}) =>
+        ({ text: texto, alignment: t.alinhamento[i] ?? 'left', margin: [2, 2, 2, 2], ...extra }) as unknown as Content;
+    const body: Content[][] = [
+        t.colunas.map((c, i) => cel(c, i, { bold: true, fillColor: '#f1f5f9' })),
+        ...t.linhas.map(l => t.colunas.map((_, i) => cel(l[i] ?? '', i))),
+    ];
+    if (t.total) body.push(t.colunas.map((_, i) => cel(t.total![i] ?? '', i, { bold: true })));
+    return {
+        table: { headerRows: 1, widths: t.colunas.map((_, i) => (t.alinhamento[i] === 'right' ? 'auto' : '*')), body },
+        layout: {
+            hLineWidth: () => 0.5,
+            vLineWidth: () => 0.5,
+            hLineColor: () => '#cbd5e1',
+            vLineColor: () => '#cbd5e1',
+        },
+        fontSize: Math.max(8, st.base - 1),
+        margin: [0, 0, 0, st.e.layout.espacoParagrafo],
+    } as Content;
+}
+
 function campoLivre(n: NoTipTap, st: Estado): Content {
     const nome = String(n.attrs?.nome ?? '').trim();
     const rotulo = String(n.attrs?.rotulo ?? nome);
@@ -282,6 +350,8 @@ function bloco(n: NoTipTap, st: Estado): Content | null {
         case 'campoLivre': return campoLivre(n, st);
         case 'assinaturas': return blocoAssinaturas(st);
         case 'anexos': return blocoAnexos(st);
+        case 'condicional': return condicional(n, st);
+        case 'tabelaDinamica': return tabelaDinamica(n, st);
         case 'hardBreak': return { text: '\n' };
         case 'text': return { text: inlines([n], st) };
         default:

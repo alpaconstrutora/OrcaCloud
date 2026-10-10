@@ -7,6 +7,8 @@ import { Node, mergeAttributes } from '@tiptap/core';
  *   campoLivre   { nome, rotulo }  bloco, atômico
  *   assinaturas  —                 bloco, atômico
  *   anexos       —                 bloco, atômico
+ *   condicional  { expressao }     bloco COM conteúdo (F6) — o conteúdo só entra se a condição valer
+ *   tabelaDinamica { fonte }       bloco, atômico (F6) — tabela montada do documento
  *
  * Nenhum deles usa `innerHTML`: o TipTap monta o DOM a partir de `renderHTML`,
  * e o texto do chip é um filho string — não há sink de XSS aqui
@@ -19,6 +21,12 @@ declare module '@tiptap/core' {
         campoLivre: { inserirCampoLivre: (nome: string, rotulo: string) => ReturnType };
         assinaturas: { inserirAssinaturas: () => ReturnType };
         anexos: { inserirAnexos: () => ReturnType };
+        condicional: {
+            /** Envolve os blocos selecionados numa condição (sem seleção: um parágrafo novo). */
+            inserirCondicional: (expressao: string) => ReturnType;
+            definirCondicao: (expressao: string) => ReturnType;
+        };
+        tabelaDinamica: { inserirTabelaDinamica: (fonte: string, rotulo?: string) => ReturnType };
     }
 }
 
@@ -142,3 +150,85 @@ function blocoFixo(nome: 'assinaturas' | 'anexos', rotulo: string, comando: 'ins
 
 export const Assinaturas = blocoFixo('assinaturas', 'Bloco de assinaturas (os signatários do documento)', 'inserirAssinaturas');
 export const Anexos = blocoFixo('anexos', 'Lista de anexos (numerada automaticamente)', 'inserirAnexos');
+
+export const Condicional = Node.create({
+    name: 'condicional',
+    group: 'block',
+    content: 'block+',
+    defining: true,
+
+    addAttributes() {
+        return { expressao: { default: '' } };
+    },
+
+    parseHTML() {
+        return [{
+            tag: 'div[data-condicional]',
+            contentElement: 'div[data-condicional-conteudo]',
+            getAttrs: el => ({ expressao: (el as HTMLElement).getAttribute('data-condicional') ?? '' }),
+        }];
+    },
+
+    renderHTML({ node, HTMLAttributes }) {
+        const expressao = String(node.attrs.expressao ?? '');
+        return ['div', mergeAttributes(HTMLAttributes, { 'data-condicional': expressao, class: 'condicional-bloco' }),
+            ['span', { class: 'condicional-rotulo', contenteditable: 'false' }, `Se: ${expressao || '(sem condição)'}`],
+            ['div', { 'data-condicional-conteudo': '' }, 0]];
+    },
+
+    addCommands() {
+        return {
+            inserirCondicional: (expressao: string) => ({ state, commands }) => {
+                if (state.selection.empty) {
+                    return commands.insertContent({ type: this.name, attrs: { expressao }, content: [{ type: 'paragraph' }] });
+                }
+                return commands.wrapIn(this.name, { expressao });
+            },
+            definirCondicao: (expressao: string) => ({ commands }) => commands.updateAttributes(this.name, { expressao }),
+        };
+    },
+});
+
+export const TabelaDinamica = Node.create({
+    name: 'tabelaDinamica',
+    group: 'block',
+    atom: true,
+    selectable: true,
+    draggable: true,
+
+    addAttributes() {
+        return { fonte: { default: '' }, rotulo: { default: '' } };
+    },
+
+    parseHTML() {
+        return [{
+            tag: 'div[data-tabela-dinamica]',
+            getAttrs: el => ({
+                fonte: (el as HTMLElement).getAttribute('data-tabela-dinamica') ?? '',
+                rotulo: (el as HTMLElement).getAttribute('data-rotulo') ?? '',
+            }),
+        }];
+    },
+
+    renderHTML({ node, HTMLAttributes }) {
+        const fonte = String(node.attrs.fonte ?? '');
+        const rotulo = String(node.attrs.rotulo || fonte);
+        return ['div', mergeAttributes(HTMLAttributes, {
+            'data-tabela-dinamica': fonte,
+            'data-rotulo': rotulo,
+            class: 'bloco-fixo tabela-dinamica-bloco',
+            contenteditable: 'false',
+        }), `Tabela do documento: ${rotulo}`];
+    },
+
+    renderText({ node }) {
+        return `[[tabela: ${String(node.attrs.fonte ?? '')}]]`;
+    },
+
+    addCommands() {
+        return {
+            inserirTabelaDinamica: (fonte: string, rotulo?: string) => ({ commands }) =>
+                commands.insertContent([{ type: this.name, attrs: { fonte, rotulo: rotulo ?? fonte } }, { type: 'paragraph' }]),
+        };
+    },
+});

@@ -16,6 +16,7 @@ import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio, assinaturasParaP
 import { ROTULO_SITUACAO, referenciaDeOficio, type OficioRecebido } from '../../services/docGen/tramitacao';
 import AprovacaoAssinaturaCard from './AprovacaoAssinaturaCard';
 import { urlDeValidacao } from '../../services/docGen/envio';
+import { tabelasDoDocumento } from '../../services/docGen/tabelasDinamicas';
 import TramitacaoCard from './TramitacaoCard';
 import VinculosPainel, { type AlvoVinculo, type VinculoPendente } from './VinculosPainel';
 import HistoricoDocumento from './HistoricoDocumento';
@@ -471,6 +472,7 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                 organization,
                 numero: atual?.numero ?? null,
                 validacaoUrl: atual ? urlDeValidacao(atual.id) : null,
+                tabelas: tabelasDoDocumento(modelo, ctx),
                 paginasAnexas: draft.anexos_no_pdf
                     ? await import('../../services/docGen/anexosNoPdf').then(m => m.rasterizarAnexos(orgId, draft.anexos))
                     : null,
@@ -689,6 +691,7 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                                     value={(draft.conteudo[c.nome] as DocTipTap | undefined) ?? DOC_TIPTAP_VAZIO}
                                     onChange={doc => set('conteudo', { ...draft.conteudo, [c.nome]: doc })}
                                     modo="documento"
+                                    organizationId={orgId}
                                     minHeightClass="min-h-[180px]"
                                 />
                             )}

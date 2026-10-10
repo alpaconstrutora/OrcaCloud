@@ -2,6 +2,7 @@ import type { Organization } from '../../types/users';
 import type { DocTipTap, LayoutModelo } from '../../types/docGen';
 import { contextoDeExemplo, resolverTodos } from './catalogoCampos';
 import { camposLivresDoModelo, montarDocDefinition, type AnexoRasterizado } from './motorRender';
+import { tabelasDoDocumento, type TabelaRender } from './tabelasDinamicas';
 import { gerarPdfBlob } from './pdf';
 
 /**
@@ -69,6 +70,8 @@ export async function previaDoModelo(e: EntradaPrevia): Promise<Blob> {
         anexos: ctx.documento?.anexos ?? [],
         logoDataUrl,
         titulo: `Prévia — ${e.titulo}`,
+        tabelas: tabelasDoDocumento({ conteudo: e.conteudo }, ctx),
+        marcarCondicaoInvalida: true,
     });
     // Data fixa: a prévia do mesmo modelo é sempre o mesmo arquivo.
     return gerarPdfBlob(def, { id: 'previa-do-modelo', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
@@ -92,6 +95,8 @@ export interface EntradaPreviaDocumento {
     validacaoUrl?: string | null;
     /** F5: anexos do GED já rasterizados (quando o ofício os leva dentro do PDF). */
     paginasAnexas?: AnexoRasterizado[] | null;
+    /** F6: tabelas dinâmicas do documento (`tabelasDoDocumento`). */
+    tabelas?: Record<string, TabelaRender> | null;
 }
 
 export const NUMERO_NO_RASCUNHO = 'nº atribuído na emissão';
@@ -115,6 +120,8 @@ export async function previaDoDocumento(
         titulo: e.titulo,
         validacao: e.validacaoUrl ? { url: e.validacaoUrl } : null,
         paginasAnexas: e.paginasAnexas ?? null,
+        tabelas: e.tabelas ?? null,
+        marcarCondicaoInvalida: !oficial,
     });
     return gerarPdfBlob(def, oficial ?? { id: 'previa-do-documento', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
 }

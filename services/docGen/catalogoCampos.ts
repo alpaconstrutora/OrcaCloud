@@ -3,7 +3,8 @@ import type { Supplier } from '../../types/users';
 import type { Company } from '../../types/company';
 import type { Empreendimento } from '../../types/empreendimento';
 import type { DestinatarioSnapshot, SignatarioDoc } from '../../types/docGen';
-import { dataCurta, dataPorExtenso, localEData } from './dataExtenso';
+import { dataCurta, dataPorExtenso, localEData, partesDaData } from './dataExtenso';
+import { valorEmAberto, valorMedido, valorPago, type FinanceiroContrato } from './financeiroContrato';
 
 /**
  * Catálogo de variáveis `{{grupo.campo}}` dos documentos gerados.
@@ -37,6 +38,8 @@ export interface DadosDocumento {
     anexos?: string[] | null;
     /** F4: "Ofício nº 123/2026 da Prefeitura de Cambuí, de 02/10/2026". */
     emRespostaA?: string | null;
+    /** F6: prazo de resposta (`YYYY-MM-DD`) — base de `documento.dias_para_resposta`. */
+    respostaAte?: string | null;
 }
 
 export interface ContextoDoc extends ResolveContext {
@@ -49,6 +52,8 @@ export interface ContextoDoc extends ResolveContext {
     assinantes?: SignatarioDoc[] | null;
     usuario?: DadosUsuario | null;
     documento?: DadosDocumento | null;
+    /** F6: parcelas e medições do contrato vinculado (campos calculados, tabelas dinâmicas). */
+    financeiroContrato?: FinanceiroContrato | null;
 }
 
 export interface CampoDoc {
@@ -116,6 +121,26 @@ const primeiroAssinante = (c: ContextoDoc): SignatarioDoc | null =>
 
 const dataDoDocumento = (c: ContextoDoc) => c.documento?.data || null;
 
+// ─── F6: campos calculados ─────────────────────────────────────────────────────
+/** Dias de `de` até `ate` (datas `YYYY-MM-DD`, sem fuso). null quando falta uma. */
+export function diasEntre(de: string | null | undefined, ate: string | null | undefined): number | null {
+    const a = partesDaData(de), b = partesDaData(ate);
+    if (!a || !b) return null;
+    return Math.round((Date.UTC(b.ano, b.mes - 1, b.dia) - Date.UTC(a.ano, a.mes - 1, a.dia)) / 86_400_000);
+}
+
+const valorDoContrato = (c: ContextoDoc): number | null => {
+    const v = c.contract?.current_value ?? c.contract?.original_value;
+    return typeof v === 'number' && !isNaN(v) ? v : null;
+};
+
+const pct = (parte: number, todo: number | null) =>
+    todo && todo > 0 ? `${(Math.round((parte / todo) * 1000) / 10).toLocaleString('pt-BR')}%` : '';
+
+/** Só calcula com contrato E financeiro carregados — senão a variável fica pendente. */
+const doFinanceiro = (fn: (f: FinanceiroContrato, c: ContextoDoc) => string) =>
+    (c: ContextoDoc) => (c.contract && c.financeiroContrato ? fn(c.financeiroContrato, c) : '');
+
 // ─── Grupos ────────────────────────────────────────────────────────────────────
 export const GRUPOS_DOC: GrupoDoc[] = [
     {
@@ -168,6 +193,8 @@ export const GRUPOS_DOC: GrupoDoc[] = [
             { chave: 'documento.ano', rotulo: 'Ano do documento', get: c => { const d = dataDoDocumento(c); return d ? d.slice(0, 4) : ''; } },
             { chave: 'documento.anexos', rotulo: 'Lista de anexos (numerada)', get: c => (c.documento?.anexos ?? []).map((a, i) => `${i + 1}. ${a}`).join('\n') },
             { chave: 'documento.em_resposta_a', rotulo: 'Em resposta a (ofício vinculado)', get: c => s(c.documento?.emRespostaA) },
+            { chave: 'documento.prazo_resposta', rotulo: 'Prazo de resposta (dd/mm/aaaa)', get: c => dataCurta(c.documento?.respostaAte) },
+            { chave: 'documento.dias_para_resposta', rotulo: 'Dias para a resposta (calculado)', get: c => { const d = diasEntre(dataDoDocumento(c), c.documento?.respostaAte); return d == null ? '' : String(d); } },
         ],
     },
     {
@@ -245,6 +272,14 @@ export const GRUPOS_DOC: GrupoDoc[] = [
             { chave: 'contrato.data_fim', rotulo: 'Data de término', get: campoLegado('contract', 'end_date') },
             { chave: 'contrato.prazo_dias', rotulo: 'Prazo (dias)', get: campoLegado('contract', 'prazo_dias') },
             { chave: 'contrato.status', rotulo: 'Situação', get: campoLegado('contract', 'status') },
+            // F6 — campos calculados (parcelas e medições do contrato).
+            { chave: 'contrato.valor_pago', rotulo: 'Valor pago (calculado)', get: doFinanceiro(f => fmtMoeda(valorPago(f))) },
+            { chave: 'contrato.valor_em_aberto', rotulo: 'Parcelas em aberto (calculado)', get: doFinanceiro(f => fmtMoeda(valorEmAberto(f))) },
+            { chave: 'contrato.saldo_a_pagar', rotulo: 'Saldo do contrato: valor − pago (calculado)', get: doFinanceiro((f, c) => { const v = valorDoContrato(c); return v == null ? '' : fmtMoeda(Math.round((v - valorPago(f)) * 100) / 100); }) },
+            { chave: 'contrato.percentual_pago', rotulo: '% pago do contrato (calculado)', get: doFinanceiro((f, c) => pct(valorPago(f), valorDoContrato(c))) },
+            { chave: 'contrato.valor_medido', rotulo: 'Valor medido (calculado)', get: doFinanceiro(f => fmtMoeda(valorMedido(f))) },
+            { chave: 'contrato.percentual_medido', rotulo: '% medido do contrato (calculado)', get: doFinanceiro((f, c) => pct(valorMedido(f), valorDoContrato(c))) },
+            { chave: 'contrato.dias_para_terminar', rotulo: 'Dias até o término (calculado)', get: c => { const d = diasEntre(dataDoDocumento(c), c.contract?.end_date); return d == null ? '' : String(d); } },
         ],
     },
     {
@@ -332,7 +367,19 @@ export function contextoDeExemplo(hoje = '2026-10-07'): ContextoDoc {
         },
         assinante: { nome: 'João da Silva', cargo: 'Diretor de Engenharia', registroProfissional: 'CREA-MG 123456/D', departamento: 'Engenharia', email: 'joao@exemplo.com.br', telefone: '(35) 99999-0000' },
         usuario: { nome: 'Maria Souza', email: 'maria@exemplo.com.br', cargo: 'Analista', departamento: 'Engenharia', telefone: '(35) 98888-0000' },
-        documento: { numero: 'OF-ENG-047/2026', assunto: 'Solicitação de ligação definitiva de energia – Residencial Central', data: hoje, anexos: ['Memorial Descritivo', 'Planta Arquitetônica', 'ART nº 1234567'], emRespostaA: 'Ofício nº 312/2026 da Companhia de Energia, de 30/09/2026' },
+        documento: { numero: 'OF-ENG-047/2026', assunto: 'Solicitação de ligação definitiva de energia – Residencial Central', data: hoje, anexos: ['Memorial Descritivo', 'Planta Arquitetônica', 'ART nº 1234567'], emRespostaA: 'Ofício nº 312/2026 da Companhia de Energia, de 30/09/2026', respostaAte: '2026-10-22' },
+        financeiroContrato: {
+            parcelas: [
+                { vencimento: '2026-04-10', descricao: 'Medição 01', valor: 250000, quitada: true },
+                { vencimento: '2026-06-10', descricao: 'Medição 02', valor: 312500, quitada: true },
+                { vencimento: '2026-10-10', descricao: 'Medição 03', valor: 187500, quitada: false },
+            ],
+            medicoes: [
+                { numero: '01', inicio: '2026-03-01', fim: '2026-03-31', data: '2026-04-02', situacao: 'Aprovada', valor: 250000 },
+                { numero: '02', inicio: '2026-04-01', fim: '2026-05-31', data: '2026-06-02', situacao: 'Aprovada', valor: 312500 },
+                { numero: '03', inicio: '2026-06-01', fim: '2026-09-30', data: '2026-10-02', situacao: 'Pendente', valor: 187500 },
+            ],
+        },
         project: {
             name: 'Residencial Central', code: 'RES01', street: 'Av. Brasil', number: '1500', complement: 'Quadra B', neighborhood: 'Jardim Europa',
             city: 'Cambuí', state: 'MG', zipCode: '37600-000', matriculaCNO: '12.345.67890/01', artRrt: 'ART 2026-0001', alvara: 'ALV 45/2026',

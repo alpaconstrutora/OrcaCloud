@@ -78,4 +78,4 @@ Sessão de 10/10/2026 (Claude Code, VS Code), transcrito literalmente:
   exceção §3.1 documentada no código (seletor em modal, fecha ao confirmar, não
   filtra a lista da tela). De quebra, três pílulas §8 das abas Equipes, Materiais e
   Capacidade viraram texto simples. Typecheck, XSS, build e suíte (8252 + 34
-  pulados = 8286, conta fechando) verdes. **Publicação: pendente de autorização.**
+  pulados = 8286, conta fechando) verdes. **Publicado** em 10/10/2026 (`5d3418ca`, autorizado pelo usuário: "publique"); CI verde e `conferir-producao.sh` confirmou o domínio servindo `5d3418c`. Não testado no app logado com dado real (exige a senha do usuário de leitura).

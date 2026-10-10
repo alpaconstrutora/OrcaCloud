@@ -153,3 +153,75 @@ export function CampoDeTexto({
     />
   );
 }
+
+/**
+ * Lê um INTEIRO escrito à brasileira: o ponto é separador de milhar ("24.000"
+ * = 24000), a vírgula é decimal (arredonda). `null` se não for número.
+ */
+export function lerInteiro(texto: string): number | null {
+  const limpo = texto.trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+  if (limpo === '') return null;
+  const valor = Number(limpo);
+  return Number.isFinite(valor) ? Math.round(valor) : null;
+}
+
+interface CampoInteiroProps {
+  /** Valor atual. `null` deixa o campo vazio (o placeholder diz o que vale). */
+  valor: number | null;
+  /** Remonta o campo quando o valor muda por fora (troca de peça). */
+  chave: string;
+  /** Recebe o inteiro (> 0), ou `null` quando o campo foi esvaziado. */
+  aoAplicar: (valor: number | null) => void;
+  ariaLabel: string;
+  placeholder?: string;
+  className?: string;
+}
+
+/**
+ * Inteiro grande (capacidade em BTU/h, vazão em m³/h) que aplica no Enter e no
+ * blur e desiste no Escape — como os outros campos deste arquivo. Mostra o número
+ * com o separador de milhar ("24.000"), para um zero a mais saltar à vista; e
+ * aplica UMA vez, ao terminar — digitar "24000" não grava 2, 24, 240… nem empilha
+ * cinco passos de Ctrl+Z (10/10/2026: o campo gravava a cada tecla).
+ */
+export function CampoInteiro({ valor, chave, aoAplicar, ariaLabel, placeholder, className = 'w-full' }: CampoInteiroProps) {
+  const [rascunho, setRascunho] = useState<string | null>(null);
+  const cancelando = useRef(false);
+  const texto = valor == null ? '' : valor.toLocaleString('pt-BR');
+
+  function confirmar(digitado: string) {
+    if (cancelando.current) {
+      cancelando.current = false;
+      setRascunho(null);
+      return;
+    }
+    setRascunho(null);
+    if (digitado.trim() === '') {
+      if (valor != null) aoAplicar(null);
+      return;
+    }
+    const lido = lerInteiro(digitado);
+    if (lido !== null && lido > 0 && lido !== valor) aoAplicar(lido);
+  }
+
+  return (
+    <input
+      key={`${chave}|${valor ?? ''}`}
+      type="text"
+      inputMode="numeric"
+      defaultValue={texto}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      onChange={(e) => setRascunho(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        if (e.key === 'Escape') {
+          cancelando.current = true;
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      onBlur={(e) => confirmar(rascunho ?? e.target.value)}
+      className={`rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums text-slate-800 ${className}`}
+    />
+  );
+}

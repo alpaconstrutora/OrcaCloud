@@ -3092,3 +3092,23 @@ A segunda parte da recomendação aceita ("seguir com a sua recomendacao").
   - **F15:** os campos e a gravação.
 - `components/TelaCatalogoDeTiposEditar.test.tsx` (3): abre, edita, grava e fecha; o inválido; o tipo
   sem número.
+
+### O campo de capacidade · 10/10/2026 (frente `clima-capacidade`)
+
+Achado no teste do usuário no app real (F10): ele digitou 24000 e o campo mostrou 240000. Um zero a
+mais, invisível num número sem separador, deu 23.446 VA no ponto elétrico. A conta estava certa; o
+campo é que deixava o erro passar. Pedido: **"sim"**, às duas melhorias propostas.
+
+- **O campo grava ao terminar.** Capacidade (BTU/h) e vazão (m³/h) passaram a usar `CampoInteiro`
+  (`CamposQueAplicam.tsx`, o molde dos campos que aplicam no Enter e no blur e desistem no Escape).
+  Antes gravavam a cada tecla: "24000" passava por 2, 24, 240…, cada passo uma mudança no histórico e
+  na potência do ponto. Agora é uma gravação e um Ctrl+Z. O número aparece com o separador de milhar
+  ("24.000"), e "24.000" digitado é lido como vinte e quatro mil.
+- **A leitura e o aviso.** Embaixo do campo, `leituraDaCapacidade`: "24.000 BTU/h · 2,0 TR". Fora da
+  faixa típica do tipo (`faixaDeCapacidadeBtuH` na ficha — hi-wall 7.000–36.000, piso-teto
+  18.000–80.000, cassete 18.000–60.000, dutada 12.000–120.000, condensadora split 7.000–80.000, VRF
+  30.000–700.000; HIPÓTESE de mercado), o aviso: "Fora da faixa típica de evaporadora hi-wall (7.000 a
+  36.000 BTU/h) — confira o número." Avisa, não recusa.
+
+**Prova:** `components/PainelTrechoClimatizacao.test.tsx` (+2): uma gravação ao terminar, "24.000",
+o Escape; a leitura, o aviso do 240.000 e o apagar.

@@ -33,7 +33,8 @@ import {
   type TipoDePontoEletrico,
   type TipoDePontoHidraulico,
 } from '../../utils/blueprintKernel';
-import { FICHA_DO_PONTO_HIDRAULICO, tiposHidraulicosDa } from '../../utils/blueprintHidraulica';
+import { FICHA_DO_PONTO_HIDRAULICO, leituraDaCapacidade, tiposHidraulicosDa } from '../../utils/blueprintHidraulica';
+import { CampoInteiro } from './CamposQueAplicam';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 import SeletorDeTipo from './SeletorDeTipo';
 import { propriedadesDoTerminal, type PropriedadesDeTerminal } from '../../utils/blueprintTipos';
@@ -461,39 +462,40 @@ export default function PainelTrechoSelecionado({
               {terminal.tipoHidraulico && (TIPOS_COM_VAZAO as readonly string[]).includes(terminal.tipoHidraulico) && (
                 <label className="block" data-testid="campo-vazao">
                   <span className="text-[11px] font-medium text-slate-600">Vazão de ar (m³/h)</span>
-                  <input
-                    type="number"
-                    min={1}
-                    step={10}
-                    value={terminal.vazaoM3h ?? ''}
+                  {/* 10/10/2026: aplica ao terminar (Enter/sair), não a cada tecla. */}
+                  <CampoInteiro
+                    valor={terminal.vazaoM3h ?? null}
+                    chave={`vazao-${terminal.id}`}
+                    aoAplicar={(v) => onTerminal({ vazaoM3h: v })}
                     placeholder="derivada do ambiente"
-                    onChange={(e) => {
-                      if (e.target.value === '') return onTerminal({ vazaoM3h: null });
-                      const x = Math.round(Number(e.target.value));
-                      if (Number.isFinite(x) && x > 0) onTerminal({ vazaoM3h: x });
-                    }}
-                    aria-label="Vazão de ar do terminal (m³/h)"
-                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                    ariaLabel="Vazão de ar do terminal (m³/h)"
+                    className="mt-0.5 w-full"
                   />
                 </label>
               )}
               {terminal.tipoHidraulico && (TIPOS_COM_CAPACIDADE as readonly string[]).includes(terminal.tipoHidraulico) && (
                 <label className="block" data-testid="campo-capacidade">
                   <span className="text-[11px] font-medium text-slate-600">Capacidade (BTU/h)</span>
-                  <input
-                    type="number"
-                    min={1000}
-                    step={1000}
-                    value={terminal.capacidadeBtuH ?? ''}
+                  {/* 10/10/2026: aplica ao terminar (Enter/sair) — um passo de Ctrl+Z, e a potência do
+                      ponto acompanha uma vez só; o número aparece com o separador de milhar. */}
+                  <CampoInteiro
+                    valor={terminal.capacidadeBtuH ?? null}
+                    chave={`capacidade-${terminal.id}`}
+                    aoAplicar={(v) => onTerminal({ capacidadeBtuH: v })}
                     placeholder="não declarada"
-                    onChange={(e) => {
-                      if (e.target.value === '') return onTerminal({ capacidadeBtuH: null });
-                      const x = Math.round(Number(e.target.value));
-                      if (Number.isFinite(x) && x > 0) onTerminal({ capacidadeBtuH: x });
-                    }}
-                    aria-label="Capacidade do equipamento (BTU/h)"
-                    className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1 text-xs tabular-nums"
+                    ariaLabel="Capacidade do equipamento (BTU/h)"
+                    className="mt-0.5 w-full"
                   />
+                  {terminal.capacidadeBtuH != null &&
+                    (() => {
+                      const l = leituraDaCapacidade(terminal.capacidadeBtuH, terminal.tipoHidraulico);
+                      return (
+                        <>
+                          <span className="mt-0.5 block text-[11px] text-slate-500 tabular-nums" data-testid="leitura-da-capacidade">{l.texto}</span>
+                          {l.aviso && <span className="mt-0.5 block text-[11px] text-amber-700" data-testid="aviso-da-capacidade">{l.aviso}</span>}
+                        </>
+                      );
+                    })()}
                 </label>
               )}
               {terminal.tipoHidraulico && (TIPOS_QUE_LIGAM_NA_CONDENSADORA as readonly string[]).includes(terminal.tipoHidraulico) && (

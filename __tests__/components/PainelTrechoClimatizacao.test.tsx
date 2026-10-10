@@ -33,6 +33,7 @@ describe('PainelTrechoSelecionado › climatização', () => {
     const cap = screen.getByLabelText('Capacidade do equipamento (BTU/h)') as HTMLInputElement;
     expect(cap.value).toBe('');
     fireEvent.change(cap, { target: { value: '12000' } });
+    fireEvent.blur(cap);
     expect(onTerminal).toHaveBeenLastCalledWith({ capacidadeBtuH: 12000 });
     const sel = screen.getByLabelText('Condensadora desta evaporadora') as HTMLSelectElement;
     expect(sel.className).toMatch(/border-red-300/);
@@ -43,7 +44,7 @@ describe('PainelTrechoSelecionado › climatização', () => {
 
   it('condensadora: tem capacidade, não tem seletor de condensadora; difusor não tem nenhum dos dois', () => {
     const r = render(<PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'CONDENSADORA_SPLIT', { capacidadeBtuH: 18000 })} onTrecho={() => {}} onTerminal={() => {}} />);
-    expect((screen.getByLabelText('Capacidade do equipamento (BTU/h)') as HTMLInputElement).value).toBe('18000');
+    expect((screen.getByLabelText('Capacidade do equipamento (BTU/h)') as HTMLInputElement).value).toBe('18.000');
     expect(screen.queryByLabelText('Condensadora desta evaporadora')).toBeNull();
     r.unmount();
     render(<PainelTrechoSelecionado trecho={null} terminal={terminal('MECANICA', 'DIFUSOR')} onTrecho={() => {}} onTerminal={() => {}} />);
@@ -109,9 +110,44 @@ describe('PainelTrechoSelecionado › climatização', () => {
     const vazao = screen.getByLabelText('Vazão de ar do terminal (m³/h)') as HTMLInputElement;
     expect(vazao.placeholder).toBe('derivada do ambiente');
     fireEvent.change(vazao, { target: { value: '350' } });
+    fireEvent.blur(vazao);
     expect(onTerminal).toHaveBeenLastCalledWith({ vazaoM3h: 350 });
     r.unmount();
     render(<PainelTrechoSelecionado trecho={null} terminal={terminal('AGUA_FRIA', 'LAVATORIO')} onTrecho={() => {}} onTerminal={() => {}} />);
     expect(screen.queryByTestId('campo-vazao')).toBeNull();
+  });
+
+  it('10/10/2026: a capacidade grava UMA vez ao terminar (não a cada tecla), lê "24.000" e desiste no Escape', async () => {
+    const onTerminal = vi.fn();
+    render(<PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'EVAPORADORA_HI_WALL')} onTrecho={() => {}} onTerminal={onTerminal} condensadoras={[]} />);
+    const user = userEvent.setup();
+    const cap = screen.getByLabelText('Capacidade do equipamento (BTU/h)') as HTMLInputElement;
+    await user.type(cap, '24.000');
+    expect(onTerminal).not.toHaveBeenCalled();
+    await user.keyboard('{Enter}');
+    expect(onTerminal).toHaveBeenCalledTimes(1);
+    expect(onTerminal).toHaveBeenLastCalledWith({ capacidadeBtuH: 24000 });
+    // O Escape desiste do que foi digitado.
+    await user.click(cap);
+    await user.clear(cap);
+    await user.type(cap, '99000');
+    await user.keyboard('{Escape}');
+    expect(onTerminal).toHaveBeenCalledTimes(1);
+  });
+
+  it('10/10/2026: a leitura em milhar e TR, o aviso fora da faixa do tipo, e apagar volta a "não declarada"', () => {
+    const onTerminal = vi.fn();
+    const r = render(<PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'EVAPORADORA_HI_WALL', { capacidadeBtuH: 24000 })} onTrecho={() => {}} onTerminal={onTerminal} condensadoras={[]} />);
+    expect(screen.getByTestId('leitura-da-capacidade')).toHaveTextContent('24.000 BTU/h · 2,0 TR');
+    expect(screen.queryByTestId('aviso-da-capacidade')).toBeNull();
+    const cap = screen.getByLabelText('Capacidade do equipamento (BTU/h)') as HTMLInputElement;
+    fireEvent.change(cap, { target: { value: '' } });
+    fireEvent.blur(cap);
+    expect(onTerminal).toHaveBeenLastCalledWith({ capacidadeBtuH: null });
+    r.unmount();
+    // O zero a mais do teste no app real: 240.000 numa hi-wall.
+    render(<PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'EVAPORADORA_HI_WALL', { capacidadeBtuH: 240000 })} onTrecho={() => {}} onTerminal={() => {}} condensadoras={[]} />);
+    expect(screen.getByTestId('leitura-da-capacidade')).toHaveTextContent('240.000 BTU/h · 20,0 TR');
+    expect(screen.getByTestId('aviso-da-capacidade')).toHaveTextContent('Fora da faixa típica de evaporadora hi-wall (7.000 a 36.000 BTU/h) — confira o número.');
   });
 });

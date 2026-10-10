@@ -62,6 +62,12 @@ export interface FichaDoPontoHidraulico {
   pressaoMinimaKpa?: number;
   /** Fator K padrão do sprinkler, L/min/bar^½ (incêndio E1.1). `Terminal.fatorK` declarado vence. */
   fatorK?: number;
+  /**
+   * Climatização (10/10/2026): a faixa TÍPICA de capacidade do tipo, BTU/h — só
+   * para AVISAR o número fora dela (um zero a mais), nunca para recusar. Valores
+   * de mercado transcritos de memória: HIPÓTESE.
+   */
+  faixaDeCapacidadeBtuH?: [number, number];
   ajuda: string;
 }
 
@@ -688,12 +694,12 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
   // Medidas e cotas são as da reserva de espaço da E11.1 (a peça herda o lugar);
   // a CAPACIDADE é declarada por instância (`Terminal.capacidadeBtuH`) — a E4 a
   // sugere pela carga térmica. DN mínimo da linha = líquido 6 mm (1/4").
-  EVAPORADORA_HI_WALL: { rotulo: 'Evaporadora hi-wall', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2200 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 900, profundidadeMm: 220, alturaMm: 300 }, ajuda: 'Unidade interna de parede, a 2,20 m; liga à condensadora pela linha frigorígena e ao dreno. A capacidade (BTU/h) se declara no painel ou vem da carga térmica (E4).' },
-  EVAPORADORA_PISO_TETO: { rotulo: 'Evaporadora piso-teto', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2300 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1200, profundidadeMm: 650, alturaMm: 240 }, ajuda: 'Unidade interna junto ao teto ou ao piso, para salões maiores.' },
-  EVAPORADORA_CASSETE: { rotulo: 'Evaporadora cassete', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 840, profundidadeMm: 840, alturaMm: 250 }, ajuda: 'Unidade interna embutida no forro, com insuflamento em quatro vias.' },
-  EVAPORADORA_DUTADA: { rotulo: 'Evaporadora dutada', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600, MECANICA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6, MECANICA: 200 }, medidasMm: { larguraMm: 1100, profundidadeMm: 700, alturaMm: 280 }, ajuda: 'Unidade interna no forro, que insufla por dutos e difusores (E7).' },
-  CONDENSADORA_SPLIT: { rotulo: 'Condensadora (split)', sigla: 'CD', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }, ajuda: 'Unidade externa de um split; fica na fachada ou na área técnica, com folga de ar. Capacidade = a da evaporadora que serve.' },
-  CONDENSADORA_VRF: { rotulo: 'Condensadora VRF', sigla: 'CD', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 10 }, medidasMm: { larguraMm: 1240, profundidadeMm: 760, alturaMm: 1700 }, ajuda: 'Unidade externa de fluxo de refrigerante variável, que serve várias evaporadoras pelos derivadores (E6).' },
+  EVAPORADORA_HI_WALL: { rotulo: 'Evaporadora hi-wall', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2200 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 900, profundidadeMm: 220, alturaMm: 300 }, faixaDeCapacidadeBtuH: [7000, 36000], ajuda: 'Unidade interna de parede, a 2,20 m; liga à condensadora pela linha frigorígena e ao dreno. A capacidade (BTU/h) se declara no painel ou vem da carga térmica (E4).' },
+  EVAPORADORA_PISO_TETO: { rotulo: 'Evaporadora piso-teto', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2300 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 1200, profundidadeMm: 650, alturaMm: 240 }, faixaDeCapacidadeBtuH: [18000, 80000], ajuda: 'Unidade interna junto ao teto ou ao piso, para salões maiores.' },
+  EVAPORADORA_CASSETE: { rotulo: 'Evaporadora cassete', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 840, profundidadeMm: 840, alturaMm: 250 }, faixaDeCapacidadeBtuH: [18000, 60000], ajuda: 'Unidade interna embutida no forro, com insuflamento em quatro vias.' },
+  EVAPORADORA_DUTADA: { rotulo: 'Evaporadora dutada', sigla: 'EV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2600, MECANICA: 2600 }, dnMinimoMm: { FRIGORIGENA: 6, MECANICA: 200 }, medidasMm: { larguraMm: 1100, profundidadeMm: 700, alturaMm: 280 }, faixaDeCapacidadeBtuH: [12000, 120000], ajuda: 'Unidade interna no forro, que insufla por dutos e difusores (E7).' },
+  CONDENSADORA_SPLIT: { rotulo: 'Condensadora (split)', sigla: 'CD', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }, faixaDeCapacidadeBtuH: [7000, 80000], ajuda: 'Unidade externa de um split; fica na fachada ou na área técnica, com folga de ar. Capacidade = a da evaporadora que serve.' },
+  CONDENSADORA_VRF: { rotulo: 'Condensadora VRF', sigla: 'CD', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 10 }, medidasMm: { larguraMm: 1240, profundidadeMm: 760, alturaMm: 1700 }, faixaDeCapacidadeBtuH: [30000, 700000], ajuda: 'Unidade externa de fluxo de refrigerante variável, que serve várias evaporadoras pelos derivadores (E6).' },
   DERIVADOR_VRF: { rotulo: 'Derivador VRF', sigla: 'DV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 6 }, sobreOTrecho: true, ajuda: 'A derivação (refnet) da linha do VRF para um ramo; sobre o trecho.' },
   // 0.94.0 (10/10/2026, C4): o coletor (header) — 3 ou mais ramais num ponto só.
   COLETOR_VRF: { rotulo: 'Coletor VRF', sigla: 'CV', grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 10 }, sobreOTrecho: true, ajuda: 'O coletor (header) do VRF: divide a linha em 3 ou mais ramais num ponto só, onde o derivador "Y" (dois ramais) não serve; sobre o trecho.' },
@@ -805,4 +811,18 @@ export function terminaisHidraulicos(model: BlueprintModel, disciplina?: Discipl
   return (model.terminais ?? []).filter(
     (t) => t.tipoHidraulico != null && (!disciplina || t.disciplina === disciplina),
   );
+}
+
+/**
+ * Climatização (10/10/2026): a LEITURA da capacidade declarada — o número com o
+ * separador de milhar e em TR (1 TR = 12.000 BTU/h), e o aviso quando ele sai da
+ * faixa típica do tipo (um zero a mais vira "240.000 BTU/h · 20,0 TR", fora da
+ * faixa da hi-wall). Avisa, não recusa: a faixa é hipótese de mercado.
+ */
+export function leituraDaCapacidade(capacidadeBtuH: number, tipo: TipoDePontoHidraulico): { texto: string; aviso: string | null } {
+  const ficha = FICHA_DO_PONTO_HIDRAULICO[tipo];
+  const texto = `${capacidadeBtuH.toLocaleString('pt-BR')} BTU/h · ${(capacidadeBtuH / 12000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} TR`;
+  const faixa = ficha?.faixaDeCapacidadeBtuH;
+  if (!faixa || (capacidadeBtuH >= faixa[0] && capacidadeBtuH <= faixa[1])) return { texto, aviso: null };
+  return { texto, aviso: `Fora da faixa típica de ${ficha.rotulo.toLowerCase()} (${faixa[0].toLocaleString('pt-BR')} a ${faixa[1].toLocaleString('pt-BR')} BTU/h) — confira o número.` };
 }

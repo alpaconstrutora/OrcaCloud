@@ -166,6 +166,32 @@ async function resolveEmpreendimentos(rows: Receivable[], organizationId: string
     }
 }
 
+/**
+ * Tributos de cada parcela (PIS/COFINS/INSS gerados por taxPayableService sobre
+ * ela, ligados por `parcela_id`). Vem do campo computado `tributos_da_parcela`
+ * — o banco soma na hora, nada guardado que possa ficar desatualizado.
+ * Roda DEPOIS da lista, como `resolveEmpreendimentos`. Falha devolve mapa vazio:
+ * a coluna fica em "—", a tabela não quebra.
+ */
+async function resolveTributos(ids: string[]): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (ids.length === 0) return out;
+    try {
+        const lotes = await Promise.all(chunk(ids).map(async lote => {
+            const { data, error } = await supabase
+                .from('internal_transactions')
+                .select('id, tributos:tributos_da_parcela')
+                .in('id', lote);
+            if (error) throw error;
+            return (data || []) as unknown as { id: string; tributos: number | null }[];
+        }));
+        lotes.flat().forEach(r => out.set(r.id, Number(r.tributos) || 0));
+    } catch (e) {
+        console.warn('[RECEIVABLE] Falha ao resolver tributos das parcelas:', e);
+    }
+    return out;
+}
+
 export const receivableService = {
 
     /**
@@ -193,6 +219,8 @@ export const receivableService = {
     },
 
     resolveEmpreendimentos,
+
+    resolveTributos,
 
     async updateStatus(
         id: string,

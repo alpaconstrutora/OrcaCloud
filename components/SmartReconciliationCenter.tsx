@@ -22,6 +22,8 @@ interface CandidateTx {
     id: string;
     description?: string;
     amount?: number;
+    /** Bruto − tributos retidos pelo cliente (campo computado). */
+    valor_esperado?: number | null;
     entity_name?: string;
     party_name?: string;
     party_type?: 'SUPPLIER' | 'CLIENT' | string;
@@ -440,7 +442,11 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                                 </p>
                                             )}
                                             <p className="text-xs text-gray-500 mt-0.5">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
-                                            <p className="text-sm font-semibold text-gray-900 tabular-nums mt-1">{formatBRL(cand?.amount)}</p>
+                                            {/* O que o banco credita: líquido quando o cliente retém tributo. */}
+                                            <p className="text-sm font-semibold text-gray-900 tabular-nums mt-1">{formatBRL(cand?.valor_esperado ?? cand?.amount)}</p>
+                                            {cand?.valor_esperado != null && cand.amount != null && Math.abs(cand.valor_esperado - cand.amount) >= 0.005 && (
+                                                <p className="text-xs text-gray-400 tabular-nums">bruto {formatBRL(cand.amount)}</p>
+                                            )}
                                         </div>
 
                                         {/* Centro: score + motivos — texto, sem pílula (§8) */}

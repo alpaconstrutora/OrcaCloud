@@ -13,6 +13,7 @@ import PlanoContasSelect, { type PlanoContasOption } from '../PlanoContasSelect'
 import type { ColumnConfig } from '../ui/TableUtils';
 import { distinctOptions, type FilterFieldConfig } from '../ui/FilterUtils';
 import type { BankTransaction, InternalTransaction, BankTransactionStatus } from '../../types';
+import { valorParaConciliar } from '../../utils/reconciliationRules';
 
 /**
  * Configuração e desenho das três tabelas da Conciliação Bancária: o Extrato, e os dois
@@ -642,6 +643,22 @@ export interface PendingInternalRowCtx {
     onUpdateCategory: (id: string, v: string) => void;
 }
 
+/**
+ * Valor de um lançamento na conciliação: o que o banco deve creditar
+ * (`valor_esperado` — líquido quando o cliente retém tributo). Quando difere do
+ * bruto, o bruto aparece embaixo, atenuado, para não parecer erro de valor.
+ */
+export function ValorParaConciliar({ tx }: { tx: Pick<InternalTransaction, 'amount' | 'valor_esperado'> }) {
+    const esperado = valorParaConciliar(tx);
+    if (Math.abs(esperado - tx.amount) < 0.005) return <>{formatMoney(tx.amount)}</>;
+    return (
+        <span className="inline-flex flex-col items-end leading-tight" title="Líquido: o cliente retém tributos na fonte">
+            <span>{formatMoney(esperado)}</span>
+            <span className="text-xs font-normal text-gray-400">bruto {formatMoney(tx.amount)}</span>
+        </span>
+    );
+}
+
 export function renderPendingInternalCell(key: string, tx: InternalTransaction, ctx: PendingInternalRowCtx): React.ReactNode {
     switch (key) {
         case 'description': {
@@ -701,7 +718,7 @@ export function renderPendingInternalCell(key: string, tx: InternalTransaction, 
         case 'date':
             return formatDateBR(ctx.displayDate(tx));
         case 'amount':
-            return formatMoney(tx.amount);
+            return <ValorParaConciliar tx={tx} />;
         default:
             return null;
     }

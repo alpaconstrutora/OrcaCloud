@@ -390,6 +390,12 @@ export interface PropertyDeal {
      * regime de competência para datar os tributos gerados (taxPayableService).
      */
     rental_competencia_offset_months?: number;
+    /**
+     * Só locação. Tributos que o cliente retém na fonte ('pis' | 'cofins' | 'inss').
+     * O retido nasce como RETIDO em Tributos a Pagar e a parcela concilia pelo
+     * líquido (valor_esperado). Nulo/vazio = nada retido, concilia pelo bruto.
+     */
+    tributos_retidos?: string[] | null;
     /** Só locação. Fim da vigência (YYYY-MM-DD) — vira contracts.end_date e delimita as parcelas. */
     end_date?: string;
     /** Só locação. Periodicidade do faturamento; default Mensal em createFromDeal. */

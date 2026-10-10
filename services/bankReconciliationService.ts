@@ -1051,7 +1051,7 @@ export const bankReconciliationService = {
         // (campos opcionais tipados sem `null` para casar com scoreCandidate/resolveBankParty;
         //  em runtime o PostgREST devolve null e os `||` lá dentro já tratam)
         type BankRow = { id: string; transaction_date: string; amount: number; direction: string; description_raw: string; description_normalized?: string; counterparty_name?: string; bank_account_id?: string };
-        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string };
+        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string; valor_esperado?: number | null };
 
         const [{ data: bankTxs, error: bankErr }, partyIndex] = await Promise.all([
             fetchAllPages<BankRow>(() => supabase
@@ -1074,15 +1074,18 @@ export const bankReconciliationService = {
 
         const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
             .from('internal_transactions')
-            .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id')
+            .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${regras.COLUNA_VALOR_ESPERADO}`)
             .eq('organization_id', organizationId)
             .eq('status', 'PENDING')
+            .or(regras.FILTRO_SEM_TRIBUTO_RETIDO)
             .gte('transaction_date', windowStart)
             .lte('transaction_date', windowEnd)
             .order('transaction_date', { ascending: true })
             .order('id', { ascending: true }) as unknown as RangeableQuery<PendingRow>);
         if (pendingErr) throw pendingErr;
-        const candidatesAll = pending || [];
+        // Mesma troca da Edge Function: a parcela com tributo retido pelo cliente
+        // casa pelo líquido (valor_esperado), não pelo bruto.
+        const candidatesAll = (pending || []).map(regras.comValorEsperado);
 
         // 2) Decide em memória. O julgamento inteiro mora em `utils/reconciliationRules`,
         //    sem um único import, para que a Edge Function pontue com o MESMO código —

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
 import { bankReconciliationService } from './bankReconciliationService';
-import { extratoForaDaConciliacao } from '../utils/reconciliationRules';
+import { extratoForaDaConciliacao, comValorEsperado, COLUNA_VALOR_ESPERADO, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
 
 const DAY = 86_400_000;
 
@@ -26,6 +26,8 @@ interface TitleItem {
     description?: string;
     entity_name?: string;
     party_name?: string;
+    /** Bruto − tributos retidos pelo cliente (campo computado). Ver comValorEsperado. */
+    valor_esperado?: number | null;
 }
 
 export interface BankToTitlesGroup {
@@ -104,9 +106,10 @@ export const reconciliationGroupService = {
                 .order('transaction_date', { ascending: true })
                 .order('id', { ascending: true }) as unknown as RangeableQuery<BankItem & { category?: string | null }>),
             fetchAllPages<TitleItem>(() => supabase.from('internal_transactions')
-                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name')
+                .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, ${COLUNA_VALOR_ESPERADO}`)
                 .eq('organization_id', organizationId)
                 .eq('status', 'PENDING')
+                .or(FILTRO_SEM_TRIBUTO_RETIDO)
                 .order('transaction_date', { ascending: true })
                 .order('id', { ascending: true }) as unknown as RangeableQuery<TitleItem>),
             // Falha ao ler a lista não derruba os agrupamentos: sem ela, nada é excluído.
@@ -121,7 +124,9 @@ export const reconciliationGroupService = {
         // Fora da conciliação (painel Regras: categoria excluída, ou sem credor/cliente com a
         // inclusão desligada): o extrato não entra em agrupamento.
         const banks = (bankTxs || []).filter(b => !extratoForaDaConciliacao(b, filtros));
-        const allTitles = titles || [];
+        // Grupo soma o que o banco credita: líquido quando o cliente retém tributo
+        // (mesma conta do fn_reconcile_group, que soma valor_esperado).
+        const allTitles = (titles || []).map(comValorEsperado);
 
         const bankToTitles: BankToTitlesGroup[] = [];
         const titleToBanks: TitleToBanksGroup[] = [];

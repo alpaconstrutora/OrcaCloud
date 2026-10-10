@@ -127,6 +127,7 @@ function competenceFromDue(dueIso: string, offsetMonths: number): string {
 }
 
 interface DealParcel {
+    id: string;           // a parcela em internal_transactions — vira o parcela_id do tributo
     reference_id: string;
     amount: number;
     vencimento: string; // vencimento da parcela no Contas a Receber (vai na descrição)
@@ -562,6 +563,22 @@ export const taxPayableService = {
             dealCode = dd?.contract_number?.trim() || dd?.code?.trim() || dealCode;
         }
 
+        // Tributos que o cliente retém na fonte (aba Financeiro da negociação).
+        // Retido nasce com business_status RETIDO: continua listado (DRE e apuração),
+        // mas não é "a pagar" e a parcela concilia pelo líquido (valor_esperado).
+        // Leitura própria e tolerante, como a defasagem de competência.
+        let retidos = new Set<string>();
+        {
+            const { data: d, error } = await supabase
+                .from('commercial_deals')
+                .select('tributos_retidos')
+                .eq('id', deal.id)
+                .maybeSingle();
+            if (!error) {
+                retidos = new Set((d as { tributos_retidos?: string[] | null } | null)?.tributos_retidos ?? []);
+            }
+        }
+
         // Sempre limpa os automáticos PENDENTES deste negócio antes de regerar
         // (parcela cancelada, mudança de valor, alíquota desativada). Preserva os
         // já PAGOS/conciliados (dinheiro que saiu).
@@ -592,7 +609,7 @@ export const taxPayableService = {
         const refPatterns = [`tx-${deal.id}-%`, ...contractIds.map(id => `${id}%`)];
         const { data: parcels, error: pErr } = await supabase
             .from('internal_transactions')
-            .select('reference_id, amount, due_date, transaction_date, status, business_status')
+            .select('id, reference_id, amount, due_date, transaction_date, status, business_status')
             .eq('organization_id', organizationId)
             .eq('direction', 'CREDIT')
             .or(refPatterns.map(p => `reference_id.like.${p}`).join(','));
@@ -601,7 +618,8 @@ export const taxPayableService = {
         const validParcels: DealParcel[] = (parcels || [])
             .filter((p: { status?: string; business_status?: string }) =>
                 p.status !== 'CANCELLED' && p.business_status !== 'CANCELADO')
-            .map((p: { reference_id: string; amount: number; due_date?: string; transaction_date?: string }) => ({
+            .map((p: { id: string; reference_id: string; amount: number; due_date?: string; transaction_date?: string }) => ({
+                id: p.id,
                 reference_id: p.reference_id,
                 amount: Number(p.amount) || 0,
                 vencimento: (p.due_date || p.transaction_date || '').slice(0, 10),
@@ -652,6 +670,9 @@ export const taxPayableService = {
                 // Contrato da parcela (Gestão de Contratos) — liga o tributo às abas
                 // Locações/Vendas de ÒPURA Relatórios. Parcela legada `tx-…` fica sem.
                 contract_id:     contractPrefix ?? null,
+                // Parcela de origem — é por ela que Contas a Receber soma os tributos
+                // e a conciliação calcula o líquido (tributos_da_parcela / valor_esperado).
+                parcela_id:      parcel.id,
                 transaction_date: parcel.fato_gerador,
                 due_date:        taxDueDate(taxName, parcel.fato_gerador),
                 amount:          Number(amount.toFixed(2)),
@@ -663,7 +684,7 @@ export const taxPayableService = {
                 category:        categoria.category,
                 category_id:     categoria.category_id,
                 status:          'PENDING',
-                business_status: 'PREVISTO',
+                business_status: retidos.has(taxKey) ? 'RETIDO' : 'PREVISTO',
             });
         };
 

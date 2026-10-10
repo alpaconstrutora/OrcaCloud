@@ -3509,6 +3509,42 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         hoverCls="hover:bg-blue-50"
                                     />
                                 </div>
+
+                                {/* Retenção na fonte (commercial_deals.tributos_retidos). Ao salvar,
+                                    taxPayableService.generateForDeal regera os tributos: o retido
+                                    nasce como "Retido pelo cliente" e a parcela passa a conciliar
+                                    pelo valor líquido (valor_esperado). Chaves = as da locação. */}
+                                {formData.type === 'RENTAL' && (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">Tributos retidos pelo cliente</label>
+                                        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                                            {([['pis', 'PIS'], ['cofins', 'COFINS'], ['inss', 'INSS']] as const).map(([chave, rotulo]) => {
+                                                const retidos = formData.tributos_retidos ?? [];
+                                                return (
+                                                    <label key={chave} className="flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                            checked={retidos.includes(chave)}
+                                                            onChange={e => setFormData({
+                                                                ...formData,
+                                                                tributos_retidos: e.target.checked
+                                                                    ? [...retidos.filter(k => k !== chave), chave]
+                                                                    : retidos.filter(k => k !== chave),
+                                                            })}
+                                                        />
+                                                        {rotulo}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-xs text-gray-500">
+                                            Marcado: o cliente desconta o tributo do aluguel e o recolhe. A parcela é conciliada
+                                            pelo valor líquido e o tributo aparece como "Retido pelo cliente" em Tributos a Pagar.
+                                            Desmarcado: concilia pelo valor bruto e o tributo fica a pagar.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* O Plano de Pagamento saiu daqui para a aba PARCELAS:

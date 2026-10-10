@@ -266,6 +266,10 @@ export interface InternalTransaction {
     status: InternalTransactionStatus;
     project_id?: string;
     cost_center_id?: string;
+    /** Campo computado do banco (só quando pedido no select): bruto − tributos
+     *  retidos pelo cliente. É o que a conciliação confere com o extrato; o
+     *  `amount` continua bruto. Ver utils/reconciliationRules › valorParaConciliar. */
+    valor_esperado?: number | null;
     created_at?: string;
     updated_at?: string;
 }
@@ -757,6 +761,10 @@ export interface Receivable {
      *  coluna da view. Ver `receivableService.enrichWithEmpreendimento`. */
     empreendimento_id?: string | null;
     empreendimento_name?: string | null;
+    /** Soma dos tributos gerados sobre a parcela (campo computado
+     *  `tributos_da_parcela`), resolvida depois da lista por
+     *  `receivableService.resolveTributos`. `undefined` = ainda não carregou. */
+    tributos?: number;
     created_at?: string;
     updated_at?: string;
 }
@@ -891,7 +899,10 @@ export interface InadimplenciaFaixa {
 export type TaxPayableBusinessStatus =
     | 'PREVISTO'
     | 'PAGO'
-    | 'CANCELADO';
+    | 'CANCELADO'
+    // Retido pelo cliente na fonte (commercial_deals.tributos_retidos): o cliente
+    // recolhe; fica listado, mas não é "a pagar".
+    | 'RETIDO';
 
 // effective_status inclui 'VENCIDO' (computado na view)
 export type TaxPayableEffectiveStatus = TaxPayableBusinessStatus | 'VENCIDO';

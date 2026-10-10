@@ -9,6 +9,9 @@ import { exigirMembro, exigirUsuario, respostaDeErro, chamadaDeCron } from "../_
 // elas erraram nas duas direções antes de acertar — duas cópias seriam duas chances de
 // regredir.
 import {
+    comValorEsperado,
+    COLUNA_VALOR_ESPERADO,
+    FILTRO_SEM_TRIBUTO_RETIDO,
     findInternalTransferPairs,
     janelaDeTitulos,
     montarAjustes,
@@ -251,15 +254,18 @@ serve(async (req: Request) => {
 
         // Só os títulos da janela que o extrato alcança — a mesma conta dos dois lados.
         const janela = janelaDeTitulos(movimentos.map(m => m.transaction_date));
-        const titulos = await todasAsPaginas<TituloParaPlano>(
+        // `valor_esperado` = bruto − tributos retidos pelo cliente: a parcela com
+        // retenção casa pelo líquido que o banco credita. Tributo RETIDO fica fora.
+        const titulos = (await todasAsPaginas<TituloParaPlano & { valor_esperado?: number | null }>(
             (de, ate) => servico.from('internal_transactions')
-                .select('id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id')
+                .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${COLUNA_VALOR_ESPERADO}`)
                 .eq('organization_id', orgId)
                 .eq('status', 'PENDING')
+                .or(FILTRO_SEM_TRIBUTO_RETIDO)
                 .gte('transaction_date', janela.inicio)
                 .lte('transaction_date', janela.fim)
                 .order('transaction_date', { ascending: true }).order('id', { ascending: true })
-                .range(de, ate));
+                .range(de, ate))).map(comValorEsperado);
 
         const settings = await carregarAjustes(servico, orgId);
         const partyIndex = await carregarContrapartes(servico, orgId);

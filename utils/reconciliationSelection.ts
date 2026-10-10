@@ -11,6 +11,7 @@
  * Plano: docs/planos/2026-09-29-conciliacao-pendentes-conciliar-e-ajustes.md
  */
 import type { BankTransaction, InternalTransaction } from '../types/financial';
+import { valorParaConciliar } from './reconciliationRules';
 
 export type ModoConciliacaoGrupo = 'EXACT' | 'ADJUSTMENT' | 'EXCESS' | 'PARTIAL' | 'ADJUST_VALUE';
 export type ModoAjuste = Exclude<ModoConciliacaoGrupo, 'EXACT'>;
@@ -74,7 +75,9 @@ export function resumoDaSelecao(
     lancamentos: InternalTransaction[],
 ): ResumoSelecao {
     const cExtrato = extrato.reduce((s, t) => s + centavos(t.amount), 0);
-    const cLanc = lancamentos.reduce((s, t) => s + centavos(t.amount), 0);
+    // O que o banco credita: líquido quando o cliente retém tributo (valor_esperado),
+    // a mesma conta que fn_reconcile_group faz no servidor.
+    const cLanc = lancamentos.reduce((s, t) => s + centavos(valorParaConciliar(t)), 0);
     const cDif = cExtrato - cLanc;
 
     const direcoes = new Set([...extrato, ...lancamentos].map(t => t.direction));

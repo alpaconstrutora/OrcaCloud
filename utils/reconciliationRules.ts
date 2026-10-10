@@ -484,6 +484,43 @@ export interface TituloParaPlano {
     party_id?: string; payment_account_id?: string;
 }
 
+/**
+ * Colunas extras que todo carregador de títulos pede junto: `valor_esperado` é o
+ * campo computado do banco (bruto − tributos retidos pelo cliente na fonte).
+ * Sem retenção é igual ao `amount`.
+ */
+export const COLUNA_VALOR_ESPERADO = 'valor_esperado';
+
+/**
+ * Filtro PostgREST (`.or(...)`) que tira dos candidatos o tributo RETIDO pelo
+ * cliente: quem recolhe é o cliente, nunca sai do banco da empresa — casá-lo com
+ * um débito do extrato seria vínculo falso.
+ */
+export const FILTRO_SEM_TRIBUTO_RETIDO = 'business_status.is.null,business_status.neq.RETIDO';
+
+/**
+ * O valor que a conciliação compara é o que o banco de fato credita: a parcela
+ * cujo cliente retém tributo concilia pelo LÍQUIDO (`valor_esperado`), a demais
+ * pelo bruto. Troca só o `amount` do título usado no plano — o registro no banco
+ * continua bruto (a DRE e os syncs dependem disso). As regras abaixo não mudam.
+ */
+/**
+ * Valor a CONFERIR com o extrato, para quem não pode trocar o `amount` do objeto
+ * (a tela edita e regrava o título a partir dele — trocar gravaria o líquido como
+ * bruto). Mesmo critério de `comValorEsperado`.
+ */
+export function valorParaConciliar(t: { amount: number; valor_esperado?: number | string | null }): number {
+    if (t.valor_esperado === null || t.valor_esperado === undefined) return t.amount;
+    const esperado = Number(t.valor_esperado);
+    return Number.isFinite(esperado) ? esperado : t.amount;
+}
+
+export function comValorEsperado<T extends { amount: number; valor_esperado?: number | string | null }>(t: T): T {
+    if (t.valor_esperado === null || t.valor_esperado === undefined) return t;
+    const esperado = Number(t.valor_esperado);
+    return Number.isFinite(esperado) ? { ...t, amount: esperado } : t;
+}
+
 
 /**
  * O PLANO de uma rodada do motor: o que casar sozinho, o que sugerir, e que contraparte

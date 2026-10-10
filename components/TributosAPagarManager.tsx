@@ -22,6 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
     PREVISTO:  'A pagar',
     PAGO:      'Pago',
     VENCIDO:   'Vencido',
+    RETIDO:    'Retido pelo cliente',
     CANCELADO: 'Cancelado',
 };
 
@@ -30,6 +31,7 @@ const STATUS_TEXT_COLORS: Record<string, string> = {
     PREVISTO:  'text-blue-700',
     PAGO:      'text-green-700',
     VENCIDO:   'text-red-600',
+    RETIDO:    'text-amber-700',
     CANCELADO: 'text-gray-400',
 };
 
@@ -604,7 +606,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     }, [rows, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia]);
 
     /** Só não-PAGO pode ser baixado. */
-    const isSelectable = (t: TaxPayable) => t.effective_status !== 'PAGO' && t.effective_status !== 'CANCELADO';
+    /** Retido o cliente recolhe — não entra em baixa por aqui. */
+    const isSelectable = (t: TaxPayable) => !['PAGO', 'CANCELADO', 'RETIDO'].includes(t.effective_status);
     const selectableVisible = useMemo(() => sorted.filter(isSelectable), [sorted]);
     const selectableIndexById = useMemo(
         () => new Map(selectableVisible.map((r, i) => [r.id, i])),
@@ -684,14 +687,14 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                 if ((r.transaction_date ?? '') >= inicioMes) pagoMes += r.amount;
             } else if (r.effective_status === 'VENCIDO') {
                 vencidos += r.amount;
-            } else if (!['CANCELADO','PAGO'].includes(r.effective_status)) {
+            } else if (!['CANCELADO','PAGO','RETIDO'].includes(r.effective_status)) {
                 aPagar += r.amount;
             }
         });
         return { aPagar, vencidos, pagoMes };
     }, [rows]);
 
-    const STATUS_OPTIONS: StatusFilter[] = ['all','PREVISTO','PAGO','VENCIDO','CANCELADO'];
+    const STATUS_OPTIONS: StatusFilter[] = ['all','PREVISTO','PAGO','VENCIDO','RETIDO','CANCELADO'];
 
     return (
         <div className="space-y-6">
@@ -978,6 +981,9 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                     const isVencido = r.effective_status === 'VENCIDO';
                                     const isPago = r.effective_status === 'PAGO';
                                     const isCancelado = r.effective_status === 'CANCELADO';
+                                    // Retido: o cliente recolhe; a marcação vem da negociação
+                                    // (aba Financeiro), não se paga nem se troca o status aqui.
+                                    const isRetido = r.effective_status === 'RETIDO';
                                     // Só lançamento manual (sem reference_id) é editável/excluível.
                                     const isManual = !r.reference_id;
                                     return (
@@ -1003,7 +1009,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                             {tableColumns.visibleColumns.includes('actions') && (
                                             <td className="px-6 py-2.5 last:border-r-0">
                                                 <div className="flex items-center gap-1.5">
-                                                    {!isPago && !isCancelado && (
+                                                    {!isPago && !isCancelado && !isRetido && (
                                                         <button
                                                             onClick={() => handleBaixa(r)}
                                                             className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all flex items-center gap-1"
@@ -1020,7 +1026,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                                             onClick={() => estornar(r)}
                                                         />
                                                     )}
-                                                    {!isPago && (
+                                                    {!isPago && !isRetido && (
                                                         <select
                                                             value={r.business_status}
                                                             disabled={changingStatus === r.id}

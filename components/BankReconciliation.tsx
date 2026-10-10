@@ -46,7 +46,7 @@ import BankTxEdicaoEmLoteModal from './BankTxEdicaoEmLoteModal';
 import { RodapePaginacao, usePaginacaoEmMemoria } from './ui/RodapePaginacao';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
-import { extratoForaDaConciliacao } from '../utils/reconciliationRules';
+import { extratoForaDaConciliacao, valorParaConciliar, COLUNA_VALOR_ESPERADO, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
 import { reconciliationReprocessService, resumoDoReprocesso } from '../services/reconciliationReprocessService';
 import BankStatementImportDrawer, { type CompletudeDaConta } from './BankStatementImportDrawer';
@@ -111,6 +111,7 @@ import {
     renderPendingBankCell,
     renderPendingInternalCell,
     renderStatementCell,
+    ValorParaConciliar,
 } from './reconciliation/tabelasDaConciliacao';
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
@@ -499,8 +500,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 valA = new Date(a.transaction_date).getTime();
                 valB = new Date(b.transaction_date).getTime();
             } else if (internalSortField === 'amount') {
-                valA = a.amount;
-                valB = b.amount;
+                valA = valorParaConciliar(a);
+                valB = valorParaConciliar(b);
             } else if (internalSortField === 'description') {
                 valA = (a.description || '').toLowerCase();
                 valB = (b.description || '').toLowerCase();
@@ -1321,9 +1322,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             // Load Internal Transactions based on view
             const buildITxQuery = () => {
+                // `*` não traz campo computado: valor_esperado (bruto − tributos retidos
+                // pelo cliente) é pedido à parte. Tributo RETIDO não é candidato — o
+                // cliente recolhe, nunca sai do extrato da empresa.
                 let q = supabase
                     .from('internal_transactions')
-                    .select('*');
+                    .select(`*, ${COLUNA_VALOR_ESPERADO}`)
+                    .or(FILTRO_SEM_TRIBUTO_RETIDO);
 
                 if (organizationId) {
                     q = q.eq('organization_id', organizationId);
@@ -1354,7 +1359,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     .select(
                         'id, bank_transaction_id, candidate_internal_transaction_id, confidence, reason, created_at, '
                         + 'bank_transaction:bank_transaction_id!inner(bank_account_id, status, transaction_date), '
-                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
+                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, valor_esperado, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
                     )
                     .eq('bank_transaction.bank_account_id', selectedAccountId)
                     .in('bank_transaction.status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);
@@ -4264,7 +4269,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="text-sm font-medium text-gray-900 leading-none">
-                                                            {formatMoney(tx.amount)}
+                                                            <ValorParaConciliar tx={tx} />
                                                         </p>
                                                         {(() => {
                                                             const m = getSourceMeta(tx.source_system);

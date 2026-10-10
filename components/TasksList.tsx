@@ -236,6 +236,19 @@ const TasksList: React.FC<Props> = ({
   const projMap   = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
   const statusMap = useMemo(() => Object.fromEntries(statuses.map(s => [s.id, s])), [statuses])
 
+  // Filtro de status por NOME: cada organização tem o próprio conjunto (Pendente/Em
+  // Andamento/Concluído), e em "Todas" a lista por id repetia cada nome uma vez por org.
+  const statusNameKey = (name: string) => name.trim().toLowerCase()
+  const statusFilterOptions = useMemo(() => {
+    const byName = new Map<string, TaskStatus>()
+    for (const s of [...statuses].sort((a, b) => a.position - b.position)) {
+      if (!byName.has(statusNameKey(s.name))) byName.set(statusNameKey(s.name), s)
+    }
+    return [...byName.values()]
+  }, [statuses])
+  // Valor persistido antes desta troca era o id do status — converte para o nome.
+  const fStatusName = statusMap[fStatus]?.name ?? fStatus
+
   const parents  = useMemo(() => tasks.filter(t => !t.parent_task_id), [tasks])
   const childMap = useMemo(() => {
     const m: Record<string, TaskRecord[]> = {}
@@ -267,7 +280,9 @@ const TasksList: React.FC<Props> = ({
     let rows = parents.filter(t => {
       if (q && !t.title.toLowerCase().includes(q) && !(t.description ?? '').toLowerCase().includes(q)) return false
       if (fPriority && String(t.priority) !== fPriority) return false
-      if (fStatus && (statuses.length > 0 ? t.status_id !== fStatus : t.status !== fStatus)) return false
+      if (fStatus && (statuses.length > 0
+        ? statusNameKey(statusMap[t.status_id ?? '']?.name ?? '') !== statusNameKey(fStatusName)
+        : t.status !== fStatus)) return false
       if (fAssignee && t.assignee_employee_id !== fAssignee) return false
       if (fProject  && t.project_id !== fProject) return false
       return true
@@ -290,7 +305,7 @@ const TasksList: React.FC<Props> = ({
       })
     }
     return rows
-  }, [parents, q, fPriority, fStatus, fAssignee, fProject, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules])
+  }, [parents, q, fPriority, fStatus, fStatusName, fAssignee, fProject, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules])
 
   const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
 
@@ -984,10 +999,10 @@ const TasksList: React.FC<Props> = ({
                 <option value="3">Normal</option>
                 <option value="4">Baixa</option>
               </select>
-              <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={sel}>
+              <select value={statuses.length > 0 ? fStatusName : fStatus} onChange={(e) => setFStatus(e.target.value)} className={sel}>
                 <option value="">Todos os status</option>
                 {statuses.length > 0
-                  ? statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                  ? statusFilterOptions.map(s => <option key={s.id} value={s.name}>{s.name}</option>)
                   : <><option value="open">Abertas</option><option value="done">Concluídas</option><option value="snoozed">Adiadas</option></>
                 }
               </select>

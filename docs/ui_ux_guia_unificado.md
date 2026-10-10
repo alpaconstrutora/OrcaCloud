@@ -172,7 +172,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas (+ §3.1 busca de seletor em drawer é transitória)
 - [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência)
-- [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela)
+- [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela; §5.5 filtro avançado: campo com valores conhecidos traz `options` e `getValue` = o que a célula mostra)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita
 - [ ] §6.1.1 Coluna espaçadora ANTES de "Ações" (nas 3 listas: colgroup/thead/tbody)
@@ -684,6 +684,45 @@ O que o componente já faz (não reescrever à mão):
 > gatilho legível com a escolha ativa e itens com altura/tipografia do §16.
 > ⚠️ Múltipla escolha (checkbox) ainda não existe aqui — se uma tela precisar,
 > estender o componente (prop `multiple`), não montar outro popover.
+
+### 5.5 Filtro avançado — campo com conjunto conhecido de valores nunca pede digitação
+
+**Referência: `components/ui/FilterUtils.tsx` + `components/TasksList.tsx`**, criado
+em 2026-10-10 a pedido do usuário: em Minhas Tarefas, "Status · Não é · concluído"
+digitado à mão não filtrava nada. *"O app sabe quais são as opções possíveis…
+bastava listar os 3 para que o usuário escolhesse, sem ter que digitar e cometer
+algum erro."* A causa tinha duas camadas, e as duas são regra daqui em diante:
+
+1. **O valor comparado é o que a célula MOSTRA.** O `getValue` devolvia `t.status`
+   (`open`/`done`), a tabela mostrava "Concluído" — nada do que se digitasse casava.
+   O `getValue` de cada campo repete a lógica da célula (nome resolvido, rótulo do
+   mapa, "Obra Própria"…), nunca o código cru.
+2. **Se o app conhece os valores, o campo traz `options`:**
+
+| O campo é… | Config | O usuário vê |
+|---|---|---|
+| enum pequeno (status, tipo, origem, natureza) | `type: 'select'` + `options` derivadas do mapa de rótulos da tela | lista fechada (É / Não é) |
+| lookup grande (fornecedor, cliente, obra, CC, plano de contas, responsável) | `type: 'text'` + `options` da lista que a tela já carrega | **lista com busca**: clicar abre tudo, digitar recorta, escolher grava o valor exato — e Contém continua |
+| sem cadastro próprio (cliente gravado como texto, etapa livre) | `type: 'text'` + `options: distinctOptions(rows, getValue)` | idem, com os valores distintos das linhas carregadas |
+| texto livre (descrição, nome, documento, e-mail) | `type: 'text'` sem `options` | campo de digitação |
+
+```tsx
+// opções que dependem de dado carregado → useMemo dentro do componente, não const de módulo
+const advancedFields = useMemo(() => [
+  { key: 'status', label: 'Status', type: 'select', options: uniqueStatusesByName(statuses).map(s => ({ value: s.name, label: s.name })) },
+  { key: 'assignee', label: 'Responsável', type: 'text', options: distinctOptions(employees, e => e.name) },
+], [statuses, employees]);
+```
+
+> ✅ A comparação de texto (`is`/`is_not`/`contains`) ignora **caixa e acento**
+> (`normalizarTexto`) — "concluido" casa com "Concluído".
+> ✅ Opção hardcoded que copia um mapa local (`STATUS_LABELS`, `MODULE_LABEL`) é
+> derivada dele (`Object.entries(...)`) — a cópia fica para trás quando o mapa
+> ganha um valor (Tarefas perdeu "Ofícios" assim).
+> ✅ A lista com busca sai por **portal** (`document.body`, `position: fixed`),
+> pela mesma razão do §5.4; o painel ignora clique nela como "clique fora".
+> ❌ Campo de valor múltiplo por linha (investidor com 2 obras numa string) fica
+> `text` sem `options` — "É" falharia; precisa de casamento por item primeiro.
 
 ---
 

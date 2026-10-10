@@ -1,15 +1,27 @@
 import React from 'react';
-import { Filter, Plus, ChevronDown, Bookmark, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Filter, Plus, ChevronDown, Bookmark, X, Check } from 'lucide-react';
 import { usePersistedState } from './TableUtils';
 import ActionIconButton from './ActionIconButton';
 
 export type FilterFieldType = 'text' | 'select' | 'date' | 'number';
 
+export interface FilterOption { value: string; label: string }
+
+/**
+ * `options` — o conjunto de valores que o app JÁ conhece para o campo
+ * (ui_ux_guia_unificado.md §5.5). O usuário escolhe em vez de digitar:
+ * - `type: 'select'` + options: lista fechada (enum pequeno: status, tipo, origem);
+ * - `type: 'text'` + options: lista com busca — clicar abre todas, digitar filtra,
+ *   e os operadores de texto (Contém, É...) continuam (lookup grande: fornecedor, obra).
+ * O `getValue` da tela devolve o mesmo valor que a célula MOSTRA — é ele que a
+ * opção escolhida precisa casar.
+ */
 export interface FilterFieldConfig {
   key: string;
   label: string;
   type: FilterFieldType;
-  options?: { value: string; label: string }[]; // obrigatório quando type === 'select'
+  options?: FilterOption[]; // obrigatório quando type === 'select'
 }
 
 export type FilterOperator =
@@ -51,6 +63,10 @@ const OPERATORS_BY_TYPE: Record<FilterFieldType, { value: FilterOperator; label:
   ],
 };
 
+const OPERATOR_LABEL = Object.fromEntries(
+  Object.values(OPERATORS_BY_TYPE).flat().map(op => [op.value, op.label]),
+) as Record<FilterOperator, string>;
+
 /** Operadores que não precisam de input de valor. */
 const VALUELESS_OPERATORS: FilterOperator[] = ['is_set', 'is_not_set'];
 
@@ -65,6 +81,30 @@ export interface SavedFilter {
   id: string;
   name: string;
   rules: FilterRule[];
+}
+
+/** Caixa e acento não importam no filtro: "concluido" casa com "Concluído". */
+export function normalizarTexto(v: unknown): string {
+  return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+/**
+ * Opções a partir dos valores distintos das linhas carregadas — para campo cujo
+ * conjunto não vem de um cadastro que a tela já tenha (cliente gravado como texto,
+ * etapa livre). Sem vazios nem repetidos (por `normalizarTexto`), em ordem alfabética.
+ */
+export function distinctOptions<T>(rows: T[], getValue: (row: T) => unknown): FilterOption[] {
+  const byKey = new Map<string, string>();
+  for (const row of rows) {
+    const raw = getValue(row);
+    if (raw === null || raw === undefined || String(raw).trim() === '') continue;
+    const label = String(raw).trim();
+    const key = normalizarTexto(label);
+    if (!byKey.has(key)) byKey.set(key, label);
+  }
+  return [...byKey.values()]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    .map(v => ({ value: v, label: v }));
 }
 
 function makeId() {
@@ -104,18 +144,18 @@ export function applyFilterRules<T>(
           if (isEmpty) return false;
           return field.type === 'number'
             ? Number(raw) === Number(rule.value)
-            : String(raw).toLowerCase() === String(rule.value ?? '').toLowerCase();
+            : normalizarTexto(raw) === normalizarTexto(rule.value);
         case 'is_not':
           if (isEmpty) return true;
           return field.type === 'number'
             ? Number(raw) !== Number(rule.value)
-            : String(raw).toLowerCase() !== String(rule.value ?? '').toLowerCase();
+            : normalizarTexto(raw) !== normalizarTexto(rule.value);
         case 'contains':
           if (isEmpty) return false;
-          return String(raw).toLowerCase().includes(String(rule.value ?? '').toLowerCase());
+          return normalizarTexto(raw).includes(normalizarTexto(rule.value));
         case 'not_contains':
           if (isEmpty) return true;
-          return !String(raw).toLowerCase().includes(String(rule.value ?? '').toLowerCase());
+          return !normalizarTexto(raw).includes(normalizarTexto(rule.value));
         case 'gt':
           if (isEmpty) return false;
           return field.type === 'date' ? String(raw) > String(rule.value ?? '') : Number(raw) > Number(rule.value);
@@ -169,6 +209,132 @@ export function useAdvancedFilters(fields: FilterFieldConfig[], storageKey: stri
   };
 }
 
+/** Marca os nós que o painel abre por portal — o clique neles não é "clique fora". */
+const PORTAL_ATTR = 'data-advanced-filter-portal';
+const COMBO_MAX_ITENS = 200;
+
+/**
+ * Valor de campo `text` com `options`: lista com busca. Clicar abre todas as opções,
+ * digitar filtra (sem caixa nem acento), escolher grava o valor exato — e o texto
+ * digitado continua valendo para "Contém". A lista sai por portal com `position:
+ * fixed` (mesma razão do FilterPopover, §5.4: a toolbar acoplada é `overflow-hidden`).
+ */
+const FilterValueCombobox: React.FC<{
+  value: string;
+  options: FilterOption[];
+  onChange: (value: string) => void;
+}> = ({ value, options, onChange }) => {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const [open, setOpen] = React.useState(false);
+  const [typed, setTyped] = React.useState(false); // abriu por clique = mostra tudo
+  const [active, setActive] = React.useState(0);
+  const [pos, setPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
+
+  const termo = typed ? normalizarTexto(value) : '';
+  const filtradas = React.useMemo(
+    () => (termo ? options.filter(o => normalizarTexto(o.label).includes(termo)) : options),
+    [options, termo],
+  );
+  const visiveis = filtradas.slice(0, COMBO_MAX_ITENS);
+
+  const updatePos = React.useCallback(() => {
+    const r = inputRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 220) });
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!open) return;
+    updatePos();
+    const fora = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (inputRef.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', fora);
+    window.addEventListener('resize', updatePos);
+    window.addEventListener('scroll', updatePos, true);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      window.removeEventListener('resize', updatePos);
+      window.removeEventListener('scroll', updatePos, true);
+    };
+  }, [open, updatePos]);
+
+  React.useEffect(() => { setActive(0); }, [termo]);
+  React.useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
+
+  const escolher = (o: FilterOption) => { onChange(o.value); setOpen(false); setTyped(false); };
+
+  return (
+    <div className="flex-1 relative">
+      <input
+        ref={inputRef}
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        value={value}
+        onFocus={() => { setTyped(false); setOpen(true); }}
+        onClick={() => { if (!open) { setTyped(false); setOpen(true); } }}
+        onChange={e => { onChange(e.target.value); setTyped(true); setOpen(true); }}
+        onKeyDown={e => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setActive(i => Math.min(i + 1, visiveis.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(i => Math.max(i - 1, 0)); }
+          else if (e.key === 'Enter' && open && visiveis[active]) { e.preventDefault(); escolher(visiveis[active]); }
+          else if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); } // fecha só a lista, não o painel
+        }}
+        placeholder="Escolha ou digite..."
+        className="w-full border border-gray-200 rounded-lg pl-2 pr-7 py-1.5 text-form-input outline-none focus:border-blue-400"
+      />
+      <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+      {open && createPortal(
+        <div
+          ref={listRef}
+          {...{ [PORTAL_ATTR]: '' }}
+          role="listbox"
+          style={{ position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999, width: pos?.width }}
+          className="bg-white rounded-[10px] border border-gray-200 shadow-lg p-1.5 z-[10000] max-h-64 overflow-auto"
+        >
+          {visiveis.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">
+              Nenhuma opção com "{value}" — o texto digitado vale para Contém/É.
+            </div>
+          ) : visiveis.map((o, i) => {
+            const selecionada = normalizarTexto(o.value) === normalizarTexto(value);
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={selecionada}
+                data-idx={i}
+                onMouseDown={e => e.preventDefault()} // mantém o foco no input
+                onMouseEnter={() => setActive(i)}
+                onClick={() => escolher(o)}
+                className={`w-full flex items-center justify-between gap-3 px-3 h-8 rounded-[6px] text-sm text-left transition-colors ${
+                  i === active ? 'bg-gray-50' : ''
+                } ${selecionada ? 'text-blue-700 font-medium' : 'text-gray-700'}`}
+              >
+                <span className="truncate">{o.label}</span>
+                {selecionada && <Check className="w-4 h-4 shrink-0" />}
+              </button>
+            );
+          })}
+          {filtradas.length > COMBO_MAX_ITENS && (
+            <div className="px-3 py-1.5 text-xs text-gray-400 border-t border-gray-100 mt-1">
+              Mostrando {COMBO_MAX_ITENS} de {filtradas.length} — digite para refinar.
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+};
+
 interface AdvancedFilterPanelProps {
   fields: FilterFieldConfig[];
   state: ReturnType<typeof useAdvancedFilters>;
@@ -193,7 +359,9 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
       if (e.key === 'Escape' && state.showPanel) state.setShowPanel(false);
     };
     const onClickOutside = (e: MouseEvent) => {
-      if (state.showPanel && panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const alvo = e.target as Element;
+      if (alvo.closest?.(`[${PORTAL_ATTR}]`)) return; // lista aberta por portal pelo próprio painel
+      if (state.showPanel && panelRef.current && !panelRef.current.contains(alvo)) {
         state.setShowPanel(false);
       }
     };
@@ -282,6 +450,11 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
                     onChange={e => state.updateRule(rule.id, { operator: e.target.value as FilterOperator, value: undefined })}
                     className="border border-gray-200 rounded-lg px-2 py-1.5 text-form-input outline-none focus:border-blue-400 w-36"
                   >
+                    {/* regra salva quando o campo era de outro tipo (ex.: Status era texto
+                        com "Contém"): o operador continua valendo — mostra em vez de sumir */}
+                    {!operators.some(op => op.value === rule.operator) && (
+                      <option value={rule.operator}>{OPERATOR_LABEL[rule.operator]}</option>
+                    )}
                     {operators.map(op => <option key={op.value} value={op.value}>{op.label}</option>)}
                   </select>
 
@@ -303,13 +476,20 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
                     </div>
                   ) : needsValue && field.type === 'select' ? (
                     <select
-                      value={(rule.value as string) ?? ''}
+                      // valor digitado antes da lista existir ("concluído") marca a opção certa
+                      value={field.options?.find(o => normalizarTexto(o.value) === normalizarTexto(rule.value))?.value ?? (rule.value as string) ?? ''}
                       onChange={e => state.updateRule(rule.id, { value: e.target.value })}
                       className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-form-input outline-none focus:border-blue-400"
                     >
                       <option value="">Selecione uma opção</option>
                       {field.options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
+                  ) : needsValue && field.type === 'text' && field.options?.length ? (
+                    <FilterValueCombobox
+                      value={(rule.value as string) ?? ''}
+                      options={field.options}
+                      onChange={v => state.updateRule(rule.id, { value: v })}
+                    />
                   ) : needsValue ? (
                     <input
                       type={field.type === 'date' ? 'date' : field.type === 'number' ? 'number' : 'text'}

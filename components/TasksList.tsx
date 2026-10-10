@@ -11,7 +11,7 @@ import type { TaskStatus } from '../services/taskService'
 import { uniqueStatusesByName, statusGroupKeyOf, statusOfGroupKey, statusNameKey } from '../utils/taskStatusByName'
 import type { GroupByField } from './TasksModule'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils'
 import ActionIconButton from './ui/ActionIconButton'
 
 interface TaskGroup { key: string; label: string; color?: string; tasks: TaskRecord[] }
@@ -105,28 +105,43 @@ const CHECK_COL_WIDTH  = 32
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // chips de filtro (fPriority/fStatus/fAssignee/fProject) já existentes, não os
-// substitui. Só usa campos planos do próprio TaskRecord (sem depender dos mapas
-// de resolução employees/projects/statuses, que são de escopo do componente).
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-  { key: 'title', label: 'Nome', type: 'text' },
-  { key: 'status', label: 'Status', type: 'text' },
-  { key: 'priority', label: 'Prioridade', type: 'select', options: [
-      { value: '1', label: 'Urgente' }, { value: '2', label: 'Alta' },
-      { value: '3', label: 'Normal' }, { value: '4', label: 'Baixa' },
-  ] },
-  { key: 'source_module', label: 'Origem', type: 'select', options: [
-      { value: 'manual', label: 'Manual' }, { value: 'operacional', label: 'Operacional' },
-      { value: 'financeiro', label: 'Financeiro' }, { value: 'rh', label: 'RH' },
-      { value: 'compras', label: 'Compras' },
-  ] },
-  { key: 'start_date', label: 'Data Inicial', type: 'date' },
-  { key: 'due_date', label: 'Vencimento', type: 'date' },
+// substitui. Campo com conjunto conhecido de valores vem com `options` — o usuário
+// escolhe, não digita (§5.5) — e o valor comparado é o que a CÉLULA mostra: Status
+// comparava `t.status` ('open'/'done') enquanto a tabela mostrava "Concluído", então
+// nada do que se digitava casava (10/10/2026).
+const LEGACY_STATUS_OPTIONS = [
+  { value: 'open', label: 'Abertas' }, { value: 'done', label: 'Concluídas' }, { value: 'snoozed', label: 'Adiadas' },
 ]
 
-function getAdvancedFilterValue(t: TaskRecord, key: string): unknown {
+function buildAdvancedFilterFields(
+  statuses: TaskStatus[], employees: EmployeeOption[], projects: ProjectOption[],
+): FilterFieldConfig[] {
+  return [
+    { key: 'title', label: 'Nome', type: 'text' },
+    { key: 'status', label: 'Status', type: 'select', options: statuses.length > 0
+        // um por nome: em "Todas" cada organização tem o próprio Pendente/Concluído
+        ? uniqueStatusesByName(statuses).map(s => ({ value: s.name, label: s.name }))
+        : LEGACY_STATUS_OPTIONS },
+    { key: 'assignee', label: 'Responsável', type: 'text', options: distinctOptions(employees, e => e.name) },
+    { key: 'project', label: 'Obra', type: 'text', options: distinctOptions(projects, p => p.name) },
+    { key: 'priority', label: 'Prioridade', type: 'select',
+      options: Object.entries(PRIORITY_META).map(([value, m]) => ({ value, label: m.label })) },
+    { key: 'source_module', label: 'Origem', type: 'select',
+      options: Object.entries(MODULE_LABEL).map(([value, m]) => ({ value, label: m.label })) },
+    { key: 'start_date', label: 'Data Inicial', type: 'date' },
+    { key: 'due_date', label: 'Vencimento', type: 'date' },
+  ]
+}
+
+function getAdvancedFilterValue(
+  t: TaskRecord, key: string,
+  maps: { statusMap: Record<string, TaskStatus>; empMap: Record<string, EmployeeOption>; projMap: Record<string, ProjectOption> },
+): unknown {
   switch (key) {
     case 'title': return t.title
-    case 'status': return t.status
+    case 'status': return maps.statusMap[t.status_id ?? '']?.name ?? t.status
+    case 'assignee': return maps.empMap[t.assignee_employee_id ?? '']?.name ?? null
+    case 'project': return maps.projMap[t.project_id ?? '']?.name ?? null
     case 'priority': return String(t.priority)
     case 'source_module': return t.source_module
     case 'start_date': return t.start_date
@@ -217,7 +232,8 @@ const TasksList: React.FC<Props> = ({
   // Visibilidade, ordem arrastável (estilo ClickUp, via SortableHeader onMoveColumn)
   // e ordenação — tudo persistido em 'tasksListColumns'.
   const taskVisibility = useTableColumns(TASKS_LIST_COLUMNS, 'tasksListColumns')
-  const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tasksListFilters:advanced')
+  const advancedFields = useMemo(() => buildAdvancedFilterFields(statuses, employees, projects), [statuses, employees, projects])
+  const advancedFilters = useAdvancedFilters(advancedFields, 'tasksListFilters:advanced')
   const { sortColumn, sortDirection } = taskVisibility
   // Colunas de dado visíveis, na ordem escolhida pelo usuário. 'actions' fica fora e
   // é renderizada por último, fixa, depois do espaçador (§6.1.1).
@@ -281,7 +297,7 @@ const TasksList: React.FC<Props> = ({
       if (fProject  && t.project_id !== fProject) return false
       return true
     })
-    rows = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue)
+    rows = applyFilterRules(rows, advancedFilters.rules, advancedFields, (t, key) => getAdvancedFilterValue(t, key, { statusMap, empMap, projMap }))
     if (sortColumn) {
       const statusName = (t: TaskRecord) => (statusMap[t.status_id ?? '']?.name ?? t.status).toLowerCase()
       rows = [...rows].sort((a, b) => {
@@ -299,7 +315,7 @@ const TasksList: React.FC<Props> = ({
       })
     }
     return rows
-  }, [parents, q, fPriority, fStatus, fStatusName, fAssignee, fProject, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules])
+  }, [parents, q, fPriority, fStatus, fStatusName, fAssignee, fProject, sortColumn, sortDirection, empMap, projMap, statusMap, statuses, advancedFilters.rules, advancedFields])
 
   const clearFilters = () => { setFPriority(''); setFStatus(''); setFAssignee(''); setFProject(''); setSearch('') }
 
@@ -942,7 +958,7 @@ const TasksList: React.FC<Props> = ({
               Filtros
             </button>
 
-            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+            <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
 
             {(expandableIds.length > 0 || groupBy !== 'none') && (
               <button

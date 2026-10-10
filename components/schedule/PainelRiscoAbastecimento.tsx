@@ -82,7 +82,12 @@ export default function PainelRiscoAbastecimento({ open, onClose, resumo, taskIn
     if (!open) return null;
 
     return (
-        <Sheet open={open} onClose={onClose} size="2xl">
+        // zIndex 150, não o 50 padrão: o Sheet não sai por portal, e o cabeçalho
+        // fixo do Gantt (ScheduleGantt.tsx: `sticky z-50`, coluna fixa `z-60`,
+        // popovers `z-[100]`) vem DEPOIS no DOM — com 50 ele pintava por cima do
+        // painel (print do usuário, 10/10/2026). Abaixo do confirm (`z-[200]`) e
+        // dos modais desta tela (`z-[200]`/`z-[210]`).
+        <Sheet open={open} onClose={onClose} size="2xl" zIndex={150}>
             <SheetHeader onClose={onClose}>
                 <SheetTitle>Etapas em risco de abastecimento</SheetTitle>
                 <SheetDescription>

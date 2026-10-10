@@ -6,6 +6,8 @@
  *  3. o resumo (etapas, insumos, custo) está no `title` do ícone;
  *  4. o clique abre o painel lateral com uma linha por etapa, e nenhuma célula
  *     corta texto (no drawer, texto livre quebra linha);
+ *  4b. nada da tela de trás aparece por cima do painel (o cabeçalho fixo do Gantt
+ *     aparecia — reproduzido aqui com as mesmas camadas z-50/z-60/z-[100]);
  *  5. Escape fecha o painel e ele sai do DOM;
  *  6. sem risco (`?sem-risco`), o ícone não aparece.
  *
@@ -104,6 +106,23 @@ confere(p.cortadas.length === 0, '4: nenhuma célula cortando texto', p);
 confere(p.colunasFora.length === 0, '4: nenhuma coluna passando da borda do painel', p);
 confere(p.cabecalhoQuebrado.length === 0, '4: nenhum cabeçalho quebrando em duas linhas', p);
 
+// 4b. Nada da tela de trás fica POR CIMA do painel. O cabeçalho fixo do Gantt
+//     (z-50/z-60/z-[100], depois do painel no DOM) aparecia sobre ele (10/10/2026).
+const sobreposicao = await page.evaluate(() => {
+    const cab = document.querySelector('[data-cabecalho-gantt]');
+    const titulo = [...document.querySelectorAll('h2')].find((h) => h.textContent === 'Etapas em risco de abastecimento');
+    const painel = titulo?.closest('.flex.flex-col');
+    if (!cab || !painel) return { semCenario: true };
+    const rc = cab.getBoundingClientRect();
+    const rp = painel.getBoundingClientRect();
+    // Pontos onde a faixa do Gantt e o painel se cruzam.
+    const y = rc.top + rc.height / 2;
+    const xs = [rp.left + 24, rp.left + rp.width / 2, rp.right - 24];
+    const vazou = xs.map((x) => document.elementFromPoint(x, y)).filter((el) => el && cab.contains(el)).map((el) => el.textContent.trim().slice(0, 30));
+    return { y: Math.round(y), vazou };
+});
+confere(!sobreposicao.semCenario && sobreposicao.vazou.length === 0, '4b: o cabeçalho do Gantt não pode aparecer por cima do painel', sobreposicao);
+
 await page.keyboard.press('Escape');
 await page.waitForTimeout(500);
 const fechou = await page.evaluate(() => ![...document.querySelectorAll('h2')].some((h) => h.textContent === 'Etapas em risco de abastecimento'));
@@ -116,6 +135,6 @@ const semIcone = (await page.locator(AVISO).count()) === 0;
 await page.screenshot({ path: path.join(outDir, '03-sem-risco.png') });
 confere(semIcone, '6: sem risco, sem ícone');
 
-console.log(JSON.stringify({ m, p, fechou, semIcone, erros, falhas }, null, 2));
+console.log(JSON.stringify({ m, p, sobreposicao, fechou, semIcone, erros, falhas }, null, 2));
 await browser.close();
 if (falhas.length || erros.length) process.exit(1);

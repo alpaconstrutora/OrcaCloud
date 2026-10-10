@@ -65,8 +65,17 @@ function Harness() {
                 taskInsights={taskInsights}
                 hierarchy={hierarchy}
             />
-            {/* O que vem logo abaixo na tela real: a grade. Sem banner no meio. */}
-            <div data-grade className="h-64 rounded-[10px] border border-gray-100 bg-white" />
+            {/* O que vem logo abaixo na tela real: a grade. Sem banner no meio.
+                Dentro dela, as MESMAS camadas do cabeçalho fixo do Gantt
+                (ScheduleGantt.tsx: `sticky top-0 z-50`, coluna fixa `z-60`,
+                popovers `z-[100]`) — e DEPOIS do painel no DOM, como na tela real.
+                Foi assim que o cabeçalho do Gantt apareceu por cima do painel. */}
+            <div data-grade className="h-64 rounded-[10px] border border-gray-100 bg-white overflow-auto">
+                <div data-cabecalho-gantt className="sticky top-0 z-50 flex h-12 bg-gray-50 border-b border-gray-200">
+                    <div className="sticky left-0 z-60 w-[440px] shrink-0 bg-gray-50 px-4 py-3 text-xs text-gray-400">TAREFA / ATIVIDADE</div>
+                    <div className="relative z-[100] flex-1 px-4 py-3 text-xs text-gray-400">Novembro 2026</div>
+                </div>
+            </div>
         </div>
     );
 }

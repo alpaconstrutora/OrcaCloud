@@ -120,4 +120,20 @@ describe('BlueprintCanvas · eixos', () => {
     // 36 (cota + chamada) + 8 (respiro) + 12 (raio + folga) px da divisa. Sem a correção seriam 1550 + 2 × 12 = 1574.
     expect(base - topo).toBeGreaterThanOrEqual(1500 + 2 * (36 + 8 + 12) - 1e-6);
   });
+
+  /**
+   * 10/10/2026 (pendência 8): a bolha fica fora do DESENHO INTEIRO, não só das cotas. Lote 10 × 30 sem cotas e um eixo
+   * curto dentro dele (5 → 25 m): as bolhas vão além das pontas do lote (1500 px), e não dentro dele (1000 px).
+   */
+  it('a bolha fica fora do desenho inteiro, mesmo sem cotas e com o eixo dentro do lote', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m0.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: l, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as const;
+    const m = applyBatch(m0, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0), { type: 'AddEixo', a: point(5000, 5000), b: point(5000, 25000) }]).model;
+    desenhar(m, { mostrarMedidasLoteMassa: false });
+    const ys = chamadas.filter((c) => c.metodo === 'fillText' && c.args[0] === 'A').map((c) => Number(c.args[2]));
+    expect(ys.length).toBeGreaterThan(0);
+    // Lote de 1500 px; cada bolha a 8 (respiro) + 12 (raio + folga) px além da divisa.
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(1500 + 2 * (8 + 12) - 1e-6);
+  });
 });

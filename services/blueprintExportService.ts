@@ -7,6 +7,7 @@
 // uma vez contra a interface. Aqui só se traduz "milímetro de papel" para o que
 // cada destino entende — pixel no canvas, ponto no PDF.
 
+import { envelopesParaExportacao } from '../utils/blueprintZonaUrbanistica';
 import type { HipotesesIncendio } from '../utils/blueprintIncendioClassificacao';
 import { abaDaListaDeMateriaisIncendio, materiaisDeIncendio, temMateriaisDeIncendio } from '../utils/blueprintListaDeMateriaisIncendio';
 import { abaDaPlanilhaDePressoes, calculoDoEstudo, caminhoCritico, planilhaDePressoes } from '../utils/blueprintPlanilhaDePressoes';
@@ -968,6 +969,7 @@ export function montarDxf(
     hash: o.hash,
     cotas: o.cotas,
     eixos: o.eixos,
+    envelopes: envelopesParaExportacao(model, o.zona),
     eletrica: o.eletrica,
     hipotesesEletricas: o.hipotesesEletricas,
     redes: o.redesNoDxf,

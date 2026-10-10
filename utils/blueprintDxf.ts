@@ -45,6 +45,7 @@ import { type Anotacao,
   nomeDoTipoEstrutural,
   wallLength,
   type BlueprintModel,
+  type Point,
   type Structural,
   type Wall,
 } from './blueprintKernel';
@@ -108,6 +109,8 @@ export const CAMADAS = {
    * PAREDE: quem plota a fôrma liga a malha e desliga o resto.
    */
   MALHA_EIXOS: 'PLANTA-MALHA-EIXOS',
+  /** O ENVELOPE recuado (10/10/2026): o que sobra do lote depois dos recuos da zona e das faixas de restrição. */
+  ENVELOPE: 'PLANTA-ENVELOPE',
   /**
    * As INTERFACES entre camadas da parede — uma linha por junta, ao longo do
    * eixo, dentro do sólido que `PLANTA-PAREDES` já desenha.
@@ -209,6 +212,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.TEXTO]: 2, // amarelo
   [CAMADAS.COTAS]: 8, // cinza
   [CAMADAS.MALHA_EIXOS]: 9, // cinza claro
+  [CAMADAS.ENVELOPE]: 30, // laranja
   [CAMADAS.ANOTACOES]: 30, // laranja
   [CAMADAS.ESTRUTURA]: 6, // magenta — concreto, distinto do preto da alvenaria
   [CAMADAS.FUNDACAO]: 4, // ciano
@@ -538,6 +542,7 @@ import type { Desenhista } from './blueprintExport';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 import { desenharEletrica, linhasDoQuadroDeCargas } from './blueprintPranchaEletrica';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
+import { caixaDoDesenho } from './blueprintExport';
 import { desenharUnifilar, desenharUnifilarEmArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 
 export interface OpcoesDxf {
@@ -547,6 +552,11 @@ export interface OpcoesDxf {
   cotas?: boolean;
   /** EIXOS DA MALHA (07/10/2026) em `PLANTA-MALHA-EIXOS`; ausente = sim (o padrão da tela). */
   eixos?: boolean;
+  /**
+   * ENVELOPE RECUADO por pavimento (10/10/2026, `envelopesParaExportacao`): em `PLANTA-ENVELOPE` e repartindo as cotas
+   * do lote. Ausente = sem recuo.
+   */
+  envelopes?: Map<string, Point[][]>;
   /**
    * Elevações a incluir, cada uma como um bloco de geometria (u, v) deslocado
    * para a DIREITA da planta. É a convenção de prancha — elevação não é planta
@@ -943,9 +953,13 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   }
 
   // As cotas antes dos eixos (08/10/2026): a bolha do eixo fica por fora da faixa que as cotas ocuparam.
+  for (const pecas of o.envelopes?.values() ?? []) for (const peca of pecas) dxf += polilinha(CAMADAS.ENVELOPE, peca);
   const faixaDasCotas = faixaVazia();
-  if (o.cotas) dxf += entidadesDeCota(model, faixaDasCotas);
-  if (o.eixos !== false) dxf += entidadesDosEixosDaMalha(model, o.cotas ? faixaDasCotas : null);
+  if (o.cotas) dxf += entidadesDeCota(model, faixaDasCotas, o.envelopes);
+  // A bolha fora do desenho inteiro (10/10/2026, pendência 8): cotas ∪ a caixa do desenho sem os eixos.
+  const caixa = caixaDoDesenho(model);
+  if (caixa) crescerFaixa(faixaDasCotas, { x: caixa.minX, y: caixa.minY }, { x: caixa.maxX, y: caixa.maxY });
+  if (o.eixos !== false) dxf += entidadesDosEixosDaMalha(model, Number.isFinite(faixaDasCotas.minX) ? faixaDasCotas : null);
   // ANOTAÇÕES (E8.1) da planta, no mm do desenho.
   dxf += entidadesDeAnotacoes((model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), (p) => ({ x: p.x, y: p.y }));
 
@@ -1264,6 +1278,7 @@ function entidadesDeCota(
   model: BlueprintModel,
   /** Cresce com o que as cotas ocupam (mm reais) — os eixos põem a bolha por fora. */
   faixa: FaixaDasCotas = faixaVazia(),
+  envelopes?: Map<string, Point[][]>,
 ): string {
   let saida = '';
 
@@ -1350,7 +1365,7 @@ function entidadesDeCota(
     // + as faixas de restrição e as divisas internas (08/10/2026). O envelope recuado não: os recuos são da zona, não do
     // modelo, e a prancha não o desenha.
     const limites = model.boundaries.filter((b) => b.levelId === nivel.id);
-    for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites))) {
+    for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites, envelopes?.get(nivel.id) ?? []))) {
       desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
     }
   }

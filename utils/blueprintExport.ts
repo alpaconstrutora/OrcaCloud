@@ -43,6 +43,7 @@ import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
+import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import type { ProjecaoCorte } from './blueprintCorte';
 import {
@@ -133,7 +134,12 @@ export interface Enquadramento {
 }
 
 /** Caixa envolvente do modelo, em mm reais. */
-export function boundingBox(model: BlueprintModel): {
+/** A caixa do DESENHO, sem os eixos (10/10/2026): o que a bolha do eixo não pode cobrir. */
+export function caixaDoDesenho(model: BlueprintModel) {
+  return boundingBox(model, false);
+}
+
+export function boundingBox(model: BlueprintModel, comEixos = true): {
   minX: number;
   minY: number;
   maxX: number;
@@ -143,7 +149,7 @@ export function boundingBox(model: BlueprintModel): {
     ...model.walls.flatMap((w) => [w.a, w.b]),
     ...model.boundaries.flatMap((b) => [b.a, b.b]),
     // EIXOS (07/10/2026): eles passam além do desenho e a bolha vai à ponta — fora da caixa, a bolha sairia cortada.
-    ...(model.eixos ?? []).flatMap((e) => [e.a, e.b]),
+    ...(comEixos ? (model.eixos ?? []).flatMap((e) => [e.a, e.b]) : []),
     // LOTEAMENTO (B4). ⚠️ Sem estas quatro famílias, um loteamento — que não tem
     // parede nenhuma — dá caixa nula, e a prancha sai declarada VAZIA com o
     // desenho inteiro dentro do modelo. O enquadramento tem de ver tudo que
@@ -308,6 +314,11 @@ export class DesenhistaDeProva implements Desenhista {
 export const AVISO_HUMANIZADA = 'PLANTA HUMANIZADA — ilustrativa. Mobiliário, acabamentos e vegetação são sugestão; medidas aproximadas. Não vale para execução nem para aprovação legal.';
 
 export interface OpcoesExportacao {
+  /**
+   * A ZONA (10/10/2026): para refazer o envelope recuado (`envelopesParaExportacao`) — desenhado na prancha e
+   * repartindo as cotas do lote. Ausente = sem recuo (nada muda).
+   */
+  zona?: ZonaParaExportacao | null;
   /**
    * EIXOS DA MALHA (07/10/2026) — a linha traço-ponto com a bolha e o nome, como na tela. Segue o "Eixos" de Vista ›
    * Exibir; ausente = desenha (o padrão da tela). A planta humanizada nunca leva.
@@ -628,6 +639,13 @@ export function desenharPlanta(
     });
   }
 
+  // ── ENVELOPE RECUADO (10/10/2026): o tracejado laranja da tela, na planta de arquitetura (não na humanizada nem
+  // nas pranchas de instalação) — é ele que reparte as cotas do lote pelo recuo.
+  const envelopes = envelopesParaExportacao(model, opcoes.zona);
+  if (!opcoes.humanizada && !opcoes.eletrica && !opcoes.hidrossanitaria && !opcoes.incendio && !opcoes.climatizacao) {
+    for (const pecas of envelopes.values()) for (const peca of pecas) tracejado(d, peca.map((p) => ({ x: px(p.x), y: py(p.y) })), { espessuraMm: 0.15, cor: COR_ENVELOPE_PRANCHA });
+  }
+
   // ── HUMANIZADA (E8.4): mobiliário por família e vegetação simbólica ──────
   if (opcoes.humanizada) {
     for (const c of model.componentes ?? []) {
@@ -692,7 +710,13 @@ export function desenharPlanta(
 
   // As cotas ANTES dos eixos (08/10/2026): os eixos põem a bolha por fora da faixa que as cotas ocuparam.
   const faixaDasCotas = opcoes.cotas ? desenharCotas(d, model, opcoes, enq, px, py) : null;
-  if (opcoes.eixos !== false && !opcoes.humanizada) desenharEixosDaMalha(d, model, px, py, faixaDasCotas);
+  // A BOLHA FORA DO DESENHO INTEIRO (10/10/2026, pendência 8): a faixa que ela evita é cotas ∪ desenho (a caixa do
+  // modelo sem os eixos) — nenhum nome de ambiente ou rótulo fica sob ela.
+  const caixa = caixaDoDesenho(model);
+  const faixaParaEixos = faixaVazia();
+  if (faixaDasCotas) crescerFaixa(faixaParaEixos, { x: faixaDasCotas.minX, y: faixaDasCotas.minY }, { x: faixaDasCotas.maxX, y: faixaDasCotas.maxY });
+  if (caixa) crescerFaixa(faixaParaEixos, { x: px(caixa.minX), y: py(caixa.minY) }, { x: px(caixa.maxX), y: py(caixa.maxY) });
+  if (opcoes.eixos !== false && !opcoes.humanizada) desenharEixosDaMalha(d, model, px, py, Number.isFinite(faixaParaEixos.minX) ? faixaParaEixos : null);
 
   // ANOTAÇÕES (E8.1) da planta, por cima de tudo — a última camada, como na tela.
   desenharAnotacoes(d, (model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), opcoes.denominador, px, py);
@@ -1504,6 +1528,24 @@ const COR_ELEV_ESCADA = '#cbd5e1';
 
 const COR_COTA = '#333333';
 const TEXTO_COTA_MM = 2.0;
+/** O laranja do envelope na tela. */
+const COR_ENVELOPE_PRANCHA = '#f59e0b';
+
+/** Um anel fechado tracejado (2 mm cheio, 1 mm vazio) — o `Desenhista` não tem tracejado. */
+function tracejado(d: Desenhista, anel: { x: number; y: number }[], estilo: EstiloTraco): void {
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp < 1e-6) continue;
+    const ux = (b.x - a.x) / comp;
+    const uy = (b.y - a.y) / comp;
+    for (let t = 0; t < comp; t += 3) {
+      const fim = Math.min(comp, t + 2);
+      d.linha(a.x + ux * t, a.y + uy * t, a.x + ux * fim, a.y + uy * fim, estilo);
+    }
+  }
+}
 
 /** A largura do texto pelo `Desenhista` quando ele sabe medir; senão a estimativa pela Helvetica. */
 export function larguraDoTextoNoPapel(d: Desenhista, texto: string, alturaMm: number): number {
@@ -1601,6 +1643,7 @@ function desenharCotas(
   const fino = { espessuraMm: 0.1, cor: COR_COTA };
   /** O que as cotas ocupam no papel — os eixos põem a bolha por fora (08/10/2026). */
   const faixa = faixaVazia();
+  const envelopes = envelopesParaExportacao(model, opcoes.zona);
 
   // Distâncias em MILÍMETRO DE PAPEL: a cota tem o mesmo tamanho em qualquer
   // escala, senão em 1:200 ela vira um risco e em 1:25 domina a folha.
@@ -1714,8 +1757,9 @@ function desenharCotas(
     // de massa, que a prancha não desenha: o lado do lote reparte só pelo contorno das paredes.
     // + as faixas de restrição e as divisas internas (08/10/2026). O envelope recuado não: os recuos são da zona, não do
     // modelo, e a prancha não o desenha.
+    // Desde 10/10/2026 o envelope recuado também (pendência 1), refeito da zona (`envelopesParaExportacao`).
     const limites = model.boundaries.filter((b) => b.levelId === nivel.id);
-    for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites))) {
+    for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites, envelopes.get(nivel.id) ?? []))) {
       desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
     }
   }

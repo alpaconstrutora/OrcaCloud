@@ -18,7 +18,8 @@
  */
 
 import { lerMilimetros, lerPorcentagem, lerValorRegulatorio, notaDeRodape, semNotaDeRodape } from './regulatoryValue';
-import { RECUOS_ZERO, type Recuos } from './blueprintTerreno';
+import { RECUOS_ZERO, envelopeConstrutivo, medirTerreno, type Recuos } from './blueprintTerreno';
+import type { BlueprintModel, Point } from './blueprintKernel';
 import { avaliar, erroDeSintaxe } from './blueprintFormulas';
 
 /**
@@ -451,3 +452,35 @@ export function zonaDerivou(
   const escalonadoDerivou = daZona('recuo_frente_escalonado') && ((escAplicado?.aPartirDoPavimento ?? null) !== (escHoje?.aPartirDoPavimento ?? null) || (escAplicado?.recuoMm ?? null) !== (escHoje?.recuoMm ?? null));
   return afastamentoDerivou || escalonadoDerivou || pares.some(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual);
 }
+
+/** O que a exportação precisa da zona para refazer o envelope (os recuos não moram no modelo). */
+export interface ZonaParaExportacao {
+  recuos: Recuos;
+  afastamentoProgressivo: ValoresDaZona['afastamentoProgressivo'];
+  recuoFrenteEscalonado?: ValoresDaZona['recuoFrenteEscalonado'];
+}
+
+/**
+ * OS ENVELOPES PARA A PRANCHA E O DXF (10/10/2026, pendência 1 do plano de cotas e eixos): por pavimento com lote
+ * fechado, o envelope recuado — as peças —, com a MESMA conta do editor (`recuosEfetivos` pela altura do modelo e pelo
+ * ordinal do pavimento, depois `envelopeConstrutivo`), feita sobre o modelo PUBLICADO que vai para a folha. Só entra o
+ * envelope que DIFERE do lote: sem recuo nem restrição, nada a desenhar nem a cotar.
+ */
+export function envelopesParaExportacao(model: BlueprintModel, zona: ZonaParaExportacao | null | undefined): Map<string, Point[][]> {
+  const saida = new Map<string, Point[][]>();
+  if (!zona || model.levels.length === 0) return saida;
+  const alturaM = Number((Math.max(...model.levels.map((l) => l.elevationMm + l.defaultHeightMm)) / 1000).toFixed(2));
+  for (const nivel of model.levels) {
+    const limites = model.boundaries.filter((b) => b.levelId === nivel.id);
+    const terreno = medirTerreno(limites);
+    if (!terreno || !terreno.fechado) continue;
+    const { recuos } = recuosEfetivos(zona.recuos, zona, alturaM, ordinalDoPavimento(model.levels, nivel.id));
+    const env = envelopeConstrutivo(terreno, limites, recuos);
+    if (!env.valido) continue;
+    const pecas = (env.pecas ?? [env.anel]).filter((p) => p.length >= 3);
+    if (pecas.length === 0 || Math.abs(env.areaMm2 - terreno.areaMm2) < 1000) continue;
+    saida.set(nivel.id, pecas);
+  }
+  return saida;
+}
+

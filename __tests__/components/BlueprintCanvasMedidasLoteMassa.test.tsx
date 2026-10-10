@@ -217,4 +217,18 @@ describe('BlueprintCanvas · medidas do lote e da massa', () => {
     const meio = ysLote.reduce((a, b) => a + b, 0) / ysLote.length;
     for (const y of ys) expect(Math.abs(y - meio)).toBeGreaterThan(150);
   });
+
+  /** 10/10/2026 (pendência 2): as sub-regiões repartem a cota do lote só com "Cotas das sub-regiões" ligado. */
+  it('sub-regiões: com cotasSubRegioes o jardim de 4 m reparte a lateral (4,00 | 26,00); sem, não', () => {
+    const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const l = m.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: l, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as const;
+    const lote = applyBatch(m, [d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0)]).model;
+    const jardim = { id: 'sr1', uid: 'u-sr1', levelId: l, material: 'GRAMA', nome: 'Jardim', pontos: [point(0, 0), point(10000, 0), point(10000, 4000), point(0, 4000)] };
+    desenhar(lote, { subRegioes: [jardim] as never, cotasSubRegioes: true });
+    expect(textos()).toContain('26,00');
+    chamadas = [];
+    desenhar(lote, { subRegioes: [jardim] as never, cotasSubRegioes: false });
+    expect(textos()).not.toContain('26,00');
+  });
 });

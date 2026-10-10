@@ -889,11 +889,17 @@ export function cadeiasDoContorno(
  * as pontas de cada DIVISA interna. Projetados em cada lado do lote por `cadeiasDoLote`: o que cai no meio do lado o
  * reparte (o recuo de frente vira um trecho da cadeia da lateral); o que coincide com um canto não reparte nada.
  */
-export function detalhesDoLote(limitesDoNivel: readonly Boundary[], envelopePecas: readonly Point[][] = []): Point[] {
+export function detalhesDoLote(
+  limitesDoNivel: readonly Boundary[],
+  envelopePecas: readonly Point[][] = [],
+  /** SUB-REGIÕES (10/10/2026): só quando "Cotas das sub-regiões" está ligado em Exibir — quem chama decide. */
+  subRegioes: readonly Point[][] = [],
+): Point[] {
   const limites = [...limitesDoNivel];
   const terreno = medirTerreno(limites.filter((x) => x.kind === 'TERRENO'));
   return [
     ...envelopePecas.filter((p) => p.length >= 3).flat(),
+    ...subRegioes.filter((p) => p.length >= 3).flat(),
     ...faixasRestritas(terreno, limites).flatMap((f) => f.anel),
     ...limites.filter((b) => b.kind !== 'TERRENO').flatMap((b) => [b.a, b.b]),
   ];

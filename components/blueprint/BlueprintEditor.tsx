@@ -2158,6 +2158,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * modelo (e nos Pilares automáticos). Nasce LIGADO — eixo é referência que quem desenhou quer ver.
    */
   const [mostrarEixos, setMostrarEixos] = usePersistedState('blueprint:mostrarEixos', true);
+  /** COTAS DAS SUB-REGIÕES (10/10/2026): as sub-regiões também repartem as cotas do lote. Nasce desligado. */
+  const [cotasSubRegioes, setCotasSubRegioes] = usePersistedState('blueprint:cotasSubRegioes', false);
   /**
    * Pinta as faixas de material dentro da espessura de cada parede.
    *
@@ -2970,6 +2972,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     empreendimentoSugerido,
     orgId,
   );
+  /** A ZONA PARA A EXPORTAÇÃO (10/10/2026): o envelope recuado é refeito sobre o modelo publicado (`envelopesParaExportacao`). */
+  const zonaParaExportacao = useMemo(
+    () => ({ recuos: zona.recuos, afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado }),
+    [zona.recuos, zona.afastamentoProgressivo, zona.recuoFrenteEscalonado],
+  );
 
   /**
    * Altura do que está desenhado, em metros — para confrontar com o gabarito.
@@ -3634,6 +3641,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         cotaAltoContraste,
         mobiliario: mostrarMobiliario,
         eixos: mostrarEixos,
+        cotasSubRegioes,
       },
       modoDeCor,
       vista3d: { laje: mostrarLaje3d, arestas: mostrarArestas3d, armadura: mostrarArmadura3d, terreno: mostrarTerreno3d, envelope: mostrarEnvelope3d },
@@ -3642,7 +3650,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       fase: filtroDeFase,
       disciplinas: camadas,
     }),
-    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEixos, camadas, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
+    [mostrarMedidas, mostrarMedidasLoteMassa, mostrarCamadas, mostrarCotas, mostrarCotaInterna, mostrarCircuitos, mostrarRotulos, mostrarGrade, mostrarPreenchimento, mostrarPreenchimentoTerreno, mostrarCurvasDeNivel, mostrarEnvelope, cotaAltoContraste, mostrarMobiliario, mostrarEixos, cotasSubRegioes, camadas, modoDeCor, mostrarLaje3d, mostrarArestas3d, mostrarArmadura3d, mostrarTerreno3d, mostrarEnvelope3d, estilo3d, estiloPlanta, filtroDeFase],
   );
   const aplicarConfiguracaoDeVista = useCallback(
     (c: ConfiguracaoDeVista) => {
@@ -3661,6 +3669,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       setCotaAltoContraste(c.planta.cotaAltoContraste);
       setMostrarMobiliario(c.planta.mobiliario);
       setMostrarEixos(c.planta.eixos);
+      setCotasSubRegioes(c.planta.cotasSubRegioes);
       setCamadasSalvas(c.disciplinas);
       setModoDeCor(c.modoDeCor);
       setCoresPorAmbiente(c.modoDeCor === 'AMBIENTE');
@@ -13041,6 +13050,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                             ajuda: 'Cotas por fora da divisa: cada lado repartido pela massa e o total do lado — o mesmo item da Planta.',
                           },
                           {
+                            chave: 'cotas-sub-regioes-vista',
+                            rotulo: 'Cotas das sub-regiões',
+                            icone: LandPlot,
+                            ligado: cotasSubRegioes,
+                            alternar: () => setCotasSubRegioes((v) => !v),
+                            desabilitado: !(editor.model.subRegioes ?? []).some((s) => s.levelId === levelId),
+                            ajuda: (editor.model.subRegioes ?? []).some((s) => s.levelId === levelId)
+                              ? 'As sub-regiões (grama, piso, deck…) também repartem as cotas do lote — o mesmo item da Planta. Só na tela: a prancha não desenha sub-região.'
+                              : 'Não há sub-região neste pavimento: desenhe uma em Terreno › Sub-região.',
+                          },
+                          {
                             chave: 'eixos-vista',
                             rotulo: 'Eixos',
                             icone: Hash,
@@ -13192,6 +13212,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                         limitesDoNivel.some((b) => b.kind === 'TERRENO') || (editor.model.blocos ?? []).some((b) => b.levelId === levelId)
                           ? 'Cotas por FORA da divisa, como na prancha: perto do lote, cada lado repartido pela massa (afastamento | bloco | afastamento); mais para fora, o total do lado. Sem lote fechado, a cota vai em volta do bloco.'
                           : 'Sem lote nem bloco neste pavimento: desenhe o lote (Terreno › Terreno ou Digitar) ou um bloco (Terreno › Massa › Bloco).',
+                    },
+                    {
+                      chave: 'cotas-sub-regioes',
+                      rotulo: 'Cotas das sub-regiões',
+                      icone: LandPlot,
+                      ligado: cotasSubRegioes,
+                      alternar: () => setCotasSubRegioes((v) => !v),
+                      desabilitado: !(editor.model.subRegioes ?? []).some((s) => s.levelId === levelId),
+                      ajuda: (editor.model.subRegioes ?? []).some((s) => s.levelId === levelId)
+                        ? 'As sub-regiões (grama, piso, deck…) também repartem as cotas do lote, por fora da divisa. Só na tela: a prancha não desenha sub-região, e cota não aponta para o que não se desenha.'
+                        : 'Não há sub-região neste pavimento: desenhe uma em Terreno › Sub-região.',
                     },
                     {
                       chave: 'camadas',
@@ -14308,6 +14339,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   // Também nas vistas (Situação, Implantação): é nelas que o lote e a massa mais importam.
                   mostrarMedidasLoteMassa={(mostrarMedidasLoteMassa && terrenoAVista)}
                   mostrarEixos={mostrarEixos}
+                  cotasSubRegioes={cotasSubRegioes && terrenoAVista}
                   eixosPrevistos={eixosPrevistos}
                   mostrarCamadasParedes={ajusteDaVista ? false : (mostrarCamadas && arquiteturaAVista)}
                   mostrarCotas={ajusteDaVista ? ajusteDaVista.mostrarCotas : (mostrarCotas && arquiteturaAVista)}
@@ -14597,6 +14629,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 key={pranchaParaExportar?.join('|') ?? 'versoes'}
                 pranchasIniciais={pranchaParaExportar}
                 mostrarEixos={mostrarEixos}
+                zona={zonaParaExportacao}
                 hipotesesDeIncendio={incendioDoEstudo.hipoteses}
                 hipotesesDeClimatizacao={climatizacaoDoEstudo.hipoteses}
                 study={study}

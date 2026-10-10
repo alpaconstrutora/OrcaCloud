@@ -1087,6 +1087,11 @@ interface Props {
    */
   mostrarMedidasLoteMassa?: boolean;
   /**
+   * COTAS DAS SUB-REGIÕES (10/10/2026): as sub-regiões visíveis também repartem as cotas do lote (Exibir › "Cotas das
+   * sub-regiões", desligado por padrão — o jardim da frente não precisa encher a cota do lote sem pedir).
+   */
+  cotasSubRegioes?: boolean;
+  /**
    * EIXOS DA MALHA (07/10/2026): *"opção de exibir ou não eixos"*. Desligado, o eixo não é desenhado, não é
    * selecionável e não dá encaixe — continua no modelo. Padrão: ligado.
    */
@@ -1631,6 +1636,7 @@ export default function BlueprintCanvas({
   ortogonal = false,
   mostrarMedidasParedes = false,
   mostrarMedidasLoteMassa = true,
+  cotasSubRegioes = false,
   mostrarEixos = true,
   eixosPrevistos,
   mostrarCamadasParedes = false,
@@ -5661,7 +5667,8 @@ export default function BlueprintCanvas({
       // Os DETALHES do lote também repartem (08/10/2026): o envelope recuado — só quando está à vista, a cota não
       // aponta para o que não se desenha —, as faixas de restrição e as divisas internas.
       const envelopeVisivel = mostrarEnvelope ? (envelopePecas?.length ? envelopePecas : envelope.length >= 3 ? [envelope] : []) : [];
-      const detalhes = detalhesDoLote(limitesDoNivel, envelopeVisivel);
+      const subRegioesNaCota = cotasSubRegioes ? subRegioes.filter((s) => s.pontos.length >= 3 && !ocultos.has(s.id)).map((s) => s.pontos) : [];
+      const detalhes = detalhesDoLote(limitesDoNivel, envelopeVisivel, subRegioesNaCota);
       for (const c of cadeiasDoContorno(anelDoLoteFechado(limitesDoNivel), blocosDoNivel, cadeiasDeCota, detalhes)) {
         const desenhadas: { segmentos: { de: number; ate: number }[]; nivel: number }[] = [];
         if (c.parcial.length > 0) desenhadas.push({ segmentos: desenharCadeia(c.lado, c.parcial, 1, 1), nivel: 1 });
@@ -7714,8 +7721,23 @@ export default function BlueprintCanvas({
     // (linha de referência). Desenhados antes dos cortes, por baixo deles.
     // A PRÉVIA da gaveta "Eixos automáticos" (07/10/2026) usa o mesmo desenho, tracejada em `COR_PREVIA`.
     // A faixa das cotas com a folga dos tiques e das chamadas (4 px além da linha) e mais um respiro.
-    const faixaDosEixos = Number.isFinite(faixaDasCotas.minX)
-      ? { minX: faixaDasCotas.minX - 8, minY: faixaDasCotas.minY - 8, maxX: faixaDasCotas.maxX + 8, maxY: faixaDasCotas.maxY + 8 }
+    // A BOLHA FORA DO DESENHO INTEIRO (10/10/2026, pendência 8): a faixa evitada é cotas ∪ desenho do pavimento —
+    // paredes, divisas, blocos, sub-regiões, vagas, estrutura e ambientes —, para nenhum nome de ambiente, rótulo de
+    // vaga ou de sub-região ficar sob a bolha.
+    const faixaDoDesenho = faixaVazia();
+    if (Number.isFinite(faixaDasCotas.minX)) crescerFaixa(faixaDoDesenho, { x: faixaDasCotas.minX, y: faixaDasCotas.minY }, { x: faixaDasCotas.maxX, y: faixaDasCotas.maxY });
+    for (const p of [
+      ...paredesDoNivel.flatMap((w) => [w.a, w.b]),
+      ...limitesDoNivel.flatMap((b) => [b.a, b.b]),
+      ...(model.blocos ?? []).filter((b) => !levelId || b.levelId === levelId).flatMap((b) => b.pontos),
+      ...subRegioes.flatMap((s) => s.pontos),
+      ...vagas.flatMap((v) => contornoDaVaga(v)),
+      ...estruturasDoNivel.flatMap((e) => contornoEmPlanta(e)),
+      ...ambientesDoNivel.flatMap((s) => s.ring),
+    ])
+      crescerFaixa(faixaDoDesenho, paraTela(p));
+    const faixaDosEixos = Number.isFinite(faixaDoDesenho.minX)
+      ? { minX: faixaDoDesenho.minX - 8, minY: faixaDoDesenho.minY - 8, maxX: faixaDoDesenho.maxX + 8, maxY: faixaDoDesenho.maxY + 8 }
       : null;
     const RAIO_DA_BOLHA = 10;
     // AS BOLHAS DE TODOS OS EIXOS DE UMA VEZ (08/10/2026): por fora das cotas e ESCALONADAS — a que encostaria na
@@ -9232,6 +9254,7 @@ export default function BlueprintCanvas({
     tipoDeAnotacao,
     faixasRestritas,
     subRegioes,
+    cotasSubRegioes,
     anelSubRegiao,
     materialDaSubRegiao,
     nucleos,

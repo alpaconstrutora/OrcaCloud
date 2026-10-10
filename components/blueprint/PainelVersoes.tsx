@@ -69,7 +69,10 @@ export default function PainelVersoes({
   hipotesesDeIncendio,
   hipotesesDeClimatizacao,
   mostrarEixos,
+  zona,
 }: {
+  /** 10/10/2026: a zona do estudo — a prancha e o DXF refazem o envelope recuado e cotam o recuo. */
+  zona?: import('../../utils/blueprintZonaUrbanistica').ZonaParaExportacao | null;
   /** 07/10/2026: o "Eixos" de Vista › Exibir — a prancha e o DXF levam os eixos da malha como a tela. Ausente = sim. */
   mostrarEixos?: boolean;
   /** E8.1: as premissas de incêndio do estudo — o quadro-resumo da folha de legenda de incêndio sai delas. */
@@ -393,6 +396,7 @@ export default function PainelVersoes({
       studyId: study.id,
       cotas,
       eixos: mostrarEixos,
+      zona,
       // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
       // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
       eletrica: comEletrica || undefined,

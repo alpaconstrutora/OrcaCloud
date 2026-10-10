@@ -19,7 +19,7 @@ import { useStore } from '../store/useStore';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import TableSwitch from './ui/TableSwitch';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
@@ -75,15 +75,17 @@ const CLIENT_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 // As opções do campo "category" são montadas em runtime a partir das categorias
 // cadastradas em Configurações do Sistema > Tipos de Clientes (clientCategoryService) —
 // ver buildAdvancedFilterFields abaixo.
+// §5.5: "Organização" é lista com busca — os nomes distintos que a coluna mostra
+// nas linhas carregadas (inclui "Todas as Organizacoes", que não está no store).
 const BASE_ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'name', label: 'Cliente', type: 'text' },
     { key: 'email', label: 'E-mail', type: 'text' },
     { key: 'document', label: 'Documento', type: 'text' },
-    { key: 'organization', label: 'Organização', type: 'text' },
 ];
 
-const buildAdvancedFilterFields = (categories: ClientCategory[]): FilterFieldConfig[] => [
+const buildAdvancedFilterFields = (categories: ClientCategory[], clients: Client[]): FilterFieldConfig[] => [
     ...BASE_ADVANCED_FILTER_FIELDS,
+    { key: 'organization', label: 'Organização', type: 'text', options: distinctOptions(clients, c => getAdvancedFilterValue(c, 'organization')) },
     { key: 'category', label: 'Tipo', type: 'select', options: categories.map(c => ({ value: c.name, label: c.name })) },
 ];
 
@@ -338,7 +340,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     // Opções de "Tipo" vêm de Configurações do Sistema > Tipos de Clientes (mesma
     // fonte usada pelo ClientForm), não de uma lista fixa — categoria custom
     // criada lá (ex: "Condomínio") precisa aparecer aqui igual.
-    const advancedFilterFields = React.useMemo(() => buildAdvancedFilterFields(categories), [categories]);
+    const advancedFilterFields = React.useMemo(() => buildAdvancedFilterFields(categories, clients), [categories, clients]);
     const advancedFilters = useAdvancedFilters(advancedFilterFields, 'clientListFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'clientListColWidths');
     // table-layout:fixed + largura 100% faz o navegador redistribuir o espaço

@@ -4,7 +4,7 @@ import { FolderOpen, Calendar, Search, Loader2, FileSpreadsheet, Edit2, LayoutDa
 import ActionIconButton from './ui/ActionIconButton';
 import { ProjectSchedule } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import Button from './ui/Button';
 
 const COLUMNS: ColumnConfig[] = [
@@ -33,12 +33,17 @@ const PLANNING_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca já existente, não a substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'name', label: 'Planejamento', type: 'text' },
-    { key: 'client', label: 'Cliente', type: 'text' },
-    { key: 'start', label: 'Início', type: 'date' },
-    { key: 'end', label: 'Prazo', type: 'date' },
-];
+// §5.5: Cliente é texto gravado no projeto, sem cadastro → lista com busca a partir
+// dos valores distintos dos planejamentos carregados (por isso os campos são montados
+// dentro do componente).
+function buildAdvancedFilterFields(clientOptions: FilterFieldConfig['options']): FilterFieldConfig[] {
+    return [
+        { key: 'name', label: 'Planejamento', type: 'text' },
+        { key: 'client', label: 'Cliente', type: 'text', options: clientOptions },
+        { key: 'start', label: 'Início', type: 'date' },
+        { key: 'end', label: 'Prazo', type: 'date' },
+    ];
+}
 
 function getAdvancedFilterValue(p: ProjectSummary, key: string): unknown {
     switch (key) {
@@ -84,7 +89,16 @@ const PlanningList: React.FC<PlanningListProps> = ({
     const [searchTerm, setSearchTerm] = usePersistedState('planningListFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('planningListFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'planningListColumns');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'planningListFilters:advanced');
+    // Linhas base da tela (só planejamentos), antes da busca e do filtro avançado.
+    const planejamentos = React.useMemo(
+        () => projects.filter(p => p.settings?.classification === 'PLANEJAMENTO'),
+        [projects],
+    );
+    const advancedFields = React.useMemo(
+        () => buildAdvancedFilterFields(distinctOptions(planejamentos, p => getAdvancedFilterValue(p, 'client'))),
+        [planejamentos],
+    );
+    const advancedFilters = useAdvancedFilters(advancedFields, 'planningListFilters:advanced');
 
     const loadProjects = async () => {
         setIsLoading(true);
@@ -131,13 +145,11 @@ const PlanningList: React.FC<PlanningListProps> = ({
     };
 
     const filteredProjects = React.useMemo(() => {
-        let base = projects.filter(p =>
-            p.settings?.classification === 'PLANEJAMENTO' && (
-                p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                p.settings?.client?.toLowerCase().includes(searchTerm.toLowerCase())
-            )
+        let base = planejamentos.filter(p =>
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.settings?.client?.toLowerCase().includes(searchTerm.toLowerCase())
         );
-        base = applyFilterRules(base, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        base = applyFilterRules(base, advancedFilters.rules, advancedFields, getAdvancedFilterValue);
         if (tableColumns.sortColumn) {
             return [...base].sort((a, b) => {
                 const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -157,7 +169,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
             });
         }
         return base.sort((a, b) => new Date(b.updated_at ?? 0).getTime() - new Date(a.updated_at ?? 0).getTime());
-    }, [projects, searchTerm, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [planejamentos, searchTerm, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const formatDate = (dateString?: string) => {
         if (!dateString) return '-';
@@ -176,7 +188,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
         const endDateRaw = project.settings?.endDate || schedule?.endDate;
 
         if (!startDate) return (
-            <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-gray-100 text-gray-500">
+            <span className="text-sm font-normal text-gray-500">
                 Sem Cronograma
             </span>
         );
@@ -201,7 +213,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
 
         if (obraStatus === 'Finalizado') {
             return (
-                <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
+                <span className="text-sm font-normal text-blue-700 flex items-center gap-1 w-fit">
                     <CheckCircle2 className="w-3 h-3" />
                     Finalizado
                 </span>
@@ -209,12 +221,12 @@ const PlanningList: React.FC<PlanningListProps> = ({
         }
 
         return isDelayed ? (
-            <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-red-100 text-red-700 flex items-center gap-1 w-fit">
+            <span className="text-sm font-normal text-red-600 flex items-center gap-1 w-fit">
                 <AlertCircle className="w-3 h-3" />
                 Atrasado
             </span>
         ) : (
-            <span className="px-2 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-700 flex items-center gap-1 w-fit">
+            <span className="text-sm font-normal text-emerald-700 flex items-center gap-1 w-fit">
                 <CheckCircle2 className="w-3 h-3" />
                 Em Dia
             </span>
@@ -326,7 +338,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                     {viewMode === 'list' && (
                         <ColumnConfigButton
                             columns={COLUMNS}
@@ -432,7 +444,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                                                             className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1.5 group/btn"
                                                         >
                                                             <LayoutDashboard className="w-4 h-4" />
-                                                            <span className="text-xs font-black uppercase hidden lg:inline">Abrir Gantt</span>
+                                                            <span className="text-sm font-medium hidden lg:inline">Abrir Gantt</span>
                                                             <ChevronRight className="w-3 h-3 group-hover/btn:translate-x-1 transition-transform" />
                                                         </button>
                                                         <ActionIconButton kind="duplicate" title="Duplicar Planejamento" onClick={() => onDuplicateProject(project.id)} />

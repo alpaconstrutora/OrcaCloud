@@ -8,7 +8,7 @@ import {
 import { supabase } from '../lib/supabase'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils'
 import ActionIconButton from './ui/ActionIconButton'
 import { KpiCard } from './ui/KpiCard'
 
@@ -94,16 +94,20 @@ const PRIORITY_CONFIG: Record<WorkOrderPriority, { label: string; color: string 
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa
 // busca/status/etapa já existentes, não os substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-  { key: 'title', label: 'Título', type: 'text' },
-  { key: 'code', label: 'Código', type: 'text' },
-  { key: 'phase', label: 'Etapa', type: 'text' },
-  { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })) },
-  { key: 'priority', label: 'Prioridade', type: 'select', options: Object.entries(PRIORITY_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })) },
-  { key: 'progress', label: 'Avanço (%)', type: 'number' },
-  { key: 'cost', label: 'Custo Real', type: 'number' },
-  { key: 'deadline', label: 'Prazo', type: 'date' },
-]
+// §5.5: Etapa é texto livre na ordem, sem cadastro → lista com busca a partir das
+// etapas distintas das ordens carregadas (por isso os campos são montados no componente).
+function buildAdvancedFilterFields(phaseOptions: FilterFieldConfig['options']): FilterFieldConfig[] {
+  return [
+    { key: 'title', label: 'Título', type: 'text' },
+    { key: 'code', label: 'Código', type: 'text' },
+    { key: 'phase', label: 'Etapa', type: 'text', options: phaseOptions },
+    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })) },
+    { key: 'priority', label: 'Prioridade', type: 'select', options: Object.entries(PRIORITY_CONFIG).map(([value, cfg]) => ({ value, label: cfg.label })) },
+    { key: 'progress', label: 'Avanço (%)', type: 'number' },
+    { key: 'cost', label: 'Custo Real', type: 'number' },
+    { key: 'deadline', label: 'Prazo', type: 'date' },
+  ]
+}
 
 function getAdvancedFilterValue(wo: WorkOrderRow, key: string): unknown {
   switch (key) {
@@ -241,7 +245,13 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   const [phaseFilter, setPhaseFilter] = usePersistedState<string>('operacionalListFilters:phase', 'all')
   const [overdueOnly, setOverdueOnly] = usePersistedState('operacionalListFilters:overdueOnly', false)
   const tableColumns = useTableColumns(OPERACIONAL_COLUMNS, 'operacionalListColumns')
-  const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'operacionalListFilters:advanced')
+  // Mesmo conjunto de `phases` (filtro rápido), das ordens carregadas — antes de
+  // qualquer filtro —, ordenado e sem repetidos por caixa/acento.
+  const advancedFields = useMemo(
+    () => buildAdvancedFilterFields(distinctOptions(workOrders, wo => getAdvancedFilterValue(wo, 'phase'))),
+    [workOrders],
+  )
+  const advancedFilters = useAdvancedFilters(advancedFields, 'operacionalListFilters:advanced')
   const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'operacionalListColWidths')
 
   // §6.1 — a largura do <table> é a SOMA exata das colunas visíveis. Com
@@ -296,7 +306,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
       }
       return true
     })
-    list = applyFilterRules(list, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue)
+    list = applyFilterRules(list, advancedFilters.rules, advancedFields, getAdvancedFilterValue)
     if (!tableColumns.sortColumn) return list
     return [...list].sort((a, b) => {
       const dir = tableColumns.sortDirection === 'asc' ? 1 : -1
@@ -310,7 +320,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
         default: return 0
       }
     })
-  }, [workOrders, statusFilter, phaseFilter, overdueOnly, search, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection])
+  }, [workOrders, statusFilter, phaseFilter, overdueOnly, search, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection])
 
   // KPIs do topo
   const kpis = useMemo(() => ({
@@ -401,7 +411,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
             <span className="hidden sm:inline">Atrasadas</span>
           </button>
 
-          <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+          <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
 
           <button
             onClick={load}

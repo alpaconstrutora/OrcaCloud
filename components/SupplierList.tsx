@@ -6,7 +6,7 @@ import { supplierService, SupplierNameMode } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import SupplierForm from './SupplierForm';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
@@ -43,22 +43,27 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/ordenação já existentes, não os substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'name', label: 'Fornecedor', type: 'text' },
-    { key: 'nickname', label: 'Apelido', type: 'text' },
-    { key: 'category', label: 'Categoria', type: 'text' },
-    { key: 'organization', label: 'Organização', type: 'text' },
-    { key: 'document', label: 'Documento', type: 'text' },
-    { key: 'type', label: 'Tipo', type: 'select', options: [
-        { value: 'PJ', label: 'Pessoa Jurídica' }, { value: 'PF', label: 'Pessoa Física' },
-    ] },
-    { key: 'portal', label: 'Portais', type: 'select', options: [
-        { value: 'Nenhum', label: 'Nenhum' },
-        { value: 'Portal do Corretor', label: 'Portal do Corretor' },
-        { value: 'Portal do Fornecedor', label: 'Portal do Fornecedor' },
-        { value: 'Portal do Parceiro', label: 'Portal do Parceiro' },
-    ] },
-];
+// §5.5: Categoria e Organização viram lista com busca — categorias distintas que a
+// tela já calcula e as organizações das linhas carregadas (o que a célula mostra).
+// Por depender dos fornecedores carregados, é builder + useMemo no componente.
+function buildAdvancedFilterFields(suppliers: Supplier[], categories: string[]): FilterFieldConfig[] {
+    return [
+        { key: 'name', label: 'Fornecedor', type: 'text' },
+        { key: 'nickname', label: 'Apelido', type: 'text' },
+        { key: 'category', label: 'Categoria', type: 'text', options: categories.map(c => ({ value: c, label: c })) },
+        { key: 'organization', label: 'Organização', type: 'text', options: distinctOptions(suppliers, s => getAdvancedFilterValue(s, 'organization')) },
+        { key: 'document', label: 'Documento', type: 'text' },
+        { key: 'type', label: 'Tipo', type: 'select', options: [
+            { value: 'PJ', label: 'Pessoa jurídica' }, { value: 'PF', label: 'Pessoa física' },
+        ] },
+        { key: 'portal', label: 'Portais', type: 'select', options: [
+            { value: 'Nenhum', label: 'Nenhum' },
+            { value: 'Portal do Corretor', label: 'Portal do Corretor' },
+            { value: 'Portal do Fornecedor', label: 'Portal do Fornecedor' },
+            { value: 'Portal do Parceiro', label: 'Portal do Parceiro' },
+        ] },
+    ];
+}
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
@@ -130,7 +135,8 @@ function getAdvancedFilterValue(supplier: Supplier, key: string): unknown {
         case 'category': return supplier.category ?? '';
         case 'organization': return supplier.organization_name ?? '';
         case 'document': return supplier.document ?? '';
-        case 'type': return supplier.type ?? '';
+        // Mesma regra da célula: só 'PJ' é jurídica, qualquer outro (inclusive vazio) aparece como física.
+        case 'type': return supplier.type === 'PJ' ? 'PJ' : 'PF';
         case 'portal': return supplier.portal ?? 'Nenhum';
         default: return null;
     }
@@ -310,7 +316,14 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     };
 
     const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplierListFilters:advanced');
+    // Declarada antes do filtro avançado: alimenta as opções do campo Categoria.
+    const distinctCategories = React.useMemo(
+        () => [...new Set(suppliers.map(s => s.category).filter((c): c is string => !!c))].sort(),
+        [suppliers]
+    );
+
+    const advancedFields = React.useMemo(() => buildAdvancedFilterFields(suppliers, distinctCategories), [suppliers, distinctCategories]);
+    const advancedFilters = useAdvancedFilters(advancedFields, 'supplierListFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplierListColWidths');
     // table-layout:fixed + largura 100% faz o navegador REDISTRIBUIR o espaço
     // sobrando entre as colunas com <col> de largura fixa (mesmo com px
@@ -341,7 +354,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 s.portal?.toLowerCase().includes(searchTerm.toLowerCase())
             );
 
-        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        result = applyFilterRules(result, advancedFilters.rules, advancedFields, getAdvancedFilterValue);
 
         return result.sort((a, b) => {
                 // Sem coluna clicada, ordenação default é nome A-Z (não há mais dropdown "Ordenar" — toda coluna ordenável já ordena pelo próprio cabeçalho).
@@ -359,12 +372,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 }
                 return a.name.localeCompare(b.name);
             });
-    }, [suppliers, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules]);
-
-    const distinctCategories = React.useMemo(
-        () => [...new Set(suppliers.map(s => s.category).filter((c): c is string => !!c))].sort(),
-        [suppliers]
-    );
+    }, [suppliers, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules, advancedFields]);
 
     const kpis = React.useMemo(() => ({
         total: suppliers.length,
@@ -484,7 +492,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                 </div>
                 {/* Dropdown "Ordenar" removido: toda coluna ordenável já ordena pelo próprio cabeçalho (ver ui_ux_guia_unificado.md §6.4) */}
                 <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
                 <button

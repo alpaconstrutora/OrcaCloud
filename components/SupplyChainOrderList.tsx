@@ -3,7 +3,7 @@ import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clo
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
@@ -36,21 +36,36 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     number: 123, empreendimento: 184, obra: 160, orcamento: 144, costCenter: 160, chartOfAccounts: 160, supplier: 200, status: 140, nfe: 160, date: 171, value: 141, items: 102, actions: 220,
 };
 
+// Todos os status da união `PurchaseOrder['status']` — o `satisfies Record<...>`
+// faz o compilador acusar quando a união ganhar um valor que ficou fora daqui
+// (a lista copiada à mão perdeu "Em Negociação" assim). Ordem = ordem do fluxo.
+const ORDER_STATUS_KEYS = {
+    'Rascunho': true, 'Enviado': true, 'Em Negociação': true, 'Confirmado': true, 'Separação': true,
+    'Em Trânsito': true, 'Entregue': true, 'Recebido': true, 'Divergência': true, 'Cancelado': true,
+} satisfies Record<PurchaseOrder['status'], true>;
+
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/filtro "Sem NF-e" já existentes, não os substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'number', label: 'Número', type: 'text' },
-    { key: 'supplier', label: 'Fornecedor', type: 'text' },
-    { key: 'obra', label: 'Obra', type: 'text' },
-    { key: 'empreendimento', label: 'Empreendimento', type: 'text' },
-    { key: 'costCenter', label: 'Centro de Custo', type: 'text' },
-    { key: 'chartOfAccounts', label: 'Plano de Contas', type: 'text' },
-    { key: 'status', label: 'Status', type: 'select', options: [
-        'Rascunho', 'Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência', 'Cancelado',
-    ].map(s => ({ value: s, label: s })) },
-    { key: 'value', label: 'Valor Total', type: 'number' },
-    { key: 'date', label: 'Data do Pedido', type: 'date' },
-];
+// §5.5: fornecedor, obra, empreendimento, CC e plano de contas viram lista com
+// busca — valores distintos das linhas carregadas (antes de busca/filtro), pelo
+// MESMO getAdvancedFilterValue que o filtro compara. Por isso é builder + useMemo.
+function buildAdvancedFilterFields(
+    orders: any[],
+    empreendimentoByProject: Record<string, { id: string; name: string; towerName?: string }>,
+): FilterFieldConfig[] {
+    const distinct = (key: string) => distinctOptions(orders, o => getAdvancedFilterValue(o, key, empreendimentoByProject));
+    return [
+        { key: 'number', label: 'Número', type: 'text' },
+        { key: 'supplier', label: 'Fornecedor', type: 'text', options: distinct('supplier') },
+        { key: 'obra', label: 'Obra', type: 'text', options: distinct('obra') },
+        { key: 'empreendimento', label: 'Empreendimento', type: 'text', options: distinct('empreendimento') },
+        { key: 'costCenter', label: 'Centro de Custo', type: 'text', options: distinct('costCenter') },
+        { key: 'chartOfAccounts', label: 'Plano de Contas', type: 'text', options: distinct('chartOfAccounts') },
+        { key: 'status', label: 'Status', type: 'select', options: Object.keys(ORDER_STATUS_KEYS).map(s => ({ value: s, label: s })) },
+        { key: 'value', label: 'Valor Total', type: 'number' },
+        { key: 'date', label: 'Data do Pedido', type: 'date' },
+    ];
+}
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
@@ -196,7 +211,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         + COLUMNS.filter(c => c.key !== 'actions')
             .reduce((sum, c) => sum + (tableColumns.visibleColumns.includes(c.key) ? cols.getWidth(c.key) : 0), 0)
         + cols.getWidth('actions');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainOrderFilters:advanced');
+    const advancedFields = React.useMemo(() => buildAdvancedFilterFields(orders, empreendimentoByProject), [orders, empreendimentoByProject]);
+    const advancedFilters = useAdvancedFilters(advancedFields, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const confirm = useConfirm();
     // Pedido → número(s) da NF-e vinculada (mais de uma NF-e por pedido é possível
@@ -310,7 +326,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             return matchSearch && matchNf;
         });
 
-        filtered = applyFilterRules(filtered, advancedFilters.rules, ADVANCED_FILTER_FIELDS,
+        filtered = applyFilterRules(filtered, advancedFilters.rules, advancedFields,
             (order, key) => getAdvancedFilterValue(order, key, empreendimentoByProject));
 
         // TableUtils sort takes priority when set
@@ -354,7 +370,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         }
 
         return filtered;
-    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, nfeNumbersByOrderId, advancedFilters.rules, empreendimentoByProject]);
+    }, [orders, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, nfFilter, nfeNumbersByOrderId, advancedFilters.rules, advancedFields, empreendimentoByProject]);
 
     const selectableVisible = React.useMemo(
         () => filteredOrders.filter(o => canDeleteOrder(o.status)),
@@ -536,7 +552,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 </button>
 
                 <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>

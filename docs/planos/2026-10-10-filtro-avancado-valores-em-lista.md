@@ -27,6 +27,7 @@ célula mostra, e 3 listas `select` estão incompletas.
 |---|---|---|
 | 10/10 | Listas grandes (fornecedor, obra, CC…): só escolher ou lista com busca? | **Lista com busca** (clicar abre tudo, digitar recorta, Contém continua) |
 | 10/10 | Validar em Tarefas antes de propagar? | **Sim**: Fase 2 só depois do OK |
+| 10/10 | (Fase 1 publicada em `7f963917`) | **"testei e funcionou perfeitamente. propagar pelo app"** → Fase 2 liberada |
 
 ## Plano
 
@@ -71,8 +72,28 @@ Padrão por tela (guia §5.5): campo com conjunto conhecido → `select` (enum) 
 - [x] 1.2 Tarefas
 - [x] 1.3 Guia §5.5
 - [x] 1.4 Plano versionado
-- [ ] Fase 1 publicada e validada pelo usuário
-- [ ] Fase 2: 0 de 13 telas
+- [x] Fase 1 publicada (`7f963917`) e validada pelo usuário (10/10)
+- [x] Fase 2: 13 de 13 telas (10/10)
+  - Extrato (`reconciliation/tabelasDaConciliacao.tsx` → `buildStatementFilterFields`): Cliente, Credor e Categoria = cadastro + valores das linhas (o nome cru do banco também é escolhível); Obra, CC e Plano vêm dos cadastros.
+  - Contas a Receber: Parte, Empreendimento e Obra vêm das linhas; CC e Plano vêm dos catálogos.
+  - Contas a Pagar: Fornecedor vira lista. **Corrigido:** status compara o efetivo ("Atrasado" virou opção; "É Pendente" não traz mais as vencidas).
+  - Tributos: Tributo, Origem, Cliente e Empreendimento.
+  - Boletos: Beneficiário vira lista. **Corrigido:** ordem da célula, com o cadastro antes.
+  - Pedidos: 5 campos de lookup. Status é derivado da união pelo compilador (`satisfies`) e ganha "Em Negociação".
+  - Cotações: Obra e Empreendimento.
+  - Fornecedores: Categoria e Organização. **Corrigido:** Tipo vazio = Pessoa física, como a célula.
+  - Clientes: Organização (valores das linhas, porque inclui "Todas as Organizações").
+  - Plano Financeiro (Natureza) e Colaboradores (Status): opções derivadas do mapa local.
+  - Obras: **Corrigido:** Cliente usa a mesma função da célula (`getClientCellValue`). Status Obra vem de `OBRA_STATUSES` (`types/project.ts`, também usada no ProjectModal) e ganha "Paralisada".
+  - Planejamento: Cliente.
+  - Operacional: Etapa.
+- [x] Regra #1 nos arquivos tocados: PlanningList teve pílulas de status (§8) e "Abrir Gantt" (§9) corrigidos. ProjectModal segue com a acusação §3 de `searchTerm`, que é exceção §3.1: a busca fica na aba "selecionar obra" dentro do modal e não filtra a lista da tela.
+
+### Observações fora do escopo (não feitas)
+- Pedidos: o `statusOrder` da ordenação não tem "Em Negociação" (o status vai para o fim).
+- Obras no contexto Diário: a coluna `status-obra` mostra "Total Registros", e o filtro "Status Obra" continua comparando `obraStatus`.
+- Obras na visão em blocos: mostra `settings.client`, não o cliente da obra vinculada (divergência antiga entre as visões).
+- Extrato, "— outra organização —": o filtro vê `''`, e "Não está configurado" pega esses casos.
 
 ## Verificação
 

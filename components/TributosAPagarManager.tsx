@@ -9,7 +9,7 @@ import { taxSettingsService } from '../services/taxSettingsService';
 import type { TaxPayable, TaxPayableEffectiveStatus } from '../types/financial';
 import type { Organization } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
@@ -66,16 +66,22 @@ const TRIBUTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap overflow-hidden' },
 };
 
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'party_name', label: 'Tributo', type: 'text' },
-    { key: 'category', label: 'Origem', type: 'text' },
-    { key: 'client_name', label: 'Cliente', type: 'text' },
-    { key: 'empreendimento_name', label: 'Empreendimento', type: 'text' },
-    { key: 'description', label: 'Descrição', type: 'text' },
-    { key: 'amount', label: 'Valor', type: 'number' },
-    { key: 'due_date', label: 'Vencimento', type: 'date' },
-    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
-];
+// Guia §5.5: Tributo, Origem, Cliente e Empreendimento são LISTA COM BUSCA — vêm
+// como texto da view, sem cadastro carregado aqui → valores distintos das linhas
+// BASE (`rows`, antes do filtro avançado), pelo mesmo getValue da célula.
+function buildAdvancedFilterFields(rows: TaxPayable[]): FilterFieldConfig[] {
+    const dasLinhas = (key: string) => distinctOptions(rows, r => getAdvancedFilterValue(r, key));
+    return [
+        { key: 'party_name', label: 'Tributo', type: 'text', options: dasLinhas('party_name') },
+        { key: 'category', label: 'Origem', type: 'text', options: dasLinhas('category') },
+        { key: 'client_name', label: 'Cliente', type: 'text', options: dasLinhas('client_name') },
+        { key: 'empreendimento_name', label: 'Empreendimento', type: 'text', options: dasLinhas('empreendimento_name') },
+        { key: 'description', label: 'Descrição', type: 'text' },
+        { key: 'amount', label: 'Valor', type: 'number' },
+        { key: 'due_date', label: 'Vencimento', type: 'date' },
+        { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
+    ];
+}
 
 function getAdvancedFilterValue(r: TaxPayable, key: string): unknown {
     switch (key) {
@@ -378,7 +384,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         + (['party_name', 'category', 'client_name', 'empreendimento_name', 'description', 'due_date', 'amount', 'status'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0)
         + cols.getWidth('actions');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'tributosPagarManagerFilters:advanced');
+    const advancedFields = useMemo(() => buildAdvancedFilterFields(rows), [rows]);
+    const advancedFilters = useAdvancedFilters(advancedFields, 'tributosPagarManagerFilters:advanced');
 
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -554,7 +561,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     }
 
     const sorted = useMemo(() => {
-        let result = applyFilterRules(rows, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        let result = applyFilterRules(rows, advancedFilters.rules, advancedFields, getAdvancedFilterValue);
         // Fechamento: recorta pela competência (mês do fato gerador = transaction_date)
         if (activeView === 'fechamento' && competencia) {
             result = result.filter(r => (r.transaction_date ?? '').slice(0, 7) === competencia);
@@ -581,7 +588,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             });
         }
         return result;
-    }, [rows, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia]);
+    }, [rows, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, activeView, competencia]);
 
     /** Só não-PAGO pode ser baixado. */
     const isSelectable = (t: TaxPayable) => t.effective_status !== 'PAGO' && t.effective_status !== 'CANCELADO';
@@ -809,7 +816,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                         </button>
 
                         <div className="flex items-center h-9">
-                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                            <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                         </div>
 
                         <button

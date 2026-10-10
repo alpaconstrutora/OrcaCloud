@@ -19,7 +19,7 @@ import type { ClientCharge, BillingType } from '../services/clientChargeService'
 import type { Receivable, ReceivableEffectiveStatus, InadimplenciaFaixa } from '../types/financial';
 import type { Organization, CostCenter } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
@@ -99,17 +99,28 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Roda client-side
 // por cima de `rowsFiltrados` (período vem do servidor; busca e status, de memória).
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'party_name', label: 'Cliente / Parte', type: 'text' },
-    { key: 'description', label: 'Descrição', type: 'text' },
-    { key: 'empreendimento_name', label: 'Empreendimento', type: 'text' },
-    { key: 'project_name', label: 'Obra', type: 'text' },
-    { key: 'amount', label: 'Valor', type: 'number' },
-    { key: 'due_date', label: 'Vencimento', type: 'date' },
-    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
-    { key: 'cost_center_name', label: 'Centro de Custo', type: 'text' },
-    { key: 'plano_de_contas_name', label: 'Plano de Contas', type: 'text' },
-];
+// Cliente/Parte, Empreendimento, Obra, CC e Plano são LISTA COM BUSCA (guia §5.5):
+// parte/empreendimento/obra vêm como texto da view (sem cadastro carregado aqui) →
+// valores distintos das linhas BASE (`rows`, antes de busca/status); CC e Plano, dos
+// catálogos que a tela já carrega para resolver o nome da célula.
+function buildAdvancedFilterFields(
+    rows: Receivable[],
+    costCenters: { name: string }[],
+    planoContas: { name: string }[],
+): FilterFieldConfig[] {
+    const dasLinhas = (key: string) => distinctOptions(rows, r => getAdvancedFilterValue(r, key));
+    return [
+        { key: 'party_name', label: 'Cliente / Parte', type: 'text', options: dasLinhas('party_name') },
+        { key: 'description', label: 'Descrição', type: 'text' },
+        { key: 'empreendimento_name', label: 'Empreendimento', type: 'text', options: dasLinhas('empreendimento_name') },
+        { key: 'project_name', label: 'Obra', type: 'text', options: dasLinhas('project_name') },
+        { key: 'amount', label: 'Valor', type: 'number' },
+        { key: 'due_date', label: 'Vencimento', type: 'date' },
+        { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
+        { key: 'cost_center_name', label: 'Centro de Custo', type: 'text', options: distinctOptions(costCenters, c => c.name) },
+        { key: 'plano_de_contas_name', label: 'Plano de Contas', type: 'text', options: distinctOptions(planoContas, c => c.name) },
+    ];
+}
 
 function getAdvancedFilterValue(r: Receivable, key: string): unknown {
     switch (key) {
@@ -722,7 +733,6 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // qualquer outro componente que também não passasse a chave.
     const tableColumns = useTableColumns(RECEBER_COLUMNS, 'contasReceberManagerColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'contasReceberManagerColWidths');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'contasReceberManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -796,6 +806,9 @@ export default function ContasReceberManager({ organizationId, organizations }: 
 
     const costCenterNameById = useMemo(() => new Map(costCenters.map(c => [c.id, c.name])), [costCenters]);
     const planoContasNameById = useMemo(() => new Map(planoContas.map(c => [c.id, c.name])), [planoContas]);
+    // Campos do filtro avançado dependem das linhas e dos catálogos carregados (§5.5).
+    const advancedFields = useMemo(() => buildAdvancedFilterFields(rows, costCenters, planoContas), [rows, costCenters, planoContas]);
+    const advancedFilters = useAdvancedFilters(advancedFields, 'contasReceberManagerFilters:advanced');
 
     /** Contador de carga: resposta de um `load()` antigo que chega depois de um
      *  novo (troca rápida de organização/período) é descartada — inclusive a
@@ -1095,7 +1108,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     })), [rowsFiltrados, costCenterNameById, planoContasNameById]);
 
     const sorted = useMemo(() => {
-        let result = applyFilterRules(rowsWithNames, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        let result = applyFilterRules(rowsWithNames, advancedFilters.rules, advancedFields, getAdvancedFilterValue);
         result = [...result];
         if (tableColumns.sortColumn) {
             result.sort((a, b) => {
@@ -1123,7 +1136,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     // `rowsWithNames`, não `rows`: com `rows` o memo não reagia ao catálogo de
     // CC/Plano chegar depois da lista — ficava mascarado enquanto a lista era a
     // mais lenta das duas.
-    }, [rowsWithNames, advancedFilters.rules, tableColumns.sortColumn, tableColumns.sortDirection, recibos]);
+    }, [rowsWithNames, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection, recibos]);
 
     useEffect(() => {
         if (!focusId || loading) return;
@@ -1353,7 +1366,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                         </button>
 
                         <div className="flex items-center h-9">
-                            <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                            <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                         </div>
 
                         <button

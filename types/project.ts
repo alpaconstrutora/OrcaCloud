@@ -19,6 +19,12 @@ export type RegimeObra =
   | 'preco_unitario'
   | 'turn_key';
 
+// Status da obra (settings.obraStatus), na ordem do seletor do ProjectModal. Lista
+// única: o seletor do formulário e o filtro avançado de Obras (ProjectList) leem
+// daqui — a cópia à mão no filtro já tinha ficado sem 'Paralisada'.
+export const OBRA_STATUSES = ['Não Iniciado', 'Em andamento', 'Paralisada', 'Concluída'] as const;
+export type ObraStatus = typeof OBRA_STATUSES[number];
+
 export interface TechnicalConfigResidencialMultifamiliar {
   tipo: 'residencial_multifamiliar';
   numeroPavimentos?: number;
@@ -136,7 +142,7 @@ export interface ProjectSettings {
     planningVersions?: PlanningVersion[];
     budgetStatus?: 'Em Andamento' | 'Fechado';
     status?: 'Em Andamento' | 'Finalizado' | 'Aprovado' | 'Proposta';
-    obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Paralisada' | 'Concluída';
+    obraStatus?: ObraStatus;
     budgetType?: 'ANALYTIC' | 'PARAMETRIC';
     tipoObra?: TipoObra;
     regimeObra?: RegimeObra;

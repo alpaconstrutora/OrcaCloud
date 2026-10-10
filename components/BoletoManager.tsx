@@ -21,7 +21,7 @@ import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { formatDateBR, formatDateTimeBR } from './ui/Format';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
@@ -93,18 +93,27 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
 // filtros rápidos/campos de período já existentes, não os substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'beneficiario', label: 'Beneficiário', type: 'text' },
-    { key: 'descricao', label: 'Descrição', type: 'text' },
-    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
-    { key: 'valor', label: 'Valor', type: 'number' },
-    { key: 'vencimento', label: 'Vencimento', type: 'date' },
-    { key: 'banco', label: 'Banco', type: 'text' },
-];
+// Guia §5.5: Beneficiário é LISTA COM BUSCA — valores distintos das linhas BASE
+// (`boletos`, antes de busca/período/valor) pelo MESMO getValue da célula.
+function buildAdvancedFilterFields(boletos: Boleto[], supplierMap: Record<string, string>): FilterFieldConfig[] {
+    return [
+        { key: 'beneficiario', label: 'Beneficiário', type: 'text', options: distinctOptions(boletos, b => getAdvancedFilterValue(b, 'beneficiario', supplierMap)) },
+        { key: 'descricao', label: 'Descrição', type: 'text' },
+        { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
+        { key: 'valor', label: 'Valor', type: 'number' },
+        { key: 'vencimento', label: 'Vencimento', type: 'date' },
+        { key: 'banco', label: 'Banco', type: 'text' },
+    ];
+}
 
-function getAdvancedFilterValue(b: Boleto, key: string): unknown {
+function getAdvancedFilterValue(b: Boleto, key: string, supplierMap: Record<string, string>): unknown {
     switch (key) {
-        case 'beneficiario': return b.beneficiario_nome ?? b.documento_nome ?? '';
+        // Mesma ordem de fallback da célula (renderBoletoCell): com fornecedor vinculado,
+        // o nome do CADASTRO vem primeiro — antes o filtro pulava o supplierMap e não
+        // casava com o nome que a tabela mostra.
+        case 'beneficiario': return (b.supplier_id
+            ? (supplierMap[b.supplier_id] ?? b.beneficiario_nome ?? b.documento_nome)
+            : (b.beneficiario_nome ?? b.documento_nome)) ?? '';
         case 'descricao': return b.descricao ?? '';
         case 'status': return b.status;
         case 'valor': return b.valor ?? null;
@@ -395,7 +404,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const tableTotalWidth = 40
         + (['numero', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'actions'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'boletoManagerFilters:advanced');
 
     // Toast de Notificação — Seção 13 do guia
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -456,6 +464,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [ccMap, setCcMap] = useState<Record<string, string>>({});
     const [projectMap, setProjectMap] = useState<Record<string, string>>({});
     const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
+    // Campos do filtro avançado dependem das linhas e do supplierMap carregados (§5.5).
+    const advancedFields = useMemo(() => buildAdvancedFilterFields(boletos, supplierMap), [boletos, supplierMap]);
+    const advancedFilters = useAdvancedFilters(advancedFields, 'boletoManagerFilters:advanced');
 
 
     // Abrir edição substitui a lista pelo BoletoFormModal (página cheia) — ao
@@ -691,7 +702,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         if (min !== null) list = list.filter(b => (b.valor ?? 0) >= min);
         if (max !== null) list = list.filter(b => (b.valor ?? 0) <= max);
 
-        list = applyFilterRules(list, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        list = applyFilterRules(list, advancedFilters.rules, advancedFields, (b, key) => getAdvancedFilterValue(b, key, supplierMap));
 
         // Ordenação — cada coluna já ordena pelo próprio <thead> (SortableHeader,
         // guia §6.3/§6.4). Sem coluna selecionada, cai no default abaixo
@@ -720,7 +731,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Mantido estável enquanto `filtered` não muda, para que as linhas memoizadas
     // (BoletoCardItem/BoletoRowItem) não re-renderizem a cada seleção.
@@ -1007,7 +1018,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     )}
                 </button>
                 <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
                 {/* Separador entre grupo "filtrar" e grupo "visualizar" — só na variante desaninhada (§5.1) */}

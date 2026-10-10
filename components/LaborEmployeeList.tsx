@@ -147,10 +147,8 @@ const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'name', label: 'Colaborador', type: 'text' },
     { key: 'role', label: 'Função', type: 'text' },
     { key: 'contract', label: 'Vínculo', type: 'select', options: Object.entries(CONTRACT_LABELS).map(([value, label]) => ({ value, label })) },
-    { key: 'status', label: 'Status', type: 'select', options: [
-        { value: 'ATIVO', label: 'Ativo' }, { value: 'INATIVO', label: 'Inativo' },
-        { value: 'AFASTADO', label: 'Afastado' }, { value: 'DESLIGADO', label: 'Desligado' },
-    ] },
+    // Derivadas de STATUS_LABELS, como o Vínculo acima (§5.5) — sem cópia à mão.
+    { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
     { key: 'salary', label: 'Salário Base', type: 'number' },
     { key: 'cost', label: 'Custo/Dia', type: 'number' },
 ];

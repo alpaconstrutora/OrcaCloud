@@ -100,7 +100,7 @@ import {
     PendingInternalRowCtx,
     STATEMENT_COLUMNS,
     STATEMENT_COLUMN_HEADERS,
-    STATEMENT_FILTER_FIELDS,
+    buildStatementFilterFields,
     STATEMENT_STATUS_COLORS,
     STATEMENT_STATUS_LABELS,
     STATEMENT_TD_CLASS,
@@ -241,7 +241,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // (colunas Cliente/Credor ficam de fora da soma quando ocultadas pelo filtro).
     const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
     const tableColumns = useTableColumns(STATEMENT_COLUMNS, 'extratoBancarioColumns');
-    const statementAdvancedFilters = useAdvancedFilters(STATEMENT_FILTER_FIELDS, 'extratoBancario:advancedFilters');
     const pendingBankColumns = useTableColumns(PENDING_BANK_COLUMNS, 'conciliacaoPendentesBankColumns');
     const pendingInternalColumns = useTableColumns(PENDING_INTERNAL_COLUMNS, 'conciliacaoPendentesInternalColumns');
     const pendingBankResize = useResizableColumns(DEFAULT_PENDING_BANK_COL_WIDTHS, 'conciliacaoPendentesBankColWidths');
@@ -317,6 +316,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     // Nome da contraparte resolvido da origem (ex: fornecedor do boleto) — keyed por internal_transaction.id
     const [originPartyNames, setOriginPartyNames] = useState<Record<string, string>>({});
     const [managedCategories, setManagedCategories] = useState<string[]>([]);
+    // Filtro avançado do Extrato: Cliente/Credor/Categoria/Obra/CC/Plano viram lista com
+    // busca (guia §5.5) — as options saem dos cadastros já carregados aqui e das linhas
+    // BASE do extrato (bankTransactions, antes de busca/filtros). Mesma chave de storage.
+    const statementFilterFields = useMemo(() => buildStatementFilterFields({
+        linhas: bankTransactions,
+        clientes: masterClients,
+        credores: [...masterSuppliers, ...masterEmployees],
+        categorias: managedCategories,
+        obras: masterProjects.map(p => p.name),
+        centrosCusto: masterCostCenters.map(c => c.name),
+        planoContas: masterPlanoContas.map(rotuloPlanoContas),
+    }), [bankTransactions, masterClients, masterSuppliers, masterEmployees, managedCategories, masterProjects, masterCostCenters, masterPlanoContas]);
+    const statementAdvancedFilters = useAdvancedFilters(statementFilterFields, 'extratoBancario:advancedFilters');
     const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
     const [stats, setStats] = useState({
         automationRate: 0,
@@ -406,7 +418,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             costCenterName: id => (id ? costCenterById.get(id) ?? null : null),
             planoContasName: planoContasLabel,
         };
-        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, STATEMENT_FILTER_FIELDS, (tx, key) => getBankTxFilterValue(tx, key, resolvers));
+        filtered = applyFilterRules(filtered, statementAdvancedFilters.rules, statementFilterFields, (tx, key) => getBankTxFilterValue(tx, key, resolvers));
         return filtered.sort((a, b) => {
             let valA: string | number = '';
             let valB: string | number = '';
@@ -439,7 +451,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, statementAdvancedFilters.rules]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, statementAdvancedFilters.rules, statementFilterFields]);
 
     const statementTotalPages = Math.max(1, Math.ceil(sortedBankTransactions.length / statementPageSize));
     // Se o recorte encolheu e a página atual não existe mais, cai na última válida
@@ -3441,7 +3453,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                                 {activeView === 'statement' && (
                                     <div className="flex items-center h-9">
-                                        <AdvancedFilterPanel fields={STATEMENT_FILTER_FIELDS} state={statementAdvancedFilters} />
+                                        <AdvancedFilterPanel fields={statementFilterFields} state={statementAdvancedFilters} />
                                     </div>
                                 )}
                                 {activeView === 'statement' && (

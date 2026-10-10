@@ -6,7 +6,7 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import EmpreendimentoCell from './empreendimento/EmpreendimentoCell';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -27,17 +27,26 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca já existente, não a substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'number', label: 'Número', type: 'text' },
-    { key: 'title', label: 'Título', type: 'text' },
-    { key: 'project', label: 'Obra', type: 'text' },
-    { key: 'empreendimento', label: 'Empreendimento', type: 'text' },
-    { key: 'status', label: 'Status', type: 'select', options: [
-        { value: 'Aberta', label: 'Aberta' }, { value: 'Em Análise', label: 'Em Análise' },
-        { value: 'Concluída', label: 'Concluída' }, { value: 'Cancelada', label: 'Cancelada' },
-    ] },
-    { key: 'deadline', label: 'Prazo Final', type: 'date' },
-];
+// §5.5: Obra e Empreendimento viram lista com busca — valores distintos das
+// cotações carregadas (antes de busca/filtro), pelo MESMO getAdvancedFilterValue
+// que o filtro compara. Por isso é builder + useMemo, não constante de módulo.
+function buildAdvancedFilterFields(
+    requests: QuotationRequest[],
+    empreendimentoByProject: Record<string, { name: string }>,
+): FilterFieldConfig[] {
+    const distinct = (key: string) => distinctOptions(requests, r => getAdvancedFilterValue(r, key, empreendimentoByProject));
+    return [
+        { key: 'number', label: 'Número', type: 'text' },
+        { key: 'title', label: 'Título', type: 'text' },
+        { key: 'project', label: 'Obra', type: 'text', options: distinct('project') },
+        { key: 'empreendimento', label: 'Empreendimento', type: 'text', options: distinct('empreendimento') },
+        { key: 'status', label: 'Status', type: 'select', options: [
+            { value: 'Aberta', label: 'Aberta' }, { value: 'Em Análise', label: 'Em Análise' },
+            { value: 'Concluída', label: 'Concluída' }, { value: 'Cancelada', label: 'Cancelada' },
+        ] },
+        { key: 'deadline', label: 'Prazo Final', type: 'date' },
+    ];
+}
 
 function getAdvancedFilterValue(
     req: QuotationRequest,
@@ -135,7 +144,8 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
     const [searchTerm, setSearchTerm] = usePersistedState('supplyChainQuotationFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('supplyChainQuotationFilters:viewMode', 'list');
     const tableColumns = useTableColumns(COLUMNS, 'supplyChainQuotationColumns');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'supplyChainQuotationFilters:advanced');
+    const advancedFields = React.useMemo(() => buildAdvancedFilterFields(requests, empreendimentoByProject), [requests, empreendimentoByProject]);
+    const advancedFilters = useAdvancedFilters(advancedFields, 'supplyChainQuotationFilters:advanced');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'supplyChainQuotationColWidths');
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1).
@@ -207,7 +217,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             (req.projectName && req.projectName.toLowerCase().includes(searchTerm.toLowerCase()))
         );
 
-        filtered = applyFilterRules(filtered, advancedFilters.rules, ADVANCED_FILTER_FIELDS,
+        filtered = applyFilterRules(filtered, advancedFilters.rules, advancedFields,
             (req, key) => getAdvancedFilterValue(req, key, empreendimentoByProject));
 
         if (tableColumns.sortColumn) {
@@ -222,7 +232,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
             });
         }
         return filtered;
-    }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules, empreendimentoByProject]);
+    }, [requests, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, advancedFilters.rules, advancedFields, empreendimentoByProject]);
 
     return (
         <div className="space-y-6">
@@ -276,7 +286,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                 </button>
 
                 <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
                 <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>

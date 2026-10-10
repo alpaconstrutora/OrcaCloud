@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, ArrowLeft, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users, Check } from 'lucide-react';
-import { TipoObra, RegimeObra, TechnicalConfig, ProjectTypeTemplate } from '../types/project';
+import { TipoObra, RegimeObra, TechnicalConfig, ProjectTypeTemplate, OBRA_STATUSES, ObraStatus } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
 import { clientService } from '../services/clientService';
 import { projectService } from '../services/projectService';
@@ -43,7 +43,7 @@ export interface NewProjectData {
   bdi: number;
   autoSave?: boolean;
   budgetStatus?: 'Em Andamento' | 'Fechado';
-  obraStatus?: 'Não Iniciado' | 'Em andamento' | 'Paralisada' | 'Concluída';
+  obraStatus?: ObraStatus;
   budgetType?: 'ANALYTIC' | 'PARAMETRIC';
   linkedProjectName?: string;
   linkedProjectId?: string;
@@ -1336,10 +1336,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                       value={formData.obraStatus || 'Não Iniciado'}
                       onChange={(e) => setFormData({ ...formData, obraStatus: e.target.value as any })}
                     >
-                      <option value="Não Iniciado">Não Iniciado</option>
-                      <option value="Em andamento">Em andamento</option>
-                      <option value="Paralisada">Paralisada</option>
-                      <option value="Concluída">Concluída</option>
+                      {/* Lista única em types/project.ts — o filtro avançado de Obras lê a mesma. */}
+                      {OBRA_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>

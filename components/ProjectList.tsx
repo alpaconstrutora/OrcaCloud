@@ -3,7 +3,7 @@ import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { TipoObra } from '../types/project';
+import { TipoObra, OBRA_STATUSES } from '../types/project';
 
 const TIPO_OBRA_LABELS: Record<TipoObra, string> = {
     residencial_multifamiliar: 'Residencial',
@@ -41,7 +41,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import ExcelImportModal from './ExcelImportModal';
 import { BudgetEntry } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
 
@@ -123,25 +123,46 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     client: 160, created: 140, updated: 172, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
 };
 
+// Obra a que o projeto está vinculado (por id; legado: por nome entre as obras).
+function findLinkedProject(project: ProjectSummary, projects: ProjectSummary[]): ProjectSummary | null | undefined {
+    if (project.settings?.linkedProjectId) {
+        return projects.find(p => p.id === project.settings?.linkedProjectId);
+    }
+    if (project.settings?.linkedProjectName) {
+        return projects.find(p => p.name === project.settings?.linkedProjectName && p.settings?.classification === 'OBRA');
+    }
+    return null;
+}
+
+// O que a coluna Cliente MOSTRA — usado pela célula e pelo filtro avançado (§5.5:
+// o filtro compara o que se vê). "Obra Própria" vence; fora da aba Obras, o cliente
+// da obra vinculada vem antes do cliente do próprio orçamento/planejamento.
+function getClientCellValue(project: ProjectSummary, projects: ProjectSummary[], activeTab: 'budgets' | 'templates'): string {
+    if (project.settings?.obraPropria) return 'Obra Própria';
+    return (activeTab === 'templates'
+        ? project.settings?.client
+        : (findLinkedProject(project, projects)?.settings?.client || project.settings?.client)) || '';
+}
+
 // F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa a
 // busca/ordenação/tipo já existentes, não os substitui.
-const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'code', label: 'Código', type: 'text' },
-    { key: 'name', label: 'Nome', type: 'text' },
-    { key: 'client', label: 'Cliente', type: 'text' },
-    { key: 'status-obra', label: 'Status Obra', type: 'select', options: [
-        { value: 'Em andamento', label: 'Em andamento' },
-        { value: 'Concluída', label: 'Concluída' },
-        { value: 'Não Iniciado', label: 'Não Iniciado' },
-    ] },
-    { key: 'updated', label: 'Atualização', type: 'date' },
-];
+// §5.5: Cliente vira lista com busca (valores distintos das linhas da aba, como a
+// célula mostra); Status Obra lê OBRA_STATUSES — a cópia à mão não tinha 'Paralisada'.
+function buildAdvancedFilterFields(clientOptions: FilterFieldConfig['options']): FilterFieldConfig[] {
+    return [
+        { key: 'code', label: 'Código', type: 'text' },
+        { key: 'name', label: 'Nome', type: 'text' },
+        { key: 'client', label: 'Cliente', type: 'text', options: clientOptions },
+        { key: 'status-obra', label: 'Status Obra', type: 'select', options: OBRA_STATUSES.map(s => ({ value: s, label: s })) },
+        { key: 'updated', label: 'Atualização', type: 'date' },
+    ];
+}
 
-function getAdvancedFilterValue(project: ProjectSummary, key: string): unknown {
+function getAdvancedFilterValue(project: ProjectSummary, key: string, projects: ProjectSummary[], activeTab: 'budgets' | 'templates'): unknown {
     switch (key) {
         case 'code': return project.code || project.settings?.code || '';
         case 'name': return project.name;
-        case 'client': return project.settings?.client ?? '';
+        case 'client': return getClientCellValue(project, projects, activeTab);
         case 'status-obra': return project.settings?.obraStatus ?? '';
         case 'updated': {
             const raw = project.updated_at || project.created_at;
@@ -242,7 +263,31 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const contextColumns = COLUMNS.filter(c => !columnsWithoutData.has(c.key));
 
     const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
-    const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'projectListFilters:advanced');
+    // Linhas da aba/contexto atual (Obras, Orçamentos, Planejamentos, Diários), antes
+    // da busca, do tipo e do filtro avançado — base da lista de clientes do filtro.
+    const tabProjects = React.useMemo(() => projects.filter(p => {
+        const isOrcamento = p.settings?.classification === 'ORCAMENTO' || !p.settings?.classification;
+        const isTemplate = p.settings?.classification === 'OBRA';
+        const isPlanejamento = p.settings?.classification === 'PLANEJAMENTO';
+
+        const effectiveTab = classificationFilter
+            ? (classificationFilter === 'OBRA' ? 'templates' : (classificationFilter === 'PLANEJAMENTO' ? 'budgets' : (classificationFilter === 'DIARIO' ? 'budgets' : 'budgets')))
+            : activeTab;
+
+        return effectiveTab === 'templates'
+            ? isTemplate
+            : (classificationFilter === 'PLANEJAMENTO'
+                ? isPlanejamento
+                : (classificationFilter === 'DIARIO'
+                    ? (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
+                    : isOrcamento));
+    }), [projects, activeTab, classificationFilter]);
+    // Opções do Cliente dependem das linhas carregadas → campos em useMemo (§5.5).
+    const advancedFields = React.useMemo(
+        () => buildAdvancedFilterFields(distinctOptions(tabProjects, p => getClientCellValue(p, projects, activeTab))),
+        [tabProjects, projects, activeTab],
+    );
+    const advancedFilters = useAdvancedFilters(advancedFields, 'projectListFilters:advanced');
     const confirm = useConfirm();
     const {
         visibleColumns,
@@ -421,20 +466,23 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                 );
             }
-            case 'client':
+            case 'client': {
+                // Mesma função do filtro avançado — o que se filtra é o que aparece aqui.
+                const clientLabel = getClientCellValue(project, projects, activeTab);
                 return (
                     <>
                         {project.settings?.obraPropria ? (
                             <span className="text-sm font-normal text-indigo-700">Obra Própria</span>
-                        ) : (activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)) ? (
+                        ) : clientLabel ? (
                             <span className="text-sm font-normal text-gray-600">
-                                {activeTab === 'templates' ? project.settings?.client : (getLinkedProjectData(project)?.settings?.client || project.settings?.client)}
+                                {clientLabel}
                             </span>
                         ) : (
                             <span className="text-sm font-normal text-gray-400 italic">-</span>
                         )}
                     </>
                 );
+            }
             case 'created':
                 return <span className="text-sm font-normal text-gray-600">{new Date(project.created_at || 0).toLocaleDateString()}</span>;
             case 'updated':
@@ -602,7 +650,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [tipoFilter, setTipoFilter] = React.useState<TipoObra | ''>('');
 
     const filteredProjects = React.useMemo(() => {
-        let result = projects
+        let result = tabProjects
             .filter(p => {
                 // Projeto de sistema já sai no store — utils/systemProjects.ts
                 const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -610,26 +658,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 const matchesTipo = !tipoFilter || p.settings?.tipoObra === tipoFilter;
 
-                const isOrcamento = p.settings?.classification === 'ORCAMENTO' || !p.settings?.classification;
-                const isTemplate = p.settings?.classification === 'OBRA';
-                const isPlanejamento = p.settings?.classification === 'PLANEJAMENTO';
-
-                const effectiveTab = classificationFilter
-                    ? (classificationFilter === 'OBRA' ? 'templates' : (classificationFilter === 'PLANEJAMENTO' ? 'budgets' : (classificationFilter === 'DIARIO' ? 'budgets' : 'budgets')))
-                    : activeTab;
-
-                const matchesTab = effectiveTab === 'templates'
-                    ? isTemplate
-                    : (classificationFilter === 'PLANEJAMENTO'
-                        ? isPlanejamento
-                        : (classificationFilter === 'DIARIO'
-                            ? (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
-                            : isOrcamento));
-
-                return matchesSearch && matchesTab && matchesTipo;
+                return matchesSearch && matchesTipo;
             });
 
-        result = applyFilterRules(result, advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue);
+        result = applyFilterRules(result, advancedFilters.rules, advancedFields, (p, key) => getAdvancedFilterValue(p, key, projects, activeTab));
 
         return result.sort((a, b) => {
                 if (sortColumn) {
@@ -712,7 +744,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, organizations, orderCounts, empreendimentoByProject]);
+    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, organizations, orderCounts, empreendimentoByProject]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -733,15 +765,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         return { total, inProgress, concluded, recent };
     }, [filteredProjects]);
 
-    const getLinkedProjectData = (project: ProjectSummary) => {
-        if (project.settings?.linkedProjectId) {
-            return projects.find(p => p.id === project.settings?.linkedProjectId);
-        }
-        if (project.settings?.linkedProjectName) {
-            return projects.find(p => p.name === project.settings?.linkedProjectName && p.settings?.classification === 'OBRA');
-        }
-        return null;
-    };
+    const getLinkedProjectData = (project: ProjectSummary) => findLinkedProject(project, projects);
 
     const getLinkedPlanning = (project: ProjectSummary) => {
         // 1. Helper: recursive discovery of the root Obra ID
@@ -954,7 +978,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     cabeçalho (ui_ux_guia_unificado.md §6.4); default sem coluna selecionada
                     ficou dentro do .sort() (mais recente primeiro / código para Obras). */}
                 <div className="flex items-center h-9">
-                    <AdvancedFilterPanel fields={ADVANCED_FILTER_FIELDS} state={advancedFilters} />
+                    <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
 
                 <button

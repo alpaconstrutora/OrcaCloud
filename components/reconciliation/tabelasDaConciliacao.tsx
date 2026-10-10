@@ -11,7 +11,7 @@ import SupplierSelect, { type SupplierOption } from '../SupplierSelect';
 import CostCenterSelect, { type CostCenterOption } from '../CostCenterSelect';
 import PlanoContasSelect, { type PlanoContasOption } from '../PlanoContasSelect';
 import type { ColumnConfig } from '../ui/TableUtils';
-import type { FilterFieldConfig } from '../ui/FilterUtils';
+import { distinctOptions, type FilterFieldConfig } from '../ui/FilterUtils';
 import type { BankTransaction, InternalTransaction, BankTransactionStatus } from '../../types';
 
 /**
@@ -201,23 +201,52 @@ export const STATEMENT_STATUS_COLORS: Partial<Record<BankTransactionStatus, stri
 // TODAS as colunas da tabela (pedido de 2026-09-14: "incluir no filtro avançado
 // todas as colunas disponíveis") — as chaves são as mesmas de STATEMENT_COLUMNS,
 // mais 'direction' (o sinal do valor), que não é coluna mas é o recorte mais pedido.
-export const STATEMENT_FILTER_FIELDS: FilterFieldConfig[] = [
-    { key: 'description',  label: 'Descrição',          type: 'text'   },
-    { key: 'client',       label: 'Cliente',            type: 'text'   },
-    { key: 'creditor',     label: 'Credor',             type: 'text'   },
-    { key: 'category',     label: 'Categoria',          type: 'text'   },
-    { key: 'project',      label: 'Obra',               type: 'text'   },
-    { key: 'costCenter',   label: 'Centro de Custo',    type: 'text'   },
-    { key: 'planoContas',  label: 'Plano de Contas',    type: 'text'   },
-    { key: 'date',         label: 'Data',               type: 'date'   },
-    { key: 'amount',       label: 'Valor',              type: 'number' },
-    { key: 'status',       label: 'Status', type: 'select', options:
-        (Object.entries(STATEMENT_STATUS_LABELS) as [BankTransactionStatus, string][]).map(([value, label]) => ({ value, label })),
-    },
-    { key: 'direction',    label: 'Tipo', type: 'select', options: [
-        { value: 'CREDIT', label: 'Entrada (crédito)' }, { value: 'DEBIT', label: 'Saída (débito)' },
-    ] },
-];
+//
+// Cliente, Credor, Categoria, Obra, Centro de Custo e Plano de Contas são LISTA COM BUSCA
+// (guia §5.5): o app já carrega esses cadastros, o usuário escolhe em vez de digitar.
+// Por isso deixou de ser constante de módulo — as options dependem do que a tela carregou.
+// Cliente/Credor/Categoria somam aos cadastros os valores das linhas do extrato: o
+// counterparty_name vem do banco e muitas vezes ainda não está cadastrado (a célula mostra
+// o nome cru como fallbackLabel) — sem isso, esse nome não seria escolhível.
+export interface StatementFilterLists {
+    /** Linhas BASE do extrato (antes de busca/filtros) — completam Cliente/Credor/Categoria. */
+    linhas: BankTransaction[];
+    clientes: string[];
+    /** Fornecedores + colaboradores (o Credor da célula é SupplierSelect com os dois). */
+    credores: string[];
+    categorias: string[];
+    obras: string[];
+    centrosCusto: string[];
+    /** Já no rótulo da célula ("código · nome"), igual ao resolvedor planoContasName. */
+    planoContas: string[];
+}
+
+// Cliente/Credor/Categoria não passam pelos resolvedores — só existe para reusar o getValue.
+const SEM_RESOLVEDORES: BankTxFilterResolvers = { projectName: () => null, costCenterName: () => null, planoContasName: () => null };
+
+const opcoesDe = (valores: string[]) => distinctOptions(valores, v => v);
+const comLinhas = (cadastro: string[], linhas: BankTransaction[], key: string) =>
+    opcoesDe([...cadastro, ...linhas.map(tx => String(getBankTxFilterValue(tx, key, SEM_RESOLVEDORES) ?? ''))]);
+
+export function buildStatementFilterFields(l: StatementFilterLists): FilterFieldConfig[] {
+    return [
+        { key: 'description',  label: 'Descrição',          type: 'text'   },
+        { key: 'client',       label: 'Cliente',            type: 'text', options: comLinhas(l.clientes, l.linhas, 'client') },
+        { key: 'creditor',     label: 'Credor',             type: 'text', options: comLinhas(l.credores, l.linhas, 'creditor') },
+        { key: 'category',     label: 'Categoria',          type: 'text', options: comLinhas(l.categorias, l.linhas, 'category') },
+        { key: 'project',      label: 'Obra',               type: 'text', options: opcoesDe(l.obras) },
+        { key: 'costCenter',   label: 'Centro de Custo',    type: 'text', options: opcoesDe(l.centrosCusto) },
+        { key: 'planoContas',  label: 'Plano de Contas',    type: 'text', options: opcoesDe(l.planoContas) },
+        { key: 'date',         label: 'Data',               type: 'date'   },
+        { key: 'amount',       label: 'Valor',              type: 'number' },
+        { key: 'status',       label: 'Status', type: 'select', options:
+            (Object.entries(STATEMENT_STATUS_LABELS) as [BankTransactionStatus, string][]).map(([value, label]) => ({ value, label })),
+        },
+        { key: 'direction',    label: 'Tipo', type: 'select', options: [
+            { value: 'CREDIT', label: 'Entrada (crédito)' }, { value: 'DEBIT', label: 'Saída (débito)' },
+        ] },
+    ];
+}
 
 // Com o filtro Receitas/Despesas ativo, a coluna do lado que não se aplica
 // (Credor em Receitas, Cliente em Despesas) só mostraria "—" em toda linha —

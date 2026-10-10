@@ -235,7 +235,8 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         if (showNature) {
             fields.push({
                 key: 'accounting_nature', label: 'Natureza', type: 'select',
-                options: [{ value: 'CREDORA', label: 'Credora' }, { value: 'DEVEDORA', label: 'Devedora' }],
+                // Derivadas de NATURE_LABELS (§5.5) — cópia à mão fica para trás quando o mapa muda.
+                options: Object.entries(NATURE_LABELS).map(([value, label]) => ({ value, label })),
             });
         }
         return fields;

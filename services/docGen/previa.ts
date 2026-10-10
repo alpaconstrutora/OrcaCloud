@@ -1,7 +1,7 @@
 import type { Organization } from '../../types/users';
 import type { DocTipTap, LayoutModelo } from '../../types/docGen';
 import { contextoDeExemplo, resolverTodos } from './catalogoCampos';
-import { camposLivresDoModelo, montarDocDefinition, type AnexoRasterizado } from './motorRender';
+import { camposLivresDoModelo, montarDocDefinition, type AnexoRasterizado, type EntradaRender } from './motorRender';
 import { tabelasDoDocumento, type TabelaRender } from './tabelasDinamicas';
 import { gerarPdfBlob } from './pdf';
 
@@ -101,15 +101,12 @@ export interface EntradaPreviaDocumento {
 
 export const NUMERO_NO_RASCUNHO = 'nº atribuído na emissão';
 
-export async function previaDoDocumento(
-    e: EntradaPreviaDocumento,
-    /** PDF DEFINITIVO (emissão): id do documento e data da emissão — o mesmo registro dá os mesmos bytes. */
-    oficial?: { id: string; criadoEm: Date },
-): Promise<Blob> {
+/** O que o motor recebe para o documento — o MESMO para o PDF e para o Word. */
+async function entradaDoDocumento(e: EntradaPreviaDocumento, oficial: boolean): Promise<EntradaRender> {
     const logoDataUrl = e.layout.cabecalho.logo === 'organizacao'
         ? await logoComoDataUrl(e.organization?.logoUrl ?? null)
         : null;
-    const def = montarDocDefinition({
+    return {
         conteudo: e.conteudoModelo,
         layout: e.layout,
         valores: { ...e.valores, 'documento.numero': e.numero || NUMERO_NO_RASCUNHO },
@@ -122,6 +119,25 @@ export async function previaDoDocumento(
         paginasAnexas: e.paginasAnexas ?? null,
         tabelas: e.tabelas ?? null,
         marcarCondicaoInvalida: !oficial,
-    });
+    };
+}
+
+export async function previaDoDocumento(
+    e: EntradaPreviaDocumento,
+    /** PDF DEFINITIVO (emissão): id do documento e data da emissão — o mesmo registro dá os mesmos bytes. */
+    oficial?: { id: string; criadoEm: Date },
+): Promise<Blob> {
+    const def = montarDocDefinition(await entradaDoDocumento(e, !!oficial));
     return gerarPdfBlob(def, oficial ?? { id: 'previa-do-documento', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
+}
+
+/**
+ * Cópia EDITÁVEL em Word (.docx) do documento — mesmos dados da prévia/PDF.
+ * `nota` vai no rodapé (ofício emitido: "o oficial é o PDF/A do GED").
+ * O `docx` só carrega aqui (`import()`), como o pdfmake na prévia.
+ */
+export async function docxDoDocumento(e: EntradaPreviaDocumento, nota?: string | null): Promise<Blob> {
+    const entrada = await entradaDoDocumento({ ...e, paginasAnexas: null }, false);
+    const { gerarDocxBlob } = await import('./motorDocx');
+    return gerarDocxBlob({ ...entrada, marcarCondicaoInvalida: false, nota: nota ?? null });
 }

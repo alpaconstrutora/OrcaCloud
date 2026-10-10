@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Lock, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Lock, ShieldCheck, Sparkles, FileType2 } from 'lucide-react';
 import type {
     DestinatarioSnapshot, DocGenAssinatura, DocGenDocumento, DocGenDocumentoRascunho, DocGenEvento, DocGenModelo, DocGenVinculo,
     DocGenVinculoTipo, DocTipTap,
@@ -12,7 +12,7 @@ import { useDepartamentosDaOrg } from '../../hooks/useDepartamentosDaOrg';
 import { useToast } from '../../hooks/useToast';
 import SaveStatus from '../ui/SaveStatus';
 import { useConfirm } from '../ui/confirm';
-import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio, assinaturasParaPdf, assinaturasValidas } from '../../services/docGen/emissao';
+import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio, assinaturasParaPdf, assinaturasValidas, nomeDoArquivo } from '../../services/docGen/emissao';
 import { ROTULO_SITUACAO, referenciaDeOficio, type OficioRecebido } from '../../services/docGen/tramitacao';
 import AprovacaoAssinaturaCard from './AprovacaoAssinaturaCard';
 import AssistenteIASheet from './AssistenteIASheet';
@@ -31,7 +31,7 @@ import SignatariosEditor from './SignatariosEditor';
 import { docGenDocumentoService, rascunhoDoDocumento, rascunhoDoModelo } from '../../services/docGenDocumentoService';
 import { camposLivresDoModelo } from '../../services/docGen/motorRender';
 import { validarDocumento, temBloqueante, type Pendencia } from '../../services/docGen/validarDocumento';
-import { previaDoDocumento } from '../../services/docGen/previa';
+import { docxDoDocumento, previaDoDocumento } from '../../services/docGen/previa';
 import {
     atualizarCadastroDestinatario, lerDestinatario, listarContratos, listarEmpreendimentos,
     montarContexto, obrasDaOrganizacao, valoresDoDocumento, type OpcaoSimples,
@@ -461,33 +461,62 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
     const [previaBlob, setPreviaBlob] = React.useState<Blob | null>(null);
     const [previaCarregando, setPreviaCarregando] = React.useState(false);
     const [previaErro, setPreviaErro] = React.useState<string | null>(null);
+    /** O documento como está na tela — a mesma entrada para a prévia em PDF e para o Word. */
+    const entradaDaTela = async (comAnexosDentro: boolean) => {
+        const ctx = await montarContexto(draft, { organization, companies, projects, nomeDepartamento, emailUsuario, emRespostaA });
+        const v = valoresDoDocumento(modelo, ctx, draft.valores);
+        // Assinatura só vale para a versão salva: com alteração pendente, sai sem o carimbo.
+        const blocoAssinaturas = await assinaturasParaPdf(
+            { id: atual?.id ?? '', versao: atual?.versao ?? 0, signatarios: draft.signatarios }, organization, dirty || !atual ? [] : assinaturas,
+        );
+        return {
+            conteudoModelo: modelo.conteudo,
+            layout: modelo.layout,
+            titulo: draft.assunto || modelo.nome,
+            valores: v,
+            camposLivres: draft.conteudo,
+            assinaturas: blocoAssinaturas,
+            anexos: draft.anexos.map(a => a.nome),
+            organization,
+            numero: atual?.numero ?? null,
+            validacaoUrl: atual && atual.status !== 'RASCUNHO' ? urlDeValidacao(atual.id) : null,
+            tabelas: tabelasDoDocumento(modelo, ctx),
+            paginasAnexas: comAnexosDentro && draft.anexos_no_pdf
+                ? await import('../../services/docGen/anexosNoPdf').then(m => m.rasterizarAnexos(orgId, draft.anexos))
+                : null,
+        };
+    };
+
+    // ── Word (.docx): cópia editável — o oficial é o PDF/A do GED ──
+    const [gerandoWord, setGerandoWord] = React.useState(false);
+    const baixarWord = async () => {
+        setGerandoWord(true);
+        try {
+            const emitido = !!atual && atual.status !== 'RASCUNHO' && !!atual.numero;
+            const nota = emitido
+                ? `Cópia editável do Ofício nº ${atual!.numero}. O documento oficial é o PDF/A arquivado no GED${atual!.ged_document_id ? ', conferível pelo QR Code / link de validação' : ''}.`
+                : 'Rascunho — sem número oficial. O número é atribuído na emissão.';
+            const blob = await docxDoDocumento(await entradaDaTela(false), nota);
+            const nome = emitido ? nomeDoArquivo(atual!.numero!).replace(/\.pdf$/, '-editavel.docx') : `Rascunho-${(draft.assunto || modelo.nome).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60) || 'oficio'}.docx`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nome;
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        } catch (e) {
+            showToast(e instanceof Error ? e.message : 'Falha ao gerar o Word.', 'error');
+        } finally {
+            setGerandoWord(false);
+        }
+    };
+
     const abrirPrevia = async () => {
         setPreviaAberta(true);
         setPreviaCarregando(true);
         setPreviaErro(null);
         try {
-            const ctx = await montarContexto(draft, { organization, companies, projects, nomeDepartamento, emailUsuario, emRespostaA });
-            const v = valoresDoDocumento(modelo, ctx, draft.valores);
-            // Assinatura só vale para a versão salva: com alteração pendente, a prévia sai sem o carimbo.
-            const blocoAssinaturas = await assinaturasParaPdf(
-                { id: atual?.id ?? '', versao: atual?.versao ?? 0, signatarios: draft.signatarios }, organization, dirty || !atual ? [] : assinaturas,
-            );
-            setPreviaBlob(await previaDoDocumento({
-                conteudoModelo: modelo.conteudo,
-                layout: modelo.layout,
-                titulo: draft.assunto || modelo.nome,
-                valores: v,
-                camposLivres: draft.conteudo,
-                assinaturas: blocoAssinaturas,
-                anexos: draft.anexos.map(a => a.nome),
-                organization,
-                numero: atual?.numero ?? null,
-                validacaoUrl: atual ? urlDeValidacao(atual.id) : null,
-                tabelas: tabelasDoDocumento(modelo, ctx),
-                paginasAnexas: draft.anexos_no_pdf
-                    ? await import('../../services/docGen/anexosNoPdf').then(m => m.rasterizarAnexos(orgId, draft.anexos))
-                    : null,
-            }));
+            setPreviaBlob(await previaDoDocumento(await entradaDaTela(true)));
         } catch (e) {
             setPreviaBlob(null);
             setPreviaErro(e instanceof Error ? e.message : 'Falha ao gerar a prévia.');
@@ -842,6 +871,11 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                 {atual && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
                 <button type="button" onClick={handleBack} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">
                     {atual ? 'Voltar' : 'Cancelar'}
+                </button>
+                <button type="button" onClick={() => void baixarWord()} disabled={gerandoWord}
+                    title={atual && atual.status !== 'RASCUNHO' ? 'Cópia editável em Word — o documento oficial é o PDF/A arquivado no GED' : 'Baixa o rascunho em Word (.docx), editável'}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                    {gerandoWord ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileType2 className="w-[15px] h-[15px]" />} Word (.docx)
                 </button>
                 <button type="button" onClick={abrirPrevia}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95">

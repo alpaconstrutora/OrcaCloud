@@ -689,6 +689,19 @@ padrão (registradas aqui para o usuário corrigir se quiser):
 | 2026-10-10 | Protocolo (`doc_gen_envios` do plano) | **Não virou tabela:** envio, recebimento (protocolo, quem recebeu), resposta e encerramento são eventos da tramitação (`doc_gen_eventos.dados`), gravados pela RPC que muda a situação — um lugar só, e ninguém grava evento à mão |
 | 2026-10-10 | Situação ASSINADO do plano | **Não virou situação:** a assinatura vale para a VERSÃO salva do rascunho (salvar de novo invalida) e aparece por signatário; o modelo diz se a emissão exige todas |
 
+### Pedido posterior — 2026-10-10, depois das Fases 2 e 3
+
+> implementar itens pendentes:
+> 1 Do MVP: gravar cargo e assinatura de um usuário em Minha Organização › Usuários precisa ser testado com uma conta de administrador. A conta de testes não tem essa permissão.
+> 2. Continuam como pendências futuras no plano: PDF/A, saída em DOCX e fonte livre nos modelos.
+
+| Data | Pergunta | Decisão (padrão, sem perguntar) |
+|---|---|---|
+| 2026-10-10 | Conta de administrador para o item 1 | Organização DESCARTÁVEL "ZZ Teste Ofícios E2E" com o usuário de leitura como dono, apagada no fim — não se mexe na permissão dele na Alpa |
+| 2026-10-10 | Qual PDF/A | **PDF/A-2b** (ISO 19005-2, conformidade básica): admite transparência (logo e assinatura em PNG) e é o perfil usual de arquivamento. Vale para TODO PDF do motor (prévia e oficial) — um só caminho. Conferido com o veraPDF |
+| 2026-10-10 | DOCX | Cópia EDITÁVEL gerada do mesmo modelo e dos mesmos dados; o documento oficial continua sendo o PDF com hash (o .docx diz isso no rodapé quando o ofício já foi emitido). Biblioteca `docx` (nova dependência, `import()` sob demanda) |
+| 2026-10-10 | Fonte livre | Fontes da organização (`.ttf`/`.otf`, até 4 variações) no bucket privado `doc-gen-assets`, cadastro `doc_gen_fontes`; o modelo escolhe entre Roboto e as fontes da organização; o PDF embute a fonte (exigência do PDF/A). Licença da fonte é responsabilidade de quem envia — a tela avisa |
+
 ## Avaliação da proposta contra o que já existe
 
 Árvore lida: `C:\D\frentes\market-fase4` no topo de `origin/main` (`11d42ec7`, 07/10). O
@@ -1342,6 +1355,31 @@ pendências futuras na seção própria.
       segredo liga também o `bi-narrative`, que hoje responde "IA não configurada"). Custo: Claude Opus 5.5 a US$ 4 / 20
       por milhão de tokens de entrada / saída; um trecho de ofício fica na casa de centavos de real. Até lá a IA não roda —
       a prova com resposta real fica para depois da chave
+
+### F8 — itens pendentes do MVP: signatário com ADMIN, PDF/A e Word (frente `oficios-f8-saidas`)
+
+- [x] F8 · 1 — **item 1 do pedido — gravar cargo e assinatura com conta de ADMIN:** organização descartável "ZZ Teste
+      Ofícios E2E" com o usuário de leitura como DONO (`f8_setup_org.sql`). Pela tela Minha Organização › Usuários ›
+      Editar: cargo "Gerente de Contratos", telefone, registro "CREA-MG 999999/D" e a IMAGEM da assinatura (PNG) →
+      Salvar. Banco: as 4 colunas gravadas em `organization_members`; Storage: o arquivo em
+      `doc-gen-assets/<org>/assinaturas/<membro>.png`. Reaberto depois de recarregar: campos relidos e a imagem
+      exibida por URL assinada. No Novo ofício o signatário aparece com cargo e registro, e o PDF da prévia traz a
+      IMAGEM (1 imagem no PDF) e o cargo. 0 erros de JS e de rede. Nenhum defeito achado — só faltava a prova
+- [x] F8 · 2 — **PDF/A-2b em todo PDF do motor** (`pdf.ts`: versão 1.7, `subset: 'PDF/A-2b'`, idioma `pt-BR`,
+      título exibido; o PDFKit embute o perfil sRGB e os metadados XMP `pdfaid`). **Validado com o veraPDF 1.30
+      (instalado no scratchpad, Java 8):** amostra completa (logo e assinatura com transparência, tabela, link, QR,
+      página de anexo) → PASS; o PDF da F5, anterior à mudança → FAIL (o validador discrimina); no app, a PRÉVIA e o
+      PDF OFICIAL gerados pelo NAVEGADOR → PASS. Determinismo mantido (mesmos bytes a cada geração — o pdfmake muda o
+      docDefinition, então cada geração monta o seu, como o app faz). O GED guarda `formato: 'PDF/A-2b'` nos metadados.
+      Teste `docGenPdfA.test.ts` trava os marcadores (o veraPDF não roda no CI)
+- [x] F8 · 3 — **saída em Word (.docx)** — `services/docGen/motorDocx.ts` com a biblioteca `docx` **9.7.2 fixada**
+      (a 9.9.0 tinha 3 dias; lock conferido no npm 10), carregada por `import()`. Mesma entrada do PDF
+      (`previa.entradaDoDocumento`): variáveis, pendências `[[…]]` grifadas, condições, tabelas dinâmicas, listas,
+      tabelas, links, assinaturas com imagem e "assinado eletronicamente", anexos, cabeçalho com logo, rodapé com
+      "Página X de Y", link de validação. Botão **Word (.docx)** no ofício: rascunho → "Rascunho — sem número oficial";
+      emitido → `OF-…-editavel.docx` com a nota "Cópia editável… o documento oficial é o PDF/A arquivado no GED".
+      Teste `docGenDocx.test.ts` lê o XML do .docx gerado. No app: os dois downloads conferidos (texto, imagens, nota,
+      paginação)
 
 
 ## Verificação

@@ -8,7 +8,7 @@ import type { VariableToken } from '../documentNumbering/types';
 import type { DocGenAssinatura, DocGenDocumento, DocGenModelo, SignatarioDoc } from '../../types/docGen';
 import { montarContexto, valoresDoDocumento, imagensDasAssinaturas, type DepsContexto } from './resolverContexto';
 import { previaDoDocumento } from './previa';
-import { sha256DoBlob } from './pdf';
+import { PERFIL_PDFA, sha256DoBlob } from './pdf';
 import { ROTULO_TIPO } from './destinatario';
 import { anoDe, garantirPasta } from './gedPastas';
 import { dataHoraCurta } from './dataExtenso';
@@ -171,6 +171,7 @@ export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Pro
             assinado_eletronicamente: assinaturas.filter(a => a.assinadoEm).map(a => ({ nome: a.nome, em: a.assinadoEm })),
             validacao: urlDeValidacao(doc.id),
             anexos_no_pdf: doc.anexos_no_pdf,
+            formato: PERFIL_PDFA,
         },
     });
 

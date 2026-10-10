@@ -43,10 +43,21 @@ async function carregarPdfMake(): Promise<PdfMakeLike> {
     return carregando;
 }
 
-/** Acrescenta ao docDefinition o que torna o PDF estável entre gerações. */
+/**
+ * Perfil de arquivamento de TODO PDF do motor (pedido de 10/10: PDF/A).
+ * PDF/A-2b (ISO 19005-2, conformidade básica): fontes embutidas, perfil de cor
+ * sRGB (o PDFKit embute o ICC), metadados XMP com a identificação pdfaid — e,
+ * ao contrário do 1b, admite a transparência do logo e da assinatura em PNG.
+ * A versão 1.7 é a base do PDF/A-2 (e a 1.3 padrão do pdfmake não tem SMask).
+ */
+export const PERFIL_PDFA = 'PDF/A-2b';
+
+/** Acrescenta ao docDefinition o que torna o PDF estável entre gerações — e PDF/A. */
 export function comMetadadosFixos(def: TDocumentDefinitions, opts: OpcoesPdf): TDocumentDefinitions {
     return {
         ...def,
+        // Campos do pdfmake 0.3 que os tipos (@types/pdfmake) ainda não declaram.
+        ...({ version: '1.7', subset: PERFIL_PDFA, language: 'pt-BR', displayTitle: true } as Partial<TDocumentDefinitions>),
         info: {
             ...(def.info ?? {}),
             subject: opts.id,

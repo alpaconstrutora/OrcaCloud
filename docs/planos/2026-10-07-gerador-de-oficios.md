@@ -1166,7 +1166,13 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
 - [x] F3 · 10 — limpeza autorizada: ofício, PDF (Storage), pastas, modelo e departamento de teste apagados; contadores
       de ofício da Alpa zerados (o 1º real sai `0001/2026`); travas religadas e conferidas. Suíte 2.909 arquivos /
       7.904 testes = 7.870 + 34 pendentes + 0 falhas; tipos 0; RLS 9/9; check-ui 0 nos 4 arquivos de tela
-- [ ] F3 · publicação, ci, domínio, fechar a frente
+- [x] F3 · publicada em 10/10 (`812c03e9` + `10f1ae41`): check-run `ci` **success** em `10f1ae41`; Vercel "success";
+      `conferir-producao.sh`: o domínio serve `10f1ae4` e o bundle contém "Cancelar ofício" e "Gerar PDF e arquivar no
+      GED" (os 2 commits "faltando" eram de outras sessões, chegados a `main` depois)
+- [x] F3 · frente `oficios-f3-emissao` fechada
+
+**MVP do Gerador de Ofícios (F1 + F2 + F3) no ar em 10/10/2026.** Fases 2 e 3 da proposta seguem planejadas acima;
+pendências futuras na seção própria.
 
 ## Verificação
 

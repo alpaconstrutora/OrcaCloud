@@ -1225,3 +1225,94 @@ describe('PDF: rótulo do trecho curto por fora', () => {
   });
 });
 
+/**
+ * PENDÊNCIAS 3, 4 e 5 (10/10/2026): eixo traço-ponto no DXF, número do trecho curto por fora também no DXF (a regra
+ * única `ondeFicaORotulo`) e a largura do texto medida pelo `Desenhista` (estimada pela Helvetica sem ele).
+ */
+describe('DXF e texto (pendências 3, 4 e 5)', () => {
+  /** As entidades de um DXF R12 lidas par a par. */
+  function entidades(dxf: string): { tipo: string; campos: Record<string, string[]> }[] {
+    const v = dxf.split(/\r?\n/).map((x) => x.trim());
+    const out: { tipo: string; campos: Record<string, string[]> }[] = [];
+    for (let i = 0; i + 1 < v.length; i += 2) {
+      if (v[i] !== '0') continue;
+      const campos: Record<string, string[]> = {};
+      for (let k = i + 2; k + 1 < v.length && v[k] !== '0'; k += 2) (campos[v[k]] ??= []).push(v[k + 1]);
+      out.push({ tipo: v[i + 1], campos });
+    }
+    return out;
+  }
+  const loteComApp = (faixaMm = 1500) => {
+    const { model: m0 } = base();
+    const t = m0.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO' }) as Command;
+    return applyBatch(m0, [
+      d(0, 0, 10000, 0), d(10000, 0, 10000, 30000), d(10000, 30000, 0, 30000), d(0, 30000, 0, 0),
+      { type: 'AddBoundary', levelId: t, a: point(10000, 30000), b: point(0, 30000), kind: 'RESTRICAO', restricao: { tipo: 'APP', faixaMm } } as Command,
+      { type: 'AddEixo', a: point(0, -3000), b: point(0, 33000) } as Command,
+    ]).model;
+  };
+
+  it('ondeFicaORotulo: no meio quando cabe; senão antes do início, depois do fim ou do outro lado', async () => {
+    const { ondeFicaORotulo } = await import('../utils/blueprintCotas');
+    expect(ondeFicaORotulo(1, 3, 100, 20)).toBe('MEIO');
+    expect(ondeFicaORotulo(0, 3, 10, 20)).toBe('ANTES');
+    expect(ondeFicaORotulo(2, 3, 10, 20)).toBe('DEPOIS');
+    expect(ondeFicaORotulo(1, 3, 10, 20)).toBe('OUTRO_LADO');
+    expect(ondeFicaORotulo(0, 1, 10, 20)).toBe('DEPOIS'); // o total sozinho: depois do fim
+  });
+
+  it('larguraEstimadaDoTexto: Helvetica — dígito 0,556 e vírgula 0,278 da altura', async () => {
+    const { larguraEstimadaDoTexto } = await import('../utils/blueprintCotas');
+    expect(larguraEstimadaDoTexto('1,50', 2)).toBeCloseTo((3 * 0.556 + 0.278) * 2, 6);
+    expect(larguraEstimadaDoTexto('27,00', 2)).toBeGreaterThan(larguraEstimadaDoTexto('1,50', 2));
+  });
+
+  it('DXF: tabela LTYPE com CONTINUOUS e EIXO (traço-ponto); a malha usa EIXO; $LTSCALE declarado', () => {
+    const dxf = gerarDxf(loteComApp(), { titulo: 't', revisao: 1, hash: 'h', cotas: true });
+    const e = entidades(dxf);
+    const tipos = e.filter((x) => x.tipo === 'LTYPE');
+    expect(tipos.map((x) => x.campos['2']?.[0])).toEqual(['CONTINUOUS', 'EIXO']);
+    const eixo = tipos.find((x) => x.campos['2']?.[0] === 'EIXO')!;
+    expect(eixo.campos['73']?.[0]).toBe('4');
+    expect(eixo.campos['49']?.map(Number).map((n) => Math.sign(n))).toEqual([1, -1, 0, -1]);
+    const camadas = e.filter((x) => x.tipo === 'LAYER');
+    expect(camadas.find((x) => x.campos['2']?.[0] === 'PLANTA-MALHA-EIXOS')?.campos['6']?.[0]).toBe('EIXO');
+    expect(camadas.find((x) => x.campos['2']?.[0] === 'PLANTA-COTAS')?.campos['6']?.[0]).toBe('CONTINUOUS');
+    expect(dxf).toContain('$LTSCALE');
+    // A tabela de tipos vem ANTES da de camadas (quem lê declara antes de usar).
+    expect(dxf.indexOf('LTYPE')).toBeLessThan(dxf.indexOf('\nLAYER\n'));
+  });
+
+  it('DXF: o número que não cabe sai POR FORA do trecho (além da ponta do lado do lote); o que cabe fica no meio', () => {
+    // A escala do DXF é a do desenho (30 m → texto de 1,05 m): a faixa de 1,50 m cabe; a de 0,80 m não.
+    const ler = (faixaMm: number, rotulo: string) =>
+      entidades(gerarDxf(loteComApp(faixaMm), { titulo: 't', revisao: 1, hash: 'h', cotas: true }))
+        .filter((x) => x.tipo === 'TEXT' && x.campos['8']?.[0] === 'PLANTA-COTAS' && x.campos['1']?.[0] === rotulo)
+        .map((x) => Number(x.campos['20']?.[0]));
+    const de080 = ler(800, '0,80');
+    expect(de080).toHaveLength(2);
+    // As laterais vão de y = 0 a 30 000: o trecho curto é o último (29 200 → 30 000), o número fica além de 30 000.
+    for (const y of de080) expect(y).toBeGreaterThan(30000);
+    const de150 = ler(1500, '1,50');
+    for (const y of de150) expect(y).toBeLessThan(30000);
+  });
+
+  it('PDF: o Desenhista que MEDE o texto decide o "cabe?" — texto estreito fica no meio do trecho', () => {
+    const m = loteComApp();
+    const op = { denominador: 500, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'abc', data: new Date('2026-10-10T12:00:00Z'), cotas: true } as Parameters<typeof desenharPlanta>[2];
+    const ys = (d: DesenhistaDeProva) => d.chamadas.filter((c) => c.tipo === 'texto' && c.args[2] === '1,50').map((c) => c.args[1] as number);
+    const ref = (d: DesenhistaDeProva) => d.chamadas.filter((c) => c.tipo === 'texto' && c.args[2] === '28,50').map((c) => c.args[1] as number);
+    // Estimado (sem medida): 1,50 não cabe em 3 mm → por fora.
+    const estimado = new DesenhistaDeProva();
+    desenharPlanta(estimado, m, op, enquadrar(m, 500, PAPEIS[0], true));
+    // Medido estreito (0,5 mm): cabe → no meio do trecho, perto da ponta do lado.
+    const medido = Object.assign(new DesenhistaDeProva(), { larguraDoTexto: () => 0.5 });
+    desenharPlanta(medido, m, op, enquadrar(m, 500, PAPEIS[0], true));
+    const meio = ref(estimado).reduce((a, b) => a + b, 0) / 2;
+    // O centro do trecho está a 30 mm do meio do lado (1:500); por fora, além da ponta do lado (31,5 mm + o texto).
+    for (const y of ys(estimado)) expect(Math.abs(y - meio)).toBeGreaterThan(32);
+    for (const y of ys(medido)) expect(Math.abs(y - meio)).toBeLessThan(31);
+  });
+});
+

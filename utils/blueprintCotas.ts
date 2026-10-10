@@ -905,3 +905,42 @@ export function anelDoLoteFechado(limitesDoNivel: readonly Boundary[]): Point[] 
   const fechado = !!medirTerreno(limitesDoNivel.filter((x) => x.kind === 'TERRENO'))?.fechado;
   return fechado && anel.length >= 3 ? anel : null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONDE FICA O NÚMERO DE UM TRECHO DE COTA (10/10/2026)
+//
+// A regra do número que não cabe no trecho, antes duplicada no canvas e no PDF (e ausente no DXF): cabe → no meio;
+// senão, no 1º trecho da cadeia ANTES do início, no último DEPOIS do fim, num trecho do meio do OUTRO LADO da linha.
+// As três saídas chamam esta função — divergir era o defeito que o módulo inteiro existe para não ter.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PosicaoDoRotulo = 'MEIO' | 'ANTES' | 'DEPOIS' | 'OUTRO_LADO';
+
+export function ondeFicaORotulo(indice: number, total: number, comprimento: number, larguraDoTexto: number, folga = 0): PosicaoDoRotulo {
+  if (comprimento >= larguraDoTexto + folga) return 'MEIO';
+  if (indice === 0 && total > 1) return 'ANTES';
+  if (indice === total - 1) return 'DEPOIS';
+  return 'OUTRO_LADO';
+}
+
+/**
+ * Largura da Helvetica por caractere, em milésimos da altura (AFM). A fonte padrão do jsPDF; serve de estimativa para
+ * quem não sabe medir texto (o `Desenhista` de prova, o DXF). Os números de cota são dígitos e vírgula.
+ */
+const LARGURA_HELVETICA: Record<string, number> = {
+  ' ': 278, ',': 278, '.': 278, ':': 278, ';': 278, '-': 333, '(': 333, ')': 333, '/': 278, '²': 333, '%': 889,
+  i: 222, j: 222, l: 222, f: 278, t: 278, r: 333, I: 278, m: 833, w: 722, M: 833, W: 944,
+};
+
+/** Largura estimada de um texto em Helvetica, na unidade da altura dada. */
+export function larguraEstimadaDoTexto(texto: string, altura: number): number {
+  let milesimos = 0;
+  for (const ch of texto) {
+    if (ch in LARGURA_HELVETICA) milesimos += LARGURA_HELVETICA[ch];
+    else if (/[0-9]/.test(ch)) milesimos += 556;
+    else if (/[A-ZÀ-Ý]/.test(ch)) milesimos += 667;
+    else milesimos += 556;
+  }
+  return (milesimos / 1000) * altura;
+}
+

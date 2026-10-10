@@ -57,6 +57,8 @@ import {
   cadeiasPorLado,
   chamadasDoLado,
   LINHA_DE_CHAMADA,
+  larguraEstimadaDoTexto,
+  ondeFicaORotulo,
   pontoDaCota,
   type LadoDoContorno,
   type SegmentoDeCota,
@@ -598,8 +600,9 @@ export function gerarDxfDaTopografia(
     par(9, '$MEASUREMENT') +
     par(70, 1) +
     par(0, 'ENDSEC');
-  dxf +=
-    par(0, 'SECTION') + par(2, 'TABLES') + par(0, 'TABLE') + par(2, 'LAYER') + par(70, camadas.length);
+  // `CONTINUOUS` declarado (10/10/2026): toda camada o usa, e leitor estrito recusa tipo de linha não definido.
+  dxf += par(0, 'SECTION') + par(2, 'TABLES') + tabelaDeTiposDeLinha(500);
+  dxf += par(0, 'TABLE') + par(2, 'LAYER') + par(70, camadas.length);
   for (const c of camadas) {
     dxf += par(0, 'LAYER') + par(2, c) + par(70, 0) + par(62, COR_CAMADA[c] ?? 7) + par(6, 'CONTINUOUS');
   }
@@ -863,13 +866,15 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     par(70, 4) + // 4 = milímetro
     par(9, '$MEASUREMENT') +
     par(70, 1) + // 1 = métrico
+    par(9, '$LTSCALE') +
+    par(40, num(1)) + // o padrão do traço-ponto já vem em mm reais (`tabelaDeTiposDeLinha`)
     par(0, 'ENDSEC');
 
-  // ── TABLES: as camadas, declaradas ────────────────────────────────────────
-  dxf +=
-    par(0, 'SECTION') + par(2, 'TABLES') + par(0, 'TABLE') + par(2, 'LAYER') + par(70, camadas.length);
+  // ── TABLES: os tipos de linha e as camadas, declarados ────────────────────
+  dxf += par(0, 'SECTION') + par(2, 'TABLES') + tabelaDeTiposDeLinha(escalaDoDxf(model));
+  dxf += par(0, 'TABLE') + par(2, 'LAYER') + par(70, camadas.length);
   for (const c of camadas) {
-    dxf += par(0, 'LAYER') + par(2, c) + par(70, 0) + par(62, COR_CAMADA[c] ?? 7) + par(6, 'CONTINUOUS');
+    dxf += par(0, 'LAYER') + par(2, c) + par(70, 0) + par(62, COR_CAMADA[c] ?? 7) + par(6, c === CAMADAS.MALHA_EIXOS ? 'EIXO' : 'CONTINUOUS');
   }
   dxf += par(0, 'ENDTAB') + par(0, 'ENDSEC');
 
@@ -1194,7 +1199,7 @@ function boundingBoxDoModelo(model: BlueprintModel): { minX: number; minY: numbe
 function entidadesDosEixosDaMalha(model: BlueprintModel, faixaDasCotas: FaixaDasCotas | null = null): string {
   const eixos = model.eixos ?? [];
   if (eixos.length === 0) return '';
-  const escala = Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
+  const escala = escalaDoDxf(model);
   const RAIO = escala * 0.5;
   const ALTURA = escala * 0.35;
   // A bolha fica por fora da faixa das cotas (08/10/2026), com um respiro proporcional.
@@ -1214,7 +1219,7 @@ function entidadesDosEixosDaMalha(model: BlueprintModel, faixaDasCotas: FaixaDas
     saida += linha(CAMADAS.MALHA_EIXOS, bolhas.linhaA, bolhas.linhaB);
     for (const c of [bolhas.centroA, bolhas.centroB]) {
       saida += circulo(CAMADAS.MALHA_EIXOS, c, RAIO);
-      saida += texto(CAMADAS.MALHA_EIXOS, { x: c.x - e.nome.length * ALTURA * 0.3, y: c.y - ALTURA / 2 }, e.nome, ALTURA);
+      saida += texto(CAMADAS.MALHA_EIXOS, { x: c.x - larguraEstimadaDoTexto(e.nome, ALTURA) / 2, y: c.y - ALTURA / 2 }, e.nome, ALTURA);
     }
   }
   return saida;
@@ -1229,6 +1234,32 @@ function entidadesDosEixosDaMalha(model: BlueprintModel, faixaDasCotas: FaixaDas
  * é o que importa: cota que diverge entre o papel e o CAD é pior que cota
  * nenhuma.
  */
+/**
+ * A ESCALA DO DXF (mm reais): o maior comprimento do desenho / 10, nunca menos de 50 mm. Proporciona o que o CAD mostra
+ * em tamanho fixo de papel — afastamento e texto das cotas, a bolha do eixo e o padrão do traço-ponto —, para não
+ * sumir numa casa grande nem dominar numa pequena.
+ */
+function escalaDoDxf(model: BlueprintModel): number {
+  return Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
+}
+
+/**
+ * TIPOS DE LINHA (10/10/2026): `CONTINUOUS` (que toda camada usa e nunca tinha sido declarado) e `EIXO`, o traço-ponto
+ * da malha — traço, vazio, ponto, vazio (R12: 72 = 65, 73 = nº de elementos, 40 = comprimento do padrão, 49 = cada
+ * elemento; negativo = vazio, 0 = ponto). Em mm reais, proporcional à escala do desenho.
+ */
+function tabelaDeTiposDeLinha(escala: number): string {
+  const traco = escala * 0.6;
+  const vazio = escala * 0.1;
+  return (
+    par(0, 'TABLE') + par(2, 'LTYPE') + par(70, 2) +
+    par(0, 'LTYPE') + par(2, 'CONTINUOUS') + par(70, 0) + par(3, 'Solid line') + par(72, 65) + par(73, 0) + par(40, num(0)) +
+    par(0, 'LTYPE') + par(2, 'EIXO') + par(70, 0) + par(3, 'Eixo da malha __ . __') + par(72, 65) + par(73, 4) +
+    par(40, num(traco + 2 * vazio)) + par(49, num(traco)) + par(49, num(-vazio)) + par(49, num(0)) + par(49, num(-vazio)) +
+    par(0, 'ENDTAB')
+  );
+}
+
 function entidadesDeCota(
   model: BlueprintModel,
   /** Cresce com o que as cotas ocupam (mm reais) — os eixos põem a bolha por fora. */
@@ -1239,7 +1270,7 @@ function entidadesDeCota(
   // Afastamentos em mm REAIS — no CAD tudo é 1:1. Proporcionais ao tamanho da
   // planta para não sumirem numa casa grande nem dominarem numa pequena.
   // A divisa do lote também conta (07/10/2026): sem parede nenhuma, o estudo de massa ficava com a escala mínima.
-  const escala = Math.max(500, ...model.walls.map((w) => wallLength(w)), ...model.boundaries.map((b) => Math.hypot(b.b.x - b.a.x, b.b.y - b.a.y))) / 10;
+  const escala = escalaDoDxf(model);
   const PASSO = escala * 0.8;
   const FOLGA = escala * 0.6;
   const ALTURA = escala * 0.35;
@@ -1256,7 +1287,7 @@ function entidadesDeCota(
       nivel: number,
     ) => {
       const afasta = FOLGA + PASSO * nivel;
-      for (const seg of segmentos) {
+      for (const [indice, seg] of segmentos.entries()) {
         const a = pontoDaCota(lado, seg.de, afasta);
         const b = pontoDaCota(lado, seg.ate, afasta);
         saida += linha(CAMADAS.COTAS, a, b);
@@ -1266,12 +1297,28 @@ function entidadesDeCota(
         // Texto no meio, empurrado mais um pouco para fora para não montar na
         // linha. Sem rotação: o DXF guardaria o ângulo, mas o leitor que abre
         // com estilo próprio pode ignorá-lo, e número deitado é legível.
-        const meio = pontoDaCota(
-          lado,
-          (seg.de + seg.ate) / 2,
-          afasta + ALTURA * 0.4,
-        );
-        saida += texto(CAMADAS.COTAS, meio, seg.rotulo, ALTURA);
+        //
+        // O texto é deitado (sem giro): a sua extensão AO LONGO do lado é a largura num lado horizontal e a altura num
+        // vertical. Não cabe no trecho → a regra única (`ondeFicaORotulo`, 10/10/2026): antes do início, depois do fim
+        // ou do outro lado da linha — a mesma da tela e do PDF.
+        const largura = larguraEstimadaDoTexto(seg.rotulo, ALTURA);
+        const dx = (lado.b.x - lado.a.x) / (Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y) || 1);
+        const dy = (lado.b.y - lado.a.y) / (Math.hypot(lado.b.x - lado.a.x, lado.b.y - lado.a.y) || 1);
+        const extensao = Math.abs(dx) * largura + Math.abs(dy) * ALTURA;
+        const onde = ondeFicaORotulo(indice, segmentos.length, seg.ate - seg.de, extensao, ALTURA * 0.3);
+        const folgaDoTexto = ALTURA * 0.3;
+        const centro =
+          onde === 'ANTES'
+            ? pontoDaCota(lado, seg.de - extensao / 2 - folgaDoTexto, afasta + ALTURA * 0.4)
+            : onde === 'DEPOIS'
+              ? pontoDaCota(lado, seg.ate + extensao / 2 + folgaDoTexto, afasta + ALTURA * 0.4)
+              : onde === 'OUTRO_LADO'
+                ? pontoDaCota(lado, (seg.de + seg.ate) / 2, afasta - ALTURA * 1.2)
+                : pontoDaCota(lado, (seg.de + seg.ate) / 2, afasta + ALTURA * 0.4);
+        // TEXT ancora à esquerda, na linha de base: centra-se à mão.
+        const insercao = { x: centro.x - largura / 2, y: centro.y - ALTURA / 2 };
+        saida += texto(CAMADAS.COTAS, insercao, seg.rotulo, ALTURA);
+        if (onde !== 'MEIO') crescerFaixa(faixa, insercao, { x: insercao.x + largura, y: insercao.y + ALTURA });
       }
     };
 

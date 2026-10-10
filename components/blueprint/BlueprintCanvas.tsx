@@ -111,6 +111,7 @@ import {
   detalhesDoLote,
   chamadasDoLado,
   LINHA_DE_CHAMADA,
+  ondeFicaORotulo,
   cadeiasPorLado,
   pontoDaCota,
   type LadoDoContorno,
@@ -4555,7 +4556,8 @@ export default function BlueprintCanvas({
         const compPx = Math.hypot(b.x - a.x, b.y - a.y);
         ctx.font = `600 ${Math.round(11 * fz)}px system-ui, sans-serif`;
         const larguraTexto = ctx.measureText(seg.rotulo).width;
-        const cabe = compPx >= larguraTexto + 10;
+        const onde = ondeFicaORotulo(indice, segmentos.length, compPx, larguraTexto, 10);
+        const cabe = onde === 'MEIO';
 
         // O TEXTO ACOMPANHA O LADO.
         //
@@ -4594,8 +4596,8 @@ export default function BlueprintCanvas({
           const dx = (b.x - a.x) / (compPx || 1);
           const dy = (b.y - a.y) / (compPx || 1);
           const recuo = larguraTexto / 2 + 8;
-          const primeiro = indice === 0 && segmentos.length > 1;
-          const ultimo = indice === segmentos.length - 1;
+          const primeiro = onde === 'ANTES';
+          const ultimo = onde === 'DEPOIS';
           centro = primeiro
             ? { x: a.x - dx * recuo - (fx / cf) * 7, y: a.y - dy * recuo - (fy / cf) * 7 }
             : ultimo

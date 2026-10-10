@@ -54,6 +54,8 @@ import {
   cadeiasPorLado,
   chamadasDoLado,
   LINHA_DE_CHAMADA,
+  larguraEstimadaDoTexto,
+  ondeFicaORotulo,
   pontoDaCota,
   type LadoDoContorno,
   type SegmentoDeCota,
@@ -250,6 +252,11 @@ export interface Desenhista {
   retangulo(x: number, y: number, w: number, h: number, estilo: EstiloTraco): void;
   /** RECORTE (E8.3): tudo desenhado entre os dois fica dentro do retângulo (mm de papel). Opcional: quem não implementa desenha sem recortar. */
   recortar?(x: number, y: number, w: number, h: number): void;
+  /**
+   * LARGURA DO TEXTO (10/10/2026), mm de papel, na mesma fonte de `texto()`. Opcional: sem ela, quem desenha estima
+   * pela Helvetica (`larguraEstimadaDoTexto`).
+   */
+  larguraDoTexto?(texto: string, alturaMm: number): number;
   /**
    * CÍRCULO (07/10/2026, a bolha do eixo): contorno no `estilo`, miolo em `preenchimento`. Opcional: sem ele, quem
    * desenha usa um polígono de 24 lados (`circuloOuPoligono`).
@@ -1498,6 +1505,11 @@ const COR_ELEV_ESCADA = '#cbd5e1';
 const COR_COTA = '#333333';
 const TEXTO_COTA_MM = 2.0;
 
+/** A largura do texto pelo `Desenhista` quando ele sabe medir; senão a estimativa pela Helvetica. */
+export function larguraDoTextoNoPapel(d: Desenhista, texto: string, alturaMm: number): number {
+  return d.larguraDoTexto?.(texto, alturaMm) ?? larguraEstimadaDoTexto(texto, alturaMm);
+}
+
 /** Círculo pelo `Desenhista`: o nativo quando há; senão um polígono de 24 lados (miolo) e o contorno em segmentos. */
 export function circuloOuPoligono(d: Desenhista, cx: number, cy: number, raio: number, estilo: EstiloTraco, preenchimento: string): void {
   if (d.circulo) {
@@ -1566,7 +1578,7 @@ function desenharEixosDaMalha(
       const cy = c.y;
       circuloOuPoligono(d, cx, cy, raio, { espessuraMm: 0.18, cor: COR_EIXO_PRANCHA }, '#ffffff');
       // O texto do `Desenhista` ancora à esquerda, na linha de base: centra-se à mão.
-      d.texto(cx - e.nome.length * texto * 0.3, cy + texto * 0.35, e.nome, texto, COR_EIXO_PRANCHA);
+      d.texto(cx - larguraDoTextoNoPapel(d, e.nome, texto) / 2, cy + texto * 0.35, e.nome, texto, COR_EIXO_PRANCHA);
     }
   }
 }
@@ -1645,18 +1657,19 @@ function desenharCotas(
         // NÃO CABE NO TRECHO (08/10/2026): vai para fora — antes do início no 1º trecho, depois do fim no último, do
         // outro lado da linha no meio. A largura do texto é estimada (0,55 da altura por caractere, o mesmo fator do
         // centramento acima): o `Desenhista` não mede texto.
-        const largura = seg.rotulo.length * TEXTO_COTA_MM * 0.55;
+        const largura = larguraDoTextoNoPapel(d, seg.rotulo, TEXTO_COTA_MM);
         const comp = Math.hypot(x2 - x1, y2 - y1);
         let mx = (x1 + x2) / 2 + nx * 2;
         let my = (y1 + y2) / 2 + ny * 2;
-        if (comp < largura + 1) {
+        const onde = ondeFicaORotulo(indice, segmentos.length, comp, largura, 1);
+        if (onde !== 'MEIO') {
           const ux = (x2 - x1) / (comp || 1);
           const uy = (y2 - y1) / (comp || 1);
           const recuo = largura / 2 + 1.5;
-          if (indice === 0 && segmentos.length > 1) {
+          if (onde === 'ANTES') {
             mx = x1 - ux * recuo + nx * 2;
             my = y1 - uy * recuo + ny * 2;
-          } else if (indice === segmentos.length - 1) {
+          } else if (onde === 'DEPOIS') {
             mx = x2 + ux * recuo + nx * 2;
             my = y2 + uy * recuo + ny * 2;
           } else {
@@ -1665,7 +1678,7 @@ function desenharCotas(
           }
           crescerFaixa(faixa, { x: mx - largura / 2, y: my - TEXTO_COTA_MM }, { x: mx + largura / 2, y: my + TEXTO_COTA_MM / 2 });
         }
-        d.texto(mx - seg.rotulo.length * 0.55, my, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
+        d.texto(mx - largura / 2, my, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
       }
     };
 

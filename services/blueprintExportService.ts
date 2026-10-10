@@ -259,6 +259,11 @@ class DesenhistaCanvas implements Desenhista {
     this.ctx.restore();
   }
 
+  larguraDoTexto(texto: string, alturaMm: number): number {
+    this.ctx.font = `${alturaMm * this.k}px sans-serif`;
+    return this.ctx.measureText(texto).width / this.k;
+  }
+
   circulo(cx: number, cy: number, raio: number, e: EstiloTraco, preenchimento: string): void {
     this.ctx.beginPath();
     this.ctx.arc(cx * this.k, cy * this.k, raio * this.k, 0, Math.PI * 2);
@@ -323,6 +328,12 @@ class DesenhistaPdf implements Desenhista {
   }
   fimDoRecorte(): void {
     this.doc.restoreGraphicsState();
+  }
+
+  larguraDoTexto(texto: string, alturaMm: number): number {
+    // A MESMA fonte de `texto()`: pt = mm × 72/25,4; `getTextWidth` devolve na unidade do documento (mm).
+    this.doc.setFontSize(alturaMm * 2.834);
+    return this.doc.getTextWidth(paraWinAnsi(texto));
   }
 
   circulo(cx: number, cy: number, raio: number, e: EstiloTraco, preenchimento: string): void {

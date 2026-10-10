@@ -665,10 +665,29 @@ ordem abaixo.
 - [x] Fase 1 — 4 de 4 (publicada em 07/10/2026, commits `8e30cd58` e `f31099ce`, CI verde)
 - [x] Fase 2 — 5 de 5 (2.4 entregue como 4.5 na Fase 4; publicada em 07/10/2026, commit `b4f8d24a`)
 - [x] Fase 3 — 4 de 4 (revisada pela D7; geocodificador trocado pela D8; frente `market-fase3`; falta o link do feed real da Conexão 381, que depende da imobiliária)
-- [x] Fase 4 — 5 de 5 (frente `market-fase4`; cadastro só para superadministrador, D9)
+- [x] Fase 4 — 5 de 5 (frente `market-fase4`; publicada em 07/10/2026, commit `e999e3b9`; cadastro só para superadministrador, D9)
 - [x] Fase 5 — 2 de 2 (frente `market-fase5-6`; publicada em 07/10/2026, commit `7005715d`)
 - [x] Fase 6 — 6 de 6 (frente `market-fase5-6`; publicada em 07/10/2026, commit `f4bb22ea`, CI verde, domínio conferido)
 - [x] Fase 7 — 2 de 2 (7.1 e 7.2 feitos na frente `market-fase1`, 07/10/2026)
+
+**Situação em 08/10/2026: as sete fases estão em produção.** Fora do plano, um ajuste
+posterior: a raiz de `OpuraMarketModule.tsx` ainda declarava `p-6` e somava 24 px ao
+gutter do `<main>` do Layout (§20.2); corrigido no commit `9c53b2c0` (medido 24 px no
+desktop, 16 px no celular). O `check-ui-standard.sh` não detecta isso.
+
+## Pendências (08/10/2026)
+
+Nada do plano está aberto. O que sobra:
+
+| # | Pendência | Dono | Observação |
+|---|---|---|---|
+| 1 | Link do feed VRSync real da Conexão 381 | imobiliária | O site não publica feed (404 nos caminhos comuns). Enquanto isso, a importação funciona com o arquivo .xml enviado na tela |
+| 2 | Qualidade da localização dos anúncios | depende de 1 | Estado após o "localizar": 52 por endereço, 143 só pelo bairro, 158 "endereço não encontrado" (fora do mapa e da análise de raio). Um feed com rua e número deve reduzir os dois últimos |
+| 3 | Saturação, Score Potencial e Bairro Score | decisão de produto | Aparecem como "Não calculado" até existir regra de cálculo (D3). Quando a regra existir, entra como hipótese editável (Fase 5), não como constante |
+| 4 | Trava de acesso (6.6) provada só por leitura de código | teste | A conta de teste (agente-leitura) é do grupo USUARIO. Falta uma conta de outro grupo (ex.: corretor ou credor) para ver o redirecionamento forçando a rota |
+| 5 | Testes da Planta estouram 5 s na CI | outra frente | Em 08/10 a CI do commit `9c53b2c0` falhou por 14 testes com timeout (`blueprint*`, `geoSigef`) e passou na reexecução. Sem relação com o Market, mas já derrubou um commit |
+| 6 | Verificação de ponta a ponta, itens 1 e 5 | teste | Item 1 (duas organizações, contagens diferentes): só existe a organização Alpa, então a prova da Fase 1 usou JWT simulado sem vínculo. Item 5 (cidade de teste em outro estado, mapa abre nela): não há registro de prova feita; a Fase 4 foi verificada com Cambuí e com a leitura de superadmin simulada para abrir a gaveta de cadastro |
+
 
 ## Verificação de ponta a ponta (ao fim de tudo)
 

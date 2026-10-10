@@ -360,7 +360,9 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     return (ca - cb) * dir;
                 }
                 if (tableColumns.sortColumn === 'status') {
-                    const statusOrder = ['Rascunho', 'Enviado', 'Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência', 'Cancelado'];
+                    // Mesma lista (na ordem do fluxo) do filtro avançado — a cópia à mão
+                    // não tinha 'Em Negociação' e mandava esses pedidos para o fim.
+                    const statusOrder: string[] = Object.keys(ORDER_STATUS_KEYS);
                     const oa = statusOrder.indexOf(a.status) >= 0 ? statusOrder.indexOf(a.status) : 99;
                     const ob = statusOrder.indexOf(b.status) >= 0 ? statusOrder.indexOf(b.status) : 99;
                     return (oa - ob) * dir;

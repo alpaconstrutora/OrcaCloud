@@ -89,7 +89,15 @@ Padrão por tela (guia §5.5): campo com conjunto conhecido → `select` (enum) 
   - Operacional: Etapa.
 - [x] Regra #1 nos arquivos tocados: PlanningList teve pílulas de status (§8) e "Abrir Gantt" (§9) corrigidos. ProjectModal segue com a acusação §3 de `searchTerm`, que é exceção §3.1: a busca fica na aba "selecionar obra" dentro do modal e não filtra a lista da tela.
 
-### Observações fora do escopo (não feitas)
+### Observações fora do escopo — pedidas e feitas em 10/10
+
+> Pedido: "implementar : Em Pedidos, ordenar por status põe "Em Negociação" no fim. Em Obras, no contexto Diário, a coluna mostra "Total Registros", mas o filtro "Status Obra" continua comparando o status da obra. Em Obras, a visão em blocos mostra o cliente do próprio projeto, e não o da obra vinculada como a tabela."
+
+- [x] Pedidos: a ordenação por status usa `ORDER_STATUS_KEYS` (mesma lista do filtro, na ordem do fluxo).
+- [x] Obras › Diário: o filtro troca "Status Obra" por "Total Registros" (número, chave `diary-count`), e a ordenação da coluna também conta os dias.
+- [x] Obras › blocos: o cliente vem de `getClientCellValue`, igual à tabela. A ordenação por Cliente também passou a usar essa função.
+
+### Observações registradas antes (histórico)
 - Pedidos: o `statusOrder` da ordenação não tem "Em Negociação" (o status vai para o fim).
 - Obras no contexto Diário: a coluna `status-obra` mostra "Total Registros", e o filtro "Status Obra" continua comparando `obraStatus`.
 - Obras na visão em blocos: mostra `settings.client`, não o cliente da obra vinculada (divergência antiga entre as visões).

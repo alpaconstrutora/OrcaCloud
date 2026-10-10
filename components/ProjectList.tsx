@@ -148,12 +148,17 @@ function getClientCellValue(project: ProjectSummary, projects: ProjectSummary[],
 // busca/ordenação/tipo já existentes, não os substitui.
 // §5.5: Cliente vira lista com busca (valores distintos das linhas da aba, como a
 // célula mostra); Status Obra lê OBRA_STATUSES — a cópia à mão não tinha 'Paralisada'.
-function buildAdvancedFilterFields(clientOptions: FilterFieldConfig['options']): FilterFieldConfig[] {
+// No contexto Diário a coluna 'status-obra' mostra "Total Registros" (dias de diário),
+// então o filtro troca junto: número, com chave própria — uma regra "Status Obra" salva
+// nas Obras (mesma chave de storage) fica órfã aqui em vez de comparar status com dias.
+function buildAdvancedFilterFields(clientOptions: FilterFieldConfig['options'], isDiaryContext: boolean): FilterFieldConfig[] {
     return [
         { key: 'code', label: 'Código', type: 'text' },
         { key: 'name', label: 'Nome', type: 'text' },
         { key: 'client', label: 'Cliente', type: 'text', options: clientOptions },
-        { key: 'status-obra', label: 'Status Obra', type: 'select', options: OBRA_STATUSES.map(s => ({ value: s, label: s })) },
+        isDiaryContext
+            ? { key: 'diary-count', label: 'Total Registros', type: 'number' }
+            : { key: 'status-obra', label: 'Status Obra', type: 'select', options: OBRA_STATUSES.map(s => ({ value: s, label: s })) },
         { key: 'updated', label: 'Atualização', type: 'date' },
     ];
 }
@@ -164,6 +169,7 @@ function getAdvancedFilterValue(project: ProjectSummary, key: string, projects: 
         case 'name': return project.name;
         case 'client': return getClientCellValue(project, projects, activeTab);
         case 'status-obra': return project.settings?.obraStatus ?? '';
+        case 'diary-count': return project.settings?.diaryEntries?.length || 0;
         case 'updated': {
             const raw = project.updated_at || project.created_at;
             return raw ? String(raw).slice(0, 10) : null;
@@ -284,8 +290,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
     }), [projects, activeTab, classificationFilter]);
     // Opções do Cliente dependem das linhas carregadas → campos em useMemo (§5.5).
     const advancedFields = React.useMemo(
-        () => buildAdvancedFilterFields(distinctOptions(tabProjects, p => getClientCellValue(p, projects, activeTab))),
-        [tabProjects, projects, activeTab],
+        () => buildAdvancedFilterFields(distinctOptions(tabProjects, p => getClientCellValue(p, projects, activeTab)), !!isDiaryContext),
+        [tabProjects, projects, activeTab, isDiaryContext],
     );
     const advancedFilters = useAdvancedFilters(advancedFields, 'projectListFilters:advanced');
     const confirm = useConfirm();
@@ -688,12 +694,19 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             valB = new Date(b.created_at || 0).getTime();
                             return sortDirection === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
                         case 'client':
-                            valA = a.settings?.client || '';
-                            valB = b.settings?.client || '';
+                            // Ordena pelo que a célula mostra (Obra Própria, cliente da vinculada).
+                            valA = getClientCellValue(a, projects, activeTab);
+                            valB = getClientCellValue(b, projects, activeTab);
                             return sortDirection === 'asc'
                                 ? (valA as string).localeCompare(valB as string)
                                 : (valB as string).localeCompare(valA as string);
                         case 'status-obra':
+                            // No Diário a coluna é "Total Registros" (dias), não o status da obra.
+                            if (isDiaryContext) {
+                                valA = a.settings?.diaryEntries?.length || 0;
+                                valB = b.settings?.diaryEntries?.length || 0;
+                                return sortDirection === 'asc' ? valA - valB : valB - valA;
+                            }
                             valA = a.settings?.obraStatus || '';
                             valB = b.settings?.obraStatus || '';
                             return sortDirection === 'asc'
@@ -744,7 +757,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, organizations, orderCounts, empreendimentoByProject]);
+    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, orderCounts, empreendimentoByProject]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -1212,9 +1225,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                     {!isObraContext && (
                                         <p className="text-sm font-normal text-gray-500 mt-1 mb-4 flex items-center gap-1.5">
+                                            {/* Mesmo cliente da coluna da tabela (getClientCellValue): o da obra vinculada vem antes. */}
                                             {project.settings?.obraPropria ? (
                                                 <span className="text-indigo-700">Obra Própria</span>
-                                            ) : (project.settings?.client || 'Cliente não definido')}
+                                            ) : (getClientCellValue(project, projects, activeTab) || 'Cliente não definido')}
                                         </p>
                                     )}
 

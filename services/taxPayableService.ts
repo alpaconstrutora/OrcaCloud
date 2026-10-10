@@ -142,16 +142,17 @@ function dealIdFromReference(referenceId?: string | null): string | null {
 }
 
 /**
- * Descrição do tributo com o CLIENTE no lugar do nome do tributo — este já tem
- * coluna própria na tabela, repeti-lo na descrição é redundante. Reescreve o
- * prefixo até ` s/ ` das descrições geradas (`{tributo} s/ {origem} (n) — Deal #x`);
+ * Descrição do tributo sem o prefixo "{tributo|cliente} s/ " — tanto o tributo
+ * quanto o cliente já têm coluna própria na tabela, repeti-los na descrição é
+ * redundante. Remove o prefixo até ` s/ ` das descrições geradas
+ * (`{tributo|cliente} s/ {origem} (n) — Deal #x` → `{origem} (n) — Deal #x`);
  * descrição manual ou em outro formato fica intacta.
  */
-function describeWithClient(description: string | undefined, clientName: string | undefined): string | undefined {
-    if (!description || !clientName) return description;
+function describeWithoutParty(description: string | undefined): string | undefined {
+    if (!description) return description;
     const sep = description.indexOf(' s/ ');
     if (sep < 0) return description;
-    return `${clientName}${description.slice(sep)}`;
+    return description.slice(sep + 4);
 }
 
 /**
@@ -160,7 +161,7 @@ function describeWithClient(description: string | undefined, clientName: string 
  * Empreendimento: tributo → deal → imóvel → empreendimento_units (rental_property_id
  * OU commercial_property_id) → torre → empreendimento.
  * Cliente: commercial_deal_buyers → clients.name, TODOS os compradores ("Ana, Bruno"),
- * com fallback em deal.client_id para negociação sem linhas ali (usado na coluna Descrição).
+ * com fallback em deal.client_id para negociação sem linhas ali.
  * Lançamento manual e negócio sem unidade vinculada ficam sem empreendimento.
  */
 async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: string | null): Promise<TaxPayable[]> {
@@ -201,7 +202,7 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
             // Tabela ausente (migration 20270919000035 não aplicada): fica o client_id.
         }
 
-        // Nomes dos compradores — vão para a coluna Descrição no lugar do nome do tributo.
+        // Nomes dos compradores — alimentam a coluna Cliente.
         const clientNameById = new Map<string, string>();
         const clientIds = [...new Set([...clientIdsByDeal.values()].flat())];
         if (clientIds.length > 0) {
@@ -220,7 +221,7 @@ async function enrichWithEmpreendimento(rows: TaxPayable[], organizationId: stri
         const withClient = (r: TaxPayable): TaxPayable => {
             const clientName = clientNameForRow(r);
             if (!clientName) return r;
-            return { ...r, client_name: clientName, description: describeWithClient(r.description, clientName) };
+            return { ...r, client_name: clientName };
         };
 
         const propertyIds = [...new Set(propertyByDeal.values())];
@@ -300,6 +301,7 @@ export const taxPayableService = {
         // Empreendimento é derivado (não é coluna da view) — resolve antes da busca
         // para que o texto digitado também case com o nome do empreendimento.
         rows = await enrichWithEmpreendimento(rows, organizationId);
+        rows = rows.map(r => ({ ...r, description: describeWithoutParty(r.description) }));
 
         if (filters?.search) {
             const s = filters.search.toLowerCase();

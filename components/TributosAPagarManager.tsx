@@ -47,8 +47,8 @@ const TRIBUTO_COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 160, category: 130, client_name: 160, empreendimento_name: 184,
-    description: 200, due_date: 150, amount: 130, status: 130, actions: 220,
+    party_name: 200, category: 150, client_name: 200, empreendimento_name: 220,
+    description: 240, due_date: 150, amount: 130, status: 130, actions: 220,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -115,26 +115,26 @@ function renderTributoCell(key: string, r: TaxPayable, isVencido: boolean): Reac
     switch (key) {
         case 'party_name':
             return (
-                <span className="text-sm font-normal text-gray-900 max-w-[160px] truncate block">
+                <span className="text-sm font-normal text-gray-900 truncate block" title={r.party_name ?? undefined}>
                     {r.party_name ?? <span className="text-gray-400 italic">—</span>}
                 </span>
             );
         case 'category':
-            return <span className="text-sm font-normal text-gray-600 max-w-[140px] truncate block">{r.category ?? '—'}</span>;
+            return <span className="text-sm font-normal text-gray-600 truncate block" title={r.category ?? undefined}>{r.category ?? '—'}</span>;
         case 'client_name':
             return (
-                <span className="text-sm font-normal text-gray-600 max-w-[180px] truncate block" title={r.client_name ?? undefined}>
+                <span className="text-sm font-normal text-gray-600 truncate block" title={r.client_name ?? undefined}>
                     {r.client_name ?? <span className="text-gray-400 italic">—</span>}
                 </span>
             );
         case 'empreendimento_name':
             return (
-                <span className="text-sm font-normal text-gray-600 max-w-[180px] truncate block" title={r.empreendimento_name ?? undefined}>
+                <span className="text-sm font-normal text-gray-600 truncate block" title={r.empreendimento_name ?? undefined}>
                     {r.empreendimento_name ?? <span className="text-gray-400 italic">—</span>}
                 </span>
             );
         case 'description':
-            return <span className="text-sm font-normal text-gray-700 max-w-[200px] truncate block">{r.description ?? '—'}</span>;
+            return <span className="text-sm font-normal text-gray-700 truncate block" title={r.description ?? undefined}>{r.description ?? '—'}</span>;
         case 'due_date':
             return <span className={`text-sm font-normal whitespace-nowrap ${isVencido ? 'text-red-600' : 'text-gray-600'}`}>{fmtDate(r.due_date)}</span>;
         case 'amount':

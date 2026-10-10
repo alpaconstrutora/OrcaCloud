@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { DinamicaDoBairro } from '../utils/opuraMarketIndicadores';
+import type { AnuncioDaPagina } from '../supabase/functions/opura-market-import/logica';
 import {
   OpuraMarketCity,
   OpuraMarketNeighborhood,
@@ -155,6 +156,16 @@ export interface BairroSemCadastro {
   nome: string;
   anuncios: number;
   semPosicao: number;
+}
+
+/** Resposta do modo 'ler-anuncio' da Edge Function opura-market-import. */
+export interface LeituraDeAnuncio extends AnuncioDaPagina {
+  /** O site não deixou ler a página (ex.: "A página do anúncio respondeu HTTP 403."). */
+  falhaLeitura: string | null;
+  /** O bairro lido casa com um bairro cadastrado da praça. */
+  bairroCadastrado: boolean;
+  /** O mesmo link já está gravado nesta organização e praça. */
+  jaGravado: { status: string | null; preco: number | null } | null;
 }
 
 async function invocarImportacao<T>(body: Record<string, unknown>): Promise<T> {
@@ -650,6 +661,25 @@ export const opuraMarketService = {
   /** "Importar agora": roda a fonte no servidor e devolve o resultado. */
   async importarFonteAgora(organizationId: string, fonteId: string): Promise<ResultadoImportacaoMercado> {
     return invocarImportacao({ modo: 'importar-fonte', organizationId, fonteId });
+  },
+
+  /**
+   * Lê UM anúncio pelo link, no servidor, sem gravar (Fase B do plano
+   * 2026-10-10-opura-market-fontes). Site que bloqueia a leitura não é erro:
+   * volta o anúncio em branco e `falhaLeitura` diz o motivo.
+   */
+  async lerAnuncioPorLink(organizationId: string, cityId: string, url: string): Promise<LeituraDeAnuncio> {
+    return invocarImportacao({ modo: 'ler-anuncio', organizationId, cityId, url });
+  },
+
+  /** Grava o anúncio conferido na tela. O mesmo link de novo atualiza, não duplica. */
+  async gravarAnuncioDeLink(
+    organizationId: string,
+    cityId: string,
+    anuncio: Record<string, unknown>,
+    site: string
+  ): Promise<ResultadoImportacaoMercado> {
+    return invocarImportacao({ modo: 'gravar-anuncio', organizationId, cityId, anuncio, site });
   },
 
   /** Geocodifica os anúncios da organização na cidade que ainda não têm coordenada. */

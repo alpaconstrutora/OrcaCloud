@@ -422,6 +422,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
             <MarketFeedPanel
               organizationId={organizationId}
               cityId={selectedCityId}
+              cidade={cidadeAtual}
               listings={listings}
               onAtualizado={() => loadListings(selectedCityId)}
             />

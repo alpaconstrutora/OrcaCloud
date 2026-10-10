@@ -81,10 +81,35 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
   - **Tela:** "Importar agora" atualizou sem duplicar. O interruptor gravou. Adicionar a mesma fonte de novo deu "Esta fonte já está cadastrada nesta praça". Remover pediu confirmação.
 - **Suíte:** 7.828 aprovados, 34 pulados, 0 falhas.
 
+## Fase B — execução (10/10/2026, frente `market-colar-link`)
+
+- **⚠️ Achado que muda as Fases C e E:** vistos **do servidor da Supabase**, ZAP Imóveis, VivaReal e OLX respondem **HTTP 403** à página de anúncio. Da máquina de desenvolvimento o ZAP ainda respondia 200 no mesmo dia, então o bloqueio é por IP de nuvem, não pelo User-Agent. Os sites de imobiliária (WordPress, ImobiBrasil, Arbo) e a API da Conexão 381 respondem normalmente ao servidor.
+  - Consequência: para portal, o caminho que funciona é a **captura no navegador (Fase C)**, que roda na máquina do usuário. A **varredura no servidor (Fase E)** tende a cair no mesmo 403. Mascarar o servidor como navegador para passar do bloqueio não é feito: seria driblar um controle de acesso do portal.
+- **`logica.ts`** (puro, sem `import`):
+  - `lerAnuncioDaPagina(html, url)`: leitor específico do site (grupo ZAP pelo payload do Next.js, OLX pelo `initial-data`, Arbo pelo `__NEXT_DATA__` `imv_*`), depois JSON-LD, depois o título e o OpenGraph. Cada campo vem da fonte mais confiável que o tiver.
+  - O JSON-LD ignora `Organization` e `RealEstateAgent`: na ImobiBrasil o 1º bloco é o endereço da imobiliária, não o do imóvel.
+  - `lerAnuncioConexao381(json, url)`: a API de detalhe. Também serve à Fase D.
+  - Links estáveis: o grupo ZAP é gravado por `https://www.zapimoveis.com.br/imovel/id-<id>/`, que o site redireciona à página e é **o mesmo para ZAP e VivaReal**. A Conexão 381 é gravada por `/imoveis/<código>`. Nos demais sites vale o canônico do mesmo host, sem `utm_*` e sem `#`.
+  - Posição "aproximada" do portal e o ponto padrão de centro de cidade (`PONTOS_PADRAO_DE_CIDADE`) nunca viram posição `fonte`.
+  - `anuncioConferido` valida no servidor o que volta da tela. A tela usa a **mesma** função, então o botão só liga quando a gravação vai passar.
+  - `bairroNoTexto`: um bairro cadastrado citado no título vira sugestão, com aviso.
+- **Edge Function:**
+  - `ler-anuncio` só lê, nunca grava. Site que bloqueia não é erro: volta o anúncio em branco com `falhaLeitura`, além de `jaGravado` e `bairroCadastrado`. O VivaReal é lido pela página do ZAP (mesmo id).
+  - `gravar-anuncio` passa pelo `gravarFeed` sem `feedId`, com `atualizarCadastro`: colar de novo também grava área, quartos, tipo e bairro corrigidos. Endereço e posição ficam como estão.
+  - `preco_oculto_na_fonte` (F1) passa a ser gravado.
+  - Republicada com `--no-verify-jwt`; sem cabeçalho dá 401.
+- **Tela:** bloco "Colar link de anúncio" no topo da aba Fontes, que abre a gaveta "Conferir anúncio" (`MarketAnuncioLinkSheet`, malha §30). O que não veio do site fica em destaque âmbar. Em "Todas", o botão fica desligado com o motivo.
+- **Testes:** `__tests__/opuraMarketAnuncioPorLink.test.ts`, 32 casos com trechos reduzidos das páginas reais.
+- **Prova** com a organização `ZZ Teste E2E Market (link)`, tudo apagado depois:
+  - **Leitura completa** em Arbo, ImobiBrasil, WordPress e Conexão 381.
+  - **Bloqueio (403)** em ZAP, VivaReal e OLX: a gaveta abriu em branco e foi preenchida à mão.
+  - **Sem duplicar:** 6 anúncios gravados, nenhum duplicado. O VivaReal colado depois do ZAP reconheceu o mesmo anúncio e atualizou o preço. Conexão 381 e ImobiBrasil colados de novo deram "já estava na base: dados atualizados", e a suíte corrigida foi gravada.
+  - O WordPress chama o terreno (600 m²) de `floorSize`: é para isso que existe a conferência.
+
 ## Estado
 
 - [x] Fase A
-- [ ] Fase B
+- [x] Fase B (captura no navegador passa a ser o caminho para portal; ver o achado acima)
 - [ ] Fase C
 - [ ] Fase D
 - [ ] Fase E

@@ -23,6 +23,10 @@
 //                      (item 2 do plano 2026-10-10-opura-market-pendencias).
 //   modo 'importar-fonte' + fonteId — roda agora uma fonte salva da organização
 //                      ("Importar agora" na tela; plano 2026-10-10-opura-market-fontes).
+//   modo 'ler-anuncio' + url — baixa a página de UM anúncio (link colado) e
+//                      devolve os campos achados, sem gravar (Fase B do plano de fontes).
+//   modo 'gravar-anuncio' + anuncio (conferido na tela) + site — grava esse
+//                      anúncio; colar o mesmo link de novo atualiza, não duplica.
 //   modo 'agendado'  — SÓ o cron diário (opura-market-feeds-diario), autenticado
 //                      pelo CRON_SECRET. Reimporta cada feed salvo em
 //                      opura_market_feeds. Sem organizationId no corpo: a
@@ -75,6 +79,14 @@ import {
   cepValido,
   ruaDoCep,
   consultasComCep,
+  urlDeLeitura,
+  lerAnuncioDaPagina,
+  lerAnuncioConexao381,
+  anuncioEmBranco,
+  anuncioConferido,
+  bairroNoTexto,
+  camposFaltando,
+  type AnuncioDaPagina,
   type BairroConhecido,
   type ConsultaGeo,
   type Localizacao,
@@ -101,6 +113,8 @@ const INTERVALO_MS = 1100;
 const ORCAMENTO_MS = 100_000;
 const MAX_LINHAS = 2000;
 const MAX_FEED_BYTES = 20 * 1024 * 1024;
+/** Página de anúncio: as do ZAP e da OLX têm ~1 MB; 5 MB cobre com folga. */
+const MAX_PAGINA_BYTES = 5 * 1024 * 1024;
 const LOTE = 200;
 
 type Resultado = Localizacao | 'fonte' | null | 'adiado';
@@ -327,6 +341,12 @@ async function gravarFeed(admin: Admin, p: {
   origem: string;
   feedId: string | null;
   agora: string;
+  /**
+   * Anúncio colado e CONFERIDO na tela (Fase B do plano de fontes): ao colar de
+   * novo, o que o usuário corrigiu (área, quartos, bairro, tipo) também é
+   * gravado — não só preço. Endereço e posição ficam como estão.
+   */
+  atualizarCadastro?: boolean;
 }) {
   const { organizationId, cidade, bairros, geo, lido, origem, feedId, agora } = p;
   const vinculo = feedId ? { feed_id: feedId } : {};
@@ -359,8 +379,19 @@ async function gravarFeed(admin: Admin, p: {
   for (const a of daCidade) {
     const existente = a.url ? existentes.get(a.url) : undefined;
     if (existente) {
+      const cadastro = p.atualizarCadastro
+        ? {
+          property_type: a.tipo, area_private: a.area, area_total: a.areaTotal ?? a.area,
+          bedrooms: a.quartos, suites: a.suites, bathrooms: a.banheiros, parking_spaces: a.vagas,
+          neighborhood_id: casarBairro(a.bairro, bairros), neighborhood_name_raw: a.bairro,
+          description: [a.titulo, a.descricao].filter(Boolean).join('\n\n') || null,
+        }
+        : {};
       const { error } = await admin.from('opura_market_listings')
-        .update({ price: a.preco, condo_fee: a.condominio, iptu: a.iptu, last_seen_at: agora, listing_status: 'active', removed_at: null, ...vinculo })
+        .update({
+          price: a.preco, condo_fee: a.condominio, iptu: a.iptu, preco_oculto_na_fonte: a.precoOcultoNaFonte === true,
+          last_seen_at: agora, listing_status: 'active', removed_at: null, ...vinculo, ...cadastro,
+        })
         .eq('id', existente.id).eq('organization_id', organizationId);
       if (error) throw new Error(`Falha ao atualizar anúncio já importado: ${error.message}`);
       if (existente.status !== 'active') reativados++; else atualizados++;
@@ -389,6 +420,7 @@ async function gravarFeed(admin: Admin, p: {
       bathrooms: a.banheiros,
       parking_spaces: a.vagas,
       price: a.preco,
+      preco_oculto_na_fonte: a.precoOcultoNaFonte === true,
       condo_fee: a.condominio,
       iptu: a.iptu,
       description: [a.titulo, a.descricao].filter(Boolean).join('\n\n') || null,
@@ -535,9 +567,8 @@ serve(async (req: Request) => {
   if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
   const modo = corpo?.modo;
-  if (!['planilha', 'feed', 'localizar', 'relocalizar', 'importar-fonte'].includes(modo)) {
-    return json({ error: "modo deve ser 'planilha', 'feed', 'localizar', 'relocalizar' ou 'importar-fonte'." }, 400);
-  }
+  const MODOS = ['planilha', 'feed', 'localizar', 'relocalizar', 'importar-fonte', 'ler-anuncio', 'gravar-anuncio'];
+  if (!MODOS.includes(modo)) return json({ error: `modo deve ser um de: ${MODOS.join(', ')}.` }, 400);
 
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -564,6 +595,63 @@ serve(async (req: Request) => {
   const base = { city_id: cidade.id, organization_id: organizationId, listing_status: 'active', captured_at: agora, last_seen_at: agora };
 
   try {
+    // ── ler-anuncio: baixa a página do link colado e devolve o que achou ───
+    // (plano 2026-10-10-opura-market-fontes, Fase B). Não grava nada. Site que
+    // bloqueia a leitura (OLX e VivaReal respondem 403 desde 10/10/2026) não é
+    // erro: volta o anúncio em branco com o motivo, e a tela abre a conferência
+    // para preencher à mão.
+    if (modo === 'ler-anuncio') {
+      const v = urlDeFeedPermitida(String(corpo.url ?? ''), 'do anúncio');
+      if (!v.ok) return json({ error: v.motivo }, 400);
+      const colada = v.url.toString();
+      const alvo = urlDeLeitura(colada);
+      let lido: AnuncioDaPagina;
+      let falhaLeitura: string | null = null;
+      try {
+        const texto = await buscarUrlPublica(new URL(alvo.url), {
+          accept: alvo.formato === 'html' ? 'text/html,application/xhtml+xml,*/*;q=0.8' : 'application/json',
+          maxBytes: MAX_PAGINA_BYTES, timeoutMs: 20_000, rotulo: 'A página do anúncio',
+        });
+        lido = alvo.formato === 'json-conexao381' ? lerAnuncioConexao381(JSON.parse(texto), colada) : lerAnuncioDaPagina(texto, colada);
+      } catch (e) {
+        falhaLeitura = e instanceof Error ? e.message : String(e);
+        lido = anuncioEmBranco(colada);
+      }
+      // Sem campo bairro: um bairro CADASTRADO citado no título vira sugestão.
+      if (!lido.anuncio.bairro) {
+        const b = bairroNoTexto(lido.anuncio.titulo, bairros);
+        if (b) {
+          lido.anuncio.bairro = b.name;
+          lido.avisos.push(`O bairro "${b.name}" foi deduzido do título do anúncio: confira.`);
+          lido.faltando = camposFaltando(lido.anuncio);
+        }
+      }
+      const { data: ja } = await admin.from('opura_market_listings').select('id, listing_status, price')
+        .eq('organization_id', organizationId).eq('city_id', cidade.id).eq('source_url', lido.anuncio.url).limit(1);
+      return json({
+        ...lido,
+        falhaLeitura,
+        bairroCadastrado: !!casarBairro(lido.anuncio.bairro, bairros),
+        jaGravado: ja?.[0] ? { status: ja[0].listing_status, preco: ja[0].price } : null,
+      });
+    }
+
+    // ── gravar-anuncio: o anúncio conferido na tela ────────────────────────
+    // Sem feedId: um anúncio avulso nunca gera saídas de uma fonte.
+    if (modo === 'gravar-anuncio') {
+      const c = anuncioConferido(corpo.anuncio);
+      if (!c.ok) return json({ error: c.motivo }, 400);
+      if (normalizarNome(c.anuncio.cidade) !== normalizarNome(cidade.name)) {
+        return json({ error: `O anúncio é de ${c.anuncio.cidade}; a praça selecionada é ${cidade.name}.` }, 400);
+      }
+      const origem = (textoOuNulo(corpo.site) ?? new URL(c.anuncio.url).hostname).slice(0, 60);
+      const resultado = await gravarFeed(admin, {
+        organizationId: organizationId as string, cidade, bairros, geo, lido: { anuncios: [c.anuncio], ignorados: {} },
+        origem, feedId: null, agora, atualizarCadastro: true,
+      });
+      return json(resultado);
+    }
+
     // ── planilha ───────────────────────────────────────────────────────────
     if (modo === 'planilha') {
       const linhas = Array.isArray(corpo.linhas) ? corpo.linhas : null;

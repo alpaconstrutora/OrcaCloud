@@ -6,11 +6,13 @@ import {
   type ResultadoImportacaoMercado,
   type FonteMercado,
   type TipoDeFonteMercado,
+  type LeituraDeAnuncio,
 } from '../../services/opuraMarketService';
 import { supabase } from '../../lib/supabase';
-import type { OpuraMarketListing } from '../../types';
+import type { OpuraMarketCity, OpuraMarketListing } from '../../types';
 import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
+import MarketAnuncioLinkSheet from './MarketAnuncioLinkSheet';
 
 /**
  * Fontes de anúncios da praça (plano 2026-10-10-opura-market-fontes, Fase A).
@@ -34,6 +36,20 @@ const descreverResultado = (r: ResultadoImportacaoMercado): string => {
   return partes.join(' · ');
 };
 
+/** Resultado de gravar UM anúncio colado por link. */
+const descreverAnuncioGravado = (r: ResultadoImportacaoMercado): string => {
+  const partes: string[] = [];
+  if (r.novos) partes.push('anúncio gravado');
+  if (r.duplicados) partes.push('gravado, mas repete um anúncio que já existia (mesmo lugar, quartos e área): fica fora das médias');
+  if (r.atualizados) partes.push('já estava na base: dados atualizados');
+  if (r.reativados) partes.push('estava como saída e voltou a ativo');
+  if (r.semLocalizacao) partes.push('endereço não encontrado no mapa');
+  if (r.pendentes) partes.push('localização pendente (use "Localizar anúncios sem coordenada")');
+  const ignorados = Object.keys(r.ignorados ?? {});
+  if (ignorados.length) partes.push(`não gravado: ${ignorados.join(', ')}`);
+  return partes.join(' · ') || 'nada gravado';
+};
+
 const SEM_ORG = 'Selecione uma organização no topo da tela: os anúncios são gravados nela.';
 
 /** Conectores que já leem fonte salva (os demais entram nas próximas fases do plano). */
@@ -49,12 +65,18 @@ const EXEMPLO_DE_LINK: Record<TipoDeFonteMercado, string> = {
 interface Props {
   organizationId: string;
   cityId: string;
+  /** A praça selecionada: o anúncio colado tem de ser desta cidade. */
+  cidade: OpuraMarketCity | null;
   listings: OpuraMarketListing[];
   onAtualizado: () => Promise<void>;
 }
 
-export default function MarketFeedPanel({ organizationId, cityId, listings, onAtualizado }: Props) {
+export default function MarketFeedPanel({ organizationId, cityId, cidade, listings, onAtualizado }: Props) {
   const confirm = useConfirm();
+  // Colar link de anúncio (Fase B do plano de fontes): lê no servidor e abre a conferência.
+  const [linkAnuncio, setLinkAnuncio] = React.useState('');
+  const [lendoAnuncio, setLendoAnuncio] = React.useState(false);
+  const [leitura, setLeitura] = React.useState<LeituraDeAnuncio | null>(null);
   const [fontes, setFontes] = React.useState<FonteMercado[]>([]);
   const [ocupada, setOcupada] = React.useState<string | null>(null);   // id da fonte em operação
   const [novoTipo, setNovoTipo] = React.useState<TipoDeFonteMercado>('vrsync');
@@ -78,7 +100,35 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
   React.useEffect(() => { carregarFontes(); }, [carregarFontes]);
 
   const trocarFonte = (f: FonteMercado) => setFontes((lista) => lista.map((x) => (x.id === f.id ? f : x)));
-  const trabalhando = !!ocupada || adicionando || importandoArquivo || localizando || relocalizando;
+  const trabalhando = !!ocupada || adicionando || importandoArquivo || localizando || relocalizando || lendoAnuncio;
+
+  const linkColado = linkAnuncio.trim();
+  const motivoLer = !organizationId ? SEM_ORG
+    : !cityId ? 'Selecione a cidade.'
+    : !linkColado ? 'Cole o link de um anúncio.'
+    : !/^https:\/\//i.test(linkColado) ? 'O link precisa começar com https://.'
+    : trabalhando ? 'Aguarde a operação em andamento.'
+    : undefined;
+
+  const lerAnuncio = async () => {
+    if (motivoLer) return;
+    setLendoAnuncio(true);
+    setResultado(null);
+    try {
+      setLeitura(await opuraMarketService.lerAnuncioPorLink(organizationId, cityId, linkColado));
+    } catch (err: any) {
+      console.error('Falha ao ler o anúncio:', err);
+      setResultado(`Erro: ${err.message || 'falha ao ler o anúncio'}`);
+    } finally {
+      setLendoAnuncio(false);
+    }
+  };
+
+  const anuncioGravado = async (r: ResultadoImportacaoMercado, site: string) => {
+    setResultado(`${site}: ${descreverAnuncioGravado(r)}`);
+    setLinkAnuncio('');
+    await onAtualizado();
+  };
 
   // Anúncios da organização só no ponto do bairro ou não encontrados (item 2 do
   // plano 2026-10-10-opura-market-pendencias): 'relocalizar' tenta de novo e nunca piora.
@@ -229,6 +279,34 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
           Cada fonte é lida no servidor. Ligada, ela é importada todo dia de manhã: anúncio novo entra, anúncio que some da fonte sai da base ativa e conta como vendido ou retirado nos indicadores do bairro.
           Reimportar a mesma fonte atualiza os preços em vez de duplicar.
         </p>
+      </div>
+
+      <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] space-y-3">
+        <div className="text-xs text-slate-600 font-semibold">
+          Colar link de anúncio
+          <span className="block text-slate-400 font-normal mt-0.5">
+            Um anúncio do ZAP, VivaReal, OLX, Conexão 381 ou do site de uma imobiliária. O servidor lê a página e você confere os dados antes de gravar.
+            Site que bloqueia a leitura abre a conferência em branco, para preencher à mão.
+          </span>
+        </div>
+        <div className="flex flex-col md:flex-row gap-3 items-center">
+          <input
+            type="text"
+            value={linkAnuncio}
+            onChange={(e) => setLinkAnuncio(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') lerAnuncio(); }}
+            placeholder="https://www.zapimoveis.com.br/imovel/..."
+            className="flex-1 w-full h-9 px-3 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          />
+          <button
+            onClick={lerAnuncio}
+            disabled={!!motivoLer}
+            title={motivoLer}
+            className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
+          >
+            {lendoAnuncio ? 'Lendo…' : 'Ler anúncio'}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -385,6 +463,15 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
           {resultado}
         </div>
       )}
+
+      <MarketAnuncioLinkSheet
+        open={!!leitura}
+        onClose={() => setLeitura(null)}
+        leitura={leitura}
+        organizationId={organizationId}
+        cidade={cidade}
+        onGravado={anuncioGravado}
+      />
     </div>
   );
 }

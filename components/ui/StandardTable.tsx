@@ -73,6 +73,10 @@ interface StandardTableProps<T> {
     filters?: React.ReactNode;
     /** Slot no fim da toolbar (ex.: ação primária §17 quando não há barra §5.3). */
     toolbarRight?: React.ReactNode;
+    /** Painel de filtros abaixo da linha da toolbar, dentro do mesmo card (§5.2 "painel de filtros
+     *  avançados"): fica no fluxo da página, então o card `overflow-hidden` não o corta. A tela
+     *  controla quando mostrar (ex.: botão "Filtros" em `filters`). */
+    filtersPanel?: React.ReactNode;
     /** Linha(s) acima da toolbar dentro do mesmo card — ex.: sub-abas (§19.1 acoplada). */
     toolbarTop?: React.ReactNode;
     /** Rodapé dentro do card (totais, avisos). Vem DEPOIS do rodapé de paginação, se houver. */
@@ -102,7 +106,7 @@ interface StandardTableProps<T> {
 
 export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
-    search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowClassName, loading, empty, dense, filters, toolbarRight, toolbarTop,
+    search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
     footer, renderTotals, renderExpanded, maxHeight = '70vh', bare, selection, pagination,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
@@ -232,6 +236,7 @@ export function StandardTable<T>({
                     </div>
                     {toolbarRight}
                 </div>
+                {filtersPanel}
             </div>
 
             {loading ? (

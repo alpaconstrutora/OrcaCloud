@@ -702,6 +702,27 @@ padrão (registradas aqui para o usuário corrigir se quiser):
 | 2026-10-10 | DOCX | Cópia EDITÁVEL gerada do mesmo modelo e dos mesmos dados; o documento oficial continua sendo o PDF com hash (o .docx diz isso no rodapé quando o ofício já foi emitido). Biblioteca `docx` (nova dependência, `import()` sob demanda) |
 | 2026-10-10 | Fonte livre | Fontes da organização (`.ttf`/`.otf`, até 4 variações) no bucket privado `doc-gen-assets`, cadastro `doc_gen_fontes`; o modelo escolhe entre Roboto e as fontes da organização; o PDF embute a fonte (exigência do PDF/A). Licença da fonte é responsabilidade de quem envia — a tela avisa |
 
+### Pedido posterior — 2026-10-10, depois do status consolidado
+
+> 1. Corrigir Links antigos de notificação do GED: vale corrigir só se você quiser que as notificações já enviadas voltem a abrir.
+> 2. implementar:
+> Pesquisa avançada (item 30): a lista de ofícios já busca por número, assunto, destinatário e modelo, e filtra por situação. Faltam os filtros por:
+>
+> período
+> emitente/empresa
+> obra e empreendimento
+> departamento
+> autor e assinante
+> O plano da F3 dizia só "filtros", e nenhuma frente registrou que eles ficaram de fora. É trabalho só de tela e service, sem migration: conferi no banco que as colunas necessárias já existem.
+
+| Data | Pergunta | Decisão (padrão, sem perguntar) |
+|---|---|---|
+| 2026-10-10 | Backfill de links: há o que corrigir? | No banco havia **0** notificações com `#/documentos`. A causa viva era a rotina diária `fn_opura_docs_vencimento_alerts` (cron 8h), que ainda GRAVAVA o link antigo — só nunca tinha disparado. Corrigir a função (migration) + o app traduzir `#/documentos?…docId=` por garantia + `UPDATE` das linhas antigas (0 hoje) |
+| 2026-10-10 | Onde ficam os filtros | Painel do §5.2 abaixo da toolbar ("Filtros" + contador), como os "Filtros rápidos" de Minhas Tarefas — o "Filtro avançado" (campo + operador + valor) abre com `absolute` e seria cortado pelo card `overflow-hidden` do `StandardTable` (nenhuma tela o usa dentro dele) |
+| 2026-10-10 | Valores de cada filtro | Lista de escolha com os valores que EXISTEM nos ofícios, nome resolvido (§5.5); filtro sem valor fica desligado e diz por quê |
+| 2026-10-10 | Período sobre qual data | Data do ofício (`data_documento`); rascunho sem data usa o dia de criação |
+| 2026-10-10 | Emitente | Empresa quando o ofício tem `company_id`; senão a organização, rotulada "(sem empresa)" — na Alpa os dois nomes são quase iguais |
+
 ## Avaliação da proposta contra o que já existe
 
 Árvore lida: `C:\D\frentes\market-fase4` no topo de `origin/main` (`11d42ec7`, 07/10). O
@@ -1053,13 +1074,11 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
   `contractId`, `addendumId`, `documentVersionId`). Quando chegar a hora: secret
   `ZAPSIGN_API_TOKEN`, webhook, status ASSINADO alimentado pelo retorno, e o PDF assinado
   vira nova versão congelada no GED.
-- Backfill de `notifications.link` antigas do GED (`#/documentos…`), se o usuário quiser
-  que notificações já emitidas passem a abrir.
+- ~~Backfill de `notifications.link` antigas do GED (`#/documentos…`)~~ — feito na F10 (10/10): havia 0 linhas; a
+  causa viva era o aviso diário de validade, corrigido.
 - ~~PDF/A e saída DOCX do ofício~~ — feitos na F8 (10/10).
 - ~~Fonte livre (upload de `.ttf`) nos modelos~~ — feita na F9 (10/10).
-- **Pesquisa avançada completa (item 30)** — achado em 10/10 ao consolidar o status: faltam os filtros por período,
-  emitente/empresa, obra, empreendimento, departamento, autor e assinante na lista de ofícios (hoje: busca por
-  número/assunto/destinatário/modelo + filtro Situação). Sem migration — as colunas existem em `doc_gen_documentos`.
+- ~~Pesquisa avançada completa (item 30)~~ — feita na F10 (10/10).
 
 ## Riscos e decisões de projeto
 
@@ -1077,8 +1096,8 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 ### Status consolidado — 10/10/2026
 
 **O módulo inteiro está no ar** (MVP + Fases 2 e 3 + os itens que tinham ficado pendentes). Só há uma parte
-desligada por decisão (a IA), um item da proposta entregue só em parte (a pesquisa avançada) e duas pendências
-futuras que dependem de decisão do usuário. No banco, em 10/10:
+desligada por decisão (a IA) e uma pendência futura que depende de decisão do usuário (assinatura externa).
+Atualizado no mesmo dia pela F10: pesquisa avançada completa e links antigos do GED corrigidos. No banco, em 10/10:
 0 modelos, 0 ofícios, 0 blocos, 0 fontes e contador de numeração zerado — os testes foram apagados e o
 módulo ainda não teve uso real.
 
@@ -1093,20 +1112,18 @@ módulo ainda não teve uso real.
 | F7 | Assistente de IA: redigir, revisar, responder ofício recebido | `dc06d051` | ⏸ código no ar, **desligado por decisão** (sem `ANTHROPIC_API_KEY`) |
 | F8 | Signatário (cargo, registro, imagem da assinatura) provado com conta de admin; PDF/A-2b em todo PDF; saída em Word | `a8ca2567` | ✅ no ar |
 | F9 | Fonte livre: `.ttf`/`.otf` da organização, embutidas no PDF/A e com o nome no Word | `c12c8909` | ✅ no ar |
+| F10 | Pesquisa avançada (item 30): período, emitente, obra, empreendimento, departamento, autor e assinante; links antigos de notificação do GED | ver seção F10 | ✅ no ar |
 
 **Pendências futuras** (detalhe em "Pendências futuras" acima; nenhuma bloqueia o uso):
 
 1. **Ligar o assistente de IA** — decisão de 10/10: manter desligado. Falta só a chave da API do Claude.
 2. **Assinatura eletrônica externa** (ZapSign / ICP-Brasil) — depende de publicar `sign-contract`, adiada desde 26/07.
-3. **Backfill de links antigos de notificação do GED** — só se o usuário quiser que as notificações já emitidas abram.
-4. **Pesquisa avançada completa (item 30 da proposta)** — achado ao consolidar este status: a lista de ofícios tem a
-   busca por número, assunto, destinatário e modelo e o filtro de Situação; **faltam** os filtros por período,
-   emitente/empresa, obra, empreendimento, departamento, autor e assinante. O plano da F3 dizia só "filtros" e nenhuma
-   frente registrou o corte. É trabalho de tela + service (as colunas já existem em `doc_gen_documentos`), sem migration.
+3. ~~Backfill de links antigos de notificação do GED~~ — feito na F10.
+4. ~~Pesquisa avançada completa (item 30)~~ — feita na F10.
 
-Conferência contra os 30 itens do pedido original: 1–28 entregues; **29 (IA)** com código no ar e desligado por
-decisão; **30 (pesquisa avançada)** parcial, como acima. No item 9/18, a assinatura eletrônica interna (registro,
-data e hash) está no ar; a com certificado/ZapSign é a pendência 2.
+Conferência contra os 30 itens do pedido original: 1–28 e **30** entregues; **29 (IA)** com código no ar e
+desligado por decisão. No item 9/18, a assinatura eletrônica interna (registro, data e hash) está no ar; a com
+certificado/ZapSign é a pendência 2.
 
 ### Histórico por frente
 
@@ -1449,6 +1466,35 @@ pendências futuras na seção própria.
 - [x] F8/F9 · limpeza — a organização descartável e tudo dela (2 ofícios emitidos, PDFs congelados do GED, pastas,
       assinatura, membros, contador) apagados; 0 arquivos restantes no Storage; travas religadas
 - [x] F9 · publicada em 10/10 (`c12c8909`): ci verde, domínio conferido ("Fontes da organização" no bundle), frente fechada
+
+### F10 — pesquisa avançada e links antigos do GED (frente `oficios-pesquisa-avancada`)
+
+- [x] F10 · 1 — **links do GED**: no banco, 0 notificações com `#/documentos`; a rotina diária
+      `fn_opura_docs_vencimento_alerts` (cron `opura-docs-vencimento-alerts`, 8h) ainda gravava
+      `#/documentos?tab=<categoria>&docId=<id>`. Migration `aplicar_20271010004000_ged_vencimento_link_opura_docs.sql`
+      **aplicada**: grava `/opura-docs?docId=<id>`; `REVOKE … FROM PUBLIC, anon, authenticated` (era SECURITY DEFINER
+      executável por qualquer usuário logado e varre todas as organizações; só o cron chama); `UPDATE` das linhas
+      antigas (0). **Provada** numa transação desfeita: documento vencendo em 30 dias → 6 avisos (um por membro da Alpa)
+      com o link novo; nada ficou gravado
+- [x] F10 · 2 — `utils/linkNotificacao.ts` traduz `#/documentos?…docId=` para o GED com o documento em foco (e
+      `pending=true` para a pendência); `#/documentos` sem `docId` continua sem navegar (é também a Área do Cliente).
+      Teste `linkNotificacao.test.ts`. **No app:** notificação de teste com o link antigo → "Ver Detalhes" abriu o GED
+      no documento (Histórico de Versões)
+- [x] F10 · 3 — `services/docGen/filtrosOficios.ts` (puro) + `docGenFiltrosOficios.test.ts` (7): período pela data do
+      ofício (rascunho sem data → dia de criação; datas trocadas se invertem), emitente (empresa ou organização "(sem
+      empresa)"), obra, empreendimento, departamento, autor (e-mail, sem caixa), assinante (usuário ou nome), AND entre
+      todos; sem filtro devolve a MESMA lista (a tabela detecta recorte pela identidade); opções só com o que existe
+- [x] F10 · 4 — tela: botão **Filtros** (com contador) ao lado de Situação abre o painel abaixo da toolbar; período
+      (de/até) e seis listas de escolha; filtro sem valor nos ofícios fica desligado com o motivo; "Limpar filtros";
+      estado persistido. `StandardTable` ganhou o slot `filtersPanel` (aditivo, §5.2). Nomes: store primeiro, o que
+      faltar lido por id (`nomesPorIds`); `rotuloDoEmpreendimento` deixa de repetir o código ("004 · 004 - Alcino
+      Salomon" → "004 - Alcino Salomon", também no seletor do Novo ofício)
+- [x] F10 · 5 — **conferência no app** (`C:/tmp/pwtest/oficios_filtros.js`, Alpa, 3 rascunhos "ZZ — Filtro A/B/C" +
+      modelo criados por SQL): cada filtro isolado devolveu o ofício certo, período de/até, combinação (autor + desde
+      01/10 → C, contador "2"), filtros e painel sobrevivem ao recarregar, vazio "Nenhum ofício com estes filtros",
+      limpar volta aos 3. Achados e corrigidos na conferência: emitente ambíguo (organização × empresa com quase o mesmo
+      nome) e código do empreendimento repetido. 0 erros de JS e de rede. Dados de teste e a notificação apagados
+      (0 ofícios, 0 modelos, contador zerado)
 
 
 ## Verificação

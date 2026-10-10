@@ -143,11 +143,42 @@ export async function atualizarCadastroDestinatario(tipo: DestinatarioTipo, id: 
 
 export interface OpcaoSimples { id: string; nome: string; detalhe?: string | null }
 
+/** "004 · Alcino Salomon" — sem repetir o código quando o nome já começa com ele ("004 - Alcino Salomon"). */
+export function rotuloDoEmpreendimento(e: { name: string; code?: string | null }): string {
+    return e.code && !e.name.trim().startsWith(e.code.trim()) ? `${e.code} · ${e.name}` : e.name;
+}
+
 export async function listarEmpreendimentos(orgId: string): Promise<OpcaoSimples[]> {
     const { data, error } = await supabase.from('empreendimentos').select('id, name, code, endereco_city').eq('organization_id', orgId).order('name');
     if (error) throw error;
     return ((data ?? []) as { id: string; name: string; code?: string; endereco_city?: string }[])
-        .map(e => ({ id: e.id, nome: e.code ? `${e.code} · ${e.name}` : e.name, detalhe: e.endereco_city ?? null }));
+        .map(e => ({ id: e.id, nome: rotuloDoEmpreendimento(e), detalhe: e.endereco_city ?? null }));
+}
+
+/**
+ * Nomes de empreendimentos, empresas e obras pelos ids — para os filtros da lista de ofícios
+ * quando o store não tem o registro (topo em "Todas", empresa de outra organização). Só lê os
+ * ids pedidos; a RLS decide o que volta, e o que não voltar fica com o rótulo "não encontrado".
+ */
+export async function nomesPorIds(ids: { empreendimentos?: string[]; empresas?: string[]; obras?: string[] }): Promise<{
+    empreendimento: Record<string, string>; empresa: Record<string, string>; obra: Record<string, string>;
+}> {
+    const em = [...new Set(ids.empreendimentos ?? [])];
+    const co = [...new Set(ids.empresas ?? [])];
+    const ob = [...new Set(ids.obras ?? [])];
+    const [e, c, o] = await Promise.all([
+        em.length ? supabase.from('empreendimentos').select('id, name, code').in('id', em) : Promise.resolve({ data: [], error: null }),
+        co.length ? supabase.from('companies').select('id, razao_social, nome_fantasia').in('id', co) : Promise.resolve({ data: [], error: null }),
+        ob.length ? supabase.from('projects').select('id, name').in('id', ob) : Promise.resolve({ data: [], error: null }),
+    ]);
+    for (const r of [e, c, o]) if (r.error) throw r.error;
+    const empreendimento: Record<string, string> = {};
+    for (const x of (e.data ?? []) as { id: string; name: string; code?: string }[]) empreendimento[x.id] = rotuloDoEmpreendimento(x);
+    const empresa: Record<string, string> = {};
+    for (const x of (c.data ?? []) as { id: string; razao_social: string; nome_fantasia?: string }[]) empresa[x.id] = x.nome_fantasia || x.razao_social;
+    const obra: Record<string, string> = {};
+    for (const x of (o.data ?? []) as { id: string; name: string }[]) obra[x.id] = x.name;
+    return { empreendimento, empresa, obra };
 }
 
 export async function listarContratos(orgId: string): Promise<OpcaoSimples[]> {

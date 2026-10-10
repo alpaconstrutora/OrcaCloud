@@ -297,6 +297,7 @@ export default function OficiosModule(_props: Props) {
                 <OficiosList
                     documentos={documentos}
                     modelos={modelos}
+                    nomeDepartamento={nomePorId}
                     loading={loading}
                     onAbrir={abrirOficio}
                     onExcluir={excluirOficio}

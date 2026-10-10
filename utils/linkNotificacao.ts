@@ -13,6 +13,10 @@
  * Área do Cliente, não o GED. `documentService` passou a gravar
  * `/opura-docs?docId=<id>[&pending=true]`, e aqui isso vira o foco
  * `GED_DOCUMENTO` / `GED_DOCUMENTO_PENDENTE`, que `OpuraDocsModule` consome.
+ *
+ * Links antigos (10/10/2026): o aviso diário de validade (`fn_opura_docs_vencimento_alerts`) ainda gravava
+ * `#/documentos?tab=<categoria>&docId=<id>` — corrigido na migration `aplicar_20271010004000`, que também
+ * reescreve as linhas antigas. Por garantia, um `#/documentos?…docId=` que ainda exista abre o GED.
  */
 const FOCO_POR_VIEW: Record<string, { param: string; source: string; sourcePendente?: string }> = {
     'contas-a-receber': { param: 'tx', source: 'CONTA_RECEBER' },
@@ -27,6 +31,9 @@ export interface DestinoDoLink {
 
 /** `null` quando o link não é uma rota interna `/view[?query]`. */
 export function destinoDoLinkDeNotificacao(link: string): DestinoDoLink | null {
+    // Só o GED legado é traduzido: `#/documentos` sem `docId` não tem como saber que era o GED
+    // (`documentos` também é a Área do Cliente) e continua sem navegar.
+    if (link.startsWith('#/documentos?') && /[?&]docId=/.test(link)) link = `/opura-docs?${link.split('?')[1]}`;
     if (!link.startsWith('/')) return null;
     const [caminho, query = ''] = link.substring(1).split('?');
     if (!caminho) return null;

@@ -14,7 +14,9 @@ describe('destinoDoLinkDeNotificacao', () => {
         expect(destinoDoLinkDeNotificacao('/contas-a-receber')).toEqual({ view: 'contas-a-receber' });
     });
     it('link que não é rota interna não navega', () => {
-        expect(destinoDoLinkDeNotificacao('#/documentos?docId=1')).toBeNull();
+        expect(destinoDoLinkDeNotificacao('#/documentos')).toBeNull();
+        expect(destinoDoLinkDeNotificacao('#/documentos?tab=juridico')).toBeNull();
+        expect(destinoDoLinkDeNotificacao('https://exemplo.com/x')).toBeNull();
         expect(destinoDoLinkDeNotificacao('/')).toBeNull();
     });
 
@@ -26,5 +28,14 @@ describe('destinoDoLinkDeNotificacao', () => {
         expect(destinoDoLinkDeNotificacao('/opura-docs?docId=d-2&pending=true'))
             .toEqual({ view: 'opura-docs', foco: { ref: 'd-2', source: 'GED_DOCUMENTO_PENDENTE' } });
         expect(destinoDoLinkDeNotificacao('/opura-docs')).toEqual({ view: 'opura-docs' });
+    });
+
+    // 10/10/2026: o aviso de validade gravava `#/documentos?tab=<cat>&docId=<id>` até a migration
+    // aplicar_20271010004000. Um link desses que ainda exista abre o GED no documento.
+    it('GED legado: #/documentos com docId abre o GED no documento (e a pendência)', () => {
+        expect(destinoDoLinkDeNotificacao('#/documentos?tab=juridico&docId=d-3'))
+            .toEqual({ view: 'opura-docs', foco: { ref: 'd-3', source: 'GED_DOCUMENTO' } });
+        expect(destinoDoLinkDeNotificacao('#/documentos?docId=d-4&pending=true'))
+            .toEqual({ view: 'opura-docs', foco: { ref: 'd-4', source: 'GED_DOCUMENTO_PENDENTE' } });
     });
 });

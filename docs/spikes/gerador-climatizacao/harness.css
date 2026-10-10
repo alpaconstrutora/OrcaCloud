@@ -1,0 +1,3 @@
+@import "../../../index.css";
+/* O Tailwind v4 procura classes a partir da raiz do Vite (a pasta do spike): aponta a dos componentes. */
+@source "../../../components/blueprint";

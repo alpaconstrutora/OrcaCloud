@@ -5843,6 +5843,70 @@ describe('BlueprintEditor · HVAC mínimo (E11.1)', () => {
   }, 90000);
 
   /**
+   * CLIMATIZAÇÃO E11 (10/10/2026): o GERADOR — Mecânica › Gerar climatização: a prévia
+   * encadeia carga → split → linha e dreno; "Lançar tudo" grava UM lote (o split, a
+   * linha e o dreno) e um Desfazer tira tudo.
+   */
+  it('Mecânica › Gerar climatização: prévia com as etapas, lançar num lote só, um Desfazer tira tudo', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) => ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    let m = k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model;
+    m = k.applyCommand(m, { type: 'NameSpace', spaceId: m.spaces[0].id, name: 'Sala' }).model;
+    loadBranchModel.mockResolvedValue(m);
+    catalogoDeTipos.length = 0;
+    for (const btu of [9000, 12000, 18000, 24000]) {
+      catalogoDeTipos.push({
+        id: `tp_split_${btu}`,
+        organizationId: 'org_1',
+        familia: 'TERMINAL',
+        nome: `Split hi-wall ${btu.toLocaleString('pt-BR')} BTU/h`,
+        propriedades: { familia: 'TERMINAL', disciplina: 'FRIGORIGENA', tipo: `Split ${btu}`, cotaMm: 2200, tipoHidraulico: 'EVAPORADORA_HI_WALL', capacidadeBtuH: btu, potenciaW: Math.round(btu / 10), larguraMm: 900, profundidadeMm: 220, alturaMm: 300 },
+        active: true,
+        createdAt: '',
+        updatedAt: '',
+      });
+    }
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^mecânica$/i);
+    await user.click(botao(/^Gerar climatização$/));
+    const gaveta = await screen.findByTestId('gerador-climatizacao');
+    // Antes da prévia, Lançar não aparece; o botão de gerar está lá.
+    expect(within(gaveta).queryByRole('button', { name: /^Lançar tudo/ })).toBeNull();
+    // O catálogo chega assíncrono: gerar depois dele.
+    await waitFor(() => expect(catalogoDeTipos.length).toBe(4));
+    await new Promise((r) => setTimeout(r, 50));
+    await user.click(within(gaveta).getByRole('button', { name: 'Gerar a prévia' }));
+    const etapas = await within(gaveta).findByTestId('ppci-etapas');
+    expect(etapas).toHaveTextContent('Carga térmica por ambiente');
+    expect(etapas).toHaveTextContent(/Equipamentos — seleção pelo catálogo e posição do split\s*lança · \d+/);
+    expect(etapas).toHaveTextContent(/Linha frigorígena e dreno\s*lança · \d+/);
+    expect(etapas).toHaveTextContent(/VRF — árvore e derivadores\s*não exigida/);
+    // O circuito sem quadro está no grupo "O gerador não decide" (nasce recolhido).
+    await user.click(within(gaveta).getByRole('button', { name: /O gerador não decide/ }));
+    expect(within(gaveta).getByTestId('ppci-pendencias')).toHaveTextContent(/não há quadro no desenho/);
+
+    const { saveDraft } = await import('../../services/blueprintService');
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(gaveta).getByRole('button', { name: /^Lançar tudo \(\d+ comandos\)/ }));
+    expect(await within(gaveta).findByText(/lançados num lote — Ctrl\+Z desfaz tudo/)).toBeInTheDocument();
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const salvo = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect((salvo.terminais ?? []).filter((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL')).toHaveLength(1);
+    expect((salvo.trechos ?? []).some((x) => x.disciplina === 'FRIGORIGENA')).toBe(true);
+
+    vi.mocked(saveDraft).mockClear();
+    await user.click(within(screen.getByRole('toolbar')).getByRole('button', { name: /^desfazer/i }));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
+    const desfeito = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
+    expect(desfeito.terminais ?? []).toHaveLength(0);
+    expect(desfeito.trechos ?? []).toHaveLength(0);
+    catalogoDeTipos.length = 0;
+  }, 90000);
+
+  /**
    * CLIMATIZAÇÃO E6 (05/10/2026): a gaveta do VRF liga as evaporadoras sem sistema
    * à condensadora VRF, lança a árvore com os derivadores e a conferência passa a
    * dizer "todas alcançadas" e "todas com derivador".

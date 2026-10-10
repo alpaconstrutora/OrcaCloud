@@ -56,7 +56,8 @@ import type { BlocoDoMemorial } from './blueprintMemorialHidro';
 import { ROTULO_DA_ALIMENTACAO, ROTULO_DO_ARRANJO, proporFonte, proporRecalque, proporReserva } from './blueprintCasaDeBombas';
 import type { BombaCandidata } from './blueprintBombeamentoIncendio';
 
-export type SituacaoDaEtapa = 'LANCOU' | 'NADA_A_FAZER' | 'NAO_EXIGIDA' | 'NAO_RODOU';
+/** `CALCULOU` (10/10/2026): etapa só de cálculo, sem comando — o gerador de climatização (carga, quantitativo). */
+export type SituacaoDaEtapa = 'LANCOU' | 'NADA_A_FAZER' | 'NAO_EXIGIDA' | 'NAO_RODOU' | 'CALCULOU';
 
 export interface EtapaDoPpci {
   id: 'EXTINTORES' | 'HIDRANTES' | 'SPRINKLERS' | 'FONTE' | 'REDE' | 'RECALQUE' | 'DN' | 'RESERVA' | 'AREA_DE_OPERACAO' | 'SINALIZACAO' | 'ILUMINACAO' | 'ALARME' | 'ANTIPANICO';
@@ -347,7 +348,7 @@ export function conferirPlanoDoPpci(original: BlueprintModel, plano: PlanoDoPpci
 }
 
 
-const ROTULO_DA_SITUACAO: Record<SituacaoDaEtapa, string> = { LANCOU: 'Lançou', NADA_A_FAZER: 'Nada a fazer', NAO_EXIGIDA: 'Não exigida', NAO_RODOU: 'Não rodou' };
+const ROTULO_DA_SITUACAO: Record<SituacaoDaEtapa, string> = { LANCOU: 'Lançou', NADA_A_FAZER: 'Nada a fazer', NAO_EXIGIDA: 'Não exigida', NAO_RODOU: 'Não rodou', CALCULOU: 'Calculou' };
 
 /** E10.2: o RELATÓRIO do gerador — etapas e pendências — no formato dos memoriais (PDF/DOCX). */
 export function relatorioDoPpci(plano: PlanoDoPpci, ctx: { nomeDoEstudo: string; geradoEm: string }): BlocoDoMemorial[] {

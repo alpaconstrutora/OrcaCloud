@@ -6,6 +6,7 @@
 import React from 'react';
 import { FileDown, Wand2 } from 'lucide-react';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type PlanoDoPpci, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
+import type { Command } from '../../utils/blueprintKernel';
 import { ROTULO_DA_ALIMENTACAO, ROTULO_DO_ARRANJO, type AlimentacaoDaRede, type ArranjoDaReserva } from '../../utils/blueprintCasaDeBombas';
 
 const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
@@ -13,12 +14,23 @@ const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
   NADA_A_FAZER: 'text-slate-500',
   NAO_EXIGIDA: 'text-slate-400',
   NAO_RODOU: 'text-amber-700',
+  CALCULOU: 'text-sky-700',
 };
-const ROTULO_DA_SITUACAO: Record<SituacaoDaEtapa, string> = { LANCOU: 'lança', NADA_A_FAZER: 'nada a fazer', NAO_EXIGIDA: 'não exigida', NAO_RODOU: 'não rodou' };
+const ROTULO_DA_SITUACAO: Record<SituacaoDaEtapa, string> = { LANCOU: 'lança', NADA_A_FAZER: 'nada a fazer', NAO_EXIGIDA: 'não exigida', NAO_RODOU: 'não rodou', CALCULOU: 'calcula' };
 const ORDEM: GrupoDaPendencia[] = ['VERIFICACAO', 'PREMISSA', 'SEM_SOLUCAO', 'CONFLITO', 'NAO_DECIDIDO', 'CONFERIR'];
 
+/**
+ * O que a gaveta mostra de QUALQUER gerador (10/10/2026: o de climatização, E11,
+ * usa a mesma gaveta): o lote, as etapas e o relatório. O `PlanoDoPpci` cabe aqui.
+ */
+export interface PlanoDoGerador {
+  comandos: readonly Command[];
+  etapas: readonly { id: string; rotulo: string; situacao: SituacaoDaEtapa; comandos: number; nota: string | null }[];
+  pendencias: PlanoDoPpci['pendencias'];
+}
+
 export interface GeradorPpciNoPainel {
-  plano: PlanoDoPpci | null;
+  plano: PlanoDoGerador | null;
   gerando: boolean;
   onGerar: () => void;
   /** A trava antes de gravar: o lote recria os mesmos ids no desenho atual? */
@@ -37,12 +49,12 @@ export interface GeradorPpciNoPainel {
   };
 }
 
-export default function PainelGeradorPpci({ g }: { g: GeradorPpciNoPainel }) {
+export default function PainelGeradorPpci({ g, testId = 'gerador-ppci' }: { g: GeradorPpciNoPainel; testId?: string }) {
   const p = g.plano;
   const motivoDeLancar = !p ? 'Gere a prévia primeiro' : p.comandos.length === 0 ? 'O gerador não tem nada a lançar' : g.prova && !g.prova.ok ? g.prova.motivo : undefined;
   const [aberto, setAberto] = React.useState<GrupoDaPendencia | null>('VERIFICACAO');
   return (
-    <div className="space-y-3" data-testid="gerador-ppci">
+    <div className="space-y-3" data-testid={testId}>
       {g.arranjo && (
         <div className="grid grid-cols-1 gap-1.5 text-xs text-slate-600" data-testid="ppci-arranjo">
           <label className="flex items-center justify-between gap-2">

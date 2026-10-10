@@ -274,6 +274,7 @@ import { materiaisDeClimatizacao } from '../../utils/blueprintMateriaisClimatiza
 import PainelMateriaisClimatizacao from './PainelMateriaisClimatizacao';
 import { conferirPlanoDoPpci, gerarPpci, relatorioDoPpci, type PlanoDoPpci } from '../../utils/blueprintGeradorPpci';
 import PainelGeradorPpci from './PainelGeradorPpci';
+import { conferirPlanoDaClimatizacao, gerarClimatizacao, relatorioDaClimatizacao, type PlanoDaClimatizacao } from '../../utils/blueprintGeradorClimatizacao';
 import PainelKitsDeInsercao from './PainelKitsDeInsercao';
 import { listarKits } from '../../services/blueprintKitService';
 import type { KitDeInsercao } from '../../utils/blueprintKitsDeInsercao';
@@ -1215,6 +1216,8 @@ const ROTULO_DA_TAREFA = {
   redeDeAr: 'Dutos e ventilação',
   // DOCUMENTOS DA CLIMATIZAÇÃO (07/10/2026, E8.3/E8.4): os memoriais com as instalações e a emissão com ART.
   memoriaisClimatizacao: 'Memoriais e emissão — climatização',
+  // CLIMATIZAÇÃO E11 (10/10/2026): o GERADOR — todos os motores num lote, com o relatório.
+  geradorClimatizacao: 'Gerador de climatização',
 } as const;
 type TarefaDoPainel = keyof typeof ROTULO_DA_TAREFA;
 
@@ -1392,6 +1395,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'memoriaisHidro',
   'matriz',
   'memoriaisClimatizacao',
+  'geradorClimatizacao',
 ]);
 
 export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo }: Props) {
@@ -8298,7 +8302,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   );
   useEffect(() => {
     // O catálogo de bombas carrega quando o cálculo abre (uma vez por abertura).
-    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit') recarregarCatalogoDeTipos();
+    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit' || tarefaAberta === 'geradorClimatizacao') recarregarCatalogoDeTipos();
   }, [tarefaAberta, recarregarCatalogoDeTipos]);
   /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
   const planoDaRedeDeHidrantes = useMemo(
@@ -8611,6 +8615,49 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       baixarArtefatos(await artefatosDoMemorial(relatorioDoPpci(planoPpci, { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() }), titulo, titulo, formato));
     },
     [planoPpci, study.name],
+  );
+  // CLIMATIZAÇÃO E11 (10/10/2026): o GERADOR — molde do PPCI: a prévia é calculada no CLIQUE;
+  // a trava confere que o lote recria os mesmos ids no desenho de agora antes de gravar.
+  const [planoClima, setPlanoClima] = useState<PlanoDaClimatizacao | null>(null);
+  const [gerandoClima, setGerandoClima] = useState(false);
+  const [lancadoClima, setLancadoClima] = useState<string | null>(null);
+  const gerarPrevisaoClima = useCallback(() => {
+    setGerandoClima(true);
+    setLancadoClima(null);
+    setTimeout(() => {
+      try {
+        setPlanoClima(
+          gerarClimatizacao(editor.model, climatizacaoDoEstudo.hipoteses, {
+            carga: { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null },
+            modelos: modelosDeClimatizacao,
+            circuitos: { hip: hipotesesDeCircuitos, eletricas: hipotesesEletricas },
+          }),
+        );
+      } finally {
+        setGerandoClima(false);
+      }
+    }, 0);
+  }, [editor.model, climatizacaoDoEstudo.hipoteses, biblioteca.materiais, zona.cidade?.name, modelosDeClimatizacao, hipotesesDeCircuitos, hipotesesEletricas]);
+  const provaClima = useMemo(
+    () => (planoClima && tarefaAberta === 'geradorClimatizacao' ? conferirPlanoDaClimatizacao(editor.model, planoClima) : null),
+    [planoClima, tarefaAberta, editor.model],
+  );
+  const lancarClima = useCallback(() => {
+    if (!planoClima || !provaClima?.ok) return;
+    const criados = editor.runBatch(planoClima.comandos);
+    const faltam = planoClima.pendencias.filter((p) => p.grupo === 'VERIFICACAO').length;
+    setLancadoClima(
+      `${criados.length} peça(s) e trecho(s) lançados num lote — Ctrl+Z desfaz tudo. As peças nascem SUGERIDAS: aceite nos painéis Split e Linha e dreno. ${faltam ? `${faltam} verificação(ões) ainda em falta (ver o relatório).` : 'Nenhuma verificação em falta.'}`,
+    );
+    setPlanoClima(null);
+  }, [planoClima, provaClima, editor]);
+  const baixarRelatorioClima = useCallback(
+    async (formato: FormatoDoMemorial) => {
+      if (!planoClima) return;
+      const titulo = `${study.name} — gerador de climatização (relatório)`;
+      baixarArtefatos(await artefatosDoMemorial(relatorioDaClimatizacao(planoClima, { nomeDoEstudo: study.name, geradoEm: new Date().toISOString() }), titulo, titulo, formato));
+    },
+    [planoClima, study.name],
   );
   const baixarMemorialIncendio = useCallback(
     async (qual: QualMemorial, formato: FormatoDoMemorial) => {
@@ -12223,6 +12270,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 ajuda="Dutos e ventilação: vazão de cada terminal (declarada ou derivada do ambiente), perda de carga e balanceamento, ajuste das seções pelo método escolhido, traçado em espinha no forro, renovação e exaustão (banheiro, cozinha e garagem sem janela pedem exaustor)"
               />
             </GrupoDoRibbon>
+            {/* CLIMATIZAÇÃO E11 (10/10/2026): o gerador — todos os motores num lote. */}
+            <GrupoDoRibbon rotulo="Gerador">
+              <BotaoDoRibbon
+                icone={Wand2}
+                rotulo="Gerar climatização"
+                ativo={tarefaAberta === 'geradorClimatizacao'}
+                onClick={() => alternarTarefa('geradorClimatizacao')}
+                ajuda="Carga térmica → split pelo catálogo, posicionado → linha frigorígena e dreno → VRF e dutos quando houver → circuito do ar-condicionado, numa prévia e num lote só (um Ctrl+Z), com o relatório do que ficou de fora: premissa faltando, CONFERIR, sem lugar, conflitos, verificações em falta"
+              />
+            </GrupoDoRibbon>
             {/* CLIMATIZAÇÃO E8.3/E8.4 (07/10/2026): memoriais com as instalações e a emissão com ART. */}
             <GrupoDoRibbon rotulo="Documentos">
               <BotaoDoRibbon
@@ -15377,6 +15434,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'vrf' && <Snowflake className="h-5 w-5 text-indigo-600" />}
               {tarefaAberta === 'redeDeAr' && <Snowflake className="h-5 w-5 text-teal-600" />}
               {tarefaAberta === 'memoriaisClimatizacao' && <FileText className="h-5 w-5 text-teal-700" />}
+              {tarefaAberta === 'geradorClimatizacao' && <Wand2 className="h-5 w-5 text-sky-700" />}
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
@@ -15449,6 +15507,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Encadeia os motores de incêndio a partir da classificação: só as medidas EXIGIDAS, cada uma sobre o resultado da anterior, numa prévia e num lote só. O relatório diz o que o gerador não decidiu — premissa faltando, valor de norma a conferir, bomba e reserva, ambiente sem solução — e cada verificação que ainda falta.'}
             {tarefaAberta === 'memoriaisIncendio' &&
               'O memorial de cálculo e o descritivo de segurança contra incêndio — classificação e exigências, planilha de pressões, bomba, reserva, saídas, rota de fuga e preventivos —, gerados do desenho e das premissas do estudo, os mesmos números das gavetas. A emissão com ART só habilita com todas as verificações atendidas.'}
+            {tarefaAberta === 'geradorClimatizacao' &&
+              'Encadeia os motores de climatização a partir da carga térmica: equipamento pelo catálogo e posição, linha e dreno, VRF e dutos quando o desenho tem, e o circuito do ar-condicionado — cada um sobre o resultado do anterior, numa prévia e num lote só. O relatório diz o que o gerador não decidiu e cada verificação que ainda falta.'}
             {tarefaAberta === 'memoriaisClimatizacao' &&
               'O memorial de cálculo e o descritivo da climatização — carga térmica, equipamentos, linha e dreno, VRF e rede de ar —, gerados do desenho e das premissas do estudo, os mesmos números das gavetas. A emissão com ART só habilita com todas as verificações atendidas e deixa de valer se o desenho, as premissas, os materiais ou a cidade mudarem.'}
             {tarefaAberta === 'memoriaisHidro' &&
@@ -16385,6 +16445,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                     setPlanoPpci(null);
                   },
                 },
+              }}
+            />
+          )}
+
+          {tarefaAberta === 'geradorClimatizacao' && (
+            <PainelGeradorPpci
+              testId="gerador-climatizacao"
+              g={{
+                plano: planoClima,
+                gerando: gerandoClima,
+                onGerar: gerarPrevisaoClima,
+                prova: provaClima,
+                onLancar: lancarClima,
+                lancado: lancadoClima,
+                onBaixar: (f) => void baixarRelatorioClima(f),
               }}
             />
           )}

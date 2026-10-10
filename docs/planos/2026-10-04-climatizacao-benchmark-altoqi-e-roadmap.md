@@ -2531,3 +2531,66 @@ Os três itens do pedido de 10/10/2026 (acima, junto do pedido original).
 - **Harness do 3D** (`?editar=1&peca=ponto`): o passeio acha a seta verde pelos pixels e arrasta para
   cima. A cota foi de **2200 → 6770**, e o **Ctrl+Z** a devolveu a **2200**. Achado no caminho: o
   `idInicial` do harness lia `model.walls[0]` no carregamento e derrubava a cena sem paredes — corrigido.
+
+### Etapa 11 — Gerador de climatização · 10/10/2026 (frente `clima-e11`, sem bump)
+
+**11.1 Encadeamento** — `gerarClimatizacao(modelo, premissas, contexto)` (`utils/blueprintGeradorClimatizacao.ts`,
+no molde do `gerarPpci`). Cada etapa propõe sobre a cópia, já com as anteriores aplicadas:
+
+1. **carga térmica** por ambiente (só cálculo);
+2. **equipamento**: seleção pelo catálogo da organização e posição do split, com o ponto elétrico e o
+   sistema ligados;
+3. **linha frigorígena e dreno**;
+4. **VRF**, só quando há condensadora VRF no desenho;
+5. **rede de dutos**, só quando há terminal de ar;
+6. **circuito do ar-condicionado**;
+7. **conflitos que a proposta criou**;
+8. **quantitativo e medidas do orçamento** (só cálculo);
+9. **verificações** que ainda faltam.
+
+Um lote, um Ctrl+Z; `conferirPlanoDaClimatizacao` é a trava antes de gravar (o lote recria os mesmos
+ids no desenho de agora).
+
+- **O circuito não mexe no que o gerador não criou.** O planejador de circuitos da Elétrica liga TODOS
+  os pontos soltos do pavimento. Por isso o gerador só o roda quando os únicos pontos soltos são os
+  que ele criou e há um quadro inequívoco: o único do pavimento ou, sem nenhum lá, o único do desenho
+  (quadro de outro pavimento vale, regra de 17/09). Fora disso, o caso vai para o relatório, como
+  "o gerador não decide".
+- **O orçamento não é lançado pelo gerador.** A composição de cada item é escolha do orçamentista. A
+  etapa mostra as medidas (equipamentos, tubo, dreno, chapa, terminais) e manda ao painel Orçamento.
+- **Rodar de novo dá o MESMO desenho.** Os planejadores de split, linha, VRF e dutos apagam as
+  próprias sugestões antes de propor, então gerar de novo não acumula. O lote não sai vazio, por
+  isso a lei do teste é "mesmas peças nos mesmos lugares", e não "lote vazio" (a
+  `propostasIdempotentes.test.ts` não se aplica a esses planejadores).
+
+**11.2 Relatório e botão.**
+
+- Mecânica › Gerador › **Gerar climatização** abre uma gaveta larga. É a MESMA gaveta do PPCI
+  (`PainelGeradorPpci`, com o tipo do plano afrouxado para `PlanoDoGerador`, e a situação nova
+  "Calculou" para as etapas só de cálculo).
+- O relatório tem os grupos: verificação em falta, premissa, sem solução, conflito, não decide e
+  CONFERIR. Sai em PDF ou DOCX (`relatorioDaClimatizacao`).
+- As peças nascem SUGERIDAS e se aceitam nos painéis Split e Linha e dreno.
+
+**Prova:**
+
+- `blueprintGeradorClimatizacao.test.ts` (7 testes):
+  - a cadeia, com as situações de cada etapa;
+  - **a lei**: reaplicar no original dá os mesmos ids e o mesmo hash, e mexer no desenho trava;
+  - **gerar de novo sobre o resultado dá o mesmo desenho**;
+  - com uma TUG solta no pavimento, o ar fica sem circuito e o relatório diz;
+  - sem quadro no desenho;
+  - sem ambiente climatizado (lote vazio, premissa dita) e catálogo vazio;
+  - o relatório.
+- `blueprintGeradorPpci.test.ts` continua verde com o tipo comum.
+- `BlueprintEditor.test.tsx` (+1 teste):
+  - Mecânica › Gerar climatização: a prévia mostra as etapas e o grupo "não decide" traz o quadro que
+    falta;
+  - "Lançar tudo" grava evaporadora e linha num lote, e um Desfazer tira tudo.
+- **Harness** `docs/spikes/gerador-climatizacao/` (a gaveta real ao lado da planta real, Sala + Quarto +
+  Cozinha + quadro):
+  - a prévia: 2 evaporadoras, 2 condensadoras, 8 trechos de linha, 6 de dreno e 2 pontos de ar com
+    circuito;
+  - o lançado: idêntico à prévia;
+  - o **Ctrl+Z**: volta a zero;
+  - o relatório traz a única verificação em falta, que é real: a Cozinha sem janela pede exaustão.

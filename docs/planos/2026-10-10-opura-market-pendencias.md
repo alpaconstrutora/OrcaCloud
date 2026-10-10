@@ -84,6 +84,14 @@ até no `tsc`). Foram 8 timeouts + 1 asserção de relógio, não 14.
   em `reference_agente_leitura_supabase.md`.
 - **Pronto:** testes verdes; prova no navegador com capturas; CI verde.
 
+#### Item 4 — execução (10/10/2026, frente `market-acesso`)
+
+- ✅ `utils/acessoAoMarket.ts` (`podeAcessarMarket`), usado no guarda do `AppRouter.tsx` e no item do menu do celular do `Layout.tsx` (os do computador seguem dentro do bloco de usuário interno). Segue o molde de `utils/acessoAoCondominio.ts`.
+- ✅ `__tests__/acessoAoMarket.test.ts` (11 casos: os 8 grupos, e-mail de dev, sessão sem grupo; grupo novo no enum quebra o teste) e `__tests__/components/LayoutMenuMarket.test.tsx` (monta o Layout, abre o menu do celular: USUARIO vê, os 6 grupos externos não). Com a trava removida, os 6 falham.
+- ✅ Conta real: linha em `broker_profiles` para `agente-leitura@alpaconstrutora.com.br` (`87a62048-f044-47eb-bed9-0631bb60681f`), **sem organização** (`organization_id` nulo, como 5 dos 27 corretores) para não aparecer nas listas de corretores da Alpa; `settings.conta_de_teste = true`. Permanente.
+- ✅ Prova no navegador (`c:/tmp/pwtest/market_acesso.js`, escrita em tabela abortada): entrando pelo Portal do Corretor, em 1600 e 390 px, o menu não mostra o Market; forçando `#/opura-market` o guarda redireciona para `#/dashboard` com o aviso `[RouteGuard]` e o módulo não abre. Pelo Portal do Colaborador o módulo abre.
+- ⚠️ **Achado fora do escopo:** o menu do celular do corretor lista vários módulos internos (Estudos de Viabilidade, Planta Inteligente, Suprimentos, Pedidos, Recebimento, Almoxarifado…). Só o Market foi travado aqui; o resto do menu do celular não respeita o perfil como o do computador. Fica registrado para uma frente própria.
+
 ## Item 1 — feed salvo e importado todo dia (frente `market-feed-agendado`)
 
 **Banco** (`supabase/migrations/aplicar_20271010000100_opura_market_feeds.sql`):

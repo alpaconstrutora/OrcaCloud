@@ -10,6 +10,7 @@ import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
 import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
+import { podeAcessarMarket } from '../utils/acessoAoMarket';
 
 const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
   if (mode === 'light') return <Sun className={className} />;
@@ -1346,7 +1347,7 @@ const Layout: React.FC<LayoutProps> = ({
               <NavItem id="blueprint" icon={PencilRuler} label="Planta Inteligente" forceFull />
               <NavItem id="bim-viewer" icon={Boxes} label="Modelo 3D (IFC)" forceFull />
               {/* Só administrador e usuário interno (D5 do plano Market); o menu do computador já filtra. */}
-              {(profile.group === 'USUARIO' || isDev) && (
+              {podeAcessarMarket(profile.group, isDevEmail) && (
                 <NavItem id="opura-market" icon={Search} label="ÒPURA Market" forceFull />
               )}
 

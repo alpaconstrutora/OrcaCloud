@@ -3120,8 +3120,10 @@ Achados no teste do usuário no app real (print com "sem dre… 2345 VA …de dr
 - **O texto da marca por cima das peças.** O canvas pintava o texto das marcas de verificação ANTES
   das peças, e a evaporadora, o "AC" e o "2345 VA" ficavam por cima dele. Agora o texto sai num
   passe próprio, depois das peças (com o fundo branco de sempre). Na marca de uma peça com medidas,
-  ele desce para baixo da peça (meia diagonal dela + folga), em vez de nascer sobre o símbolo. Vale
-  para todas as marcas da verificação, não só as da climatização.
+  ele desce para LOGO ABAIXO da peça (a meia altura dela na tela pelo giro, mais uma linha de folga)
+  em vez de nascer sobre o símbolo. A primeira versão usava a meia diagonal, e o usuário achou o texto
+  "excessivamente afastado" (28 px abaixo da potência na cena do teste; agora, uma linha). Vale para
+  todas as marcas da verificação, não só as da climatização.
 - **O ponto da evaporadora sem parede.** Sem parede perto, `pontoEletricoDaEvaporadora` punha o
   ponto no centro da peça, um por cima do outro. Agora ele nasce ao LADO, no eixo da largura (meia
   largura + 150 mm, pelo giro da peça). Com parede, segue na face dela, como antes.

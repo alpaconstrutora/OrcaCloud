@@ -91,5 +91,10 @@ describe('BlueprintCanvas · o texto da marca por cima das peças', () => {
     expect(Math.max(...daMarca.map((x) => x.i))).toBeGreaterThan(Math.max(...daPotencia.map((x) => x.i)));
     // E abaixo dele: o y do texto da marca é maior que o do "2345 VA".
     expect(Math.min(...daMarca.map((x) => Number(x.c.args[2])))).toBeGreaterThan(Math.max(...daPotencia.map((x) => Number(x.c.args[2]))));
+    // E PERTO: uma linha abaixo do "2345 VA", sem encostar (12 a 22 px). Na meia diagonal da peça
+    // (a primeira versão) eram 28 px — "excessivamente afastado", no teste do usuário.
+    const folga = Math.max(...daMarca.map((x) => Number(x.c.args[2]))) - Math.max(...daPotencia.map((x) => Number(x.c.args[2])));
+    expect(folga).toBeGreaterThanOrEqual(12);
+    expect(folga).toBeLessThanOrEqual(22);
   });
 });

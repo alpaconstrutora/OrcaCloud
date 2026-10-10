@@ -6453,7 +6453,11 @@ export default function BlueprintCanvas({
         const largura = ctx.measureText(mv.texto).width;
         const alvo = terminalPorIdDaMarca.get(mv.alvoId);
         const sobreAPeca = alvo && alvo.at.x === mv.at.x && alvo.at.y === mv.at.y ? medidasDoTerminal(alvo) : null;
-        const abaixo = sobreAPeca ? emTela(Math.hypot(sobreAPeca.larguraMm, sobreAPeca.profundidadeMm) / 2) + 22 * fz : (mv.tipo === 'LOUCA_SEM_PONTO' ? 16 : 10) * fz;
+        // Logo abaixo da peça: a meia ALTURA dela na tela pelo giro (na hi-wall deitada, a meia
+        // profundidade), e não a meia diagonal — que numa peça larga e rasa afastava demais o texto.
+        const giroDaMarca = ((alvo?.rotacaoGraus ?? 0) * Math.PI) / 180;
+        const meiaAlturaMm = sobreAPeca ? (Math.abs(Math.sin(giroDaMarca)) * sobreAPeca.larguraMm + Math.abs(Math.cos(giroDaMarca)) * sobreAPeca.profundidadeMm) / 2 : 0;
+        const abaixo = sobreAPeca ? emTela(meiaAlturaMm) + 26 * fz : (mv.tipo === 'LOUCA_SEM_PONTO' ? 16 : 10) * fz;
         textosDasMarcas.push({ texto: mv.texto, x: c.x - largura / 2, y: c.y + abaixo, cor, largura, atenuada: atenuados.has(mv.alvoId) });
       }
       ctx.restore();

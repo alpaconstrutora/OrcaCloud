@@ -65,8 +65,10 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
   const [showForm, setShowForm]       = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
   const [isMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
-  const [groupBy, setGroupBy]             = useState<GroupByField>('none')
-  const [viewMode, setViewMode]           = useState<ViewMode>('list')
+  // Agrupar e Lista/Kanban também persistem (§3): eram useState e voltavam ao padrão
+  // a cada saída da tela, enquanto Prazo/Espaço/Pasta acima ficavam.
+  const [groupBy, setGroupBy]             = usePersistedState<GroupByField>('tasksModule:groupBy', 'none')
+  const [viewMode, setViewMode]           = usePersistedState<ViewMode>('tasksModule:viewMode', 'list')
   const [taskDefaults, setTaskDefaults]   = useState<TaskDefaults>({})
   const [employees, setEmployees]     = useState<EmployeeOption[]>([])
   const [obrasLocal, setObrasLocal]   = useState<ProjectOption[]>([])

@@ -75,8 +75,11 @@ describe('favorito "Enviar ao ÒPURA"', () => {
     const listing = { id: '2833700148', prices: { sale: { value: 2500000 } }, address: { city: 'Cambuí', isApproximateLocation: true }, amenities: { usableAreas: [280] }, unitType: 'HOME' };
     (self as unknown as { __next_f: unknown[] }).__next_f = [[1, '0:{}\n']];
     const el = document.createElement('script');
+    // Tipo que o jsdom não executa: só o TEXTO interessa, como um pedaço já consumido
+    // pelo Next. (Sem isso o jsdom rodava o push num `self` sem __next_f e a CI caía
+    // com "Unhandled error", em 10/10/2026.) A captura lê qualquer <script>.
+    el.type = 'text/x-pedaco-do-next';
     el.textContent = `self.__next_f.push([1,${JSON.stringify(`7:["$","div",null,{"listing":${JSON.stringify(listing)}}]\n`)}])`;
-    // Só o texto: no jsdom o <script> anexado não roda, como um pedaço já consumido pelo Next.
     document.body.appendChild(el);
     const { lido } = lerDoHash(rodarFavorito());
     expect(lido.leitor).toBe('zap');

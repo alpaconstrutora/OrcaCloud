@@ -123,7 +123,7 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
   - A aba Fontes manda o pacote ao modo `ler-anuncio` e abre a mesma gaveta de conferência.
   - Em "Todas", um aviso âmbar diz o motivo e o anúncio espera, com o botão "Descartar".
 - **Servidor:** o modo `ler-anuncio` aceita `pacote`. Com ele, não baixa nada. Se o pacote não tiver o anúncio, como na Conexão 381, cuja página é montada por JavaScript, busca como antes.
-- **Testes:** `__tests__/opuraMarketCaptura.test.ts`, 11 casos em jsdom. O favorito roda a partir do TEXTO do `javascript:`, como faz o navegador.
+- **Testes:** `__tests__/opuraMarketCaptura.test.ts`, 10 casos em jsdom. O favorito roda a partir do TEXTO do `javascript:`, como faz o navegador.
 - **Prova** com o build de PRODUÇÃO (minificado) e a organização `ZZ Teste E2E Market (navegador)`, apagada depois:
   - **Chrome automatizado nos portais reais:** o favorito abriu o app e o servidor recebeu o pacote. Mas o Cloudflare mostrou "Attention Required" ao Chrome automatizado nos três portais. Driblar essa detecção está fora.
   - **Replay com as páginas reais baixadas em 10/10:** ZAP, VivaReal e OLX lidos por inteiro, com pacotes de cerca de 5 mil caracteres. O VivaReal e o ZAP repetido deram "já estava na base: dados atualizados". No banco: 2 anúncios, nenhum duplicado.

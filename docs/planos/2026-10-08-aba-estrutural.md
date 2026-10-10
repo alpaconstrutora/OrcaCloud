@@ -34,3 +34,12 @@ Ficam onde estão, de propósito: escada, rampa, shaft e elevador (desenho da ar
 - Textos que apontavam "Arquitetura › Estrutural" (Armadura, Quantitativos, Exibir › Eixos) passaram a dizer "aba Estrutural".
 - Testes: os do editor que chegavam às peças e aos lançamentos por Arquitetura abrem a aba Estrutural; novos casos para
   a ordem das abas, os grupos, a Armadura nos dois lugares e Arquitetura sem lançamento automático.
+
+## Status (10/10/2026)
+
+**Publicado** em `05d1b43d` (08/10/2026) — CI verde, domínio conferido, prova no app (ordem das abas, quatro grupos,
+menu Elementos com os seis, Pilar liga a ferramenta, Componentes de Arquitetura sem estrutura, Armadura em Analisar).
+
+Pendências: nenhuma. Observação para quem escreve prova no navegador: o menu `data-menu-do-ribbon="Estrutural"` da aba
+Arquitetura deixou de existir — os comandos estão na aba Estrutural.
+

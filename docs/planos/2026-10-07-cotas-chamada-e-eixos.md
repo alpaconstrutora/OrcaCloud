@@ -2,6 +2,40 @@
 
 > Plano aprovado em 07/10/2026. Frente `cotas-chamada-eixos` (REGRA #8).
 
+## Status (atualizado em 10/10/2026)
+
+**Tudo publicado** — CI verde e domínio conferido em cada entrega; frentes fechadas.
+
+| Entrega | Commit | Data |
+|---|---|---|
+| Linhas de chamada (tela, PDF, DXF) · cotas do lote no PDF/DXF · nome vertical = letra · Eixos automáticos · Exibir › Eixos · eixos no PDF/DXF | `e6fe6e58` | 07/10 |
+| Eixos pelos lados do lote (estudo sem paredes nem blocos) | `20b64b9f` | 08/10 |
+| Cotas e eixos pelos detalhes do lote (recuo, faixas de restrição, divisas) | `a5513115` | 08/10 |
+| Bolha do eixo por fora das cotas · renumerar ao gerar de novo | `a6fa1789` | 08/10 |
+| Bolhas escalonadas (zigue-zague) | `a2175a43` | 08/10 |
+| Número do trecho curto de cota escrito por fora (tela e PDF) | `d607c5d6` | 08/10 |
+| Aba Estrutural no ribbon (plano próprio: `2026-10-08-aba-estrutural.md`) | `05d1b43d` | 08/10 |
+
+### Pendências (nenhuma pedida; ficam registradas)
+
+1. **PDF/DXF sem o recuo nas cotas do lote.** O envelope vem dos recuos da zona (`blueprint_study_urban_context`), fora
+   do modelo, e a prancha não o desenha; o PDF/DXF reparte o lado do lote só por faixas de restrição e divisas. Fechar
+   pede passar o envelope à exportação (e desenhá-lo na prancha).
+2. **Sub-regiões não repartem as cotas do lote** (grama, piso, deck…) — decisão de 08/10: acabamento, não limite.
+   Entram se o usuário pedir.
+3. **DXF: eixo em linha contínua.** Traço-ponto exige tabela LTYPE no R12; hoje a camada própria
+   (`PLANTA-MALHA-EIXOS`) deixa quem recebe aplicar o tipo de linha.
+4. **DXF: número do trecho curto continua no meio do trecho** (o CAD não esconde texto por tamanho; a regra "por fora"
+   é da tela e do PDF).
+5. **PDF: largura do texto estimada** (0,55 × altura por caractere) — o `Desenhista` não mede texto; um rótulo de
+   fonte muito diferente pode ficar um pouco deslocado.
+6. **Eixos recém-criados nascem selecionados (vermelho)** — o mesmo comportamento dos Pilares automáticos; é seleção,
+   não erro, mas confunde no primeiro olhar.
+7. **Eixos de estudos antigos** (antes de 07/10) podem ter a convenção velha (vertical com número): gerar de novo com
+   "Renumerar" ligado corrige; nada é renomeado sozinho.
+8. **Bolha empurrada só pelas cotas.** A faixa evitada é a das cadeias de cota; outros textos do desenho (nome de
+   ambiente, rótulo de vaga) não entram nela.
+
 ## Contexto
 
 Pedido, literal, com dois prints (o lote 10 × 30 com as cotas por fora, e uma planta baixa de referência com cadeias e

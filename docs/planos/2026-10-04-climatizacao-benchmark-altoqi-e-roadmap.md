@@ -500,7 +500,7 @@ O detalhe de cada fase está em "Execução", no fim do documento.
   - o achado 8 (as normas) continua aberto e é a pendência A abaixo;
   - o achado 13: o modelo externo como referência entrou na E10.4b, e o RVT direto segue no backlog.
 
-**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **175 ✅ (77 %), 45 🟡 e
+**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **178 ✅ (78 %), 42 🟡 e
 8 ❌**; eram 51 / 83 / 94 em 04/10. Os números e os 10 ❌ estão na "Leitura geral".
 
 ### Pendências
@@ -586,16 +586,16 @@ E os 🟡 que a regraduação revelou:
   estrutura e móvel na folga.
 - **F7** **Importação IFC:** a unidade `.SPLITSYSTEM.` de outro programa é recusada (provado só com o IFC
   da própria Planta).
-- **F8** **Corte:** sem o equipamento e sem o terminal de ar, e a linha cortada como um tubo sem isolamento.
-- **F9** **Referências externas:** o IFC externo aparece só no 3D, não na planta 2D. O DXF vetorial traz só
+- **F8** ✅ **Corte:** sem o equipamento e sem o terminal de ar, e a linha cortada como um tubo sem isolamento.
+- **F9** ✅ (o IFC na planta 2D; o DXF sem textos segue) **Referências externas:** o IFC externo aparece só no 3D, não na planta 2D. O DXF vetorial traz só
   linhas e arcos (sem textos e cotas).
 - **F10** ✅ **Evaporadora inserida à mão:** traz o ponto elétrico com a potência pela capacidade.
-- **F11** **Problemas de dimensionamento:** só aparecem nos painéis, não marcados no desenho.
+- **F11** ✅ **Problemas de dimensionamento:** só aparecem nos painéis, não marcados no desenho.
 - **F12** **Porta interna para ambiente não climatizado:** sai da parede e nenhuma parcela a substitui. A
   infiltração é por trocas/h, não por fresta.
 - **F13** **Ambiente vizinho:** a temperatura dele não se declara (fração fixa do ΔT).
 - **F14** ✅ **Iluminação:** sai das luminárias desenhadas quando não declarada.
-- **F15** **Catálogo:** o tipo só se renomeia, desativa ou apaga.
+- **F15** ✅ **Catálogo:** o tipo só se renomeia, desativa ou apaga.
 
 **E. Backlog nomeado (sem mudança):**
 - RVT/RTE direto (serviço externo);
@@ -1037,7 +1037,7 @@ ela herda quase de graça:
 | 31 · Cadastro nativo: dutos | E | ✅ | chapa galvanizada, painel pré-isolado e flexível em `MATERIAIS_DA_DISCIPLINA.MECANICA` (`model:2654`), redondo e retangular |
 | 31 · Cadastro nativo: kits de linhas frigorígenas | E | 🟡 | não há kit nativo como peça; o cobre (par), o isolamento e o cabo saem da linha desenhada na lista de materiais (`utils/blueprintMateriaisClimatizacao.ts`), e a composição do kit é montada pela organização (`PainelComposicoesDePeca.tsx:18`) |
 | 32 · Criação de novas peças | E | ✅ | "salvar tipo" leva a capacidade (`utils/blueprintTipos.ts:67, 144`) para `blueprint_element_types`; `EQUIPAMENTO_CLIMATIZACAO` personalizado (`utils/blueprintHidraulica.ts:710`); a vazão não entra no tipo salvo |
-| 33 · Edição de peças existentes | E | 🟡 | a tela do catálogo só renomeia, desativa e exclui (`TelaCatalogoDeTipos.tsx:129-130`); mudar propriedade = aplicar, editar a peça e salvar outro tipo; as fichas nativas ficam no código |
+| 33 · Edição de peças existentes | E | ✅ | a tela do catálogo edita as propriedades numéricas do tipo (capacidade, potência, medidas, cota, vazão) num painel lateral, além de renomear, desativar e excluir (F15, 10/10: `camposEditaveisDoTipo`, `updateElementTypeProps`); o tipo é molde: as peças já desenhadas ficam como estão |
 | 34 · Informações técnicas | E | ✅ | capacidade, vazão e sistema no `Terminal` (`model:3391-3404`), medidas, potência e parâmetros personalizados (`model:3188`) |
 | 35 · Itens associados (composição) | E | ✅ | a tela de composições lista `FRIGORIGENA`, `DRENO_AC` e `MECANICA` (`PainelComposicoesDePeca.tsx:18`), com o kit do split pela especificação ("12.000 BTU/h") |
 | 36 · Simbologia 2D | E | 🟡 | 20 símbolos de fonte única (`utils/blueprintSimbolosClimatizacao.ts:57, 130`), canvas e prancha; fixos no código, sem cadastro nem personalização pela organização |
@@ -1050,7 +1050,7 @@ ela herda quase de graça:
 | 38 · Plantas de climatização | E | ✅ | prancha por pavimento com linha, dreno e duto (`blueprintPranchaClimatizacao.ts:55`, `:67`); `TipoDePrancha` com `CLIMATIZACAO` (`blueprintPranchas.ts:163`) e entrada no conjunto (`blueprintPranchas.ts:297-306`); a cadeia de cotas passa além da condensadora na fachada (C12, 10/10: `pecasForaDoLado`, na tela, no PDF e no DXF) |
 | 39 · Detalhes técnicos | E | 🟡 | 4 detalhes típicos (evaporadora, condensadora, dreno com sifão, difusor com plenum), saem só do que existe no desenho (`blueprintDetalhesClimatizacao.ts:73`, `:91`). Falta: são genéricos e sem escala, com medidas "CONFERIR com o fabricante" (`:103`); não há detalhe de VRF/derivador, exaustor, suporte de linha ou duto, nem passagem em parede ou laje |
 | 40 · Detalhes isométricos | E | ✅ | isométrico da rede inteira (linha, dreno e dutos, todos os pavimentos) (`blueprintDetalhesClimatizacao.ts:26`; `RedeDaPrancha` + `CLIMATIZACAO` em `blueprintIsometricoPrancha.ts:51`). os rótulos de peças próximas desviam uns dos outros, com linha de chamada (C13, 10/10: `lugarDoRotulo`) |
-| 41 · Cortes | E | 🟡 | trechos de climatização entram no corte e o duto retangular é cortado na meia-altura (`blueprintCorte.ts:327`, `:507`). Falta: evaporadora, condensadora e terminais de ar não aparecem no corte, que só traz as peças de incêndio (`blueprintCorte.ts:535`); a linha é cortada como um tubo só, sem o par e sem o isolamento |
+| 41 · Cortes | E | ✅ | trechos de climatização entram no corte com o ENVELOPE (isolamento), a linha frigorígena cortada como o par de tubos e o duto retangular na meia-altura; evaporadora, condensadora e terminais de ar no plano ou atrás dele, na tela e na prancha, com a sigla (F8, 10/10: `pecasDeClimatizacao` em `blueprintCorte.ts`) |
 | 42 · Representações realistas | E | ❌ | o 3D desenha as peças como caixas nas medidas declaradas (`Blueprint3DViewer.tsx:1214-1221`) e o duto retangular com bolsas. Falta a geometria realista do equipamento |
 | 43 · Indicações gráficas | E | ✅ | rótulos por disciplina: Ø líquido/sucção, DN, L×A (`blueprintPranchaClimatizacao.ts:39`); número EV-1/CD-2 e tag BTU/h ou m³/h (`:46-50`); as etiquetas desviam umas das outras (`posicaoLivre`, `:168`) |
 | 44 · Legendas | E | ✅ | quadro-resumo por pavimento e legenda com os traços das três redes e os símbolos que existem, com a quantidade (`blueprintPranchaClimatizacao.ts:186`, `:235`) |
@@ -1075,7 +1075,7 @@ ela herda quase de graça:
 | 53 · Importação IFC | E | 🟡 | a climatização é importada (`ifcParametricoService.ts:1028`, `ifcParaKernel.ts:1111`, `PainelImportarIfc.tsx:246`) com religação do sistema (`ifcParaKernel.ts:1243`). Falta: um `IfcUnitaryEquipment .SPLITSYSTEM.` de outro programa é recusado, porque evaporadora e condensadora só se distinguem pelo nosso ObjectType (`ifcParaKernel.ts:1055`); a importação só foi provada com IFC da própria Planta |
 | 54 · Exportação IFC | E | ✅ | `IfcDuctFitting` (`blueprintIfc.ts:2357`), `IfcAirTerminal` (`:2647-2655`), `IfcUnitaryEquipment` (`:2632`), par da linha (`:2273`), sistemas `.AIRCONDITIONING.`/`.REFRIGERATION.` (`:2168-2170`) e `Pset_OpuraClimatizacao` (`:1424`, `:1433`). a rede só de exaustão em `.VENTILATION.` (C14, 10/10: `idsDaRedeDeExaustao`) e o isolamento como `IfcCovering .WRAPPING.` ligado ao tubo (C15, 10/10) |
 | 55 · OpenBIM | E | ✅ | IFC4 e IFC4X3 (`blueprintIfc.ts:574`); BCF com a classe `EQUIPAMENTO` (`blueprintBcf.ts:260`) |
-| 56 · Modelos BIM externos como referência | E | 🟡 | IFC da biblioteca como referência no 3D, com olho, opacidade, deslocamento e giro (`blueprintReferenciaExterna.ts:101`, `Blueprint3DViewer.tsx:2321`); a lista fica no estudo, na tabela `blueprint_study_referencias` (`blueprintReferenciasService.ts:21`). Falta: não aparece na planta 2D, só no 3D; a prova no app real com um arquivo real está pendente |
+| 56 · Modelos BIM externos como referência | E | 🟡 | IFC da biblioteca como referência no 3D e, cortado na altura de corte da referência (1,20 m acima do piso, editável), também na PLANTA 2D como linhas de fundo (F9, 10/10: `secaoDoIfc`, `secaoHorizontalDaMalha`); a lista fica no estudo (`blueprint_study_referencias`). Falta: a prova no app real com um arquivo real |
 | 57 · Importação de arquitetura/estrutura | E | ✅ | IFC: peças, paredes e vãos (`ifcParaKernel.ts:235`, `:483`, `:624`). DXF: paredes e aberturas (`dxfParaKernel.ts:111`, `:438`) |
 | 58 · Importação RVT/RTE | E | ❌ | recusada com a orientação de exportar (`blueprintUnderlay.ts:432`); está no backlog (serviço externo). O caminho é o IFC do Revit |
 | 59 · DWG/DXF como referência | E | 🟡 | o DXF/DWG (o DWG é convertido no servidor, `PainelImportarDxf.tsx:113`) vira fundo; o canvas traça o vetor quando o plano bate com o PNG (`dxfParaFundo.ts:219`, `BlueprintEditor.tsx:3032`). Falta: só entram linhas e arcos (sem textos, cotas nem hachuras); acima de 80 mil traços volta o PNG; o seletor de "Planta de fundo" ainda recusa .dwg/.dxf (`blueprintUnderlay.ts:437`) |
@@ -1113,7 +1113,7 @@ ela herda quase de graça:
 | 69 · Visibilidade independente dos modelos IFC | E | ✅ | cada referência IFC com olho e opacidade próprios (`blueprintReferenciaExterna.ts:31,40`; `Ed:1762-1766`; `3D:2321`), lista gravada no estudo (`hooks/useBlueprintReferencias.ts:42`; `services/blueprintReferenciasService.ts:21`). RVT/RTE direto segue no backlog |
 | 70 · Planos de corte | E | 🟡 | corte 2D (`Corte:86`) e caixa de corte no 3D (`blueprint3dSelecao.ts:85`) ✅; falta lançar/editar no plano de corte (XZ/YZ) e no isométrico — backlog |
 | 71 · Captura de pontos/referências | E | ✅ | OSNAP (`Encaixe:47-60`) |
-| 72 · Indicação de problemas durante o lançamento | E | 🟡 | marcas no desenho já cobrem a climatização: declividade do dreno (`Verif:146-150`), linha/dreno/duto × pilar e viga (`Verif:177-188`), ponta aberta (`Verif:102`), desenhadas pelo canvas (`Canvas:2073-2075`). Falta: as FALTAs de dimensionamento (subdimensionado, linha acima do limite, limites do VRF, velocidade/pressão do duto, exaustão) só aparecem nas gavetas, sem marca no desenho |
+| 72 · Indicação de problemas durante o lançamento | E | ✅ | marcas no desenho para a climatização inteira: declividade do dreno, ponta aberta, rede × pilar e viga, e — F11, 10/10 (`blueprintMarcasClimatizacao.ts`) — linha longa/fina/sem linha, desnível, DN do dreno pela vazão, dreno sem sifão, VRF (diâmetro, peça da divisão, limites), exaustor sem duto e, com a rede de ar aberta, velocidade e pressão; listadas nas gavetas da linha, do VRF e dos dutos |
 | 73 · Blocos inteligentes | E | ✅ | equipamento é peça da rede com capacidade, potência, medidas, sistema e kit (`blueprintPosicaoSplit.ts:231-277`); componente com ficha que lança o ponto elétrico (`PtsHidro:376`); kit do split na composição (`PainelComposicoesDePeca.tsx:17`) |
 | 74 · Replicação/edição de elementos | E | ✅ | `DuplicateEntities` copia componentes e religa a evaporadora à cópia da condensadora (`commands:5427`, `commands:5571-5573`); Ctrl+D com telhado, instalações e componentes (`blueprintSelecao.ts:222-246`); matriz, alinhar e distribuir (`blueprintSelecao.ts:377,534,602`); `DuplicateLevel` leva componentes (`commands:5370-5386`) |
 | 75 · Pavimentos e níveis | E | ✅ | `Level` (`model:45`) |
@@ -1177,14 +1177,14 @@ derivado a cada mudança.
 
 | Grau | ✅ | 🟡 | ❌ | Total |
 |---|---|---|---|---|
-| **E** | 175 | 45 | 8 | 228 |
+| **E** | 178 | 42 | 8 | 228 |
 | **A** | 8 | 9 | 0 | 17 |
 | **M** | 0 | 0 | 0 | 0 |
 | **B** | 0 | 0 | 0 | 0 |
 | **N** | 0 | 0 | 2 | 2 |
-| **Total** | 183 | 54 | 10 | 247 |
+| **Total** | 186 | 51 | 10 | 247 |
 
-**Dos 228 Essenciais, 175 estão prontos (77 %; eram 51, 22 %), e só 8 não existem.** Os 10 ❌:
+**Dos 228 Essenciais, 178 estão prontos (78 %; eram 51, 22 %), e só 8 não existem.** Os 10 ❌:
 
 - quatro de backlog: RVT direto, gás, SPDA e cabeamento;
 - o ajuste do raio das curvas;
@@ -3046,3 +3046,49 @@ Pedido do usuário, depois da explicação item a item do grupo F: **"seguir com
 
 A inserção pelo menu chama a função provada. O clique no canvas não é testável no jsdom e entra nas
 provas no app real (B).
+
+### Grupo F, bloco "em seguida" — F11, F8, F9 e F15 · 10/10/2026 (frente `clima-f2`)
+
+A segunda parte da recomendação aceita ("seguir com a sua recomendacao").
+
+- **F11, as marcas no desenho.** `marcasDaClimatizacao` leva as conferências que já existiam ao lugar
+  do problema, no formato da verificação da rede (`MarcaDeVerificacao`, treze tipos `CLIMA_*`):
+  - **ERRO:** linha longa, desnível, Ø abaixo da faixa, DN do dreno abaixo da vazão, VRF com trecho
+    fino, divisão sem a peça certa e limites;
+  - **AVISO:** evaporadora sem linha, sem dreno ou sem sifão, e exaustor sem duto.
+
+  Com a rede de ar calculada (a gaveta dos dutos aberta, que tem a carga térmica), entram ainda a
+  velocidade alta e a pressão que não atende. O canvas desenha as marcas pelo mesmo caminho das do
+  cálculo de incêndio, e as gavetas da linha, do VRF e dos dutos as listam (`PainelVerificacaoDaRede`).
+  Sem nada de climatização no desenho, nada é calculado.
+- **F8, o corte.**
+  - O tubo cortado é o ENVELOPE (o isolamento soma na largura e na altura).
+  - A linha frigorígena cortada são os DOIS tubos, deslocados pelo lado do eixo projetado no plano (a
+    conta do IFC e do 3D).
+  - Os equipamentos e os terminais de ar no plano ou atrás dele (`pecasDeClimatizacao`) aparecem na
+    tela e na prancha: a caixa vista no plano (largura e profundidade projetadas pelo giro) e a sigla.
+- **F9, o IFC de referência na planta 2D.**
+  - `secaoDoIfc` abre o IFC, leva a malha ao mundo com as mesmas matrizes do 3D e a corta no plano
+    horizontal (`secaoHorizontalDaMalha`, pura) na altura do pavimento aberto + `alturaDoCorteMm` da
+    referência (1,20 m, editável no painel; ausente no que foi gravado antes = o padrão).
+  - O canvas desenha os segmentos como linhas de fundo, antes da grade.
+  - O corte é calculado uma vez por arquivo, altura e posição.
+  - O DXF vetorial sem textos e cotas segue de fora (não foi o recomendado).
+- **F15, o catálogo.**
+  - Cada tipo com propriedade numérica ganha "Editar propriedades": um painel lateral com os números
+    de primeiro nível (capacidade, potência, medidas, cota, vazão).
+  - Recusa vazio, texto e negativo dizendo o campo, e grava por `updateElementTypeProps`.
+  - O tipo sem número a editar nem mostra o botão: desabilitado, o motivo não apareceria (o botão de
+    ação desliga o ponteiro).
+  - O tipo é molde: as peças desenhadas ficam como estão.
+
+**Prova:**
+- `blueprintClimatizacaoGrupoF2.test.ts` (10):
+  - **F11:** sem climatização, nada; as marcas no lugar; a rede de ar; o filtro por pavimento.
+  - **F8:** o par cortado com os raios do envelope; o dreno isolado × a água sem isolamento; o
+    equipamento atrás do plano e o girado.
+  - **F9:** o cubo cortado; a altura padrão e a lida; um IFC REAL exportado pela Planta cortado onde
+    as paredes estão, e deslocado.
+  - **F15:** os campos e a gravação.
+- `components/TelaCatalogoDeTiposEditar.test.tsx` (3): abre, edita, grava e fecha; o inválido; o tipo
+  sem número.

@@ -38,7 +38,16 @@ export interface ReferenciaExterna {
   rotacaoDeg: number;
   /** 0–1. Nasce meio transparente: é fundo para coordenar, não o desenho. */
   opacidade: number;
+  /**
+   * F9 (10/10/2026): a altura, acima do piso do pavimento, em que o modelo é
+   * CORTADO para aparecer na planta 2D (a convenção de planta: ~1,20 m). Ausente
+   * no que foi gravado antes = o padrão.
+   */
+  alturaDoCorteMm?: number;
 }
+
+/** F9: a altura de corte de partida da planta (a convenção, editável por referência). */
+export const ALTURA_DO_CORTE_DA_PLANTA_MM = 1200;
 
 export function referenciaNova(arquivo: { id: string; nome: string; storagePath: string }): ReferenciaExterna {
   return {
@@ -81,6 +90,7 @@ export function lerReferencias(guardado: unknown): ReferenciaExterna[] {
       cotaMm: Math.round(numero(r.cotaMm, 0)),
       rotacaoDeg: numero(r.rotacaoDeg, 0),
       opacidade: Math.min(1, Math.max(0.05, numero(r.opacidade, 0.6))),
+      alturaDoCorteMm: Math.round(Math.min(10000, Math.max(0, numero(r.alturaDoCorteMm, ALTURA_DO_CORTE_DA_PLANTA_MM)))),
     });
   }
   return saida;
@@ -119,4 +129,47 @@ export function aplicarMatriz(m: readonly number[], p: readonly [number, number,
     m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
     m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14],
   ];
+}
+
+// ─── F9 (10/10/2026): a referência na PLANTA 2D — o corte horizontal da malha ──
+
+export interface SegmentoEmPlanta {
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+}
+
+/**
+ * F9: o corte da malha (posições já no mundo do viewer, metro, Y para cima) pelo
+ * plano horizontal Y = `alturaM` — cada triângulo que o plano atravessa dá um
+ * segmento. Devolve em mm de PLANTA: o x do viewer é o x da planta e o Z do
+ * viewer é o y da planta (ver `matrizDaReferencia`). Segmentos de menos de
+ * 1 mm (o triângulo deitado no plano, a quina) ficam de fora.
+ */
+export function secaoHorizontalDaMalha(posicoes: ArrayLike<number>, indices: ArrayLike<number>, alturaM: number): SegmentoEmPlanta[] {
+  const saida: SegmentoEmPlanta[] = [];
+  const p = (i: number): [number, number, number] => [posicoes[i * 3], posicoes[i * 3 + 1], posicoes[i * 3 + 2]];
+  for (let k = 0; k + 2 < indices.length; k += 3) {
+    const tri = [p(indices[k]), p(indices[k + 1]), p(indices[k + 2])];
+    const pontos: [number, number][] = [];
+    for (let e = 0; e < 3; e++) {
+      const u = tri[e];
+      const v = tri[(e + 1) % 3];
+      const du = u[1] - alturaM;
+      const dv = v[1] - alturaM;
+      // A aresta atravessa (ou toca num extremo só) o plano.
+      if ((du < 0 && dv > 0) || (du > 0 && dv < 0)) {
+        const f = du / (du - dv);
+        pontos.push([u[0] + (v[0] - u[0]) * f, u[2] + (v[2] - u[2]) * f]);
+      } else if (du === 0 && dv !== 0) pontos.push([u[0], u[2]]);
+    }
+    if (pontos.length < 2) continue;
+    const [a, b] = pontos;
+    const ax = Math.round(a[0] * 1000);
+    const ay = Math.round(a[1] * 1000);
+    const bx = Math.round(b[0] * 1000);
+    const by = Math.round(b[1] * 1000);
+    if (Math.hypot(bx - ax, by - ay) < 1) continue;
+    saida.push({ a: { x: ax, y: ay }, b: { x: bx, y: by } });
+  }
+  return saida;
 }

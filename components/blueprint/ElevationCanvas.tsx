@@ -21,6 +21,7 @@ import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
+import { FICHA_DO_PONTO_HIDRAULICO } from '../../utils/blueprintHidraulica';
 
 
 /**
@@ -532,6 +533,23 @@ export default function ElevationCanvas({
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // 2c. F8 (10/10/2026): EQUIPAMENTOS e TERMINAIS DE AR da climatização no plano ou atrás
+    // dele — a caixa vista no plano (contorno, não corpo: a mesma razão das instalações) e a sigla.
+    if (ehCorte(projecao)) {
+      for (const p of projecao.pecasDeClimatizacao ?? []) {
+        if (!p.larguraMm || !p.alturaMm) continue;
+        const cor = COR_DA_DISCIPLINA[p.disciplina as keyof typeof COR_DA_DISCIPLINA] ?? '#64748b';
+        const r = retangulo(p.u - p.larguraMm / 2, p.u + p.larguraMm / 2, p.v - p.alturaMm / 2, p.v + p.alturaMm / 2);
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = 1.25;
+        ctx.setLineDash([]);
+        ctx.strokeRect(r.x, r.y, r.w, r.h);
+        ctx.fillStyle = cor;
+        ctx.font = '10px sans-serif';
+        ctx.fillText(FICHA_DO_PONTO_HIDRAULICO[p.tipo].sigla, r.x + r.w + 3, r.y + 10);
+      }
     }
 
     // 3. Contorno externo do nível — traço forte, POR CIMA de tudo.

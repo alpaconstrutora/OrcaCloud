@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { Boxes, Eye, EyeOff, Loader2, Plus, Trash2 } from 'lucide-react';
 import { listarArquivos, type ArquivoDigital } from '../../services/digitalFileService';
 import { useOrgContext } from '../../hooks/useOrgContext';
-import { referenciaNova, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
+import { ALTURA_DO_CORTE_DA_PLANTA_MM, referenciaNova, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
 
 interface Props {
   referencias: ReferenciaExterna[];
@@ -41,13 +41,13 @@ export default function PainelReferenciasExternas({ referencias, onMudar, carreg
   const mudar = (arquivoId: string, parcial: Partial<ReferenciaExterna>) =>
     onMudar(referencias.map((r) => (r.arquivoId === arquivoId ? { ...r, ...parcial } : r)));
 
-  const campo = (r: ReferenciaExterna, rotulo: string, chave: 'deslocamentoXMm' | 'deslocamentoYMm' | 'cotaMm' | 'rotacaoDeg', unidade: string) => (
+  const campo = (r: ReferenciaExterna, rotulo: string, chave: 'deslocamentoXMm' | 'deslocamentoYMm' | 'cotaMm' | 'rotacaoDeg' | 'alturaDoCorteMm', unidade: string) => (
     <label key={chave} className="flex items-center justify-between gap-2 text-xs text-slate-600">
       {rotulo}
       <span className="flex items-center gap-1">
         <input
           type="number"
-          value={r[chave]}
+          value={r[chave] ?? (chave === 'alturaDoCorteMm' ? ALTURA_DO_CORTE_DA_PLANTA_MM : 0)}
           step={chave === 'rotacaoDeg' ? 1 : 100}
           aria-label={`${rotulo} — ${r.nome}`}
           onChange={(e) => mudar(r.arquivoId, { [chave]: Number(e.target.value) || 0 })}
@@ -107,6 +107,8 @@ export default function PainelReferenciasExternas({ referencias, onMudar, carreg
                 {campo(r, 'Deslocamento em y', 'deslocamentoYMm', 'mm')}
                 {campo(r, 'Cota', 'cotaMm', 'mm')}
                 {campo(r, 'Giro (anti-horário)', 'rotacaoDeg', '°')}
+                {/* F9 (10/10/2026): na planta 2D o modelo aparece cortado nesta altura acima do piso do pavimento. */}
+                {campo(r, 'Corte na planta, acima do piso', 'alturaDoCorteMm', 'mm')}
                 <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
                   Opacidade
                   <input

@@ -1470,6 +1470,21 @@ export function desenharElevacao(
       }
       d.texto(c.x + Math.max(lw / 2, 0.7) + 0.6, c.y - 0.6, ficha.sigla, 1.6, cor);
     }
+    // F8 (10/10/2026): os equipamentos e terminais de ar da climatização — a caixa nas medidas
+    // vista no plano, com a sigla; sem medida, a marca.
+    for (const p of projecao.pecasDeClimatizacao ?? []) {
+      const corP = COR_DA_DISCIPLINA[p.disciplina as keyof typeof COR_DA_DISCIPLINA] ?? '#64748b';
+      const c = { x: px(p.u), y: py(p.v) };
+      const ficha = FICHA_DO_PONTO_HIDRAULICO[p.tipo];
+      const lw = p.larguraMm ? Math.abs(px(p.u + p.larguraMm / 2) - px(p.u - p.larguraMm / 2)) : 0;
+      const lh = p.alturaMm ? Math.abs(py(p.v + p.alturaMm / 2) - py(p.v - p.alturaMm / 2)) : 0;
+      if (lw >= 1.5 && lh >= 1.5) d.retangulo(c.x - lw / 2, c.y - lh / 2, lw, lh, { espessuraMm: 0.3, cor: corP });
+      else {
+        const r = 0.7;
+        d.poligono(Array.from({ length: 12 }, (_, i) => ({ x: c.x + r * Math.cos((i / 12) * Math.PI * 2), y: c.y + r * Math.sin((i / 12) * Math.PI * 2) })), corP);
+      }
+      d.texto(c.x + Math.max(lw / 2, 0.7) + 0.6, c.y - 0.6, ficha.sigla, 1.6, corP);
+    }
   }
 
   // ── O QUE O PLANO CORTA — por cima de tudo, fora da ordenacao ──────────────

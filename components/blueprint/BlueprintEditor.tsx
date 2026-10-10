@@ -354,7 +354,7 @@ import PainelReferenciasExternas from './PainelReferenciasExternas';
 import { fundoVetorialDoDesenho, type FundoVetorial } from '../../utils/dxfParaFundo';
 import { prepararDxf } from '../../utils/dxfParaKernel';
 import { baixarArquivo } from '../../services/digitalFileService';
-import { matrizDaReferencia, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
+import { ALTURA_DO_CORTE_DA_PLANTA_MM, matrizDaReferencia, type SegmentoEmPlanta, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
 import { useBlueprintReferencias } from '../../hooks/useBlueprintReferencias';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
@@ -519,7 +519,7 @@ import TelaChavesDeApi from './TelaChavesDeApi';
 import TelaCompras from './TelaCompras';
 import TelaCatalogoDeTipos from './TelaCatalogoDeTipos';
 import TelaParametros, { usosPorChave } from './TelaParametros';
-import { deleteElementType, listAllElementTypes, renameElementType, setElementTypeActive, upsertElementTypes, type TipoDeElemento } from '../../services/blueprintElementTypeService';
+import { deleteElementType, listAllElementTypes, renameElementType, setElementTypeActive, updateElementTypeProps, upsertElementTypes, type TipoDeElemento } from '../../services/blueprintElementTypeService';
 import { usosPorAssinatura } from '../../utils/blueprintCatalogoDeTipos';
 import { abrirCotacao, lancarNoPlano, nomeDaObra, preverCompras, type PreviaDeCompras } from '../../services/blueprintComprasService';
 import { somarDias } from '../../utils/blueprintCompras';
@@ -770,6 +770,7 @@ import {
 } from '../../utils/blueprintPontosHidraulicos';
 import { comandosDaPotenciaDaEvaporadora, pontoEletricoDaEvaporadora, pontosEletricosDoComponente } from '../../utils/blueprintPontosHidraulicos';
 import { luminariasDoAmbienteW } from '../../utils/blueprintClimatizacaoAmbientes';
+import { marcasDaClimatizacao } from '../../utils/blueprintMarcasClimatizacao';
 import {
   planejarAguaDoModelo,
   refazerAgua,
@@ -2506,6 +2507,39 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (nivelAtivoId && ids.includes(nivelAtivoId)) return nivelAtivoId;
     return ids[0] ?? null;
   }, [editor.model.levels, nivelAtivoId]);
+  /**
+   * F9 (10/10/2026): a referência IFC também na PLANTA 2D — o modelo cortado na
+   * altura de corte da referência acima do piso do pavimento aberto. O corte é
+   * calculado uma vez por (arquivo, altura, posição) e guardado; o canvas desenha
+   * as linhas como fundo.
+   */
+  const [secoesDasReferencias, setSecoesDasReferencias] = useState<Record<string, SegmentoEmPlanta[]>>({});
+  const secoesPedidas = useRef(new Set<string>());
+  const elevacaoDoNivelAberto = editor.model.levels.find((l) => l.id === levelId)?.elevationMm ?? null;
+  const chavesDasSecoes = useMemo(
+    () =>
+      elevacaoDoNivelAberto == null
+        ? []
+        : referenciasExternas
+            .filter((r) => r.visivel && bytesDasReferencias[r.arquivoId])
+            .map((r) => {
+              const alturaM = (elevacaoDoNivelAberto + (r.alturaDoCorteMm ?? ALTURA_DO_CORTE_DA_PLANTA_MM)) / 1000;
+              const matriz = matrizDaReferencia(r);
+              return { chave: `${r.arquivoId}|${alturaM}|${matriz.join(',')}`, bytes: bytesDasReferencias[r.arquivoId], matriz, alturaM };
+            }),
+    [elevacaoDoNivelAberto, referenciasExternas, bytesDasReferencias],
+  );
+  useEffect(() => {
+    for (const c of chavesDasSecoes) {
+      if (secoesPedidas.current.has(c.chave)) continue;
+      secoesPedidas.current.add(c.chave);
+      void import('../../services/ifcViewerService')
+        .then(({ secaoDoIfc }) => secaoDoIfc(c.bytes, c.matriz, c.alturaM))
+        .then(({ segmentos }) => setSecoesDasReferencias((s) => ({ ...s, [c.chave]: segmentos })))
+        .catch((e) => console.warn('[referência IFC] corte da planta falhou:', e));
+    }
+  }, [chavesDasSecoes]);
+  const referenciasEmPlanta = useMemo(() => chavesDasSecoes.flatMap((c) => secoesDasReferencias[c.chave] ?? []), [chavesDasSecoes, secoesDasReferencias]);
   /** O pavimento ativo, quando é cópia viva de um tipo (E2.1). */
   const nivelAtivoVinculado = useMemo(() => {
     const l = editor.model.levels.find((x) => x.id === levelId);
@@ -3252,6 +3286,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     return { redes, ventilacao, ajustes: comandosDeDimensionamento(redes), plano: planejarRedeDeAr(editor.model, levelId, vazoes, hipAr), conferencia: conferenciaDaRedeDeAr(redes, ventilacao, hipAr, exaustoresDoNivel(editor.model, levelId)) };
   }, [tarefa, levelId, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.ar]);
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
+  /** F11 (10/10/2026): os problemas de dimensionamento da climatização marcados no desenho (com a rede de ar quando a gaveta dela está aberta). */
+  const marcasDaClima = useMemo(() => marcasDaClimatizacao(editor.model, climatizacaoDoEstudo.hipoteses, redeDeAr?.redes ?? []), [editor.model, climatizacaoDoEstudo.hipoteses, redeDeAr]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */
   /** E8.3/E8.4: a carga do ESTUDO inteiro para os documentos — só com a tarefa de documentos aberta. */
   const nomeDoNivelDoEstudo = useCallback((id: string) => editor.model.levels.find((l) => l.id === id)?.name ?? id, [editor.model.levels]);
@@ -10694,6 +10730,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 const t = await renameElementType(id, nome);
                 setTiposDoCatalogo((lista) => lista.map((x) => (x.id === id ? t : x)));
               }}
+              onEditarPropriedades={async (id, propriedades) => {
+                const t = await updateElementTypeProps(id, propriedades);
+                setTiposDoCatalogo((lista) => lista.map((x) => (x.id === id ? t : x)));
+              }}
               onAtivar={async (id, active) => {
                 const t = await setElementTypeActive(id, active);
                 setTiposDoCatalogo((lista) => lista.map((x) => (x.id === id ? t : x)));
@@ -14380,7 +14420,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               <div className="relative h-full min-w-0 flex-1">
                 <BlueprintCanvas
                   pressoesDaAgua={pressoesDaAgua}
-                  marcasDoCalculo={coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio}
+                  referenciasEmPlanta={referenciasEmPlanta.length ? referenciasEmPlanta : undefined}
+                  marcasDoCalculo={[...(coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio), ...marcasDaClima]}
                   encaixesAtivos={encaixesAtivos}
                   mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos && eletricaAVista}
                   model={editor.model}
@@ -16071,6 +16112,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 }
                 onSelecionar={selecionar}
               />
+              {/* F11 (10/10/2026): os problemas da climatização marcados no desenho, listados aqui. */}
+              <PainelVerificacaoDaRede marcas={marcasDaClima} disciplinas={['FRIGORIGENA', 'DRENO_AC']} onSelecionar={selecionar} />
             </div>
           )}
 
@@ -16109,6 +16152,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 }
                 onSelecionar={selecionar}
               />
+              {/* F11 (10/10/2026): os problemas da climatização marcados no desenho, listados aqui. */}
+              <PainelVerificacaoDaRede marcas={marcasDaClima} disciplinas={['FRIGORIGENA']} onSelecionar={selecionar} />
             </div>
           )}
 
@@ -16137,6 +16182,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   if (cmds.length) editor.runBatch(cmds);
                 }}
               />
+              {/* F11 (10/10/2026): os problemas da climatização marcados no desenho, listados aqui. */}
+              <PainelVerificacaoDaRede marcas={marcasDaClima} disciplinas={['MECANICA']} onSelecionar={selecionar} />
             </div>
           )}
 

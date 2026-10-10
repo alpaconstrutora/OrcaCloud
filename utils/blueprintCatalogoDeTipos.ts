@@ -144,3 +144,56 @@ export function validarNomeDeTipo(nome: string, outros: readonly Pick<TipoDoCata
 export function paraCopiar(tipos: readonly TipoDoCatalogo[]): SementeDeTipo[] {
   return tipos.filter((t) => t.active).map((t) => ({ nome: t.nome, propriedades: t.propriedades }));
 }
+
+// ─── F15 (10/10/2026): EDITAR as propriedades numéricas de um tipo ───────────
+
+/** O rótulo de cada propriedade numérica conhecida; a desconhecida aparece pela chave. */
+const ROTULO_DA_PROPRIEDADE: Record<string, string> = {
+  capacidadeBtuH: 'Capacidade (BTU/h)',
+  potenciaW: 'Potência (W)',
+  vazaoM3h: 'Vazão (m³/h)',
+  larguraMm: 'Largura (mm)',
+  profundidadeMm: 'Profundidade (mm)',
+  alturaMm: 'Altura (mm)',
+  cotaMm: 'Cota (mm)',
+  baseMm: 'Base (mm)',
+  diametroMm: 'Diâmetro (mm)',
+  volumeL: 'Volume (L)',
+  espessuraMm: 'Espessura (mm)',
+};
+
+export interface CampoDoTipo {
+  chave: string;
+  rotulo: string;
+  valor: number;
+}
+
+/**
+ * F15: os campos NUMÉRICOS de primeiro nível do tipo — o que a tela deixa editar.
+ * Texto, família e listas (camadas, pontos) ficam de fora: mudá-los muda o que o
+ * tipo É, e isso é outro tipo (salvar de uma peça).
+ */
+export function camposEditaveisDoTipo(p: PropriedadesDoTipo): CampoDoTipo[] {
+  return Object.entries(p as unknown as Record<string, unknown>)
+    .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+    .map(([chave, v]) => ({ chave, rotulo: ROTULO_DA_PROPRIEDADE[chave] ?? chave, valor: v as number }))
+    .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
+}
+
+/**
+ * F15: as propriedades com os valores editados — ou o motivo de recusar (número
+ * inválido ou negativo). Só as chaves que já eram numéricas mudam.
+ */
+export function aplicarCamposAoTipo(p: PropriedadesDoTipo, valores: Readonly<Record<string, string>>): { propriedades: PropriedadesDoTipo } | { erro: string } {
+  const atual = p as unknown as Record<string, unknown>;
+  const nova: Record<string, unknown> = { ...atual };
+  for (const [chave, texto] of Object.entries(valores)) {
+    if (typeof atual[chave] !== 'number') continue;
+    const v = Number(String(texto).replace(',', '.'));
+    const rotulo = ROTULO_DA_PROPRIEDADE[chave] ?? chave;
+    if (String(texto).trim() === '' || !Number.isFinite(v)) return { erro: `${rotulo}: informe um número.` };
+    if (v < 0) return { erro: `${rotulo}: não pode ser negativo.` };
+    nova[chave] = v;
+  }
+  return { propriedades: nova as unknown as PropriedadesDoTipo };
+}

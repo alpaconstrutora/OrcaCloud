@@ -68,7 +68,21 @@ export type TipoDeMarca =
   | 'INCENDIO_PRESSAO_ALTA'
   | 'INCENDIO_NAO_ATENDE'
   // E3.3 — ambiente fora do alcance dos hidrantes (mangueira + jato pelo percurso).
-  | 'INCENDIO_SEM_COBERTURA';
+  | 'INCENDIO_SEM_COBERTURA'
+  // F11 (10/10/2026) — climatização: a conferência levada ao desenho (`blueprintMarcasClimatizacao`).
+  | 'CLIMA_SEM_LINHA'
+  | 'CLIMA_LINHA_LONGA'
+  | 'CLIMA_DESNIVEL'
+  | 'CLIMA_LINHA_FINA'
+  | 'CLIMA_DN_DRENO'
+  | 'CLIMA_SEM_DRENO'
+  | 'CLIMA_SEM_SIFAO'
+  | 'CLIMA_VRF_DIAMETRO'
+  | 'CLIMA_VRF_SEM_PECA'
+  | 'CLIMA_VRF_LIMITE'
+  | 'CLIMA_EXAUSTOR_SEM_DUTO'
+  | 'CLIMA_VELOCIDADE_DUTO'
+  | 'CLIMA_PRESSAO_DUTO';
 
 export interface MarcaDeVerificacao {
   chave: string;

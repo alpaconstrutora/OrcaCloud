@@ -1116,6 +1116,8 @@ interface Props {
    * a imagem, as LINHAS são traçadas no lugar do PNG — nítidas em qualquer zoom.
    */
   fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number; vetor?: FundoVetorial | null } | null;
+  /** F9 (10/10/2026): o IFC de referência cortado na altura da planta — linhas de fundo, em mm do modelo. */
+  referenciasEmPlanta?: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[];
   /**
    * Identidade da prancha ATIVA. Quando ela muda, a vista se enquadra na
    * imagem — e só então.
@@ -1644,6 +1646,7 @@ export default function BlueprintCanvas({
   eixosPrevistos,
   mostrarCamadasParedes = false,
   fundo = null,
+  referenciasEmPlanta,
   onMoveVertex,
   onAddLimite,
   kindDaDivisa = 'DIVISA',
@@ -3608,6 +3611,24 @@ export default function BlueprintCanvas({
       }
       ctx.restore();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // F9 (10/10/2026): o IFC de referência cortado na planta — linhas finas de fundo, como a
+    // planta de fundo: antes da grade e de tudo o que se desenha, para nunca cobrir o desenho.
+    if (referenciasEmPlanta && referenciasEmPlanta.length) {
+      ctx.save();
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      for (const s of referenciasEmPlanta) {
+        const p = paraTela(s.a);
+        const q = paraTela(s.b);
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+      }
+      ctx.stroke();
+      ctx.restore();
     }
 
     // Grade. Duas granularidades: fina no passo em vigor, forte a cada 5 —
@@ -9283,6 +9304,7 @@ export default function BlueprintCanvas({
     mostrarMedidasParedes,
     mostrarMedidasLoteMassa,
     fundo,
+    referenciasEmPlanta,
     calibP1,
     medicoesDoNivel,
     limitesDoNivel,

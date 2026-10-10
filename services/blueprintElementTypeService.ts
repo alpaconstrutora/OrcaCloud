@@ -115,6 +115,18 @@ export async function renameElementType(id: string, nome: string): Promise<TipoD
   return mapear(data as Record<string, unknown>);
 }
 
+/** F15 (10/10/2026): grava as propriedades editadas do tipo (o molde muda; peça nenhuma muda). */
+export async function updateElementTypeProps(id: string, propriedades: PropriedadesDoTipo): Promise<TipoDeElemento> {
+  const { data, error } = await supabase
+    .from('blueprint_element_types')
+    .update({ propriedades, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(COLS)
+    .single();
+  if (error) fail('updateElementTypeProps', error);
+  return mapear(data as Record<string, unknown>);
+}
+
 export async function setElementTypeActive(id: string, active: boolean): Promise<TipoDeElemento> {
   const { data, error } = await supabase
     .from('blueprint_element_types')

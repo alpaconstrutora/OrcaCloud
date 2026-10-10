@@ -9,12 +9,14 @@
  * um tipo não mexe em planta nenhuma — a tela diz isso antes.
  */
 import React, { useMemo, useState } from 'react';
-import { BookMarked, Copy, Pencil, Power, Sprout } from 'lucide-react';
+import { BookMarked, Copy, Pencil, Power, SlidersHorizontal, Sprout } from 'lucide-react';
+import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { ROTULO_DA_FAMILIA_DE_TIPO, resumoDoTipo } from '../../utils/blueprintTipos';
-import { faltamSementes, usosDoTipo, validarNomeDeTipo, type SementeDeTipo, type TipoDoCatalogo } from '../../utils/blueprintCatalogoDeTipos';
+import { aplicarCamposAoTipo, camposEditaveisDoTipo, faltamSementes, usosDoTipo, validarNomeDeTipo, type SementeDeTipo, type TipoDoCatalogo } from '../../utils/blueprintCatalogoDeTipos';
+import type { PropriedadesDoTipo } from '../../utils/blueprintTipos';
 
 interface Props {
   tipos: TipoDoCatalogo[];
@@ -26,6 +28,8 @@ interface Props {
   nomeDaOrg: (id: string) => string;
   mostrarOrg: boolean;
   onRenomear: (id: string, nome: string) => Promise<void>;
+  /** F15 (10/10/2026): grava as propriedades numéricas editadas (capacidade, potência, medidas…). */
+  onEditarPropriedades?: (id: string, propriedades: PropriedadesDoTipo) => Promise<void>;
   onAtivar: (id: string, active: boolean) => Promise<void>;
   onExcluir: (id: string) => Promise<void>;
   /** Grava as sementes que faltam (a organização de destino é resolvida por quem chama — REGRA #5). */
@@ -43,9 +47,11 @@ const COLUNAS: StandardTableColumn[] = [
   { key: 'status', label: 'Status', width: 90 },
 ];
 
-export default function TelaCatalogoDeTipos({ tipos, carregando, indisponivel, usos, nomeDaOrg, mostrarOrg, onRenomear, onAtivar, onExcluir, onSemear, onCopiar }: Props) {
+export default function TelaCatalogoDeTipos({ tipos, carregando, indisponivel, usos, nomeDaOrg, mostrarOrg, onRenomear, onEditarPropriedades, onAtivar, onExcluir, onSemear, onCopiar }: Props) {
   const confirmar = useConfirm();
   const [editando, setEditando] = useState<{ id: string; nome: string } | null>(null);
+  /** F15: o tipo cujas propriedades estão abertas no painel, com os valores digitados. */
+  const [propriedades, setPropriedades] = useState<{ tipo: TipoDoCatalogo; valores: Record<string, string>; erro: string | null } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -77,6 +83,24 @@ export default function TelaCatalogoDeTipos({ tipos, carregando, indisponivel, u
       await onRenomear(t.id, editando.nome.trim());
       setEditando(null);
     });
+  }
+
+  function abrirPropriedades(t: TipoDoCatalogo) {
+    setPropriedades({ tipo: t, valores: Object.fromEntries(camposEditaveisDoTipo(t.propriedades).map((c) => [c.chave, String(c.valor)])), erro: null });
+  }
+
+  async function salvarPropriedades() {
+    if (!propriedades || !onEditarPropriedades) return;
+    const r = aplicarCamposAoTipo(propriedades.tipo.propriedades, propriedades.valores);
+    if ('erro' in r) {
+      setPropriedades({ ...propriedades, erro: r.erro });
+      return;
+    }
+    const t = propriedades.tipo;
+    await rodar(async () => {
+      await onEditarPropriedades(t.id, r.propriedades);
+      setPropriedades(null);
+    }, `Propriedades do tipo "${t.nome}" gravadas.`);
   }
 
   async function excluir(t: TipoDoCatalogo) {
@@ -123,10 +147,14 @@ export default function TelaCatalogoDeTipos({ tipos, carregando, indisponivel, u
         }
         actions={{
           label: 'Ações',
-          width: 120,
+          width: 150,
           render: (t) => (
             <span className="flex items-center gap-1">
               <ActionIconButton kind="edit" icon={<Pencil className="h-4 w-4" />} title={`Renomear ${t.nome}`} onClick={() => { setEditando({ id: t.id, nome: t.nome }); setErro(null); }} />
+              {/* Sem propriedade numérica (escada, telhado…) não há o que editar aqui — o botão nem aparece. */}
+              {onEditarPropriedades && camposEditaveisDoTipo(t.propriedades).length > 0 && (
+                <ActionIconButton kind="edit" icon={<SlidersHorizontal className="h-4 w-4" />} title={`Editar propriedades de ${t.nome}`} onClick={() => abrirPropriedades(t)} />
+              )}
               <ActionIconButton kind="edit" icon={<Power className="h-4 w-4" />} title={t.active ? `Desativar ${t.nome} (some do seletor)` : `Reativar ${t.nome}`} onClick={() => void rodar(() => onAtivar(t.id, !t.active))} />
               <ActionIconButton kind="delete" title={`Excluir ${t.nome}`} onClick={() => void excluir(t)} />
             </span>
@@ -161,6 +189,37 @@ export default function TelaCatalogoDeTipos({ tipos, carregando, indisponivel, u
           }
         }}
       />
+
+      {/* F15: o painel lateral das propriedades — montado só aberto (o Sheet fechado manteria os filhos no DOM). */}
+      {propriedades && (
+        <Sheet open onClose={() => setPropriedades(null)} size="md">
+          <SheetHeader onClose={() => setPropriedades(null)}>
+            <SheetTitle>Propriedades de "{propriedades.tipo.nome}"</SheetTitle>
+            <SheetDescription>O tipo é molde: gravar muda o que "aplicar tipo…" copia daqui em diante — as peças já desenhadas ficam como estão.</SheetDescription>
+          </SheetHeader>
+          <SheetPanel className="p-6">
+            <div className="space-y-3" data-testid="propriedades-do-tipo">
+            {camposEditaveisDoTipo(propriedades.tipo.propriedades).map((c) => (
+              <label key={c.chave} className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                <span>{c.rotulo}</span>
+                <input
+                  value={propriedades.valores[c.chave] ?? ''}
+                  onChange={(e) => setPropriedades({ ...propriedades, valores: { ...propriedades.valores, [c.chave]: e.target.value }, erro: null })}
+                  inputMode="decimal"
+                  aria-label={c.rotulo}
+                  className="h-9 w-36 rounded-[6px] border border-slate-300 bg-white px-2 text-right text-sm tabular-nums text-slate-800"
+                />
+              </label>
+            ))}
+            {propriedades.erro && <p className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" data-testid="erro-das-propriedades">{propriedades.erro}</p>}
+            </div>
+          </SheetPanel>
+          <SheetFooter>
+            <button type="button" onClick={() => setPropriedades(null)} className="h-9 rounded-[6px] border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50">Cancelar</button>
+            <button type="button" disabled={ocupado} onClick={() => void salvarPropriedades()} className="h-9 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50" data-testid="salvar-propriedades-do-tipo">Gravar</button>
+          </SheetFooter>
+        </Sheet>
+      )}
     </div>
   );
 }

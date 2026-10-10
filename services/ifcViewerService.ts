@@ -189,6 +189,64 @@ async function nomeDoTipo(codigo: number): Promise<string> {
  * aplicá-la, modelos georreferenciados nascem a centenas de milhares de
  * unidades da origem, e o `float` da GPU começa a tremer visivelmente.
  */
+/**
+ * F9 (10/10/2026): o CORTE horizontal do IFC de referência para a planta 2D —
+ * a mesma malha do 3D (flatTransformation → matriz de coordenação → matriz da
+ * referência), cortada no plano Y = `alturaM`. Devolve os segmentos em mm de
+ * planta. Sem THREE na conta: as matrizes são aplicadas à mão (column-major).
+ */
+export async function secaoDoIfc(bytes: ArrayBuffer, matrizDaReferencia: readonly number[], alturaM: number): Promise<{ segmentos: { a: { x: number; y: number }; b: { x: number; y: number } }[] }> {
+  const { secaoHorizontalDaMalha } = await import('../utils/blueprintReferenciaExterna');
+  const api = await obterApi();
+  const modeloId = api.OpenModel(new Uint8Array(bytes));
+  const segmentos: { a: { x: number; y: number }; b: { x: number; y: number } }[] = [];
+  try {
+    const coordInversa = inverter4x4(api.GetCoordinationMatrix(modeloId));
+    api.StreamAllMeshes(modeloId, (malha) => {
+      const geos = malha.geometries;
+      for (let i = 0; i < geos.size(); i++) {
+        const posta = geos.get(i);
+        const g = api.GetGeometry(modeloId, posta.geometryExpressID);
+        const verts = api.GetVertexArray(g.GetVertexData(), g.GetVertexDataSize());
+        const idx = api.GetIndexArray(g.GetIndexData(), g.GetIndexDataSize());
+        const m = multiplicar4x4(matrizDaReferencia, multiplicar4x4(coordInversa, posta.flatTransformation));
+        const pos = new Float32Array(verts.length / 2);
+        for (let v = 0, p = 0; v < verts.length; v += 6, p += 3) {
+          const x = verts[v];
+          const y = verts[v + 1];
+          const z = verts[v + 2];
+          pos[p] = m[0] * x + m[4] * y + m[8] * z + m[12];
+          pos[p + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+          pos[p + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+        }
+        segmentos.push(...secaoHorizontalDaMalha(pos, idx, alturaM));
+        g.delete?.();
+      }
+    });
+  } finally {
+    api.CloseModel?.(modeloId);
+  }
+  return { segmentos };
+}
+
+/** Produto de matrizes 4×4 column-major (a · b). */
+function multiplicar4x4(a: readonly number[], b: readonly number[]): number[] {
+  const r = new Array<number>(16).fill(0);
+  for (let c = 0; c < 4; c++) for (let l = 0; l < 4; l++) for (let k = 0; k < 4; k++) r[c * 4 + l] += a[k * 4 + l] * b[c * 4 + k];
+  return r;
+}
+
+/** A inversa da matriz de coordenação (rotação + translação, column-major). */
+function inverter4x4(m: readonly number[]): number[] {
+  // A matriz de coordenação do IFC é rígida: a inversa é Rᵀ e −Rᵀ·t.
+  const r = [m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, 0, 0, 0, 1];
+  const t = [m[12], m[13], m[14]];
+  r[12] = -(r[0] * t[0] + r[4] * t[1] + r[8] * t[2]);
+  r[13] = -(r[1] * t[0] + r[5] * t[1] + r[9] * t[2]);
+  r[14] = -(r[2] * t[0] + r[6] * t[1] + r[10] * t[2]);
+  return r;
+}
+
 export async function carregarIfc(
   bytes: ArrayBuffer,
   THREE: typeof THREE_NS,

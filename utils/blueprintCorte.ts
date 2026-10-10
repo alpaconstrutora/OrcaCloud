@@ -34,7 +34,8 @@
  * linha até o fim da casa.
  */
 
-import { segmentosDoEletroduto } from './blueprintRede';
+import { ladoDoEixo, parDaLinha, segmentosDoEletroduto } from './blueprintRede';
+import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
   distanciaAoAnelComAresta,
@@ -214,6 +215,13 @@ export interface ProjecaoCorte {
    * abrigo nas medidas dele e o resto como marca com a sigla.
    */
   pecasDeIncendio?: { terminalId: ObjectId; tipo: TipoDePontoHidraulico; u: number; v: number; larguraMm: number | null; alturaMm: number | null }[];
+  /**
+   * F8 (climatização, 10/10/2026): os equipamentos e os terminais de ar NO plano
+   * ou ATRÁS dele, no `u` e na cota absoluta do centro. `larguraMm` é a extensão
+   * da caixa AO LONGO do plano (a largura e a profundidade da peça projetadas pelo
+   * giro dela); a tela e a prancha desenham a caixa com a sigla.
+   */
+  pecasDeClimatizacao?: { terminalId: ObjectId; tipo: TipoDePontoHidraulico; disciplina: string; u: number; v: number; larguraMm: number | null; alturaMm: number | null }[];
   /** Instalações ATRÁS do plano — as que ele atravessa vão em `cortados`. */
   redes: TrechoElevacao[];
   linhaDoSolo: { uMin: number; uMax: number; v: number };
@@ -323,8 +331,9 @@ function faceCortadaDoTrecho(
   base: BaseElevacao,
   origem: Point,
 ): ItemCortado[] {
-  const raio = t.bitolaMm / 2;
-  const meiaAltura = t.alturaDutoMm != null ? t.alturaDutoMm / 2 : raio;
+  // F8 (10/10/2026): o tubo cortado é o ENVELOPE — com o isolamento declarado (a linha e o dreno).
+  const raio = t.bitolaMm / 2 + (t.isolamentoMm ?? 0);
+  const meiaAltura = t.alturaDutoMm != null ? t.alturaDutoMm / 2 + (t.isolamentoMm ?? 0) : raio;
   const vA = elevacaoNivelMm + t.cotaAMm;
   const vB = elevacaoNivelMm + t.cotaBMm;
   const projU = (p: Point) => p.x * base.u.x + p.y * base.u.y;
@@ -350,11 +359,17 @@ function faceCortadaDoTrecho(
   }
 
   // ── TRECHO COM PERCURSO EM PLANTA ───────────────────────────────────────
-  const pegada = cantosDaParede(t.a, t.b, t.bitolaMm);
+  // F8: a largura cortada é a do envelope (a bitola + o isolamento dos dois lados).
+  const pegada = cantosDaParede(t.a, t.b, 2 * raio);
   if (classificarNoCorte(pegada, base, origem) !== 'CORTADO') return [];
 
   const comprimento = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
-  return trechosCortados(pegada, base, origem).map((faixa) => {
+  // F8: a LINHA FRIGORÍGENA em par — os dois tubos cortados lado a lado, cada um com o raio do
+  // envelope dele, deslocados pelo lado do eixo projetado no plano (a conta do IFC e do 3D).
+  const par = t.disciplina === 'FRIGORIGENA' && t.bitolaSuccaoMm != null ? parDaLinha(t.bitolaMm, t.bitolaSuccaoMm, t.isolamentoMm ?? 0) : null;
+  const lado = ladoDoEixo([t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm]);
+  const ladoNoPlano = lado[0] * base.u.x + lado[1] * base.u.y;
+  return trechosCortados(pegada, base, origem).flatMap((faixa) => {
     // ⚠️ A COTA É INTERPOLADA no ponto do cruzamento, e não tomada da ponta:
     // um esgoto com caimento cortado no meio está entre as duas cotas, e usar
     // `cotaAMm` o desenharia no lugar errado — plausivelmente, que é o pior.
@@ -364,7 +379,19 @@ function faceCortadaDoTrecho(
     const fracao = uA === uB ? 0.5 : Math.min(1, Math.max(0, (meioU - uA) / (uB - uA)));
     const v = vA + (vB - vA) * fracao;
     void comprimento;
-    return {
+    if (par) {
+      const meio = (faixa.uMin + faixa.uMax) / 2;
+      return par.deslocamentos.map((d, i) => ({
+        id: t.id,
+        familia: 'REDE' as const,
+        pontos: caixa(meio + d * ladoNoPlano - par.raios[i], meio + d * ladoNoPlano + par.raios[i], v - par.raios[i], v + par.raios[i]),
+        vaos: [],
+        enterrada: v < elevacaoNivelMm,
+        rotulo: t.rotulo ?? null,
+        disciplina: t.disciplina,
+      }));
+    }
+    return [{
       id: t.id,
       familia: 'REDE' as const,
       // E7.1: o duto retangular ocupa meia ALTURA acima e abaixo do eixo, não meia largura.
@@ -373,7 +400,7 @@ function faceCortadaDoTrecho(
       enterrada: v < elevacaoNivelMm,
       rotulo: t.rotulo ?? null,
       disciplina: t.disciplina,
-    };
+    }];
   });
 }
 
@@ -543,6 +570,30 @@ export function projetarCorte(
         larguraMm: t.larguraMm ?? FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].medidasMm?.larguraMm ?? null,
         alturaMm: t.alturaMm ?? FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].medidasMm?.alturaMm ?? null,
       })),
+    // F8 (10/10/2026): os equipamentos e terminais de ar no plano ou atrás dele.
+    pecasDeClimatizacao: (model.terminais ?? [])
+      .filter((t) => !!t.tipoHidraulico && (TIPOS_DE_CLIMATIZACAO as readonly string[]).includes(t.tipoHidraulico) && vista.levelIds.includes(t.levelId))
+      .filter((t) => (t.at.x - origem.x) * base.d.x + (t.at.y - origem.y) * base.d.y >= -1)
+      .map((t) => {
+        const med = FICHA_DO_PONTO_HIDRAULICO[t.tipoHidraulico!].medidasMm;
+        const largura = t.larguraMm ?? med?.larguraMm ?? null;
+        const profundidade = t.profundidadeMm ?? med?.profundidadeMm ?? null;
+        const giro = ((t.rotacaoGraus ?? 0) * Math.PI) / 180;
+        // A caixa vista no plano: a largura e a profundidade projetadas em `u` pelo giro da peça.
+        const aoLongo =
+          largura != null && profundidade != null
+            ? Math.abs(largura * (Math.cos(giro) * base.u.x + Math.sin(giro) * base.u.y)) + Math.abs(profundidade * (-Math.sin(giro) * base.u.x + Math.cos(giro) * base.u.y))
+            : largura;
+        return {
+          terminalId: t.id,
+          tipo: t.tipoHidraulico!,
+          disciplina: DISCIPLINAS_DO_PONTO_HIDRAULICO[t.tipoHidraulico!][0] ?? t.disciplina,
+          u: t.at.x * base.u.x + t.at.y * base.u.y,
+          v: (model.levels.find((l) => l.id === t.levelId)?.elevationMm ?? 0) + t.cotaMm,
+          larguraMm: aoLongo == null ? null : Math.round(aoLongo),
+          alturaMm: t.alturaMm ?? med?.alturaMm ?? null,
+        };
+      }),
     linhaDoSolo: vista.linhaDoSolo,
     bbox: vista.bbox,
   };

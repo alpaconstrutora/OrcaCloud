@@ -459,6 +459,126 @@ Implementar os dois itens que ficaram de fora !
 (Os dois itens eram: o Ctrl+D sem instalações e componentes, e o portão `cena=estrutura` do harness 3D
 em 2,33 %.)
 
+## Status em 10/10/2026
+
+**O roadmap foi implementado inteiro: as 12 etapas (E0–E11) estão publicadas em `main`, as 42 fases,
+com CI verde e o domínio conferido.** Depois delas saíram três complementos pedidos pelo usuário:
+- E9b: gás do VRF, cabo pelo eletroduto e peso do painel;
+- as pendências da E10: componente na matriz, subir/descer no 3D e referências IFC no estudo;
+- as duas sobras: Ctrl+D completo e o harness 3D.
+
+O detalhe de cada fase está em "Execução", no fim do documento.
+
+| Etapa | Entrega | Publicada | Commit | Kernel / banco |
+|---|---|---|---|---|
+| E0 | Premissas, clima por cidade, dados por ambiente; defeitos 9–12 | 04/10 | `ee098c1f..8f879ae2` | migration `blueprint_study_climatizacao` |
+| E1 | Envoltória: vidro e proteção solar, camadas no telhado e laje, exposição vertical | 04/10 | `c92d152f..f80399e6` | kernel 0.91.0 |
+| E2 | Motor de carga térmica, painel por ambiente, mapa de calor, memorial | 04/10 | `f80399e6..e0913bde` | — |
+| E3 | Equipamento como peça da rede, `FRIGORIGENA` e `DRENO_AC`, símbolos, numeração, kit | 04/10 | `9a75709d` | kernel 0.92.0 |
+| E4 | Seleção pelo catálogo, posição do split, ponto elétrico | 05/10 | `8cc331dd` | — |
+| E5 | Linha frigorígena e dreno (traçado, faixas, gás, curvas, bomba) | 05/10 | `1eada5c6` | — (desvio dito) |
+| E6 | VRF: árvore, derivadores, limites | 05/10 | `7a807df2` | — (desvio dito) |
+| E7 | Duto retangular, terminais de ar, perda de carga, renovação e exaustão | 07/10 | `16f0c72d` | kernel 0.93.0 |
+| E8 | Pranchas, legenda, isométrico, detalhes típicos, memoriais, emissão com ART | 07/10 | `dccccd12` | migration (CHECK do executivo) |
+| E9 | Quantitativo, medidas do orçamento, lista de materiais | 07/10 | `8c52adc1` | quant-1.25.0 |
+| E9b | Gás do VRF, cabo pelo eletroduto, peso do painel pré-isolado | 07/10 | `c7b2e043` | — |
+| E10.1 | IFC da climatização (ida e volta) | 07/10 | `eca6d832` | — (planta-api redeployada) |
+| E10.2 | Compatibilização (envelope, equipamento, ponta comum) | 07/10 | `eeeb0426` | — |
+| E10.3 | Editor 3D: seleção múltipla, mover, caixa de corte, lado a lado | 08/10 | `e989ccd6` + `56c1bc8d` | — |
+| E10.4 | Alinhar/distribuir, IFC externo no 3D, DXF vetorial | 08/10 | `dd0c3697`, `492fde88`, `ad7bd9eb` | — |
+| Pendências E10 | Componente na matriz, subir/descer no 3D, referências no estudo | 10/10 | `277fad31` | migration `blueprint_study_referencias` |
+| E11 | Gerador de climatização (um lote, relatório) | 10/10 | `080bb860` | — |
+| Sobras | Ctrl+D completo; harness 3D com o CSS do app | 10/10 | `4a37dc3e` | — |
+
+**Achados do benchmark:** os 12 que pediam código estão resolvidos.
+- **Na E0:** 3 (pé-direito único), 4 (U da parede), 5 (insolação no estudo), 6 (dados por ambiente
+  pelo uid da etiqueta) e 9 a 12 (frase do IFC, difusor fora dos pontos hidráulicos, `SISTEMA_IFC`,
+  `DuplicateLevel` com componentes).
+- **Na E1.3:** 7 (o que está acima e abaixo do ambiente).
+- **Na E3:** 1 e 2 (equipamento na rede; três disciplinas).
+- **Os outros dois:**
+  - o achado 8 (as normas) continua aberto e é a pendência A abaixo;
+  - o achado 13: o modelo externo como referência entrou na E10.4b, e o RVT direto segue no backlog.
+
+**A tabela item a item da Parte 1 (247 linhas, "Leitura geral") é a foto de 04/10.** Ela não foi
+regraduada depois da execução. Os ✅/🟡/❌ de lá descrevem o ponto de partida, não o estado de hoje.
+
+### Pendências
+
+**A. Normas e dados de fabricante — o que impede "fechar" a disciplina.** Nenhuma das normas chegou à
+pasta (NBR 16655-1/2/3, NBR 16401-1/2/3). Tudo o que vem delas foi transcrito de memória e carrega
+**CONFERIR NA NORMA** no código, na tela, no memorial e no relatório do gerador:
+- a tabela de condições externas por cidade (TBS/TBU, 16401-1 Anexo A);
+- as parcelas da carga térmica: pessoas, iluminação, equipamentos, insolação por orientação e fatores
+  de proteção solar (16655-3);
+- a renovação de ar e a exaustão (16401-3);
+- o conforto interno.
+
+As faixas de diâmetro, comprimento, desnível e gás da linha e os limites do VRF são de FABRICANTE,
+nomeados como hipótese, e o catálogo de capacidades é o semeado. Quando os PDFs e um catálogo real
+chegarem, conferir tabela por tabela e tirar a marca.
+
+**B. Provas no app real ainda não feitas** (login, estudo descartável, como as de 05/10 e 07/10).
+
+Já provados:
+- E0, E2 e E4 (05/10);
+- E5, a emissão com ART (E8.4) e a E9 (07/10);
+- da E6 e da E7, só as gavetas abrindo.
+
+Faltam:
+- E1: vidro e camadas declarados na tela;
+- E3: inserir evaporadora e condensadora pelo menu e ligar o sistema;
+- E6: lançar a árvore VRF;
+- E7: lançar a espinha de dutos e ver no 3D;
+- E10: IFC exportado aberto fora e reimportado; conflitos; o editor 3D; a referência IFC com a tabela
+  nova e um arquivo real da biblioteca; o DXF vetorial com um DXF/DWG real;
+- E11: o gerador;
+- o Ctrl+D completo.
+
+**C. Funcionais deixados de fora nas etapas (ditos em cada "Não entrou").**
+- **Entre pavimentos:**
+  - a prumada da linha frigorígena (condensadora na cobertura);
+  - a prumada do VRF (evaporadora de outro pavimento só gera AVISO).
+- **VRF:** o comprimento equivalente das conexões e o coletor (header) como peça.
+- **Dreno:** o DN pela vazão de condensado (hoje 25 mm fixos, hipótese) e o sifão como peça (hoje só
+  no detalhe típico).
+- **Dutos:**
+  - a exaustão com duto até a fachada (o exaustor é conferido no ambiente, a rede dele não é traçada);
+  - o desvio de pilar no forro (o conflito acusa);
+  - a perda em damper e plenum;
+  - o duto flexível do difusor como peça.
+- **Desenho:**
+  - a linha frigorígena aparece como UM tubo na planta e no 3D da tela (o par líquido/sucção existe
+    no IFC);
+  - as cotas da arquitetura passam por cima da condensadora fora da parede;
+  - no isométrico, rótulos de peças muito próximas encostam.
+- **IFC:** `.VENTILATION.` para rede só de exaustão; o `IfcCovering` do isolamento (o envelope cumpre
+  a coordenação).
+- **Quantitativo:** a tela de quantitativos não tem colunas próprias de climatização por pavimento (a
+  lista de materiais tem o recorte por pavimento e por sistema).
+- **Gerador (por decisão):**
+  - não lança o orçamento (a composição é do orçamentista);
+  - só liga o circuito quando não arrasta pontos que ele não criou;
+  - as peças nascem sugeridas e se aceitam nos painéis.
+
+**D. Pequenos, anotados e não resolvidos.**
+- O símbolo da hi-wall é desenhado num quadrado do lado da MAIOR medida: o desenho sai mais fundo que
+  os 220 mm reais.
+- O terminal mecânico de texto livre ("Difusor / grelha") continua no menu, ao lado dos tipos de
+  terminal de ar da E7. Não foi convertido como legado.
+- A densidade W/m² usa a área de EIXO do ambiente (~8 % abaixo da área útil). A decisão de qual área
+  reportar ficou para depois da E4 e não foi tomada.
+- O link `#/blueprint?studyId=` não abriu o estudo no passeio de 05/10. Está anotado e não foi
+  investigado.
+
+**E. Backlog nomeado (sem mudança):**
+- RVT/RTE direto (serviço externo);
+- gás, SPDA e cabeamento estruturado como disciplinas;
+- edição no isométrico e planos XZ/YZ;
+- catálogos reais de fabricantes;
+- chiller, água gelada e fancoil;
+- CFD e simulação energética anual (N).
+
 ## Critério e legenda
 
 **Critério do grau: paridade com o AltoQi Builder Climatização, mais o ciclo fechado.** Um item é
@@ -975,6 +1095,8 @@ derivado a cada mudança.
   `DRENO_AC`, isolamento e curva no trecho, a seção retangular no duto, a relação de sistema VRF.
 
 ## Leitura geral
+
+> ⚠️ **Foto de 04/10/2026**, antes da execução — o estado de hoje está em "Status em 10/10/2026" (no topo).
 
 Contagem feita por script sobre as tabelas das seções 1–76: 247 linhas, sendo os itens do pedido
 na ordem dele mais os desdobramentos que o próprio texto pede (cada orientação, cada proteção

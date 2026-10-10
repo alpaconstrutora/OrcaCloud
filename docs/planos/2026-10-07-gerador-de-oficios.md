@@ -1112,7 +1112,7 @@ módulo ainda não teve uso real.
 | F7 | Assistente de IA: redigir, revisar, responder ofício recebido | `dc06d051` | ⏸ código no ar, **desligado por decisão** (sem `ANTHROPIC_API_KEY`) |
 | F8 | Signatário (cargo, registro, imagem da assinatura) provado com conta de admin; PDF/A-2b em todo PDF; saída em Word | `a8ca2567` | ✅ no ar |
 | F9 | Fonte livre: `.ttf`/`.otf` da organização, embutidas no PDF/A e com o nome no Word | `c12c8909` | ✅ no ar |
-| F10 | Pesquisa avançada (item 30): período, emitente, obra, empreendimento, departamento, autor e assinante; links antigos de notificação do GED | ver seção F10 | ✅ no ar |
+| F10 | Pesquisa avançada (item 30): período, emitente, obra, empreendimento, departamento, autor e assinante; links antigos de notificação do GED | `e194b51b` | ✅ no ar |
 
 **Pendências futuras** (detalhe em "Pendências futuras" acima; nenhuma bloqueia o uso):
 
@@ -1495,6 +1495,7 @@ pendências futuras na seção própria.
       limpar volta aos 3. Achados e corrigidos na conferência: emitente ambíguo (organização × empresa com quase o mesmo
       nome) e código do empreendimento repetido. 0 erros de JS e de rede. Dados de teste e a notificação apagados
       (0 ofícios, 0 modelos, contador zerado)
+- [x] F10 · publicada em 10/10 (`e194b51b`): check-run `ci` **success**; domínio conferido ("Data do ofício de" no bundle)
 
 
 ## Verificação

@@ -611,7 +611,19 @@
  * versão. Provado antes do bump: com a string em 0.92.0 os goldens e os testes
  * de climatização e de duto passaram sem outra alteração.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.93.0';
+/**
+ * ─── 0.93.0 → 0.94.0 (10/10/2026) — O COLETOR DO VRF E O SIFÃO DO DRENO ──────
+ *
+ * Climatização, pendências C4 e C6 (plano `2026-10-04-climatizacao-benchmark-altoqi-e-roadmap.md`):
+ *  - `COLETOR_VRF`: o header do VRF, a divisão em 3 ou mais ramais num ponto só
+ *    (o derivador "Y" divide em dois). Liga na condensadora como o derivador
+ *    (`TIPOS_QUE_LIGAM_NA_CONDENSADORA`);
+ *  - `SIFAO_DRENO`: o sifão do dreno de condensado, peça sobre o trecho DRENO_AC.
+ * Dois valores novos de `TipoDePontoHidraulico`, sem campo novo — desenho antigo
+ * só muda pela string da versão. Provado antes do bump: com a string em 0.93.0
+ * os goldens e os testes de climatização passaram sem outra alteração.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.94.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

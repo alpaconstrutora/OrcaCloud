@@ -375,11 +375,17 @@ export interface HipotesesDaLinha {
   /** Isolamento da linha até 24.000 BTU/h e acima, mm. */
   isolamentoAte24kMm: number;
   isolamentoAcimaMm: number;
-  /** DN do dreno de condensado, mm. */
+  /** DN MÍNIMO do dreno de condensado, mm (C5: a vazão pode pedir mais). */
   dnDrenoMm: number;
+  /** C1 (10/10/2026): até que distância da condensadora um SHAFT atrai a prumada da linha entre pavimentos, mm. */
+  raioDoShaftMm: number;
+  /** C5: condensado por 1.000 BTU/h de evaporadora, L/h — HIPÓTESE (clima úmido), CONFERIR. */
+  condensadoLhPorKbtu: number;
+  /** C6: onde o sifão entra no dreno por gravidade, medido da saída da evaporadora pelo caminho, mm. */
+  distanciaDoSifaoMm: number;
 }
 
-export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25 };
+export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300 };
 
 export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max: number }> = {
   cotaDaLinhaMm: { min: 300, max: 6000 },
@@ -389,6 +395,9 @@ export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max
   isolamentoAte24kMm: { min: 3, max: 50 },
   isolamentoAcimaMm: { min: 3, max: 50 },
   dnDrenoMm: { min: 15, max: 50 },
+  raioDoShaftMm: { min: 0, max: 20000 },
+  condensadoLhPorKbtu: { min: 0.02, max: 2 },
+  distanciaDoSifaoMm: { min: 50, max: 3000 },
 };
 
 export function hipotesesDaLinhaDaColuna(raw: unknown): HipotesesDaLinha {
@@ -419,9 +428,18 @@ export interface HipotesesDoVrf {
   /** Desnível condensadora–evaporadora e entre evaporadoras, m. */
   desnivelCondEvapMaxM: number;
   desnivelEntreEvapMaxM: number;
+  /**
+   * C3 (10/10/2026): o COMPRIMENTO EQUIVALENTE — o catálogo limita a distância até a
+   * evaporadora mais distante também somando as peças: cada curva, derivador e
+   * coletor no caminho vale estes metros de tubo reto.
+   */
+  ateMaisDistanteEquivalenteMaxM: number;
+  equivalenteCurvaM: number;
+  equivalenteDerivadorM: number;
+  equivalenteColetorM: number;
 }
 
-export const HIPOTESES_DO_VRF_PADRAO: HipotesesDoVrf = { taxaMinPct: 50, taxaMaxPct: 130, comprimentoTotalMaxM: 300, ateMaisDistanteMaxM: 150, aposPrimeiraDerivacaoMaxM: 40, desnivelCondEvapMaxM: 50, desnivelEntreEvapMaxM: 15 };
+export const HIPOTESES_DO_VRF_PADRAO: HipotesesDoVrf = { taxaMinPct: 50, taxaMaxPct: 130, comprimentoTotalMaxM: 300, ateMaisDistanteMaxM: 150, aposPrimeiraDerivacaoMaxM: 40, desnivelCondEvapMaxM: 50, desnivelEntreEvapMaxM: 15, ateMaisDistanteEquivalenteMaxM: 175, equivalenteCurvaM: 0.5, equivalenteDerivadorM: 0.5, equivalenteColetorM: 1 };
 
 export const LIMITES_DO_VRF: Record<keyof HipotesesDoVrf, { min: number; max: number }> = {
   taxaMinPct: { min: 10, max: 100 },
@@ -431,6 +449,10 @@ export const LIMITES_DO_VRF: Record<keyof HipotesesDoVrf, { min: number; max: nu
   aposPrimeiraDerivacaoMaxM: { min: 5, max: 200 },
   desnivelCondEvapMaxM: { min: 1, max: 200 },
   desnivelEntreEvapMaxM: { min: 1, max: 100 },
+  ateMaisDistanteEquivalenteMaxM: { min: 5, max: 600 },
+  equivalenteCurvaM: { min: 0, max: 5 },
+  equivalenteDerivadorM: { min: 0, max: 5 },
+  equivalenteColetorM: { min: 0, max: 10 },
 };
 
 export function hipotesesDoVrfDaColuna(raw: unknown): HipotesesDoVrf {

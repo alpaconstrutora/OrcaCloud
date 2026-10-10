@@ -68,7 +68,10 @@ export default function PainelLinhaFrigorigena({ plano, linhas, conferencia, hip
         <Numero rotulo="Encaixe na parede até (mm)" chave="raioDeEncaixeMm" passo={50} hip={hip} onHip={onHip} />
         <Numero rotulo="Pré-carga de gás (m)" chave="preCargaM" passo={1} hip={hip} onHip={onHip} />
         <Numero rotulo="Declividade do dreno (%)" chave="declividadeDrenoPct" passo={0.5} hip={hip} onHip={onHip} />
-        <Numero rotulo="DN do dreno (mm)" chave="dnDrenoMm" passo={5} hip={hip} onHip={onHip} />
+        <Numero rotulo="DN mínimo do dreno (mm)" chave="dnDrenoMm" passo={5} hip={hip} onHip={onHip} />
+        <Numero rotulo="Condensado (L/h por 1.000 BTU/h)" chave="condensadoLhPorKbtu" passo={0.05} hip={hip} onHip={onHip} />
+        <Numero rotulo="Sifão após a saída (mm)" chave="distanciaDoSifaoMm" passo={50} hip={hip} onHip={onHip} />
+        <Numero rotulo="Shaft atrai a prumada até (mm)" chave="raioDoShaftMm" passo={500} hip={hip} onHip={onHip} />
         <Numero rotulo="Isolamento até 24.000 (mm)" chave="isolamentoAte24kMm" passo={1} hip={hip} onHip={onHip} />
         <Numero rotulo="Isolamento acima de 24.000 (mm)" chave="isolamentoAcimaMm" passo={1} hip={hip} onHip={onHip} />
       </div>

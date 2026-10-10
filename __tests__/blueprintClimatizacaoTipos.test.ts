@@ -51,19 +51,21 @@ describe('climatização E3 · taxonomia e disciplinas', () => {
     expect(MATERIAIS_DA_DISCIPLINA.DRENO_AC).toContain('PVC_SOLDAVEL');
   });
 
-  it('os 20 tipos têm ficha, grupo de climatização e disciplina coerente com a família', () => {
-    expect(TIPOS_DE_CLIMATIZACAO).toHaveLength(20);
+  it('os 22 tipos têm ficha, grupo de climatização e disciplina coerente com a família', () => {
+    // 0.94.0 (10/10/2026): + o coletor do VRF e o sifão do dreno.
+    expect(TIPOS_DE_CLIMATIZACAO).toHaveLength(22);
     for (const t of TIPOS_DE_CLIMATIZACAO) {
       expect(TIPOS_DE_PONTO_HIDRAULICO).toContain(t);
       expect(FICHA_DO_PONTO_HIDRAULICO[t].rotulo.length).toBeGreaterThan(2);
       expect(GRUPO_DO_PONTO_HIDRAULICO[t].startsWith('Climatização')).toBe(true);
     }
-    for (const t of [...TIPOS_DE_EVAPORADORA.filter((x) => x !== 'EVAPORADORA_DUTADA'), ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF'] as const) expect(DISCIPLINAS_DO_PONTO_HIDRAULICO[t]).toEqual(['FRIGORIGENA']);
+    for (const t of [...TIPOS_DE_EVAPORADORA.filter((x) => x !== 'EVAPORADORA_DUTADA'), ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF', 'COLETOR_VRF'] as const) expect(DISCIPLINAS_DO_PONTO_HIDRAULICO[t]).toEqual(['FRIGORIGENA']);
     // E7 (05/10/2026): a dutada também sopra no duto — a rede de ar (MECANICA) parte dela.
     expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.EVAPORADORA_DUTADA).toEqual(['FRIGORIGENA', 'MECANICA']);
     for (const t of TIPOS_DE_TERMINAL_DE_AR) expect(DISCIPLINAS_DO_PONTO_HIDRAULICO[t]).toEqual(['MECANICA']);
     expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.BOMBA_DRENO).toEqual(['DRENO_AC']);
     expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.PONTO_DRENO).toEqual(['DRENO_AC']);
+    expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.SIFAO_DRENO).toEqual(['DRENO_AC']);
     // O personalizado liga em qualquer uma das três.
     expect(DISCIPLINAS_DO_PONTO_HIDRAULICO.EQUIPAMENTO_CLIMATIZACAO).toEqual(['FRIGORIGENA', 'DRENO_AC', 'MECANICA']);
     // Quem troca calor tem capacidade; terminal de ar e dreno, não.

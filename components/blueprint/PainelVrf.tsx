@@ -26,6 +26,8 @@ interface Props {
   onLigar: (condensadoraId: ObjectId) => void;
   onTrocar: (deId: ObjectId, paraId: ObjectId) => void;
   sugeridos: { trechos: ObjectId[]; terminais: ObjectId[] };
+  /** C2 (10/10/2026): os VRF de outros pavimentos que atendem evaporadoras deste — o vazio diz de onde lançar. */
+  deOutrosPavimentos?: { nome: string; pavimento: string }[];
   onLancar: () => void;
   onAceitar: (s: { trechos: ObjectId[]; terminais: ObjectId[] }) => void;
   onSelecionar?: (ids: string[]) => void;
@@ -44,6 +46,11 @@ const ROTULOS: Record<keyof HipotesesDoVrf, string> = {
   aposPrimeiraDerivacaoMaxM: 'Após a 1ª derivação máx. (m)',
   desnivelCondEvapMaxM: 'Desnível cond.–evap. máx. (m)',
   desnivelEntreEvapMaxM: 'Desnível entre evap. máx. (m)',
+  // C3 (10/10/2026): o comprimento equivalente (tubo + peças).
+  ateMaisDistanteEquivalenteMaxM: 'Até a mais distante, equivalente máx. (m)',
+  equivalenteCurvaM: 'Equivalente de cada curva (m)',
+  equivalenteDerivadorM: 'Equivalente de cada derivador (m)',
+  equivalenteColetorM: 'Equivalente de cada coletor (m)',
 };
 
 function IconeDoEstado({ estado }: { estado: EstadoDaConferencia }) {
@@ -52,7 +59,7 @@ function IconeDoEstado({ estado }: { estado: EstadoDaConferencia }) {
   return <AlertTriangle className={`h-3.5 w-3.5 ${estado === 'FALTA' ? 'text-red-600' : 'text-amber-600'}`} aria-label={estado === 'FALTA' ? 'falta' : 'aviso'} />;
 }
 
-export default function PainelVrf({ analises, plano, conferencia, hip, onHip, semSistema, condensadoras, onLigar, onTrocar, sugeridos, onLancar, onAceitar, onSelecionar }: Props) {
+export default function PainelVrf({ analises, plano, conferencia, hip, onHip, semSistema, condensadoras, onLigar, onTrocar, sugeridos, deOutrosPavimentos = [], onLancar, onAceitar, onSelecionar }: Props) {
   const motivoDeLancar = plano.motivo ?? (plano.aCriar.length === 0 && plano.apagados === 0 ? 'nada a lançar' : null);
   const totalSugerido = sugeridos.trechos.length + sugeridos.terminais.length;
   return (
@@ -65,7 +72,7 @@ export default function PainelVrf({ analises, plano, conferencia, hip, onHip, se
               type="number"
               min={LIMITES_DO_VRF[k].min}
               max={LIMITES_DO_VRF[k].max}
-              step={k.endsWith('Pct') ? 5 : 1}
+              step={k.endsWith('Pct') ? 5 : k.startsWith('equivalente') ? 0.1 : 1}
               value={hip[k]}
               onChange={(e) => {
                 const x = Number(e.target.value);
@@ -81,7 +88,9 @@ export default function PainelVrf({ analises, plano, conferencia, hip, onHip, se
 
       {analises.length === 0 ? (
         <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" data-testid="vrf-vazio">
-          Nenhuma condensadora VRF neste pavimento — insira uma em Climatização — equipamentos (Condensadora VRF) e ligue as evaporadoras a ela.
+          {deOutrosPavimentos.length
+            ? `As evaporadoras deste pavimento são do VRF ${deOutrosPavimentos.map((o) => `${o.nome} (em ${o.pavimento})`).join(', ')} — a rede (prumada e árvore deste pavimento) se lança do pavimento da condensadora.`
+            : 'Nenhuma condensadora VRF neste pavimento — insira uma em Climatização — equipamentos (Condensadora VRF) e ligue as evaporadoras a ela.'}
         </p>
       ) : (
         <table className="w-full text-xs" data-testid="tabela-vrf">
@@ -117,7 +126,10 @@ export default function PainelVrf({ analises, plano, conferencia, hip, onHip, se
                   </td>
                   <td className="py-1 pr-2 text-right tabular-nums">{a.taxaPct == null ? '—' : `${a.taxaPct.toLocaleString('pt-BR')} %`}</td>
                   <td className="py-1 pr-2 text-right tabular-nums">{m1(a.comprimentoTotalM)}</td>
-                  <td className="py-1 pr-2 text-right tabular-nums">{m1(a.maisDistanteM)}</td>
+                  <td className="py-1 pr-2 text-right tabular-nums" title="real · equivalente (com curvas, derivadores e coletores)">
+                    {m1(a.maisDistanteM)}
+                    <p className="text-[10px] text-slate-500">eq. {m1(a.maisDistanteEquivalenteM)}</p>
+                  </td>
                   <td className="py-1 pr-2 text-right tabular-nums">{m1(a.aposPrimeiraDerivacaoM)}</td>
                   <td className="py-1">
                     <div className="flex flex-col gap-1">

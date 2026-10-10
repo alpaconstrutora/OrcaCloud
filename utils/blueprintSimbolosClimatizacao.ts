@@ -116,6 +116,9 @@ export function simboloDeClimatizacao(tipo: TipoDePontoHidraulico, proporcao: nu
     case 'DERIVADOR_VRF':
       // O "Y" da derivação (refnet), sobre o trecho.
       return [circulo(0.5), linha(-0.5, 0, 0, 0), linha(0, 0, 0.42, -0.3), linha(0, 0, 0.42, 0.3), circulo(0.06, true)];
+    case 'COLETOR_VRF':
+      // 0.94.0: o coletor (header) — a barra que recebe a linha e solta três ramais.
+      return [circulo(0.5), linha(-0.5, 0, -0.12, 0), linha(-0.12, -0.3, -0.12, 0.3), linha(-0.12, -0.3, 0.42, -0.3), linha(-0.12, 0, 0.48, 0), linha(-0.12, 0.3, 0.42, 0.3)];
     case 'EXAUSTOR_AR':
       // O círculo da hélice com as três pás e a seta de saída.
       return [circulo(0.5), circulo(0.07, true), linha(0, 0, 0, -0.42), linha(0, 0, 0.36, 0.21), linha(0, 0, -0.36, 0.21), ...seta(0.44, 0.1, 0.44, -0.3, 0.06)];
@@ -125,6 +128,9 @@ export function simboloDeClimatizacao(tipo: TipoDePontoHidraulico, proporcao: nu
     case 'PONTO_DRENO':
       // O funil: triângulo invertido no círculo.
       return [circulo(0.5), poligono([[-0.3, -0.2], [0.3, -0.2], [0, 0.3]], false), linha(0, 0.3, 0, 0.46)];
+    case 'SIFAO_DRENO':
+      // 0.94.0: o sifão — o "U" do fecho hídrico no círculo.
+      return [circulo(0.5), linha(-0.22, -0.36, -0.22, 0.12), linha(-0.22, 0.12, 0, 0.3), linha(0, 0.3, 0.22, 0.12), linha(0.22, 0.12, 0.22, -0.1)];
     case 'CAIXA_DISTRIBUICAO_AR':
       // A caixa com os quatro ramais.
       return [quadrado(0.7), linha(0.35, 0, 0.5, 0), linha(-0.35, 0, -0.5, 0), linha(0, 0.35, 0, 0.5), linha(0, -0.35, 0, -0.5), texto('CX', 0.26)];

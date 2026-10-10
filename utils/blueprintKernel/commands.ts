@@ -135,6 +135,7 @@ import {
   TIPOS_COM_CAPACIDADE,
   TIPOS_COM_VAZAO,
   TIPOS_DE_EVAPORADORA,
+  TIPOS_QUE_LIGAM_NA_CONDENSADORA,
   TIPOS_DO_LACO_DE_ALARME,
   findGrupo,
   findNucleo,
@@ -3714,7 +3715,7 @@ function aplicarSemHash(
       if (command.tipoHidraulico !== undefined) {
         if ((!terminal.tipoHidraulico || !(TIPOS_COM_CAPACIDADE as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.capacidadeBtuH != null) terminal.capacidadeBtuH = null;
         if ((!terminal.tipoHidraulico || !(TIPOS_COM_VAZAO as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.vazaoM3h != null) terminal.vazaoM3h = null;
-        if ((!terminal.tipoHidraulico || !([...TIPOS_DE_EVAPORADORA, 'DERIVADOR_VRF'] as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.condensadoraId != null) terminal.condensadoraId = null;
+        if ((!terminal.tipoHidraulico || !(TIPOS_QUE_LIGAM_NA_CONDENSADORA as readonly string[]).includes(terminal.tipoHidraulico)) && terminal.condensadoraId != null) terminal.condensadoraId = null;
       }
       // Deixar de ser do laço leva a central junto — a invariante recusaria.
       if ((!terminal.tipoHidraulico || !TIPOS_DO_LACO_DE_ALARME.includes(terminal.tipoHidraulico)) && terminal.centralAlarmeId != null) terminal.centralAlarmeId = null;

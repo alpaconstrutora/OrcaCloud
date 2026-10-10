@@ -261,9 +261,9 @@ import PainelCargaTermica from './PainelCargaTermica';
 import { cargaTermicaDoEstudo, cargaTermicaDoNivel, coresDaCarga } from '../../utils/blueprintCargaTermica';
 import { modelosDoCatalogo, selecaoDoNivel } from '../../utils/blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from '../../utils/blueprintPosicaoSplit';
-import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas } from '../../utils/blueprintLinhaFrigorigena';
+import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas, sugeridosDaLinha } from '../../utils/blueprintLinhaFrigorigena';
 import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
-import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, ROTULO_DA_LINHA_VRF } from '../../utils/blueprintVrf';
+import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, sugeridosDoVrf, vrfDeOutrosPavimentos } from '../../utils/blueprintVrf';
 import PainelVrf from './PainelVrf';
 import { analisarRedesDeAr, comandosDeConverterTerminaisAntigos, comandosDeDimensionamento, terminaisDeArAntigos, conferenciaDaRedeDeAr, planejarRedeDeAr, ROTULO_DA_REDE_DE_AR, vazoesDosTerminais, ventilacaoDoNivel } from '../../utils/blueprintRedeDeAr';
 import PainelRedeDeAr from './PainelRedeDeAr';
@@ -3232,7 +3232,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     () => (tarefa === 'vrf' && levelId ? planejarVrf(editor.model, levelId, climatizacaoDoEstudo.hipoteses.linha) : null),
     [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.linha],
   );
-  const analisesDoVrf = useMemo(() => (tarefa === 'vrf' && levelId ? analisesDoNivel(editor.model, levelId) : []), [tarefa, levelId, editor.model]);
+  // C3 (10/10/2026): a análise com as premissas do VRF — o comprimento equivalente usa os metros de cada peça.
+  const analisesDoVrf = useMemo(
+    () => (tarefa === 'vrf' && levelId ? analisesDoNivel(editor.model, levelId, climatizacaoDoEstudo.hipoteses.vrf) : []),
+    [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.vrf],
+  );
   const conferenciaDoVrfDoNivel = useMemo(
     () => (tarefa === 'vrf' && levelId ? conferenciaDoVrf(editor.model, levelId, climatizacaoDoEstudo.hipoteses.vrf) : []),
     [tarefa, levelId, editor.model, climatizacaoDoEstudo.hipoteses.vrf],
@@ -16039,10 +16043,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 conferencia={conferenciaDaLinhaDoNivel}
                 hip={climatizacaoDoEstudo.hipoteses.linha}
                 onHip={(linha) => climatizacaoDoEstudo.setHipoteses({ ...climatizacaoDoEstudo.hipoteses, linha })}
-                sugeridos={{
-                  trechos: (editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && ((t.disciplina === 'FRIGORIGENA' && t.rotulo !== ROTULO_DA_LINHA_VRF) || t.disciplina === 'DRENO_AC')).map((t) => t.id),
-                  terminais: (editor.model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'DRENO_AC').map((t) => t.id),
-                }}
+                // C1 (10/10/2026): a linha sugerida deste pavimento onde estiver (a prumada atravessa outros).
+                sugeridos={levelId ? sugeridosDaLinha(editor.model, levelId) : { trechos: [], terminais: [] }}
                 onLancar={() => {
                   if (planoDaLinha.comandos.length) editor.runBatch(planoDaLinha.comandos);
                 }}
@@ -16078,10 +16080,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   const cmds = comandosTrocarCondensadora(editor.model, deId, paraId);
                   if (cmds.length) editor.runBatch(cmds);
                 }}
-                sugeridos={{
-                  trechos: (editor.model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && t.rotulo === ROTULO_DA_LINHA_VRF).map((t) => t.id),
-                  terminais: (editor.model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.tipoHidraulico === 'DERIVADOR_VRF').map((t) => t.id),
-                }}
+                // C2 (10/10/2026): o VRF deste pavimento onde estiver — a prumada e as árvores dos outros pavimentos.
+                sugeridos={levelId ? sugeridosDoVrf(editor.model, levelId) : { trechos: [], terminais: [] }}
+                deOutrosPavimentos={levelId ? vrfDeOutrosPavimentos(editor.model, levelId) : []}
                 onLancar={() => {
                   if (planoDoVrf.comandos.length) editor.runBatch(planoDoVrf.comandos);
                 }}

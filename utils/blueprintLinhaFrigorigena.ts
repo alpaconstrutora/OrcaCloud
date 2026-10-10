@@ -20,6 +20,18 @@
  *    nasce junto da evaporadora e o dreno vira recalque (sem cobrança de
  *    declividade).
  *
+ * Pendências C1/C5/C6 (10/10/2026):
+ *  - C1 a PRUMADA: a condensadora em OUTRO pavimento (a do split na cobertura) —
+ *    a linha corre no pavimento da evaporadora até a prumada (num shaft perto da
+ *    condensadora, ou sob/sobre ela) e sobe ou desce por ela
+ *    (`blueprintPrumadaClimatizacao.ts`). Relançar apaga a linha sugerida do
+ *    pavimento ONDE ela estiver: o grupo de trechos que toca a evaporadora daqui.
+ *  - C5 o DN do dreno pela VAZÃO de condensado: a capacidade de cada evaporadora
+ *    a montante × `condensadoLhPorKbtu`, pela tabela `DN_DO_DRENO_PELA_VAZAO`
+ *    (HIPÓTESE, CONFERIR), nunca abaixo do DN mínimo das premissas.
+ *  - C6 o SIFÃO: no dreno por gravidade, a `distanciaDoSifaoMm` da saída da
+ *    evaporadora (a bomba de dreno tem o dela).
+ *
  * Tudo nasce `sugerido`; relançar apaga as sugestões anteriores da linha e do
  * dreno no mesmo lote; aceitar fixa. Um lote = um Ctrl+Z.
  *
@@ -34,6 +46,7 @@ import { comprimentoMm, fazerChave, menorCaminhoEntre, type Aresta, type No } fr
 import { arvorePelasParedes, chaveP, type P2 } from './blueprintRotaPelasParedes';
 import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
+import { componentesSugeridos, lancesDaPrumada, pavimentosEntre, pontoDaPrumada } from './blueprintPrumadaClimatizacao';
 import type { HipotesesDaLinha } from './blueprintClimatizacao';
 import type { ItemConferido } from './blueprintConferenciaClimatizacao';
 
@@ -74,6 +87,29 @@ export const raioMinimoDaCurvaMm = (dnMm: number): number => RAIO_MINIMO_DA_CURV
 
 export const isolamentoDaLinhaMm = (capacidadeBtuH: number | null | undefined, hip: HipotesesDaLinha): number => ((capacidadeBtuH ?? 0) <= 24000 ? hip.isolamentoAte24kMm : hip.isolamentoAcimaMm);
 
+/**
+ * C5 (10/10/2026): o DN do dreno de condensado pela vazão que passa no trecho,
+ * L/h — valores típicos para tubo de PVC com a declividade mínima, transcritos de
+ * memória: HIPÓTESE, CONFERIR. O DN mínimo das premissas vale por cima.
+ */
+export const DN_DO_DRENO_PELA_VAZAO: readonly { ateLh: number; dnMm: number }[] = [
+  { ateLh: 10, dnMm: 20 },
+  { ateLh: 30, dnMm: 25 },
+  { ateLh: 70, dnMm: 32 },
+  { ateLh: 150, dnMm: 40 },
+  { ateLh: Infinity, dnMm: 50 },
+];
+export const FONTE_DO_DN_DO_DRENO = 'DN do dreno pela vazão de condensado (L/h por 1.000 BTU/h das evaporadoras a montante) — tabela típica transcrita de memória: HIPÓTESE, CONFERIR. O DN mínimo das premissas vale por cima.';
+
+/** A vazão de condensado de uma evaporadora, L/h (sem capacidade declarada = 0: o DN sai pelo mínimo). */
+export const condensadoDaEvaporadoraLh = (e: Pick<Terminal, 'capacidadeBtuH'>, hip: HipotesesDaLinha): number => ((e.capacidadeBtuH ?? 0) / 1000) * hip.condensadoLhPorKbtu;
+
+/** O DN do dreno para a vazão, nunca abaixo do mínimo das premissas. */
+export function dnDoDrenoMm(vazaoLh: number, hip: HipotesesDaLinha): number {
+  const pela = (DN_DO_DRENO_PELA_VAZAO.find((f) => vazaoLh <= f.ateLh) ?? DN_DO_DRENO_PELA_VAZAO[DN_DO_DRENO_PELA_VAZAO.length - 1]).dnMm;
+  return Math.max(Math.round(hip.dnDrenoMm), pela);
+}
+
 // ─── O sistema (evaporadora → condensadora) ──────────────────────────────────
 
 export interface SistemaSplit {
@@ -91,13 +127,16 @@ const ehDoVrf = (t: Pick<Trecho, 'rotulo'>) => t.rotulo === ROTULO_DA_LINHA_VRF;
 /** O sistema é de SPLIT (uma evaporadora, uma condensadora, uma linha). O VRF é a E6. */
 export const ehSplit = (s: SistemaSplit) => s.condensadora.tipoHidraulico !== 'CONDENSADORA_VRF';
 
-/** As evaporadoras do pavimento com condensadora (no mesmo pavimento — a prumada entre pavimentos é backlog). */
+/**
+ * As evaporadoras do pavimento com condensadora. C1 (10/10/2026): a condensadora
+ * pode estar em OUTRO pavimento — a linha sobe/desce pela prumada.
+ */
 export function sistemasDoNivel(model: BlueprintModel, levelId: ObjectId): SistemaSplit[] {
   const porId = new Map((model.terminais ?? []).map((t) => [t.id, t]));
   return (model.terminais ?? [])
     .filter((t) => t.levelId === levelId && !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico) && !!t.condensadoraId)
     .map((e) => ({ evaporadora: e, condensadora: porId.get(e.condensadoraId!)! }))
-    .filter((s) => !!s.condensadora && s.condensadora.levelId === levelId && !!s.condensadora.tipoHidraulico && (TIPOS_DE_CONDENSADORA as readonly string[]).includes(s.condensadora.tipoHidraulico))
+    .filter((s) => !!s.condensadora && !!s.condensadora.tipoHidraulico && (TIPOS_DE_CONDENSADORA as readonly string[]).includes(s.condensadora.tipoHidraulico))
     .sort((a, b) => a.evaporadora.id.localeCompare(b.evaporadora.id));
 }
 
@@ -110,6 +149,35 @@ function arestasDe(model: BlueprintModel, disciplina: Trecho['disciplina']): Are
 }
 
 const noDe = (model: BlueprintModel, t: Pick<Terminal, 'levelId' | 'at' | 'cotaMm'>): No => fazerChave(model.levels)(t.levelId, t.at.x, t.at.y, t.cotaMm);
+
+/** C1: o desnível entre as duas peças em cota de MUNDO (elevação do pavimento + cota), mm. */
+export function desnivelDoSistemaMm(model: BlueprintModel, s: SistemaSplit): number {
+  const elevacao = (id: ObjectId) => model.levels.find((l) => l.id === id)?.elevationMm ?? 0;
+  return Math.abs(elevacao(s.evaporadora.levelId) + s.evaporadora.cotaMm - (elevacao(s.condensadora.levelId) + s.condensadora.cotaMm));
+}
+
+/**
+ * C1: os trechos sugeridos da linha do SPLIT que são deste pavimento — o grupo
+ * conexo (pela chave de mundo) que toca uma evaporadora DAQUI, onde quer que os
+ * trechos estejam (a prumada atravessa outros pavimentos), e os grupos sem
+ * evaporadora nenhuma que têm um trecho aqui. O grupo de uma evaporadora de
+ * OUTRO pavimento fica, mesmo com trecho aqui: é a linha dela.
+ */
+export function linhaSugeridaDoNivel(model: BlueprintModel, levelId: ObjectId): Trecho[] {
+  const candidatos = (model.trechos ?? []).filter((t) => !!t.sugerido && t.disciplina === 'FRIGORIGENA' && !ehDoVrf(t));
+  if (candidatos.length === 0) return [];
+  const evaporadoras = (model.terminais ?? []).filter((t) => !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico));
+  const nivelDoNo = new Map<No, Set<ObjectId>>();
+  for (const e of evaporadoras) {
+    const k = noDe(model, e);
+    nivelDoNo.set(k, new Set([...(nivelDoNo.get(k) ?? []), e.levelId]));
+  }
+  return componentesSugeridos(model, candidatos).flatMap((g) => {
+    const donos = new Set([...g.nos].flatMap((n) => [...(nivelDoNo.get(n) ?? [])]));
+    const doNivel = donos.has(levelId) || (donos.size === 0 && g.trechos.some((t) => t.levelId === levelId));
+    return doNivel ? g.trechos : [];
+  });
+}
 
 /** A linha existente entre a evaporadora e a condensadora: comprimento, trechos e se algum é sugerido. */
 export function linhaExistente(model: BlueprintModel, s: SistemaSplit): { mm: number; trechoIds: ObjectId[]; sugerida: boolean } | null {
@@ -133,7 +201,7 @@ export interface LinhaPlanejada {
   comprimentoMm: number;
   desnivelMm: number;
   /** O dreno: até onde, com bomba ou por gravidade. */
-  dreno: { destino: 'PONTO_EXISTENTE' | 'PONTO_NOVO_NA_FACHADA'; comBomba: boolean; comprimentoMm: number } | null;
+  dreno: { destino: 'PONTO_EXISTENTE' | 'PONTO_NOVO_NA_FACHADA'; comBomba: boolean; comprimentoMm: number; /** C6. */ comSifao: boolean } | null;
   avisos: string[];
 }
 
@@ -150,23 +218,54 @@ export interface PlanoDaLinha {
 
 const mesmoP = (a: P2, b: P2) => a.x === b.x && a.y === b.y;
 
-/** Um planejador de trechos com deduplicação por nó (o mesmo `addTrecho` do eletroduto). A E6 (VRF) usa o mesmo. */
+/**
+ * Um planejador de trechos com deduplicação por nó (o mesmo `addTrecho` do
+ * eletroduto). A E6 (VRF) usa o mesmo. C5: `add` devolve o índice do comando
+ * (o já existente, quando o trecho repete) — é por ele que o dreno compartilhado
+ * soma a vazão de quem passa; `null` para trecho de comprimento zero.
+ */
 export function lote(model: BlueprintModel) {
   const chave = fazerChave(model.levels);
   const comandos: Command[] = [];
   const arestas: Aresta[] = [];
-  const vistas = new Set<string>();
-  const add = (base: Omit<Extract<Command, { type: 'AddTrecho' }>, 'type' | 'a' | 'b' | 'cotaAMm' | 'cotaBMm'>, a: P2, cotaA: number, b: P2, cotaB: number) => {
-    if (mesmoP(a, b) && cotaA === cotaB) return;
+  const vistas = new Map<string, number>();
+  const add = (base: Omit<Extract<Command, { type: 'AddTrecho' }>, 'type' | 'a' | 'b' | 'cotaAMm' | 'cotaBMm'>, a: P2, cotaA: number, b: P2, cotaB: number): number | null => {
+    if (mesmoP(a, b) && cotaA === cotaB) return null;
     const de = chave(base.levelId, a.x, a.y, cotaA);
     const para = chave(base.levelId, b.x, b.y, cotaB);
     const k = [de, para].sort().join('>');
-    if (vistas.has(k)) return;
-    vistas.add(k);
+    const ja = vistas.get(k);
+    if (ja != null) return ja;
     comandos.push({ type: 'AddTrecho', ...base, a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, cotaAMm: cotaA, cotaBMm: cotaB } as Command);
+    vistas.set(k, comandos.length - 1);
     arestas.push({ ref: { novo: comandos.length - 1 }, de, para, mm: comprimentoMm({ a, b, cotaAMm: cotaA, cotaBMm: cotaB }) });
+    return comandos.length - 1;
   };
   return { comandos, arestas, add };
+}
+
+/**
+ * C6: o caminho com um vértice a `distanciaMm` do começo (no máximo na metade do
+ * caminho) — o lugar do sifão. Devolve os pontos e o índice do vértice (`-1` num
+ * caminho curto demais). Coordenadas em mm inteiros.
+ */
+export function verticeNoCaminho(pontos: readonly P2[], distanciaMm: number): { pontos: P2[]; indice: number } {
+  const lances = pontos.slice(1).map((q, i) => Math.hypot(q.x - pontos[i].x, q.y - pontos[i].y));
+  const total = lances.reduce((s, l) => s + l, 0);
+  if (pontos.length < 2 || total < 2) return { pontos: [...pontos], indice: -1 };
+  const d = Math.min(distanciaMm, total / 2);
+  let andado = 0;
+  for (let i = 0; i < lances.length; i++) {
+    if (andado + lances[i] >= d) {
+      const f = lances[i] > 0 ? (d - andado) / lances[i] : 0;
+      const p = { x: Math.round(pontos[i].x + (pontos[i + 1].x - pontos[i].x) * f), y: Math.round(pontos[i].y + (pontos[i + 1].y - pontos[i].y) * f) };
+      if (mesmoP(p, pontos[i])) return { pontos: [...pontos], indice: i === 0 ? -1 : i };
+      if (mesmoP(p, pontos[i + 1])) return { pontos: [...pontos], indice: i + 1 === pontos.length - 1 ? -1 : i + 1 };
+      return { pontos: [...pontos.slice(0, i + 1), p, ...pontos.slice(i + 1)], indice: i + 1 };
+    }
+    andado += lances[i];
+  }
+  return { pontos: [...pontos], indice: -1 };
 }
 
 /** A polilinha em planta da peça `de` à peça `para`, pelo eixo das paredes; reta (com desvio de pilar) quando não há parede perto. */
@@ -224,32 +323,47 @@ function drenoDaEvaporadora(model: BlueprintModel, e: Terminal): boolean {
     .some((t) => !!menorCaminhoEntre(de, noDe(model, t), arestas));
 }
 
+/**
+ * O que a linha e o dreno DESTE pavimento sugeriram: a linha do split onde
+ * estiver (C1), o dreno e as peças de dreno sugeridas (ponto, bomba, sifão).
+ * É o que relançar apaga e o que aceitar fixa.
+ */
+export function sugeridosDaLinha(model: BlueprintModel, levelId: ObjectId): { trechos: ObjectId[]; terminais: ObjectId[] } {
+  return {
+    trechos: [...linhaSugeridaDoNivel(model, levelId), ...(model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && t.disciplina === 'DRENO_AC')].map((t) => t.id),
+    terminais: (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'DRENO_AC' && (t.tipoHidraulico === 'PONTO_DRENO' || t.tipoHidraulico === 'BOMBA_DRENO' || t.tipoHidraulico === 'SIFAO_DRENO')).map((t) => t.id),
+  };
+}
+
 /** O plano da linha e do dreno de todos os sistemas do pavimento. */
 export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): PlanoDaLinha {
   const vazio = (motivo: string, apagar: Command[] = []): PlanoDaLinha => ({ comandos: apagar, aCriar: [], jaLigados: [], semLugar: [], apagados: apagar.length, motivo, resumo: [] });
-  // Relançar apaga o que este planejador sugeriu antes: trechos da linha do SPLIT e do dreno e as peças de
-  // dreno sugeridas. A árvore do VRF (rótulo próprio) é da E6 e fica.
-  const sugeridos = (model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && ((t.disciplina === 'FRIGORIGENA' && !ehDoVrf(t)) || t.disciplina === 'DRENO_AC'));
-  const pecasSugeridas = (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'DRENO_AC' && (t.tipoHidraulico === 'PONTO_DRENO' || t.tipoHidraulico === 'BOMBA_DRENO'));
+  // Relançar apaga o que este planejador sugeriu antes: a linha do SPLIT deste pavimento (C1: onde
+  // quer que esteja — a prumada atravessa outros), o dreno e as peças de dreno sugeridas. A árvore do
+  // VRF (rótulo próprio) é da E6 e fica.
+  const sug = sugeridosDaLinha(model, levelId);
   const apagar: Command[] = [
-    ...sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }) as Command),
-    ...pecasSugeridas.map((t) => ({ type: 'DeleteTerminal', terminalId: t.id }) as Command),
+    ...sug.trechos.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as Command),
+    ...sug.terminais.map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as Command),
   ];
   const sistemas = sistemasDoNivel(model, levelId);
   if (sistemas.length === 0) return vazio('nenhuma evaporadora com condensadora ligada neste pavimento — lance o split (Seleção e posição) ou ligue o sistema no painel da peça', apagar);
 
   // O modelo SEM as sugestões anteriores é o que decide "já ligado" e por onde a nova linha passa.
-  const idsApagados = new Set([...sugeridos.map((t) => t.id), ...pecasSugeridas.map((t) => t.id)]);
+  const idsApagados = new Set([...sug.trechos, ...sug.terminais]);
   const base: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !idsApagados.has(t.id)), terminais: (model.terminais ?? []).filter((t) => !idsApagados.has(t.id)) };
 
   const l = lote(base);
   const aCriar: LinhaPlanejada[] = [];
   const jaLigados: string[] = [];
   const semLugar: { nome: string; motivo: string }[] = [];
-  /** Peças novas (ponto de dreno / bomba) na ordem em que entram no lote. */
+  /** Peças novas (ponto de dreno / bomba) na ordem em que entram no lote; o sifão, sobre o trecho, entra depois dos trechos. */
   const pecas: Command[] = [];
-  const dnDreno = Math.round(hip.dnDrenoMm);
+  const sifoes: Command[] = [];
+  /** C5: a vazão de condensado que passa em cada trecho novo de dreno (índice do comando → L/h). */
+  const vazaoNoTrecho = new Map<number, number>();
   const medCond = FICHA_DO_PONTO_HIDRAULICO.CONDENSADORA_SPLIT.medidasMm ?? { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 };
+  const nomeDoNivel = (id: ObjectId) => base.levels.find((x) => x.id === id)?.name ?? id;
 
   for (const s of sistemas) {
     const nome = `${s.evaporadora.tipo}`;
@@ -268,9 +382,14 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     const avisos: string[] = [];
     const cotaLinha = Math.round(hip.cotaDaLinhaMm);
     let comprimento = 0;
-    const desnivel = Math.abs(e.cotaMm - c.cotaMm);
+    const desnivel = desnivelDoSistemaMm(base, s);
+    // C1: a condensadora em OUTRO pavimento — a linha vai até a PRUMADA e sobe/desce por ela.
+    const outroNivel = c.levelId !== e.levelId;
+    const prumada = outroNivel ? pontoDaPrumada(base, c.at, pavimentosEntre(base, e.levelId, c.levelId).map((x) => x.id), hip.raioDoShaftMm) : null;
+    /** Onde a linha sai deste pavimento: a prumada, ou a própria condensadora. */
+    const saidaAt = prumada?.at ?? c.at;
     if (precisaLinha) {
-      const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, s.condensadora.at, hip);
+      const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, saidaAt, hip);
       if (!caminho.pelaParede) avisos.push('sem parede ao alcance: a linha vai em reta (desviando de pilar)');
       const baseLinha = { levelId, disciplina: 'FRIGORIGENA' as const, bitolaMm: faixa.liquidoMm, bitolaSuccaoMm: faixa.succaoMm, isolamentoMm, sugerido: true };
       // Sobe da evaporadora à cota da linha, corre, desce à condensadora.
@@ -278,14 +397,32 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
       const antes = l.comandos.length;
       l.add(baseLinha, e.at, e.cotaMm, e.at, cotaLinha);
       for (let i = 0; i + 1 < p.length; i++) l.add(baseLinha, p[i], cotaLinha, p[i + 1], cotaLinha);
-      l.add(baseLinha, c.at, cotaLinha, c.at, c.cotaMm);
+      if (!prumada) {
+        l.add(baseLinha, c.at, cotaLinha, c.at, c.cotaMm);
+      } else {
+        // A prumada chega direto à condensadora quando corre sob/sobre ela; num shaft, chega à cota
+        // da linha e corre no pavimento dela até a peça.
+        const direto = mesmoP(prumada.at, c.at);
+        for (const lance of lancesDaPrumada(base, { levelId: e.levelId, cotaMm: cotaLinha }, { levelId: c.levelId, cotaMm: direto ? c.cotaMm : cotaLinha })) {
+          l.add({ ...baseLinha, levelId: lance.levelId }, prumada.at, lance.cotaAMm, prumada.at, lance.cotaBMm);
+        }
+        if (!direto) {
+          const noDestino = caminhoEmPlanta(base, c.levelId, prumada.at, c.at, hip);
+          if (!noDestino.pelaParede) avisos.push(`em ${nomeDoNivel(c.levelId)}, sem parede ao alcance: a linha vai em reta do shaft à condensadora`);
+          const q = noDestino.pontos;
+          for (let i = 0; i + 1 < q.length; i++) l.add({ ...baseLinha, levelId: c.levelId }, q[i], cotaLinha, q[i + 1], cotaLinha);
+          l.add({ ...baseLinha, levelId: c.levelId }, c.at, cotaLinha, c.at, c.cotaMm);
+        }
+        avisos.push(`a condensadora está em ${nomeDoNivel(c.levelId)}: a linha ${prumada.shaft ? 'sobe/desce pelo shaft' : 'sobe/desce numa prumada na posição dela (sem shaft ao alcance)'}`);
+      }
       comprimento = l.arestas.slice(antes).reduce((acc, a) => acc + a.mm, 0);
     }
     if (!precisaDreno) {
       aCriar.push({ evaporadoraId: e.id, condensadoraId: c.id, nome, linha: precisaLinha, faixa, comprimentoMm: comprimento, desnivelMm: desnivel, dreno: null, avisos });
       continue;
     }
-    // E5.4 — o DRENO: ao ponto de dreno existente mais perto, senão a um ponto novo na fachada, junto da condensadora.
+    // E5.4 — o DRENO: ao ponto de dreno existente mais perto, senão a um ponto novo na fachada, junto da
+    // condensadora (C1: com ela em outro pavimento, junto da prumada).
     const existentePonto = pontoDeDrenoMaisPerto(base, e);
     let destinoAt: P2;
     let destinoCota: number;
@@ -297,34 +434,43 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     } else {
       // Ao LADO da condensadora (meia largura + 200 mm ao longo da parede — a mesma distância da
       // parede que ela, para a rota ainda encaixar no eixo), no piso.
-      const dx = c.at.x - e.at.x;
-      const dy = c.at.y - e.at.y;
+      const dx = saidaAt.x - e.at.x;
+      const dy = saidaAt.y - e.at.y;
       const d = Math.hypot(dx, dy) || 1;
       const lateral = medCond.larguraMm / 2 + 200;
-      destinoAt = { x: Math.round(c.at.x + (-dy / d) * lateral), y: Math.round(c.at.y + (dx / d) * lateral) };
+      destinoAt = { x: Math.round(saidaAt.x + (-dy / d) * lateral), y: Math.round(saidaAt.y + (dx / d) * lateral) };
       destinoCota = 0;
       destino = 'PONTO_NOVO_NA_FACHADA';
       pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Ponto de dreno', tipoHidraulico: 'PONTO_DRENO', at: destinoAt, cotaMm: 0, sugerida: true } as Command);
     }
     const caminhoDreno = caminhoEmPlanta(base, levelId, e.at, destinoAt, hip);
     const pontosD = caminhoDreno.pontos;
+    // C6: o caminho por gravidade já com o vértice do SIFÃO (colinear: não muda o comprimento).
+    const comSifao = verticeNoCaminho(pontosD, hip.distanciaDoSifaoMm);
+    const pontosG = comSifao.pontos;
     // A queda de CADA lance arredondada para cima (mm inteiros): assim nenhum lance fica abaixo da
     // declividade por arredondamento, e a soma é a queda que o descarte precisa oferecer.
-    const lances = pontosD.slice(1).map((q, i) => Math.hypot(q.x - pontosD[i].x, q.y - pontosD[i].y));
-    const quedas = lances.map((l) => Math.ceil((l * hip.declividadeDrenoPct) / 100));
+    const lances = pontosG.slice(1).map((q, i) => Math.hypot(q.x - pontosG[i].x, q.y - pontosG[i].y));
+    const quedas = lances.map((x) => Math.ceil((x * hip.declividadeDrenoPct) / 100));
     const quedaNecessaria = quedas.reduce((acc, q) => acc + q, 0);
     // A base da evaporadora é por onde o condensado sai; a ponta do dreno fica no nó da peça (coincidência exata).
     const cotaSaida = e.cotaMm;
     const comBomba = cotaSaida - quedaNecessaria < destinoCota;
-    const baseDreno = { levelId, disciplina: 'DRENO_AC' as const, bitolaMm: dnDreno, sugerido: true };
+    const baseDreno = { levelId, disciplina: 'DRENO_AC' as const, bitolaMm: Math.round(hip.dnDrenoMm), sugerido: true };
     const antesD = l.comandos.length;
+    /** C5: os trechos (índices) por onde o condensado DESTA evaporadora passa. */
+    const doDreno: number[] = [];
+    const addDreno = (a: P2, cotaA: number, b: P2, cotaB: number) => {
+      const i = l.add(baseDreno, a, cotaA, b, cotaB);
+      if (i != null) doDreno.push(i);
+    };
     if (comBomba) {
       // Recalque: a bomba junto da evaporadora (30 cm ao longo do primeiro lance), e o dreno sobe o que precisar.
       const q0 = pontosD.length > 1 ? pontosD[1] : destinoAt;
       const dd = Math.hypot(q0.x - e.at.x, q0.y - e.at.y) || 1;
       const bombaAt = { x: Math.round(e.at.x + ((q0.x - e.at.x) / dd) * Math.min(300, dd)), y: Math.round(e.at.y + ((q0.y - e.at.y) / dd) * Math.min(300, dd)) };
       pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Bomba de dreno', tipoHidraulico: 'BOMBA_DRENO', at: bombaAt, cotaMm: cotaSaida, sugerida: true } as Command);
-      l.add(baseDreno, e.at, cotaSaida, bombaAt, cotaSaida);
+      addDreno(e.at, cotaSaida, bombaAt, cotaSaida);
       let atual: P2 = bombaAt;
       let cota = cotaSaida;
       // Sobe/desce em linha até a cota do destino ao longo do caminho (recalque não tem declividade).
@@ -334,7 +480,7 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
       for (const q of resto) {
         andado += Math.hypot(q.x - atual.x, q.y - atual.y);
         const cotaQ = mesmoP(q, destinoAt) ? destinoCota : Math.round(cotaSaida + ((destinoCota - cotaSaida) * andado) / total);
-        l.add(baseDreno, atual, cota, q, cotaQ);
+        addDreno(atual, cota, q, cotaQ);
         atual = q;
         cota = cotaQ;
       }
@@ -343,24 +489,33 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
       // Gravidade: cada lance desce a sua queda; o último cai na cota do destino (que está abaixo, pela conta acima).
       let atual: P2 = e.at;
       let cota = cotaSaida;
-      pontosD.slice(1).forEach((q, i, arr) => {
+      pontosG.slice(1).forEach((q, i, arr) => {
         const ultimo = i === arr.length - 1;
         const cotaQ = ultimo ? destinoCota : cota - quedas[i];
-        l.add(baseDreno, atual, cota, q, cotaQ);
+        addDreno(atual, cota, q, cotaQ);
+        if (i + 1 === comSifao.indice) sifoes.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Sifão do dreno', tipoHidraulico: 'SIFAO_DRENO', at: { x: q.x, y: q.y }, cotaMm: cotaQ, sugerida: true } as Command);
         atual = q;
         cota = cotaQ;
       });
     }
+    const sifaoNoDreno = !comBomba && comSifao.indice > 0;
+    const vazao = condensadoDaEvaporadoraLh(e, hip);
+    for (const i of new Set(doDreno)) vazaoNoTrecho.set(i, (vazaoNoTrecho.get(i) ?? 0) + vazao);
     const comprimentoDreno = l.arestas.slice(antesD).reduce((acc, a) => acc + a.mm, 0);
-    aCriar.push({ evaporadoraId: e.id, condensadoraId: c.id, nome, linha: precisaLinha, faixa, comprimentoMm: comprimento, desnivelMm: desnivel, dreno: { destino, comBomba, comprimentoMm: comprimentoDreno }, avisos });
+    aCriar.push({ evaporadoraId: e.id, condensadoraId: c.id, nome, linha: precisaLinha, faixa, comprimentoMm: comprimento, desnivelMm: desnivel, dreno: { destino, comBomba, comprimentoMm: comprimentoDreno, comSifao: sifaoNoDreno }, avisos });
   }
 
   if (aCriar.length === 0) {
     const motivo = jaLigados.length ? 'todas as evaporadoras já têm linha (split) e dreno confirmados' : null;
     return { comandos: apagar, aCriar: [], jaLigados, semLugar, apagados: apagar.length, motivo, resumo: [] };
   }
+  // C5: o DN de cada trecho novo de dreno pela vazão de quem passa nele (o compartilhado soma).
+  for (const [i, vazao] of vazaoNoTrecho) {
+    const cmd = l.comandos[i] as Extract<Command, { type: 'AddTrecho' }>;
+    cmd.bitolaMm = dnDoDrenoMm(vazao, hip);
+  }
   // Prova na cópia: o lote aplica?
-  const comandos = [...apagar, ...pecas, ...l.comandos];
+  const comandos = [...apagar, ...pecas, ...l.comandos, ...sifoes];
   try {
     applyBatch(model, comandos);
   } catch (err) {
@@ -369,7 +524,7 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
   const m1 = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const resumo = aCriar.map((x) => {
     const linha = x.linha ? `linha ${m1(x.comprimentoMm)} m (Ø ${x.faixa.liquidoMm}/${x.faixa.succaoMm} mm, máx. ${x.faixa.comprimentoMaxM} m)` : '';
-    const dreno = x.dreno ? `dreno ${m1(x.dreno.comprimentoMm)} m ${x.dreno.comBomba ? 'com bomba' : 'por gravidade'} ${x.dreno.destino === 'PONTO_EXISTENTE' ? 'ao ponto de dreno' : 'a um ponto novo na fachada'}` : '';
+    const dreno = x.dreno ? `dreno ${m1(x.dreno.comprimentoMm)} m ${x.dreno.comBomba ? 'com bomba' : x.dreno.comSifao ? 'por gravidade, com sifão' : 'por gravidade'} ${x.dreno.destino === 'PONTO_EXISTENTE' ? 'ao ponto de dreno' : 'a um ponto novo na fachada'}` : '';
     return `${x.nome}: ${[linha, dreno].filter(Boolean).join(' · ')}${x.avisos.length ? ` — ${x.avisos.join('; ')}` : ''}`;
   });
   return { comandos, aCriar, jaLigados, semLugar, apagados: apagar.length, motivo: null, resumo };
@@ -409,7 +564,8 @@ export function linhasConferidas(model: BlueprintModel, levelId: ObjectId, hip: 
     if (!linha) pend.push('sem linha entre a evaporadora e a condensadora');
     const comprimentoM = linha ? linha.mm / 1000 : null;
     if (comprimentoM != null && comprimentoM > faixa.comprimentoMaxM) pend.push(`linha de ${comprimentoM.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m acima do máximo de ${faixa.comprimentoMaxM} m da faixa`);
-    const desnivelM = Math.abs(s.evaporadora.cotaMm - s.condensadora.cotaMm) / 1000;
+    // C1: em cota de MUNDO — a condensadora pode estar em outro pavimento.
+    const desnivelM = desnivelDoSistemaMm(model, s) / 1000;
     if (desnivelM > faixa.desnivelMaxM) pend.push(`desnível de ${desnivelM.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m acima do máximo de ${faixa.desnivelMaxM} m`);
     const dnLiquidoMm = [...new Set(trechos.map((t) => t.bitolaMm))].sort((a, b) => a - b);
     const dnSuccaoMm = [...new Set(trechos.map((t) => t.bitolaSuccaoMm ?? t.bitolaMm))].sort((a, b) => a - b);
@@ -426,19 +582,59 @@ export function linhasConferidas(model: BlueprintModel, levelId: ObjectId, hip: 
   });
 }
 
-/** O dreno de cada evaporadora: chega a um ponto de dreno? por gravidade ou bomba? */
-export function drenosConferidos(model: BlueprintModel, levelId: ObjectId): { evaporadoraId: ObjectId; nome: string; chega: boolean; comBomba: boolean }[] {
+/** O dreno de cada evaporadora: chega a um ponto de dreno? por gravidade ou bomba? C6: com sifão no caminho? */
+export function drenosConferidos(model: BlueprintModel, levelId: ObjectId): { evaporadoraId: ObjectId; nome: string; chega: boolean; comBomba: boolean; comSifao: boolean }[] {
   const arestas = arestasDe(model, 'DRENO_AC');
   const pontos = (model.terminais ?? []).filter((t) => t.levelId === levelId && t.tipoHidraulico === 'PONTO_DRENO');
   const bombas = (model.terminais ?? []).filter((t) => t.levelId === levelId && t.tipoHidraulico === 'BOMBA_DRENO');
+  const sifoes = new Set((model.terminais ?? []).filter((t) => t.levelId === levelId && t.tipoHidraulico === 'SIFAO_DRENO').map((t) => noDe(model, t)));
   return (model.terminais ?? [])
     .filter((t) => t.levelId === levelId && !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico))
     .map((e) => {
       const de = noDe(model, e);
-      const chega = pontos.some((p) => !!menorCaminhoEntre(de, noDe(model, p), arestas));
+      const caminhos = pontos.map((p) => menorCaminhoEntre(de, noDe(model, p), arestas)).filter((c): c is NonNullable<typeof c> => !!c);
+      const chega = caminhos.length > 0;
       const comBomba = bombas.some((b) => !!menorCaminhoEntre(de, noDe(model, b), arestas));
-      return { evaporadoraId: e.id, nome: e.tipo, chega, comBomba };
+      const comSifao = caminhos.some((c) => c.arestas.some((i) => sifoes.has(arestas[i].de) || sifoes.has(arestas[i].para)));
+      return { evaporadoraId: e.id, nome: e.tipo, chega, comBomba, comSifao };
     });
+}
+
+export interface DrenoPorVazao {
+  trechoId: ObjectId;
+  vazaoLh: number;
+  pedeMm: number;
+  bitolaMm: number;
+}
+
+/**
+ * C5: cada trecho de dreno do pavimento com a vazão de condensado que passa nele
+ * (as evaporadoras cujo caminho até o ponto de dreno — ou a bomba — o usa) e o DN
+ * que essa vazão pede.
+ */
+export function drenosPorVazao(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): DrenoPorVazao[] {
+  const arestas = arestasDe(model, 'DRENO_AC');
+  if (arestas.length === 0) return [];
+  const destinos = (model.terminais ?? []).filter((t) => t.levelId === levelId && (t.tipoHidraulico === 'PONTO_DRENO' || t.tipoHidraulico === 'BOMBA_DRENO'));
+  const vazao = new Map<ObjectId, number>();
+  for (const e of (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico))) {
+    const de = noDe(model, e);
+    const caminho = destinos
+      .map((d) => menorCaminhoEntre(de, noDe(model, d), arestas))
+      .filter((c): c is NonNullable<typeof c> => !!c)
+      .sort((a, b) => a.mm - b.mm)[0];
+    if (!caminho) continue;
+    const q = condensadoDaEvaporadoraLh(e, hip);
+    for (const i of new Set(caminho.arestas)) {
+      const id = (arestas[i].ref as { existente: ObjectId }).existente;
+      vazao.set(id, (vazao.get(id) ?? 0) + q);
+    }
+  }
+  const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
+  return [...vazao.entries()]
+    .filter(([id]) => porId.get(id)?.levelId === levelId)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([trechoId, vazaoLh]) => ({ trechoId, vazaoLh, pedeMm: dnDoDrenoMm(vazaoLh, hip), bitolaMm: porId.get(trechoId)!.bitolaMm }));
 }
 
 /** A conferência em 3 estados (mesmo molde da carga e da seleção). */
@@ -466,6 +662,28 @@ export function conferenciaDaLinha(model: BlueprintModel, levelId: ObjectId, hip
   itens.push({ codigo: 'CURVAS', item: 'Curvas da linha (cobre curvado, não joelho) com raio mínimo por diâmetro', estado: comLinha.length === 0 ? 'NAO_AVALIADO' : curvas > 0 ? 'AVISO' : 'OK', obtido: comLinha.length === 0 ? 'sem linha' : curvas > 0 ? `${curvas} curva(s); raio mínimo ${comLinha.map((l) => `${l.nome} ${l.raioMinimoMm} mm`).join('; ')} — HIPÓTESE, CONFERIR` : 'sem mudança de direção', spaceIds: [] });
   const semDreno = drenos.filter((d) => !d.chega);
   itens.push({ codigo: 'DRENO', item: 'Dreno de condensado de cada evaporadora até um ponto de dreno', estado: drenos.length === 0 ? 'NAO_AVALIADO' : semDreno.length ? 'FALTA' : 'OK', obtido: drenos.length === 0 ? 'nenhuma evaporadora' : semDreno.length ? `sem dreno: ${nomes(semDreno)}` : `${drenos.length} dreno(s)${drenos.some((d) => d.comBomba) ? ` — ${drenos.filter((d) => d.comBomba).length} com bomba` : ''}`, spaceIds: [] });
+  // C5: o DN de cada trecho de dreno pela vazão de condensado de quem passa nele.
+  const porVazao = drenosPorVazao(model, levelId, hip);
+  const finos = porVazao.filter((d) => d.bitolaMm < d.pedeMm);
+  const maiorVazao = porVazao.reduce((m, d) => Math.max(m, d.vazaoLh), 0);
+  const l1 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  itens.push({
+    codigo: 'DN_DRENO',
+    item: 'DN do dreno pela vazão de condensado (hipótese — CONFERIR)',
+    estado: porVazao.length === 0 ? 'NAO_AVALIADO' : finos.length ? 'FALTA' : 'OK',
+    obtido: porVazao.length === 0 ? 'nenhum dreno ligado a evaporadora' : finos.length ? `${finos.length} trecho(s) abaixo do DN pedido (${finos.map((d) => `${l1(d.vazaoLh)} L/h pede DN ${d.pedeMm}, tem ${d.bitolaMm}`).join('; ')})` : `${porVazao.length} trecho(s) ok; maior vazão ${l1(maiorVazao)} L/h`,
+    spaceIds: [],
+  });
+  // C6: o sifão no dreno por gravidade (a bomba tem o dela).
+  const porGravidade = drenos.filter((d) => d.chega && !d.comBomba);
+  const semSifao = porGravidade.filter((d) => !d.comSifao);
+  itens.push({
+    codigo: 'SIFAO',
+    item: 'Sifão no dreno por gravidade',
+    estado: porGravidade.length === 0 ? 'NAO_AVALIADO' : semSifao.length ? 'AVISO' : 'OK',
+    obtido: porGravidade.length === 0 ? 'nenhum dreno por gravidade' : semSifao.length ? `sem sifão: ${nomes(semSifao)}` : `${porGravidade.length} dreno(s) com sifão`,
+    spaceIds: [],
+  });
   return itens;
 }
 

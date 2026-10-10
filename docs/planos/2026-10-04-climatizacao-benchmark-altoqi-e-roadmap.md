@@ -500,7 +500,7 @@ O detalhe de cada fase está em "Execução", no fim do documento.
   - o achado 8 (as normas) continua aberto e é a pendência A abaixo;
   - o achado 13: o modelo externo como referência entrou na E10.4b, e o RVT direto segue no backlog.
 
-**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **162 ✅ (71 %), 56 🟡 e
+**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **167 ✅ (73 %), 51 🟡 e
 10 ❌**; eram 51 / 83 / 94 em 04/10. Os números e os 10 ❌ estão na "Leitura geral".
 
 ### Pendências
@@ -536,19 +536,19 @@ Faltam:
 - o Ctrl+D completo.
 
 **C. Funcionais deixados de fora nas etapas (ditos em cada "Não entrou").**
-- **Entre pavimentos:**
-  - a prumada da linha frigorígena (condensadora na cobertura);
-  - a prumada do VRF (evaporadora de outro pavimento só gera AVISO).
-- **VRF:** o comprimento equivalente das conexões e o coletor (header) como peça.
-- **Dreno:** o DN pela vazão de condensado (hoje 25 mm fixos, hipótese) e o sifão como peça (hoje só
-  no detalhe típico).
-- **Dutos:**
+- ✅ **Feitos em 10/10 (frente `clima-linha-vrf`, kernel 0.94.0):**
+  - **C1:** a prumada da linha frigorígena (condensadora na cobertura), por shaft quando há;
+  - **C2:** o VRF entre pavimentos (tronco pela prumada, árvore em cada pavimento);
+  - **C3:** o comprimento equivalente (curvas, derivadores e coletores);
+  - **C4:** o coletor (header) do VRF como peça;
+  - **C5:** o DN do dreno pela vazão de condensado;
+  - **C6:** o sifão do dreno como peça;
+  - **C11:** a linha desenhada como o par na planta e no 3D da tela.
+- **Dutos (C7–C10, próxima frente):**
   - a exaustão com duto até a fachada (o exaustor é conferido no ambiente, a rede dele não é traçada);
   - o desvio de pilar no forro (o conflito acusa);
   - a perda em damper e plenum;
   - o duto flexível do difusor como peça.
-- **Desenho:** a linha frigorígena aparece como UM tubo na planta e no 3D da tela (o par
-  líquido/sucção existe no IFC).
 - ✅ **Feitos em 10/10 (frente `clima-cd`):**
   - **C12:** as cotas passam além da condensadora;
   - **C13:** os rótulos do isométrico não encostam;
@@ -789,7 +789,7 @@ ela herda quase de graça:
 | Geração e edição em cortes | E | 🟡 | o corte sai com as redes, duto retangular cortado na meia altura (`utils/blueprintCorte.ts:327`); edição no corte não existe (planos XZ/YZ seguem no backlog) |
 | Geração de detalhes isométricos | E | ✅ | `isometricoDeClimatizacao` com todos os pavimentos e rótulo L×A / Ø líquido/sucção (`utils/blueprintDetalhesClimatizacao.ts:26`); os rótulos desviam uns dos outros (C13, 10/10: `lugarDoRotulo`) |
 | Posicionamento por altura/cota | E | ✅ | `Terminal.cotaMm` (`model.ts:3195`), `cotaAMm`/`cotaBMm` do trecho (`model.ts:2686`), campo Cota no painel (`components/blueprint/PainelTrechoSelecionado.tsx:235`) e subir/descer no 3D (`utils/blueprint3dSelecao.ts:71`) |
-| Modelagem em diferentes pavimentos | E | 🟡 | `levelId` em toda peça e `DuplicateLevel` copia componentes (`utils/blueprintKernel/commands.ts:5262`); falta a prumada da linha e do VRF entre pavimentos: sistemas só no mesmo pavimento (`utils/blueprintLinhaFrigorigena.ts:95`, `utils/blueprintVrf.ts:91`) |
+| Modelagem em diferentes pavimentos | E | ✅ | `levelId` em toda peça e `DuplicateLevel` copia componentes (`utils/blueprintKernel/commands.ts:5262`); a linha do split e o VRF sobem/descem pela prumada entre pavimentos (C1/C2, 10/10: `utils/blueprintPrumadaClimatizacao.ts`) |
 | Visualização simultânea entre croqui e 3D | E | ✅ | "Planta + 3D lado a lado", persistido (`BlueprintEditor.tsx:1724, 10078, 14633`) — a mesma cena e a mesma seleção; desliga nas elevações, dizendo por quê |
 | Movimentação de elementos no ambiente 3D | E | ✅ | alça X/Z vira o mesmo `TranslateEntities` do 2D (`utils/blueprint3dSelecao.ts:62`, `utils/blueprintSelecao.ts:35`); Y vira a cota (`utils/blueprintSelecao.ts:76`) |
 | Caixa de corte 3D | E | ✅ | seis planos por material (`Blueprint3DViewer.tsx:1997-2012`, `utils/blueprint3dSelecao.ts:85`) |
@@ -803,11 +803,11 @@ ela herda quase de graça:
 | Funcionalidade | Grau | Estado | Evidência / o que falta |
 |---|---|---|---|
 | Split | E | ✅ | evaporadora + condensadora tipadas com capacidade e sistema (`model.ts:3000, 3391, 3404`); seleção e posição (`utils/blueprintPosicaoSplit.ts:181`); linha e dreno (`utils/blueprintLinhaFrigorigena.ts:228`) |
-| VRF | E | 🟡 | árvore com derivadores e Ø pelo somatório a jusante, taxa e limites (`utils/blueprintVrf.ts:165, 335, 431`); falta: prumada entre pavimentos (evaporadora de outro pavimento só AVISO), comprimento equivalente das conexões, coletor (header) como peça |
+| VRF | E | ✅ | árvore com derivadores e Ø pelo somatório a jusante, taxa e limites (`utils/blueprintVrf.ts`); entre pavimentos pela prumada (C2), comprimento equivalente com curvas, derivadores e coletores (C3) e o coletor (header) como peça em 3 ou mais ramais (C4), 10/10 |
 | Unidades evaporadoras | E | ✅ | hi-wall, piso-teto, cassete e dutada (`model.ts:3019`), fichas com cota e medidas (`utils/blueprintHidraulica.ts:691-694`) |
 | Unidades condensadoras | E | ✅ | split e VRF (`model.ts:3020`, `utils/blueprintHidraulica.ts:695-696`); as medidas da ficha são fixas (não variam com a capacidade) |
 | Interligação entre os equipamentos | E | ✅ | `condensadoraId` com invariante `BAD_CONDENSER` (`model.ts:3404, 5262-5266`); a peça conta no nó da linha e do dreno (`utils/blueprintKernel/conexoes.ts:229-237`) |
-| Redes frigorígenas | E | 🟡 | disciplina `FRIGORIGENA` em cobre, par líquido/sucção e isolamento num trecho (`model.ts:2563, 2762-2764`), traçado e conferência (`utils/blueprintLinhaFrigorigena.ts:228, 445`); falta a prumada entre pavimentos e o desenho do par na tela (um tubo só) |
+| Redes frigorígenas | E | ✅ | disciplina `FRIGORIGENA` em cobre, par líquido/sucção e isolamento num trecho (`model.ts:2563, 2762-2764`), traçado e conferência (`utils/blueprintLinhaFrigorigena.ts`); prumada entre pavimentos (C1) e o par desenhado na planta e no 3D (C11), 10/10 |
 | Dutos | E | ✅ | duto redondo ou retangular (`model.ts:2772`), vazão, perda de carga e espinha automática (`utils/blueprintRedeDeAr.ts:233, 420`); lacunas de acessório em §9–§10 |
 | Exaustores e componentes auxiliares | E | 🟡 | `EXAUSTOR_AR` com vazão (`utils/blueprintHidraulica.ts:698`, `model.ts:3025`) e exaustão conferida por ambiente (`utils/blueprintRedeDeAr.ts:352`); falta traçar o duto de exaustão até a fachada (a rede de ar só parte de dutada/caixa, `utils/blueprintRedeDeAr.ts:49`) |
 
@@ -871,15 +871,15 @@ ela herda quase de graça:
 | Condutos multicurva | E | 🟡 | percurso em trechos retos encadeados; cada dobra vira curva derivada contada na conferência (`utils/blueprintLinhaFrigorigena.ts:445`); o trecho é sempre reto `a → b` (`model.ts:2686`), sem arco |
 | Curvas com raio mínimo | E | 🟡 | raio mínimo por Ø dito na conferência (`utils/blueprintLinhaFrigorigena.ts:72-73`); não é desenhado nem verificado na geometria |
 | Ajuste do raio das curvas | E | ❌ | o raio é tabela fixa (`utils/blueprintLinhaFrigorigena.ts:72`), nem hipótese editável; sem campo de raio no trecho (o `Trecho.curva` do roadmap não entrou) |
-| Representação realista do percurso | E | 🟡 | no IFC, o par isolado lado a lado (`utils/blueprintIfc.ts:2306`); na planta e no 3D da tela, um tubo só, com cantos vivos |
+| Representação realista do percurso | E | 🟡 | o par isolado lado a lado no IFC, na planta e no 3D da tela (C11, 10/10: `parDaLinhaEmPlanta`/`cilindrosDoTrecho` em `utils/blueprintRede.ts`); falta a curva com raio — a dobra ainda sai em canto vivo |
 
 ## 8. Tubulações
 
 | Funcionalidade | Grau | Estado | Evidência / o que falta |
 |---|---|---|---|
-| Lançamento de tubulações | E | 🟡 | linha e dreno como disciplinas próprias (`model.ts:2563`), dreno automático por gravidade ou bomba (`utils/blueprintLinhaFrigorigena.ts:228`); falta o DN do dreno pela vazão de condensado (hipótese fixa de 25 mm, `utils/blueprintClimatizacao.ts:382`) e o sifão como peça (só no detalhe típico, `utils/blueprintDetalhesClimatizacao.ts:95`) |
+| Lançamento de tubulações | E | ✅ | linha e dreno como disciplinas próprias (`model.ts:2563`), dreno automático por gravidade ou bomba (`utils/blueprintLinhaFrigorigena.ts`), o DN do dreno pela vazão de condensado (C5) e o sifão como peça (C6), 10/10 |
 | Trajetos horizontais | E | ✅ | corrida na cota da linha (`utils/blueprintLinhaFrigorigena.ts:228`); dreno com declividade conferida trecho a trecho (`utils/blueprintLinhaFrigorigena.ts:489`) |
-| Trajetos verticais | E | 🟡 | subida e descida dentro do pavimento; falta a prumada da linha/VRF entre pavimentos (`utils/blueprintLinhaFrigorigena.ts:95`) |
+| Trajetos verticais | E | ✅ | subida e descida dentro do pavimento e a prumada da linha e do VRF entre pavimentos, por shaft quando há (C1/C2, 10/10: `lancesDaPrumada`, `pontoDaPrumada`) |
 | Mudanças de direção | E | ✅ | joelho 90/45 derivado também em linha, dreno e duto (`utils/blueprintKernel/conexoes.ts:161, 299-301`) |
 | Conexões | E | ✅ | `HIDRAULICAS` inclui `FRIGORIGENA`, `DRENO_AC` e `MECANICA` (`conexoes.ts:161`); o derivador VRF é a conexão (`conexoes.ts:280`); a curva do cobre não vira peça, por decisão (`conexoes.ts:97`) |
 | Representação tridimensional | E | 🟡 | cilindro (`Blueprint3DViewer.tsx:1146-1200`); sem par nem isolamento na tela |
@@ -913,7 +913,7 @@ ela herda quase de graça:
 | Bocais | E | ✅ | `BOCAL_AR` (`utils/blueprintHidraulica.ts:705`) |
 | Caixas | E | 🟡 | caixa plenum e de distribuição como peças (`utils/blueprintHidraulica.ts:701, 708`); falta a perda do plenum no cálculo (só curva e tê entram, `utils/blueprintRedeDeAr.ts:233`) |
 | Adaptadores | E | ❌ | não há transição redondo↔retangular nem colarinho |
-| Componentes da linha frigorígena | E | 🟡 | derivador VRF (`model.ts:3002`); falta porca flange, união, o coletor (header) do VRF e o sifão do dreno como peças |
+| Componentes da linha frigorígena | E | 🟡 | derivador e coletor (header) do VRF e o sifão do dreno como peças (`COLETOR_VRF`/`SIFAO_DRENO`, kernel 0.94.0, 10/10); falta porca flange e união |
 | Acessórios de dutos | E | 🟡 | damper como peça (`utils/blueprintHidraulica.ts:709`); falta a perda do damper, colarinho, junta flexível e o duto flexível do difusor como peça |
 
 ## 11. Kits de climatização
@@ -1068,7 +1068,7 @@ ela herda quase de graça:
 
 | Funcionalidade | Grau | Estado | Evidência / o que falta |
 |---|---|---|---|
-| 52 · Modelagem BIM de climatização | E | 🟡 | disciplinas `FRIGORIGENA`/`DRENO_AC`/`MECANICA` no modelo (`model.ts:2563`), equipamento como peça da rede, 3D e IFC com Pset. Falta: prumada da linha e do VRF entre pavimentos (`blueprintLinhaFrigorigena.ts:94`, `blueprintVrf.ts:83`); rede de exaustão traçada até a fachada; a linha aparece como um tubo só na planta e no 3D |
+| 52 · Modelagem BIM de climatização | E | 🟡 | disciplinas `FRIGORIGENA`/`DRENO_AC`/`MECANICA` no modelo (`model.ts:2563`), equipamento como peça da rede, 3D e IFC com Pset. Prumada da linha e do VRF entre pavimentos e a linha em par na planta e no 3D (C1/C2/C11, 10/10). Falta: rede de exaustão traçada até a fachada |
 | 53 · Importação IFC | E | 🟡 | a climatização é importada (`ifcParametricoService.ts:1028`, `ifcParaKernel.ts:1111`, `PainelImportarIfc.tsx:246`) com religação do sistema (`ifcParaKernel.ts:1243`). Falta: um `IfcUnitaryEquipment .SPLITSYSTEM.` de outro programa é recusado, porque evaporadora e condensadora só se distinguem pelo nosso ObjectType (`ifcParaKernel.ts:1055`); a importação só foi provada com IFC da própria Planta |
 | 54 · Exportação IFC | E | ✅ | `IfcDuctFitting` (`blueprintIfc.ts:2357`), `IfcAirTerminal` (`:2647-2655`), `IfcUnitaryEquipment` (`:2632`), par da linha (`:2273`), sistemas `.AIRCONDITIONING.`/`.REFRIGERATION.` (`:2168-2170`) e `Pset_OpuraClimatizacao` (`:1424`, `:1433`). a rede só de exaustão em `.VENTILATION.` (C14, 10/10: `idsDaRedeDeExaustao`) e o isolamento como `IfcCovering .WRAPPING.` ligado ao tubo (C15, 10/10) |
 | 55 · OpenBIM | E | ✅ | IFC4 e IFC4X3 (`blueprintIfc.ts:574`); BCF com a classe `EQUIPAMENTO` (`blueprintBcf.ts:260`) |
@@ -1122,10 +1122,10 @@ ela herda quase de graça:
 | Selecionar automaticamente o aparelho por catálogo | A | 🟡 | `selecionarModelo` sobre o catálogo da organização (`blueprintSelecaoClimatizacao.ts:47,86`). Falta catálogo real de fabricante: as capacidades são sementes de hipótese (`blueprintCatalogoDeTipos.ts:52,73-80`) |
 | Verificar se o equipamento atende à carga calculada | A | ✅ | `avaliarCapacidade` → atende / subdimensionado / superdimensionado, declarado vence e é conferido (`blueprintSelecaoClimatizacao.ts:110,198`) |
 | Pré-dimensionamento Split | A | 🟡 | capacidade pela carga + folga, diâmetros, isolamento, comprimento/desnível e carga de gás (`blueprintLinhaFrigorigena.ts:56-75`, `:445`). Falta: faixas de fabricante transcritas de memória (HIPÓTESE, `:63`), sem catálogo real |
-| Pré-dimensionamento VRF (taxa de combinação, derivadores) | A | 🟡 | taxa de combinação, derivador pelo somatório a jusante, diâmetro por trecho e limites (`blueprintVrf.ts:62,165,431`). Falta: limites e derivadores de memória (HIPÓTESE, `:70`), comprimento equivalente das conexões, prumada entre pavimentos (só AVISO, `:83`) |
+| Pré-dimensionamento VRF (taxa de combinação, derivadores) | A | 🟡 | taxa de combinação, derivador e coletor pelo somatório a jusante, diâmetro por trecho, limites reais e equivalentes, entre pavimentos (`blueprintVrf.ts`, C2–C4 em 10/10). Falta: limites e derivadores de memória (HIPÓTESE) |
 | Otimizar a localização dos equipamentos | A | 🟡 | posição automática: evaporadora em parede livre sem porta e fora dos vãos, condensadora na fachada ou em ambiente técnico pelo nome (`blueprintPosicaoSplit.ts:109,158-178,181`). Falta: é regra de prioridade, não minimiza a linha; só no mesmo pavimento (condensadora na cobertura fora) |
-| Gerar automaticamente a rede frigorígena | A | 🟡 | split pela parede com Steiner + desvio de pilar (`blueprintLinhaFrigorigena.ts:172-181,228`); árvore VRF (`blueprintVrf.ts:304-314,335`). Falta: prumada entre pavimentos (split e VRF); na planta/3D da tela a linha é um tubo só (o par existe no IFC) |
-| Drenos: traçado, declividade, bomba | A | ✅ | dreno até ponto existente ou novo na fachada, por gravidade, com bomba quando falta queda (`blueprintLinhaFrigorigena.ts:136,318-327`); declividade conferida e marcada (`:489`; `Verif:146-150`). Pendente menor: DN fixo de 25 mm (hipótese), sifão só no detalhe típico |
+| Gerar automaticamente a rede frigorígena | A | ✅ | split pela parede com Steiner + desvio de pilar (`blueprintLinhaFrigorigena.ts`); árvore VRF (`blueprintVrf.ts`); entre pavimentos pela prumada, split e VRF (C1/C2), e o par desenhado na tela (C11), 10/10 |
+| Drenos: traçado, declividade, bomba | A | ✅ | dreno até ponto existente ou novo na fachada, por gravidade, com bomba quando falta queda (`blueprintLinhaFrigorigena.ts:136,318-327`); declividade conferida e marcada (`:489`; `Verif:146-150`). O DN pela vazão de condensado (C5) e o sifão como peça (C6), 10/10 |
 | Dimensionamento automático de dutos | A | ✅ | seção por velocidade/igual atrito para a vazão a jusante (`blueprintRedeDeAr.ts:110`), "Ajustar seções" em um lote (`:321`), traçado em espinha no forro (`:420`) |
 | Cálculo de vazão | A | ✅ | vazão por terminal: declarada ou derivada do calor sensível, nunca abaixo da renovação (`blueprintRedeDeAr.ts:140,159`) |
 | Perda de carga | A | 🟡 | duto: Darcy + Swamee-Jain no diâmetro hidráulico (`blueprintRedeDeAr.ts:73-80`), curva e tê por coeficiente (`:290-301`), caminho crítico × pressão disponível (`:313`). Falta: perda em damper e plenum; comprimento equivalente das conexões do VRF |
@@ -1174,14 +1174,14 @@ derivado a cada mudança.
 
 | Grau | ✅ | 🟡 | ❌ | Total |
 |---|---|---|---|---|
-| **E** | 162 | 56 | 10 | 228 |
-| **A** | 6 | 11 | 0 | 17 |
+| **E** | 167 | 51 | 10 | 228 |
+| **A** | 7 | 10 | 0 | 17 |
 | **M** | 0 | 0 | 0 | 0 |
 | **B** | 0 | 0 | 0 | 0 |
 | **N** | 0 | 0 | 2 | 2 |
-| **Total** | 168 | 67 | 12 | 247 |
+| **Total** | 174 | 61 | 12 | 247 |
 
-**Dos 228 Essenciais, 162 estão prontos (71 %; eram 51, 22 %), e só 10 não existem.** Os 10 ❌:
+**Dos 228 Essenciais, 167 estão prontos (73 %; eram 51, 22 %), e só 10 não existem.** Os 10 ❌:
 
 - quatro de backlog: RVT direto, gás, SPDA e cabeamento;
 - o ajuste do raio das curvas;
@@ -1195,7 +1195,7 @@ Dos 60 🟡, a maior parte é a mesma família:
 - dado de fabricante semeado;
 - as pendências C do plano.
 
-Os 17 "vai além" saíram de 0 para 6 ✅ e 11 🟡 (o 🟡 é quase todo hipótese de fabricante e as prumadas).
+Os 17 "vai além" saíram de 0 para 7 ✅ e 10 🟡 (o 🟡 é quase todo hipótese de fabricante e as prumadas).
 
 ### A foto de 04/10/2026 (o ponto de partida)
 
@@ -2910,3 +2910,58 @@ Itens do "Plano das pendências C e D" (no topo, depois do status), mais a regra
 | C13 | `blueprintIsometricoPrancha.test.ts` (+2) | três peças a 10 cm, nenhum par de rótulos sobreposto |
 | C14/C15 | `blueprintIfcVentilacao.test.ts` (novo, 4) | os dois sistemas; a rede mista fica ar-condicionado; o covering lido pelo web-ifc, ligado ao IfcPipeSegment |
 | C16 | `blueprintQuantitativosPorPavimento.test.ts` (+1) | linha, dreno, duto, equipamentos e terminais; o lavatório é o único ponto hidráulico |
+
+### Pendências C1–C6 e C11 · 10/10/2026 (frente `clima-linha-vrf`, kernel 0.94.0)
+
+Itens do "Plano das pendências C e D". Os dutos (C7–C10) ficam para a frente seguinte.
+
+- **Kernel 0.93.0 → 0.94.0:** dois tipos de ponto, `COLETOR_VRF` e `SIFAO_DRENO`, sem campo novo.
+  Com ficha, símbolo, numeração (CV, SF), IFC (`IfcPipeFitting .JUNCTION.`, `IfcWasteTerminal
+  .WASTETRAP.`) e importação. `TIPOS_QUE_LIGAM_NA_CONDENSADORA` junta, num lugar só, quem aponta uma
+  condensadora (antes, a lista estava repetida em três arquivos). Provado antes do bump: com a string
+  em 0.93.0 os goldens e os testes de climatização passaram sem outra alteração.
+- **C1, a prumada da linha.** `sistemasDoNivel` aceita a condensadora de outro pavimento. A linha corre
+  no pavimento da evaporadora até a prumada e sobe ou desce por ela, um lance por pavimento, piso a
+  teto nos do meio (`blueprintPrumadaClimatizacao.ts`, o molde da prumada do eletroduto). A prumada
+  corre num shaft (sem disciplina, ou MECANICA) que atravesse todos os pavimentos do caminho, a até
+  `raioDoShaftMm` da condensadora; sem ele, na posição dela. O desnível conferido passou a ser de
+  mundo. Relançar apaga a linha sugerida do pavimento onde estiver: `componentesSugeridos` agrupa os
+  trechos pela continuidade da rede, e o grupo é do pavimento da evaporadora que toca.
+- **C2, o VRF entre pavimentos.** O sistema é a condensadora com todas as evaporadoras, de qualquer
+  pavimento. O planejador monta a árvore em 3D: a árvore pelas paredes no pavimento da condensadora (a
+  prumada entra como mais um destino quando corre num shaft), a prumada para cima e para baixo com uma
+  parada na cota da linha de cada pavimento atendido, e uma árvore pelas paredes em cada um a partir
+  dela. O somatório a jusante sai pela chave de mundo, e o tronco da prumada leva o dos pavimentos
+  depois dele. O AVISO "evaporadora em outro pavimento" saiu. No pavimento só das evaporadoras, o
+  painel diz de onde lançar (`vrfDeOutrosPavimentos`), e nada é apagado ali.
+- **C3, o comprimento equivalente.** Até a evaporadora mais distante: o real, mais
+  `equivalenteDerivadorM` por divisão, `equivalenteColetorM` por coletor e `equivalenteCurvaM` por
+  mudança de direção (vetores de mundo). O limite `ateMaisDistanteEquivalenteMaxM` entra em LIMITES.
+  Tudo nas premissas do VRF, hipótese editável.
+- **C4, o coletor.** Uma divisão com 3 ou mais ramais leva `COLETOR_VRF` ("Coletor VRF de N ramais").
+  A análise diz `ramais`, a `peca` no nó e se é a certa. Um "Y" em 3 ramais é FALTA, "sem coletor".
+- **C5, o DN do dreno.** `condensadoLhPorKbtu` (0,2 L/h por 1.000 BTU/h, hipótese) dá a vazão, e
+  `DN_DO_DRENO_PELA_VAZAO` dá o DN, nunca abaixo do mínimo das premissas. O planejador soma a vazão
+  nos trechos do lote: `lote.add` passou a devolver o índice do comando, também quando o trecho
+  repete. A conferência `DN_DRENO` lê a rede existente (`drenosPorVazao`), pelo caminho de cada
+  evaporadora até o ponto de dreno.
+- **C6, o sifão.** No dreno por gravidade, o sifão entra a `distanciaDoSifaoMm` (300 mm) da saída, pelo
+  caminho: um vértice colinear novo (`verticeNoCaminho`), sobre o trecho. Com bomba, não entra. A
+  conferência `SIFAO` avisa o dreno por gravidade sem ele. Na lista de materiais, o sifão sai no grupo
+  Dreno.
+- **C11, o par na tela.** `parDaLinha` mudou-se do IFC para `blueprintRede` (o IFC reexporta). A
+  planta desenha os dois tubos paralelos (`parDaLinhaEmPlanta`, largura do envelope), e o 3D, os dois
+  cilindros (`cilindrosDoTrecho`): a mesma conta do arquivo.
+
+**Prova:**
+
+| Item | Teste | O que prova |
+|---|---|---|
+| C1 | `blueprintClimatizacaoEntrePavimentos.test.ts` | os lances; o trecho nos três pavimentos, ligado, sem ponta aberta, desnível 3,7 m de mundo; relançar idempotente, e a Cobertura não toca; pelo shaft |
+| C2 | idem | 4 evaporadoras em 2 pavimentos, 3 derivadores, tronco com 96 mil a jusante, conferência toda OK; relançar idempotente; o Térreo só diz de onde lançar; a E5 faz só o dreno |
+| C3 | idem | zerado = real; derivador 1 m → +2 m (duas divisões no caminho); curva inteira ≥ 3; o limite equivalente acusa |
+| C4 | idem; `blueprintVrf.test.ts` | coletor em 3 e 4 ramais, sem tê; no IFC; o "Y" em 3 ramais é FALTA |
+| C5 | idem | a tabela; 48 L/h → DN 32 no lote; o compartilhado soma (60 + 60 → DN 40) |
+| C6 | idem; `blueprintLinhaFrigorigena.test.ts` | o vértice; o sifão sobre o dreno, sem ponta aberta, declividade mantida; AVISO sem ele; nada com bomba; o IFC ida e volta; a lista de materiais |
+| C11 | `components/BlueprintCanvasParDaLinha.test.tsx` | o par em planta e no 3D; o canvas risca dois traços à distância certa, e o tubo só não |
+| 0.94.0 | `blueprintKernelGoldens.test.ts`, `blueprintClimatizacaoTipos.test.ts` | os seis hashes; os 22 tipos |

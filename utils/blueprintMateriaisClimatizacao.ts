@@ -176,7 +176,9 @@ export function materiaisDeClimatizacao(model: BlueprintModel, hip: HipotesesCli
   for (const p of (t.porTerminal ?? []).filter((x) => ehDaClimatizacao(x.classificacao) || (x.disciplina === 'MECANICA' && !x.classificacao))) {
     const nome = nomeDaPeca(p.classificacao, p.tipo);
     const equip = ehEquipamentoDeClimatizacao(p.classificacao);
-    totais.push({ grupo: equip ? 'Equipamentos' : 'Terminais de ar', item: p.especificacao ? `${nome} — ${p.especificacao}` : nome, quantidade: p.quantidade, unidade: 'un', itemCode: p.itemCode });
+    // C6 (10/10/2026): o sifão é peça do DRENO, não equipamento.
+    const grupo = p.classificacao === 'SIFAO_DRENO' ? 'Dreno' : equip ? 'Equipamentos' : 'Terminais de ar';
+    totais.push({ grupo, item: p.especificacao ? `${nome} — ${p.especificacao}` : nome, quantidade: p.quantidade, unidade: 'un', itemCode: p.itemCode });
   }
   const semCapacidade = (model.terminais ?? []).filter((x) => x.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(x.tipoHidraulico) && x.capacidadeBtuH == null).length;
   if (semCapacidade) avisos.push(`${semCapacidade} evaporadora(s) sem capacidade declarada: a compra pede o modelo.`);

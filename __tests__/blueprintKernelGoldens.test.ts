@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'e79e13721a4ef26c7e3a5e1645758d7c000bc843985fe190107c5a3bc16bcaeb',
+    hash: '7278a3462c86f24a3ad5ea8eb69aca2ebc65c7518123c54333f855196c39ff17',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '6f5e4b5151cc7404191be80f4ae1d9047653393d546a97abc62a6d8dc9bafa82',
+    hash: 'a1b25475d8b07e0cd442d6fac561e49430293c75893f6cfde86dafa756090c02',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'eb8dab9ca8aaa795d57071b1aee0a1e64fb67306c6589860d75c05edd2024328',
+    hash: '6092545161d7baac44ecbd34c1e6e241d85c88588f6a104bd86fa755d12ba070',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '843f9e5f4fe5588645c16d5a9197ac092d5880cca9f526549880a86121a5a254',
+    hash: 'de24549376da3d3e1358f586af0cf448e81ef071dd83fc40e21315d1c40b5c85',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'b82f0fd95a789158bef856a4e58fbe5e0fe4ed02a613a5cd31f69a26540a8c63',
+    hash: 'b1ca94d3b1fc5c1fcf0515efe5b1bb201df86ff2950f5dc2aa329dba764ad07f',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'd0b84bd91870b45818885721d044ec1b85c141b2a585d440af08caf5b3eb36b4',
+    hash: 'ca5126b549182340c817e2c4a9b3ba7617a53d8aa139e4e22168c235ce23d4c1',
   },
 };
 
@@ -925,6 +925,13 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   tocar num hash: com a string em 0.92.0 e o código novo, os sete testes deste
  *   arquivo e os de climatização, duto e HVAC passaram sem outra alteração; depois
  *   do bump as seis falhas foram todas de hash, contagens idênticas.
+ *
+ *   0.93.0 → 0.94.0 (10/10/2026): dois tipos de ponto novos, COLETOR_VRF e
+ *   SIFAO_DRENO (pendências C4/C6 da climatização), sem campo novo. Mesma prova,
+ *   refeita ANTES de tocar num hash: com a string em 0.93.0 e os tipos no código,
+ *   os sete testes deste arquivo e os de climatização (HVAC, dutos, VRF, linha,
+ *   símbolos, numeração) passaram sem outra alteração; depois do bump as seis
+ *   falhas foram todas de hash, contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

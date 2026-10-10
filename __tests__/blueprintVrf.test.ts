@@ -148,12 +148,15 @@ describe('climatização E6.2/E6.3 · a árvore do VRF', () => {
     expect(conferenciaDoVrf(sem, t, hipVrf).find((c) => c.codigo === 'DERIVADORES')).toMatchObject({ estado: 'FALTA', obtido: '1 divisão(ões) sem derivador' });
   });
 
-  it('sem paredes a rede sai em estrela da condensadora, com um derivador na saída; sem evaporadora a condensadora é acusada', () => {
+  it('sem paredes a rede sai em estrela da condensadora, com um COLETOR na saída (4 ramais, C4); sem evaporadora a condensadora é acusada', () => {
     const { m, t } = corredor(96000, false);
     const plano = planejarVrf(m, t, hipLinha);
     expect(plano.aCriar[0].avisos.some((x) => /estrela/.test(x))).toBe(true);
     const depois = applyBatch(m, plano.comandos).model;
-    expect(terminais(depois).filter((x) => x.tipoHidraulico === 'DERIVADOR_VRF')).toHaveLength(1);
+    // C4 (10/10/2026): quatro ramais num ponto só não é "Y" — é coletor.
+    expect(terminais(depois).filter((x) => x.tipoHidraulico === 'DERIVADOR_VRF')).toHaveLength(0);
+    expect(terminais(depois).filter((x) => x.tipoHidraulico === 'COLETOR_VRF').map((x) => x.tipo)).toEqual(['Coletor VRF de 4 ramais']);
+    expect(conferenciaDoVrf(depois, t, hipVrf).find((c) => c.codigo === 'DERIVADORES')).toMatchObject({ estado: 'OK', obtido: expect.stringMatching(/1 com coletor/) });
     expect(analisarVrf(depois, sistemasVrfDoNivel(depois, t)[0]).naoAlcancadas).toEqual([]);
     const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const so = applyCommand(a, { type: 'AddTerminal', levelId: a.levels[0].id, disciplina: 'FRIGORIGENA', tipo: 'VRF', tipoHidraulico: 'CONDENSADORA_VRF', at: point(0, 0), cotaMm: 850 } as Command).model;

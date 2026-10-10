@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.93.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.94.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -718,13 +718,20 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "VENEZIANA_AR",
   "CAIXA_PLENUM",
   "DAMPER",
-  "EQUIPAMENTO_CLIMATIZACAO"
+  "EQUIPAMENTO_CLIMATIZACAO",
+  // 10/10/2026 (climatização, pendências C4/C6, 0.94.0): o COLETOR do VRF (header —
+  // a divisão em 3 ou mais ramais num ponto só, onde o derivador "Y" não serve) e o
+  // SIFÃO do dreno de condensado (a peça que o quantitativo conta).
+  "COLETOR_VRF",
+  "SIFAO_DRENO"
 ];
 var TIPOS_DE_EVAPORADORA = ["EVAPORADORA_HI_WALL", "EVAPORADORA_PISO_TETO", "EVAPORADORA_CASSETE", "EVAPORADORA_DUTADA"];
 var TIPOS_DE_CONDENSADORA = ["CONDENSADORA_SPLIT", "CONDENSADORA_VRF"];
 var TIPOS_DE_TERMINAL_DE_AR = ["DIFUSOR", "GRELHA_INSUFLAMENTO", "GRELHA_RETORNO", "BOCAL_AR", "TOMADA_AR_EXTERIOR", "VENEZIANA_AR", "CAIXA_PLENUM", "DAMPER"];
 var TIPOS_COM_CAPACIDADE = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "EQUIPAMENTO_CLIMATIZACAO"];
-var TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "DERIVADOR_VRF", "EXAUSTOR_AR", "BOMBA_DRENO", "PONTO_DRENO", "CAIXA_DISTRIBUICAO_AR", ...TIPOS_DE_TERMINAL_DE_AR, "EQUIPAMENTO_CLIMATIZACAO"];
+var TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, "DERIVADOR_VRF", "COLETOR_VRF", "EXAUSTOR_AR", "BOMBA_DRENO", "PONTO_DRENO", "SIFAO_DRENO", "CAIXA_DISTRIBUICAO_AR", ...TIPOS_DE_TERMINAL_DE_AR, "EQUIPAMENTO_CLIMATIZACAO"];
+var TIPOS_DE_DIVISAO_DO_VRF = ["DERIVADOR_VRF", "COLETOR_VRF"];
+var TIPOS_QUE_LIGAM_NA_CONDENSADORA = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_DIVISAO_DO_VRF];
 var AF_AQ = ["AGUA_FRIA", "AGUA_QUENTE"];
 var AF_AQ_ESG = ["AGUA_FRIA", "AGUA_QUENTE", "ESGOTO"];
 var ESG = ["ESGOTO"];
@@ -810,9 +817,11 @@ var DISCIPLINAS_DO_PONTO_HIDRAULICO = {
   CONDENSADORA_SPLIT: ["FRIGORIGENA"],
   CONDENSADORA_VRF: ["FRIGORIGENA"],
   DERIVADOR_VRF: ["FRIGORIGENA"],
+  COLETOR_VRF: ["FRIGORIGENA"],
   EXAUSTOR_AR: ["MECANICA"],
   BOMBA_DRENO: ["DRENO_AC"],
   PONTO_DRENO: ["DRENO_AC"],
+  SIFAO_DRENO: ["DRENO_AC"],
   CAIXA_DISTRIBUICAO_AR: ["MECANICA"],
   DIFUSOR: ["MECANICA"],
   GRELHA_INSUFLAMENTO: ["MECANICA"],
@@ -3497,7 +3506,7 @@ function conexoesDerivadas(model) {
     const ramais = [...inc].sort((x, y) => x.trecho.id.localeCompare(y.trecho.id)).map((i) => ({ trechoId: i.trecho.id, u: i.u, bitolaMm: i.trecho.bitolaMm, ...i.trecho.alturaDutoMm != null ? { alturaDutoMm: i.trecho.alturaDutoMm } : {} }));
     const base = { levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoIds, bitolaMm: maior, ramais };
     if (!manual && dentroDeCaixa(no)) continue;
-    if (!manual && terminais.some((t) => t.tipoHidraulico === "DERIVADOR_VRF")) continue;
+    if (!manual && terminais.some((t) => t.tipoHidraulico === "DERIVADOR_VRF" || t.tipoHidraulico === "COLETOR_VRF" || t.tipoHidraulico === "SIFAO_DRENO")) continue;
     if (manual) {
       conexoes.push({ ...base, tipo: manual, origem: "MANUAL", ...menor !== maior ? { paraMm: menor } : {} });
       continue;
@@ -4831,9 +4840,11 @@ var PREFIXO_DA_NUMERACAO_CLIMATIZACAO = {
   CONDENSADORA_SPLIT: "CD",
   CONDENSADORA_VRF: "CD",
   DERIVADOR_VRF: "DV",
+  COLETOR_VRF: "CV",
   EXAUSTOR_AR: "EX",
   BOMBA_DRENO: "BD",
   PONTO_DRENO: "PD",
+  SIFAO_DRENO: "SF",
   CAIXA_DISTRIBUICAO_AR: "CX",
   DIFUSOR: "DF",
   GRELHA_INSUFLAMENTO: "GI",
@@ -4886,6 +4897,15 @@ function comprimentoDoTrecho(t) {
   const planta = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
   const desnivel = Math.abs(t.cotaBMm - t.cotaAMm);
   return t.disciplina === "ELETRICA" ? planta + desnivel : Math.hypot(planta, desnivel);
+}
+function parDaLinha(liquidoMm, succaoMm, isolamentoMm) {
+  const raios = [liquidoMm / 2 + isolamentoMm, succaoMm / 2 + isolamentoMm];
+  const d = Math.max(...raios) + 5;
+  return { raios, deslocamentos: [-d, d] };
+}
+function ladoDoEixo(eixo) {
+  const h = Math.hypot(eixo[0], eixo[1]);
+  return h < 1e-6 ? [1, 0, 0] : [-eixo[1] / h, eixo[0] / h, 0];
 }
 var ROTULO_DO_PONTO_ELETRICO = {
   ILUMINACAO_TETO: "Luz de teto",
@@ -6750,15 +6770,6 @@ function emitirTrecho(t, ctx, localNivel, peDireitoMm) {
     `${classe.entidade}(${guidDe(t.uid, `trecho-${t.id}`)},${historico},${s(t.rotulo || `Trecho ${t.disciplina}`)},$,$,${local},${produtoForma},${s(rotuloCurto(t.uid, "trecho"))},${classe.predefinido})`
   );
 }
-function parDaLinha(liquidoMm, succaoMm, isolamentoMm) {
-  const raios = [liquidoMm / 2 + isolamentoMm, succaoMm / 2 + isolamentoMm];
-  const d = Math.max(...raios) + 5;
-  return { raios, deslocamentos: [-d, d] };
-}
-function ladoDoEixo(eixo) {
-  const h = Math.hypot(eixo[0], eixo[1]);
-  return h < 1e-6 ? [1, 0, 0] : [-eixo[1] / h, eixo[0] / h, 0];
-}
 var PREDEFINIDO_DA_CONEXAO = {
   JOELHO_90: ".BEND.",
   JOELHO_45: ".BEND.",
@@ -6987,6 +6998,7 @@ function entidadeDoPontoHidraulico(tipo) {
     case "CONDENSADORA_VRF":
       return { entidade: "IFCUNITARYEQUIPMENT", predefinido: ".AIRCONDITIONINGUNIT." };
     case "DERIVADOR_VRF":
+    case "COLETOR_VRF":
       return { entidade: "IFCPIPEFITTING", predefinido: ".JUNCTION." };
     case "EXAUSTOR_AR":
       return { entidade: "IFCFAN", predefinido: ".CENTRIFUGALFORWARDCURVED." };
@@ -6994,6 +7006,9 @@ function entidadeDoPontoHidraulico(tipo) {
       return { entidade: "IFCPUMP", predefinido: ".SUBMERSIBLEPUMP." };
     case "PONTO_DRENO":
       return { entidade: "IFCWASTETERMINAL", predefinido: ".USERDEFINED." };
+    // 0.94.0: o sifão é o WASTETRAP da norma.
+    case "SIFAO_DRENO":
+      return { entidade: "IFCWASTETERMINAL", predefinido: ".WASTETRAP." };
     case "CAIXA_DISTRIBUICAO_AR":
     case "CAIXA_PLENUM":
       return { entidade: "IFCDUCTFITTING", predefinido: ".JUNCTION." };
@@ -8118,9 +8133,13 @@ var FICHA_DO_PONTO_HIDRAULICO = {
   CONDENSADORA_SPLIT: { rotulo: "Condensadora (split)", sigla: "CD", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 6 }, medidasMm: { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 }, ajuda: "Unidade externa de um split; fica na fachada ou na \xE1rea t\xE9cnica, com folga de ar. Capacidade = a da evaporadora que serve." },
   CONDENSADORA_VRF: { rotulo: "Condensadora VRF", sigla: "CD", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 0 }, dnMinimoMm: { FRIGORIGENA: 10 }, medidasMm: { larguraMm: 1240, profundidadeMm: 760, alturaMm: 1700 }, ajuda: "Unidade externa de fluxo de refrigerante vari\xE1vel, que serve v\xE1rias evaporadoras pelos derivadores (E6)." },
   DERIVADOR_VRF: { rotulo: "Derivador VRF", sigla: "DV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 6 }, sobreOTrecho: true, ajuda: "A deriva\xE7\xE3o (refnet) da linha do VRF para um ramo; sobre o trecho." },
+  // 0.94.0 (10/10/2026, C4): o coletor (header) — 3 ou mais ramais num ponto só.
+  COLETOR_VRF: { rotulo: "Coletor VRF", sigla: "CV", grupo: CLIMA_EQUIP, cotaMm: { FRIGORIGENA: 2500 }, dnMinimoMm: { FRIGORIGENA: 10 }, sobreOTrecho: true, ajuda: 'O coletor (header) do VRF: divide a linha em 3 ou mais ramais num ponto s\xF3, onde o derivador "Y" (dois ramais) n\xE3o serve; sobre o trecho.' },
   EXAUSTOR_AR: { rotulo: "Exaustor", sigla: "EX", grupo: CLIMA_AR, cotaMm: { MECANICA: 2300 }, dnMinimoMm: { MECANICA: 100 }, medidasMm: { larguraMm: 400, profundidadeMm: 400, alturaMm: 400 }, ajuda: "Exaustor de banheiro, cozinha ou garagem; a vaz\xE3o e a renova\xE7\xE3o de ar entram na E7." },
   BOMBA_DRENO: { rotulo: "Bomba de dreno", sigla: "BD", grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 2100 }, dnMinimoMm: { DRENO_AC: 20 }, medidasMm: { larguraMm: 200, profundidadeMm: 100, alturaMm: 100 }, ajuda: "Quando o condensado n\xE3o escoa por gravidade: a bomba junto da evaporadora, recalcando ao ponto de descarte (E5.4)." },
   PONTO_DRENO: { rotulo: "Ponto de dreno", sigla: "PD", grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 0 }, dnMinimoMm: { DRENO_AC: 25 }, ajuda: "Onde o condensado \xE9 descartado: ralo, caixa sifonada, esgoto ou a fachada." },
+  // 0.94.0 (10/10/2026, C6): o sifão do dreno — peça que o quantitativo conta.
+  SIFAO_DRENO: { rotulo: "Sif\xE3o do dreno", sigla: "SF", grupo: CLIMA_DRENO, cotaMm: { DRENO_AC: 2100 }, dnMinimoMm: { DRENO_AC: 20 }, sobreOTrecho: true, ajuda: "O sif\xE3o do dreno de condensado (o fecho h\xEDdrico contra o retorno de odor e a suc\xE7\xE3o da evaporadora); sobre o trecho de dreno, logo depois da sa\xEDda da pe\xE7a." },
   CAIXA_DISTRIBUICAO_AR: { rotulo: "Caixa de distribui\xE7\xE3o de ar", sigla: "CX", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 200 }, medidasMm: { larguraMm: 600, profundidadeMm: 600, alturaMm: 300 }, ajuda: "A caixa que recebe o duto principal e distribui aos ramais." },
   DIFUSOR: { rotulo: "Difusor", sigla: "DF", grupo: CLIMA_AR, cotaMm: { MECANICA: 2600 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 300, profundidadeMm: 300, alturaMm: 50 }, ajuda: "Insuflamento no forro (quadrado, de 1 a 4 vias). A vaz\xE3o por terminal entra na E7." },
   GRELHA_INSUFLAMENTO: { rotulo: "Grelha de insuflamento", sigla: "GI", grupo: CLIMA_AR, cotaMm: { MECANICA: 2400 }, dnMinimoMm: { MECANICA: 150 }, medidasMm: { larguraMm: 400, profundidadeMm: 50, alturaMm: 200 }, ajuda: "Insuflamento na parede, com aletas." },

@@ -37,6 +37,7 @@ import {
   COR_DA_DISCIPLINA,
   caixaDaPeca,
   cilindroDoTrecho,
+  cilindrosDoTrecho,
   giroDaPeca,
   segmentosDoEletroduto,
   medidasDoQuadro,
@@ -1155,11 +1156,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         // seguindo a parede, teto ou piso".
         .flatMap((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
-          return segmentosDoEletroduto(t, nivel?.defaultHeightMm ?? 2800).map((seg, k) => ({
-            t,
-            k,
-            c: cilindroDoTrecho({ ...t, ...seg }, nivel?.elevationMm ?? 0),
-          }));
+          // C11 (10/10/2026): a linha frigorígena em par vira DOIS cilindros (líquido e sucção) — `cilindrosDoTrecho`.
+          return segmentosDoEletroduto(t, nivel?.defaultHeightMm ?? 2800).flatMap((seg, k) =>
+            cilindrosDoTrecho({ ...t, ...seg }, nivel?.elevationMm ?? 0).map((c, j) => ({ t, k: `${k}-${j}`, c })),
+          );
         })
         .map(({ t, k, c }) => {
           // O `CylinderGeometry` nasce alinhado ao Y — daí a prumada ser o caso

@@ -389,6 +389,42 @@ export function comprimentoDoTrecho(t: Trecho): number {
   return t.disciplina === 'ELETRICA' ? planta + desnivel : Math.hypot(planta, desnivel);
 }
 
+/**
+ * E10.1: os dois tubos da linha frigorígena — os RAIOS do envelope (Ø/2 + isolamento) e os
+ * DESLOCAMENTOS laterais, simétricos: cada centro a (maior raio + 5 mm) do eixo. O meio dos dois é o eixo.
+ * C11 (10/10/2026): mudou-se do `blueprintIfc` para cá — a planta e o 3D da tela desenham o mesmo par.
+ */
+export function parDaLinha(liquidoMm: number, succaoMm: number, isolamentoMm: number): { raios: [number, number]; deslocamentos: [number, number] } {
+  const raios: [number, number] = [liquidoMm / 2 + isolamentoMm, succaoMm / 2 + isolamentoMm];
+  const d = Math.max(...raios) + 5;
+  return { raios, deslocamentos: [-d, d] };
+}
+/** A direção LATERAL do eixo (planta x, planta y, altura): horizontal e perpendicular a ele (na prumada, o X do mundo). */
+export function ladoDoEixo(eixo: [number, number, number]): [number, number, number] {
+  const h = Math.hypot(eixo[0], eixo[1]);
+  return h < 1e-6 ? [1, 0, 0] : [-eixo[1] / h, eixo[0] / h, 0];
+}
+
+/** O trecho é a linha frigorígena em PAR (líquido e sucção declarados)? */
+const ehPar = (t: Pick<Trecho, 'disciplina' | 'bitolaSuccaoMm'>) => t.disciplina === 'FRIGORIGENA' && t.bitolaSuccaoMm != null;
+
+/**
+ * C11 (10/10/2026): os dois tubos da linha frigorígena EM PLANTA — cada eixo
+ * deslocado para um lado (o líquido à esquerda de a → b), com o diâmetro do
+ * envelope (tubo + isolamento), a mesma conta do IFC. Na prumada, os dois centros
+ * lado a lado em X. `null` quando o trecho não é o par.
+ */
+export function parDaLinhaEmPlanta(t: Pick<Trecho, 'disciplina' | 'a' | 'b' | 'cotaAMm' | 'cotaBMm' | 'bitolaMm' | 'bitolaSuccaoMm' | 'isolamentoMm'>): { a: Point; b: Point; diametroMm: number }[] | null {
+  if (!ehPar(t)) return null;
+  const par = parDaLinha(t.bitolaMm, t.bitolaSuccaoMm!, t.isolamentoMm ?? 0);
+  const lado = ladoDoEixo([t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm]);
+  return par.deslocamentos.map((d, i) => ({
+    a: { x: t.a.x + lado[0] * d, y: t.a.y + lado[1] * d },
+    b: { x: t.b.x + lado[0] * d, y: t.b.y + lado[1] * d },
+    diametroMm: par.raios[i] * 2,
+  }));
+}
+
 /** É uma PRUMADA? As duas pontas no mesmo lugar em planta, cotas diferentes. */
 export function ehPrumada(t: Trecho): boolean {
   return t.a.x === t.b.x && t.a.y === t.b.y;
@@ -442,6 +478,25 @@ export function cilindroDoTrecho(
     raioM: (t.bitolaMm / 2) * ESCALA_3D,
     ...secaoRetangular3D(t, [dx / n, dz / n, dy / n]),
   };
+}
+
+/**
+ * C11 (10/10/2026): os cilindros do trecho no 3D — um, como sempre; DOIS na linha
+ * frigorígena em par (líquido e sucção), deslocados para os lados do eixo com o
+ * raio do envelope, a mesma forma que o IFC emite (E10.1). Antes a tela mostrava
+ * um tubo só, e o par existia apenas no arquivo.
+ */
+export function cilindrosDoTrecho(t: Trecho, elevacaoDoNivelMm: number): ReturnType<typeof cilindroDoTrecho>[] {
+  const c = cilindroDoTrecho(t, elevacaoDoNivelMm);
+  if (!ehPar(t)) return [c];
+  const par = parDaLinha(t.bitolaMm, t.bitolaSuccaoMm!, t.isolamentoMm ?? 0);
+  const lado = ladoDoEixo([t.b.x - t.a.x, t.b.y - t.a.y, t.cotaBMm - t.cotaAMm]);
+  return par.deslocamentos.map((d, i) => ({
+    ...c,
+    // Na convenção do 3D: X e Z são a planta, Y é a altura.
+    centro: [c.centro[0] + lado[0] * d * ESCALA_3D, c.centro[1] + lado[2] * d * ESCALA_3D, c.centro[2] + lado[1] * d * ESCALA_3D] as [number, number, number],
+    raioM: par.raios[i] * ESCALA_3D,
+  }));
 }
 
 /**

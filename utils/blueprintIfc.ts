@@ -108,10 +108,15 @@ import { rotuloDaFase } from './blueprintFasesEletricas';
 import { ROTULO_DO_TIPO_DE_AMBIENTE } from './blueprintDistribuicao';
 import {
   giroDaPeca,
+  ladoDoEixo,
   medidasDoQuadro,
   medidasDoTerminal,
+  parDaLinha,
   segmentosDoEletroduto,
 } from './blueprintRede';
+
+// C11 (10/10/2026): o par da linha mora em `blueprintRede` — o IFC, o 3D e a planta usam a mesma conta.
+export { parDaLinha };
 
 /**
  * O que este IFC representa, e o que não representa.
@@ -2371,20 +2376,6 @@ function emitirTrecho(t: Trecho, ctx: Ctx, localNivel: string, peDireitoMm: numb
   );
 }
 
-/**
- * E10.1: os dois tubos da linha frigorígena — os RAIOS do envelope (Ø/2 + isolamento) e os
- * DESLOCAMENTOS laterais, simétricos: cada centro a (maior raio + 5 mm) do eixo. O meio dos dois é o eixo.
- */
-export function parDaLinha(liquidoMm: number, succaoMm: number, isolamentoMm: number): { raios: [number, number]; deslocamentos: [number, number] } {
-  const raios: [number, number] = [liquidoMm / 2 + isolamentoMm, succaoMm / 2 + isolamentoMm];
-  const d = Math.max(...raios) + 5;
-  return { raios, deslocamentos: [-d, d] };
-}
-/** A direção LATERAL do eixo: horizontal e perpendicular a ele (na prumada, o X do mundo). */
-function ladoDoEixo(eixo: [number, number, number]): [number, number, number] {
-  const h = Math.hypot(eixo[0], eixo[1]);
-  return h < 1e-6 ? [1, 0, 0] : [-eixo[1] / h, eixo[0] / h, 0];
-}
 
 /** O `PredefinedType` do `IfcPipeFitting` pelo tipo da conexão derivada — o mesmo da conexão lançada à mão. */
 const PREDEFINIDO_DA_CONEXAO: Record<string, string> = {
@@ -2705,6 +2696,7 @@ function entidadeDoPontoHidraulico(
     case 'CONDENSADORA_VRF':
       return { entidade: 'IFCUNITARYEQUIPMENT', predefinido: '.AIRCONDITIONINGUNIT.' };
     case 'DERIVADOR_VRF':
+    case 'COLETOR_VRF':
       return { entidade: 'IFCPIPEFITTING', predefinido: '.JUNCTION.' };
     case 'EXAUSTOR_AR':
       return { entidade: 'IFCFAN', predefinido: '.CENTRIFUGALFORWARDCURVED.' };
@@ -2712,6 +2704,9 @@ function entidadeDoPontoHidraulico(
       return { entidade: 'IFCPUMP', predefinido: '.SUBMERSIBLEPUMP.' };
     case 'PONTO_DRENO':
       return { entidade: 'IFCWASTETERMINAL', predefinido: '.USERDEFINED.' };
+    // 0.94.0: o sifão é o WASTETRAP da norma.
+    case 'SIFAO_DRENO':
+      return { entidade: 'IFCWASTETERMINAL', predefinido: '.WASTETRAP.' };
     case 'CAIXA_DISTRIBUICAO_AR':
     case 'CAIXA_PLENUM':
       return { entidade: 'IFCDUCTFITTING', predefinido: '.JUNCTION.' };

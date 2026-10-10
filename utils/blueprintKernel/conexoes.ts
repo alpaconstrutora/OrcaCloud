@@ -277,7 +277,8 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
 
     if (!manual && dentroDeCaixa(no)) continue;
     // E6 (05/10/2026): o DERIVADOR do VRF no nó É a conexão (o refnet) — não se conta tê por cima dele.
-    if (!manual && terminais.some((t) => t.tipoHidraulico === 'DERIVADOR_VRF')) continue;
+    // 0.94.0: o COLETOR do VRF e o SIFÃO do dreno também são a peça do nó.
+    if (!manual && terminais.some((t) => t.tipoHidraulico === 'DERIVADOR_VRF' || t.tipoHidraulico === 'COLETOR_VRF' || t.tipoHidraulico === 'SIFAO_DRENO')) continue;
     if (manual) {
       conexoes.push({ ...base, tipo: manual, origem: 'MANUAL', ...(menor !== maior ? { paraMm: menor } : {}) });
       continue;

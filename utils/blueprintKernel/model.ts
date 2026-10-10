@@ -3013,6 +3013,11 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'CAIXA_PLENUM',
   'DAMPER',
   'EQUIPAMENTO_CLIMATIZACAO',
+  // 10/10/2026 (climatização, pendências C4/C6, 0.94.0): o COLETOR do VRF (header —
+  // a divisão em 3 ou mais ramais num ponto só, onde o derivador "Y" não serve) e o
+  // SIFÃO do dreno de condensado (a peça que o quantitativo conta).
+  'COLETOR_VRF',
+  'SIFAO_DRENO',
 ] as const;
 
 /** Climatização E3.1: as famílias, para quem precisa decidir sem conhecer a lista. */
@@ -3023,7 +3028,11 @@ export const TIPOS_DE_TERMINAL_DE_AR = ['DIFUSOR', 'GRELHA_INSUFLAMENTO', 'GRELH
 export const TIPOS_COM_CAPACIDADE = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
 /** Climatização E7.2 (0.93.0): os tipos com VAZÃO de ar declarável. */
 export const TIPOS_COM_VAZAO = ['DIFUSOR', 'GRELHA_INSUFLAMENTO', 'GRELHA_RETORNO', 'BOCAL_AR', 'TOMADA_AR_EXTERIOR', 'VENEZIANA_AR', 'EXAUSTOR_AR', 'EVAPORADORA_DUTADA', 'CAIXA_DISTRIBUICAO_AR'] as const satisfies readonly TipoDePontoHidraulico[];
-export const TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF', 'EXAUSTOR_AR', 'BOMBA_DRENO', 'PONTO_DRENO', 'CAIXA_DISTRIBUICAO_AR', ...TIPOS_DE_TERMINAL_DE_AR, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
+export const TIPOS_DE_CLIMATIZACAO = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_CONDENSADORA, 'DERIVADOR_VRF', 'COLETOR_VRF', 'EXAUSTOR_AR', 'BOMBA_DRENO', 'PONTO_DRENO', 'SIFAO_DRENO', 'CAIXA_DISTRIBUICAO_AR', ...TIPOS_DE_TERMINAL_DE_AR, 'EQUIPAMENTO_CLIMATIZACAO'] as const satisfies readonly TipoDePontoHidraulico[];
+/** As peças do SISTEMA da condensadora no meio da linha (0.94.0): o derivador e o coletor do VRF. */
+export const TIPOS_DE_DIVISAO_DO_VRF = ['DERIVADOR_VRF', 'COLETOR_VRF'] as const satisfies readonly TipoDePontoHidraulico[];
+/** Quem pode apontar uma condensadora (`condensadoraId`): as evaporadoras e as peças de divisão do VRF. */
+export const TIPOS_QUE_LIGAM_NA_CONDENSADORA = [...TIPOS_DE_EVAPORADORA, ...TIPOS_DE_DIVISAO_DO_VRF] as const satisfies readonly TipoDePontoHidraulico[];
 
 export type TipoDePontoHidraulico = (typeof TIPOS_DE_PONTO_HIDRAULICO)[number];
 
@@ -3141,9 +3150,11 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   CONDENSADORA_SPLIT: ['FRIGORIGENA'],
   CONDENSADORA_VRF: ['FRIGORIGENA'],
   DERIVADOR_VRF: ['FRIGORIGENA'],
+  COLETOR_VRF: ['FRIGORIGENA'],
   EXAUSTOR_AR: ['MECANICA'],
   BOMBA_DRENO: ['DRENO_AC'],
   PONTO_DRENO: ['DRENO_AC'],
+  SIFAO_DRENO: ['DRENO_AC'],
   CAIXA_DISTRIBUICAO_AR: ['MECANICA'],
   DIFUSOR: ['MECANICA'],
   GRELHA_INSUFLAMENTO: ['MECANICA'],
@@ -5260,7 +5271,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (!Number.isInteger(t.capacidadeBtuH) || t.capacidadeBtuH <= 0) throw new KernelError('BAD_CAPACITY', `Capacidade inválida em ${t.id}: ${String(t.capacidadeBtuH)} BTU/h`);
     }
     if (t.condensadoraId != null) {
-      if (!t.tipoHidraulico || !([...TIPOS_DE_EVAPORADORA, 'DERIVADOR_VRF'] as readonly string[]).includes(t.tipoHidraulico)) throw new KernelError('BAD_CONDENSER', `${t.id} (${t.tipoHidraulico ?? t.tipo}) não liga em condensadora`);
+      if (!t.tipoHidraulico || !(TIPOS_QUE_LIGAM_NA_CONDENSADORA as readonly string[]).includes(t.tipoHidraulico)) throw new KernelError('BAD_CONDENSER', `${t.id} (${t.tipoHidraulico ?? t.tipo}) não liga em condensadora`);
       const c = porIdTerminal.get(t.condensadoraId);
       if (!c) throw new KernelError('BAD_CONDENSER', `Condensadora inexistente em ${t.id}: ${t.condensadoraId}`);
       if (c.id === t.id || !c.tipoHidraulico || !(TIPOS_DE_CONDENSADORA as readonly string[]).includes(c.tipoHidraulico)) throw new KernelError('BAD_CONDENSER', `${t.condensadoraId} não é condensadora (${c.tipoHidraulico ?? c.tipo})`);

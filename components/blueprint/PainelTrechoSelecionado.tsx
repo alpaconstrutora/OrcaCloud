@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowDownRight, MoveVertical, Trash2 } from 'lucide-react';
 import type { DisciplinaDeRede, Terminal, Trecho } from '../../utils/blueprintKernel';
 import type { OcupacaoDoEletroduto } from '../../utils/blueprintEletricaDimensionamento';
-import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, TIPOS_COM_CAPACIDADE, TIPOS_COM_VAZAO, TIPOS_DE_EVAPORADORA, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
+import { AGENTES_EXTINTORES, DISCIPLINAS, MATERIAIS_DA_DISCIPLINA, POSICOES_DO_SPRINKLER, TIPOS_COM_CAPACIDADE, TIPOS_COM_VAZAO, TIPOS_DE_EVAPORADORA, TIPOS_QUE_LIGAM_NA_CONDENSADORA, capacidadeExtintoraValida, materialPadraoDaDisciplina, type AgenteExtintor, type MaterialDeTubo, type PosicaoDoSprinkler } from '../../utils/blueprintKernel';
 import { ROTULO_DO_AGENTE } from '../../utils/blueprintExtintores';
 import { CATALOGO_DE_PLACAS } from '../../utils/blueprintSinalizacao';
 import { FICHA_DO_MATERIAL } from '../../utils/blueprintHidraulicaPressao';
@@ -496,7 +496,7 @@ export default function PainelTrechoSelecionado({
                   />
                 </label>
               )}
-              {terminal.tipoHidraulico && ([...TIPOS_DE_EVAPORADORA, 'DERIVADOR_VRF'] as readonly string[]).includes(terminal.tipoHidraulico) && (
+              {terminal.tipoHidraulico && (TIPOS_QUE_LIGAM_NA_CONDENSADORA as readonly string[]).includes(terminal.tipoHidraulico) && (
                 <label className="block" data-testid="campo-condensadora">
                   <span className="text-[11px] font-medium text-slate-600">Condensadora (sistema)</span>
                   <select

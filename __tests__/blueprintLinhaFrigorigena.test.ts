@@ -89,10 +89,11 @@ describe('climatização E5.1/E5.2/E5.4 · linha e dreno do split lançado', () 
     const cx = conexoesDerivadas(depois);
     expect(cx.pontasAbertas.filter((p) => p.disciplina === 'FRIGORIGENA' || p.disciplina === 'DRENO_AC')).toEqual([]);
     // O dreno: ponto novo na fachada (cota 0), por gravidade, com ≥ 1 % em todo lance em planta.
-    expect(plano.aCriar[0].dreno).toMatchObject({ destino: 'PONTO_NOVO_NA_FACHADA', comBomba: false });
+    // C6 (10/10/2026): por gravidade, com o sifão logo depois da saída.
+    expect(plano.aCriar[0].dreno).toMatchObject({ destino: 'PONTO_NOVO_NA_FACHADA', comBomba: false, comSifao: true });
     expect(terminais(depois).some((x) => x.tipoHidraulico === 'PONTO_DRENO' && x.sugerida && x.cotaMm === 0)).toBe(true);
     for (const d of drenosTrechoATrecho(depois)) if (d.declividadePct != null) expect(d.declividadePct + 1e-9).toBeGreaterThanOrEqual(1);
-    expect(drenosConferidos(depois, t)).toEqual([{ evaporadoraId: sistemas[0].evaporadora.id, nome: sistemas[0].evaporadora.tipo, chega: true, comBomba: false }]);
+    expect(drenosConferidos(depois, t)).toEqual([{ evaporadoraId: sistemas[0].evaporadora.id, nome: sistemas[0].evaporadora.tipo, chega: true, comBomba: false, comSifao: true }]);
     // E a verificação não acusa declividade baixa nem pilar.
     const marcas = marcasDeVerificacao(depois, t);
     expect(marcas.filter((x) => x.disciplina === 'DRENO_AC' || x.disciplina === 'FRIGORIGENA')).toEqual([]);
@@ -122,7 +123,7 @@ describe('climatização E5.1/E5.2/E5.4 · linha e dreno do split lançado', () 
     const p1 = planejarLinhasFrigorigenas(m, t, hipLinha);
     const m1 = applyBatch(m, p1.comandos).model;
     const p2 = planejarLinhasFrigorigenas(m1, t, hipLinha);
-    expect(p2.apagados).toBe(trechos(m1).filter((x) => x.sugerido && (x.disciplina === 'FRIGORIGENA' || x.disciplina === 'DRENO_AC')).length + 1); // + o ponto de dreno sugerido
+    expect(p2.apagados).toBe(trechos(m1).filter((x) => x.sugerido && (x.disciplina === 'FRIGORIGENA' || x.disciplina === 'DRENO_AC')).length + 2); // + o ponto de dreno e o sifão (C6) sugeridos
     const m2 = applyBatch(m1, p2.comandos).model;
     const assinatura = (mm: BlueprintModel) => trechos(mm).map((x) => [x.disciplina, x.a.x, x.a.y, x.cotaAMm, x.b.x, x.b.y, x.cotaBMm].join(',')).sort();
     expect(assinatura(m2)).toEqual(assinatura(m1));

@@ -1040,13 +1040,13 @@ export async function lerClimatizacaoParametrica(modeloId: number): Promise<Leit
         case 'IFCPIPESEGMENT':
           return sistemas.has('REFRIGERATION') || sistemas.has('DRAINAGE');
         case 'IFCPIPEFITTING':
-          return tipo === 'DERIVADOR_VRF';
+          return tipo === 'DERIVADOR_VRF' || tipo === 'COLETOR_VRF';
         case 'IFCDUCTFITTING':
           return tipo === 'CAIXA_PLENUM' || tipo === 'CAIXA_DISTRIBUICAO_AR';
         case 'IFCPUMP':
           return tipo === 'BOMBA_DRENO' || (pd === 'SUBMERSIBLEPUMP' && sistemas.has('DRAINAGE'));
         case 'IFCWASTETERMINAL':
-          return tipo === 'PONTO_DRENO' || sistemas.has('DRAINAGE');
+          return tipo === 'PONTO_DRENO' || tipo === 'SIFAO_DRENO' || pd === 'WASTETRAP' || sistemas.has('DRAINAGE');
         default:
           return true;
       }

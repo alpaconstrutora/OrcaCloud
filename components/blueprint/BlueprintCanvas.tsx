@@ -151,6 +151,7 @@ import {
   quadroSob as acertoQuadro,
   terminalSob as acertoTerminal,
   trechoSob as acertoTrecho,
+  parDaLinhaEmPlanta,
 } from '../../utils/blueprintRede';
 import { TIPOS_DE_EQUIPAMENTO_ELETRICO } from '../../utils/blueprintRede';
 import {
@@ -5993,7 +5994,30 @@ export default function BlueprintCanvas({
       const ehPrumada = p.x === q.x && p.y === q.y;
       const detalhado = hidraulico && larguraPx >= LARGURA_MINIMA_DO_DETALHE_PX && (desvios.get(t.id) ?? 0) === 0;
       const faixa = detalhado && !ehPrumada ? faixaDoTubo2D(p, q, larguraPx) : null;
-      if (detalhado) {
+      // C11 (10/10/2026): a LINHA FRIGORÍGENA em par (líquido e sucção) é desenhada como os DOIS
+      // tubos lado a lado, na largura do envelope — a mesma conta do IFC e do 3D (`parDaLinhaEmPlanta`).
+      // No zoom de conjunto os dois traços se encostam e leem como um; de perto, separam.
+      const par = (desvios.get(t.id) ?? 0) === 0 ? parDaLinhaEmPlanta({ ...t, a: entrada?.a ?? t.a, b: entrada?.b ?? t.b }) : null;
+      if (par) {
+        ctx.save();
+        ctx.strokeStyle = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
+        ctx.setLineDash(t.sugerido ? [3, 3] : embutidoNoPiso(t) ? [6, 3] : []);
+        for (const tubo of par) {
+          const pa = paraTela(tubo.a);
+          const pb = paraTela(tubo.b);
+          ctx.beginPath();
+          if (ehPrumada) {
+            ctx.lineWidth = selecionado ? 2 : 1.25;
+            ctx.arc(pa.x, pa.y, Math.max(emTela(tubo.diametroMm / 2), 1.5), 0, Math.PI * 2);
+          } else {
+            ctx.lineWidth = Math.max(tubo.diametroMm * vista.escala, selecionado ? 2 : 1.25);
+            ctx.moveTo(pa.x, pa.y);
+            ctx.lineTo(pb.x, pb.y);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (detalhado) {
         const cor = selecionado ? COR_SELECIONADA : COR_DA_DISCIPLINA[t.disciplina];
         ctx.save();
         ctx.strokeStyle = cor;

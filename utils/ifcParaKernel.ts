@@ -1066,7 +1066,8 @@ export function tipoDoPontoDeClimatizacaoIfc(classe: string, predefinido: string
     case 'IFCPUMP':
       return 'BOMBA_DRENO';
     case 'IFCWASTETERMINAL':
-      return 'PONTO_DRENO';
+      // 0.94.0: o WASTETRAP é o sifão do dreno.
+      return pd === 'WASTETRAP' ? 'SIFAO_DRENO' : 'PONTO_DRENO';
     default:
       return null;
   }

@@ -1014,7 +1014,7 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
 - **Anexos dentro do PDF**: PDFs do GED rasterizados com pdfjs e anexados depois do ofício (como
   `relatorioRateioPdf`); sem `pdf-lib`.
 
-### Fase 3 — frentes F6 e F7 (F6 no ar; estado na seção Estado)
+### Fase 3 — frentes F6 e F7 (estado na seção Estado)
 
 - **F6 — `oficios-f6-motor-avancado`**: nó `condicional {expressao}` no TipTap (avaliador puro, sem
   `eval`: comparações de variável com texto/número, e/ou/não); nó `tabelaDinamica {fonte}` com
@@ -1318,6 +1318,30 @@ pendências futuras na seção própria.
       Valor … Total em aberto R$ 187.500,00", fecho do bloco. Ofício (sem salvar) ligado a um contrato REAL da Alpa com 6
       parcelas em aberto: a tabela traz as 6 parcelas reais e a condição `contrato.saldo_a_pagar > 0` vale; nenhuma
       escrita; 0 erros de JS e de rede. Limpeza: bloco e modelo de teste apagados
+- [x] F6 · publicada em 10/10 (`5a8d8cc0`): check-run `ci` **success**; o domínio serve `5a8d8cc` com "Biblioteca de
+      blocos"; frente fechada
+
+### F7 — assistente de IA (frente `oficios-f7-ia`, base `5a8d8cc0`)
+
+- [x] F7 · 1 — Edge Function `doc-gen-ia` **publicada**: SDK oficial (`npm:@anthropic-ai/sdk`), modelo `claude-opus-5-5`,
+      esforço `medium` explícito, saída estruturada (`{ paragrafos, observacao }`), `fallbacks: "default"` para recusa,
+      `stop_reason` checado antes de ler o conteúdo. Três pedidos por campo livre: **redigir** (instrução + contexto do
+      ofício), **revisar** (o texto atual, sem mudar fatos) e **responder** (lê o PDF do ofício RECEBIDO vinculado — só GED
+      da mesma organização). O sistema manda escrever só o trecho (cabeçalho, fecho e assinatura são do modelo), nunca
+      inventar número/data/valor (o que falta volta como `[[…]]`) e tratar o conteúdo de documentos como dado, não
+      instrução. **Portão provado:** sem header 401; chave anon 401; organização alheia 403; sem instrução 400; pedido
+      válido sem a chave → **503 `IA_NAO_CONFIGURADA`**
+- [x] F7 · 2 — tela: botão "Assistente de IA" em cada campo livre do Novo ofício → drawer com a ação, a orientação e a
+      SUGESTÃO, que só entra no texto se a pessoa escolher "Substituir" ou "Acrescentar". Todo botão desligado diz o
+      motivo ("Vincule o ofício recebido…", "O campo ainda não tem texto…"). Sem a chave, aviso âmbar explicando o que
+      falta, não um erro. O contexto enviado (assunto, destinatário, emitente, obra, contrato, em resposta a, datas) é
+      resolvido mesmo que o modelo não use essas variáveis
+- [x] F7 · 3 — testes `docGenIa.test.ts` (5) e conferência no app (`oficios_f7.js`, sem salvar): o drawer abre, as três
+      ações desligam com o motivo certo, "Gerar sugestão" mostra o aviso de IA não configurada; nenhuma escrita
+- [ ] F7 · **pendente do usuário** — cadastrar a chave: `npx supabase secrets set ANTHROPIC_API_KEY=<chave>` (o mesmo
+      segredo liga também o `bi-narrative`, que hoje responde "IA não configurada"). Custo: Claude Opus 5.5 a US$ 4 / 20
+      por milhão de tokens de entrada / saída; um trecho de ofício fica na casa de centavos de real. Até lá a IA não roda —
+      a prova com resposta real fica para depois da chave
 
 
 ## Verificação

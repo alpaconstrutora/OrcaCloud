@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Lock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Eye, Loader2, AlertCircle, Save, Send, UserRound, RefreshCw, FileDown, FolderOpen, Lock, ShieldCheck, Sparkles } from 'lucide-react';
 import type {
     DestinatarioSnapshot, DocGenAssinatura, DocGenDocumento, DocGenDocumentoRascunho, DocGenEvento, DocGenModelo, DocGenVinculo,
     DocGenVinculoTipo, DocTipTap,
@@ -15,6 +15,7 @@ import { useConfirm } from '../ui/confirm';
 import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio, assinaturasParaPdf, assinaturasValidas } from '../../services/docGen/emissao';
 import { ROTULO_SITUACAO, referenciaDeOficio, type OficioRecebido } from '../../services/docGen/tramitacao';
 import AprovacaoAssinaturaCard from './AprovacaoAssinaturaCard';
+import AssistenteIASheet from './AssistenteIASheet';
 import { urlDeValidacao } from '../../services/docGen/envio';
 import { tabelasDoDocumento } from '../../services/docGen/tabelasDinamicas';
 import TramitacaoCard from './TramitacaoCard';
@@ -202,6 +203,16 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
             showToast(e instanceof Error ? e.message : 'Falha ao desfazer o vínculo.', 'error');
         }
     };
+
+    // ── F7: assistente de IA por campo livre ──
+    const [iaCampo, setIaCampo] = React.useState<{ nome: string; rotulo: string } | null>(null);
+    /** Ofício recebido (GED) a que este responde — a IA lê o PDF para sugerir a resposta. */
+    const recebidoGedId = React.useMemo(() => {
+        const gravado = vinculos.find(v => v.tipo === 'RESPONDE' && v.de_documento_id === atualId && v.para_ged_id)?.para_ged_id;
+        if (gravado) return gravado;
+        const pend = pendentes.find(x => x.tipo === 'RESPONDE' && 'gedId' in x.alvo);
+        return pend && 'gedId' in pend.alvo ? pend.alvo.gedId : null;
+    }, [vinculos, pendentes, atualId]);
 
     /** Vínculos escolhidos antes do primeiro "Salvar" — gravados quando o ofício passa a existir. */
     const gravarPendentes = async (doc: DocGenDocumento) => {
@@ -683,7 +694,15 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                         <p className="text-sm text-gray-500">O modelo não tem campos de redação livre — o texto é todo do modelo.</p>
                     ) : camposLivres.map(c => (
                         <div key={c.nome} id={`campo-livre-${c.nome}`} className="space-y-1.5">
-                            <label className={LABEL}>{c.rotulo}</label>
+                            <div className="flex items-center justify-between gap-3">
+                                <label className={LABEL}>{c.rotulo}</label>
+                                {!somenteLeitura && (
+                                    <button type="button" onClick={() => setIaCampo(c)} title="Redigir, revisar ou responder com a ajuda da IA — a sugestão só entra se você escolher"
+                                        className="flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100">
+                                        <Sparkles className="w-4 h-4" /> Assistente de IA
+                                    </button>
+                                )}
+                            </div>
                             {somenteLeitura ? (
                                 <div className="rounded-[10px] border border-gray-100 px-4 py-3 text-sm text-gray-500">Documento emitido — texto congelado.</div>
                             ) : (
@@ -866,6 +885,26 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                 organizations={organizations}
                 atual={draft.destinatario_snapshot}
                 onEscolher={escolherDestinatario}
+            />
+            <AssistenteIASheet
+                aberto={!!iaCampo}
+                onClose={() => setIaCampo(null)}
+                organizationId={orgId}
+                campo={iaCampo}
+                textoAtual={iaCampo ? ((draft.conteudo[iaCampo.nome] as DocTipTap | undefined) ?? null) : null}
+                contexto={{
+                    assunto: draft.assunto,
+                    destinatario: draft.destinatario_snapshot ? [draft.destinatario_snapshot.razao_social, draft.destinatario_snapshot.contato_nome && `A/C ${draft.destinatario_snapshot.contato_nome}`].filter(Boolean).join(' — ') : null,
+                    emitente: valores['empresa.razao_social'] || organization?.name,
+                    obra: valores['obra.nome'] || null,
+                    contrato: [valores['contrato.numero'], valores['contrato.titulo']].filter(Boolean).join(' — ') || null,
+                    em_resposta_a: emRespostaA || null,
+                    data_do_documento: draft.data_documento ?? 'automática (a da emissão)',
+                    prazo_de_resposta: draft.resposta_esperada_ate,
+                }}
+                recebidoGedId={recebidoGedId}
+                recebidoDescricao={emRespostaA || null}
+                onAplicar={doc => { if (iaCampo) set('conteudo', { ...draft.conteudo, [iaCampo.nome]: doc }); }}
             />
             <PreviewPdf open={previaAberta} onClose={() => setPreviaAberta(false)} titulo={draft.assunto || modelo.nome}
                 blob={previaBlob} carregando={previaCarregando} erro={previaErro} />

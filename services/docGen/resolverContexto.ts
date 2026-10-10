@@ -309,7 +309,8 @@ export function carregarFinanceiroContrato(contractId: string): Promise<Financei
 }
 
 
-const CHAVES_DA_TELA = ['empresa.cidade', 'documento.local_e_data'];
+// F7: + o que o assistente de IA recebe como contexto, use o modelo ou não essas variáveis.
+const CHAVES_DA_TELA = ['empresa.cidade', 'documento.local_e_data', 'empresa.razao_social', 'obra.nome', 'contrato.numero', 'contrato.titulo'];
 
 /**
  * Valores finais das variáveis do modelo: o resolvido do cadastro, com os

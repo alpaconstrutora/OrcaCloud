@@ -39,6 +39,7 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { faceDaParede } from './blueprintRotaPelasParedes';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { potenciaPadraoVA } from './blueprintPotenciaPadrao';
+import { potenciaEletricaVA } from './blueprintSelecaoClimatizacao';
 
 export type KitHidraulico = 'BANHEIRO' | 'COZINHA' | 'AREA_SERVICO';
 
@@ -400,6 +401,71 @@ export function pontosEletricosDoComponente(
       ...(potencia != null ? { potenciaW: potencia } : {}),
     },
   ];
+}
+
+/**
+ * F10 (10/10/2026): a potência AUTOMÁTICA do ponto de ar-condicionado da
+ * evaporadora — pela capacidade declarada ÷ EER das premissas de seleção (a
+ * mesma conta do lançamento do split, E4.3); sem capacidade, a típica (1400 VA,
+ * hipótese). "Automática" é o que o app põe sozinho; o que o projetista digita
+ * no ponto não é tocado (`comandosDaPotenciaDaEvaporadora`).
+ */
+export function potenciaDaEvaporadoraVA(capacidadeBtuH: number | null | undefined, eerWW: number): number {
+  return capacidadeBtuH ? potenciaEletricaVA(capacidadeBtuH, eerWW) : (potenciaPadraoVA('AR_CONDICIONADO', null) ?? 1400);
+}
+
+/** O ponto de ar-condicionado que serve a evaporadora: o mais perto, a até `RAIO_DA_LOUCA_MM` dela ou na face da parede atrás. */
+export function pontoEletricoDaEvaporadoraExistente(model: BlueprintModel, evap: Pick<Terminal, 'levelId' | 'at' | 'larguraMm' | 'profundidadeMm'>): Terminal | null {
+  const alcance = Math.max(evap.larguraMm ?? 0, evap.profundidadeMm ?? 0) / 2 + 400;
+  const naFace = faceDaParede(evap.at, model.walls.filter((w) => w.levelId === evap.levelId), alcance)?.face;
+  const candidatos = (model.terminais ?? []).filter(
+    (t) =>
+      t.levelId === evap.levelId &&
+      t.disciplina === 'ELETRICA' &&
+      t.tipoEletrico === 'AR_CONDICIONADO' &&
+      (Math.hypot(t.at.x - evap.at.x, t.at.y - evap.at.y) <= RAIO_DA_LOUCA_MM || (!!naFace && Math.hypot(t.at.x - naFace.x, t.at.y - naFace.y) <= MESMO_PONTO_MM)),
+  );
+  return candidatos.sort((a, b) => Math.hypot(a.at.x - evap.at.x, a.at.y - evap.at.y) - Math.hypot(b.at.x - evap.at.x, b.at.y - evap.at.y))[0] ?? null;
+}
+
+/**
+ * F10 (10/10/2026): o PONTO ELÉTRICO da evaporadora REAL (a peça da rede, E3)
+ * inserida à mão — o mesmo gesto do componente de reserva: o ponto de
+ * ar-condicionado na FACE da parede atrás dela, com a potência pela capacidade.
+ * Antes ela entrava sem ponto nenhum (e a reserva antiga, com 1400 VA fixos).
+ * Idempotente: com um ponto de ar-condicionado já servindo a peça, nada nasce.
+ */
+export function pontoEletricoDaEvaporadora(model: BlueprintModel, evap: Pick<Terminal, 'levelId' | 'at' | 'capacidadeBtuH' | 'larguraMm' | 'profundidadeMm'>, eerWW: number): Extract<Command, { type: 'AddTerminal' }>[] {
+  if (pontoEletricoDaEvaporadoraExistente(model, evap)) return [];
+  const alcance = Math.max(evap.larguraMm ?? 0, evap.profundidadeMm ?? 0) / 2 + 400;
+  const naFace = faceDaParede(evap.at, model.walls.filter((w) => w.levelId === evap.levelId), alcance)?.face;
+  const ponto = naFace ?? evap.at;
+  return [
+    {
+      type: 'AddTerminal' as const,
+      levelId: evap.levelId,
+      disciplina: 'ELETRICA',
+      tipo: ROTULO_DO_PONTO_ELETRICO.AR_CONDICIONADO,
+      at: { x: Math.round(ponto.x), y: Math.round(ponto.y) },
+      cotaMm: COTA_USUAL_DO_PONTO_ELETRICO.AR_CONDICIONADO,
+      tipoEletrico: 'AR_CONDICIONADO',
+      potenciaW: potenciaDaEvaporadoraVA(evap.capacidadeBtuH, eerWW),
+    },
+  ];
+}
+
+/**
+ * F10: a capacidade da evaporadora mudou — a potência do ponto dela acompanha,
+ * MAS só se ainda é a automática (a da capacidade anterior, a típica ou vazia).
+ * Potência digitada pelo projetista fica (regra: o app preenche, não sobrescreve).
+ */
+export function comandosDaPotenciaDaEvaporadora(model: BlueprintModel, evap: Terminal, novaCapacidadeBtuH: number | null, eerWW: number): Command[] {
+  const ponto = pontoEletricoDaEvaporadoraExistente(model, evap);
+  if (!ponto) return [];
+  const automaticas = new Set([potenciaDaEvaporadoraVA(evap.capacidadeBtuH, eerWW), potenciaDaEvaporadoraVA(null, eerWW)]);
+  if (ponto.potenciaW != null && !automaticas.has(ponto.potenciaW)) return [];
+  const nova = potenciaDaEvaporadoraVA(novaCapacidadeBtuH, eerWW);
+  return ponto.potenciaW === nova ? [] : [{ type: 'SetTerminalProps', terminalId: ponto.id, potenciaW: nova } as Command];
 }
 
 /** Os pontos das louças (e o ponto elétrico dos equipamentos) que ENTRARAM num comando (a peça, ou o conjunto e os filhos). */

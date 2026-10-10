@@ -24,7 +24,8 @@
  * acabado à face do forro. A do quantitativo mede outra coisa (a altura até o
  * forro para o acabamento) e fica como está, agora com o nome que a distingue.
  */
-import type { AcabamentosDoAmbiente } from './blueprintKernel';
+import type { AcabamentosDoAmbiente, BlueprintModel, ObjectId } from './blueprintKernel';
+import { pointInPolygon } from './blueprintKernel';
 import { peDireitoUtilMm } from './blueprintAcabamentos';
 import { FICHA_DO_USO, USOS_DO_AMBIENTE, usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
 
@@ -141,7 +142,8 @@ export function ambientesDaColuna(raw: unknown): Record<string, HipotesesDoAmbie
 
 // ─── O que vale para cada ambiente ───────────────────────────────────────────
 
-export type OrigemDoDado = 'DECLARADA' | 'USO' | 'ESTUDO' | 'SEM';
+/** F14 (10/10/2026): `DESENHO` = o valor saiu do que está desenhado (as luminárias do ambiente). */
+export type OrigemDoDado = 'DECLARADA' | 'USO' | 'ESTUDO' | 'SEM' | 'DESENHO';
 export interface DadoComOrigem<T> {
   valor: T;
   origem: OrigemDoDado;
@@ -155,6 +157,30 @@ export interface ContextoDoAmbiente {
   acabamentos?: AcabamentosDoAmbiente;
   /** O setpoint do estudo (`HipotesesDeConforto.temperaturaInternaC`). */
   temperaturaDoEstudoC: number;
+  /** F14: a soma das potências das luminárias desenhadas no ambiente, W (`null` = nenhuma com potência). */
+  luminariasW?: number | null;
+}
+
+/**
+ * F14 (10/10/2026): a potência das LUMINÁRIAS desenhadas no ambiente — a soma
+ * da `potenciaW` dos pontos de iluminação da elétrica dentro do contorno. `null`
+ * quando não há luminária com potência: a carga fica no W/m² do uso.
+ */
+export function luminariasDoAmbienteW(model: BlueprintModel, spaceId: ObjectId): number | null {
+  const s = model.spaces.find((x) => x.id === spaceId);
+  if (!s) return null;
+  const dentro = (model.terminais ?? []).filter(
+    (t) =>
+      t.levelId === s.levelId &&
+      t.disciplina === 'ELETRICA' &&
+      !!t.tipoEletrico &&
+      t.tipoEletrico.startsWith('ILUMINACAO') &&
+      t.potenciaW != null &&
+      t.potenciaW > 0 &&
+      pointInPolygon(s.ring, t.at) &&
+      !s.holes.some((h) => pointInPolygon(h, t.at)),
+  );
+  return dentro.length ? dentro.reduce((acc, t) => acc + (t.potenciaW ?? 0), 0) : null;
 }
 
 export interface PremissasDoAmbiente {
@@ -193,7 +219,11 @@ export function premissasDoAmbiente(declarado: HipotesesDoAmbiente | undefined, 
     h.temperaturaInternaC != null ? { valor: h.temperaturaInternaC, origem: 'DECLARADA' } : { valor: ctx.temperaturaDoEstudoC, origem: 'ESTUDO' };
   const pessoas = escolher(h.pessoas, padrao.pessoas);
   const atividade = escolher(h.atividade, padrao.atividade);
-  const iluminacaoWm2 = escolher(h.iluminacaoWm2, padrao.iluminacaoWm2);
+  // F14: sem declaração, as luminárias DESENHADAS valem antes do padrão do uso (o app já tem a informação).
+  const pelasLuminarias = h.iluminacaoWm2 == null && ctx.luminariasW != null && ctx.luminariasW > 0 && ctx.areaPisoM2 > 0;
+  const iluminacaoWm2: DadoComOrigem<number> = pelasLuminarias
+    ? { valor: Math.round((ctx.luminariasW! / ctx.areaPisoM2) * 10) / 10, origem: 'DESENHO' }
+    : escolher(h.iluminacaoWm2, padrao.iluminacaoWm2);
   const equipamentosW = escolher(h.equipamentosW, padrao.equipamentosW);
   const pd = peDireitoLivreMm(ctx.peDireitoMm, ctx.acabamentos);
   const conferir = [climatizado, pessoas, atividade, iluminacaoWm2, equipamentosW].some((d) => d.origem !== 'DECLARADA');
@@ -204,7 +234,7 @@ export function premissasDoAmbiente(declarado: HipotesesDoAmbiente | undefined, 
     pessoas,
     atividade,
     iluminacaoWm2,
-    iluminacaoW: Math.round(iluminacaoWm2.valor * ctx.areaPisoM2),
+    iluminacaoW: pelasLuminarias ? Math.round(ctx.luminariasW!) : Math.round(iluminacaoWm2.valor * ctx.areaPisoM2),
     equipamentosW,
     fonteSensivelW: h.fonteSensivelW ?? 0,
     fonteLatenteW: h.fonteLatenteW ?? 0,

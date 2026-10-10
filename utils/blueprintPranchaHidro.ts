@@ -127,6 +127,9 @@ export const SIGLA_DA_CONEXAO: Record<TipoDeConexao, string> = {
   CRUZETA: 'X',
   LUVA: 'L',
   REDUCAO: 'R',
+  // F2 (10/10/2026): as peças do duto — a transição de seção e o colarinho.
+  TRANSICAO: 'TR',
+  COLARINHO: 'C',
 };
 
 /** Clareia a cor em `quanto` (0–1) — o miolo do tubo bifilar. */

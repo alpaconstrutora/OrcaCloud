@@ -350,7 +350,9 @@ export function analisarRedesDeAr(model: BlueprintModel, levelId: ObjectId, vazo
         perda += tr.atritoPa;
         const tipo = tipoDoNo.get(p.noDeSaida);
         if (tipo === 'JOELHO_90' || tipo === 'JOELHO_45') perda += hip.kCurva * pressaoDinamicaPa(tr.velocidadeMs);
-        else if (tipo === 'TE' || tipo === 'JUNCAO_45' || tipo === 'CRUZETA') perda += hip.kTe * pressaoDinamicaPa(tr.velocidadeMs);
+        else if (tipo === 'TE' || tipo === 'JUNCAO_45' || tipo === 'CRUZETA' || tipo === 'COLARINHO') perda += hip.kTe * pressaoDinamicaPa(tr.velocidadeMs);
+        // F2 (10/10/2026): a transição redondo ↔ retangular tem o coeficiente dela.
+        else if (tipo === 'TRANSICAO') perda += hip.kTransicao * pressaoDinamicaPa(tr.velocidadeMs);
       }
       return { terminalId: t.id, nome: t.tipo, vazao: vazoes.get(t.id) ?? { vazaoM3h: 0, origem: 'SEM', memoria: 'sem vazão' }, perdaPa: perda, excessoPa: 0, perdaEmPecasPa: perdaEmPecas };
     });

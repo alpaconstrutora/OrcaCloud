@@ -500,8 +500,8 @@ O detalhe de cada fase está em "Execução", no fim do documento.
   - o achado 8 (as normas) continua aberto e é a pendência A abaixo;
   - o achado 13: o modelo externo como referência entrou na E10.4b, e o RVT direto segue no backlog.
 
-**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **172 ✅ (75 %), 46 🟡 e
-10 ❌**; eram 51 / 83 / 94 em 04/10. Os números e os 10 ❌ estão na "Leitura geral".
+**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **175 ✅ (77 %), 45 🟡 e
+8 ❌**; eram 51 / 83 / 94 em 04/10. Os números e os 10 ❌ estão na "Leitura geral".
 
 ### Pendências
 
@@ -568,31 +568,34 @@ Faltam:
 - **D4:** o link `#/blueprint?studyId=` abre o estudo também com a lista já na tela. Era o módulo que
   só lia o parâmetro ao montar.
 
-**F. Achados da regraduação, fora da lista C/D — para o usuário decidir.**
+**F. Achados da regraduação, fora da lista C/D.** Decisão do usuário em 10/10/2026 ("seguir com a sua
+recomendação", depois da explicação item a item): fazer já F6, F10, F14, F2 e F1 (premissa); em
+seguida F8, F11, F9 (IFC na planta 2D) e F15; F12 e F13 junto com as normas (A); F7 depois de um IFC
+real de terceiros; F3, F4 e F5 no backlog. ✅ = feito em 10/10 (frente `clima-f`).
 
 Itens ❌ que não são backlog:
-- o raio das curvas da linha é tabela fixa, sem campo no trecho nem hipótese editável;
-- não há adaptador redondo↔retangular nem colarinho;
-- não há objeto 3D cadastrável por peça, e o equipamento sai como caixa;
-- a legenda da prancha não é personalizável;
-- não há quantitativo por detalhe.
+- **F1** o raio das curvas da linha: ✅ em DIÂMETROS, premissa editável; a curva desenhada com o
+  raio segue de fora (o trecho é reto);
+- **F2** ✅ a transição redondo↔retangular e o colarinho;
+- **F3** não há objeto 3D cadastrável por peça, e o equipamento sai como caixa (backlog);
+- **F4** a legenda da prancha não é personalizável (backlog);
+- **F5** não há quantitativo por detalhe (backlog).
 
 E os 🟡 que a regraduação revelou:
-- **Conflito do equipamento:** o conflito equipamento × arquitetura (parede, porta, janela, folga de
-  manutenção) só confere a RESERVA antiga. O equipamento real só confere o centro dentro de
-  pilar/viga.
-- **Importação IFC:** a unidade `.SPLITSYSTEM.` de outro programa é recusada (provado só com o IFC
+- **F6** ✅ **Conflito do equipamento:** a caixa inteira do equipamento real × parede, vão,
+  estrutura e móvel na folga.
+- **F7** **Importação IFC:** a unidade `.SPLITSYSTEM.` de outro programa é recusada (provado só com o IFC
   da própria Planta).
-- **Corte:** sem o equipamento e sem o terminal de ar, e a linha cortada como um tubo sem isolamento.
-- **Referências externas:** o IFC externo aparece só no 3D, não na planta 2D. O DXF vetorial traz só
+- **F8** **Corte:** sem o equipamento e sem o terminal de ar, e a linha cortada como um tubo sem isolamento.
+- **F9** **Referências externas:** o IFC externo aparece só no 3D, não na planta 2D. O DXF vetorial traz só
   linhas e arcos (sem textos e cotas).
-- **Evaporadora inserida à mão:** o ponto elétrico ganha os 1400 VA típicos, não a potência do modelo.
-- **Problemas de dimensionamento:** só aparecem nos painéis, não marcados no desenho.
-- **Porta interna para ambiente não climatizado:** sai da parede e nenhuma parcela a substitui. A
+- **F10** ✅ **Evaporadora inserida à mão:** traz o ponto elétrico com a potência pela capacidade.
+- **F11** **Problemas de dimensionamento:** só aparecem nos painéis, não marcados no desenho.
+- **F12** **Porta interna para ambiente não climatizado:** sai da parede e nenhuma parcela a substitui. A
   infiltração é por trocas/h, não por fresta.
-- **Ambiente vizinho:** a temperatura dele não se declara (fração fixa do ΔT).
-- **Iluminação:** sai de W/m² × área, e não das luminárias desenhadas.
-- **Catálogo:** o tipo só se renomeia, desativa ou apaga.
+- **F13** **Ambiente vizinho:** a temperatura dele não se declara (fração fixa do ΔT).
+- **F14** ✅ **Iluminação:** sai das luminárias desenhadas quando não declarada.
+- **F15** **Catálogo:** o tipo só se renomeia, desativa ou apaga.
 
 **E. Backlog nomeado (sem mudança):**
 - RVT/RTE direto (serviço externo);
@@ -870,7 +873,7 @@ ela herda quase de graça:
 | Visualização da tubulação em 3D | E | 🟡 | cilindro do trecho (`Blueprint3DViewer.tsx:1146-1200`); falta o par líquido/sucção e o isolamento na tela (o par só existe no IFC, `utils/blueprintIfc.ts:2273, 2306`) |
 | Condutos multicurva | E | 🟡 | percurso em trechos retos encadeados; cada dobra vira curva derivada contada na conferência (`utils/blueprintLinhaFrigorigena.ts:445`); o trecho é sempre reto `a → b` (`model.ts:2686`), sem arco |
 | Curvas com raio mínimo | E | 🟡 | raio mínimo por Ø dito na conferência (`utils/blueprintLinhaFrigorigena.ts:72-73`); não é desenhado nem verificado na geometria |
-| Ajuste do raio das curvas | E | ❌ | o raio é tabela fixa (`utils/blueprintLinhaFrigorigena.ts:72`), nem hipótese editável; sem campo de raio no trecho (o `Trecho.curva` do roadmap não entrou) |
+| Ajuste do raio das curvas | E | 🟡 | o raio mínimo em DIÂMETROS do tubo, premissa editável da linha (F1, 10/10: `raioDaCurvaEmDiametros`, `raioMinimoDaCurvaMm`); falta a curva DESENHADA com o raio — o trecho segue reto e a dobra sai em canto vivo |
 | Representação realista do percurso | E | 🟡 | o par isolado lado a lado no IFC, na planta e no 3D da tela (C11, 10/10: `parDaLinhaEmPlanta`/`cilindrosDoTrecho` em `utils/blueprintRede.ts`); falta a curva com raio — a dobra ainda sai em canto vivo |
 
 ## 8. Tubulações
@@ -912,9 +915,9 @@ ela herda quase de graça:
 | Curvas | E | ✅ | joelho 90/45 (`conexoes.ts:299-300`); na linha, curva de cobre conferida, não peça (`conexoes.ts:97`) |
 | Bocais | E | ✅ | `BOCAL_AR` (`utils/blueprintHidraulica.ts:705`) |
 | Caixas | E | ✅ | caixa plenum e de distribuição como peças (`utils/blueprintHidraulica.ts:701, 708`); a perda do plenum no caminho do terminal entra no cálculo (C9, 10/10: `perdaPlenumPa`) |
-| Adaptadores | E | ❌ | não há transição redondo↔retangular nem colarinho |
+| Adaptadores | E | ✅ | a TRANSIÇÃO redondo↔retangular e o COLARINHO (ramal redondo saindo do duto retangular) derivados no duto, contados no quantitativo e no IFC, com a perda da transição no caminho (F2, 10/10: `conexoes.ts`, quant-1.26.0) |
 | Componentes da linha frigorígena | E | 🟡 | derivador e coletor (header) do VRF e o sifão do dreno como peças (`COLETOR_VRF`/`SIFAO_DRENO`, kernel 0.94.0, 10/10); falta porca flange e união |
-| Acessórios de dutos | E | 🟡 | damper como peça (`utils/blueprintHidraulica.ts:709`), com a perda dele no caminho (C9), e o duto flexível do difusor (C10), 10/10; falta colarinho e junta flexível |
+| Acessórios de dutos | E | 🟡 | damper como peça (`utils/blueprintHidraulica.ts:709`), com a perda dele no caminho (C9), o duto flexível do difusor (C10) e o colarinho (F2), 10/10; falta a junta flexível |
 
 ## 11. Kits de climatização
 
@@ -996,7 +999,7 @@ ela herda quase de graça:
 | 21 · Calor latente por pessoa | E | ✅ | idem, coluna latente |
 | 21 · Categorias de atividade (leve/sentado … maior movimento) | E | ✅ | 5 categorias, de sentado em repouso a atividade pesada (`utils/blueprintClimatizacaoAmbientes.ts:31-39`) |
 | 22 · Iluminação | E | ✅ | W/m² por ambiente, declarado ou do uso (`utils/blueprintClimatizacaoAmbientes.ts:49, 207`; `PainelClimatizacao.tsx:196`), parcela em `utils/blueprintCargaTermica.ts:309` |
-| 22 · Potência instalada | E | 🟡 | sai de W/m² × área de eixo (`utils/blueprintClimatizacaoAmbientes.ts:207`); não soma a `potenciaW` das luminárias desenhadas, nem há campo de W total |
+| 22 · Potência instalada | E | 🟡 | sem declaração, a soma da `potenciaW` das luminárias desenhadas no ambiente (F14, 10/10: `luminariasDoAmbienteW`, origem "das luminárias desenhadas"); sem luminária, W/m² × área. Falta um campo de W total declarável |
 | 22 · Contribuição para a carga sensível | E | ✅ | W × fator de uso (hipótese editável) na sensível (`utils/blueprintCargaTermica.ts:309, 333`) |
 | 23 · Equipamentos | E | ✅ | W por ambiente, declarado ou do uso (`utils/blueprintClimatizacaoAmbientes.ts:51`; `PainelClimatizacao.tsx:197`), parcela `utils/blueprintCargaTermica.ts:310`; um número só, não lido dos pontos de uso específico |
 | 23 · Aparelhos | E | ✅ | idem: o mesmo campo "equipamentos e aparelhos, W" (`utils/blueprintClimatizacaoAmbientes.ts:50-51`) |
@@ -1093,8 +1096,8 @@ ela herda quase de graça:
 | 61 · Compatibilização visual 3D | E | ✅ | "Destacar no 3D" pinta de vermelho as peças dos conflitos abertos (`BlueprintEditor.tsx:4295-4302`); camadas em meio-tom (`Blueprint3DViewer.tsx:129`) |
 | 62 · Duto × viga | E | ✅ | o duto retangular conta meia altura na vertical e meia largura em planta (`conflitos.ts:101-108`, `:325-350`); a marca aparece no desenho |
 | 62 · Tubulação × estrutura | E | ✅ | linha (os dois tubos com o isolamento) e dreno contra a estrutura pelo envelope (`conflitos.ts:101-108`, `:328-350`) |
-| 62 · Evaporadora × elemento arquitetônico | E | 🟡 | a peça real (terminal, desde a E3) só é conferida pelo centro dentro de pilar/viga (`conflitosArquitetonicos.ts:245-276`) e pelo trecho que atravessa a caixa dela (`conflitos.ts:384-401`); `RESERVA_X_PAREDE/COMPONENTE` só vale para a reserva antiga, que é componente (`conflitosArquitetonicos.ts:369`). Falta: caixa da evaporadora × parede, janela e porta (só a sugestão de posição evita vãos, `blueprintPosicaoSplit.ts:105`) |
-| 62 · Condensadora × arquitetura | E | 🟡 | a mesma limitação da evaporadora (`conflitosArquitetonicos.ts:245-276`, `:369`). Falta: caixa da condensadora × parede e estrutura e a folga de manutenção e de ar contra outras peças |
+| 62 · Evaporadora × elemento arquitetônico | E | ✅ | a caixa inteira da evaporadora × parede (atravessada), vão (porta pelo giro da folha, janela pela folga, na faixa de altura), estrutura e móvel na folga de manutenção (F6, 10/10: `conflitosDoEquipamento`), além do trecho que atravessa a caixa (`conflitos.ts:384-401`) |
+| 62 · Condensadora × arquitetura | E | ✅ | a mesma conferência da evaporadora (F6, 10/10), com a folga de 300 mm da ficha da reserva contra móveis |
 | 62 · Redes de climatização × outras instalações | E | ✅ | rede × rede pelo envelope, medindo a partir de onde os trechos se separam quando nascem no mesmo nó (`conflitos.ts:403-433`); trecho × caixa do equipamento de climatização (`conflitos.ts:384-401`, `BlueprintEditor.tsx:4029`). O duto retangular conta pelo maior meio-lado: é conservador e pode acusar a mais |
 
 ## 63–75. Recursos gerais
@@ -1133,7 +1136,7 @@ ela herda quase de graça:
 | Renovação de ar (NBR 16401-3) | A | 🟡 | L/s por pessoa + por m² (`blueprintRedeDeAr.ts:137`), aviso de climatizado sem janela nem tomada de ar (`:352-368`). Falta: coeficientes transcritos de memória — CONFERIR NA NORMA (`blueprintClimatizacao.ts:471,520`) |
 | Exaustão (banheiro sem janela, cozinha) | A | 🟡 | exigência e vazão por uso; sem janela e sem exaustor = FALTA; o duto do exaustor traçado até a fachada (C7, 10/10). Falta: valores de hipótese (código de obras) |
 | Otimização de rotas | A | 🟡 | linha e VRF por Steiner pelas paredes com desvio de pilar (`blueprintRotaPelasParedes.ts:70`; `blueprintObstaculosEstruturais.ts:93`); duto sob a viga mais baixa (`blueprintRedeDeAr.ts:36,413`). Falta: o duto em espinha não desvia pilar no forro (o conflito só acusa) |
-| Ponto elétrico e circuito do aparelho | A | 🟡 | pelo planejador do split o ponto nasce com a potência do modelo/EER (`blueprintPosicaoSplit.ts:231,272-277`; `blueprintSelecaoClimatizacao.ts:73`) e o gerador liga o circuito (`blueprintGeradorClimatizacao.ts:210-239`). Falta: a evaporadora inserida à mão (componente) ainda nasce com 1400 VA típicos (`PtsHidro:390`; `Potencia:58`); o gerador não liga o circuito quando há outros pontos soltos ou mais de um quadro |
+| Ponto elétrico e circuito do aparelho | A | 🟡 | pelo planejador do split o ponto nasce com a potência do modelo/EER (`blueprintPosicaoSplit.ts:231,272-277`) e o gerador liga o circuito; a evaporadora inserida à mão traz o ponto na face da parede com a potência pela capacidade, e trocar a capacidade acompanha se a potência ainda é a automática (F10, 10/10: `pontoEletricoDaEvaporadora`, `comandosDaPotenciaDaEvaporadora`). Falta: o gerador não liga o circuito quando há outros pontos soltos ou mais de um quadro (decisão) |
 | Orçamento do sistema (lançamento por peça, composição) | A | ✅ | `FRIGORIGENA`, `DRENO_AC` e `MECANICA` em `REDES_HIDROSSANITARIAS`, grupo "de climatização" (`Budget:1679-1681`), peça e tubo/duto lançados (`Budget:1795`, `Budget:1857-1868`), medidas novas (`Budget:390-411`); kit do split na composição (`PainelComposicoesDePeca.tsx:17`) |
 | Geração automática do projeto inteiro | A | 🟡 | `gerarClimatizacao`: carga → equipamento → linha/dreno → VRF → dutos → circuito → conflitos → medidas, um lote, relatório (`blueprintGeradorClimatizacao.ts:102,272,286`). Falta: não lança o orçamento (por decisão — mostra medidas e manda ao painel Orçamento), peças nascem sugeridas, sem prumada entre pavimentos, circuito só quando inequívoco, pranchas emitidas à parte |
 | Simulação CFD | N | ❌ | fora do escopo (N, não replicar) |
@@ -1174,14 +1177,14 @@ derivado a cada mudança.
 
 | Grau | ✅ | 🟡 | ❌ | Total |
 |---|---|---|---|---|
-| **E** | 172 | 46 | 10 | 228 |
+| **E** | 175 | 45 | 8 | 228 |
 | **A** | 8 | 9 | 0 | 17 |
 | **M** | 0 | 0 | 0 | 0 |
 | **B** | 0 | 0 | 0 | 0 |
 | **N** | 0 | 0 | 2 | 2 |
-| **Total** | 180 | 55 | 12 | 247 |
+| **Total** | 183 | 54 | 10 | 247 |
 
-**Dos 228 Essenciais, 172 estão prontos (75 %; eram 51, 22 %), e só 10 não existem.** Os 10 ❌:
+**Dos 228 Essenciais, 175 estão prontos (77 %; eram 51, 22 %), e só 8 não existem.** Os 10 ❌:
 
 - quatro de backlog: RVT direto, gás, SPDA e cabeamento;
 - o ajuste do raio das curvas;
@@ -3001,3 +3004,45 @@ veneziana já existiam (0.93.0).
 | C8 | idem | nenhum ponto de trecho dentro do pilar, os 4 difusores alcançados; controle sem pilar passa reto |
 | C9 | idem | +damper nos dois terminais a jusante, +damper+plenum no do plenum, nada no outro ramo |
 | C10 | idem; `blueprintRedeDeAr.test.ts` | 4 ramais de 1,5 m + 4 descidas flexíveis e redondas; com 1 m, o ramal dividido; com 0, nenhum; "Ajustar seções" vazio; o flexível na lista de materiais |
+
+### Grupo F, bloco "fazer já" — F6, F10, F14, F2 e F1 · 10/10/2026 (frente `clima-f`)
+
+Pedido do usuário, depois da explicação item a item do grupo F: **"seguir com a sua recomendacao"**.
+
+- **F6, o equipamento × a arquitetura.** `conflitosArquitetonicos(model, { pecas })` recebe as caixas
+  dos equipamentos (`volumesDasPecasDeClimatizacao`, as mesmas do conflito trecho × peça) e confere a
+  CAIXA inteira da evaporadora, condensadora, exaustor e equipamento personalizado. Quatro classes:
+  `EQUIPAMENTO_X_ESTRUTURA`, `EQUIPAMENTO_X_PAREDE` (atravessar, não encostar),
+  `EQUIPAMENTO_X_VAO` (porta pelo giro da folha, janela/vão pela folga, com mais de 50 mm na faixa de
+  altura — a evaporadora a 2,20 m sobre a verga de 2,10 m encosta e não é acusada) e
+  `EQUIPAMENTO_X_COMPONENTE` (móvel na folga). A folga é a da reserva do mesmo equipamento no catálogo
+  (`folgaDoEquipamentoMm`): um número só para as duas peças. O equipamento conferido inteiro sai do
+  "centro dentro da estrutura" (sem repetir). O gerador (E11) acusa o equipamento que ele lançou.
+- **F10, o ponto elétrico da evaporadora.** A evaporadora inserida pelo menu traz, no mesmo lote, o
+  ponto de ar-condicionado na face da parede (`pontoEletricoDaEvaporadora`, o gesto do componente),
+  com a potência pela capacidade ÷ EER das premissas de seleção, ou a típica sem capacidade. Mudar a
+  capacidade no painel muda a potência do ponto no mesmo lote, só se ela ainda é a automática
+  (`comandosDaPotenciaDaEvaporadora`): a digitada pelo projetista fica.
+- **F14, a iluminação pelas luminárias.** Sem iluminação declarada no ambiente, a carga usa a soma da
+  `potenciaW` das luminárias desenhadas dentro dele (`luminariasDoAmbienteW`), com a origem "das
+  luminárias desenhadas"; sem luminária, segue o W/m² do uso. O painel das premissas mostra o mesmo
+  número.
+- **F2, transição e colarinho.** Duas conexões derivadas no duto (`conexoes.ts`): `TRANSICAO` (redondo
+  encontrando retangular, em linha ou na curva) e `COLARINHO` (o ramal redondo saindo do duto
+  retangular que passa, no lugar do tê). Entram no quantitativo (**quant-1.26.0**), no IFC
+  (`IfcDuctFitting .TRANSITION.` / `.JUNCTION.`), na sigla da prancha e na perda de carga (o
+  colarinho pelo K do tê; a transição pelo `kTransicao` das premissas, 0,15, CONFERIR).
+- **F1, o raio da curva.** A tabela fixa virou `raioDaCurvaEmDiametros` (4 de partida, premissa da
+  linha): raio = diâmetro × fator, arredondado para cima de 5 em 5 mm. A curva desenhada com o raio
+  segue de fora — o trecho é reto.
+
+**Prova:** `blueprintClimatizacaoGrupoF.test.ts` (11):
+- **F10:** a potência; o ponto na face, uma vez só; a capacidade muda a automática e não a digitada.
+- **F6:** a condensadora na porta; a evaporadora atravessada e a encostada; o encosto na verga; o pilar
+  sem repetir; o móvel na folga; e, sem as caixas, nada muda.
+- **F14:** a soma, a origem, a declarada por cima, a carga lendo.
+- **F2:** transição, colarinho e tê; o quantitativo.
+- **F1:** o raio e a faixa da premissa.
+
+A inserção pelo menu chama a função provada. O clique no canvas não é testável no jsdom e entra nas
+provas no app real (B).

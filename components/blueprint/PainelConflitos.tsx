@@ -269,6 +269,14 @@ export default function PainelConflitos({
                     ? `luminária a menos de 30 cm do sprinkler (faltam ${c.medidaMm} mm) — faz sombra no jato (CONFERIR NA NBR 10897)`
                     : c.classe === 'PECA_X_PORTA'
                       ? `peça de incêndio ${c.medidaMm} mm dentro da passagem da porta — o abrigo aberto ou a folha bloqueiam`
+                      : c.classe === 'EQUIPAMENTO_X_ESTRUTURA'
+                        ? `estrutura dentro do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+                        : c.classe === 'EQUIPAMENTO_X_PAREDE'
+                          ? `parede atravessando o equipamento (≈ ${c.medidaMm} mm de lado em comum)`
+                          : c.classe === 'EQUIPAMENTO_X_VAO'
+                            ? `equipamento na frente do vão (${c.medidaMm} mm ao longo da parede) — a porta não abre ou a janela fica tapada`
+                            : c.classe === 'EQUIPAMENTO_X_COMPONENTE'
+                              ? `peça dentro da folga de manutenção do equipamento (≈ ${c.medidaMm} mm de lado em comum)`
                       : `faltam ${c.medidaMm} mm para os 2,10 m livres sobre o degrau (NBR 9077)`;
 
   const nomeDoTrecho = (id: string) => {

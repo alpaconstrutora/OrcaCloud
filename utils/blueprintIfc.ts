@@ -2386,6 +2386,9 @@ const PREDEFINIDO_DA_CONEXAO: Record<string, string> = {
   CRUZETA: '.JUNCTION.',
   LUVA: '.CONNECTOR.',
   REDUCAO: '.TRANSITION.',
+  // F2 (10/10/2026): a transição de seção do duto e o colarinho do ramal.
+  TRANSICAO: '.TRANSITION.',
+  COLARINHO: '.JUNCTION.',
 };
 
 /**

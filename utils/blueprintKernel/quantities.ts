@@ -207,7 +207,11 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // ganhou a CAPACIDADE (BTU/h), a VAZÃO (m³/h) e, no terminal de ar, a MEDIDA
   // declarada. Antes a evaporadora de 9.000 e a de 12.000 BTU/h somavam numa
   // linha, e o par 6/10 com o 6/13.
-  version: 'quant-1.25.0',
+  // quant-1.26.0 (10/10/2026, F2 da climatização): duas conexões derivadas novas
+  // no DUTO — `TRANSICAO` (redondo ↔ retangular) e `COLARINHO` (ramal redondo
+  // saindo do duto retangular, no lugar do tê). `porConexao` passa a contá-las;
+  // antes o encontro do flexível com o tronco saía como luva/joelho/tê.
+  version: 'quant-1.26.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,

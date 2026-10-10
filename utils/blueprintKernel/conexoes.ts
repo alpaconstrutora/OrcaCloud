@@ -37,7 +37,12 @@ import type { BlueprintModel, DisciplinaDeRede, Level, ObjectId, Terminal, Trech
 import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from './model';
 import type { Point } from './geom';
 
-export type TipoDeConexao = 'JOELHO_90' | 'JOELHO_45' | 'TE' | 'JUNCAO_45' | 'CRUZETA' | 'LUVA' | 'REDUCAO';
+/**
+ * F2 (climatização, 10/10/2026, quant-1.26.0): no DUTO, a TRANSIÇÃO (redondo ↔
+ * retangular — o flexível redondo encontrando o tronco retangular) e o
+ * COLARINHO (o ramal redondo que sai do duto retangular, no lugar do tê).
+ */
+export type TipoDeConexao = 'JOELHO_90' | 'JOELHO_45' | 'TE' | 'JUNCAO_45' | 'CRUZETA' | 'LUVA' | 'REDUCAO' | 'TRANSICAO' | 'COLARINHO';
 
 export const ROTULO_DA_CONEXAO: Record<TipoDeConexao, string> = {
   JOELHO_90: 'Joelho 90°',
@@ -47,6 +52,8 @@ export const ROTULO_DA_CONEXAO: Record<TipoDeConexao, string> = {
   CRUZETA: 'Cruzeta',
   LUVA: 'Luva',
   REDUCAO: 'Redução',
+  TRANSICAO: 'Transição redondo/retangular',
+  COLARINHO: 'Colarinho',
 };
 
 /** O tipo manual (`CONEXAO_TE`) → o tipo de conexão contado. */
@@ -287,6 +294,14 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
       if (!temPeca) pontasAbertas.push({ levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoId: inc[0].trecho.id });
       continue;
     }
+    // F2: no duto, a seção de cada ramal — retangular (com altura) ou redonda.
+    const retangular = (i: (typeof inc)[number]) => i.trecho.alturaDutoMm != null;
+    if (inc.length === 2 && no.disciplina === 'MECANICA' && retangular(inc[0]) !== retangular(inc[1])) {
+      // Redondo encontrando retangular: a peça é a transição, em linha ou na curva.
+      if (temPeca) continue;
+      conexoes.push({ ...base, tipo: 'TRANSICAO', origem: 'DERIVADA', ...(menor !== maior ? { paraMm: menor } : {}) });
+      continue;
+    }
     if (inc.length === 2) {
       const ang = anguloGraus(inc[0].u, inc[1].u);
       if (ang >= 170) {
@@ -310,6 +325,8 @@ export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
         if (anguloGraus(inc[i].u, inc[j].u) < 170) continue;
         const ang = anguloGraus(inc[k2].u, inc[i].u);
         if (Math.abs(ang - 45) <= 10 || Math.abs(ang - 135) <= 10) tipo = 'JUNCAO_45';
+        // F2: o ramal REDONDO saindo do duto RETANGULAR que passa é o colarinho.
+        else if (no.disciplina === 'MECANICA' && retangular(inc[i]) && retangular(inc[j]) && !retangular(inc[k2])) tipo = 'COLARINHO';
         break;
       }
       conexoes.push({ ...base, tipo, origem: 'DERIVADA', ...(menor !== maior ? { paraMm: menor } : {}) });

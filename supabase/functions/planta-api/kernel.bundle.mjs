@@ -3380,7 +3380,9 @@ var ROTULO_DA_CONEXAO = {
   JUNCAO_45: "Jun\xE7\xE3o 45\xB0",
   CRUZETA: "Cruzeta",
   LUVA: "Luva",
-  REDUCAO: "Redu\xE7\xE3o"
+  REDUCAO: "Redu\xE7\xE3o",
+  TRANSICAO: "Transi\xE7\xE3o redondo/retangular",
+  COLARINHO: "Colarinho"
 };
 function tipoDeConexaoManual(tipoHidraulico) {
   switch (tipoHidraulico) {
@@ -3515,6 +3517,12 @@ function conexoesDerivadas(model) {
       if (!temPeca) pontasAbertas.push({ levelId: no.levelId, no: no.no, cotaMm: no.cotaMm, disciplina: no.disciplina, trechoId: inc[0].trecho.id });
       continue;
     }
+    const retangular = (i) => i.trecho.alturaDutoMm != null;
+    if (inc.length === 2 && no.disciplina === "MECANICA" && retangular(inc[0]) !== retangular(inc[1])) {
+      if (temPeca) continue;
+      conexoes.push({ ...base, tipo: "TRANSICAO", origem: "DERIVADA", ...menor !== maior ? { paraMm: menor } : {} });
+      continue;
+    }
     if (inc.length === 2) {
       const ang = anguloGraus(inc[0].u, inc[1].u);
       if (ang >= 170) {
@@ -3535,6 +3543,7 @@ function conexoesDerivadas(model) {
         if (anguloGraus(inc[i].u, inc[j].u) < 170) continue;
         const ang = anguloGraus(inc[k2].u, inc[i].u);
         if (Math.abs(ang - 45) <= 10 || Math.abs(ang - 135) <= 10) tipo = "JUNCAO_45";
+        else if (no.disciplina === "MECANICA" && retangular(inc[i]) && retangular(inc[j]) && !retangular(inc[k2])) tipo = "COLARINHO";
         break;
       }
       conexoes.push({ ...base, tipo, origem: "DERIVADA", ...menor !== maior ? { paraMm: menor } : {} });
@@ -3948,7 +3957,11 @@ var POLITICA_PADRAO = {
   // ganhou a CAPACIDADE (BTU/h), a VAZÃO (m³/h) e, no terminal de ar, a MEDIDA
   // declarada. Antes a evaporadora de 9.000 e a de 12.000 BTU/h somavam numa
   // linha, e o par 6/10 com o 6/13.
-  version: "quant-1.25.0",
+  // quant-1.26.0 (10/10/2026, F2 da climatização): duas conexões derivadas novas
+  // no DUTO — `TRANSICAO` (redondo ↔ retangular) e `COLARINHO` (ramal redondo
+  // saindo do duto retangular, no lugar do tê). `porConexao` passa a contá-las;
+  // antes o encontro do flexível com o tronco saía como luva/joelho/tê.
+  version: "quant-1.26.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -6777,7 +6790,10 @@ var PREDEFINIDO_DA_CONEXAO = {
   JUNCAO_45: ".JUNCTION.",
   CRUZETA: ".JUNCTION.",
   LUVA: ".CONNECTOR.",
-  REDUCAO: ".TRANSITION."
+  REDUCAO: ".TRANSITION.",
+  // F2 (10/10/2026): a transição de seção do duto e o colarinho do ramal.
+  TRANSICAO: ".TRANSITION.",
+  COLARINHO: ".JUNCTION."
 };
 function emitirConexao(c, ctx, localNivel, cotaNoNivelMm) {
   const { emitir, guid, historico } = ctx;

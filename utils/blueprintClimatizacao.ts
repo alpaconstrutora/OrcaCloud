@@ -383,9 +383,11 @@ export interface HipotesesDaLinha {
   condensadoLhPorKbtu: number;
   /** C6: onde o sifão entra no dreno por gravidade, medido da saída da evaporadora pelo caminho, mm. */
   distanciaDoSifaoMm: number;
+  /** F1 (10/10/2026): o raio mínimo da curva do cobre, em DIÂMETROS do tubo (HIPÓTESE, CONFERIR). */
+  raioDaCurvaEmDiametros: number;
 }
 
-export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300 };
+export const HIPOTESES_DA_LINHA_PADRAO: HipotesesDaLinha = { cotaDaLinhaMm: 2500, raioDeEncaixeMm: 600, preCargaM: 5, declividadeDrenoPct: 1, isolamentoAte24kMm: 9, isolamentoAcimaMm: 13, dnDrenoMm: 25, raioDoShaftMm: 3000, condensadoLhPorKbtu: 0.2, distanciaDoSifaoMm: 300, raioDaCurvaEmDiametros: 4 };
 
 export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max: number }> = {
   cotaDaLinhaMm: { min: 300, max: 6000 },
@@ -398,6 +400,7 @@ export const LIMITES_DA_LINHA: Record<keyof HipotesesDaLinha, { min: number; max
   raioDoShaftMm: { min: 0, max: 20000 },
   condensadoLhPorKbtu: { min: 0.02, max: 2 },
   distanciaDoSifaoMm: { min: 50, max: 3000 },
+  raioDaCurvaEmDiametros: { min: 2, max: 10 },
 };
 
 export function hipotesesDaLinhaDaColuna(raw: unknown): HipotesesDaLinha {
@@ -502,6 +505,8 @@ export interface HipotesesDoAr {
   perdaPlenumPa: number;
   /** C10: o último ramal até o terminal sai em duto flexível até este comprimento, mm (0 = sem flexível). */
   comprimentoFlexivelMaxMm: number;
+  /** F2 (10/10/2026): coeficiente de perda localizada da transição redondo ↔ retangular (CONFERIR). */
+  kTransicao: number;
 }
 
 export const HIPOTESES_DO_AR_PADRAO: HipotesesDoAr = {
@@ -525,6 +530,7 @@ export const HIPOTESES_DO_AR_PADRAO: HipotesesDoAr = {
   perdaDamperPa: 20,
   perdaPlenumPa: 15,
   comprimentoFlexivelMaxMm: 1500,
+  kTransicao: 0.15,
 };
 
 type ChaveNumericaDoAr = Exclude<keyof HipotesesDoAr, 'metodo' | 'secaoPadrao'>;
@@ -547,6 +553,7 @@ export const LIMITES_DO_AR: Record<ChaveNumericaDoAr, { min: number; max: number
   perdaDamperPa: { min: 0, max: 300 },
   perdaPlenumPa: { min: 0, max: 300 },
   comprimentoFlexivelMaxMm: { min: 0, max: 5000 },
+  kTransicao: { min: 0, max: 3 },
 };
 
 export const FONTE_DO_AR =

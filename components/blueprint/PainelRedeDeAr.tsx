@@ -57,6 +57,7 @@ const ROTULOS: Record<keyof typeof LIMITES_DO_AR, string> = {
   perdaDamperPa: 'Perda no damper (Pa)',
   perdaPlenumPa: 'Perda no plenum (Pa)',
   comprimentoFlexivelMaxMm: 'Flexível no ramal até (mm; 0 = sem)',
+  kTransicao: 'K da transição redondo/retangular',
 };
 
 function IconeDoEstado({ estado }: { estado: EstadoDaConferencia }) {

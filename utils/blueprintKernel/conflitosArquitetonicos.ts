@@ -51,11 +51,25 @@
  *   Peça × peça GENÉRICA não entra: o kit do banheiro põe água fria, quente e
  *   esgoto no MESMO ponto de propósito, e a lista viraria ruído.
  *
+ * - **F6 (climatização, 10/10/2026) — o EQUIPAMENTO real × a arquitetura:** a
+ *   evaporadora, a condensadora, o exaustor e o equipamento personalizado (a
+ *   peça da rede, desde a E3) conferem a CAIXA inteira — antes só o centro
+ *   dentro de pilar/viga, e a conferência completa valia apenas para a reserva
+ *   antiga. As caixas vêm de quem chama (`opcoes.pecas`, as medidas da ficha
+ *   moram fora do kernel; a cota é o centro). A folga é a da reserva do mesmo
+ *   equipamento no catálogo (um número só para as duas peças):
+ *   - `EQUIPAMENTO_X_ESTRUTURA`: pilar sempre; viga só na faixa de altura;
+ *   - `EQUIPAMENTO_X_PAREDE`: a parede atravessando a caixa (encostar é normal);
+ *   - `EQUIPAMENTO_X_VAO`: a caixa na frente de porta (o giro da folha) ou de
+ *     janela/vão (a folga), na faixa de altura do vão;
+ *   - `EQUIPAMENTO_X_COMPONENTE`: móvel dentro da caixa + folga de manutenção.
+ *
  * Determinístico: ordenado por id da peça e do outro, como `conflitosDoModelo`.
  */
 import { pointInPolygon, polygonArea, type Point } from './geom';
 import { fatiasDaEscada } from './escada';
 import type { BlueprintModel, Componente, ObjectId, Structural } from './model';
+import type { VolumeDePeca } from './conflitos';
 import { CATALOGO_DE_COMPONENTES, FORMA_ESTRUTURAL, contornoDoComponente, pavimentosDoNucleo } from './model';
 import { faixaDaEstruturaNaParede, pegadaEmPlanta, recorteComum } from './sobreposicao';
 
@@ -78,7 +92,7 @@ export interface ConflitoArquitetonico {
   outroId: ObjectId;
   outroUid: string;
   outroFamilia?: 'structural' | 'wall' | 'componente' | 'terminal' | 'opening';
-  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE' | 'PONTO_X_ESTRUTURA' | 'SPRINKLER_X_OBSTRUCAO' | 'PECA_X_PORTA';
+  classe: 'VAO_X_ESTRUTURA' | 'ESCADA_X_PILAR' | 'ESCADA_X_ALTURA_LIVRE' | 'NUCLEO_X_ESTRUTURA' | 'RESERVA_X_ESTRUTURA' | 'RESERVA_X_PAREDE' | 'RESERVA_X_COMPONENTE' | 'PONTO_X_ESTRUTURA' | 'SPRINKLER_X_OBSTRUCAO' | 'PECA_X_PORTA' | 'EQUIPAMENTO_X_ESTRUTURA' | 'EQUIPAMENTO_X_PAREDE' | 'EQUIPAMENTO_X_VAO' | 'EQUIPAMENTO_X_COMPONENTE';
   levelId: ObjectId;
   /**
    * O tamanho do problema, em mm: no vão, quanto do vão está tomado ao longo
@@ -100,7 +114,7 @@ function centro(anel: Point[]): Point {
   };
 }
 
-export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitetonico[] {
+export function conflitosArquitetonicos(model: BlueprintModel, opcoes: { pecas?: readonly VolumeDePeca[] } = {}): ConflitoArquitetonico[] {
   const saida: ConflitoArquitetonico[] = [];
   const estruturasPorNivel = new Map<ObjectId, Structural[]>();
   for (const s of model.structures) {
@@ -241,6 +255,9 @@ export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitet
 
   // ── Reserva de equipamento (E11.1) ─────────────────────────────────────
   saida.push(...conflitosDeReserva(model));
+  // ── F6: o EQUIPAMENTO real (com a caixa vinda de quem chama) ─────────────
+  const equipamentos = opcoes.pecas ? conflitosDoEquipamento(model, opcoes.pecas) : { conflitos: [], ids: new Set<ObjectId>() };
+  saida.push(...equipamentos.conflitos);
 
   // ── E7.2: PONTO e QUADRO × ESTRUTURA ────────────────────────────────────
   // O CENTRO da peça (planta e cota) dentro do prisma de um pilar/viga/laje —
@@ -253,6 +270,8 @@ export function conflitosArquitetonicos(model: BlueprintModel): ConflitoArquitet
     ...(model.quadros ?? []).map((q) => ({ id: q.id, uid: q.uid, familia: 'quadro' as const, levelId: q.levelId, at: q.at, cotaMm: q.cotaMm })),
   ];
   for (const p of pecasPontuais) {
+    // F6: o equipamento com caixa já foi conferido inteiro — o centro não conta de novo.
+    if (equipamentos.ids.has(p.id)) continue;
     const z = (elevacaoDe.get(p.levelId) ?? 0) + p.cotaMm;
     for (const s of model.structures) {
       const es = (elevacaoDe.get(s.levelId) ?? 0) + s.baseMm;
@@ -358,6 +377,87 @@ function distanciaAoContorno(anel: readonly Point[], p: Point): number {
     d = Math.min(d, Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
   }
   return d;
+}
+
+/**
+ * F6: a folga de manutenção do EQUIPAMENTO real — a da reserva do mesmo
+ * equipamento no catálogo (`folgaMm`), para as duas peças não terem dois números.
+ * `null` = o tipo não é equipamento (terminal de ar, derivador, sifão… não entram).
+ */
+export function folgaDoEquipamentoMm(tipoHidraulico: string | null | undefined): number | null {
+  if (!tipoHidraulico) return null;
+  if (tipoHidraulico.startsWith('EVAPORADORA_')) return CATALOGO_DE_COMPONENTES.EVAPORADORA?.folgaMm ?? 0;
+  if (tipoHidraulico.startsWith('CONDENSADORA_')) return CATALOGO_DE_COMPONENTES.CONDENSADORA?.folgaMm ?? 0;
+  if (tipoHidraulico === 'EXAUSTOR_AR') return CATALOGO_DE_COMPONENTES.EXAUSTOR?.folgaMm ?? 0;
+  if (tipoHidraulico === 'EQUIPAMENTO_CLIMATIZACAO') return 0;
+  return null;
+}
+
+/** F6: o equipamento real (a caixa inteira) × estrutura, parede, vão e componente. */
+export function conflitosDoEquipamento(model: BlueprintModel, pecas: readonly VolumeDePeca[]): { conflitos: ConflitoArquitetonico[]; ids: Set<ObjectId> } {
+  const saida: ConflitoArquitetonico[] = [];
+  const ids = new Set<ObjectId>();
+  const porId = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+  const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
+  for (const p of pecas) {
+    const folga = folgaDoEquipamentoMm(porId.get(p.id)?.tipoHidraulico);
+    if (folga == null || !(p.larguraMm > 0) || !(p.profundidadeMm > 0)) continue;
+    ids.add(p.id);
+    const forma = { at: p.at, larguraMm: p.larguraMm, profundidadeMm: p.profundidadeMm, rotacaoGraus: p.rotacaoGraus };
+    const caixa = contornoDoComponente(forma);
+    const caixaComFolga = folga > 0 ? contornoComFolga(forma, folga) : caixa;
+    const base = p.cotaMm - p.alturaMm / 2;
+    const topo = base + p.alturaMm;
+    const mesmo = (outroId: ObjectId, outroUid: string, outroFamilia: ConflitoArquitetonico['outroFamilia'], classe: ConflitoArquitetonico['classe'], medidaMm: number, em: Point) =>
+      saida.push({ pecaId: p.id, pecaUid: p.uid, familia: 'terminal', outroId, outroUid, outroFamilia, classe, levelId: p.levelId, medidaMm: Math.round(medidaMm), em });
+    // Estrutura: pilar sempre; viga/laje só se a faixa de altura cruza a da caixa.
+    for (const s of model.structures) {
+      if (s.levelId !== p.levelId || s.kind === 'LAJE') continue;
+      if (FORMA_ESTRUTURAL[s.kind] !== 'PONTO' && (s.baseMm >= topo || s.baseMm + s.alturaMm <= base)) continue;
+      const comum = recorteComum(caixa, pegadaEmPlanta(s));
+      if (comum.length < 3) continue;
+      const a = areaDe(comum);
+      if (a > 0) mesmo(s.id, s.uid, 'structural', 'EQUIPAMENTO_X_ESTRUTURA', Math.sqrt(a), centro(comum));
+    }
+    // Parede: só o corpo DENTRO da caixa — pelo menos 50 mm de lado em comum.
+    for (const w of model.walls) {
+      if (w.levelId !== p.levelId) continue;
+      const comum = recorteComum(caixa, pegadaEmPlanta(w));
+      if (comum.length < 3) continue;
+      const lado = Math.sqrt(areaDe(comum));
+      if (lado >= 50) mesmo(w.id, w.uid, 'wall', 'EQUIPAMENTO_X_PAREDE', lado, centro(comum));
+    }
+    // Vão: a caixa no referencial da parede — ao longo (s) e através (n) do eixo.
+    for (const o of model.openings) {
+      const w = paredePorId.get(o.wallId);
+      if (!w || w.levelId !== p.levelId) continue;
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      if (!(L > 0)) continue;
+      // Na faixa de altura do vão, com MAIS de 50 mm de sobreposição (a evaporadora a 2,20 m sobre a verga de 2,10 m encosta, não tapa).
+      if (Math.min(topo, o.sillMm + o.heightMm) - Math.max(base, o.sillMm) <= 50) continue;
+      const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+      const ss = caixa.map((c) => (c.x - w.a.x) * u.x + (c.y - w.a.y) * u.y);
+      const ns = caixa.map((c) => -(c.x - w.a.x) * u.y + (c.y - w.a.y) * u.x);
+      const nMin = Math.min(...ns) <= 0 && Math.max(...ns) >= 0 ? 0 : Math.min(...ns.map(Math.abs));
+      // A faixa do vão: a porta de abrir pelo giro da folha; janela, correr e vão livre pela folga do equipamento.
+      const alcance = w.thicknessMm / 2 + (o.kind === 'door' ? o.widthMm : folga);
+      const aoLongo = Math.min(Math.max(...ss), o.offsetMm + o.widthMm) - Math.max(Math.min(...ss), o.offsetMm);
+      if (aoLongo <= 0 || nMin >= alcance) continue;
+      const meio = o.offsetMm + o.widthMm / 2;
+      mesmo(o.id, o.uid, 'opening', 'EQUIPAMENTO_X_VAO', aoLongo, { x: Math.round(w.a.x + u.x * meio), y: Math.round(w.a.y + u.y * meio) });
+    }
+    // Componente (móvel) dentro da caixa + folga, na mesma faixa de altura — a reserva antiga não conta.
+    for (const c of model.componentes ?? []) {
+      if (c.levelId !== p.levelId || ehReservaDeEquipamento(c)) continue;
+      const baseC = c.cotaMm ?? 0;
+      if (baseC >= topo + folga || baseC + c.alturaMm <= base - folga) continue;
+      const comum = recorteComum(caixaComFolga, contornoDoComponente(c));
+      if (comum.length < 3) continue;
+      const a = areaDe(comum);
+      if (a > 0) mesmo(c.id, c.uid, 'componente', 'EQUIPAMENTO_X_COMPONENTE', Math.sqrt(a), centro(comum));
+    }
+  }
+  return { conflitos: saida, ids };
 }
 
 /** A caixa da reserva crescida da folga em todo o contorno. */

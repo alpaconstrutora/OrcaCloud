@@ -33,7 +33,7 @@ import { acabamentosDoAmbiente, areaRecuada, fatorDeSombreamento } from './bluep
 import { desempenhoTermico, type Material } from './blueprintMateriais';
 import type { PontoCardeal } from './blueprintGrafoEspacial';
 import { condicoesExternas, type CondicoesExternas, type HipotesesClimatizacao } from './blueprintClimatizacao';
-import { premissasDoAmbiente, type Atividade, type PremissasDoAmbiente } from './blueprintClimatizacaoAmbientes';
+import { luminariasDoAmbienteW, premissasDoAmbiente, type Atividade, type PremissasDoAmbiente } from './blueprintClimatizacaoAmbientes';
 import { exposicaoDoNivel, type ExposicaoDoAmbiente, type FaceVerticalDoAmbiente } from './blueprintExposicaoTermica';
 
 export const W_PARA_BTUH = 3.412142;
@@ -191,7 +191,7 @@ export function cargaTermicaDoNivel(model: BlueprintModel, hip: HipotesesClimati
   const premissasPorSpace = new Map<ObjectId, PremissasDoAmbiente>();
   for (const e of exposicao) {
     const s = model.spaces.find((x) => x.id === e.spaceId)!;
-    premissasPorSpace.set(e.spaceId, premissasDoAmbiente(e.labelUid ? hip.ambientes[e.labelUid] : undefined, { nome: e.nome, areaPisoM2: e.areaPisoM2, peDireitoMm: e.peDireitoMm, acabamentos: acabamentosDoAmbiente(model, s), temperaturaDoEstudoC: tInt }));
+    premissasPorSpace.set(e.spaceId, premissasDoAmbiente(e.labelUid ? hip.ambientes[e.labelUid] : undefined, { nome: e.nome, areaPisoM2: e.areaPisoM2, peDireitoMm: e.peDireitoMm, acabamentos: acabamentosDoAmbiente(model, s), temperaturaDoEstudoC: tInt, luminariasW: luminariasDoAmbienteW(model, e.spaceId) }));
   }
   const climatizadoPorUid = (uid: string | null, nome: string): boolean | null => {
     if (!uid) return null;

@@ -12,7 +12,8 @@
  *    FABRICANTE, hipótese de pré-projeto, CONFERIR com o modelo real.
  *  - E5.3 as CURVAS: em cobre a mudança de direção é tubo CURVADO, não joelho —
  *    a conferência conta as curvas da linha e diz o raio mínimo por diâmetro
- *    (`RAIO_MINIMO_DA_CURVA`), sem campo novo no kernel: o raio é regra da
+ *    (`raioMinimoDaCurvaMm`; F1, 10/10/2026: em DIÂMETROS, premissa editável
+ *    `raioDaCurvaEmDiametros`), sem campo novo no kernel: o raio é regra da
  *    dobra, e a dobra mora no NÓ entre dois trechos retos, não no trecho.
  *  - E5.4 o DRENO: da evaporadora ao PONTO DE DRENO mais próximo (ou a um ponto
  *    novo na fachada, junto da condensadora), por gravidade com a declividade
@@ -47,7 +48,7 @@ import { arvorePelasParedes, chaveP, type P2 } from './blueprintRotaPelasParedes
 import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { componentesSugeridos, lancesDaPrumada, pavimentosEntre, pontoDaPrumada } from './blueprintPrumadaClimatizacao';
-import type { HipotesesDaLinha } from './blueprintClimatizacao';
+import { HIPOTESES_DA_LINHA_PADRAO, type HipotesesDaLinha } from './blueprintClimatizacao';
 import type { ItemConferido } from './blueprintConferenciaClimatizacao';
 
 // ─── E5.2: a tabela por capacidade (HIPÓTESE de fabricante) ──────────────────
@@ -82,8 +83,12 @@ export function faixaDaLinha(capacidadeBtuH: number | null | undefined): FaixaDa
 }
 
 /** E5.3: raio mínimo de curvamento do cobre recozido, mm, por diâmetro externo — HIPÓTESE (≈ 4 × D). CONFERIR. */
-export const RAIO_MINIMO_DA_CURVA: Record<number, number> = { 6: 30, 10: 40, 13: 50, 16: 65, 19: 80 };
-export const raioMinimoDaCurvaMm = (dnMm: number): number => RAIO_MINIMO_DA_CURVA[dnMm] ?? Math.round(dnMm * 4);
+/**
+ * F1 (10/10/2026): o raio mínimo = o diâmetro × `emDiametros` (premissa da linha,
+ * 4 de partida — HIPÓTESE, CONFERIR com o fabricante do curvador), arredondado
+ * para cima de 5 em 5 mm. Antes era uma tabela fixa no código.
+ */
+export const raioMinimoDaCurvaMm = (dnMm: number, emDiametros: number = HIPOTESES_DA_LINHA_PADRAO.raioDaCurvaEmDiametros): number => Math.ceil((dnMm * emDiametros) / 5) * 5;
 
 export const isolamentoDaLinhaMm = (capacidadeBtuH: number | null | undefined, hip: HipotesesDaLinha): number => ((capacidadeBtuH ?? 0) <= 24000 ? hip.isolamentoAte24kMm : hip.isolamentoAcimaMm);
 
@@ -576,7 +581,7 @@ export function linhasConferidas(model: BlueprintModel, levelId: ObjectId, hip: 
     const gasAdicionalG = comprimentoM == null ? null : Math.round(Math.max(0, comprimentoM - hip.preCargaM) * faixa.gasAdicionalGPorM);
     const ids = new Set(trechos.map((t) => t.id));
     const curvas = cx.conexoes.filter((c) => c.disciplina === 'FRIGORIGENA' && (c.tipo === 'JOELHO_90' || c.tipo === 'JOELHO_45') && c.trechoIds.every((id) => ids.has(id))).length;
-    const raioMinimoMm = raioMinimoDaCurvaMm(Math.max(faixa.succaoMm, ...dnSuccaoMm));
+    const raioMinimoMm = raioMinimoDaCurvaMm(Math.max(faixa.succaoMm, ...dnSuccaoMm), hip.raioDaCurvaEmDiametros);
     if (cap == null) pend.push('capacidade não declarada — a faixa usada é a menor');
     return { evaporadoraId: s.evaporadora.id, condensadoraId: s.condensadora.id, nome: s.evaporadora.tipo, capacidadeBtuH: cap, faixa, comprimentoM, desnivelM, dnLiquidoMm, dnSuccaoMm, isolamentoMinMm, gasAdicionalG, curvas, raioMinimoMm, pendencias: pend };
   });

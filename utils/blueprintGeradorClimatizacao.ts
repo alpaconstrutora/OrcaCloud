@@ -38,7 +38,7 @@
  * Split e Linha e dreno) é o que as fixa.
  */
 import type { BlueprintModel, Command, ObjectId } from './blueprintKernel';
-import { POLITICA_PADRAO, applyBatch, computeQuantities, conflitosDoModelo, TIPOS_DE_EVAPORADORA, TIPOS_DE_TERMINAL_DE_AR } from './blueprintKernel';
+import { POLITICA_PADRAO, applyBatch, computeQuantities, conflitosArquitetonicos, conflitosDoModelo, TIPOS_DE_EVAPORADORA, TIPOS_DE_TERMINAL_DE_AR } from './blueprintKernel';
 import type { HipotesesClimatizacao } from './blueprintClimatizacao';
 import { cargaTermicaDoEstudo, type CargaTermicaDoNivel, type ContextoDaCarga } from './blueprintCargaTermica';
 import { selecaoDoNivel, type ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
@@ -243,6 +243,11 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   for (const c of conflitosDoModelo(m, { pecas: volumesDasPecasDeClimatizacao(m) })) {
     if (!novos.has(c.trechoId) && !novos.has(c.outroId)) continue;
     pendencia('CONFLITO', `${c.classe.replace(/_/g, ' ').toLowerCase()}: trecho ${c.trechoId} × ${c.outroId} (${um(c.comprimentoDentroMm, 0)} mm dentro).`);
+  }
+  // F6 (10/10/2026): o equipamento lançado × parede, vão, estrutura e móvel (a caixa inteira).
+  for (const c of conflitosArquitetonicos(m, { pecas: volumesDasPecasDeClimatizacao(m) })) {
+    if (!c.classe.startsWith('EQUIPAMENTO_') || !novos.has(c.pecaId)) continue;
+    pendencia('CONFLITO', `${c.classe.replace(/_/g, ' ').toLowerCase()}: ${c.pecaId} × ${c.outroId} (${um(c.medidaMm, 0)} mm).`);
   }
 
   // ── Quantitativo e orçamento (E9) — só cálculo ────────────────────────────

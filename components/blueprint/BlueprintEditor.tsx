@@ -140,7 +140,7 @@ import {
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
-import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA, TIPOS_DE_CLIMATIZACAO } from '../../utils/blueprintKernel';
+import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from '../../utils/blueprintKernel';
 import { TIPOS_DE_AREA_PUBLICA, TIPOS_DE_AREA_DO_LOTEAMENTO, TIPOS_AMBIENTAIS, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
 import {
   numerarQuadra,
@@ -768,7 +768,8 @@ import {
   type HipotesesDePontos,
   type KitHidraulico,
 } from '../../utils/blueprintPontosHidraulicos';
-import { pontosEletricosDoComponente } from '../../utils/blueprintPontosHidraulicos';
+import { comandosDaPotenciaDaEvaporadora, pontoEletricoDaEvaporadora, pontosEletricosDoComponente } from '../../utils/blueprintPontosHidraulicos';
+import { luminariasDoAmbienteW } from '../../utils/blueprintClimatizacaoAmbientes';
 import {
   planejarAguaDoModelo,
   refazerAgua,
@@ -4032,7 +4033,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   // E10.2 (climatização): com as caixas das peças de climatização — o trecho que atravessa um equipamento a que não se liga.
   const conflitos = useMemo(() => conflitosDoModelo(editor.model, { pecas: volumesDasPecasDeClimatizacao(editor.model) }), [editor.model]);
   /** Os arquitetônicos (E0.4): pilar no vão, pilar na escada, viga baixa sobre o degrau. */
-  const conflitosArq = useMemo(() => conflitosArquitetonicos(editor.model), [editor.model]);
+  // F6 (10/10/2026): com as caixas dos equipamentos, a conferência confere a peça real inteira.
+  const conflitosArq = useMemo(() => conflitosArquitetonicos(editor.model, { pecas: volumesDasPecasDeClimatizacao(editor.model) }), [editor.model]);
   /** MECÂNICA (E11.1): quantos conflitos são de reserva de equipamento, e quais shafts são mecânicos. */
   const conflitosDeReservas = useMemo(() => conflitosArq.filter((c) => c.classe.startsWith('RESERVA_X_')).length, [conflitosArq]);
   const shaftsMecanicos = useMemo(() => (editor.model.nucleos ?? []).filter((n) => n.tipo === 'SHAFT' && n.disciplina === 'MECANICA'), [editor.model.nucleos]);
@@ -7375,6 +7377,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         lote = kit.comandos;
         if (kit.aviso) setAvisoColar(kit.aviso);
       }
+      // F10 (10/10/2026): a evaporadora inserida à mão traz o ponto de ar-condicionado na face da
+      // parede (como a reserva antiga), com a potência pela capacidade — no mesmo lote, um Ctrl+Z.
+      if ((TIPOS_DE_EVAPORADORA as readonly string[]).includes(tipoDePontoHidraulico)) {
+        lote = [...lote, ...pontoEletricoDaEvaporadora(editor.model, { levelId, at: ponto, capacidadeBtuH: null, larguraMm: ficha.medidasMm?.larguraMm, profundidadeMm: ficha.medidasMm?.profundidadeMm }, climatizacaoDoEstudo.hipoteses.selecao.eerWW)];
+      }
       const criados = lote.length > 1 ? editor.runBatch(lote) : editor.run(comando);
       // As medidas padrão da ficha (caixa d'água, caixas, hidrômetro) entram
       // num segundo comando do mesmo lote: `AddTerminal` não as recebe.
@@ -9593,12 +9600,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   conjuntoMolhadoPassaDeSeis(editor.model, terminalSel.levelId),
                 )
               : null;
-          editor.run({
+          const mudar: Command = {
             type: 'SetTerminalProps',
             terminalId: terminalSel.id,
             ...campos,
             ...(padrao != null ? { potenciaW: padrao } : {}),
-          });
+          };
+          // F10 (10/10/2026): a capacidade da evaporadora mudou — a potência do ponto dela
+          // acompanha, se ainda é a automática. Um lote: um Ctrl+Z desfaz os dois.
+          const acompanha =
+            campos.capacidadeBtuH !== undefined && !!terminalSel.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(terminalSel.tipoHidraulico)
+              ? comandosDaPotenciaDaEvaporadora(editor.model, terminalSel, campos.capacidadeBtuH ?? null, climatizacaoDoEstudo.hipoteses.selecao.eerWW)
+              : [];
+          if (acompanha.length) editor.runBatch([mudar, ...acompanha]);
+          else editor.run(mudar);
         }}
       />
 
@@ -16134,7 +16149,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 // E0.3: a mesma lista do painel de acabamentos, mais o uid da ETIQUETA (a chave do declarado).
                 ambientes={ambientesParaAcabamento.map((a) => {
                   const etiquetaId = ambientes.find((x) => x.id === a.spaceId)?.etiquetaId ?? null;
-                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos };
+                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, luminariasW: luminariasDoAmbienteW(editor.model, a.spaceId) };
                 })}
                 nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
                 // E1.3: derivado do desenho, só com a gaveta aberta (é por ambiente do pavimento ativo).

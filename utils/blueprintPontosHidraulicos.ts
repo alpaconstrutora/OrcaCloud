@@ -435,11 +435,15 @@ export function pontoEletricoDaEvaporadoraExistente(model: BlueprintModel, evap:
  * Antes ela entrava sem ponto nenhum (e a reserva antiga, com 1400 VA fixos).
  * Idempotente: com um ponto de ar-condicionado já servindo a peça, nada nasce.
  */
-export function pontoEletricoDaEvaporadora(model: BlueprintModel, evap: Pick<Terminal, 'levelId' | 'at' | 'capacidadeBtuH' | 'larguraMm' | 'profundidadeMm'>, eerWW: number): Extract<Command, { type: 'AddTerminal' }>[] {
+export function pontoEletricoDaEvaporadora(model: BlueprintModel, evap: Pick<Terminal, 'levelId' | 'at' | 'capacidadeBtuH' | 'larguraMm' | 'profundidadeMm' | 'rotacaoGraus'>, eerWW: number): Extract<Command, { type: 'AddTerminal' }>[] {
   if (pontoEletricoDaEvaporadoraExistente(model, evap)) return [];
   const alcance = Math.max(evap.larguraMm ?? 0, evap.profundidadeMm ?? 0) / 2 + 400;
   const naFace = faceDaParede(evap.at, model.walls.filter((w) => w.levelId === evap.levelId), alcance)?.face;
-  const ponto = naFace ?? evap.at;
+  // 10/10/2026 (teste no app real): SEM parede perto o ponto nascia no centro da peça, um
+  // por cima do outro. Agora nasce ao LADO dela, no eixo da largura (meia largura + 150 mm).
+  const giro = ((evap.rotacaoGraus ?? 0) * Math.PI) / 180;
+  const aoLado = (evap.larguraMm ?? 900) / 2 + 150;
+  const ponto = naFace ?? { x: evap.at.x + Math.cos(giro) * aoLado, y: evap.at.y + Math.sin(giro) * aoLado };
   return [
     {
       type: 'AddTerminal' as const,

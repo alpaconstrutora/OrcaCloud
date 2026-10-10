@@ -52,6 +52,19 @@ describe('F10 · o ponto elétrico da evaporadora inserida à mão', () => {
     expect(pontoEletricoDaEvaporadora(depois, evap, 3)).toEqual([]);
   });
 
+  it('sem parede perto, o ponto nasce AO LADO da evaporadora (meia largura + 150 mm), não em cima dela', () => {
+    const m0 = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m0.levels[0].id;
+    const evap = { levelId: t, at: point(2000, 2000), capacidadeBtuH: null, larguraMm: 900, profundidadeMm: 220 };
+    expect(pontoEletricoDaEvaporadora(m0, evap, 3)).toEqual([expect.objectContaining({ at: { x: 2600, y: 2000 } })]);
+    // Girada 90°, o lado é em y; e o ponto ao lado ainda conta como o dela (não nasce outro).
+    const girada = { ...evap, rotacaoGraus: 90 };
+    const cmds = pontoEletricoDaEvaporadora(m0, girada, 3);
+    expect(cmds[0].at.x).toBeCloseTo(2000, 6);
+    expect(cmds[0].at.y).toBeCloseTo(2600, 6);
+    expect(pontoEletricoDaEvaporadora(applyBatch(m0, pontoEletricoDaEvaporadora(m0, evap, 3)).model, evap, 3)).toEqual([]);
+  });
+
   it('mudar a capacidade muda a potência automática; a digitada pelo projetista fica', () => {
     const { m, t } = sala();
     let x = applyCommand(m, peca(t, 'EVAPORADORA_HI_WALL', 4500, 3815, 2200, { larguraMm: 900, profundidadeMm: 220, alturaMm: 300 })).model;

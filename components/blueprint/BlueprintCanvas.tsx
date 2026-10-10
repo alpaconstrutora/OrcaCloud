@@ -6426,6 +6426,13 @@ export default function BlueprintCanvas({
     // nada. DN fora do necessário: o texto junto do trecho (vermelho abaixo,
     // âmbar acima). Louça sem ponto: anel âmbar na peça. Tamanho em PIXEL —
     // a marca tem de aparecer em qualquer zoom, e não é medida de nada.
+    //
+    // 10/10/2026 (teste no app real): o TEXTO da marca sai num passe próprio, DEPOIS
+    // das peças — antes ele era pintado primeiro e a evaporadora, o "AC" e o "2345 VA"
+    // ficavam por cima, ilegíveis. Na marca de uma peça com medidas, o texto desce
+    // para baixo da peça (meia diagonal dela), em vez de nascer sobre o símbolo.
+    const terminalPorIdDaMarca = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+    const textosDasMarcas: { texto: string; x: number; y: number; cor: string; largura: number; atenuada: boolean }[] = [];
     for (const mv of marcasDaRede2d) {
       meioTom(atenuados.has(mv.alvoId));
       const c = paraTela(mv.at);
@@ -6444,14 +6451,10 @@ export default function BlueprintCanvas({
       if (mv.tipo !== 'PONTA_ABERTA') {
         ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
         const largura = ctx.measureText(mv.texto).width;
-        const x = c.x - largura / 2;
-        const y = c.y + (mv.tipo === 'LOUCA_SEM_PONTO' ? 16 : 10) * fz;
-        ctx.fillStyle = 'rgba(255,255,255,0.9)';
-        ctx.fillRect(x - 3, y - 9 * fz, largura + 6, 12 * fz);
-        ctx.fillStyle = cor;
-        ctx.textAlign = 'start';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(mv.texto, x, y);
+        const alvo = terminalPorIdDaMarca.get(mv.alvoId);
+        const sobreAPeca = alvo && alvo.at.x === mv.at.x && alvo.at.y === mv.at.y ? medidasDoTerminal(alvo) : null;
+        const abaixo = sobreAPeca ? emTela(Math.hypot(sobreAPeca.larguraMm, sobreAPeca.profundidadeMm) / 2) + 22 * fz : (mv.tipo === 'LOUCA_SEM_PONTO' ? 16 : 10) * fz;
+        textosDasMarcas.push({ texto: mv.texto, x: c.x - largura / 2, y: c.y + abaixo, cor, largura, atenuada: atenuados.has(mv.alvoId) });
       }
       ctx.restore();
     }
@@ -7131,6 +7134,21 @@ export default function BlueprintCanvas({
           ctx.fillText(t.comando, c.x + raio + 3, c.y + raio + 10);
         }
       }
+    }
+    meioTom(false);
+
+    // O texto das marcas da verificação, POR CIMA das peças (ver o passe das marcas, acima).
+    for (const tm of textosDasMarcas) {
+      meioTom(tm.atenuada);
+      ctx.save();
+      ctx.font = `bold ${Math.round(9 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillRect(tm.x - 3, tm.y - 9 * fz, tm.largura + 6, 12 * fz);
+      ctx.fillStyle = tm.cor;
+      ctx.textAlign = 'start';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(tm.texto, tm.x, tm.y);
+      ctx.restore();
     }
     meioTom(false);
 

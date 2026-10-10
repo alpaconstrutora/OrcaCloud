@@ -373,7 +373,7 @@ import {
 import PainelCorteSelecionado from './PainelCorteSelecionado';
 import PainelEixoSelecionado from './PainelEixoSelecionado';
 import PainelEixosAutomaticos from './PainelEixosAutomaticos';
-import { HIPOTESES_EIXOS_PADRAO, normalizarHipotesesDeEixos, propostaDeEixos, type HipotesesDeEixos } from '../../utils/blueprintEixosAutomaticos';
+import { HIPOTESES_EIXOS_PADRAO, eixosNaConvencaoAntiga, normalizarHipotesesDeEixos, propostaDeEixos, type HipotesesDeEixos } from '../../utils/blueprintEixosAutomaticos';
 import PainelRestricoes from './PainelRestricoes';
 import FichaDoElemento from './FichaDoElemento';
 import { fichaDoElemento } from '../../utils/blueprintFicha';
@@ -8691,7 +8691,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const { novos, renomeados } = propostaDeEixosDoNivel;
     const nomes = propostaDeEixosDoNivel.eixos.filter((e) => !e.existenteId).map((e) => e.nome).join(', ');
     const criados = editor.runBatch(propostaDeEixosDoNivel.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     const partes = [novos > 0 ? `${novos} eixo(s) criado(s): ${nomes}` : null, renomeados > 0 ? `${renomeados} renumerado(s)` : null].filter(Boolean);
     setResultadoDeEixos({ ok: true, texto: `${partes.join(' · ')} — Ctrl+Z desfaz.` });
   };
@@ -8746,7 +8746,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const n = planoDePilares.pilares.length;
     const m = planoDePilares.paredesQueCedem.length;
     const criados = editor.runBatch(planoDePilares.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDePilares({
       ok: true,
       texto: `${n} pilar(es) lançado(s) · ${m} parede(s) passaram a ceder — Ctrl+Z desfaz.`,
@@ -8821,7 +8821,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeVigas.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDeVigas({
       ok: true,
       texto: `${planoDeVigas.vigas.length} viga(s) lançada(s) · ${planoDeVigas.paredesQueCedem.length} parede(s) passaram a ceder — Ctrl+Z desfaz.`,
@@ -8842,7 +8842,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeRelancamentoDeVigas.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDeVigas({
       ok: true,
       texto: `${planoDeRelancamentoDeVigas.apagados.length} viga(s) apagada(s) e ${planoDeRelancamentoDeVigas.vigas.length} lançada(s) — Ctrl+Z desfaz.`,
@@ -8856,7 +8856,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeLajes.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     const area = planoDeLajes.lajes.reduce((a, l) => a + l.areaMm2, 0) / 1_000_000;
     setResultadoDeLajes({
       ok: true,
@@ -8878,7 +8878,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeRelancamentoDeLajes.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDeLajes({
       ok: true,
       texto: `${planoDeRelancamentoDeLajes.apagados.length} laje(s) apagada(s) e ${planoDeRelancamentoDeLajes.lajes.length} lançada(s) com ${hipotesesDeLajes.espessuraMm / 10} cm — Ctrl+Z desfaz.`,
@@ -8931,7 +8931,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeFundacoes.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDeFundacoes({
       ok: true,
       texto: `${resumoDeFundacoes(planoDeFundacoes)} lançado(s)${planoDeFundacoes.pilaresQueDescem.length ? ` · ${planoDeFundacoes.pilaresQueDescem.length} pilar(es) desceram até o bloco` : ''} — Ctrl+Z desfaz.`,
@@ -8952,7 +8952,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeRelancamentoDeFundacoes.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDeFundacoes({
       ok: true,
       texto: `${planoDeRelancamentoDeFundacoes.apagados.length} peça(s) apagada(s); ${resumoDeFundacoes(planoDeRelancamentoDeFundacoes)} lançado(s) — Ctrl+Z desfaz.`,
@@ -9067,7 +9067,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       return;
     }
     const criados = editor.runBatch(planoDeRelancamento.comandos);
-    if (criados.length > 0) selecionar(criados);
+    selecionar([]); // 10/10/2026: nada selecionado depois de criar (o vermelho confundia).
     setResultadoDePilares({
       ok: true,
       texto: `${planoDeRelancamento.apagados.length} pilar(es) apagado(s) e ${planoDeRelancamento.pilares.length} lançado(s) com ${secao} — Ctrl+Z desfaz.`,
@@ -17618,6 +17618,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               onHipotese={(k, v) => setHipDeEixosSalvas((h) => ({ ...h, [k]: v }))}
               onUsarLadosDoLote={(ligado) => setHipDeEixosSalvas((h) => ({ ...h, usarLadosDoLote: ligado }))}
               onRenumerar={(ligado) => setHipDeEixosSalvas((h) => ({ ...h, renumerar: ligado }))}
+              naConvencaoAntiga={eixosNaConvencaoAntiga(editor.model).length}
               onVerPrevia={() => setDrawerRecolhido(true)}
               resultado={resultadoDeEixos}
             />

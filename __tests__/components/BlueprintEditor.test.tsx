@@ -7758,6 +7758,69 @@ describe('BlueprintEditor · Eixos automáticos e "Eixos" em Exibir', () => {
     await userEvent.click(item);
     expect(localStorage.getItem('blueprint:mostrarEixos')).toBe('false');
   });
+
+  it('10/10/2026: depois de "Criar", nada fica selecionado (o vermelho confundia)', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    loadBranchModel.mockResolvedValue(k.applyBatch(nivel.model, [w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0)]).model);
+    await montar();
+    await abrirAba(/^estrutural$/i);
+    await userEvent.setup().click(botao(/^eixos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    await userEvent.setup().click(within(drawer).getByRole('button', { name: /^criar 4 eixo/i }));
+    expect(drawer).toHaveTextContent(/4 eixo\(s\) criado\(s\)/);
+    expect(screen.queryByTestId('painel-eixo')).not.toBeInTheDocument();
+  });
+
+  it('10/10/2026: eixo vertical com número (convenção antiga) — a gaveta avisa e "Renumerar" corrige', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    loadBranchModel.mockResolvedValue(
+      k.applyBatch(nivel.model, [
+        w(0, 0, 6000, 0), w(6000, 0, 6000, 4000), w(6000, 4000, 0, 4000), w(0, 4000, 0, 0),
+        { type: 'AddEixo', a: k.point(0, -3000), b: k.point(0, 7000), nome: '1' },
+      ]).model,
+    );
+    await montar();
+    await abrirAba(/^estrutural$/i);
+    await userEvent.setup().click(botao(/^eixos automáticos/i));
+    const drawer = await screen.findByRole('dialog');
+    expect(within(drawer).getByTestId('aviso-convencao-antiga')).toHaveTextContent(/1 eixo\(s\) na convenção antiga/);
+    // A sequência renomeia o "1" vertical para "A".
+    expect(within(within(drawer).getByRole('table', { name: /prévia dos eixos/i })).getAllByRole('row').slice(1)[0]).toHaveTextContent(/^AVertical.*era 1/);
+  });
+
+  it('10/10/2026: Exibir › "Cotas das sub-regiões" — desligado sem sub-região (com o motivo); com sub-região nasce desligado e grava a escolha', async () => {
+    await montar();
+    await abrirAba(/^vista$/i);
+    await userEvent.click(botao(/exibir/i));
+    const sem = screen.getByRole('menuitemcheckbox', { name: /^cotas das sub-regiões$/i });
+    expect(sem).toBeDisabled();
+    expect(sem).toHaveAttribute('title', expect.stringMatching(/Não há sub-região neste pavimento/));
+  });
+
+  it('Exibir › "Cotas das sub-regiões" com sub-região: nasce desligado; ligar grava a chave', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    const nivel = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 });
+    const t = nivel.model.levels[0].id;
+    loadBranchModel.mockResolvedValue(
+      k.applyCommand(nivel.model, { type: 'AddSubRegiao', levelId: t, material: 'GRAMA', pontos: [k.point(0, 0), k.point(4000, 0), k.point(4000, 3000), k.point(0, 3000)], nome: 'Jardim' }).model,
+    );
+    await montar();
+    await abrirAba(/^vista$/i);
+    await userEvent.click(botao(/exibir/i));
+    await waitFor(() => expect(screen.getByRole('menuitemcheckbox', { name: /^cotas das sub-regiões$/i })).toBeEnabled());
+    const item = screen.getByRole('menuitemcheckbox', { name: /^cotas das sub-regiões$/i });
+    expect(item).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(item);
+    expect(localStorage.getItem('blueprint:cotasSubRegioes')).toBe('true');
+  });
 });
 
 /**

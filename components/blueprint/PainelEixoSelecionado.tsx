@@ -7,6 +7,7 @@ import React from 'react';
 import type { Eixo } from '../../utils/blueprintKernel';
 import { MAX_NOME_DE_EIXO } from '../../utils/blueprintKernel';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
+import { AVISO_CONVENCAO_ANTIGA, eixoNaConvencaoAntiga } from '../../utils/blueprintEixosAutomaticos';
 
 interface Props {
   eixo: Eixo | null;
@@ -59,6 +60,11 @@ export default function PainelEixoSelecionado({ eixo, onProps, onExcluir, cruzam
           className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800"
         />
       </label>
+      {eixoNaConvencaoAntiga(eixo) && (
+        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800" role="note" data-testid="aviso-convencao-antiga-eixo">
+          {AVISO_CONVENCAO_ANTIGA}
+        </p>
+      )}
       <p className="mt-1.5 text-[11px] text-slate-400">
         O eixo vale para todos os pavimentos. O ímã puxa para a linha e para os cruzamentos; "Pilares
         automáticos" propõe um pilar em cada cruzamento.

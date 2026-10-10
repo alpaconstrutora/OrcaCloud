@@ -16,25 +16,18 @@
 | Número do trecho curto de cota escrito por fora (tela e PDF) | `d607c5d6` | 08/10 |
 | Aba Estrutural no ribbon (plano próprio: `2026-10-08-aba-estrutural.md`) | `05d1b43d` | 08/10 |
 
-### Pendências (nenhuma pedida; ficam registradas)
+### Pendências — RESOLVIDAS em 10/10/2026
 
-1. **PDF/DXF sem o recuo nas cotas do lote.** O envelope vem dos recuos da zona (`blueprint_study_urban_context`), fora
-   do modelo, e a prancha não o desenha; o PDF/DXF reparte o lado do lote só por faixas de restrição e divisas. Fechar
-   pede passar o envelope à exportação (e desenhá-lo na prancha).
-2. **Sub-regiões não repartem as cotas do lote** (grama, piso, deck…) — decisão de 08/10: acabamento, não limite.
-   Entram se o usuário pedir.
-3. **DXF: eixo em linha contínua.** Traço-ponto exige tabela LTYPE no R12; hoje a camada própria
-   (`PLANTA-MALHA-EIXOS`) deixa quem recebe aplicar o tipo de linha.
-4. **DXF: número do trecho curto continua no meio do trecho** (o CAD não esconde texto por tamanho; a regra "por fora"
-   é da tela e do PDF).
-5. **PDF: largura do texto estimada** (0,55 × altura por caractere) — o `Desenhista` não mede texto; um rótulo de
-   fonte muito diferente pode ficar um pouco deslocado.
-6. **Eixos recém-criados nascem selecionados (vermelho)** — o mesmo comportamento dos Pilares automáticos; é seleção,
-   não erro, mas confunde no primeiro olhar.
-7. **Eixos de estudos antigos** (antes de 07/10) podem ter a convenção velha (vertical com número): gerar de novo com
-   "Renumerar" ligado corrige; nada é renomeado sozinho.
-8. **Bolha empurrada só pelas cotas.** A faixa evitada é a das cadeias de cota; outros textos do desenho (nome de
-   ambiente, rótulo de vaga) não entram nela.
+As 8 foram feitas (plano `2026-10-10-pendencias-cotas-eixos.md`): (1) recuo da zona nas cotas do PDF/DXF e o envelope
+desenhado; (2) Exibir › "Cotas das sub-regiões"; (3) eixo traço-ponto no DXF (LTYPE `EIXO`, `CONTINUOUS` declarado);
+(4) número curto por fora também no DXF (regra única `ondeFicaORotulo`); (5) largura real do texto no PDF; (6) nada
+selecionado depois de criar eixos e lançamentos automáticos; (7) aviso dos eixos na convenção antiga; (8) bolha sempre
+fora do desenho inteiro.
+
+### Observação nova (10/10/2026, não pedida)
+
+- PDF: com a edificação perto da divisa (2 m), as cadeias das paredes e as do lote se sobrepõem na lateral — os números
+  se misturam. Já acontecia antes; tratar seria afastar a cadeia do lote além da faixa das cadeias das paredes.
 
 ## Contexto
 

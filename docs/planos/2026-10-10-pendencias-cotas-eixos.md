@@ -102,3 +102,23 @@ seleção vazia. A mensagem de resultado e o Ctrl+Z ficam como estão.
   exportados e conferidos (recuo nas cotas, envelope, eixo traço-ponto aberto num leitor de DXF por inspeção do
   arquivo); ligar "Cotas das sub-regiões"; zoom afastado com bolhas fora do desenho; criar eixos sem seleção; eixo
   antigo (vertical "1") mostrando o aviso. Push → `conferir-producao.sh` → check-run `ci`.
+
+## Execução e verificação (10/10/2026)
+
+- Bloco A (3, 4, 5) — `ondeFicaORotulo` e `larguraEstimadaDoTexto` em `utils/blueprintCotas.ts`; `Desenhista.larguraDoTexto`
+  (jsPDF `getTextWidth`, canvas `measureText`); DXF com LTYPE (`CONTINUOUS`, `EIXO`), `$LTSCALE`, `escalaDoDxf` e o número
+  curto por fora.
+- Bloco B (1, 2, 8) — `envelopesParaExportacao` (em `utils/blueprintZonaUrbanistica.ts`, não em `blueprintTerreno.ts`:
+  é lá que moram `recuosEfetivos` e `ordinalDoPavimento`); `OpcoesExportacao.zona`, `OpcoesDxf.envelopes`, camada
+  `PLANTA-ENVELOPE`; Exibir › "Cotas das sub-regiões" (`blueprint:cotasSubRegioes`, `CamadasDaPlanta.cotasSubRegioes`);
+  `caixaDoDesenho` + a faixa da bolha = cotas ∪ desenho nas três saídas.
+- Bloco C (6, 7) — `selecionar([])` depois de criar eixos e de lançar/relançar pilares, vigas, lajes e fundações;
+  `eixosNaConvencaoAntiga`/`eixoNaConvencaoAntiga` com aviso na gaveta e no painel do eixo.
+- Testes: `blueprintPendenciasCotasEixos` (novo, 8), `blueprintCotasPorLado` (+5), `BlueprintCanvasMedidasLoteMassa` (+1),
+  `BlueprintCanvasEixos` (+1), `BlueprintEditor` (+4). Suíte cheia: 7932 = 7898 + 34 pulados, 0 falha. Tipos 0 erros; build ok.
+- App real (estudo descartável, apagado): Cotas das sub-regiões reparte (1,50 | 23,50 | 3,50 | 1,50); aviso da convenção
+  antiga e "Criar 3 eixo(s) e renumerar 1" → o "1" vertical virou "A"; nada selecionado; zoom afastado com bolhas fora
+  do desenho; PDF A3 1:200 com o envelope e a lateral 1,50 | 6,50 | 4,00 | 16,50 | 1,50; DXF com `PLANTA-ENVELOPE` e `EIXO`.
+- Observação NOVA (não estava entre as 8): no PDF, casa a 2 m da divisa — as cadeias das paredes (até ~19 mm de papel)
+  e as do lote se sobrepõem na lateral. Já acontecia antes; fica registrada no § Status do plano de 07/10.
+

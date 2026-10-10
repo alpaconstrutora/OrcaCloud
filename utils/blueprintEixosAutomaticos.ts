@@ -475,3 +475,21 @@ export function bolhasDosEixos(
   return saida;
 }
 
+/**
+ * EIXOS NA CONVENÇÃO ANTIGA (10/10/2026, pendência 7): até 07/10/2026 o eixo horizontal ganhava LETRA e o vertical
+ * NÚMERO. Os gravados assim não mudam sozinhos; esta lista é o que a gaveta e o painel do eixo avisam — gerar de novo
+ * com "Renumerar" corrige. Só nome automático (nome dado à mão não é "errado").
+ */
+export function eixosNaConvencaoAntiga(model: Pick<BlueprintModel, 'eixos'>): { id: ObjectId; nome: string }[] {
+  return (model.eixos ?? []).filter((e) => nomeAutomaticoDeEixo(e.nome) && eixoNaConvencaoAntiga(e));
+}
+
+export function eixoNaConvencaoAntiga(e: { a: Point; b: Point; nome: string }): boolean {
+  if (!nomeAutomaticoDeEixo(e.nome)) return false;
+  return eixoEhVertical(e.a, e.b) ? /^\d+$/.test(e.nome) : /^[A-Z]\d*$/.test(e.nome);
+}
+
+/** A frase do aviso — a mesma na gaveta e no painel do eixo. */
+export const AVISO_CONVENCAO_ANTIGA =
+  'Até 07/10/2026 o eixo vertical ganhava número e o horizontal letra. Gere os eixos de novo com "Renumerar" ligado para a sequência seguir a convenção da prancha (letras nos verticais, números nos horizontais).';
+

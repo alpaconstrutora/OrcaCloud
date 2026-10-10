@@ -116,3 +116,26 @@ describe('pendência 8 — a bolha do eixo fora do desenho inteiro', () => {
     expect(Math.max(...ys)).toBeGreaterThan(30000);
   });
 });
+
+describe('pendência 7 — eixos na convenção antiga', () => {
+  it('vertical com número e horizontal com letra são da convenção antiga; nome à mão não', async () => {
+    const { eixosNaConvencaoAntiga, eixoNaConvencaoAntiga } = await import('../utils/blueprintEixosAutomaticos');
+    const v = (nome: string) => ({ a: point(0, 0), b: point(0, 10000), nome });
+    const h = (nome: string) => ({ a: point(0, 0), b: point(10000, 0), nome });
+    expect(eixoNaConvencaoAntiga(v('1'))).toBe(true);
+    expect(eixoNaConvencaoAntiga(v('A'))).toBe(false);
+    expect(eixoNaConvencaoAntiga(h('A'))).toBe(true);
+    expect(eixoNaConvencaoAntiga(h('3'))).toBe(false);
+    expect(eixoNaConvencaoAntiga(v('P-1'))).toBe(false);
+    expect(eixoNaConvencaoAntiga(v(''))).toBe(false);
+    const m = lote((t) => {
+      void t;
+      return [
+        { type: 'AddEixo', a: point(0, -1000), b: point(0, 31000), nome: '1' } as Command,
+        { type: 'AddEixo', a: point(-1000, 0), b: point(11000, 0), nome: '2' } as Command,
+      ];
+    });
+    expect(eixosNaConvencaoAntiga(m).map((e) => e.nome)).toEqual(['1']);
+  });
+});
+

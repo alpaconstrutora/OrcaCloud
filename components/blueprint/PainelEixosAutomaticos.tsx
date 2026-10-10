@@ -14,6 +14,8 @@ export interface PainelEixosAutomaticosProps {
   onHipotese: (campo: DistanciaDosEixos, valorMm: number) => void;
   /** "Usar o lote" — lados, recuos, restrições e divisas (08/10/2026). */
   onUsarLadosDoLote: (ligado: boolean) => void;
+  /** Quantos eixos estão na convenção antiga (vertical com número) — o aviso (10/10/2026). */
+  naConvencaoAntiga?: number;
   /** "Renumerar os existentes" (08/10/2026). */
   onRenumerar: (ligado: boolean) => void;
   /** Recolhe a gaveta para ver a prévia tracejada no desenho. */
@@ -34,7 +36,7 @@ const ORIGEM: Record<PropostaDeEixos['eixos'][number]['origem'], string> = {
   EXISTENTE: 'Já existe',
 };
 
-export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onUsarLadosDoLote, onRenumerar, onVerPrevia, resultado }: PainelEixosAutomaticosProps) {
+export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese, onUsarLadosDoLote, onRenumerar, onVerPrevia, resultado, naConvencaoAntiga = 0 }: PainelEixosAutomaticosProps) {
   const campo = 'w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs';
   const numero = (k: DistanciaDosEixos, emMm: number, rotulo: string, unidade: 'm' | 'cm', title: string) => {
     const fator = unidade === 'm' ? 1000 : 10;
@@ -60,6 +62,12 @@ export default function PainelEixosAutomaticos({ proposta, hipoteses, onHipotese
 
   return (
     <div className="space-y-4">
+      {naConvencaoAntiga > 0 && (
+        <p className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" role="note" data-testid="aviso-convencao-antiga">
+          <strong>{naConvencaoAntiga} eixo(s) na convenção antiga</strong> (vertical com número).{' '}
+          {hipoteses.renumerar ? '"Renumerar" está ligado: o botão abaixo corrige.' : 'Ligue "Renumerar os existentes" para corrigir.'}
+        </p>
+      )}
       <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
         <p className="font-semibold text-slate-700">Hipóteses da malha</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-4">

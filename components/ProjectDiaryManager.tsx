@@ -41,6 +41,7 @@ import { useStore } from '../store/useStore';
 import Button from './ui/Button';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import DiaryMobileApp from './DiaryMobileApp';
+import { isUnplannedActivity, setUnplanned, countUnplanned } from '../utils/diaryActivities';
 
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
@@ -66,10 +67,11 @@ const LABOR_DATALIST_ID = 'diario-efetivo-sugestoes';
 
 // §6.10 — só colunas de DADO; "Ações" entra por `actions`.
 const DIARY_COLUMNS: StandardTableColumn[] = [
-    // soma (1170) + Ações (110) cabe na largura útil de 1290px sem rolagem horizontal
+    // soma (1170) + Ações (110) cabe na largura útil de 1290px sem rolagem horizontal.
+    // Atividades leva "2/3 · 1 não prevista" (2026-10-10): os 70px vieram do Relato, que já trunca.
     { key: 'date', label: 'Data', sortable: true, width: 115 },
-    { key: 'description', label: 'Relato', sortable: true, width: 290 },
-    { key: 'activities', label: 'Atividades', sortable: true, width: 110, align: 'center' },
+    { key: 'description', label: 'Relato', sortable: true, width: 220 },
+    { key: 'activities', label: 'Atividades', sortable: true, width: 180, align: 'center' },
     { key: 'labor', label: 'Efetivo', sortable: true, width: 95, align: 'center' },
     { key: 'weather', label: 'Clima', sortable: true, width: 125 },
     { key: 'media', label: 'Mídia', sortable: true, width: 125, align: 'center' },
@@ -441,7 +443,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     allEntries.forEach(entry => {
                         if (entry.status !== 'Recusado') {
                             entry.activities?.forEach(act => {
-                                if (act.itemId) {
+                                if (act.itemId && !isUnplannedActivity(act)) {
                                     const currentMax = maxEvolutionByItem.get(act.itemId) || 0;
                                     maxEvolutionByItem.set(act.itemId, Math.max(currentMax, act.evolution || 0));
                                 }
@@ -1132,9 +1134,10 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                     <div className="flex-1 min-w-[300px] flex items-center gap-4">
                                                         <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-bold shrink-0">{idx + 1}</div>
                                                         <div className="flex-1 space-y-2">
-                                                            {itensCronogramaVinculaveis.length > 0 ? (
+                                                            {/* Não prevista não tem vínculo: o seletor some e o itemId é limpo (setUnplanned) */}
+                                                            {itensCronogramaVinculaveis.length > 0 && !isUnplannedActivity(act) ? (
                                                                 <div className="flex flex-col gap-1">
-                                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-tighter ml-1">Vincular Item do Cronograma</span>
+                                                                    <span className="text-xs font-semibold text-slate-500 ml-1">Vincular item do cronograma</span>
                                                                     <select
                                                                         value={act.itemId || ''}
                                                                         onChange={(e) => {
@@ -1175,6 +1178,31 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                 onChange={(e) => handleActivityChange(idx, 'description', e.target.value)}
                                                                 className="w-full bg-gray-50 border-none outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-3 rounded-xl text-sm font-medium transition-all"
                                                             />
+
+                                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ml-1">
+                                                                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isUnplannedActivity(act)}
+                                                                        onChange={(e) => {
+                                                                            const marcar = e.target.checked;
+                                                                            setFormData((prev: Partial<DiaryEntry>) => ({
+                                                                                ...prev,
+                                                                                activities: (prev.activities || []).map((a, i) => (i === idx ? setUnplanned(a, marcar) : a)),
+                                                                            }));
+                                                                        }}
+                                                                        className="w-4 h-4 accent-amber-600 cursor-pointer"
+                                                                    />
+                                                                    Não prevista no cronograma
+                                                                </label>
+                                                                {isUnplannedActivity(act) && (
+                                                                    <span className="text-xs text-amber-700">
+                                                                        {itensCronogramaVinculaveis.length > 0
+                                                                            ? 'Não altera o cronograma. Para incluí-la, desmarque e vincule um item.'
+                                                                            : 'Não altera o cronograma.'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div className="w-64 flex flex-col gap-2">
@@ -1361,6 +1389,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                     e.description || '',
                     e.impediments || '',
                     ...(e.activities || []).map(a => a.description),
+                    countUnplanned(e.activities) > 0 ? 'não prevista' : '',
                 ].join(' ')}
                 sortValue={(key, e) => {
                     switch (key) {
@@ -1384,7 +1413,18 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         case 'activities': {
                             const acts = e.activities || [];
                             const done = acts.filter(a => a.status === 'Finalizada').length;
-                            return <span className="text-sm font-normal text-gray-700">{acts.length ? `${done}/${acts.length}` : '-'}</span>;
+                            const naoPrevistas = countUnplanned(acts);
+                            if (!acts.length) return <span className="text-sm font-normal text-gray-700">-</span>;
+                            return (
+                                <span className="text-sm font-normal text-gray-700 whitespace-nowrap">
+                                    {done}/{acts.length}
+                                    {naoPrevistas > 0 && (
+                                        <span className="text-amber-700" title="Atividades executadas fora do cronograma">
+                                            {` · ${naoPrevistas} não prevista${naoPrevistas > 1 ? 's' : ''}`}
+                                        </span>
+                                    )}
+                                </span>
+                            );
                         }
                         case 'labor': {
                             const n = laborCount(e);

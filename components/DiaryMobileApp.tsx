@@ -9,6 +9,7 @@ import { projectService } from '../services/projectService';
 import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
+import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
 
 /**
  * Diário de Obras — aplicativo mobile.
@@ -650,6 +651,21 @@ const EntrySheet: React.FC<{
                                 placeholder="Observação (opcional)"
                                 className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             />
+                            <label className="flex items-center gap-2 min-h-[40px] text-sm text-slate-600 select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={isUnplannedActivity(a)}
+                                    onChange={e => {
+                                        const marcar = e.target.checked;
+                                        setForm(p => ({
+                                            ...p,
+                                            activities: (p.activities || []).map((x, k) => (k === i ? setUnplanned(x, marcar) : x)),
+                                        }));
+                                    }}
+                                    className="w-5 h-5 accent-amber-600"
+                                />
+                                Não prevista no cronograma
+                            </label>
                         </div>
                     ))}
                 </div>

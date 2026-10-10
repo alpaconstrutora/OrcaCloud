@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ProjectSettings, Organization } from '../types';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
+import { isUnplannedActivity } from '../utils/diaryActivities';
 import {
     Printer,
     FileText,
@@ -221,6 +222,9 @@ const DiaryReportViewer: React.FC<DiaryReportViewerProps> = ({ settings, organiz
                                                     {entry.activities.map((act, i) => (
                                                         <div key={i} className="flex items-center justify-between text-xs p-2 bg-gray-50/50 rounded-lg border border-gray-100">
                                                             <span className="font-bold text-gray-700 truncate flex-1 mr-2">{act.description}</span>
+                                                            {isUnplannedActivity(act) && (
+                                                                <span className="text-amber-700 whitespace-nowrap mr-2">Não prevista</span>
+                                                            )}
                                                             <span className="font-black text-indigo-600">{act.evolution}%</span>
                                                         </div>
                                                     ))}

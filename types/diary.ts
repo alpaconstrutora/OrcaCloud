@@ -12,6 +12,12 @@ export interface DiaryActivity {
     evolution: number;
     comment?: string;
     status: 'Em Andamento' | 'Finalizada' | 'Parada';
+    /**
+     * Executada fora do cronograma. Marcação explícita: sem `itemId` NÃO quer
+     * dizer não prevista (o app mobile não vincula). Não prevista nunca tem
+     * `itemId` e nunca alimenta o cronograma — ver `utils/diaryActivities.ts`.
+     */
+    unplanned?: boolean;
 }
 
 export interface LaborEntry {

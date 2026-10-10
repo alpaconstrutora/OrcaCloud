@@ -41,6 +41,7 @@ import * as outlineOps from '../utils/scheduleOutline';
 import { exportScheduleToXlsx, exportScheduleToCsv } from '../utils/scheduleExport';
 import { RecurrenceRule, expandRecurrenceDates } from '../utils/recurrence';
 import { applySplitToTask, removeSplitFromTask } from '../utils/scheduleSegments';
+import { activityMatchesBudgetItem } from '../utils/diaryActivities';
 import { useConfirm } from './ui/confirm';
 import { useTelaCheia } from '../hooks/useTelaCheia';
 import { ResourceManagement } from './ResourceManagement';
@@ -1639,11 +1640,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
             // Physical Progress (Diary or Manual Sync)
             const task = schedule.itemSchedules?.find(s => s.id === item.id);
             const diaryMaxEvolution = allDiaryEntries?.reduce((max, entry: DiaryEntry) => {
-                const activity = entry.activities?.find((a: DiaryActivity) => {
-                    const matchId = a.itemId === item.id;
-                    const matchDesc = a.description && item.sinapiItem?.description && a.description.trim() === item.sinapiItem.description.trim();
-                    return matchId || matchDesc;
-                });
+                const activity = entry.activities?.find((a: DiaryActivity) => activityMatchesBudgetItem(a, item));
                 return Math.max(max, activity?.evolution || 0);
             }, 0) || 0;
 
@@ -3875,10 +3872,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     allDiaryEntries.forEach(entry => {
                         const entryDate = new Date(entry.date);
                         if (entryDate >= periodStart && entryDate < nextPeriodStart && entry.status !== 'Recusado') {
-                            const activity = entry.activities?.find((a: DiaryActivity) =>
-                                a.itemId === item.id ||
-                                (a.description && item.sinapiItem?.description && a.description.trim() === item.sinapiItem.description.trim())
-                            );
+                            const activity = entry.activities?.find((a: DiaryActivity) => activityMatchesBudgetItem(a, item));
                             if (activity) {
                                 // Fallback: If realizedQty is 0 (Legacy or not filled), use evolution % to calculate financial value
                                 if ((activity.realizedQty || 0) === 0 && (activity.evolution || 0) > 0) {

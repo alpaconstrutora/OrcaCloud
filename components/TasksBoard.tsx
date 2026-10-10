@@ -6,10 +6,13 @@ import {
 import { CheckCircle2, Plus, Calendar, CheckSquare, AlertTriangle, Bell } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
+import { statusGroupKeyOf, statusOfGroupKey } from '../utils/taskStatusByName'
 import type { GroupByField } from './TasksModule'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
-interface BoardColumn { key: string; label: string; color?: string; tasks: TaskRecord[] }
+// statusId: em groupBy 'status' a chave é o NOME (junta as organizações); este é o id
+// representante, que o TaskForm troca pelo de mesmo nome da organização escolhida.
+interface BoardColumn { key: string; label: string; color?: string; statusId?: string; tasks: TaskRecord[] }
 
 interface Props {
   tasks: TaskRecord[]
@@ -52,10 +55,11 @@ function isOverdue(iso: string | null) {
   return new Date(iso) < new Date(new Date().toDateString())
 }
 
-function buildDefaults(groupKey: string, groupBy: GroupByField): TaskDefaults {
+function buildDefaults(col: BoardColumn, groupBy: GroupByField): TaskDefaults {
+  const groupKey = col.key
   if (groupKey === '__none__') return {}
   switch (groupBy) {
-    case 'status':   return { status_id: groupKey }
+    case 'status':   return { status_id: col.statusId ?? null }
     case 'assignee': return { assignee_employee_id: groupKey }
     case 'priority': return { priority: Number(groupKey) }
     case 'project':  return { project_id: groupKey }
@@ -286,7 +290,7 @@ function DroppableColumn({
         </span>
         {onAddTask && (
           <button
-            onClick={() => onAddTask(buildDefaults(col.key, groupBy))}
+            onClick={() => onAddTask(buildDefaults(col, groupBy))}
             className="p-1 rounded-lg text-slate-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -323,7 +327,7 @@ function DroppableColumn({
       {/* Footer "+ Adicionar tarefa" */}
       {onAddTask && (
         <button
-          onClick={() => onAddTask(buildDefaults(col.key, groupBy))}
+          onClick={() => onAddTask(buildDefaults(col, groupBy))}
           className="mt-2 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-button font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors w-full"
         >
           <Plus className="w-3.5 h-3.5" /> Adicionar tarefa
@@ -365,12 +369,14 @@ const TasksBoard: React.FC<Props> = ({
     const map = new Map<string, BoardColumn>()
 
     for (const t of rootTasks) {
-      let key: string, label: string, color: string | undefined
+      let key: string, label: string, color: string | undefined, statusId: string | undefined
 
       switch (groupBy) {
         case 'status': {
-          const s = statusMap[t.status_id ?? '']
-          key = t.status_id ?? '__none__'; label = s?.name ?? 'Sem status'; color = s?.color; break
+          // por nome: uma coluna "Pendente" só, mesmo com tarefas de várias organizações
+          key = statusGroupKeyOf(t.status_id, statusMap)
+          const s = statusOfGroupKey(key, statuses)
+          label = s?.name ?? 'Sem status'; color = s?.color; statusId = s?.id; break
         }
         case 'assignee': {
           const emp = empMap[t.assignee_employee_id ?? '']
@@ -387,14 +393,14 @@ const TasksBoard: React.FC<Props> = ({
         default: key = '__all__'; label = 'Todas'
       }
 
-      if (!map.has(key)) map.set(key, { key, label, color, tasks: [] })
+      if (!map.has(key)) map.set(key, { key, label, color, statusId, tasks: [] })
       map.get(key)!.tasks.push(t)
     }
 
     if (groupBy === 'status') {
       return [...map.values()].sort((a, b) => {
-        const pa = statuses.find(s => s.id === a.key)?.position ?? 99
-        const pb = statuses.find(s => s.id === b.key)?.position ?? 99
+        const pa = statusOfGroupKey(a.key, statuses)?.position ?? 99
+        const pb = statusOfGroupKey(b.key, statuses)?.position ?? 99
         return pa - pb
       })
     }
@@ -420,7 +426,7 @@ const TasksBoard: React.FC<Props> = ({
 
   function getTaskGroupKey(t: TaskRecord): string {
     switch (groupBy) {
-      case 'status':   return t.status_id ?? '__none__'
+      case 'status':   return statusGroupKeyOf(t.status_id, statusMap)
       case 'assignee': return t.assignee_employee_id ?? '__none__'
       case 'priority': return String(t.priority)
       case 'project':  return t.project_id ?? '__none__'

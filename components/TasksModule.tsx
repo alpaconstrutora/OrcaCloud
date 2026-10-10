@@ -24,6 +24,7 @@ import { FilterPopover } from './ui/FilterPopover'
 import { usePersistedState } from './ui/TableUtils'
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext'
 import { useStore } from '../store/useStore'
+import { STATUS_NONE, statusNameKey, statusesOfOrg, statusByNameInOrg, statusOfGroupKey, openStatusOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
 import MobilePreviewFrame from './MobilePreviewFrame'
 import TasksMobileApp from './TasksMobileApp'
 import { isSystemProject, excludeSystemProjects, SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects'
@@ -293,14 +294,13 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     let nextStatusId: string | null = t.status_id ?? null
     let nextLegacy: 'open' | 'done' = isDone ? 'open' : 'done'
 
-    if (statuses.length > 0) {
+    // Só os status da organização DA TAREFA: em "Todas" `statuses` traz os de todas.
+    if (statusesOfOrg(statuses, t.org_id).length > 0) {
       if (isDone) {
-        const def = statuses.find(s => s.is_default) ?? statuses.find(s => !s.is_done) ?? statuses[0]
-        nextStatusId = def?.id ?? null
+        nextStatusId = openStatusOfOrg(statuses, t.org_id)?.id ?? null
         nextLegacy = 'open'
       } else {
-        const doneStatus = statuses.find(s => s.is_done)
-        nextStatusId = doneStatus?.id ?? null
+        nextStatusId = doneStatusOfOrg(statuses, t.org_id)?.id ?? null
         nextLegacy = 'done'
       }
     }
@@ -314,14 +314,33 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
 
   const moveCard = async (taskId: string, newGroupKey: string) => {
     let patch: Partial<TaskRecord> = {}
-    if (groupBy === 'status') {
-      const s = statuses.find(x => x.id === newGroupKey)
-      patch = { status_id: newGroupKey === '__none__' ? null : newGroupKey, status: s?.is_done ? 'done' : 'open' }
-    } else if (groupBy === 'assignee') {
+    // O Kanban com "Agrupar" vazio mostra colunas de status (ver <TasksBoard groupBy>).
+    const boardGroupBy = groupBy === 'none' ? 'status' : groupBy
+    if (boardGroupBy === 'status') {
+      // A coluna é o NOME do status; grava o status de mesmo nome da org da tarefa.
+      const task = tasks.find(t => t.id === taskId)
+      if (newGroupKey === STATUS_NONE) {
+        patch = { status_id: null, status: 'open' }
+      } else {
+        const s = statusByNameInOrg(statuses, task?.org_id, newGroupKey)
+        if (!s) {
+          const label = statusOfGroupKey(newGroupKey, statuses)?.name ?? newGroupKey
+          await confirm({
+            title: `A organização desta tarefa não tem o status "${label}"`,
+            message: `Crie o status em Gerenciar status de ${orgNameOf(task?.org_id ?? '')} para poder mover a tarefa para esta coluna.`,
+            confirmLabel: 'Entendi',
+            cancelLabel: 'Fechar',
+            variant: 'warning',
+          })
+          return
+        }
+        patch = { status_id: s.id, status: s.is_done ? 'done' : 'open' }
+      }
+    } else if (boardGroupBy === 'assignee') {
       patch = { assignee_employee_id: newGroupKey === '__none__' ? null : newGroupKey }
-    } else if (groupBy === 'priority') {
+    } else if (boardGroupBy === 'priority') {
       patch = { priority: Number(newGroupKey) as 1 | 2 | 3 | 4 }
-    } else if (groupBy === 'project') {
+    } else if (boardGroupBy === 'project') {
       patch = { project_id: newGroupKey === '__none__' ? null : newGroupKey }
     }
     if (!Object.keys(patch).length) return
@@ -355,6 +374,31 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     }
   }
 
+  // Status é por organização: um lote com tarefas de várias orgs grava, em cada uma, o
+  // status de mesmo nome da organização dela (o status_id do patch vale como NOME).
+  const idsByOrg = (ids: string[]) => {
+    const m = new Map<string, string[]>()
+    for (const id of ids) {
+      const org = tasks.find(t => t.id === id)?.org_id ?? ''
+      m.set(org, [...(m.get(org) ?? []), id])
+    }
+    return m
+  }
+  const bulkUpdateByOrg = async (ids: string[], patch: TaskBulkPatch) => {
+    if (!patch.status_id) return bulkUpdate(ids, patch)
+    const chosen = statuses.find(s => s.id === patch.status_id)
+    const nameKey = statusNameKey(chosen?.name ?? '')
+    let missing = 0
+    for (const [org, orgIds] of idsByOrg(ids)) {
+      const s = statusByNameInOrg(statuses, org, nameKey)
+      if (!s) { missing += orgIds.length; continue }
+      await bulkUpdate(orgIds, { ...patch, status_id: s.id, status: s.is_done ? 'done' : 'open' })
+    }
+    if (missing > 0) {
+      throw new Error(`${missing} tarefa(s) não foram alteradas: a organização delas não tem o status "${chosen?.name ?? ''}".`)
+    }
+  }
+
   const bulkEdit = (ids: string[]) => new Promise<boolean>(resolve => {
     bulkResolveRef.current = resolve
     setBulkIds(ids)
@@ -366,9 +410,14 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
   }
 
   const bulkDone = async (ids: string[]) => {
-    const doneStatus = statuses.find(s => s.is_done)
-    const patch: TaskBulkPatch = { status: 'done', ...(statuses.length > 0 ? { status_id: doneStatus?.id ?? null } : {}) }
-    try { await bulkUpdate(ids, patch); return true }
+    try {
+      for (const [org, orgIds] of idsByOrg(ids)) {
+        const ownStatuses = statusesOfOrg(statuses, org)
+        const patch: TaskBulkPatch = { status: 'done', ...(ownStatuses.length > 0 ? { status_id: doneStatusOfOrg(statuses, org)?.id ?? null } : {}) }
+        await bulkUpdate(orgIds, patch)
+      }
+      return true
+    }
     catch (e) { console.error('[tasks] bulkDone', e); load(); return false }
   }
 
@@ -676,7 +725,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
         statuses={statuses}
         spaces={spaceOptions}
         onClose={() => closeBulkEdit(false)}
-        onApply={async patch => { await bulkUpdate(bulkIds, patch); closeBulkEdit(true) }}
+        onApply={async patch => { await bulkUpdateByOrg(bulkIds, patch); closeBulkEdit(true) }}
       />
 
       {orgTargetModal}

@@ -3,6 +3,7 @@ import { AlertTriangle, Pencil } from 'lucide-react'
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet'
 import type { TaskRecord, EmployeeOption, ProjectOption, SpaceOption } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
+import { uniqueStatusesByName } from '../utils/taskStatusByName'
 
 /** Campos que a edição em lote pode gravar numa tarefa. `undefined` = não alterar. */
 export type TaskBulkPatch = Partial<Pick<TaskRecord,
@@ -130,7 +131,8 @@ const TaskBulkEditSheet: React.FC<Props> = ({ open, tasks, employees, projects, 
               <label htmlFor="bulk-status" className={label}>Status</label>
               <select id="bulk-status" value={statusId} onChange={e => setStatusId(e.target.value)} disabled={saving || statuses.length === 0} className={field}>
                 <option value="">Não alterar</option>
-                {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {/* um por nome: quem grava troca pelo status de mesmo nome da org de cada tarefa */}
+                {uniqueStatusesByName(statuses).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">

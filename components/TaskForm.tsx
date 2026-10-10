@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X, Loader2, Save, Trash2, Bell, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import type { TaskStatus } from '../services/taskService'
+import { statusNameKey } from '../utils/taskStatusByName'
+import { useConfirm } from './ui/confirm'
 import { notificationService } from '../services/notificationService'
 import Button from './ui/Button';
 
@@ -77,6 +79,7 @@ const TaskForm: React.FC<Props> = ({
   parentTaskId = null, parentTaskTitle = null,
   onClose, onSaved, onOrgChange,
 }) => {
+  const confirm = useConfirm()
   const [selectedOrgId, setSelectedOrgId] = useState(task?.org_id ?? orgId)
   const [title, setTitle]             = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -119,12 +122,16 @@ const TaskForm: React.FC<Props> = ({
     [statuses, selectedOrgId]
   )
 
-  // Update statusId default when statuses load
+  // Status é por organização: se o status atual não é da org escolhida (padrão vindo de
+  // um grupo/coluna em "Todas", ou troca de organização no form), usa o de MESMO NOME da
+  // org; sem ele, o padrão dela. Antes gravava status_id de outra organização.
   useEffect(() => {
-    if (!statusId && orgStatuses.length > 0) {
-      const def = orgStatuses.find(s => s.is_default) ?? orgStatuses[0]
-      if (def) setStatusId(def.id)
-    }
+    if (orgStatuses.length === 0) return
+    if (statusId && orgStatuses.some(s => s.id === statusId)) return
+    const current = statuses.find(s => s.id === statusId)
+    const sameName = current ? orgStatuses.find(s => statusNameKey(s.name) === statusNameKey(current.name)) : undefined
+    const def = sameName ?? orgStatuses.find(s => s.is_default) ?? orgStatuses[0]
+    if (def) setStatusId(def.id)
   }, [orgStatuses])
 
   // Carrega colaboradores ao editar tarefa existente
@@ -243,7 +250,12 @@ const TaskForm: React.FC<Props> = ({
 
   const remove = async () => {
     if (!task?.id) return
-    if (!window.confirm('Excluir esta tarefa? As subtarefas também serão excluídas.')) return
+    if (!await confirm({
+      title: 'Excluir esta tarefa?',
+      message: 'As subtarefas também serão excluídas. Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    })) return
     setSaving(true)
     const { error: e } = await supabase.from('tasks').delete().eq('id', task.id)
     setSaving(false)

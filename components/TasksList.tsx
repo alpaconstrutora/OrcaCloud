@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
+import { uniqueStatusesByName, statusGroupKeyOf, statusOfGroupKey, statusNameKey } from '../utils/taskStatusByName'
 import type { GroupByField } from './TasksModule'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils'
@@ -236,16 +237,9 @@ const TasksList: React.FC<Props> = ({
   const projMap   = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects])
   const statusMap = useMemo(() => Object.fromEntries(statuses.map(s => [s.id, s])), [statuses])
 
-  // Filtro de status por NOME: cada organização tem o próprio conjunto (Pendente/Em
-  // Andamento/Concluído), e em "Todas" a lista por id repetia cada nome uma vez por org.
-  const statusNameKey = (name: string) => name.trim().toLowerCase()
-  const statusFilterOptions = useMemo(() => {
-    const byName = new Map<string, TaskStatus>()
-    for (const s of [...statuses].sort((a, b) => a.position - b.position)) {
-      if (!byName.has(statusNameKey(s.name))) byName.set(statusNameKey(s.name), s)
-    }
-    return [...byName.values()]
-  }, [statuses])
+  // Filtro de status por NOME (utils/taskStatusByName): em "Todas" cada organização traz
+  // o próprio Pendente/Em Andamento/Concluído, e a lista por id repetia cada nome.
+  const statusFilterOptions = useMemo(() => uniqueStatusesByName(statuses), [statuses])
   // Valor persistido antes desta troca era o id do status — converte para o nome.
   const fStatusName = statusMap[fStatus]?.name ?? fStatus
 
@@ -325,8 +319,10 @@ const TasksList: React.FC<Props> = ({
 
       switch (groupBy) {
         case 'status': {
-          const s = statusMap[t.status_id ?? '']
-          key = t.status_id ?? '__none__'; label = s?.name ?? 'Sem status'; color = s?.color; break
+          // por nome: um grupo "Pendente" só, mesmo com tarefas de várias organizações
+          key = statusGroupKeyOf(t.status_id, statusMap)
+          const s = statusOfGroupKey(key, statuses)
+          label = s?.name ?? 'Sem status'; color = s?.color; break
         }
         case 'assignee': {
           const emp = empMap[t.assignee_employee_id ?? '']
@@ -353,8 +349,8 @@ const TasksList: React.FC<Props> = ({
     // Ordem estável para status (position) e prioridade (1→4)
     if (groupBy === 'status') {
       return [...map.values()].sort((a, b) => {
-        const pa = statuses.find(s => s.id === a.key)?.position ?? 99
-        const pb = statuses.find(s => s.id === b.key)?.position ?? 99
+        const pa = statusOfGroupKey(a.key, statuses)?.position ?? 99
+        const pb = statusOfGroupKey(b.key, statuses)?.position ?? 99
         return pa - pb
       })
     }
@@ -824,7 +820,8 @@ const TasksList: React.FC<Props> = ({
   function buildDefaults(groupKey: string): TaskDefaults {
     if (groupKey === '__none__') return {}
     switch (groupBy) {
-      case 'status':   return { status_id: groupKey }
+      // a chave é o NOME; o TaskForm troca pelo status de mesmo nome da org escolhida
+      case 'status':   return { status_id: statusOfGroupKey(groupKey, statuses)?.id ?? null }
       case 'assignee': return { assignee_employee_id: groupKey }
       case 'priority': return { priority: Number(groupKey) }
       case 'project':  return { project_id: groupKey }

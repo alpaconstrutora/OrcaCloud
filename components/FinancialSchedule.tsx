@@ -67,6 +67,13 @@ import ScheduleGridView from './schedule/ScheduleGridView';
 import ModernDateInput from './ModernDateInput';
 import { valorEfetivoDoItem } from '../utils/pedidoItemValor';
 import {
+    buildTimelineColumns,
+    ganttAnchorDate,
+    ganttTimelineOrigin,
+    GANTT_LEAD_MAX_STEPS,
+    TIMELINE_PX_PER_DAY,
+} from '../utils/scheduleTimeline';
+import {
     ChevronDown,
     AlertTriangle,
     TrendingUp,
@@ -79,14 +86,6 @@ import {
     History,
     ArrowUpCircle
 } from 'lucide-react';
-
-function getWeekNumber(d: Date): number {
-    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    const weekNo = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-    return weekNo;
-}
 
 const formatDateDisplay = (dateString?: string) => {
     if (!dateString) return '-';
@@ -3660,10 +3659,10 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         });
     };
 
-    // Unified Timeline Columns Calculation
-    const timelineColumns = React.useMemo(() => {
+    // Fim da timeline: término do projeto, ou início + duração estendido até a última tarefa.
+    const timelineMaxDate = React.useMemo(() => {
         const minDate = new Date(schedule.startDate);
-        if (isNaN(minDate.getTime())) return [];
+        if (isNaN(minDate.getTime())) return null;
 
         let maxDate = schedule.endDate ? new Date(schedule.endDate) : new Date(minDate);
         if (!schedule.endDate) {
@@ -3675,119 +3674,40 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 }
             });
         }
+        return maxDate;
+    }, [schedule.startDate, schedule.endDate, schedule.duration, schedule.itemSchedules]);
 
-        const bufferedMaxDate = new Date(maxDate);
-        if (timeScale === 'year') {
-            bufferedMaxDate.setFullYear(bufferedMaxDate.getFullYear() + 1);
-        } else {
-            bufferedMaxDate.setDate(bufferedMaxDate.getDate() + 30);
-        }
+    // Unified Timeline Columns Calculation — Grade, Curva S e distribuição por período.
+    // Começa no início do projeto (o Gantt tem as próprias colunas, ver `ganttColumns`).
+    const timelineColumns = React.useMemo(() => {
+        if (!timelineMaxDate) return [];
+        return buildTimelineColumns(new Date(schedule.startDate), timelineMaxDate, timeScale);
+    }, [schedule.startDate, timelineMaxDate, timeScale]);
 
-        const columns = [];
-        let current = new Date(minDate);
-        let loopCount = 0;
-        const MAX_LOOPS = 5000;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+    // Gantt: navega para ANTES do início (pedido de 10/10/2026). Abre na âncora — o
+    // início, ou a tarefa que começa antes dele — e recua mais um passo a cada vez que
+    // o usuário chega à borda esquerda. Trocar de escala volta ao recuo inicial — derivado
+    // no render (não por efeito), para o Gantt não pintar a escala nova com o recuo velho.
+    const [ganttLead, setGanttLead] = useState<{ scale: typeof timeScale; steps: number }>({ scale: timeScale, steps: 1 });
+    const ganttLeadSteps = ganttLead.scale === timeScale ? ganttLead.steps : 1;
 
-        const scaleConfig = {
-            day: { pxPerDay: 40, stepDays: 1 },
-            week: { pxPerDay: 10, stepDays: 7 },
-            month: { pxPerDay: 3, stepDays: 30 }, // Average
-            year: { pxPerDay: 0.5, stepDays: 365 }
-        };
-        const { pxPerDay } = scaleConfig[timeScale];
+    const ganttAnchor = React.useMemo(
+        () => ganttAnchorDate(new Date(schedule.startDate), (schedule.itemSchedules || []).map(s => s.startDate)),
+        [schedule.startDate, schedule.itemSchedules]
+    );
 
-        const labelFormats = {
-            day: (d: Date) => d.getDate().toString(),
-            week: (d: Date) => `Sem ${getWeekNumber(d)} `,
-            month: (d: Date) => new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(d),
-            year: (d: Date) => d.getFullYear().toString()
-        };
+    const ganttColumns = React.useMemo(() => {
+        if (!timelineMaxDate || isNaN(ganttAnchor.getTime())) return [];
+        return buildTimelineColumns(ganttTimelineOrigin(ganttAnchor, timeScale, ganttLeadSteps), timelineMaxDate, timeScale);
+    }, [ganttAnchor, timelineMaxDate, timeScale, ganttLeadSteps]);
 
-        const subLabelFormats = {
-            day: (d: Date) => new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).toUpperCase(),
-            week: (d: Date) => new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d).toUpperCase(),
-            month: (d: Date) => d.getFullYear().toString(),
-            year: (d: Date) => ''
-        };
-
-        if (timeScale === 'day') {
-            while (current <= maxDate && loopCount++ < MAX_LOOPS) {
-                const isToday = current.getTime() === today.getTime();
-                columns.push({
-                    id: current.toISOString().split('T')[0],
-                    date: new Date(current),
-                    name: labelFormats.day(current),
-                    label: labelFormats.day(current),
-                    subLabel: subLabelFormats.day(current),
-                    width: pxPerDay,
-                    isToday
-                });
-                current.setDate(current.getDate() + 1);
-            }
-        } else if (timeScale === 'week') {
-            const day = current.getDay();
-            const diff = current.getDate() - day + (day === 0 ? -6 : 1);
-            current.setDate(diff);
-            while (current <= maxDate && loopCount++ < MAX_LOOPS) {
-                const nextWeek = new Date(current);
-                nextWeek.setDate(current.getDate() + 7);
-                const isToday = today >= current && today < nextWeek;
-
-                columns.push({
-                    id: current.toISOString().split('T')[0],
-                    date: new Date(current),
-                    name: labelFormats.week(current),
-                    label: labelFormats.week(current).toUpperCase(),
-                    subLabel: subLabelFormats.week(current),
-                    width: pxPerDay * 7,
-                    isToday
-                });
-                current.setDate(current.getDate() + 7);
-            }
-        } else if (timeScale === 'month') {
-            current.setDate(1);
-            while (current <= maxDate && loopCount++ < MAX_LOOPS) {
-                const nextMonth = new Date(current);
-                nextMonth.setMonth(current.getMonth() + 1);
-                const daysInMonth = Math.round((nextMonth.getTime() - current.getTime()) / (1000 * 3600 * 24));
-                const isToday = today >= current && today < nextMonth;
-
-                columns.push({
-                    id: current.toISOString().split('T')[0],
-                    date: new Date(current),
-                    name: labelFormats.month(current),
-                    label: labelFormats.month(current).split(' ')[0].toUpperCase(),
-                    subLabel: subLabelFormats.month(current),
-                    width: pxPerDay * daysInMonth,
-                    isToday
-                });
-                current.setMonth(current.getMonth() + 1);
-            }
-        } else if (timeScale === 'year') {
-            current.setMonth(0, 1);
-            while (current <= maxDate && loopCount++ < MAX_LOOPS) {
-                const nextYear = new Date(current);
-                nextYear.setFullYear(current.getFullYear() + 1);
-                const daysInYear = Math.round((nextYear.getTime() - current.getTime()) / (1000 * 3600 * 24));
-                const isToday = today >= current && today < nextYear;
-
-                columns.push({
-                    id: current.toISOString().split('T')[0],
-                    date: new Date(current),
-                    name: labelFormats.year(current),
-                    label: labelFormats.year(current),
-                    subLabel: '',
-                    width: pxPerDay * daysInYear,
-                    isToday
-                });
-                current.setFullYear(current.getFullYear() + 1);
-            }
-        }
-
-        return columns;
-    }, [schedule.startDate, schedule.endDate, schedule.duration, schedule.itemSchedules, timeScale]);
+    const canExtendGanttLead = ganttLeadSteps < GANTT_LEAD_MAX_STEPS[timeScale];
+    const handleGanttReachStart = React.useCallback(() => {
+        setGanttLead(prev => ({
+            scale: timeScale,
+            steps: Math.min((prev.scale === timeScale ? prev.steps : 1) + 1, GANTT_LEAD_MAX_STEPS[timeScale]),
+        }));
+    }, [timeScale]);
 
 
 
@@ -4612,32 +4532,29 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                             <div className="overflow-x-auto min-h-[400px] bg-white flex flex-col" ref={ganttSidebarRef}>
                                 {(() => {
                                     try {
-                                        const minDate = new Date(schedule.startDate);
-                                        const maxDate = timelineColumns.length > 0
-                                            ? timelineColumns[timelineColumns.length - 1].date
-                                            : minDate;
+                                        if (ganttColumns.length === 0) return <div className="p-4 text-red-500">Erro ao gerar planejamento</div>;
+
+                                        // Origem = 1ª coluna (já encaixada no começo da semana/mês/ano),
+                                        // para cabeçalho, grade e barras medirem do mesmo ponto.
+                                        const minDate = ganttColumns[0].date;
+                                        const maxDate = ganttColumns[ganttColumns.length - 1].date;
 
                                         const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24));
-                                        const scaleConfig = {
-                                            day: { pxPerDay: 40 },
-                                            week: { pxPerDay: 10 },
-                                            month: { pxPerDay: 3 },
-                                            year: { pxPerDay: 0.5 }
-                                        };
-                                        const { pxPerDay } = scaleConfig[timeScale];
+                                        const pxPerDay = TIMELINE_PX_PER_DAY[timeScale];
                                         const totalWidth = Math.max(800, totalDays * pxPerDay + 200);
-
-                                        if (timelineColumns.length === 0) return <div className="p-4 text-red-500">Erro ao gerar planejamento</div>;
 
                                         return (
                                             <ScheduleGantt
                                                 hierarchy={hierarchy}
                                                 schedule={schedule}
                                                 outlineActions={outlineActions}
-                                                timelineColumns={timelineColumns}
+                                                timelineColumns={ganttColumns}
                                                 timeScale={timeScale}
                                                 showFloat={showGanttFloat}
                                                 minDate={minDate}
+                                                anchorDate={ganttAnchor}
+                                                isVisible={viewMode === 'gantt'}
+                                                onReachTimelineStart={canExtendGanttLead ? handleGanttReachStart : undefined}
                                                 totalWidth={totalWidth}
                                                 pxPerDay={pxPerDay}
                                                 sidebarWidth={sidebarWidth}

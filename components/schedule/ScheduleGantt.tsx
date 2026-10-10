@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronRight, Camera, ArrowRightToLine } from 'lucide-react';
 
@@ -38,7 +38,17 @@ interface ScheduleGanttProps {
     timelineColumns: any[];
     timeScale?: 'day' | 'week' | 'month' | 'year';
     showFloat?: boolean;
+    /** Origem da timeline = data da 1ª coluna. Barras, grade e "hoje" medem a partir dela. */
     minDate: Date;
+    /** Onde o Gantt abre (colada na borda esquerda): o início do projeto, ou a tarefa
+        que começa antes dele. O que fica antes é alcançável rolando para a esquerda. */
+    anchorDate?: Date;
+    /** O Gantt fica montado com `display: none` fora da aba; só dá para posicionar a
+        rolagem quando ele está visível. */
+    isVisible?: boolean;
+    /** Chamado quando a rolagem chega à borda esquerda — o pai recua a timeline.
+        `undefined` = já está no recuo máximo. */
+    onReachTimelineStart?: () => void;
     totalWidth: number;
     pxPerDay: number;
     sidebarWidth: number;
@@ -86,6 +96,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     timeScale,
     showFloat = true,
     minDate,
+    anchorDate,
+    isVisible = true,
+    onReachTimelineStart,
 
     totalWidth,
     pxPerDay,
@@ -161,10 +174,56 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
 
 
+    // Navegação antes do início (10/10/2026). O Gantt abre com a âncora colada na
+    // borda esquerda — o mesmo enquadramento de antes —, e o período anterior fica à
+    // esquerda. Quando a origem muda (o pai prepende colunas, ou o início do projeto
+    // muda), a rolagem é compensada pela diferença para a data na borda não pular.
+    const originTime = minDate.getTime();
+    const scrollStateRef = useRef<{ origin: number; pxPerDay: number } | null>(null);
+    // Origem para a qual já se pediu recuo: um pedido por origem, senão cada evento de
+    // scroll na borda (antes do re-render) somaria mais um passo.
+    const requestedForOriginRef = useRef<number | null>(null);
+    const lastScrollLeftRef = useRef(0);
+
+    useLayoutEffect(() => {
+        const el = containerRef.current;
+        if (!el || !isVisible || el.clientWidth === 0) return;
+        const dayMs = 1000 * 60 * 60 * 24;
+        const prev = scrollStateRef.current;
+        if (!prev || prev.pxPerDay !== pxPerDay) {
+            const anchorTime = (anchorDate ?? minDate).getTime();
+            el.scrollLeft = Math.max(0, (anchorTime - originTime) / dayMs * pxPerDay);
+        } else if (originTime !== prev.origin) {
+            el.scrollLeft += (prev.origin - originTime) / dayMs * pxPerDay;
+        }
+        scrollStateRef.current = { origin: originTime, pxPerDay };
+        requestedForOriginRef.current = null;
+        lastScrollLeftRef.current = el.scrollLeft;
+    }, [originTime, pxPerDay, isVisible]);
+
+    const requestEarlierPeriods = () => {
+        if (!onReachTimelineStart || !scrollStateRef.current) return;
+        if (requestedForOriginRef.current === originTime) return;
+        requestedForOriginRef.current = originTime;
+        onReachTimelineStart();
+    };
+
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const scrollLeft = (e.currentTarget as HTMLDivElement).scrollLeft;
         if (headerRef.current) headerRef.current.scrollLeft = scrollLeft;
         if (macroHeaderRef.current) macroHeaderRef.current.scrollLeft = scrollLeft;
+        // Só CHEGAR à borda pede recuo: rolagem vertical com scrollLeft já em 0 (timeline
+        // cabendo na tela) não é gesto para a esquerda.
+        if (scrollLeft <= 0 && lastScrollLeftRef.current > 0) requestEarlierPeriods();
+        lastScrollLeftRef.current = scrollLeft;
+    };
+
+    // Já parado na borda — ou com a timeline inteira cabendo na tela (escala ano), sem
+    // barra de rolagem —, a roda não gera evento de scroll: o pedido vem por aqui.
+    const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+        if (e.currentTarget.scrollLeft > 0) return;
+        const towardsLeft = e.deltaX < 0 || (e.shiftKey && e.deltaY < 0);
+        if (towardsLeft) requestEarlierPeriods();
     };
 
     // Cabeçalho de dois níveis (estilo MS Project): agrupa as colunas em períodos
@@ -998,6 +1057,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             <div
                 ref={containerRef}
                 onScroll={handleScroll}
+                onWheel={handleWheel}
                 className="flex-1 overflow-auto bg-white border border-gray-100 rounded-3xl shadow-sm relative scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
             >
                 <div className="inline-block min-w-full">

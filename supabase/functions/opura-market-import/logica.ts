@@ -454,3 +454,51 @@ export function consultasComCep(e: {
   const vistas = new Set<string>();
   return [...pelaRua, ...pelaRuaDoCep, ...pelaBairro].filter((c) => (vistas.has(c.q) ? false : (vistas.add(c.q), true)));
 }
+
+// ── Fontes (plano 2026-10-10-opura-market-fontes, Fase A) ───────────────────
+
+/** Conectores conhecidos. O texto é o que a tela mostra. */
+export const TIPOS_DE_FONTE = {
+  vrsync: 'Feed XML (VRSync)',
+  api_conexao381: 'API do site da Conexão 381',
+  portal_zap: 'ZAP Imóveis e VivaReal',
+  portal_olx: 'OLX',
+} as const;
+export type TipoDeFonte = keyof typeof TIPOS_DE_FONTE;
+
+/**
+ * Codificação do texto a partir do Content-Type (e, sem ele, de um
+ * `<meta charset>` no começo do HTML). Sites de imobiliária na plataforma
+ * ImobiBrasil servem ISO-8859-1: lido como UTF-8, "Cambuí" vira "Cambu�"
+ * e a cidade deixa de casar com a praça.
+ */
+export function charsetDaResposta(contentType: string | null | undefined, inicioDoCorpo = ''): string {
+  const doCabecalho = /charset\s*=\s*["']?([\w-]+)/i.exec(contentType ?? '')?.[1];
+  const doMeta = /<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(inicioDoCorpo)?.[1];
+  const bruto = (doCabecalho ?? doMeta ?? 'utf-8').toLowerCase();
+  if (/^(iso-?8859-?1|latin-?1|windows-?1252|cp1252)$/.test(bruto)) return 'windows-1252';
+  if (/^utf-?8$/.test(bruto)) return 'utf-8';
+  return bruto;
+}
+
+/** Dois links apontam para a mesma fonte? (host sem www e caixa, sem barra final, sem #) */
+export function mesmaUrl(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (t: string | null | undefined) => {
+    try {
+      const u = new URL((t ?? '').trim());
+      u.hash = '';
+      const host = u.hostname.toLowerCase().replace(/^www\./, '');
+      const caminho = u.pathname.replace(/\/+$/, '') || '/';
+      return `${u.protocol}//${host}${caminho}${u.search}`;
+    } catch {
+      return null;
+    }
+  };
+  const na = norm(a);
+  return na != null && na === norm(b);
+}
+
+/** Meia-noite UTC do dia de `agora`: o cron pega só fontes que não rodaram hoje. */
+export function inicioDoDiaUtc(agora: Date): string {
+  return new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate())).toISOString();
+}

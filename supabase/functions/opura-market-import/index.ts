@@ -21,6 +21,8 @@
 //   modo 'relocalizar' — tenta de novo os anúncios 'bairro' e 'nao_encontrado' da
 //                      organização na cidade; só grava se a posição MELHORAR
 //                      (item 2 do plano 2026-10-10-opura-market-pendencias).
+//   modo 'importar-fonte' + fonteId — roda agora uma fonte salva da organização
+//                      ("Importar agora" na tela; plano 2026-10-10-opura-market-fontes).
 //   modo 'agendado'  — SÓ o cron diário (opura-market-feeds-diario), autenticado
 //                      pelo CRON_SECRET. Reimporta cada feed salvo em
 //                      opura_market_feeds. Sem organizationId no corpo: a
@@ -64,6 +66,10 @@ import {
   primeiraLocalizacao,
   urlDeFeedPermitida,
   anunciosQueSairam,
+  charsetDaResposta,
+  mesmaUrl,
+  inicioDoDiaUtc,
+  TIPOS_DE_FONTE,
   partesDoEndereco,
   precisaoMelhor,
   cepValido,
@@ -245,33 +251,63 @@ function contarLocalizacao(registros: Record<string, unknown>[]) {
   };
 }
 
-async function baixarFeed(url: URL): Promise<string> {
+/**
+ * Busca um endereço público (feed, API, página de anúncio): https e host público
+ * em cada salto de redirecionamento, tempo máximo e CORTE DE BYTES NO FLUXO — até
+ * 10/10/2026 o corpo inteiro era lido antes de conferir o tamanho. O texto é
+ * decodificado pela codificação da resposta (ImobiBrasil serve ISO-8859-1).
+ */
+async function buscarUrlPublica(url: URL, o: { accept: string; maxBytes: number; timeoutMs: number; rotulo: string }): Promise<string> {
   let atual = url;
   for (let salto = 0; salto < 4; salto++) {
     const r = await fetch(atual.toString(), {
       redirect: 'manual',
-      headers: { 'User-Agent': AGENTE, Accept: 'application/xml, text/xml, */*' },
-      signal: AbortSignal.timeout(30_000),
+      headers: { 'User-Agent': AGENTE, Accept: o.accept },
+      signal: AbortSignal.timeout(o.timeoutMs),
     });
     if (r.status >= 300 && r.status < 400) {
       const destino = r.headers.get('location');
-      if (!destino) throw new Error(`O feed respondeu HTTP ${r.status} sem destino.`);
-      // O redirecionamento passa pela mesma checagem: senão um feed público
+      if (!destino) throw new Error(`${o.rotulo} respondeu HTTP ${r.status} sem destino.`);
+      // O redirecionamento passa pela mesma checagem: senão um endereço público
       // poderia mandar a function buscar um endereço interno.
       const v = urlDeFeedPermitida(new URL(destino, atual).toString());
-      if (!v.ok) throw new Error(`O feed redireciona para um endereço não permitido: ${v.motivo}`);
+      if (!v.ok) throw new Error(`${o.rotulo} redireciona para um endereço não permitido: ${v.motivo}`);
       atual = v.url;
       continue;
     }
-    if (!r.ok) throw new Error(`O servidor do feed respondeu HTTP ${r.status}.`);
-    const tamanho = Number(r.headers.get('content-length') ?? 0);
-    if (tamanho > MAX_FEED_BYTES) throw new Error('O feed passa de 20 MB.');
-    const texto = await r.text();
-    if (texto.length > MAX_FEED_BYTES) throw new Error('O feed passa de 20 MB.');
-    return texto;
+    if (!r.ok) throw new Error(`${o.rotulo} respondeu HTTP ${r.status}.`);
+    const limiteMb = Math.round(o.maxBytes / 1048576);
+    if (Number(r.headers.get('content-length') ?? 0) > o.maxBytes) throw new Error(`${o.rotulo} passa de ${limiteMb} MB.`);
+    const leitor = r.body?.getReader();
+    if (!leitor) return await r.text();
+    const partes: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > o.maxBytes) {
+        await leitor.cancel();
+        throw new Error(`${o.rotulo} passa de ${limiteMb} MB.`);
+      }
+      partes.push(value);
+    }
+    const bytes = new Uint8Array(total);
+    let pos = 0;
+    for (const p of partes) { bytes.set(p, pos); pos += p.byteLength; }
+    const inicio = new TextDecoder('latin1').decode(bytes.subarray(0, 2048));
+    const charset = charsetDaResposta(r.headers.get('content-type'), inicio);
+    try {
+      return new TextDecoder(charset).decode(bytes);
+    } catch {
+      return new TextDecoder('utf-8').decode(bytes);
+    }
   }
-  throw new Error('O feed redirecionou vezes demais.');
+  throw new Error(`${o.rotulo} redirecionou vezes demais.`);
 }
+
+const baixarFeed = (url: URL) =>
+  buscarUrlPublica(url, { accept: 'application/xml, text/xml, */*', maxBytes: MAX_FEED_BYTES, timeoutMs: 30_000, rotulo: 'O feed' });
 
 // deno-lint-ignore no-explicit-any
 type Admin = any;
@@ -399,45 +435,70 @@ async function registrarExecucao(admin: Admin, feedId: string, resultado: unknow
     .eq('id', feedId);
 }
 
+/** Uma fonte salva, como vem de opura_market_feeds. */
+interface Fonte { id: string; organization_id: string; city_id: string; url: string; tipo: string; config: Record<string, unknown> | null }
+
 /**
- * Modo 'agendado': o cron diário reimporta cada feed salvo e ativo. O orçamento
- * de geocodificação é um só para a chamada inteira; feed que não couber fica
- * para o dia seguinte (os mais antigos vão primeiro).
+ * Lê uma fonte salva pelo conector do tipo dela e grava como varredura completa
+ * (com `feedId`: gera saídas e reativações). Plano 2026-10-10-opura-market-fontes.
+ */
+async function executarFonte(admin: Admin, fonte: Fonte, inicio: number) {
+  try {
+    const { data: cidade } = await admin.from('opura_market_cities').select('id, name, state').eq('id', fonte.city_id).maybeSingle();
+    if (!cidade) throw new Error('A cidade da fonte não existe mais.');
+    const v = urlDeFeedPermitida(fonte.url);
+    if (!v.ok) throw new Error(v.motivo);
+    let lido: FeedLido;
+    let origem: string;
+    if (fonte.tipo === 'vrsync') {
+      lido = lerFeedVrsync(await baixarFeed(v.url));
+      origem = `Feed ${v.url.hostname}`;
+    } else {
+      const rotulo = (TIPOS_DE_FONTE as Record<string, string>)[fonte.tipo] ?? fonte.tipo;
+      throw new Error(`O conector "${rotulo}" ainda não está disponível.`);
+    }
+    const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name, centroid_lat, centroid_lng').eq('city_id', cidade.id);
+    const resultado = await gravarFeed(admin, {
+      organizationId: fonte.organization_id, cidade, bairros: bairrosDb ?? [],
+      geo: criarGeocodificador(cidade, inicio, bairrosDb ?? []), lido, origem,
+      feedId: fonte.id, agora: new Date().toISOString(),
+    });
+    await registrarExecucao(admin, fonte.id, resultado, null);
+    return { ok: true as const, resultado };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await registrarExecucao(admin, fonte.id, null, msg);
+    return { ok: false as const, erro: msg };
+  }
+}
+
+/**
+ * Modo 'agendado': o cron roda 4 vezes de manhã; cada chamada pega as fontes
+ * ativas que ainda não rodaram HOJE (as mais antigas primeiro), dentro de um
+ * orçamento de tempo só. O que não couber fica para a próxima janela.
  */
 async function rodarAgendado(admin: Admin) {
   const inicio = Date.now();
-  const { data: feeds, error } = await admin
-    .from('opura_market_feeds').select('id, organization_id, city_id, url')
-    .eq('ativo', true).order('ultima_execucao', { ascending: true, nullsFirst: true }).limit(50);
-  if (error) throw new Error(`Falha ao listar feeds: ${error.message}`);
+  const hoje = inicioDoDiaUtc(new Date());
+  const { data: fontes, error } = await admin
+    .from('opura_market_feeds').select('id, organization_id, city_id, url, tipo, config')
+    .eq('ativo', true)
+    .or(`ultima_execucao.is.null,ultima_execucao.lt.${hoje}`)
+    .order('ultima_execucao', { ascending: true, nullsFirst: true }).limit(50);
+  if (error) throw new Error(`Falha ao listar fontes: ${error.message}`);
 
-  const relatorio: { feed: string; ok: boolean; detalhe: string }[] = [];
-  for (const feed of feeds ?? []) {
+  const relatorio: { fonte: string; tipo: string; ok: boolean; detalhe: string }[] = [];
+  for (const fonte of (fontes ?? []) as Fonte[]) {
     if (Date.now() - inicio > ORCAMENTO_MS) {
-      relatorio.push({ feed: feed.id, ok: false, detalhe: 'fica para amanhã (tempo esgotado)' });
+      relatorio.push({ fonte: fonte.id, tipo: fonte.tipo, ok: false, detalhe: 'fica para a próxima janela (tempo esgotado)' });
       continue;
     }
-    try {
-      const { data: cidade } = await admin.from('opura_market_cities').select('id, name, state').eq('id', feed.city_id).maybeSingle();
-      if (!cidade) throw new Error('A cidade do feed não existe mais.');
-      const v = urlDeFeedPermitida(feed.url);
-      if (!v.ok) throw new Error(v.motivo);
-      const lido = lerFeedVrsync(await baixarFeed(v.url));
-      const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name, centroid_lat, centroid_lng').eq('city_id', cidade.id);
-      const resultado = await gravarFeed(admin, {
-        organizationId: feed.organization_id, cidade, bairros: bairrosDb ?? [],
-        geo: criarGeocodificador(cidade, inicio, bairrosDb ?? []), lido, origem: `Feed ${v.url.hostname}`,
-        feedId: feed.id, agora: new Date().toISOString(),
-      });
-      await registrarExecucao(admin, feed.id, resultado, null);
-      relatorio.push({ feed: feed.id, ok: true, detalhe: `novos ${resultado.novos}, saídas ${resultado.saidas}` });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      await registrarExecucao(admin, feed.id, null, msg);
-      relatorio.push({ feed: feed.id, ok: false, detalhe: msg });
-    }
+    const r = await executarFonte(admin, fonte, inicio);
+    relatorio.push(r.ok
+      ? { fonte: fonte.id, tipo: fonte.tipo, ok: true, detalhe: `novos ${r.resultado.novos}, saídas ${r.resultado.saidas}` }
+      : { fonte: fonte.id, tipo: fonte.tipo, ok: false, detalhe: r.erro });
   }
-  return { feeds: (feeds ?? []).length, relatorio };
+  return { fontes: (fontes ?? []).length, relatorio };
 }
 
 serve(async (req: Request) => {
@@ -474,13 +535,23 @@ serve(async (req: Request) => {
   if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
   const modo = corpo?.modo;
-  if (!['planilha', 'feed', 'localizar', 'relocalizar'].includes(modo)) {
-    return json({ error: "modo deve ser 'planilha', 'feed', 'localizar' ou 'relocalizar'." }, 400);
+  if (!['planilha', 'feed', 'localizar', 'relocalizar', 'importar-fonte'].includes(modo)) {
+    return json({ error: "modo deve ser 'planilha', 'feed', 'localizar', 'relocalizar' ou 'importar-fonte'." }, 400);
   }
 
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  // "Importar agora": a fonte tem de ser da organização validada acima.
+  if (modo === 'importar-fonte') {
+    const { data: fonte } = await admin.from('opura_market_feeds')
+      .select('id, organization_id, city_id, url, tipo, config')
+      .eq('id', corpo?.fonteId ?? '').eq('organization_id', organizationId).maybeSingle();
+    if (!fonte) return json({ error: 'Fonte não encontrada nesta organização.' }, 404);
+    const r = await executarFonte(admin, fonte as Fonte, Date.now());
+    return r.ok ? json(r.resultado) : json({ error: r.erro }, 502);
+  }
 
   const { data: cidade } = await admin
     .from('opura_market_cities').select('id, name, state').eq('id', corpo?.cityId ?? '').maybeSingle();
@@ -567,11 +638,10 @@ serve(async (req: Request) => {
       // dele (vínculo, saídas e "última importação" na tela).
       let feedId: string | null = null;
       if (feedUrlUsada) {
-        const { data: salvo } = await admin.from('opura_market_feeds').select('id, url')
-          .eq('organization_id', organizationId).eq('city_id', cidade.id).maybeSingle();
-        let mesma = false;
-        try { mesma = !!salvo && new URL(salvo.url).toString() === feedUrlUsada; } catch { mesma = false; }
-        if (mesma) feedId = salvo.id;
+        const { data: salvas } = await admin.from('opura_market_feeds').select('id, url')
+          .eq('organization_id', organizationId).eq('city_id', cidade.id).eq('tipo', 'vrsync');
+        const salvo = (salvas ?? []).find((x: { id: string; url: string }) => mesmaUrl(x.url, feedUrlUsada));
+        if (salvo) feedId = salvo.id;
       }
 
       const resultado = await gravarFeed(admin, { organizationId: organizationId as string, cidade, bairros, geo, lido, origem, feedId, agora });

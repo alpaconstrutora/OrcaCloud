@@ -22,6 +22,10 @@ import {
   cepValido,
   ruaDoCep,
   consultasComCep,
+  charsetDaResposta,
+  mesmaUrl,
+  inicioDoDiaUtc,
+  TIPOS_DE_FONTE,
 } from '../supabase/functions/opura-market-import/logica';
 
 /**
@@ -372,5 +376,30 @@ describe('localização · item 2 do plano 2026-10-10', () => {
       const c = consultasComCep({ rua: 'Rua A', numero: null, bairro: null, cidade: 'Cambuí', uf: 'MG', cep: { rua: 'R. A', bairro: null } });
       expect(c.filter((x) => x.temRua).length).toBe(consultasDeEndereco({ rua: 'Rua A', cidade: 'Cambuí', uf: 'MG' }).length);
     });
+  });
+});
+
+describe('fontes · plano 2026-10-10-opura-market-fontes, Fase A', () => {
+  it('charset: cabeçalho vence; sem ele, meta do HTML; latin-1 vira windows-1252', () => {
+    expect(charsetDaResposta('text/html; charset=ISO-8859-1')).toBe('windows-1252');
+    expect(charsetDaResposta('text/html', '<html><head><meta charset="iso-8859-1">')).toBe('windows-1252');
+    expect(charsetDaResposta('application/json; charset=utf-8')).toBe('utf-8');
+    expect(charsetDaResposta(null, '<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">')).toBe('utf-8');
+    expect(charsetDaResposta(undefined)).toBe('utf-8');
+  });
+
+  it('mesmaUrl ignora www, caixa do host, barra final e âncora; não a busca', () => {
+    expect(mesmaUrl('https://www.Imob.com.br/feed.xml/', 'https://imob.com.br/feed.xml')).toBe(true);
+    expect(mesmaUrl('https://imob.com.br/feed.xml#x', 'https://imob.com.br/feed.xml')).toBe(true);
+    expect(mesmaUrl('https://imob.com.br/feed.xml?v=1', 'https://imob.com.br/feed.xml?v=2')).toBe(false);
+    expect(mesmaUrl('não é url', 'não é url')).toBe(false);
+  });
+
+  it('inicioDoDiaUtc', () => {
+    expect(inicioDoDiaUtc(new Date('2026-10-10T23:59:00Z'))).toBe('2026-10-10T00:00:00.000Z');
+  });
+
+  it('todo tipo aceito no banco tem rótulo', () => {
+    expect(Object.keys(TIPOS_DE_FONTE).sort()).toEqual(['api_conexao381', 'portal_olx', 'portal_zap', 'vrsync']);
   });
 });

@@ -54,7 +54,7 @@ type Aba = 'map' | 'table' | 'feed' | 'studies';
 const ABAS: { id: Aba; label: string }[] = [
   { id: 'map', label: '🗺️ Mapa de Inteligência' },
   { id: 'table', label: '📋 Tabela de Ocorrências' },
-  { id: 'feed', label: '📡 Feed XML' },
+  { id: 'feed', label: '📡 Fontes' },
   { id: 'studies', label: '📊 Estudos & Análise' },
 ];
 

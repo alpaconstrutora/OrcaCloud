@@ -1,20 +1,30 @@
 import React from 'react';
-import { opuraMarketService, type ResultadoImportacaoMercado, type FeedSalvoMercado } from '../../services/opuraMarketService';
+import { Trash2 } from 'lucide-react';
+import {
+  opuraMarketService,
+  ROTULO_DA_FONTE,
+  type ResultadoImportacaoMercado,
+  type FonteMercado,
+  type TipoDeFonteMercado,
+} from '../../services/opuraMarketService';
 import { supabase } from '../../lib/supabase';
 import type { OpuraMarketListing } from '../../types';
 import TableSwitch from '../ui/TableSwitch';
+import { useConfirm } from '../ui/confirm';
 
 /**
- * Importação por feed XML (decisão D7 do plano 2026-10-07-opura-market-intelligence.md).
- * O robô antigo lia o portal de UMA imobiliária no navegador, por proxies de CORS de
- * terceiros, e parou de achar anúncios quando o portal mudou. Agora a Edge Function
- * opura-market-import lê o feed, geocodifica pelo endereço e grava no servidor.
+ * Fontes de anúncios da praça (plano 2026-10-10-opura-market-fontes, Fase A).
+ *
+ * Até 10/10/2026 havia UM feed VRSync por organização + cidade, e o módulo
+ * dependia da imobiliária mandar o link. Agora cada praça tem várias fontes,
+ * cada uma lida pelo conector do tipo dela na Edge Function opura-market-import,
+ * com importação diária opcional (cron) e "Importar agora".
  */
 const descreverResultado = (r: ResultadoImportacaoMercado): string => {
   const partes = [`Anúncios novos: ${r.novos}`];
   if (r.atualizados) partes.push(`já importados, com preço atualizado: ${r.atualizados}`);
-  if (r.reativados) partes.push(`voltaram ao feed: ${r.reativados}`);
-  if (r.saidas) partes.push(`saíram do feed (vendidos ou retirados): ${r.saidas}`);
+  if (r.reativados) partes.push(`voltaram à fonte: ${r.reativados}`);
+  if (r.saidas) partes.push(`saíram da fonte (vendidos ou retirados): ${r.saidas}`);
   if (r.saidasIgnoradas) partes.push(`saídas não registradas: ${r.saidasIgnoradas}`);
   if (r.duplicados) partes.push(`repetidos de anúncios que já existiam: ${r.duplicados}`);
   if (r.semLocalizacao) partes.push(`endereço não encontrado: ${r.semLocalizacao}`);
@@ -26,6 +36,16 @@ const descreverResultado = (r: ResultadoImportacaoMercado): string => {
 
 const SEM_ORG = 'Selecione uma organização no topo da tela: os anúncios são gravados nela.';
 
+/** Conectores que já leem fonte salva (os demais entram nas próximas fases do plano). */
+const TIPOS_DISPONIVEIS: TipoDeFonteMercado[] = ['vrsync'];
+
+const EXEMPLO_DE_LINK: Record<TipoDeFonteMercado, string> = {
+  vrsync: 'https://imobiliaria.com.br/feed-vrsync.xml',
+  api_conexao381: 'https://conexao381.com.br',
+  portal_zap: 'https://www.zapimoveis.com.br/venda/imoveis/mg+cambui/',
+  portal_olx: 'https://www.olx.com.br/imoveis/venda/estado-mg/...',
+};
+
 interface Props {
   organizationId: string;
   cityId: string;
@@ -34,35 +54,34 @@ interface Props {
 }
 
 export default function MarketFeedPanel({ organizationId, cityId, listings, onAtualizado }: Props) {
-  const [feedUrl, setFeedUrl] = React.useState('');
-  const [feedArquivo, setFeedArquivo] = React.useState<File | null>(null);
-  const [importando, setImportando] = React.useState(false);
+  const confirm = useConfirm();
+  const [fontes, setFontes] = React.useState<FonteMercado[]>([]);
+  const [ocupada, setOcupada] = React.useState<string | null>(null);   // id da fonte em operação
+  const [novoTipo, setNovoTipo] = React.useState<TipoDeFonteMercado>('vrsync');
+  const [novoLink, setNovoLink] = React.useState('');
+  const [adicionando, setAdicionando] = React.useState(false);
+  const [arquivo, setArquivo] = React.useState<File | null>(null);
+  const [importandoArquivo, setImportandoArquivo] = React.useState(false);
   const [localizando, setLocalizando] = React.useState(false);
   const [relocalizando, setRelocalizando] = React.useState(false);
   const [resultado, setResultado] = React.useState<string | null>(null);
-  // Feed salvo desta organização + cidade, reimportado todo dia pelo cron
-  // (plano 2026-10-10-opura-market-pendencias, item 1).
-  const [salvo, setSalvo] = React.useState<FeedSalvoMercado | null>(null);
-  const [salvando, setSalvando] = React.useState(false);
 
-  const carregarSalvo = React.useCallback(async () => {
-    if (!organizationId || !cityId) { setSalvo(null); return null; }
+  const carregarFontes = React.useCallback(async () => {
+    if (!organizationId || !cityId) { setFontes([]); return; }
     try {
-      const f = await opuraMarketService.getFeedSalvo(organizationId, cityId);
-      setSalvo(f);
-      return f;
+      setFontes(await opuraMarketService.listarFontes(organizationId, cityId));
     } catch (err) {
-      console.error('Falha ao ler o feed salvo:', err);
-      return null;
+      console.error('Falha ao ler as fontes:', err);
     }
   }, [organizationId, cityId]);
 
-  React.useEffect(() => {
-    carregarSalvo().then((f) => setFeedUrl(f?.url ?? ''));
-  }, [carregarSalvo]);
+  React.useEffect(() => { carregarFontes(); }, [carregarFontes]);
+
+  const trocarFonte = (f: FonteMercado) => setFontes((lista) => lista.map((x) => (x.id === f.id ? f : x)));
+  const trabalhando = !!ocupada || adicionando || importandoArquivo || localizando || relocalizando;
 
   // Anúncios da organização só no ponto do bairro ou não encontrados (item 2 do
-  // plano 2026-10-10): o modo 'relocalizar' tenta de novo e nunca piora.
+  // plano 2026-10-10-opura-market-pendencias): 'relocalizar' tenta de novo e nunca piora.
   const aproximados = listings.filter(
     l => l.organizationId === organizationId && (l.geoPrecision === 'bairro' || l.geoPrecision === 'nao_encontrado')
   ).length;
@@ -72,47 +91,94 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
     l => l.organizationId === organizationId && l.latitude == null && !l.geoPrecision
   ).length;
 
-  const motivoImportar = !organizationId ? SEM_ORG
+  const linkNovo = novoLink.trim();
+  const motivoAdicionar = !organizationId ? SEM_ORG
     : !cityId ? 'Selecione a cidade.'
-    : !feedArquivo && !feedUrl.trim() ? 'Informe o link do feed ou escolha o arquivo .xml.'
+    : !linkNovo ? 'Informe o link da fonte.'
+    : !/^https:\/\//i.test(linkNovo) ? 'O link precisa começar com https://.'
     : undefined;
 
-  const importar = async () => {
-    if (motivoImportar) return;
-    setImportando(true);
+  const adicionar = async () => {
+    if (motivoAdicionar) return;
+    setAdicionando(true);
     setResultado(null);
     try {
-      const origem = feedArquivo ? { feedXml: await feedArquivo.text() } : { feedUrl: feedUrl.trim() };
-      setResultado(descreverResultado(await opuraMarketService.importarFeed(organizationId, cityId, origem)));
-      await Promise.all([onAtualizado(), carregarSalvo()]);
+      const { data } = await supabase.auth.getUser();
+      const f = await opuraMarketService.criarFonte({
+        organizationId, cityId, tipo: novoTipo, url: linkNovo, ativo: true, email: data.user?.email ?? null,
+      });
+      setFontes((lista) => [...lista, f]);
+      setNovoLink('');
     } catch (err: any) {
-      console.error('Falha ao importar o feed:', err);
-      setResultado(`Erro: ${err.message || 'falha inesperada'}`);
+      console.error('Falha ao adicionar a fonte:', err);
+      setResultado(`Erro: ${err.message || 'falha ao adicionar a fonte'}`);
     } finally {
-      setImportando(false);
+      setAdicionando(false);
     }
   };
 
-  const urlDigitada = feedUrl.trim();
-  const linkDiferenteDoSalvo = !!salvo && salvo.url !== urlDigitada;
-  const motivoAgendar = !organizationId ? SEM_ORG
-    : !cityId ? 'Selecione a cidade.'
-    : feedArquivo ? 'A importação diária usa o link, não o arquivo. Remova o arquivo.'
-    : !urlDigitada ? 'Informe o link do feed.'
-    : !/^https:\/\//i.test(urlDigitada) ? 'O link precisa começar com https://.'
-    : undefined;
-
-  const salvarAgendamento = async (ativo: boolean) => {
-    if (motivoAgendar) return;
-    setSalvando(true);
+  const ligar = async (f: FonteMercado) => {
+    setOcupada(f.id);
     try {
-      const { data } = await supabase.auth.getUser();
-      setSalvo(await opuraMarketService.salvarFeed(organizationId, cityId, urlDigitada, ativo, data.user?.email ?? null));
+      trocarFonte(await opuraMarketService.ligarFonte(f.id, !f.ativo));
     } catch (err: any) {
-      console.error('Falha ao salvar o feed:', err);
-      setResultado(`Erro: ${err.message || 'falha ao salvar o feed'}`);
+      console.error('Falha ao alterar a fonte:', err);
+      setResultado(`Erro: ${err.message || 'falha ao alterar a fonte'}`);
     } finally {
-      setSalvando(false);
+      setOcupada(null);
+    }
+  };
+
+  const importarAgora = async (f: FonteMercado) => {
+    setOcupada(f.id);
+    setResultado(null);
+    try {
+      const r = await opuraMarketService.importarFonteAgora(organizationId, f.id);
+      setResultado(`${ROTULO_DA_FONTE[f.tipo]}: ${descreverResultado(r)}`);
+      await Promise.all([onAtualizado(), carregarFontes()]);
+    } catch (err: any) {
+      console.error('Falha ao importar a fonte:', err);
+      setResultado(`Erro: ${err.message || 'falha inesperada'}`);
+      await carregarFontes();
+    } finally {
+      setOcupada(null);
+    }
+  };
+
+  const remover = async (f: FonteMercado) => {
+    const ok = await confirm({
+      title: 'Remover esta fonte?',
+      message: `${ROTULO_DA_FONTE[f.tipo]} — ${f.url}. Os anúncios já importados ficam; a fonte só deixa de ser lida.`,
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setOcupada(f.id);
+    try {
+      await opuraMarketService.removerFonte(f.id);
+      setFontes((lista) => lista.filter((x) => x.id !== f.id));
+    } catch (err: any) {
+      console.error('Falha ao remover a fonte:', err);
+      setResultado(`Erro: ${err.message || 'falha ao remover a fonte'}`);
+    } finally {
+      setOcupada(null);
+    }
+  };
+
+  const importarArquivo = async () => {
+    if (!arquivo || !organizationId || !cityId) return;
+    setImportandoArquivo(true);
+    setResultado(null);
+    try {
+      const r = await opuraMarketService.importarFeed(organizationId, cityId, { feedXml: await arquivo.text() });
+      setResultado(`Arquivo ${arquivo.name}: ${descreverResultado(r)}`);
+      setArquivo(null);
+      await onAtualizado();
+    } catch (err: any) {
+      console.error('Falha ao importar o arquivo:', err);
+      setResultado(`Erro: ${err.message || 'falha inesperada'}`);
+    } finally {
+      setImportandoArquivo(false);
     }
   };
 
@@ -152,87 +218,120 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
     }
   };
 
+  const motivoSemOrgOuOcupado = (f?: FonteMercado) =>
+    !organizationId ? SEM_ORG : trabalhando && ocupada !== f?.id ? 'Aguarde a operação em andamento.' : undefined;
+
   return (
     <div className="bg-white rounded-[10px] border border-slate-200/60 p-6 space-y-6">
       <div className="border-b border-slate-100 pb-4">
-        <h2 className="text-base font-bold text-slate-900">Importar feed XML</h2>
+        <h2 className="text-base font-bold text-slate-900">Fontes de anúncios</h2>
         <p className="text-xs text-slate-500 mt-1">
-          Feed no padrão VRSync, o mesmo que as imobiliárias enviam para ZAP, VivaReal e OLX. Peça o link à imobiliária parceira ou use o arquivo .xml.
-          Entram só os anúncios de venda da cidade selecionada, e reimportar o mesmo feed atualiza os preços em vez de duplicar.
+          Cada fonte é lida no servidor. Ligada, ela é importada todo dia de manhã: anúncio novo entra, anúncio que some da fonte sai da base ativa e conta como vendido ou retirado nos indicadores do bairro.
+          Reimportar a mesma fonte atualiza os preços em vez de duplicar.
         </p>
       </div>
 
+      <div className="space-y-2">
+        {fontes.length === 0 ? (
+          <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] text-xs text-slate-500">
+            Nenhuma fonte cadastrada nesta praça.
+          </div>
+        ) : fontes.map((f) => {
+          const motivo = motivoSemOrgOuOcupado(f);
+          return (
+            <div key={f.id} className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] space-y-2">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="block text-xs font-semibold text-slate-700">{ROTULO_DA_FONTE[f.tipo] ?? f.tipo}</span>
+                  <span className="block text-xs text-slate-500 truncate" title={f.url}>{f.url}</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <TableSwitch
+                    checked={f.ativo}
+                    onChange={() => ligar(f)}
+                    disabled={!!motivo || ocupada === f.id}
+                    title={motivo ?? (f.ativo ? 'Importada todo dia de manhã. Clique para desligar.' : 'Só importa quando você clica "Importar agora". Clique para ligar a importação diária.')}
+                    onLabel="Todo dia"
+                    offLabel="Desligada"
+                  />
+                  <button
+                    onClick={() => importarAgora(f)}
+                    disabled={!!motivo || ocupada === f.id}
+                    title={motivo}
+                    className="h-8 px-3 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                  >
+                    {ocupada === f.id ? 'Importando…' : 'Importar agora'}
+                  </button>
+                  <button
+                    onClick={() => remover(f)}
+                    disabled={!!motivo || ocupada === f.id}
+                    title={motivo ?? 'Remover a fonte (os anúncios importados ficam)'}
+                    className="h-8 w-8 flex items-center justify-center rounded-[6px] text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:text-slate-300 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              {f.ultimaExecucao && (
+                <div className={`text-xs ${f.ultimoErro ? 'text-rose-700' : 'text-slate-500'}`}>
+                  Última importação: {new Date(f.ultimaExecucao).toLocaleString('pt-BR')} —{' '}
+                  {f.ultimoErro ? `falhou: ${f.ultimoErro}` : f.ultimoResultado ? descreverResultado(f.ultimoResultado) : 'sem detalhes'}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col md:flex-row gap-3 items-center">
+        <select
+          value={novoTipo}
+          onChange={(e) => setNovoTipo(e.target.value as TipoDeFonteMercado)}
+          className="h-9 px-3 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-600 focus:outline-none shrink-0"
+          title="Tipo da fonte"
+        >
+          {TIPOS_DISPONIVEIS.map((t) => <option key={t} value={t}>{ROTULO_DA_FONTE[t]}</option>)}
+        </select>
         <div className="flex-1 w-full">
           <input
             type="text"
-            value={feedUrl}
-            onChange={(e) => setFeedUrl(e.target.value)}
-            disabled={!!feedArquivo}
-            placeholder="https://imobiliaria.com.br/feed-vrsync.xml"
-            className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:opacity-50"
-            title={feedArquivo ? 'Um arquivo foi escolhido: o link é ignorado. Remova o arquivo para usar o link.' : undefined}
+            value={novoLink}
+            onChange={(e) => setNovoLink(e.target.value)}
+            placeholder={EXEMPLO_DE_LINK[novoTipo]}
+            className="w-full h-9 px-3 bg-slate-50 border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
           />
         </div>
-        <label className="h-9 px-3 flex items-center gap-1.5 bg-white border border-slate-200 rounded-[6px] text-[13px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer shrink-0">
-          <input
-            type="file"
-            accept=".xml,text/xml,application/xml"
-            className="hidden"
-            onChange={(e) => setFeedArquivo(e.target.files?.[0] ?? null)}
-          />
-          {feedArquivo ? `📄 ${feedArquivo.name}` : 'Ou escolher arquivo .xml'}
-        </label>
-        {feedArquivo && (
-          <button onClick={() => setFeedArquivo(null)} className="h-9 px-3 text-[13px] font-medium text-slate-500 hover:text-slate-800 shrink-0">
-            Remover arquivo
-          </button>
-        )}
         <button
-          onClick={importar}
-          disabled={importando || localizando || !!motivoImportar}
-          title={motivoImportar}
+          onClick={adicionar}
+          disabled={trabalhando || !!motivoAdicionar}
+          title={motivoAdicionar ?? (trabalhando ? 'Aguarde a operação em andamento.' : undefined)}
           className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
         >
-          {importando ? 'Importando…' : 'Importar feed'}
+          {adicionando ? 'Adicionando…' : 'Adicionar fonte'}
         </button>
       </div>
 
-      <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] space-y-2">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="text-xs text-slate-600 font-semibold">
-            Importar este link todo dia às 6h
-            <span className="block text-slate-400 font-normal mt-0.5">
-              Anúncio novo entra; anúncio que sumiu do feed sai da base ativa e conta como vendido ou retirado nos indicadores do bairro.
-            </span>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {salvo?.ativo && linkDiferenteDoSalvo && (
-              <button
-                onClick={() => salvarAgendamento(true)}
-                disabled={salvando || !!motivoAgendar}
-                title={motivoAgendar ?? `O link salvo é ${salvo.url}. Clique para trocar pelo link acima.`}
-                className="h-8 px-3 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
-              >
-                Trocar pelo link acima
-              </button>
-            )}
-            <TableSwitch
-              checked={!!salvo?.ativo}
-              onChange={() => salvarAgendamento(!salvo?.ativo)}
-              disabled={salvando || (!salvo?.ativo && !!motivoAgendar) || (!!salvo?.ativo && !organizationId)}
-              title={!salvo?.ativo ? motivoAgendar : !organizationId ? SEM_ORG : undefined}
-              onLabel="Ligado"
-              offLabel="Desligado"
-            />
-          </div>
+      <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="text-xs text-slate-600 font-semibold">
+          Importar um arquivo .xml (VRSync) uma vez
+          <span className="block text-slate-400 font-normal mt-0.5">
+            Para quando a imobiliária manda o arquivo em vez do link. Não vira fonte salva: não gera saídas.
+          </span>
         </div>
-        {salvo?.ultimaExecucao && (
-          <div className={`text-xs ${salvo.ultimoErro ? 'text-rose-700' : 'text-slate-500'}`}>
-            Última importação: {new Date(salvo.ultimaExecucao).toLocaleString('pt-BR')} —{' '}
-            {salvo.ultimoErro ? `falhou: ${salvo.ultimoErro}` : salvo.ultimoResultado ? descreverResultado(salvo.ultimoResultado) : 'sem detalhes'}
-          </div>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          <label className="h-9 px-3 flex items-center gap-1.5 bg-white border border-slate-200 rounded-[6px] text-[13px] font-medium text-slate-600 hover:bg-slate-50 cursor-pointer">
+            <input type="file" accept=".xml,text/xml,application/xml" className="hidden" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
+            {arquivo ? `📄 ${arquivo.name}` : 'Escolher arquivo .xml'}
+          </label>
+          <button
+            onClick={importarArquivo}
+            disabled={!arquivo || trabalhando || !organizationId}
+            title={!organizationId ? SEM_ORG : !arquivo ? 'Escolha o arquivo .xml.' : trabalhando ? 'Aguarde a operação em andamento.' : undefined}
+            className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+          >
+            {importandoArquivo ? 'Importando…' : 'Importar arquivo'}
+          </button>
+        </div>
       </div>
 
       <div className="p-4 bg-slate-50 border border-slate-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -246,8 +345,8 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
         </div>
         <button
           onClick={localizar}
-          disabled={localizando || importando || pendentes === 0 || !organizationId}
-          title={!organizationId ? SEM_ORG : pendentes === 0 ? 'Não há anúncio pendente de localização nesta cidade.' : undefined}
+          disabled={trabalhando || pendentes === 0 || !organizationId}
+          title={!organizationId ? SEM_ORG : pendentes === 0 ? 'Não há anúncio pendente de localização nesta cidade.' : trabalhando ? 'Aguarde a operação em andamento.' : undefined}
           className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
         >
           {localizando ? 'Localizando…' : 'Localizar anúncios sem coordenada'}
@@ -265,15 +364,15 @@ export default function MarketFeedPanel({ organizationId, cityId, listings, onAt
         </div>
         <button
           onClick={relocalizar}
-          disabled={relocalizando || localizando || importando || aproximados === 0 || !organizationId}
-          title={!organizationId ? SEM_ORG : aproximados === 0 ? 'Não há anúncio aproximado nesta cidade.' : (localizando || importando) ? 'Aguarde a operação em andamento.' : undefined}
+          disabled={trabalhando || aproximados === 0 || !organizationId}
+          title={!organizationId ? SEM_ORG : aproximados === 0 ? 'Não há anúncio aproximado nesta cidade.' : trabalhando ? 'Aguarde a operação em andamento.' : undefined}
           className="h-9 px-4 rounded-[6px] text-[13px] font-medium bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed shrink-0"
         >
           {relocalizando ? 'Tentando…' : 'Tentar localizar de novo'}
         </button>
       </div>
 
-      {(importando || localizando || relocalizando) && (
+      {trabalhando && (
         <div className="p-4 bg-blue-50 border border-blue-100 rounded-[10px] text-xs text-blue-800 font-semibold">
           Trabalhando no servidor. Os endereços são localizados a cerca de um por segundo.
         </div>

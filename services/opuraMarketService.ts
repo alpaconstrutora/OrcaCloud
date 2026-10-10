@@ -98,11 +98,26 @@ export interface ResultadoImportacaoMercado {
 }
 
 /**
- * Feed salvo por organização + cidade, reimportado todo dia pelo cron
- * (plano 2026-10-10-opura-market-pendencias, item 1).
+ * Conectores de fonte (mesmos valores do CHECK de opura_market_feeds.tipo).
+ * Plano 2026-10-10-opura-market-fontes.
  */
-export interface FeedSalvoMercado {
+export type TipoDeFonteMercado = 'vrsync' | 'api_conexao381' | 'portal_zap' | 'portal_olx';
+
+export const ROTULO_DA_FONTE: Record<TipoDeFonteMercado, string> = {
+  vrsync: 'Feed XML (VRSync)',
+  api_conexao381: 'API do site da Conexão 381',
+  portal_zap: 'ZAP Imóveis e VivaReal',
+  portal_olx: 'OLX',
+};
+
+/**
+ * Fonte de anúncios salva por organização + cidade, reimportada pelo cron
+ * quando ligada (planos 2026-10-10-opura-market-pendencias, item 1, e
+ * 2026-10-10-opura-market-fontes). Pode haver várias por praça.
+ */
+export interface FonteMercado {
   id: string;
+  tipo: TipoDeFonteMercado;
   url: string;
   ativo: boolean;
   ultimaExecucao: string | null;
@@ -110,8 +125,11 @@ export interface FeedSalvoMercado {
   ultimoErro: string | null;
 }
 
-const mapearFeed = (d: any): FeedSalvoMercado => ({
+const COLUNAS_DA_FONTE = 'id, tipo, url, ativo, ultima_execucao, ultimo_resultado, ultimo_erro';
+
+const mapearFonte = (d: any): FonteMercado => ({
   id: d.id,
+  tipo: d.tipo,
   url: d.url,
   ativo: !!d.ativo,
   ultimaExecucao: d.ultima_execucao ?? null,
@@ -584,31 +602,54 @@ export const opuraMarketService = {
     return invocarImportacao({ modo: 'feed', organizationId, cityId, ...origem });
   },
 
-  /** Feed salvo da organização nesta cidade (null se não houver). */
-  async getFeedSalvo(organizationId: string, cityId: string): Promise<FeedSalvoMercado | null> {
-    if (!organizationId || !cityId) return null;
+  /** Fontes salvas da organização nesta cidade, mais antigas primeiro. */
+  async listarFontes(organizationId: string, cityId: string): Promise<FonteMercado[]> {
+    if (!organizationId || !cityId) return [];
     const { data, error } = await supabase
       .from('opura_market_feeds')
-      .select('id, url, ativo, ultima_execucao, ultimo_resultado, ultimo_erro')
+      .select(COLUNAS_DA_FONTE)
       .eq('organization_id', organizationId)
       .eq('city_id', cityId)
-      .maybeSingle();
-    if (error) throw new Error(`Falha ao ler o feed salvo: ${error.message}`);
-    return data ? mapearFeed(data) : null;
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(`Falha ao ler as fontes: ${error.message}`);
+    return (data ?? []).map(mapearFonte);
   },
 
-  /** Guarda o link e liga/desliga a importação diária. Um feed por organização + cidade. */
-  async salvarFeed(organizationId: string, cityId: string, url: string, ativo: boolean, email: string | null): Promise<FeedSalvoMercado> {
+  /** Cria uma fonte. Já existe a mesma (tipo + link) na praça → erro claro, não duplica. */
+  async criarFonte(p: { organizationId: string; cityId: string; tipo: TipoDeFonteMercado; url: string; ativo: boolean; email: string | null }): Promise<FonteMercado> {
     const { data, error } = await supabase
       .from('opura_market_feeds')
-      .upsert(
-        { organization_id: organizationId, city_id: cityId, url: url.trim(), ativo, created_by: email, updated_at: new Date().toISOString() },
-        { onConflict: 'organization_id,city_id' },
-      )
-      .select('id, url, ativo, ultima_execucao, ultimo_resultado, ultimo_erro')
+      .insert({ organization_id: p.organizationId, city_id: p.cityId, tipo: p.tipo, url: p.url.trim(), ativo: p.ativo, created_by: p.email })
+      .select(COLUNAS_DA_FONTE)
       .single();
-    if (error) throw new Error(`Falha ao salvar o feed: ${error.message}`);
-    return mapearFeed(data);
+    if (error) {
+      if (error.code === '23505') throw new Error('Esta fonte já está cadastrada nesta praça.');
+      throw new Error(`Falha ao salvar a fonte: ${error.message}`);
+    }
+    return mapearFonte(data);
+  },
+
+  /** Liga ou desliga a importação diária de uma fonte. */
+  async ligarFonte(id: string, ativo: boolean): Promise<FonteMercado> {
+    const { data, error } = await supabase
+      .from('opura_market_feeds')
+      .update({ ativo, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select(COLUNAS_DA_FONTE)
+      .single();
+    if (error) throw new Error(`Falha ao alterar a fonte: ${error.message}`);
+    return mapearFonte(data);
+  },
+
+  /** Remove a fonte. Os anúncios dela ficam (perdem só o vínculo, `feed_id` vira nulo). */
+  async removerFonte(id: string): Promise<void> {
+    const { error } = await supabase.from('opura_market_feeds').delete().eq('id', id);
+    if (error) throw new Error(`Falha ao remover a fonte: ${error.message}`);
+  },
+
+  /** "Importar agora": roda a fonte no servidor e devolve o resultado. */
+  async importarFonteAgora(organizationId: string, fonteId: string): Promise<ResultadoImportacaoMercado> {
+    return invocarImportacao({ modo: 'importar-fonte', organizationId, fonteId });
   },
 
   /** Geocodifica os anúncios da organização na cidade que ainda não têm coordenada. */

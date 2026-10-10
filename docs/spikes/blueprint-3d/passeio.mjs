@@ -436,6 +436,58 @@ if (!antesDeMover || antesDeMover.x !== 0 || antesDeMover.y !== 0) {
   console.log(`mover no 3D: parede 0,0 → ${depoisDeMover?.x},${depoisDeMover?.y} → Ctrl+Z → ${desfeito?.x},${desfeito?.y}`);
 }
 
+/**
+ * A REFERÊNCIA EXTERNA (E10.4b, 08/10/2026).
+ *
+ * O IFC da própria casa, lido no navegador (web-ifc + wasm) e posto 9 m ao lado
+ * pela `matrizDaReferencia`. Dois sinais: a tela MUDA com a referência (a segunda
+ * casa apareceu — e o console ficou limpo, senão o wasm não carregou) e, com a
+ * referência em cima do desenho (dx = 0), quase nada muda (caiu no lugar certo).
+ */
+async function fracaoQueMudou(a, b) {
+  return page.evaluate(async ([x, y]) => {
+    const carregar = (b64) =>
+      new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => ok(img);
+        img.src = `data:image/png;base64,${b64}`;
+      });
+    const [ia, ib] = await Promise.all([carregar(x), carregar(y)]);
+    const pintar = (img) => {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      return c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    };
+    if (ia.width !== ib.width || ia.height !== ib.height) return 1;
+    const da = pintar(ia);
+    const db = pintar(ib);
+    let n = 0;
+    for (let i = 0; i < da.length; i += 4) {
+      if (Math.abs(da[i] - db[i]) > 8 || Math.abs(da[i + 1] - db[i + 1]) > 8 || Math.abs(da[i + 2] - db[i + 2]) > 8) n++;
+    }
+    return n / (da.length / 4);
+  }, [a, b]);
+}
+await cena('niveis=terreo&arestas=1', 'referencia-sem', 2200);
+const semReferencia = (await page.locator('canvas').screenshot()).toString('base64');
+await cena('niveis=terreo&arestas=1&referencia=1&dx=9000', 'referencia-ao-lado', 4500);
+const aoLado = (await page.locator('canvas').screenshot()).toString('base64');
+await cena('niveis=terreo&arestas=1&referencia=1&dx=0', 'referencia-em-cima', 4500);
+const emCima = (await page.locator('canvas').screenshot()).toString('base64');
+const mudouAoLado = await fracaoQueMudou(semReferencia, aoLado);
+const mudouEmCima = await fracaoQueMudou(semReferencia, emCima);
+if (mudouAoLado < 0.03) {
+  erros.push(`a referência IFC 9 m ao lado não apareceu — só ${(mudouAoLado * 100).toFixed(2)}% da tela mudou (mínimo 3%)`);
+}
+if (mudouEmCima > mudouAoLado / 2) {
+  erros.push(
+    `a referência em dx=0 não caiu em cima do desenho: mudou ${(mudouEmCima * 100).toFixed(1)}% (ao lado: ${(mudouAoLado * 100).toFixed(1)}%)`,
+  );
+}
+console.log(`referência IFC: ao lado mudou ${(mudouAoLado * 100).toFixed(1)}% · em cima mudou ${(mudouEmCima * 100).toFixed(1)}%`);
+
 await cena('paredes=150', 'stress', 2500);
 
 await browser.close();

@@ -65,6 +65,12 @@ interface Props {
   onMover?: (delta: { x: number; y: number }) => void;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
+  /**
+   * E10.4b: modelos IFC EXTERNOS desenhados como referência — só para olhar. Não são
+   * peça do modelo: não se clicam, não entram no enquadramento nem no hash; a caixa
+   * de corte os recorta junto. `matriz` vem de `matrizDaReferencia`.
+   */
+  referencias?: readonly import('./Blueprint3DViewer').ReferenciaNo3D[];
 }
 
 const Carregando = () => (

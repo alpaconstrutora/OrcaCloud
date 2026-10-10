@@ -338,6 +338,16 @@ vi.mock('../../services/blueprintComprasService', () => ({
   nomeDaObra: vi.fn(async () => 'Residencial Alfa'),
 }));
 
+// E10.4b: a biblioteca de IFC da organização (Referência 3D) é dublê — o que se
+// prova aqui é a lista guardada por estudo e o download só do que está visível.
+const baixarArquivoIfc = vi.fn(async () => new ArrayBuffer(8));
+vi.mock('../../services/digitalFileService', () => ({
+  listarArquivos: vi.fn(async () => [
+    { id: 'df_1', organizationId: 'org_1', projectId: null, nome: 'Estrutural', nomeArquivo: 'est.ifc', disciplina: 'ESTRUTURA', modeloGrupo: 'g1', revisao: 2, storagePath: 'org_1/est.ifc', fileSha256: 'x', bytes: 8 },
+  ]),
+  baixarArquivo: (...a: unknown[]) => baixarArquivoIfc(...(a as [])),
+}));
+
 // jsdom não implementa ResizeObserver, e o canvas o usa para acompanhar o
 // tamanho do container.
 beforeEach(() => {
@@ -5075,6 +5085,31 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     await waitFor(() => expect(saveDraft).toHaveBeenCalled(), { timeout: 5000 });
     const desfeito = (vi.mocked(saveDraft).mock.calls.at(-1) as unknown as [string, import('../../utils/blueprintKernel').BlueprintModel])[1];
     expect(desfeito.structures.find((e) => e.rotulo === 'P2')!.pontos[0].x).toBe(2000);
+  });
+
+  it('Referência 3D (E10.4b): o IFC da biblioteca entra na lista do estudo, baixa uma vez, e o olho e a lixeira mexem só na lista', async () => {
+    baixarArquivoIfc.mockClear();
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^inserir$/i);
+    await user.click(botao(/^referência 3d/i));
+    const painel = await screen.findByTestId('painel-referencias-externas');
+    expect(within(painel).getByText(/Nenhum modelo de referência ainda/)).toBeInTheDocument();
+
+    await user.click(await within(painel).findByRole('button', { name: /Estrutural/ }));
+    const item = await within(painel).findByTestId('referencia-externa');
+    expect(item).toHaveTextContent('Estrutural rev. 2');
+    await waitFor(() => expect(baixarArquivoIfc).toHaveBeenCalledWith('org_1/est.ifc'));
+    // Guardado por estudo, fora do modelo.
+    expect(JSON.parse(localStorage.getItem('blueprint:referenciasExternas:std_1')!)).toMatchObject([{ arquivoId: 'df_1', visivel: true }]);
+    // Já na lista: o botão da biblioteca desliga e diz por quê.
+    expect(within(painel).getByTitle('Já está nas referências')).toBeDisabled();
+
+    await user.click(within(item).getByRole('button', { name: 'Ocultar Estrutural rev. 2 no 3D' }));
+    expect(JSON.parse(localStorage.getItem('blueprint:referenciasExternas:std_1')!)[0].visivel).toBe(false);
+    await user.click(within(item).getByRole('button', { name: 'Tirar Estrutural rev. 2 das referências' }));
+    expect(within(painel).queryByTestId('referencia-externa')).toBeNull();
+    expect(baixarArquivoIfc).toHaveBeenCalledTimes(1);
   });
 
   it('Ctrl+D duplica a seleção pelo teclado', async () => {

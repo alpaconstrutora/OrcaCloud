@@ -164,6 +164,12 @@ interface Props {
   onMover?: (delta: { x: number; y: number }) => void;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
+  /**
+   * E10.4b: modelos IFC EXTERNOS desenhados como referência — só para olhar. Não são
+   * peça do modelo: não se clicam, não entram no enquadramento nem no hash; a caixa
+   * de corte os recorta junto. `matriz` vem de `matrizDaReferencia`.
+   */
+  referencias?: readonly ReferenciaNo3D[];
 }
 
 /** Cores das barras: longitudinal em ferro-oxidado, transversal (estribo/espiral/malha) em vermelho. */
@@ -2006,6 +2012,76 @@ function Recortado({ caixa, children }: { caixa: CaixaDeCorte | null; children: 
   return <group ref={ref}>{children}</group>;
 }
 
+/** E10.4b: um IFC externo pronto para o 3D — os bytes do arquivo e onde ele cai. */
+export interface ReferenciaNo3D {
+  chave: string;
+  bytes: ArrayBuffer;
+  /** Column-major 4×4 (`matrizDaReferencia`). */
+  matriz: readonly number[];
+  opacidade: number;
+}
+
+/**
+ * E10.4b: o IFC EXTERNO no 3D. Lê pelo `carregarIfc` (o mesmo parser do
+ * visualizador de IFC), põe pela matriz e some com o raycast — a referência é
+ * para olhar, e um clique que a atravessa tem de pegar a peça do desenho atrás.
+ */
+function ReferenciaIfc({ bytes, matriz, opacidade }: ReferenciaNo3D) {
+  const [grupo, setGrupo] = useState<THREE.Group | null>(null);
+  const ref = useRef<THREE.Group>(null);
+  useEffect(() => {
+    let vivo = true;
+    let liberar: (() => void) | null = null;
+    void import('../../services/ifcViewerService')
+      .then(({ carregarIfc }) => carregarIfc(bytes, THREE))
+      .then((c) => {
+        if (!vivo) {
+          c.liberar();
+          return;
+        }
+        liberar = c.liberar;
+        c.grupo.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          m.raycast = () => {};
+          const mat = m.material as THREE.Material;
+          mat.userData.opacidadeDoArquivo = mat.opacity;
+        });
+        setGrupo(c.grupo);
+      })
+      .catch((e) => console.warn('[referência IFC] não abriu:', e));
+    return () => {
+      vivo = false;
+      liberar?.();
+      setGrupo(null);
+    };
+  }, [bytes]);
+  useEffect(() => {
+    grupo?.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = m.material as THREE.Material;
+      mat.opacity = (mat.userData.opacidadeDoArquivo ?? 1) * opacidade;
+      mat.transparent = mat.opacity < 1;
+      mat.depthWrite = mat.opacity >= 1;
+      mat.needsUpdate = true;
+    });
+  }, [grupo, opacidade]);
+  useEffect(() => {
+    const g = ref.current;
+    if (!g) return;
+    g.matrixAutoUpdate = false;
+    g.matrix.fromArray(matriz as number[]);
+    g.matrixWorldNeedsUpdate = true;
+  }, [matriz, grupo]);
+  if (!grupo) return null;
+  return (
+    <group ref={ref}>
+      <primitive object={grupo} />
+    </group>
+  );
+}
+
 /** O contorno da caixa de corte (fora do grupo recortado). */
 function ContornoDaCaixa({ caixa }: { caixa: CaixaDeCorte }) {
   const geom = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(caixa.max[0] - caixa.min[0], caixa.max[1] - caixa.min[1], caixa.max[2] - caixa.min[2])), [caixa]);
@@ -2236,6 +2312,7 @@ export default function Blueprint3DViewer(props: Props) {
             </>
           );
         })()}
+        {props.referencias?.map((r) => <ReferenciaIfc key={r.chave} {...r} />)}
         </Recortado>
         {caixa && <ContornoDaCaixa caixa={caixa} />}
         {/* E10.3 — a ALÇA de mover: só em planta (X e Z); a prévia translúcida acompanha durante o arraste;

@@ -2403,3 +2403,36 @@ A 10.4 sai em três publicações: **(a)** alinhar/arranjo, **(b)** IFC externo 
   a recusa agora é a da esquadria avulsa; o aviso da referência cita o trecho).
 - `BlueprintEditor.test.tsx` (+1 teste): o botão desligado diz "selecione 3 peças ou mais"; com três
   pilares selecionados por Shift, o do meio vai de 2000 a 4000; um Desfazer o devolve.
+
+### Etapa 10.4b — IFC externo como referência no 3D · 08/10/2026 (frente `clima-e10-ref`, sem bump)
+
+- **Referência 3D** (Inserir › Importar › Referência 3D): escolhe um IFC na biblioteca da organização
+  (Modelo 3D (IFC), tabela `digital_files`). Cada referência tem olho, opacidade, deslocamento em x e
+  y, cota e giro próprios. Ela é desenhada no 3D (e no lado a lado da 10.3) só para coordenar: **não
+  vira desenho, não se clica** (o raycast a atravessa até a peça de trás), **não entra no
+  enquadramento nem no hash**. A caixa de corte da 10.3 a recorta junto.
+- **Os dois mundos** (`utils/blueprintReferenciaExterna.ts`, puro):
+  - o web-ifc deita o plano do IFC em X/−Z; o viewer põe o y da planta em +Z;
+  - a `matrizDaReferencia` espelha Z, gira (anti-horário na planta = −θ em Y) e desloca (mm → m).
+- **Onde mora:** a lista fica **no navegador, por estudo** (`blueprint:referenciasExternas:<estudo>`),
+  lida sem confiar no guardado (`lerReferencias`). Os bytes são baixados do bucket `bim_files` só
+  quando a referência está visível, uma vez por arquivo, e lidos pelo `carregarIfc` (o mesmo parser do
+  visualizador de IFC).
+- ⚠️ **Decisão pendente do usuário:** guardar a lista no ESTUDO, para todos que abrem a Planta, pede uma
+  tabela própria (migration). Nesta fase ela é por navegador.
+
+**Prova:**
+
+- `blueprintReferenciaExterna.test.ts` (6 testes):
+  - a matriz sem THREE;
+  - **o IFC exportado pela própria Planta, lido pelo web-ifc de verdade e posto pela matriz, cai EM CIMA
+    das duas paredes** (caixa −0,075…4 em x, −0,075…3 em +Z, 0…2,8 de altura);
+  - deslocado 10 m e girado 90°, a parede de 4 m passa a correr em +Z a partir de x = 10;
+  - o hash do modelo não muda;
+  - a leitura do navegador descarta item sem arquivo e repetido, e volta número estragado ao padrão.
+- `BlueprintEditor.test.tsx` (+1 teste): o arquivo da biblioteca entra na lista do estudo, baixa uma
+  vez, o botão da biblioteca desliga com o motivo, e o olho e a lixeira mexem só na lista.
+- **Harness do 3D** (`?referencia=1&dx=…`): o IFC da casa lido no navegador, com o wasm de `/wasm/`.
+  - **9 m ao lado**: 13,8 % da tela muda (a segunda casa apareceu, console limpo);
+  - **em cima (dx = 0)**: 5,1 % muda — ele cai sobre o desenho; o que sobra é o z-fighting das faces
+    coincidentes e o 2º pavimento do IFC.

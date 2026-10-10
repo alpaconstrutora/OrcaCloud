@@ -23,6 +23,8 @@ import {
   type Command,
 } from '../../../utils/blueprintKernel';
 import { comandoDeMover } from '../../../utils/blueprintSelecao';
+import { gerarIfc } from '../../../utils/blueprintIfc';
+import { matrizDaReferencia } from '../../../utils/blueprintReferenciaExterna';
 
 const T = 150;
 const H = 2800;
@@ -679,11 +681,34 @@ function App() {
           ocultos={ocultos}
           selecionados={clicavel ? new Set(selecionados) : undefined}
           onSelecionar={clicavel ? setSelecionados : undefined}
+          referencias={referencias}
         />
       </div>
     </>
   );
 }
+
+/**
+ * A REFERÊNCIA EXTERNA (`?referencia=1&dx=…&dy=…&cota=…&giro=…`, E10.4b).
+ *
+ * O IFC é o da própria casa, exportado por `gerarIfc` — o mesmo arquivo que a
+ * Planta entrega —, lido no navegador pelo `carregarIfc` (o web-ifc com o wasm de
+ * `/wasm/`) e posto pela `matrizDaReferencia`. O passeio confere que ele aparece
+ * deslocado e some com o olho (sem `referencia`).
+ */
+const referencias = params.get('referencia') === '1'
+  ? [{
+      chave: 'casa',
+      bytes: new TextEncoder().encode(gerarIfc(model, { titulo: 'Referência', revisao: 1, hash: 'r'.repeat(64) })).buffer as ArrayBuffer,
+      matriz: matrizDaReferencia({
+        deslocamentoXMm: Number(params.get('dx') || 0),
+        deslocamentoYMm: Number(params.get('dy') || 0),
+        cotaMm: Number(params.get('cota') || 0),
+        rotacaoDeg: Number(params.get('giro') || 0),
+      }),
+      opacidade: Number(params.get('opacidade') || 1),
+    }]
+  : undefined;
 
 /**
  * O EDITOR NO 3D (`?editar=1`, E10.3 de 08/10/2026).

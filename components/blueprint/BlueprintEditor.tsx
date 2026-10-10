@@ -71,6 +71,7 @@ import {
   Keyboard,
   LandPlot,
   Layers,
+  Layers3,
   Fence,
   BookOpen,
   Type,
@@ -348,6 +349,9 @@ import PainelRevisaoDePontas from './PainelRevisaoDePontas';
 import { chaveDaPonta, pontasParaRevisar, type PontaEmRevisao } from '../../utils/blueprintRevisaoDePontas';
 import { comandoDeEstender, extensoesDaParede } from '../../utils/blueprintEstenderAteFace';
 import PainelImportarIfc from './PainelImportarIfc';
+import PainelReferenciasExternas from './PainelReferenciasExternas';
+import { baixarArquivo } from '../../services/digitalFileService';
+import { chaveDasReferencias, lerReferencias, matrizDaReferencia, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
 import PainelImportarDxf from './PainelImportarDxf';
 import PainelImportarBcf from './PainelImportarBcf';
 import PainelComentarios from './PainelComentarios';
@@ -1186,6 +1190,8 @@ const ROTULO_DA_TAREFA = {
   ia: 'Conversar com a planta',
   'gerar-paredes': 'Gerar paredes do PDF',
   'importar-ifc': 'Importar do IFC',
+  // REFERÊNCIA EXTERNA (08/10/2026, E10.4b): IFC de outra disciplina só para olhar no 3D.
+  referencias: 'Referências externas (IFC no 3D)',
   'importar-dxf': 'Importar do DXF / DWG',
   // IMPORTAR DO SKETCHUP (21/09/2026, backlog P2): COLLADA .dae → paredes reconhecidas nas faces.
   'importar-collada': 'Importar do SketchUp (COLLADA)',
@@ -1708,6 +1714,44 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * a mesma seleção — clicar num lado marca a peça no outro.
    */
   const [ladoALado3d, setLadoALado3d] = usePersistedState<boolean>('blueprint:vista3dLadoALado', false);
+  /**
+   * REFERÊNCIAS EXTERNAS (E10.4b, 08/10/2026): os IFC de outras disciplinas no 3D.
+   * A lista mora no navegador, por estudo (fora do modelo e do hash); os bytes
+   * são baixados da biblioteca só quando a referência está visível, uma vez.
+   */
+  const [referenciasGuardadas, setReferenciasGuardadas] = usePersistedState<unknown>(chaveDasReferencias(study.id), []);
+  const referenciasExternas = useMemo(() => lerReferencias(referenciasGuardadas), [referenciasGuardadas]);
+  const [bytesDasReferencias, setBytesDasReferencias] = useState<Record<string, ArrayBuffer>>({});
+  const [carregandoReferencias, setCarregandoReferencias] = useState<ReadonlySet<string>>(() => new Set());
+  const [errosDasReferencias, setErrosDasReferencias] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const faltam = referenciasExternas.filter(
+      (r: ReferenciaExterna) =>
+        r.visivel && !bytesDasReferencias[r.arquivoId] && !carregandoReferencias.has(r.arquivoId) && !errosDasReferencias[r.arquivoId],
+    );
+    for (const r of faltam) {
+      setCarregandoReferencias((c) => new Set(c).add(r.arquivoId));
+      void baixarArquivo(r.storagePath)
+        .then((b) => setBytesDasReferencias((m) => ({ ...m, [r.arquivoId]: b })))
+        .catch((e) =>
+          setErrosDasReferencias((m) => ({ ...m, [r.arquivoId]: `Não foi possível baixar o arquivo: ${e instanceof Error ? e.message : String(e)}` })),
+        )
+        .finally(() =>
+          setCarregandoReferencias((c) => {
+            const n = new Set(c);
+            n.delete(r.arquivoId);
+            return n;
+          }),
+        );
+    }
+  }, [referenciasExternas, bytesDasReferencias, carregandoReferencias, errosDasReferencias]);
+  const referencias3d = useMemo(
+    () =>
+      referenciasExternas
+        .filter((r) => r.visivel && bytesDasReferencias[r.arquivoId])
+        .map((r) => ({ chave: r.arquivoId, bytes: bytesDasReferencias[r.arquivoId], matriz: matrizDaReferencia(r), opacidade: r.opacidade })),
+    [referenciasExternas, bytesDasReferencias],
+  );
   const [mostrarTerreno3d, setMostrarTerreno3d] = usePersistedState(
     'blueprint:vista3dTerreno',
     false,
@@ -10202,6 +10246,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       // peça marcada. Duas seleções paralelas seriam duas verdades.
       selecionados={new Set(editor.selectedIds)}
       onSelecionar={selecionarEAbrir}
+      referencias={referencias3d.length > 0 ? referencias3d : undefined}
       // MOVER NO 3D: a alça devolve o deslocamento em mm no plano da planta, e
       // ele vira o MESMO TranslateEntities do mover do 2D — um passo de Ctrl+Z,
       // com o mesmo modo de junção (manter/soltar) que a barra mostra.
@@ -12319,6 +12364,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                   ativo={tarefaAberta === 'importar-ifc'}
                   onClick={() => alternarTarefa('importar-ifc')}
                   ajuda="Importar paredes, aberturas e estrutura de um modelo IFC"
+                />
+                <BotaoDoRibbon
+                  icone={Layers3}
+                  rotulo="Referência 3D"
+                  ativo={tarefaAberta === 'referencias'}
+                  onClick={() => alternarTarefa('referencias')}
+                  ajuda="Mostrar no 3D o IFC de outra disciplina, só para coordenar — não vira desenho nem entra na versão"
                 />
                 <BotaoDoRibbon
                   icone={PenTool}
@@ -15251,6 +15303,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               {tarefaAberta === 'terreno' && <Landmark className="h-5 w-5 text-emerald-700" />}
               {tarefaAberta === 'gerar-paredes' && <FileText className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-ifc' && <Boxes className="h-5 w-5 text-blue-700" />}
+              {tarefaAberta === 'referencias' && <Layers3 className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-dxf' && <PenTool className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-collada' && <Boxes className="h-5 w-5 text-blue-700" />}
               {tarefaAberta === 'importar-bcf' && <MessagesSquare className="h-5 w-5 text-blue-700" />}
@@ -15360,6 +15413,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
               'Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem. Traçar perfil ou drenagem fecha este painel — volte por Terreno › Dados do lote.'}
             {tarefaAberta === 'gerar-paredes' &&
               'Paredes e portas a partir da planta de fundo em PDF. Ao marcar a região, este painel se recolhe para você arrastar sobre o desenho e volta em seguida.'}
+            {tarefaAberta === 'referencias' &&
+              'Modelos IFC de outras disciplinas desenhados no 3D, com olho, opacidade e posição próprios. Só para coordenar: não viram desenho e não entram na versão.'}
             {tarefaAberta === 'importar-ifc' &&
               'Paredes, aberturas e estrutura de um modelo IFC, por medida declarada.'}
             {tarefaAberta === 'importar-dxf' && 'Paredes de um desenho DXF ou DWG, por camada — com portas (arco), janelas (símbolo) e vãos.'}
@@ -17897,6 +17952,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
 
           {tarefaAberta === 'importar-ifc' && (
             <PainelImportarIfc model={editor.model} levelIdAtivo={levelId} onImportar={importarDoIfc} />
+          )}
+
+          {tarefaAberta === 'referencias' && (
+            <PainelReferenciasExternas
+              referencias={referenciasExternas}
+              onMudar={setReferenciasGuardadas}
+              carregando={carregandoReferencias}
+              erros={errosDasReferencias}
+            />
           )}
 
           {tarefaAberta === 'importar-dxf' && (

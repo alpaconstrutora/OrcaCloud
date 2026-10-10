@@ -60,6 +60,9 @@ import {
   LINHA_DE_CHAMADA,
   larguraEstimadaDoTexto,
   ondeFicaORotulo,
+  alcanceAlemDoLado,
+  deslocamentoDaCadeiaDoLote,
+  referencialDoLado,
   pontoDaCota,
   type LadoDoContorno,
   type SegmentoDeCota,
@@ -1296,17 +1299,24 @@ function entidadesDeCota(
   const FOLGA_DA_CHAMADA = LINHA_DE_CHAMADA.folgaPapelMm * mmPorMmDePapel;
   const ULTRAPASSA = LINHA_DE_CHAMADA.ultrapassaPapelMm * mmPorMmDePapel;
 
-  const desenharLado = (lado: LadoDoContorno, faceMm: number, cadeias: [SegmentoDeCota[], number][]) => {
+  // Os pontos (mm reais) do que as cotas já ocupam — a cadeia do LOTE começa além das da edificação (10/10/2026).
+  const pontosDasCotas: { x: number; y: number }[] = [];
+  const marcar = (...pts: { x: number; y: number }[]) => {
+    crescerFaixa(faixa, ...pts);
+    pontosDasCotas.push(...pts);
+  };
+
+  const desenharLado = (lado: LadoDoContorno, faceMm: number, cadeias: [SegmentoDeCota[], number][], extra = 0) => {
     const desenhar = (
       segmentos: { de: number; ate: number; rotulo: string }[],
       nivel: number,
     ) => {
-      const afasta = FOLGA + PASSO * nivel;
+      const afasta = FOLGA + PASSO * nivel + extra;
       for (const [indice, seg] of segmentos.entries()) {
         const a = pontoDaCota(lado, seg.de, afasta);
         const b = pontoDaCota(lado, seg.ate, afasta);
         saida += linha(CAMADAS.COTAS, a, b);
-        crescerFaixa(faixa, a, b);
+        marcar(a, b);
         // Tique a 45° nas duas pontas — a marca de fim de cota que o PDF já tinha.
         for (const p of [a, b]) saida += linha(CAMADAS.COTAS, { x: p.x - TIQUE / 2, y: p.y - TIQUE / 2 }, { x: p.x + TIQUE / 2, y: p.y + TIQUE / 2 });
         // Texto no meio, empurrado mais um pouco para fora para não montar na
@@ -1333,7 +1343,8 @@ function entidadesDeCota(
         // TEXT ancora à esquerda, na linha de base: centra-se à mão.
         const insercao = { x: centro.x - largura / 2, y: centro.y - ALTURA / 2 };
         saida += texto(CAMADAS.COTAS, insercao, seg.rotulo, ALTURA);
-        if (onde !== 'MEIO') crescerFaixa(faixa, insercao, { x: insercao.x + largura, y: insercao.y + ALTURA });
+        // O número fica PARA FORA da linha: a caixa dele também é do que as cotas ocupam.
+        marcar(insercao, { x: insercao.x + largura, y: insercao.y + ALTURA }, { x: insercao.x, y: insercao.y + ALTURA }, { x: insercao.x + largura, y: insercao.y });
       }
     };
 
@@ -1342,16 +1353,17 @@ function entidadesDeCota(
     // LINHAS DE CHAMADA: da face do objeto + folga até além da linha mais externa que quebra ali — a regra do PDF.
     const inicio = faceMm + FOLGA_DA_CHAMADA;
     for (const ch of chamadasDoLado(cadeias.map(([segmentos, nivel]) => ({ segmentos, nivel })))) {
-      const fim = FOLGA + PASSO * ch.nivel + ULTRAPASSA;
+      const fim = FOLGA + PASSO * ch.nivel + extra + ULTRAPASSA;
       if (fim > inicio) {
         const ponta = pontoDaCota(lado, ch.t, fim);
         saida += linha(CAMADAS.COTAS, pontoDaCota(lado, ch.t, inicio), ponta);
-        crescerFaixa(faixa, ponta);
+        marcar(ponta);
       }
     }
   };
 
   for (const nivel of model.levels) {
+    pontosDasCotas.length = 0;
     const dasParedes = cadeiasPorLado(model, nivel);
     for (const c of dasParedes) {
       desenharLado(c.lado, c.faceExternaMm, [
@@ -1365,8 +1377,14 @@ function entidadesDeCota(
     // + as faixas de restrição e as divisas internas (08/10/2026). O envelope recuado não: os recuos são da zona, não do
     // modelo, e a prancha não o desenha.
     const limites = model.boundaries.filter((b) => b.levelId === nivel.id);
+    // ALÉM DAS COTAS DA EDIFICAÇÃO (10/10/2026): a cadeia do lote começa além do que as das paredes já ocupam.
+    const ocupado = [...pontosDasCotas];
     for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites, envelopes?.get(nivel.id) ?? []))) {
-      desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
+      const { ux, uy, nx, ny } = referencialDoLado(c.lado);
+      const comprimento = Math.hypot(c.lado.b.x - c.lado.a.x, c.lado.b.y - c.lado.a.y);
+      const alcance = alcanceAlemDoLado(ocupado, { a: c.lado.a, u: { x: ux, y: uy }, n: { x: nx, y: ny }, comprimento });
+      const extra = deslocamentoDaCadeiaDoLote(alcance, ALTURA * 0.5, FOLGA);
+      desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]], extra);
     }
   }
 

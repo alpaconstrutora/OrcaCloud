@@ -122,3 +122,16 @@ seleção vazia. A mensagem de resultado e o Ctrl+Z ficam como estão.
 - Observação NOVA (não estava entre as 8): no PDF, casa a 2 m da divisa — as cadeias das paredes (até ~19 mm de papel)
   e as do lote se sobrepõem na lateral. Já acontecia antes; fica registrada no § Status do plano de 07/10.
 
+
+## Complemento (10/10/2026) — cotas do lote além das da edificação
+
+Pedido: *"corrigir: Uma observação nova, que não estava entre as 8: no PDF, quando a casa fica perto da divisa (2 m no
+teste), as cotas da casa e as do lote se sobrepõem na lateral e os números se misturam. … se quiser, a correção é
+afastar as cotas do lote para além das da casa."*
+
+- `alcanceAlemDoLado` + `deslocamentoDaCadeiaDoLote` (`utils/blueprintCotas.ts`): cada saída guarda o que as cotas das
+  paredes ocupam (linhas, chamadas, números) na sua unidade; a cadeia do lote de cada lado começa além disso, com um
+  respiro (tela 6 px, papel 1,5 mm, DXF meia altura de texto). A chamada do lote continua nascendo na divisa.
+- Tela, PDF e DXF. No PDF a caixa do número entra sempre (ele fica 2 mm para fora da linha).
+- Teste: PDF 1:200 com a casa a 2 m da divisa — nenhum número de cota sobre outro (sem a correção falha em
+  "4,15" × "4,00"); DXF — a cadeia do lote além das da casa.

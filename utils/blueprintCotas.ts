@@ -950,3 +950,44 @@ export function larguraEstimadaDoTexto(texto: string, altura: number): number {
   return (milesimos / 1000) * altura;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AS COTAS DO LOTE ALÉM DAS DA EDIFICAÇÃO (10/10/2026)
+//
+// *"corrigir: … no PDF, quando a casa fica perto da divisa (2 m no teste), as cotas da casa e as do lote se sobrepõem
+// na lateral e os números se misturam"*. As cadeias da edificação ficam a uma distância fixa (px de tela, mm de papel,
+// mm reais) da PAREDE; com a parede perto da divisa, elas atravessam a divisa e caem onde a cadeia do lote começa.
+// A medida: até onde o que já foi desenhado das cotas (linhas, tiques, chamadas, números) passa PARA FORA de cada lado
+// do lote, dentro do comprimento dele. A cadeia do lote começa além disso — a chamada dela continua nascendo na divisa
+// e cruza as da casa, como na prancha. Cada saída mede na sua unidade.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Um lado na unidade de quem desenha: origem, direção unitária ao longo, normal unitária PARA FORA e o comprimento. */
+export interface LadoNaSaida {
+  a: { x: number; y: number };
+  u: { x: number; y: number };
+  n: { x: number; y: number };
+  comprimento: number;
+}
+
+/** Quanto os pontos passam para fora do lado (0 se nenhum passa), contando só os que caem ao longo dele. */
+export function alcanceAlemDoLado(pontos: readonly { x: number; y: number }[], lado: LadoNaSaida): number {
+  let maior = 0;
+  for (const q of pontos) {
+    const dx = q.x - lado.a.x;
+    const dy = q.y - lado.a.y;
+    const t = dx * lado.u.x + dy * lado.u.y;
+    if (t < 0 || t > lado.comprimento) continue;
+    const d = dx * lado.n.x + dy * lado.n.y;
+    if (d > maior) maior = d;
+  }
+  return maior;
+}
+
+/**
+ * Quanto a cadeia do lote tem de se afastar a MAIS (na unidade de quem desenha) para a primeira linha dela ficar além
+ * do `alcance` com um `respiro` — `folgaInicial` é onde ela já começaria sem nada no caminho.
+ */
+export function deslocamentoDaCadeiaDoLote(alcance: number, respiro: number, folgaInicial: number): number {
+  return alcance > 0 ? Math.max(0, alcance + respiro - folgaInicial) : 0;
+}
+

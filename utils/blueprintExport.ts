@@ -57,6 +57,8 @@ import {
   LINHA_DE_CHAMADA,
   larguraEstimadaDoTexto,
   ondeFicaORotulo,
+  alcanceAlemDoLado,
+  deslocamentoDaCadeiaDoLote,
   pontoDaCota,
   type LadoDoContorno,
   type SegmentoDeCota,
@@ -1655,7 +1657,24 @@ function desenharCotas(
    * As cadeias de UM lado (`[segmentos, nível]`, nível 0 = a mais perto do desenho) e as linhas de chamada delas, que
    * nascem na FACE do objeto (`faceMm`, mm reais a partir da linha do lado) — a regra de `LINHA_DE_CHAMADA`.
    */
-  const desenharLado = (lado: LadoDoContorno, faceMm: number, cadeias: [SegmentoDeCota[], number][]) => {
+  // Os pontos (mm de papel) do que as cotas já ocupam — a cadeia do LOTE começa além das da edificação (10/10/2026).
+  const pontosDasCotas: { x: number; y: number }[] = [];
+  const marcar = (...pts: { x: number; y: number }[]) => {
+    crescerFaixa(faixa, ...pts);
+    pontosDasCotas.push(...pts);
+  };
+  /** O lado do contorno no papel: origem, direção, normal PARA FORA (deduzida pelo mapeamento) e comprimento. */
+  const ladoNoPapel = (lado: LadoDoContorno) => {
+    const a = { x: px(lado.a.x), y: py(lado.a.y) };
+    const b = { x: px(lado.b.x), y: py(lado.b.y) };
+    const fora = pontoDaCota(lado, 0, 1000);
+    const f = { x: px(fora.x) - a.x, y: py(fora.y) - a.y };
+    const cf = Math.hypot(f.x, f.y) || 1;
+    const comprimento = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { a, u: { x: (b.x - a.x) / comprimento, y: (b.y - a.y) / comprimento }, n: { x: f.x / cf, y: f.y / cf }, comprimento };
+  };
+
+  const desenharLado = (lado: LadoDoContorno, faceMm: number, cadeias: [SegmentoDeCota[], number][], extra = 0) => {
     // A DIREÇÃO PARA FORA, deduzida no espaço do PAPEL.
     //
     // O papel pode inverter o Y em relação ao modelo, então a normal do kernel
@@ -1676,7 +1695,7 @@ function desenharCotas(
       segmentos: { de: number; ate: number; rotulo: string; vao?: boolean }[],
       nivel: number,
     ) => {
-      const afasta = FOLGA + PASSO * nivel;
+      const afasta = FOLGA + PASSO * nivel + extra;
       for (const [indice, seg] of segmentos.entries()) {
         const pa = pontoDaCota(lado, seg.de, 0);
         const pb = pontoDaCota(lado, seg.ate, 0);
@@ -1686,7 +1705,7 @@ function desenharCotas(
         const y2 = py(pb.y) + ny * afasta;
 
         d.linha(x1, y1, x2, y2, fino);
-        crescerFaixa(faixa, { x: x1, y: y1 }, { x: x2, y: y2 });
+        marcar({ x: x1, y: y1 }, { x: x2, y: y2 });
 
         // Tique a 45° — a marca de fim de cota do desenho de arquitetura.
         for (const [tx, ty] of [[x1, y1], [x2, y2]]) {
@@ -1719,8 +1738,14 @@ function desenharCotas(
             mx = (x1 + x2) / 2 - nx * 2.5;
             my = (y1 + y2) / 2 - ny * 2.5;
           }
-          crescerFaixa(faixa, { x: mx - largura / 2, y: my - TEXTO_COTA_MM }, { x: mx + largura / 2, y: my + TEXTO_COTA_MM / 2 });
         }
+        // O número no papel fica 2 mm PARA FORA da linha: a caixa dele também é do que as cotas ocupam.
+        marcar(
+          { x: mx - largura / 2, y: my - TEXTO_COTA_MM },
+          { x: mx + largura / 2, y: my + TEXTO_COTA_MM / 2 },
+          { x: mx - largura / 2, y: my + TEXTO_COTA_MM / 2 },
+          { x: mx + largura / 2, y: my - TEXTO_COTA_MM },
+        );
         d.texto(mx - largura / 2, my, seg.rotulo, TEXTO_COTA_MM, COR_COTA);
       }
     };
@@ -1733,17 +1758,18 @@ function desenharCotas(
     const mmDePapelPorMmReal = norma / 1000;
     const inicio = faceMm * mmDePapelPorMmReal + LINHA_DE_CHAMADA.folgaPapelMm;
     for (const ch of chamadasDoLado(cadeias.map(([segmentos, nivel]) => ({ segmentos, nivel })))) {
-      const fim = FOLGA + PASSO * ch.nivel + LINHA_DE_CHAMADA.ultrapassaPapelMm;
+      const fim = FOLGA + PASSO * ch.nivel + extra + LINHA_DE_CHAMADA.ultrapassaPapelMm;
       if (fim <= inicio) continue;
       const p = pontoDaCota(lado, ch.t, 0);
       const qx = px(p.x);
       const qy = py(p.y);
       d.linha(qx + nx * inicio, qy + ny * inicio, qx + nx * fim, qy + ny * fim, { espessuraMm: 0.08, cor: '#999999' });
-      crescerFaixa(faixa, { x: qx + nx * fim, y: qy + ny * fim });
+      marcar({ x: qx + nx * fim, y: qy + ny * fim });
     }
   };
 
   for (const nivel of model.levels) {
+    pontosDasCotas.length = 0;
     const dasParedes = cadeiasPorLado(model, nivel);
     for (const c of dasParedes) {
       desenharLado(c.lado, c.faceExternaMm, [
@@ -1759,8 +1785,12 @@ function desenharCotas(
     // modelo, e a prancha não o desenha.
     // Desde 10/10/2026 o envelope recuado também (pendência 1), refeito da zona (`envelopesParaExportacao`).
     const limites = model.boundaries.filter((b) => b.levelId === nivel.id);
+    // ALÉM DAS COTAS DA EDIFICAÇÃO (10/10/2026): a cadeia do lote começa além do que as das paredes já ocupam
+    // (`alcanceAlemDoLado`), com 1,5 mm de respiro.
+    const ocupado = [...pontosDasCotas];
     for (const c of cadeiasDoContorno(anelDoLoteFechado(limites), [], dasParedes, detalhesDoLote(limites, envelopes.get(nivel.id) ?? []))) {
-      desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]]);
+      const extra = deslocamentoDaCadeiaDoLote(alcanceAlemDoLado(ocupado, ladoNoPapel(c.lado)), 1.5, FOLGA);
+      desenharLado(c.lado, 0, c.parcial.length > 0 ? [[c.parcial, 0], [[c.total], 1]] : [[[c.total], 0]], extra);
     }
   }
   return faixa;

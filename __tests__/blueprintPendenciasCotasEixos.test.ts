@@ -139,3 +139,76 @@ describe('pendência 7 — eixos na convenção antiga', () => {
   });
 });
 
+/**
+ * 10/10/2026 — *"corrigir: … no PDF, quando a casa fica perto da divisa (2 m no teste), as cotas da casa e as do lote
+ * se sobrepõem na lateral e os números se misturam"*. A cadeia do lote começa além do que as da casa ocupam.
+ */
+describe('cotas do lote além das cotas da edificação', () => {
+  // Lote 10 × 30 e uma casa 6 × 4 a 2 m das laterais (a mesma da prova no app).
+  const casaPertoDaDivisa = () =>
+    lote((t) => {
+      const w = (ax: number, ay: number, bx: number, by: number) =>
+        ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 }) as Command;
+      return [w(2000, 8000, 8000, 8000), w(8000, 8000, 8000, 12000), w(8000, 12000, 2000, 12000), w(2000, 12000, 2000, 8000)];
+    });
+
+  it('alcanceAlemDoLado e deslocamentoDaCadeiaDoLote', async () => {
+    const { alcanceAlemDoLado, deslocamentoDaCadeiaDoLote } = await import('../utils/blueprintCotas');
+    const lado = { a: { x: 0, y: 0 }, u: { x: 0, y: 1 }, n: { x: -1, y: 0 }, comprimento: 100 };
+    expect(alcanceAlemDoLado([{ x: -7, y: 50 }, { x: -12, y: 150 }, { x: 3, y: 10 }], lado)).toBe(7); // o de y=150 está fora do lado
+    expect(deslocamentoDaCadeiaDoLote(7, 1.5, 4)).toBeCloseTo(4.5, 9);
+    expect(deslocamentoDaCadeiaDoLote(2, 1.5, 4)).toBe(0); // já cabe antes da folga
+    expect(deslocamentoDaCadeiaDoLote(0, 1.5, 4)).toBe(0);
+  });
+
+  it('PDF 1:200: nenhum número de cota cai em cima de outro', () => {
+    const m = casaPertoDaDivisa();
+    const d = new DesenhistaDeProva();
+    desenharPlanta(d, m, op({ denominador: 200, papel: PAPEIS[1], zona: ZONA_1_5 }), enquadrar(m, 200, PAPEIS[1], true));
+    const caixas = d.chamadas
+      .filter((c) => c.tipo === 'texto' && c.args[4] === '#333333')
+      .map((c) => {
+        const [x, y, texto, alt] = c.args as [number, number, string, number];
+        const largura = (texto.length * 0.55 + 0.1) * alt;
+        return { texto, x0: x, x1: x + largura, y0: y - alt, y1: y };
+      });
+    expect(caixas.length).toBeGreaterThan(10);
+    for (let i = 0; i < caixas.length; i++)
+      for (let j = i + 1; j < caixas.length; j++) {
+        const a = caixas[i];
+        const b = caixas[j];
+        const sobrepoe = a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+        expect(sobrepoe, `"${a.texto}" × "${b.texto}"`).toBe(false);
+      }
+  });
+
+  it('DXF: a cadeia do lote na lateral fica além de tudo o que as cotas da casa ocupam', () => {
+    const m = casaPertoDaDivisa();
+    const dxf = gerarDxf(m, { titulo: 't', revisao: 1, hash: 'h', cotas: true, envelopes: envelopesParaExportacao(m, ZONA_1_5) });
+    const v = dxf.split(/\r?\n/).map((x) => x.trim());
+    const linhas: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    for (let i = 0; i + 1 < v.length; i += 2) {
+      if (v[i] !== '0' || v[i + 1] !== 'LINE') continue;
+      const c: Record<string, string> = {};
+      for (let k = i + 2; k + 1 < v.length && v[k] !== '0'; k += 2) c[v[k]] = v[k + 1];
+      if (c['8'] === 'PLANTA-COTAS') linhas.push({ x1: Number(c['10']), y1: Number(c['20']), x2: Number(c['11']), y2: Number(c['21']) });
+    }
+    // As linhas verticais à esquerda da divisa, agrupadas pela posição x: as do LOTE cobrem os 30 m do lado; as da
+    // CASA, ~4 m (o lado dela). Os tiques (diagonais) e as chamadas (horizontais) ficam de fora.
+    const porX = new Map<number, { min: number; max: number }>();
+    for (const l of linhas) {
+      if (Math.abs(l.x1 - l.x2) > 1e-6 || l.x1 >= 0 || Math.abs(l.y2 - l.y1) < 1) continue;
+      const x = Math.round(l.x1);
+      const g = porX.get(x) ?? { min: Infinity, max: -Infinity };
+      porX.set(x, { min: Math.min(g.min, l.y1, l.y2), max: Math.max(g.max, l.y1, l.y2) });
+    }
+    const xsDoLote = [...porX].filter(([, g]) => g.max - g.min > 29000).map(([x]) => x);
+    const xsDaCasa = [...porX].filter(([, g]) => g.max - g.min < 4500).map(([x]) => x);
+    expect(xsDoLote.length).toBeGreaterThan(0);
+    expect(xsDaCasa.length).toBeGreaterThan(0);
+    const xLote = Math.max(...xsDoLote); // a linha do lote mais perto da divisa
+    const xCasa = Math.min(...xsDaCasa); // a linha da casa mais longe
+    expect(xLote).toBeLessThan(xCasa);
+  });
+});
+

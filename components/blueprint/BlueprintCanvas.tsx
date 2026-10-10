@@ -112,6 +112,8 @@ import {
   chamadasDoLado,
   LINHA_DE_CHAMADA,
   ondeFicaORotulo,
+  alcanceAlemDoLado,
+  deslocamentoDaCadeiaDoLote,
   cadeiasPorLado,
   pontoDaCota,
   type LadoDoContorno,
@@ -4512,6 +4514,12 @@ export default function BlueprintCanvas({
     // A FAIXA OCUPADA PELAS COTAS neste quadro (px de tela) — os eixos, desenhados depois, põem a bolha por fora dela
     // (08/10/2026, *"cotas e eixo se sobrepondo. eixos devem ficar mais externos"*).
     const faixaDasCotas = faixaVazia();
+    // Os pontos (px) do que as cotas já ocupam — para a cadeia do LOTE começar além das da edificação (10/10/2026).
+    const pontosDasCotas: { x: number; y: number }[] = [];
+    const marcarCota = (...pts: { x: number; y: number }[]) => {
+      crescerFaixa(faixaDasCotas, ...pts);
+      pontosDasCotas.push(...pts);
+    };
     // As caixas dos rótulos de cota já escritos neste quadro (px): o rótulo POR FORA não pode cair em cima de outro.
     const rotulosDeCotaPostos: { x0: number; y0: number; x1: number; y1: number }[] = [];
 
@@ -4525,9 +4533,11 @@ export default function BlueprintCanvas({
        * número fica de fora quando não cabe — sem a linha, a cadeia parecia não começar no canto do lote.
        */
       minimoPx: number = MIN_PX_COTA_PAREDE,
+      /** Afastamento a MAIS, mm do modelo — a cadeia do lote além das cotas da edificação (10/10/2026). */
+      extraMm = 0,
     ): { de: number; ate: number }[] => {
       ctx.strokeStyle = corLinhaCota;
-      const afasta = folgaBaseMm + passoMm * nivelAfastamento;
+      const afasta = folgaBaseMm + passoMm * nivelAfastamento + extraMm;
       // Os trechos que SAÍRAM: só eles ganham linha de chamada.
       const desenhados: { de: number; ate: number }[] = [];
       for (const [indice, seg] of segmentos.entries()) {
@@ -4535,7 +4545,7 @@ export default function BlueprintCanvas({
         const b = paraTela(pontoDaCota(lado, seg.ate, afasta) as Point);
         if (Math.hypot(b.x - a.x, b.y - a.y) < minimoPx) continue;
         desenhados.push(seg);
-        crescerFaixa(faixaDasCotas, a, b);
+        marcarCota(a, b);
 
         // O VÃO ganha traço mais forte: numa cadeia de esquadria o que se
         // procura é onde estão as aberturas, e sem distinção elas se perdem
@@ -4618,7 +4628,7 @@ export default function BlueprintCanvas({
         if (!cabe && rotulosDeCotaPostos.some((r) => r.x0 < caixa.x1 && caixa.x0 < r.x1 && r.y0 < caixa.y1 && caixa.y0 < r.y1)) continue;
         rotulosDeCotaPostos.push(caixa);
         // O rótulo de fora também ocupa a faixa das cotas: a bolha do eixo vai além dele.
-        if (!cabe) crescerFaixa(faixaDasCotas, { x: caixa.x0, y: caixa.y0 }, { x: caixa.x1, y: caixa.y1 });
+        if (!cabe) marcarCota({ x: caixa.x0, y: caixa.y0 }, { x: caixa.x1, y: caixa.y1 }, { x: caixa.x0, y: caixa.y1 }, { x: caixa.x1, y: caixa.y0 });
 
         ctx.save();
         ctx.translate(centro.x, centro.y);
@@ -4632,12 +4642,12 @@ export default function BlueprintCanvas({
     // LINHAS DE CHAMADA (07/10/2026) — *"veja que o início e fim das cotas encostam aonde inicia e termina a
     // medida"*. Uma por quebra do lado: da FACE do objeto (+ folga) até um pouco além da linha de cota mais externa
     // que quebra ali. A regra (e as folgas) mora em `LINHA_DE_CHAMADA`, a mesma do PDF e do DXF.
-    const desenharChamadas = (lado: LadoDoContorno, faceMm: number, cadeias: { segmentos: { de: number; ate: number }[]; nivel: number }[]) => {
+    const desenharChamadas = (lado: LadoDoContorno, faceMm: number, cadeias: { segmentos: { de: number; ate: number }[]; nivel: number }[], extraMm = 0) => {
       ctx.strokeStyle = corLinhaCota;
       ctx.lineWidth = 0.75;
       const inicio = faceMm + LINHA_DE_CHAMADA.folgaTelaPx / vista.escala;
       for (const ch of chamadasDoLado(cadeias)) {
-        const fim = folgaBaseMm + passoMm * ch.nivel + LINHA_DE_CHAMADA.ultrapassaTelaPx / vista.escala;
+        const fim = folgaBaseMm + passoMm * ch.nivel + extraMm + LINHA_DE_CHAMADA.ultrapassaTelaPx / vista.escala;
         if (fim <= inicio) continue;
         const a = paraTela(pontoDaCota(lado, ch.t, inicio) as Point);
         const b = paraTela(pontoDaCota(lado, ch.t, fim) as Point);
@@ -4645,7 +4655,7 @@ export default function BlueprintCanvas({
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
-        crescerFaixa(faixaDasCotas, b);
+        marcarCota(b);
       }
       ctx.lineWidth = 1;
     };
@@ -5669,12 +5679,27 @@ export default function BlueprintCanvas({
       const envelopeVisivel = mostrarEnvelope ? (envelopePecas?.length ? envelopePecas : envelope.length >= 3 ? [envelope] : []) : [];
       const subRegioesNaCota = cotasSubRegioes ? subRegioes.filter((s) => s.pontos.length >= 3 && !ocultos.has(s.id)).map((s) => s.pontos) : [];
       const detalhes = detalhesDoLote(limitesDoNivel, envelopeVisivel, subRegioesNaCota);
+      // ALÉM DAS COTAS DA EDIFICAÇÃO (10/10/2026): com a parede perto da divisa, as cadeias dela atravessam a divisa;
+      // a do lote começa além do que elas já ocupam (`alcanceAlemDoLado`), com 6 px de respiro.
+      const dasParedes = [...pontosDasCotas];
       for (const c of cadeiasDoContorno(anelDoLoteFechado(limitesDoNivel), blocosDoNivel, cadeiasDeCota, detalhes)) {
+        const a = paraTela(c.lado.a);
+        const b = paraTela(c.lado.b);
+        const comprimento = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const fora = paraTela(pontoDaCota(c.lado, 0, 1000) as Point);
+        const cn = Math.hypot(fora.x - a.x, fora.y - a.y) || 1;
+        const alcance = alcanceAlemDoLado(dasParedes, {
+          a,
+          u: { x: (b.x - a.x) / comprimento, y: (b.y - a.y) / comprimento },
+          n: { x: (fora.x - a.x) / cn, y: (fora.y - a.y) / cn },
+          comprimento,
+        });
+        const extraMm = deslocamentoDaCadeiaDoLote(alcance, 6, 10) / vista.escala;
         const desenhadas: { segmentos: { de: number; ate: number }[]; nivel: number }[] = [];
-        if (c.parcial.length > 0) desenhadas.push({ segmentos: desenharCadeia(c.lado, c.parcial, 1, 1), nivel: 1 });
+        if (c.parcial.length > 0) desenhadas.push({ segmentos: desenharCadeia(c.lado, c.parcial, 1, 1, extraMm), nivel: 1 });
         const nivelDoTotal = c.parcial.length > 0 ? 2 : 1;
-        desenhadas.push({ segmentos: desenharCadeia(c.lado, [c.total], nivelDoTotal, 1), nivel: nivelDoTotal });
-        desenharChamadas(c.lado, 0, desenhadas);
+        desenhadas.push({ segmentos: desenharCadeia(c.lado, [c.total], nivelDoTotal, 1, extraMm), nivel: nivelDoTotal });
+        desenharChamadas(c.lado, 0, desenhadas, extraMm);
       }
       ctx.restore();
     }

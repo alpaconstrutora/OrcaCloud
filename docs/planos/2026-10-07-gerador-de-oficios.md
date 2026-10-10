@@ -1001,7 +1001,7 @@ cabeçalho/rodapé/margens e vê o PDF de prévia com dados de exemplo e texto s
   GED com `metadados.tipo = 'OFICIO_RECEBIDO'`, congelado com hash; "Responder" cria o rascunho vinculado e
   `{{documento.em_resposta_a}}` imprime a referência.
 
-**F5 — `oficios-f5-envio-validacao`** (planejada):
+**F5 — `oficios-f5-envio-validacao`** (estado na seção Estado):
 
 - **Envio por e-mail**: Edge Function `doc-gen-enviar` (Resend com o PDF em `attachments` base64, gate
   `exigirMembro`, prova 401 sem header e 403 de outra org; prova de envio para `delivered@resend.dev`);
@@ -1248,6 +1248,43 @@ pendências futuras na seção própria.
       emitida; o recebido que é resposta a um ofício nosso aparecia "Sem prazo" (agora "Resposta ao OF-…"); "Validação —
       pronto para emitir" aparecia em ofício já emitido
 - [x] F4 · 6 — limpeza: ofício, recebidos, PDFs (Storage), pastas, tarefas, modelo de teste apagados; contador zerado
+- [x] F4 · publicada em 10/10 (`904637fd` + `994db947`): check-run `ci` **success**; `conferir-producao.sh`: o domínio
+      serve `994db94` e o bundle contém "Registrar recebido"; frente fechada
+
+### F5 — envio e validação (frente `oficios-f5-envio-validacao`, base `994db947`)
+
+- [x] F5 · 1 — migration `aplicar_20271010000600_oficio_envio_validacao.sql` **aplicada em 10/10**: `anexos_no_pdf`
+      (congela com o conteúdo); `doc_gen_registrar_envio` (membro; 1º envio de EMITIDO → ENVIADO pela mesma permissão da
+      tramitação; depois, evento REENVIADO — a situação não volta); `doc_gen_validar` (anon de propósito, molde do
+      certificado da Academia: número, emitente, destinatário, datas, situação e SHA-256 — sem `storage_path`, assunto,
+      texto nem signatários; rascunho "não existe"). `check-rls-postura.sh` ganhou `doc_gen_validar` na allowlist, com o
+      motivo
+- [x] F5 · 2 — Edge Function `doc-gen-enviar` **publicada**: `exigirMembro` da organização DO documento; outra
+      organização e id inexistente respondem igual (404); anexos só se forem GED da mesma organização (id alheio posto à
+      mão em `anexos` não exfiltra arquivo); PDF oficial + anexos opcionais em `attachments` (teto 25 MB, 10
+      destinatários); `reply_to` = quem envia; registro do envio com o JWT do usuário. **Portão provado:** sem header 401;
+      chave anon num ofício real 401 ("Token inválido"); usuário em ofício de outra organização 404; id inválido 400;
+      ofício cancelado 422
+- [x] F5 · 3 — PDF: bloco "Autenticidade" com **QR Code nativo do pdfmake** (determinístico, sem serviço externo) e o
+      endereço `/publico/validar-documento/<id>`; anexos do GED dentro do PDF (pdfjs → JPEG, até 30 páginas; outro formato
+      vira página de aviso), `import()` dinâmico para não pesar quem não usa
+- [x] F5 · 4 — telas: "Enviar por e-mail" (Para/Cópia/mensagem, anexos opcionais), "Por WhatsApp" (`wa.me` com texto e
+      link de validação; o envio só é registrado quando o usuário confirma que mandou), "Copiar link de validação";
+      checkbox "Incluir os anexos do GED dentro do PDF"; página pública `PublicDocumentoChecker` (sem login; confere o
+      SHA-256 de um PDF escolhido NO NAVEGADOR, o arquivo não sai da máquina)
+- [x] F5 · 5 — testes `docGenEnvio.test.ts` (11): link de validação, telefone/`wa.me`, lista de e-mails, texto padrão,
+      REENVIADO, QR inquebrável, páginas de anexo com título e dentro da área útil, validação pública sem caminho de
+      arquivo, REVOKE, portão e recorte por organização na function. Tipos 0 erros
+- [x] F5 · 6 — **conferência no app com gravação real** (`C:/tmp/pwtest/oficios_f5.js` + `oficios_f5_publica.js`):
+      rascunho com anexo enviado ao GED e "anexos dentro do PDF" → emitir `OF-0001/2026` → PDF de 2 páginas com
+      "Autenticidade … /publico/validar-documento/<id>" e "Anexo 1 — PW-anexo-memorial" → e-mail para
+      `delivered@resend.dev` (Resend aceitou, id `01a125bf…`; ofício → Enviado; evento com destinatário e id) → WhatsApp
+      (`api.whatsapp.com/send/?phone=5535999990000…`; evento REENVIADO) → **página pública sem login**: "Documento
+      autêntico", número, emitente, destinatário, situação e o SHA-256 = o do PDF baixado; o PDF oficial "é idêntico", outro
+      PDF "NÃO é"; id inexistente "não encontrado" → cancelar → envio desligado com o motivo e a página pública mostra
+      "Documento cancelado pelo emitente". 0 erros de JS, 0 respostas 4xx/5xx
+- [x] F5 · 7 — limpeza: ofício, anexo do GED, PDFs (Storage), ofício de outra organização, modelos de teste apagados;
+      contador zerado; travas religadas
 
 
 ## Verificação

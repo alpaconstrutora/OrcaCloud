@@ -62,6 +62,7 @@ export function descreverEvento(e: Pick<DocGenEvento, 'tipo' | 'dados'>): string
         case 'APROVACAO_DESFEITA': return texto(d.motivo) ? `Aprovação desfeita — ${texto(d.motivo).toLowerCase()}` : 'Retirado da aprovação';
         case 'ASSINADO': return partes([`Assinado eletronicamente por ${texto(d.nome)}`, d.versao ? `versão ${texto(d.versao)}` : '']);
         case 'EMITIDO': return partes(['Emitido', texto(d.numero) && `nº ${texto(d.numero)}`]);
+        case 'REENVIADO': return partes(['Enviado de novo', rotuloCanal(d.canal), texto(d.para) && `para ${texto(d.para)}`]);
         case 'ENVIADO': return partes(['Enviado', rotuloCanal(d.canal), texto(d.para) && `para ${texto(d.para)}`, texto(d.rastreio) && `rastreio ${texto(d.rastreio)}`, texto(d.observacao)]);
         case 'RECEBIDO': return partes(['Recebido pelo destinatário', texto(d.protocolo) && `protocolo ${texto(d.protocolo)}`, texto(d.recebido_por) && `por ${texto(d.recebido_por)}`, d.recebido_em ? `em ${dataCurta(texto(d.recebido_em))}` : '', texto(d.observacao)]);
         case 'RESPONDIDO': return partes(['Respondido', texto(d.resposta) && `pela ${texto(d.resposta)}`, texto(d.observacao)]);

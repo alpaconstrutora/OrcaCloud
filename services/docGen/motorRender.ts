@@ -35,6 +35,18 @@ export interface EntradaRender {
     anexos?: string[];
     logoDataUrl?: string | null;
     titulo?: string;
+    /** F5: bloco de autenticidade no fim do texto — QR Code + endereço da validação pública. */
+    validacao?: { url: string } | null;
+    /** F5: anexos do GED DENTRO do PDF — páginas já rasterizadas, uma por imagem, depois do texto. */
+    paginasAnexas?: AnexoRasterizado[] | null;
+}
+
+/** Um anexo pronto para entrar no PDF: título e as páginas como imagem (data URL). */
+export interface AnexoRasterizado {
+    titulo: string;
+    paginas: { dataUrl: string; largura: number; altura: number }[];
+    /** Arquivo que não vira imagem (ex.: .docx) — entra só uma página dizendo onde consultar. */
+    aviso?: string | null;
 }
 
 // ─── Unidades e cores ──────────────────────────────────────────────────────────
@@ -333,6 +345,40 @@ function rodape(st: Estado): ((pagina: number, total: number) => Content) | unde
 }
 
 // ─── Entrada principal ─────────────────────────────────────────────────────────
+/** QR + endereço da validação pública. Inquebrável: o QR nunca fica numa página e o texto noutra. */
+function blocoValidacao(url: string): Content {
+    return {
+        unbreakable: true,
+        margin: [0, 18, 0, 0],
+        columns: [
+            { qr: url, fit: 62, width: 'auto' },
+            {
+                width: '*',
+                margin: [10, 4, 0, 0],
+                stack: [
+                    { text: 'Autenticidade', bold: true, fontSize: 8, color: COR_TEXTO },
+                    { text: 'Confira número, emitente, data e o hash deste PDF pelo QR Code ou em:', fontSize: 7, color: COR_SUAVE },
+                    { text: url, fontSize: 7, color: COR_LINK, link: url },
+                ],
+            },
+        ],
+    } as Content;
+}
+
+/** Páginas de um anexo: cada imagem numa página, a primeira com o título do anexo. */
+function paginasDoAnexo(anexo: AnexoRasterizado, largura: number, altura: number): Content[] {
+    const titulo = (texto: string): Content => ({ text: texto, fontSize: 8, color: COR_SUAVE, margin: [0, 0, 0, 6], pageBreak: 'before' });
+    if (!anexo.paginas.length) {
+        return [titulo(anexo.titulo), { text: anexo.aviso || 'Arquivo não incorporado — consulte o anexo no GED.', fontSize: 10, color: COR_SUAVE }];
+    }
+    const out: Content[] = [];
+    anexo.paginas.forEach((p, i) => {
+        out.push(titulo(anexo.paginas.length > 1 ? `${anexo.titulo} — página ${i + 1} de ${anexo.paginas.length}` : anexo.titulo));
+        out.push({ image: p.dataUrl, fit: [largura, altura], alignment: 'center' });
+    });
+    return out;
+}
+
 export function montarDocDefinition(e: EntradaRender): TDocumentDefinitions {
     const st: Estado = { e, base: e.layout.tamanhoFonte };
     const m = e.layout.margens;
@@ -340,6 +386,10 @@ export function montarDocDefinition(e: EntradaRender): TDocumentDefinitions {
     const base = mmParaPt(m.inferior) + (e.layout.rodape.mostrar ? mmParaPt(ALTURA_RODAPE_MM) : 0);
 
     const corpo = (e.conteudo.content ?? []).map(n => bloco(n, st)).filter((b): b is Content => b !== null);
+    if (e.validacao?.url) corpo.push(blocoValidacao(e.validacao.url));
+    const largura = A4.largura - mmParaPt(m.esquerda) - mmParaPt(m.direita);
+    const altura = A4.altura - topo - base - 24;   // 24 pt: a linha de título do anexo
+    for (const anexo of e.paginasAnexas ?? []) corpo.push(...paginasDoAnexo(anexo, largura, altura));
 
     const def: TDocumentDefinitions = {
         pageSize: 'A4',

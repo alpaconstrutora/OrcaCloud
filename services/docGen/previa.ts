@@ -1,7 +1,7 @@
 import type { Organization } from '../../types/users';
 import type { DocTipTap, LayoutModelo } from '../../types/docGen';
 import { contextoDeExemplo, resolverTodos } from './catalogoCampos';
-import { camposLivresDoModelo, montarDocDefinition } from './motorRender';
+import { camposLivresDoModelo, montarDocDefinition, type AnexoRasterizado } from './motorRender';
 import { gerarPdfBlob } from './pdf';
 
 /**
@@ -88,6 +88,10 @@ export interface EntradaPreviaDocumento {
     organization?: Organization | null;
     /** Número já emitido; no rascunho, o texto avisa que ele nasce na emissão. */
     numero?: string | null;
+    /** F5: QR + endereço da validação pública. */
+    validacaoUrl?: string | null;
+    /** F5: anexos do GED já rasterizados (quando o ofício os leva dentro do PDF). */
+    paginasAnexas?: AnexoRasterizado[] | null;
 }
 
 export const NUMERO_NO_RASCUNHO = 'nº atribuído na emissão';
@@ -109,6 +113,8 @@ export async function previaDoDocumento(
         anexos: e.anexos,
         logoDataUrl,
         titulo: e.titulo,
+        validacao: e.validacaoUrl ? { url: e.validacaoUrl } : null,
+        paginasAnexas: e.paginasAnexas ?? null,
     });
     return gerarPdfBlob(def, oficial ?? { id: 'previa-do-documento', criadoEm: new Date(Date.UTC(2026, 0, 1, 12)) });
 }

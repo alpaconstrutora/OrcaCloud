@@ -379,6 +379,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 const PublicMarketplaceView = React.lazy(() => import('./components/public/PublicMarketplaceView'));
 const PublicPlantChecker = React.lazy(() => import('./components/public/PublicPlantChecker').then(m => ({ default: m.PublicPlantChecker })));
 const PublicCertificadoChecker = React.lazy(() => import('./components/public/PublicCertificadoChecker').then(m => ({ default: m.PublicCertificadoChecker })));
+const PublicDocumentoChecker = React.lazy(() => import('./components/public/PublicDocumentoChecker').then(m => ({ default: m.PublicDocumentoChecker })));
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { useTabRouter } from './hooks/useTabRouter';
 import { syncViewToUrl } from './lib/tabRouter';
@@ -654,6 +655,12 @@ const App: React.FC = () => {
     const match = window.location.pathname.match(/^\/publico\/validar-certificado\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
   }, []);
+
+  // Validação pública de documento emitido (ofício) — destino do QR do PDF (F5).
+  const publicDocumentoId = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/publico\/validar-documento\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  }, []);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const showOverlay = loadingSession || !profileSynchronized || isValidating || projectsLoading;
@@ -744,6 +751,11 @@ const App: React.FC = () => {
   if (publicCertificadoCodigo) return (
     <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
       <PublicCertificadoChecker />
+    </React.Suspense>
+  );
+  if (publicDocumentoId) return (
+    <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+      <PublicDocumentoChecker />
     </React.Suspense>
   );
 

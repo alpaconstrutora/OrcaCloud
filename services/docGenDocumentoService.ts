@@ -23,7 +23,7 @@ const COLUNAS = [
     'id', 'organization_id', 'company_id', 'modelo_id', 'modelo_versao', 'tipo_documental', 'status', 'numero', 'assunto',
     'data_documento', 'cidade', 'department_id', 'destinatario_tipo', 'destinatario_id', 'destinatario_snapshot',
     'project_id', 'empreendimento_id', 'contract_id', 'client_id', 'supplier_id', 'valores', 'conteudo', 'signatarios',
-    'anexos', 'documento_relacionado_id', 'resposta_esperada_ate', 'versao', 'ged_document_id', 'ged_version_id',
+    'anexos', 'documento_relacionado_id', 'resposta_esperada_ate', 'anexos_no_pdf', 'versao', 'ged_document_id', 'ged_version_id',
     'emitido_por', 'emitido_em', 'approval_status', 'approval_chain', 'approval_required_levels',
     'created_by', 'created_at', 'updated_at',
 ].join(', ');
@@ -33,7 +33,7 @@ const COLUNAS_LISTA = [
     'id', 'organization_id', 'company_id', 'modelo_id', 'modelo_versao', 'tipo_documental', 'status', 'numero', 'assunto',
     'data_documento', 'cidade', 'department_id', 'destinatario_tipo', 'destinatario_id', 'destinatario_snapshot',
     'project_id', 'empreendimento_id', 'contract_id', 'client_id', 'supplier_id', 'signatarios', 'anexos',
-    'documento_relacionado_id', 'resposta_esperada_ate', 'versao', 'ged_document_id', 'ged_version_id', 'emitido_por', 'emitido_em',
+    'documento_relacionado_id', 'resposta_esperada_ate', 'anexos_no_pdf', 'versao', 'ged_document_id', 'ged_version_id', 'emitido_por', 'emitido_em',
     'approval_status', 'approval_chain', 'approval_required_levels', 'created_by', 'created_at', 'updated_at',
 ].join(', ');
 
@@ -50,6 +50,7 @@ function normalizar(row: Record<string, unknown>): DocGenDocumento {
         approval_status: (row.approval_status as DocGenDocumento['approval_status']) ?? 'RASCUNHO',
         approval_chain: Array.isArray(row.approval_chain) ? (row.approval_chain as DocGenDocumento['approval_chain']) : [],
         approval_required_levels: Number(row.approval_required_levels) || 1,
+        anexos_no_pdf: row.anexos_no_pdf === true,
     };
 }
 
@@ -111,6 +112,7 @@ export function rascunhoDoModelo(modelo: DocGenModelo, extras?: Partial<DocGenDo
         anexos: [],
         documento_relacionado_id: null,
         resposta_esperada_ate: null,
+        anexos_no_pdf: false,
         ...extras,
     };
 }
@@ -141,6 +143,7 @@ function payloadDe(r: DocGenDocumentoRascunho): DocGenDocumentoRascunho {
         anexos: r.anexos ?? [],
         documento_relacionado_id: r.documento_relacionado_id,
         resposta_esperada_ate: r.resposta_esperada_ate || null,
+        anexos_no_pdf: !!r.anexos_no_pdf,
     };
 }
 

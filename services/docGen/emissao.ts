@@ -13,6 +13,7 @@ import { ROTULO_TIPO } from './destinatario';
 import { anoDe, garantirPasta } from './gedPastas';
 import { dataHoraCurta } from './dataExtenso';
 import { textoEmRespostaA } from './tramitacao';
+import { urlDeValidacao } from './envio';
 
 export { anoDe, garantirPasta };
 
@@ -120,6 +121,11 @@ export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Pro
         anexos: doc.anexos.map(a => a.nome),
         organization: deps.organization,
         numero: doc.numero,
+        validacaoUrl: urlDeValidacao(doc.id),
+        // Import dinâmico: pdfjs (e o worker) só carregam quando o ofício leva anexos dentro.
+        paginasAnexas: doc.anexos_no_pdf
+            ? await import('./anexosNoPdf').then(m => m.rasterizarAnexos(doc.organization_id, doc.anexos))
+            : null,
     }, { id: doc.id, criadoEm: new Date(doc.emitido_em) });
 
     const sha256 = await sha256DoBlob(blob);
@@ -161,6 +167,8 @@ export async function arquivarNoGed(documentoId: string, deps: DepsEmissao): Pro
             emitido_em: doc.emitido_em,
             signatarios: doc.signatarios.map(s => s.nome),
             assinado_eletronicamente: assinaturas.filter(a => a.assinadoEm).map(a => ({ nome: a.nome, em: a.assinadoEm })),
+            validacao: urlDeValidacao(doc.id),
+            anexos_no_pdf: doc.anexos_no_pdf,
         },
     });
 

@@ -1,5 +1,7 @@
 import React from 'react';
-import { Send, Inbox, Reply, CheckCheck, Ban, Loader2, CalendarClock, FileUp } from 'lucide-react';
+import { Send, Inbox, Reply, CheckCheck, Ban, Loader2, CalendarClock, FileUp, Mail, MessageCircle, Link2 } from 'lucide-react';
+import EnviarOficioSheet from './EnviarOficioSheet';
+import { urlDeValidacao } from '../../services/docGen/envio';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { useToast } from '../../hooks/useToast';
 import type { DocGenDocumento, DocGenSituacaoTramitacao } from '../../types/docGen';
@@ -19,6 +21,10 @@ interface Props {
     onCancelar: () => void;
     /** "Registrar resposta" → arquivar o ofício de resposta recebido (aba Recebidos). */
     onArquivarResposta: () => void;
+    /** F5: nome de quem emite (empresa ou organização) — vai no texto do envio. */
+    emitente: string;
+    /** F5: o histórico mudou sem mudar a situação (reenvio) — a tela-mãe relê. */
+    onHistoricoMudou: () => void;
 }
 
 const INPUT = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
@@ -32,9 +38,28 @@ const ACAO: Record<Exclude<DocGenSituacaoTramitacao, 'CANCELADO'>, { label: stri
     ENCERRADO: { label: 'Encerrar', icon: <CheckCheck className="w-[15px] h-[15px]" />, titulo: 'Encerrar o ofício', descricao: 'Nada mais a acompanhar. Fica no histórico; não volta.' },
 };
 
-export default function TramitacaoCard({ documento, onDocumento, onCancelar, onArquivarResposta }: Props) {
+export default function TramitacaoCard({ documento, onDocumento, onCancelar, onArquivarResposta, emitente, onHistoricoMudou }: Props) {
     const { showToast } = useToast();
     const [acao, setAcao] = React.useState<Exclude<DocGenSituacaoTramitacao, 'CANCELADO'> | null>(null);
+    const [envio, setEnvio] = React.useState<'EMAIL' | 'WHATSAPP' | null>(null);
+    const podeEnviar = documento.status !== 'CANCELADO' && !!documento.ged_version_id;
+    const motivoEnviar = documento.status === 'CANCELADO' ? 'Ofício cancelado não é enviado.'
+        : !documento.ged_version_id ? 'O PDF oficial ainda não está no GED — use "Gerar PDF e arquivar no GED".' : undefined;
+
+    const copiarLink = async () => {
+        try {
+            await navigator.clipboard.writeText(urlDeValidacao(documento.id));
+            showToast('Link de validação copiado.', 'success');
+        } catch {
+            showToast('Não foi possível copiar — o link é: ' + urlDeValidacao(documento.id), 'error');
+        }
+    };
+
+    const depoisDoEnvio = async () => {
+        const relido = await docGenDocumentoService.get(documento.id).catch(() => null);
+        if (relido && relido.status !== documento.status) onDocumento(relido);
+        else onHistoricoMudou();
+    };
     const [prazo, setPrazo] = React.useState(documento.resposta_esperada_ate ?? '');
     const [gravandoPrazo, setGravandoPrazo] = React.useState(false);
     React.useEffect(() => { setPrazo(documento.resposta_esperada_ate ?? ''); }, [documento.resposta_esperada_ate]);
@@ -85,6 +110,19 @@ export default function TramitacaoCard({ documento, onDocumento, onCancelar, onA
                 </div>
             </div>
 
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-gray-700 mr-1">Enviar</span>
+                <button type="button" onClick={() => setEnvio('EMAIL')} disabled={!podeEnviar} title={motivoEnviar ?? 'Envia o PDF oficial em anexo'} className={BTN_SEC}>
+                    <Mail className="w-[15px] h-[15px]" /> Por e-mail
+                </button>
+                <button type="button" onClick={() => setEnvio('WHATSAPP')} disabled={!podeEnviar} title={motivoEnviar ?? 'Abre o WhatsApp com a mensagem e o link de validação'} className={BTN_SEC}>
+                    <MessageCircle className="w-[15px] h-[15px]" /> Por WhatsApp
+                </button>
+                <button type="button" onClick={copiarLink} disabled={documento.status === 'RASCUNHO'} title="Endereço público que confere número, emitente, data e o hash do PDF (o mesmo do QR Code)" className={BTN_SEC}>
+                    <Link2 className="w-[15px] h-[15px]" /> Copiar link de validação
+                </button>
+            </div>
+
             {(emCurso || documento.resposta_esperada_ate) && (
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1.5">
@@ -102,6 +140,14 @@ export default function TramitacaoCard({ documento, onDocumento, onCancelar, onA
                     {vencido && <span className="text-sm text-red-600 pb-2">Prazo vencido em {dataCurta(documento.resposta_esperada_ate)}</span>}
                 </div>
             )}
+
+            <EnviarOficioSheet
+                canal={envio}
+                documento={documento}
+                emitente={emitente}
+                onClose={() => setEnvio(null)}
+                onEnviado={() => void depoisDoEnvio()}
+            />
 
             <TramitarSheet
                 acao={acao}

@@ -15,6 +15,7 @@ import { useConfirm } from '../ui/confirm';
 import { emitirOficio, arquivarNoGed, urlDoPdf, cancelarOficio, assinaturasParaPdf, assinaturasValidas } from '../../services/docGen/emissao';
 import { ROTULO_SITUACAO, referenciaDeOficio, type OficioRecebido } from '../../services/docGen/tramitacao';
 import AprovacaoAssinaturaCard from './AprovacaoAssinaturaCard';
+import { urlDeValidacao } from '../../services/docGen/envio';
 import TramitacaoCard from './TramitacaoCard';
 import VinculosPainel, { type AlvoVinculo, type VinculoPendente } from './VinculosPainel';
 import HistoricoDocumento from './HistoricoDocumento';
@@ -469,6 +470,10 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                 anexos: draft.anexos.map(a => a.nome),
                 organization,
                 numero: atual?.numero ?? null,
+                validacaoUrl: atual ? urlDeValidacao(atual.id) : null,
+                paginasAnexas: draft.anexos_no_pdf
+                    ? await import('../../services/docGen/anexosNoPdf').then(m => m.rasterizarAnexos(orgId, draft.anexos))
+                    : null,
             }));
         } catch (e) {
             setPreviaBlob(null);
@@ -704,6 +709,16 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                         emailUsuario={emailUsuario}
                         somenteLeitura={somenteLeitura}
                     />
+                    {draft.anexos.some(a => a.tipo === 'GED') && (
+                        <label className="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" checked={draft.anexos_no_pdf} disabled={somenteLeitura}
+                                onChange={e => set('anexos_no_pdf', e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-gray-300 text-blue-600" />
+                            <span>
+                                <span className="block">Incluir os anexos do GED dentro do PDF do ofício</span>
+                                <span className="block text-xs text-gray-400">Cada página entra como imagem depois do texto (PDF e imagens; até 30 páginas). Outros formatos ficam só no GED.</span>
+                            </span>
+                        </label>
+                    )}
                 </div>
 
                 <div className="space-y-4" id="secao-signatarios">
@@ -767,6 +782,8 @@ export default function NovoOficioTela({ modelo, documento, respondendoA, docume
                         onDocumento={doc => { setAtual(doc); onSaved(doc); void recarregarExtras(); }}
                         onCancelar={cancelar}
                         onArquivarResposta={() => setRegistrandoResposta(true)}
+                        emitente={valores['empresa.razao_social'] || (companies.find(c => c.id === atual.company_id)?.razao_social ?? organization?.name ?? '')}
+                        onHistoricoMudou={() => void recarregarExtras()}
                     />
                 </div>
             )}

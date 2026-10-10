@@ -199,6 +199,8 @@ export interface DocGenDocumento {
     anexos: AnexoDoc[];
     documento_relacionado_id: string | null;
     resposta_esperada_ate: string | null;
+    /** F5: os anexos do GED entram DENTRO do PDF (páginas depois do texto). */
+    anexos_no_pdf: boolean;
     versao: number;
     ged_document_id: string | null;
     ged_version_id: string | null;

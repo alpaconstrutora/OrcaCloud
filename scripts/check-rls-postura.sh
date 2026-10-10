@@ -85,9 +85,10 @@ fi
 # ── 3. SECURITY DEFINER executável por anon (achados C3-01 e C3-02) ─────────
 # O PostgreSQL concede EXECUTE a PUBLIC por padrão; sem REVOKE, `anon` executa.
 # A allowlist é o conjunto legítimo: RPCs recortadas por token de portal e as
-# funções realmente públicas do marketplace.
+# funções realmente públicas do marketplace, e os destinos de QR (certificado da
+# Academia, ofício — `doc_gen_validar`, recortado pelo UUID, sem storage_path).
 secao "3. Funções SECURITY DEFINER executáveis por anon (fora da allowlist)"
-R=$(consulta "SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND has_function_privilege('anon', p.oid, 'EXECUTE') AND p.prorettype <> 'trigger'::regtype AND pg_get_function_result(p.oid) <> 'boolean' AND pg_get_function_identity_arguments(p.oid) <> '' AND pg_get_function_identity_arguments(p.oid) NOT LIKE '%p_token%' AND p.proname NOT LIKE 'st\\_%' AND p.proname NOT IN ( 'get_public_marketplace','submit_public_interest', 'academy_validate_certificate','fn_get_document_status_public') ORDER BY 1;")
+R=$(consulta "SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND has_function_privilege('anon', p.oid, 'EXECUTE') AND p.prorettype <> 'trigger'::regtype AND pg_get_function_result(p.oid) <> 'boolean' AND pg_get_function_identity_arguments(p.oid) <> '' AND pg_get_function_identity_arguments(p.oid) NOT LIKE '%p_token%' AND p.proname NOT LIKE 'st\\_%' AND p.proname NOT IN ( 'get_public_marketplace','submit_public_interest', 'academy_validate_certificate','fn_get_document_status_public','doc_gen_validar') ORDER BY 1;")
 if [ "$(tem_resultado "$R")" = "sim" ]; then
     echo "$R"
     echo "❌ SECURITY DEFINER alcançável por anon sem token."

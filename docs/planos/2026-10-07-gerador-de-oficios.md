@@ -1128,7 +1128,45 @@ assistente de redação via API Claude em Edge Function (ler a skill `claude-api
       **success**. Vercel "success"; `conferir-producao.sh` ✓: o domínio serve `56c1bc8` e o bundle contém
       "Escolher destinatário" e "Atualizar cadastro"
 - [ ] F2 · fechar a frente (`fechar-frente.sh oficios-f2-novo-oficio`)
-- [ ] F3
+- [x] F3 · 1 — Nomenclatura: `OFICIO` no CHECK e no catálogo (`OF` + `DEPARTAMENTO`, 3 dígitos, `/ano`), variável
+      `DEPARTAMENTO` só para o Ofício (`extraVariables`), `year_suffix` por linha (coluna "/Ano" na tela), ano no
+      escopo do contador. **Mudança de rumo:** o separador NÃO ganhou `/` — o sufixo `/{ano}` já dá
+      `OF-ENG-047/2026`. `fn_format_document_number` de 8 argumentos chama a de 6, que NÃO mudou (banco = arquivo,
+      conferido por md5). Departamentos ganham **Sigla** — e o formulário de departamento, que gravava o estado antigo
+      (criar saía com nome vazio e desistia calado; editar regravava o que já estava), passou a gravar o que se digita;
+      os dois `confirm()` nativos da tela viraram `useConfirm` (REGRA #1)
+- [x] F3 · 2 — `doc_gen_emitir` (SECURITY DEFINER, REVOKE PUBLIC/anon, organização conferida dentro, `FOR UPDATE`,
+      idempotente, congela a versão salva). `aplicar_20271008000200` **aplicada em 10/10**
+- [x] F3 · 3 — GED: `sha256` e `congelada` nas versões, `metadados` no documento; gatilhos recusam alterar/apagar
+      versão congelada, nova versão e exclusão do documento emitido. `uploadNewDocument`/`uploadNewVersion` calculam o
+      SHA-256 em todo envio; congelar é o ÚLTIMO passo (o rollback do upload continua apagando). `deleteDocument` recusa
+      documento congelado ANTES de apagar arquivos do Storage (senão o registro ficaria sem o PDF). Histórico de
+      versões mostra cadeado + SHA-256 copiável (§27); excluir desligado com o motivo
+- [x] F3 · 4 — gatilho `trg_doc_gen_congelar`: emitido só cancela e registra o arquivo; tirar de RASCUNHO só pela função
+      (permissão local à transação). Não precisou de `doc_gen_registrar_arquivo`: o registro é um UPDATE que o gatilho
+      deixa passar uma vez
+- [x] F3 · 5/6 — `services/docGen/emissao.ts`: número → PDF definitivo (determinístico: id + `emitido_em`) → SHA-256 →
+      pasta `Ofícios/<ano>/<departamento>` → GED congelado com metadados → registro; falha depois do número deixa o
+      ofício EMITIDO sem arquivo e a tela oferece "Gerar PDF e arquivar no GED" (idempotente)
+- [x] F3 · 7 — tela: "Emitir" com `useConfirm` e motivo quando desligado; pós-emissão com número no título, Abrir PDF
+      (URL assinada), Abrir no GED, Cancelar ofício (arquivo vira "arquivado" + etiqueta `cancelado`, nada se apaga)
+- [x] F3 · 8 — **conferência no app com emissão real** (10/10, `C:/tmp/pwtest/oficios_f3.js`, autorizada em 08/10;
+      departamento de teste sigla `PWT` para não tocar em departamento real): `OF-PWT-001/2026`; PDF 59.815 bytes por URL
+      assinada; **SHA-256 do arquivo baixado = o gravado na versão do GED** (`fbaf987d…0134`); GED mostra o aviso de
+      congelado, o cadeado e o hash; pasta `Ofícios / 2026 / PW — Engenharia (teste)`; cancelar → GED `arquivado` +
+      `cancelado`. 0 erros de JS, 0 respostas 4xx/5xx. **Provas no banco** (cada uma desfeita): alterar assunto,
+      voltar a rascunho, trocar o arquivo, forjar emissão por UPDATE, mexer/apagar a versão, nova versão e excluir o
+      documento — todas recusadas com a mensagem certa; 2º clique devolve o mesmo número; data de 2027 reinicia em
+      `001/2027`; cancelado não reemite
+- [x] F3 · 9 — **achado da conferência e corrigido:** a Nomenclatura mostrava `OF-ENG-0001/2026` (dígitos da página) e
+      a emissão deu `OF-PWT-001/2026` (padrão do catálogo, linha não salva). `aplicar_20271010000100` (aplicada 10/10):
+      sem linha salva, a emissão usa separador e dígitos da organização. Provado: o próximo sai `OF-PWT-0002/2026`.
+      **Para a Alpa os ofícios saem com 4 dígitos** (`OF-ENG-0001/2026`) — 3 dígitos exigiria mudar "Dígitos do
+      Sequencial", que vale para todos os documentos
+- [x] F3 · 10 — limpeza autorizada: ofício, PDF (Storage), pastas, modelo e departamento de teste apagados; contadores
+      de ofício da Alpa zerados (o 1º real sai `0001/2026`); travas religadas e conferidas. Suíte 2.909 arquivos /
+      7.904 testes = 7.870 + 34 pendentes + 0 falhas; tipos 0; RLS 9/9; check-ui 0 nos 4 arquivos de tela
+- [ ] F3 · publicação, ci, domínio, fechar a frente
 
 ## Verificação
 

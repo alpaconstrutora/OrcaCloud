@@ -79,6 +79,21 @@ describe('doc_gen_emitir · o padrão do banco é o mesmo do catálogo', () => {
     });
 });
 
+describe('doc_gen_emitir · sem linha salva, segue separador e dígitos da organização (10/10)', () => {
+    // Achado na conferência: a Nomenclatura mostrava OF-ENG-0001/2026 (dígitos da página)
+    // e a emissão dava OF-PWT-001/2026 (padrão do catálogo).
+    const NOVA = readFileSync(join(__dirname, '../supabase/migrations/aplicar_20271010000100_oficio_numero_segue_nomenclatura.sql'), 'utf-8');
+    it('lê separator e seq_padding da organização antes do padrão do catálogo', () => {
+        expect(NOVA).toMatch(/SELECT separator, seq_padding INTO v_separator, v_padding\s+FROM public\.document_numbering_settings\s+WHERE organization_id = v_doc\.organization_id/);
+        expect(NOVA).toContain(`v_padding := COALESCE(v_padding, ${getDocTypeDefault('OFICIO').seqPadding});`);
+        expect(NOVA).toContain(`v_separator := COALESCE(v_separator, '${getDocTypeDefault('OFICIO').separator}');`);
+    });
+    it('continua com REVOKE e autorização dentro (REGRA #7)', () => {
+        expect(NOVA).toMatch(/REVOKE ALL ON FUNCTION public\.doc_gen_emitir\(UUID, JSONB\) FROM PUBLIC, anon;/);
+        expect(NOVA).toContain('organization_members');
+    });
+});
+
 describe('docGen · arquivo e pasta do ofício emitido', () => {
     it('nome do arquivo sem barra', () => {
         expect(nomeDoArquivo('OF-ENG-047/2026')).toBe('OF-ENG-047-2026.pdf');

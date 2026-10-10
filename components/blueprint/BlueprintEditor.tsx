@@ -265,7 +265,7 @@ import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas, suger
 import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
 import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, sugeridosDoVrf, vrfDeOutrosPavimentos } from '../../utils/blueprintVrf';
 import PainelVrf from './PainelVrf';
-import { analisarRedesDeAr, comandosDeConverterTerminaisAntigos, comandosDeDimensionamento, terminaisDeArAntigos, conferenciaDaRedeDeAr, planejarRedeDeAr, ROTULO_DA_REDE_DE_AR, vazoesDosTerminais, ventilacaoDoNivel } from '../../utils/blueprintRedeDeAr';
+import { analisarRedesDeAr, exaustoresDoNivel, comandosDeConverterTerminaisAntigos, comandosDeDimensionamento, terminaisDeArAntigos, conferenciaDaRedeDeAr, planejarRedeDeAr, ROTULO_DA_REDE_DE_AR, vazoesDosTerminais, ventilacaoDoNivel } from '../../utils/blueprintRedeDeAr';
 import PainelRedeDeAr from './PainelRedeDeAr';
 import PainelSelecaoSplit from './PainelSelecaoSplit';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao } from '../../utils/blueprintMemorialClimatizacao';
@@ -3248,7 +3248,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     const vazoes = vazoesDosTerminais(editor.model, cargaDoNivel, hipAr);
     const redes = analisarRedesDeAr(editor.model, levelId, vazoes, hipAr);
     const ventilacao = ventilacaoDoNivel(editor.model, cargaDoNivel, hipAr);
-    return { redes, ventilacao, ajustes: comandosDeDimensionamento(redes), plano: planejarRedeDeAr(editor.model, levelId, vazoes, hipAr), conferencia: conferenciaDaRedeDeAr(redes, ventilacao, hipAr) };
+    return { redes, ventilacao, ajustes: comandosDeDimensionamento(redes), plano: planejarRedeDeAr(editor.model, levelId, vazoes, hipAr), conferencia: conferenciaDaRedeDeAr(redes, ventilacao, hipAr, exaustoresDoNivel(editor.model, levelId)) };
   }, [tarefa, levelId, cargaDoNivel, editor.model, climatizacaoDoEstudo.hipoteses.ar]);
   const mapaDeCalor = useMemo(() => (cargaDoNivel ? coresDaCarga(cargaDoNivel) : undefined), [cargaDoNivel]);
   /** E2.4: os memoriais da climatização (cálculo e descritivo), do estudo inteiro — a prévia e o download saem da MESMA função. */

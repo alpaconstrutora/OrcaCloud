@@ -500,7 +500,7 @@ O detalhe de cada fase está em "Execução", no fim do documento.
   - o achado 8 (as normas) continua aberto e é a pendência A abaixo;
   - o achado 13: o modelo externo como referência entrou na E10.4b, e o RVT direto segue no backlog.
 
-**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **167 ✅ (73 %), 51 🟡 e
+**A tabela item a item da Parte 1 foi REGRADUADA em 10/10.** Dos 228 Essenciais, **172 ✅ (75 %), 46 🟡 e
 10 ❌**; eram 51 / 83 / 94 em 04/10. Os números e os 10 ❌ estão na "Leitura geral".
 
 ### Pendências
@@ -544,11 +544,11 @@ Faltam:
   - **C5:** o DN do dreno pela vazão de condensado;
   - **C6:** o sifão do dreno como peça;
   - **C11:** a linha desenhada como o par na planta e no 3D da tela.
-- **Dutos (C7–C10, próxima frente):**
-  - a exaustão com duto até a fachada (o exaustor é conferido no ambiente, a rede dele não é traçada);
-  - o desvio de pilar no forro (o conflito acusa);
-  - a perda em damper e plenum;
-  - o duto flexível do difusor como peça.
+- ✅ **Dutos — feitos em 10/10 (frente `clima-dutos`):**
+  - **C7:** a exaustão com duto até a veneziana na fachada;
+  - **C8:** o desvio de pilar no forro;
+  - **C9:** a perda em damper e plenum;
+  - **C10:** o duto flexível no ramal do terminal.
 - ✅ **Feitos em 10/10 (frente `clima-cd`):**
   - **C12:** as cotas passam além da condensadora;
   - **C13:** os rótulos do isométrico não encostam;
@@ -809,7 +809,7 @@ ela herda quase de graça:
 | Interligação entre os equipamentos | E | ✅ | `condensadoraId` com invariante `BAD_CONDENSER` (`model.ts:3404, 5262-5266`); a peça conta no nó da linha e do dreno (`utils/blueprintKernel/conexoes.ts:229-237`) |
 | Redes frigorígenas | E | ✅ | disciplina `FRIGORIGENA` em cobre, par líquido/sucção e isolamento num trecho (`model.ts:2563, 2762-2764`), traçado e conferência (`utils/blueprintLinhaFrigorigena.ts`); prumada entre pavimentos (C1) e o par desenhado na planta e no 3D (C11), 10/10 |
 | Dutos | E | ✅ | duto redondo ou retangular (`model.ts:2772`), vazão, perda de carga e espinha automática (`utils/blueprintRedeDeAr.ts:233, 420`); lacunas de acessório em §9–§10 |
-| Exaustores e componentes auxiliares | E | 🟡 | `EXAUSTOR_AR` com vazão (`utils/blueprintHidraulica.ts:698`, `model.ts:3025`) e exaustão conferida por ambiente (`utils/blueprintRedeDeAr.ts:352`); falta traçar o duto de exaustão até a fachada (a rede de ar só parte de dutada/caixa, `utils/blueprintRedeDeAr.ts:49`) |
+| Exaustores e componentes auxiliares | E | ✅ | `EXAUSTOR_AR` com vazão (`utils/blueprintHidraulica.ts:698`, `model.ts:3025`), exaustão conferida por ambiente e o duto do exaustor até a veneziana na fachada (C7, 10/10: `descargaNaFachada`, `exaustoresDoNivel` em `utils/blueprintRedeDeAr.ts`) |
 
 ## 3. Lançamento de evaporadoras
 
@@ -845,7 +845,7 @@ ela herda quase de graça:
 |---|---|---|---|
 | Evaporadoras | E | ✅ | §3 (os limites de catálogo e de desenho estão lá) |
 | Condensadoras | E | ✅ | §4 |
-| Exaustores | E | 🟡 | `EXAUSTOR_AR` com vazão declarada ou derivada (`utils/blueprintRedeDeAr.ts:143`); falta o duto de exaustão até a fachada |
+| Exaustores | E | ✅ | `EXAUSTOR_AR` com vazão declarada ou derivada (`utils/blueprintRedeDeAr.ts`) e o duto de exaustão traçado até a fachada, saindo no IFC como `.VENTILATION.` (C7 + C14, 10/10) |
 | Bocais | E | ✅ | `BOCAL_AR` com ficha e vazão (`utils/blueprintHidraulica.ts:705`, `model.ts:3025`) |
 | Caixas de distribuição | E | ✅ | `CAIXA_DISTRIBUICAO_AR` (`utils/blueprintHidraulica.ts:701`), raiz da rede de ar (`utils/blueprintRedeDeAr.ts:49`) |
 | Bombas de drenagem | E | ✅ | `BOMBA_DRENO` (`utils/blueprintHidraulica.ts:699`), lançada quando o descarte fica alto (`utils/blueprintLinhaFrigorigena.ts:326`) |
@@ -890,11 +890,11 @@ ela herda quase de graça:
 
 | Funcionalidade | Grau | Estado | Evidência / o que falta |
 |---|---|---|---|
-| Lançamento de dutos | E | 🟡 | menu Duto (`MenuComponentes.tsx:755`) e espinha automática no forro (`utils/blueprintRedeDeAr.ts:420`); falta desviar pilar no forro (o conflito acusa) e traçar a exaustão até a fachada |
+| Lançamento de dutos | E | ✅ | menu Duto (`MenuComponentes.tsx`) e espinha automática no forro (`utils/blueprintRedeDeAr.ts`), que contorna o pilar (C8) e traça a exaustão até a fachada (C7), 10/10 |
 | Dutos retangulares | E | ✅ | `Trecho.alturaDutoMm` (`model.ts:2772`), "Seção do duto" no painel (`PainelTrechoSelecionado.tsx:906`) |
 | Representação 2D | E | ✅ | traço na largura real e rótulo "600×300" / "Ø 200" (`BlueprintCanvas.tsx:6304`); bifilar na prancha (`utils/blueprintPranchaClimatizacao.ts:39`) |
 | Representação 3D | E | ✅ | caixa retangular com a largura deitada (`Blueprint3DViewer.tsx:1169-1193`, `utils/blueprintRede.ts:410`) |
-| Modelagem realista dos dutos | E | 🟡 | seção retangular, material e isolamento (envelope no IFC e no conflito, `utils/blueprintKernel/conflitos.ts:101`); falta flange, o isolamento no 3D da tela e o duto flexível como peça (é só material) |
+| Modelagem realista dos dutos | E | 🟡 | seção retangular, material e isolamento (envelope no IFC e no conflito, `utils/blueprintKernel/conflitos.ts:101`) e o ramal final em duto flexível redondo (C10, 10/10); falta flange e o isolamento no 3D da tela |
 | Curvas | E | ✅ | joelho derivado no duto (`conexoes.ts:299-301`), `IfcDuctFitting` (`utils/blueprintIfc.ts:2342-2357`), bolsa retangular no 3D (`utils/blueprintIsometrico.ts:81`), K da curva na perda |
 | Mudanças de direção | E | ✅ | idem, com a perda localizada (`utils/blueprintRedeDeAr.ts:233`) |
 | Conexões | E | ✅ | curva, tê, cruzeta derivados na `MECANICA` (`conexoes.ts:161`) |
@@ -911,10 +911,10 @@ ela herda quase de graça:
 | Reduções | E | 🟡 | redução derivada pela bitola (`conexoes.ts:293-295`); no duto, a mudança só de altura ou de redondo para retangular sai como luva, sem transição |
 | Curvas | E | ✅ | joelho 90/45 (`conexoes.ts:299-300`); na linha, curva de cobre conferida, não peça (`conexoes.ts:97`) |
 | Bocais | E | ✅ | `BOCAL_AR` (`utils/blueprintHidraulica.ts:705`) |
-| Caixas | E | 🟡 | caixa plenum e de distribuição como peças (`utils/blueprintHidraulica.ts:701, 708`); falta a perda do plenum no cálculo (só curva e tê entram, `utils/blueprintRedeDeAr.ts:233`) |
+| Caixas | E | ✅ | caixa plenum e de distribuição como peças (`utils/blueprintHidraulica.ts:701, 708`); a perda do plenum no caminho do terminal entra no cálculo (C9, 10/10: `perdaPlenumPa`) |
 | Adaptadores | E | ❌ | não há transição redondo↔retangular nem colarinho |
 | Componentes da linha frigorígena | E | 🟡 | derivador e coletor (header) do VRF e o sifão do dreno como peças (`COLETOR_VRF`/`SIFAO_DRENO`, kernel 0.94.0, 10/10); falta porca flange e união |
-| Acessórios de dutos | E | 🟡 | damper como peça (`utils/blueprintHidraulica.ts:709`); falta a perda do damper, colarinho, junta flexível e o duto flexível do difusor como peça |
+| Acessórios de dutos | E | 🟡 | damper como peça (`utils/blueprintHidraulica.ts:709`), com a perda dele no caminho (C9), e o duto flexível do difusor (C10), 10/10; falta colarinho e junta flexível |
 
 ## 11. Kits de climatização
 
@@ -1068,7 +1068,7 @@ ela herda quase de graça:
 
 | Funcionalidade | Grau | Estado | Evidência / o que falta |
 |---|---|---|---|
-| 52 · Modelagem BIM de climatização | E | 🟡 | disciplinas `FRIGORIGENA`/`DRENO_AC`/`MECANICA` no modelo (`model.ts:2563`), equipamento como peça da rede, 3D e IFC com Pset. Prumada da linha e do VRF entre pavimentos e a linha em par na planta e no 3D (C1/C2/C11, 10/10). Falta: rede de exaustão traçada até a fachada |
+| 52 · Modelagem BIM de climatização | E | ✅ | disciplinas `FRIGORIGENA`/`DRENO_AC`/`MECANICA` no modelo (`model.ts:2563`), equipamento como peça da rede, 3D e IFC com Pset; prumada da linha e do VRF entre pavimentos e a linha em par na planta e no 3D (C1/C2/C11) e a rede de exaustão traçada até a fachada (C7), 10/10 |
 | 53 · Importação IFC | E | 🟡 | a climatização é importada (`ifcParametricoService.ts:1028`, `ifcParaKernel.ts:1111`, `PainelImportarIfc.tsx:246`) com religação do sistema (`ifcParaKernel.ts:1243`). Falta: um `IfcUnitaryEquipment .SPLITSYSTEM.` de outro programa é recusado, porque evaporadora e condensadora só se distinguem pelo nosso ObjectType (`ifcParaKernel.ts:1055`); a importação só foi provada com IFC da própria Planta |
 | 54 · Exportação IFC | E | ✅ | `IfcDuctFitting` (`blueprintIfc.ts:2357`), `IfcAirTerminal` (`:2647-2655`), `IfcUnitaryEquipment` (`:2632`), par da linha (`:2273`), sistemas `.AIRCONDITIONING.`/`.REFRIGERATION.` (`:2168-2170`) e `Pset_OpuraClimatizacao` (`:1424`, `:1433`). a rede só de exaustão em `.VENTILATION.` (C14, 10/10: `idsDaRedeDeExaustao`) e o isolamento como `IfcCovering .WRAPPING.` ligado ao tubo (C15, 10/10) |
 | 55 · OpenBIM | E | ✅ | IFC4 e IFC4X3 (`blueprintIfc.ts:574`); BCF com a classe `EQUIPAMENTO` (`blueprintBcf.ts:260`) |
@@ -1128,10 +1128,10 @@ ela herda quase de graça:
 | Drenos: traçado, declividade, bomba | A | ✅ | dreno até ponto existente ou novo na fachada, por gravidade, com bomba quando falta queda (`blueprintLinhaFrigorigena.ts:136,318-327`); declividade conferida e marcada (`:489`; `Verif:146-150`). O DN pela vazão de condensado (C5) e o sifão como peça (C6), 10/10 |
 | Dimensionamento automático de dutos | A | ✅ | seção por velocidade/igual atrito para a vazão a jusante (`blueprintRedeDeAr.ts:110`), "Ajustar seções" em um lote (`:321`), traçado em espinha no forro (`:420`) |
 | Cálculo de vazão | A | ✅ | vazão por terminal: declarada ou derivada do calor sensível, nunca abaixo da renovação (`blueprintRedeDeAr.ts:140,159`) |
-| Perda de carga | A | 🟡 | duto: Darcy + Swamee-Jain no diâmetro hidráulico (`blueprintRedeDeAr.ts:73-80`), curva e tê por coeficiente (`:290-301`), caminho crítico × pressão disponível (`:313`). Falta: perda em damper e plenum; comprimento equivalente das conexões do VRF |
+| Perda de carga | A | ✅ | duto: Darcy + Swamee-Jain no diâmetro hidráulico (`blueprintRedeDeAr.ts`), curva e tê por coeficiente, damper e plenum no caminho (C9) e caminho crítico × pressão disponível; o VRF com o comprimento equivalente (C3), 10/10 |
 | Balanceamento aeráulico | A | ✅ | excesso que o damper de cada terminal absorve para igualar o caminho crítico (`blueprintRedeDeAr.ts:304-305`) |
 | Renovação de ar (NBR 16401-3) | A | 🟡 | L/s por pessoa + por m² (`blueprintRedeDeAr.ts:137`), aviso de climatizado sem janela nem tomada de ar (`:352-368`). Falta: coeficientes transcritos de memória — CONFERIR NA NORMA (`blueprintClimatizacao.ts:471,520`) |
-| Exaustão (banheiro sem janela, cozinha) | A | 🟡 | exigência e vazão por uso; sem janela e sem exaustor = FALTA (`blueprintRedeDeAr.ts:143-149,352-368,374-375`). Falta: rede de exaustão até a fachada não é traçada; valores de hipótese (código de obras) |
+| Exaustão (banheiro sem janela, cozinha) | A | 🟡 | exigência e vazão por uso; sem janela e sem exaustor = FALTA; o duto do exaustor traçado até a fachada (C7, 10/10). Falta: valores de hipótese (código de obras) |
 | Otimização de rotas | A | 🟡 | linha e VRF por Steiner pelas paredes com desvio de pilar (`blueprintRotaPelasParedes.ts:70`; `blueprintObstaculosEstruturais.ts:93`); duto sob a viga mais baixa (`blueprintRedeDeAr.ts:36,413`). Falta: o duto em espinha não desvia pilar no forro (o conflito só acusa) |
 | Ponto elétrico e circuito do aparelho | A | 🟡 | pelo planejador do split o ponto nasce com a potência do modelo/EER (`blueprintPosicaoSplit.ts:231,272-277`; `blueprintSelecaoClimatizacao.ts:73`) e o gerador liga o circuito (`blueprintGeradorClimatizacao.ts:210-239`). Falta: a evaporadora inserida à mão (componente) ainda nasce com 1400 VA típicos (`PtsHidro:390`; `Potencia:58`); o gerador não liga o circuito quando há outros pontos soltos ou mais de um quadro |
 | Orçamento do sistema (lançamento por peça, composição) | A | ✅ | `FRIGORIGENA`, `DRENO_AC` e `MECANICA` em `REDES_HIDROSSANITARIAS`, grupo "de climatização" (`Budget:1679-1681`), peça e tubo/duto lançados (`Budget:1795`, `Budget:1857-1868`), medidas novas (`Budget:390-411`); kit do split na composição (`PainelComposicoesDePeca.tsx:17`) |
@@ -1174,14 +1174,14 @@ derivado a cada mudança.
 
 | Grau | ✅ | 🟡 | ❌ | Total |
 |---|---|---|---|---|
-| **E** | 167 | 51 | 10 | 228 |
-| **A** | 7 | 10 | 0 | 17 |
+| **E** | 172 | 46 | 10 | 228 |
+| **A** | 8 | 9 | 0 | 17 |
 | **M** | 0 | 0 | 0 | 0 |
 | **B** | 0 | 0 | 0 | 0 |
 | **N** | 0 | 0 | 2 | 2 |
-| **Total** | 174 | 61 | 12 | 247 |
+| **Total** | 180 | 55 | 12 | 247 |
 
-**Dos 228 Essenciais, 167 estão prontos (73 %; eram 51, 22 %), e só 10 não existem.** Os 10 ❌:
+**Dos 228 Essenciais, 172 estão prontos (75 %; eram 51, 22 %), e só 10 não existem.** Os 10 ❌:
 
 - quatro de backlog: RVT direto, gás, SPDA e cabeamento;
 - o ajuste do raio das curvas;
@@ -1195,7 +1195,7 @@ Dos 60 🟡, a maior parte é a mesma família:
 - dado de fabricante semeado;
 - as pendências C do plano.
 
-Os 17 "vai além" saíram de 0 para 7 ✅ e 10 🟡 (o 🟡 é quase todo hipótese de fabricante e as prumadas).
+Os 17 "vai além" saíram de 0 para 8 ✅ e 9 🟡 (o 🟡 é quase todo hipótese de fabricante e as prumadas).
 
 ### A foto de 04/10/2026 (o ponto de partida)
 
@@ -2965,3 +2965,39 @@ Itens do "Plano das pendências C e D". Os dutos (C7–C10) ficam para a frente 
 | C6 | idem; `blueprintLinhaFrigorigena.test.ts` | o vértice; o sifão sobre o dreno, sem ponta aberta, declividade mantida; AVISO sem ele; nada com bomba; o IFC ida e volta; a lista de materiais |
 | C11 | `components/BlueprintCanvasParDaLinha.test.tsx` | o par em planta e no 3D; o canvas risca dois traços à distância certa, e o tubo só não |
 | 0.94.0 | `blueprintKernelGoldens.test.ts`, `blueprintClimatizacaoTipos.test.ts` | os seis hashes; os 22 tipos |
+
+### Pendências C7–C10 · 10/10/2026 (frente `clima-dutos`)
+
+Os dutos do "Plano das pendências C e D". Sem bump do kernel: o flexível (`DUTO_FLEXIVEL`) e a
+veneziana já existiam (0.93.0).
+
+- **C7, a exaustão com duto.** O planejador da rede de ar passou a tratar também o exaustor SEM duto
+  (nenhum trecho MECANICA no nó dele), mesmo num pavimento sem evaporadora dutada. O duto sobe do
+  exaustor à cota do forro e corre até a parede EXTERNA mais perto (`descargaNaFachada`: a projeção no
+  eixo, a 100 mm das pontas, levada à face de fora — o lado que não cai em ambiente nenhum). Termina
+  numa veneziana sugerida, que o relançar apaga junto. A seção sai pela vazão do exaustor. A
+  conferência ganhou `EXAUSTAO_DUTO` (AVISO para o exaustor sem caminho até uma veneziana ou tomada
+  de ar), no painel, no memorial e no executivo. A rede só de exaustão sai no IFC como
+  `.VENTILATION.` (C14), sem nada a mais. O gerador (E11) lança os dutos também quando só há
+  exaustor.
+- **C8, o desvio de pilar.** Cada lance da espinha, dos ramais e do duto de exaustão passa por
+  `desvioDoPilar` (o mesmo do eletroduto e da linha frigorígena). O lance sem contorno possível sai
+  reto, com aviso.
+- **C9, damper e plenum.** O damper (num nó do caminho) e o plenum (no nó do terminal) somam
+  `perdaDamperPa` e `perdaPlenumPa` à perda do terminal, e com isso ao caminho crítico e ao
+  balanceamento. `TerminalDeAr.perdaEmPecasPa` diz quanto veio deles. Hipóteses editáveis, CONFERIR
+  com o catálogo.
+- **C10, o duto flexível.** O último ramal até cada terminal (a folha da árvore) sai em
+  `DUTO_FLEXIVEL` redondo, até `comprimentoFlexivelMaxMm` (1,5 m). Passando disso, o ramal se divide:
+  rígido até o ponto e flexível no fim. A descida ao terminal também é flexível. 0 desliga. Achado de
+  carona, pelo teste antigo: o "Ajustar seções" propunha seção RETANGULAR para o flexível, que o kernel
+  recusa. A proposta do flexível agora é sempre redonda.
+
+**Prova:**
+
+| Item | Teste | O que prova |
+|---|---|---|
+| C7 | `blueprintDutosExaustaoFlexivel.test.ts` | a descarga na face de fora; o duto e a veneziana nas medidas; AVISO → OK; relançar idempotente; `.VENTILATION.`; convive com a rede da dutada, e o confirmado não é tocado |
+| C8 | idem | nenhum ponto de trecho dentro do pilar, os 4 difusores alcançados; controle sem pilar passa reto |
+| C9 | idem | +damper nos dois terminais a jusante, +damper+plenum no do plenum, nada no outro ramo |
+| C10 | idem; `blueprintRedeDeAr.test.ts` | 4 ramais de 1,5 m + 4 descidas flexíveis e redondas; com 1 m, o ramal dividido; com 0, nenhum; "Ajustar seções" vazio; o flexível na lista de materiais |

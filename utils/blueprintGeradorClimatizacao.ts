@@ -193,8 +193,9 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   }
 
   // ── Rede de dutos (E7) ─────────────────────────────────────────────────────
-  const temTerminalDeAr = (m.terminais ?? []).some((t) => (TIPOS_DE_TERMINAL_DE_AR as readonly string[]).includes(t.tipoHidraulico ?? ''));
-  if (!temTerminalDeAr) etapa('DUTOS', ROTULOS.DUTOS, 'NAO_EXIGIDA', 0, 'sem terminal de ar no desenho');
+  // C7 (10/10/2026): o exaustor também pede duto (até a fachada).
+  const temTerminalDeAr = (m.terminais ?? []).some((t) => (TIPOS_DE_TERMINAL_DE_AR as readonly string[]).includes(t.tipoHidraulico ?? '') || t.tipoHidraulico === 'EXAUSTOR_AR');
+  if (!temTerminalDeAr) etapa('DUTOS', ROTULOS.DUTOS, 'NAO_EXIGIDA', 0, 'sem terminal de ar nem exaustor no desenho');
   else {
     let n = 0;
     for (const nivel of cargas) {

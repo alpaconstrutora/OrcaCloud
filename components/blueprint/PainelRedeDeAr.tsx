@@ -53,6 +53,10 @@ const ROTULOS: Record<keyof typeof LIMITES_DO_AR, string> = {
   exaustaoBanheiroM3h: 'Exaustão do banheiro (m³/h)',
   exaustaoCozinhaM3h: 'Exaustão da cozinha (m³/h)',
   exaustaoGaragemTrocasH: 'Exaustão da garagem (trocas/h)',
+  // C9/C10 (10/10/2026).
+  perdaDamperPa: 'Perda no damper (Pa)',
+  perdaPlenumPa: 'Perda no plenum (Pa)',
+  comprimentoFlexivelMaxMm: 'Flexível no ramal até (mm; 0 = sem)',
 };
 
 function IconeDoEstado({ estado }: { estado: EstadoDaConferencia }) {

@@ -20,7 +20,7 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { numeracaoDeClimatizacao } from './blueprintNumeracaoClimatizacao';
 import { FONTE_DAS_FAIXAS, conferenciaDaLinha, drenosConferidos, drenosTrechoATrecho, linhasConferidas } from './blueprintLinhaFrigorigena';
 import { analisesDoNivel, conferenciaDoVrf } from './blueprintVrf';
-import { analisarRedesDeAr, conferenciaDaRedeDeAr, nomeDaSecao, vazoesDosTerminais, ventilacaoDoNivel } from './blueprintRedeDeAr';
+import { analisarRedesDeAr, conferenciaDaRedeDeAr, exaustoresDoNivel, nomeDaSecao, vazoesDosTerminais, ventilacaoDoNivel } from './blueprintRedeDeAr';
 
 export interface ContextoDoMemorial {
   nomeDoEstudo: string;
@@ -245,7 +245,7 @@ export function memorialDasInstalacoesClimatizacao(model: BlueprintModel, niveis
       }
       const amb = ventilacao.filter((v) => v.exaustores || v.tomadasDeAr || v.falta || v.exaustaoM3h || v.renovacaoM3h);
       if (amb.length) b.push({ tipo: 'tabela', cabecalho: ['Ambiente', 'Renovação (m³/h)', 'Exaustão (m³/h)', 'Exaustores', 'Tomadas de ar', 'Falta'], linhas: amb.map((v) => [v.nome, n0(v.renovacaoM3h), n0(v.exaustaoM3h), String(v.exaustores), String(v.tomadasDeAr), v.falta ?? '—']) });
-      b.push(tabelaDaConferencia(`Conferência da rede de ar — ${ctx.nomeDoNivel(c.levelId)}`, conferenciaDaRedeDeAr(redes, ventilacao, h)));
+      b.push(tabelaDaConferencia(`Conferência da rede de ar — ${ctx.nomeDoNivel(c.levelId)}`, conferenciaDaRedeDeAr(redes, ventilacao, h, exaustoresDoNivel(model, c.levelId))));
     }
   }
   return b;

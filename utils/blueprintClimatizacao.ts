@@ -497,6 +497,11 @@ export interface HipotesesDoAr {
   exaustaoBanheiroM3h: number;
   exaustaoCozinhaM3h: number;
   exaustaoGaragemTrocasH: number;
+  /** C9 (10/10/2026): perda no damper e no plenum que estejam no caminho do terminal, Pa (CONFERIR com o catálogo). */
+  perdaDamperPa: number;
+  perdaPlenumPa: number;
+  /** C10: o último ramal até o terminal sai em duto flexível até este comprimento, mm (0 = sem flexível). */
+  comprimentoFlexivelMaxMm: number;
 }
 
 export const HIPOTESES_DO_AR_PADRAO: HipotesesDoAr = {
@@ -517,6 +522,9 @@ export const HIPOTESES_DO_AR_PADRAO: HipotesesDoAr = {
   exaustaoBanheiroM3h: 90,
   exaustaoCozinhaM3h: 180,
   exaustaoGaragemTrocasH: 6,
+  perdaDamperPa: 20,
+  perdaPlenumPa: 15,
+  comprimentoFlexivelMaxMm: 1500,
 };
 
 type ChaveNumericaDoAr = Exclude<keyof HipotesesDoAr, 'metodo' | 'secaoPadrao'>;
@@ -536,6 +544,9 @@ export const LIMITES_DO_AR: Record<ChaveNumericaDoAr, { min: number; max: number
   exaustaoBanheiroM3h: { min: 0, max: 1000 },
   exaustaoCozinhaM3h: { min: 0, max: 3000 },
   exaustaoGaragemTrocasH: { min: 0, max: 30 },
+  perdaDamperPa: { min: 0, max: 300 },
+  perdaPlenumPa: { min: 0, max: 300 },
+  comprimentoFlexivelMaxMm: { min: 0, max: 5000 },
 };
 
 export const FONTE_DO_AR =

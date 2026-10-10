@@ -25,6 +25,19 @@
  *    com a seção do método escolhido para a vazão a jusante dele. As conexões
  *    (curva, tê) são DERIVADAS (`conexoesDerivadas` já cobre a MECANICA).
  *
+ * Pendências C7–C10 (10/10/2026):
+ *  - C7 a EXAUSTÃO COM DUTO: cada exaustor sem duto ganha o seu, no forro, até a
+ *    parede EXTERNA mais perto, terminando numa veneziana na fachada (a rede só
+ *    de exaustão sai no IFC como `.VENTILATION.`, C14). A conferência avisa o
+ *    exaustor que não chega à fachada.
+ *  - C8 o DESVIO DE PILAR no forro: o lance que atravessaria um pilar contorna
+ *    pelo canto (`desvioDoPilar`, o do eletroduto e da linha frigorígena).
+ *  - C9 a perda no DAMPER e no PLENUM: cada um no caminho do terminal soma a
+ *    perda das premissas (hipótese, CONFERIR com o catálogo).
+ *  - C10 o DUTO FLEXÍVEL do terminal: o último ramal até cada terminal, até
+ *    `comprimentoFlexivelMaxMm`, sai em duto flexível redondo (o resto do ramal,
+ *    rígido); 0 desliga.
+ *
  * Tudo DERIVADO, nada gravado além do que o lote do traçado/dimensionamento cria.
  * Física (ar a ~20 °C): ρ = 1,2 kg/m³, ν = 1,5·10⁻⁵ m²/s, cp = 1005 J/kg·K.
  */
@@ -33,7 +46,8 @@ import { applyBatch } from './blueprintKernel';
 import { pointInPolygon } from './blueprintKernel/geom';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, type No } from './blueprintGrafoDeRede';
-import { fundoDaVigaMaisBaixaMm } from './blueprintObstaculosEstruturais';
+import { desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { paredeEhExterna } from './blueprintKernel/exterior';
 import { lote } from './blueprintLinhaFrigorigena';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
 import type { CargaTermicaDoNivel, CargaDoAmbiente } from './blueprintCargaTermica';
@@ -244,6 +258,8 @@ export interface TerminalDeAr {
   perdaPa: number;
   /** O que o damper deste terminal absorve para igualar o caminho crítico, Pa. */
   excessoPa: number;
+  /** C9: a parte da perda que vem de damper e plenum no caminho, Pa. */
+  perdaEmPecasPa: number;
 }
 
 export interface RedeDeAr {
@@ -272,6 +288,9 @@ export function analisarRedesDeAr(model: BlueprintModel, levelId: ObjectId, vazo
   const tipoDoNo = new Map<No, string>();
   for (const c of conexoesDerivadas(model).conexoes) if (c.disciplina === 'MECANICA') tipoDoNo.set(chave(c.levelId, c.no.x, c.no.y, c.cotaMm), c.tipo);
   const terminaisDoNivel = (model.terminais ?? []).filter((t) => t.levelId === levelId);
+  // C9: os nós com damper e com plenum (a peça no nó do caminho soma a perda dela).
+  const nosDeDamper = new Set(terminaisDoNivel.filter((t) => t.tipoHidraulico === 'DAMPER').map(noDe));
+  const nosDePlenum = new Set(terminaisDoNivel.filter((t) => t.tipoHidraulico === 'CAIXA_PLENUM').map(noDe));
   const redes: RedeDeAr[] = [];
   for (const raiz of terminaisDoNivel.filter((t) => ehDe(RAIZES_DA_REDE_DE_AR, t)).sort((a, b) => a.id.localeCompare(b.id))) {
     // BFS a partir da raiz (árvore: o primeiro a chegar é o pai).
@@ -315,11 +334,17 @@ export function analisarRedesDeAr(model: BlueprintModel, levelId: ObjectId, vazo
         const s = secaoDoTrecho(t);
         const n = contagem.get(trechoId) ?? 1;
         const v = velocidadeMs(q, s);
-        return { trechoId, vazaoM3h: q, terminais: n, secao: s, velocidadeMs: v, atritoPa: perdaPorAtritoPa(q, s, comprimentoMm(t) / 1000, rugosidadeDoTrecho(t)), proposta: secaoProposta(q, n > 1, hip), velocidadeAlta: v > (n > 1 ? hip.velocidadeTroncoMs : hip.velocidadeRamalMs) * 1.25 };
+        // C10: o flexível é sempre redondo — a proposta dele também (o kernel recusa flexível retangular).
+        const proposta = secaoProposta(q, n > 1, t.material === 'DUTO_FLEXIVEL' ? { ...hip, secaoPadrao: 'REDONDA' } : hip);
+        return { trechoId, vazaoM3h: q, terminais: n, secao: s, velocidadeMs: v, atritoPa: perdaPorAtritoPa(q, s, comprimentoMm(t) / 1000, rugosidadeDoTrecho(t)), proposta, velocidadeAlta: v > (n > 1 ? hip.velocidadeTroncoMs : hip.velocidadeRamalMs) * 1.25 };
       });
     const porTrecho = new Map(trechos.map((x) => [x.trechoId, x]));
     const terminais: TerminalDeAr[] = alcancados.map((t) => {
       let perda = hip.perdaTerminalPa;
+      const nosDoCaminho = new Set<No>([noDe(t), ...caminhos.get(t.id)!.map((p) => p.noDeSaida)]);
+      nosDoCaminho.delete(r);
+      const perdaEmPecas = [...nosDoCaminho].reduce((acc, n) => acc + (nosDeDamper.has(n) ? hip.perdaDamperPa : 0) + (nosDePlenum.has(n) ? hip.perdaPlenumPa : 0), 0);
+      perda += perdaEmPecas;
       for (const p of caminhos.get(t.id)!) {
         const tr = porTrecho.get(p.trecho.id)!;
         perda += tr.atritoPa;
@@ -327,7 +352,7 @@ export function analisarRedesDeAr(model: BlueprintModel, levelId: ObjectId, vazo
         if (tipo === 'JOELHO_90' || tipo === 'JOELHO_45') perda += hip.kCurva * pressaoDinamicaPa(tr.velocidadeMs);
         else if (tipo === 'TE' || tipo === 'JUNCAO_45' || tipo === 'CRUZETA') perda += hip.kTe * pressaoDinamicaPa(tr.velocidadeMs);
       }
-      return { terminalId: t.id, nome: t.tipo, vazao: vazoes.get(t.id) ?? { vazaoM3h: 0, origem: 'SEM', memoria: 'sem vazão' }, perdaPa: perda, excessoPa: 0 };
+      return { terminalId: t.id, nome: t.tipo, vazao: vazoes.get(t.id) ?? { vazaoM3h: 0, origem: 'SEM', memoria: 'sem vazão' }, perdaPa: perda, excessoPa: 0, perdaEmPecasPa: perdaEmPecas };
     });
     const critica = Math.max(...terminais.map((t) => t.perdaPa));
     for (const t of terminais) t.excessoPa = critica - t.perdaPa;
@@ -394,14 +419,66 @@ export function ventilacaoDoNivel(model: BlueprintModel, carga: CargaTermicaDoNi
   });
 }
 
+// ─── C7: o exaustor chega à fachada? ─────────────────────────────────────────
+
+export interface ExaustorConferido {
+  terminalId: ObjectId;
+  nome: string;
+  /** Há caminho pelos trechos MECANICA até uma veneziana ou tomada de ar (a descarga). */
+  chegaNaFachada: boolean;
+}
+
+/** C7: cada exaustor do pavimento e se o duto dele chega a uma descarga (veneziana/tomada de ar). */
+export function exaustoresDoNivel(model: BlueprintModel, levelId: ObjectId): ExaustorConferido[] {
+  const chave = fazerChave(model.levels);
+  const noDe = (t: Terminal) => chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+  const viz = new Map<No, No[]>();
+  for (const t of (model.trechos ?? []).filter((x) => x.disciplina === 'MECANICA')) {
+    const a = chave(t.levelId, t.a.x, t.a.y, t.cotaAMm);
+    const b = chave(t.levelId, t.b.x, t.b.y, t.cotaBMm);
+    viz.set(a, [...(viz.get(a) ?? []), b]);
+    viz.set(b, [...(viz.get(b) ?? []), a]);
+  }
+  const descargas = new Set((model.terminais ?? []).filter((t) => t.tipoHidraulico === 'VENEZIANA_AR' || t.tipoHidraulico === 'TOMADA_AR_EXTERIOR').map(noDe));
+  return (model.terminais ?? [])
+    .filter((t) => t.levelId === levelId && t.tipoHidraulico === 'EXAUSTOR_AR')
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((t) => {
+      const vistos = new Set<No>([noDe(t)]);
+      const fila = [noDe(t)];
+      let chega = false;
+      while (fila.length && !chega) {
+        const k = fila.shift()!;
+        for (const v of viz.get(k) ?? []) {
+          if (vistos.has(v)) continue;
+          if (descargas.has(v)) chega = true;
+          vistos.add(v);
+          fila.push(v);
+        }
+      }
+      return { terminalId: t.id, nome: t.tipo, chegaNaFachada: chega };
+    });
+}
+
 // ─── A conferência ───────────────────────────────────────────────────────────
 
-export function conferenciaDaRedeDeAr(redes: readonly RedeDeAr[], ventilacao: readonly VentilacaoDoAmbiente[], hip: HipotesesDoAr): ItemConferido[] {
+export function conferenciaDaRedeDeAr(redes: readonly RedeDeAr[], ventilacao: readonly VentilacaoDoAmbiente[], hip: HipotesesDoAr, exaustores?: readonly ExaustorConferido[]): ItemConferido[] {
   const itens: ItemConferido[] = [];
   const faltas = ventilacao.filter((v) => v.falta);
   itens.push({ codigo: 'EXAUSTAO', item: 'Exaustão mecânica onde não há janela (banheiro, cozinha, garagem — hipótese, CONFERIR no código de obras)', estado: faltas.length ? 'FALTA' : 'OK', obtido: faltas.length ? faltas.map((v) => v.falta).join('; ') : `${ventilacao.filter((v) => v.exaustaoM3h > 0).length} ambiente(s) com exaustão pedida, todos atendidos`, spaceIds: faltas.map((v) => v.spaceId) });
   const avisos = ventilacao.filter((v) => v.aviso);
   itens.push({ codigo: 'RENOVACAO', item: 'Renovação de ar do ambiente climatizado (NBR 16401-3 — CONFERIR)', estado: avisos.length ? 'AVISO' : 'OK', obtido: avisos.length ? avisos.map((v) => v.aviso).join('; ') : 'climatizados com janela ou tomada de ar exterior', spaceIds: avisos.map((v) => v.spaceId) });
+  // C7: o exaustor com duto até a fachada (a descarga).
+  if (exaustores) {
+    const soltos = exaustores.filter((e) => !e.chegaNaFachada);
+    itens.push({
+      codigo: 'EXAUSTAO_DUTO',
+      item: 'Duto do exaustor até a fachada (veneziana ou tomada de ar)',
+      estado: exaustores.length === 0 ? 'NAO_AVALIADO' : soltos.length ? 'AVISO' : 'OK',
+      obtido: exaustores.length === 0 ? 'nenhum exaustor no pavimento' : soltos.length ? `${soltos.length} exaustor(es) sem duto até a fachada — "Lançar" traça` : `${exaustores.length} exaustor(es) com duto até a fachada`,
+      spaceIds: [],
+    });
+  }
   if (redes.length === 0) {
     itens.push({ codigo: 'REDE', item: 'Rede de dutos (raiz → terminais)', estado: 'NAO_AVALIADO', obtido: 'nenhuma rede de dutos ligada a evaporadora dutada ou caixa de distribuição', spaceIds: [] });
     return itens;
@@ -425,6 +502,8 @@ export interface RedeDeArPlanejada {
   vazaoM3h: number;
   cotaMm: number;
   avisos: string[];
+  /** C7: a rede é o duto de um exaustor até a fachada (a "raiz" é o exaustor). */
+  exaustao?: boolean;
 }
 
 export interface PlanoDaRedeDeAr {
@@ -445,28 +524,93 @@ export function cotaDoDutoNoForro(model: BlueprintModel, levelId: ObjectId, hip:
   return Math.round(fundo - hip.folgaSobVigaMm - hip.alturaPadraoMm / 2);
 }
 
+/** C8: cada aresta em planta que atravessaria um pilar vira a cadeia que o contorna. */
+function comDesvioDePilar(arestas: readonly { de: { x: number; y: number }; para: { x: number; y: number } }[], pegadas: ReturnType<typeof pegadasDePilares>): { arestas: { de: { x: number; y: number }; para: { x: number; y: number } }[]; semContorno: number } {
+  const saida: { de: { x: number; y: number }; para: { x: number; y: number } }[] = [];
+  let semContorno = 0;
+  for (const a of arestas) {
+    const desvio = desvioDoPilar(a.de, a.para, pegadas);
+    if (desvio == null) semContorno++;
+    const pts = [a.de, ...(desvio ?? []).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), a.para];
+    for (let i = 1; i < pts.length; i++) saida.push({ de: pts[i - 1], para: pts[i] });
+  }
+  return { arestas: saida, semContorno };
+}
+
+/**
+ * C7: a descarga do exaustor na fachada — o ponto da parede EXTERNA mais perto
+ * (projeção no eixo, longe 100 mm das pontas), levado à face de fora. `null` sem
+ * parede externa no pavimento.
+ */
+export function descargaNaFachada(model: BlueprintModel, levelId: ObjectId, de: { x: number; y: number }): { at: { x: number; y: number }; noEixo: { x: number; y: number }; paredeId: ObjectId } | null {
+  let melhor: { at: { x: number; y: number }; noEixo: { x: number; y: number }; paredeId: ObjectId; d: number } | null = null;
+  for (const w of model.walls.filter((x) => x.levelId === levelId)) {
+    if (paredeEhExterna(model, w) !== true) continue;
+    const dx = w.b.x - w.a.x;
+    const dy = w.b.y - w.a.y;
+    const comp = Math.hypot(dx, dy);
+    if (comp < 300) continue;
+    const ux = dx / comp;
+    const uy = dy / comp;
+    const s = Math.max(100, Math.min(comp - 100, (de.x - w.a.x) * ux + (de.y - w.a.y) * uy));
+    const q = { x: w.a.x + ux * s, y: w.a.y + uy * s };
+    const d = Math.hypot(q.x - de.x, q.y - de.y);
+    if (melhor && d >= melhor.d) continue;
+    // O lado de FORA: o que não cai em ambiente nenhum.
+    const nx = -uy;
+    const ny = ux;
+    const meia = w.thicknessMm / 2;
+    const prova = meia + 20;
+    const dentro = (p: { x: number; y: number }) => model.spaces.some((sp) => sp.levelId === levelId && pointInPolygon(sp.ring, p) && !sp.holes.some((h) => pointInPolygon(h, p)));
+    const lado = !dentro({ x: q.x + nx * prova, y: q.y + ny * prova }) ? 1 : !dentro({ x: q.x - nx * prova, y: q.y - ny * prova }) ? -1 : 0;
+    if (lado === 0) continue;
+    melhor = { at: { x: Math.round(q.x + lado * nx * meia), y: Math.round(q.y + lado * ny * meia) }, noEixo: { x: Math.round(q.x), y: Math.round(q.y) }, paredeId: w.id, d };
+  }
+  return melhor ? { at: melhor.at, noEixo: melhor.noEixo, paredeId: melhor.paredeId } : null;
+}
+
 export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoes: Map<ObjectId, VazaoDoTerminal>, hip: HipotesesDoAr): PlanoDaRedeDeAr {
   const vazio = (motivo: string, apagar: Command[] = []): PlanoDaRedeDeAr => ({ comandos: apagar, aCriar: [], jaLigados: [], semLugar: [], apagados: apagar.length, motivo, resumo: [] });
   const sugeridos = (model.trechos ?? []).filter((t) => t.levelId === levelId && !!t.sugerido && t.disciplina === 'MECANICA' && t.rotulo === ROTULO_DA_REDE_DE_AR);
-  const apagar = sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }) as Command);
-  const ids = new Set(sugeridos.map((t) => t.id));
-  const base: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !ids.has(t.id)) };
+  // C7: a veneziana sugerida da descarga do exaustor é deste planejador.
+  const pecasSugeridas = (model.terminais ?? []).filter((t) => t.levelId === levelId && !!t.sugerida && t.disciplina === 'MECANICA' && t.tipoHidraulico === 'VENEZIANA_AR');
+  const apagar = [...sugeridos.map((t) => ({ type: 'DeleteTrecho', trechoId: t.id }) as Command), ...pecasSugeridas.map((t) => ({ type: 'DeleteTerminal', terminalId: t.id }) as Command)];
+  const ids = new Set([...sugeridos.map((t) => t.id), ...pecasSugeridas.map((t) => t.id)]);
+  const base: BlueprintModel = { ...model, trechos: (model.trechos ?? []).filter((t) => !ids.has(t.id)), terminais: (model.terminais ?? []).filter((t) => !ids.has(t.id)) };
   const terminais = (base.terminais ?? []).filter((t) => t.levelId === levelId);
   const raizes = terminais.filter((t) => ehDe(RAIZES_DA_REDE_DE_AR, t)).sort((a, b) => a.id.localeCompare(b.id));
-  if (raizes.length === 0) return vazio('nenhuma evaporadora dutada nem caixa de distribuição de ar neste pavimento — insira uma (Climatização — equipamentos / terminais de ar)', apagar);
+  // C7: os exaustores sem duto (nenhum trecho MECANICA no nó deles).
+  const chave = fazerChave(base.levels);
+  const nosComDuto = new Set((base.trechos ?? []).filter((t) => t.disciplina === 'MECANICA').flatMap((t) => [chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm)]));
+  const exaustoresSoltos = terminais.filter((t) => t.tipoHidraulico === 'EXAUSTOR_AR' && !nosComDuto.has(chave(t.levelId, t.at.x, t.at.y, t.cotaMm))).sort((a, b) => a.id.localeCompare(b.id));
   // Os terminais que alguma rede CONFIRMADA já alcança ficam; os outros vão para a raiz mais perto.
-  const jaAlcancados = new Set(analisarRedesDeAr(base, levelId, vazoes, hip).flatMap((r) => r.terminais.map((t) => t.terminalId)));
-  const soltos = terminais.filter((t) => ehDe(TERMINAIS_DA_REDE_DE_AR, t) && !jaAlcancados.has(t.id));
-  const jaLigados = raizes.filter((r) => analisarRedesDeAr(base, levelId, vazoes, hip).some((x) => x.raiz.id === r.id)).map((r) => r.tipo);
-  if (soltos.length === 0) return { ...vazio(jaLigados.length ? 'todos os terminais de ar já estão ligados por rede confirmada' : 'nenhum terminal de ar (difusor, grelha, bocal, tomada de ar) neste pavimento', apagar), jaLigados };
+  const redesExistentes = raizes.length ? analisarRedesDeAr(base, levelId, vazoes, hip) : [];
+  const jaAlcancados = new Set(redesExistentes.flatMap((r) => r.terminais.map((t) => t.terminalId)));
+  const soltos = raizes.length ? terminais.filter((t) => ehDe(TERMINAIS_DA_REDE_DE_AR, t) && !jaAlcancados.has(t.id)) : [];
+  const jaLigados = raizes.filter((r) => redesExistentes.some((x) => x.raiz.id === r.id)).map((r) => r.tipo);
+  if (soltos.length === 0 && exaustoresSoltos.length === 0) {
+    const motivo =
+      raizes.length === 0
+        ? 'nenhuma evaporadora dutada nem caixa de distribuição de ar neste pavimento — insira uma (Climatização — equipamentos / terminais de ar) — e nenhum exaustor sem duto'
+        : jaLigados.length
+          ? 'todos os terminais de ar já estão ligados por rede confirmada'
+          : 'nenhum terminal de ar (difusor, grelha, bocal, tomada de ar) neste pavimento';
+    return { ...vazio(motivo, apagar), jaLigados };
+  }
   const grupos = new Map<ObjectId, Terminal[]>();
   for (const t of soltos) {
     const r = raizes.reduce((m, x) => (Math.hypot(x.at.x - t.at.x, x.at.y - t.at.y) < Math.hypot(m.at.x - t.at.x, m.at.y - t.at.y) ? x : m));
     grupos.set(r.id, [...(grupos.get(r.id) ?? []), t]);
   }
   const cota = cotaDoDutoNoForro(base, levelId, hip);
+  const pegadas = pegadasDePilares(base, levelId);
   const l = lote(base);
+  const pecas: Command[] = [];
+  const semLugar: { nome: string; motivo: string }[] = [];
   const aCriar: RedeDeArPlanejada[] = [];
+  const flexMax = Math.round(hip.comprimentoFlexivelMaxMm);
+  /** C10: a seção do flexível — sempre redonda. */
+  const secaoFlexivel = (q: number) => secaoProposta(q, false, { ...hip, secaoPadrao: 'REDONDA' });
   for (const raiz of raizes) {
     const ts = grupos.get(raiz.id);
     if (!ts?.length) continue;
@@ -481,7 +625,7 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
     const uDe = (t: Terminal) => (emX ? t.at.x : t.at.y);
     const wDe = (t: Terminal) => (emX ? t.at.y : t.at.x);
     // Arestas orientadas da raiz para fora, em planta, na cota do forro.
-    const arestas: { de: { x: number; y: number }; para: { x: number; y: number } }[] = [];
+    let arestas: { de: { x: number; y: number }; para: { x: number; y: number } }[] = [];
     const us = [...new Set([u0, ...ts.map(uDe)])].sort((a, b) => a - b);
     const esquerda = us.filter((u) => u < u0).reverse();
     const direita = us.filter((u) => u > u0);
@@ -505,6 +649,10 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
         }
       }
     }
+    // C8: o lance que atravessaria pilar contorna pelo canto.
+    const desviado = comDesvioDePilar(arestas, pegadas);
+    arestas = desviado.arestas;
+    if (desviado.semContorno) avisos.push(`${desviado.semContorno} lance(s) sem contorno do pilar — conferir o conflito`);
     // A vazão a jusante de cada ponto (pós-ordem da árvore orientada) e quantos terminais.
     const k = (p: { x: number; y: number }) => `${p.x},${p.y}`;
     const filhos = new Map<string, { x: number; y: number }[]>();
@@ -530,23 +678,68 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
     };
     const total = jusante(raiz.at);
     const baseDe = (q: number, n: number) => {
-      const s = secaoProposta(q, n > 1, hip);
-      return { levelId, disciplina: 'MECANICA' as const, bitolaMm: s.bitolaMm, ...(s.alturaDutoMm != null ? { alturaDutoMm: s.alturaDutoMm } : {}), rotulo: ROTULO_DA_REDE_DE_AR, sugerido: true };
+      const s2 = secaoProposta(q, n > 1, hip);
+      return { levelId, disciplina: 'MECANICA' as const, bitolaMm: s2.bitolaMm, ...(s2.alturaDutoMm != null ? { alturaDutoMm: s2.alturaDutoMm } : {}), rotulo: ROTULO_DA_REDE_DE_AR, sugerido: true };
     };
+    const flexivelDe = (q: number) => ({ levelId, disciplina: 'MECANICA' as const, bitolaMm: secaoFlexivel(q).bitolaMm, material: 'DUTO_FLEXIVEL' as const, rotulo: ROTULO_DA_REDE_DE_AR, sugerido: true });
+    const pontosDeTerminal = new Set(ts.map((t) => k(t.at)));
+    let flexiveis = 0;
     l.add(baseDe(total.q, total.n), raiz.at, raiz.cotaMm, raiz.at, cota);
     for (const a of arestas) {
       const j = jusante(a.para);
+      // C10: o ÚLTIMO ramal até o terminal (folha da árvore) sai em flexível até o comprimento máximo.
+      const folha = pontosDeTerminal.has(k(a.para)) && !(filhos.get(k(a.para)) ?? []).length;
+      const comp = Math.hypot(a.para.x - a.de.x, a.para.y - a.de.y);
+      if (flexMax > 0 && folha && comp > 0) {
+        if (comp <= flexMax) {
+          l.add(flexivelDe(j.q), a.de, cota, a.para, cota);
+        } else {
+          const f = (comp - flexMax) / comp;
+          const meio = { x: Math.round(a.de.x + (a.para.x - a.de.x) * f), y: Math.round(a.de.y + (a.para.y - a.de.y) * f) };
+          l.add(baseDe(j.q, j.n), a.de, cota, meio, cota);
+          l.add(flexivelDe(j.q), meio, cota, a.para, cota);
+        }
+        flexiveis++;
+        continue;
+      }
       l.add(baseDe(j.q, j.n), a.de, cota, a.para, cota);
     }
-    for (const t of ts) l.add(baseDe(vazoes.get(t.id)?.vazaoM3h ?? 0, 1), t.at, cota, t.at, t.cotaMm);
+    // A descida (ou subida) ao terminal: flexível com o ramal, rígida sem ele.
+    for (const t of ts) {
+      const q = vazoes.get(t.id)?.vazaoM3h ?? 0;
+      l.add(flexMax > 0 ? flexivelDe(q) : baseDe(q, 1), t.at, cota, t.at, t.cotaMm);
+    }
+    if (flexiveis) avisos.push(`${flexiveis} ramal(is) final(is) em duto flexível (até ${(flexMax / 1000).toLocaleString('pt-BR')} m)`);
     aCriar.push({ raizId: raiz.id, nome: raiz.tipo, terminais: ts.length, vazaoM3h: total.q, cotaMm: cota, avisos: [...new Set(avisos)] });
   }
-  const comandos = [...apagar, ...l.comandos];
+  // C7: cada exaustor sem duto — sobe ao forro e corre até a fachada, com a veneziana na face de fora.
+  for (const ex of exaustoresSoltos) {
+    const descarga = descargaNaFachada(base, levelId, ex.at);
+    if (!descarga) {
+      semLugar.push({ nome: ex.tipo, motivo: 'nenhuma parede externa no pavimento para a descarga do exaustor' });
+      continue;
+    }
+    const avisos: string[] = [];
+    const q = vazoes.get(ex.id)?.vazaoM3h ?? 0;
+    if (q <= 0) avisos.push('exaustor sem vazão — a seção sai pela mínima');
+    const s2 = secaoProposta(q, false, hip);
+    const baseEx = { levelId, disciplina: 'MECANICA' as const, bitolaMm: s2.bitolaMm, ...(s2.alturaDutoMm != null ? { alturaDutoMm: s2.alturaDutoMm } : {}), rotulo: ROTULO_DA_REDE_DE_AR, sugerido: true };
+    l.add(baseEx, ex.at, ex.cotaMm, ex.at, cota);
+    const desviado = comDesvioDePilar([{ de: ex.at, para: descarga.at }], pegadas);
+    if (desviado.semContorno) avisos.push('o duto atravessa pilar sem contorno — conferir o conflito');
+    for (const a of desviado.arestas) l.add(baseEx, a.de, cota, a.para, cota);
+    pecas.push({ type: 'AddTerminal', levelId, disciplina: 'MECANICA', tipo: 'Veneziana de descarga', tipoHidraulico: 'VENEZIANA_AR', at: descarga.at, cotaMm: cota, sugerida: true } as Command);
+    aCriar.push({ raizId: ex.id, nome: `${ex.tipo} → fachada`, terminais: 1, vazaoM3h: q, cotaMm: cota, avisos, exaustao: true });
+  }
+  if (aCriar.length === 0) {
+    return { comandos: apagar, aCriar: [], jaLigados, semLugar, apagados: apagar.length, motivo: semLugar.length ? `nada a lançar: ${semLugar.map((x) => `${x.nome} (${x.motivo})`).join('; ')}` : null, resumo: [] };
+  }
+  const comandos = [...apagar, ...l.comandos, ...pecas];
   try {
     applyBatch(model, comandos);
   } catch (err) {
     return vazio(`o plano não aplica: ${err instanceof Error ? err.message : String(err)}`, apagar);
   }
-  const resumo = aCriar.map((p) => `${p.nome}: ${p.terminais} terminal(is), ${p.vazaoM3h.toLocaleString('pt-BR')} m³/h, duto no forro a ${(p.cotaMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m${p.avisos.length ? ` — ${p.avisos.join('; ')}` : ''}`);
-  return { comandos, aCriar, jaLigados, semLugar: [], apagados: apagar.length, motivo: null, resumo };
+  const resumo = aCriar.map((p) => `${p.nome}: ${p.exaustao ? 'duto de exaustão até a veneziana na fachada' : `${p.terminais} terminal(is)`}, ${p.vazaoM3h.toLocaleString('pt-BR')} m³/h, duto no forro a ${(p.cotaMm / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} m${p.avisos.length ? ` — ${p.avisos.join('; ')}` : ''}`);
+  return { comandos, aCriar, jaLigados, semLugar, apagados: apagar.length, motivo: null, resumo };
 }

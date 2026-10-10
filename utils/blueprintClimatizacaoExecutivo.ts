@@ -22,7 +22,7 @@ import { conferenciaDeCargaTermica, type ItemConferido } from './blueprintConfer
 import { selecaoDoNivel } from './blueprintSelecaoClimatizacao';
 import { conferenciaDaLinha } from './blueprintLinhaFrigorigena';
 import { conferenciaDoVrf } from './blueprintVrf';
-import { analisarRedesDeAr, conferenciaDaRedeDeAr, vazoesDosTerminais, ventilacaoDoNivel } from './blueprintRedeDeAr';
+import { analisarRedesDeAr, conferenciaDaRedeDeAr, exaustoresDoNivel, vazoesDosTerminais, ventilacaoDoNivel } from './blueprintRedeDeAr';
 import { memorialDeCalculoClimatizacao, memorialDescritivoClimatizacao, type ContextoDoMemorial } from './blueprintMemorialClimatizacao';
 
 export type GrupoDaVerificacaoDeClimatizacao = 'RESPONSAVEL' | 'CARGA' | 'SELECAO' | 'LINHA' | 'VRF' | 'AR';
@@ -123,7 +123,7 @@ export function verificacoesClimatizacao(
     const redes = analisarRedesDeAr(model, n.levelId, vazoesDosTerminais(model, n, hip.ar), hip.ar);
     const ventilacao = ventilacaoDoNivel(model, n, hip.ar);
     if (!redes.length && !ventilacao.some((x) => x.exaustores || x.tomadasDeAr || x.falta)) continue;
-    v.push(...daConferencia('AR', 'NBR 16401-1 e -3', ` — ${nomeDoNivel(n.levelId)}`, conferenciaDaRedeDeAr(redes, ventilacao, hip.ar)));
+    v.push(...daConferencia('AR', 'NBR 16401-1 e -3', ` — ${nomeDoNivel(n.levelId)}`, conferenciaDaRedeDeAr(redes, ventilacao, hip.ar, exaustoresDoNivel(model, n.levelId))));
   }
 
   const pendencias = v.filter((x) => !x.atende).map((x) => `${x.item}: ${x.obtido}`);

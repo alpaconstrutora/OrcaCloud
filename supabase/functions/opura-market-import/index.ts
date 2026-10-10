@@ -90,6 +90,12 @@ import {
   anuncioConferido,
   bairroNoTexto,
   camposFaltando,
+  lerListaConexao381,
+  juntarDetalheConexao381,
+  maxDetalhesDaFonte,
+  urlDaListaConexao381,
+  urlDoDetalheConexao381,
+  fonteEhConexao381,
   type AnuncioDaPagina,
   type BairroConhecido,
   type ConsultaGeo,
@@ -471,6 +477,67 @@ async function registrarExecucao(admin: Admin, feedId: string, resultado: unknow
     .eq('id', feedId);
 }
 
+/** Tempo da rodada que pode ir para detalhes da Conexão 381; o resto fica para localizar e gravar. */
+const TEMPO_PARA_DETALHES_MS = 55_000;
+
+/**
+ * Conector da API da Conexão 381 (Fase D do plano de fontes). Lista TODAS as
+ * páginas da cidade (sem a lista inteira não dá para marcar saídas) e busca o
+ * detalhe só dos anúncios novos, até `max_detalhes` da fonte e dentro do tempo.
+ * Novo que fica sem detalhe NÃO entra nesta rodada: entra na próxima, já com
+ * endereço. Pausa de ~1 s entre requisições, User-Agent identificado.
+ */
+async function lerConexao381(admin: Admin, fonte: Fonte, cidade: Cidade, inicio: number) {
+  if (!fonteEhConexao381(fonte.url)) throw new Error('A fonte da Conexão 381 precisa apontar para https://conexao381.com.br.');
+  let ultima = 0;
+  const buscarJson = async (url: string) => {
+    const espera = ultima + INTERVALO_MS - Date.now();
+    if (espera > 0) await new Promise((r) => setTimeout(r, espera));
+    ultima = Date.now();
+    const texto = await buscarUrlPublica(new URL(url), { accept: 'application/json', maxBytes: MAX_PAGINA_BYTES, timeoutMs: 20_000, rotulo: 'A API da Conexão 381' });
+    return JSON.parse(texto);
+  };
+
+  // Lista completa: uma página que falhe derruba a rodada (senão viraria "saída" em massa).
+  const primeira = lerListaConexao381(await buscarJson(urlDaListaConexao381(cidade.name, 1)));
+  const anuncios = [...primeira.anuncios];
+  const ignorados: Record<string, number> = { ...primeira.ignorados };
+  for (let p = 2; p <= Math.min(primeira.paginas, 50); p++) {
+    const pagina = lerListaConexao381(await buscarJson(urlDaListaConexao381(cidade.name, p)));
+    anuncios.push(...pagina.anuncios);
+    for (const [k, n] of Object.entries(pagina.ignorados)) ignorados[k] = (ignorados[k] ?? 0) + n;
+  }
+
+  // Quem já está gravado nesta organização e praça não precisa de detalhe.
+  const urls = anuncios.map((a) => a.url as string);
+  const jaGravados = new Set<string>();
+  for (let i = 0; i < urls.length; i += LOTE) {
+    const { data, error } = await admin.from('opura_market_listings').select('source_url')
+      .eq('organization_id', fonte.organization_id).eq('city_id', cidade.id).in('source_url', urls.slice(i, i + LOTE));
+    if (error) throw new Error(`Falha ao buscar anúncios já importados: ${error.message}`);
+    for (const r of data ?? []) jaGravados.add(r.source_url);
+  }
+
+  const max = maxDetalhesDaFonte(fonte.config);
+  const detalhes = { buscados: 0, semDetalhe: 0, adiados: 0, limite: max };
+  const final: AnuncioLido[] = [];
+  for (const a of anuncios) {
+    if (jaGravados.has(a.url as string)) { final.push(a); continue; }
+    if (detalhes.buscados + detalhes.semDetalhe >= max || Date.now() - inicio > TEMPO_PARA_DETALHES_MS) { detalhes.adiados++; continue; }
+    const codigo = (a.url as string).split('/').pop() as string;
+    try {
+      const d = lerAnuncioConexao381(await buscarJson(urlDoDetalheConexao381(codigo)), a.url as string);
+      final.push(juntarDetalheConexao381(a, d.leitor === 'nenhum' ? null : d.anuncio));
+      detalhes.buscados++;
+    } catch {
+      // Detalhe fora do ar: entra com o que a lista deu (bairro), como no feed.
+      final.push(a);
+      detalhes.semDetalhe++;
+    }
+  }
+  return { lido: { anuncios: final, ignorados } as FeedLido, total: primeira.total, detalhes };
+}
+
 /** Uma fonte salva, como vem de opura_market_feeds. */
 interface Fonte { id: string; organization_id: string; city_id: string; url: string; tipo: string; config: Record<string, unknown> | null }
 
@@ -486,19 +553,29 @@ async function executarFonte(admin: Admin, fonte: Fonte, inicio: number) {
     if (!v.ok) throw new Error(v.motivo);
     let lido: FeedLido;
     let origem: string;
+    let extra: Record<string, unknown> = {};
     if (fonte.tipo === 'vrsync') {
       lido = lerFeedVrsync(await baixarFeed(v.url));
       origem = `Feed ${v.url.hostname}`;
+    } else if (fonte.tipo === 'api_conexao381') {
+      const r = await lerConexao381(admin, fonte, cidade, inicio);
+      lido = r.lido;
+      // O mesmo nome do "Colar link": o anúncio colado antes é reconhecido pelo link e passa a ser da fonte.
+      origem = 'Conexão 381';
+      extra = { detalhes: r.detalhes, totalNaFonte: r.total };
     } else {
       const rotulo = (TIPOS_DE_FONTE as Record<string, string>)[fonte.tipo] ?? fonte.tipo;
       throw new Error(`O conector "${rotulo}" ainda não está disponível.`);
     }
     const { data: bairrosDb } = await admin.from('opura_market_neighborhoods').select('id, name, centroid_lat, centroid_lng').eq('city_id', cidade.id);
-    const resultado = await gravarFeed(admin, {
-      organizationId: fonte.organization_id, cidade, bairros: bairrosDb ?? [],
-      geo: criarGeocodificador(cidade, inicio, bairrosDb ?? []), lido, origem,
-      feedId: fonte.id, agora: new Date().toISOString(),
-    });
+    const resultado = {
+      ...(await gravarFeed(admin, {
+        organizationId: fonte.organization_id, cidade, bairros: bairrosDb ?? [],
+        geo: criarGeocodificador(cidade, inicio, bairrosDb ?? []), lido, origem,
+        feedId: fonte.id, agora: new Date().toISOString(),
+      })),
+      ...extra,
+    };
     await registrarExecucao(admin, fonte.id, resultado, null);
     return { ok: true as const, resultado };
   } catch (e) {

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import type { DinamicaDoBairro } from '../utils/opuraMarketIndicadores';
 import type { AnuncioDaPagina } from '../supabase/functions/opura-market-import/logica';
 import {
@@ -96,6 +96,9 @@ export interface ResultadoImportacaoMercado {
   saidas?: number;
   /** Por que as saídas não foram registradas nesta execução, se não foram. */
   saidasIgnoradas?: string | null;
+  /** API da Conexão 381 (Fase D): detalhes buscados nesta rodada e novos que ficaram para a próxima. */
+  detalhes?: { buscados: number; semDetalhe: number; adiados: number; limite: number };
+  totalNaFonte?: number;
 }
 
 /**
@@ -124,15 +127,18 @@ export interface FonteMercado {
   ultimaExecucao: string | null;
   ultimoResultado: ResultadoImportacaoMercado | null;
   ultimoErro: string | null;
+  /** Ajustes do conector (ex.: `max_detalhes` da Conexão 381). */
+  config: Record<string, unknown>;
 }
 
-const COLUNAS_DA_FONTE = 'id, tipo, url, ativo, ultima_execucao, ultimo_resultado, ultimo_erro';
+const COLUNAS_DA_FONTE = 'id, tipo, url, ativo, config, ultima_execucao, ultimo_resultado, ultimo_erro';
 
 const mapearFonte = (d: any): FonteMercado => ({
   id: d.id,
   tipo: d.tipo,
   url: d.url,
   ativo: !!d.ativo,
+  config: d.config && typeof d.config === 'object' ? d.config : {},
   ultimaExecucao: d.ultima_execucao ?? null,
   ultimoResultado: d.ultimo_resultado ?? null,
   ultimoErro: d.ultimo_erro ?? null,
@@ -168,15 +174,40 @@ export interface LeituraDeAnuncio extends AnuncioDaPagina {
   jaGravado: { status: string | null; preco: number | null } | null;
 }
 
+/**
+ * Corte de tempo da chamada à Edge Function. Ela trabalha até ~100 s
+ * (geocodificação a 1 por segundo; detalhes da Conexão 381) e o limite dela é
+ * 150 s. O client global corta em 20 s (lib/supabase.ts): até 10/10/2026 "Importar
+ * agora", "Localizar" e "Tentar de novo" mostravam "Failed to send a request"
+ * enquanto o servidor terminava o trabalho. Mesmo desenho do motor de conciliação.
+ */
+const IMPORTACAO_TIMEOUT_MS = 170_000;
+
 async function invocarImportacao<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.functions.invoke('opura-market-import', { body });
-  if (error) {
-    // Resposta 4xx/5xx chega como FunctionsHttpError — a mensagem útil está no corpo.
-    const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
-    throw new Error(corpo?.error || error.message || 'Falha na importação.');
+  const { data: sessao } = await supabase.auth.getSession();
+  let resp: Response;
+  try {
+    resp = await fetch(`${SUPABASE_URL}/functions/v1/opura-market-import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${sessao.session?.access_token ?? SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(IMPORTACAO_TIMEOUT_MS),
+    });
+  } catch (e) {
+    const nome = (e as { name?: string })?.name;
+    if (nome === 'TimeoutError' || nome === 'AbortError') {
+      throw new Error('O servidor não respondeu em 3 minutos. A importação pode ter terminado mesmo assim: confira a "Última importação" da fonte.');
+    }
+    throw new Error(`Sem conexão com o servidor: ${e instanceof Error ? e.message : String(e)}`);
   }
-  if (data?.error) throw new Error(data.error);
-  return data as T;
+  // Resposta 4xx/5xx: a mensagem útil está no corpo (`{ error }`).
+  const corpo = await resp.json().catch(() => null);
+  if (!resp.ok || corpo?.error) throw new Error(corpo?.error || `Falha na importação (HTTP ${resp.status}).`);
+  return corpo as T;
 }
 
 export const opuraMarketService = {
@@ -649,6 +680,18 @@ export const opuraMarketService = {
       .select(COLUNAS_DA_FONTE)
       .single();
     if (error) throw new Error(`Falha ao alterar a fonte: ${error.message}`);
+    return mapearFonte(data);
+  },
+
+  /** Grava os ajustes do conector da fonte (substitui o `config` inteiro). */
+  async salvarConfigDaFonte(id: string, config: Record<string, unknown>): Promise<FonteMercado> {
+    const { data, error } = await supabase
+      .from('opura_market_feeds')
+      .update({ config, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select(COLUNAS_DA_FONTE)
+      .single();
+    if (error) throw new Error(`Falha ao salvar o ajuste da fonte: ${error.message}`);
     return mapearFonte(data);
   },
 

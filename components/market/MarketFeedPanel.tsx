@@ -14,6 +14,7 @@ import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
 import MarketAnuncioLinkSheet from './MarketAnuncioLinkSheet';
 import { codigoDoFavorito, type CapturaDoNavegador } from '../../utils/opuraMarketCaptura';
+import { maxDetalhesDaFonte, fonteEhConexao381 } from '../../supabase/functions/opura-market-import/logica';
 
 /**
  * Fontes de anúncios da praça (plano 2026-10-10-opura-market-fontes, Fase A).
@@ -29,6 +30,11 @@ const descreverResultado = (r: ResultadoImportacaoMercado): string => {
   if (r.reativados) partes.push(`voltaram à fonte: ${r.reativados}`);
   if (r.saidas) partes.push(`saíram da fonte (vendidos ou retirados): ${r.saidas}`);
   if (r.saidasIgnoradas) partes.push(`saídas não registradas: ${r.saidasIgnoradas}`);
+  if (r.detalhes) {
+    partes.push(`endereço buscado no site: ${r.detalhes.buscados}`);
+    if (r.detalhes.adiados) partes.push(`anúncios novos para a próxima rodada: ${r.detalhes.adiados} (limite de ${r.detalhes.limite} por rodada)`);
+    if (r.detalhes.semDetalhe) partes.push(`sem endereço (detalhe indisponível): ${r.detalhes.semDetalhe}`);
+  }
   if (r.duplicados) partes.push(`repetidos de anúncios que já existiam: ${r.duplicados}`);
   if (r.semLocalizacao) partes.push(`endereço não encontrado: ${r.semLocalizacao}`);
   if (r.pendentes) partes.push(`ainda sem localização por limite de tempo: ${r.pendentes} (use "Localizar anúncios sem coordenada")`);
@@ -54,7 +60,7 @@ const descreverAnuncioGravado = (r: ResultadoImportacaoMercado): string => {
 const SEM_ORG = 'Selecione uma organização no topo da tela: os anúncios são gravados nela.';
 
 /** Conectores que já leem fonte salva (os demais entram nas próximas fases do plano). */
-const TIPOS_DISPONIVEIS: TipoDeFonteMercado[] = ['vrsync'];
+const TIPOS_DISPONIVEIS: TipoDeFonteMercado[] = ['vrsync', 'api_conexao381'];
 
 const EXEMPLO_DE_LINK: Record<TipoDeFonteMercado, string> = {
   vrsync: 'https://imobiliaria.com.br/feed-vrsync.xml',
@@ -62,6 +68,54 @@ const EXEMPLO_DE_LINK: Record<TipoDeFonteMercado, string> = {
   portal_zap: 'https://www.zapimoveis.com.br/venda/imoveis/mg+cambui/',
   portal_olx: 'https://www.olx.com.br/imoveis/venda/estado-mg/...',
 };
+
+/**
+ * Hipótese editável da fonte da Conexão 381: quantos anúncios NOVOS têm o
+ * endereço buscado por rodada (`config.max_detalhes`). Cada um é uma requisição
+ * ao site, a ~1 por segundo; o que passa do limite entra na rodada seguinte.
+ */
+function AjusteMaxDetalhes({ fonte, desabilitado, onSalvo, onErro }: {
+  fonte: FonteMercado;
+  desabilitado?: string;
+  onSalvo: (f: FonteMercado) => void;
+  onErro: (mensagem: string) => void;
+}) {
+  const atual = maxDetalhesDaFonte(fonte.config);
+  const [valor, setValor] = React.useState(String(atual));
+  const [salvando, setSalvando] = React.useState(false);
+  React.useEffect(() => { setValor(String(atual)); }, [atual]);
+  const salvar = async () => {
+    const n = maxDetalhesDaFonte({ max_detalhes: valor });
+    setValor(String(n));
+    if (n === atual) return;
+    setSalvando(true);
+    try {
+      onSalvo(await opuraMarketService.salvarConfigDaFonte(fonte.id, { ...fonte.config, max_detalhes: n }));
+    } catch (err: any) {
+      console.error('Falha ao salvar o limite de detalhes:', err);
+      onErro(err.message || 'falha ao salvar o limite de detalhes');
+      setValor(String(atual));
+    } finally {
+      setSalvando(false);
+    }
+  };
+  return (
+    <label className="flex items-center gap-2 text-xs text-slate-600 shrink-0" title={desabilitado ?? 'Anúncios novos com endereço buscado por rodada (0 a 300). O restante entra na rodada seguinte.'}>
+      Endereços buscados por rodada
+      <input
+        type="number"
+        min={0}
+        max={300}
+        value={valor}
+        disabled={!!desabilitado || salvando}
+        onChange={(e) => setValor(e.target.value)}
+        onBlur={salvar}
+        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        className="w-20 h-8 px-2 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-700 text-right focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:text-slate-400"
+      />
+    </label>
+  );
+}
 
 interface Props {
   organizationId: string;
@@ -190,7 +244,15 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
     : !cityId ? 'Selecione a cidade.'
     : !linkNovo ? 'Informe o link da fonte.'
     : !/^https:\/\//i.test(linkNovo) ? 'O link precisa começar com https://.'
+    : novoTipo === 'api_conexao381' && !fonteEhConexao381(linkNovo) ? 'A fonte da Conexão 381 é o site https://conexao381.com.br.'
     : undefined;
+
+  const trocarTipo = (t: TipoDeFonteMercado) => {
+    setNovoTipo(t);
+    // A API da Conexão 381 tem endereço fixo: o link é o site.
+    if (t === 'api_conexao381') setNovoLink('https://conexao381.com.br');
+    else if (novoTipo === 'api_conexao381') setNovoLink('');
+  };
 
   const adicionar = async () => {
     if (motivoAdicionar) return;
@@ -198,8 +260,9 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
     setResultado(null);
     try {
       const { data } = await supabase.auth.getUser();
+      // Decisão F2 do plano: a Conexão 381 nasce SEM coleta diária, até a imobiliária autorizar.
       const f = await opuraMarketService.criarFonte({
-        organizationId, cityId, tipo: novoTipo, url: linkNovo, ativo: true, email: data.user?.email ?? null,
+        organizationId, cityId, tipo: novoTipo, url: linkNovo, ativo: novoTipo !== 'api_conexao381', email: data.user?.email ?? null,
       });
       setFontes((lista) => [...lista, f]);
       setNovoLink('');
@@ -212,6 +275,15 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
   };
 
   const ligar = async (f: FonteMercado) => {
+    if (f.tipo === 'api_conexao381' && !f.ativo) {
+      const ok = await confirm({
+        title: 'Ligar a coleta diária da Conexão 381?',
+        message: 'Os termos de uso do site (item 8) proíbem a extração automatizada sem autorização. Ligue só depois que a Conexão 381 autorizar a coleta.',
+        confirmLabel: 'Ligar coleta diária',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
     setOcupada(f.id);
     try {
       trocarFonte(await opuraMarketService.ligarFonte(f.id, !f.ativo));
@@ -438,6 +510,21 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
                   </button>
                 </div>
               </div>
+              {f.tipo === 'api_conexao381' && (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <p className={`text-xs ${f.ativo ? 'text-slate-500' : 'text-amber-700'}`}>
+                    {f.ativo
+                      ? 'Coleta diária ligada. Lê a lista de anúncios de venda da cidade no site; o endereço é buscado só dos anúncios novos.'
+                      : 'Coleta diária desligada: ligue quando a Conexão 381 autorizar (os termos do site proíbem extração automatizada sem autorização). "Importar agora" lê sob seu comando.'}
+                  </p>
+                  <AjusteMaxDetalhes
+                    fonte={f}
+                    desabilitado={motivo ?? (ocupada === f.id ? 'Aguarde a operação em andamento.' : undefined)}
+                    onSalvo={trocarFonte}
+                    onErro={(m) => setResultado(`Erro: ${m}`)}
+                  />
+                </div>
+              )}
               {f.ultimaExecucao && (
                 <div className={`text-xs ${f.ultimoErro ? 'text-rose-700' : 'text-slate-500'}`}>
                   Última importação: {new Date(f.ultimaExecucao).toLocaleString('pt-BR')} —{' '}
@@ -452,7 +539,7 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
       <div className="flex flex-col md:flex-row gap-3 items-center">
         <select
           value={novoTipo}
-          onChange={(e) => setNovoTipo(e.target.value as TipoDeFonteMercado)}
+          onChange={(e) => trocarTipo(e.target.value as TipoDeFonteMercado)}
           className="h-9 px-3 bg-white border border-slate-200 rounded-[6px] text-xs font-semibold text-slate-600 focus:outline-none shrink-0"
           title="Tipo da fonte"
         >

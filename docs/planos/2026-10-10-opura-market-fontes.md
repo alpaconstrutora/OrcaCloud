@@ -129,11 +129,47 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
   - **Replay com as páginas reais baixadas em 10/10:** ZAP, VivaReal e OLX lidos por inteiro, com pacotes de cerca de 5 mil caracteres. O VivaReal e o ZAP repetido deram "já estava na base: dados atualizados". No banco: 2 anúncios, nenhum duplicado.
   - **Pendente:** clicar no favorito num navegador de verdade, nos portais ao vivo. Fica com o usuário.
 
+## Fase D — execução (10/10/2026, frente `market-conector-c381`)
+
+- **Medido na API em 10/10:** 351 anúncios de venda em Cambuí, em 6 páginas de 60.
+  - O filtro `purpose=Venda` ainda devolve "Locação"; a finalidade vem como "Venda", "For Sale", "Sale/Rent" ou "Venda e Locação".
+  - O tipo vem em português ou em inglês ("Commercial / Business", "Residential / Sobrado").
+  - 45 de 60 não têm área útil (terrenos e lotes só têm a do terreno). Ficou o mesmo mapeamento do feed: área útil em `area_private`, terreno em `area_total`.
+- **`logica.ts`:**
+  - `lerListaConexao381` fica só com o que tem venda e conta o resto em `ignorados`.
+  - Resposta sem `items` é ERRO, nunca lista vazia, que viraria saída em massa.
+  - `juntarDetalheConexao381`: o detalhe dá rua, número, CEP, posição e descrição; preço, tipo e bairro ficam os da lista.
+  - `maxDetalhesDaFonte` lê `config.max_detalhes` (padrão 60, de 0 a 300).
+  - `fonteEhConexao381` garante que o conector só busca nesse host.
+- **Edge Function (`lerConexao381`):**
+  - Lista TODAS as páginas; uma página que falhe derruba a rodada.
+  - Busca o detalhe só dos anúncios NOVOS, até o limite e até 55 s da rodada. Pausa de ~1,1 s entre requisições, User-Agent identificado.
+  - Novo sem detalhe NÃO entra na rodada: entra na próxima, já com endereço.
+  - Grava com `feedId` (saídas e reativações) e `origem` "Conexão 381", o mesmo nome do "Colar link", então o anúncio colado antes passa a ser da fonte.
+- **Tela:**
+  - O tipo "API do site da Conexão 381" entrou em "Adicionar fonte", com o link fixo `https://conexao381.com.br`.
+  - A fonte nasce **desligada** (F2), com o aviso dos termos de uso.
+  - Ligar a coleta diária pede confirmação citando o item 8 dos termos.
+  - "Endereços buscados por rodada" é a hipótese editável (`config.max_detalhes`).
+- **⚠️ Achado anterior a esta fase, corrigido aqui:**
+  - Toda chamada à `opura-market-import` passava pelo client global, que corta em 20 s.
+  - "Importar agora", "Localizar" e "Tentar de novo" trabalham até ~100 s no servidor: a tela mostrava "Failed to send a request to the Edge Function" enquanto o servidor terminava. A 1ª rodada desta prova caiu assim, embora o servidor tenha gravado 10 anúncios.
+  - `invocarImportacao` agora faz a chamada direta com corte de 170 s, no desenho do motor de conciliação.
+- **Testes:** `__tests__/opuraMarketConexao381.test.ts`, 11 casos com itens reais reduzidos.
+- **Prova** com a organização `ZZ Teste E2E Market (conexao381)`, limite de 10 endereços por rodada, tudo apagado depois:
+  - **Fonte:** criada desligada, com o link certo. Ligar pediu confirmação, e cancelar manteve desligada. O limite salvo foi 10.
+  - **Rodadas:** 5 de "Importar agora" (26–27 s cada, depois da correção do corte), cada uma com 10 endereços buscados e o resto para a próxima. 2 "só aluguel" ignorados por rodada.
+  - **Saída:** um anúncio plantado na fonte e ausente da API virou saída.
+  - **No banco:** 50 anúncios reais, 50 links distintos, todos com a fonte.
+    - Posição: 25 pelo ponto do site, 3 pelo endereço, 19 pelo bairro, 3 não encontrados, 1 pendente.
+    - 12 com preço oculto marcado.
+    - 5 marcados como repetidos: unidades idênticas do mesmo prédio na planta, juntadas pelo gatilho de duplicados que já existia.
+
 ## Estado
 
 - [x] Fase A
 - [x] Fase B (captura no navegador passa a ser o caminho para portal; ver o achado acima)
 - [x] Fase C (falta o clique num navegador de verdade, nos portais ao vivo)
-- [ ] Fase D
+- [x] Fase D (fonte desligada até a Conexão 381 autorizar)
 - [ ] Fase E
 - [ ] Fase F

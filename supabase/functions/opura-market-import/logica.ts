@@ -1261,3 +1261,127 @@ export function anuncioConferido(e: any): { ok: true; anuncio: AnuncioLido & { u
     },
   };
 }
+
+// ── Conector da API da Conexão 381 (plano 2026-10-10-opura-market-fontes, Fase D) ──
+//
+// A lista pública (`/api/properties-fast`) dá preço, tipo, bairro, quartos e
+// áreas de TODOS os anúncios da cidade (medido em 10/10/2026: 351 em Cambuí, 6
+// páginas de 60). Rua, número, CEP e posição só vêm no detalhe
+// (`/api/public-property-by-code/<código>`), um por anúncio: o detalhe é buscado
+// só para anúncio NOVO, até um limite por rodada; o resto entra nas próximas.
+//
+// ⚠️ Termos de uso do site, item 8: proíbem extração automatizada sem
+// autorização. Decisão F2 do plano: a fonte nasce DESLIGADA (sem coleta diária)
+// até a imobiliária autorizar; "Importar agora" é sob comando do usuário.
+
+/** Limite de detalhes por rodada quando a fonte não diz outro (hipótese editável na tela). */
+export const MAX_DETALHES_PADRAO = 60;
+
+/** `config.max_detalhes` da fonte, entre 0 e 300; inválido ou ausente → o padrão. */
+export function maxDetalhesDaFonte(config: unknown): number {
+  const v = config && typeof config === 'object' ? (config as Record<string, unknown>).max_detalhes : undefined;
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? Math.min(300, Math.max(0, Math.round(n))) : MAX_DETALHES_PADRAO;
+}
+
+/** Endereço da página `pagina` da lista de venda da cidade. */
+export function urlDaListaConexao381(cidade: string, pagina: number): string {
+  const q = new URLSearchParams({ page: String(pagina), limit: '60', purpose: 'Venda', city: cidade, sort: 'recent' });
+  return `https://conexao381.com.br/api/properties-fast?${q.toString()}`;
+}
+
+/** Endereço do detalhe de um anúncio pelo código. */
+export function urlDoDetalheConexao381(codigo: string): string {
+  return `https://conexao381.com.br/api/public-property-by-code/${encodeURIComponent(codigo)}`;
+}
+
+/** A fonte salva é mesmo do site da Conexão 381? (o conector só busca nesse host) */
+export function fonteEhConexao381(url: string | null | undefined): boolean {
+  try {
+    return new URL(String(url ?? '')).hostname.toLowerCase().replace(/^www\./, '') === 'conexao381.com.br';
+  } catch {
+    return false;
+  }
+}
+
+export interface ListaConexao381 extends FeedLido {
+  /** Páginas que a API diz ter. */
+  paginas: number;
+  total: number;
+}
+
+/**
+ * Uma página da lista. A finalidade vem misturada ("Venda", "For Sale",
+ * "Sale/Rent", "Venda e Locação" e até "Locação", apesar do filtro
+ * `purpose=Venda`): fica o que tem venda. `hideSalePrice` = o site esconde o
+ * preço; a decisão F1 do plano é usar o valor da API, marcando.
+ */
+// deno-lint-ignore no-explicit-any
+export function lerListaConexao381(json: any): ListaConexao381 {
+  if (!json || typeof json !== 'object' || !Array.isArray(json.items)) {
+    throw new Error('A API da Conexão 381 respondeu num formato inesperado (sem "items").');
+  }
+  const anuncios: AnuncioLido[] = [];
+  const ignorados: Record<string, number> = {};
+  const ignorar = (motivo: string) => { ignorados[motivo] = (ignorados[motivo] ?? 0) + 1; };
+  for (const i of json.items) {
+    if (!i || typeof i !== 'object') continue;
+    const finalidade = textoLimpo(i.purpose) ?? '';
+    if (!/venda|sale/i.test(finalidade)) { ignorar('só aluguel'); continue; }
+    const preco = positivo(i.salePrice);
+    if (preco == null) { ignorar('sem preço de venda'); continue; }
+    const codigo = textoLimpo(i.code, 40);
+    if (!codigo) { ignorar('sem código do anúncio'); continue; }
+    anuncios.push({
+      url: `https://conexao381.com.br/imoveis/${codigo}`,
+      titulo: textoLimpo(i.title, 300),
+      tipo: tipoDoTexto(textoLimpo(i.type)) ?? 'Outro',
+      preco,
+      area: positivo(i.usableArea),
+      areaTotal: positivo(i.landArea),
+      quartos: Math.round(positivo(i.bedrooms) ?? 0),
+      banheiros: Math.round(positivo(i.bathrooms) ?? 0),
+      suites: Math.round(positivo(i.suites) ?? 0),
+      vagas: Math.round(positivo(i.parkingSpaces) ?? 0),
+      condominio: null,
+      iptu: null,
+      descricao: null,
+      rua: null,
+      numero: null,
+      bairro: textoLimpo(i.neighborhood),
+      cidade: textoLimpo(i.city),
+      uf: textoLimpo(i.state, 2),
+      cep: null,
+      lat: null,
+      lng: null,
+      precoOcultoNaFonte: i.hideSalePrice === true,
+    });
+  }
+  const paginas = Number(json.pages);
+  const total = Number(json.total);
+  return { anuncios, ignorados, paginas: Number.isFinite(paginas) && paginas > 0 ? Math.floor(paginas) : 1, total: Number.isFinite(total) ? total : anuncios.length };
+}
+
+/**
+ * O anúncio da lista completado pelo detalhe: endereço, CEP, posição,
+ * descrição, condomínio/IPTU e área construída quando a lista não tem. Preço,
+ * tipo e bairro ficam os da LISTA (é o que a varredura compara a cada rodada).
+ */
+export function juntarDetalheConexao381(daLista: AnuncioLido, doDetalhe: AnuncioLido | null): AnuncioLido {
+  if (!doDetalhe) return daLista;
+  return {
+    ...daLista,
+    area: daLista.area ?? doDetalhe.area,
+    areaTotal: daLista.areaTotal ?? doDetalhe.areaTotal,
+    condominio: doDetalhe.condominio,
+    iptu: doDetalhe.iptu,
+    descricao: doDetalhe.descricao,
+    rua: doDetalhe.rua,
+    numero: doDetalhe.numero,
+    uf: daLista.uf ?? doDetalhe.uf,
+    cep: doDetalhe.cep,
+    lat: doDetalhe.lat,
+    lng: doDetalhe.lng,
+    bairro: daLista.bairro ?? doDetalhe.bairro,
+  };
+}

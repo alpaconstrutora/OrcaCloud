@@ -83,6 +83,7 @@ import {
   type PontoPx,
   type Underlay,
 } from '../../utils/blueprintUnderlay';
+import { desenharFundo, type FundoVetorial } from '../../utils/dxfParaFundo';
 import { anelDoTerreno, ROTULO_CURTO_DO_PAPEL } from '../../utils/blueprintTerreno';
 import { faixaDaVia, calcadasDaVia, centroide, areaEmM2 } from '../../utils/blueprintLoteamento';
 import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
@@ -1101,7 +1102,11 @@ interface Props {
    */
   mostrarCamadasParedes?: boolean;
   /** Planta de fundo já carregada, com o posicionamento aferido. */
-  fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number } | null;
+  /**
+   * `vetor` (E10.4c): quando a prancha veio de DXF e o desenho guardado bate com
+   * a imagem, as LINHAS são traçadas no lugar do PNG — nítidas em qualquer zoom.
+   */
+  fundo?: { imagem: HTMLImageElement; underlay: Underlay; opacidade: number; vetor?: FundoVetorial | null } | null;
   /**
    * Identidade da prancha ATIVA. Quando ela muda, a vista se enquadra na
    * imagem — e só então.
@@ -3583,7 +3588,14 @@ export default function BlueprintCanvas({
         o.x * dpr,
         o.y * dpr,
       );
-      ctx.drawImage(fundo.imagem, 0, 0);
+      if (fundo.vetor) {
+        // E10.4c: as linhas do DXF no MESMO espaço de pixel do PNG (a mesma matriz),
+        // com o traço fixo em ~1 pixel de tela qualquer que seja o zoom.
+        const escala = Math.hypot(ex.x - o.x, ex.y - o.y) || 1;
+        desenharFundo(ctx, fundo.vetor.plano, fundo.vetor.leitura, { ...fundo.vetor.opcoes, larguraFixaPx: 1 / escala });
+      } else {
+        ctx.drawImage(fundo.imagem, 0, 0);
+      }
       ctx.restore();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }

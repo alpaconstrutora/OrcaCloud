@@ -350,6 +350,8 @@ import { chaveDaPonta, pontasParaRevisar, type PontaEmRevisao } from '../../util
 import { comandoDeEstender, extensoesDaParede } from '../../utils/blueprintEstenderAteFace';
 import PainelImportarIfc from './PainelImportarIfc';
 import PainelReferenciasExternas from './PainelReferenciasExternas';
+import { fundoVetorialDoDesenho, type FundoVetorial } from '../../utils/dxfParaFundo';
+import { prepararDxf } from '../../utils/dxfParaKernel';
 import { baixarArquivo } from '../../services/digitalFileService';
 import { chaveDasReferencias, lerReferencias, matrizDaReferencia, type ReferenciaExterna } from '../../utils/blueprintReferenciaExterna';
 import PainelImportarDxf from './PainelImportarDxf';
@@ -2994,6 +2996,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   const recuos = recuosEfetivosDaZona.recuos;
 
   const fundo = useBlueprintUnderlay(study.id, study.organization_id, levelId);
+  /**
+   * FUNDO VETORIAL (E10.4c, 08/10/2026): a prancha que veio de DXF traz o desenho
+   * de origem; quando o plano refeito bate com a imagem, o canvas traça as linhas
+   * em vez de esticar o PNG. Sem desenho, ou sem bater, fica o PNG — nunca um
+   * vetor fora do lugar (a regra em `fundoVetorialDoDesenho`).
+   */
+  const [fundoVetorial, setFundoVetorial] = useState<FundoVetorial | null>(null);
+  const { desenhoDaPranchaAtiva } = fundo;
+  const imagemDoFundo = fundo.imagem;
+  useEffect(() => {
+    let vivo = true;
+    setFundoVetorial(null);
+    if (!imagemDoFundo) return;
+    void desenhoDaPranchaAtiva()
+      .then((d) => {
+        if (!vivo || !d) return;
+        const v = fundoVetorialDoDesenho(prepararDxf(d.texto), d, { larguraPx: imagemDoFundo.naturalWidth, alturaPx: imagemDoFundo.naturalHeight });
+        if (vivo) setFundoVetorial(v);
+      })
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, [desenhoDaPranchaAtiva, imagemDoFundo]);
   const [camadaAtiva, setCamadaAtiva] = useState('Geral');
   /** Camadas desligadas. Estado de TELA — preferência de quem olha, não do dado. */
   const [camadasOcultas, setCamadasOcultas] = useState<Set<string>>(new Set());
@@ -14440,6 +14466,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                           imagem: fundo.imagem,
                           underlay: fundo.underlay,
                           opacidade: fundo.opacidade,
+                          vetor: fundoVetorial,
                         }
                       : null
                   }

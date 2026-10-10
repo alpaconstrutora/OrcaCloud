@@ -2436,3 +2436,33 @@ A 10.4 sai em três publicações: **(a)** alinhar/arranjo, **(b)** IFC externo 
   - **9 m ao lado**: 13,8 % da tela muda (a segunda casa apareceu, console limpo);
   - **em cima (dx = 0)**: 5,1 % muda — ele cai sobre o desenho; o que sobra é o z-fighting das faces
     coincidentes e o 2º pavimento do IFC.
+
+### Etapa 10.4c — DXF como fundo vetorial · 08/10/2026 (frente `clima-e10-ref`, sem bump)
+
+- A prancha de fundo que veio de DXF/DWG guarda o desenho de origem ao lado do PNG (`.desenho.json`,
+  P2.38). Agora o canvas traça as **linhas** desse desenho no lugar do PNG: o traço fica com ~1 px de
+  tela em qualquer zoom, sem o serrilhado de esticar um raster de 4096 px.
+- **Onde cada linha cai:** o traço é desenhado no espaço de pixel do PNG e passa pela MESMA matriz que
+  o canvas já usava para a imagem (pixel → aferição ATUAL da prancha → tela). Assim o vetor segue a
+  prancha se ela foi movida, girada ou reaferida depois de importada.
+- **Só quando bate** (`fundoVetorialDoDesenho`):
+  - o plano é refeito do desenho guardado e só vale se bater pixel a pixel com a imagem guardada (largura
+    e altura), que é a prova de que a importação usou as mesmas opções;
+  - dois jeitos de ter importado são tentados: pela camada/unidade escolhidas, ou pela leitura da própria
+    ÒPURA (mm);
+  - se nenhum bater, fica o PNG — nunca um vetor fora do lugar;
+  - acima de 80 mil traços também fica o PNG, que custa menos a cada quadro.
+- O fundo de PDF e o de imagem continuam como estavam.
+
+**Prova:**
+
+- `dxfFundoVetorial.test.ts` (6 testes):
+  - os dois candidatos;
+  - a imagem que não bate e o desenho grande demais (fica o PNG);
+  - **o pixel do traço, levado pela aferição da prancha, é o ponto do DXF × unidade + ancoragem**;
+  - o traço fixo, com a camada em destaque 1,5× mais grossa.
+- **Harness** `docs/spikes/fundo-vetorial/` (novo): o DXF da própria Planta, rasterizado como a
+  importação faz, no `BlueprintCanvas` real.
+  - A caixa do traço com o PNG e com o vetor difere em **1 px**.
+  - Depois do mesmo zoom forte, o PNG tem **3,77 %** da tela escura e o vetor **0,18 %**. Os prints
+    mostram as mesmas três linhas, grossas no PNG e finas no vetor.

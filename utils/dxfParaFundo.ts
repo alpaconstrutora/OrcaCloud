@@ -52,6 +52,12 @@ export interface OpcoesDoFundo {
   /** Camada de parede escolhida — sai mais escura, para o olho achar o que foi lido. */
   camadaDestaque?: string | null;
   ladoMaxPx?: number;
+  /**
+   * E10.4c (fundo VETORIAL): espessura do traço comum em pixels do PLANO, fixa —
+   * quem desenha na tela passa "1 pixel de tela ÷ escala", e o traço fica fino em
+   * qualquer zoom. Ausente = a espessura em mm do modelo do raster (abaixo).
+   */
+  larguraFixaPx?: number;
 }
 
 /**
@@ -150,9 +156,10 @@ export function desenharFundo(ctx: ContextoDeTraco, plano: PlanoDoFundo, leitura
   // mostrou. 20 mm (30 na camada em destaque) é o traço de caneta 0,4 mm numa planta 1:50: se vê
   // enquadrado e não engorda no zoom além do que uma planta impressa tem.
   const largura = (mmDeTraco: number, minPx: number) => Math.max(minPx, mmDeTraco / u.mmPorPixel);
-  tracar(comuns, comunsArcos, COR_DO_FUNDO, largura(20, 1.5));
+  const fixa = o.larguraFixaPx;
+  tracar(comuns, comunsArcos, COR_DO_FUNDO, fixa ?? largura(20, 1.5));
   if (destaque) {
-    tracar(leitura.segmentos.filter((s) => s.camada === destaque && passa(s.camada)), leitura.arcos.filter((a) => a.camada === destaque && passa(a.camada)), COR_DO_DESTAQUE, largura(30, 2));
+    tracar(leitura.segmentos.filter((s) => s.camada === destaque && passa(s.camada)), leitura.arcos.filter((a) => a.camada === destaque && passa(a.camada)), COR_DO_DESTAQUE, fixa !== undefined ? fixa * 1.5 : largura(30, 2));
   }
   return { segmentos, arcos };
 }
@@ -175,4 +182,53 @@ export async function rasterizarDxf(leitura: Pick<LeituraDxf, 'segmentos' | 'arc
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
   if (!blob) return null;
   return { blob, plano, tracos };
+}
+
+/**
+ * O FUNDO VETORIAL (E10.4c do roadmap de climatização, 08/10/2026).
+ *
+ * A prancha que veio de DXF guarda o desenho de origem ao lado do PNG
+ * (`.desenho.json`, P2.38). Com ele o canvas pode traçar as LINHAS em vez de
+ * esticar a imagem — nítidas em qualquer zoom, sem o serrilhado do raster de
+ * 4096 px.
+ *
+ * ─── ONDE CADA LINHA CAI ────────────────────────────────────────────────────
+ *
+ * O traço é desenhado no espaço de PIXEL do PNG (o mesmo `plano` da importação)
+ * e passa pela MESMA matriz que o canvas já usa para a imagem: pixel → modelo
+ * (a aferição ATUAL da prancha) → tela. Assim o vetor segue a prancha se ela foi
+ * movida, girada ou reaferida depois de importada — e cai exatamente onde o PNG
+ * cairia.
+ *
+ * O `plano` é recalculado do desenho guardado. Ele só vale se bater PIXEL A
+ * PIXEL com a imagem guardada (largura e altura): é a prova de que a importação
+ * usou as mesmas opções. Dois jeitos possíveis de ter importado — pela camada e
+ * unidade escolhidas, ou pela leitura da própria ÒPURA (mm, sem destaque) —, e o
+ * primeiro que bater ganha. Nenhum bateu = fica o PNG (`null`), nunca um vetor
+ * fora do lugar.
+ */
+export interface FundoVetorial {
+  leitura: Pick<LeituraDxf, 'segmentos' | 'arcos'>;
+  plano: PlanoDoFundo;
+  opcoes: OpcoesDoFundo;
+}
+
+/** Acima disto, o vetor custa mais a cada quadro do que o PNG — fica o PNG. */
+export const LIMITE_DE_TRACOS_VETORIAIS = 80_000;
+
+export function fundoVetorialDoDesenho(
+  leitura: Pick<LeituraDxf, 'segmentos' | 'arcos'>,
+  desenho: { mmPorUnidade: number; camada: string; dx: number; dy: number },
+  imagem: { larguraPx: number; alturaPx: number },
+): FundoVetorial | null {
+  if (leitura.segmentos.length + leitura.arcos.length > LIMITE_DE_TRACOS_VETORIAIS) return null;
+  const candidatos: OpcoesDoFundo[] = [
+    { mmPorUnidade: desenho.mmPorUnidade, dx: desenho.dx, dy: desenho.dy, camadaDestaque: desenho.camada },
+    { mmPorUnidade: 1, dx: desenho.dx, dy: desenho.dy, camadaDestaque: null },
+  ];
+  for (const opcoes of candidatos) {
+    const plano = planejarFundo(leitura, opcoes);
+    if (plano && plano.larguraPx === imagem.larguraPx && plano.alturaPx === imagem.alturaPx) return { leitura, plano, opcoes };
+  }
+  return null;
 }

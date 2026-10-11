@@ -97,34 +97,9 @@ export interface FinancialTransaction {
     attachmentUrl?: string;
 }
 
-export interface BillingRule {
-    id: string;
-    days: number;
-    time: string;
-    active: boolean;
-    messageTemplate?: string;
-    clientId?: string;
-    dealId?: string;
-    triggerMode: 'MANUAL' | 'AUTOMATIC';
-    minValue?: number;
-}
-
-export interface ContractTemplate {
-    id: string;
-    name: string;
-    externalId: string;
-    description?: string;
-}
-
 export interface FinancialInfo {
     totalValue: number;
     paymentMethod: string;
-    webhookUrl?: string;
-    billingWebhookUrl?: string;
-    contractWebhookUrl?: string;
-    billingRules?: BillingRule[];
-    billingTriggerHour?: number;
-    contractTemplates?: ContractTemplate[];
     installments: PaymentInstallment[];
     transactions: FinancialTransaction[];
 }

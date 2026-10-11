@@ -17,15 +17,13 @@ import {
     MessageSquare,
     Info,
     MessageCircle,
-    Zap,
     RefreshCw,
     Loader2
 } from 'lucide-react';
 import { QuotationRequest, QuotationResponse } from '../types';
 import { quotationService } from '../services/quotationService';
-import { webhookService } from '../services/webhookService';
 import { projectService } from '../services/projectService';
-import { supplierService, getSupplierDisplayName } from '../services/supplierService';
+import { getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import ActionIconButton from './ui/ActionIconButton';
 import { getQuotationNumberLockReason, regenerateQuotationNumber } from '../services/quotationNumberRegenService';
@@ -238,58 +236,6 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
         window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
     };
 
-    const handleSendWebhook = () => {
-        if (!request) return;
-
-        askConfirm(
-            "Deseja enviar/reenviar o detalhe desta cotação via automação (Make.com)? Isso pode disparar mensagens WhatsApp para os fornecedores.",
-            () => {
-                (async () => {
-                    try {
-                        setLoading(true);
-
-                        let projectData = null;
-                        if (request.projectId) {
-                            projectData = await projectService.loadProject(request.projectId);
-                        }
-
-                        // Se a cotação não tem respostas ainda, 'responses' estaria vazio.
-                        // Para notificar quem foi CONVIDADO, pegamos da lista de convidados:
-                        let suppliersData: any[] = [];
-
-                        if (request.invitedSupplierIds && request.invitedSupplierIds.length > 0) {
-                            // Fetch the actual supplier details
-                            const sups = await Promise.all(
-                                request.invitedSupplierIds.map(id => supplierService.getById(id))
-                            );
-
-                            suppliersData = sups.filter((s): s is NonNullable<typeof s> => s !== null).map(s => ({
-                                id: s.id,
-                                name: s.name,
-                                email: s.email,
-                                phone: s.phone
-                            }));
-                        } else {
-                            // Fallback (se por acaso for depender das respostas já dadas)
-                            suppliersData = responses.map(r => ({
-                                id: r.supplierId,
-                                name: r.supplierName
-                            }));
-                        }
-
-                        await webhookService.triggerQuotationSentWebhook(request, suppliersData, projectData);
-                        notify("Cotação enviada via automação com sucesso!");
-                    } catch (error: any) {
-                        console.error("Erro ao enviar cotação via webhook:", error);
-                        notify(`Erro na operação: ${error.message || 'Erro desconhecido'}`, "error");
-                    } finally {
-                        setLoading(false);
-                    }
-                })();
-            }
-        );
-    };
-
     if (loading) return <div className="p-8 text-center animate-pulse font-bold text-gray-400">CARREGANDO MAPA COMPARATIVO...</div>;
     if (!request) return <div className="p-8 text-center text-red-500 font-bold">Cotação não encontrada.</div>;
 
@@ -348,17 +294,6 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleSendWebhook}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 text-button font-black uppercase tracking-widest disabled:opacity-50 active:scale-95"
-                        title="Enviar para Automação (Make.com)"
-                    >
-                        <Zap className="w-4 h-4" />
-                        Enviar Automação
-                    </button>
-                </div>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

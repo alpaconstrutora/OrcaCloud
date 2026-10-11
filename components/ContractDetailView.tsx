@@ -4,16 +4,16 @@ import {
     ArrowLeft, FileText, Calendar, Shield, DollarSign,
     Layers, Plus, History, CheckCircle2, AlertCircle,
     MoreHorizontal, ArrowUpRight, TrendingUp, BarChart3,
-    ArrowRight, Edit3, PlusCircle, Clock,
+    Edit3, PlusCircle, Clock,
     Camera, ExternalLink, HandCoins, CreditCard, X,
-    Video, Image as ImageIcon, Send, FileDown, Zap,
+    Video, Image as ImageIcon, Send, FileDown,
     Package, Pencil, Settings, Search,
     ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
     Contract, ContractItem, ContractAddendum,
-    ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings, ContractTemplate,
+    ContractMeasurement, ContractMeasurementItem, BudgetEntry, ProjectSettings,
     ContractUtilityBill, SinapiItem, CustomDatabase, SinapiType,
     ContractGuarantee, ContractPenalty, ContractRetentionLedger, ContractRetentionRelease, GuaranteeKind, PenaltyKind,
     ContractRiskAssessment, ContractLaborQuestionnaire, ContractPrecedentCondition, ContractDocumentRequirement,
@@ -125,7 +125,6 @@ import UtilityBillModal from './UtilityBillModal';
 import DatabasePickerModal from './DatabasePickerModal';
 import { organizationService } from '../services/organizationService';
 import { exportService } from '../services/exportService';
-import { webhookService } from '../services/webhookService';
 import { supplierService } from '../services/supplierService';
 import { Organization } from '../types';
 import Button from './ui/Button';
@@ -238,8 +237,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     const [activeTab, setActiveTab] = React.useState<ContractDetailTab>('overview_resumo');
     const [isBudgetPickerOpen, setIsBudgetPickerOpen] = React.useState(false);
     const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingId: string | null; initial: AvulsoItem | null }>({ open: false, editingId: null, initial: null });
-    const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
-    const [selectedTemplate, setSelectedTemplate] = React.useState<ContractTemplate | undefined>(undefined);
     const [isMeasurementModalOpen, setIsMeasurementModalOpen] = React.useState(false);
     const [editingMeasurement, setEditingMeasurement] = React.useState<ContractMeasurement | null>(null);
     const [editingMeasurementItems, setEditingMeasurementItems] = React.useState<ContractMeasurementItem[]>([]);
@@ -1062,115 +1059,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
-    const handleSendWebhook = async (template?: ContractTemplate) => {
-        if (!contract) {
-            notify("Dados insuficientes para enviar o contrato.", "error");
-            return;
-        }
-
-        const templates = projectSettings?.financialInfo?.contractTemplates || [];
-        if (templates.length > 0 && !template) {
-            setIsTemplateModalOpen(true);
-            return;
-        }
-
-        const party = (contract as any).direction === 'OUTGOING' ? 'cliente' : 'fornecedor';
-        const confirmMessage = contract.status === 'Enviado'
-            ? `Este contrato já foi enviado. Deseja enviar novamente para o ${party} via automação?`
-            : `O status do contrato passa para 'Enviado'.`;
-
-        const ok = await confirm({
-            title: contract.status === 'Enviado' ? 'Enviar novamente?' : `Enviar contrato para o ${party}?`,
-            message: confirmMessage,
-            variant: 'warning',
-            confirmLabel: 'Enviar',
-        });
-        if (!ok) return;
-        try {
-            setLoading(true);
-
-            let supplierData = null;
-            if (contract.supplier_id) {
-                supplierData = await supplierService.getById(contract.supplier_id);
-            }
-
-            await webhookService.triggerContractSentWebhook(
-                contract,
-                supplierData ?? undefined,
-                projectSettings ?? undefined,
-                false,
-                template
-            );
-
-            if (contract.status !== 'Enviado' && contract.status !== 'Ativo') {
-                await contractService.updateContract(contract.id, {
-                    status: 'Enviado'
-                });
-            }
-
-            await loadContractData();
-            setIsTemplateModalOpen(false);
-            notify("Contrato enviado via automação com sucesso!", "success");
-        } catch (error: unknown) {
-            console.error("Erro ao enviar contrato:", error);
-            notify(`Erro na operação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`, "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const renderTemplateModal = () => {
-        const templates = projectSettings?.financialInfo?.contractTemplates || [];
-        if (!isTemplateModalOpen) return null;
-
-        return (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-                <div className="bg-white rounded-[10px] shadow-xl p-6 w-full max-w-lg border border-gray-100 animate-in zoom-in-95 duration-300">
-                    <div className="flex justify-between items-start mb-8">
-                        <div>
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="p-2 bg-blue-600 rounded-[6px] text-white shadow-lg shadow-blue-600/20">
-                                    <Zap className="w-5 h-5" />
-                                </div>
-                                <span className="text-xs font-medium text-blue-600">Automação</span>
-                            </div>
-                            <h3 className="text-2xl font-medium text-gray-900 tracking-tight">Escolha o Template</h3>
-                            <p className="text-sm text-gray-500 font-medium">Selecione o modelo de contrato para emissão.</p>
-                        </div>
-                        <button onClick={() => setIsTemplateModalOpen(false)} className="p-3 hover:bg-gray-100 rounded-[10px] transition-all text-gray-400">
-                            <X className="w-6 h-6" />
-                        </button>
-                    </div>
-
-                    <div className="space-y-4 mb-10">
-                        {templates.map((template) => (
-                            <button
-                                key={template.id}
-                                onClick={() => handleSendWebhook(template)}
-                                className="w-full p-6 bg-gray-50 border-2 border-transparent hover:border-blue-500 hover:bg-white rounded-[10px] transition-all text-left flex items-center justify-between group"
-                            >
-                                <div>
-                                    <p className="text-base font-medium text-gray-900 leading-tight mb-1">{template.name}</p>
-                                    <p className="text-xs font-medium text-gray-400 leading-none">ID: {template.externalId}</p>
-                                </div>
-                                <div className="p-3 bg-white rounded-[10px] text-gray-400 group-hover:text-blue-600 group-hover:bg-blue-50 transition-all border border-gray-100">
-                                    <ArrowRight className="w-5 h-5" />
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-
-                    <button
-                        onClick={() => setIsTemplateModalOpen(false)}
-                        className="w-full py-5 bg-gray-100 text-gray-400 rounded-[6px] font-medium text-[13px] hover:bg-gray-200 hover:text-gray-600 transition-all"
-                    >
-                        Cancelar Envio
-                    </button>
-                </div>
-            </div>
-        );
-    };
-
     const totalMeasurements = measurements.reduce((sum, m) => sum + (m.total_value || 0), 0);
     const physicalProgress = contract ? (totalMeasurements / (contract.current_value || 1)) * 100 : 0;
 
@@ -1464,22 +1352,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     )}
                 </div>
 
-                {/* §17: ação primária da aba Emissão — enviar o contrato para a
-                    automação (Make.com) é parte da emissão, ao lado de emitir o
-                    .docx; não é ação de toda aba (pedido de 2026-09-30). Não usar
-                    o <Button> compartilhado — a classe BASE dele herda font-black
-                    uppercase + shadow pesado. */}
-                {activeTab === 'emissao' && (
-                    <button
-                        onClick={() => handleSendWebhook()}
-                        disabled={loading}
-                        className="ml-auto flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
-                        title="Enviar para Automação (Make.com)"
-                    >
-                        <Zap className="w-[15px] h-[15px]" />
-                        Enviar automação
-                    </button>
-                )}
             </div>
             )}
 
@@ -3715,8 +3587,6 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* §14 — a confirmação destrutiva é o useConfirm() global; o modal
                 inline `pendingConfirm` que existia aqui foi removido. */}
-
-            {isTemplateModalOpen && renderTemplateModal()}
 
             {/* Modal: PDF via Template */}
             {templatePdfModal && (

@@ -25,7 +25,6 @@ const CONSUMIDORES = [
     'services/orderService.ts',
     'services/financialService.ts',
     'services/matchService.ts',
-    'services/webhookService.ts',
     'services/negotiationService.ts',
     'services/quotationService.ts',
     'components/SupplyChainOrderList.tsx',

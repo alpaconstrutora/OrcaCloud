@@ -20,7 +20,6 @@ import { storageService } from '../services/storageService';
 import { profileService } from '../services/profileService';
 import NegotiationHub from './NegotiationHub';
 import SupplyChainOrderForm from './SupplyChainOrderForm';
-import { webhookService } from '../services/webhookService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
 import { pedidoCompradorService } from '../services/pedidoCompradorService';
 import { pedidoFinanceiroService } from '../services/pedidoFinanceiroService';
@@ -810,47 +809,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    const handleSendWebhook = () => {
-        if (!order) return;
-
-        const confirmMessage = order.status === 'Enviado'
-            ? "Este pedido já foi enviado. Deseja enviar novamente para o fornecedor via automação?"
-            : "Deseja enviar o pedido para o fornecedor via automação? Isso atualizará o status para 'Enviado'.";
-
-        askConfirm(confirmMessage, () => {
-            (async () => {
-                try {
-                    setLoading(true);
-
-                    let supplierData = null;
-                    if (order.supplierId) {
-                        supplierData = await supplierService.getById(order.supplierId);
-                    }
-
-                    let projectData = null;
-                    if (order.projectId) {
-                        projectData = await projectService.loadProject(order.projectId);
-                    }
-
-                    await webhookService.triggerOrderSentWebhook(order, supplierData ?? undefined, projectData ?? undefined);
-
-                    if (order.status === 'Rascunho') {
-                        await orderService.updateOrder(order.id, { status: 'Enviado' }, order.version);
-                    }
-
-                    await loadOrderData();
-                    notify("Pedido enviado via automação com sucesso!");
-                } catch (err: unknown) {
-                    const error = err instanceof Error ? err : new Error(String(err));
-                    console.error("Erro ao enviar pedido via webhook:", error);
-                    notify(`Erro na operação: ${error.message || 'Erro desconhecido'}`, "error");
-                } finally {
-                    setLoading(false);
-                }
-            })();
-        }, { titulo: 'Enviar para automação', variante: 'default', rotulo: 'Enviar' });
-    };
-
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -1065,22 +1023,10 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         Negociar
                     </button>
 
-                    {/* Automação, duplicar, excluir e WhatsApp são ferramentas administrativas do
+                    {/* Duplicar, excluir e WhatsApp são ferramentas administrativas do
                         time de compras — indisponíveis no link público (§ mesma razão de excluir/
                         duplicar já combinada: ação destrutiva/administrativa não pertence a um link
                         copiável por qualquer um). */}
-                    {ehComprador && (
-                        <button
-                            onClick={handleSendWebhook}
-                            disabled={loading}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 transition-all text-[13px] font-medium disabled:opacity-50 active:scale-95"
-                            title="Enviar para Automação (Make.com)"
-                        >
-                            <Zap className="w-[15px] h-[15px]" />
-                            Enviar automação
-                        </button>
-                    )}
-
                     <button
                         onClick={() => window.print()}
                         className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] transition-all shadow-sm active:scale-95"

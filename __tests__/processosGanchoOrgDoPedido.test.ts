@@ -40,7 +40,6 @@ vi.mock('../services/appSettingsService', () => ({ appSettingsService: { get: ()
 vi.mock('../services/notificationService', () => ({ notificationService: { sendNotification: async () => {} } }));
 vi.mock('../services/supplierService', () => ({ supplierService: { getById: async () => null }, getSupplierDisplayName: (s: { name: string }) => s.name }));
 vi.mock('../services/financialService', () => ({ financialService: { syncOrderToFinance: async () => {} } }));
-vi.mock('../services/webhookService', () => ({ webhookService: {} }));
 vi.mock('../services/projectService', () => ({ projectService: {} }));
 vi.mock('../services/receiptService', () => ({ receiptService: {} }));
 vi.mock('../services/discrepancyService', () => ({ discrepancyService: {} }));

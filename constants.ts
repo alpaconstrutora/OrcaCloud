@@ -145,9 +145,6 @@ export const INITIAL_PROJECT_SETTINGS: ProjectSettings = {
     totalValue: 0,
     paymentMethod: 'Parcelamento Próprio',
     installments: [],
-    webhookUrl: '',
-    billingWebhookUrl: '',
-    contractWebhookUrl: '',
     transactions: []
   },
   documents: [],

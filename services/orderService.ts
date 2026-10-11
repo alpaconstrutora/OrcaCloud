@@ -4,7 +4,6 @@ import { notificationService } from './notificationService';
 import { supplierService, getSupplierDisplayName } from './supplierService';
 import { financialService } from './financialService';
 import { sanitizeFileName } from '../utils/storageUtils';
-import { webhookService } from './webhookService';
 import { projectService } from './projectService';
 import { receiptService, CreateReceiptItemInput } from './receiptService';
 import { discrepancyService } from './discrepancyService';
@@ -75,34 +74,6 @@ export const orderService = {
             .single();
 
         if (error) throw duplicateNumberError(error, number);
-
-        // Trigger Make.com Webhook if Enviado at creation
-        if (order.status === 'Enviado') {
-            try {
-                const supplierData = data.supplier_id ? await supplierService.getById(data.supplier_id) : undefined;
-                const projectData = data.project_id ? await projectService.loadProject(data.project_id) : undefined;
-                const fullOrder = this.mapDbOrderToType(data as DbOrderRow, {});
-                await webhookService.triggerOrderSentWebhook(fullOrder, supplierData ?? undefined, projectData ?? undefined);
-                notificationLogService.log({
-                    orderId: data.id,
-                    channel: 'webhook',
-                    recipient: supplierData?.email,
-                    subject: `Pedido ${data.number} enviado via automação`,
-                    status: 'sent',
-                    metadata: { event: 'order_sent', supplier: supplierData?.name },
-                });
-            } catch (webhookErr: unknown) {
-                const webhookError = webhookErr instanceof Error ? webhookErr : new Error(String(webhookErr));
-                console.error("[WEBHOOK] Failed to trigger on creation:", webhookError);
-                notificationLogService.log({
-                    orderId: data.id,
-                    channel: 'webhook',
-                    status: 'failed',
-                    error: webhookError.message,
-                    metadata: { event: 'order_sent' },
-                });
-            }
-        }
 
         return data;
     },
@@ -482,36 +453,7 @@ export const orderService = {
                 }
             }
 
-            // 3. Trigger Make.com Webhook if Enviado
-            if (updates.status === 'Enviado') {
-                try {
-                    const supplierData = data.supplier_id ? await supplierService.getById(data.supplier_id) : undefined;
-                    const projectData = data.project_id ? await projectService.loadProject(data.project_id) : undefined;
-
-                    const fullOrder = this.mapDbOrderToType(data as DbOrderRow, {});
-                    await webhookService.triggerOrderSentWebhook(fullOrder, supplierData ?? undefined, projectData ?? undefined);
-                    notificationLogService.log({
-                        orderId: data.id,
-                        channel: 'webhook',
-                        recipient: supplierData?.email,
-                        subject: `Pedido ${data.number} enviado via automação`,
-                        status: 'sent',
-                        metadata: { event: 'order_sent', supplier: supplierData?.name },
-                    });
-                } catch (webhookErr: unknown) {
-                    const webhookError = webhookErr instanceof Error ? webhookErr : new Error(String(webhookErr));
-                    console.error("[ORDER SERVICE] Make.com Webhook trigger failed:", webhookError);
-                    notificationLogService.log({
-                        orderId: data.id,
-                        channel: 'webhook',
-                        status: 'failed',
-                        error: webhookError.message,
-                        metadata: { event: 'order_sent' },
-                    });
-                }
-            }
-
-            // 4. WhatsApp automático quando status muda para Enviado
+            // 3. WhatsApp automático quando status muda para Enviado
             if (updates.status === 'Enviado' && whatsappService.isConfigured()) {
                 try {
                     const supplierForWa = data.supplier_id

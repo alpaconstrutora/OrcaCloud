@@ -3168,6 +3168,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     ))}
                                 </div>
 
+                                {/* Linha de cima (11/10/2026, "muito espaço perdido"): composição à
+                                    esquerda; à direita, os campos curtos numa grade 2×N — Valor Total |
+                                    Forma, Datas, Centro de Custo | Plano de Contas. Antes cada um ocupava
+                                    uma faixa de 1.276px, e o Valor Total ficava sozinho numa linha. Abaixo,
+                                    "Montar plano" e o Plano de pagamento na largura toda: condições → plano. */}
+                                <div className="grid grid-cols-1 xl:grid-cols-12 gap-x-8 gap-y-6 items-start">
+                                <div className="xl:col-span-5 min-w-0">
                                 {/* Composição do valor — o valor de cada unidade e a soma. Estava na
                                     aba Dados da Unidade até 2026-09-04, junto do banner "Total do
                                     contrato"; quem montava o valor de um contrato tinha de pular
@@ -3229,13 +3236,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     )}
                                 </div>
-
+                                </div>
+                                <div className="xl:col-span-7 min-w-0 grid grid-cols-2 gap-x-6 gap-y-4">
                                 {/* Valor Total do Contrato — o alvo que o Plano de Pagamento
                                     precisa fechar. Nasce da composição das unidades (efeito
                                     acima) e continua editável: o fechamento negociado pode
                                     divergir da soma de tabela. */}
                                 {usaTrioFinanceiro && (
-                                    <div className="space-y-1.5 max-w-xs">
+                                    <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
@@ -3257,6 +3265,193 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 A composição das unidades soma {fmtMoeda(unitsTotal)} — diferença de {fmtMoeda(Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal))}.
                                             </span>
                                         )}
+                                    </div>
+                                )}
+
+                                {/* Forma de Pagamento */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Forma de Pagamento</label>
+                                    <select
+                                        value={formData.payment_method}
+                                        onChange={(e) => {
+                                            const method = e.target.value;
+                                            setFormData({
+                                                ...formData,
+                                                payment_method: method,
+                                                installments: method === 'CASH' ? 1 : formData.installments
+                                            });
+                                        }}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                    >
+                                        <option value="CASH">À Vista</option>
+                                        <option value="INSTALLMENTS">Parcelado Direto / Mensalidade</option>
+                                        {formData.type === 'SALE' && (
+                                            <>
+                                                <option value="FINANCING">Financiamento</option>
+                                                <option value="PERMUTA">Permuta</option>
+                                                <option value="HIBRIDO">Híbrido</option>
+                                            </>
+                                        )}
+                                    </select>
+                                </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Data Efetiva</label>
+                                        <div className="relative">
+                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                            <input
+                                                type="date"
+                                                value={formData.date}
+                                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
+                                        <div className="relative">
+                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
+                                            {/* A data é gravada a cada tecla (nada se perde se o
+                                                usuário clicar direto em Salvar), mas a PERGUNTA de
+                                                recalcular as parcelas só sai no blur/Enter. Ligada ao
+                                                onChange, ela abria no meio da digitação: o input de
+                                                data dispara a cada segmento e, ao digitar o ano,
+                                                "0002" já é uma data válida. */}
+                                            <input
+                                                type="date"
+                                                value={formData.payment_due_date || ''}
+                                                onFocus={() => { dueDateAoFocar.current = formData.payment_due_date || ''; }}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, payment_due_date: e.target.value }))}
+                                                onBlur={() => perguntarRecalculoDatas()}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
+                                                className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+
+
+                                {/* Dimensões contábeis do negócio. São DUAS coisas
+                                    diferentes: Centro de Custo é `cost_centers_v2`
+                                    (Minha Organização > Centro de Custo) e Plano de
+                                    Contas é `plano_de_contas` (Minha Organização >
+                                    Plano de Contas). Definidas aqui uma única vez e
+                                    herdadas por TODAS as parcelas — na aba Parcelas
+                                    aparecem só como colunas de leitura. */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
+                                    <CostCenterSelect
+                                        costCenters={costCenters}
+                                        value={formData.cost_center_id || ''}
+                                        onChange={(v) => setFormData({ ...formData, cost_center_id: v || null })}
+                                        placeholder="Nenhum centro de custo vinculado"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
+                                    <PlanoContasSelect
+                                        planoContas={planoContas}
+                                        value={formData.plano_de_contas_id || ''}
+                                        onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v || null })}
+                                        placeholder="Nenhuma conta vinculada"
+                                        hoverCls="hover:bg-blue-50"
+                                    />
+                                </div>
+
+                                {/* Retenção na fonte (commercial_deals.tributos_retidos). Ao salvar,
+                                    taxPayableService.generateForDeal regera os tributos: o retido
+                                    nasce como "Retido pelo cliente" e a parcela passa a conciliar
+                                    pelo valor líquido (valor_esperado). Chaves = as da locação. */}
+                                {formData.type === 'RENTAL' && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500">Locador</label>
+                                        <ClientSelect
+                                            clients={clients}
+                                            value={locadorId || ''}
+                                            onChange={(v) => setFormData({ ...formData, locador_client_id: v || null })}
+                                            icon={null}
+                                            title="Selecionar Locador"
+                                            placeholder="Locador não informado (empresa)"
+                                            triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                        <p className="text-xs text-gray-500">
+                                            {locadorLocacao
+                                                ? `${locadorLocacao.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'} (cadastro de Clientes)${formData.locador_client_id === undefined ? ' — sugerido pelo proprietário do imóvel' : ''}.`
+                                                : 'Sem locador pessoa física informado: não há retenção de IRRF.'}
+                                        </p>
+                                    </div>
+                                )}
+                                </div>
+                                </div>
+
+                                {/* Parcelado → montar o plano aqui mesmo. Os campos são o
+                                    ponto de partida; o Plano de pagamento (logo abaixo) continua
+                                    sendo a lista que vale, editável bloco a bloco. */}
+                                {formData.payment_method === 'INSTALLMENTS' && usaTrioFinanceiro && (
+                                    <div className="space-y-2 p-4 bg-gray-50 border border-gray-100 rounded-[10px]">
+                                        <label className="text-xs font-semibold text-slate-500">Montar plano de pagamento</label>
+                                        <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${formData.type === 'SALE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                                            {formData.type === 'SALE' && (
+                                                <div className="space-y-1.5">
+                                                    <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                        <input
+                                                            type="number" min="0" step="0.01" placeholder="0,00"
+                                                            value={planoRapido.entrada}
+                                                            onChange={(e) => setPlanoRapido(prev => ({ ...prev, entrada: e.target.value }))}
+                                                            className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
+                                                <input
+                                                    type="number" min="1" step="1" placeholder="12"
+                                                    value={planoRapido.parcelas}
+                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, parcelas: e.target.value }))}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
+                                                <select
+                                                    value={planoRapido.tipo}
+                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, tipo: e.target.value }))}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                                >
+                                                    {tiposDeSerie.map(t => (
+                                                        <option key={t.id} value={t.code}>{t.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-semibold text-slate-500">1º vencimento</label>
+                                                <input
+                                                    type="date"
+                                                    value={planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || ''}
+                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pt-1">
+                                            <span className="text-xs text-gray-500">
+                                                {formData.type === 'SALE' && totalDoContrato <= 0
+                                                    ? 'Informe o Valor Total do Contrato para calcular as parcelas.'
+                                                    : `Vai gerar: ${resumoPlanoRapido}.`}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => { void montarPlano(); }}
+                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                            >
+                                                <Layers className="w-[15px] h-[15px]" />
+                                                {linhasDoPlano.length > 0 ? 'Substituir plano' : 'Montar plano'}
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 
@@ -3397,196 +3592,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         )}
                                     </div>
                                 )}
-
-                                {/* Datas + Forma de Pagamento: três campos curtos, uma linha. */}
-                                <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-slate-500">Data Efetiva</label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                            <input
-                                                type="date"
-                                                value={formData.date}
-                                                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                                className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
-                                            {/* A data é gravada a cada tecla (nada se perde se o
-                                                usuário clicar direto em Salvar), mas a PERGUNTA de
-                                                recalcular as parcelas só sai no blur/Enter. Ligada ao
-                                                onChange, ela abria no meio da digitação: o input de
-                                                data dispara a cada segmento e, ao digitar o ano,
-                                                "0002" já é uma data válida. */}
-                                            <input
-                                                type="date"
-                                                value={formData.payment_due_date || ''}
-                                                onFocus={() => { dueDateAoFocar.current = formData.payment_due_date || ''; }}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, payment_due_date: e.target.value }))}
-                                                onBlur={() => perguntarRecalculoDatas()}
-                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}
-                                                className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                            />
-                                        </div>
-                                    </div>
-
-                                {/* Forma de Pagamento */}
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Forma de Pagamento</label>
-                                    <select
-                                        value={formData.payment_method}
-                                        onChange={(e) => {
-                                            const method = e.target.value;
-                                            setFormData({
-                                                ...formData,
-                                                payment_method: method,
-                                                installments: method === 'CASH' ? 1 : formData.installments
-                                            });
-                                        }}
-                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                    >
-                                        <option value="CASH">À Vista</option>
-                                        <option value="INSTALLMENTS">Parcelado Direto / Mensalidade</option>
-                                        {formData.type === 'SALE' && (
-                                            <>
-                                                <option value="FINANCING">Financiamento</option>
-                                                <option value="PERMUTA">Permuta</option>
-                                                <option value="HIBRIDO">Híbrido</option>
-                                            </>
-                                        )}
-                                    </select>
-                                </div>
-                                </div>
-
-                                {/* Parcelado → montar o plano aqui mesmo. Os campos são o
-                                    ponto de partida; o Plano de pagamento (acima) continua
-                                    sendo a lista que vale, editável bloco a bloco. */}
-                                {formData.payment_method === 'INSTALLMENTS' && usaTrioFinanceiro && (
-                                    <div className="space-y-2 p-4 bg-gray-50 border border-gray-100 rounded-[10px]">
-                                        <label className="text-xs font-semibold text-slate-500">Montar plano de pagamento</label>
-                                        <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${formData.type === 'SALE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-                                            {formData.type === 'SALE' && (
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                        <input
-                                                            type="number" min="0" step="0.01" placeholder="0,00"
-                                                            value={planoRapido.entrada}
-                                                            onChange={(e) => setPlanoRapido(prev => ({ ...prev, entrada: e.target.value }))}
-                                                            className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
-                                                <input
-                                                    type="number" min="1" step="1" placeholder="12"
-                                                    value={planoRapido.parcelas}
-                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, parcelas: e.target.value }))}
-                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
-                                                <select
-                                                    value={planoRapido.tipo}
-                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, tipo: e.target.value }))}
-                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                                >
-                                                    {tiposDeSerie.map(t => (
-                                                        <option key={t.id} value={t.code}>{t.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-slate-500">1º vencimento</label>
-                                                <input
-                                                    type="date"
-                                                    value={planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || ''}
-                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
-                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pt-1">
-                                            <span className="text-xs text-gray-500">
-                                                {formData.type === 'SALE' && totalDoContrato <= 0
-                                                    ? 'Informe o Valor Total do Contrato para calcular as parcelas.'
-                                                    : `Vai gerar: ${resumoPlanoRapido}.`}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => { void montarPlano(); }}
-                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                                            >
-                                                <Layers className="w-[15px] h-[15px]" />
-                                                {linhasDoPlano.length > 0 ? 'Substituir plano' : 'Montar plano'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Dimensões contábeis do negócio. São DUAS coisas
-                                    diferentes: Centro de Custo é `cost_centers_v2`
-                                    (Minha Organização > Centro de Custo) e Plano de
-                                    Contas é `plano_de_contas` (Minha Organização >
-                                    Plano de Contas). Definidas aqui uma única vez e
-                                    herdadas por TODAS as parcelas — na aba Parcelas
-                                    aparecem só como colunas de leitura. */}
-                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
-                                    <CostCenterSelect
-                                        costCenters={costCenters}
-                                        value={formData.cost_center_id || ''}
-                                        onChange={(v) => setFormData({ ...formData, cost_center_id: v || null })}
-                                        placeholder="Nenhum centro de custo vinculado"
-                                        hoverCls="hover:bg-blue-50"
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
-                                    <PlanoContasSelect
-                                        planoContas={planoContas}
-                                        value={formData.plano_de_contas_id || ''}
-                                        onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v || null })}
-                                        placeholder="Nenhuma conta vinculada"
-                                        hoverCls="hover:bg-blue-50"
-                                    />
-                                </div>
-
-                                {/* Retenção na fonte (commercial_deals.tributos_retidos). Ao salvar,
-                                    taxPayableService.generateForDeal regera os tributos: o retido
-                                    nasce como "Retido pelo cliente" e a parcela passa a conciliar
-                                    pelo valor líquido (valor_esperado). Chaves = as da locação. */}
-                                {formData.type === 'RENTAL' && (
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-slate-500">Locador</label>
-                                        <ClientSelect
-                                            clients={clients}
-                                            value={locadorId || ''}
-                                            onChange={(v) => setFormData({ ...formData, locador_client_id: v || null })}
-                                            icon={null}
-                                            title="Selecionar Locador"
-                                            placeholder="Locador não informado (empresa)"
-                                            triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                        />
-                                        <p className="text-xs text-gray-500">
-                                            {locadorLocacao
-                                                ? `${locadorLocacao.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'} (cadastro de Clientes)${formData.locador_client_id === undefined ? ' — sugerido pelo proprietário do imóvel' : ''}.`
-                                                : 'Sem locador pessoa física informado: não há retenção de IRRF.'}
-                                        </p>
-                                    </div>
-                                )}
-
-                                </div>
 
                                 {formData.type === 'RENTAL' && (
                                     <div className="space-y-1.5">

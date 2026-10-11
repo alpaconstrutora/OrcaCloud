@@ -97,6 +97,20 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F2 — Ambiente com um clique** · `BlueprintCanvas.tsx`, `BlueprintEditor.tsx`, `useBlueprintEditor.ts`
 - Muda: ferramenta `ambiente`. No movimento do mouse, o realce da face sob o cursor vem de `ambientesDoNivel` (~2046) + `pointInPolygon(ring)` sem os `holes`, como faz `aplicarEtiquetas`. O clique emite `NameSpace` (ou `PlaceSpaceLabel` com `at` = ponto clicado) e abre a edição do nome no lugar, com o tipo de ambiente sugerido por `usoDoNome`.
 - Pronto quando: teste do acerto (ponto em ambiente com furo não acerta o furo); no app, clicar em 3 ambientes os nomeia e um Ctrl+Z desfaz o último.
+- **Feito na execução (11/10), com mudanças em relação ao rascunho:**
+  - Ferramenta `ambiente` (botão "Ambiente" no grupo Construir da Arquitetura, atalho **A**).
+    Função pura `utils/blueprintAmbienteNoPonto.ts` — o MESMO teste serve ao realce (movimento) e
+    ao clique, para o que se clica ser o que estava aceso.
+  - O clique NÃO grava sozinho: abre o campo "Nome do ambiente" na barra de opções, já com o nome
+    atual e a área; **Enter** grava com `NameSpace` (substitui a etiqueta, não empilha), **Esc**
+    cancela, e a ferramenta segue armada para o próximo. Trocar de ferramenta esquece o clicado.
+  - **Sem sugestão de tipo pelo nome**: o renomear da lista lateral também não a faz; manter os dois
+    caminhos iguais. Se a sugestão vier, entra nos dois de uma vez.
+  - Prova: `__tests__/blueprintAmbienteNoPonto.test.ts` (3, inclusive o pátio dentro da casa e o
+    modelo real do kernel); harness `docs/spikes/ambiente-um-clique/` em Chrome com canvas REAL —
+    8/8, e **reprova** (4 ❌, exit 1) com o X do clique espelhado, cada rodada com servidor novo.
+  - **Falta a prova no app**: o campo da barra de opções, o Enter que grava e o Ctrl+Z (pede a
+    senha da conta de teste).
 
 **F3 — Separador de ambiente na aba Arquitetura** · `BlueprintEditor.tsx` (ribbon), `BlueprintCanvas.tsx`, `utils/blueprintExport.ts`, `utils/blueprintDxf.ts`
 - Muda: botão "Separador de ambiente" na Arquitetura, que reaproveita `tool:'divisa'` com `kind:'DIVISA'` (sem bump). Traço próprio (tracejado fino) distinto de divisa de terreno; aparece no PDF e numa camada DXF própria.

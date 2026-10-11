@@ -65,6 +65,7 @@ import {
 } from '../../utils/blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from '../../utils/blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
+import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -1436,6 +1437,8 @@ interface Props {
   medicoes?: FormaMedida[];
   /** Conclui uma forma medida. `null` em `pontos` cancela. */
   onMedicaoPronta?: (tipo: TipoMedida, pontos: Point[]) => void;
+  /** F2: a ferramenta "Ambiente" clicou num ambiente fechado — o editor abre o nome dele. */
+  onClicarAmbiente?: (spaceId: string) => void;
   /** Id da medição escolhida na LISTA lateral, para destacar junto com a seleção. */
   medicaoSelecionada?: string | null;
   /** Move a ponta de uma parede. Sem isto, a alça é desenhada e não faz nada. */
@@ -1671,6 +1674,7 @@ export default function BlueprintCanvas({
   onCalibrar,
   medicoes = [],
   onMedicaoPronta,
+  onClicarAmbiente,
   medicaoSelecionada = null,
   enquadrarPrancha = null,
   navegacao = null,
@@ -2047,6 +2051,11 @@ export default function BlueprintCanvas({
   const ambientesDoNivel = useMemo(
     () => model.spaces.filter((s) => (!levelId || s.levelId === levelId) && !ocultos.has(s.id)),
     [model.spaces, levelId, ocultos],
+  );
+  /** F2: o ambiente que o clique da ferramenta "Ambiente" vai nomear — realçado sob o cursor. */
+  const ambienteRealcado = useMemo(
+    () => (tool === 'ambiente' && cursor ? ambienteNoPonto(ambientesDoNivel, cursor) : null),
+    [tool, cursor, ambientesDoNivel],
   );
   const estruturasReais = useMemo(
     () => (model.structures ?? []).filter((s) => (!levelId || s.levelId === levelId) && !ocultos.has(s.id)),
@@ -3731,6 +3740,28 @@ export default function BlueprintCanvas({
       }
     }
     meioTom(false);
+
+    // AMBIENTE SOB O CURSOR (F2): a ferramenta "Ambiente" realça o que o clique
+    // vai nomear. Por baixo das paredes, como o preenchimento: tinge o interior,
+    // não a alvenaria. Os furos ficam de fora (`evenodd`) — o pátio não é a casa.
+    if (ambienteRealcado && ambienteRealcado.ring.length >= 3) {
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.18)';
+      ctx.strokeStyle = 'rgba(37, 99, 235, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (const anel of [ambienteRealcado.ring, ...ambienteRealcado.holes]) {
+        if (anel.length < 3) continue;
+        const q0 = paraTela(anel[0]);
+        ctx.moveTo(q0.x, q0.y);
+        for (const p of anel.slice(1)) {
+          const t = paraTela(p);
+          ctx.lineTo(t.x, t.y);
+        }
+        ctx.closePath();
+      }
+      ctx.fill('evenodd');
+      ctx.stroke();
+    }
 
     // HUMANIZADA (E8.4): a SOMBRA das paredes, sob as paredes e sobre os pisos.
     if (humanizada) {
@@ -9466,6 +9497,7 @@ export default function BlueprintCanvas({
     paraTela,
     paredesDoNivel,
     ambientesDoNivel,
+    ambienteRealcado,
   ]);
 
   // ── Interação ─────────────────────────────────────────────────────────────
@@ -9817,7 +9849,9 @@ export default function BlueprintCanvas({
       tool === 'calibrar' ||
       tool === 'medir-area' ||
       tool === 'medir-linha' ||
-      tool === 'contar'
+      tool === 'contar' ||
+      // F2: sem encaixe — o cursor só aponta o ambiente, não constrói nada.
+      tool === 'ambiente'
     ) {
       setCursor(paraMundo(px, py) as Point);
       return;
@@ -10018,6 +10052,14 @@ export default function BlueprintCanvas({
     if (regiaoArmada) {
       setArrastoRegiao({ origem: arredondar(mundo), atual: arredondar(mundo) });
       canvasRef.current?.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    if (tool === 'ambiente') {
+      // F2: o clique nomeia o ambiente sob o ponto — o mesmo teste do realce,
+      // para o que se clica ser o que estava aceso. Fora de ambiente, nada.
+      const s = ambienteNoPonto(ambientesDoNivel, mundo as Point);
+      if (s) onClicarAmbiente?.(s.id);
       return;
     }
 

@@ -1313,6 +1313,7 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   calibrar: 'Calibrar a planta de fundo',
   'medir-area': 'Medir área',
   'medir-linha': 'Medir linha',
+  ambiente: 'Ambiente',
   contar: 'Contar',
   terreno: 'Terreno',
   divisa: 'Divisa',
@@ -1567,6 +1568,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [tipoDaBarra, setTipoDaBarra] = useState<TipoDeEsquadria | null>(null);
   const [tiposDeEsquadria, setTiposDeEsquadria] = useState<TipoDeEsquadria[]>([]);
   const [renomeando, setRenomeando] = useState<string | null>(null);
+  /** F2: o ambiente clicado com a ferramenta "Ambiente" — o nome dele abre na barra de opções. */
+  const [ambienteEmNome, setAmbienteEmNome] = useState<string | null>(null);
 
   // ── Seções do painel lateral (accordion multi-aberto) ─────────────────────
   // Persistido porque quem trabalha na planta reabre o editor dezenas de vezes
@@ -8181,6 +8184,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     return () => window.removeEventListener('keydown', aoTeclar);
   }, [editor.setTool]);
 
+  // F2: sair da ferramenta "Ambiente" esquece o ambiente clicado — voltar a ela
+  // não pode reabrir o nome de um ambiente de minutos atrás.
+  useEffect(() => {
+    if (editor.tool !== 'ambiente') setAmbienteEmNome(null);
+  }, [editor.tool]);
+
   /** Os ambientes classificados que ainda devem tomada (9.5.2.2.1) — a contagem do botão. */
   const ambientesComDeficit = ambientes.filter(
     (a) => !!a.conferencia && (a.conferencia.deficit > 0 || a.conferencia.deficitMedias > 0),
@@ -11615,6 +11624,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 rotulo="Mover"
                 onClick={editor.setTool}
               />
+              {/* F2 (11/10/2026): nomear ambiente com um clique — realça sob o cursor. */}
+              <Ferramenta
+                atual={editor.tool}
+                valor="ambiente"
+                icone={Tag}
+                rotulo="Ambiente"
+                onClick={editor.setTool}
+              />
               {/* COMPONENTES — parede, esquadria, estrutura e fundação num menu só.
                   (Decisão do usuário, 31/08/2026.) Com o ribbon, o menu ficou com a
                   família do que se CONSTRÓI; trechos, pontos e quadro estão na aba
@@ -13775,7 +13792,47 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           mesma regra: o que já está lançado se edita no painel lateral. */}
       {!emVista && (
         <BarraDeOpcoes rotulo={rotuloDaFerramentaAtiva}>
-          {editor.tool === 'quadra' ? (
+          {editor.tool === 'ambiente' ? (
+            /* AMBIENTE COM UM CLIQUE (F2): o clique no canvas escolhe o ambiente; o
+               nome se digita aqui. Enter grava (`NameSpace` — substitui a etiqueta,
+               não empilha) e a ferramenta continua armada para o próximo. */
+            (() => {
+              const alvo = ambienteEmNome ? editor.model.spaces.find((s) => s.id === ambienteEmNome) ?? null : null;
+              if (!alvo) {
+                return (
+                  <span className="text-xs text-slate-500">
+                    {ambienteEmNome
+                      ? 'O ambiente mudou desde o clique (o desenho foi editado) — clique nele de novo.'
+                      : 'Passe o mouse sobre um ambiente fechado e clique para dar nome a ele.'}
+                  </span>
+                );
+              }
+              const gravar = (nome: string) => {
+                editor.run({ type: 'NameSpace', spaceId: alvo.id, name: nome });
+                setAmbienteEmNome(null);
+              };
+              return (
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  Nome do ambiente
+                  <input
+                    key={alvo.id}
+                    type="text"
+                    autoFocus
+                    defaultValue={alvo.name ?? ''}
+                    aria-label="Nome do ambiente clicado"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') gravar((e.target as HTMLInputElement).value);
+                      if (e.key === 'Escape') setAmbienteEmNome(null);
+                    }}
+                    className="w-48 rounded-md border border-blue-400 px-1.5 py-0.5 text-xs text-slate-800"
+                  />
+                  <span className="text-slate-400">
+                    {(alvo.areaMm2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m² · Enter grava · Esc cancela
+                  </span>
+                </label>
+              );
+            })()
+          ) : editor.tool === 'quadra' ? (
             /* LOTEAMENTO (B1): o nome da PRÓXIMA quadra. Anda sozinho depois de
                cada uma (A, B, C…) — desenhar dez quadras digitando o nome de
                cada uma seria o trabalho que a ferramenta existe para tirar. */
@@ -14838,6 +14895,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   medicoes={medicoesVisiveis}
                   medicaoSelecionada={medicoes.selecionada}
                   onMedicaoPronta={(tipo, pontos) => void medicoes.criar(tipo, pontos)}
+                  onClicarAmbiente={setAmbienteEmNome}
                 />
               </div>
               {ladoALado3d && !emVista && (

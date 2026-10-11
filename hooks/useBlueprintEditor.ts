@@ -69,6 +69,13 @@ export type BlueprintTool =
   | 'medir-linha'
   | 'contar'
   /**
+   * AMBIENTE COM UM CLIQUE (F2, 11/10/2026): passar o mouse realça o ambiente
+   * fechado sob o cursor; clicar abre o nome dele na barra de opções. Não
+   * desenha nada — o ambiente já existe (derivado das paredes e separadores);
+   * a ferramenta só o nomeia (`NameSpace`).
+   */
+  | 'ambiente'
+  /**
    * Contorno do LOTE. Os dois desenham limites (`Boundary`), não paredes — lote
    * é divisa jurídica, não construção, e não pode virar linha de alvenaria no
    * orçamento. A diferença entre eles é só o gesto e a prévia: `terreno` mostra

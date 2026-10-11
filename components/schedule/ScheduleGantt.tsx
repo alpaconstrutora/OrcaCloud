@@ -207,14 +207,40 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         requestedForOriginRef.current = originTime;
         onReachTimelineStart();
     };
+    const requestEarlierPeriodsRef = useRef(requestEarlierPeriods);
+    requestEarlierPeriodsRef.current = requestEarlierPeriods;
+
+    // ARRASTO DA BARRA (11/10/2026, "a barra de rolagem esta travando"): recuar a
+    // timeline com o polegar SEGURO fazia o polegar pular para a direita debaixo do
+    // cursor — o conteúdo cresce à esquerda, a rolagem é compensada, e o navegador
+    // reposiciona o polegar no meio do arrasto (medido: 27 → 910 px, 4 pulos num arrasto
+    // só, docs/spikes/gantt-rolagem/arrastar-barra.mjs). Enquanto a barra está sendo
+    // arrastada, não recua; ao soltar parado na borda, recua uma vez.
+    const arrastandoBarraRef = useRef(false);
+    const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        const el = e.currentTarget;
+        if (e.target !== el) return; // clique no conteúdo, não na barra
+        const r = el.getBoundingClientRect();
+        const naBarra = e.clientY - r.top > el.clientTop + el.clientHeight || e.clientX - r.left > el.clientLeft + el.clientWidth;
+        if (naBarra) arrastandoBarraRef.current = true;
+    };
+    React.useEffect(() => {
+        const soltar = () => {
+            if (!arrastandoBarraRef.current) return;
+            arrastandoBarraRef.current = false;
+            if ((containerRef.current?.scrollLeft ?? 1) <= 0) requestEarlierPeriodsRef.current();
+        };
+        window.addEventListener('pointerup', soltar);
+        return () => window.removeEventListener('pointerup', soltar);
+    }, []);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const scrollLeft = (e.currentTarget as HTMLDivElement).scrollLeft;
         if (headerRef.current) headerRef.current.scrollLeft = scrollLeft;
         if (macroHeaderRef.current) macroHeaderRef.current.scrollLeft = scrollLeft;
         // Só CHEGAR à borda pede recuo: rolagem vertical com scrollLeft já em 0 (timeline
-        // cabendo na tela) não é gesto para a esquerda.
-        if (scrollLeft <= 0 && lastScrollLeftRef.current > 0) requestEarlierPeriods();
+        // cabendo na tela) não é gesto para a esquerda. Com a barra segura, espera soltar.
+        if (scrollLeft <= 0 && lastScrollLeftRef.current > 0 && !arrastandoBarraRef.current) requestEarlierPeriods();
         lastScrollLeftRef.current = scrollLeft;
     };
 
@@ -250,6 +276,37 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         });
         return groups;
     }, [timelineColumns, timeScale]);
+
+    // GRADE DA TIMELINE — uma camada só, atrás de todas as linhas (11/10/2026: *"a barra
+    // de rolagem esta travando na visualizacao gantt"*). Antes cada linha desenhava a sua
+    // grade: um <div> por coluna POR LINHA. Na escala Dia, 300 tarefas × 366 colunas eram
+    // ~120 mil <div>s só de fundo (138 mil nós no Gantt, medido em
+    // docs/spikes/gantt-rolagem/) e a rolagem perdia quadro. As linhas agora são
+    // transparentes na timeline; o fundo branco é do container. Memorizada: só muda
+    // quando a timeline muda, não a cada render das linhas.
+    const sidebarTotal = getGanttSidebarTotal();
+    const gradeDaTimeline = React.useMemo(() => (
+        <div
+            aria-hidden
+            className="pointer-events-none absolute top-0 bottom-0"
+            style={{ left: `${sidebarTotal}px`, width: `${totalWidth}px` }}
+        >
+            {timelineColumns.map((column, index) => {
+                const dow = column.date.getDay();
+                const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
+                return (
+                    <div
+                        key={column.id}
+                        className={`absolute top-0 bottom-0 border-l border-gray-300 ${isWeekend ? 'bg-gray-300/40' : timeScale !== 'day' && index % 2 === 0 ? 'bg-gray-100/50' : ''}`}
+                        style={{
+                            left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
+                            width: `${column.width}px`
+                        }}
+                    />
+                );
+            })}
+        </div>
+    ), [timelineColumns, timeScale, minDate.getTime(), pxPerDay, totalWidth, sidebarTotal]);
 
     const renderGanttRow = (node: HierarchyNode, isParentVisible = true): React.ReactNode => {
         const isVisible = visibleSummaryLevels.has(node.type);
@@ -297,7 +354,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             return (
                 <div
                     key={item.id}
-                    className={`group flex bg-white border-b border-gray-100 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
+                    className={`group flex border-b border-gray-100 hover:bg-blue-50/30 transition-colors h-9 relative cursor-pointer ${node.inactive ? 'opacity-50' : ''}`}
                     onClick={() => setSelectedTaskId(item.id)}
                 >
                     <div
@@ -609,21 +666,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             </span>
                         </div>
                     </div>
-                    <div className="relative flex-1 h-full bg-white" style={{ width: `${totalWidth}px` }}>
-                        {timelineColumns.map((column, index) => {
-                            const dow = column.date.getDay();
-                            const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
-                            return (
-                                <div
-                                    key={`grid-${index}`}
-                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : timeScale !== 'day' && index % 2 === 0 ? 'bg-gray-100/50' : ''}`}
-                                    style={{
-                                        left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
-                                        width: `${column.width}px`
-                                    }}
-                                />
-                            );
-                        })}
+                    {/* Sem fundo e sem grade própria: a grade da timeline é UMA camada atrás
+                        de todas as linhas (`gradeDaTimeline`, mais abaixo). */}
+                    <div className="relative flex-1 h-full" style={{ width: `${totalWidth}px` }}>
 
                         {itemSchedule?.startDate && (itemSchedule?.duration !== undefined) ? (() => {
                             const itemStart = new Date(itemSchedule.startDate).getTime();
@@ -792,7 +837,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         return (
             <div key={node.id}>
                 <div
-                    className="flex border-b border-gray-200 cursor-pointer group/row h-9 bg-white"
+                    className="flex border-b border-gray-200 cursor-pointer group/row h-9"
                     onClick={() => toggleNode(node.id)}
                 >
                     <div
@@ -915,21 +960,9 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             </div>
                         </div>
                     </div>
-                    <div className="flex-1 bg-white group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
-                        {timelineColumns.map((column, index) => {
-                            const dow = column.date.getDay();
-                            const isWeekend = timeScale === 'day' && (dow === 0 || dow === 6);
-                            return (
-                                <div
-                                    key={`grid-parent-${index}`}
-                                    className={`absolute top-0 bottom-0 border-l border-gray-300 h-full ${isWeekend ? 'bg-gray-300/40' : timeScale !== 'day' && index % 2 === 0 ? 'bg-gray-200/40' : ''}`}
-                                    style={{
-                                        left: `${(Math.max(minDate.getTime(), column.date.getTime()) - minDate.getTime()) / (1000 * 60 * 60 * 24) * pxPerDay}px`,
-                                        width: `${column.width}px`
-                                    }}
-                                />
-                            );
-                        })}
+                    {/* Linha de grupo: um tom leve sobre a grade única — antes a faixa alternada
+                        do grupo era mais escura (`bg-gray-200/40`), desenhada por linha. */}
+                    <div className="flex-1 bg-gray-500/[0.04] group-hover/row:bg-blue-50/10 transition-colors relative h-full overflow-hidden" style={{ width: `${totalWidth}px` }}>
 
                         {(visibleSummaryLevels.has(node.type)) && node.earlyStart && node.earlyFinish ? (() => {
                             const start = new Date(node.earlyStart).getTime();
@@ -1058,6 +1091,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                 ref={containerRef}
                 onScroll={handleScroll}
                 onWheel={handleWheel}
+                onPointerDown={handlePointerDown}
                 className="flex-1 overflow-auto bg-white border border-gray-100 rounded-3xl shadow-sm relative scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
             >
                 <div className="inline-block min-w-full">
@@ -1145,7 +1179,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
                     </div>
 
-                    <div className="relative">
+                    <div className="relative bg-white">
+                        {gradeDaTimeline}
                         {hierarchy.map(node => renderGanttRow(node, true))}
 
                         {/* EAP vazia: o comando mora no ribbon (Estrutura › Novo grupo). */}

@@ -3255,3 +3255,34 @@ para 1,6 m: com o ponto ao lado, a ~2 m da condensadora em 3D, 2 m já o alcanç
 **Rodado no rascunho real** (só em memória): encostar → a evaporadora a 110 mm da face, girada, o
 ponto a 600 mm ao lado, linha e dreno juntos; gerar → 24.000 BTU/h na evaporadora e na condensadora,
 2.345 VA no ponto, linha 6/16 mm, sem conflito e sem verificação em falta.
+
+### Mover a peça leva o sistema junto · 11/10/2026 (frente `clima-mover-sistema`)
+
+Teste do usuário no app real, depois de publicado o arraste direto: **"o comando mover funciona,
+porém a linha de dreno e a alimentação elétrica não acompanham a nova posição"** (print: a linha e o
+dreno esticados na diagonal do lugar antigo até o novo; "0 % < 1 %"; o ponto de força para trás).
+Decisão do usuário: **"Refazer sempre"** — a linha e o dreno do sistema são retraçados ao mover, mesmo
+os já aceitos (voltam sugeridos).
+
+- `blueprintMoverClimatizacao.ts` (`comandosAoMoverClimatizacao`), chamado pelo editor no mesmo lote
+  do arraste (um Ctrl+Z): (1) a evaporadora de parede que parou perto de uma parede encosta e gira;
+  (2) o ponto de força que a servia ANTES vai para onde um ponto novo nasceria (ao lado, na face);
+  (3) a linha e o dreno do sistema (evaporadora OU condensadora movida) saem e o planejador da linha
+  os retraça. O traçado que a seleção levou inteiro junto não é refeito. Se o complemento falhar,
+  o movimento vale e a tela diz o que faltou.
+- `pecasDoSistemaParaRefazer` (`blueprintLinhaFrigorigena.ts`): a linha entre as duas peças e o
+  caminho do dreno até o ponto/bomba, com os sifões. O dreno COMPARTILHADO com outra evaporadora
+  fica; o DESTINO (ponto de dreno/bomba) sai junto quando só este dreno chega a ele — posto para a
+  posição antiga, mantê-lo levava o dreno novo a dar a volta na sala (12 m no caso de prova).
+- ⚠️ Achado no caminho: o ponto de dreno NOVO "ao lado da condensadora" usava a perpendicular de
+  evaporadora→condensadora — certo só com a condensadora em frente à evaporadora. Deslocada ao longo
+  da fachada (o caso do usuário), caía longe e o dreno saía na diagonal. Agora: ao longo da PAREDE
+  mais perto da condensadora, para o lado da evaporadora.
+
+**Prova:** `blueprintMoverClimatizacao.test.ts` (4): a evaporadora levada da norte para a sul
+(encosta, gira, ponto ao lado, linha e dreno aceitos retraçados, nada na diagonal); o fluxo do
+usuário em dois gestos (evaporadora, depois condensadora) — o dreno termina com < 3 m, ao sul; o
+ponto de dreno de outro dreno fica; o conjunto arrastado inteiro não é refeito.
+
+Fica de fora (registrado): o ELETRODUTO do ponto de força, quando desenhado, acompanha só pela ponta
+presa (regra do kernel), não é retraçado.

@@ -44,7 +44,7 @@ import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho } from 
 import { TIPOS_DE_CONDENSADORA, TIPOS_DE_EVAPORADORA, applyBatch } from './blueprintKernel';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, menorCaminhoEntre, type Aresta, type No } from './blueprintGrafoDeRede';
-import { arvorePelasParedes, chaveP, type P2 } from './blueprintRotaPelasParedes';
+import { arvorePelasParedes, chaveP, encaixarNaParede, type P2 } from './blueprintRotaPelasParedes';
 import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { componentesSugeridos, lancesDaPrumada, pavimentosEntre, pontoDaPrumada } from './blueprintPrumadaClimatizacao';
@@ -329,6 +329,59 @@ function drenoDaEvaporadora(model: BlueprintModel, e: Terminal): boolean {
 }
 
 /**
+ * 11/10/2026 (teste do usuário no app real: "a linha de dreno e a alimentação não acompanham a
+ * nova posição"): o que REFAZER quando a peça do sistema anda — a linha frigorígena entre a
+ * evaporadora e a condensadora (`linha`) e, com `dreno`, o caminho do dreno da evaporadora até o
+ * ponto de dreno/bomba mais perto pela rede, com os sifões nele. Aceitos ou sugeridos (decisão
+ * do usuário: "refazer sempre"). O dreno COMPARTILHADO (o caminho de outra evaporadora passa
+ * por um trecho dele) fica: apagá-lo cortaria o dreno da outra. O DESTINO (ponto de dreno ou
+ * bomba) sai junto quando só este dreno chega a ele — foi posto para a posição antiga, e
+ * mantê-lo levava o dreno novo a dar a volta na sala até lá; servindo a outro dreno, fica.
+ */
+export function pecasDoSistemaParaRefazer(model: BlueprintModel, s: SistemaSplit, opts: { linha: boolean; dreno: boolean }): { trechos: ObjectId[]; terminais: ObjectId[] } {
+  const trechos = new Set<ObjectId>();
+  const terminais = new Set<ObjectId>();
+  if (opts.linha && ehSplit(s)) for (const id of linhaExistente(model, s)?.trechoIds ?? []) trechos.add(id);
+  if (opts.dreno) {
+    const arestas = arestasDe(model, 'DRENO_AC');
+    const destinos = (model.terminais ?? []).filter((t) => t.levelId === s.evaporadora.levelId && (t.tipoHidraulico === 'PONTO_DRENO' || t.tipoHidraulico === 'BOMBA_DRENO'));
+    const rotaDe = (e: Terminal): { ids: ObjectId[]; destino: Terminal } | null => {
+      const de = noDe(model, e);
+      const melhor = destinos
+        .map((d) => ({ d, c: menorCaminhoEntre(de, noDe(model, d), arestas) }))
+        .filter((x): x is { d: Terminal; c: NonNullable<typeof x.c> } => !!x.c)
+        .sort((a, b) => a.c.mm - b.c.mm)[0];
+      return melhor ? { ids: melhor.c.arestas.map((i) => (arestas[i].ref as { existente: ObjectId }).existente), destino: melhor.d } : null;
+    };
+    const caminhoDe = (e: Terminal): ObjectId[] | null => rotaDe(e)?.ids ?? null;
+    const rota = rotaDe(s.evaporadora);
+    const meu = rota?.ids ?? null;
+    if (meu && meu.length) {
+      const outras = (model.terminais ?? []).filter((t) => t.id !== s.evaporadora.id && t.levelId === s.evaporadora.levelId && !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico));
+      const deOutra = new Set(outras.flatMap((o) => caminhoDe(o) ?? []));
+      if (!meu.some((id) => deOutra.has(id))) {
+        for (const id of meu) trechos.add(id);
+        const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
+        const chave = fazerChave(model.levels);
+        const nos = new Set(meu.flatMap((id) => {
+          const t = porId.get(id)!;
+          return [chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm)];
+        }));
+        for (const t of model.terminais ?? []) if (t.tipoHidraulico === 'SIFAO_DRENO' && nos.has(noDe(model, t))) terminais.add(t.id);
+        // O destino só deste dreno: nenhum outro trecho de dreno chega a ele.
+        const noDoDestino = noDe(model, rota!.destino);
+        const meus = new Set(meu);
+        const outroChega = (model.trechos ?? []).some(
+          (t) => t.disciplina === 'DRENO_AC' && !meus.has(t.id) && (chave(t.levelId, t.a.x, t.a.y, t.cotaAMm) === noDoDestino || chave(t.levelId, t.b.x, t.b.y, t.cotaBMm) === noDoDestino),
+        );
+        if (!outroChega) terminais.add(rota!.destino.id);
+      }
+    }
+  }
+  return { trechos: [...trechos], terminais: [...terminais] };
+}
+
+/**
  * O que a linha e o dreno DESTE pavimento sugeriram: a linha do split onde
  * estiver (C1), o dreno e as peças de dreno sugeridas (ponto, bomba, sifão).
  * É o que relançar apaga e o que aceitar fixa.
@@ -439,11 +492,24 @@ export function planejarLinhasFrigorigenas(model: BlueprintModel, levelId: Objec
     } else {
       // Ao LADO da condensadora (meia largura + 200 mm ao longo da parede — a mesma distância da
       // parede que ela, para a rota ainda encaixar no eixo), no piso.
-      const dx = saidaAt.x - e.at.x;
-      const dy = saidaAt.y - e.at.y;
-      const d = Math.hypot(dx, dy) || 1;
+      // ⚠️ 11/10/2026 (teste no app real): "ao longo da parede" era a perpendicular de
+      // evaporadora→condensadora — certo só com a condensadora EM FRENTE à evaporadora. Deslocada
+      // ao longo da fachada, o ponto caía longe dela e o dreno saía na diagonal. Agora é a direção
+      // da PAREDE mais perto da condensadora, para o lado da evaporadora (o dreno mais curto).
       const lateral = medCond.larguraMm / 2 + 200;
-      destinoAt = { x: Math.round(saidaAt.x + (-dy / d) * lateral), y: Math.round(saidaAt.y + (dx / d) * lateral) };
+      const paredeDaCond = encaixarNaParede(saidaAt, base.walls.filter((w) => w.levelId === levelId), hip.raioDeEncaixeMm + medCond.profundidadeMm)?.parede;
+      if (paredeDaCond) {
+        const L = Math.hypot(paredeDaCond.b.x - paredeDaCond.a.x, paredeDaCond.b.y - paredeDaCond.a.y) || 1;
+        const u = { x: (paredeDaCond.b.x - paredeDaCond.a.x) / L, y: (paredeDaCond.b.y - paredeDaCond.a.y) / L };
+        const paraEvap = (e.at.x - saidaAt.x) * u.x + (e.at.y - saidaAt.y) * u.y;
+        const k = paraEvap < 0 ? -1 : 1;
+        destinoAt = { x: Math.round(saidaAt.x + u.x * lateral * k), y: Math.round(saidaAt.y + u.y * lateral * k) };
+      } else {
+        const dx = saidaAt.x - e.at.x;
+        const dy = saidaAt.y - e.at.y;
+        const d = Math.hypot(dx, dy) || 1;
+        destinoAt = { x: Math.round(saidaAt.x + (-dy / d) * lateral), y: Math.round(saidaAt.y + (dx / d) * lateral) };
+      }
       destinoCota = 0;
       destino = 'PONTO_NOVO_NA_FACHADA';
       pecas.push({ type: 'AddTerminal', levelId, disciplina: 'DRENO_AC', tipo: 'Ponto de dreno', tipoHidraulico: 'PONTO_DRENO', at: destinoAt, cotaMm: 0, sugerida: true } as Command);

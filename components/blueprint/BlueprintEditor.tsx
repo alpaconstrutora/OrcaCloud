@@ -776,6 +776,7 @@ import {
   pontosEletricosDoComponente,
 } from '../../utils/blueprintPontosHidraulicos';
 import { ehEvaporadoraDeParede, encostoNaParede } from '../../utils/blueprintEncostoNaParede';
+import { comandosAoMoverClimatizacao, moveuClimatizacao } from '../../utils/blueprintMoverClimatizacao';
 import { luminariasDoAmbienteW } from '../../utils/blueprintClimatizacaoAmbientes';
 import { marcasDaClimatizacao } from '../../utils/blueprintMarcasClimatizacao';
 import {
@@ -7643,7 +7644,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
     pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[] },
   ) {
-    editor.run({
+    const mover: Command = {
       type: 'TranslateEntities',
       wallIds,
       boundaryIds,
@@ -7662,7 +7663,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       quadroIds: rede?.quadroIds ?? [],
       delta,
       manterJuncoes: modoJuncao === 'MANTER',
-    });
+    };
+    // 11/10/2026 (teste no app real: "a linha de dreno e a alimentação não acompanham a nova
+    // posição"): a evaporadora/condensadora leva o sistema junto — encosta e gira, o ponto de
+    // força vai para o lado, a linha e o dreno são retraçados. No MESMO lote: um Ctrl+Z.
+    const terminalIds = rede?.terminalIds ?? [];
+    if (terminalIds.length && moveuClimatizacao(editor.model, terminalIds)) {
+      try {
+        const depois = applyBatch(editor.model, [mover]).model;
+        const junto = comandosAoMoverClimatizacao(editor.model, depois, { terminalIds, trechoIds: rede?.trechoIds ?? [] }, climatizacaoDoEstudo.hipoteses.linha);
+        if (junto.length) {
+          editor.runBatch([mover, ...junto]);
+          return;
+        }
+      } catch (e) {
+        // O gesto continua valendo (só as pontas presas acompanham) — e a tela diz o que faltou.
+        setAvisoColar(`Peça movida, mas a linha e o dreno não foram refeitos: ${e instanceof Error ? e.message : String(e)}. Use Climatização › Linha e dreno.`);
+      }
+    }
+    editor.run(mover);
   }
 
   /**

@@ -71,4 +71,9 @@ limitar a altura do Gantt para a barra horizontal ficar à vista. Resposta do us
 - **Pronto quando:** typecheck, build, check de UI e suíte completa com a conta fechando;
   publicado só com autorização; conferido em produção com o usuário de leitura (o usuário
   autorizou o uso da senha nesta sessão).
-- **Estado:** pendente.
+- **Estado:** ✅ feito (11/10). Typecheck, XSS, build (o `@property` chega ao CSS de
+  produção) e suíte (8503 + 34 pulados = 8537, conta fechando). Publicado em `36e8dbfa`
+  (autorizado: "sim"); CI verde; `conferir-producao.sh` confirmou o domínio servindo
+  `36e8dbf`. Conferido em produção com o usuário de leitura, escritas bloqueadas, no
+  planejamento Divino Espírito Santo (escala Dia, janela 1000px): Gantt com 717px, termina
+  em 976px, barra horizontal à vista, rola sozinho, cabeçalho fixo após descer 1.200px.

@@ -272,6 +272,12 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     gravada e desfeita pelo Ctrl+Z (banco conferido) — mas com o defeito (3), que foi corrigido DEPOIS. A
     rodada com a correção parou na trava de segurança: havia outra pessoa no ramo. **Falta refazer a prova
     no app com o estudo sozinho.**
+  - ✅ **Fechado (11/10, depois que o usuário fechou a "Planta 11/10/2026")**: tecla C → "Cota linear";
+    3 cliques ao longo da parede de baixo + duplo clique abaixo → **no banco, 1 COTA_LINEAR com 4 pontos**
+    (1800,2000) (8216,2000) (17800,2000) e a colocação (1800,875), abaixo da parede; **Ctrl+Z → banco sem
+    cota**. O total gravado é **16,00 m**, não os 15,85 m entre EIXOS: com "Clique: na face" (o padrão da
+    barra) a captura encaixa no CANTO DA FACE — 1875 − 75 = 1800 e 17725 + 75 = 17800 são os cantos
+    externos das paredes de 150 mm. É a cota EXTERNA da sala (eixo + 2 × 7,5 cm), o que se cota em planta.
 
 ### Bloco 2 — desenho técnico mais rico
 
@@ -324,8 +330,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 ## Estado
 - [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [x] F2 — provada no app com escrita, Ctrl+Z incluso
   · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
-  app com escrita: banco 4×250 e Ctrl+Z 4×150 · [ ] F5 — **parcial**: kernel 0.95.0, saídas e gesto provados por
-  teste e harness; falta a prova no app com escrita depois da correção do gesto (estudo estava ocupado)
+  app com escrita: banco 4×250 e Ctrl+Z 4×150 · [x] F5 — `90d58534`, kernel 0.95.0, provada no app com escrita
+  (cota gravada e desfeita) + PDF/DXF por teste
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

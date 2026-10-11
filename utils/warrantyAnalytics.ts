@@ -19,7 +19,10 @@ import type { ClaimState, WarrantyClaim, WarrantyKPIs } from '../types/warranty'
  * `getKPIs` repetia este par em três contagens diferentes; um dia alguém
  * acrescentaria um estado terminal em duas delas e esqueceria a terceira.
  */
-export const ESTADOS_TERMINAIS: readonly ClaimState[] = ['ENCERRADO', 'FORA_GARANTIA'];
+// Desde 2026-10-11 só ENCERRADO: "Fora de garantia" pode seguir para reparo
+// (por conta do cliente) e precisa ser encerrado — enquanto isso está na fila.
+// O cron fn_warranty_sla_sweep usa a mesma lista (aplicar_20271011000700).
+export const ESTADOS_TERMINAIS: readonly ClaimState[] = ['ENCERRADO'];
 
 /** Só o que as agregações leem — a consulta de KPI não precisa da linha inteira. */
 export type WarrantyKPIRow = Pick<

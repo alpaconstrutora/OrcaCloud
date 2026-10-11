@@ -37,7 +37,75 @@ async function nomesDeFornecedores(ids: string[]): Promise<Record<string, string
 
 const COLS_PEDIDO = 'id, number, status, supplier_id, items, created_at';
 
+/** SC ou contrato ainda sem chamado, que pode ser vinculado (drawer "Vincular existente"). */
+export interface Vinculavel {
+    tipo: 'solicitacao' | 'contrato';
+    id: string;
+    numero: string;
+    descricao: string;
+    projectId: string | null;
+    status: string;
+    valor: number;
+    data: string | null;
+}
+
+const TABELA_DO_TIPO = { solicitacao: 'purchase_requests', contrato: 'contracts' } as const;
+
 export const warrantySuprimentosService = {
+    /**
+     * SCs e contratos de FORNECEDOR da organização do chamado ainda sem vínculo
+     * com chamado nenhum. Cancelados ficam de fora. O recorte por obra é da tela.
+     */
+    async listarVinculaveis(organizationId: string): Promise<Vinculavel[]> {
+        const [scs, cts] = await Promise.all([
+            supabase.from('purchase_requests')
+                .select('id, number, title, project_id, estimated_total, approval_status, created_at')
+                .eq('organization_id', organizationId)
+                .is('warranty_claim_id', null)
+                .is('cancelled_at', null)
+                .order('created_at', { ascending: false }),
+            supabase.from('contracts')
+                .select('id, number, title, project_id, status, current_value, start_date')
+                .eq('organization_id', organizationId)
+                .eq('direction', 'INCOMING')
+                .or('domain.eq.SUPRIMENTOS,domain.is.null')
+                .is('warranty_claim_id', null)
+                .neq('status', 'Cancelado')
+                .order('start_date', { ascending: false }),
+        ]);
+        if (scs.error) throw scs.error;
+        if (cts.error) throw cts.error;
+        const SC_STATUS: Record<string, string> = { RASCUNHO: 'Rascunho', PENDENTE: 'Em aprovação', APROVADO: 'Aprovada', REJEITADO: 'Reprovada' };
+        return [
+            ...((scs.data ?? []) as Row[]).map(r => ({
+                tipo: 'solicitacao' as const, id: r.id, numero: r.number ?? '—', descricao: r.title,
+                projectId: r.project_id ?? null, status: SC_STATUS[r.approval_status] ?? r.approval_status,
+                valor: Number(r.estimated_total ?? 0), data: r.created_at ?? null,
+            })),
+            ...((cts.data ?? []) as Row[]).map(r => ({
+                tipo: 'contrato' as const, id: r.id, numero: r.number ?? '—', descricao: r.title,
+                projectId: r.project_id ?? null, status: r.status,
+                valor: Number(r.current_value ?? 0), data: r.start_date ?? null,
+            })),
+        ];
+    },
+
+    /**
+     * Liga um registro existente ao chamado. A trava de organização e o evento
+     * `ProcurementLinked` são do banco (aplicar_20271011000600) — a recusa vem
+     * como P0004 com a frase pronta.
+     */
+    async vincular(tipo: 'solicitacao' | 'contrato', id: string, claimId: string): Promise<void> {
+        const { error } = await supabase.from(TABELA_DO_TIPO[tipo]).update({ warranty_claim_id: claimId }).eq('id', id);
+        if (error) throw error;
+    },
+
+    /** Tira o vínculo; o registro continua em Suprimentos. Evento `ProcurementUnlinked` no banco. */
+    async desvincular(tipo: 'solicitacao' | 'contrato', id: string): Promise<void> {
+        const { error } = await supabase.from(TABELA_DO_TIPO[tipo]).update({ warranty_claim_id: null }).eq('id', id);
+        if (error) throw error;
+    },
+
     /** Quantos registros de Suprimentos apontam para o chamado (aviso ao excluir). */
     async contarVinculos(claimId: string): Promise<{ solicitacoes: number; contratos: number }> {
         const [sc, ct] = await Promise.all([

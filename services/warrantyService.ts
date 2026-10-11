@@ -6,6 +6,7 @@ import type {
     OpenWarrantyClaimCommand, TriageClaimCommand, ScheduleVisitCommand, CloseClaimCommand,
     ClassifyClaimCommand, ClaimFilters, WarrantyUnitOption,
     StartRepairCommand, CompleteRepairCommand, RecordVisitResultCommand, SetResponsibilityCommand,
+    RescheduleVisitCommand, CancelVisitCommand, ReopenClaimCommand,
 } from '../types/warranty';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 import { computeWarrantyKPIs, type WarrantyKPIRow } from '../utils/warrantyAnalytics';
@@ -214,6 +215,45 @@ export const warrantyService = {
             p_expected_version: cmd.expected_version,
             p_party:            cmd.party,
             p_notes:            cmd.notes ?? null,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number };
+    },
+
+    async rescheduleVisit(cmd: RescheduleVisitCommand): Promise<{ version: number }> {
+        const { data, error } = await supabase.rpc('reschedule_warranty_visit', {
+            p_visit_id:         cmd.visit_id,
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_scheduled_at:     cmd.scheduled_at,
+            p_technician_name:  cmd.technician_name ?? null,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number };
+    },
+
+    async cancelVisit(cmd: CancelVisitCommand): Promise<{ version: number; new_state: string }> {
+        const { data, error } = await supabase.rpc('cancel_warranty_visit', {
+            p_visit_id:         cmd.visit_id,
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_reason:           cmd.reason,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number; new_state: string };
+    },
+
+    async reopen(cmd: ReopenClaimCommand): Promise<{ version: number }> {
+        const { data, error } = await supabase.rpc('reopen_warranty_claim', {
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_reason:           cmd.reason,
             p_actor:            cmd.actor,
         });
         if (error) throw error;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    acoesDisponiveis, estadoAposAgendar, motivoBloqueio, resumoDoEvento, sugerirResponsavel, sugestaoDeAgendamento,
+    acoesDisponiveis, estadoAposAgendar, estadoAposCancelarVisita, motivoBloqueio, visitaPendente, resumoDoEvento, sugerirResponsavel, sugestaoDeAgendamento,
     type AcaoDoChamado,
 } from '../utils/warrantyLifecycle';
 import type { ClaimState } from '../types/warranty';
@@ -11,7 +11,7 @@ const TODOS: ClaimState[] = [
 ];
 const ACOES: AcaoDoChamado[] = [
     'triar', 'agendar_visita', 'iniciar_reparo', 'concluir_reparo', 'encerrar',
-    'definir_responsabilidade', 'suprimentos',
+    'definir_responsabilidade', 'suprimentos', 'reabrir',
 ];
 
 describe('ciclo de vida do chamado (2026-10-11)', () => {
@@ -22,8 +22,8 @@ describe('ciclo de vida do chamado (2026-10-11)', () => {
         }
     });
 
-    it('encerrado não deixa fazer nada', () => {
-        expect(acoesDisponiveis({ state: 'ENCERRADO', in_warranty: true })).toEqual([]);
+    it('encerrado só deixa reabrir', () => {
+        expect(acoesDisponiveis({ state: 'ENCERRADO', in_warranty: true })).toEqual(['reabrir']);
     });
 
     it('aberto: triar e agendar visita; reparo e compras pedem triagem antes', () => {
@@ -44,7 +44,7 @@ describe('ciclo de vida do chamado (2026-10-11)', () => {
         expect(acoesDisponiveis({ state: 'EM_REPARO', in_warranty: true }))
             .toEqual(['agendar_visita', 'concluir_reparo', 'encerrar', 'definir_responsabilidade', 'suprimentos']);
         expect(acoesDisponiveis({ state: 'CONCLUIDO', in_warranty: true }))
-            .toEqual(['agendar_visita', 'encerrar', 'definir_responsabilidade', 'suprimentos']);
+            .toEqual(['agendar_visita', 'encerrar', 'definir_responsabilidade', 'suprimentos', 'reabrir']);
     });
 
     it('fora de garantia pode encerrar direto (sem reparo) ou reparar por conta do cliente', () => {
@@ -82,5 +82,33 @@ describe('resumo do evento no Histórico', () => {
         expect(resumoDoEvento('ProcurementLinked', { tipo: 'solicitacao', number: 'SC-0012' })).toBe('Solicitação de compra SC-0012');
         expect(resumoDoEvento('ClaimClosed', { custo_real: null, nps_nota: 9 })).toBe('NPS 9');
         expect(resumoDoEvento('ClaimOpened', { state: 'ABERTO' })).toBeNull();
+    });
+});
+
+describe('pendências (2026-10-11): reabrir e cancelar visita', () => {
+    it('reaberto pode triar de novo, reparar, comprar e encerrar', () => {
+        const a = acoesDisponiveis({ state: 'REABERTO', in_warranty: true });
+        for (const x of ['triar', 'agendar_visita', 'iniciar_reparo', 'encerrar', 'suprimentos'] as const) expect(a).toContain(x);
+        expect(a).not.toContain('reabrir');
+    });
+    it('só concluído/encerrado reabrem, e o bloqueio diz por quê', () => {
+        expect(motivoBloqueio('reabrir', { state: 'EM_REPARO', in_warranty: true })).toMatch(/concluído ou encerrado/);
+    });
+    it('cancelar a única visita devolve o estado de antes', () => {
+        expect(estadoAposCancelarVisita({ state: 'VISITA_AGENDADA', in_warranty: null }, false)).toBe('ABERTO');
+        expect(estadoAposCancelarVisita({ state: 'VISITA_AGENDADA', in_warranty: true }, false)).toBe('EM_GARANTIA');
+        expect(estadoAposCancelarVisita({ state: 'VISITA_AGENDADA', in_warranty: false }, false)).toBe('FORA_GARANTIA');
+        expect(estadoAposCancelarVisita({ state: 'VISITA_AGENDADA', in_warranty: true }, true)).toBe('VISITA_AGENDADA');
+        expect(estadoAposCancelarVisita({ state: 'EM_REPARO', in_warranty: true }, false)).toBe('EM_REPARO');
+    });
+    it('visita pendente = agendada ou reagendada', () => {
+        expect(visitaPendente('AGENDADA')).toBe(true);
+        expect(visitaPendente('REAGENDADA')).toBe(true);
+        expect(visitaPendente('REALIZADA')).toBe(false);
+        expect(visitaPendente('CANCELADA')).toBe(false);
+    });
+    it('histórico mostra o motivo', () => {
+        expect(resumoDoEvento('VisitCancelled', { reason: 'cliente viajou' })).toBe('motivo: cliente viajou');
+        expect(resumoDoEvento('ProcurementUnlinked', { tipo: 'contrato', number: 'CT-9' })).toBe('Contrato CT-9');
     });
 });

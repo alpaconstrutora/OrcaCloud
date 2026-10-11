@@ -345,6 +345,34 @@ export interface CompleteRepairCommand {
 
 export type VisitParecer = 'EM_GARANTIA' | 'FORA_GARANTIA' | 'AGUARDANDO_LAUDO';
 
+/** Fase 4 (aplicar_20271011000700). */
+export interface RescheduleVisitCommand {
+  visit_id: string;
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  scheduled_at: string;
+  technician_name?: string;
+  actor: ActorReference;
+}
+
+export interface CancelVisitCommand {
+  visit_id: string;
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  reason: string;
+  actor: ActorReference;
+}
+
+export interface ReopenClaimCommand {
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  reason: string;
+  actor: ActorReference;
+}
+
 export interface RecordVisitResultCommand {
   visit_id: string;
   claim_id: string;

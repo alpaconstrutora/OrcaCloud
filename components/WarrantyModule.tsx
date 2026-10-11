@@ -5,6 +5,7 @@ import { warrantyService, mensagemDoErro } from '../services/warrantyService';
 import { useStore } from '../store/useStore';
 import {
     EVENT_LABELS, RESPONSAVEL_LABELS, motivoBloqueio, resumoDoEvento, sugerirResponsavel, sugestaoDeAgendamento,
+    visitaPendente,
 } from '../utils/warrantyLifecycle';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { clientService } from '../services/clientService';
@@ -26,6 +27,7 @@ import { FilterPopover } from './ui/FilterPopover';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import UnitSelect from './UnitSelect';
 import WarrantySuprimentosTab from './warranty/WarrantySuprimentosTab';
+import VincularSuprimentosSheet from './warranty/VincularSuprimentosSheet';
 import { warrantySuprimentosService } from '../services/warrantySuprimentosService';
 import { consumirAberturaDoChamado } from '../utils/warrantyNavegacao';
 import { contractService } from '../services/contractService';
@@ -2022,6 +2024,12 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     }, [claim.id]);
     React.useEffect(() => { carregarSuprimentos(); }, [carregarSuprimentos]);
     const [criandoSolicitacao, setCriandoSolicitacao] = React.useState(false);
+    const [vinculandoExistente, setVinculandoExistente] = React.useState(false);
+    // Fase 4 (2026-10-11): reagendar/cancelar visita e reabrir chamado.
+    const [acaoVisita, setAcaoVisita] = React.useState<null | { id: string; tipo: 'reagendar' | 'cancelar' }>(null);
+    const [reagendaForm, setReagendaForm] = React.useState({ quando: '', tecnico: '' });
+    const [motivoCancelamento, setMotivoCancelamento] = React.useState('');
+    const [motivoReabertura, setMotivoReabertura] = React.useState('');
     const [contratoAberto, setContratoAberto] = React.useState(false);
 
     // Sugestões a partir do que já foi comprado — nunca sobre o que o usuário digitou.
@@ -2043,6 +2051,43 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         else if (l.tipo === 'pedido') onOpenPedido?.(l.id);
         else onOpenContrato?.(l.id);
     };
+
+    const recarregarEventos = () => warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
+
+    const vincularExistente = async (item: { tipo: 'solicitacao' | 'contrato'; id: string; numero: string }) => {
+        try {
+            await warrantySuprimentosService.vincular(item.tipo, item.id, claim.id);
+            showToast(`${item.tipo === 'contrato' ? 'Contrato' : 'Solicitação'} ${item.numero} vinculado(a) ao chamado`, 'success');
+            carregarSuprimentos();
+            recarregarEventos();
+        } catch (e) {
+            showToast(mensagemDoErro(e, 'Não foi possível vincular'), 'error');
+            throw e;
+        }
+    };
+
+    const desvincular = async (l: LinhaSuprimentos) => {
+        if (l.tipo === 'pedido') return;
+        const ok = await confirm({
+            title: `Desvincular ${l.tipo === 'contrato' ? 'o contrato' : 'a solicitação'} ${l.numero}?`,
+            message: 'O registro continua em Suprimentos; só deixa de contar neste chamado.',
+            variant: 'warning',
+            confirmLabel: 'Desvincular',
+        });
+        if (!ok) return;
+        try {
+            await warrantySuprimentosService.desvincular(l.tipo, l.id);
+            showToast('Desvinculado do chamado', 'success');
+            carregarSuprimentos();
+            recarregarEventos();
+        } catch (e) {
+            showToast(mensagemDoErro(e, 'Não foi possível desvincular'), 'error');
+        }
+    };
+
+    const nomeDaObra = React.useCallback((id: string | null) =>
+        (id && (projects.find(p => p.id === id)?.name ?? obrasDoStore.find(p => p.id === id)?.name)) || 'Obra não informada',
+    [projects, obrasDoStore]);
 
     const abrirNovoContrato = async () => {
         const ok = await confirm({
@@ -2342,6 +2387,34 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
             technician_name: agendaForm.tecnico.trim() || ator.name, actor: ator,
         }), 'Visita agendada', 'Erro ao agendar a visita');
         if (ok) setAgendando(false);
+    };
+
+    const handleRescheduleVisit = async (visitId: string) => {
+        if (!reagendaForm.quando) { showToast('Informe a nova data e hora da visita', 'error'); return; }
+        const ok = await executar('agendar', () => warrantyService.rescheduleVisit({
+            visit_id: visitId, claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+            scheduled_at: new Date(reagendaForm.quando).toISOString(),
+            technician_name: reagendaForm.tecnico.trim() || undefined, actor: ator,
+        }), 'Visita reagendada', 'Erro ao reagendar a visita');
+        if (ok) setAcaoVisita(null);
+    };
+
+    const handleCancelVisit = async (visitId: string) => {
+        if (!motivoCancelamento.trim()) { showToast('Informe o motivo do cancelamento', 'error'); return; }
+        const ok = await executar('agendar', () => warrantyService.cancelVisit({
+            visit_id: visitId, claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+            reason: motivoCancelamento.trim(), actor: ator,
+        }), 'Visita cancelada', 'Erro ao cancelar a visita');
+        if (ok) { setAcaoVisita(null); setMotivoCancelamento(''); }
+    };
+
+    const handleReopen = async () => {
+        if (!motivoReabertura.trim()) return;
+        const ok = await executar('concluir', () => warrantyService.reopen({
+            claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+            reason: motivoReabertura.trim(), actor: ator,
+        }), 'Chamado reaberto', 'Erro ao reabrir o chamado');
+        if (ok) setMotivoReabertura('');
     };
 
     const handleRecordVisit = async (visitId: string) => {
@@ -2848,6 +2921,33 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 </div>
                             )}
 
+                            {/* Reabrir — defeito voltou ou o reparo não resolveu (2026-10-11). */}
+                            {motivoBloqueio('reabrir', estadoAtual) === null && (
+                                <div className="border border-amber-100 rounded-[10px] p-4 space-y-3">
+                                    <p className="text-xs font-semibold text-amber-700">Reabrir chamado</p>
+                                    <div className="space-y-1.5">
+                                        <label className={LABEL_CLASS}>Motivo *</label>
+                                        <textarea
+                                            rows={2}
+                                            value={motivoReabertura}
+                                            onChange={e => setMotivoReabertura(e.target.value)}
+                                            placeholder="Ex.: a infiltração voltou depois do reparo"
+                                            className={TEXTAREA_CLASS}
+                                        />
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            onClick={handleReopen}
+                                            disabled={!motivoReabertura.trim() || acting === 'concluir'}
+                                            title={!motivoReabertura.trim() ? 'Informe o motivo para reabrir' : undefined}
+                                            className={BTN_PRIMARY}
+                                        >
+                                            {acting === 'concluir' ? 'Reabrindo...' : 'Reabrir chamado'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Responsabilidade — sugerida pela origem provável já classificada. */}
                             {motivoBloqueio('definir_responsabilidade', estadoAtual) === null && (
                                 <div className="border border-gray-100 rounded-[10px] p-4 space-y-3">
@@ -2954,7 +3054,52 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                     {v.parecer && <p className="text-sm text-gray-700"><span className="text-gray-500">Parecer:</span> {PARECER_OPCOES.find(o => o.value === v.parecer)?.label ?? v.parecer}</p>}
                                     {v.acao_definida && <p className="text-sm text-gray-700"><span className="text-gray-500">Ação definida:</span> {v.acao_definida}</p>}
 
-                                    {(v.status === 'AGENDADA' || v.status === 'REAGENDADA') && claim.state !== 'ENCERRADO' && (
+                                    {visitaPendente(v.status) && claim.state !== 'ENCERRADO' && acaoVisita?.id === v.id && (
+                                        acaoVisita.tipo === 'reagendar' ? (
+                                            <div className="border border-blue-100 bg-white rounded-[10px] p-4 space-y-4 mt-2">
+                                                <p className="text-xs font-semibold text-blue-700">Reagendar visita</p>
+                                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                                    <div className="space-y-1.5">
+                                                        <label className={LABEL_CLASS}>Nova data e hora *</label>
+                                                        <input type="datetime-local" value={reagendaForm.quando}
+                                                            onChange={e => setReagendaForm(f => ({ ...f, quando: e.target.value }))} className={FIELD_CLASS} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className={LABEL_CLASS}>Técnico</label>
+                                                        <input value={reagendaForm.tecnico}
+                                                            onChange={e => setReagendaForm(f => ({ ...f, tecnico: e.target.value }))} className={FIELD_CLASS} />
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => setAcaoVisita(null)} className={BTN_SECONDARY}>Voltar</button>
+                                                    <button onClick={() => handleRescheduleVisit(v.id)} disabled={acting === 'agendar'} className={BTN_PRIMARY}>
+                                                        {acting === 'agendar' ? 'Salvando...' : 'Reagendar'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="border border-red-100 bg-white rounded-[10px] p-4 space-y-4 mt-2">
+                                                <p className="text-xs font-semibold text-red-700">Cancelar visita</p>
+                                                <div className="space-y-1.5">
+                                                    <label className={LABEL_CLASS}>Motivo *</label>
+                                                    <input value={motivoCancelamento} placeholder="Ex.: cliente não estará no local"
+                                                        onChange={e => setMotivoCancelamento(e.target.value)} className={FIELD_CLASS} />
+                                                </div>
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => setAcaoVisita(null)} className={BTN_SECONDARY}>Voltar</button>
+                                                    <button
+                                                        onClick={() => handleCancelVisit(v.id)}
+                                                        disabled={!motivoCancelamento.trim() || acting === 'agendar'}
+                                                        title={!motivoCancelamento.trim() ? 'Informe o motivo do cancelamento' : undefined}
+                                                        className="inline-flex items-center justify-center h-9 px-3.5 bg-white border border-red-200 text-red-600 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {acting === 'agendar' ? 'Cancelando...' : 'Cancelar visita'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )
+                                    )}
+                                    {visitaPendente(v.status) && claim.state !== 'ENCERRADO' && acaoVisita?.id !== v.id && (
                                         registrandoVisita === v.id ? (
                                             <div className="border border-blue-100 bg-white rounded-[10px] p-4 space-y-4 mt-2">
                                                 <p className="text-xs font-semibold text-blue-700">Resultado da visita</p>
@@ -2991,12 +3136,32 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button
-                                                onClick={() => { setResultadoForm({ realizada: agoraLocal(), diagnostico: '', parecer: '', acao: '' }); setRegistrandoVisita(v.id); }}
-                                                className="text-sm text-blue-600 hover:text-blue-800 font-medium pt-1"
-                                            >
-                                                Registrar resultado
-                                            </button>
+                                            <div className="flex items-center gap-4 pt-1">
+                                                <button
+                                                    onClick={() => { setResultadoForm({ realizada: agoraLocal(), diagnostico: '', parecer: '', acao: '' }); setRegistrandoVisita(v.id); }}
+                                                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                                >
+                                                    Registrar resultado
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const d = new Date(v.scheduled_at);
+                                                        const p2 = (n: number) => String(n).padStart(2, '0');
+                                                        setReagendaForm({ quando: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`, tecnico: v.technician_name ?? '' });
+                                                        setRegistrandoVisita(null);
+                                                        setAcaoVisita({ id: v.id, tipo: 'reagendar' });
+                                                    }}
+                                                    className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+                                                >
+                                                    Reagendar
+                                                </button>
+                                                <button
+                                                    onClick={() => { setMotivoCancelamento(''); setRegistrandoVisita(null); setAcaoVisita({ id: v.id, tipo: 'cancelar' }); }}
+                                                    className="text-sm text-red-600 hover:text-red-800 font-medium"
+                                                >
+                                                    Cancelar visita
+                                                </button>
+                                            </div>
                                         )
                                     )}
                                 </div>
@@ -3013,6 +3178,17 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             onGerarSolicitacao={() => setCriandoSolicitacao(true)}
                             onNovoContrato={abrirNovoContrato}
                             onAbrir={abrirLinha}
+                            onVincular={() => setVinculandoExistente(true)}
+                            onDesvincular={desvincular}
+                        />
+                    )}
+                    {vinculandoExistente && (
+                        <VincularSuprimentosSheet
+                            organizationId={claim.organization_id}
+                            projectId={claim.project_id ?? null}
+                            nomeDaObra={nomeDaObra}
+                            onClose={() => setVinculandoExistente(false)}
+                            onEscolher={vincularExistente}
                         />
                     )}
                     {contratoAberto && claim.project_id && (

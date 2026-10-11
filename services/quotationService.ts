@@ -4,6 +4,32 @@ import { orderService } from './orderService';
 import { generateQuotationNumber } from './quotationNumberingService';
 import { montarItensDoPedidoDaCotacao } from '../utils/pedidoItemValor';
 
+/**
+ * CC e plano de contas da Solicitação de Compra que originou a cotação — pelos
+ * itens da SC que apontam esta cotação. Mais de uma SC na mesma cotação: vale a
+ * primeira que tiver o campo preenchido (cada campo independente). Sem SC de
+ * origem (cotação feita à mão), devolve vazio e o pedido segue como antes.
+ */
+export async function classificacaoDaSolicitacaoDeOrigem(
+    quotationRequestId: string,
+): Promise<{ costCenterId?: string; planoDeContasId?: string }> {
+    const { data, error } = await supabase
+        .from('purchase_request_items')
+        .select('purchase_requests(cost_center_id, plano_de_contas_id)')
+        .eq('quotation_request_id', quotationRequestId);
+    if (error) {
+        console.error('[quotationService] SC de origem da cotação:', error);
+        return {};
+    }
+    const scs = ((data ?? []) as { purchase_requests: { cost_center_id?: string | null; plano_de_contas_id?: string | null } | null }[])
+        .map(r => r.purchase_requests)
+        .filter(Boolean) as { cost_center_id?: string | null; plano_de_contas_id?: string | null }[];
+    return {
+        costCenterId: scs.find(x => x.cost_center_id)?.cost_center_id ?? undefined,
+        planoDeContasId: scs.find(x => x.plano_de_contas_id)?.plano_de_contas_id ?? undefined,
+    };
+}
+
 export const quotationService = {
     async listRequests(projectId?: string): Promise<QuotationRequest[]> {
         let query = supabase
@@ -434,6 +460,7 @@ export const quotationService = {
             .single();
 
         if (responsesRaw && requestRaw) {
+            const classificacao = await classificacaoDaSolicitacaoDeOrigem(requestId);
             await orderService.createOrder({
                 projectId: requestRaw.project_id,
                 supplierId: responsesRaw.supplier_id,
@@ -454,6 +481,11 @@ export const quotationService = {
                 // Sem isto o pedido não dizia de qual cotação veio, e quem segue a
                 // cadeia a partir da SC (Pós-Obra & Garantia) o perdia de vista.
                 quotationRequestId: requestRaw.id,
+                // Herda da SC de origem (2026-10-11): até aqui o pedido vindo de
+                // cotação nascia sem CC e sem plano de contas, enquanto o gerado
+                // direto da SC (generateOrder) já os levava.
+                costCenterId: classificacao.costCenterId,
+                planoDeContasId: classificacao.planoDeContasId,
             });
         }
     }

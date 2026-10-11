@@ -19,6 +19,7 @@ import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const listClaims = vi.fn();
+const listVisits = vi.fn(async (..._a: unknown[]) => [] as unknown[]);
 
 // Diretório de unidades (`warranty_unit_directory`) — pedido de 2026-10-10:
 // escolher o cliente preenche unidade, empreendimento e obra.
@@ -46,7 +47,7 @@ vi.mock('../../services/warrantyService', () => ({
         close: vi.fn(async () => ({})),
         delete: vi.fn(async () => undefined),
         getUnitDirectory: vi.fn(async () => DIRETORIO),
-        listVisits: vi.fn(async () => []),
+        listVisits: (...a: unknown[]) => listVisits(...a),
         startRepair: vi.fn(async () => ({ version: 2 })),
         completeRepair: vi.fn(async () => ({ version: 2 })),
         recordVisitResult: vi.fn(async () => ({ version: 2 })),
@@ -512,5 +513,42 @@ describe('Pós-Obra & Garantia · volta de Suprimentos para o chamado (2026-10-1
         render(<WarrantyModule projects={PROJETOS} />);
         expect(await screen.findByRole('heading', { level: 1, name: 'Impermeabilização da laje' })).toBeInTheDocument();
         expect(sessionStorage.getItem('garantia:abrir-chamado')).toBeNull();
+    });
+});
+
+describe('Pós-Obra & Garantia · pendências (2026-10-11)', () => {
+    async function abrir(over: Record<string, unknown>) {
+        listClaims.mockResolvedValue([chamado({ id: 'cp', sistema_descricao: 'Chamado pendências', ...over })]);
+        const user = userEvent.setup();
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Chamado pendências')).toBeInTheDocument());
+        await user.click(screen.getByText('Chamado pendências'));
+        await screen.findByRole('heading', { level: 1 });
+        return user;
+    }
+
+    it('encerrado: reabrir exige motivo e diz por quê', async () => {
+        const user = await abrir({ state: 'ENCERRADO', in_warranty: true });
+        const b = screen.getByRole('button', { name: 'Reabrir chamado' });
+        expect(b).toBeDisabled();
+        expect(b).toHaveAttribute('title', 'Informe o motivo para reabrir');
+        await user.type(screen.getByPlaceholderText(/a infiltração voltou/), 'voltou a pingar');
+        expect(b).toBeEnabled();
+    });
+
+    it('em reparo: sem cartão de reabrir', async () => {
+        await abrir({ state: 'EM_REPARO', in_warranty: true });
+        expect(screen.queryByRole('button', { name: 'Reabrir chamado' })).not.toBeInTheDocument();
+    });
+
+    it('visita pendente oferece registrar, reagendar e cancelar (com motivo)', async () => {
+        listVisits.mockResolvedValueOnce([{ id: 'v1', claim_id: 'cp', organization_id: 'org1', scheduled_at: '2026-10-20T12:00:00Z', technician_name: 'Ana', status: 'AGENDADA', created_at: '2026-10-11' }]);
+        const user = await abrir({ state: 'VISITA_AGENDADA', in_warranty: null });
+        await user.click(screen.getByRole('button', { name: 'Visitas' }));
+        expect(await screen.findByRole('button', { name: 'Registrar resultado' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Reagendar' })).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));
+        const confirmar = screen.getAllByRole('button', { name: 'Cancelar visita' }).find(b => b.hasAttribute('disabled'));
+        expect(confirmar).toHaveAttribute('title', 'Informe o motivo do cancelamento');
     });
 });

@@ -9,7 +9,8 @@
  * usuário pode fazer e — quando não pode — POR QUÊ (o botão nunca fica mudo).
  *
  * As listas de estados de origem abaixo são as MESMAS que as RPCs conferem no
- * banco (`aplicar_20271011000500_garantia_ciclo_vida.sql`). O teste
+ * banco (`aplicar_20271011000500_garantia_ciclo_vida.sql`, ampliado por
+ * `aplicar_20271011000700_garantia_pendencias.sql`). O teste
  * `warrantyLifecycleSql.test.ts` lê a migration e quebra se um lado mudar
  * sem o outro.
  */
@@ -31,7 +32,10 @@ export const ESTADOS_INICIAR_REPARO: readonly ClaimState[] = [
     'EM_GARANTIA', 'FORA_GARANTIA', 'VISITA_AGENDADA', 'REABERTO', 'CONTESTADO',
 ];
 export const ESTADOS_CONCLUIR_REPARO: readonly ClaimState[] = ['EM_REPARO'];
-export const ESTADOS_ENCERRAR: readonly ClaimState[] = ['CONCLUIDO', 'EM_REPARO', 'FORA_GARANTIA'];
+/** REABERTO entra (2026-10-11): reaberto por engano, ou cuja revisão não pediu nova ação. */
+export const ESTADOS_ENCERRAR: readonly ClaimState[] = ['CONCLUIDO', 'EM_REPARO', 'FORA_GARANTIA', 'REABERTO'];
+/** Reabrir: depois de concluído ou encerrado (defeito voltou, reparo não resolveu). */
+export const ESTADOS_REABRIR: readonly ClaimState[] = ['CONCLUIDO', 'ENCERRADO'];
 
 export type AcaoDoChamado =
     | 'triar'
@@ -40,7 +44,8 @@ export type AcaoDoChamado =
     | 'concluir_reparo'
     | 'encerrar'
     | 'definir_responsabilidade'
-    | 'suprimentos';
+    | 'suprimentos'
+    | 'reabrir';
 
 /** O mínimo do chamado que decide as ações. `in_warranty` nulo = ainda não triado. */
 export interface EstadoDoChamado {
@@ -55,6 +60,9 @@ const triado = (c: EstadoDoChamado) => c.in_warranty === true || c.in_warranty =
  * fazer, não só o que falta (regra do app: botão desligado sempre diz o motivo).
  */
 export function motivoBloqueio(acao: AcaoDoChamado, c: EstadoDoChamado): string | null {
+    if (acao === 'reabrir') {
+        return ESTADOS_REABRIR.includes(c.state) ? null : 'Só é possível reabrir um chamado concluído ou encerrado.';
+    }
     if (c.state === 'ENCERRADO') return 'Chamado encerrado.';
     switch (acao) {
         case 'triar':
@@ -85,7 +93,7 @@ export function motivoBloqueio(acao: AcaoDoChamado, c: EstadoDoChamado): string 
 export function acoesDisponiveis(c: EstadoDoChamado): AcaoDoChamado[] {
     const todas: AcaoDoChamado[] = [
         'triar', 'agendar_visita', 'iniciar_reparo', 'concluir_reparo', 'encerrar',
-        'definir_responsabilidade', 'suprimentos',
+        'definir_responsabilidade', 'suprimentos', 'reabrir',
     ];
     return todas.filter(a => motivoBloqueio(a, c) === null);
 }
@@ -93,6 +101,25 @@ export function acoesDisponiveis(c: EstadoDoChamado): AcaoDoChamado[] {
 /** Estado que o chamado assume ao agendar uma visita. */
 export function estadoAposAgendar(state: ClaimState): ClaimState {
     return ESTADOS_QUE_VIRAM_VISITA.includes(state) ? 'VISITA_AGENDADA' : state;
+}
+
+/**
+ * Estado do chamado depois de cancelar uma visita: se ele só estava em
+ * "Visita agendada" por causa dela (e não sobra outra pendente), volta ao que
+ * era — sem triagem → ABERTO; triado → EM_GARANTIA / FORA_GARANTIA. Em reparo,
+ * concluído etc. a visita não tinha mudado o estado, então nada muda.
+ * Mesma regra de `cancel_warranty_visit` (aplicar_20271011000700).
+ */
+export function estadoAposCancelarVisita(c: EstadoDoChamado, sobraVisitaPendente: boolean): ClaimState {
+    if (c.state !== 'VISITA_AGENDADA' || sobraVisitaPendente) return c.state;
+    if (c.in_warranty === true) return 'EM_GARANTIA';
+    if (c.in_warranty === false) return 'FORA_GARANTIA';
+    return 'ABERTO';
+}
+
+/** Visita que ainda pode ser reagendada, cancelada ou ter o resultado registrado. */
+export function visitaPendente(status: string | null | undefined): boolean {
+    return status === 'AGENDADA' || status === 'REAGENDADA';
 }
 
 /** Responsável sugerido pela origem provável já classificada (o app já sabe → sugere). */
@@ -123,6 +150,10 @@ export const EVENT_LABELS: Record<string, string> = {
     ClaimTriaged:               'Triagem realizada',
     VisitScheduled:             'Visita agendada',
     VisitCompleted:             'Visita realizada',
+    VisitRescheduled:           'Visita reagendada',
+    VisitCancelled:             'Visita cancelada',
+    ClaimReopened:              'Chamado reaberto',
+    ProcurementUnlinked:        'Desvinculado de Suprimentos',
     RepairStarted:              'Reparo iniciado',
     RepairCompleted:            'Reparo concluído',
     ResponsibilityAssigned:     'Responsabilidade definida',
@@ -183,6 +214,15 @@ export function resumoDoEvento(tipo: string, payload: Record<string, unknown> | 
             if (p.nps_nota != null) partes.push(`NPS ${p.nps_nota}`);
             break;
         }
+        case 'VisitRescheduled':
+            if (p.scheduled_at) partes.push(`para ${new Date(String(p.scheduled_at)).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`);
+            if (p.technician_name) partes.push(`técnico ${p.technician_name}`);
+            break;
+        case 'VisitCancelled':
+        case 'ClaimReopened':
+            if (typeof p.reason === 'string' && p.reason.trim()) partes.push(`motivo: ${p.reason.trim()}`);
+            break;
+        case 'ProcurementUnlinked':
         case 'ProcurementLinked':
             if (p.tipo) partes.push(`${p.tipo === 'contrato' ? 'Contrato' : 'Solicitação de compra'}${p.number ? ` ${p.number}` : ''}`);
             break;

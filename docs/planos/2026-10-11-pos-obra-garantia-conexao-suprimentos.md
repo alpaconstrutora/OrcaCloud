@@ -282,3 +282,69 @@ warranty_claim_id})` (o insert espalha o objeto, `:1742-1748`).
 5. Limpeza obrigatória: excluir SC (rascunho), contrato via `deleteContract` (apaga os títulos —
    conferir Contas a Pagar) e o chamado via `delete_warranty_claim`; contagens voltam ao início.
 6. Publicação por fase: push em `main` só após ler a suíte; `conferir-producao.sh` + check-run `ci`.
+
+---
+
+## Fase 4 — Pendências decididas pelo usuário (2026-10-11) — 5 de 5 ✅
+
+> **Estado (2026-10-11):** os 5 itens feitos e conferidos.
+> - Migration `aplicar_20271011000700_garantia_pendencias.sql` aplicada. ACL: as 4 RPCs novas/reescritas
+>   só `authenticated`; `fn_warranty_sla_sweep` só `postgres`/`service_role`.
+> - Banco (bloco que aborta, nada gravado): reagendar → REAGENDADA com técnico novo; cancelar a única
+>   visita de chamado não triado → ABERTO; com outra pendente → segue VISITA_AGENDADA; cancelar a
+>   última de chamado triado → EM_GARANTIA; reabrir de ENCERRADO → REABERTO com `closed_at` nulo e
+>   custo mantido; encerrar a partir de REABERTO. Recusas (reabrir aberto, cancelar/reagendar visita
+>   inexistente, cancelar sem motivo) com frase P0004.
+> - Testes: `warrantyLifecycle` (reabrir, estado após cancelar, visita pendente, resumo com motivo),
+>   `warrantyLifecycleSql` (agora vale a ÚLTIMA migration que marca cada constante),
+>   `warrantyAnalytics` (FORA_GARANTIA conta como aberto), `pedidoDaCotacaoHerdaClassificacao` 3/3,
+>   `WarrantyModule` 31/31.
+> - Navegador (agente-leitura, Alpa): chamado de teste → agendar → reagendar (25/10 14:30, técnico novo)
+>   → cancelar com motivo (banco: evento VisitCancelled com estado ABERTO) → triagem → SC pelo chamado
+>   → desvincular (aba vazia) → "Vincular existente" (drawer recortado na obra) → vinculada de novo →
+>   reparo → encerrar → reabrir com motivo → pode encerrar de novo; Histórico com os 7 registros;
+>   0 erro. Limpeza: SC, contador 006|006, chamado; 5 chamados, 0 eventos órfãos.
+> - **Ajustes na execução:** REABERTO entrou em ESTADOS_ENCERRAR (reaberto por engano pode ser
+>   encerrado sem novo reparo). Pedido na lista de Suprimentos não tem "Desvincular" — ele segue a SC
+>   que o gerou ("via SC"). O drawer lista só contratos de FORNECEDOR (INCOMING, domínio Suprimentos).
+
+### Pedido (transcrito literalmente)
+
+> Para você decidir depois
+>
+> Cancelar ou reagendar visita: implementar
+> Reabrir chamado: implementar
+> Vincular uma SC ou um contrato que já existam: implementar
+> O pedido gerado por cotação herdar centro de custo e plano de contas da SC (hoje não herda): implementar
+> O KPI "Abertos" ainda conta "Fora de garantia" como terminal, embora agora esse chamado possa seguir para reparo: implementar
+
+### 4.1 Cancelar / reagendar visita
+RPCs `cancel_warranty_visit` (AGENDADA/REAGENDADA → CANCELADA; se o chamado estava em
+VISITA_AGENDADA e não sobra visita pendente, volta ao estado de antes: ABERTO sem triagem,
+EM_GARANTIA ou FORA_GARANTIA conforme `in_warranty`) e `reschedule_warranty_visit`
+(→ REAGENDADA com nova data/técnico). Motivo do cancelamento obrigatório, no evento.
+- **Pronto quando:** recusas e caminho feliz provados no banco; aba Visitas com Reagendar e
+  Cancelar em cada visita pendente; Histórico com os dois eventos.
+
+### 4.2 Reabrir chamado
+RPC `reopen_warranty_claim` (CONCLUIDO/ENCERRADO → REABERTO, `closed_at` volta a nulo, motivo
+obrigatório). REABERTO pode ser triado de novo, ter visita, reparo, compras e ser encerrado.
+- **Pronto quando:** idem; cartão "Reabrir chamado" nos estados permitidos.
+
+### 4.3 Vincular SC / contrato existente (e desvincular)
+Drawer "Vincular existente" na aba Suprimentos: SCs e contratos de fornecedor da organização do
+chamado ainda sem vínculo (recorte padrão: a obra do chamado). Desvincular pela linha. A trava de
+organização já existe; o gatilho de evento passa a registrar também `ProcurementUnlinked`.
+- **Pronto quando:** vincular/desvincular no navegador refletem na aba e no Histórico.
+
+### 4.4 Pedido gerado por cotação herda CC e plano de contas da SC
+`quotationService.selectWinner` lê o CC/plano da SC de origem (itens com `quotation_request_id`)
+e passa ao `createOrder` (que já os usa também na numeração).
+- **Pronto quando:** teste do serviço prova que o pedido nasce com o CC/plano da SC.
+
+### 4.5 "Fora de garantia" deixa de ser terminal
+`ESTADOS_TERMINAIS = ['ENCERRADO']` (KPI "Abertos", SLA vencido) e o cron
+`fn_warranty_sla_sweep` alinhado (reescrito da definição viva). Achado: o sweep é SECURITY
+DEFINER e estava executável por `authenticated` (gravaria eventos em chamados de todas as
+organizações) — só o cron o chama, revogado.
+- **Pronto quando:** `warrantyAnalytics.test.ts` atualizado; ACL do sweep sem `authenticated`.

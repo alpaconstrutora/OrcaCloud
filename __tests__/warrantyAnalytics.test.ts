@@ -25,14 +25,14 @@ function kpiRow(over: Partial<WarrantyKPIRow> = {}): WarrantyKPIRow {
 }
 
 describe('computeWarrantyKPIs', () => {
-    it('conta em aberto ignorando os dois estados terminais', () => {
+    it('conta em aberto: só ENCERRADO sai da fila (fora de garantia ainda precisa ser encerrado — 2026-10-11)', () => {
         const rows = [
             kpiRow({ state: 'ABERTO' }),
             kpiRow({ state: 'EM_REPARO' }),
             kpiRow({ state: 'ENCERRADO' }),
             kpiRow({ state: 'FORA_GARANTIA' }),
         ];
-        expect(computeWarrantyKPIs(rows, AGORA).total_abertos).toBe(2);
+        expect(computeWarrantyKPIs(rows, AGORA).total_abertos).toBe(3);
     });
 
     it('em garantia exclui encerrados; fora de garantia conta pelo booleano', () => {

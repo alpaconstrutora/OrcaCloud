@@ -1,5 +1,6 @@
 import React from 'react';
-import { ShoppingCart, FileSignature, Package, Wallet, CheckCircle, Clock } from 'lucide-react';
+import { ShoppingCart, FileSignature, Package, Wallet, CheckCircle, Clock, Link2, Unlink } from 'lucide-react';
+import ActionIconButton from '../ui/ActionIconButton';
 import KpiCard from '../ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import type { ConsolidadoSuprimentos, LinhaSuprimentos } from '../../utils/warrantySuprimentos';
@@ -22,6 +23,10 @@ interface Props {
     onGerarSolicitacao: () => void;
     onNovoContrato: () => void;
     onAbrir: (linha: LinhaSuprimentos) => void;
+    /** Abre o drawer "Vincular existente" (SC/contrato já criados). */
+    onVincular: () => void;
+    /** Tira o vínculo de uma SC/contrato — pedido não se desvincula (segue a SC). */
+    onDesvincular: (linha: LinhaSuprimentos) => void;
 }
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -46,7 +51,7 @@ const BTN_PRIMARY = 'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 
 const BTN_SECONDARY_OUTLINE = 'inline-flex items-center justify-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed';
 
 const WarrantySuprimentosTab: React.FC<Props> = ({
-    dados, carregando, erro, motivo, onGerarSolicitacao, onNovoContrato, onAbrir,
+    dados, carregando, erro, motivo, onGerarSolicitacao, onNovoContrato, onAbrir, onVincular, onDesvincular,
 }) => {
     const linhas = dados?.linhas ?? [];
     return (
@@ -56,6 +61,10 @@ const WarrantySuprimentosTab: React.FC<Props> = ({
                     Material e serviço que a execução deste chamado precisa — o ciclo de compra continua em Suprimentos.
                 </p>
                 <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={onVincular} disabled={!!motivo} title={motivo ?? 'SC ou contrato que já existe em Suprimentos'} className={BTN_SECONDARY_OUTLINE}>
+                        <Link2 className="w-[15px] h-[15px]" />
+                        Vincular existente
+                    </button>
                     <button onClick={onNovoContrato} disabled={!!motivo} title={motivo ?? undefined} className={BTN_SECONDARY_OUTLINE}>
                         <FileSignature className="w-[15px] h-[15px]" />
                         Novo contrato
@@ -83,6 +92,19 @@ const WarrantySuprimentosTab: React.FC<Props> = ({
                 rowKey={l => `${l.tipo}:${l.id}`}
                 loading={carregando}
                 onRowClick={onAbrir}
+                actions={{
+                    width: 90,
+                    render: l => l.tipo === 'pedido'
+                        ? <span className="text-xs text-gray-400" title="O pedido segue a solicitação de compra que o gerou">via SC</span>
+                        : (
+                            <ActionIconButton
+                                kind="unlock"
+                                title="Desvincular do chamado (continua em Suprimentos)"
+                                icon={<Unlink className="w-4 h-4" />}
+                                onClick={e => { e.stopPropagation(); onDesvincular(l); }}
+                            />
+                        ),
+                }}
                 sortValue={(key, l) => key === 'valor' ? l.valor : key === 'tipo' ? TIPO_LABEL[l.tipo] : (l[key as keyof LinhaSuprimentos] as string | null) ?? ''}
                 renderCell={(key, l) => {
                     switch (key) {

@@ -98,7 +98,7 @@ compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não 
 - [x] Item 5 — aplicado em produção 11/10/2026; verificado no banco publicado
 - [x] Item 6 — aplicado em produção 11/10/2026: results 69→61, items 241→217, events 34
   (inalterado), runs 19→22; ações MOVIDO=3, MOVIDO_CICLO_NOVO=4, DUPLICATA=8
-- [ ] Fase 2 publicada (push em `main`)
+- [x] Fase 2 publicada — `1200cf50`; domínio servindo `81e54a8` (contém), CI verde
 - [ ] **Decisão manual pendente:** 04/2026 (Rogério, Altair, Claudinei, Ricardo na folha
   aberta da Garden, que tem R$ 3.815,81 em lançamentos financeiros pendentes) e
   06/2026 (os mesmos 4 na folha aberta da Garden). Nos dois meses a folha da Alpa

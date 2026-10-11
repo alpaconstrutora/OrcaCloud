@@ -169,9 +169,14 @@ export const payrollEngine = {
             });
         }
 
-        // 2. Obter Colaboradores Ativos
+        // 2. Obter Colaboradores Ativos — SÓ os da própria organização.
+        // `listEmployees(orgId)` traz também os COMPARTILHADOS de outras orgs
+        // (`employee_org_shares`); regra de produto (11/10/2026): a folha é
+        // gerada na organização DO COLABORADOR, não na de quem recebeu o
+        // compartilhamento. Incluí-los aqui punha o mesmo colaborador na folha
+        // das duas orgs no mesmo mês.
         const employees = await laborService.listEmployees(orgId);
-        const activeEmployees = employees.filter(e => e.status === 'ATIVO');
+        const activeEmployees = employees.filter(e => e.status === 'ATIVO' && e.org_id === orgId);
 
         // 3. Processar em paralelo — allSettled para não abortar a folha se um colaborador falhar
         const results = await Promise.allSettled(

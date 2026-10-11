@@ -7,6 +7,15 @@
 
 Sessão: 9d5a9eda-b806-44d0-8512-a7e101769ce2 · 11/10/2026
 
+### Pedido posterior — 11/10/2026 (mudou o rumo)
+
+> a folha deve ser gerada na organizacao do colaborador e nao do usuário
+
+E, respondendo a "quem pode fechar o ciclo da Garden":
+
+> Esse e um caso especifico que nao deve ser tratado como geral.
+> contratei um fornecedor para ser assistente administrativo e cuidar da folha de pagamento
+
 ## Diagnóstico (medido no banco, não inferido)
 
 - Usuário: `alpaconstrutora@gmail.com` (fornecedor Sebastião Eugênio, `partner_users`).
@@ -36,8 +45,13 @@ Sessão: 9d5a9eda-b806-44d0-8512-a7e101769ce2 · 11/10/2026
 |---|---|---|
 | 11/10/2026 | Correção estrutural (compartilhamento cobre a folha) × só incluir o fornecedor como membro da Garden × as duas | **Estrutural** |
 
-Consequência: o fornecedor **continua** membro só da Alpa. Ele trabalha a folha dos
-compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não muda).
+| 11/10/2026 | Folhas já geradas com colaborador de outra org | **Corrigir as abertas agora**; fechadas não mudam |
+| 11/10/2026 | Quem fecha o ciclo da Garden | "caso específico… assistente administrativo que cuida da folha" → ele vira **membro da Garden**; a ampliação por compartilhamento é desfeita |
+| 11/10/2026 | Executar o plano de acesso + dados + código | **Sim, tudo** |
+
+~~Consequência: o fornecedor **continua** membro só da Alpa. Ele trabalha a folha dos
+compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não muda).~~
+**Superado pelo pedido posterior:** a folha é da org do colaborador, e o assistente é membro da Garden.
 
 ## Plano
 
@@ -55,6 +69,24 @@ compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não 
    mostra a mensagem do lote sem org gravável.
    *Pronto quando:* typecheck limpo e teste do item 2 passa.
 
+### Fase 2 — folha na org do colaborador (pedido posterior)
+
+4. **`services/payrollEngine.ts`** — `runPayroll(orgId)` calcula só colaboradores com
+   `org_id = orgId` (o compartilhado vai para a folha da org dele).
+   *Pronto quando:* `__tests__/payrollEngine.orgDoColaborador.test.ts` passa.
+5. **`aplicar_20271011000800_folha_acesso_assistente_desfaz_compartilhamento.sql`** —
+   `alpaconstrutora@gmail.com` membro da Garden (permissões copiadas da Alpa); as 8
+   policies voltam a "membro da org"; `can_access_employee` sem o ramo do
+   compartilhamento; trava das 2 RPCs mantida; `employee_shared_in_home_org` removida.
+   *Pronto quando:* assistente lança evento e cria ciclo na Garden; conta sem vínculo
+   leva 42501 na RPC.
+6. **`aplicar_20271011000900_folha_abertas_para_org_do_colaborador.sql`** — folhas
+   abertas: duplicata apagada, resto movido (criando ciclo se faltar); destino fechado
+   não mexe; aborta se a origem tiver lançamento financeiro; reversão em
+   `folha_org_colaborador_reversao_20261011` (**não apagar**).
+   *Pronto quando:* MOVIDO=3, MOVIDO_CICLO_NOVO=4 (3 ciclos novos), DUPLICATA=8, e só
+   os 8 casos de 04 e 06/2026 seguem cruzados.
+
 ## Estado
 
 - [x] Item 1 — aplicado em produção em 11/10/2026 (ensaio com rollback antes; depois
@@ -62,6 +94,15 @@ compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não 
 - [x] Item 2 — teste 4/4
 - [x] Item 3
 - [x] Publicado — `317ab127` em 11/10/2026; domínio conferido servindo o commit, CI verde
+- [x] Item 4 — teste 1/1
+- [x] Item 5 — aplicado em produção 11/10/2026; verificado no banco publicado
+- [x] Item 6 — aplicado em produção 11/10/2026: results 69→61, items 241→217, events 34
+  (inalterado), runs 19→22; ações MOVIDO=3, MOVIDO_CICLO_NOVO=4, DUPLICATA=8
+- [ ] Fase 2 publicada (push em `main`)
+- [ ] **Decisão manual pendente:** 04/2026 (Rogério, Altair, Claudinei, Ricardo na folha
+  aberta da Garden, que tem R$ 3.815,81 em lançamentos financeiros pendentes) e
+  06/2026 (os mesmos 4 na folha aberta da Garden). Nos dois meses a folha da Alpa
+  está FECHADA; corrigir exige mexer em folha fechada.
 
 ## Verificação
 
@@ -84,11 +125,11 @@ Admin (UID real), contagem nas 8 tabelas antes × depois da migration: idêntica
 
 ## Fora do escopo (anotado, não feito)
 
-- **Folha em dobro possível:** quem é membro da org de origem **e** da que recebeu o
+- ~~**Folha em dobro possível:** quem é membro da org de origem **e** da que recebeu o
   colaborador, ao gerar o lote em "Todas", abre ciclo nas duas, e o compartilhado entra
   nas duas (`listEmployees(orgId)` inclui os compartilhados). Pré-existente; os dados de
   hoje mostram a folha deles só na Alpa. Decidir qual org paga o compartilhado é
-  pergunta de produto.
+  pergunta de produto.~~ Resolvido pela Fase 2.
 - **Centro de Custo da alocação do compartilhado:** `LaborAllocations` grava o rateio
   com a org do colaborador (Garden), mas o catálogo de CC carregado é o da org da tela.
 - Os ciclos de 08 e 09/2026 da Alpa estão parados em `PROCESSANDO`.

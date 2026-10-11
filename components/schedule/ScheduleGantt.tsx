@@ -146,6 +146,32 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     const headerRef = useRef<HTMLDivElement>(null);
     const macroHeaderRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // ALTURA LIMITADA À JANELA (11/10/2026; plano
+    // docs/planos/2026-10-11-barras-de-rolagem-e-altura-do-gantt.md). O pai é
+    // `flex flex-col` sem altura, então o contêiner crescia até a última linha: a
+    // rolagem vertical era a da página, o cabeçalho de datas (sticky top-0) rolava junto
+    // e a barra horizontal ficava DEPOIS da última tarefa (11.958px de altura com 300
+    // tarefas — docs/spikes/gantt-rolagem/layout.mjs). Agora ele ocupa a altura que sobra
+    // na janela abaixo do seu topo (mínimo 400px, 24px de respiro = gutter do Layout) e
+    // rola sozinho. O topo é medido "como se a página estivesse no topo" (somando o
+    // scrollTop dos ancestrais), para a altura não mudar enquanto a página rola.
+    const [alturaMaxima, setAlturaMaxima] = useState<number | null>(null);
+    const medirAlturaMaxima = React.useCallback(() => {
+        const el = containerRef.current;
+        if (!el || !isVisible || el.offsetParent === null) return;
+        let topo = el.getBoundingClientRect().top + window.scrollY;
+        for (let a = el.parentElement; a; a = a.parentElement) topo += a.scrollTop;
+        const altura = Math.max(400, Math.floor(window.innerHeight - topo - 24));
+        setAlturaMaxima(prev => (prev !== null && Math.abs(prev - altura) < 2 ? prev : altura));
+    }, [isVisible]);
+    // Sem dependências de propósito: o topo muda quando o que está acima muda (ribbon
+    // recolhido, barra de opções, tela cheia) — e todos esses re-renderizam o Gantt.
+    useLayoutEffect(() => { medirAlturaMaxima(); });
+    React.useEffect(() => {
+        window.addEventListener('resize', medirAlturaMaxima);
+        return () => window.removeEventListener('resize', medirAlturaMaxima);
+    }, [medirAlturaMaxima]);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
     // Flat list of all items for predecessor name lookup
@@ -1089,6 +1115,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
             })()}
             <div
                 ref={containerRef}
+                style={alturaMaxima ? { maxHeight: `${alturaMaxima}px` } : undefined}
                 onScroll={handleScroll}
                 onWheel={handleWheel}
                 onPointerDown={handlePointerDown}

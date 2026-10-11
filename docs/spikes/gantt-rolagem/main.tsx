@@ -9,6 +9,7 @@
  *   ?recuo=0            0 = timeline começa no início (como antes de 10/10);
  *                       N = recuo de N passos (o que a tela faz hoje: abre com 1)
  *   ?navegar=0          desliga o recuo automático na borda esquerda
+ *   ?layout=app         Gantt dentro do rolador da página, como na tela real
  *
  * `window.__harness` expõe colunas, linhas e o número de nós do DOM do Gantt.
  */
@@ -131,4 +132,23 @@ function Harness() {
     );
 }
 
-createRoot(document.getElementById('raiz')!).render(<Harness />);
+// `?layout=app`: o Gantt no MESMO encaixe da tela real — dentro do rolador da página
+// (o <main> do Layout: `overflow-y-auto p-4 md:p-6`), abaixo do espaço do ribbon, num pai
+// `overflow-x-auto min-h-[400px] flex flex-col` SEM altura (FinancialSchedule.tsx). É o
+// que faz o contêiner do Gantt crescer até a última linha (11/10/2026).
+const raiz = document.getElementById('raiz')!;
+if (params.get('layout') === 'app') {
+    raiz.removeAttribute('style');
+    createRoot(raiz).render(
+        <main id="rolador-pagina" className="overflow-y-auto p-6" style={{ height: '100vh', boxSizing: 'border-box' }}>
+            <div className="space-y-6">
+                <div data-ribbon className="rounded-[10px] border border-gray-100 bg-white shadow-sm" style={{ height: 180 }} />
+                <div className="overflow-x-auto min-h-[400px] bg-white flex flex-col">
+                    <Harness />
+                </div>
+            </div>
+        </main>
+    );
+} else {
+    createRoot(raiz).render(<Harness />);
+}

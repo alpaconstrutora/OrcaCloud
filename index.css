@@ -23,6 +23,14 @@
 
 /* OrçaCloud SaaS - Global Styles */
 
+/* Gatilho do contraste da barra de rolagem sob o mouse (ver "BARRAS DE ROLAGEM" abaixo).
+   inherits: false — mudar no :hover de um contêiner não recalcula os filhos. */
+@property --barra-sob-o-mouse {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
 @layer base {
   :root {
     --primary: #2563eb;
@@ -80,22 +88,68 @@
     background-color: #ffffff;
   }
 
+  /* BARRAS DE ROLAGEM — discretas em repouso, nunca somem, alargam sob o mouse
+     (11/10/2026; plano docs/planos/2026-10-11-barras-de-rolagem-e-altura-do-gantt.md).
+     - O ESPAÇO reservado continua 8px: alargá-lo tiraria largura de todo contêiner
+       rolável, e há tabelas com a soma das colunas no limite da largura útil.
+     - O "alargar" é visual, DENTRO dos 8px: a borda transparente + background-clip
+       recolhe o polegar a ~4px; sob o mouse a borda zera e ele ocupa os 8px.
+     - Overlay que some ao parar de rolar NÃO: numa tabela larga ou no Gantt a barra é o
+       único aviso de que há conteúdo à direita. */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
 
-  ::-webkit-scrollbar-track {
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
     background: transparent;
   }
 
+  /* repouso: fino e claro */
   ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 10px;
+    background-color: #e2e8f0;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    border-radius: 9999px;
   }
 
+  /* mouse sobre a área rolável: mais contraste, mesma espessura.
+     ⚠️ O Chrome guarda o estilo da barra em cache e só o recalcula se o :hover mudar
+     ALGUM estilo do próprio elemento — sem a variável abaixo, esta regra não pinta
+     nada (medido: docs/spikes/barras-rolagem/medir.mjs). A variável é registrada como
+     NÃO herdada (@property, fora do @layer): herdada, cada entrada do mouse num
+     contêiner recalcularia a subárvore inteira (o Gantt tem ~18 mil nós). */
+  *:hover {
+    --barra-sob-o-mouse: 1;
+  }
+
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+  }
+
+  /* mouse sobre o polegar: alarga para os 8px e escurece; arrastando, mais escuro */
   ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    border-width: 0;
+    background-color: #94a3b8;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    border-width: 0;
+    background-color: #64748b;
+  }
+
+  /* Firefox não tem ::-webkit-scrollbar. Só para ele: no Chrome 121+ declarar
+     scrollbar-color/scrollbar-width DESLIGA as regras ::-webkit-scrollbar acima. */
+  @supports (-moz-appearance: none) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e1 transparent;
+    }
+
+    *:hover {
+      scrollbar-color: #94a3b8 transparent;
+    }
   }
 }
 

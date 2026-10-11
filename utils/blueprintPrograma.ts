@@ -324,6 +324,25 @@ function fmt(v: number): string {
  * em empate de posição vale a ordem mais específica (suíte antes de
  * dormitório, lavabo antes de banheiro).
  */
+/**
+ * 11/10/2026 (teste do usuário no app real): o TIPO DE AMBIENTE da etiqueta (NBR 5410,
+ * o seletor que a elétrica usa) como uso — para quando o nome não diz ("Ambiente 1"
+ * com tipo Sala/Dormitório era tratado como "outro, não climatizado"). O tipo é mais
+ * grosso que o uso: Sala/Dormitório vira SALA; Outro não diz nada.
+ */
+export const USO_DO_TIPO_DE_AMBIENTE: Record<TipoDeAmbiente, UsoDoAmbiente | null> = {
+  SALA_DORMITORIO: 'SALA',
+  COZINHA_SERVICO: 'COZINHA',
+  BANHEIRO: 'BANHEIRO',
+  VARANDA: 'VARANDA',
+  OUTRO: null,
+};
+
+/** O uso do ambiente: pelo NOME, e — quando o nome não diz — pelo tipo de ambiente da etiqueta. */
+export function usoDoAmbiente(nome: string | null | undefined, tipoDeAmbiente: TipoDeAmbiente | null | undefined): UsoDoAmbiente | null {
+  return usoDoNome(nome) ?? (tipoDeAmbiente ? USO_DO_TIPO_DE_AMBIENTE[tipoDeAmbiente] : null);
+}
+
 export function usoDoNome(nome: string | null | undefined): UsoDoAmbiente | null {
   const n = (nome ?? '').trim();
   if (!n) return null;

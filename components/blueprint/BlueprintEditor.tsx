@@ -16196,7 +16196,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
                 // E0.3: a mesma lista do painel de acabamentos, mais o uid da ETIQUETA (a chave do declarado).
                 ambientes={ambientesParaAcabamento.map((a) => {
                   const etiquetaId = ambientes.find((x) => x.id === a.spaceId)?.etiquetaId ?? null;
-                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, luminariasW: luminariasDoAmbienteW(editor.model, a.spaceId) };
+                  return { spaceId: a.spaceId, uid: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.uid) || null, rotulo: a.rotulo, areaPisoM2: a.areaPisoM2, peDireitoMm: a.peDireitoMm, acabamentos: a.acabamentos, luminariasW: luminariasDoAmbienteW(editor.model, a.spaceId), tipoDeAmbiente: (etiquetaId && editor.model.labels.find((l) => l.id === etiquetaId)?.tipoDeAmbiente) || null };
                 })}
                 nomeDoPavimento={editor.model.levels.find((l) => l.id === levelId)?.name ?? 'pavimento'}
                 // E1.3: derivado do desenho, só com a gaveta aberta (é por ambiente do pavimento ativo).

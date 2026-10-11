@@ -3147,3 +3147,20 @@ usam a mesma gaveta (`PainelGeradorPpci`):
   deixou de rodar.
 
 **Prova:** `components/PainelGeradorPpci.test.tsx` (+2): o caso do print, e o gerador que rodou.
+
+### O tipo de ambiente vale como uso · 11/10/2026 (frente `clima-tipo-ambiente`)
+
+Achado no teste do usuário no app real (estudo "Planta 26/09/2026"): o ambiente "Ambiente 1",
+com o tipo **Sala/Dormitório** escolhido na etiqueta (o seletor que a elétrica usa, NBR 5410), era
+tratado pela climatização como "outro, não climatizado" — ela só lia o nome — e o gerador parava em
+"Nenhum ambiente climatizado".
+
+- **`usoDoAmbiente(nome, tipoDeAmbiente)`** (`blueprintPrograma.ts`): o nome vence; quando o nome
+  não diz, o tipo da etiqueta vale como uso (`USO_DO_TIPO_DE_AMBIENTE`: Sala/Dormitório → SALA,
+  Cozinha/Serviço → COZINHA, Banheiro → BANHEIRO, Varanda → VARANDA, Outro → nada).
+- As premissas do ambiente, a carga térmica (pela etiqueta, por `uid`) e o painel passam o tipo.
+  A origem continua "padrão do uso", e a declaração do usuário vence.
+
+**Prova:** `blueprintClimatizacaoTipoAmbiente.test.ts` (3): a tabela e a ordem; o caso do usuário
+(climatizado com o tipo, não climatizado sem ele); a premissa e a declaração. Conferido também no
+rascunho real do usuário: "Ambiente 1" → SALA, climatizado.

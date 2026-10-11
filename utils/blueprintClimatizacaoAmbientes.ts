@@ -24,10 +24,10 @@
  * acabado à face do forro. A do quantitativo mede outra coisa (a altura até o
  * forro para o acabamento) e fica como está, agora com o nome que a distingue.
  */
-import type { AcabamentosDoAmbiente, BlueprintModel, ObjectId } from './blueprintKernel';
+import type { AcabamentosDoAmbiente, BlueprintModel, ObjectId, TipoDeAmbiente } from './blueprintKernel';
 import { pointInPolygon } from './blueprintKernel';
 import { peDireitoUtilMm } from './blueprintAcabamentos';
-import { FICHA_DO_USO, USOS_DO_AMBIENTE, usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
+import { FICHA_DO_USO, USOS_DO_AMBIENTE, usoDoAmbiente, usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
 
 export const ATIVIDADES = ['SENTADO_REPOUSO', 'SENTADO_TRABALHO_LEVE', 'EM_PE_LEVE', 'MODERADA', 'PESADA'] as const;
 export type Atividade = (typeof ATIVIDADES)[number];
@@ -159,6 +159,8 @@ export interface ContextoDoAmbiente {
   temperaturaDoEstudoC: number;
   /** F14: a soma das potências das luminárias desenhadas no ambiente, W (`null` = nenhuma com potência). */
   luminariasW?: number | null;
+  /** 11/10/2026: o tipo de ambiente da etiqueta — vale como uso quando o nome não diz. */
+  tipoDeAmbiente?: TipoDeAmbiente | null;
 }
 
 /**
@@ -209,7 +211,8 @@ export function peDireitoLivreMm(peDireitoMm: number, acabamentos: AcabamentosDo
 
 export function premissasDoAmbiente(declarado: HipotesesDoAmbiente | undefined, ctx: ContextoDoAmbiente): PremissasDoAmbiente {
   const h = declarado ?? HIPOTESES_DO_AMBIENTE_VAZIAS;
-  const uso = usoDoNome(ctx.nome);
+  // 11/10/2026: o nome primeiro; sem uso no nome ("Ambiente 1"), o tipo de ambiente da etiqueta.
+  const uso = usoDoAmbiente(ctx.nome, ctx.tipoDeAmbiente);
   const padrao = uso ? PADRAO_POR_USO[uso] : PADRAO_POR_USO.OUTRO;
   const origemPadrao: OrigemDoDado = uso ? 'USO' : 'SEM';
   const escolher = <T,>(decl: T | null, doUso: T): DadoComOrigem<T> => (decl != null ? { valor: decl, origem: 'DECLARADA' } : { valor: doUso, origem: origemPadrao });

@@ -158,7 +158,6 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewProcesses: true, canEditProcesses: false,
         canViewMasterData: true, canEditMasterData: false,
         canViewProjects: true, canEditProjects: false,
-        canViewMeasureAi: true, canEditMeasureAi: false,
         canEditStructural: false,
         canViewAreaEngine: true, canEditAreaEngine: false,
         canViewProjectTemplates: true, canEditProjectTemplates: false,
@@ -233,7 +232,6 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
 
                 canEditTasks: true,
                 canEditProjects: true,
-                canEditMeasureAi: true,
                 canEditStructural: true,
                 canEditAreaEngine: true,
                 canEditOperational: true,
@@ -349,7 +347,6 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     { group: 'Engenharia', title: 'Planejamento', view: 'canViewPlanning', edit: 'canEditPlanning' },
     { group: 'Engenharia', title: 'Relatórios de Engenharia', view: 'canViewReports', edit: 'canEditReports' },
     { group: 'Engenharia', title: 'Dados Técnicos', view: 'canViewTechnicalData', edit: 'canEditTechnicalData' },
-    { group: 'Engenharia', title: 'Medição Inteligente', view: 'canViewMeasureAi', edit: 'canEditMeasureAi' },
     { group: 'Engenharia', title: 'Ferragem & Aço (Estrutural)', view: 'canViewStructural', edit: 'canEditStructural' },
     { group: 'Engenharia', title: 'Áreas NBR 12721', view: 'canViewAreaEngine', edit: 'canEditAreaEngine' },
     { group: 'Engenharia', title: 'Tipos e Templates de Obra', view: 'canViewProjectTemplates', edit: 'canEditProjectTemplates' },

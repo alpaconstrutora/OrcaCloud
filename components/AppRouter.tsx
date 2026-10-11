@@ -101,7 +101,6 @@ const MasterDataBrowser     = React.lazy(() => import('./MasterDataBrowser'));
 const ProModule             = React.lazy(() => import('./ProModule'));
 const OfficesModule         = React.lazy(() => import('./OfficesModule'));
 const ReformasModule        = React.lazy(() => import('./ReformasModule'));
-const MeasureAIModule       = React.lazy(() => import('./MeasureAIModule'));
 const EcommerceDashboard    = React.lazy(() => import('./EcommerceDashboard'));
 const EcommercePhysicalMap  = React.lazy(() => import('./EcommercePhysicalMap'));
 const EcommerceChecklists   = React.lazy(() => import('./EcommerceChecklists'));
@@ -627,13 +626,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <EcommerceChecklists
           organizationId={activeOrganizationId || ''}
           onBack={() => setActiveView('ecommerce-dashboard')}
-        />
-      );
-
-    case 'measure-ai':
-      return (
-        <MeasureAIModule
-          userId={session?.user?.id || ''}
         />
       );
 

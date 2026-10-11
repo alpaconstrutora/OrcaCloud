@@ -470,7 +470,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const [commandQuery, setCommandQuery] = React.useState('');
   const commandInputRef = React.useRef<HTMLInputElement>(null);
-  const engViews = ['dashboard','eng-obras','eng-orcamentos','measure-ai','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine'];
+  const engViews = ['dashboard','eng-obras','eng-orcamentos','estrutural','explorer','eng-planejamento','reports','project-settings','eng-obra-types','org-type-templates','area-engine'];
   const [isEngenhariaOpen, setIsEngenhariaOpen] = React.useState(() => engViews.includes(activeView) || activeView.startsWith('eng-'));
   React.useEffect(() => { if (engViews.includes(activeView) || activeView.startsWith('eng-')) setIsEngenhariaOpen(true); }, [activeView]);
   const [isOrganizacaoOpen, setIsOrganizacaoOpen] = React.useState(() => activeView === 'organization');
@@ -515,7 +515,6 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
       { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
       { id: 'eng-planejamento', label: 'Planejamento', group: 'Engenharia', icon: Calendar },
-      { id: 'measure-ai', label: 'Medição inteligente', group: 'Engenharia', icon: Calculator },
       { id: 'supplies-solicitacoes', label: 'Solicitações de compra', group: 'Suprimentos', icon: ClipboardPen },
       { id: 'supplies-contracts', label: 'Contratos', group: 'Suprimentos', icon: FileText },
       { id: 'supplies-quotations', label: 'Cotações', group: 'Suprimentos', icon: FileText },
@@ -951,7 +950,6 @@ const Layout: React.FC<LayoutProps> = ({
                     <DropdownItem id="explorer" label="Composições" icon={BookOpen} />
                     <DropdownItem id="eng-planejamento" label="Planejamento" icon={Calendar} />
                     <DropdownItem id="reports" label="Relatórios" icon={FileText} />
-                    <DropdownItem id="measure-ai" label="Medição Inteligente" icon={Calculator} />
                     <DropdownItem id="estrutural" label="Ferragem & Aço" icon={Layers} />
                     <DropdownItem id="project-settings" label="Dados Técnicos" icon={Calculator} />
                     <DropdownItem id="eng-obra-types" label="Tipos de Obra" icon={Layers} />

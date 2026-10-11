@@ -21,7 +21,6 @@ export * from "./supplierBankAccount";
 export * from "./pro";
 export * from "./offices";
 export * from "./reformas";
-export * from "./measure";
 export * from "./ecommerce";
 export * from "./documents";
 export * from "./cno";

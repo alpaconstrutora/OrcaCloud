@@ -359,8 +359,6 @@ export interface UserPermissions {
     // --- Engenharia ---
     canViewProjects?: boolean;
     canEditProjects?: boolean;
-    canViewMeasureAi?: boolean;
-    canEditMeasureAi?: boolean;
     canEditStructural?: boolean;
     /**
      * ⚠️ LEGADO. O módulo de Projetos Elétricos foi removido em 08/09/2026 —

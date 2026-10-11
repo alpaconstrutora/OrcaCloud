@@ -11,6 +11,16 @@
 >
 > Sessão: 62e7c910 · 10/10/2026
 
+### Pedido posterior (10/10/2026)
+> o contrato TL-010-0004 esta com os impostos retidos nao selecionados, ou seja, nenhum imposto foi retido pelo cliente. nesta caso o cliente deve pagar o valor integral da parcela.
+> no financeiro > contas a receber existe a coluna valor com o valor da parcela (renomear para Valor Bruno), coluna valor l;iqudo (que é o valor bruno - tributos) e para nao confundir com o valor a receber do cliente,vamos criar uma nova coluna chamada valor a receber que é o valor bruto - (tributos somente quando tributos retidos pelo cliente estiverem selecionados)
+
+Leitura: "Bruno" = bruto. CTL-010-0004 conferido no banco: sem retenção, bruto R$ 28.800,00,
+tributos R$ 3.211,20, valor a receber R$ 28.800,00.
+Feito: coluna Valor → **Valor bruto**; nova **Valor a receber** = campo computado
+`valor_esperado` (o mesmo que a conciliação confere), carregado junto com Tributos em
+`receivableService.resolveTributos`. Valor líquido inalterado.
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|

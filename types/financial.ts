@@ -765,6 +765,10 @@ export interface Receivable {
      *  `tributos_da_parcela`), resolvida depois da lista por
      *  `receivableService.resolveTributos`. `undefined` = ainda não carregou. */
     tributos?: number;
+    /** Valor a receber do cliente = bruto − só os tributos RETIDOS por ele
+     *  (campo computado `valor_esperado`; sem retenção é o próprio bruto).
+     *  Diferente do líquido (bruto − todos os tributos). Mesma carga de `tributos`. */
+    valor_a_receber?: number;
     created_at?: string;
     updated_at?: string;
 }

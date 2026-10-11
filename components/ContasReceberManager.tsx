@@ -58,12 +58,16 @@ const RECEBER_COLUMNS: ColumnConfig[] = [
     { key: 'empreendimento_name', label: 'Empreendimento', sortable: true },
     { key: 'project_name', label: 'Obra', sortable: true },
     { key: 'due_date', label: 'Vencimento', sortable: true },
-    { key: 'amount', label: 'Valor', sortable: true },
+    { key: 'amount', label: 'Valor bruto', sortable: true },
     // Tributos gerados sobre a parcela (PIS/COFINS/INSS, campo computado
-    // tributos_da_parcela) e o líquido = Valor − Tributos. Resolvidos depois
+    // tributos_da_parcela) e o líquido = Valor bruto − Tributos. Resolvidos depois
     // da lista (receivableService.resolveTributos); "—" enquanto não chegam.
     { key: 'tributos', label: 'Tributos', sortable: true },
     { key: 'valor_liquido', label: 'Valor líquido', sortable: true },
+    // Valor a receber ≠ líquido: é o que o CLIENTE paga = bruto − só os tributos
+    // que ele retém (negociação › aba Financeiro). Sem retenção = o bruto inteiro.
+    // Campo computado valor_esperado — o mesmo valor que a conciliação confere.
+    { key: 'valor_a_receber', label: 'Valor a receber', sortable: true },
     // Recibo ANTES de Status, de propósito: a tabela é mais larga que a tela e
     // a coluna Ações fica fora da área visível — o ícone de recibo ali passava
     // despercebido (26/09/2026). Depois de Status ainda terminava em 1655px
@@ -90,9 +94,10 @@ const RECEBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     empreendimento_name: { label: 'Empreendimento', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     project_name: { label: 'Obra', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     due_date: { label: 'Vencimento', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
-    amount: { label: 'Valor', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
+    amount: { label: 'Valor bruto', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     tributos: { label: 'Tributos', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     valor_liquido: { label: 'Valor líquido', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
+    valor_a_receber: { label: 'Valor a receber', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     recibo: { label: 'Recibo', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
     cost_center_name: { label: 'Centro de Custo', className: 'px-6 py-2 text-left whitespace-nowrap border-r border-gray-100 relative overflow-hidden' },
@@ -100,7 +105,7 @@ const RECEBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    party_name: 200, description: 220, empreendimento_name: 180, project_name: 160, due_date: 150, amount: 140, tributos: 130, valor_liquido: 150, status: 150, recibo: 130,
+    party_name: 200, description: 220, empreendimento_name: 180, project_name: 160, due_date: 150, amount: 140, tributos: 130, valor_liquido: 150, valor_a_receber: 150, status: 150, recibo: 130,
     cost_center_name: 180, plano_de_contas_name: 180, actions: 260,
 };
 
@@ -121,9 +126,10 @@ function buildAdvancedFilterFields(
         { key: 'description', label: 'Descrição', type: 'text' },
         { key: 'empreendimento_name', label: 'Empreendimento', type: 'text', options: dasLinhas('empreendimento_name') },
         { key: 'project_name', label: 'Obra', type: 'text', options: dasLinhas('project_name') },
-        { key: 'amount', label: 'Valor', type: 'number' },
+        { key: 'amount', label: 'Valor bruto', type: 'number' },
         { key: 'tributos', label: 'Tributos', type: 'number' },
         { key: 'valor_liquido', label: 'Valor líquido', type: 'number' },
+        { key: 'valor_a_receber', label: 'Valor a receber', type: 'number' },
         { key: 'due_date', label: 'Vencimento', type: 'date' },
         { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })) },
         { key: 'cost_center_name', label: 'Centro de Custo', type: 'text', options: distinctOptions(costCenters, c => c.name) },
@@ -140,6 +146,7 @@ function getAdvancedFilterValue(r: Receivable, key: string): unknown {
         case 'amount': return r.amount ?? null;
         case 'tributos': return r.tributos ?? null;
         case 'valor_liquido': return valorLiquido(r);
+        case 'valor_a_receber': return r.valor_a_receber ?? null;
         case 'due_date': return r.due_date ?? null;
         case 'status': return r.effective_status;
         case 'cost_center_name': return r.cost_center_name ?? '';
@@ -200,6 +207,10 @@ function renderReceberCell(key: string, r: ReceberRow): React.ReactNode {
             return r.tributos === undefined
                 ? <span className="text-sm text-gray-400 italic">—</span>
                 : <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(r.tributos)}</span>;
+        case 'valor_a_receber':
+            return r.valor_a_receber === undefined
+                ? <span className="text-sm text-gray-400 italic">—</span>
+                : <span className="text-sm font-medium text-gray-800 whitespace-nowrap">{fmt(r.valor_a_receber)}</span>;
         case 'valor_liquido': {
             const liquido = valorLiquido(r);
             return liquido === null
@@ -880,7 +891,10 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             receivableService.resolveTributos(data.map(r => r.id))
                 .then(m => {
                     if (seq !== loadSeq.current || m.size === 0) return;
-                    setRows(prev => prev.map(r => m.has(r.id) ? { ...r, tributos: m.get(r.id) } : r));
+                    setRows(prev => prev.map(r => {
+                        const t = m.get(r.id);
+                        return t ? { ...r, tributos: t.tributos, valor_a_receber: t.valorAReceber } : r;
+                    }));
                 });
 
             const comEmpreendimento = await receivableService.resolveEmpreendimentos(data, effectiveOrgId);
@@ -1156,6 +1170,7 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                     case 'amount':        va = a.amount ?? 0;                         vb = b.amount ?? 0;                         break;
                     case 'tributos':      va = a.tributos ?? 0;                       vb = b.tributos ?? 0;                       break;
                     case 'valor_liquido': va = valorLiquido(a) ?? a.amount ?? 0;      vb = valorLiquido(b) ?? b.amount ?? 0;      break;
+                    case 'valor_a_receber': va = a.valor_a_receber ?? a.amount ?? 0;  vb = b.valor_a_receber ?? b.amount ?? 0;  break;
                     case 'cost_center_name':    va = (a.cost_center_name ?? '').toLowerCase();    vb = (b.cost_center_name ?? '').toLowerCase();    break;
                     case 'plano_de_contas_name': va = (a.plano_de_contas_name ?? '').toLowerCase(); vb = (b.plano_de_contas_name ?? '').toLowerCase(); break;
                     case 'status':        va = a.effective_status;                    vb = b.effective_status;                    break;

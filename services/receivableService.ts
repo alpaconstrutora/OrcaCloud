@@ -168,24 +168,33 @@ async function resolveEmpreendimentos(rows: Receivable[], organizationId: string
 
 /**
  * Tributos de cada parcela (PIS/COFINS/INSS gerados por taxPayableService sobre
- * ela, ligados por `parcela_id`). Vem do campo computado `tributos_da_parcela`
- * — o banco soma na hora, nada guardado que possa ficar desatualizado.
- * Roda DEPOIS da lista, como `resolveEmpreendimentos`. Falha devolve mapa vazio:
- * a coluna fica em "—", a tabela não quebra.
+ * ela, ligados por `parcela_id`) e o valor a receber do cliente. Vêm dos campos
+ * computados `tributos_da_parcela` e `valor_esperado` (bruto − só os tributos
+ * RETIDOS pelo cliente) — o banco calcula na hora, nada guardado que possa ficar
+ * desatualizado. Roda DEPOIS da lista, como `resolveEmpreendimentos`. Falha
+ * devolve mapa vazio: as colunas ficam em "—", a tabela não quebra.
  */
-async function resolveTributos(ids: string[]): Promise<Map<string, number>> {
-    const out = new Map<string, number>();
+export interface TributosDaParcela {
+    tributos: number;
+    valorAReceber: number;
+}
+
+async function resolveTributos(ids: string[]): Promise<Map<string, TributosDaParcela>> {
+    const out = new Map<string, TributosDaParcela>();
     if (ids.length === 0) return out;
     try {
         const lotes = await Promise.all(chunk(ids).map(async lote => {
             const { data, error } = await supabase
                 .from('internal_transactions')
-                .select('id, tributos:tributos_da_parcela')
+                .select('id, amount, tributos:tributos_da_parcela, valor_a_receber:valor_esperado')
                 .in('id', lote);
             if (error) throw error;
-            return (data || []) as unknown as { id: string; tributos: number | null }[];
+            return (data || []) as unknown as { id: string; amount: number; tributos: number | null; valor_a_receber: number | null }[];
         }));
-        lotes.flat().forEach(r => out.set(r.id, Number(r.tributos) || 0));
+        lotes.flat().forEach(r => out.set(r.id, {
+            tributos: Number(r.tributos) || 0,
+            valorAReceber: r.valor_a_receber === null ? Number(r.amount) || 0 : Number(r.valor_a_receber),
+        }));
     } catch (e) {
         console.warn('[RECEIVABLE] Falha ao resolver tributos das parcelas:', e);
     }

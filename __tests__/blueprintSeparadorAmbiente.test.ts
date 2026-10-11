@@ -19,6 +19,7 @@ import {
 } from '../utils/blueprintKernel';
 import { sugerirRodapes } from '../utils/blueprintRodape';
 import { gerarDxf } from '../utils/blueprintDxf';
+import { DesenhistaDeProva, PAPEIS, desenharPlanta, enquadrar } from '../utils/blueprintExport';
 
 const H = 2800;
 
@@ -81,6 +82,26 @@ describe('separador de ambiente (F3)', () => {
     expect(sobreOSeparador).toHaveLength(0);
     const metros = sugestoes.reduce((soma, s) => soma + s.comprimentoMm, 0) / 1000;
     expect(metros).toBeCloseTo(18, 3);
+  });
+
+  it('PDF: o separador sai TRACEJADO — traços curtos ao longo da linha, não um traço contínuo', () => {
+    const linhasDeLimite = (m: BlueprintModel) => {
+      const d = new DesenhistaDeProva();
+      const op = { denominador: 100, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'h', data: new Date('2026-10-11T12:00:00Z') } as Parameters<typeof desenharPlanta>[2];
+      desenharPlanta(d, m, op, enquadrar(m, 100, PAPEIS[0], true));
+      // O cinza dos limites sem material (`blueprintExport.ts`, seção "Limites sem material").
+      return d.chamadas
+        .filter((c) => c.tipo === 'linha' && (c.args[4] as { cor?: string }).cor === '#888888')
+        .map((c) => c.args as [number, number, number, number]);
+    };
+    const tracos = linhasDeLimite(salao('separador'));
+    // 3000 mm a 1:100 = 30 mm de papel; passo de 3 mm (2 cheio + 1 vazio) → 10 traços.
+    expect(tracos.length).toBeGreaterThanOrEqual(9);
+    for (const [x1, y1, x2, y2] of tracos) {
+      expect(Math.abs(x1 - x2)).toBeLessThan(1e-6); // vertical, sobre o separador
+      expect(Math.hypot(x2 - x1, y2 - y1)).toBeLessThanOrEqual(2 + 1e-6);
+    }
+    expect(linhasDeLimite(salao('nada'))).toHaveLength(0);
   });
 
   it('DXF: o separador sai na camada PLANTA-SEPARADORES (tracejada); a parede não', () => {

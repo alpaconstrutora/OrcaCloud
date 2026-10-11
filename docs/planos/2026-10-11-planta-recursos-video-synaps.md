@@ -127,9 +127,14 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     ambiente abre "Nome do ambiente" com o nome atual ("Ambiente 2"), a área (25,7 m²), o foco e o
     texto selecionado; o ambiente aparece realçado; Esc fecha sem gravar. Print:
     `C:/tmp/f1f2-app/1-ambiente-realcado-e-nome.png`.
-  - **Não provado no app, de propósito**: o **Enter que grava** e o **Ctrl+Z** — gravariam no estudo,
-    e a prova foi combinada sem escrita. Para fechar: um estudo DESCARTÁVEL autorizado pelo usuário.
-    O caminho do Enter é o mesmo `NameSpace` do renomear da lista lateral, que já está em uso.
+  - ~~Não provado no app~~ → **Prova COM ESCRITA (11/10, autorizada pelo usuário: "pode usar a planta
+    26/09/2026")**: com a ferramenta Ambiente, digitar "Sala Teste" + **Enter** gravou o nome (o campo
+    reaberto mostra "Sala Teste"). ✅
+  - **Ctrl+Z: NÃO provado — e o motivo é o editor estar certo.** No estudo havia OUTRA PESSOA no ramo
+    (o usuário com a planta aberta), e o desfazer fica desligado nesse caso (`desfazerBloqueado =
+    colab.participantes.length > 0`; o botão diz "Desfazer — desligado enquanto há outra pessoa neste
+    ramo", lido no app). O Ctrl+Z não fez nada, como devia. Para provar o desfazer do nome falta um
+    estudo sem mais ninguém aberto.
 
 **F3 — Separador de ambiente na aba Arquitetura** · `BlueprintEditor.tsx` (ribbon), `BlueprintCanvas.tsx`, `utils/blueprintExport.ts`, `utils/blueprintDxf.ts`
 - Muda: botão "Separador de ambiente" na Arquitetura, que reaproveita `tool:'divisa'` com `kind:'DIVISA'` (sem bump). Traço próprio (tracejado fino) distinto de divisa de terreno; aparece no PDF e numa camada DXF própria.
@@ -161,8 +166,14 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   - Harness: "Divisas do lote" abre sozinho ~1 s após carregar quando o lote está fechado e sem lados
     classificados, e cobre o ribbon até Esc — o roteiro espera o diálogo com `pointer-events:auto`
     (os três diálogos do editor ficam SEMPRE no DOM).
-  - **Não provado no app, de propósito**: traçar o separador e a sala virar dois ambientes — grava no
-    estudo. Coberto pelo teste do kernel + harness do canvas; fechar com estudo descartável.
+  - **Prova COM ESCRITA no app (11/10, "Planta 26/09/2026", autorizada)**: tecla S, separador vertical
+    em x = 6 m cruzando as duas paredes do ambiente de 8,45 × 4,25 m → dois ambientes clicáveis (a
+    etiqueta antiga ficou do lado em que estava; o outro nasceu sem nome); nomeados "Entrada" e
+    "Estar". **No banco**, depois do autosave: 4 paredes, **1 limite `DIVISA`, 2 ambientes, etiquetas
+    "Entrada | Estar"** (`draft_saved_at` 17:41). ✅
+  - **PDF tracejado**: provado pela própria função de exportação (`desenharPlanta` com o
+    `DesenhistaDeProva`): o separador de 3 m sai em ≥ 9 traços verticais de ≤ 2 mm; sem separador,
+    nenhuma linha de limite. O teste **reprova** com o traço contínuo de antes (mutação conferida).
 
 **F4 — Conta-gotas (Modificar › Igualar propriedades)** · kernel `commands.ts`/`model.ts` (**bump 0.95**), `utils/blueprintIgualar.ts` (novo, puro), `BlueprintEditor.tsx` (aba Modificar ~12861)
 - Muda: comando novo `SetWallHeight`. Função pura `comandosParaIgualar(modelo, refId, alvoIds, quais)` cobre:
@@ -227,9 +238,9 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - Pronto quando: teste do pós-processamento com uma resposta JSON fixa; no app, um escaneado de exemplo gera paredes alinhadas ao fundo e o resultado mostra quantas paredes foram aceitas e quantas descartadas.
 
 ## Estado
-- [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [ ] F2 — **parcial**: tudo provado no app menos
-  Enter-grava e Ctrl+Z (ver F2) · [ ] F3 — **parcial**: tudo provado menos traçar o separador no app
-  (grava; ver F3) · [ ] F4 · [ ] F5
+- [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [ ] F2 — **parcial**: falta só o Ctrl+Z do nome
+  no app (bloqueado pela colaboração enquanto havia outra pessoa no ramo — ver F2) · [x] F3 — `932030a5`,
+  provada no app com escrita + PDF/DXF por teste · [ ] F4 · [ ] F5
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

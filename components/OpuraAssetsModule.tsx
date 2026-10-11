@@ -1788,8 +1788,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                     ))}
                                     <td aria-hidden="true"></td>
                                     {assetTableColumns.visibleColumns.includes('actions') && (() => {
-                                      // Visível: ver · editar · duplicar · reservar (excluir saiu a pedido do usuário
-                                      // em 2026-10-11), mais movimentar. O ⋮ guarda só o que é operação do bem.
+                                      // Visível: ver · editar · duplicar · reservar (excluir foi para o ⋮ "mais opções"
+                                      // a pedido do usuário em 2026-10-11), mais movimentar. O ⋮ guarda só o que é operação do bem.
                                       return (
                                         <td className="px-6 py-2.5 text-right">
                                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -1822,7 +1822,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                             />
                                             <InlineDisclosureMenu
                                               menuItems={acoesSecundariasDoAtivo(asset)}
-                                              showDelete={false}
+                                              onDelete={() => handleDeleteAsset(asset)}
+                                              deleteDisabled={asset.status === 'em_uso'}
+                                              deleteDisabledTitle="Ativo alocado em uma obra — registre a devolução antes de excluir"
                                             />
                                           </div>
                                         </td>

@@ -5491,9 +5491,10 @@ describe('BlueprintEditor · seções do painel ordenáveis', () => {
   it('nasce Pavimentos · Camadas · Componentes · Ambientes, respeita a ordem salva e ignora id desconhecido', async () => {
     localStorage.setItem('blueprint:ordemDasSecoes', JSON.stringify(['ambientes', 'nada', 'pavimentos']));
     await montar();
-    // Seção que a ordem salva não conhece entra no fim, na ordem de fábrica (Camadas, 04/10/2026).
-    expect(ordem()).toEqual(['ambientes', 'pavimentos', 'camadas', 'componentes']);
-    expect(screen.getAllByRole('button', { name: /arrastar a seção/i })).toHaveLength(4);
+    // Seção que a ordem salva não conhece entra no fim, na ordem de fábrica (Camadas, 04/10/2026;
+    // Biblioteca, F9 de 11/10/2026).
+    expect(ordem()).toEqual(['ambientes', 'pavimentos', 'camadas', 'componentes', 'biblioteca']);
+    expect(screen.getAllByRole('button', { name: /arrastar a seção/i })).toHaveLength(5);
   });
 
   // O arrasto em si não se prova em jsdom (o dnd-kit precisa de geometria

@@ -347,6 +347,7 @@ import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIP
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelFolhas from './PainelFolhas';
+import PainelBibliotecaComponentes from './PainelBibliotecaComponentes';
 import PainelEsquadrias from './PainelEsquadrias';
 import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
 import { medidasNaDescricao } from '../../utils/blueprintItemPorMedida';
@@ -1014,6 +1015,9 @@ const SECOES_DO_PAINEL = [
   // Antes de "Ambientes" porque é a ordem do trabalho e a do vocabulário: aqui
   // está o que se DESENHA, ali o que a topologia DERIVA do desenho.
   { id: 'componentes', rotulo: 'Componentes', naVista: false, no3d: true },
+  // F9 (11/10/2026): a BIBLIOTECA arrastável — logo depois do inventário, de onde se tira a peça.
+  // Fechada por padrão (abre pelo botão Biblioteca da Arquitetura); só na planta, onde se solta.
+  { id: 'biblioteca', rotulo: 'Biblioteca', naVista: false, no3d: false },
   { id: 'ambientes', rotulo: 'Ambientes', naVista: false, no3d: false },
   // Até 13/09/2026 havia mais doze aqui — Do PDF, Do IFC, Do DXF, Do BCF,
   // Comentários, Conflitos, Elétrica, Medições, Quantitativos, Orçamento,
@@ -1365,6 +1369,7 @@ const SECOES_ABERTAS_PADRAO: Record<SecaoDoPainel, boolean> = {
   camadas: true,
   // O editor também a abre sozinho ao selecionar um componente.
   componentes: true,
+  biblioteca: false,
   ambientes: true,
 };
 
@@ -7054,10 +7059,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (criados.length > 0) selecionar(criados);
   }
   /** O componente nasce com as medidas do catálogo, de pé; o painel gira e ajusta. */
-  function adicionarComponente(at: Point) {
+  function adicionarComponente(at: Point, tipo: TipoDeComponente = tipoDeComponente) {
     if (!levelId) return;
     // FAMÍLIAS ANINHADAS (P2.18): um conjunto entra pai + filhos; a seleção fica no pai.
-    const comando: Command = ehConjunto(tipoDeComponente) ? { type: 'AddConjunto', levelId, at, tipoId: tipoDeComponente } : { type: 'AddComponente', levelId, at, tipoId: tipoDeComponente };
+    // F9: `tipo` explícito = o soltar da BIBLIOTECA (não mexe na ferramenta armada).
+    const comando: Command = ehConjunto(tipo) ? { type: 'AddConjunto', levelId, at, tipoId: tipo } : { type: 'AddComponente', levelId, at, tipoId: tipo };
     // A LOUÇA LANÇA OS PONTOS DELA (27/09/2026): o vaso desenhado não era visto
     // pelo esgoto automático, que só lê pontos. Peça e pontos num lote só — um
     // Ctrl+Z desfaz os dois. Recusa do kernel: o `run` abaixo mostra o motivo.
@@ -11791,6 +11797,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 rotulo="Mobiliário"
                 onEscolher={escolherComponente}
               />
+              {/* F9 (11/10/2026): a BIBLIOTECA com miniaturas — abre a seção do painel lateral, de onde se
+                  arrasta a peça para a planta. Não é modal: a planta fica livre para receber o soltar. */}
+              {!emVista && (
+                <BotaoDoRibbon
+                  icone={LayoutGrid}
+                  rotulo="Biblioteca"
+                  ativo={secoes.biblioteca}
+                  onClick={() => alternarSecao('biblioteca')}
+                  ajuda="Móveis, louças e equipamentos com miniatura, busca e família — arraste para a planta (um Ctrl+Z desfaz)"
+                />
+              )}
               {/* JUNTAR não desenha — CORRIGE. Fica junto das de desenho mesmo assim
                   porque é onde o erro que ela conserta nasce: contorno traçado à mão,
                   ou gerado do PDF, com o canto passando do encontro. */}
@@ -15040,6 +15057,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   anotacoes={anotacoesDoNivelAtivo}
                   tipoDeAnotacao={tipoDeAnotacao}
                   anotacaoRetangulo={anotacaoRetangulo}
+                  onSoltarComponente={(tipoId, at) => adicionarComponente(at, tipoId)}
                   onAddAnotacao={adicionarAnotacao}
                   onAddTrecho={adicionarTrecho}
                   redeEmUmClique={prumadaDeRede != null}
@@ -15365,6 +15383,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             </SecaoAccordion>
           )}
 
+          {idDaSecao === 'biblioteca' && secaoVisivel('biblioteca') && (
+            <SecaoAccordion alca={alca} titulo="Biblioteca" aberta={secoes.biblioteca} onAlternar={() => alternarSecao('biblioteca')}>
+              <PainelBibliotecaComponentes
+                ativo={editor.tool === 'componente' ? tipoDeComponente : null}
+                onEscolher={(componente) => escolherComponente({ tool: 'componente', componente })}
+                semPavimento={!levelId}
+              />
+            </SecaoAccordion>
+          )}
           {idDaSecao === 'ambientes' && secaoVisivel('ambientes') && (
           <SecaoAccordion alca={alca}
             titulo="Ambientes"

@@ -131,6 +131,8 @@ export default function PainelVersoes({
   const [papelId, setPapelId] = useState('A4');
   const [paisagem, setPaisagem] = useState(false);
   const [cotas, setCotas] = useState(false);
+  /** F9: móveis na planta TÉCNICA (contorno + símbolo, traço fino). Desligado = a técnica de sempre. */
+  const [mobiliario, setMobiliario] = useState(false);
   /** Quais pranchas entram no PDF/PNG/DXF — planta e/ou as quatro elevações. */
   const [pranchas, setPranchas] = useState<PranchaExport[]>(
     pranchasIniciais && pranchasIniciais.length > 0 ? pranchasIniciais : ['planta'],
@@ -395,6 +397,7 @@ export default function PainelVersoes({
       // procedência em `Pset_OpuraPlanta`; as outras saídas ignoram.
       studyId: study.id,
       cotas,
+      mobiliario: mobiliario || undefined,
       eixos: mostrarEixos,
       zona,
       // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
@@ -712,6 +715,13 @@ export default function PainelVersoes({
                   onChange={(e) => setCotas(e.target.checked)}
                 />
                 <Ruler className="h-3 w-3" /> Cotas
+              </label>
+              <label
+                className="flex items-center gap-1.5 text-[11px] text-slate-600"
+                title="Móveis, louças e equipamentos na planta técnica: contorno e símbolo, traço fino (a humanizada já os leva coloridos)"
+              >
+                <input type="checkbox" checked={mobiliario} onChange={(e) => setMobiliario(e.target.checked)} />
+                Mobiliário
               </label>
             </div>
             {cotas && (

@@ -32,6 +32,7 @@ import {
   type Point,
   type Space,
   type TipoDeAmbiente,
+  type TipoDeComponente,
   type Wall,
 } from './blueprintKernel';
 import { usoDoNome, type UsoDoAmbiente } from './blueprintPrograma';
@@ -503,6 +504,52 @@ export function tracosDoSimbolo(simbolo: (typeof CATALOGO_DE_COMPONENTES)[keyof 
  * segmentos e polilinhas (círculos e elipses viram polígonos de 24 lados). É
  * o que o PDF desenha; o canvas continua com arcos verdadeiros.
  */
+/**
+ * O SÍMBOLO POR TIPO (F9, 11/10/2026 — "símbolos 2D por tipo mais fiéis"): o do `simbolo` da
+ * ficha, mais o detalhe que distingue as peças que dividem símbolo — o sofá ganha os assentos, a
+ * cama de solteiro um travesseiro só, a mesa as cadeiras, o rack a TV, a estante as prateleiras, o
+ * criado e a escrivaninha a gaveta. FONTE ÚNICA: o canvas, os dois PDFs e a miniatura da biblioteca
+ * leem daqui (antes o canvas tinha um `switch` próprio, cópia deste).
+ */
+export function tracosDoComponente(tipoId: TipoDeComponente): TracoDoSimbolo[] {
+  const ficha = CATALOGO_DE_COMPONENTES[tipoId];
+  if (!ficha) return [];
+  switch (tipoId) {
+    case 'CAMA_SOLTEIRO':
+      return [
+        { tipo: 'linha', a: [0, 0.85], b: [1, 0.85] },
+        { tipo: 'poli', pontos: [[0.15, 0.7], [0.85, 0.7], [0.85, 0.82], [0.15, 0.82]] },
+        { tipo: 'linha', a: [0, 0.55], b: [1, 0.55] },
+      ];
+    case 'SOFA':
+      return [...tracosDoSimbolo('SOFA'), { tipo: 'linha', a: [0.37, 0], b: [0.37, 0.75] }, { tipo: 'linha', a: [0.63, 0], b: [0.63, 0.75] }];
+    case 'MESA_JANTAR':
+      return [
+        { tipo: 'poli', pontos: [[0.05, 0.18], [0.95, 0.18], [0.95, 0.82], [0.05, 0.82]] },
+        { tipo: 'poli', pontos: [[0.2, 0], [0.38, 0], [0.38, 0.14], [0.2, 0.14]] },
+        { tipo: 'poli', pontos: [[0.62, 0], [0.8, 0], [0.8, 0.14], [0.62, 0.14]] },
+        { tipo: 'poli', pontos: [[0.2, 0.86], [0.38, 0.86], [0.38, 1], [0.2, 1]] },
+        { tipo: 'poli', pontos: [[0.62, 0.86], [0.8, 0.86], [0.8, 1], [0.62, 1]] },
+      ];
+    case 'CADEIRA':
+      return [{ tipo: 'linha', a: [0, 0.8], b: [1, 0.8] }, { tipo: 'poli', pontos: [[0.12, 0.08], [0.88, 0.08], [0.88, 0.72], [0.12, 0.72]] }];
+    case 'RACK':
+      return [{ tipo: 'linha', a: [0, 0.5], b: [1, 0.5] }, { tipo: 'poli', pontos: [[0.2, 0.62], [0.8, 0.62], [0.8, 0.78], [0.2, 0.78]] }];
+    case 'ESTANTE':
+      return [{ tipo: 'linha', a: [0.33, 0], b: [0.33, 1] }, { tipo: 'linha', a: [0.67, 0], b: [0.67, 1] }, { tipo: 'linha', a: [0, 0.1], b: [1, 0.1] }];
+    case 'CRIADO':
+      return [{ tipo: 'linha', a: [0, 0.5], b: [1, 0.5] }, { tipo: 'linha', a: [0.42, 0.25], b: [0.58, 0.25] }];
+    case 'ESCRIVANINHA':
+      return [{ tipo: 'poli', pontos: [[0.68, 0.08], [0.95, 0.08], [0.95, 0.92], [0.68, 0.92]] }, { tipo: 'linha', a: [0.68, 0.5], b: [0.95, 0.5] }];
+    case 'BANCADA_SECA':
+      return [{ tipo: 'linha', a: [0, 0.85], b: [1, 0.85] }];
+    case 'GELADEIRA':
+      return [...tracosDoSimbolo('GELADEIRA'), { tipo: 'linha', a: [0.85, 0.1], b: [0.85, 0.5] }];
+    default:
+      return tracosDoSimbolo(ficha.simbolo);
+  }
+}
+
 export function simboloNoMundo(c: Componente): { contorno: Point[]; tracos: Point[][]; cores: { fundo: string; traco: string } } {
   const anel = contornoDoComponente(c);
   const ux = { x: anel[1].x - anel[0].x, y: anel[1].y - anel[0].y };
@@ -510,7 +557,7 @@ export function simboloNoMundo(c: Componente): { contorno: Point[]; tracos: Poin
   const P = (fx: number, fy: number): Point => ({ x: anel[0].x + ux.x * fx + uy.x * fy, y: anel[0].y + ux.y * fx + uy.y * fy });
   const menor = Math.min(c.larguraMm, c.profundidadeMm);
   const tracos: Point[][] = [];
-  for (const t of tracosDoSimbolo(CATALOGO_DE_COMPONENTES[c.tipoId]?.simbolo ?? 'CAIXA')) {
+  for (const t of tracosDoComponente(c.tipoId)) {
     if (t.tipo === 'linha') tracos.push([P(...t.a), P(...t.b)]);
     else if (t.tipo === 'poli') tracos.push([...t.pontos.map((p) => P(...p)), P(...t.pontos[0])]);
     else {

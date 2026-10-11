@@ -399,6 +399,29 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F9 — Biblioteca de móveis arrastável** · `components/blueprint/PainelBibliotecaComponentes.tsx` (novo), `BlueprintCanvas.tsx` (drop), `BlueprintEditor.tsx`
 - Muda: grade com miniatura por tipo/conjunto, busca e família; `dataTransfer` com `tipoId`; o drop converte para mm (Y espelhado) e chama `adicionarComponente(at)`. Símbolos 2D por tipo mais fiéis. Opção de exibir mobiliário na planta técnica do PDF.
 - Pronto quando: teste da conversão tela→mm no drop; no app, arrastar sofá e cama os insere no ponto solto, e um Ctrl+Z desfaz.
+- **Feito na execução (11/10, sem bump de kernel — nada muda no modelo):**
+  - `utils/blueprintBiblioteca.ts` (puro): o catálogo como itens (conjuntos com a caixa dos filhos), a busca
+    sem acento/caixa por todas as palavras, o filtro por família (+ "Conjuntos"), `tipoDoArraste` (só tipo
+    do catálogo), `pontoDoSoltar` (desfaz a vista: Y do modelo SOBE; arredonda a 10 mm) e
+    `miniaturaDoComponente` (o símbolo da planta encaixado num quadrado de SVG; conjunto = um contorno por
+    filho).
+  - Painel "Biblioteca" (seção NOVA do painel lateral, não modal — a planta fica livre para receber o soltar;
+    fechada por padrão, abre pelo botão Biblioteca da Arquitetura, ao lado de Mobiliário): busca, família,
+    grade 3 colunas com miniatura, rótulo e medida em cm. Arrastar → o canvas aceita só o tipo próprio
+    (`application/x-opura-componente`) e põe a peça no ponto solto pelo MESMO `adicionarComponente` do clique
+    (louça lança os pontos no mesmo lote; um Ctrl+Z). Clicar arma a ferramenta (caminho do teclado).
+  - Símbolos por TIPO: `tracosDoComponente` (fonte única — o canvas perdeu o `switch` próprio que copiava
+    `tracosDoSimbolo`): sofá com os assentos, solteiro com um travesseiro, mesa com as cadeiras, cadeira com
+    o assento, rack com a TV, estante com prateleiras, criado e escrivaninha com gaveta, bancada seca com o
+    rodabanca, geladeira com o puxador. Fogão e louças como antes (teste da humanizada intacto).
+  - PDF: opção "Mobiliário" no exportar (ao lado de Cotas, desligada por padrão) — a planta TÉCNICA sai com
+    contorno + símbolo de cada peça em traço fino cinza; o pai do conjunto não (é agrupamento); a humanizada
+    segue com os coloridos dela (teste). DXF: fora desta fase.
+  - Prova: `__tests__/blueprintBiblioteca.test.ts` (12), `components/PainelBibliotecaComponentes.test.tsx` (4).
+    ✅ Olhar SÓ-LEITURA no app ("Planta 26/09/2026", 11/10): o botão Biblioteca abre a seção; 28 peças com
+    miniatura; "cama" acha casal, solteiro e o conjunto de dormitório; a miniatura é arrastável; o rascunho
+    do estudo NÃO mudou (draft_saved_at igual antes e depois). ⏳ Prova COM ESCRITA (arrastar sofá e cama →
+    peça no ponto solto, Ctrl+Z) pendente do estudo de testes livre.
 
 **F10 — Modelos glTF dos componentes** · `FichaDoComponente` (`model.ts:1736`) ganha `modelo3d?` (fora do hash, como o `uid`); bucket `blueprint-modelos-3d` + migration (REGRA #7); `utils/blueprintModelos3d.ts`; `Blueprint3DViewer.tsx:1387`
 - Muda: curadoria de modelos **CC0** (fonte e licença registradas por arquivo, em `docs/planos/…` + tabela de créditos); `useGLTF` com escala para a ficha (largura × profundidade × altura); fallback para a caixa se faltar ou falhar; peso máximo por modelo. O IFC continua com a caixa.
@@ -437,7 +460,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   (cota gravada e desfeita) + PDF/DXF por teste
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
-  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [ ] F9 · [ ] F10
+  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [~] F9 — no ar; prova com escrita pendente do estudo livre · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

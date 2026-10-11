@@ -69,6 +69,7 @@ import { anotacoesNaOrdem, cantosDoRetangulo, contornoDaNuvem, cotaAngularDesenh
 import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
 import { linhasDoPadrao } from '../../utils/blueprintPadroes';
 import { simboloDasFolhas } from '../../utils/blueprintFolhas';
+import { MIME_DO_COMPONENTE, pontoDoSoltar, tipoDoArraste } from '../../utils/blueprintBiblioteca';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -95,7 +96,7 @@ import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
 /** Identidade estável para o padrão do prop (um `new Set()` no parâmetro redesenharia a cada render). */
 const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
 import { COR_DA_FASE } from '../../utils/blueprintFases';
-import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
+import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tracosDoComponente, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
 import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
@@ -1537,6 +1538,11 @@ interface Props {
   tipoDeAnotacao?: TipoDeAnotacao;
   /** F7: a região hachurada em RETÂNGULO — dois cliques nos cantos opostos viram os 4 vértices. */
   anotacaoRetangulo?: boolean;
+  /**
+   * F9 (11/10/2026): a miniatura da BIBLIOTECA solta sobre o canvas — o tipo e o ponto em mm
+   * (`pontoDoSoltar`, Y do modelo para cima). Ausente = o canvas não aceita o arraste.
+   */
+  onSoltarComponente?: (tipoId: TipoDeComponente, at: Point) => void;
   onAddAnotacao?: (tipo: TipoDeAnotacao, pontos: Point[]) => void;
   /** GUARDA-CORPO (E7.3): dois cliques; o tipo ativo vem da barra. */
   tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
@@ -1750,6 +1756,7 @@ export default function BlueprintCanvas({
   anotacoes = SEM_ANOTACOES,
   tipoDeAnotacao = 'TEXTO',
   anotacaoRetangulo = false,
+  onSoltarComponente,
   onAddAnotacao,
   nucleos: nucleosReais = SEM_NUCLEOS,
   onAddNucleo,
@@ -7530,104 +7537,22 @@ export default function BlueprintCanvas({
       if (larguraPx >= 10 && profPx >= 10) {
         ctx.lineWidth = 1;
         ctx.strokeStyle = cor;
-        const simbolo = CATALOGO_DE_COMPONENTES[c.tipoId]?.simbolo ?? 'CAIXA';
-        switch (simbolo) {
-          case 'CAMA': // cabeceira ao fundo (y=1), travesseiros, dobra do lençol
-            linha(P(0, 0.85), P(1, 0.85));
-            poli([P(0.08, 0.7), P(0.46, 0.7), P(0.46, 0.82), P(0.08, 0.82)]);
-            poli([P(0.54, 0.7), P(0.92, 0.7), P(0.92, 0.82), P(0.54, 0.82)]);
-            linha(P(0, 0.55), P(1, 0.55));
-            break;
-          case 'SOFA': // encosto ao fundo e braços
-            linha(P(0, 0.75), P(1, 0.75));
-            linha(P(0.12, 0), P(0.12, 0.75));
-            linha(P(0.88, 0), P(0.88, 0.75));
-            break;
-          case 'MESA': // tampo com cadeiras sugeridas nos lados longos
-            poli([P(0.1, 0.1), P(0.9, 0.1), P(0.9, 0.9), P(0.1, 0.9)]);
-            break;
-          case 'VASO': { // bacia oval + caixa ao fundo
-            const cc = P(0.5, 0.4);
+        // F9: os traços do TIPO (`tracosDoComponente`) — a mesma fonte do PDF e da miniatura da
+        // biblioteca. Frações locais 0..1: x ao longo da largura, y da frente ao encosto.
+        for (const tr of tracosDoComponente(c.tipoId)) {
+          if (tr.tipo === 'linha') linha(P(...tr.a), P(...tr.b));
+          else if (tr.tipo === 'poli') poli(tr.pontos.map(([fx, fy]) => P(fx, fy)));
+          else if (tr.tipo === 'circulo') {
+            const cc = P(...tr.c);
             ctx.beginPath();
-            ctx.ellipse(cc.x, cc.y, larguraPx * 0.4, profPx * 0.32, Math.atan2(ux.y, ux.x), 0, Math.PI * 2);
+            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * tr.r, 0, Math.PI * 2);
             ctx.stroke();
-            poli([P(0.1, 0.78), P(0.9, 0.78), P(0.9, 1), P(0.1, 1)]);
-            break;
-          }
-          case 'LAVATORIO': {
-            const cc = P(0.5, 0.5);
+          } else {
+            const cc = P(...tr.c);
             ctx.beginPath();
-            ctx.ellipse(cc.x, cc.y, larguraPx * 0.36, profPx * 0.34, Math.atan2(ux.y, ux.x), 0, Math.PI * 2);
+            ctx.ellipse(cc.x, cc.y, larguraPx * tr.rx, profPx * tr.ry, Math.atan2(ux.y, ux.x), 0, Math.PI * 2);
             ctx.stroke();
-            break;
           }
-          case 'BOX': // diagonal + ralo
-            linha(P(0, 0), P(1, 1));
-            linha(P(0.42, 0.5), P(0.58, 0.5));
-            break;
-          case 'PIA': // cuba à esquerda
-            poli([P(0.1, 0.2), P(0.42, 0.2), P(0.42, 0.8), P(0.1, 0.8)]);
-            break;
-          case 'FOGAO': { // quatro bocas
-            for (const [fx, fy] of [[0.28, 0.3], [0.72, 0.3], [0.28, 0.7], [0.72, 0.7]]) {
-              const cc = P(fx, fy);
-              ctx.beginPath();
-              ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.14, 0, Math.PI * 2);
-              ctx.stroke();
-            }
-            break;
-          }
-          case 'GELADEIRA':
-            linha(P(0, 0.6), P(1, 0.6));
-            break;
-          case 'TANQUE':
-            poli([P(0.15, 0.15), P(0.85, 0.15), P(0.85, 0.85), P(0.15, 0.85)]);
-            break;
-          case 'MAQUINA': {
-            const cc = P(0.5, 0.5);
-            ctx.beginPath();
-            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.3, 0, Math.PI * 2);
-            ctx.stroke();
-            break;
-          }
-          case 'ARMARIO': // portas: divisões + X de guarda-roupa
-            linha(P(0, 0), P(1, 1));
-            linha(P(1, 0), P(0, 1));
-            break;
-          case 'CADEIRA':
-            linha(P(0, 0.8), P(1, 0.8));
-            break;
-          // HVAC (E11.1): a reserva de espaço — símbolo simples, folga tracejada em volta.
-          case 'CONDENSADORA': { // ventilador circular + diagonais de grade
-            const cc = P(0.5, 0.5);
-            ctx.beginPath();
-            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.38, 0, Math.PI * 2);
-            ctx.stroke();
-            linha(P(0.5, 0.5), P(0.5, 0.12));
-            linha(P(0.5, 0.5), P(0.83, 0.69));
-            linha(P(0.5, 0.5), P(0.17, 0.69));
-            break;
-          }
-          case 'EVAPORADORA': // caixa fina com a saída de ar na frente
-            linha(P(0.08, 0.35), P(0.92, 0.35));
-            linha(P(0.08, 0.2), P(0.92, 0.2));
-            break;
-          case 'EXAUSTOR': { // hélice: círculo com X
-            const cc = P(0.5, 0.5);
-            ctx.beginPath();
-            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * 0.4, 0, Math.PI * 2);
-            ctx.stroke();
-            linha(P(0.2, 0.2), P(0.8, 0.8));
-            linha(P(0.8, 0.2), P(0.2, 0.8));
-            break;
-          }
-          case 'RESERVA': // hachura diagonal: é reserva, não peça
-            for (const f of [0.25, 0.5, 0.75]) linha(P(0, f), P(f, 0));
-            for (const f of [0.25, 0.5, 0.75]) linha(P(f, 1), P(1, f));
-            linha(P(0, 1), P(1, 0));
-            break;
-          default:
-            break;
         }
       }
       // A FOLGA de manutenção da reserva (E11.1), tracejada e fina: é o que o clash confere.
@@ -11440,6 +11365,20 @@ export default function BlueprintCanvas({
         onDoubleClick={aoDuploClique}
         onPointerUp={aoSoltar}
         onKeyDown={aoTeclar}
+        // F9: a miniatura da biblioteca. Só o NOSSO tipo de arraste é aceito (texto solto de
+        // outra janela não vira peça); `preventDefault` no dragover é o que libera o drop.
+        onDragOver={(e) => {
+          if (!onSoltarComponente || !Array.from(e.dataTransfer.types).includes(MIME_DO_COMPONENTE)) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }}
+        onDrop={(e) => {
+          const tipoId = tipoDoArraste(e.dataTransfer.getData(MIME_DO_COMPONENTE));
+          if (!onSoltarComponente || !tipoId || !canvasRef.current) return;
+          e.preventDefault();
+          onSoltarComponente(tipoId, pontoDoSoltar(e, canvasRef.current.getBoundingClientRect(), vista));
+          canvasRef.current.focus();
+        }}
         onContextMenu={(e) => e.preventDefault()}
       />
 

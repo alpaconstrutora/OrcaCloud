@@ -41,7 +41,7 @@ import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } fro
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
 import { anotacoesNaOrdem, linhasDaRegiao } from './blueprintAnotacoes';
 import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
-import { acabamentosDoAmbiente, contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
+import { acabamentosDoAmbiente, contornoEmPlanta, ehConjunto, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { linhasDoPadrao } from './blueprintPadroes';
 import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
@@ -347,6 +347,12 @@ export interface OpcoesExportacao {
    * aviso (`AVISO_HUMANIZADA`).
    */
   humanizada?: boolean;
+  /**
+   * MOBILIÁRIO NA PLANTA TÉCNICA (F9, 11/10/2026): os componentes com o contorno e o símbolo do tipo
+   * (`simboloNoMundo` — o mesmo da tela), em traço fino cinza. Ausente/false = a técnica sem móveis, como
+   * sempre; a humanizada já os leva coloridos.
+   */
+  mobiliario?: boolean;
   /** PRANCHAS (E8.3): carimbo da organização e a numeração da folha no conjunto. */
   carimboDaOrg?: { empresa: string; responsavel: string; registro: string; cliente: string; endereco: string; camposExtras: { rotulo: string; valor: string }[] };
   prancha?: { numero: string; total: number; titulo: string };
@@ -726,6 +732,20 @@ export function desenharPlanta(
           }
         }
       }
+    }
+  }
+
+  // ── MOBILIÁRIO NA PLANTA TÉCNICA (F9): só com a opção, e nunca por cima da humanizada ─────────
+  if (opcoes.mobiliario && !opcoes.humanizada) {
+    const fino = { espessuraMm: ESPESSURA_FINA_MM, cor: '#555555' };
+    const detalhe = { espessuraMm: 0.1, cor: '#555555' };
+    for (const c of model.componentes ?? []) {
+      // O CONJUNTO é agrupamento: os filhos desenham por si.
+      if (ehConjunto(c.tipoId)) continue;
+      const { contorno, tracos: linhas } = simboloNoMundo(c);
+      const fechado = [...contorno, contorno[0]];
+      for (let i = 0; i + 1 < fechado.length; i++) d.linha(px(fechado[i].x), py(fechado[i].y), px(fechado[i + 1].x), py(fechado[i + 1].y), fino);
+      for (const poli of linhas) for (let i = 0; i + 1 < poli.length; i++) d.linha(px(poli[i].x), py(poli[i].y), px(poli[i + 1].x), py(poli[i + 1].y), detalhe);
     }
   }
 

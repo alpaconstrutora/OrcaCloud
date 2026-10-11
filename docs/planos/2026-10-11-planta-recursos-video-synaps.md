@@ -307,9 +307,9 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     camadas da parede (`PainelCamadasParede`) e do piso/forro (`EditorDeCamadas`). Tirar a hachura REMOVE
     a chave (`camadaComHachura`).
   - DXF: fora desta fase (o DXF segue sem hachuras, como já declarava).
-  - Prova: `__tests__/blueprintPadroes.test.ts` (13). **No app com escrita: pendente** — a rodada parou na
-    trava de segurança (havia outra pessoa no estudo); roteiro pronto: selecionar a parede → "Dividir em
-    camadas" → hachura Tijolo → banco → Ctrl+Z ×2.
+  - Prova: `__tests__/blueprintPadroes.test.ts` (13). ✅ **No app com escrita (11/10, "Planta 11/10/2026",
+    estudo sozinho)**: selecionar a parede de baixo → "Dividir em camadas" → hachura Tijolo (aparecem escala
+    e giro) → **no banco, a camada com `hachura: TIJOLO, 100 %, 0°`** → Ctrl+Z ×2 → parede homogênea de novo.
 
 **F7 — Anotação de forma com preenchimento** · kernel (**bump**): `HACHURA` ganha `padraoVisual`, `opacidade`, `traco {tracoMm, espacoMm}`, `ordem`; modo retângulo; `BlueprintCanvas.tsx`, `blueprintExport.ts`, `PainelAnotacaoSelecionada.tsx`
 - Muda: retângulo em 2 cliques; "Trazer para frente / Enviar para trás" mexem em `ordem`; fundo sólido opaco disponível.
@@ -358,7 +358,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
   app com escrita: banco 4×250 e Ctrl+Z 4×150 · [x] F5 — `90d58534`, kernel 0.95.0, provada no app com escrita
   (cota gravada e desfeita) + PDF/DXF por teste
-- [ ] F6 — **parcial**: kernel 0.96.0, tela, PDF e edição provados por teste; falta a prova no app com escrita · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
+- [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

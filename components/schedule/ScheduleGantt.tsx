@@ -32,6 +32,10 @@ function stripWbsPrefix(name: string, wbsCode?: string): string {
     return rest || name;
 }
 
+/** Cor da linha de dependência — e da SETA, que acompanha a linha. */
+const COR_DEPENDENCIA = '#94a3b8';
+const COR_DEPENDENCIA_CRITICA = '#ef4444';
+
 interface ScheduleGanttProps {
     hierarchy: HierarchyNode[];
     schedule: ProjectSchedule;
@@ -766,10 +770,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         zIndex: isDraggingTask === item.id ? 30 : undefined,
                                     }}
                                 >
-                                    {showFloat && itemSchedule.totalFloat && itemSchedule.totalFloat > 0 && (
+                                    {/* `(… ?? 0) > 0`, não `totalFloat && …`: com folga ZERO (toda tarefa
+                                        crítica) a expressão valia 0 e o React escrevia "0" ao lado da barra. */}
+                                    {showFloat && (itemSchedule.totalFloat ?? 0) > 0 && (
                                         <div
                                             className="absolute top-0 h-6 bg-amber-100/60 border border-dashed border-amber-300 rounded-r z-[1]"
-                                            style={{ left: `${width}px`, width: `${itemSchedule.totalFloat * pxPerDay}px` }}
+                                            style={{ left: `${width}px`, width: `${(itemSchedule.totalFloat ?? 0) * pxPerDay}px` }}
                                             title={`Folga total: ${itemSchedule.totalFloat} dia(s)`}
                                         />
                                     )}
@@ -1250,9 +1256,28 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
                         <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-[25]" style={{ minHeight: `${rowIdx * 36}px`, width: `${totalWidth + getGanttSidebarTotal()}px` }}>
                             <defs>
-                                <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orientation="auto">
-                                    <path d="M0,0 L6,2 L0,4 Z" fill="#94a3b8" />
-                                </marker>
+                                {/* Setas das dependências (11/10/2026: *"dobrar o tamanho da seta. Esta
+                                    muito pequena. a cor da seta deve ser a mesma cor da linha de
+                                    conexão"*). Era UM marcador cinza 6×4 — a linha crítica, vermelha,
+                                    terminava em seta cinza. Agora um por cor, 12×8 em px de tela
+                                    (userSpaceOnUse: não escala com a espessura da linha, então crítica e
+                                    normal têm o mesmo tamanho). `orient` — o atributo estava escrito
+                                    `orientation`, que não existe: a seta apontava sempre para a
+                                    direita, mesmo com a linha chegando pela direita. */}
+                                {([['normal', COR_DEPENDENCIA], ['critica', COR_DEPENDENCIA_CRITICA]] as const).map(([tipo, cor]) => (
+                                    <marker
+                                        key={tipo}
+                                        id={`gantt-seta-${tipo}`}
+                                        markerUnits="userSpaceOnUse"
+                                        markerWidth="12"
+                                        markerHeight="8"
+                                        refX="11"
+                                        refY="4"
+                                        orient="auto"
+                                    >
+                                        <path d="M0,0 L12,4 L0,8 Z" fill={cor} />
+                                    </marker>
+                                ))}
                             </defs>
                             {(() => {
                                 const tasks = schedule.itemSchedules || [];
@@ -1287,7 +1312,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         else if (pred.type === 'SF') { startX = predLeft; endX = taskRight; }
 
                                         const isCritical = task.isCritical && predTask.isCritical;
-                                        const color = isCritical ? '#ef4444' : '#94a3b8';
+                                        const color = isCritical ? COR_DEPENDENCIA_CRITICA : COR_DEPENDENCIA;
 
                                         const midX = startX + (endX - startX) / 2;
                                         const d = `M ${startX} ${predY} L ${midX} ${predY} L ${midX} ${taskY} L ${endX} ${taskY}`;
@@ -1299,7 +1324,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                 fill="none"
                                                 stroke={color}
                                                 strokeWidth={isCritical ? 1.5 : 1}
-                                                markerEnd="url(#arrowhead)"
+                                                markerEnd={`url(#gantt-seta-${isCritical ? 'critica' : 'normal'})`}
                                                 className="transition-all duration-300"
                                             />
                                         );

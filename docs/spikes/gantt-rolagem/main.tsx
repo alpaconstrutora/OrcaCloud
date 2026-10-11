@@ -10,6 +10,7 @@
  *                       N = recuo de N passos (o que a tela faz hoje: abre com 1)
  *   ?navegar=0          desliga o recuo automático na borda esquerda
  *   ?layout=app         Gantt dentro do rolador da página, como na tela real
+ *   ?criticas=1         etapas pares críticas (folga 0), ímpares normais (folga 3d)
  *
  * `window.__harness` expõe colunas, linhas e o número de nós do DOM do Gantt.
  */
@@ -32,6 +33,8 @@ const params = new URLSearchParams(location.search);
 const N = Number(params.get('tarefas') ?? 300);
 const RECUO = Number(params.get('recuo') ?? 1);
 const NAVEGAR = params.get('navegar') !== '0';
+// `?criticas=1`: etapas pares críticas (folga 0), ímpares normais (folga 3d) — setas das duas cores.
+const CRITICAS = params.get('criticas') === '1';
 
 const INICIO = '2026-03-20';
 const FIM = '2027-03-20';
@@ -44,9 +47,12 @@ for (let g = 0; g * 10 < N; g++) {
     for (let k = 0; k < 10 && g * 10 + k < N; k++) {
         const idx = g * 10 + k;
         const ini = new Date('2026-03-20T12:00:00Z');
-        ini.setUTCDate(ini.getUTCDate() + (idx * 3) % 330);
+        // Com ?criticas=1, tarefas em SEQUÊNCIA (cada uma começa depois da anterior) — o caso
+        // comum, em que a linha FS chega pela esquerda.
+        ini.setUTCDate(ini.getUTCDate() + (CRITICAS ? (idx * 15) % 330 : (idx * 3) % 330));
         const fim = new Date(ini); fim.setUTCDate(fim.getUTCDate() + 12);
-        const s = { id: `i${idx}`, startDate: iso(ini), endDate: iso(fim), duration: 12, predecessors: idx % 10 ? [{ id: `i${idx - 1}`, type: 'FS', lag: 0 }] : [] };
+        const critica = CRITICAS && g % 2 === 0;
+        const s = { id: `i${idx}`, startDate: iso(ini), endDate: iso(fim), duration: 12, predecessors: idx % 10 ? [{ id: `i${idx - 1}`, type: 'FS', lag: 0 }] : [], ...(CRITICAS ? { isCritical: critica, totalFloat: critica ? 0 : 3 } : {}) };
         itemSchedules.push(s);
         filhos.push({
             id: s.id, uid: s.id, type: 'item', name: `Tarefa ${idx + 1} — serviço de obra`, children: [], level: 1, wbsCode: `${g + 1}.${k + 1}`,

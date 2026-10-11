@@ -102,4 +102,4 @@ pela tela e a seleção acompanha o que está visível (busca + filtro de Confia
       **Não exercitado:** o clique em Conciliar contra o banco (o harness usa `onConfirm`
       falso). O caminho de gravação é o mesmo de antes (`handleConfirmMatch` →
       `fn_reconcile_match`), sem mudança.
-- [ ] publicação
+- [x] publicação — commit `ddc583e9` em main; CI `ci` success; domínio serve `ddc583e` com "Conciliar selecionados" no bundle.

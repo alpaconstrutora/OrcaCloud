@@ -24,6 +24,11 @@
 --       body := '{}'::jsonb);$$);
 --   …e redeploy da function a partir do git anterior a este commit.
 --
+-- Nome: nasceu como `aplicar_20271011005000` e colidiu com
+-- `aplicar_20271011005000_remover_medicao_inteligente` (outra frente, mesmo dia).
+-- Renomeado para 005100 — o conteúdo JÁ FOI APLICADO com o nome antigo; não reaplicar
+-- por causa do nome novo (é idempotente de qualquer forma).
+--
 -- Aplicar com `npx supabase db query --linked -f` — NUNCA `db push`. Idempotente.
 
 DO $$

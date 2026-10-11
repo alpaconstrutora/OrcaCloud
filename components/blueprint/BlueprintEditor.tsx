@@ -40,6 +40,7 @@ import {
   Contrast,
   Copy,
   CopyPlus,
+  Pipette,
   Combine,
   CornerDownRight,
   DoorOpen,
@@ -848,6 +849,7 @@ import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutiv
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
 import { alvoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
+import { IGUALAR_TUDO, ROTULO_DA_PROPRIEDADE, comandosParaIgualar, type OQueIgualar, type PropriedadeDaAbertura, type PropriedadeDaParede } from '../../utils/blueprintIgualar';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -4272,9 +4274,67 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * lista): abre as propriedades no Sheet. Seleções programáticas (o lote que
    * acabou de ser lançado) não abrem — o painel lateral as mostra, como sempre.
    */
+  /** F4: os DESTINOS do conta-gotas enquanto se espera o clique na referência. */
+  const [igualando, setIgualando] = useState<{ alvos: string[] } | null>(null);
+  /** F4: o que o conta-gotas copia — preferência de trabalho, lembrada entre usos. */
+  const [oQueIgualarGuardado, setOQueIgualar] = usePersistedState<OQueIgualar>('blueprint:oQueIgualar', IGUALAR_TUDO);
+  // O valor vem do localStorage: um formato antigo ou estragado não pode derrubar a barra.
+  const oQueIgualar: OQueIgualar = {
+    parede: Array.isArray(oQueIgualarGuardado?.parede) ? oQueIgualarGuardado.parede : IGUALAR_TUDO.parede,
+    abertura: Array.isArray(oQueIgualarGuardado?.abertura) ? oQueIgualarGuardado.abertura : IGUALAR_TUDO.abertura,
+  };
+
   function selecionarEAbrir(ids: string[]) {
+    // CONTA-GOTAS (F4): enquanto "Igualar" espera a referência, o clique no
+    // desenho NÃO troca a seleção — escolhe a peça de onde as propriedades vêm.
+    if (igualando) {
+      if (ids[0]) aplicarIgualar(ids[0]);
+      return;
+    }
     selecionar(ids);
     setPropriedadesEmSheet(ids.length > 0);
+  }
+
+  /**
+   * CONTA-GOTAS (F4, 11/10/2026): "Igualar" guarda a seleção como DESTINO e espera
+   * o clique na referência. A regra mora em `utils/blueprintIgualar.ts`; aqui só o
+   * gesto: um lote (um Ctrl+Z), a seleção volta aos destinos, e o resultado diz o
+   * que mudou e o que ficou de fora — com o motivo do kernel.
+   */
+  function iniciarIgualar() {
+    if (editor.selectedIds.length === 0) return;
+    editor.setTool('selecionar');
+    setIgualando({ alvos: [...editor.selectedIds] });
+    // A seleção ESVAZIA enquanto se escolhe a referência. Com ela cheia, clicar numa
+    // peça já selecionada não seleciona — começa o ARRASTE da seleção inteira, e o
+    // clique na referência não chegava aqui (pego no app real, 11/10/2026: Ctrl+A,
+    // Igualar, clique na parede de referência → nada). Os destinos ficam em
+    // `igualando.alvos` e voltam a ser a seleção ao aplicar ou desistir.
+    selecionar([]);
+  }
+  /** Desiste do conta-gotas devolvendo a seleção que havia. */
+  function cancelarIgualar() {
+    if (igualando) selecionar(igualando.alvos);
+    setIgualando(null);
+  }
+  function aplicarIgualar(refId: string) {
+    if (!igualando) return;
+    const r = comandosParaIgualar(editor.model, refId, igualando.alvos, oQueIgualar);
+    if (r.comandos.length > 0) editor.runBatch(r.comandos);
+    selecionar(igualando.alvos);
+    setIgualando(null);
+    if (!r.familia) {
+      setAvisoColar('Igualar: a referência tem de ser uma parede ou uma abertura — nada mudou.');
+      return;
+    }
+    const nome = r.familia === 'parede' ? ['parede', 'paredes'] : ['abertura', 'aberturas'];
+    const feitos = `${r.aplicados.length} ${r.aplicados.length === 1 ? nome[0] : nome[1]} igualada${r.aplicados.length === 1 ? '' : 's'} à referência`;
+    const motivos = [...new Set(r.ignorados.map((x) => x.motivo))];
+    setAvisoColar(
+      r.ignorados.length === 0
+        ? `${feitos}.`
+        : `${feitos}; ${r.ignorados.length} ${r.ignorados.length === 1 ? 'ficou' : 'ficaram'} de fora: ${motivos.join(' · ')}.`,
+    );
   }
   /**
    * Grava (ou apaga, com `null`) o lançamento manual de armadura de um ou mais
@@ -8196,6 +8256,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (editor.tool !== 'ambiente') setAmbienteEmNome(null);
   }, [editor.tool]);
 
+  // F4: o conta-gotas espera a referência com a ferramenta Selecionar. Armar outra
+  // ferramenta (tecla ou ribbon) ou apertar Esc desiste — sem aplicar nada.
+  useEffect(() => {
+    if (editor.tool !== 'selecionar') cancelarIgualar();
+  }, [editor.tool]);
+  useEffect(() => {
+    if (!igualando) return;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelarIgualar();
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [igualando]);
+
   // F2: o campo do nome pega o foco DEPOIS do clique. `autoFocus` sozinho não basta:
   // o campo nasce dentro do `pointerdown` do canvas, e o `mousedown` que vem logo
   // depois devolve o foco ao canvas — quem clicava no ambiente tinha de clicar de
@@ -9671,6 +9745,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           aberturas={aberturasSelecionadas.length}
           medicoes={medicoesSelecionadas}
           modo={modoJuncao}
+          onIgualar={iniciarIgualar}
           onMover={(dx, dy) => {
             const aguasSelecionadas = (editor.model.roofs ?? []).filter((r) =>
               editor.selectedIds.includes(r.id),
@@ -13079,6 +13154,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onClick={removerSelecionada}
                 ajuda="Excluir a seleção (Delete)"
               />
+              {/* F4 (11/10/2026): conta-gotas — a seleção copia as propriedades de uma peça de referência. */}
+              <BotaoDoRibbon
+                icone={Pipette}
+                rotulo="Igualar"
+                ativo={igualando !== null}
+                onClick={() => (igualando ? cancelarIgualar() : iniciarIgualar())}
+                ajuda="Conta-gotas: a seleção copia espessura/camadas e altura (paredes) ou tipo, tamanho e esquadria (aberturas) de uma peça de referência — clique nela em seguida"
+              />
             </GrupoDoRibbon>
 
             {paredeSel && (
@@ -13820,8 +13903,53 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           "estado da barra" (as medidas da PRÓXIMA peça) continua aqui, com a
           mesma regra: o que já está lançado se edita no painel lateral. */}
       {!emVista && (
-        <BarraDeOpcoes rotulo={rotuloDaFerramentaAtiva}>
-          {editor.tool === 'ambiente' ? (
+        <BarraDeOpcoes rotulo={igualando ? 'Igualar propriedades' : rotuloDaFerramentaAtiva}>
+          {igualando ? (
+            /* CONTA-GOTAS (F4): os destinos já estão escolhidos (a seleção); falta a
+               REFERÊNCIA. As caixas dizem o que se copia — vale a família da
+               referência: parede copia as de parede; abertura, as de abertura. */
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <span className="font-medium text-blue-700">
+                {igualando.alvos.length} {igualando.alvos.length === 1 ? 'peça escolhida' : 'peças escolhidas'} — clique na peça de REFERÊNCIA
+              </span>
+              {([
+                ['parede', ['composicao', 'altura']],
+                ['abertura', ['tipo', 'tamanho', 'esquadria']],
+              ] as const).map(([familia, props]) => (
+                <span key={familia} className="flex items-center gap-2">
+                  <span className="text-slate-400">{familia === 'parede' ? 'Parede:' : 'Abertura:'}</span>
+                  {props.map((p) => {
+                    const lista = oQueIgualar[familia] as readonly string[];
+                    const marcado = lista.includes(p);
+                    return (
+                      <label key={p} className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={marcado}
+                          onChange={() =>
+                            setOQueIgualar(() => {
+                              const nova = marcado ? lista.filter((x) => x !== p) : [...lista, p];
+                              return familia === 'parede'
+                                ? { ...oQueIgualar, parede: nova as PropriedadeDaParede[] }
+                                : { ...oQueIgualar, abertura: nova as PropriedadeDaAbertura[] };
+                            })
+                          }
+                        />
+                        {ROTULO_DA_PROPRIEDADE[p]}
+                      </label>
+                    );
+                  })}
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={cancelarIgualar}
+                className="rounded-md border border-slate-300 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100"
+              >
+                Cancelar (Esc)
+              </button>
+            </div>
+          ) : editor.tool === 'ambiente' ? (
             /* AMBIENTE COM UM CLIQUE (F2): o clique no canvas escolhe o ambiente; o
                nome se digita aqui. Enter grava (`NameSpace` — substitui a etiqueta,
                não empilha) e a ferramenta continua armada para o próximo. */

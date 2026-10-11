@@ -1094,6 +1094,16 @@ export type Command =
    */
   | { type: 'SetThickness'; wallId: ObjectId; thicknessMm: number }
   /**
+   * ALTURA de uma parede já traçada (F4 do plano `2026-10-11-planta-recursos-video-
+   * synaps.md`, 11/10/2026 — o conta-gotas copia a altura). Até aqui a altura só
+   * nascia no `AddWall`. Não muda o formato do modelo (`Wall.heightMm` sempre
+   * existiu), por isso não sobe `KERNEL_VERSION`; um cliente antigo que receba o
+   * comando pela colaboração o recusa e avisa "recarregue" (`useBlueprintColaboracao`).
+   * Recusa baixar a parede abaixo do topo de uma abertura dela — a janela furaria
+   * a parede por cima, e o quantitativo daria área líquida negativa.
+   */
+  | { type: 'SetWallHeight'; wallId: ObjectId; heightMm: number }
+  /**
    * Troca a COMPOSIÇÃO inteira da parede, e com ela a espessura.
    *
    * ─── UM COMANDO, E NÃO CINCO ────────────────────────────────────────────
@@ -4150,6 +4160,24 @@ function aplicarSemHash(
       break;
     }
 
+    case 'SetWallHeight': {
+      const wall = findWall(next, command.wallId);
+      if (!(command.heightMm > 0)) {
+        throw new KernelError('BAD_WALL_HEIGHT', 'Altura da parede tem que ser maior que zero');
+      }
+      assertIntegerMm(command.heightMm, `${wall.id}.heightMm`);
+      const topo = Math.max(0, ...next.openings.filter((o) => o.wallId === wall.id).map((o) => o.sillMm + o.heightMm));
+      if (command.heightMm < topo) {
+        throw new KernelError(
+          'WALL_LOWER_THAN_OPENING',
+          `A parede ${wall.id} tem abertura até ${topo} mm — não pode ficar com ${command.heightMm} mm`,
+        );
+      }
+      wall.heightMm = command.heightMm;
+      diff.updated.push(wall.id);
+      break;
+    }
+
     case 'SetWallLayers': {
       const wall = findWall(next, command.wallId);
 
@@ -6100,6 +6128,7 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
       break;
     case 'MoveVertex':
     case 'SetThickness':
+    case 'SetWallHeight':
     case 'SetWallLayers':
     case 'SplitWall':
     case 'DeleteWall':

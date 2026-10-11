@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Move, Trash2 } from 'lucide-react';
+import { Move, Pipette, Trash2 } from 'lucide-react';
 import { wallLength, type Wall } from '../../utils/blueprintKernel';
 import type { FormaMedida } from '../../utils/blueprintMedicoes';
 
@@ -34,6 +34,12 @@ interface Props {
   /** Desloca a seleção inteira. Recebe milímetros, como todo o resto do kernel. */
   onMover: (deltaXmm: number, deltaYmm: number) => void;
   onExcluir: () => void;
+  /**
+   * CONTA-GOTAS (F4, 11/10/2026): a seleção vira DESTINO e o próximo clique no
+   * desenho escolhe a referência. Aqui porque é este painel que está aberto logo
+   * depois de selecionar — no ribbon ele fica na aba Modificar, que não abre sozinha.
+   */
+  onIgualar?: () => void;
   /** Modo em vigor, só para o texto dizer o que vai acontecer nas junções. */
   modo: 'MANTER' | 'SOLTAR';
 }
@@ -45,6 +51,7 @@ export default function PainelSelecaoMultipla({
   medicoes,
   onMover,
   onExcluir,
+  onIgualar,
   modo,
 }: Props) {
   const [dx, setDx] = useState('0');
@@ -129,6 +136,18 @@ export default function PainelSelecaoMultipla({
           <Trash2 className="h-3.5 w-3.5" />
           Excluir
         </button>
+
+        {onIgualar && (
+          <button
+            type="button"
+            onClick={onIgualar}
+            title="Conta-gotas: a seleção copia as propriedades de uma peça de referência — clique nela no desenho em seguida"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <Pipette className="h-3.5 w-3.5" />
+            Igualar
+          </button>
+        )}
       </div>
 
       <p className="mt-2 text-xs text-slate-500">

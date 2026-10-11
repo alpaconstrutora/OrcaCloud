@@ -184,6 +184,41 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 
   Gesto: com a seleção feita, "Igualar" pede o clique na referência; checkboxes dizem o que copiar. Tudo num `runBatch`.
 - Pronto quando: teste: 5 paredes recebem as camadas da referência e a face de referência não se move; tipos diferentes declaram "ignorado: tipo diferente"; no app, um Ctrl+Z desfaz as 5.
+- **Feito na execução (11/10), com mudanças em relação ao rascunho:**
+  - **SEM bump do kernel** (o rascunho previa 0.95): `SetWallHeight` não muda o FORMATO do modelo —
+    `Wall.heightMm` sempre existiu — e todas as subidas do histórico (`units.ts`) foram por formato. O
+    caso de versão misturada na colaboração já é tratado: o cliente antigo recusa o comando e mostra
+    "Um comando de X foi recusado aqui… recarregue" (`useBlueprintColaboracao.ts`). A `planta-api` só lê
+    estudos publicados e não recebe comandos — bundle não regerado.
+  - `SetWallHeight` recusa ≤ 0, milímetro fracionado e **baixar a parede abaixo do topo de uma
+    abertura dela** (a janela furaria a parede; o modelo já tinha essa invariante para abertura).
+  - Escopo copiado: **parede** = composição (camadas ou espessura, face traçada parada) e altura;
+    **abertura** = tipo, tamanho (largura/altura/peitoril) e esquadria. **Ficaram de fora**: cortina/brise
+    da parede, acabamentos/tipo de AMBIENTE (ambiente não entra na seleção do canvas) e estilo de
+    anotação — próximos candidatos, se pedidos.
+  - Cada destino é aplicado num RASCUNHO, na ordem: o que o kernel recusa (porta larga demais, parede
+    mais baixa que a janela) vai para "ignorados" com a mensagem DELE, e os outros seguem — uma recusa
+    não derruba o lote inteiro.
+  - Botão "Igualar" em DOIS lugares: aba Modificar e o painel "Seleção múltipla" (que é o que está
+    aberto logo depois de selecionar — a aba Modificar não abre sozinha). A escolha do que copiar é
+    lembrada (`blueprint:oQueIgualar`, normalizada contra localStorage estragado).
+  - ⚠️ **Defeito pego no app real**: com a seleção cheia, clicar na referência (já selecionada) começava
+    o ARRASTE da seleção inteira e o clique nunca chegava ao editor — e dava para arrastar 51 peças sem
+    querer. Agora a seleção ESVAZIA enquanto se escolhe a referência (os destinos ficam no modo) e volta
+    ao aplicar ou desistir (Esc, Cancelar, outra ferramenta).
+  - Prova: `__tests__/blueprintIgualar.test.ts` (9: comando de altura e suas recusas; camadas + altura
+    em 3 paredes traçadas pela face com o anel fechado; homogênea tira camadas; só o marcado; recusa do
+    kernel vira "ignorado" com o motivo e o resto passa; outro tipo e já-igual ditos; abertura que não
+    cabe). **No app, com escrita ("Planta 26/09/2026")**: Ctrl+A (51 peças) → Igualar → clique na parede
+    de 250 mm → aviso "4 paredes igualadas à referência; 46 ficaram de fora: não é parede, como a
+    referência".
+  - ⚠️ **No banco ficaram 3 das 4 paredes a 250** (`wal_0002`, a esquerda, a 150, `draft_saved_at`
+    18:05:46). A regra rodada FORA do navegador sobre esse rascunho real gera os 4 comandos certos
+    (incluindo `wal_0002`) e deixa as 4 a 250 — o lote do editor estava completo. O mais provável é a
+    gravação de OUTRA sessão aberta no mesmo ramo (o usuário estava no estudo: era o que desligava o
+    Ctrl+Z na F2) — cada cliente grava o próprio rascunho e o último vence. O rascunho não guarda quem
+    gravou, então isso NÃO está provado. **Refazer a prova com o estudo sem mais ninguém.**
+  - **Ctrl+Z desfaz as 5: não provado** — mesma razão da F2 (desfazer desligado com outra pessoa no ramo).
 
 **F5 — Cota linear manual e contínua** · kernel (**bump**): `TipoDeAnotacao += 'COTA_LINEAR'` (`pontos[]`, `afastamentoMm`, `modo: 'simples'|'continua'`, `total?: boolean`); `BlueprintCanvas.tsx`, `blueprintExport.ts`, `blueprintDxf.ts`
 - Muda: ferramenta Cota, com cliques encadeados e duplo clique para fechar (gesto da `'anotacao'`, `BlueprintCanvas.tsx:10164`) e OSNAP. O desenho reaproveita `desenharCadeia`/`LINHA_DE_CHAMADA`/`ondeFicaORotulo` nas três saídas.
@@ -240,7 +275,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 ## Estado
 - [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [ ] F2 — **parcial**: falta só o Ctrl+Z do nome
   no app (bloqueado pela colaboração enquanto havia outra pessoa no ramo — ver F2) · [x] F3 — `932030a5`,
-  provada no app com escrita + PDF/DXF por teste · [ ] F4 · [ ] F5
+  provada no app com escrita + PDF/DXF por teste · [ ] F4 — **parcial**: regra e tela provadas; falta refazer
+  no app SEM outra pessoa no estudo (banco ficou com 3 de 4 paredes; Ctrl+Z) · [ ] F5
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

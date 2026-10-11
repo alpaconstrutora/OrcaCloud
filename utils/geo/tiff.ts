@@ -237,10 +237,40 @@ function desfazerPreditor3(bloco: Uint8Array, larguraBloco: number, linhas: numb
   }
 }
 
-// ── Leitura ──────────────────────────────────────────────────────────────────
+// ── Cabeçalho e bloco (11/10/2026) ───────────────────────────────────────────
+//
+// Separados do `lerTiff` para o COG (`cog.ts`): um GeoTIFF na nuvem é lido por
+// PARTES — o cabeçalho num pedido, só os blocos que interessam em outros. O
+// `lerTiff` continua lendo o arquivo inteiro pelos mesmos dois passos.
 
-export async function lerTiff(dados: ArrayBuffer | Uint8Array): Promise<Tiff> {
-  const b = dados instanceof Uint8Array ? dados : new Uint8Array(dados);
+/** O que o IFD diz: geometria, codificação, onde estão os blocos e a georreferência. */
+export interface CabecalhoTiff {
+  le: boolean;
+  largura: number;
+  altura: number;
+  amostrasPorPixel: number;
+  bitsPorAmostra: number;
+  formatoDaAmostra: 1 | 2 | 3;
+  fotometrica: number;
+  compressao: number;
+  preditor: number;
+  /** Blocos (tiles) ou faixas (strips); faixa = bloco da largura da imagem. */
+  emBlocos: boolean;
+  larguraBloco: number;
+  alturaBloco: number;
+  offsets: number[];
+  contagens: number[];
+  paleta: Uint16Array | null;
+  nodata: number | null;
+  geo: GeoDoTiff | null;
+}
+
+/**
+ * Lê o primeiro IFD. `bytes` pode ser só o COMEÇO do arquivo (COG): se o IFD
+ * ou o valor de uma tag cair além do trecho, o erro é `RangeError`, e quem lê
+ * por partes pede um trecho maior.
+ */
+export function lerCabecalhoTiff(b: Uint8Array): CabecalhoTiff {
   if (b.length < 8) throw new TiffNaoSuportado('Arquivo curto demais para ser TIFF.');
   const ordem = String.fromCharCode(b[0], b[1]);
   if (ordem !== 'II' && ordem !== 'MM') throw new TiffNaoSuportado('Não é um TIFF (o cabeçalho não começa com II nem MM).');
@@ -257,7 +287,9 @@ export async function lerTiff(dados: ArrayBuffer | Uint8Array): Promise<Tiff> {
     const tipo = r.u16(o + 2);
     const cont = r.u32(o + 4);
     const tamanho = (TIPO_TAMANHO[tipo] ?? 1) * cont;
-    tags.set(tag, { tipo, n: cont, offset: tamanho <= 4 ? o + 8 : r.u32(o + 8) });
+    const offset = tamanho <= 4 ? o + 8 : r.u32(o + 8);
+    if (offset + tamanho > b.length) throw new RangeError(`tag ${tag} além do trecho lido (${offset + tamanho} > ${b.length})`);
+    tags.set(tag, { tipo, n: cont, offset });
   }
   const um = (tag: number, padrao?: number): number => {
     const e = tags.get(tag);
@@ -288,40 +320,85 @@ export async function lerTiff(dados: ArrayBuffer | Uint8Array): Promise<Tiff> {
     throw new TiffNaoSuportado(`Compressão ${nome} dentro do TIFF não é lida. Converta com gdal_translate -co COMPRESS=DEFLATE (ou LZW).`);
   }
   if (![8, 16, 32, 64].includes(bits)) throw new TiffNaoSuportado(`${bits} bits por amostra não é lido (só 8, 16, 32 e 64).`);
+
+  const emBlocos = tags.has(322);
+  const paletaV = varios(320);
+  const nodataTxt = tags.get(42113) ? r.texto(tags.get(42113)!).trim() : '';
+  return {
+    le: r.le,
+    largura,
+    altura,
+    amostrasPorPixel: spp,
+    bitsPorAmostra: bits,
+    formatoDaAmostra: formato,
+    fotometrica,
+    compressao,
+    preditor,
+    emBlocos,
+    larguraBloco: emBlocos ? um(322) : largura,
+    alturaBloco: emBlocos ? um(323) : um(278, altura),
+    offsets: varios(emBlocos ? 324 : 273) ?? [],
+    contagens: varios(emBlocos ? 325 : 279) ?? [],
+    paleta: paletaV ? Uint16Array.from(paletaV) : null,
+    nodata: nodataTxt !== '' && Number.isFinite(Number(nodataTxt)) ? Number(nodataTxt) : null,
+    geo: lerGeo(r, tags),
+  };
+}
+
+/** Quantas linhas o bloco `k` tem de verdade (a última faixa pode ser mais curta). */
+export function linhasDoBloco(c: CabecalhoTiff, k: number): number {
+  return c.emBlocos ? c.alturaBloco : Math.min(c.alturaBloco, c.altura - k * c.alturaBloco);
+}
+
+/**
+ * Descomprime um bloco e desfaz o preditor. Devolve os bytes no endian do
+ * ARQUIVO, `larguraBloco × linhas × amostras × bytes` (completa com zero se o
+ * bloco veio curto).
+ */
+export async function decodificarBloco(c: CabecalhoTiff, bruto: Uint8Array, linhas: number): Promise<Uint8Array> {
+  const bytes = c.bitsPorAmostra / 8;
+  const spp = c.amostrasPorPixel;
+  const esperado = c.larguraBloco * linhas * spp * bytes;
+  let bloco: Uint8Array;
+  if (c.compressao === 1) bloco = bruto.slice(0, esperado);
+  else if (c.compressao === 5) bloco = descomprimirLzw(bruto, esperado);
+  else if (c.compressao === 32773) bloco = descomprimirPackBits(bruto, esperado);
+  else bloco = await descomprimirDeflate(bruto);
+  if (bloco.length < esperado) {
+    const cheio = new Uint8Array(esperado);
+    cheio.set(bloco);
+    bloco = cheio;
+  }
+  if (c.preditor === 2) desfazerPreditor2(bloco, c.larguraBloco, linhas, spp, bytes, c.le);
+  else if (c.preditor === 3) desfazerPreditor3(bloco, c.larguraBloco, linhas, spp, bytes, c.le);
+  return bloco;
+}
+
+// ── Leitura ──────────────────────────────────────────────────────────────────
+
+export async function lerTiff(dados: ArrayBuffer | Uint8Array): Promise<Tiff> {
+  const b = dados instanceof Uint8Array ? dados : new Uint8Array(dados);
+  const c = lerCabecalhoTiff(b);
+  const { largura, altura, larguraBloco, alturaBloco, emBlocos, offsets, contagens } = c;
+  const spp = c.amostrasPorPixel;
+  const bits = c.bitsPorAmostra;
+  const formato = c.formatoDaAmostra;
   if (largura * altura > 120_000_000) throw new TiffNaoSuportado(`Imagem de ${largura} × ${altura} pixels é grande demais para o navegador. Recorte a área do lote antes.`);
 
   const bytes = bits / 8;
   const saidaBytes = new Uint8Array(largura * altura * spp * bytes);
   const porPixel = spp * bytes;
-
-  const emBlocos = tags.has(322);
-  const larguraBloco = emBlocos ? um(322) : largura;
-  const alturaBloco = emBlocos ? um(323) : um(278, altura);
-  const offsets = varios(emBlocos ? 324 : 273) ?? [];
-  const contagens = varios(emBlocos ? 325 : 279) ?? [];
   const blocosPorLinha = Math.ceil(largura / larguraBloco);
 
   for (let k = 0; k < offsets.length; k++) {
     const bruto = b.subarray(offsets[k], offsets[k] + (contagens[k] ?? 0));
-    const linhasDoBloco = emBlocos ? alturaBloco : Math.min(alturaBloco, altura - k * alturaBloco);
-    if (linhasDoBloco <= 0) continue;
-    const esperado = larguraBloco * linhasDoBloco * porPixel;
-    let bloco: Uint8Array;
-    if (compressao === 1) bloco = bruto.slice(0, esperado);
-    else if (compressao === 5) bloco = descomprimirLzw(bruto, esperado);
-    else if (compressao === 32773) bloco = descomprimirPackBits(bruto, esperado);
-    else bloco = await descomprimirDeflate(bruto);
-    if (bloco.length < esperado) {
-      const cheio = new Uint8Array(esperado);
-      cheio.set(bloco);
-      bloco = cheio;
-    }
-    if (preditor === 2) desfazerPreditor2(bloco, larguraBloco, linhasDoBloco, spp, bytes, r.le);
-    else if (preditor === 3) desfazerPreditor3(bloco, larguraBloco, linhasDoBloco, spp, bytes, r.le);
+    const linhas = linhasDoBloco(c, k);
+    if (linhas <= 0) continue;
+    const bloco = await decodificarBloco(c, bruto, linhas);
     const x0 = emBlocos ? (k % blocosPorLinha) * larguraBloco : 0;
     const y0 = emBlocos ? Math.floor(k / blocosPorLinha) * alturaBloco : k * alturaBloco;
     const colunasUteis = Math.min(larguraBloco, largura - x0);
-    for (let l = 0; l < linhasDoBloco; l++) {
+    for (let l = 0; l < linhas; l++) {
       const y = y0 + l;
       if (y >= altura) break;
       const de = l * larguraBloco * porPixel;
@@ -335,22 +412,18 @@ export async function lerTiff(dados: ArrayBuffer | Uint8Array): Promise<Tiff> {
   let amostras: Tiff['amostras'];
   if (formato === 3) {
     amostras = bits === 32 ? new Float32Array(total) : new Float64Array(total);
-    for (let i = 0; i < total; i++) amostras[i] = bits === 32 ? v.getFloat32(i * 4, r.le) : v.getFloat64(i * 8, r.le);
+    for (let i = 0; i < total; i++) amostras[i] = bits === 32 ? v.getFloat32(i * 4, c.le) : v.getFloat64(i * 8, c.le);
   } else if (bits === 8) {
     amostras = formato === 2 ? new Int8Array(saidaBytes.buffer) : saidaBytes;
   } else if (bits === 16) {
     amostras = formato === 2 ? new Int16Array(total) : new Uint16Array(total);
-    for (let i = 0; i < total; i++) amostras[i] = formato === 2 ? v.getInt16(i * 2, r.le) : v.getUint16(i * 2, r.le);
+    for (let i = 0; i < total; i++) amostras[i] = formato === 2 ? v.getInt16(i * 2, c.le) : v.getUint16(i * 2, c.le);
   } else if (bits === 32) {
     amostras = formato === 2 ? new Int32Array(total) : new Uint32Array(total);
-    for (let i = 0; i < total; i++) amostras[i] = formato === 2 ? v.getInt32(i * 4, r.le) : v.getUint32(i * 4, r.le);
+    for (let i = 0; i < total; i++) amostras[i] = formato === 2 ? v.getInt32(i * 4, c.le) : v.getUint32(i * 4, c.le);
   } else {
     throw new TiffNaoSuportado('Inteiro de 64 bits não é lido.');
   }
-
-  const paletaV = varios(320);
-  const nodataTxt = tags.get(42113) ? r.texto(tags.get(42113)!).trim() : '';
-  const nodata = nodataTxt !== '' && Number.isFinite(Number(nodataTxt)) ? Number(nodataTxt) : null;
 
   return {
     largura,
@@ -358,11 +431,11 @@ export async function lerTiff(dados: ArrayBuffer | Uint8Array): Promise<Tiff> {
     amostrasPorPixel: spp,
     bitsPorAmostra: bits,
     formatoDaAmostra: formato,
-    fotometrica,
+    fotometrica: c.fotometrica,
     amostras,
-    paleta: paletaV ? Uint16Array.from(paletaV) : null,
-    nodata,
-    geo: lerGeo(r, tags),
+    paleta: c.paleta,
+    nodata: c.nodata,
+    geo: c.geo,
   };
 }
 

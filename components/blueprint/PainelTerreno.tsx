@@ -12,7 +12,7 @@ import {
   desvioDaAreaEmUtm,
   gmsTexto,
 } from '../../utils/geo';
-import { AlertTriangle, Keyboard, LandPlot, Save, Table2 } from 'lucide-react';
+import { AlertTriangle, Keyboard, LandPlot, MapPinned, Save, Table2 } from 'lucide-react';
 import type { Boundary, BoundaryPapel, Georreferencia } from '../../utils/blueprintKernel';
 import {
   areaEmM2,
@@ -224,6 +224,8 @@ interface Props {
   onAbrirQuadro: () => void;
   /** Sem lote: abre "Criar o lote digitando" (03/10/2026). */
   onDigitarLote?: () => void;
+  /** Sem lote: abre o mapa para desenhar a área (11/10/2026 — curvas sem ferramenta externa). */
+  onDesenharNoMapa?: () => void;
   /** Quantos lados do lote ainda não têm papel. */
   ladosSemPapel: number;
   /** Quantos lados divergem da medida da escritura além da tolerância. */
@@ -289,6 +291,7 @@ export default function PainelTerreno({
   erro = null,
   onAbrirQuadro,
   onDigitarLote,
+  onDesenharNoMapa,
   ladosSemPapel,
   ladosDivergentes,
   zonaSlot,
@@ -313,7 +316,7 @@ export default function PainelTerreno({
   if (!terreno && !divisaSelecionada) {
     // A ZONA também vale sem lote (03/10/2026): escolher a lei — e com ela os recuos e o gabarito que o lote vai
     // receber — não depende de já haver divisa desenhada. Este retorno antecipado a deixava de fora.
-    if (!topografiaSlot && !zonaSlot && !onDigitarLote) return null;
+    if (!topografiaSlot && !zonaSlot && !onDigitarLote && !onDesenharNoMapa) return null;
     return (
       <div className={raizDoPainel}>
         {!emDrawer && (
@@ -324,17 +327,36 @@ export default function PainelTerreno({
         )}
         {/* 03/10/2026: *"hoje o terreno ou lote é criado apenas desenhando. implementar também
             digitando"* — quem tem a escritura na mão começa por aqui. */}
-        {onDigitarLote && (
+        {(onDigitarLote || onDesenharNoMapa) && (
           <div className="space-y-1.5" data-testid="sem-lote-digitar">
-            <p className="text-xs text-slate-500">Ainda não há contorno de lote. Desenhe com a ferramenta Terreno, ou digite as medidas da escritura.</p>
-            <button
-              type="button"
-              onClick={onDigitarLote}
-              className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-50"
-            >
-              <Keyboard className="h-3.5 w-3.5 shrink-0" />
-              Criar o lote digitando
-            </button>
+            <p className="text-xs text-slate-500">
+              Ainda não há contorno de lote. Desenhe com a ferramenta Terreno, digite as medidas da escritura
+              {onDesenharNoMapa ? ', ou marque a área no mapa — o lote já nasce no lugar, pronto para as curvas de nível' : ''}.
+            </p>
+            {/* 11/10/2026: *"Se for possivel gerar tudo sem uso de ferramenta externa seria
+                perfeito"* — o mapa substitui o Google Earth para dizer onde o terreno está. */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {onDesenharNoMapa && (
+                <button
+                  type="button"
+                  onClick={onDesenharNoMapa}
+                  className="flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  <MapPinned className="h-3.5 w-3.5 shrink-0" />
+                  Desenhar no mapa
+                </button>
+              )}
+              {onDigitarLote && (
+                <button
+                  type="button"
+                  onClick={onDigitarLote}
+                  className={`flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 transition-colors hover:bg-slate-50 ${onDesenharNoMapa ? '' : 'col-span-2'}`}
+                >
+                  <Keyboard className="h-3.5 w-3.5 shrink-0" />
+                  Criar o lote digitando
+                </button>
+              )}
+            </div>
           </div>
         )}
         <Georreferenciar valor={georreferencia} onMudar={onGeorreferencia} />

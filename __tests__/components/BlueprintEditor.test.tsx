@@ -7486,6 +7486,20 @@ describe('BlueprintEditor · criar o lote digitando', () => {
     expect(await screen.findByTestId('painel-lote-digitado')).toBeInTheDocument();
     expect(screen.queryByText(/dados do lote, zona e topografia/i)).toBeNull();
   });
+
+  it('sem lote, "Desenhar no mapa" troca a gaveta pelo mapa (11/10/2026 — curvas sem ferramenta externa)', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^terreno$/i);
+    await user.click(botao(/^dados do lote$/i));
+    const bloco = await screen.findByTestId('sem-lote-digitar');
+    await user.click(within(bloco).getByRole('button', { name: 'Desenhar no mapa' }));
+    expect(await screen.findByTestId('painel-mapa-do-lote')).toBeInTheDocument();
+    expect(screen.getByText('Desenhar o lote no mapa')).toBeInTheDocument();
+    expect(screen.queryByText(/dados do lote, zona e topografia/i)).toBeNull();
+    // O mesmo atalho mora no ribbon do Terreno.
+    expect(botao(/^mapa$/i)).toBeEnabled();
+  });
 });
 
 describe('BlueprintEditor · editar o lote digitando', () => {

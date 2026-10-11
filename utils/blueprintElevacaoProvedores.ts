@@ -21,6 +21,16 @@
  * gratuita para uso NÃO comercial — uso comercial exige assinatura. Decisão
  * jurídica pendente (emenda E-12 da reconciliação de 30/08); o piloto é interno.
  *
+ * ─── 11/10/2026: COPERNICUS GLO-30 VIRA A FONTE PRINCIPAL ───────────────────
+ *
+ * Pedido: *"gerar tudo sem uso de ferramenta externa ... sem custos"*. O
+ * GLO-30 (o mesmo DEM do GLO-90, na resolução nativa de 30 m) é lido do AWS
+ * Open Data pela Edge Function `topografia-copernicus`: licença livre inclusive
+ * comercial, sem limite de taxa. O Open-Meteo sai dos botões (`oferecida:
+ * false`) por causa da licença da API, mas continua no registro — versão antiga
+ * gravada com ele ainda precisa mostrar a proveniência. O SRTM fica como
+ * reserva. Plano: docs/planos/2026-10-11-curvas-de-nivel-sem-ferramenta-externa.md.
+ *
  * ─── ESTE MÓDULO NÃO CONHECE A GRADE ────────────────────────────────────────
  *
  * Recebe coordenadas, devolve cotas na mesma ordem. Quem sabe onde os nós estão
@@ -29,7 +39,7 @@
 
 import type { ClasseDeQualidade, LatLon } from './blueprintTopografia';
 
-export type CodigoDaFonte = 'PONTOS_COTADOS' | 'OPEN_METEO_GLO90' | 'OPENTOPODATA_SRTM30' | 'DEM_ARQUIVO';
+export type CodigoDaFonte = 'PONTOS_COTADOS' | 'COPERNICUS_GLO30' | 'OPEN_METEO_GLO90' | 'OPENTOPODATA_SRTM30' | 'DEM_ARQUIVO';
 
 export interface FonteDeElevacao {
   codigo: CodigoDaFonte;
@@ -53,7 +63,14 @@ export interface FonteDeElevacao {
   classe: ClasseDeQualidade;
   /** Quantas coordenadas cabem numa requisição. Irrelevante para LOCAL. */
   maxPontosPorRequisicao: number;
+  /** Espera entre lotes de uma fonte atrás de function (limite de taxa do provedor). Ausente = sem espera. */
+  respiroEntreLotesMs?: number;
   exigeGeorreferencia: boolean;
+  /**
+   * Aparece como botão no painel. `false` = só aparece quando JÁ é a fonte ativa
+   * (versão antiga gravada com ela, ou um arquivo que a escolheu).
+   */
+  oferecida: boolean;
   /** O que a tela diz antes de gerar. */
   descricao: string;
 }
@@ -72,9 +89,33 @@ export const FONTES: readonly FonteDeElevacao[] = [
     classe: 'LEVANTAMENTO_IMPORTADO',
     maxPontosPorRequisicao: Number.POSITIVE_INFINITY,
     exigeGeorreferencia: false,
+    oferecida: true,
     descricao:
       'Cotas digitadas em pontos do desenho (vértices do lote, pontos do levantamento). ' +
       'Entre os pontos o terreno é tomado como plano — é o que o topógrafo entrega.',
+  },
+  {
+    codigo: 'COPERNICUS_GLO30',
+    nome: 'Copernicus DEM GLO-30 (AWS Open Data)',
+    rotuloCurto: 'Copernicus 30 m',
+    tipo: 'API_FUNCTION',
+    funcao: 'topografia-copernicus',
+    resolucaoNominalM: 30,
+    referenciaVertical: 'EGM2008 (declarada pelo Copernicus DEM)',
+    datasetVersao: 'Copernicus DEM GLO-30 (2021), COG do AWS Open Data',
+    licenca:
+      'Dado: Copernicus DEM GLO-30, licença livre inclusive para uso comercial, com atribuição. ' +
+      'Lido do AWS Open Data pela nossa Edge Function — sem custo e sem limite de taxa.',
+    atribuicao:
+      'Copernicus DEM GLO-30 © DLR e.V. 2010-2014 e © Airbus Defence and Space GmbH 2014-2018, ' +
+      'fornecido no âmbito do COPERNICUS pela União Europeia e ESA',
+    classe: 'PRELIMINAR_REMOTO',
+    maxPontosPorRequisicao: 2000,
+    exigeGeorreferencia: true,
+    oferecida: true,
+    descricao:
+      'Modelo digital de elevação de satélite (2011–2015) com célula de 30 m. Mede a superfície: copa de árvore ' +
+      'e telhado entram na cota. Serve gleba e área de estudo; num lote com lado menor < 90 m é recusado.',
   },
   {
     codigo: 'OPEN_METEO_GLO90',
@@ -91,6 +132,9 @@ export const FONTES: readonly FonteDeElevacao[] = [
     classe: 'PRELIMINAR_REMOTO',
     maxPontosPorRequisicao: 100,
     exigeGeorreferencia: true,
+    // 11/10/2026: fora dos botões — a API do Open-Meteo só é gratuita para uso
+    // não comercial (E-12), e o Copernicus 30 m é o mesmo DEM em resolução nativa.
+    oferecida: false,
     descricao:
       'Modelo digital de elevação público com célula de 90 m. Serve gleba e loteamento; ' +
       'num lote urbano cabe inteiro dentro de uma célula e a fonte é recusada.',
@@ -110,7 +154,9 @@ export const FONTES: readonly FonteDeElevacao[] = [
     atribuicao: 'SRTM (NASA/USGS) via OpenTopoData',
     classe: 'PRELIMINAR_REMOTO',
     maxPontosPorRequisicao: 100,
+    respiroEntreLotesMs: 1100,
     exigeGeorreferencia: true,
+    oferecida: true,
     descricao:
       'Modelo digital de elevação público com célula de 30 m, três vezes mais fino que o GLO-90. ' +
       'Serve gleba grande; num lote urbano ainda é recusado (lado menor < 90 m).',
@@ -133,6 +179,7 @@ export const FONTES: readonly FonteDeElevacao[] = [
     classe: 'PRELIMINAR_REMOTO',
     maxPontosPorRequisicao: Number.POSITIVE_INFINITY,
     exigeGeorreferencia: true,
+    oferecida: false,
     descricao:
       'Modelo de elevação em GeoTIFF com célula acima de 1 m (SRTM, ALOS, Copernicus baixados). Os pixels viram pontos cotados; ' +
       'a versão sai PRELIMINAR, como um DEM remoto.',
@@ -172,9 +219,6 @@ const URL_OPEN_METEO = 'https://api.open-meteo.com/v1/elevation';
  */
 export type InvocarFuncao = (nome: string, corpo: unknown) => Promise<{ data: unknown; error: { message: string } | null }>;
 
-/** Entre lotes de uma fonte atrás de function: o provedor público limita a 1 req/s. */
-const RESPIRO_ENTRE_LOTES_MS = 1100;
-
 export async function amostrarRemoto(
   fonte: FonteDeElevacao,
   coordenadas: LatLon[],
@@ -194,7 +238,8 @@ export async function amostrarRemoto(
   for (let i = 0; i < coordenadas.length; i += tamanho) {
     const lote = coordenadas.slice(i, i + tamanho);
     if (fonte.tipo === 'API_FUNCTION') {
-      if (i > 0) await esperar(RESPIRO_ENTRE_LOTES_MS);
+      // O respiro é da fonte: o OpenTopoData limita a 1 req/s; o Copernicus não tem limite.
+      if (i > 0 && fonte.respiroEntreLotesMs) await esperar(fonte.respiroEntreLotesMs);
       saida.push(...(await loteFuncao(fonte, lote, invocar!)));
     } else {
       saida.push(...(await loteOpenMeteo(fonte, lote, fetchFn)));

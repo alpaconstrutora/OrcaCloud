@@ -70,6 +70,7 @@ import {
   Hexagon,
   Keyboard,
   LandPlot,
+  MapPinned,
   Layers,
   Layers3,
   Fence,
@@ -162,6 +163,8 @@ import { pendenciasDosMemoriais } from '../../utils/blueprintMemorialLote';
 import { roteiroPerimetrico, memorialConvencional } from '../../utils/blueprintRoteiroPerimetrico';
 import PainelRoteiroPerimetrico from './PainelRoteiroPerimetrico';
 import PainelLoteDigitado from './PainelLoteDigitado';
+// O Leaflet entra por import() dentro do painel: o editor não carrega o mapa até a gaveta abrir.
+import PainelMapaDoLote from './PainelMapaDoLote';
 import { comandosDoLote, loteExistente, rotacaoDoNorte, type ModoDoLoteDigitado } from '../../utils/blueprintLoteDigitado';
 import PainelViasEGreide from './PainelViasEGreide';
 import PainelSigef from './PainelSigef';
@@ -1249,6 +1252,10 @@ const RELATORIOS_DO_DOCK = {
   // desenhando. implementar também digitando"* — frente × fundo, lados e
   // ângulos, azimutes/rumos, coordenadas e o memorial colado.
   'lote-digitado': { rotulo: 'Criar o lote digitando', naVista: false, no3d: false },
+  // O LOTE NO MAPA (11/10/2026): *"Se for possivel gerar tudo sem uso de
+  // ferramenta externa seria perfeito"* — marcar a área num mapa substitui o
+  // Google Earth; o lote nasce georreferenciado, pronto para as curvas.
+  'mapa-do-lote': { rotulo: 'Desenhar o lote no mapa', naVista: false, no3d: false },
   // VIAS E GREIDE (26/09/2026, C2): eixo estaqueado, greide com PIVs, seções
   // transversais, volumes por áreas médias e nota de serviço.
   vias: { rotulo: 'Vias e greide', naVista: false, no3d: false },
@@ -2039,6 +2046,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     'roteiro',
     // Formulário com prévia — gaveta, como o SIGEF.
     'lote-digitado',
+    // Mapa + formulário — gaveta, como o lote digitado.
+    'mapa-do-lote',
     'medicoes',
     'orcamento',
   ]);
@@ -2105,6 +2114,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     // A gaveta de Dados do lote (de onde se pode ter vindo) sai: duas gavetas empilhadas escondem a prévia.
     setTarefa(null);
     setRelatorio('lote-digitado');
+  }
+  function abrirMapaDoLote() {
+    // Pelo mesmo motivo do lote digitado: duas gavetas empilhadas escondem o mapa.
+    setTarefa(null);
+    setRelatorio('mapa-do-lote');
   }
   const dock = useAlturaDoDock();
   const [ortogonal, setOrtogonal] = useState(true);
@@ -9385,6 +9399,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       erro={erroArea}
       onAbrirQuadro={() => setQuadroAberto(true)}
       onDigitarLote={() => abrirLoteDigitado()}
+      onDesenharNoMapa={() => abrirMapaDoLote()}
       ladosSemPapel={ladosSemPapel}
       ladosDivergentes={ladosDivergentes}
       gabaritoAlturaMaxM={zona.gabaritoAlturaMaxM}
@@ -11898,6 +11913,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   roteiro.lados.length > 0
                     ? 'Editar o lote digitando: as medidas, ângulos, azimutes e coordenadas do lote atual vêm carregados para alterar — papel, escritura, SIGEF e nomes dos vértices acompanham cada lado'
                     : 'Criar o lote digitando: frente × fundo, lados e ângulos, azimutes/rumos, coordenadas dos vértices ou o memorial da escritura colado — com prévia e erro de fechamento'
+                }
+              />
+              {/* 11/10/2026: o lote também nasce MARCADO NO MAPA — sem Google Earth. */}
+              <BotaoDoRibbon
+                icone={MapPinned}
+                rotulo="Mapa"
+                ativo={relatorioAberto === 'mapa-do-lote'}
+                disabled={roteiro.lados.length > 0}
+                onClick={() => (relatorioAberto === 'mapa-do-lote' ? setRelatorio(null) : abrirMapaDoLote())}
+                ajuda={
+                  roteiro.lados.length > 0
+                    ? 'Já há um lote: o mapa cria lote novo. Para trocar o contorno, use Terreno ou Digitar'
+                    : 'Desenhar o lote no mapa: procurar o endereço ou colar a coordenada, marcar os cantos — o lote nasce georreferenciado, pronto para as curvas de nível (Copernicus 30 m)'
                 }
               />
               <Ferramenta
@@ -18694,6 +18722,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {relatorioNoDrawer === 'loteamento' && <LandPlot className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'roteiro' && <ListOrdered className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'lote-digitado' && <Keyboard className="h-5 w-5 text-blue-700" />}
+              {relatorioNoDrawer === 'mapa-do-lote' && <MapPinned className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'sigef' && <Landmark className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'car' && <Trees className="h-5 w-5 text-blue-700" />}
               {relatorioNoDrawer === 'reurb' && <Users className="h-5 w-5 text-blue-700" />}
@@ -18749,6 +18778,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               (loteParaEditar
                 ? 'As medidas do lote atual, para alterar em qualquer aba. A prévia mostra a área e o erro de fechamento; aplicar troca o contorno num passo só (Ctrl+Z desfaz).'
                 : 'O contorno do lote pelas medidas da escritura ou do levantamento, sem desenhar. A prévia mostra a área e o erro de fechamento; lançar cria as divisas num passo só (Ctrl+Z desfaz) e o Quadro de divisas completa o resto.')}
+            {relatorioNoDrawer === 'mapa-do-lote' &&
+              'Ache o terreno pelo endereço ou pela coordenada e marque os cantos. O lote nasce no lugar certo do mundo — "Onde fica" preenchido — e as curvas de nível saem do Copernicus 30 m, sem ferramenta externa. Lançar cria as divisas num passo só (Ctrl+Z desfaz).'}
             {relatorioNoDrawer === 'vias' &&
               'O projeto geométrico da via: eixo estaqueado, greide com PIVs e curvas verticais, seção tipo, seções transversais por estaca, volumes por áreas médias e a nota de serviço. Grava-se o eixo, o passo, os PIVs e a seção tipo; o resto é derivado contra a topografia exibida.'}
           </SheetDescription>
@@ -18805,6 +18836,46 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   setAvisoConexaoT(
                     `${opcoes.editando ? 'Lote alterado' : 'Lote lançado'}: ${lote.anel.length} divisas, ${(lote.areaMm2 / 1e6).toFixed(2).replace('.', ',')} m². Ctrl+Z desfaz tudo.` +
                       (lote.compensacao !== 'NENHUMA' ? ` ${lote.descricao}` : ''),
+                  );
+                  return null;
+                }}
+              />
+            </div>
+          )}
+
+          {relatorioNoDrawer === 'mapa-do-lote' && (
+            <div className="px-6 py-4">
+              <PainelMapaDoLote
+                georreferencia={editor.model.georreferencia ?? null}
+                onUsar={(area) => {
+                  if (!levelId) return 'Crie um pavimento antes: as divisas moram num pavimento.';
+                  if ((editor.model.boundaries ?? []).some((b) => b.kind === 'TERRENO')) {
+                    return 'Já há um lote. Para trocar o contorno, use a ferramenta Terreno ou Digitar.';
+                  }
+                  const pts = area.pontosMm;
+                  // Georreferência e divisas num lote só: um Ctrl+Z desfaz o lote E o "Onde fica" que nasceu com ele.
+                  const comandos: Command[] = [
+                    ...(area.georreferenciaNova ? [{ type: 'SetGeorreferencia' as const, georreferencia: area.georreferencia }] : []),
+                    ...pts.map((a, i) => ({ type: 'AddBoundary' as const, levelId, a, b: pts[(i + 1) % pts.length], kind: 'TERRENO' as const })),
+                  ];
+                  try {
+                    editor.runBatch(comandos);
+                  } catch (e) {
+                    return e instanceof Error ? `O desenho recusou a área: ${e.message}` : 'O desenho recusou a área.';
+                  }
+                  // A fonte das curvas já vem escolhida quando o terreno comporta o Copernicus e
+                  // ninguém digitou levantamento — o app já tem a informação, não pergunta.
+                  const copernicus = area.medidas.serveCopernicus && topografia.pontosCotados.length === 0;
+                  if (copernicus) topografia.setFonteCodigo('COPERNICUS_GLO30');
+                  setRelatorio(null);
+                  navegar('ENQUADRAR');
+                  // Dados do lote abre: é lá que estão as curvas de nível.
+                  setDrawerRecolhido(false);
+                  setTarefa('terreno');
+                  setAvisoConexaoT(
+                    `Lote lançado do mapa: ${pts.length} divisas, ${area.medidas.areaM2.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m².` +
+                      (copernicus ? ' Curvas de nível: fonte Copernicus 30 m escolhida — é só Gerar.' : '') +
+                      ' Ctrl+Z desfaz.',
                   );
                   return null;
                 }}

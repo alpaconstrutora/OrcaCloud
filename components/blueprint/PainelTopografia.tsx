@@ -313,8 +313,9 @@ export default function PainelTopografia({
           {/* Fonte — um botão por fonte, como a origem da zona: a escolha decide se
               o resultado é levantamento ou DEM (90 m ou 30 m, fase 8). */}
           <div className="mt-1.5 flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5">
-            {/* A3: "DEM do arquivo" não é escolha: só aparece quando um GeoTIFF a trouxe. */}
-            {t.fontes.filter((f) => f.codigo !== 'DEM_ARQUIVO' || t.fonteCodigo === 'DEM_ARQUIVO').map((f) => (
+            {/* Fonte não oferecida só aparece quando já é a ativa: "DEM do arquivo" (A3) vem
+                de um GeoTIFF; "DEM 90 m" (Open-Meteo, fora em 11/10/2026) de uma versão antiga. */}
+            {t.fontes.filter((f) => f.oferecida || t.fonteCodigo === f.codigo).map((f) => (
               <button
                 key={f.codigo}
                 type="button"

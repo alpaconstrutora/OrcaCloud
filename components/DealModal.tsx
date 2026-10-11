@@ -1133,6 +1133,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [loading, setLoading] = useState(false);
+    const enviandoRef = useRef(false); // trava de envio duplo — ver handleSubmit
     // Aviso padrão de salvamento — mostrado dentro da própria tela "Gerenciar
     // Negociação" (tela cheia), que permanece aberta após salvar (o toast do
     // módulo-pai só aparece depois que a tela some, e em modo edição ela não
@@ -2388,9 +2389,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         propertyExportService.generateProposalPDF(formData as PropertyDeal, selectedProperty, selectedClient, org, unitProperties, buyerClients);
     };
 
-    const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
-        if (e) e.preventDefault();
-
+    const salvarNegociacao = async () => {
         if (dealUnits.length === 0 || !formData.client_id) {
             setActiveTab(dealUnits.length === 0 ? 'unidade' : 'cliente');
             notifyError('Por favor, selecione ao menos um imóvel e o cliente para continuar.');
@@ -2447,6 +2446,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             notifyError(`Erro ao salvar negociação: ${err.message || 'Erro de conexão/banco'}`);
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Trava de envio duplo. `disabled={loading}` no botão não basta: o estado só
+    // chega ao DOM no próximo render, e um segundo envio nesse intervalo grava
+    // a negociação DUAS vezes — 23/09/2026, unidade 42 do Bella Vista: 0010 e
+    // 0011 idênticas, inseridas com 13 ms de diferença. O ref (`enviandoRef`,
+    // junto de `loading`) muda na hora.
+    const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+        if (e) e.preventDefault();
+        if (enviandoRef.current) return;
+        enviandoRef.current = true;
+        try {
+            await salvarNegociacao();
+        } finally {
+            enviandoRef.current = false;
         }
     };
 

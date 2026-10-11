@@ -135,6 +135,9 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     colab.participantes.length > 0`; o botão diz "Desfazer — desligado enquanto há outra pessoa neste
     ramo", lido no app). O Ctrl+Z não fez nada, como devia. Para provar o desfazer do nome falta um
     estudo sem mais ninguém aberto.
+  - ✅ **Fechado (11/10, estudo novo que o usuário criou para isso — "Planta 11/10/2026" de 18:18,
+    ramo `10acbfa3…`, sem mais ninguém: botão "Desfazer (Ctrl+Z)")**: Enter gravou "Sala Teste" e o
+    **Ctrl+Z desfez** (o campo reaberto volta vazio).
 
 **F3 — Separador de ambiente na aba Arquitetura** · `BlueprintEditor.tsx` (ribbon), `BlueprintCanvas.tsx`, `utils/blueprintExport.ts`, `utils/blueprintDxf.ts`
 - Muda: botão "Separador de ambiente" na Arquitetura, que reaproveita `tool:'divisa'` com `kind:'DIVISA'` (sem bump). Traço próprio (tracejado fino) distinto de divisa de terreno; aparece no PDF e numa camada DXF própria.
@@ -219,6 +222,17 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     Ctrl+Z na F2) — cada cliente grava o próprio rascunho e o último vence. O rascunho não guarda quem
     gravou, então isso NÃO está provado. **Refazer a prova com o estudo sem mais ninguém.**
   - **Ctrl+Z desfaz as 5: não provado** — mesma razão da F2 (desfazer desligado com outra pessoa no ramo).
+  - ✅ **Fechado (11/10, "Planta 11/10/2026" de 18:18, sem mais ninguém no ramo)**: referência de 250 mm
+    traçada abaixo da sala, Ctrl+A, Igualar, clique nela → "4 paredes igualadas à referência"; **no
+    banco, as 4 paredes da sala a 250**; Ctrl+Z → **no banco, as 4 de volta a 150**. Com o estudo
+    sozinho, o banco bateu com o aviso — reforça que o "3 de 4" de antes foi a gravação da outra sessão.
+  - ⚠️ **Defeito achado no caminho — a vista SALTAVA a cada parede desenhada.** O
+    `PainelRevisaoDePontas` (P2.52) fica montado sempre que há ponta solta e centralizava a vista na
+    "ponta atual" ao montar e a cada ponta NOVA — e toda parede aberta tem ponta. Medido no app: no
+    segundo clique da parede, um marco fixo do desenho pulou de (436, 715) para (757, 550). Agora a vista
+    só acompanha depois que alguém COMEÇA a revisar (botão novo "Ir até ela", anterior/próxima,
+    consertar, "não é problema"). Depois da correção, o mesmo marco ficou parado em todos os passos.
+    Teste do painel atualizado para o requisito novo (+ caso "ponta nova não mexe na vista").
 
 **F5 — Cota linear manual e contínua** · kernel (**bump**): `TipoDeAnotacao += 'COTA_LINEAR'` (`pontos[]`, `afastamentoMm`, `modo: 'simples'|'continua'`, `total?: boolean`); `BlueprintCanvas.tsx`, `blueprintExport.ts`, `blueprintDxf.ts`
 - Muda: ferramenta Cota, com cliques encadeados e duplo clique para fechar (gesto da `'anotacao'`, `BlueprintCanvas.tsx:10164`) e OSNAP. O desenho reaproveita `desenharCadeia`/`LINHA_DE_CHAMADA`/`ondeFicaORotulo` nas três saídas.
@@ -273,10 +287,9 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - Pronto quando: teste do pós-processamento com uma resposta JSON fixa; no app, um escaneado de exemplo gera paredes alinhadas ao fundo e o resultado mostra quantas paredes foram aceitas e quantas descartadas.
 
 ## Estado
-- [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [ ] F2 — **parcial**: falta só o Ctrl+Z do nome
-  no app (bloqueado pela colaboração enquanto havia outra pessoa no ramo — ver F2) · [x] F3 — `932030a5`,
-  provada no app com escrita + PDF/DXF por teste · [ ] F4 — **parcial**: regra e tela provadas; falta refazer
-  no app SEM outra pessoa no estudo (banco ficou com 3 de 4 paredes; Ctrl+Z) · [ ] F5
+- [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [x] F2 — provada no app com escrita, Ctrl+Z incluso
+  · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
+  app com escrita: banco 4×250 e Ctrl+Z 4×150 · [ ] F5
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

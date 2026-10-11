@@ -6,7 +6,10 @@
  * que só a interface promete:
  *
  *   1. a vista é levada até a ponta em foco, e só quando ela MUDA — focar a
- *      cada render brigaria com o zoom de quem está olhando;
+ *      cada render brigaria com o zoom de quem está olhando. ⚠️ E só DEPOIS que
+ *      alguém começa a revisar (11/10/2026): o painel fica montado sempre que há
+ *      ponta solta, e toda parede aberta tem ponta — focar ao montar fazia a vista
+ *      saltar a cada parede desenhada;
  *   2. ⚠️ o índice FICA onde está quando a lista encolhe. É o que faz a revisão
  *      avançar sozinha: consertei a 8ª de 69, a lista vira 68 e eu continuo na
  *      8ª — que agora é a próxima. Se o índice acompanhasse a ponta, eu saltaria
@@ -58,9 +61,20 @@ function montar(pontas: PontaEmRevisao[], ignoradas = 0) {
 beforeEach(() => vi.clearAllMocks());
 
 describe('PainelRevisaoDePontas', () => {
-  it('leva a vista até a ponta em foco, e só quando ela muda', async () => {
+  it('⚠️ montar e ver ponta NOVA aparecer não mexe na vista — quem está desenhando não é arrastado', () => {
+    const { rerender } = montar([comJuntar('w1')]);
+    expect(onFocar).not.toHaveBeenCalled();
+    // Uma parede aberta acabou de ser desenhada: a ponta dela entra na lista (e vira a "atual").
+    rerender(
+      <PainelRevisaoDePontas pontas={[ponta({ wallId: 'w9', p: { x: 5, y: 5 } as PontaEmRevisao['p'] })]} ignoradas={0} onFocar={onFocar} onAplicar={onAplicar} onIgnorar={onIgnorar} onLimparIgnoradas={onLimpar} />,
+    );
+    expect(onFocar).not.toHaveBeenCalled();
+  });
+
+  it('"Ir até ela" começa a revisão; daí a vista acompanha a ponta em foco, e só quando ela muda', async () => {
     const user = userEvent.setup();
     const { rerender } = montar([comJuntar('w1'), ponta({ wallId: 'w2', p: { x: 9, y: 9 } as PontaEmRevisao['p'] })]);
+    await user.click(screen.getByTestId('revisao-ir'));
     expect(onFocar).toHaveBeenCalledTimes(1);
     expect(onFocar).toHaveBeenCalledWith({ x: 1000, y: 2000 });
 
@@ -72,6 +86,14 @@ describe('PainelRevisaoDePontas', () => {
 
     await user.click(screen.getByLabelText('Próxima ponta'));
     expect(onFocar).toHaveBeenCalledTimes(2);
+  });
+
+  it('"Próxima" sozinha também começa a revisão (sem precisar do "Ir até ela")', async () => {
+    const user = userEvent.setup();
+    montar([comJuntar('w1'), ponta({ wallId: 'w2', p: { x: 9, y: 9 } as PontaEmRevisao['p'] })]);
+    await user.click(screen.getByLabelText('Próxima ponta'));
+    expect(onFocar).toHaveBeenCalledTimes(1);
+    expect(onFocar).toHaveBeenCalledWith({ x: 9, y: 9 });
   });
 
   it('⚠️ o índice FICA quando a lista encolhe — é o que avança para a próxima', async () => {

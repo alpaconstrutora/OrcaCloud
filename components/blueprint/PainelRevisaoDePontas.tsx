@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, EyeOff, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crosshair, EyeOff, Check } from 'lucide-react';
 import type { PontaEmRevisao } from '../../utils/blueprintRevisaoDePontas';
 
 /**
@@ -46,17 +46,28 @@ export default function PainelRevisaoDePontas({
   onLimparIgnoradas,
 }: Props) {
   const [i, setI] = useState(0);
+  /**
+   * A vista só acompanha a revisão DEPOIS que alguém começa a revisar (11/10/2026).
+   *
+   * O painel fica montado sempre que há ponta solta — e toda parede ABERTA tem
+   * ponta solta. Focar ao montar, ou quando uma ponta nova aparece, levava a vista
+   * até a ponta a cada parede desenhada: quem traçava longe do centro via o
+   * desenho saltar sob o cursor (pego no app real: o segundo clique da parede
+   * deslocava a vista ~360 px). Revisar é um gesto — Ir até ela, anterior,
+   * próxima, consertar, "não é problema" —, e só ele liga o acompanhamento.
+   */
+  const [revisando, setRevisando] = useState(false);
   // A lista encolhe a cada conserto: o índice tem de continuar dentro dela, e
   // ficar onde estava é o que faz a revisão avançar sozinha para a próxima.
   const indice = pontas.length === 0 ? 0 : Math.min(i, pontas.length - 1);
   const atual = pontas[indice];
 
   useEffect(() => {
-    if (atual) onFocar(atual.p);
-    // Só quando a ponta em foco muda: focar a cada render brigaria com o zoom
-    // de quem está olhando.
+    if (atual && revisando) onFocar(atual.p);
+    // Só quando a ponta em foco muda (ou a revisão começa): focar a cada render
+    // brigaria com o zoom de quem está olhando.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atual?.wallId, atual?.end]);
+  }, [atual?.wallId, atual?.end, revisando]);
 
   if (pontas.length === 0) {
     return (
@@ -89,7 +100,24 @@ export default function PainelRevisaoDePontas({
         <span className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setI((n) => (n - 1 + pontas.length) % pontas.length)}
+            onClick={() => {
+              // Já revisando, a vista já está nela: reclicar leva de novo (quem rolou o desenho para longe).
+              if (revisando && atual) onFocar(atual.p);
+              setRevisando(true);
+            }}
+            data-testid="revisao-ir"
+            title="Leva a vista até esta ponta — e daqui em diante a vista acompanha a revisão"
+            className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-1.5 py-1 text-[11px] text-amber-800 hover:bg-amber-100"
+          >
+            <Crosshair className="h-3.5 w-3.5" />
+            Ir até ela
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRevisando(true);
+              setI((n) => (n - 1 + pontas.length) % pontas.length);
+            }}
             aria-label="Ponta anterior"
             className="rounded-md border border-amber-300 bg-white p-1 text-amber-800 hover:bg-amber-100"
           >
@@ -97,7 +125,10 @@ export default function PainelRevisaoDePontas({
           </button>
           <button
             type="button"
-            onClick={() => setI((n) => (n + 1) % pontas.length)}
+            onClick={() => {
+              setRevisando(true);
+              setI((n) => (n + 1) % pontas.length);
+            }}
             aria-label="Próxima ponta"
             className="rounded-md border border-amber-300 bg-white p-1 text-amber-800 hover:bg-amber-100"
           >
@@ -116,7 +147,10 @@ export default function PainelRevisaoDePontas({
           <button
             key={o.tipo}
             type="button"
-            onClick={() => onAplicar(atual, k)}
+            onClick={() => {
+              setRevisando(true);
+              onAplicar(atual, k);
+            }}
             className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
             data-testid={`revisao-opcao-${o.tipo}`}
           >
@@ -126,7 +160,10 @@ export default function PainelRevisaoDePontas({
         ))}
         <button
           type="button"
-          onClick={() => onIgnorar(atual)}
+          onClick={() => {
+            setRevisando(true);
+            onIgnorar(atual);
+          }}
           title="Varanda, terraço e limite externo DEVEM ficar abertos — some da lista sem mexer no desenho"
           className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100"
           data-testid="revisao-ignorar"

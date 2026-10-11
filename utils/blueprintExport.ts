@@ -43,7 +43,7 @@ import { anotacoesNaOrdem, linhasDaRegiao } from './blueprintAnotacoes';
 import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
 import { acabamentosDoAmbiente, contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { linhasDoPadrao } from './blueprintPadroes';
-import { simboloDasFolhas } from './blueprintFolhas';
+import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
@@ -1486,6 +1486,20 @@ export function desenharElevacao(
           const v = caixa(a.uMin, a.uMax, a.vMin, a.vMax);
           d.retangulo(v.x, v.y, v.w, v.h, { espessuraMm: 0, cor: '#ffffff' });
           d.retangulo(v.x, v.y, v.w, v.h, { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+          // F8: as folhas e a bandeira (a mesma conta da tela e do DXF); tracejado à mão, 1,5/1 mm.
+          for (const s of simboloDaElevacao(a)) {
+            const x0 = px(s.a.u), y0 = py(s.a.v), x1 = px(s.b.u), y1 = py(s.b.v);
+            const estilo = { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO };
+            if (!s.tracejado) {
+              d.linha(x0, y0, x1, y1, estilo);
+              continue;
+            }
+            const L = Math.hypot(x1 - x0, y1 - y0);
+            for (let k = 0; k < L; k += 2.5) {
+              const e = Math.min(k + 1.5, L);
+              d.linha(x0 + ((x1 - x0) * k) / L, y0 + ((y1 - y0) * k) / L, x0 + ((x1 - x0) * e) / L, y0 + ((y1 - y0) * e) / L, estilo);
+            }
+          }
         }
       },
     });

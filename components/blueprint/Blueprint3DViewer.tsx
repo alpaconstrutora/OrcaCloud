@@ -1505,12 +1505,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       {pecasDeEsquadria.map((p) => (
         <mesh key={`esquadria-${p.chave}`} geometry={p.geom} position={p.pos} rotation={[0, p.rot, 0]} castShadow={p.material !== 'VIDRO'} receiveShadow {...cliqueDe(p.id)}>
           <meshStandardMaterial
-            color={selecionados?.has(p.id) ? '#2563eb' : p.material === 'VIDRO' ? '#bae6fd' : p.material === 'FOLHA' ? '#a16207' : '#475569'}
+            color={selecionados?.has(p.id) ? (p.material === 'TRAVESSA' ? '#1e3a8a' : '#2563eb') : p.material === 'VIDRO' ? '#bae6fd' : p.material === 'FOLHA' ? '#a16207' : p.material === 'TRAVESSA' ? '#0f172a' : '#475569'}
             transparent={p.material === 'VIDRO'}
             opacity={p.material === 'VIDRO' ? 0.4 : 1}
             depthWrite={p.material !== 'VIDRO'}
-            roughness={p.material === 'CAIXILHO' ? 0.4 : 0.7}
-            metalness={p.material === 'CAIXILHO' ? 0.5 : 0}
+            roughness={p.material === 'CAIXILHO' || p.material === 'TRAVESSA' ? 0.4 : 0.7}
+            metalness={p.material === 'CAIXILHO' || p.material === 'TRAVESSA' ? 0.5 : 0}
           />
         </mesh>
       ))}

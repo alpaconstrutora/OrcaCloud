@@ -69,7 +69,7 @@ import {
 } from './blueprintCotas';
 import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, linhasDaRegiao, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
-import { simboloDasFolhas } from './blueprintFolhas';
+import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
 
@@ -785,6 +785,8 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
       P(a.uMax, a.vMax),
       P(a.uMin, a.vMax),
     ]);
+    // F8: as folhas e a bandeira por dentro do vão (a mesma conta da tela e do PDF).
+    for (const s of simboloDaElevacao(a)) saida += linha(CAMADAS.ELEV_ABERTURAS, P(s.a.u, s.a.v), P(s.b.u, s.b.v));
   }
   // ── O QUE O PLANO CORTA ───────────────────────────────────────────────────
   //

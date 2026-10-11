@@ -148,7 +148,11 @@ export function simboloDasFolhas(o: AberturaComFolhas, w: ParedeDaAbertura, offs
   return saida;
 }
 
-export type MaterialDaPecaDaEsquadria = 'CAIXILHO' | 'VIDRO' | 'FOLHA';
+/**
+ * `TRAVESSA` (pendência 3 da F8): a barra da bandeira tem material PRÓPRIO — mais escura, mais alta e
+ * saliente das duas faces — porque, da mesma cor e espessura do caixilho, de longe ela sumia no quadro.
+ */
+export type MaterialDaPecaDaEsquadria = 'CAIXILHO' | 'TRAVESSA' | 'VIDRO' | 'FOLHA';
 /** Uma caixa do 3D: centro em planta (mm do modelo), altura do centro a partir do PISO do pavimento, medidas e giro (o da parede). */
 export interface PecaDaEsquadria3D {
   centro: Point;
@@ -162,7 +166,7 @@ export interface PecaDaEsquadria3D {
 }
 
 /** Perfil do caixilho e do montante, e as espessuras de vidro e folha, em mm. */
-export const MEDIDAS_DO_CAIXILHO = { perfilMm: 50, montanteMm: 40, profundidadeMm: 70, vidroMm: 8, folhaMm: 35 } as const;
+export const MEDIDAS_DO_CAIXILHO = { perfilMm: 50, montanteMm: 40, travessaMm: 70, salienciaDaTravessaMm: 15, profundidadeMm: 70, vidroMm: 8, folhaMm: 35 } as const;
 
 /**
  * As PEÇAS do 3D: caixilho (batentes, verga e — na janela — o peitoril do
@@ -195,12 +199,12 @@ export function pecas3dDasFolhas(o: AberturaComFolhas, w: ParedeDaAbertura): Pec
   // Bandeira.
   const yBandeira = c.bandeira ? y1 - c.bandeira.alturaMm : null;
   if (yBandeira != null) {
-    caixa(M.perfilMm, W - M.perfilMm, yBandeira - M.montanteMm / 2, yBandeira + M.montanteMm / 2, prof, 'CAIXILHO');
-    caixa(M.perfilMm, W - M.perfilMm, yBandeira + M.montanteMm / 2, y1 - M.perfilMm, M.vidroMm, 'VIDRO');
+    caixa(0, W, yBandeira - M.travessaMm / 2, yBandeira + M.travessaMm / 2, prof + 2 * M.salienciaDaTravessaMm, 'TRAVESSA');
+    caixa(M.perfilMm, W - M.perfilMm, yBandeira + M.travessaMm / 2, y1 - M.perfilMm, M.vidroMm, 'VIDRO');
   }
   // Folhas.
   const f0 = janela ? y0 + M.perfilMm : y0;
-  const f1 = yBandeira != null ? yBandeira - M.montanteMm / 2 : y1 - M.perfilMm;
+  const f1 = yBandeira != null ? yBandeira - M.travessaMm / 2 : y1 - M.perfilMm;
   const trechos = trechosDasFolhas(c.folhas, W);
   trechos.forEach(({ folha, de, ate }, i) => {
     if (i > 0) caixa(de - M.montanteMm / 2, de + M.montanteMm / 2, f0, f1, prof, 'CAIXILHO');
@@ -263,4 +267,102 @@ export function faixaDaBandeira(heightMm: number): { min: number; max: number } 
 export function bandeiraPadrao(heightMm: number): BandeiraDaEsquadria | null {
   const faixa = faixaDaBandeira(heightMm);
   return faixa ? { alturaMm: Math.min(400, faixa.max), mecanismo: 'BASCULANTE' } : null;
+}
+
+// ─── ELEVAÇÃO E CORTE ───────────────────────────────────────────────────────
+
+/** Segmento no plano da fachada: `u` ao longo, `v` a cota. */
+export interface SegmentoDeElevacao {
+  a: { u: number; v: number };
+  b: { u: number; v: number };
+  tracejado?: boolean;
+}
+
+type AberturaNaFachada = {
+  uMin: number;
+  uMax: number;
+  vMin: number;
+  vMax: number;
+  folhas?: { uMin: number; uMax: number; mecanismo: FolhaDaEsquadria['mecanismo']; uDobradica: number }[];
+  bandeira?: { v: number; mecanismo: FolhaDaEsquadria['mecanismo'] };
+};
+
+/**
+ * O SÍMBOLO DE ELEVAÇÃO das folhas (pendência 2 da F8): o que a fachada e o corte mostram por dentro do
+ * retângulo do vão. Convenção de desenho de esquadria:
+ *
+ *   montantes e travessa da bandeira — traço cheio;
+ *   DE ABRIR     "V" tracejado com o vértice no lado da DOBRADIÇA;
+ *   MAXIM-AR     "V" com o vértice no alto (gira pela travessa de cima);
+ *   BASCULANTE   "X" (gira no meio);
+ *   PIVOTANTE    o eixo tracejado no meio;
+ *   DE CORRER    seta a meia altura para o lado em que corre (para o centro do vão);
+ *   CAMARÃO      a dobra no meio + o "V" de cada metade;
+ *   FIXA         nada além do quadro.
+ *
+ * `[]` sem folhas declaradas — o retângulo de sempre.
+ */
+export function simboloDaElevacao(a: AberturaNaFachada): SegmentoDeElevacao[] {
+  if (!a.folhas?.length) return [];
+  const saida: SegmentoDeElevacao[] = [];
+  const seg = (u0: number, v0: number, u1: number, v1: number, tracejado = false) =>
+    saida.push(tracejado ? { a: { u: u0, v: v0 }, b: { u: u1, v: v1 }, tracejado } : { a: { u: u0, v: v0 }, b: { u: u1, v: v1 } });
+  const topoDasFolhas = a.bandeira ? a.bandeira.v : a.vMax;
+  const centroDoVao = (a.uMin + a.uMax) / 2;
+
+  /** O símbolo de UM painel retangular. */
+  const painel = (u0: number, u1: number, v0: number, v1: number, mecanismo: FolhaDaEsquadria['mecanismo'], uDobradica: number) => {
+    const meioV = (v0 + v1) / 2;
+    const meioU = (u0 + u1) / 2;
+    switch (mecanismo) {
+      case 'ABRIR': {
+        const oposto = Math.abs(uDobradica - u0) < Math.abs(uDobradica - u1) ? u1 : u0;
+        seg(oposto, v0, uDobradica, meioV, true);
+        seg(oposto, v1, uDobradica, meioV, true);
+        break;
+      }
+      case 'MAXIM_AR':
+        seg(u0, v0, meioU, v1, true);
+        seg(u1, v0, meioU, v1, true);
+        break;
+      case 'BASCULANTE':
+        seg(u0, v0, u1, v1, true);
+        seg(u0, v1, u1, v0, true);
+        break;
+      case 'PIVOTANTE':
+        seg(meioU, v0, meioU, v1, true);
+        break;
+      case 'CORRER': {
+        const para = meioU <= centroDoVao ? 1 : -1;
+        const largura = u1 - u0;
+        const ini = meioU - (para * largura) / 4;
+        const fim = meioU + (para * largura) / 4;
+        const ponta = Math.min(largura / 10, 120);
+        seg(ini, meioV, fim, meioV);
+        seg(fim, meioV, fim - para * ponta, meioV + ponta * 0.6);
+        seg(fim, meioV, fim - para * ponta, meioV - ponta * 0.6);
+        break;
+      }
+      case 'CAMARAO':
+        seg(meioU, v0, meioU, v1);
+        seg(u1, v0, u0, meioV, true);
+        seg(u1, v1, u0, meioV, true);
+        break;
+      case 'FIXA':
+        break;
+    }
+  };
+
+  // As folhas vêm na ordem da DOBRADIÇA, que pode correr contra `u`: os montantes são as divisas
+  // internas — todo `uMin` menos o da ponta do vão.
+  const uPonta = Math.min(...a.folhas.map((f) => f.uMin));
+  for (const f of a.folhas) {
+    if (f.uMin > uPonta) seg(f.uMin, a.vMin, f.uMin, topoDasFolhas);
+    painel(f.uMin, f.uMax, a.vMin, topoDasFolhas, f.mecanismo, f.uDobradica);
+  }
+  if (a.bandeira) {
+    seg(a.uMin, a.bandeira.v, a.uMax, a.bandeira.v);
+    painel(a.uMin, a.uMax, a.bandeira.v, a.vMax, a.bandeira.mecanismo, a.uMin);
+  }
+  return saida;
 }

@@ -23,11 +23,13 @@
  */
 
 import { segmentosDoEletroduto } from './blueprintRede';
+import { trechosDasFolhas } from './blueprintFolhas';
 import {
   type BlueprintModel,
   type BoundaryPapel,
   type Level,
   type ObjectId,
+  type MecanismoDeFolha,
   type Opening,
   type Point,
   type Segment,
@@ -83,6 +85,34 @@ export interface RetanguloElevacao {
   degenerada: boolean;
 }
 
+/**
+ * F8: as folhas de uma abertura configurada, projetadas na fachada. A ordem das folhas parte da
+ * ponta da DOBRADIÇA (`hingeAtStart`), como na planta; a dobradiça de cada folha de abrir fica na
+ * ponta de FORA (primeira metade: a inicial; segunda: a final) — a regra de `simboloDasFolhas`.
+ */
+function folhasNaFachada(
+  o: Opening,
+  a: Point,
+  eixo: Point,
+  projU: (p: Point) => number,
+  elevacaoDoNivelMm: number,
+): Pick<AberturaElevacao, 'folhas' | 'bandeira'> {
+  const c = o.configuracao;
+  if (!c || (o.kind !== 'door' && o.kind !== 'window')) return {};
+  const origem = o.hingeAtStart ? o.offsetMm : o.offsetMm + o.widthMm;
+  const sentido = o.hingeAtStart ? 1 : -1;
+  const u = (s: number) => projU({ x: a.x + eixo.x * (origem + sentido * s), y: a.y + eixo.y * (origem + sentido * s) } as Point);
+  const trechos = trechosDasFolhas(c.folhas, o.widthMm);
+  const N = trechos.length;
+  const folhas = trechos.map(({ folha, de, ate }, i) => {
+    const u0 = u(de);
+    const u1 = u(ate);
+    return { uMin: Math.min(u0, u1), uMax: Math.max(u0, u1), mecanismo: folha.mecanismo, uDobradica: i < N / 2 ? u0 : u1 };
+  });
+  const topo = elevacaoDoNivelMm + o.sillMm + o.heightMm;
+  return { folhas, ...(c.bandeira ? { bandeira: { v: topo - c.bandeira.alturaMm, mecanismo: c.bandeira.mecanismo } } : {}) };
+}
+
 export interface AberturaElevacao {
   openingId: ObjectId;
   wallId: ObjectId;
@@ -93,6 +123,13 @@ export interface AberturaElevacao {
   vMin: number;
   vMax: number;
   profundidade: number;
+  /**
+   * FOLHAS (F8, kernel 0.98.0) já no plano da fachada: o trecho `u` de cada folha, o mecanismo e
+   * de que lado (`uDobradica`) ela gira; e a cota `v` da travessa da bandeira. Ausente = abertura
+   * sem configuração (o retângulo de sempre). Quem desenha é `simboloDaElevacao`.
+   */
+  folhas?: { uMin: number; uMax: number; mecanismo: MecanismoDeFolha; uDobradica: number }[];
+  bandeira?: { v: number; mecanismo: MecanismoDeFolha };
 }
 
 /**
@@ -442,6 +479,7 @@ export function projetarElevacao(
           vMin: level.elevationMm + o.sillMm,
           vMax: level.elevationMm + o.sillMm + o.heightMm,
           profundidade,
+          ...folhasNaFachada(o, wall.a, eixo, projU, level.elevationMm),
         });
       }
     }

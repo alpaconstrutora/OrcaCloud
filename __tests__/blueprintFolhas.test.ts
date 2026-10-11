@@ -37,6 +37,8 @@ import { ehEspacoDeEspelhar } from '../utils/blueprintAtalhos';
 import { comandosParaIgualar } from '../utils/blueprintIgualar';
 import { gerarDxf } from '../utils/blueprintDxf';
 import { DesenhistaDeProva, desenharAberturas } from '../utils/blueprintExport';
+import { projetarElevacao } from '../utils/blueprintElevation';
+import { simboloDaElevacao } from '../utils/blueprintFolhas';
 
 const TRES_FOLHAS: ConfiguracaoDaEsquadria = {
   folhas: [
@@ -265,5 +267,63 @@ describe('esquadria configurável — as regras do painel', () => {
     const r = comandosParaIgualar(m, ref, [a, b]);
     const depois = applyBatch(m, r.comandos).model;
     expect(depois.openings.map((o) => o.configuracao)).toEqual([TRES_FOLHAS, TRES_FOLHAS, TRES_FOLHAS]);
+  });
+});
+
+describe('esquadria configurável — elevação e corte (pendência 2)', () => {
+  const fachada = (m: BlueprintModel) => projetarElevacao(m, { direcao: 'FRENTE' }).aberturas;
+
+  it('a projeção leva as folhas no plano da fachada; sem configuração, nenhuma chave nova', () => {
+    const sem = fachada(planta([{}]));
+    expect(sem).toHaveLength(1);
+    expect('folhas' in sem[0] || 'bandeira' in sem[0]).toBe(false);
+    const [a] = fachada(planta([{ configuracao: TRES_FOLHAS }]));
+    expect(a.folhas).toHaveLength(3);
+    expect(a.folhas!.reduce((s, f) => s + (f.uMax - f.uMin), 0)).toBeCloseTo(a.uMax - a.uMin, 6);
+    expect(a.bandeira).toEqual({ v: a.vMax - 400, mecanismo: 'BASCULANTE' });
+  });
+
+  it('o símbolo: 2 montantes, o V da de abrir, a seta da de correr, a travessa e o X da basculante', () => {
+    const [a] = fachada(planta([{ configuracao: TRES_FOLHAS }]));
+    const s = simboloDaElevacao(a);
+    const horizontais = s.filter((x) => !x.tracejado && x.a.v === x.b.v);
+    const verticais = s.filter((x) => !x.tracejado && x.a.u === x.b.u);
+    expect(verticais).toHaveLength(2); // montantes
+    expect(horizontais.some((x) => x.a.v === a.bandeira!.v && Math.abs(x.b.u - x.a.u) === a.uMax - a.uMin)).toBe(true); // travessa
+    expect(s.filter((x) => x.tracejado)).toHaveLength(2 + 2); // V da de abrir + X da basculante
+    expect(simboloDaElevacao({ ...a, folhas: undefined })).toEqual([]);
+  });
+
+  it('o V da de abrir aponta para a dobradiça — e girar (hingeAtStart) o leva para o outro lado', () => {
+    const cfg: ConfiguracaoDaEsquadria = { folhas: [{ mecanismo: 'ABRIR', larguraPct: 100 }] };
+    const m = planta([{ configuracao: cfg }]);
+    const vertice = (mm: BlueprintModel) => {
+      const [a] = fachada(mm);
+      return simboloDaElevacao(a).filter((x) => x.tracejado)[0].b.u;
+    };
+    const girada = applyCommand(m, { type: 'FlipOpening', openingId: m.openings[0].id, axis: 'hinge' }).model;
+    expect(vertice(m)).not.toBe(vertice(girada));
+  });
+
+  it('o DXF da elevação ganha as linhas das folhas na camada das aberturas', () => {
+    const contar = (m: BlueprintModel) =>
+      (gerarDxf(m, { titulo: 't', revisao: 1, hash: 'h', elevacoes: [projetarElevacao(m, { direcao: 'FRENTE' })] }).match(/\nELEVACAO-ABERTURAS\n/g) ?? []).length;
+    const sem = planta([{}]);
+    const com = applyCommand(sem, { type: 'SetOpeningConfiguracao', openingId: sem.openings[0].id, configuracao: TRES_FOLHAS }).model;
+    expect(contar(com) - contar(sem)).toBe(simboloDaElevacao(fachada(com)[0]).length);
+  });
+});
+
+describe('esquadria configurável — a travessa da bandeira no 3D (pendência 3)', () => {
+  it('é peça PRÓPRIA (TRAVESSA), no vão inteiro, mais alta que o montante e saliente das faces do caixilho', () => {
+    const m = planta([{ configuracao: TRES_FOLHAS }]);
+    const pecas = pecas3dDasFolhas(m.openings[0], m.walls[0]);
+    const travessas = pecas.filter((p) => p.material === 'TRAVESSA');
+    expect(travessas).toHaveLength(1);
+    const caixilho = pecas.find((p) => p.material === 'CAIXILHO')!;
+    expect(travessas[0].comprimentoMm).toBe(1200);
+    expect(travessas[0].espessuraMm).toBeGreaterThan(caixilho.espessuraMm);
+    expect(travessas[0].alturaMm).toBeGreaterThan(40);
+    expect(pecas3dDasFolhas(planta([{ configuracao: { folhas: TRES_FOLHAS.folhas } }]).openings[0], m.walls[0]).some((p) => p.material === 'TRAVESSA')).toBe(false);
   });
 });

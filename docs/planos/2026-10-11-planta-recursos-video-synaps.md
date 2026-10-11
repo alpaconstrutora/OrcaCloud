@@ -365,8 +365,26 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     previsível, e sem um segundo teste de acerto.
   - Igualar (F4): a opção "Esquadria (catálogo e folhas)" leva as folhas junto, depois do tipo e do
     tamanho que as validam (teste).
-  - ⏳ Fica para depois: o catálogo de tipos da organização (`blueprint_opening_types`) ainda não guarda
-    folhas (pediria migration); a elevação/corte desenha o vão como retângulo, sem as folhas.
+  - ✅ **Pendências fechadas (11/10, pedido: "Implemente 1. o catálogo… 2. elevações e cortes… 3. a
+    travessa no 3D… na sequência seguir com F9"):**
+    1. CATÁLOGO: migration `aplicar_20271011009000_blueprint_opening_types_configuracao.sql` (só ADD COLUMN
+       `configuracao JSONB NULL`, idempotente; sem policy/função — REGRA #7 não se aplica), aplicada com
+       `db query -f` e conferida em `information_schema`. "Salvar tipo" (painel da abertura e quadro de
+       esquadrias) leva as folhas; "Aplicar tipo" aplica as folhas no mesmo lote (tipo sem folhas volta a
+       abertura ao desenho padrão, como o vidro). A leitura (`configuracaoDaColuna`) só aceita a forma do
+       kernel; lixo vira desenho padrão.
+    2. ELEVAÇÃO E CORTE: a projeção (`projetarElevacao`, reaproveitada pelo corte para o que fica atrás do
+       plano) leva as folhas no plano da fachada (trecho `u`, lado da dobradiça) e a cota da bandeira;
+       `simboloDaElevacao` desenha montantes, travessa e a convenção (V tracejado para a dobradiça na de
+       abrir, V para cima no maxim-ar, X na basculante, eixo na pivotante, seta na de correr) — a MESMA
+       conta na tela (`ElevationCanvas`), no PDF e no DXF (`ELEVACAO-ABERTURAS`). Sem folhas, o retângulo
+       de sempre e nenhuma chave nova na projeção (teste). O vão CORTADO pelo plano segue como retângulo.
+    3. TRAVESSA NO 3D: peça própria `TRAVESSA` — vão inteiro, 70 mm de altura, 15 mm saliente de cada face
+       do caixilho, quase preta (#0f172a) — não some mais no quadro de longe.
+    - Prova: `blueprintFolhas.test.ts` (28), `blueprintCatalogoFolhas.test.ts` (3),
+      `components/PainelEsquadria.test.tsx` (+1); suíte inteira 841 arquivos / 8564 testes.
+      ⏳ **Prova no app pendente**: o estudo de testes "Planta 11/10/2026" foi editado por outra pessoa às
+      19:18 (4 paredes, 2 janelas novas) — não escrevi nele; a rodada parou antes da 1ª escrita.
   - Prova: `__tests__/blueprintFolhas.test.ts` (23). ✅ **No app com escrita (11/10, "Planta 11/10/2026",
     estudo sozinho)**: J + clique na parede de cima → Configurar folhas → + Folha → folha 1 Fixa, folha 2 De
     abrir → Pôr bandeira → **no banco, FIXA 33 / ABRIR 33 / CORRER 34 + bandeira BASCULANTE 400**; largura

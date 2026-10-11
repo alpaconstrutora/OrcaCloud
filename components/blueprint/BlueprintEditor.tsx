@@ -5945,6 +5945,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       // E1.1 da climatização: o tipo leva o vidro junto — e um tipo SEM vidro limpa o da abertura,
       // porque "aplicar o tipo" é aplicá-lo inteiro (uma J1 não é J1 com outro vidro).
       { type: 'SetOpeningVidro', openingId: abertura.id, vidro: tipo.vidro ?? null },
+      // F8: as folhas idem — tipo sem folhas volta a abertura ao desenho padrão. Só porta/janela as têm.
+      ...(tipo.kind === 'door' || tipo.kind === 'window'
+        ? [{ type: 'SetOpeningConfiguracao' as const, openingId: abertura.id, configuracao: tipo.configuracao ?? null }]
+        : []),
     ]);
   }
 
@@ -16166,6 +16170,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           {tarefaAberta === 'esquadrias' && (
             <PainelEsquadrias
               grupos={quant.totais.porEsquadria ?? []}
+              configuracaoDe={(id) => editor.model.openings.find((o) => o.id === id)?.configuracao}
               onAplicar={(mudancas) => {
                 // UM lote para tudo: um passo de desfazer para o quadro inteiro.
                 const cmds: Command[] = mudancas.flatMap((m) =>

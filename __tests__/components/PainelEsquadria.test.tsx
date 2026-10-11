@@ -235,4 +235,15 @@ describe('PainelEsquadria · 6. vidro e proteção solar', () => {
     await gravar('org_1');
     expect(saveOpeningType).toHaveBeenCalledWith('org_1', expect.objectContaining({ nome: 'J1', vidro: VIDRO }));
   });
+
+  it('salvar como tipo leva as FOLHAS da abertura (F8, coluna configuracao do catálogo)', async () => {
+    const user = userEvent.setup();
+    const configuracao = { folhas: [{ mecanismo: 'FIXA' as const, larguraPct: 40 }, { mecanismo: 'CORRER' as const, larguraPct: 60 }], bandeira: { alturaMm: 300, mecanismo: 'BASCULANTE' as const } };
+    montar({ abertura: porta({ kind: 'window', esquadria: { nome: 'J2', itemCode: '', descricao: '' }, configuracao }) });
+    await user.click(screen.getByRole('button', { name: /Salvar tipo/ }));
+    await waitFor(() => expect(forEachTargetOrg).toHaveBeenCalled());
+    const gravar = vi.mocked(forEachTargetOrg).mock.calls.at(-1)![1] as (org: string) => Promise<unknown>;
+    await gravar('org_1');
+    expect(saveOpeningType).toHaveBeenCalledWith('org_1', expect.objectContaining({ nome: 'J2', configuracao }));
+  });
 });

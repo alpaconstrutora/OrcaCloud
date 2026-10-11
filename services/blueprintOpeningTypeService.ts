@@ -20,7 +20,7 @@
 // — não "nenhuma". O `.eq()` só entra quando há org, e a RLS recorta o resto.
 
 import { supabase } from '../lib/supabase';
-import type { Opening, VidroDaAbertura } from '../utils/blueprintKernel';
+import { MECANISMOS_DE_FOLHA, MECANISMOS_DA_BANDEIRA, type ConfiguracaoDaEsquadria, type Opening, type VidroDaAbertura } from '../utils/blueprintKernel';
 
 export interface TipoDeEsquadria {
   id: string;
@@ -39,6 +39,8 @@ export interface TipoDeEsquadria {
   descricao: string;
   /** VIDRO (E1.1 da climatização, 04/10/2026): o mesmo `Opening.vidro` do kernel; `null` = não declarado. */
   vidro: VidroDaAbertura | null;
+  /** FOLHAS E BANDEIRA (F8, kernel 0.98.0): o mesmo `Opening.configuracao`; `null` = desenho padrão. */
+  configuracao: ConfiguracaoDaEsquadria | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -47,12 +49,12 @@ export interface TipoDeEsquadria {
 /** O que se grava — sem id, sem carimbos. */
 export type DadosDoTipoDeEsquadria = Pick<
   TipoDeEsquadria,
-  'nome' | 'kind' | 'widthMm' | 'heightMm' | 'sillMm' | 'embutida' | 'itemCode' | 'descricao' | 'vidro'
+  'nome' | 'kind' | 'widthMm' | 'heightMm' | 'sillMm' | 'embutida' | 'itemCode' | 'descricao' | 'vidro' | 'configuracao'
 >;
 
 /** Colunas nomeadas, nunca `select('*')`. */
 const COLS =
-  'id, organization_id, nome, kind, width_mm, height_mm, sill_mm, embutida, item_code, descricao, vidro, active, created_at, updated_at';
+  'id, organization_id, nome, kind, width_mm, height_mm, sill_mm, embutida, item_code, descricao, vidro, configuracao, active, created_at, updated_at';
 
 /** O JSONB do catálogo, só com a forma que o kernel aceita; qualquer coisa estranha vira "sem vidro". */
 function vidroDaColuna(raw: unknown): VidroDaAbertura | null {
@@ -61,6 +63,26 @@ function vidroDaColuna(raw: unknown): VidroDaAbertura | null {
   const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
   if (typeof r.protecao !== 'string') return null;
   return { fatorSolar: num(r.fatorSolar), uWm2K: num(r.uWm2K), protecao: r.protecao as VidroDaAbertura['protecao'], fatorSombreamento: num(r.fatorSombreamento) };
+}
+
+/**
+ * O JSONB das folhas, só com a forma que o kernel aceita (mecanismos conhecidos, % inteiro); qualquer
+ * coisa estranha vira "desenho padrão". A soma e a bandeira o kernel confere ao aplicar.
+ */
+export function configuracaoDaColuna(raw: unknown): ConfiguracaoDaEsquadria | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as { folhas?: unknown; bandeira?: unknown };
+  if (!Array.isArray(r.folhas) || r.folhas.length === 0) return null;
+  const folhas: ConfiguracaoDaEsquadria['folhas'] = [];
+  for (const f of r.folhas as Record<string, unknown>[]) {
+    if (!f || !(MECANISMOS_DE_FOLHA as readonly unknown[]).includes(f.mecanismo) || !Number.isInteger(f.larguraPct)) return null;
+    folhas.push({ mecanismo: f.mecanismo as ConfiguracaoDaEsquadria['folhas'][number]['mecanismo'], larguraPct: f.larguraPct as number });
+  }
+  const b = r.bandeira as Record<string, unknown> | null | undefined;
+  if (b && (MECANISMOS_DA_BANDEIRA as readonly unknown[]).includes(b.mecanismo) && Number.isInteger(b.alturaMm)) {
+    return { folhas, bandeira: { alturaMm: b.alturaMm as number, mecanismo: b.mecanismo as NonNullable<ConfiguracaoDaEsquadria['bandeira']>['mecanismo'] } };
+  }
+  return { folhas };
 }
 
 function mapear(row: Record<string, unknown>): TipoDeEsquadria {
@@ -76,6 +98,7 @@ function mapear(row: Record<string, unknown>): TipoDeEsquadria {
     itemCode: (row.item_code as string) ?? '',
     descricao: (row.descricao as string) ?? '',
     vidro: vidroDaColuna(row.vidro),
+    configuracao: configuracaoDaColuna(row.configuracao),
     active: row.active as boolean,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
@@ -129,6 +152,8 @@ export async function saveOpeningType(
         item_code: dados.itemCode.trim(),
         descricao: dados.descricao,
         vidro: dados.vidro ?? null,
+        // Folhas só em porta e janela (o kernel recusa nos outros tipos ao aplicar).
+        configuracao: dados.kind === 'door' || dados.kind === 'window' ? (dados.configuracao ?? null) : null,
         active: true,
         updated_at: new Date().toISOString(),
       },

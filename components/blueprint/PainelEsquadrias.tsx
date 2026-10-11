@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookMarked, Combine, Search, Sparkles, Wand2 } from 'lucide-react';
-import { nomeDoTipoDeAbertura, type Esquadria } from '../../utils/blueprintKernel';
+import { nomeDoTipoDeAbertura, type ConfiguracaoDaEsquadria, type Esquadria } from '../../utils/blueprintKernel';
 import type { QuantidadePorEsquadria } from '../../utils/blueprintKernel/quantities';
 import { cmParaMm, mmParaCm, textoEmCm } from '../../utils/blueprintMedidaCm';
 import { TOLERANCIA_PADRAO_MM, type Unificacao } from '../../utils/blueprintUnificarEsquadrias';
@@ -58,6 +58,8 @@ interface Props {
   onAplicar: (mudancas: { openingIds: readonly string[]; esquadria: Esquadria }[]) => void;
   /** Mostra o grupo no desenho. */
   onSelecionar: (openingIds: readonly string[]) => void;
+  /** F8: as folhas de uma abertura do desenho — para "Salvar no catálogo" levar as do grupo. */
+  configuracaoDe?: (openingId: string) => ConfiguracaoDaEsquadria | null | undefined;
   /**
    * UNIFICAR TIPOS PRÓXIMOS (P2.50). A proposta chega pronta porque depende do
    * MODELO (saber se a medida nova cabe na parede), e este painel só conhece o
@@ -83,6 +85,7 @@ export default function PainelEsquadrias({
   grupos,
   onAplicar,
   onSelecionar,
+  configuracaoDe,
   unificacoes = [],
   toleranciaMm = TOLERANCIA_PADRAO_MM,
   onTolerancia,
@@ -294,6 +297,8 @@ export default function PainelEsquadrias({
           // (E1.1 da climatização); o tipo salvo daqui nasce sem ele, e o painel da
           // abertura selecionada é onde o vidro se declara e se guarda no tipo.
           vidro: null,
+          // F8: as folhas são parte da assinatura, então o grupo inteiro tem as mesmas — lê da 1ª abertura.
+          configuracao: configuracaoDe?.(g.openingIds[0]) ?? null,
         }),
       );
       ok += r.ok;

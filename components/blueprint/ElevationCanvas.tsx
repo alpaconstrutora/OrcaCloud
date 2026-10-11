@@ -17,6 +17,7 @@ import {
   type ProjecaoElevacao,
   projetarElevacao,
 } from '../../utils/blueprintElevation';
+import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
@@ -366,6 +367,19 @@ export default function ElevationCanvas({
             ctx.strokeStyle = COR_ABERTURA_BORDA;
             ctx.lineWidth = 1.25;
             ctx.strokeRect(rv.x, rv.y, rv.w, rv.h);
+            // F8: as folhas e a bandeira por dentro do vão (a mesma conta do PDF e do DXF).
+            for (const s of simboloDaElevacao(o)) {
+              const p = paraTela({ x: s.a.u, y: s.a.v });
+              const q = paraTela({ x: s.b.u, y: s.b.v });
+              ctx.save();
+              ctx.lineWidth = 1;
+              if (s.tracejado) ctx.setLineDash([4, 3]);
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(q.x, q.y);
+              ctx.stroke();
+              ctx.restore();
+            }
 
             if (mostrarRotulosEsquadria && Math.abs(rv.w) > 28 && Math.abs(rv.h) > 16) {
               ctx.fillStyle = COR_TEXTO;

@@ -156,6 +156,7 @@ export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo, 
         itemCode: esq.itemCode,
         descricao: esq.descricao,
         vidro: abertura.vidro ?? null,
+        configuracao: abertura.configuracao ?? null,
       }),
     );
     setAviso(
@@ -199,7 +200,7 @@ export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo, 
           title={
             compativeis.length === 0
               ? `Nenhum tipo de ${nomeDoTipoDeAbertura(abertura.kind).toLowerCase()} salvo nesta organização`
-              : 'Aplica nome, item, largura, altura e peitoril do tipo — um passo de desfazer'
+              : 'Aplica nome, item, largura, altura, peitoril, vidro e folhas do tipo — um passo de desfazer'
           }
           className="h-8 min-w-0 flex-1 rounded-[6px] border border-slate-200 bg-white px-2 text-sm font-normal text-slate-800 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-50 disabled:text-slate-400"
         >

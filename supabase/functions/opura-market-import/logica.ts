@@ -804,6 +804,46 @@ export interface PedacosDaPagina {
   olx: unknown;
   /** Sites Arbo: `props.pageProps.imovel` do `__NEXT_DATA__`. */
   arbo: unknown;
+  /** Página de BUSCA do ZAP/VivaReal: `"listings":[…]`, cada item no formato do `listing` (Fase C2). */
+  zapLista?: unknown[];
+  /** Página de BUSCA da OLX: `"ads":[…]` do payload do Next.js (Fase C2). */
+  olxLista?: unknown[];
+}
+
+/** Máximo de anúncios lidos de uma página de busca (ZAP: 30; OLX: ~50). */
+export const MAX_ITENS_DO_LOTE = 100;
+
+/** Array JSON começando em `inicio` (o colchete de abertura), respeitando strings. */
+export function listaJsonEm(texto: string, inicio: number): string | null {
+  if (texto[inicio] !== '[') return null;
+  let prof = 0;
+  let emTexto = false;
+  let escape = false;
+  for (let j = inicio; j < texto.length; j++) {
+    const c = texto[j];
+    if (emTexto) {
+      if (escape) escape = false;
+      else if (c === '\\') escape = true;
+      else if (c === '"') emTexto = false;
+      continue;
+    }
+    if (c === '"') emTexto = true;
+    else if (c === '[' || c === '{') prof++;
+    else if ((c === ']' || c === '}') && --prof === 0) return texto.slice(inicio, j + 1);
+  }
+  return null;
+}
+
+/** O array JSON depois de `chave` (ex.: '"listings":') no texto; [] se não houver ou não abrir. */
+function listaDepoisDe(texto: string, chave: string): unknown[] {
+  const i = texto.indexOf(`${chave}[`);
+  if (i < 0) return [];
+  try {
+    const v = JSON.parse(listaJsonEm(texto, i + chave.length) ?? '');
+    return Array.isArray(v) ? v.slice(0, MAX_ITENS_DO_LOTE) : [];
+  } catch {
+    return [];
+  }
 }
 
 function metaDe(html: string, nome: string): string | null {
@@ -864,6 +904,9 @@ export function pedacosDoHtml(html: string): PedacosDaPagina {
     zap,
     olx,
     arbo,
+    // Página de busca (Fase C2): só quando a página não é de um anúncio único.
+    zapLista: zap ? [] : listaDepoisDe(payload, '"listings":'),
+    olxLista: olx ? [] : listaDepoisDe(payload, '"ads":'),
   };
 }
 
@@ -889,6 +932,8 @@ export function pedacosDoPacote(x: unknown): PedacosDaPagina | null {
     zap: ehObjeto(x.zap) ? x.zap : null,
     olx: ehObjeto(x.olx) ? x.olx : null,
     arbo: ehObjeto(x.arbo) ? x.arbo : null,
+    zapLista: Array.isArray(x.zapLista) ? x.zapLista.filter(ehObjeto).slice(0, MAX_ITENS_DO_LOTE) : [],
+    olxLista: Array.isArray(x.olxLista) ? x.olxLista.filter(ehObjeto).slice(0, MAX_ITENS_DO_LOTE) : [],
   };
 }
 
@@ -907,7 +952,10 @@ function lerGrupoZap(l: any, avisos: string[]): Parcial | null {
   const primeiro = (x: unknown) => (Array.isArray(x) ? x[0] : x);
   const coordenadas = ehObjeto(ad.coordinates) ? ad.coordinates : null;
   // Posição "aproximada" é o centro do bairro que o portal mostra: não é do imóvel.
-  const pos = ad.isApproximateLocation === false && coordenadas ? posicao(coordenadas.lat, coordenadas.lon ?? coordenadas.lng) : { lat: null, lng: null };
+  // Anúncio: `{lat, lon}`; página de busca: `{latitude, longitude}` (visto em 10/10/2026).
+  const pos = ad.isApproximateLocation === false && coordenadas
+    ? posicao(coordenadas.lat ?? coordenadas.latitude, coordenadas.lon ?? coordenadas.lng ?? coordenadas.longitude)
+    : { lat: null, lng: null };
   if (ad.isApproximateLocation !== false) avisos.push('O portal mostra só a localização aproximada: a posição será buscada pelo endereço ou pelo bairro.');
   const id = typeof l.id === 'string' || typeof l.id === 'number' ? String(l.id) : '';
   return {
@@ -1103,7 +1151,8 @@ function completar(p: Parcial, url: string, precoOculto: boolean): AnuncioLido {
     iptu: p.iptu ?? null,
     descricao: p.descricao ?? null,
     rua: p.rua ?? null,
-    numero: p.numero ?? null,
+    // Número sem dígito não é número: o ZAP põe "Estrada" no campo (visto em 10/10/2026).
+    numero: p.numero && /\d/.test(p.numero) ? p.numero : null,
     bairro: p.bairro ?? null,
     cidade: p.cidade ?? null,
     uf: p.uf ?? null,
@@ -1397,4 +1446,105 @@ export const FONTES_SO_SOB_COMANDO: readonly string[] = ['api_conexao381'];
 /** A fonte deste tipo pode ser lida pelo cron diário? */
 export function fonteTemColetaDiaria(tipo: string | null | undefined): boolean {
   return !FONTES_SO_SOB_COMANDO.includes(String(tipo ?? ''));
+}
+
+// ── Página de busca: vários anúncios de uma vez (plano 2026-10-10-opura-market-fontes, Fase C2) ──
+//
+// O favorito "Enviar ao ÒPURA" clicado numa página de RESULTADOS manda a lista
+// que a própria página já trouxe: ZAP/VivaReal `"listings":[…]` (30 por página,
+// no mesmo formato do anúncio individual), OLX `"ads":[…]` (~50) ou, em site de
+// imobiliária, o JSON-LD `ItemList`. Cada item passa pelos MESMOS leitores do
+// anúncio individual.
+
+/** OLX: o anúncio da LISTA traz os campos com outros nomes; vira o formato do anúncio individual. */
+function olxDaLista(ad: Record<string, unknown>): Record<string, unknown> {
+  return {
+    listId: ad.listId,
+    subject: ad.subject,
+    priceValue: ad.priceValue ?? ad.price,
+    categoryName: ad.categoryName ?? ad.category,
+    canonicalUrl: ad.url,
+    location: ad.locationDetails,
+    properties: ad.properties,
+  };
+}
+
+/** Os itens de um JSON-LD `ItemList` (o `item` de cada `ListItem`, ou o próprio elemento). */
+function itensDoItemList(raizes: unknown[]): Record<string, unknown>[] {
+  const itens: Record<string, unknown>[] = [];
+  const visitar = (n: unknown, prof: number) => {
+    if (!n || typeof n !== 'object' || prof > 4) return;
+    if (Array.isArray(n)) { n.forEach((x) => visitar(x, prof + 1)); return; }
+    const o = n as Record<string, unknown>;
+    if (Array.isArray(o['@graph'])) (o['@graph'] as unknown[]).forEach((x) => visitar(x, prof + 1));
+    const tipos = ([] as unknown[]).concat(o['@type'] ?? []).map(String);
+    if (tipos.includes('ItemList') && Array.isArray(o.itemListElement)) {
+      for (const el of o.itemListElement as unknown[]) {
+        const it = ehObjeto(el) && ehObjeto(el.item) ? el.item : el;
+        if (ehObjeto(it)) itens.push(it);
+      }
+    }
+  };
+  raizes.forEach((r) => visitar(r, 0));
+  return itens.slice(0, MAX_ITENS_DO_LOTE);
+}
+
+/** A página é de BUSCA (vários anúncios) e não de um anúncio só? O anúncio único sempre ganha. */
+export function ehPaginaDeBusca(pd: PedacosDaPagina | null | undefined): boolean {
+  if (!pd || pd.zap || pd.olx || pd.arbo) return false;
+  return (pd.zapLista?.length ?? 0) > 0 || (pd.olxLista?.length ?? 0) > 0 || itensDoItemList(pd.ld).length >= 2;
+}
+
+/** Os anúncios de uma página de busca, sem repetir link. `url` é o endereço da página. */
+export function lerAnunciosDaLista(pd: PedacosDaPagina, url: string): AnuncioDaPagina[] {
+  const site = nomeDoSite(url, pd.ogSiteName);
+  const itens: AnuncioDaPagina[] = [];
+  const vistos = new Set<string>();
+  const adicionar = (p: Parcial | null, leitor: string, avisos: string[]) => {
+    if (!p) return;
+    const pp = juntar(p, dadosDoTitulo(p.titulo));
+    let link = pp.url ?? '';
+    if (/^www\./i.test(link)) link = `https://${link}`;
+    if (!/^https?:\/\//i.test(link)) return;   // sem link estável não dá para reconhecer depois
+    link = urlEstavel(link);
+    if (vistos.has(link)) return;
+    vistos.add(link);
+    const anuncio = completar({ ...pp, url: link }, link, false);
+    itens.push({ anuncio, site, leitor, faltando: camposFaltando(anuncio), avisos });
+  };
+  for (const l of pd.zapLista ?? []) {
+    const avisos: string[] = [];
+    // O aviso de "localização aproximada" repetido em 30 linhas não ajuda ninguém.
+    adicionar(lerGrupoZap(l, avisos), 'zap', avisos.filter((a) => !/aproximada/.test(a)));
+  }
+  for (const ad of pd.olxLista ?? []) {
+    if (!ehObjeto(ad)) continue;
+    const avisos: string[] = [];
+    adicionar(lerOlx(olxDaLista(ad), avisos), 'olx', avisos);
+  }
+  if (itens.length === 0) {
+    for (const it of itensDoItemList(pd.ld)) {
+      const p = lerJsonLd([it]);
+      if (p) adicionar({ ...p, url: textoLimpo(it.url, 1000) }, 'json-ld', []);
+    }
+  }
+  return itens;
+}
+
+/**
+ * O que fazer com cada anúncio do lote: só vai marcado o que a gravação aceita
+ * (`anuncioConferido`): preço, área e a cidade da praça. Já gravado = atualiza o preço.
+ */
+export function situacaoNoLote(a: AnuncioLido, jaGravado: boolean, cidadeDaPraca: string): { gravavel: boolean; texto: string } {
+  if (a.cidade && normalizarNome(a.cidade) !== normalizarNome(cidadeDaPraca)) {
+    return { gravavel: false, texto: `Outra cidade (${a.cidade})` };
+  }
+  const falta = [
+    !(a.preco > 0) ? 'preço' : null,
+    !(a.area != null && a.area > 0) ? 'área' : null,
+    !a.cidade ? 'cidade' : null,
+  ].filter(Boolean);
+  if (falta.length) return { gravavel: false, texto: `Falta ${falta.join(', ')}` };
+  if (jaGravado) return { gravavel: true, texto: 'Já na base: atualiza o preço' };
+  return { gravavel: true, texto: a.bairro ? 'Novo' : 'Novo, sem bairro' };
 }

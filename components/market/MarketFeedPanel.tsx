@@ -7,14 +7,16 @@ import {
   type FonteMercado,
   type TipoDeFonteMercado,
   type LeituraDeAnuncio,
+  type LeituraDoLote,
 } from '../../services/opuraMarketService';
 import { supabase } from '../../lib/supabase';
 import type { OpuraMarketCity, OpuraMarketListing } from '../../types';
 import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
 import MarketAnuncioLinkSheet from './MarketAnuncioLinkSheet';
+import MarketLoteCaptura from './MarketLoteCaptura';
 import { codigoDoFavorito, type CapturaDoNavegador } from '../../utils/opuraMarketCaptura';
-import { maxDetalhesDaFonte, fonteEhConexao381, fonteTemColetaDiaria } from '../../supabase/functions/opura-market-import/logica';
+import { maxDetalhesDaFonte, fonteEhConexao381, fonteTemColetaDiaria, ehPaginaDeBusca, pedacosDoPacote } from '../../supabase/functions/opura-market-import/logica';
 
 /**
  * Fontes de anúncios da praça (plano 2026-10-10-opura-market-fontes, Fase A).
@@ -185,13 +187,23 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
   // Anúncio enviado pelo favorito (Fase C): lido assim que houver organização e
   // praça. A ref impede ler o mesmo pacote duas vezes (efeito repetido do StrictMode).
   const capturaLida = React.useRef<CapturaDoNavegador | null>(null);
+  const [lote, setLote] = React.useState<LeituraDoLote | null>(null);
+  const loteGravado = async (r: ResultadoImportacaoMercado, site: string) => {
+    setResultado(`${site} (página de busca): ${descreverResultado(r)}`);
+    setLote(null);
+    await onAtualizado();
+  };
   React.useEffect(() => {
     if (!captura || !organizationId || !cityId || capturaLida.current === captura) return;
     capturaLida.current = captura;
     setLendoAnuncio(true);
     setResultado(null);
-    opuraMarketService.lerAnuncioPorLink(organizationId, cityId, captura.url, captura.pacote)
-      .then(setLeitura)
+    // Página de BUSCA (Fase C2): a lista vai para a revisão do lote; anúncio único, para a gaveta.
+    const busca = ehPaginaDeBusca(pedacosDoPacote(captura.pacote));
+    const leitura = busca
+      ? opuraMarketService.lerLoteDoNavegador(organizationId, cityId, captura.url, captura.pacote).then(setLote)
+      : opuraMarketService.lerAnuncioPorLink(organizationId, cityId, captura.url, captura.pacote).then(setLeitura);
+    leitura
       .catch((err: any) => {
         console.error('Falha ao ler o anúncio enviado pelo navegador:', err);
         setResultado(`Erro: ${err.message || 'falha ao ler o anúncio enviado pelo navegador'}`);
@@ -417,6 +429,16 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
         </div>
       </div>
 
+      {lote && (
+        <MarketLoteCaptura
+          lote={lote}
+          organizationId={organizationId}
+          cityId={cityId}
+          onDescartar={() => setLote(null)}
+          onGravado={loteGravado}
+        />
+      )}
+
       {captura && (!organizationId || !cityId) && (
         <div className="p-4 bg-amber-50 border border-amber-100 rounded-[10px] flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="text-xs text-amber-800 font-semibold min-w-0">
@@ -438,7 +460,7 @@ export default function MarketFeedPanel({ organizationId, cityId, cidade, listin
           Capturar no navegador (ZAP, VivaReal, OLX)
           <span className="block text-slate-400 font-normal mt-0.5">
             Esses portais bloqueiam a leitura pelo servidor. Arraste o botão para a barra de favoritos do navegador (uma vez só, no computador).
-            Depois, na página de um anúncio, clique no favorito: o app abre com o anúncio para conferir. Fotos não são copiadas.
+            Depois, na página de um anúncio ou numa página de resultados de busca, clique no favorito: o app abre com o anúncio (ou a lista inteira da página) para conferir. Fotos não são copiadas.
           </span>
         </div>
         <div className="flex items-center gap-3 shrink-0">

@@ -39,6 +39,7 @@ export function capturarAnuncio(app: string, maximo: number): void {
     }
     return r;
   };
+  // Objeto `{…}` ou lista `[…]` começando em `ini`, respeitando strings.
   var objetoEm = function (t: string, ini: number): string | null {
     var prof = 0;
     var emTexto = false;
@@ -52,8 +53,8 @@ export function capturarAnuncio(app: string, maximo: number): void {
         continue;
       }
       if (c === '"') emTexto = true;
-      else if (c === '{') prof++;
-      else if (c === '}') { prof--; if (prof === 0) return t.slice(ini, j + 1); }
+      else if (c === '{' || c === '[') prof++;
+      else if (c === '}' || c === ']') { prof--; if (prof === 0) return t.slice(ini, j + 1); }
     }
     return null;
   };
@@ -86,7 +87,7 @@ export function capturarAnuncio(app: string, maximo: number): void {
       if (parte && typeof parte[1] === 'string') texto += parte[1];
     }
   }
-  if (texto.indexOf('"listing":{') < 0) {
+  if (texto.indexOf('"listing":{') < 0 && texto.indexOf('"listings":[') < 0 && texto.indexOf('"ads":[') < 0) {
     texto = '';
     var scripts = d.getElementsByTagName('script');
     var re = /self\.__next_f\.push\(\[1,("(?:[^"\\]|\\.)*")\]\)/g;
@@ -129,6 +130,30 @@ export function capturarAnuncio(app: string, maximo: number): void {
         pacote.arbo = arbo;
       }
     } catch (e) { /* sem anúncio */ }
+  }
+  // Página de BUSCA (Fase C2): sem anúncio único, leva a lista que a página já
+  // trouxe — ZAP/VivaReal "listings" (30) e OLX "ads" (~50) —, só as chaves úteis.
+  if (!pacote.zap && !pacote.olx && !pacote.arbo && texto) {
+    var lista = function (chave: string, chaves: string[]): Record<string, unknown>[] {
+      var p = texto.indexOf(chave);
+      if (p < 0) return [];
+      try {
+        var v = JSON.parse(objetoEm(texto, p + chave.length - 1) || '');
+        var r: Record<string, unknown>[] = [];
+        for (var q = 0; q < v.length && q < 100; q++) {
+          var item = so(v[q], chaves);
+          if (item) {
+            if (typeof item.description === 'string') item.description = (item.description as string).slice(0, 1000);
+            r.push(item);
+          }
+        }
+        return r;
+      } catch (e) {
+        return [];
+      }
+    };
+    pacote.zapLista = lista('"listings":[', ['id', 'prices', 'title', 'href', 'business', 'address', 'amenities', 'description', 'unitType']);
+    pacote.olxLista = lista('"ads":[', ['listId', 'subject', 'priceValue', 'price', 'categoryName', 'category', 'url', 'locationDetails', 'properties']);
   }
   // Fotos nunca: qualquer chave de imagem sai do pacote.
   var json = JSON.stringify(pacote, function (chave, valor) {

@@ -164,6 +164,20 @@ export interface BairroSemCadastro {
   semPosicao: number;
 }
 
+/** Um anúncio de página de busca, com o que a revisão do lote precisa (Fase C2). */
+export interface ItemDoLote extends AnuncioDaPagina {
+  jaGravado: boolean;
+  bairroCadastrado: boolean;
+  /** `gravavel` = preço, área e a cidade da praça; `texto` = o que a tabela mostra. */
+  situacao: { gravavel: boolean; texto: string };
+}
+
+/** Resposta do modo 'ler-lote'. */
+export interface LeituraDoLote {
+  site: string;
+  itens: ItemDoLote[];
+}
+
 /** Resposta do modo 'ler-anuncio' da Edge Function opura-market-import. */
 export interface LeituraDeAnuncio extends AnuncioDaPagina {
   /** O site não deixou ler a página (ex.: "A página do anúncio respondeu HTTP 403."). */
@@ -719,6 +733,16 @@ export const opuraMarketService = {
     pacote?: Record<string, unknown>
   ): Promise<LeituraDeAnuncio> {
     return invocarImportacao({ modo: 'ler-anuncio', organizationId, cityId, url, ...(pacote ? { pacote } : {}) });
+  },
+
+  /** Página de BUSCA enviada pelo favorito (Fase C2): lê os anúncios da lista, sem gravar. */
+  async lerLoteDoNavegador(organizationId: string, cityId: string, url: string, pacote: Record<string, unknown>): Promise<LeituraDoLote> {
+    return invocarImportacao({ modo: 'ler-lote', organizationId, cityId, url, pacote });
+  },
+
+  /** Grava os anúncios marcados na revisão do lote. Link já gravado = atualiza o preço. */
+  async gravarLote(organizationId: string, cityId: string, anuncios: AnuncioDaPagina['anuncio'][], site: string): Promise<ResultadoImportacaoMercado> {
+    return invocarImportacao({ modo: 'gravar-lote', organizationId, cityId, anuncios, site });
   },
 
   /** Grava o anúncio conferido na tela. O mesmo link de novo atualiza, não duplica. */

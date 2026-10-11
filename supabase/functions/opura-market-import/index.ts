@@ -27,6 +27,9 @@
 //                      devolve os campos achados, sem gravar (Fase B do plano de fontes).
 //                      Com `pacote` (Fase C, favorito "Enviar ao ÒPURA"), lê os pedaços
 //                      que o NAVEGADOR tirou da página, sem baixar nada.
+//   modo 'ler-lote' + url + pacote — página de BUSCA enviada pelo favorito: lê
+//                      os anúncios da lista e marca os já gravados (Fase C2).
+//   modo 'gravar-lote' + anuncios[] + site — grava os marcados na revisão do lote.
 //   modo 'gravar-anuncio' + anuncio (conferido na tela) + site — grava esse
 //                      anúncio; colar o mesmo link de novo atualiza, não duplica.
 //   modo 'agendado'  — SÓ o cron diário (opura-market-feeds-diario), autenticado
@@ -85,6 +88,11 @@ import {
   lerAnuncioDaPagina,
   lerAnuncioDosPedacos,
   pedacosDoPacote,
+  ehPaginaDeBusca,
+  lerAnunciosDaLista,
+  situacaoNoLote,
+  nomeDoSite,
+  MAX_ITENS_DO_LOTE,
   lerAnuncioConexao381,
   anuncioEmBranco,
   anuncioConferido,
@@ -654,7 +662,7 @@ serve(async (req: Request) => {
   if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
   const modo = corpo?.modo;
-  const MODOS = ['planilha', 'feed', 'localizar', 'relocalizar', 'importar-fonte', 'ler-anuncio', 'gravar-anuncio'];
+  const MODOS = ['planilha', 'feed', 'localizar', 'relocalizar', 'importar-fonte', 'ler-anuncio', 'gravar-anuncio', 'ler-lote', 'gravar-lote'];
   if (!MODOS.includes(modo)) return json({ error: `modo deve ser um de: ${MODOS.join(', ')}.` }, 400);
 
   const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
@@ -745,6 +753,57 @@ serve(async (req: Request) => {
       const resultado = await gravarFeed(admin, {
         organizationId: organizationId as string, cidade, bairros, geo, lido: { anuncios: [c.anuncio], ignorados: {} },
         origem, feedId: null, agora, atualizarCadastro: true,
+      });
+      return json(resultado);
+    }
+
+    // ── ler-lote: página de BUSCA enviada pelo favorito (Fase C2) ───────────
+    // Lê os anúncios que a própria página já trouxe e marca, numa consulta só,
+    // os que já estão na base. Não grava nada.
+    if (modo === 'ler-lote') {
+      const v = urlDeFeedPermitida(String(corpo.url ?? ''), 'da página');
+      if (!v.ok) return json({ error: v.motivo }, 400);
+      if (JSON.stringify(corpo.pacote ?? null).length > MAX_PAGINA_BYTES) return json({ error: 'O pacote do navegador passa de 5 MB.' }, 413);
+      const pedacos = pedacosDoPacote(corpo.pacote);
+      if (!pedacos || !ehPaginaDeBusca(pedacos)) return json({ error: 'A página enviada não tem uma lista de anúncios.' }, 400);
+      const itens = lerAnunciosDaLista(pedacos, v.url.toString());
+      const urls = itens.map((i) => i.anuncio.url as string);
+      const jaNaBase = new Set<string>();
+      for (let i = 0; i < urls.length; i += LOTE) {
+        const { data, error } = await admin.from('opura_market_listings').select('source_url')
+          .eq('organization_id', organizationId).eq('city_id', cidade.id).in('source_url', urls.slice(i, i + LOTE));
+        if (error) throw new Error(`Falha ao buscar anúncios já importados: ${error.message}`);
+        for (const r of data ?? []) jaNaBase.add(r.source_url);
+      }
+      return json({
+        site: itens[0]?.site ?? nomeDoSite(v.url.toString(), pedacos.ogSiteName),
+        itens: itens.map((i) => {
+          const ja = jaNaBase.has(i.anuncio.url as string);
+          return { ...i, jaGravado: ja, bairroCadastrado: !!casarBairro(i.anuncio.bairro, bairros), situacao: situacaoNoLote(i.anuncio, ja, cidade.name) };
+        }),
+      });
+    }
+
+    // ── gravar-lote: os anúncios marcados na revisão do lote ───────────────
+    // Cada um passa de novo por `anuncioConferido` (o corpo não é confiável) e
+    // tem de ser da praça. Sem feedId: anúncio de página de busca nunca gera saídas.
+    if (modo === 'gravar-lote') {
+      const lista = Array.isArray(corpo.anuncios) ? corpo.anuncios : null;
+      if (!lista || lista.length === 0) return json({ error: 'Nenhum anúncio selecionado.' }, 400);
+      if (lista.length > MAX_ITENS_DO_LOTE) return json({ error: `No máximo ${MAX_ITENS_DO_LOTE} anúncios por vez.` }, 400);
+      const validos: AnuncioLido[] = [];
+      let recusados = 0;
+      for (const e of lista) {
+        const c = anuncioConferido(e);
+        if (!c.ok || normalizarNome(c.anuncio.cidade) !== normalizarNome(cidade.name)) { recusados++; continue; }
+        validos.push(c.anuncio);
+      }
+      if (validos.length === 0) return json({ error: 'Nenhum anúncio do lote tem preço, área e a cidade da praça.' }, 400);
+      const origem = (textoOuNulo(corpo.site) ?? 'Página de busca').slice(0, 60);
+      const resultado = await gravarFeed(admin, {
+        organizationId: organizationId as string, cidade, bairros, geo,
+        lido: { anuncios: validos, ignorados: recusados ? { 'recusados na validação': recusados } : {} },
+        origem, feedId: null, agora,
       });
       return json(resultado);
     }

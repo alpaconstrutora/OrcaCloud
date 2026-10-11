@@ -179,6 +179,49 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
     - 12 com preço oculto marcado.
     - 5 marcados como repetidos: unidades idênticas do mesmo prédio na planta, juntadas pelo gatilho de duplicados que já existia.
 
+## Fase C2 — captura em lote no navegador (10/10/2026, frente `market-captura-lote`)
+
+**Pedido literal do usuário:**
+
+> pergunta: o usuário tem que cadastrar anuncio por anuncio manualmente?
+
+Respondi que, para ZAP, VivaReal e OLX, sim (um anúncio por clique), e propus fazer o favorito funcionar na página de RESULTADOS de busca. Resposta: **"sim"**.
+
+**O que as páginas de busca trazem** (amostras reais de 10/10):
+
+| Portal | Onde | Quantos por página | Formato |
+|---|---|---|---|
+| ZAP e VivaReal | payload do Next.js, `"listings":[…]` | 30 (os mesmos 30 ids nos dois sites) | o MESMO objeto `listing` do anúncio individual |
+| OLX | payload do Next.js, `"ads":[…]` | até ~50 | `subject`, `priceValue`, `properties`, `locationDetails`, `url` |
+| Site de imobiliária (Arbo e outros) | JSON-LD `ItemList` de `RealEstateListing` | 10 (Arbo) | área, quartos e endereço; o preço vem no nome |
+
+As páginas de anúncio individual não trazem essas listas: o anúncio único continua tendo preferência.
+
+**Desenho:**
+- **Favorito:** sem anúncio único na página, ele junta a lista (`zapLista` e `olxLista`), só com as chaves que interessam e sem fotos.
+- **`logica.ts`:**
+  - `lerAnunciosDaLista(pedaços, url)` reaproveita os leitores de ZAP e OLX e lê também o JSON-LD `ItemList`.
+  - `situacaoNoLote` decide o que pode ser gravado: falta de preço, área ou cidade, e outra cidade, bloqueiam o item; "já na base" atualiza.
+- **Edge Function:**
+  - `ler-lote` lê os itens e marca os que já estão na base, numa consulta só.
+  - `gravar-lote` valida cada item com `anuncioConferido` e grava pelo `gravarFeed`, sem `feedId`.
+- **Tela:**
+  - A revisão NÃO é gaveta: uma tabela de 30 a 50 linhas não cabe em 672 px. É um cartão na própria aba Fontes, com `StandardTable` e seleção.
+  - Os itens graváveis vêm marcados; os outros dizem o motivo.
+  - Botão "Gravar N anúncios".
+- **Correção junto:** na busca do ZAP a coordenada vem como `latitude`/`longitude`, e o leitor só olhava `lat`/`lon`.
+
+**Execução (10/10/2026):**
+- Feito como desenhado, mais duas correções que as amostras mostraram: o "número" sem dígito ("Estrada", no ZAP) é descartado, e o link de `ItemList` sem `https://` ganha o esquema.
+- **Testes:** `__tests__/opuraMarketPaginaDeBusca.test.ts` com 13 casos, e +1 caso em `opuraMarketCaptura.test.ts`: o favorito numa busca de 30 anúncios, executado como texto, gera um endereço com menos de 80 mil caracteres.
+- **Prova** com o build de PRODUÇÃO e a organização `ZZ Teste E2E Market (lote)`, apagada depois. É replay das páginas de busca reais, porque o Cloudflare barra o Chrome automatizado:
+  - **ZAP:** 30 lidos e 30 gravados de uma vez, num endereço de cerca de 99 mil caracteres.
+  - **OLX** (busca por "cambuí"): 42 lidos; 4 gravados, e 38 de Sete Lagoas ficaram como "Outra cidade".
+  - **VivaReal (os mesmos 30):** "já importados, com preço atualizado: 30".
+  - **No banco:** 34 anúncios, 34 links, 0 repetidos.
+- **Ajuste visual depois da 1ª prova:** as colunas Área e Situação quebravam linha ("214 m²" em duas). Alarguei para 110 e 240 px, e preço e área não quebram mais.
+- **Limite conhecido:** o link de um anúncio Arbo na lista JSON-LD não é o mesmo do canônico da página do anúncio. Capturar o mesmo imóvel Arbo pela busca e pela página pode gerar dois registros; o gatilho de duplicados junta os dois pela posição (o Arbo dá coordenada).
+
 ## Estado
 
 - [x] Fase A
@@ -186,6 +229,7 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
 - [x] Fase C — aprovada pelo usuário no navegador real (10/10/2026, VivaReal ao vivo: dados certos; 2º envio = "já está na base", sem duplicar)
 - [x] Fase D (só sob comando: o banco recusa coleta diária da Conexão 381; migration `aplicar_20271010004200`, aplicada)
 - [ ] ~~Fase E~~ — cancelada (revisão de 10/10/2026)
+- [x] Fase C2 — captura em lote numa página de busca (ZAP, VivaReal, OLX, ItemList)
 - [ ] Fase F — pendência para implementação futura
 
 **Pendências que ficam:**

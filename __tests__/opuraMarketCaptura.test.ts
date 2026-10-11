@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { codigoDoFavorito, pacoteDoHash, capturarAnuncio, MAX_PACOTE } from '../utils/opuraMarketCaptura';
-import { pedacosDoPacote, lerAnuncioDosPedacos } from '../supabase/functions/opura-market-import/logica';
+import { pedacosDoPacote, lerAnuncioDosPedacos, ehPaginaDeBusca, lerAnunciosDaLista } from '../supabase/functions/opura-market-import/logica';
 
 /**
  * Captura no navegador — Fase C do plano docs/planos/2026-10-10-opura-market-fontes.md.
@@ -84,6 +84,29 @@ describe('favorito "Enviar ao ÒPURA"', () => {
     const { lido } = lerDoHash(rodarFavorito());
     expect(lido.leitor).toBe('zap');
     expect(lido.anuncio).toMatchObject({ preco: 2500000, area: 280, url: 'https://www.zapimoveis.com.br/imovel/id-2833700148/' });
+  });
+
+  it('página de BUSCA do ZAP (Fase C2): leva a lista inteira, sem fotos nem anunciante', () => {
+    const listings = [...Array(30)].map((_, i) => ({
+      id: String(2900000000 + i), prices: { sale: { value: 300000 + i * 1000 } }, title: `Casa ${i}`,
+      address: { city: 'Cambuí', stateAcronym: 'MG', neighborhood: 'Centro', isApproximateLocation: true },
+      amenities: { usableAreas: [80 + i], bedrooms: [2] }, unitType: 'HOME',
+      medias: { images: [{ dangerousSrc: 'https://resizedimgs.zapimoveis.com.br/img/x.webp' }] },
+      advertiser: { name: 'Imobiliária Teste', phoneNumbers: ['3534227208'] },
+      description: 'x'.repeat(5000),
+    }));
+    (self as unknown as { __next_f: unknown[] }).__next_f = [[1, `5:["$","$L34",null,{"content":{"listings":${JSON.stringify(listings)}}}]\n`]];
+    const endereco = rodarFavorito();
+    const recebido = pacoteDoHash(endereco.slice(endereco.indexOf('#')))!;
+    expect(JSON.stringify(recebido.pacote)).not.toMatch(/resizedimgs|3534227208|Imobiliária Teste/);
+    const pd = pedacosDoPacote(recebido.pacote)!;
+    expect(ehPaginaDeBusca(pd)).toBe(true);
+    const itens = lerAnunciosDaLista(pd, recebido.url);
+    expect(itens).toHaveLength(30);
+    expect(itens[29].anuncio).toMatchObject({ preco: 329000, area: 109, url: 'https://www.zapimoveis.com.br/imovel/id-2900000029/' });
+    // A descrição longa é cortada no navegador: o endereço do app não pode crescer sem limite.
+    expect((itens[0].anuncio.descricao ?? '').length).toBeLessThanOrEqual(1000);
+    expect(endereco.length).toBeLessThan(80_000);
   });
 
   it('OLX: lê o initial-data; o usuário e as fotos ficam de fora', () => {

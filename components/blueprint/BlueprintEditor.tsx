@@ -847,6 +847,7 @@ import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../
 import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
+import { alvoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
 
 /**
  * Tela do editor de plantas (épico E3).
@@ -8156,6 +8157,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     }
   };
 
+  /**
+   * ATALHOS DE FERRAMENTA (F1, 11/10/2026): W parede, P porta, J janela… — a regra
+   * da tecla mora em `utils/blueprintAtalhos.ts`. Passa pelo MESMO `escolherComponente`
+   * do menu, para a tecla e o clique não divergirem no subtipo.
+   *
+   * Só vale numa vista de PLANTA: o passeio 3D anda com W/A/S/D escutando a janela
+   * inteira, e cada passo armaria a parede. Pelo mesmo motivo, nada acontece com o
+   * mouse travado pelo passeio (`pointerLockElement`).
+   */
+  const atalhoRef = useRef({ escolherComponente, emPlanta: vistaDePlanta !== null });
+  atalhoRef.current = { escolherComponente, emPlanta: vistaDePlanta !== null };
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (!atalhoRef.current.emPlanta || document.pointerLockElement) return;
+      const alvo = alvoDoAtalho(e, e.target as HTMLElement | null);
+      if (!alvo) return;
+      e.preventDefault();
+      if (ehFerramentaSimples(alvo)) editor.setTool(alvo.tool);
+      else atalhoRef.current.escolherComponente(alvo);
+    }
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [editor.setTool]);
+
   /** Os ambientes classificados que ainda devem tomada (9.5.2.2.1) — a contagem do botão. */
   const ambientesComDeficit = ambientes.filter(
     (a) => !!a.conferencia && (a.conferencia.deficit > 0 || a.conferencia.deficitMedias > 0),
@@ -10438,7 +10463,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   disabled={!isolado && editor.selectedIds.length === 0}
                   ativo={isolado}
                 />
-                <BotaoBarra icone={Ruler} rotulo="Medir linha — dois cliques na planta" onClick={() => editor.setTool('medir-linha')} ativo={editor.tool === 'medir-linha'} />
+                <BotaoBarra icone={Ruler} rotulo="Medir linha — dois cliques na planta (atalho: M)" onClick={() => editor.setTool('medir-linha')} ativo={editor.tool === 'medir-linha'} />
               </>
             ),
           },
@@ -19569,11 +19594,14 @@ function Ferramenta({
   onClick: (t: BlueprintTool) => void;
 }) {
   const ativo = atual === valor;
+  // A letra que arma a ferramenta pelo teclado (F1) — derivada da mesma regra do atalho.
+  const letra = letraDoAtalho({ tool: valor });
   return (
     <button
       type="button"
       aria-pressed={ativo}
       onClick={() => onClick(valor)}
+      title={letra ? `${rotulo} — atalho: ${letra}` : undefined}
       className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${
         ativo ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
       }`}

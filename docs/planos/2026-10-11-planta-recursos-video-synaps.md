@@ -78,6 +78,21 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F1 — Atalhos de ferramenta** · `utils/blueprintAtalhos.ts` (novo), `BlueprintEditor.tsx` (efeito de teclado em ~3117), `Ribbon.tsx`
 - Muda: mapa `Record<tecla, BlueprintTool>` (W parede, J janela, D porta, P polígono/hachura, R ambiente, S separador, C cota, M medir, Esc sai). Ignora INPUT/TEXTAREA/SELECT e teclas com Ctrl. A letra aparece no tooltip de cada botão do ribbon.
 - Pronto quando: teste puro do mapa (sem colisão com Ctrl+*/Espaço/setas); no app, W arma a parede e digitar W num input de nome não arma.
+- **Feito na execução (11/10), com mudanças em relação ao rascunho:**
+  - Letras finais: **V** selecionar · **H** mover vista · **W** parede · **R** parede em retângulo ·
+    **P** porta · **J** janela · **M** medir linha. P ficou com **porta** (português, e o polígono de
+    N lados é raro); as letras das fases seguintes nascem com elas: **A** ambiente (F2), **S**
+    separador (F3), **C** cota (F5).
+  - O listener fica num `useEffect` próprio depois de `escolherComponente` (não no de Ctrl+Z), para a
+    tecla passar pelo MESMO caminho do clique no menu (porta/janela = mesma ferramenta, subtipo
+    diferente).
+  - **Só em vista de planta e nunca com `pointerLockElement`**: o passeio 3D anda com W/A/S/D
+    escutando a janela inteira (`Blueprint3DViewer.tsx`, `utils/blueprint3dWalk.ts`) — sem essa
+    trava, cada passo no 3D armaria a parede.
+  - A letra aparece como `<kbd>` à direita do item no menu Componentes e no tooltip dos botões
+    `Ferramenta` (derivada de `letraDoAtalho`, a mesma regra do teclado).
+  - Prova: `__tests__/blueprintAtalhos.test.ts` 6/6; `tsc exit=0`; `check-ui-standard` limpo nos 2
+    `.tsx`. **Falta a prova no app** (pede a senha da conta de teste).
 
 **F2 — Ambiente com um clique** · `BlueprintCanvas.tsx`, `BlueprintEditor.tsx`, `useBlueprintEditor.ts`
 - Muda: ferramenta `ambiente`. No movimento do mouse, o realce da face sob o cursor vem de `ambientesDoNivel` (~2046) + `pointInPolygon(ring)` sem os `holes`, como faz `aplicarEtiquetas`. O clique emite `NameSpace` (ou `PlaceSpaceLabel` com `at` = ponto clicado) e abre a edição do nome no lugar, com o tipo de ambiente sugerido por `usoDoNome`.

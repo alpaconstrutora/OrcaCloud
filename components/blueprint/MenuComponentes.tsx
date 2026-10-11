@@ -89,6 +89,7 @@ import {
 } from '../../utils/blueprintRede';
 import { grupoDoPontoNaDisciplina, FICHA_DO_PONTO_HIDRAULICO, GRUPO_HIDRAULICO_A_CLASSIFICAR, ehSobreOTrecho } from '../../utils/blueprintHidraulica';
 import type { BlueprintTool } from '../../hooks/useBlueprintEditor';
+import { letraDoAtalho } from '../../utils/blueprintAtalhos';
 
 /**
  * COMPONENTES — tudo que o desenho constrói, num menu só.
@@ -1142,6 +1143,8 @@ export default function MenuComponentes(props: Props) {
               {grupo.itens.map((item) => {
                 const IconeItem = item.icone;
                 const selecionado = ativo?.chave === item.chave;
+                // A letra que arma o item pelo teclado (F1) — a mesma regra que o atalho usa.
+                const letra = letraDoAtalho(item.escolha);
                 return (
                   <button
                     key={item.chave}
@@ -1152,7 +1155,7 @@ export default function MenuComponentes(props: Props) {
                       onEscolher(item.escolha);
                       setAberto(false);
                     }}
-                    title={item.ajuda}
+                    title={letra ? `${item.ajuda} Atalho: ${letra}.` : item.ajuda}
                     className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                       selecionado
                         ? 'bg-blue-50 font-medium text-blue-700'
@@ -1161,6 +1164,11 @@ export default function MenuComponentes(props: Props) {
                   >
                     <IconeItem className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{item.rotulo}</span>
+                    {letra && (
+                      <kbd className="ml-auto shrink-0 rounded border border-slate-200 bg-slate-50 px-1 text-[10px] font-medium text-slate-500">
+                        {letra}
+                      </kbd>
+                    )}
                   </button>
                 );
               })}

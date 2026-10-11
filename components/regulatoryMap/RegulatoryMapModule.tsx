@@ -5,7 +5,7 @@
 // empreendimento, cadastra-se aqui uma vez por cidade e o empreendimento importa (aba "Mapa
 // Regulatório" → "Importar de mapa cadastrado").
 import React from 'react';
-import { Plus, Map, Search, RefreshCw, AlertCircle, MoveHorizontal } from 'lucide-react';
+import { Plus, Map, Search, RefreshCw, AlertCircle, MoveHorizontal, ArrowLeft } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
@@ -21,6 +21,11 @@ interface Props {
     /** Abas da tela que hospeda este cadastro (Planta Inteligente) — entram entre o
      *  título e os KPIs, na ordem do §19.3. Ausente = sem abas. */
     tabsSlot?: React.ReactNode;
+    /** Abrir direto o detalhe deste mapa (atalho do editor da Planta). Consumido uma vez: avisa por `onMapaAberto`. */
+    abrirMapaId?: string | null;
+    onMapaAberto?: () => void;
+    /** Veio do editor de uma planta: o "Voltar" (lista e detalhe) devolve a ela. */
+    onVoltarParaPlanta?: (() => void) | null;
 }
 
 const STATUS_LABELS: Record<RegulatoryMapStatus, string> = {
@@ -91,7 +96,7 @@ function renderMapCell(key: string, item: RegulatoryMapWithCity): React.ReactNod
     }
 }
 
-export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tabsSlot }) => {
+export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tabsSlot, abrirMapaId, onMapaAberto, onVoltarParaPlanta }) => {
     const isAllOrgs = !activeOrganizationId || activeOrganizationId === 'all' || activeOrganizationId === 'TODAS';
     const orgIdParam = isAllOrgs ? undefined : activeOrganizationId as string;
 
@@ -118,6 +123,24 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tab
     }, [orgIdParam]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    // Atalho do editor: abre o mapa pedido assim que a lista chega. Fora da lista
+    // (mapa de outra organização achado pela cidade), busca pelo id.
+    React.useEffect(() => {
+        if (!abrirMapaId || loading) return;
+        let vivo = true;
+        const daLista = items.find(i => i.id === abrirMapaId);
+        if (daLista) {
+            setSelected(daLista);
+            onMapaAberto?.();
+            return;
+        }
+        regulatoryMapService.getById(abrirMapaId)
+            .then(m => { if (vivo && m) setSelected(m); })
+            .catch(err => console.error('[RegulatoryMapModule] mapa do atalho não abriu:', err))
+            .finally(() => { if (vivo) onMapaAberto?.(); });
+        return () => { vivo = false; };
+    }, [abrirMapaId, loading, items, onMapaAberto]);
 
     const handleSaved = async (saved: { id: string }) => {
         setIsFormOpen(false);
@@ -170,7 +193,8 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tab
             <>
                 <RegulatoryMapDetail
                     map={selected}
-                    onBack={() => setSelected(null)}
+                    onBack={() => (onVoltarParaPlanta ? onVoltarParaPlanta() : setSelected(null))}
+                    backLabel={onVoltarParaPlanta ? 'Voltar para a planta' : 'Voltar'}
                     onEdit={() => { setEditing(selected); setIsFormOpen(true); }}
                 />
                 {isFormOpen && (
@@ -191,6 +215,17 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tab
             {/* Cabeçalho §20 — h1 + p direto, sem card/banda/ícone. Sem migalha (§18/§23):
                 desde 10/10/2026 este cadastro é aba da Planta Inteligente, e a sidebar já
                 mostra Incorporação › Planta Inteligente ativo. */}
+            {/* Veio do editor de uma planta: 1 salto de volta (§23, exceção do "Voltar"). */}
+            <div>
+            {onVoltarParaPlanta && (
+                <button
+                    type="button"
+                    onClick={onVoltarParaPlanta}
+                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
+                >
+                    <ArrowLeft className="w-4 h-4" /> Voltar para a planta
+                </button>
+            )}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Mapa Regulatório</h1>
@@ -205,6 +240,7 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tab
                 >
                     <Plus className="w-[15px] h-[15px]" /> Novo mapa
                 </button>
+            </div>
             </div>
 
             {tabsSlot}

@@ -1360,6 +1360,12 @@ interface Props {
   onBack: () => void;
   /** DESIGN OPTIONS (E6.1): abrir outra alternativa (ramo) do estudo — quem monta o editor troca o `branchId`. */
   onTrocarRamo?: (branchId: string) => void;
+  /**
+   * Atalho do painel de zona para o cadastro do Mapa Regulatório: `mapaId` é o
+   * mapa escolhido em "Buscar por cidade" (`null` = abrir a lista). Ausente, o
+   * painel não oferece o atalho. Quem monta decide para onde ir e como voltar.
+   */
+  onAbrirMapaRegulatorio?: (mapaId: string | null) => void;
 }
 
 /**
@@ -1409,7 +1415,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'geradorClimatizacao',
 ]);
 
-export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo }: Props) {
+export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo, onAbrirMapaRegulatorio }: Props) {
   // MULTIUSUÁRIO (E10.1): o editor pergunta aos ganchos ANTES de aplicar (trava de
   // outra pessoa, somente leitura) e difunde DEPOIS. Os ganchos leem refs porque o
   // canal e as permissões nascem mais abaixo, depois do próprio editor.
@@ -1430,6 +1436,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
   });
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  /**
+   * TODA saída do editor passa por aqui. O autosave espera 1,5 s e o temporizador
+   * morre com o editor: sair logo depois de uma alteração a perdia, calado.
+   * Gravação falhou → fica no editor, com "Falha ao salvar" à vista.
+   */
+  const sairDoEditor = useCallback(async (destino: () => void) => {
+    if (await editorRef.current.salvarPendente()) destino();
+  }, []);
   /** Quem sou eu no canal: o usuário da sessão (id + e-mail); o nome vem da organização. */
   const [sessaoAtual, setSessaoAtual] = useState<{ id: string; email: string } | null>(null);
   useEffect(() => {
@@ -9529,6 +9543,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           salvando={zona.salvando}
           vocabulario={{ testadaMinimaMm: zona.testadaMinimaMm, areaMinimaDoLoteM2: zona.areaMinimaDoLoteM2, vagasPorUnidade: zona.vagasPorUnidade, insolacaoMinimaH: zona.insolacaoMinimaH, afastamentoProgressivo: zona.afastamentoProgressivo, recuoFrenteEscalonado: zona.recuoFrenteEscalonado, areaMinimaUnidadeM2: zona.areaMinimaUnidadeM2 }}
           onVocabulario={zona.ajustarVocabulario}
+          onAbrirMapaRegulatorio={
+            onAbrirMapaRegulatorio
+              ? () => void sairDoEditor(() => onAbrirMapaRegulatorio(zona.origemDaZona === 'CATALOGO' && zona.mapaId ? zona.mapaId : null))
+              : undefined
+          }
         />
       }
     />
@@ -11462,7 +11481,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             <BotaoBarra
               icone={ArrowLeft}
               rotulo={`Voltar para a lista — ${study.name}`}
-              onClick={onBack}
+              onClick={() => void sairDoEditor(onBack)}
             />
             {/* ⚠️ O NOME DA PLANTA SAIU DA BARRA (25/09/2026, P2.63): *"o botão de
                 voltar não precisa de texto, somente o ícone"* — colado na seta, o

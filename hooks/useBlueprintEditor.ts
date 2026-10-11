@@ -223,6 +223,13 @@ export interface UseBlueprintEditor {
   /** Devolve o id do snapshot publicado (`null` se não publicou). */
   publish: (notes?: string) => Promise<string | null>;
   publishedHash: string | null;
+  /**
+   * Grava AGORA o rascunho que está esperando o debounce do autosave. Toda saída
+   * do editor passa por aqui: ao desmontar, o temporizador é cancelado, e a
+   * alteração feita nos últimos 1,5 s se perdia. `false` = a gravação falhou
+   * (o estado vira 'erro') — quem ia sair deve ficar.
+   */
+  salvarPendente: () => Promise<boolean>;
   /** `true` quando há mudança não publicada em relação ao último snapshot. */
   dirtySincePublish: boolean;
   /**
@@ -266,6 +273,8 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
 
   const [, force] = useState(0);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** O modelo que o temporizador vai gravar — para `salvarPendente` gravar o mesmo, já. */
+  const pendenteRef = useRef<BlueprintModel | null>(null);
 
   // ── Carregar ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -348,7 +357,10 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
 
       setSaveState('pendente');
+      pendenteRef.current = atual;
       autosaveTimer.current = setTimeout(async () => {
+        autosaveTimer.current = null;
+        pendenteRef.current = null;
         setSaveState('salvando');
         try {
           await saveDraft(branchId, atual);
@@ -361,6 +373,24 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
     },
     [branchId],
   );
+
+  const salvarPendente = useCallback(async (): Promise<boolean> => {
+    const pendente = pendenteRef.current;
+    if (!branchId || !autosaveTimer.current || !pendente) return true;
+    clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = null;
+    pendenteRef.current = null;
+    setSaveState('salvando');
+    try {
+      await saveDraft(branchId, pendente);
+      setSaveState('salvo');
+      return true;
+    } catch (e) {
+      setSaveState('erro');
+      setLastError(e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [branchId]);
 
   useEffect(
     () => () => {
@@ -459,6 +489,8 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
       // Escrever o rascunho antes de publicar evita perder o que ainda estava
       // no debounce se a publicação falhar.
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+      autosaveTimer.current = null;
+      pendenteRef.current = null;
 
       try {
         await saveDraft(branchId, model);
@@ -522,6 +554,7 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
     publishing,
     publish,
     publishedHash,
+    salvarPendente,
     dirtySincePublish: hashAtual !== null && hashAtual !== publishedHash,
     aplicarExterno,
   };

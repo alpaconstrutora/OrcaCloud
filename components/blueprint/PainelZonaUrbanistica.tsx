@@ -1,6 +1,6 @@
 import { erroDeSintaxe } from '../../utils/blueprintFormulas';
 import React from 'react';
-import { AlertTriangle, Map, RefreshCw, Scale } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Map, RefreshCw, Scale } from 'lucide-react';
 import CitySearchSelect, { type CitySearchValue } from '../regulatoryMap/CitySearchSelect';
 import type { RegulatoryMapWithCity } from '../../types/regulatoryMap';
 import type { OrigemDaZona } from '../../hooks/useBlueprintZonaUrbanistica';
@@ -31,7 +31,9 @@ import {
  * Não CADASTRA zona nem importa para o empreendimento. Isso já existe em
  * **Planta Inteligente › aba Mapa Regulatório** e no botão "Importar de mapa cadastrado"
  * da aba do empreendimento — duplicar aquele fluxo aqui criaria um segundo lugar
- * para a mesma lei divergir. Aqui só se LÊ.
+ * para a mesma lei divergir. Aqui só se LÊ — e se LEVA até lá: o atalho "Abrir
+ * Mapa Regulatório" (11/10/2026) sai do editor para o cadastro e o "Voltar" de
+ * lá devolve a esta planta.
  *
  * ─── DUAS ORIGENS ───────────────────────────────────────────────────────────
  *
@@ -80,6 +82,8 @@ interface Props {
   vocabulario?: VocabularioDaZona;
   onVocabulario?: (patch: Partial<VocabularioDaZona>) => void;
   salvando?: boolean;
+  /** Atalho para o cadastro (o mapa escolhido, ou a lista). Ausente = sem atalho. */
+  onAbrirMapaRegulatorio?: () => void;
 }
 
 export default function PainelZonaUrbanistica({
@@ -105,6 +109,7 @@ export default function PainelZonaUrbanistica({
   salvando = false,
   vocabulario,
   onVocabulario,
+  onAbrirMapaRegulatorio,
 }: Props) {
   const [escolhida, setEscolhida] = React.useState<string>('');
   const zonaSelecionada = escolhida || zonaAplicadaId || '';
@@ -117,10 +122,27 @@ export default function PainelZonaUrbanistica({
 
   return (
     <div className="mt-3 border-t border-slate-200 pt-3">
-      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
-        <Scale className="h-3.5 w-3.5" />
-        Zona urbanística
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-700">
+          <Scale className="h-3.5 w-3.5" />
+          Zona urbanística
+        </p>
+        {/* Rótulo curto de propósito: na lateral de 320 px, "Abrir Mapa Regulatório"
+            empurrava o título para duas linhas. A seta diz "ir para lá"; o title explica. */}
+        {onAbrirMapaRegulatorio && (
+          <button
+            type="button"
+            onClick={onAbrirMapaRegulatorio}
+            title={origemDaZona === 'CATALOGO' && mapaId
+              ? 'Abrir este mapa no cadastro do Mapa Regulatório. Voltar de lá traz você a esta planta.'
+              : 'Abrir o cadastro do Mapa Regulatório. Voltar de lá traz você a esta planta.'}
+            className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-blue-600 transition-colors hover:text-blue-700"
+          >
+            {origemDaZona === 'CATALOGO' && mapaId ? 'Abrir este mapa' : 'Mapa Regulatório'}
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
       {/* Trilho de origem. Duas opções só — segmentado, não select: com dois
           itens um dropdown esconde metade da resposta atrás de um clique. */}
@@ -265,8 +287,20 @@ export default function PainelZonaUrbanistica({
         <p className="mt-1.5 flex items-start gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
           <Map className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            Este mapa não tem zona cadastrada. Cadastre em{' '}
-            a aba <strong className="font-semibold">Mapa Regulatório</strong> da lista de plantas.
+            Este mapa não tem zona cadastrada.{' '}
+            {onAbrirMapaRegulatorio ? (
+              <button
+                type="button"
+                onClick={onAbrirMapaRegulatorio}
+                className="font-semibold text-blue-600 underline transition-colors hover:text-blue-700"
+              >
+                Cadastrar zona neste mapa
+              </button>
+            ) : (
+              <>
+                Cadastre na aba <strong className="font-semibold">Mapa Regulatório</strong> da lista de plantas.
+              </>
+            )}
           </span>
         </p>
       )}

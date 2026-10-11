@@ -210,6 +210,16 @@ const CAMPO_DO_VOCABULARIO: Record<CampoDoVocabulario, CampoDaZona> = {
   areaMinimaUnidadeM2: 'area_minima_unidade',
 };
 
+/**
+ * A ESCOLHA EM ANDAMENTO de cada estudo (origem, cidade, mapa), na memória da
+ * aba do navegador — não no banco. O editor desmonta quando o atalho "Abrir Mapa
+ * Regulatório" leva ao cadastro; sem isto, voltar do cadastro (onde se acabou de
+ * criar a zona que faltava) trazia o painel zerado, e era preciso achar a cidade
+ * e o mapa de novo. O que foi APLICADO continua vindo do banco; isto só guarda o
+ * que se estava olhando. Recarregar a página esquece — de propósito.
+ */
+const ESCOLHA_EM_ANDAMENTO = new Map<string, { origem: OrigemDaZona; cidade: CitySearchValue | null; mapaId: string }>();
+
 export function useBlueprintZonaUrbanistica(
   studyId: string,
   organizationId: string,
@@ -218,12 +228,14 @@ export function useBlueprintZonaUrbanistica(
   /** Contexto do topo. `null` = "Todas" — o catálogo então não filtra por org. */
   orgId: string | null,
 ): ZonaUrbanistica {
-  const [origemDaZona, setOrigemDaZona] = useState<OrigemDaZona>('EMPREENDIMENTO');
+  /** Retomada da escolha em andamento: lida UMA vez, na montagem. */
+  const retomada = useRef(ESCOLHA_EM_ANDAMENTO.get(studyId) ?? null);
+  const [origemDaZona, setOrigemDaZona] = useState<OrigemDaZona>(retomada.current?.origem ?? 'EMPREENDIMENTO');
   const [empreendimentoId, setEmpreendimentoIdBruto] = useState('');
 
-  const [cidade, setCidade] = useState<CitySearchValue | null>(null);
+  const [cidade, setCidade] = useState<CitySearchValue | null>(retomada.current?.cidade ?? null);
   const [mapas, setMapas] = useState<RegulatoryMapWithCity[]>([]);
-  const [mapaId, setMapaId] = useState('');
+  const [mapaId, setMapaId] = useState(retomada.current?.mapaId ?? '');
   const [carregandoMapas, setCarregandoMapas] = useState(false);
 
   const [zonas, setZonas] = useState<ZonaRegulatoria[]>([]);
@@ -270,9 +282,12 @@ export function useBlueprintZonaUrbanistica(
         // Linha gravada antes de `zona_origem` existir veio do empreendimento:
         // à época era o único caminho.
         const origemSalva: OrigemDaZona = ctx.zona_origem ?? 'EMPREENDIMENTO';
-        setOrigemDaZona(origemSalva);
-        if (origemSalva === 'CATALOGO' && ctx.regulatory_map_id) {
-          setMapaId(ctx.regulatory_map_id);
+        // Com escolha em andamento, ela é a mais nova: o salvo não passa por cima.
+        if (!retomada.current) {
+          setOrigemDaZona(origemSalva);
+          if (origemSalva === 'CATALOGO' && ctx.regulatory_map_id) {
+            setMapaId(ctx.regulatory_map_id);
+          }
         }
         if (ctx.empreendimento_id) {
           escolheuAMao.current = true;
@@ -293,6 +308,16 @@ export function useBlueprintZonaUrbanistica(
     if (escolheuAMao.current || empreendimentoId || !empreendimentoSugerido) return;
     setEmpreendimentoIdBruto(empreendimentoSugerido);
   }, [empreendimentoSugerido, empreendimentoId]);
+
+  // Só guarda depois que a PESSOA mexeu: gravar na montagem guardaria os valores
+  // padrão, e na próxima abertura eles passariam por cima da zona aplicada no banco.
+  const mexeuNaEscolha = useRef(retomada.current !== null);
+  useEffect(() => {
+    if (mexeuNaEscolha.current) ESCOLHA_EM_ANDAMENTO.set(studyId, { origem: origemDaZona, cidade, mapaId });
+  }, [studyId, origemDaZona, cidade, mapaId]);
+  const escolherOrigem = useCallback((o: OrigemDaZona) => { mexeuNaEscolha.current = true; setOrigemDaZona(o); }, []);
+  const escolherCidade = useCallback((c: CitySearchValue | null) => { mexeuNaEscolha.current = true; setCidade(c); }, []);
+  const escolherMapa = useCallback((id: string) => { mexeuNaEscolha.current = true; setMapaId(id); }, []);
 
   // ── Mapas da cidade (só no caminho do catálogo) ───────────────────────────
   useEffect(() => {
@@ -526,14 +551,14 @@ export function useBlueprintZonaUrbanistica(
 
   return {
     origemDaZona,
-    setOrigemDaZona,
+    setOrigemDaZona: escolherOrigem,
     empreendimentoId,
     setEmpreendimentoId,
     cidade,
-    setCidade,
+    setCidade: escolherCidade,
     mapas,
     mapaId,
-    setMapaId,
+    setMapaId: escolherMapa,
     carregandoMapas,
     zonas,
     carregandoZonas,

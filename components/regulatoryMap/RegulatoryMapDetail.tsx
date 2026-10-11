@@ -15,10 +15,12 @@ import RegulatoryMapExcelImportModal from './RegulatoryMapExcelImportModal';
 interface Props {
     map: RegulatoryMapWithCity;
     onBack: () => void;
+    /** Rótulo do botão de voltar — "Voltar para a planta" quando se veio do editor. */
+    backLabel?: string;
     onEdit: () => void;
 }
 
-export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) => {
+export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit, backLabel = 'Voltar' }) => {
     const [zones, setZones] = React.useState<RegulatoryMapZone[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [savingId, setSavingId] = React.useState<string | null>(null);
@@ -89,7 +91,7 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit }) =>
                     onClick={onBack}
                     className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
                 >
-                    <ArrowLeft className="w-4 h-4" /> Voltar
+                    <ArrowLeft className="w-4 h-4" /> {backLabel}
                 </button>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>

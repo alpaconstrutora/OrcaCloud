@@ -70,6 +70,11 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
   const [erro, setErro] = useState<string | null>(null);
   const [criando, setCriando] = useState(false);
   const [aberto, setAberto] = useState<{ study: BlueprintStudy; branchId: string } | null>(null);
+  // Atalho "Abrir Mapa Regulatório" do editor (11/10/2026): a planta de onde se
+  // saiu, para o "Voltar" do mapa devolver a ela, e o mapa a abrir (uma vez).
+  const [voltarParaPlanta, setVoltarParaPlanta] = useState<{ study: BlueprintStudy; branchId: string } | null>(null);
+  const [mapaParaAbrir, setMapaParaAbrir] = useState<string | null>(null);
+  const consumirMapaParaAbrir = useCallback(() => setMapaParaAbrir(null), []);
   const [searchTerm, setSearchTerm] = usePersistedState<string>('blueprintModule:search', '');
 
   const tableColumns = useTableColumns(COLUMNS, 'blueprintModuleColumns');
@@ -221,7 +226,11 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
         { id: 'mapa-regulatorio', label: 'Mapa Regulatório' },
       ]}
       value={abaEfetiva}
-      onChange={setAba}
+      onChange={(id) => {
+        // Trocar de aba à mão encerra o "ida e volta" com a planta.
+        setVoltarParaPlanta(null);
+        setAba(id);
+      }}
     />
   ) : null;
 
@@ -234,6 +243,16 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
         study={aberto.study}
         branchId={aberto.branchId}
         onTrocarRamo={(branchId) => setAberto((a) => (a ? { ...a, branchId } : a))}
+        onAbrirMapaRegulatorio={
+          podeVerMapaRegulatorio
+            ? (mapaId) => {
+                setVoltarParaPlanta(aberto);
+                setMapaParaAbrir(mapaId);
+                setAberto(null);
+                setAba('mapa-regulatorio');
+              }
+            : undefined
+        }
         onBack={() => {
           setAberto(null);
           carregar();
@@ -246,7 +265,22 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
     // A tela do mapa é dona do próprio título; a barra entra entre ele e os KPIs (§19.3).
     return (
       <div className="pb-20">
-        <RegulatoryMapModule activeOrganizationId={orgId} tabsSlot={barraDeAbas} />
+        <RegulatoryMapModule
+          activeOrganizationId={orgId}
+          tabsSlot={barraDeAbas}
+          abrirMapaId={mapaParaAbrir}
+          onMapaAberto={consumirMapaParaAbrir}
+          onVoltarParaPlanta={
+            voltarParaPlanta
+              ? () => {
+                  // Volta para a aba Plantas: sair do editor depois cai na lista, não no mapa.
+                  setAba('plantas');
+                  setAberto(voltarParaPlanta);
+                  setVoltarParaPlanta(null);
+                }
+              : null
+          }
+        />
       </div>
     );
   }

@@ -9,7 +9,7 @@
  * PF/PJ vem do cadastro de Clientes (`clients.type`). Com vários inquilinos,
  * basta UM ser PJ (decisão do usuário).
  */
-import { calculateIRRF, aplicarRedutorIRRF2026 } from '../lib/payrollCalc';
+import { calcularIrrfMensal } from '../lib/payrollCalc';
 import type { IRRFBracket } from '../services/fiscalService';
 
 export type TipoPessoa = 'PF' | 'PJ';
@@ -22,12 +22,14 @@ export function deveReterIrrfLocacao(inquilinos: Pessoa[], locador: Pessoa | nul
 }
 
 /**
- * IRRF sobre a parcela de aluguel: tabela progressiva mensal (`irrf_brackets`
- * vigente na data) e, de 2026 em diante, o mesmo redutor da folha
- * (`aplicarRedutorIRRF2026` — decisão do usuário). Arredondado a centavos.
+ * IRRF sobre a parcela de aluguel — a MESMA conta da folha
+ * (`calcularIrrfMensal`, Lei 9.250): sem deduções legais conhecidas, vale o
+ * desconto simplificado mensal (art. 4º, § 2º — a partir de 05/2023), depois a
+ * tabela progressiva vigente na data e, de 2026 em diante, a redução do
+ * art. 3º-A sobre o valor da parcela. Arredondado a centavos.
  */
-export function irrfDoAluguel(valorParcela: number, faixas: IRRFBracket[], ano: number): number {
-    const bruto = calculateIRRF(valorParcela, faixas);
-    const imposto = ano >= 2026 ? aplicarRedutorIRRF2026(bruto, valorParcela) : bruto;
-    return Math.round(imposto * 100) / 100;
+export function irrfDoAluguel(valorParcela: number, faixas: IRRFBracket[], data: string): number {
+    const { irrf } = calcularIrrfMensal(valorParcela, 0, faixas, data);
+    // toFixed(6) antes de arredondar: 802,685 não pode virar 802,68 por ponto flutuante.
+    return Math.round(Number(irrf.toFixed(6)) * 100) / 100;
 }

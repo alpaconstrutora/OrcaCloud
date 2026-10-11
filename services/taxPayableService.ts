@@ -740,7 +740,7 @@ export const taxPayableService = {
             for (const parcel of taxableParcels) {
                 const year = parseLocal(parcel.fato_gerador).getFullYear();
                 if (retidos.has('irrf')) {
-                    const irrf = irrfDoAluguel(parcel.amount, await faixasIrrf(parcel.fato_gerador), year);
+                    const irrf = irrfDoAluguel(parcel.amount, await faixasIrrf(parcel.fato_gerador), parcel.fato_gerador);
                     pushRow(parcel, 'irrf', 'IRRF', irrf);
                 }
                 if (regimeLabel) {

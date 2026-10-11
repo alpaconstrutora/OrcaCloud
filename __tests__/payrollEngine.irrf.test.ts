@@ -73,10 +73,11 @@ describe('calculateIRRF — Tabela Prática', () => {
     });
 });
 
-// ─── applyIRRFReducer — IN RFB 2.216/2024 ────────────────────────────────────
-// Redutor mensal 2026: zera IRRF para base ≤ R$5.000; redução linear até R$7.350.
-// Âncora: IRRF em R$5.000 = 5000 × 27,5% − 908,73 = R$466,27.
-// Fórmula: redutor(base) = 466,27 × (7.350 − base) / 2.350
+// ─── applyIRRFReducer — Lei 9.250, art. 3º-A (Lei 15.270/2025) ───────────────
+// Redução mensal 2026 sobre o RENDIMENTO tributável (2º argumento):
+//   até R$ 5.000 → até R$ 312,89; R$ 5.000,01–7.350 → 978,62 − 0,133145 × rendimento;
+//   limitada ao imposto (§ 1º). Até 11/10/2026 o código usava uma âncora de
+//   R$ 466,27 que zerava tudo até R$ 5.000 — sem amparo no texto da lei.
 
 describe('applyIRRFReducer — redutor 2026', () => {
 
@@ -86,21 +87,19 @@ describe('applyIRRFReducer — redutor 2026', () => {
         expect(payrollEngine.applyIRRFReducer(raw, 4000)).toBe(0);
     });
 
-    it('base = R$5.000 — redutor exatamente iguala o imposto (zero líquido)', () => {
-        // rawIRRF = 5000×27,5% − 908,73 = 466,27; redutor = 466,27×(7350−5000)/2350 = 466,27 → 0
+    it('rendimento = R$5.000 — redução de até R$ 312,89 (não zera imposto maior que isso)', () => {
+        // imposto 466,27 (sem dedução nenhuma) − 312,89 = 153,38
         const raw = payrollEngine.calculateIRRF(5000, IRRF_2026);
         expect(raw).toBeCloseTo(466.27, 2);
-        expect(payrollEngine.applyIRRFReducer(raw, 5000)).toBeCloseTo(0, 2);
+        expect(payrollEngine.applyIRRFReducer(raw, 5000)).toBeCloseTo(153.38, 2);
     });
 
-    it('base = R$6.000 — redução parcial proporcional', () => {
-        // rawIRRF = 6000×27,5% − 908,73 = 741,27
-        // redutor = 466,27 × 1350/2350 = 267,86
-        // IRRF final ≈ 741,27 − 267,86 = 473,41
+    it('rendimento = R$6.000 — redução 978,62 − 0,133145 × 6000 = 179,75', () => {
+        // imposto 741,27 − 179,75 = 561,52
         const raw = payrollEngine.calculateIRRF(6000, IRRF_2026);
         expect(raw).toBeCloseTo(741.27, 2);
         const final = payrollEngine.applyIRRFReducer(raw, 6000);
-        expect(final).toBeCloseTo(473.41, 1);
+        expect(final).toBeCloseTo(561.52, 2);
     });
 
     it('base = R$7.350 — redutor zerado (limite superior da faixa de transição)', () => {

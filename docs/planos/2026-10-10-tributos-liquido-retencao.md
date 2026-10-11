@@ -64,6 +64,25 @@ Reversão em `public.irrf_brackets_reversao_20261011` (30 linhas antigas, NÃO a
 ⚠️ A folha usa a mesma tabela: folhas de 2023–2025 recalculadas daqui em diante saem com os
 valores corretos (diferentes dos já calculados).
 
+### Pedido posterior (11/10/2026) — redução 2026 conforme a lei
+Pergunta do usuário: "voce leu a lei inteira para ver se a resposta as suas tres perguntas podem
+ser respondidas?" — não tinha lido (respondi de memória). Lido depois, no Planalto:
+- **Lei 9.250, art. 3º-A** (Lei 15.270/2025): redução sobre os "rendimentos tributáveis sujeitos à
+  incidência mensal" — até R$ 5.000 até R$ 312,89; R$ 5.000,01–7.350 = 978,62 − 0,133145 × rendimento;
+  § 1º limitada ao imposto calculado "com o disposto no art. 4º"; § 2º acima de 7.350 sem redução.
+  Não restringe a salário (o § 3º estende ao 13º) → vale para aluguel.
+- **Lei 9.250, art. 4º, caput**: deduções "na determinação da base de cálculo sujeita à incidência
+  mensal" (geral). **§ 2º** (Lei 14.663/2023): "alternativamente às deduções... desconto simplificado
+  mensal, correspondente a 25% do valor máximo da faixa com alíquota zero... caso seja mais benéfico".
+- O código usava âncora R$ 466,27 sobre a base deduzida (zerava tudo até R$ 5.000) — sem amparo.
+
+Decisão do usuário: aplicar a lei na folha e no aluguel, com o desconto simplificado.
+Feito: `lib/payrollCalc` › `calcularIrrfMensal` (maior entre deduções legais e o simplificado,
+desde 05/2023, valor tirado da tabela; tabela progressiva; redução 2026+ sobre o rendimento) —
+usada por `payrollEngine`, `remuneracaoSocietariaService` e `irrfDoAluguel`.
+⚠️ Muda o IRRF da folha/pró-labore desde 05/2023 (desconto simplificado) e de 2026 (redução).
+Fora do escopo: deduções próprias do aluguel (IPTU/condomínio pagos pelo locador) — outras normas.
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|

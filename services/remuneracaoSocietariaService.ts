@@ -1,11 +1,10 @@
 import { supabase } from '../lib/supabase';
 import { fiscalService } from './fiscalService';
-import { payrollEngine } from './payrollEngine';
 import { documentService } from './documentService';
 import { supplierService } from './supplierService';
 import { companyService } from './companyService';
 import { getOrgTerceirosTaxes } from './payrollService';
-import { calculateIRRF } from '../lib/payrollCalc';
+import { calcularIrrfMensal } from '../lib/payrollCalc';
 import {
     PartnerCompensationSettings, PartnerCompensationSettingsUpsert,
     ProlaborePayroll, ProlaborePayrollItem, ProlaboreManualEntry,
@@ -69,7 +68,7 @@ export const remuneracaoSocietariaService = {
     // FIXA (não a tabela progressiva de empregado CLT), limitada ao teto do
     // salário de contribuição, sem parcela a deduzir. FGTS nunca incide.
     // IRRF usa a mesma tabela progressiva de qualquer remuneração (reaproveitada
-    // de lib/payrollCalc; applyIRRFReducer do payrollEngine cobre o redutor 2026+).
+    // de lib/payrollCalc › calcularIrrfMensal: desconto simplificado + redução 2026+).
     // Cota Patronal (20%) é despesa da empresa — não desconta do líquido do
     // sócio — e só incide se a empresa NÃO for optante do Simples Nacional.
     // Contribuições de Terceiros (Sistema S) incidem sobre a MESMA base da
@@ -100,10 +99,9 @@ export const remuneracaoSocietariaService = {
         const baseInss = Math.min(grossAmount, rule.teto);
         const inss = baseInss * rule.rate;
 
-        const irrfBase = grossAmount - inss;
-        const rawIrrf = calculateIRRF(irrfBase, irrfBrackets);
-        const year = parseInt(competenceDate.slice(0, 4), 10);
-        const irrf = year >= 2026 ? payrollEngine.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
+        // Mesma conta da folha (lib/payrollCalc): maior dedução entre INSS e o
+        // desconto simplificado; redução 2026+ sobre o bruto (Lei 9.250, art. 3º-A).
+        const { irrf } = calcularIrrfMensal(grossAmount, inss, irrfBrackets, competenceDate);
 
         // Simples Nacional isenta a Cota Patronal via DAS — EXCETO o Anexo IV
         // (advocacia, limpeza, segurança, construção civil, decoração), que

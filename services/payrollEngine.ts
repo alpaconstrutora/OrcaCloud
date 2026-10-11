@@ -2,7 +2,7 @@ import { payrollService, PayrollRun, PayrollItem, PayrollResult, PayrollRubric, 
 import { laborService, Employee, TimeEntry } from './laborService';
 import { payrollValidationService } from './payrollValidationService';
 import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from './fiscalService';
-import { calculateINSS as calcINSS, calculateIRRF as calcIRRF, aplicarRedutorIRRF2026 } from '../lib/payrollCalc';
+import { calculateINSS as calcINSS, calculateIRRF as calcIRRF, aplicarRedutorIRRF2026, calcularIrrfMensal } from '../lib/payrollCalc';
 
 /**
  * Parser aritmético seguro — substitui new Function() / eval().
@@ -579,10 +579,13 @@ export const payrollEngine = {
             items.push({ code: 'INSS', type: 'desconto', amount: inss, base_amount: base_inss, reference: 0 });
         }
 
-        const irrfBase = base_irrf - inss;
-        const runYear = parseInt(ctx.run.start_date.slice(0, 4), 10);
-        const rawIrrf = this.calculateIRRF(irrfBase, ctx.irrfBrackets);
-        const irrf = runYear >= 2026 ? this.applyIRRFReducer(rawIrrf, irrfBase) : rawIrrf;
+        // Lei 9.250: dedução = maior entre INSS (art. 4º) e o desconto simplificado
+        // mensal (§ 2º); de 2026 em diante, redução do art. 3º-A sobre o rendimento
+        // tributável (base_irrf), não sobre a base deduzida. Conta em lib/payrollCalc.
+        if (ctx.irrfBrackets.length === 0) {
+            console.warn('[payrollEngine] Cálculo de IRRF ignorado: Tabela de faixas está vazia!');
+        }
+        const { base: irrfBase, irrf } = calcularIrrfMensal(base_irrf, inss, ctx.irrfBrackets, ctx.run.start_date);
         if (irrf > 0) {
             items.push({ code: 'IRRF', type: 'desconto', amount: irrf, base_amount: irrfBase, reference: 0 });
         }
@@ -686,10 +689,10 @@ export const payrollEngine = {
         };
     },
 
-    // IN RFB 2.216/2024 — redutor mensal IRRF 2026+. A conta mora em
-    // lib/payrollCalc (aplicarRedutorIRRF2026), compartilhada com o IRRF de aluguel.
-    applyIRRFReducer(irrf: number, base: number): number {
-        return aplicarRedutorIRRF2026(irrf, base);
+    // Redução mensal 2026+ (Lei 9.250, art. 3º-A). O 2º argumento é o RENDIMENTO
+    // tributável, não a base deduzida. A conta mora em lib/payrollCalc.
+    applyIRRFReducer(irrf: number, rendimentosTributaveis: number): number {
+        return aplicarRedutorIRRF2026(irrf, rendimentosTributaveis);
     },
 
     calculateINSS(base: number, brackets: INSSBracket[]) {

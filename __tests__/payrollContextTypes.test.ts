@@ -396,8 +396,8 @@ describe('evento manual — reference como number | string | null', () => {
 
 // ─── 6. applyIRRFReducer — lógica pura ───────────────────────────────────────
 
-describe('applyIRRFReducer — redutor IN RFB 2.216/2024', () => {
-    it('base ≤ 5000 → imposto zerado', () => {
+describe('applyIRRFReducer — Lei 9.250, art. 3º-A (Lei 15.270/2025)', () => {
+    it('rendimento ≤ 5000 e imposto ≤ 312,89 → imposto zerado', () => {
         expect(payrollEngine.applyIRRFReducer(100, 5000)).toBe(0);
         expect(payrollEngine.applyIRRFReducer(50, 3000)).toBe(0);
     });

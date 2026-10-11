@@ -1,4 +1,5 @@
 import React from 'react';
+import { pedirAberturaDoChamado } from '../utils/warrantyNavegacao';
 import { Plus, FileSpreadsheet, FileText } from 'lucide-react';
 import Button from './ui/Button';
 import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
@@ -924,6 +925,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <SolicitacoesCompraList
           onOpenQuotation={(id) => { setEditingQuotationId(id); setIsCreatingQuotation(true); setActiveView('supplies-quotations'); }}
           onOpenOrder={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); setActiveView('supplies-orders'); }}
+          onOpenWarrantyClaim={(id) => { pedirAberturaDoChamado(id); setActiveView('pos-obra'); }}
         />
       );
 
@@ -950,7 +952,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     case 'supplies-contracts':
       if (selectedContractId) {
-        return <ContractDetailView contractId={selectedContractId} onBack={() => setSelectedContractId(null)} budget={budget} onEdit={(contract) => { setSelectedContractId(null); setEditingContract(contract); setIsCreatingContract(true); }} />;
+        return <ContractDetailView contractId={selectedContractId} onBack={() => setSelectedContractId(null)} budget={budget} onEdit={(contract) => { setSelectedContractId(null); setEditingContract(contract); setIsCreatingContract(true); }}
+          onOpenWarrantyClaim={(id) => { setSelectedContractId(null); pedirAberturaDoChamado(id); setActiveView('pos-obra'); }} />;
       }
       return (
         <ContractsDashboardShell
@@ -1309,7 +1312,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onOpenSolicitacao={(id) => {
             // A lista de SC é preguiçosa: o pedido de abertura vai pelo módulo dela.
             import('./suprimentos/SolicitacoesCompraList')
-              .then(m => m.pedirEdicaoDaSolicitacao(id))
+              .then(m => m.pedirAberturaDaSolicitacao(id))
               .finally(() => setActiveView('supplies-solicitacoes'));
           }}
           onOpenPedido={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); setActiveView('supplies-orders'); }}

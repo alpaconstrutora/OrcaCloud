@@ -43,6 +43,7 @@ interface Props {
     onChanged: (sc: PurchaseRequest | null, id: string) => void;
     onOpenQuotation: (id: string) => void;
     onOpenOrder: (id: string) => void;
+    onOpenWarrantyClaim?: (id: string) => void;
 }
 
 const Campo: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -52,7 +53,7 @@ const Campo: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
     </div>
 );
 
-const SolicitacaoCompraSheet: React.FC<Props> = ({ requestId, onClose, onEdit, onChanged, onOpenQuotation, onOpenOrder }) => {
+const SolicitacaoCompraSheet: React.FC<Props> = ({ requestId, onClose, onEdit, onChanged, onOpenQuotation, onOpenOrder, onOpenWarrantyClaim }) => {
     const confirm = useConfirm();
     const { showToast } = useToast();
     const email = useStore(s => s.session?.user?.email) ?? '';
@@ -186,6 +187,17 @@ const SolicitacaoCompraSheet: React.FC<Props> = ({ requestId, onClose, onEdit, o
                             <Campo label="Prioridade">
                                 <span className={sc.priority === 'urgente' ? 'text-red-600' : ''}>{sc.priority === 'urgente' ? 'Urgente' : 'Normal'}</span>
                             </Campo>
+                            {sc.warrantyClaimId && (
+                                <div className="col-span-2">
+                                    <Campo label="Origem">
+                                        {onOpenWarrantyClaim ? (
+                                            <button className="text-sm font-normal text-blue-600 hover:underline" onClick={() => onOpenWarrantyClaim(sc.warrantyClaimId!)}>
+                                                Chamado de garantia (Pós-Obra)
+                                            </button>
+                                        ) : 'Chamado de garantia (Pós-Obra)'}
+                                    </Campo>
+                                </div>
+                            )}
                             {sc.justification && <div className="col-span-2"><Campo label="Justificativa">{sc.justification}</Campo></div>}
                             {sc.cancelledAt && (
                                 <div className="col-span-2">

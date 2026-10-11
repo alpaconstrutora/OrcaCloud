@@ -505,3 +505,12 @@ describe('Pós-Obra & Garantia · aba Suprimentos (2026-10-11)', () => {
         expect(await screen.findByText('Nada em Suprimentos ainda')).toBeInTheDocument();
     });
 });
+
+describe('Pós-Obra & Garantia · volta de Suprimentos para o chamado (2026-10-11)', () => {
+    it('chamado pedido pela ficha da SC / contrato abre direto no detalhe', async () => {
+        sessionStorage.setItem('garantia:abrir-chamado', 'c1');
+        render(<WarrantyModule projects={PROJETOS} />);
+        expect(await screen.findByRole('heading', { level: 1, name: 'Impermeabilização da laje' })).toBeInTheDocument();
+        expect(sessionStorage.getItem('garantia:abrir-chamado')).toBeNull();
+    });
+});

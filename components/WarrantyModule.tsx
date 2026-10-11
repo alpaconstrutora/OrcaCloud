@@ -27,6 +27,7 @@ import ClientSelect, { type ClientOption } from './ClientSelect';
 import UnitSelect from './UnitSelect';
 import WarrantySuprimentosTab from './warranty/WarrantySuprimentosTab';
 import { warrantySuprimentosService } from '../services/warrantySuprimentosService';
+import { consumirAberturaDoChamado } from '../utils/warrantyNavegacao';
 import { contractService } from '../services/contractService';
 import {
     consolidarSuprimentos, motivoNaoComprar, rascunhoDaSolicitacao, sugestaoCustoReal,
@@ -772,6 +773,18 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({
 
     React.useEffect(() => { load(); }, [load]);
 
+    // Chamado pedido por outra tela (ficha da SC, detalhe do contrato): abre
+    // assim que a lista chega. Consumido uma vez, na montagem.
+    const aberturaPedidaRef = React.useRef<string | null>(consumirAberturaDoChamado());
+    React.useEffect(() => {
+        const id = aberturaPedidaRef.current;
+        if (!id || loading) return;
+        aberturaPedidaRef.current = null;
+        const alvo = claims.find(c => c.id === id);
+        if (alvo) setSelected(alvo);
+        else showToast('Chamado não encontrado nesta organização — confira o seletor do topo.', 'error');
+    }, [claims, loading, showToast]);
+
     // A taxonomia é catálogo global (não tem organization_id), então carrega uma
     // vez só e não recarrega ao trocar de organização no seletor do topo.
     React.useEffect(() => {
@@ -899,7 +912,7 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({
         if (deletingId) return;
         if (!await confirm({
             title: 'Excluir chamado?',
-            message: 'Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.',
+            message: await mensagemDeExclusao(claim.id),
             variant: 'danger',
             confirmLabel: 'Excluir',
         })) return;
@@ -1888,6 +1901,25 @@ interface WarrantyClaimDetailProps extends SuprimentosNav {
 }
 
 /**
+ * Texto do "Excluir chamado?" — avisa quando há SC/contrato vinculados: eles
+ * CONTINUAM em Suprimentos (FK ON DELETE SET NULL), só perdem o vínculo.
+ */
+async function mensagemDeExclusao(claimId: string): Promise<string> {
+    const base = 'Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.';
+    try {
+        const { solicitacoes, contratos } = await warrantySuprimentosService.contarVinculos(claimId);
+        if (!solicitacoes && !contratos) return base;
+        const partes = [
+            solicitacoes && `${solicitacoes} solicitação(ões) de compra`,
+            contratos && `${contratos} contrato(s)`,
+        ].filter(Boolean).join(' e ');
+        return `${base} ${partes} gerado(s) por este chamado continua(m) em Suprimentos, sem o vínculo.`;
+    } catch {
+        return base;
+    }
+}
+
+/**
  * Quem está agindo, para os eventos do chamado. Até 2026-10-11 todo comando
  * gravava `{actorId:'system', name:'Usuário'}` — o Histórico não dizia quem fez.
  */
@@ -2184,7 +2216,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         if (deleting) return;
         if (!await confirm({
             title: 'Excluir chamado?',
-            message: 'Esta ação não pode ser desfeita. Todo o histórico e evidências serão removidos.',
+            message: await mensagemDeExclusao(claim.id),
             variant: 'danger',
             confirmLabel: 'Excluir',
         })) return;

@@ -219,9 +219,11 @@ interface ContractDetailViewProps {
      * `ServiceContractsModule`, `ServicesCommercialModule`).
      */
     onEdit?: (contract: Contract) => void;
+    /** Contrato nascido de um chamado de Pós-Obra & Garantia (2026-10-11): link de volta. */
+    onOpenWarrantyClaim?: (id: string) => void;
 }
 
-const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp }) => {
+const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onBack, budget, organizationId: orgIdProp, onOpenWarrantyClaim }) => {
     const confirm = useConfirm();
     // Usado pelas abas Retenção de Garantia, Penalidades e Avaliação de Desempenho.
     const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -1294,6 +1296,16 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <span className="text-xs font-medium text-gray-400">{contract.contract_type}</span>
                         </div>
                         <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">{contract.title}</h1>
+                        {contract.warranty_claim_id && (
+                            <p className="text-xs text-gray-500 mt-1">
+                                Origem:{' '}
+                                {onOpenWarrantyClaim ? (
+                                    <button className="text-blue-600 hover:underline" onClick={() => onOpenWarrantyClaim(contract.warranty_claim_id!)}>
+                                        Chamado de garantia (Pós-Obra)
+                                    </button>
+                                ) : 'Chamado de garantia (Pós-Obra)'}
+                            </p>
+                        )}
                     </div>
                 </div>
                 <div className="flex flex-col items-end">

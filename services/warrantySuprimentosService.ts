@@ -38,6 +38,17 @@ async function nomesDeFornecedores(ids: string[]): Promise<Record<string, string
 const COLS_PEDIDO = 'id, number, status, supplier_id, items, created_at';
 
 export const warrantySuprimentosService = {
+    /** Quantos registros de Suprimentos apontam para o chamado (aviso ao excluir). */
+    async contarVinculos(claimId: string): Promise<{ solicitacoes: number; contratos: number }> {
+        const [sc, ct] = await Promise.all([
+            supabase.from('purchase_requests').select('id', { count: 'exact', head: true }).eq('warranty_claim_id', claimId),
+            supabase.from('contracts').select('id', { count: 'exact', head: true }).eq('warranty_claim_id', claimId),
+        ]);
+        if (sc.error) throw sc.error;
+        if (ct.error) throw ct.error;
+        return { solicitacoes: sc.count ?? 0, contratos: ct.count ?? 0 };
+    },
+
     async carregar(claimId: string): Promise<SuprimentosDoChamado> {
         const [solicitacoes, contratosRaw] = await Promise.all([
             purchaseRequestService.listByWarrantyClaim(claimId),

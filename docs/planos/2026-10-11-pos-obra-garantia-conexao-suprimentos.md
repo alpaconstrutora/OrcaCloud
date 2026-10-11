@@ -242,7 +242,20 @@ warranty_claim_id})` (o insert espalha o objeto, `:1742-1748`).
 
 ---
 
-## Fase 3 — Acabamento
+## Fase 3 — Acabamento — 3 de 3 itens feitos (2026-10-11); "fica para decidir depois" segue em aberto
+
+> - **Volta para o chamado:** ficha da SC (`SolicitacaoCompraSheet`, campo "Origem") e detalhe do
+>   contrato (`ContractDetailView`, linha "Origem" sob o título) → `pedirAberturaDoChamado`
+>   (`utils/warrantyNavegacao.ts`, sessionStorage) → o `WarrantyModule` abre o chamado quando a
+>   lista chega. Abrir a SC a partir do chamado agora abre a **ficha** (`pedirAberturaDaSolicitacao`),
+>   não o formulário de edição. Navegador: chamado → linha da SC → ficha com origem → link → volta
+>   ao chamado ✅. O link do **contrato** não foi exercitado no navegador (exigiria salvar contrato
+>   real, que gera títulos) — coberto por typecheck, que inclusive pegou a prop não desestruturada.
+> - **Ator real:** feito já na Fase 0 (todos os comandos usam o usuário logado).
+> - **Aviso ao excluir chamado com vínculos:** "N solicitação(ões) de compra / N contrato(s) gerados
+>   por este chamado continuam em Suprimentos, sem o vínculo" (`contarVinculos`). Navegador ✅.
+> - Teste de componente: chamado pedido por outra tela abre direto no detalhe e o pedido é consumido.
+> - Limpeza: chamado, SC, item e contador de teste apagados; 5 chamados, 0 eventos órfãos.
 
 - Volta para o chamado: "Chamado de garantia: {sistema}" no `SolicitacaoCompraSheet`, no cabeçalho
   do formulário de SC e no `ContractDetailView` (`navigateToFocus('pos-obra', id, 'CHAMADO_GARANTIA')`;

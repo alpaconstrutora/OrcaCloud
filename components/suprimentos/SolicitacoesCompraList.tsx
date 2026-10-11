@@ -58,14 +58,22 @@ export function pedirEdicaoDaSolicitacao(id: string) {
     try { sessionStorage.setItem(CHAVE_ABRIR, id); } catch { /* sem storage: abre na lista */ }
 }
 
+/** Abrir a FICHA (não o formulário) — vindo de Pós-Obra & Garantia, 2026-10-11. */
+const CHAVE_FICHA = 'suprimentos:sc:abrir-ficha';
+export function pedirAberturaDaSolicitacao(id: string) {
+    try { sessionStorage.setItem(CHAVE_FICHA, id); } catch { /* sem storage: abre na lista */ }
+}
+
 type Modo = { tipo: 'lista' } | { tipo: 'form'; id: string | null };
 
 interface Props {
     onOpenQuotation: (id: string) => void;
     onOpenOrder: (id: string) => void;
+    /** SC nascida de um chamado de garantia — o link "Chamado de garantia" da ficha. */
+    onOpenWarrantyClaim?: (id: string) => void;
 }
 
-const SolicitacoesCompraList: React.FC<Props> = ({ onOpenQuotation, onOpenOrder }) => {
+const SolicitacoesCompraList: React.FC<Props> = ({ onOpenQuotation, onOpenOrder, onOpenWarrantyClaim }) => {
     const { orgId } = useOrgContext();
     const { showToast } = useToast();
     const [lista, setLista] = React.useState<PurchaseRequest[]>([]);
@@ -78,7 +86,13 @@ const SolicitacoesCompraList: React.FC<Props> = ({ onOpenQuotation, onOpenOrder 
         } catch { /* ignore */ }
         return { tipo: 'lista' };
     });
-    const [abertaId, setAbertaId] = React.useState<string | null>(null);
+    const [abertaId, setAbertaId] = React.useState<string | null>(() => {
+        try {
+            const id = sessionStorage.getItem(CHAVE_FICHA);
+            if (id) { sessionStorage.removeItem(CHAVE_FICHA); return id; }
+        } catch { /* ignore */ }
+        return null;
+    });
 
     const carregar = React.useCallback(async () => {
         setLoading(true);
@@ -247,6 +261,7 @@ const SolicitacoesCompraList: React.FC<Props> = ({ onOpenQuotation, onOpenOrder 
                 onChanged={aplicar}
                 onOpenQuotation={id => { setAbertaId(null); onOpenQuotation(id); }}
                 onOpenOrder={id => { setAbertaId(null); onOpenOrder(id); }}
+                onOpenWarrantyClaim={onOpenWarrantyClaim ? id => { setAbertaId(null); onOpenWarrantyClaim(id); } : undefined}
             />
         </div>
     );

@@ -176,13 +176,13 @@ else
     #   token lixo  → comparação frouxa. Guarda contra o caso de `CRON_SECRET`
     #                 vazio fazer `"Bearer "` casar com qualquer coisa.
     ABERTAS=0
-    # As cinco primeiras são de CRON (gate por CRON_SECRET no código).
+    # As quatro primeiras são de CRON (gate por CRON_SECRET no código).
     # `credit-room-download` é de USUÁRIO LOGADO — entra aqui pela mesma razão e
     # com a mesma expectativa: ela assina URL de documento do Data Room com
     # service_role, e a chave anon do bundle não pode chegar perto disso. É a
     # primeira function do sistema cujo chamador legítimo é um usuário externo
     # com sessão, então o cenário `anon` é o que mais importa nela.
-    for FN in task-alert-notifier process-billing-ruler dunning-notifier \
+    for FN in task-alert-notifier dunning-notifier \
               fiscal-nfe-processor notify-opportunity-interest \
               credit-room-download; do
         LINHA="   $FN:"

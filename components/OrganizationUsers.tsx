@@ -188,7 +188,6 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewFinancialIntelligence: true,
         canViewControladoria: true, canEditControladoria: false,
         canEditFiscal: false,
-        canViewAutomation: true, canEditAutomation: false,
         canEditSales: false,
         canEditRentals: false,
         canViewServiceContracts: true, canEditServiceContracts: false,
@@ -395,7 +394,6 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     { group: 'Financeiro', title: 'Inteligência Financeira', view: 'canViewFinancialIntelligence' },
     { group: 'Financeiro', title: 'Controladoria', view: 'canViewControladoria', edit: 'canEditControladoria' },
     { group: 'Financeiro', title: 'Fiscal e NF-e', view: 'canViewFiscal', edit: 'canEditFiscal' },
-    { group: 'Financeiro', title: 'Automação', view: 'canViewAutomation', edit: 'canEditAutomation' },
 
     // --- Comercial ---
     { group: 'Comercial', title: 'Vendas de Ativos', view: 'canViewSales', edit: 'canEditSales' },

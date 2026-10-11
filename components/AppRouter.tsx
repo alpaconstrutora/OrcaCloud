@@ -49,7 +49,6 @@ const ContractDetailView    = React.lazy(() => import('./ContractDetailView'));
 const ContractTemplateManager = React.lazy(() => import('./ContractTemplateManager'));
 const ContractReajusteDue  = React.lazy(() => import('./ContractReajusteDue'));
 const SupplyChainReceiptManager = React.lazy(() => import('./SupplyChainReceiptManager'));
-const AutomationManager     = React.lazy(() => import('./AutomationManager'));
 const ImovibDashboard       = React.lazy(() => import('./ImovibDashboard'));
 const ImovibForm            = React.lazy(() => import('./ImovibForm'));
 const ImovibDetailView      = React.lazy(() => import('./ImovibDetailView'));
@@ -1007,9 +1006,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onViewPayable={() => { setActiveView('contas-a-pagar'); }}
         />
       );
-
-    case 'automation':
-      return <AutomationManager settings={settingsWithId} onUpdateSettings={handleUpdateSettings} organizationId={activeOrganizationId || undefined} />;
 
     // ── Imovib — agora gerenciado dentro do SalesManagementModule ──────────────
     case 'imovib':

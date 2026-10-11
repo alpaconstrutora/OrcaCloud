@@ -8,13 +8,11 @@ interface SettingsLike {
     location?: string;
     webhookUrl?: string;
     contractWebhookUrl?: string;
-    billingWebhookUrl?: string;
     organizationId?: string;
     organization_id?: string;
     financialInfo?: {
         webhookUrl?: string;
         contractWebhookUrl?: string;
-        billingWebhookUrl?: string;
     };
 }
 
@@ -53,26 +51,6 @@ interface WebhookContract {
     project_id?: string;
 }
 
-interface BillingInstallment {
-    id: string;
-    value: number;
-    dueDate?: string;
-    due_date?: string;
-    description?: string;
-    clientName?: string;
-    propertyName?: string;
-    status: string;
-    project_id?: string;
-    organization_id?: string;
-}
-
-interface BillingRule {
-    id: string;
-    days: number;
-    triggerMode: string;
-    messageTemplate?: string;
-}
-
 interface WebhookPayload {
     event: string;
     timestamp: string;
@@ -97,22 +75,6 @@ interface WebhookPayload {
 }
 
 export const webhookService = {
-    async pingWebhook(url: string) {
-        if (!url) throw new Error('URL invalid');
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ event: 'ping', timestamp: new Date().toISOString(), message: 'Connection Test' })
-            });
-            if (!response.ok) throw new Error(`Status: ${response.status}`);
-            return true;
-        } catch (err: unknown) {
-            console.error('[WEBHOOK] Ping failed:', err);
-            throw err;
-        }
-    },
-
     async triggerOrderSentWebhook(order: PurchaseOrder, supplier?: WebhookSupplier, project?: WebhookProject, isRetry = false) {
         // ... (existing logic for targetUrl)
         const settings: SettingsLike | undefined = project?.settings || project;
@@ -405,137 +367,6 @@ export const webhookService = {
             if (logError) console.error('[WEBHOOK] Failed to log contract error history:', logError);
 
             throw error;
-        }
-    },
-
-    renderTemplate(template: string, data: { cliente: string; valor: string; vencimento: string; descricao: string; projeto: string }) {
-        if (!template) return '';
-        return template
-            .replace(/{{cliente}}/g, data.cliente)
-            .replace(/{{valor}}/g, data.valor)
-            .replace(/{{vencimento}}/g, data.vencimento)
-            .replace(/{{descricao}}/g, data.descricao)
-            .replace(/{{projeto}}/g, data.projeto);
-    },
-
-    async triggerBillingWebhook(item: { inst: BillingInstallment; rule: BillingRule }, project?: WebhookProject) {
-        const settings: SettingsLike | undefined = project?.settings || project;
-        const billingUrl = settings?.financialInfo?.billingWebhookUrl || settings?.billingWebhookUrl;
-
-        if (!billingUrl || billingUrl.includes('your-webhook-id')) {
-            console.warn('[WEBHOOK] Billing Webhook URL not configured. Skipping trigger.');
-            return;
-        }
-
-        const dueDate = item.inst.dueDate || item.inst.due_date;
-        const formattedDate = dueDate ? new Date(dueDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'N/A';
-        const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.inst.value);
-
-        const renderedMessage = this.renderTemplate(item.rule.messageTemplate || '', {
-            cliente: item.inst.clientName || 'Cliente',
-            valor: formattedValue,
-            vencimento: formattedDate,
-            descricao: item.inst.description || 'Parcela',
-            projeto: project?.name || 'Projeto'
-        });
-
-        const payload = {
-            event: 'billing_triggered',
-            timestamp: new Date().toISOString(),
-            renderedMessage,
-            installment: {
-                id: item.inst.id,
-                value: item.inst.value,
-                dueDate: item.inst.dueDate || item.inst.due_date,
-                description: item.inst.description,
-                clientName: item.inst.clientName,
-                propertyName: item.inst.propertyName,
-                status: item.inst.status
-            },
-            rule: {
-                id: item.rule.id,
-                days: item.rule.days,
-                triggerMode: item.rule.triggerMode
-            },
-            project: project ? {
-                id: project.id,
-                name: project.name || '',
-                organizationId: project.organization_id || project.settings?.organizationId
-            } : undefined
-        };
-
-        try {
-            const response = await fetch(billingUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-            // Log history
-            const historyData = {
-                project_id: project?.id || project?.projectId || item.inst.project_id,
-                organization_id: item.inst.organization_id || project?.organizationId || project?.organization_id || project?.settings?.organizationId,
-                event_type: 'billing_triggered' as const,
-                reference_id: item.inst.id,
-                reference_name: `${item.inst.clientName} - ${item.inst.description || 'Parcela'}`,
-                status: 'success' as const,
-                payload
-            };
-
-            const { error: logError } = await supabase.from('automation_history').insert(historyData);
-            if (logError) console.error('[WEBHOOK] Failed to log billing success history:', logError);
-        } catch (err: unknown) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            console.error('[WEBHOOK] Failed to send billing to Make.com:', error);
-
-            // Log error
-            const historyData = {
-                project_id: project?.id || project?.projectId || item.inst.project_id,
-                organization_id: item.inst.organization_id || project?.organizationId || project?.organization_id || project?.settings?.organizationId,
-                event_type: 'billing_triggered' as const,
-                reference_id: item.inst.id,
-                reference_name: `${item.inst.clientName} - ${item.inst.description || 'Parcela'}`,
-                status: 'error' as const,
-                error_message: error.message,
-                payload
-            };
-            const { error: logError } = await supabase.from('automation_history').insert(historyData);
-            if (logError) console.error('[WEBHOOK] Failed to log billing error history:', logError);
-
-            throw error;
-        }
-    },
-
-    async recordBillingConversion(installmentId: string, value: number) {
-        try {
-            // Find the most recent billing trigger for this installment that hasn't been converted yet
-            const { data, error } = await supabase
-                .from('automation_history')
-                .select('id')
-                .eq('reference_id', installmentId)
-                .eq('event_type', 'billing_triggered')
-                .eq('status', 'success')
-                .is('converted_at', null)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
-
-            if (error || !data) return; // No trigger found or already converted
-
-            // Mark as converted
-            const { error: updateError } = await supabase
-                .from('automation_history')
-                .update({
-                    converted_at: new Date().toISOString(),
-                    converted_value: value
-                })
-                .eq('id', data.id);
-
-            if (updateError) console.error('[WEBHOOK] Failed to record billing conversion:', updateError);
-        } catch (err) {
-            console.error('[WEBHOOK] recordBillingConversion error:', err);
         }
     }
 };

@@ -36,8 +36,8 @@ serve(async (req: Request) => {
     // conteúdo vindo de formulário público (ver C5-03). O `verify_jwt` da
     // plataforma não ajuda: ele é satisfeito pela chave anon, que é pública.
     //
-    // Gate igual ao das funções de cron (process-billing-ruler,
-    // quality-sla-enforcement, task-alert-notifier): só o service_role invoca.
+    // Gate igual ao das funções de cron (quality-sla-enforcement,
+    // task-alert-notifier): só o service_role invoca.
     // Estas funções são chamadas por serviço/trigger, nunca pelo navegador.
     const authHeader = req.headers.get('Authorization');
     if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {

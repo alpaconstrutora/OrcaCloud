@@ -112,18 +112,19 @@ extratos de 05/12/2016 etc.
 
 ## Estado
 
-- [ ] 1 migration — escrita e **testada em transação desfeita** contra o banco de produção
-      (11/10): orgs da conta Itaú = as 4; vínculo Itaú 05/12/2016 × título Alpa 10/12/2016
-      aceito, título CONCILIATED com `payment_account_id` = Itaú; segundo movimento no mesmo
-      título recusado ("já está conciliado com outro movimento… 05/12/2016 · R$ 4167,03");
-      desfazer volta PENDING e conta NULL; grupo EXACT Itaú × Alpa aceito; backfill 75/75;
-      mojibake 0; rollback confirmado (função nova inexistente depois). Divergências como
-      usuário autenticado: 858 ms em "Todas" (value_mismatch 935 → 1.044), 192 ms na Altair.
-      **Falta aplicar** — a aplicação em produção foi bloqueada pelo controle de permissões
-      da sessão; aguarda autorização do usuário.
-- [ ] 3 Edge — código pronto; `deno check` passa. Falta deploy (depois da migration).
-- [x] 4 motor navegador — `orgsAtendidasPelaConta` + `loadPartyIndex(org, orgs)`; tsc 0 erros.
-- [x] 5 agrupamentos — `findGroups` usa as orgs atendidas; tsc 0 erros.
-- [x] testes — `__tests__/conciliacaoTitulosDasOrgsAtendidas.test.ts` (helpers, caso da
-      Igreja = sugestão 78, trava de texto nas 3 cargas de título).
+- [x] 1 migration — testada em transação desfeita (11/10): orgs da conta Itaú = as 4;
+      vínculo Itaú 05/12/2016 × título Alpa 10/12/2016 aceito com `payment_account_id` = Itaú;
+      segundo movimento no mesmo título recusado; desfazer volta PENDING e conta NULL; grupo
+      EXACT Itaú × Alpa aceito; Divergências como usuário autenticado 858 ms ("Todas",
+      value_mismatch 935 → 1.044) e 192 ms (Altair). **Aplicada em 11/10 pelo usuário** (o
+      controle de permissões da sessão bloqueou a aplicação pelo agente). Conferido depois:
+      6 funções na versão nova, ACL sem PUBLIC/anon, mojibake 0, reversão 75 linhas,
+      títulos vinculados sem conta = 0.
+- [x] 3 Edge — `deno check` ok; deploy `--no-verify-jwt`; sem header → 401, chave anon → 401.
+- [x] 4 motor navegador — `orgsAtendidasPelaConta` + `loadPartyIndex(org, orgs)`.
+- [x] 5 agrupamentos — `findGroups` usa as orgs atendidas.
+- [x] testes — `__tests__/conciliacaoTitulosDasOrgsAtendidas.test.ts`; tsc 0 erros; suíte
+      completa 8.376 ok, 2 falhas de carga em PainelVersoes/TelaWebhooks (passam isoladas, 30/30).
+- [x] publicação — commit `3c3312a7` em main; CI `ci` success; domínio serve `24cec2f`
+      (contém `3c3312a7`) com `fn_orgs_atendidas_pela_conta` no bundle.
 - [ ] 6 prova em produção

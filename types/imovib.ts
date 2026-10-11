@@ -391,11 +391,15 @@ export interface PropertyDeal {
      */
     rental_competencia_offset_months?: number;
     /**
-     * Só locação. Tributos que o cliente retém na fonte ('pis' | 'cofins' | 'inss').
+     * Só locação. Tributos que o cliente retém na fonte ('pis' | 'cofins' | 'inss' | 'irrf').
      * O retido nasce como RETIDO em Tributos a Pagar e a parcela concilia pelo
      * líquido (valor_esperado). Nulo/vazio = nada retido, concilia pelo bruto.
+     * 'irrf' só é gerado quando marcado (inquilino PJ + locador PF, confirmado na aba Financeiro).
      */
     tributos_retidos?: string[] | null;
+    /** Só locação. Locador como cliente cadastrado — o Tipo de pessoa dele (PF/PJ)
+     *  decide a retenção de IRRF (utils/retencaoIrrfLocacao). */
+    locador_client_id?: string | null;
     /** Só locação. Fim da vigência (YYYY-MM-DD) — vira contracts.end_date e delimita as parcelas. */
     end_date?: string;
     /** Só locação. Periodicidade do faturamento; default Mensal em createFromDeal. */

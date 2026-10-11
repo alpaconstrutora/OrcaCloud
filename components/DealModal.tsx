@@ -53,6 +53,7 @@ import DocumentVersionsPanel from './contracts/DocumentVersionsPanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
+import { deveReterIrrfLocacao } from '../utils/retencaoIrrfLocacao';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato' | 'garantias';
 
@@ -1751,6 +1752,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     /** O cliente apontado por `client_id` — UM dos compradores (o primeiro).
      *  Só para o que ainda é de cliente único (análise de crédito, locação). */
     const selectedClient = clients.find(c => c.id === formData.client_id);
+
+    // ── Locação: locador e retenção de IRRF ─────────────────────────────────
+    // Inquilino PJ + locador PF = o cliente retém o IRRF (utils/retencaoIrrfLocacao).
+    // PF/PJ vem do cadastro de Clientes. Locador sugerido = "Cliente / proprietário"
+    // do imóvel, quando não é um dos inquilinos (o campo do imóvel é ambíguo). A
+    // sugestão não é gravada sozinha — só quando o usuário escolhe ou confirma o
+    // IRRF; `null` em locador_client_id = "nenhum", escolhido de propósito.
+    const inquilinosLocacao = buyerClients.length > 0 ? buyerClients : (selectedClient ? [selectedClient] : []);
+    const locadorSugeridoId = selectedProperty?.client_id && !inquilinosLocacao.some(c => c.id === selectedProperty.client_id)
+        ? selectedProperty.client_id : null;
+    const locadorId = formData.locador_client_id !== undefined ? formData.locador_client_id : locadorSugeridoId;
+    const locadorLocacao = locadorId ? clients.find(c => c.id === locadorId) : undefined;
+    const regraPedeIrrf = deveReterIrrfLocacao(inquilinosLocacao, locadorLocacao);
+    const inquilinoPj = inquilinosLocacao.find(c => c.type === 'PJ');
     /** Comprador cujo cartão de conferência está aberto (venda: o clicado; senão o primeiro). */
     const conferenceClient = isMultiBuyer
         ? clients.find(c => c.id === (expandedBuyerId || formData.client_id))
@@ -3516,9 +3531,49 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     pelo valor líquido (valor_esperado). Chaves = as da locação. */}
                                 {formData.type === 'RENTAL' && (
                                     <div className="space-y-2">
+                                        <label className="text-xs font-semibold text-slate-500">Locador</label>
+                                        <ClientSelect
+                                            clients={clients}
+                                            value={locadorId || ''}
+                                            onChange={(v) => setFormData({ ...formData, locador_client_id: v || null })}
+                                            icon={null}
+                                            title="Selecionar Locador"
+                                            placeholder="Locador não informado (empresa)"
+                                            triggerClassName="w-full h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                        <p className="text-xs text-gray-500">
+                                            {locadorLocacao
+                                                ? `${locadorLocacao.type === 'PJ' ? 'Pessoa jurídica' : 'Pessoa física'} (cadastro de Clientes)${formData.locador_client_id === undefined ? ' — sugerido pelo proprietário do imóvel' : ''}.`
+                                                : 'Sem locador pessoa física informado: não há retenção de IRRF.'}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {formData.type === 'RENTAL' && (
+                                    <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-500">Tributos retidos pelo cliente</label>
+                                        {/* Pedido de confirmação: a regra pede IRRF e ele não está marcado. */}
+                                        {regraPedeIrrf && !(formData.tributos_retidos ?? []).includes('irrf') && (
+                                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2">
+                                                <p className="text-sm font-normal text-amber-800">
+                                                    Inquilino pessoa jurídica ({inquilinoPj?.name}) e locador pessoa física ({locadorLocacao?.name}):
+                                                    o cliente retém o IRRF e paga a parcela líquida.
+                                                </p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFormData({
+                                                        ...formData,
+                                                        locador_client_id: locadorId,
+                                                        tributos_retidos: [...(formData.tributos_retidos ?? []).filter(k => k !== 'irrf'), 'irrf'],
+                                                    })}
+                                                    className="h-8 px-3 bg-amber-600 text-white rounded-[6px] hover:bg-amber-700 font-medium text-[13px] transition-all"
+                                                >
+                                                    Confirmar retenção de IRRF
+                                                </button>
+                                            </div>
+                                        )}
                                         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                            {([['pis', 'PIS'], ['cofins', 'COFINS'], ['inss', 'INSS']] as const).map(([chave, rotulo]) => {
+                                            {([['pis', 'PIS'], ['cofins', 'COFINS'], ['inss', 'INSS'], ['irrf', 'IRRF']] as const).map(([chave, rotulo]) => {
                                                 const retidos = formData.tributos_retidos ?? [];
                                                 return (
                                                     <label key={chave} className="flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer">
@@ -3541,8 +3596,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <p className="text-xs text-gray-500">
                                             Marcado: o cliente desconta o tributo do aluguel e o recolhe. A parcela é conciliada
                                             pelo valor líquido e o tributo aparece como "Retido pelo cliente" em Tributos a Pagar.
-                                            Desmarcado: concilia pelo valor bruto e o tributo fica a pagar.
+                                            Desmarcado: concilia pelo valor bruto e o tributo fica a pagar. IRRF (tabela progressiva
+                                            sobre a parcela) só existe quando retido: inquilino pessoa jurídica e locador pessoa física.
                                         </p>
+                                        {(formData.tributos_retidos ?? []).includes('irrf') && !regraPedeIrrf && (
+                                            <p className="text-xs text-amber-700">
+                                                IRRF marcado, mas pela regra só há retenção com inquilino pessoa jurídica e locador pessoa física —
+                                                confira o Locador e o tipo de pessoa dos inquilinos.
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </div>

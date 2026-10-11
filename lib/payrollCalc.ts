@@ -25,6 +25,22 @@ export function calculateINSS(base: number, brackets: INSSBracket[]): number {
  * Cálculo de IRRF por tabela progressiva — fonte única de verdade.
  * Aplica alíquota da faixa correspondente menos a parcela a deduzir.
  */
+/**
+ * IN RFB 2.216/2024 — redutor mensal do IRRF a partir de 2026.
+ * Base ≤ R$5.000: imposto zerado; R$5.000,01–R$7.350: redução proporcional linear.
+ * Âncora: IRRF exato em R$5.000 = 5000×27,5% − 908,73 = R$466,27.
+ *
+ * Movido de `payrollEngine.applyIRRFReducer` (10/10/2026) sem mudar o corpo, para
+ * o IRRF retido em aluguel (taxPayableService) usar a MESMA conta da folha.
+ * A folha continua chamando pelo payrollEngine, que delega para cá.
+ */
+export function aplicarRedutorIRRF2026(irrf: number, base: number): number {
+    if (base <= 5000) return 0;
+    if (base > 7350) return irrf;
+    const reducer = 466.27 * (7350 - base) / 2350;
+    return Math.max(0, irrf - reducer);
+}
+
 export function calculateIRRF(base: number, brackets: IRRFBracket[]): number {
     if (base <= 0 || brackets.length === 0) return 0;
 

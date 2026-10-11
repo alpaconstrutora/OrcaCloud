@@ -2,7 +2,7 @@ import { payrollService, PayrollRun, PayrollItem, PayrollResult, PayrollRubric, 
 import { laborService, Employee, TimeEntry } from './laborService';
 import { payrollValidationService } from './payrollValidationService';
 import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from './fiscalService';
-import { calculateINSS as calcINSS, calculateIRRF as calcIRRF } from '../lib/payrollCalc';
+import { calculateINSS as calcINSS, calculateIRRF as calcIRRF, aplicarRedutorIRRF2026 } from '../lib/payrollCalc';
 
 /**
  * Parser aritmético seguro — substitui new Function() / eval().
@@ -662,14 +662,10 @@ export const payrollEngine = {
         };
     },
 
-    // IN RFB 2.216/2024 — redutor mensal IRRF 2026+
-    // Base ≤ R$5.000: imposto zerado; R$5.000,01–R$7.350: redução proporcional linear.
-    // Âncora: IRRF exato em R$5.000 = 5000×27,5% − 908,73 = R$466,27.
+    // IN RFB 2.216/2024 — redutor mensal IRRF 2026+. A conta mora em
+    // lib/payrollCalc (aplicarRedutorIRRF2026), compartilhada com o IRRF de aluguel.
     applyIRRFReducer(irrf: number, base: number): number {
-        if (base <= 5000) return 0;
-        if (base > 7350) return irrf;
-        const reducer = 466.27 * (7350 - base) / 2350;
-        return Math.max(0, irrf - reducer);
+        return aplicarRedutorIRRF2026(irrf, base);
     },
 
     calculateINSS(base: number, brackets: INSSBracket[]) {

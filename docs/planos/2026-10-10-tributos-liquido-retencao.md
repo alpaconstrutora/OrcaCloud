@@ -21,11 +21,32 @@ Feito: coluna Valor → **Valor bruto**; nova **Valor a receber** = campo comput
 `valor_esperado` (o mesmo que a conciliação confere), carregado junto com Tributos em
 `receivableService.resolveTributos`. Valor líquido inalterado.
 
+### Pedido posterior (10/10/2026) — IRRF
+> somente quando o cliente é PJ e o locador é PF, acontecerá rentencao na fonte. ou seja o cliente irá reter o valor referente ao Inmposto de renda e pagará apenas o valor líquido (valor da parcela - valor do IRRF)
+
+Achado: o locador era sempre uma empresa (`companies`, tratada como PJ) — não havia locador PF.
+Feito (migration `aplicar_20271010005100`):
+- Negociação de locação ganha **Locador** (`commercial_deals.locador_client_id` → `clients`),
+  cujo Tipo de pessoa decide PF/PJ; sugerido pelo "Cliente / proprietário" do imóvel quando
+  não é um dos inquilinos (nunca gravado sozinho).
+- **IRRF** entra em "Tributos retidos pelo cliente" (chave `irrf`). Quando algum inquilino é PJ
+  e o locador é PF, a aba pede **Confirmar retenção de IRRF**; marcado fora da regra, avisa.
+- `generateForDeal` gera o IRRF (só quando marcado) por parcela: tabela de `irrf_brackets`
+  vigente na data + redutor 2026 da folha (`aplicarRedutorIRRF2026`, movido de
+  `payrollEngine` para `lib/payrollCalc`). Nasce RETIDO → Valor a receber e conciliação pelo líquido.
+- ⚠️ A fórmula do redutor é a da folha (âncora R$ 466,27 sobre a base) e pode não bater com a
+  Lei 15.270/2025 — usada por decisão do usuário; confirmar com o contador.
+- Anotado, sem mudar: vencimento do IRRF em `taxDueDate` é dia 25 (aluguel retido: dia 20,
+  informativo — quem recolhe é o cliente); DRE classifica "IRRF" em impostos s/ receita.
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|
 | 10/10/2026 | Retenção: por tributo ou opção única? | **Por tributo** — PIS, COFINS e INSS separados |
 | 10/10/2026 | Tributo retido em Tributos a Pagar? | **Fica listado como "Retido pelo cliente"** — fora de "A pagar"/"Vencidos", sem botão Pagar |
+| 10/10/2026 | Onde dizer que o locador é PF? | **Tipo de pessoa do cadastro de Clientes**, com pedido de confirmação na negociação |
+| 10/10/2026 | Vários inquilinos PF/PJ misturados? | **Basta um PJ** para reter |
+| 10/10/2026 | Redução 2026 no IRRF do aluguel? | **Aplicar a mesma da folha** |
 
 ## Restrições que moldaram o desenho
 - `internal_transactions.amount` NÃO muda: 10 origens de sync regravam o amount e a DRE

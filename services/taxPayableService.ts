@@ -6,6 +6,8 @@ import { pisRatesService } from './pisRatesService';
 import { cofinsRatesService } from './cofinsRatesService';
 import { inssBracketsService } from './inssBracketsService';
 import { numerarParcelas, descricaoTributo } from '../utils/tributoDescricao';
+import { irrfDoAluguel } from '../utils/retencaoIrrfLocacao';
+import { fiscalService, type IRRFBracket } from './fiscalService';
 import {
     categoriaDoTributo, resolverCategoriaPorNomes,
     CATEGORIA_IMPOSTO_SOBRE_RECEITA, CATEGORIA_IMPOSTO_SOBRE_RESULTADO,
@@ -712,8 +714,20 @@ export const taxPayableService = {
             if (!regimeLabel) {
                 console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);
             }
+            // IRRF: só quando o cliente retém (inquilino PJ, locador PF — a negociação
+            // pede confirmação e marca 'irrf' em tributos_retidos). Não retido não é
+            // tributo da organização: o locador PF recolhe pelo Carnê-Leão.
+            const faixasIrrfPorData = new Map<string, Promise<IRRFBracket[]>>();
+            const faixasIrrf = (data: string) => {
+                if (!faixasIrrfPorData.has(data)) faixasIrrfPorData.set(data, fiscalService.getIRRFBrackets(data));
+                return faixasIrrfPorData.get(data)!;
+            };
             for (const parcel of taxableParcels) {
                 const year = parseLocal(parcel.fato_gerador).getFullYear();
+                if (retidos.has('irrf')) {
+                    const irrf = irrfDoAluguel(parcel.amount, await faixasIrrf(parcel.fato_gerador), year);
+                    pushRow(parcel, 'irrf', 'IRRF', irrf);
+                }
                 if (regimeLabel) {
                     const pis = rateForYear(pisRates, regimeLabel, year);
                     const cofins = rateForYear(cofinsRates, regimeLabel, year);

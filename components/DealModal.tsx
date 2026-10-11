@@ -2653,7 +2653,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         ABA 1 — DADOS DO CLIENTE
                     ══════════════════════════════════════════ */}
                     {activeTab === 'cliente' && (
-                        <div className="max-w-2xl space-y-8">
+                        // Largura toda da tela (pedido do usuário, 11/10/2026): antes
+                        // `max-w-2xl` deixava metade da tela vazia. Duas colunas em vez
+                        // de campos esticados (§30): quem preenche à esquerda, a ficha
+                        // de conferência à direita; documentos em grade embaixo.
+                        <div className="space-y-8">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-8 items-start">
+                        <div className="space-y-8 min-w-0">
                             {/* Código da negociação — campo rotulado, e não um ícone solto no
                                 cabeçalho: escondido lá, ninguém achava (relato do usuário,
                                 2026-08-31). Mesmo padrão de "Número do Contrato/Pedido/Cotação".
@@ -2773,6 +2779,50 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
+                            {/* Origem / Canal — alimenta "Fontes de Locação" (e Vendas) */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500">Origem / Canal</label>
+                                <select
+                                    value={formData.origin_channel || ''}
+                                    onChange={(e) => setFormData({ ...formData, origin_channel: e.target.value })}
+                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="">Não informado</option>
+                                    <option value="Direto">Direto</option>
+                                    <option value="Indicação">Indicação</option>
+                                    <option value="Portal Imobiliário">Portal Imobiliário</option>
+                                    <option value="Imobiliária / Corretor">Imobiliária / Corretor</option>
+                                    <option value="Redes Sociais">Redes Sociais</option>
+                                    <option value="Site">Site</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                            </div>
+
+                            {/* Competência do aluguel — só locação. Define o mês de auferimento
+                                em relação ao vencimento, usado na apuração por competência. */}
+                            {formData.type === 'RENTAL' && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500">Competência do aluguel</label>
+                                    <select
+                                        value={String(formData.rental_competencia_offset_months ?? 0)}
+                                        onChange={(e) => setFormData({ ...formData, rental_competencia_offset_months: parseInt(e.target.value, 10) })}
+                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                    >
+                                        <option value="0">Mesmo mês do vencimento</option>
+                                        <option value="1">Vence 1 mês após a competência (postecipado)</option>
+                                        <option value="2">Vence 2 meses após a competência</option>
+                                        <option value="-1">Vence no mês anterior (antecipado)</option>
+                                    </select>
+                                    <p className="text-xs font-normal text-gray-400 px-1">
+                                        Mês em que o aluguel é auferido, em relação ao vencimento. Usado no regime de competência para datar os tributos.
+                                    </p>
+                                </div>
+                            )}
+
+                        </div>
+
+                        {/* Coluna da direita: só leitura, para conferir antes de emitir. */}
+                        <div className="min-w-0">
                             {/* Dados cadastrados do cliente (Minha Organização → Meus Clientes) —
                                 somente leitura, para conferência antes de emitir o contrato. Não
                                 edita o cadastro aqui (evita duas fontes de verdade); qualquer
@@ -2833,46 +2883,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 </div>
                             )}
-
-                            {/* Origem / Canal — alimenta "Fontes de Locação" (e Vendas) */}
-                            <div className="space-y-2">
-                                <label className="text-xs font-semibold text-slate-500">Origem / Canal</label>
-                                <select
-                                    value={formData.origin_channel || ''}
-                                    onChange={(e) => setFormData({ ...formData, origin_channel: e.target.value })}
-                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                >
-                                    <option value="">Não informado</option>
-                                    <option value="Direto">Direto</option>
-                                    <option value="Indicação">Indicação</option>
-                                    <option value="Portal Imobiliário">Portal Imobiliário</option>
-                                    <option value="Imobiliária / Corretor">Imobiliária / Corretor</option>
-                                    <option value="Redes Sociais">Redes Sociais</option>
-                                    <option value="Site">Site</option>
-                                    <option value="Outros">Outros</option>
-                                </select>
-                            </div>
-
-                            {/* Competência do aluguel — só locação. Define o mês de auferimento
-                                em relação ao vencimento, usado na apuração por competência. */}
-                            {formData.type === 'RENTAL' && (
-                                <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-slate-500">Competência do aluguel</label>
-                                    <select
-                                        value={String(formData.rental_competencia_offset_months ?? 0)}
-                                        onChange={(e) => setFormData({ ...formData, rental_competencia_offset_months: parseInt(e.target.value, 10) })}
-                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                    >
-                                        <option value="0">Mesmo mês do vencimento</option>
-                                        <option value="1">Vence 1 mês após a competência (postecipado)</option>
-                                        <option value="2">Vence 2 meses após a competência</option>
-                                        <option value="-1">Vence no mês anterior (antecipado)</option>
-                                    </select>
-                                    <p className="text-xs font-normal text-gray-400 px-1">
-                                        Mês em que o aluguel é auferido, em relação ao vencimento. Usado no regime de competência para datar os tributos.
-                                    </p>
-                                </div>
-                            )}
+                        </div>
+                        </div>
 
                             {/* Checklist de documentos — UM bloco por comprador, cada um
                                 conforme Pessoa Física / Jurídica do seu cadastro. Persistido em
@@ -2908,7 +2920,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 {doneCount}/{items.length}
                                             </span>
                                         </div>
-                                        <div className="space-y-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
                                             {items.map(item => {
                                                 const isChecked = isOn(item.key);
                                                 return (
@@ -2946,8 +2958,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         ABA 2 — DADOS DA UNIDADE
                     ══════════════════════════════════════════ */}
                     {activeTab === 'unidade' && (
-                        <div className="max-w-2xl space-y-8">
-                            <div className="space-y-4">
+                        // Largura toda (11/10/2026): a lista de unidades à esquerda e a
+                        // ficha da unidade selecionada à direita, em vez de empilhadas
+                        // numa coluna de 672px com metade da tela vazia.
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-8 items-start">
+                            <div className="space-y-4 min-w-0">
                                 <div className="flex items-center gap-2 text-blue-600">
                                     <Building className="w-5 h-5" />
                                     <h3 className="text-sm font-bold text-gray-800">Imóveis da Negociação</h3>
@@ -3036,6 +3051,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 )}
 
+                            </div>
+
+                            {/* Coluna da direita: a unidade clicada na lista. */}
+                            <div className="space-y-4 min-w-0">
                                 {expandedProperty && (
                                     <div className="p-6 bg-white rounded-[10px] border border-gray-100 flex items-center gap-6 animate-in slide-in-from-left-4 duration-500 shadow-sm">
                                         <div className="w-20 h-20 rounded-[6px] border-2 border-white shadow-lg overflow-hidden bg-white shrink-0">
@@ -3123,8 +3142,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 (abaixo, fora deste container) usa a largura toda: cada parcela +
                                 desconto cabe numa linha só. 4xl (896px), não 3xl: a tabela do
                                 Plano de pagamento tem 7 colunas e em 768px cortava Vencimento
-                                e Ações. */}
-                            <div className="max-w-4xl space-y-6">
+                                e Ações.
+                                11/10/2026: sem teto — a aba ocupa a largura toda (pedido do
+                                usuário); os campos curtos dividem a linha (§30) em vez de esticar. */}
+                            <div className="space-y-6">
                                 <div className="flex items-center gap-2 text-blue-600">
                                     <DollarSign className="w-5 h-5" />
                                     <h3 className="text-sm font-bold text-gray-800">
@@ -3377,8 +3398,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 )}
 
-                                {/* Datas */}
-                                <div className="grid grid-cols-2 gap-4">
+                                {/* Datas + Forma de Pagamento: três campos curtos, uma linha. */}
+                                <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
                                     <div className="space-y-2">
                                         <label className="text-xs font-semibold text-slate-500">Data Efetiva</label>
                                         <div className="relative">
@@ -3412,7 +3433,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
-                                </div>
 
                                 {/* Forma de Pagamento */}
                                 <div className="space-y-2">
@@ -3439,6 +3459,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </>
                                         )}
                                     </select>
+                                </div>
                                 </div>
 
                                 {/* Parcelado → montar o plano aqui mesmo. Os campos são o
@@ -3518,6 +3539,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     Plano de Contas). Definidas aqui uma única vez e
                                     herdadas por TODAS as parcelas — na aba Parcelas
                                     aparecem só como colunas de leitura. */}
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-4">
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
                                     <CostCenterSelect
@@ -3563,6 +3585,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </p>
                                     </div>
                                 )}
+
+                                </div>
 
                                 {formData.type === 'RENTAL' && (
                                     <div className="space-y-2">
@@ -4061,7 +4085,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         ABA 4 — PARTES & COMISSÃO
                     ══════════════════════════════════════════ */}
                     {activeTab === 'partes' && (
-                        <div className="max-w-2xl space-y-8">
+                        // Largura toda (11/10/2026): seletor e ficha do corretor lado a
+                        // lado; os quatro campos da comissão numa linha só (§30).
+                        <div className="space-y-8">
                             {/* Corretor */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-2 text-amber-600">
@@ -4070,6 +4096,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <span className="text-xs font-semibold text-amber-500">Opcional</span>
                                 </div>
 
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-4 items-center">
                                 <select
                                     value={formData.broker_id || ''}
                                     onChange={(e) => {
@@ -4117,9 +4144,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                     </div>
                                 )}
+                                </div>
 
                                 {formData.broker_id && (
-                                    <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2 duration-300">
+                                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 animate-in slide-in-from-top-2 duration-300">
                                         <div className="space-y-2">
                                             <label className="text-xs font-semibold text-slate-500">
                                                 <Percent className="w-3 h-3 inline mr-1" />% Comissão

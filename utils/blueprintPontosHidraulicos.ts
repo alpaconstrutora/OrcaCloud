@@ -40,6 +40,7 @@ import { faceDaParede } from './blueprintRotaPelasParedes';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { potenciaPadraoVA } from './blueprintPotenciaPadrao';
 import { potenciaEletricaVA } from './blueprintSelecaoClimatizacao';
+import { ehEvaporadoraDeParede, encostoNaParede, estaEncostada, lugaresDoPontoDeForca } from './blueprintEncostoNaParede';
 
 export type KitHidraulico = 'BANHEIRO' | 'COZINHA' | 'AREA_SERVICO';
 
@@ -418,12 +419,17 @@ export function potenciaDaEvaporadoraVA(capacidadeBtuH: number | null | undefine
 export function pontoEletricoDaEvaporadoraExistente(model: BlueprintModel, evap: Pick<Terminal, 'levelId' | 'at' | 'larguraMm' | 'profundidadeMm'>): Terminal | null {
   const alcance = Math.max(evap.larguraMm ?? 0, evap.profundidadeMm ?? 0) / 2 + 400;
   const naFace = faceDaParede(evap.at, model.walls.filter((w) => w.levelId === evap.levelId), alcance)?.face;
+  // 11/10/2026: e os dois lugares AO LADO da peça, na face — onde o ponto nasce agora.
+  const enc = encostoNaParede(model, evap.levelId, evap.at, evap.profundidadeMm ?? 220);
+  const aoLado = enc ? lugaresDoPontoDeForca(model, enc, evap.larguraMm ?? 900) : [];
   const candidatos = (model.terminais ?? []).filter(
     (t) =>
       t.levelId === evap.levelId &&
       t.disciplina === 'ELETRICA' &&
       t.tipoEletrico === 'AR_CONDICIONADO' &&
-      (Math.hypot(t.at.x - evap.at.x, t.at.y - evap.at.y) <= RAIO_DA_LOUCA_MM || (!!naFace && Math.hypot(t.at.x - naFace.x, t.at.y - naFace.y) <= MESMO_PONTO_MM)),
+      (Math.hypot(t.at.x - evap.at.x, t.at.y - evap.at.y) <= RAIO_DA_LOUCA_MM ||
+        (!!naFace && Math.hypot(t.at.x - naFace.x, t.at.y - naFace.y) <= MESMO_PONTO_MM) ||
+        aoLado.some((l) => Math.hypot(t.at.x - l.x, t.at.y - l.y) <= MESMO_PONTO_MM)),
   );
   return candidatos.sort((a, b) => Math.hypot(a.at.x - evap.at.x, a.at.y - evap.at.y) - Math.hypot(b.at.x - evap.at.x, b.at.y - evap.at.y))[0] ?? null;
 }
@@ -437,13 +443,14 @@ export function pontoEletricoDaEvaporadoraExistente(model: BlueprintModel, evap:
  */
 export function pontoEletricoDaEvaporadora(model: BlueprintModel, evap: Pick<Terminal, 'levelId' | 'at' | 'capacidadeBtuH' | 'larguraMm' | 'profundidadeMm' | 'rotacaoGraus'>, eerWW: number): Extract<Command, { type: 'AddTerminal' }>[] {
   if (pontoEletricoDaEvaporadoraExistente(model, evap)) return [];
-  const alcance = Math.max(evap.larguraMm ?? 0, evap.profundidadeMm ?? 0) / 2 + 400;
-  const naFace = faceDaParede(evap.at, model.walls.filter((w) => w.levelId === evap.levelId), alcance)?.face;
+  // 11/10/2026 (teste no app real): na face ATRÁS do centro o ponto ficava escondido sob o
+  // aparelho. Agora nasce na face, AO LADO dele (meia largura + 150 mm), do lado em que a parede continua.
+  const enc = encostoNaParede(model, evap.levelId, evap.at, evap.profundidadeMm ?? 220);
   // 10/10/2026 (teste no app real): SEM parede perto o ponto nascia no centro da peça, um
   // por cima do outro. Agora nasce ao LADO dela, no eixo da largura (meia largura + 150 mm).
   const giro = ((evap.rotacaoGraus ?? 0) * Math.PI) / 180;
   const aoLado = (evap.larguraMm ?? 900) / 2 + 150;
-  const ponto = naFace ?? { x: evap.at.x + Math.cos(giro) * aoLado, y: evap.at.y + Math.sin(giro) * aoLado };
+  const ponto = enc ? lugaresDoPontoDeForca(model, enc, evap.larguraMm ?? 900)[0] : { x: evap.at.x + Math.cos(giro) * aoLado, y: evap.at.y + Math.sin(giro) * aoLado };
   return [
     {
       type: 'AddTerminal' as const,
@@ -470,6 +477,59 @@ export function comandosDaPotenciaDaEvaporadora(model: BlueprintModel, evap: Ter
   if (ponto.potenciaW != null && !automaticas.has(ponto.potenciaW)) return [];
   const nova = potenciaDaEvaporadoraVA(novaCapacidadeBtuH, eerWW);
   return ponto.potenciaW === nova ? [] : [{ type: 'SetTerminalProps', terminalId: ponto.id, potenciaW: nova } as Command];
+}
+
+/**
+ * 11/10/2026 (teste do usuário no app real): ENCOSTAR na parede a evaporadora de parede já
+ * desenhada — a que ficou com metade dentro da alvenaria ou sem giro. A peça anda até o
+ * encosto e gira para soprar para dentro; o ponto de força dela que ficou ESCONDIDO sob o
+ * aparelho (entre o eixo da parede e a frente da peça, dentro da largura) vai para o lado.
+ * Um lote; vazio quando já está encostada ou não há parede ao alcance.
+ */
+export function comandosParaEncostarEvaporadora(model: BlueprintModel, evap: Terminal): Command[] {
+  if (!ehEvaporadoraDeParede(evap.tipoHidraulico)) return [];
+  const ficha = evap.tipoHidraulico ? FICHA_DO_PONTO_HIDRAULICO[evap.tipoHidraulico]?.medidasMm : undefined;
+  const larguraMm = evap.larguraMm ?? ficha?.larguraMm ?? 900;
+  const profundidadeMm = evap.profundidadeMm ?? ficha?.profundidadeMm ?? 220;
+  const enc = encostoNaParede(model, evap.levelId, evap.at, profundidadeMm);
+  if (!enc || estaEncostada(evap.at, evap.rotacaoGraus, enc)) return [];
+  const lote: Command[] = [];
+  const delta = { x: enc.at.x - evap.at.x, y: enc.at.y - evap.at.y };
+  if (delta.x !== 0 || delta.y !== 0) lote.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [evap.id], delta, manterJuncoes: false });
+  lote.push({ type: 'SetTerminalProps', terminalId: evap.id, rotacaoGraus: enc.rotacaoGraus });
+  const ponto = pontoEletricoDaEvaporadoraExistente(model, evap);
+  if (ponto) {
+    const w = model.walls.find((x) => x.id === enc.wallId);
+    const meia = (w?.thicknessMm ?? 150) / 2;
+    const rel = { x: ponto.at.x - enc.face.x, y: ponto.at.y - enc.face.y };
+    const aoLongo = rel.x * enc.tangente.x + rel.y * enc.tangente.y;
+    const paraDentro = rel.x * enc.normal.x + rel.y * enc.normal.y;
+    const escondido = Math.abs(aoLongo) < larguraMm / 2 && paraDentro >= -meia - 1 && paraDentro <= profundidadeMm + 1;
+    if (escondido) {
+      const destino = lugaresDoPontoDeForca(model, enc, larguraMm)[0];
+      lote.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [ponto.id], delta: { x: destino.x - ponto.at.x, y: destino.y - ponto.at.y }, manterJuncoes: false });
+    }
+  }
+  return lote;
+}
+
+/** O nome que o app dá à condensadora pela capacidade (o mesmo do lançamento do split). */
+export const nomeDaCondensadora = (capacidadeBtuH: number | null | undefined): string =>
+  capacidadeBtuH ? `Condensadora ${capacidadeBtuH.toLocaleString('pt-BR')} BTU/h` : 'Condensadora';
+
+/**
+ * 11/10/2026 (teste do usuário no app real): a capacidade da evaporadora mudou — a da
+ * condensadora LIGADA a ela (split) acompanha, MAS só se ainda é a automática (vazia ou
+ * igual à anterior da evaporadora); o nome também, se ainda é o automático. O que o
+ * projetista declarou na condensadora não é tocado.
+ */
+export function comandosDaCapacidadeDaCondensadora(model: BlueprintModel, evap: Terminal, novaCapacidadeBtuH: number | null): Command[] {
+  const cond = evap.condensadoraId ? (model.terminais ?? []).find((t) => t.id === evap.condensadoraId) : undefined;
+  if (!cond || cond.tipoHidraulico !== 'CONDENSADORA_SPLIT') return [];
+  const automatica = cond.capacidadeBtuH == null || cond.capacidadeBtuH === evap.capacidadeBtuH;
+  if (!automatica || (cond.capacidadeBtuH ?? null) === novaCapacidadeBtuH) return [];
+  const nomeAutomatico = cond.tipo === nomeDaCondensadora(cond.capacidadeBtuH) || cond.tipo === 'Condensadora';
+  return [{ type: 'SetTerminalProps', terminalId: cond.id, capacidadeBtuH: novaCapacidadeBtuH, ...(nomeAutomatico ? { tipo: nomeDaCondensadora(novaCapacidadeBtuH) } : {}) } as Command];
 }
 
 /** Os pontos das louças (e o ponto elétrico dos equipamentos) que ENTRARAM num comando (a peça, ou o conjunto e os filhos). */

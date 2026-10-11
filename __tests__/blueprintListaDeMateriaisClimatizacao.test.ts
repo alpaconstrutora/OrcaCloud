@@ -156,12 +156,13 @@ describe('climatização E9b · gás do VRF, cabo pelo eletroduto, peso do paine
     expect(lista.porSistema[0].caboM).toBeCloseTo(esperado / 1000 + hip.materiais.folgaDoCaboM, 6);
     expect(lista.avisos.join(' ')).not.toMatch(/sem eletroduto desenhado/);
     expect(linha(lista, /^Cabo de interligação/)!.nota).toMatch(/1 pelo eletroduto desenhado/);
-    // O eletroduto que para a 1,5 m da condensadora: com alcance de 0,3 m não liga (volta para a linha —
-    // com 1 m, a ponta no próprio ponto de força já alcançaria a condensadora, a ~0,6 m dele);
-    // com 2 m liga, e os 1,5 m fora do eletroduto entram no comprimento.
+    // O eletroduto que para a 1,5 m da condensadora: com alcance de 0,3 m não liga (volta para a linha);
+    // com 1,6 m liga, e os 1,5 m fora do eletroduto entram no comprimento. ⚠️ 11/10/2026: o ponto de
+    // força saiu do centro da evaporadora para o LADO dela, a ~2 m da condensadora em 3D — com
+    // alcance de 2 m a ponta no próprio ponto de força já a alcançaria (antes, a ~0,6 m, já com 1 m).
     const curto = applyBatch(m, eletroduto({ x: s.condensadora.at.x, y: s.condensadora.at.y + 1500 }, s.condensadora.cotaMm)).model;
     expect(materiaisDeClimatizacao(curto, { ...hip, materiais: { ...hip.materiais, raioDoEletrodutoM: 0.3 } }).porSistema[0].origemDoCabo).toBe('LINHA');
-    const alcance2 = materiaisDeClimatizacao(curto, { ...hip, materiais: { ...hip.materiais, raioDoEletrodutoM: 2 } });
+    const alcance2 = materiaisDeClimatizacao(curto, { ...hip, materiais: { ...hip.materiais, raioDoEletrodutoM: 1.6 } });
     expect(alcance2.porSistema[0].origemDoCabo).toBe('ELETRODUTO');
     const ate = Math.hypot(2000, 2000) + Math.hypot(s.condensadora.at.x - q.x, s.condensadora.at.y + 1500 - q.y, s.condensadora.cotaMm - ac.cotaMm) + 1500;
     expect(alcance2.porSistema[0].caboM).toBeCloseTo(ate / 1000 + hip.materiais.folgaDoCaboM, 6);

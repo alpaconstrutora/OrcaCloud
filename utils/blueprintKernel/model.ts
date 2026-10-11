@@ -5075,27 +5075,34 @@ export function verticeDeAcompanhamento(
  * Devolve, por trecho, se a ponta `a` e/ou a `b` seguem. Um trecho pode ter as
  * DUAS presas — o pedaço curto entre duas tomadas que andam juntas —, e aí ele
  * anda inteiro.
+ *
+ * 11/10/2026 (teste do usuário no app real): a EVAPORADORA prende também o dreno
+ * de condensado (DRENO_AC), que nasce nela — antes, encostar ou arrastar a
+ * evaporadora levava a linha frigorígena e deixava o dreno no lugar antigo, e o
+ * gerador, sem reconhecê-lo, lançava um segundo dreno por cima.
  */
 export function pontasPresasAsPecas(
   model: BlueprintModel,
   terminalIds: readonly ObjectId[],
   quadroIds: readonly ObjectId[],
 ): Map<ObjectId, { a: boolean; b: boolean }> {
-  const ancoras: { at: Point; levelId: ObjectId; disciplina: DisciplinaDeRede | null }[] = [];
+  const ancoras: { at: Point; levelId: ObjectId; disciplinas: readonly DisciplinaDeRede[] }[] = [];
   const terminais = new Set(terminalIds);
   const quadros = new Set(quadroIds);
   for (const t of model.terminais ?? []) {
-    if (terminais.has(t.id)) ancoras.push({ at: t.at, levelId: t.levelId, disciplina: t.disciplina });
+    if (!terminais.has(t.id)) continue;
+    const comDreno = !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico) && t.disciplina !== 'DRENO_AC';
+    ancoras.push({ at: t.at, levelId: t.levelId, disciplinas: comDreno ? [t.disciplina, 'DRENO_AC'] : [t.disciplina] });
   }
   for (const q of model.quadros ?? []) {
     // O quadro é elétrico por natureza: prende eletroduto, e só.
-    if (quadros.has(q.id)) ancoras.push({ at: q.at, levelId: q.levelId, disciplina: 'ELETRICA' });
+    if (quadros.has(q.id)) ancoras.push({ at: q.at, levelId: q.levelId, disciplinas: ['ELETRICA'] });
   }
   const presa = (p: Point, t: Trecho) =>
     ancoras.some(
       (a) =>
         a.levelId === t.levelId &&
-        a.disciplina === t.disciplina &&
+        a.disciplinas.includes(t.disciplina) &&
         a.at.x === p.x &&
         a.at.y === p.y,
     );

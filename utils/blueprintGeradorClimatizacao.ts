@@ -43,7 +43,7 @@ import type { HipotesesClimatizacao } from './blueprintClimatizacao';
 import { cargaTermicaDoEstudo, type CargaTermicaDoNivel, type ContextoDaCarga } from './blueprintCargaTermica';
 import { selecaoDoNivel, type ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from './blueprintPosicaoSplit';
-import { planejarLinhasFrigorigenas } from './blueprintLinhaFrigorigena';
+import { comandosDaLinhaPelaCapacidade, planejarLinhasFrigorigenas } from './blueprintLinhaFrigorigena';
 import { planejarVrf } from './blueprintVrf';
 import { planejarRedeDeAr, vazoesDosTerminais } from './blueprintRedeDeAr';
 import { planejarCircuitos, type HipotesesDeCircuitos } from './blueprintCircuitosAutomaticos';
@@ -168,6 +168,11 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(nivel.levelId)}: ${plano.aCriar.length} split(s)`);
       // 11/10/2026: a evaporadora existente sem condensadora ganha a dela.
       if (plano.condensadorasParaExistentes.length) notas.push(`${nomeDoNivel(nivel.levelId)}: ${plano.condensadorasParaExistentes.length} condensadora(s) para evaporadora(s) existente(s)`);
+      // 11/10/2026: a capacidade vazia da evaporadora existente, pelo modelo que a carga pede — dito no relatório.
+      for (const c of plano.capacidadesPreenchidas) {
+        notas.push(`${c.nome}: capacidade ${c.capacidadeBtuH.toLocaleString('pt-BR')} BTU/h na evaporadora existente`);
+        pendencia('CONFERIR', `${nomeDoNivel(nivel.levelId)} › ${c.nome}: a evaporadora existente estava sem capacidade — recebeu ${c.capacidadeBtuH.toLocaleString('pt-BR')} BTU/h, o modelo que a carga pede; confira antes de comprar`);
+      }
       if (plano.jaAtendidos.length) notas.push(`${plano.jaAtendidos.length} ambiente(s) já atendido(s) por equipamento confirmado`);
     }
     etapa('EQUIPAMENTOS', ROTULOS.EQUIPAMENTOS, 'LANCOU', n, notas.join(' · ') || null);
@@ -183,6 +188,12 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       n += aplicar(plano.comandos);
       for (const s of plano.semLugar) pendencia('SEM_SOLUCAO', `${nomeDoNivel(levelId)} › ${s.nome}: ${s.motivo}`);
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(levelId)}: ${plano.aCriar.length} sistema(s)`);
+      // 11/10/2026: a linha que já existia acompanha a capacidade (só os valores automáticos, só para cima).
+      const pelaCapacidade = comandosDaLinhaPelaCapacidade(m, levelId, hip.linha);
+      if (pelaCapacidade.length) {
+        n += aplicar(pelaCapacidade);
+        notas.push(`${nomeDoNivel(levelId)}: ${pelaCapacidade.length} trecho(s) da linha existente com diâmetro/isolamento pela capacidade`);
+      }
     }
     etapa('LINHA', ROTULOS.LINHA, 'LANCOU', n, notas.join(' · ') || null);
   }

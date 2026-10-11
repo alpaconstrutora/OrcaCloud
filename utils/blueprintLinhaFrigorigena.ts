@@ -556,6 +556,42 @@ export interface LinhaConferida {
 }
 
 /** Cada sistema do pavimento conferido contra a faixa da capacidade. */
+/**
+ * 11/10/2026 (teste do usuário no app real): a linha do split JÁ existente acompanha a
+ * capacidade — a evaporadora ganhou 24.000 BTU/h depois de a linha ter saído na faixa
+ * menor (sem capacidade). Sobe o diâmetro (líquido/sucção) e o isolamento para os da
+ * faixa pedida, MAS só onde o valor do trecho ainda é um AUTOMÁTICO (o par de uma das
+ * faixas; um dos isolamentos das premissas) e está ABAIXO do pedido. O que o
+ * projetista digitou, e o que já passa do pedido, fica. Um comando por trecho mudado.
+ */
+export function comandosDaLinhaPelaCapacidade(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): Command[] {
+  const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
+  const paresAutomaticos = FAIXAS_DA_LINHA.map((f) => `${f.liquidoMm}/${f.succaoMm}`);
+  const isolamentosAutomaticos = [hip.isolamentoAte24kMm, hip.isolamentoAcimaMm];
+  const cmds: Command[] = [];
+  for (const s of sistemasDoNivel(model, levelId).filter(ehSplit)) {
+    const linha = linhaExistente(model, s);
+    if (!linha) continue;
+    const cap = s.evaporadora.capacidadeBtuH ?? s.condensadora.capacidadeBtuH ?? null;
+    if (cap == null) continue;
+    const f = faixaDaLinha(cap);
+    const iso = isolamentoDaLinhaMm(cap, hip);
+    for (const id of linha.trechoIds) {
+      const t = porId.get(id);
+      if (!t) continue;
+      const succao = t.bitolaSuccaoMm ?? t.bitolaMm;
+      const mudar: { bitolaMm?: number; bitolaSuccaoMm?: number; isolamentoMm?: number } = {};
+      if (paresAutomaticos.includes(`${t.bitolaMm}/${succao}`) && (t.bitolaMm < f.liquidoMm || succao < f.succaoMm)) {
+        mudar.bitolaMm = Math.max(t.bitolaMm, f.liquidoMm);
+        mudar.bitolaSuccaoMm = Math.max(succao, f.succaoMm);
+      }
+      if (t.isolamentoMm != null && isolamentosAutomaticos.includes(t.isolamentoMm) && t.isolamentoMm < iso) mudar.isolamentoMm = iso;
+      if (Object.keys(mudar).length) cmds.push({ type: 'SetTrechoProps', trechoId: t.id, ...mudar } as Command);
+    }
+  }
+  return cmds;
+}
+
 export function linhasConferidas(model: BlueprintModel, levelId: ObjectId, hip: HipotesesDaLinha): LinhaConferida[] {
   const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
   const cx = conexoesDerivadas(model);

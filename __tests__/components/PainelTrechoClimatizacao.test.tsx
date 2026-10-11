@@ -42,6 +42,19 @@ describe('PainelTrechoSelecionado › climatização', () => {
     expect(onTerminal).toHaveBeenLastCalledWith({ condensadoraId: 'c1' });
   });
 
+  it('11/10/2026: evaporadora fora do encosto mostra "Encostar na parede" (e o clique encosta); encostada, não mostra nada', () => {
+    const onEncostar = vi.fn();
+    const r = render(
+      <PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'EVAPORADORA_HI_WALL')} onTrecho={() => {}} onTerminal={() => {}} encostoDaEvaporadora={{ onEncostar }} />,
+    );
+    expect(screen.getByTestId('encosto-da-evaporadora').textContent).toMatch(/parte do aparelho entra na parede/);
+    fireEvent.click(screen.getByRole('button', { name: 'Encostar na parede' }));
+    expect(onEncostar).toHaveBeenCalledTimes(1);
+    r.unmount();
+    render(<PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'EVAPORADORA_HI_WALL')} onTrecho={() => {}} onTerminal={() => {}} />);
+    expect(screen.queryByTestId('encosto-da-evaporadora')).toBeNull();
+  });
+
   it('condensadora: tem capacidade, não tem seletor de condensadora; difusor não tem nenhum dos dois', () => {
     const r = render(<PainelTrechoSelecionado trecho={null} terminal={terminal('FRIGORIGENA', 'CONDENSADORA_SPLIT', { capacidadeBtuH: 18000 })} onTrecho={() => {}} onTerminal={() => {}} />);
     expect((screen.getByLabelText('Capacidade do equipamento (BTU/h)') as HTMLInputElement).value).toBe('18.000');

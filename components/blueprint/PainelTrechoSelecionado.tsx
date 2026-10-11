@@ -158,6 +158,12 @@ interface Props {
    * extravasor, limpeza) e o botão que lança. `resumo` vazio = já tem tudo.
    */
   pecasDaCaixa?: { resumo: string[]; onLancar: () => void };
+  /**
+   * 11/10/2026 (teste no app real): a evaporadora de parede fora do encosto (metade dentro da
+   * alvenaria, ou sem giro) — o botão que a encosta na face e leva o ponto de força escondido
+   * para o lado. Ausente = já encostada (ou sem parede ao alcance): nada a oferecer.
+   */
+  encostoDaEvaporadora?: { onEncostar: () => void };
   /** Incêndio E4.1: as bombas principais do desenho, para a jockey escolher a sua. */
   bombasPrincipais?: { id: string; nome: string }[];
   /** Incêndio E1.4: o número da peça (H-2) e se é derivado ou declarado. `undefined` = não é numerada. */
@@ -200,6 +206,7 @@ export default function PainelTrechoSelecionado({
   terminal,
   onAplicarTipoDoTerminal,
   pecasDaCaixa,
+  encostoDaEvaporadora,
   comAMesmaAssinatura,
   onTrecho,
   onTerminal,
@@ -374,6 +381,14 @@ export default function PainelTrechoSelecionado({
                       </button>
                     </>
                   )}
+                </div>
+              )}
+              {encostoDaEvaporadora && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800" data-testid="encosto-da-evaporadora">
+                  <span>Fora do encosto: parte do aparelho entra na parede (ou não sopra para o ambiente).</span>
+                  <button type="button" onClick={encostoDaEvaporadora.onEncostar} className="ml-1 font-medium text-blue-700 hover:underline">
+                    Encostar na parede
+                  </button>
                 </div>
               )}
               {terminal.tipoHidraulico === 'RESERVATORIO' && (

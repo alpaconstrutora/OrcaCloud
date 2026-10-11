@@ -261,7 +261,7 @@ import PainelCargaTermica from './PainelCargaTermica';
 import { cargaTermicaDoEstudo, cargaTermicaDoNivel, coresDaCarga } from '../../utils/blueprintCargaTermica';
 import { modelosDoCatalogo, selecaoDoNivel } from '../../utils/blueprintSelecaoClimatizacao';
 import { planejarEquipamentosSplit } from '../../utils/blueprintPosicaoSplit';
-import { conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas, sugeridosDaLinha } from '../../utils/blueprintLinhaFrigorigena';
+import { comandosDaLinhaPelaCapacidade, conferenciaDaLinha, linhasConferidas, planejarLinhasFrigorigenas, sugeridosDaLinha } from '../../utils/blueprintLinhaFrigorigena';
 import PainelLinhaFrigorigena from './PainelLinhaFrigorigena';
 import { analisesDoNivel, comandosLigarAoVrf, comandosTrocarCondensadora, conferenciaDoVrf, evaporadorasSemSistema, planejarVrf, sugeridosDoVrf, vrfDeOutrosPavimentos } from '../../utils/blueprintVrf';
 import PainelVrf from './PainelVrf';
@@ -768,7 +768,14 @@ import {
   type HipotesesDePontos,
   type KitHidraulico,
 } from '../../utils/blueprintPontosHidraulicos';
-import { comandosDaPotenciaDaEvaporadora, pontoEletricoDaEvaporadora, pontosEletricosDoComponente } from '../../utils/blueprintPontosHidraulicos';
+import {
+  comandosDaCapacidadeDaCondensadora,
+  comandosDaPotenciaDaEvaporadora,
+  comandosParaEncostarEvaporadora,
+  pontoEletricoDaEvaporadora,
+  pontosEletricosDoComponente,
+} from '../../utils/blueprintPontosHidraulicos';
+import { ehEvaporadoraDeParede, encostoNaParede } from '../../utils/blueprintEncostoNaParede';
 import { luminariasDoAmbienteW } from '../../utils/blueprintClimatizacaoAmbientes';
 import { marcasDaClimatizacao } from '../../utils/blueprintMarcasClimatizacao';
 import {
@@ -7394,6 +7401,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         ponto = melhor.ponto;
         cotaMm = melhor.cotaMm;
       }
+      // 11/10/2026 (teste no app real): a evaporadora de PAREDE clicada perto de uma parede encosta
+      // o fundo na face e gira para soprar para dentro — antes ficava onde o clique caía (no
+      // print do usuário, metade dentro da alvenaria). Longe de parede, fica onde se clicou.
+      let rotacaoGraus: number | null = null;
+      if (ehEvaporadoraDeParede(tipoDePontoHidraulico)) {
+        const enc = encostoNaParede(editor.model, levelId, ponto, ficha.medidasMm?.profundidadeMm ?? 220);
+        if (enc) {
+          ponto = enc.at;
+          rotacaoGraus = enc.rotacaoGraus;
+        }
+      }
       const comando: Command = {
         type: 'AddTerminal',
         levelId,
@@ -7403,6 +7421,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
         cotaMm,
         tipoHidraulico: tipoDePontoHidraulico,
         volumeL: ficha.volumeL ?? null,
+        ...(rotacaoGraus != null ? { rotacaoGraus } : {}),
       };
       // F1 (incêndio pós-roadmap): a peça de incêndio entra com o KIT dela num lote só — a placa do
       // equipamento e, na VGA, os manômetros e o registro de bloqueio. Um Ctrl+Z desfaz tudo.
@@ -7416,7 +7435,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
       // F10 (10/10/2026): a evaporadora inserida à mão traz o ponto de ar-condicionado na face da
       // parede (como a reserva antiga), com a potência pela capacidade — no mesmo lote, um Ctrl+Z.
       if ((TIPOS_DE_EVAPORADORA as readonly string[]).includes(tipoDePontoHidraulico)) {
-        lote = [...lote, ...pontoEletricoDaEvaporadora(editor.model, { levelId, at: ponto, capacidadeBtuH: null, larguraMm: ficha.medidasMm?.larguraMm, profundidadeMm: ficha.medidasMm?.profundidadeMm }, climatizacaoDoEstudo.hipoteses.selecao.eerWW)];
+        lote = [
+          ...lote,
+          ...pontoEletricoDaEvaporadora(
+            editor.model,
+            { levelId, at: ponto, capacidadeBtuH: null, larguraMm: ficha.medidasMm?.larguraMm, profundidadeMm: ficha.medidasMm?.profundidadeMm, rotacaoGraus },
+            climatizacaoDoEstudo.hipoteses.selecao.eerWW,
+          ),
+        ];
       }
       const criados = lote.length > 1 ? editor.runBatch(lote) : editor.run(comando);
       // As medidas padrão da ficha (caixa d'água, caixas, hidrômetro) entram
@@ -9609,6 +9635,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
             ? (editor.model.terminais ?? []).filter((t) => assinaturaDoTipo(propriedadesDoTerminal(t)) === assinaturaDoTipo(propriedadesDoTerminal(terminalSel))).length
             : undefined
         }
+        encostoDaEvaporadora={
+          terminalSel && ehEvaporadoraDeParede(terminalSel.tipoHidraulico)
+            ? (() => {
+                // 11/10/2026: um lote — a peça encosta e gira, o ponto escondido vai para o lado; um Ctrl+Z.
+                const lote = comandosParaEncostarEvaporadora(editor.model, terminalSel);
+                return lote.length ? { onEncostar: () => editor.runBatch(lote) } : undefined;
+              })()
+            : undefined
+        }
         pecasDaCaixa={
           terminalSel?.tipoHidraulico === 'RESERVATORIO' && terminalSel.disciplina === 'AGUA_FRIA'
             ? (() => {
@@ -9644,11 +9679,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
           };
           // F10 (10/10/2026): a capacidade da evaporadora mudou — a potência do ponto dela
           // acompanha, se ainda é a automática. Um lote: um Ctrl+Z desfaz os dois.
+          // 11/10/2026: e a condensadora ligada a ela, se a capacidade dela ainda é a automática.
           const acompanha =
             campos.capacidadeBtuH !== undefined && !!terminalSel.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(terminalSel.tipoHidraulico)
-              ? comandosDaPotenciaDaEvaporadora(editor.model, terminalSel, campos.capacidadeBtuH ?? null, climatizacaoDoEstudo.hipoteses.selecao.eerWW)
+              ? [
+                  ...comandosDaPotenciaDaEvaporadora(editor.model, terminalSel, campos.capacidadeBtuH ?? null, climatizacaoDoEstudo.hipoteses.selecao.eerWW),
+                  ...comandosDaCapacidadeDaCondensadora(editor.model, terminalSel, campos.capacidadeBtuH ?? null),
+                ]
               : [];
-          if (acompanha.length) editor.runBatch([mudar, ...acompanha]);
+          // 11/10/2026: e a linha já desenhada, se o diâmetro/isolamento dela ainda é o automático e ficou
+          // abaixo da faixa da capacidade nova — lida no desenho já com a capacidade (e a condensadora) mudadas.
+          const daLinha =
+            campos.capacidadeBtuH !== undefined && !!terminalSel.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(terminalSel.tipoHidraulico)
+              ? comandosDaLinhaPelaCapacidade(applyBatch(editor.model, [mudar, ...acompanha]).model, terminalSel.levelId, climatizacaoDoEstudo.hipoteses.linha)
+              : [];
+          if (acompanha.length || daLinha.length) editor.runBatch([mudar, ...acompanha, ...daLinha]);
           else editor.run(mudar);
         }}
       />

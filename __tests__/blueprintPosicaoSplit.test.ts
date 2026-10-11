@@ -13,6 +13,7 @@ import { cargaTermicaDoNivel } from '../utils/blueprintCargaTermica';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { modelosDoCatalogo, selecaoDoNivel } from '../utils/blueprintSelecaoClimatizacao';
 import { giroParaSoprarParaDentro, planejarEquipamentosSplit } from '../utils/blueprintPosicaoSplit';
+import { pontoEletricoDaEvaporadoraExistente } from '../utils/blueprintPontosHidraulicos';
 
 const catalogo = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
 const hip = HIPOTESES_DE_SELECAO_PADRAO;
@@ -74,7 +75,10 @@ describe('climatização E4.2/E4.3 · posição automática do split', () => {
     const modelo = plano.aCriar[0].modelo;
     expect(ac.potenciaW).toBe(modelo.potenciaVA);
     expect(ac.potenciaW).not.toBe(1400);
-    expect(ac.at).toEqual(evap.at);
+    // 11/10/2026 (teste no app real): no centro da evaporadora ficava escondido sob ela — agora na face
+    // da parede (norte, y = 4000 − 75), meia largura + 150 mm ao lado; e segue reconhecido como o dela.
+    expect(ac.at).toEqual({ x: evap.at.x - 600, y: 3925 });
+    expect(pontoEletricoDaEvaporadoraExistente(depois, evap)?.id).toBe(ac.id);
     expect(ac.sugerida).toBe(true);
     expect(evap.capacidadeBtuH).toBe(modelo.capacidadeBtuH);
     expect(evap.capacidadeBtuH).toBeGreaterThanOrEqual(plano.aCriar[0].modelo.capacidadeBtuH);

@@ -43,11 +43,15 @@ describe('F10 · o ponto elétrico da evaporadora inserida à mão', () => {
     expect(potenciaDaEvaporadoraVA(null, 3)).toBe(1400);
   });
 
-  it('o ponto nasce na FACE da parede atrás da evaporadora, uma vez só', () => {
+  it('o ponto nasce na FACE da parede, AO LADO da evaporadora, uma vez só', () => {
     const { m, t } = sala();
     const evap = { levelId: t, at: point(4500, 3815), capacidadeBtuH: null, larguraMm: 900, profundidadeMm: 220 };
     const cmds = pontoEletricoDaEvaporadora(m, evap, 3);
-    expect(cmds).toEqual([expect.objectContaining({ type: 'AddTerminal', tipoEletrico: 'AR_CONDICIONADO', at: { x: 4500, y: 3925 }, potenciaW: 1400 })]);
+    expect(cmds).toEqual([expect.objectContaining({ type: 'AddTerminal', tipoEletrico: 'AR_CONDICIONADO', potenciaW: 1400 })]);
+    // 11/10/2026 (teste no app real): na face ATRÁS do centro (4500, 3925) ficava escondido sob o
+    // aparelho — agora na mesma face, meia largura + 150 mm ao lado.
+    expect(cmds[0].at.y).toBe(3925);
+    expect(Math.abs(cmds[0].at.x - 4500)).toBe(600);
     const depois = applyBatch(m, cmds).model;
     expect(pontoEletricoDaEvaporadora(depois, evap, 3)).toEqual([]);
   });

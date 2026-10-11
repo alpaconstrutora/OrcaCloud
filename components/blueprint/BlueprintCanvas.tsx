@@ -176,6 +176,7 @@ import { numeracaoDeIncendio } from '../../utils/blueprintNumeracaoIncendio';
 // Climatização E3.4 (04/10/2026): o símbolo e o número (EV-1, CD-1) das peças de climatização.
 import { proporcaoDoSimbolo, simboloDeClimatizacao, temSimboloDeClimatizacao } from '../../utils/blueprintSimbolosClimatizacao';
 import { numeracaoDeClimatizacao } from '../../utils/blueprintNumeracaoClimatizacao';
+import { posicionarRotulos, type CaixaNaTela } from '../../utils/blueprintRotulosSemColisao';
 import {
   ROTULO_DO_ENCAIXE,
   TIPOS_DE_ENCAIXE,
@@ -6464,6 +6465,22 @@ export default function BlueprintCanvas({
     }
     meioTom(false);
 
+    // 11/10/2026 (teste no app real): o RÓTULO das peças tipadas ("EV-1", "SF-1", "CD-1") sai num
+    // passe próprio, depois do laço, FORA da caixa da peça e sem cobrir outro rótulo nem outra peça
+    // (`posicionarRotulos`). Antes ia a meio "raio" do centro — a menor medida —, e na peça
+    // comprida caía em cima dela; dois vizinhos se encostavam.
+    const rotulosDasPecas: { id: string; texto: string; cor: string; largura: number; altura: number; caixa: CaixaNaTela; atenuada: boolean }[] = [];
+    const caixaDaPecaNaTela = (t: Terminal): CaixaNaTela => {
+      const k = cantosDaPeca(t.at, medidasDoTerminal(t), giroDaPeca(t)).map(paraTela);
+      const c = paraTela(t.at);
+      // Ao menos o símbolo mínimo (4 px de raio), como o desenho do ponto.
+      return {
+        x0: Math.min(c.x - 4, ...k.map((p) => p.x)),
+        y0: Math.min(c.y - 4, ...k.map((p) => p.y)),
+        x1: Math.max(c.x + 4, ...k.map((p) => p.x)),
+        y1: Math.max(c.y + 4, ...k.map((p) => p.y)),
+      };
+    };
     for (const t of terminaisDoNivel) {
       meioTom(atenuados.has(t.id));
       const selecionado = selecao.has(t.id);
@@ -7037,11 +7054,16 @@ export default function BlueprintCanvas({
           ctx.textBaseline = 'middle';
           ctx.fillText(t.tipoHidraulico === 'RESERVATORIO' && t.volumeL != null ? `${sigla} ${t.volumeL} L` : sigla, c.x, c.y);
         } else {
-          const raio = Math.max(meio, 4);
-          ctx.fillStyle = COR_DA_DISCIPLINA[t.disciplina];
-          ctx.textAlign = 'start';
-          ctx.textBaseline = 'alphabetic';
-          ctx.fillText(sigla, c.x + raio + 3, c.y - raio - 2);
+          // Posicionado e desenhado depois do laço (ver `rotulosDasPecas`).
+          rotulosDasPecas.push({
+            id: t.id,
+            texto: sigla,
+            cor: COR_DA_DISCIPLINA[t.disciplina],
+            largura: ctx.measureText(sigla).width,
+            altura: Math.round(11 * fz),
+            caixa: caixaDaPecaNaTela(t),
+            atenuada: atenuados.has(t.id),
+          });
         }
         ctx.restore();
       }
@@ -7140,6 +7162,26 @@ export default function BlueprintCanvas({
       }
     }
     meioTom(false);
+
+    // Os rótulos das peças tipadas, fora delas e sem colisão (ver `rotulosDasPecas`, acima).
+    {
+      const postos = new Map(posicionarRotulos(rotulosDasPecas, terminaisDoNivel.map((t) => ({ id: t.id, caixa: caixaDaPecaNaTela(t) }))).map((p) => [p.id, p]));
+      for (const r of rotulosDasPecas) {
+        const p = postos.get(r.id);
+        if (!p) continue;
+        meioTom(r.atenuada);
+        ctx.save();
+        ctx.font = `bold ${r.altura}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillRect(p.x - 1, p.y, r.largura + 2, r.altura);
+        ctx.fillStyle = r.cor;
+        ctx.textAlign = 'start';
+        ctx.textBaseline = 'top';
+        ctx.fillText(r.texto, p.x, p.y);
+        ctx.restore();
+      }
+      meioTom(false);
+    }
 
     // O texto das marcas da verificação, POR CIMA das peças (ver o passe das marcas, acima).
     for (const tm of textosDasMarcas) {
@@ -10604,6 +10646,16 @@ export default function BlueprintCanvas({
               : [...selectedIds, clicado]
             : [clicado],
         );
+        // 11/10/2026 (teste do usuário no app real: "não consigo mover a condensadora e/ou o
+        // split"): a PEÇA — equipamento/ponto, quadro, louça/móvel — se arrasta já no primeiro
+        // aperto, sem selecionar antes. A geometria (parede, laje, limite…) segue a convenção
+        // do CAD acima. O arraste pega a seleção nova (o pai já a trocou quando o ponteiro
+        // anda); um clique sem andar continua sendo só seleção (delta zero não grava nada).
+        const ehPeca = clicado === terminalClicado?.id || clicado === quadroClicado?.id || clicado === componenteClicado?.id;
+        if (ehPeca && !acumular) {
+          setMovendoSelecao({ origem: arredondar(mundo), delta: { x: 0, y: 0 } });
+          canvasRef.current?.setPointerCapture(e.pointerId);
+        }
         return;
       }
 

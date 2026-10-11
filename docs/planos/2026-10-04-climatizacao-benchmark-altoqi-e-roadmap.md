@@ -3194,3 +3194,64 @@ semeado e clima declarado): carga 17.607 BTU/h no "Ambiente 1"; a condensadora e
 evaporadora, a linha e o dreno com sifão seguem; quantitativo e orçamento calculam. O relatório
 ainda dizia "1 evaporadora sem condensadora": as pendências da seleção eram lidas do desenho de
 ANTES do lote. Agora são do desenho de depois (`blueprintGeradorClimatizacao.ts`, +1 asserção).
+
+### Encosto, rótulos, ponto de força e capacidade · 11/10/2026 (frente `clima-ajustes-evap`)
+
+Achados no print do usuário depois da climatização gerada na planta real ("Planta 26/09/2026").
+Pedido: **"corrija de 1 a 4"**.
+
+1. **A evaporadora dentro da parede.** A inserida à mão ficava onde o clique caía (no caso, centro
+   na face interna: metade do aparelho na alvenaria, sem giro). `blueprintEncostoNaParede.ts`:
+   a de PAREDE (hi-wall, piso-teto) clicada a até 60 cm da face encosta o fundo nela e gira para
+   soprar para dentro (`giroParaSoprarParaDentro` mudou-se para lá; o planejador reexporta). Para
+   as já desenhadas, o painel do ponto mostra **"Encostar na parede"** (só quando fora do encosto):
+   um lote — a peça anda e gira, o ponto de força escondido sob ela vai para o lado.
+   ⚠️ Achado ao provar no rascunho real: o kernel arrastava só as pontas de trecho da MESMA
+   disciplina da peça — a linha (FRIGORIGENA) ia, o dreno (DRENO_AC) ficava, e o gerador lançava
+   outro dreno por cima (2 conflitos). `pontasPresasAsPecas`: a evaporadora prende também o dreno
+   (vale para o arraste à mão e a prévia do canvas). Sem bump: o formato gravado não muda (como o
+   commit original da regra, 10/09).
+2. **Rótulos sobrepostos.** A sigla ia a meio "raio" do centro — a MENOR medida —, e na peça
+   comprida caía em cima dela. `blueprintRotulosSemColisao.ts`: o rótulo sai fora da caixa da
+   peça, na primeira posição livre de outros rótulos e peças (cantos, acima/abaixo, lados), com
+   fundo branco leve; o canvas posiciona num passe próprio, depois das peças.
+3. **O ponto de força escondido.** Nascia na face atrás do centro (a inserção à mão) ou no centro
+   (o gerador). Agora na face, ao LADO do aparelho (meia largura + 150 mm), do lado em que a parede
+   continua; o reconhecimento do ponto existente inclui esses lugares (não duplica).
+4. **Capacidade.** O gerador preenche a capacidade VAZIA da evaporadora aceita com a do modelo que a
+   carga pede (o app preenche o que sabe; a declarada não é tocada) — e diz, em CONFERIR. A
+   condensadora ligada acompanha a capacidade (e o nome) se a dela ainda é a automática, no gerador e
+   no painel. A potência do ponto acompanha (F10). E a linha JÁ desenhada acompanha também
+   (`comandosDaLinhaPelaCapacidade`): diâmetro e isolamento automáticos sobem para a faixa pedida —
+   só os automáticos, só para cima.
+
+5. **A evaporadora sobre o vaso sanitário** (2º print, depois de o usuário apagar a evaporadora feita
+   à mão e deixar o gerador lançar o split): `lugarDaEvaporadora` só olhava portas e janelas. Agora o
+   trecho com componente ENCOSTADO na parede (até 30 cm da face: louça, armário, cama) também não
+   serve; sem nenhuma parede livre deles, vale a regra de antes (o split sai mesmo assim). No caso do
+   usuário, a evaporadora vai da parede das louças para a parede leste.
+
+6. **"Não consigo mover a condensadora e/ou o split."** Reproduzido no rascunho do usuário com o
+   canvas: (a) o ponto de força no CENTRO da evaporadora pegava o clique no meio dela — arrastava-se
+   o ponto escondido (resolvido pelo item 3); (b) apertar e arrastar uma peça NÃO selecionada só a
+   selecionava (a convenção do CAD, pensada para a parede). Decisão do usuário: **"Direto nas
+   peças"** — equipamento/ponto, quadro, louça/móvel se arrastam no primeiro aperto; parede, laje,
+   limite e o resto da geometria seguem selecionar-depois-arrastar. Um clique sem andar continua
+   sendo só seleção. Prova: `components/BlueprintCanvasArrastePeca.test.tsx` (4; 2 falham sem a
+   mudança).
+
+⚠️ Ainda no 2º print: a linha e o dreno do lançamento anterior estavam ACEITOS (o painel "Linha e
+dreno") com a evaporadora e a condensadora ainda sugeridas — relançar apaga só as sugestões, e a linha
+e o dreno aceitos ficam órfãos (o dreno novo encosta no antigo: conflito). O gerador está certo em não
+apagar o aceito; o projetista apaga. E o ponto de força da evaporadora apagada à mão continua no
+desenho (apagar a peça não apaga o ponto dela) — registrado, não mudado.
+
+**Prova:** `blueprintEncostoEvaporadora.test.ts` (10), na geometria do rascunho do usuário;
+`blueprintRotulosSemColisao.test.ts` (3); `components/BlueprintCanvasRotulosDasPecas.test.tsx`
+(falha contra o canvas antigo); `PainelTrechoClimatizacao.test.tsx` (+1). Atualizados para a regra
+nova: `blueprintClimatizacaoGrupoF.test.ts` e `blueprintPosicaoSplit.test.ts` (o ponto ao lado);
+`blueprintListaDeMateriaisClimatizacao.test.ts` (o alcance do caso do eletroduto curto passou de 2 m
+para 1,6 m: com o ponto ao lado, a ~2 m da condensadora em 3D, 2 m já o alcançava direto).
+**Rodado no rascunho real** (só em memória): encostar → a evaporadora a 110 mm da face, girada, o
+ponto a 600 mm ao lado, linha e dreno juntos; gerar → 24.000 BTU/h na evaporadora e na condensadora,
+2.345 VA no ponto, linha 6/16 mm, sem conflito e sem verificação em falta.

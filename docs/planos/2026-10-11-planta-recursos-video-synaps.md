@@ -337,6 +337,46 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F8 — Esquadria configurável** · kernel (**bump**): `Opening.configuracao? {mecanismo: ABRIR|CORRER|BASCULANTE|MAXIM_AR|PIVOTANTE|FIXA|CAMARAO, folhas: {mecanismo, larguraRel}[], bandeira?: {alturaMm, mecanismo}}`; entra em `assinaturaDaEsquadria` (`model.ts:653`); canvas `:4171`; 3D `Blueprint3DViewer.tsx:319` (caixilho + folhas); `PainelParedeSelecionada.tsx`
 - Muda: editor de folhas (adicionar/remover/trocar mecanismo); porta de 2 folhas (fecha o item aberto em `2026-08-14-girar-espelhar-porta.md:102`); Espaço com a abertura sob o cursor gira o sentido (`FlipOpening`). Sem `configuracao`, o desenho atual não muda (compatibilidade).
 - Pronto quando: golden; teste de quantitativo (2 janelas iguais em tamanho e diferentes em folhas = 2 linhas); no app, janela 3 folhas (fixa/abrir/correr) + bandeira basculante, no 2D, no 3D e no quantitativo.
+- **Feito na execução (11/10, kernel 0.98.0, quant-1.28.0):**
+  - Modelo: `Opening.configuracao? { folhas: {mecanismo, larguraPct}[], bandeira?: {alturaMm, mecanismo} }` —
+    mecanismos FIXA, ABRIR, CORRER, BASCULANTE, MAXIM_AR, PIVOTANTE, CAMARAO; largura em % INTEIRO somando
+    100 (fração em ponto flutuante no hash mudaria com a ordem das somas); 1–6 folhas; bandeira só
+    fixa/basculante/maxim-ar/pivotante, de 100 mm até (altura do vão − 300). Só porta e janela:
+    `SetOpeningKind` para correr/vão livre DESCARTA a configuração. O `mecanismo` único do rascunho virou
+    o mecanismo POR folha (a janela do vídeo mistura fixa, abrir e correr).
+  - As folhas vão da ponta da dobradiça para a outra: "Girar" (`FlipOpening` hinge) espelha a esquadria
+    inteira sem reescrever a lista; "Espelhar" (swing) troca o lado da abertura.
+  - `SetOpeningConfiguracao` (null remove) e `AddOpening` aceita a configuração. Omitida do canônico
+    quando ausente (teste).
+  - Assinatura: sufixo `|cfg:…` SÓ quando há configuração — a chave de quem não tem é a de antes, byte a
+    byte (é id de linha de orçamento persistido; teste). Quadro: a linha ganha `configuracao` por extenso;
+    mesma medida com folhas diferentes = duas linhas (teste); o painel Esquadrias e a planilha (coluna
+    "Folhas" no fim) mostram.
+  - Geometria única `utils/blueprintFolhas.ts`: `simboloDasFolhas` (segmentos em mm — canvas, PDF e DXF
+    desenham a MESMA conta; no DXF só a abertura configurada ganha traço, o DXF de antes não muda — teste)
+    e `pecas3dDasFolhas` (caixilho, montantes, travessa e vidro da bandeira, pano de cada folha — vidro;
+    na porta, folha opaca, salvo a fixa lateral; a de correr em trilhos alternados). Sem configuração,
+    tudo como antes.
+  - Painel "Folhas" (dentro do painel da esquadria): Configurar folhas → mecanismo e % por folha (a
+    vizinha cede a diferença; fora da faixa o painel diz a faixa e não grava), + Folha, Dividir por
+    igual, tirar folha, Pôr bandeira (altura e mecanismo), Desenho padrão. Botão sem efeito diz por quê.
+  - Espaço: com UMA abertura selecionada (Selecionar ativo), espelha o lado em que ela abre — mas não em
+    campo de texto nem com o foco num botão (lá Espaço é clicar). "Sob o cursor" virou "selecionada":
+    previsível, e sem um segundo teste de acerto.
+  - Igualar (F4): a opção "Esquadria (catálogo e folhas)" leva as folhas junto, depois do tipo e do
+    tamanho que as validam (teste).
+  - ⏳ Fica para depois: o catálogo de tipos da organização (`blueprint_opening_types`) ainda não guarda
+    folhas (pediria migration); a elevação/corte desenha o vão como retângulo, sem as folhas.
+  - Prova: `__tests__/blueprintFolhas.test.ts` (23). ✅ **No app com escrita (11/10, "Planta 11/10/2026",
+    estudo sozinho)**: J + clique na parede de cima → Configurar folhas → + Folha → folha 1 Fixa, folha 2 De
+    abrir → Pôr bandeira → **no banco, FIXA 33 / ABRIR 33 / CORRER 34 + bandeira BASCULANTE 400**; largura
+    99 % recusada com "Cabe de 5 a 61 %"; Espaço → `swingReversed` false → true; quadro de esquadrias com a
+    linha "3 folhas: fixa · de abrir · de correr + bandeira basculante"; 3D com caixilho, montantes e panos;
+    Ctrl+Z ×7 → banco de volta a só a porta. Prints: planta de perto (fixa no eixo, montantes, a de abrir com
+    o arco, a de correr no trilho deslocado), espelhada, quadro e 3D.
+    ⚠️ A 1ª e a 2ª rodada pararam ANTES do desfazer (seletor do quadro errado) e deixaram a janela no
+    rascunho — apagada pelo app (selecionar + Delete) e conferida no banco nas duas vezes; o roteiro agora
+    desfaz num `finally`.
 
 **F9 — Biblioteca de móveis arrastável** · `components/blueprint/PainelBibliotecaComponentes.tsx` (novo), `BlueprintCanvas.tsx` (drop), `BlueprintEditor.tsx`
 - Muda: grade com miniatura por tipo/conjunto, busca e família; `dataTransfer` com `tipoId`; o drop converte para mm (Y espelhado) e chama `adicionarComponente(at)`. Símbolos 2D por tipo mais fiéis. Opção de exibir mobiliário na planta técnica do PDF.
@@ -378,7 +418,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   app com escrita: banco 4×250 e Ctrl+Z 4×150 · [x] F5 — `90d58534`, kernel 0.95.0, provada no app com escrita
   (cota gravada e desfeita) + PDF/DXF por teste
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
-  provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [ ] F8 · [ ] F9 · [ ] F10
+  provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
+  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

@@ -69,6 +69,7 @@ import {
 } from './blueprintCotas';
 import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, linhasDaRegiao, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
+import { simboloDasFolhas } from './blueprintFolhas';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
 
@@ -977,6 +978,9 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
         { x: cx - nx * meia, y: cy - ny * meia },
       );
     }
+    // ESQUADRIA CONFIGURÁVEL (F8, 0.98.0): com folhas declaradas, o símbolo delas — a geometria do
+    // canvas e do PDF. Sem configuração, só as bordas, como sempre (o DXF de antes não muda).
+    for (const sg of simboloDasFolhas(abertura, w)) dxf += linha(CAMADAS.ABERTURAS, sg.a, sg.b);
   }
 
   for (const s of model.structures ?? []) {

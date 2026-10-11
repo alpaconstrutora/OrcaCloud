@@ -23,7 +23,7 @@ import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho, TIPOS_DE_TERMINAL_DE_AR } from './model';
 import { contornoExternoDoNivel } from './arrangement';
 import { medirAgua } from './telhado';
-import { assinaturaDaEsquadria, nomeDaEsquadria } from './model';
+import { assinaturaDaEsquadria, descricaoDaConfiguracao, nomeDaEsquadria } from './model';
 import { furosDaEscada, medirEscada } from './escada';
 import { furosDoNucleo } from './nucleo';
 import { sobreposicoesDoModelo } from './sobreposicao';
@@ -215,7 +215,12 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // derivado do ambiente desconta os lados sobre SEPARADOR de ambiente
   // (`Boundary` DIVISA sem parede) — antes saía rodapé ao longo da linha que
   // divide a entrada da sala, onde não há parede. Planta sem separador não muda.
-  version: 'quant-1.27.0',
+  // quant-1.28.0 (11/10/2026, F8 do plano recursos-video-synaps): ESQUADRIA
+  // CONFIGURÁVEL — a abertura e a linha do quadro ganham `configuracao` ("3 folhas:
+  // fixa · de abrir · de correr + bandeira basculante"), e duas janelas de mesma
+  // medida com folhas diferentes viram DUAS linhas (a configuração entra na
+  // assinatura). Esquadria sem folhas declaradas: linha e chave de antes.
+  version: 'quant-1.28.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -447,6 +452,8 @@ export interface QuantidadeAbertura {
   /** Item de catálogo do tipo. `''` = sem tipo ou tipo sem item. */
   itemCode: string;
   descricao: string;
+  /** quant-1.28.0: as folhas e a bandeira, por extenso. `''` = sem configuração declarada. */
+  configuracao: string;
 }
 
 /**
@@ -473,6 +480,8 @@ export interface QuantidadePorEsquadria {
   alturaM: number;
   itemCode: string;
   descricao: string;
+  /** quant-1.28.0: as folhas e a bandeira, por extenso. `''` = sem configuração declarada. */
+  configuracao: string;
   quantidade: number;
   /** Largura × altura × quantidade — para item cotado em m². */
   areaM2: number;
@@ -1720,6 +1729,7 @@ export function computeQuantities(
     declarada: !!o.esquadria?.nome,
     itemCode: o.esquadria?.itemCode ?? '',
     descricao: o.esquadria?.descricao ?? '',
+    configuracao: descricaoDaConfiguracao(o.configuracao),
   }));
   const aberturas = aberturasTodas.filter((q) => q.fase === 'NOVO');
 
@@ -1743,6 +1753,7 @@ export function computeQuantities(
         alturaM: q.alturaM,
         itemCode: q.itemCode,
         descricao: q.descricao,
+        configuracao: q.configuracao,
         quantidade: 1,
         areaM2: q.areaM2,
         openingIds: [q.openingId],

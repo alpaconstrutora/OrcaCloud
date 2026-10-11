@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'd6a51e00fa4682c5536dc611e827521d1df38053f72ddb0c4bb086c45cc57020',
+    hash: '64fb47643976ee20c167196bf1d089b3ad78d036a0170fff6ddd0dfa3cf5d835',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '8c481477f749f3c87e1e2e334da124a4a0c8539edb0c6800455d50765fc2ce52',
+    hash: 'cc3b7959cd311046028b3b42e7f33fd2003a93b7e3380a34fdc6f2820fa5793a',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '44654da18364ccfdafd9db93141cce55c60ff71fb822db8d0272f2f6dadd46cf',
+    hash: '2d00299334ef5a7accfe480a5001e73be4b86b6311b22dfb197038a10bf4de92',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '82cdf230816eadccbfbd62271e21569382a05394530b54019919f3e1f37886ca',
+    hash: '76d04c2cf2a09ab10ecf96094bd7e9c74bc1ecd049f9d23b8609d495c66e71ca',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '37a217546f098541a50681160da2cb600ac92d697f18b826204da7403fd4fcdc',
+    hash: '248254ba33391ec6493d8ac1769924875ffd31e12b3def3553b411bb75082c6e',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'cb948ef07aa42e8a1729af8d30a40ae1b51e3ea1f740a3d474e18aa4298aea82',
+    hash: 'cc55e31b47652022a31f2ea02be9330efcbffc180a0c3eb6acaf457bf9548d1e',
   },
 };
 
@@ -951,6 +951,12 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   (F7), opcionais e emitidos só quando declarados — nenhum dos seis casos tem anotação.
  *   Mesma prova, ANTES de tocar num hash: com a string em 0.96.0 e tudo no lugar, 293
  *   testes de kernel/goldens/anotações/nuvem/cotas/padrões passaram; depois do bump as seis
+ *   falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
+ *
+ *   0.97.0 → 0.98.0 (11/10/2026): `Opening` ganhou `configuracao` (folhas e bandeira, F8),
+ *   opcional e emitida só quando declarada — nenhum dos seis casos tem abertura configurada.
+ *   Mesma prova, ANTES de tocar num hash: com a string em 0.97.0 e tudo no lugar, 318
+ *   testes de kernel/goldens/esquadria/quantitativo/igualar passaram; depois do bump as seis
  *   falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {

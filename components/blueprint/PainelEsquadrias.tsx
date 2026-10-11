@@ -481,6 +481,8 @@ export default function PainelEsquadrias({
                   >
                     {nomeDoTipoDeAbertura(g.tipo)}
                   </button>
+                  {/* F8 (quant-1.28.0): mesma medida com folhas diferentes é OUTRA linha — e diz por quê. */}
+                  {g.configuracao && <div className="text-[11px] text-slate-500">{g.configuracao}</div>}
                 </td>
                 <td className="py-1 pr-2 text-right tabular-nums text-slate-600">
                   {textoEmCm(Math.round(g.larguraM * 1000))} × {textoEmCm(Math.round(g.alturaM * 1000))}

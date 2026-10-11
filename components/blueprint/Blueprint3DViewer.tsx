@@ -71,6 +71,7 @@ import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
 import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
+import { pecas3dDasFolhas, type MaterialDaPecaDaEsquadria } from '../../utils/blueprintFolhas';
 
 interface Props {
   model: BlueprintModel;
@@ -1423,6 +1424,34 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   }, [model.guardaCorpos, model.levels, levelIds, ocultos]);
 
   /**
+   * ESQUADRIA CONFIGURÁVEL (F8, 0.98.0): na abertura com folhas declaradas, o caixilho, os
+   * montantes, a travessa da bandeira e o pano de cada folha (vidro; na porta, folha opaca) —
+   * `pecas3dDasFolhas`. Sem configuração, o vão continua só o furo, como sempre.
+   */
+  const pecasDeEsquadria = useMemo(() => {
+    const out: { id: string; chave: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; material: MaterialDaPecaDaEsquadria }[] = [];
+    for (const o of model.openings) {
+      if (!o.configuracao || ocultos?.has(o.id) || ocultos?.has(o.wallId)) continue;
+      const w = model.walls.find((x) => x.id === o.wallId);
+      if (!w || !levelIds || !levelIds.includes(w.levelId)) continue;
+      const nivel = model.levels.find((l) => l.id === w.levelId);
+      if (!nivel) continue;
+      pecas3dDasFolhas(o, w).forEach((p, k) => {
+        out.push({
+          id: o.id,
+          chave: `${o.id}-${k}`,
+          geom: new THREE.BoxGeometry(p.comprimentoMm * S, p.alturaMm * S, p.espessuraMm * S),
+          pos: [p.centro.x * S, (nivel.elevationMm + p.centroAlturaMm) * S, p.centro.y * S],
+          rot: p.giro,
+          material: p.material,
+        });
+      });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.openings, model.walls, model.levels, levelIds, ocultos]);
+
+  /**
    * NÚCLEOS VERTICAIS NO 3D (20/09/2026, backlog P2 — P2.6): até aqui só o furo
    * na laje aparecia. Agora o SHAFT é um prisma translúcido do piso de partida
    * ao teto do último pavimento (na cor da disciplina — verde-azulado se
@@ -1471,6 +1500,18 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       {paineisDeGuardaCorpo.map((g) => (
         <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow {...cliqueDe(g.id)}>
           <meshStandardMaterial color={selecionados?.has(g.id) ? '#2563eb' : g.material === 'VIDRO' ? '#bae6fd' : g.material === 'MADEIRA' ? '#a16207' : g.material === 'ALVENARIA' ? '#e7e5e4' : '#334155'} transparent={g.material === 'VIDRO' || g.sugerido} opacity={g.sugerido ? 0.45 : g.material === 'VIDRO' ? 0.4 : 1} roughness={g.material === 'INOX' ? 0.2 : 0.7} metalness={g.material === 'INOX' || g.material === 'METALICO' ? 0.6 : 0} />
+        </mesh>
+      ))}
+      {pecasDeEsquadria.map((p) => (
+        <mesh key={`esquadria-${p.chave}`} geometry={p.geom} position={p.pos} rotation={[0, p.rot, 0]} castShadow={p.material !== 'VIDRO'} receiveShadow {...cliqueDe(p.id)}>
+          <meshStandardMaterial
+            color={selecionados?.has(p.id) ? '#2563eb' : p.material === 'VIDRO' ? '#bae6fd' : p.material === 'FOLHA' ? '#a16207' : '#475569'}
+            transparent={p.material === 'VIDRO'}
+            opacity={p.material === 'VIDRO' ? 0.4 : 1}
+            depthWrite={p.material !== 'VIDRO'}
+            roughness={p.material === 'CAIXILHO' ? 0.4 : 0.7}
+            metalness={p.material === 'CAIXILHO' ? 0.5 : 0}
+          />
         </mesh>
       ))}
       {prismasDeNucleo.map((p) => (

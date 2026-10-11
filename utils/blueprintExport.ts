@@ -43,6 +43,7 @@ import { anotacoesNaOrdem, linhasDaRegiao } from './blueprintAnotacoes';
 import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
 import { acabamentosDoAmbiente, contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { linhasDoPadrao } from './blueprintPadroes';
+import { simboloDasFolhas } from './blueprintFolhas';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
@@ -828,6 +829,25 @@ export function desenharAberturas(d: Desenhista, model: BlueprintModel, px: (x: 
     if (o.widthMm / denominador < 2) continue;
     // 3. símbolo.
     if (o.kind === 'passage') continue;
+    // ESQUADRIA CONFIGURÁVEL (F8, 0.98.0): as folhas declaradas — a geometria do canvas.
+    if (o.configuracao && (o.kind === 'door' || o.kind === 'window')) {
+      for (const sg of simboloDasFolhas(o, w)) {
+        const A = P(sg.a);
+        const B = P(sg.b);
+        const estilo = { espessuraMm: espessura, cor: COR_TRACO };
+        if (!sg.tracejado) {
+          d.linha(A.x, A.y, B.x, B.y, estilo);
+          continue;
+        }
+        // Tracejado à mão (o Desenhista não tem): 1,5 mm de traço e 1 mm de espaço no papel.
+        const L = Math.hypot(B.x - A.x, B.y - A.y);
+        for (let s = 0; s < L; s += 2.5) {
+          const e = Math.min(s + 1.5, L);
+          d.linha(A.x + ((B.x - A.x) * s) / L, A.y + ((B.y - A.y) * s) / L, A.x + ((B.x - A.x) * e) / L, A.y + ((B.y - A.y) * e) / L, estilo);
+        }
+      }
+      continue;
+    }
     if (o.kind === 'window') {
       linha(ini, fim);
       continue;

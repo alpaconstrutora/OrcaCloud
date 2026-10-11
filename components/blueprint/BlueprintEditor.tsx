@@ -346,6 +346,7 @@ import PainelConferenciaDoLoteamento from './PainelConferenciaDoLoteamento';
 import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIPOTESES_VAGAS_PADRAO, planejarVagas, type HipotesesDeVagas, type RegiaoDeVagas } from '../../utils/blueprintVagasAutomaticas';
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
+import PainelFolhas from './PainelFolhas';
 import PainelEsquadrias from './PainelEsquadrias';
 import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
 import { medidasNaDescricao } from '../../utils/blueprintItemPorMedida';
@@ -849,7 +850,7 @@ import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../
 import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
-import { alvoDoAtalho, ehAnotacaoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
+import { alvoDoAtalho, ehEspacoDeEspelhar, ehAnotacaoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
 import { IGUALAR_TUDO, ROTULO_DA_PROPRIEDADE, comandosParaIgualar, type OQueIgualar, type PropriedadeDaAbertura, type PropriedadeDaParede } from '../../utils/blueprintIgualar';
 
 /**
@@ -8238,11 +8239,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * e é `null` na planta baixa comum — a primeira versão usou ela e os atalhos não
    * funcionavam em lugar nenhum onde se desenha (pego no app real, 11/10/2026).
    */
-  const atalhoRef = useRef({ escolherComponente, emPlanta: !emVista });
-  atalhoRef.current = { escolherComponente, emPlanta: !emVista };
+  // F8: Espaço com UMA abertura selecionada (e Selecionar ativo) espelha o lado para onde ela abre.
+  const espelharAbertura = aberturaSel && editor.tool === 'selecionar' ? () => flipAbertura('swing') : null;
+  const atalhoRef = useRef({ escolherComponente, emPlanta: !emVista, espelharAbertura });
+  atalhoRef.current = { escolherComponente, emPlanta: !emVista, espelharAbertura };
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
       if (!atalhoRef.current.emPlanta || document.pointerLockElement) return;
+      if (atalhoRef.current.espelharAbertura && ehEspacoDeEspelhar(e, e.target as HTMLElement | null)) {
+        e.preventDefault();
+        atalhoRef.current.espelharAbertura();
+        return;
+      }
       const alvo = alvoDoAtalho(e, e.target as HTMLElement | null);
       if (!alvo) return;
       e.preventDefault();
@@ -10249,6 +10257,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               }
               onAplicarTipo={(tipo) => aplicarTipoDeEsquadria(aberturaSel, tipo)}
               onVidro={(vidro) => editor.run({ type: 'SetOpeningVidro', openingId: aberturaSel.id, vidro })}
+              folhasSlot={
+                // F8 (0.98.0): folhas e bandeira — o editor de janela do vídeo.
+                <PainelFolhas abertura={aberturaSel} onConfiguracao={(configuracao) => editor.run({ type: 'SetOpeningConfiguracao', openingId: aberturaSel.id, configuracao })} />
+              }
             />
           ) : null
         }

@@ -96,6 +96,8 @@ import {
   emptyModel,
   nextId,
   type ProtecaoSolar,
+  type MecanismoDeFolha,
+  type BandeiraDaEsquadria,
 } from './model';
 import { recomputeSpaces } from './arrangement';
 import { type AlinhamentoParede } from './geom';
@@ -333,6 +335,13 @@ function projetar(model: BlueprintModel): {
       emergencia: o.emergencia?.length ? [...o.emergencia] : undefined,
       // VIDRO (0.91.0): só quando declarado — mesma disciplina. Campos reescritos um a um.
       vidro: o.vidro ? { fatorSolar: o.vidro.fatorSolar, uWm2K: o.vidro.uWm2K, protecao: o.vidro.protecao, fatorSombreamento: o.vidro.fatorSombreamento } : undefined,
+      // ESQUADRIA CONFIGURÁVEL (0.98.0): só quando declarada — mesma disciplina. Campos reescritos um a um.
+      configuracao: o.configuracao
+        ? {
+            folhas: o.configuracao.folhas.map((f) => ({ mecanismo: f.mecanismo, larguraPct: f.larguraPct })),
+            ...(o.configuracao.bandeira ? { bandeira: { alturaMm: o.configuracao.bandeira.alturaMm, mecanismo: o.configuracao.bandeira.mecanismo } } : {}),
+          }
+        : undefined,
       parametros: parametrosCanonicos(o.parametros),
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm,
@@ -1418,6 +1427,8 @@ export interface CanonicalPayload {
     emergencia?: ('SAIDA' | 'CORTA_FOGO' | 'ANTIPANICO')[];
     /** VIDRO. Ausente sob kernel < 0.91.0 e em abertura sem declaração. */
     vidro?: { fatorSolar: number | null; uWm2K: number | null; protecao: string; fatorSombreamento: number | null };
+    /** ESQUADRIA CONFIGURÁVEL. Ausente sob kernel < 0.98.0 e em abertura sem folhas declaradas. */
+    configuracao?: { folhas: { mecanismo: string; larguraPct: number }[]; bandeira?: { alturaMm: number; mecanismo: string } };
     /** Fase de reforma (0.46.0). Ausente = NOVO. */
     fase?: 'EXISTENTE' | 'DEMOLIR';
     /** ETAPAS (0.57.0): índices em `etapas`. */
@@ -1981,6 +1992,14 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
         : {}),
       ...(o.emergencia?.length ? { emergencia: [...o.emergencia] } : {}),
       ...(o.vidro ? { vidro: { fatorSolar: o.vidro.fatorSolar ?? null, uWm2K: o.vidro.uWm2K ?? null, protecao: o.vidro.protecao as ProtecaoSolar, fatorSombreamento: o.vidro.fatorSombreamento ?? null } } : {}),
+      ...(o.configuracao
+        ? {
+            configuracao: {
+              folhas: o.configuracao.folhas.map((f) => ({ mecanismo: f.mecanismo as MecanismoDeFolha, larguraPct: f.larguraPct })),
+              ...(o.configuracao.bandeira ? { bandeira: { alturaMm: o.configuracao.bandeira.alturaMm, mecanismo: o.configuracao.bandeira.mecanismo as BandeiraDaEsquadria['mecanismo'] } } : {}),
+            },
+          }
+        : {}),
       ...(o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}),
     });
   });

@@ -557,6 +557,98 @@ export function normalizarVidro(v: VidroDaAbertura, onde: string): VidroDaAbertu
 }
 
 /**
+ * ESQUADRIA CONFIGURÁVEL (11/10/2026, kernel 0.98.0 — F8 do plano
+ * `2026-10-11-planta-recursos-video-synaps.md`): as FOLHAS da porta/janela, cada
+ * uma com o seu mecanismo e a sua fração da largura, e a BANDEIRA opcional em cima.
+ *
+ * É DECLARAÇÃO e mora na abertura (entra no payload e no hash): duas janelas
+ * 120×120, uma de correr e outra fixa + maxim-ar, são compras diferentes — e por
+ * isso a configuração entra na `assinaturaDaEsquadria`, separando as duas no
+ * quadro. Ausente = o desenho de sempre (porta com 1 folha de abrir, janela como
+ * linha no eixo), e a chave é OMITIDA do canônico.
+ *
+ * ─── A ORDEM DAS FOLHAS ─────────────────────────────────────────────────────
+ *
+ * As folhas vão da ponta da DOBRADIÇA para a outra: `hingeAtStart` = começam em
+ * `wall.a + offsetMm`. Assim "girar" (`FlipOpening` hinge) espelha a esquadria
+ * inteira, como espelha a porta simples — sem reescrever a lista.
+ *
+ * `larguraPct` é INTEIRO e a soma é exatamente 100: fração em ponto flutuante no
+ * hash mudaria com a ordem das somas.
+ */
+export const MECANISMOS_DE_FOLHA = ['FIXA', 'ABRIR', 'CORRER', 'BASCULANTE', 'MAXIM_AR', 'PIVOTANTE', 'CAMARAO'] as const;
+export type MecanismoDeFolha = (typeof MECANISMOS_DE_FOLHA)[number];
+export const ROTULO_DO_MECANISMO: Record<MecanismoDeFolha, string> = {
+  FIXA: 'Fixa',
+  ABRIR: 'De abrir',
+  CORRER: 'De correr',
+  BASCULANTE: 'Basculante',
+  MAXIM_AR: 'Maxim-ar',
+  PIVOTANTE: 'Pivotante',
+  CAMARAO: 'Camarão',
+};
+/** A bandeira não corre nem abre como porta: fica fixa ou gira no próprio quadro. */
+export const MECANISMOS_DA_BANDEIRA = ['FIXA', 'BASCULANTE', 'MAXIM_AR', 'PIVOTANTE'] as const satisfies readonly MecanismoDeFolha[];
+export const MAX_FOLHAS_DA_ESQUADRIA = 6;
+export const MIN_LARGURA_DA_FOLHA_PCT = 5;
+export const MIN_ALTURA_DA_BANDEIRA_MM = 100;
+/** O que sobra embaixo da bandeira: menos que isto não é folha, é fresta. */
+export const MIN_ALTURA_SOB_A_BANDEIRA_MM = 300;
+export interface FolhaDaEsquadria {
+  mecanismo: MecanismoDeFolha;
+  /** Inteiro em [5, 100]; a soma das folhas é 100. */
+  larguraPct: number;
+}
+export interface BandeiraDaEsquadria {
+  /** Altura da bandeira, medida do TOPO do vão para baixo. */
+  alturaMm: number;
+  mecanismo: (typeof MECANISMOS_DA_BANDEIRA)[number];
+}
+export interface ConfiguracaoDaEsquadria {
+  folhas: FolhaDaEsquadria[];
+  bandeira?: BandeiraDaEsquadria;
+}
+/** Folhas iguais (a última leva o resto do arredondamento). */
+export function folhasIguais(n: number, mecanismo: MecanismoDeFolha): FolhaDaEsquadria[] {
+  const k = Math.max(1, Math.min(MAX_FOLHAS_DA_ESQUADRIA, Math.round(n)));
+  const pct = Math.floor(100 / k);
+  return Array.from({ length: k }, (_, i) => ({ mecanismo, larguraPct: i === k - 1 ? 100 - pct * (k - 1) : pct }));
+}
+/**
+ * Cópia validada. `kind` e `heightMm` são os da abertura: só porta e janela têm
+ * folhas configuráveis (a de correr e o vão livre têm o desenho deles), e a
+ * bandeira precisa deixar folha embaixo dela.
+ */
+export function normalizarConfiguracao(c: ConfiguracaoDaEsquadria, kind: string, heightMm: number, onde: string): ConfiguracaoDaEsquadria {
+  const erro = (m: string) => new KernelError('BAD_CONFIGURACAO', `${m} em ${onde}`);
+  if (kind !== 'door' && kind !== 'window') throw erro(`Só porta e janela têm folhas configuráveis (${kind})`);
+  if (!Array.isArray(c.folhas) || c.folhas.length < 1 || c.folhas.length > MAX_FOLHAS_DA_ESQUADRIA) throw erro(`De 1 a ${MAX_FOLHAS_DA_ESQUADRIA} folhas`);
+  let soma = 0;
+  for (const f of c.folhas) {
+    if (!(MECANISMOS_DE_FOLHA as readonly string[]).includes(f.mecanismo)) throw erro(`Mecanismo desconhecido: ${String(f.mecanismo)}`);
+    if (!Number.isInteger(f.larguraPct) || f.larguraPct < MIN_LARGURA_DA_FOLHA_PCT || f.larguraPct > 100) throw erro(`Largura da folha fora de [${MIN_LARGURA_DA_FOLHA_PCT}, 100] %: ${String(f.larguraPct)}`);
+    soma += f.larguraPct;
+  }
+  if (soma !== 100) throw erro(`As folhas somam ${soma} %, não 100 %`);
+  const saida: ConfiguracaoDaEsquadria = { folhas: c.folhas.map((f) => ({ mecanismo: f.mecanismo, larguraPct: f.larguraPct })) };
+  if (c.bandeira) {
+    const b = c.bandeira;
+    if (!(MECANISMOS_DA_BANDEIRA as readonly string[]).includes(b.mecanismo)) throw erro(`Bandeira não pode ser ${String(b.mecanismo)}`);
+    const max = heightMm - MIN_ALTURA_SOB_A_BANDEIRA_MM;
+    if (!Number.isInteger(b.alturaMm) || b.alturaMm < MIN_ALTURA_DA_BANDEIRA_MM || b.alturaMm > max) throw erro(`Bandeira de ${String(b.alturaMm)} mm: cabe de ${MIN_ALTURA_DA_BANDEIRA_MM} a ${max} mm nesta altura de vão`);
+    saida.bandeira = { alturaMm: b.alturaMm, mecanismo: b.mecanismo };
+  }
+  return saida;
+}
+/** "3 folhas: fixa · de abrir · de correr + bandeira basculante" — o rótulo do quadro. `''` sem configuração. */
+export function descricaoDaConfiguracao(c: ConfiguracaoDaEsquadria | undefined): string {
+  if (!c) return '';
+  const folhas = c.folhas.map((f) => ROTULO_DO_MECANISMO[f.mecanismo].toLowerCase()).join(' · ');
+  const n = c.folhas.length;
+  return `${n} folha${n > 1 ? 's' : ''}: ${folhas}${c.bandeira ? ` + bandeira ${ROTULO_DO_MECANISMO[c.bandeira.mecanismo].toLowerCase()}` : ''}`;
+}
+
+/**
  * PARÂMETROS PERSONALIZADOS (18/09/2026, roadmap E1.2: *"Parâmetros
  * personalizados — P0"*).
  *
@@ -681,6 +773,8 @@ export interface Opening {
   emergencia?: MarcaDeEmergencia[];
   /** VIDRO (0.91.0): fator solar, U e proteção solar declarados. Ausente = não declarado. Omitido no canônico quando ausente. */
   vidro?: VidroDaAbertura;
+  /** ESQUADRIA CONFIGURÁVEL (0.98.0): folhas e bandeira. Só porta e janela. Ausente = o desenho de sempre. Ver `ConfiguracaoDaEsquadria`. */
+  configuracao?: ConfiguracaoDaEsquadria;
 }
 
 /**
@@ -715,10 +809,14 @@ function escaparNaChave(valor: string): string {
   return valor.replace(/[\\\|]/g, (c) => '\\' + c);
 }
 
-export function assinaturaDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'heightMm' | 'esquadria'>): string {
+export function assinaturaDaEsquadria(o: Pick<Opening, 'kind' | 'widthMm' | 'heightMm' | 'esquadria'> & { configuracao?: ConfiguracaoDaEsquadria }): string {
   const nome = escaparNaChave(o.esquadria?.nome ?? '');
   const item = escaparNaChave(o.esquadria?.itemCode ?? '');
-  return `${o.kind}|${o.widthMm}|${o.heightMm}|${nome}|${item}`;
+  // CONFIGURAÇÃO (0.98.0): sufixo SÓ quando há — sem ela, a chave é a de antes, byte a byte (é id de
+  // linha de orçamento persistido). Sem texto livre: mecanismos e números não precisam de escape.
+  const c = o.configuracao;
+  const cfg = c ? `|cfg:${c.folhas.map((f) => `${f.mecanismo}${f.larguraPct}`).join('+')}${c.bandeira ? `/B${c.bandeira.alturaMm}${c.bandeira.mecanismo}` : ''}` : '';
+  return `${o.kind}|${o.widthMm}|${o.heightMm}|${nome}|${item}${cfg}`;
 }
 
 /**
@@ -4034,6 +4132,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
       ...o,
       ...(o.esquadria ? { esquadria: { ...o.esquadria } } : {}),
       ...(o.emergencia ? { emergencia: [...o.emergencia] } : {}),
+      ...(o.configuracao ? { configuracao: { folhas: o.configuracao.folhas.map((f) => ({ ...f })), ...(o.configuracao.bandeira ? { bandeira: { ...o.configuracao.bandeira } } : {}) } } : {}),
     })),
     boundaries: model.boundaries.map((b) => ({ ...b, a: { ...b.a }, b: { ...b.b } })),
     // `pontos` é copiado ponto a ponto, não por referência: um `...s` cru
@@ -5605,6 +5704,8 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (opening.kind === 'passage') throw new KernelError('BAD_VIDRO', `Vão livre ${opening.id} não tem vidro`);
       normalizarVidro(opening.vidro, opening.id);
     }
+    // CONFIGURAÇÃO (0.98.0): só porta/janela, folhas somando 100 %, bandeira cabendo no vão.
+    if (opening.configuracao) normalizarConfiguracao(opening.configuracao, opening.kind, opening.heightMm, opening.id);
   }
 
   // Duas aberturas não podem ocupar o mesmo trecho da mesma parede.

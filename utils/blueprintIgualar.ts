@@ -10,7 +10,8 @@
  *
  * PAREDE: a COMPOSIÇÃO (camadas, ou a espessura da homogênea) e a ALTURA.
  * ABERTURA: o TIPO (porta, janela, correr, vão), o TAMANHO (largura, altura,
- * peitoril) e a ESQUADRIA (o tipo do catálogo).
+ * peitoril) e a ESQUADRIA (o tipo do catálogo e, desde a F8 — kernel 0.98.0 —, as
+ * FOLHAS e a bandeira: são parte do que se compra).
  *
  * A composição segue a regra de `mudarEspessura`/`mudarCamadas` do editor: a
  * face que o usuário traçou fica PARADA — o eixo anda (`TranslateEntities` com
@@ -54,7 +55,7 @@ export const ROTULO_DA_PROPRIEDADE: Record<PropriedadeDaParede | PropriedadeDaAb
   altura: 'Altura',
   tipo: 'Tipo (porta, janela…)',
   tamanho: 'Largura, altura e peitoril',
-  esquadria: 'Esquadria do catálogo',
+  esquadria: 'Esquadria (catálogo e folhas)',
 };
 
 export interface ResultadoDoIgualar {
@@ -104,6 +105,10 @@ function comandosDaAbertura(ref: Opening, alvo: Opening, quais: readonly Proprie
   }
   if (quais.includes('esquadria') && JSON.stringify(ref.esquadria ?? null) !== JSON.stringify(alvo.esquadria ?? null)) {
     cmds.push({ type: 'SetOpeningEsquadria', openingId: alvo.id, esquadria: ref.esquadria ? { ...ref.esquadria } : null });
+  }
+  // F8: as folhas vão junto da esquadria — DEPOIS do tipo e do tamanho, que a validam.
+  if (quais.includes('esquadria') && JSON.stringify(ref.configuracao ?? null) !== JSON.stringify(alvo.configuracao ?? null)) {
+    cmds.push({ type: 'SetOpeningConfiguracao', openingId: alvo.id, configuracao: ref.configuracao ? { folhas: ref.configuracao.folhas.map((f) => ({ ...f })), ...(ref.configuracao.bandeira ? { bandeira: { ...ref.configuracao.bandeira } } : {}) } : null });
   }
   return cmds;
 }

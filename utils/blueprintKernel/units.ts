@@ -651,8 +651,20 @@
  * Material, fundo e plano só na região hachurada. Anotação antiga só muda pela
  * string da versão. Provado antes do bump: com a string em 0.96.0 e tudo no
  * lugar, 293 testes de kernel/goldens/anotações/nuvem/cotas/padrões passaram.
+ *
+ * ─── 0.97.0 → 0.98.0 (11/10/2026) — A ESQUADRIA CONFIGURÁVEL ───────────────
+ *
+ * F8 do plano `2026-10-11-planta-recursos-video-synaps.md`: `Opening` ganhou
+ * `configuracao?` — as FOLHAS (mecanismo: fixa, de abrir, de correr, basculante,
+ * maxim-ar, pivotante, camarão; largura em % inteiro somando 100) e a BANDEIRA
+ * opcional (altura e mecanismo). Só porta e janela; virar correr/vão livre a
+ * descarta (`SetOpeningKind`). Comando novo `SetOpeningConfiguracao`; `AddOpening`
+ * a aceita. Entra na `assinaturaDaEsquadria` como sufixo SÓ quando há — a chave
+ * de quem não tem não muda. Omitida do canônico quando ausente: desenho antigo só
+ * muda pela string da versão. Provado antes do bump: com a string em 0.97.0 e
+ * tudo no lugar, 318 testes de kernel/goldens/esquadria/quantitativo/igualar passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.97.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.98.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.97.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.98.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -478,13 +478,30 @@ function assinaturaDasCamadas(camadas) {
   if (!camadas || camadas.length === 0) return "";
   return camadas.map((c) => `${c.espessuraMm}|${c.itemCode}|${c.funcao}`).join(";");
 }
+var ROTULO_DO_MECANISMO = {
+  FIXA: "Fixa",
+  ABRIR: "De abrir",
+  CORRER: "De correr",
+  BASCULANTE: "Basculante",
+  MAXIM_AR: "Maxim-ar",
+  PIVOTANTE: "Pivotante",
+  CAMARAO: "Camar\xE3o"
+};
+function descricaoDaConfiguracao(c) {
+  if (!c) return "";
+  const folhas = c.folhas.map((f) => ROTULO_DO_MECANISMO[f.mecanismo].toLowerCase()).join(" \xB7 ");
+  const n4 = c.folhas.length;
+  return `${n4} folha${n4 > 1 ? "s" : ""}: ${folhas}${c.bandeira ? ` + bandeira ${ROTULO_DO_MECANISMO[c.bandeira.mecanismo].toLowerCase()}` : ""}`;
+}
 function escaparNaChave(valor) {
   return valor.replace(/[\\\|]/g, (c) => "\\" + c);
 }
 function assinaturaDaEsquadria(o) {
   const nome = escaparNaChave(o.esquadria?.nome ?? "");
   const item = escaparNaChave(o.esquadria?.itemCode ?? "");
-  return `${o.kind}|${o.widthMm}|${o.heightMm}|${nome}|${item}`;
+  const c = o.configuracao;
+  const cfg = c ? `|cfg:${c.folhas.map((f) => `${f.mecanismo}${f.larguraPct}`).join("+")}${c.bandeira ? `/B${c.bandeira.alturaMm}${c.bandeira.mecanismo}` : ""}` : "";
+  return `${o.kind}|${o.widthMm}|${o.heightMm}|${nome}|${item}${cfg}`;
 }
 function nomeDaEsquadria(o) {
   const cm = (mm) => (mm / 10).toFixed(Math.round(mm) % 10 === 0 ? 0 : 1).replace(".", ",");
@@ -1909,6 +1926,11 @@ function projetar(model) {
       emergencia: o.emergencia?.length ? [...o.emergencia] : void 0,
       // VIDRO (0.91.0): só quando declarado — mesma disciplina. Campos reescritos um a um.
       vidro: o.vidro ? { fatorSolar: o.vidro.fatorSolar, uWm2K: o.vidro.uWm2K, protecao: o.vidro.protecao, fatorSombreamento: o.vidro.fatorSombreamento } : void 0,
+      // ESQUADRIA CONFIGURÁVEL (0.98.0): só quando declarada — mesma disciplina. Campos reescritos um a um.
+      configuracao: o.configuracao ? {
+        folhas: o.configuracao.folhas.map((f) => ({ mecanismo: f.mecanismo, larguraPct: f.larguraPct })),
+        ...o.configuracao.bandeira ? { bandeira: { alturaMm: o.configuracao.bandeira.alturaMm, mecanismo: o.configuracao.bandeira.mecanismo } } : {}
+      } : void 0,
       parametros: parametrosCanonicos(o.parametros)
     }),
     (x, y) => parede(x.wallId) - parede(y.wallId) || x.offsetMm - y.offsetMm
@@ -2728,6 +2750,12 @@ function modelFromCanonicalPayload(payload) {
       ...o.esquadria ? { esquadria: { nome: o.esquadria.nome, itemCode: o.esquadria.itemCode, descricao: o.esquadria.descricao } } : {},
       ...o.emergencia?.length ? { emergencia: [...o.emergencia] } : {},
       ...o.vidro ? { vidro: { fatorSolar: o.vidro.fatorSolar ?? null, uWm2K: o.vidro.uWm2K ?? null, protecao: o.vidro.protecao, fatorSombreamento: o.vidro.fatorSombreamento ?? null } } : {},
+      ...o.configuracao ? {
+        configuracao: {
+          folhas: o.configuracao.folhas.map((f) => ({ mecanismo: f.mecanismo, larguraPct: f.larguraPct })),
+          ...o.configuracao.bandeira ? { bandeira: { alturaMm: o.configuracao.bandeira.alturaMm, mecanismo: o.configuracao.bandeira.mecanismo } } : {}
+        }
+      } : {},
       ...o.parametros && Object.keys(o.parametros).length > 0 ? { parametros: { ...o.parametros } } : {}
     });
   });
@@ -3985,7 +4013,12 @@ var POLITICA_PADRAO = {
   // derivado do ambiente desconta os lados sobre SEPARADOR de ambiente
   // (`Boundary` DIVISA sem parede) — antes saía rodapé ao longo da linha que
   // divide a entrada da sala, onde não há parede. Planta sem separador não muda.
-  version: "quant-1.27.0",
+  // quant-1.28.0 (11/10/2026, F8 do plano recursos-video-synaps): ESQUADRIA
+  // CONFIGURÁVEL — a abertura e a linha do quadro ganham `configuracao` ("3 folhas:
+  // fixa · de abrir · de correr + bandeira basculante"), e duas janelas de mesma
+  // medida com folhas diferentes viram DUAS linhas (a configuração entra na
+  // assinatura). Esquadria sem folhas declaradas: linha e chave de antes.
+  version: "quant-1.28.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -4426,7 +4459,8 @@ ${c.funcao}`;
     assinatura: assinaturaDaEsquadria(o),
     declarada: !!o.esquadria?.nome,
     itemCode: o.esquadria?.itemCode ?? "",
-    descricao: o.esquadria?.descricao ?? ""
+    descricao: o.esquadria?.descricao ?? "",
+    configuracao: descricaoDaConfiguracao(o.configuracao)
   }));
   const aberturas = aberturasTodas.filter((q) => q.fase === "NOVO");
   const grupos = /* @__PURE__ */ new Map();
@@ -4447,6 +4481,7 @@ ${c.funcao}`;
         alturaM: q.alturaM,
         itemCode: q.itemCode,
         descricao: q.descricao,
+        configuracao: q.configuracao,
         quantidade: 1,
         areaM2: q.areaM2,
         openingIds: [q.openingId]

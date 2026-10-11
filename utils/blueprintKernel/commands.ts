@@ -192,6 +192,8 @@ import {
   type Structural,
   normalizarVidro,
   type VidroDaAbertura,
+  normalizarConfiguracao,
+  type ConfiguracaoDaEsquadria,
 } from './model';
 import {
   type AlinhamentoParede,
@@ -313,6 +315,8 @@ export type Command =
       embutida?: boolean;
       /** O tipo, quando a barra já o escolheu. Omitido = sem tipo. */
       esquadria?: Esquadria;
+      /** ESQUADRIA CONFIGURÁVEL (0.98.0): folhas e bandeira. Omitido = o desenho de sempre. */
+      configuracao?: ConfiguracaoDaEsquadria;
     }
   /**
    * Limite sem material. `kind` distingue o anel do LOTE de uma divisa solta —
@@ -1376,6 +1380,8 @@ export type Command =
   | { type: 'SetOpeningEsquadria'; openingId: ObjectId; esquadria: Esquadria | null }
   /** VIDRO (0.91.0): fator solar, U e proteção solar da abertura. `null` remove a declaração. */
   | { type: 'SetOpeningVidro'; openingId: ObjectId; vidro: VidroDaAbertura | null }
+  /** ESQUADRIA CONFIGURÁVEL (0.98.0): as folhas e a bandeira. Só porta e janela. `null` volta ao desenho de sempre. */
+  | { type: 'SetOpeningConfiguracao'; openingId: ObjectId; configuracao: ConfiguracaoDaEsquadria | null }
   /** Nome vazio remove a etiqueta. */
   | { type: 'NameSpace'; spaceId: ObjectId; name: string; tipoDeAmbiente?: TipoDeAmbiente | null; acabamentos?: AcabamentosDoAmbiente | null; departamento?: string | null }
   /**
@@ -4892,9 +4898,11 @@ function aplicarSemHash(
       next.openings = next.openings.map((o) =>
         o.id === opening.id
           ? {
-              ...o,
+              ...semConfiguracaoSeNaoCabe(o, command.kind),
               kind: command.kind,
               embutida: command.kind === 'sliding' ? (command.embutida ?? o.embutida) : false,
+              // CONFIGURAÇÃO (0.98.0): folhas são de porta e janela. Virar correr ou vão livre
+              // as descarta — guardá-las seria uma afirmação sobre folhas num vão que não tem.
             }
           : o,
       );
@@ -4949,6 +4957,16 @@ function aplicarSemHash(
         // Cópia validada — o painel passa o próprio objeto de estado.
         opening.vidro = normalizarVidro(command.vidro, opening.id);
       }
+      diff.updated.push(opening.id);
+      break;
+    }
+
+    case 'SetOpeningConfiguracao': {
+      const opening = next.openings.find((o) => o.id === command.openingId);
+      if (!opening) throw new KernelError('OPENING_NOT_FOUND', `Abertura inexistente: ${command.openingId}`);
+      // Cópia validada — o painel passa o próprio objeto de estado.
+      if (command.configuracao === null) delete opening.configuracao;
+      else opening.configuracao = normalizarConfiguracao(command.configuracao, opening.kind, opening.heightMm, opening.id);
       diff.updated.push(opening.id);
       break;
     }
@@ -5810,6 +5828,16 @@ function adicionarParede(next: BlueprintModel, diff: Diff, command: ComandoAddWa
   diff.created.push(id);
 }
 
+/**
+ * CONFIGURAÇÃO (0.98.0): folhas são de porta e janela. Virar correr ou vão livre as
+ * descarta — guardá-las seria uma afirmação sobre folhas num vão que não tem.
+ */
+function semConfiguracaoSeNaoCabe(o: Opening, kind: Opening['kind']): Opening {
+  if (!o.configuracao || kind === 'door' || kind === 'window') return o;
+  const { configuracao: _descartada, ...resto } = o;
+  return resto;
+}
+
 function adicionarAbertura(next: BlueprintModel, diff: Diff, command: ComandoAddOpening): void {
   const porUid = command.wallUid
     ? next.walls.find((w) => w.uid === command.wallUid)
@@ -5842,6 +5870,7 @@ function adicionarAbertura(next: BlueprintModel, diff: Diff, command: ComandoAdd
     // não tem.
     embutida: command.embutida ?? false,
     ...(command.esquadria ? { esquadria: { ...command.esquadria } } : {}),
+    ...(command.configuracao ? { configuracao: normalizarConfiguracao(command.configuracao, command.kind, command.heightMm, id) } : {}),
   });
   diff.created.push(id);
 }
@@ -6159,6 +6188,7 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
     case 'SetOpeningKind':
     case 'SetOpeningEsquadria':
     case 'SetOpeningVidro':
+    case 'SetOpeningConfiguracao':
     case 'DeleteOpening':
       a.openingIds = str(c.openingId);
       break;

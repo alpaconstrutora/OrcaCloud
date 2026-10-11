@@ -92,6 +92,20 @@ export function alvoDoAtalho(tecla: TeclaPressionada, alvo?: AlvoDaTecla | null)
   return ATALHOS_DE_FERRAMENTA[tecla.key.toLowerCase()] ?? null;
 }
 
+/**
+ * ESPAÇO ESPELHA A ABERTURA (F8, 11/10/2026): com UMA abertura selecionada, o Espaço
+ * troca o lado para onde ela abre (`FlipOpening` swing) — o gesto do vídeo. A mesma
+ * tecla que inverte o lado da parede no traçado; aqui, fora do traçado.
+ *
+ * Não vale em campo de texto nem com o foco num BOTÃO: lá o Espaço é "clicar", e
+ * roubá-lo faria o botão focado parar de responder ao teclado.
+ */
+export function ehEspacoDeEspelhar(tecla: TeclaPressionada, alvo?: AlvoDaTecla | null): boolean {
+  if (tecla.key !== ' ' || tecla.ctrlKey || tecla.metaKey || tecla.altKey || tecla.shiftKey || tecla.repeat) return false;
+  if (ehCampoDeTexto(alvo)) return false;
+  return !/^(BUTTON|A)$/.test(alvo?.tagName ?? '');
+}
+
 /** A letra (maiúscula) que arma este alvo, para mostrar no menu e no tooltip. */
 export function letraDoAtalho(alvo: { tool: string; abertura?: string; anotacao?: string }): string | null {
   for (const [letra, a] of Object.entries(ATALHOS_DE_FERRAMENTA)) {

@@ -68,6 +68,7 @@ import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from '../../utils/blueprintKernel';
 import { anotacoesNaOrdem, cantosDoRetangulo, contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, distanciaAAnotacao, linhasDaHachura, linhasDaRegiao, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
 import { linhasDoPadrao } from '../../utils/blueprintPadroes';
+import { simboloDasFolhas } from '../../utils/blueprintFolhas';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -4233,7 +4234,21 @@ export default function BlueprintCanvas({
       if (larguraTela < 4) continue;
 
       // 3. simbolo
-      if (o.kind === 'passage') {
+      if (o.configuracao && (o.kind === 'door' || o.kind === 'window')) {
+        // ESQUADRIA CONFIGURÁVEL (F8, 0.98.0): as folhas declaradas — a mesma geometria do PDF e do
+        // DXF (`simboloDasFolhas`). Sem configuração, os ramos abaixo, como sempre.
+        for (const sg of simboloDasFolhas(o, w, offsetMm)) {
+          const p = paraTela(sg.a as Point);
+          const q = paraTela(sg.b as Point);
+          ctx.save();
+          if (sg.tracejado) ctx.setLineDash([5, 4]);
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
+          ctx.restore();
+        }
+      } else if (o.kind === 'passage') {
         // VÃO LIVRE não tem símbolo: é o buraco na parede, e os batentes que a
         // etapa 2 já desenhou são tudo que existe para mostrar. Desenhar folha
         // ou arco aqui afirmaria uma esquadria que ninguém vai comprar.

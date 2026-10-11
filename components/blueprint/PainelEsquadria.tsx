@@ -53,6 +53,8 @@ interface Props {
   onAplicarTipo: (tipo: TipoDeEsquadria) => void;
   /** VIDRO (E1.1 da climatização): grava fator solar, U e proteção solar. `null` remove a declaração. */
   onVidro: (vidro: VidroDaAbertura | null) => void;
+  /** F8 (0.98.0): o editor das folhas e da bandeira, logo depois do tipo. */
+  folhasSlot?: React.ReactNode;
 }
 
 const VIDRO_VAZIO: VidroDaAbertura = { fatorSolar: null, uWm2K: null, protecao: 'SEM', fatorSombreamento: null };
@@ -99,7 +101,7 @@ function CampoDoVidro({ rotulo, valor, faixa, passo, unidade, onValor, chave }: 
   );
 }
 
-export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo, onVidro }: Props) {
+export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo, onVidro, folhasSlot }: Props) {
   const [escolhendoItem, setEscolhendoItem] = useState(false);
 
   // ⚠️ REGRA #5: `orgId` do CONTEXTO, e `null` ("Todas") não bloqueia a leitura.
@@ -279,6 +281,8 @@ export default function PainelEsquadria({ abertura, onEsquadria, onAplicarTipo, 
         </p>
       )}
       {aviso && <p className="mt-1.5 text-[11px] text-emerald-700">{aviso}</p>}
+
+      {folhasSlot}
 
       {/* VIDRO E PROTEÇÃO SOLAR (E1.1 da climatização, kernel 0.91.0): o que a
           carga térmica lê da janela. Declarar a proteção já cria a declaração;

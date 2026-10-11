@@ -23,7 +23,7 @@
  */
 
 /** Ferramenta sem subtipo, armada direto (`editor.setTool`). */
-export type FerramentaSimples = { tool: 'selecionar' | 'mover' | 'medir-linha' | 'ambiente' };
+export type FerramentaSimples = { tool: 'selecionar' | 'mover' | 'medir-linha' | 'ambiente' | 'separador' };
 /** Mesmo formato da `EscolhaComponente` do menu — passa por `escolherComponente`. */
 export type EscolhaDoAtalho = { tool: 'parede' | 'retangulo' } | { tool: 'abertura'; abertura: 'door' | 'window' };
 
@@ -31,7 +31,13 @@ export type AlvoDoAtalho = FerramentaSimples | EscolhaDoAtalho;
 
 /** Ferramenta sem subtipo (arma direto) × par do menu (passa por `escolherComponente`). */
 export function ehFerramentaSimples(alvo: AlvoDoAtalho): alvo is FerramentaSimples {
-  return alvo.tool === 'selecionar' || alvo.tool === 'mover' || alvo.tool === 'medir-linha' || alvo.tool === 'ambiente';
+  return (
+    alvo.tool === 'selecionar' ||
+    alvo.tool === 'mover' ||
+    alvo.tool === 'medir-linha' ||
+    alvo.tool === 'ambiente' ||
+    alvo.tool === 'separador'
+  );
 }
 
 /** Letra minúscula → ferramenta. Uma letra, um alvo. */
@@ -44,6 +50,7 @@ export const ATALHOS_DE_FERRAMENTA: Readonly<Record<string, AlvoDoAtalho>> = {
   j: { tool: 'abertura', abertura: 'window' },
   m: { tool: 'medir-linha' },
   a: { tool: 'ambiente' },
+  s: { tool: 'separador' },
 };
 
 /** O mínimo do `KeyboardEvent` que a regra lê — testável sem DOM. */

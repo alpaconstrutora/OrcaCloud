@@ -90,6 +90,13 @@ export const CAMADAS = {
   PAREDES: 'PLANTA-PAREDES',
   EIXOS: 'PLANTA-EIXOS',
   AMBIENTES: 'PLANTA-AMBIENTES',
+  /**
+   * SEPARADOR DE AMBIENTE (F3, 11/10/2026): a `Boundary` DIVISA — linha sem
+   * material que reparte o espaço aberto. Camada própria, TRACEJADA: misturada
+   * aos contornos de ambiente, quem recebe o DXF não a distinguiria de parede
+   * fina nem a desligaria sozinha.
+   */
+  SEPARADORES: 'PLANTA-SEPARADORES',
   ABERTURAS: 'PLANTA-ABERTURAS',
   TEXTO: 'PLANTA-TEXTO',
   COTAS: 'PLANTA-COTAS',
@@ -211,6 +218,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.PAREDES]: 7, // preto/branco
   [CAMADAS.EIXOS]: 1, // vermelho
   [CAMADAS.AMBIENTES]: 3, // verde
+  [CAMADAS.SEPARADORES]: 3, // verde, como os ambientes que ele reparte — o TRACEJADO o distingue
   [CAMADAS.ABERTURAS]: 5, // azul
   [CAMADAS.TEXTO]: 2, // amarelo
   [CAMADAS.COTAS]: 8, // cinza
@@ -887,7 +895,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   dxf += par(0, 'SECTION') + par(2, 'TABLES') + tabelaDeTiposDeLinha(escalaDoDxf(model));
   dxf += par(0, 'TABLE') + par(2, 'LAYER') + par(70, camadas.length);
   for (const c of camadas) {
-    dxf += par(0, 'LAYER') + par(2, c) + par(70, 0) + par(62, COR_CAMADA[c] ?? 7) + par(6, c === CAMADAS.MALHA_EIXOS ? 'EIXO' : 'CONTINUOUS');
+    dxf += par(0, 'LAYER') + par(2, c) + par(70, 0) + par(62, COR_CAMADA[c] ?? 7) + par(6, c === CAMADAS.MALHA_EIXOS ? 'EIXO' : c === CAMADAS.SEPARADORES ? 'TRACEJADO' : 'CONTINUOUS');
   }
   dxf += par(0, 'ENDTAB') + par(0, 'ENDSEC');
 
@@ -904,7 +912,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
   }
 
   for (const b of model.boundaries) {
-    dxf += linha(CAMADAS.AMBIENTES, b.a, b.b);
+    dxf += linha(b.kind === 'DIVISA' ? CAMADAS.SEPARADORES : CAMADAS.AMBIENTES, b.a, b.b);
   }
 
   // Topografia logo depois das divisas: é o chão, e vem antes do que se
@@ -1269,10 +1277,13 @@ function tabelaDeTiposDeLinha(escala: number): string {
   const traco = escala * 0.6;
   const vazio = escala * 0.1;
   return (
-    par(0, 'TABLE') + par(2, 'LTYPE') + par(70, 2) +
+    par(0, 'TABLE') + par(2, 'LTYPE') + par(70, 3) +
     par(0, 'LTYPE') + par(2, 'CONTINUOUS') + par(70, 0) + par(3, 'Solid line') + par(72, 65) + par(73, 0) + par(40, num(0)) +
     par(0, 'LTYPE') + par(2, 'EIXO') + par(70, 0) + par(3, 'Eixo da malha __ . __') + par(72, 65) + par(73, 4) +
     par(40, num(traco + 2 * vazio)) + par(49, num(traco)) + par(49, num(-vazio)) + par(49, num(0)) + par(49, num(-vazio)) +
+    // F3: o separador de ambiente — traço e vazio, sem o ponto do eixo.
+    par(0, 'LTYPE') + par(2, 'TRACEJADO') + par(70, 0) + par(3, 'Separador de ambiente __ __') + par(72, 65) + par(73, 2) +
+    par(40, num(traco / 2 + vazio)) + par(49, num(traco / 2)) + par(49, num(-vazio)) +
     par(0, 'ENDTAB')
   );
 }

@@ -30,6 +30,7 @@ import {
   type Space,
   type TrechoDeRodape,
   acabamentosDoAmbiente,
+  ladoSemParede,
   projecaoNoSegmento,
 } from './blueprintKernel';
 
@@ -130,6 +131,8 @@ export function sugerirRodapes(model: BlueprintModel, levelId: ObjectId, hip: Hi
     for (let i = 0; i < s.ring.length; i++) {
       const a = s.ring[i];
       const b = s.ring[(i + 1) % s.ring.length];
+      // F3 (quant-1.27.0): lado sobre SEPARADOR de ambiente não tem parede — sem rodapé.
+      if (ladoSemParede(a, b, s.levelId, model.walls, model.boundaries)) continue;
       for (const [p, q] of trechosDoLado(a, b, vaosNoLado(model, s, a, b))) {
         sugestoes.push({
           spaceId: s.id,

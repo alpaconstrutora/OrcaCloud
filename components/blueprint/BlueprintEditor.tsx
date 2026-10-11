@@ -1317,6 +1317,7 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   contar: 'Contar',
   terreno: 'Terreno',
   divisa: 'Divisa',
+  separador: 'Separador de ambiente',
   perfil: 'Perfil altimétrico',
   drenagem: 'Drenagem',
   corte: 'Corte',
@@ -11652,6 +11653,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 rotulo="Ambiente"
                 onClick={editor.setTool}
               />
+              {/* F3 (11/10/2026): linha sem material que reparte um espaço aberto em dois ambientes. */}
+              <Ferramenta
+                atual={editor.tool}
+                valor="separador"
+                icone={Slash}
+                rotulo="Separador"
+                onClick={editor.setTool}
+              />
               {/* COMPONENTES — parede, esquadria, estrutura e fundação num menu só.
                   (Decisão do usuário, 31/08/2026.) Com o ribbon, o menu ficou com a
                   família do que se CONSTRÓI; trechos, pontos e quadro estão na aba
@@ -14056,6 +14065,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               alvoEspelhoMm={alvoEspelho}
               onAlvoEspelho={setAlvoEspelho}
             />
+          ) : editor.tool === 'separador' ? (
+            /* SEPARADOR (F3): sem opção — é sempre um limite solto (`DIVISA`). A
+               barra diz o que a linha É, para ninguém esperar alvenaria dela. */
+            <span className="text-xs text-slate-500">
+              Linha sem material que divide o ambiente em dois (entrada × sala). Não é parede: não entra no
+              quantitativo nem no 3D. Cliques nos vértices · Esc termina.
+            </span>
           ) : editor.tool === 'divisa' ? (
             /* O que a linha É (E3.1): limite solto que divide ambiente, ou faixa
                restrita do lote (APP, servidão…) com a largura padrão do tipo. */

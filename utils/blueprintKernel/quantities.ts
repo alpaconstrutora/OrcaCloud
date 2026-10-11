@@ -18,7 +18,7 @@
  * ligada ao snapshot que a originou.
  */
 
-import type { AcabamentosDoAmbiente, BlueprintModel, Circuito, LigacaoDoCircuito, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
+import type { AcabamentosDoAmbiente, BlueprintModel, Boundary, Circuito, LigacaoDoCircuito, PainelDeCortina, OrientacaoDeBrise, FaseDeReforma, FuncaoCamada, Level, MaterialDeGuardaCorpo, Opening, Rodape, Space, Structural, StructuralKind, Terminal, TipoDeGuardaCorpo, Wall } from './model';
 import { areaDaSecaoT, perimetroDeFormaDaSecaoT, secaoTValida } from './secaoT';
 import { wallLength, FORMA_ESTRUTURAL, contornoEmPlanta, nomeDoTipoEstrutural, acabamentosDoAmbiente, comprimentoDoGuardaCorpo, faseDe, materialDoTrecho, TIPOS_DE_TERMINAL_DE_AR } from './model';
 import { contornoExternoDoNivel } from './arrangement';
@@ -211,7 +211,11 @@ export const POLITICA_PADRAO: QuantityPolicy = {
   // no DUTO — `TRANSICAO` (redondo ↔ retangular) e `COLARINHO` (ramal redondo
   // saindo do duto retangular, no lugar do tê). `porConexao` passa a contá-las;
   // antes o encontro do flexível com o tronco saía como luva/joelho/tê.
-  version: 'quant-1.26.0',
+  // quant-1.27.0 (11/10/2026, F3 do plano recursos-video-synaps): o rodapé
+  // derivado do ambiente desconta os lados sobre SEPARADOR de ambiente
+  // (`Boundary` DIVISA sem parede) — antes saía rodapé ao longo da linha que
+  // divide a entrada da sala, onde não há parede. Planta sem separador não muda.
+  version: 'quant-1.27.0',
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2,
@@ -1249,6 +1253,44 @@ export function aberturasDoAmbiente(
 }
 
 /**
+ * O lado `a→b` do anel corre sobre um SEPARADOR (`Boundary` DIVISA) e não sobre
+ * parede — não há onde pregar rodapé (F3 do plano `2026-10-11-planta-recursos-
+ * video-synaps.md`, quant-1.27.0).
+ *
+ * O separador entra no arranjo planar e reparte o espaço aberto em dois
+ * ambientes; o lado comum dos dois é só uma linha. Sem este desconto, o rodapé
+ * derivado (perímetro − portas) e o gerador de trechos punham rodapé no meio da
+ * sala, calados — e o orçamento comprava.
+ *
+ * Mesmo teste de "lado sobre parede" de `aberturasDoAmbiente` (colinear e entre
+ * as pontas). Separador desenhado SOBRE uma parede não desconta: lá há parede.
+ */
+export function ladoSemParede(
+  a: Point,
+  b: Point,
+  levelId: string,
+  walls: readonly Wall[],
+  boundaries: readonly Boundary[],
+): boolean {
+  const sobre = (p: Point, q: Point) => areCollinear(p, q, a) && areCollinear(p, q, b) && isBetween(p, q, a) && isBetween(p, q, b);
+  const noSeparador = boundaries.some((l) => l.levelId === levelId && l.kind === 'DIVISA' && sobre(l.a, l.b));
+  if (!noSeparador) return false;
+  return !walls.some((w) => w.levelId === levelId && sobre(w.a, w.b));
+}
+
+/** Soma dos lados do anel que correm sobre separador sem parede — ver `ladoSemParede`. */
+export function comprimentoSemParedeMm(space: Space, walls: readonly Wall[], boundaries: readonly Boundary[]): number {
+  let soma = 0;
+  const n = space.ring.length;
+  for (let i = 0; i < n; i++) {
+    const a = space.ring[i];
+    const b = space.ring[(i + 1) % n];
+    if (ladoSemParede(a, b, space.levelId, walls, boundaries)) soma += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return soma;
+}
+
+/**
  * Volume de concreto e área de fôrma de uma peça estrutural.
  *
  * ─── POR QUE O CÍRCULO NÃO VIRA POLÍGONO ────────────────────────────────────
@@ -1870,7 +1912,10 @@ export function computeQuantities(
       (o) => o.sillMm === 0,
     );
     const vaoPortasMm = interrompemRodape.reduce((soma, o) => soma + o.widthMm, 0);
-    const rodapeDerivadoMm = Math.max(0, s.perimeterMm - vaoPortasMm);
+    // quant-1.27.0 (F3): o lado sobre SEPARADOR de ambiente não tem parede —
+    // nada onde pregar rodapé. Ver `ladoSemParede`.
+    const semParedeMm = comprimentoSemParedeMm(s, model.walls, model.boundaries);
+    const rodapeDerivadoMm = Math.max(0, s.perimeterMm - vaoPortasMm - semParedeMm);
 
     // ACABAMENTOS (E7.2): o que a etiqueta declarou. Rodapé `null` zera o
     // comprimento — o ambiente disse que não tem; altura declarada vence a da

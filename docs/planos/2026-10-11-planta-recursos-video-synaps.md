@@ -134,6 +134,35 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F3 — Separador de ambiente na aba Arquitetura** · `BlueprintEditor.tsx` (ribbon), `BlueprintCanvas.tsx`, `utils/blueprintExport.ts`, `utils/blueprintDxf.ts`
 - Muda: botão "Separador de ambiente" na Arquitetura, que reaproveita `tool:'divisa'` com `kind:'DIVISA'` (sem bump). Traço próprio (tracejado fino) distinto de divisa de terreno; aparece no PDF e numa camada DXF própria.
 - Pronto quando: teste: um retângulo + separador gera 2 spaces com áreas que somam o total; no app, a sala vira "Entrada" + "Estar" e o separador sai no PDF.
+- **Feito na execução (11/10), com mudanças em relação ao rascunho:**
+  - Ferramenta PRÓPRIA `separador` (botão "Separador" no grupo Construir, atalho **S**), e não um
+    botão para a `divisa`: reaproveitada, a barra diria "Divisa" e ofereceria "Faixa restrita do
+    lote" dentro da Arquitetura. No canvas, `ehDivisa = tool === 'divisa' || tool === 'separador'`
+    nos 6 pontos do gesto; o separador grava SEMPRE `kind: 'DIVISA'`. A barra diz o que a linha é.
+  - ⚠️ **Achado no caminho — rodapé no meio da sala.** O separador é um lado dos dois ambientes, e o
+    rodapé derivado (perímetro − portas) e o gerador de trechos (`sugerirRodapes`) punham rodapé
+    ao longo dele, onde não há parede. Já valia para a DIVISA da aba Terreno; com o separador na
+    Arquitetura viraria comum. Corrigido no kernel: `ladoSemParede` / `comprimentoSemParedeMm`
+    (`quantities.ts`) — lado sobre DIVISA e fora de parede do MESMO pavimento. **quant-1.26.0 →
+    1.27.0** (17 testes que fixam a versão atualizados, como em toda subida); planta sem separador
+    não muda. Separador desenhado sobre parede não desconta.
+  - **PDF**: a DIVISA sai TRACEJADA (`segmentoTracejado`, extraído do `tracejado` de anel — como
+    anel de 2 pontos sairia ida e volta, quase contínuo). **DXF**: camada própria
+    `PLANTA-SEPARADORES` com LTYPE novo `TRACEJADO` (tabela LTYPE 2 → 3; teste do DXF atualizado).
+  - 3D: não muda (o 3D só lê limites `TERRENO`, via `divisasDoLote`).
+  - `planta-api`: bundle do kernel regerado (`scripts/build-planta-api-kernel.mjs`) — o teste de
+    frescor acusou `quant-1.26.0`.
+  - Prova: `__tests__/blueprintSeparadorAmbiente.test.ts` (6: 2 ambientes somando a área; rodapé
+    24 m com parede no meio × 18 m com separador × 24 m com separador sobre parede; gerador sem trecho
+    no separador; DXF na camada tracejada). Harness `docs/spikes/separador-ambiente/` em Chrome com
+    canvas REAL e `kindDaDivisa = 'RESTRICAO'`: 6/6, e **reprova** (exit 1) com o separador herdando a
+    opção da Divisa. **No app** (conta agente-leitura, sem clique no canvas): S e o botão armam a
+    ferramenta, barra e tooltip certos, estudo intacto (`draft_hash` igual).
+  - Harness: "Divisas do lote" abre sozinho ~1 s após carregar quando o lote está fechado e sem lados
+    classificados, e cobre o ribbon até Esc — o roteiro espera o diálogo com `pointer-events:auto`
+    (os três diálogos do editor ficam SEMPRE no DOM).
+  - **Não provado no app, de propósito**: traçar o separador e a sala virar dois ambientes — grava no
+    estudo. Coberto pelo teste do kernel + harness do canvas; fechar com estudo descartável.
 
 **F4 — Conta-gotas (Modificar › Igualar propriedades)** · kernel `commands.ts`/`model.ts` (**bump 0.95**), `utils/blueprintIgualar.ts` (novo, puro), `BlueprintEditor.tsx` (aba Modificar ~12861)
 - Muda: comando novo `SetWallHeight`. Função pura `comandosParaIgualar(modelo, refId, alvoIds, quais)` cobre:
@@ -199,7 +228,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 
 ## Estado
 - [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [ ] F2 — **parcial**: tudo provado no app menos
-  Enter-grava e Ctrl+Z (ver F2) · [ ] F3 · [ ] F4 · [ ] F5
+  Enter-grava e Ctrl+Z (ver F2) · [ ] F3 — **parcial**: tudo provado menos traçar o separador no app
+  (grava; ver F3) · [ ] F4 · [ ] F5
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

@@ -1268,16 +1268,22 @@ describe('DXF e texto (pendências 3, 4 e 5)', () => {
     expect(larguraEstimadaDoTexto('27,00', 2)).toBeGreaterThan(larguraEstimadaDoTexto('1,50', 2));
   });
 
-  it('DXF: tabela LTYPE com CONTINUOUS e EIXO (traço-ponto); a malha usa EIXO; $LTSCALE declarado', () => {
+  it('DXF: tabela LTYPE com CONTINUOUS, EIXO (traço-ponto) e TRACEJADO (separador, F3); a malha usa EIXO; $LTSCALE declarado', () => {
     const dxf = gerarDxf(loteComApp(), { titulo: 't', revisao: 1, hash: 'h', cotas: true });
     const e = entidades(dxf);
     const tipos = e.filter((x) => x.tipo === 'LTYPE');
-    expect(tipos.map((x) => x.campos['2']?.[0])).toEqual(['CONTINUOUS', 'EIXO']);
+    expect(tipos.map((x) => x.campos['2']?.[0])).toEqual(['CONTINUOUS', 'EIXO', 'TRACEJADO']);
+    // A contagem declarada no cabeçalho da tabela bate com os tipos que vêm nela.
+    expect(dxf).toMatch(/\n\s*2\nLTYPE\n\s*70\n\s*3\n/);
     const eixo = tipos.find((x) => x.campos['2']?.[0] === 'EIXO')!;
     expect(eixo.campos['73']?.[0]).toBe('4');
     expect(eixo.campos['49']?.map(Number).map((n) => Math.sign(n))).toEqual([1, -1, 0, -1]);
+    const separador = tipos.find((x) => x.campos['2']?.[0] === 'TRACEJADO')!;
+    expect(separador.campos['73']?.[0]).toBe('2');
+    expect(separador.campos['49']?.map(Number).map((n) => Math.sign(n))).toEqual([1, -1]);
     const camadas = e.filter((x) => x.tipo === 'LAYER');
     expect(camadas.find((x) => x.campos['2']?.[0] === 'PLANTA-MALHA-EIXOS')?.campos['6']?.[0]).toBe('EIXO');
+    expect(camadas.find((x) => x.campos['2']?.[0] === 'PLANTA-SEPARADORES')?.campos['6']?.[0]).toBe('TRACEJADO');
     expect(camadas.find((x) => x.campos['2']?.[0] === 'PLANTA-COTAS')?.campos['6']?.[0]).toBe('CONTINUOUS');
     expect(dxf).toContain('$LTSCALE');
     // A tabela de tipos vem ANTES da de camadas (quem lê declara antes de usar).

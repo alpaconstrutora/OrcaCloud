@@ -633,12 +633,14 @@ export function desenharPlanta(
     }
   }
 
-  // ── Limites sem material: tracejado seria melhor, fino resolve por ora ────
+  // ── Limites sem material ──────────────────────────────────────────────────
+  // O SEPARADOR de ambiente (DIVISA, F3) sai TRACEJADO: é a convenção de linha
+  // de ambiente, e contínuo ele se confundiria com parede fina no papel. Os
+  // demais limites seguem o traço fino contínuo de antes.
   for (const b of model.boundaries) {
-    d.linha(px(b.a.x), py(b.a.y), px(b.b.x), py(b.b.y), {
-      espessuraMm: ESPESSURA_FINA_MM,
-      cor: '#888888',
-    });
+    const estilo = { espessuraMm: ESPESSURA_FINA_MM, cor: '#888888' };
+    if (b.kind === 'DIVISA') segmentoTracejado(d, { x: px(b.a.x), y: py(b.a.y) }, { x: px(b.b.x), y: py(b.b.y) }, estilo);
+    else d.linha(px(b.a.x), py(b.a.y), px(b.b.x), py(b.b.y), estilo);
   }
 
   // ── ENVELOPE RECUADO (10/10/2026): o tracejado laranja da tela, na planta de arquitetura (não na humanizada nem
@@ -1550,17 +1552,22 @@ const COR_ENVELOPE_PRANCHA = '#f59e0b';
 
 /** Um anel fechado tracejado (2 mm cheio, 1 mm vazio) — o `Desenhista` não tem tracejado. */
 function tracejado(d: Desenhista, anel: { x: number; y: number }[], estilo: EstiloTraco): void {
-  for (let i = 0; i < anel.length; i++) {
-    const a = anel[i];
-    const b = anel[(i + 1) % anel.length];
-    const comp = Math.hypot(b.x - a.x, b.y - a.y);
-    if (comp < 1e-6) continue;
-    const ux = (b.x - a.x) / comp;
-    const uy = (b.y - a.y) / comp;
-    for (let t = 0; t < comp; t += 3) {
-      const fim = Math.min(comp, t + 2);
-      d.linha(a.x + ux * t, a.y + uy * t, a.x + ux * fim, a.y + uy * fim, estilo);
-    }
+  for (let i = 0; i < anel.length; i++) segmentoTracejado(d, anel[i], anel[(i + 1) % anel.length], estilo);
+}
+
+/**
+ * Um segmento ABERTO tracejado, no mesmo passo do anel (2 cheio, 1 vazio). Existe
+ * à parte porque o separador de ambiente (F3) é linha aberta: passado como anel de
+ * dois pontos, sairia ida e volta com fases diferentes — quase contínuo no papel.
+ */
+function segmentoTracejado(d: Desenhista, a: { x: number; y: number }, b: { x: number; y: number }, estilo: EstiloTraco): void {
+  const comp = Math.hypot(b.x - a.x, b.y - a.y);
+  if (comp < 1e-6) return;
+  const ux = (b.x - a.x) / comp;
+  const uy = (b.y - a.y) / comp;
+  for (let t = 0; t < comp; t += 3) {
+    const fim = Math.min(comp, t + 2);
+    d.linha(a.x + ux * t, a.y + uy * t, a.x + ux * fim, a.y + uy * fim, estilo);
   }
 }
 

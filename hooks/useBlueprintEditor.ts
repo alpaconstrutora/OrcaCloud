@@ -85,6 +85,12 @@ export type BlueprintTool =
   | 'terreno'
   | 'divisa'
   /**
+   * SEPARADOR DE AMBIENTE (F3, 11/10/2026): o gesto da `divisa`, sempre
+   * `kind: 'DIVISA'` — linha sem material que reparte um espaço aberto (entrada
+   * × sala) em dois ambientes. Não é parede: não entra no quantitativo.
+   */
+  | 'separador'
+  /**
    * PERFIL altimétrico por linha desenhada (fase 4 da topografia). Cliques
    * encadeados como o terreno, mas NÃO cria entidade de kernel: a polilinha é
    * dado do mundo (vai para a premissa de terraplenagem), e o canvas só a

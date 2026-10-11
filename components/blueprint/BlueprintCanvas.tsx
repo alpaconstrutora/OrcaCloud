@@ -1763,6 +1763,12 @@ export default function BlueprintCanvas({
   onMoveEscadaVertex,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /**
+   * SEPARADOR DE AMBIENTE (F3, 11/10/2026): o mesmo gesto da Divisa — traçado
+   * aberto, cliques encadeados —, mas sempre `kind: 'DIVISA'`. Mora na aba
+   * Arquitetura porque é decisão de PROJETO (sala × entrada), não de lote.
+   */
+  const ehDivisa = tool === 'divisa' || tool === 'separador';
 
   // A roda dá zoom sem rolar a página — listener NATIVO com `passive: false`.
   // `aoRolar` é declaração de função, então já existe aqui por içamento.
@@ -8485,7 +8491,7 @@ export default function BlueprintCanvas({
       ctx.stroke();
     }
 
-    if ((tool === 'terreno' || tool === 'divisa') && inicio && cursor) {
+    if ((tool === 'terreno' || ehDivisa) && inicio && cursor) {
       const pontos = [...cadeia, cursor];
       const emTela = pontos.map(paraTela);
 
@@ -9201,7 +9207,7 @@ export default function BlueprintCanvas({
         tool === 'poligono' ||
         tool === 'retangulo' ||
         tool === 'terreno' ||
-        tool === 'divisa' ||
+        ehDivisa ||
         tool === 'estrutural' ||
         tool === 'telhado' ||
         tool === 'corte' ||
@@ -9987,7 +9993,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'terreno' || tool === 'divisa') {
+    if (tool === 'terreno' || ehDivisa) {
       // A prévia tem de aplicar a MESMA trava do clique, senão a linha "pula"
       // ao soltar e o usuário aprende a não confiar nela.
       let alvo = capturarTracado(paraMundo(px, py));
@@ -10751,7 +10757,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'terreno' || tool === 'divisa') {
+    if (tool === 'terreno' || ehDivisa) {
       let ponto = capturarTracado(mundo);
       if (!inicio) {
         setCadeia([ponto]);
@@ -10767,7 +10773,7 @@ export default function BlueprintCanvas({
       if (ortoAtivo(e) && !fechandoContorno(ponto)) ponto = travarOrtogonal(inicio, ponto);
       if (ponto.x === inicio.x && ponto.y === inicio.y) return;
 
-      const kind: BoundaryKind = tool === 'terreno' ? 'TERRENO' : kindDaDivisa;
+      const kind: BoundaryKind = tool === 'terreno' ? 'TERRENO' : tool === 'separador' ? 'DIVISA' : kindDaDivisa;
       onAddLimite?.(inicio, ponto, kind);
 
       // Voltar ao primeiro vértice FECHA o contorno e encerra a polilinha — o
@@ -10904,7 +10910,7 @@ export default function BlueprintCanvas({
     }
     // DIVISA não fecha sozinha — ela é um traçado aberto por natureza, e fechar
     // por conta própria inventaria um lado que ninguém desenhou.
-    if (tool === 'divisa') {
+    if (ehDivisa) {
       setCadeia([]);
       setTrechos([]);
       return;
@@ -11295,7 +11301,7 @@ export default function BlueprintCanvas({
       />
 
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-        {tool === 'terreno' || tool === 'divisa'
+        {tool === 'terreno' || ehDivisa
           ? inicio
             ? cadeia.length >= 2
               ? tool === 'terreno'

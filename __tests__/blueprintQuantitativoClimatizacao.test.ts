@@ -52,7 +52,7 @@ function cena() {
 describe('climatização E9.1 · o quantitativo (quant-1.25.0)', () => {
   it('⚠️ PRONTO QUANDO: a versão é a 1.25.0 e a linha se separa pelo par de diâmetros e o isolamento', () => {
     const { q } = cena();
-    expect(q.policy.version).toBe('quant-1.26.0');
+    expect(q.policy.version).toBe('quant-1.27.0');
     const linha = q.totais.porBitola.filter((b) => b.disciplina === 'FRIGORIGENA');
     expect(linha.map((b) => [b.bitolaMm, b.bitolaSuccaoMm, b.isolamentoMm, Math.round(b.comprimentoM * 100) / 100])).toEqual([
       [6, 10, 9, 4],

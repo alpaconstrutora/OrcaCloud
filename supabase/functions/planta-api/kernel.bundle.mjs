@@ -3961,7 +3961,11 @@ var POLITICA_PADRAO = {
   // no DUTO — `TRANSICAO` (redondo ↔ retangular) e `COLARINHO` (ramal redondo
   // saindo do duto retangular, no lugar do tê). `porConexao` passa a contá-las;
   // antes o encontro do flexível com o tronco saía como luva/joelho/tê.
-  version: "quant-1.26.0",
+  // quant-1.27.0 (11/10/2026, F3 do plano recursos-video-synaps): o rodapé
+  // derivado do ambiente desconta os lados sobre SEPARADOR de ambiente
+  // (`Boundary` DIVISA sem parede) — antes saía rodapé ao longo da linha que
+  // divide a entrada da sala, onde não há parede. Planta sem separador não muda.
+  version: "quant-1.27.0",
   alturaRodapeMm: 100,
   perdaRevestimento: 0.1,
   casas: 2
@@ -4119,6 +4123,22 @@ function aberturasDoAmbiente(space, walls, openings) {
     }
   }
   return openings.filter((o) => idsNoContorno.has(o.wallId));
+}
+function ladoSemParede(a, b, levelId, walls, boundaries) {
+  const sobre = (p, q) => areCollinear(p, q, a) && areCollinear(p, q, b) && isBetween(p, q, a) && isBetween(p, q, b);
+  const noSeparador = boundaries.some((l) => l.levelId === levelId && l.kind === "DIVISA" && sobre(l.a, l.b));
+  if (!noSeparador) return false;
+  return !walls.some((w) => w.levelId === levelId && sobre(w.a, w.b));
+}
+function comprimentoSemParedeMm(space, walls, boundaries) {
+  let soma = 0;
+  const n4 = space.ring.length;
+  for (let i = 0; i < n4; i++) {
+    const a = space.ring[i];
+    const b = space.ring[(i + 1) % n4];
+    if (ladoSemParede(a, b, space.levelId, walls, boundaries)) soma += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return soma;
 }
 function medirEstrutura(s2) {
   const forma = FORMA_ESTRUTURAL[s2.kind];
@@ -4513,7 +4533,8 @@ ${c.funcao}`;
       (o) => o.sillMm === 0
     );
     const vaoPortasMm = interrompemRodape.reduce((soma, o) => soma + o.widthMm, 0);
-    const rodapeDerivadoMm = Math.max(0, s2.perimeterMm - vaoPortasMm);
+    const semParedeMm = comprimentoSemParedeMm(s2, model.walls, model.boundaries);
+    const rodapeDerivadoMm = Math.max(0, s2.perimeterMm - vaoPortasMm - semParedeMm);
     const acab = acabamentosDoAmbiente(model, s2);
     const rodapeMm = acab?.rodape === null ? 0 : rodapeDerivadoMm;
     const alturaRodapeMm = acab?.rodape ? acab.rodape.alturaMm : policy.alturaRodapeMm;

@@ -52,6 +52,18 @@ Causa: CTL-006-012-0001 (locador ALTAIR PEREIRA DA ROSA, PF) gerava PIS/COFINS p
 empresa do imóvel, ignorando o locador. Feito: com locador PF, `generateForDeal` não gera
 PIS/COFINS; na aba Financeiro as caixas PIS/COFINS ficam desligadas com o motivo. INSS inalterado.
 
+### Pedido posterior (11/10/2026) — INSS e tabela de IRRF
+> 1. locador pessoa física somente incide IRRF. INSS é um tributo aplicado apenas a pessoa Juridica
+> 2. corrigir tabela
+
+Feito: com locador PF o gerador também não gera INSS (só IRRF); caixa INSS desligada com o motivo.
+Tabela `irrf_brackets` corrigida (`aplicar_20271011000200`): vigências 04/2015–04/2023 (Lei 13.149),
+05/2023–01/2024 (MP 1.171), 02/2024–04/2025 (MP 1.206), 05/2025–12/2025 e 2026+ (MP 1.294);
+duplicata de 2026 removida. Provado: 153 meses (04/2015–12/2027) com exatamente uma tabela.
+Reversão em `public.irrf_brackets_reversao_20261011` (30 linhas antigas, NÃO apagar).
+⚠️ A folha usa a mesma tabela: folhas de 2023–2025 recalculadas daqui em diante saem com os
+valores corretos (diferentes dos já calculados).
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|

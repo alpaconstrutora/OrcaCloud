@@ -3575,13 +3575,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                                             {([['pis', 'PIS'], ['cofins', 'COFINS'], ['inss', 'INSS'], ['irrf', 'IRRF']] as const).map(([chave, rotulo]) => {
                                                 const retidos = formData.tributos_retidos ?? [];
-                                                // Locador PF: PIS/COFINS não incidem (taxPayableService não gera) —
-                                                // a caixa fica desligada e diz por quê.
-                                                const naoIncide = locadorLocacao?.type === 'PF' && (chave === 'pis' || chave === 'cofins');
+                                                // Locador PF: só IRRF — PIS/COFINS/INSS não incidem (taxPayableService
+                                                // não gera); a caixa fica desligada e diz por quê.
+                                                const naoIncide = locadorLocacao?.type === 'PF' && chave !== 'irrf';
                                                 return (
                                                     <label
                                                         key={chave}
-                                                        title={naoIncide ? `${rotulo} é contribuição de pessoa jurídica — não incide com locador pessoa física.` : undefined}
+                                                        title={naoIncide ? `${rotulo} é tributo de pessoa jurídica — não incide com locador pessoa física.` : undefined}
                                                         className={`flex items-center gap-2 text-sm font-normal ${naoIncide ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 cursor-pointer'}`}
                                                     >
                                                         <input
@@ -3609,7 +3609,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </p>
                                         {locadorLocacao?.type === 'PF' && (
                                             <p className="text-xs text-gray-500">
-                                                Locador pessoa física: PIS e COFINS não incidem (são contribuições de pessoa jurídica) e não são
+                                                Locador pessoa física: PIS, COFINS e INSS não incidem (são tributos de pessoa jurídica) e não são
                                                 gerados. Sobre o aluguel só há Imposto de Renda — retido na fonte quando o inquilino é pessoa
                                                 jurídica, ou recolhido pelo próprio locador no Carnê-Leão.
                                             </p>

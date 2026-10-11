@@ -570,9 +570,9 @@ export const taxPayableService = {
         // mas não é "a pagar" e a parcela concilia pelo líquido (valor_esperado).
         // Leitura própria e tolerante, como a defasagem de competência.
         let retidos = new Set<string>();
-        // Locador pessoa física (cliente cadastrado com tipo PF): PIS/COFINS são
-        // contribuições de pessoa JURÍDICA e não incidem — sobre o aluguel de PF só
-        // há IR (retido pelo inquilino PJ, ou Carnê-Leão do próprio locador).
+        // Locador pessoa física (cliente cadastrado com tipo PF): PIS, COFINS e INSS
+        // são de pessoa JURÍDICA e não incidem — sobre o aluguel de PF só há IR
+        // (retido pelo inquilino PJ, ou Carnê-Leão do próprio locador).
         let locadorPf = false;
         {
             const { data: d, error } = await supabase
@@ -724,7 +724,7 @@ export const taxPayableService = {
             ]);
             // Locador PF: sem PIS/COFINS, qualquer que seja o regime da empresa do imóvel.
             const regimeLabel = regime && !locadorPf ? REGIME_LABEL[regime] : null;
-            if (locadorPf) console.log(`[TAX-PAYABLE] Locação ${shortId}: locador pessoa física — PIS/COFINS não incidem.`);
+            if (locadorPf) console.log(`[TAX-PAYABLE] Locação ${shortId}: locador pessoa física — só IRRF; PIS/COFINS/INSS não incidem.`);
             console.log(`[TAX-PAYABLE] Locação ${shortId}: regime=${JSON.stringify(regime)} → label=${JSON.stringify(regimeLabel)}; pisRates=${pisRates.length} cofinsRates=${cofinsRates.length} inssBrackets=${inssBrackets.length}`);
             if (!regimeLabel) {
                 console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);
@@ -750,7 +750,8 @@ export const taxPayableService = {
                     if (pis != null)    pushRow(parcel, 'pis',    'PIS',    parcel.amount * pis / 100);
                     if (cofins != null) pushRow(parcel, 'cofins', 'COFINS', parcel.amount * cofins / 100);
                 }
-                const inss = inssRateForValue(inssBrackets, parcel.amount, year);
+                // INSS também é de pessoa jurídica: não incide com locador PF.
+                const inss = locadorPf ? null : inssRateForValue(inssBrackets, parcel.amount, year);
                 if (inss != null) pushRow(parcel, 'inss', 'INSS', parcel.amount * inss / 100);
             }
         }

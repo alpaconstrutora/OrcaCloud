@@ -91,10 +91,14 @@ disso, o item 1 só alargava com o mouse EM CIMA do polegar de 4px — aquém do
   no TRILHO; no Gantt do harness (layout da tela) a barra horizontal mede 4px longe e 8px
   perto/no trilho/no polegar; seguir o mouse sobre o Gantt de 300 tarefas não custa quadro;
   a trava falha no Gantt antigo; em produção, depois de publicar, o Gantt real alarga.
-- **Estado:** em andamento (11/10). Harness das barras: perto 8px, trilho 8px (antes 4px).
+- **Estado:** ✅ feito (11/10). Harness das barras: perto 8px, trilho 8px (antes 4px).
   Gantt do harness: longe 4px; 10px acima da barra 8px; trilho 8px; polegar 8px; reservado
   8px (era 10px nativo). 80 movimentos do mouse: p95 17ms, 0 quadros > 50ms. A trava acusa
-  `ScheduleGantt.tsx:1122 scrollbar-thin` na versão antiga. Falta: suíte, publicar, produção.
+  `ScheduleGantt.tsx:1122 scrollbar-thin` na versão antiga. ✅ Suíte 8532 + 34 pulados =
+  8566 (conta fechando). Publicado em `72f072df` (autorizado: "sim"); CI verde; domínio
+  servindo `72f072d`. **Em produção**, Gantt real (Divino Espírito Santo, usuário de
+  leitura, escritas bloqueadas): faixa 8px; longe 4px; 10px acima da barra 8px; trilho 8px;
+  polegar 8px (antes: 6px nativo em todos).
 
 ### 3. Verificação e publicação
 - **Pronto quando:** typecheck, build, check de UI e suíte completa com a conta fechando;

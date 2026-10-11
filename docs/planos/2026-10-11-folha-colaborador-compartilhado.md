@@ -16,6 +16,15 @@ E, respondendo a "quem pode fechar o ciclo da Garden":
 > Esse e um caso especifico que nao deve ser tratado como geral.
 > contratei um fornecedor para ser assistente administrativo e cuidar da folha de pagamento
 
+### Pedido posterior — 11/10/2026 (04 e 06/2026)
+
+> corrigir folha mesmo fechada
+
+E, perguntado sobre o adiantamento de 05/2026 do Rogério (pago pela conta da Garden, conciliado):
+
+> calma para não fazer uma grande confusao. Uma coisa e gerar folha na organizacao correta.
+> outra é qual conta será paga. pois entanda. Um colaborador pode ser de uma organizacao mas prestar servico para outra e ser pago por uma conta de outra organizacao.
+
 ## Diagnóstico (medido no banco, não inferido)
 
 - Usuário: `alpaconstrutora@gmail.com` (fornecedor Sebastião Eugênio, `partner_users`).
@@ -87,6 +96,15 @@ compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não 
    *Pronto quando:* MOVIDO=3, MOVIDO_CICLO_NOVO=4 (3 ciclos novos), DUPLICATA=8, e só
    os 8 casos de 04 e 06/2026 seguem cruzados.
 
+### Fase 3 — folhas fechadas (pedido posterior)
+
+7. **`aplicar_20271011004000_folha_fechadas_para_org_do_colaborador.sql`** — os 14
+   resultados cruzados restantes (04, 05 e 06/2026, abertas e fechadas) vão para a folha
+   da org do colaborador; duplicata sai (fica a da org dele, mesmo com valor divergente).
+   **Financeiro não é tocado** (folha ≠ conta que paga).
+   *Pronto quando:* 0 resultados cruzados; `internal_transactions` LABOR idêntico antes e
+   depois (73 / R$ 44.264,06 / 1 conciliado / 1 vínculo).
+
 ## Estado
 
 - [x] Item 1 — aplicado em produção em 11/10/2026 (ensaio com rollback antes; depois
@@ -99,10 +117,13 @@ compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não 
 - [x] Item 6 — aplicado em produção 11/10/2026: results 69→61, items 241→217, events 34
   (inalterado), runs 19→22; ações MOVIDO=3, MOVIDO_CICLO_NOVO=4, DUPLICATA=8
 - [x] Fase 2 publicada — `1200cf50`; domínio servindo `81e54a8` (contém), CI verde
-- [ ] **Decisão manual pendente:** 04/2026 (Rogério, Altair, Claudinei, Ricardo na folha
-  aberta da Garden, que tem R$ 3.815,81 em lançamentos financeiros pendentes) e
-  06/2026 (os mesmos 4 na folha aberta da Garden). Nos dois meses a folha da Alpa
-  está FECHADA; corrigir exige mexer em folha fechada.
+- [x] ~~Decisão manual pendente 04 e 06/2026~~ → "corrigir folha mesmo fechada"
+- [x] Item 7 — aplicado em produção 11/10/2026: DUPLICATA=7, MOVIDO=7, cruzados 14→0,
+  results 61→54, items 217→188, events 34, runs 22; financeiro LABOR idêntico.
+  Duplicatas com valor divergente (cópia descartada está na reversão):
+  06/2026 Clovis — ficou o da Garden (líquido 1.287,60; o da Alpa fechada era 2.278,40);
+  06/2026 Rogério — ficou o da Alpa fechada (líquido 1.499,43; o da Garden era 1.374,53,
+  com 4 eventos, que foram para a folha da Alpa sem recálculo).
 
 ## Verificação
 
@@ -124,6 +145,16 @@ Admin (UID real), contagem nas 8 tabelas antes × depois da migration: idêntica
 (34 / 5 / 9 / 0 / 3 / 3 / 13 / 2).
 
 ## Fora do escopo (anotado, não feito)
+
+- **Folha × conta que paga:** o usuário separou os dois (11/10/2026). E esclareceu:
+  "o controle de organizacoes que o colaborador pode se movimentar se dá com a o drawer
+  [...] Disponibilizar Colaborador" (`LaborEmployeeSharing.tsx` → `employee_org_shares`).
+  Ou seja: a org de ORIGEM ("DONA") é onde a folha é gerada; as orgs "disponibilizadas"
+  são onde ele pode prestar serviço / ser pago — o eixo do financeiro, não o da folha. Hoje o sync de
+  LABOR lança salários/encargos na org DA FOLHA (`run.org_id`); quem paga pode ser
+  outra org. Não foi redesenhado. Enquanto isso, NÃO resincronizar o financeiro das
+  folhas de 04–06/2026: o sync apaga e recria todos os lançamentos da folha e o
+  vínculo de conciliação cai por CASCADE (ver memória dos syncs).
 
 - ~~**Folha em dobro possível:** quem é membro da org de origem **e** da que recebeu o
   colaborador, ao gerar o lote em "Todas", abre ciclo nas duas, e o compartilhado entra

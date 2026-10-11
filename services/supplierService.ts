@@ -198,6 +198,20 @@ function mapCnpjaOfficeToSupplier(office: CnpjaOfficeResponse): CnpjaSupplierUpd
     };
 }
 
+// O que o cadastro do fornecedor manda no perfil do corretor. `commission_rate`
+// fica FORA de propósito: é editado em Corretores (BrokerModal) e o upsert o
+// regravava em 5% a cada salvamento — e a cada listagem, quando ela ainda
+// sincronizava (até 11/10/2026). Perfil novo recebe 5% pelo default da coluna.
+function brokerProfileFromSupplier(supplier: Partial<Supplier>, email: string) {
+    return {
+        email,
+        name: supplier.contact_name || supplier.name || email,
+        phone: supplier.phone || null,
+        cpf: supplier.type === 'PF' ? supplier.document || null : null,
+        agency_name: supplier.type === 'PJ' ? supplier.name || null : null,
+    };
+}
+
 async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise<void> {
     const email = normalizeEmail(supplier.email);
     const organizationId = supplier.organization_id || null;
@@ -218,12 +232,7 @@ async function syncRealEstateBrokerProfile(supplier: Partial<Supplier>): Promise
     }
 
     const baseProfile = {
-        email,
-        name: supplier.contact_name || supplier.name || email,
-        phone: supplier.phone || null,
-        cpf: supplier.type === 'PF' ? supplier.document || null : null,
-        agency_name: supplier.type === 'PJ' ? supplier.name || null : null,
-        commission_rate: 5,
+        ...brokerProfileFromSupplier(supplier, email),
         is_active: true,
         updated_at: new Date().toISOString(),
     };
@@ -355,22 +364,48 @@ export const supplierService = {
         return (data || []) as Supplier[];
     },
 
+    // Chamada ao LISTAR corretores (brokerService.listProfiles), então só CRIA o
+    // perfil que falta e nunca atualiza: até 11/10/2026 ela fazia upsert de
+    // todos os corretores a cada abertura de tela — regravava nome, telefone e
+    // a comissão (5%) por cima do que foi editado em Corretores. Atualizar e
+    // desativar é papel de salvar o fornecedor (syncRealEstateBrokerProfile).
+    //
+    // Corretor COMPARTILHADO só materializa em todas as organizações no momento
+    // em que o fornecedor é salvo. Se uma organização for criada depois (nova
+    // SPE), o corretor não teria linha nela — ao listar UMA organização,
+    // garantimos a linha dela também.
     syncRealEstateBrokerProfiles: async (organizationId?: string): Promise<void> => {
         const brokers = await supplierService.listRealEstateBrokers(organizationId);
-        await Promise.all(
-            brokers
-                .filter(supplier => supplier.email)
-                // Corretor COMPARTILHADO só materializa em todas as organizações no
-                // momento em que o fornecedor é salvo (ver syncRealEstateBrokerProfile).
-                // Se uma organização for criada depois (nova SPE), o corretor nunca
-                // ganha linha nela até o fornecedor ser salvo de novo — aqui, ao listar
-                // corretores de UMA organização, garantimos a linha dela também.
-                .map(supplier => syncRealEstateBrokerProfile(
-                    supplier.is_shared && organizationId
-                        ? { ...supplier, organization_id: organizationId, is_shared: false }
-                        : supplier
-                ))
-        );
+        const desejados = new Map<string, ReturnType<typeof brokerProfileFromSupplier> & { organization_id: string }>();
+        for (const supplier of brokers) {
+            const email = normalizeEmail(supplier.email);
+            const orgId = supplier.is_shared && organizationId ? organizationId : supplier.organization_id;
+            if (!email || !orgId) continue;
+            desejados.set(`${orgId}|${email}`, { ...brokerProfileFromSupplier(supplier, email), organization_id: orgId });
+        }
+        if (desejados.size === 0) return;
+
+        const linhas = Array.from(desejados.values());
+        const { data: existentes, error: erroLeitura } = await supabase
+            .from('broker_profiles')
+            .select('organization_id, email')
+            .in('organization_id', Array.from(new Set(linhas.map(l => l.organization_id))))
+            .in('email', Array.from(new Set(linhas.map(l => l.email))));
+        if (erroLeitura) throw erroLeitura;
+
+        const jaExiste = new Set((existentes || []).map(e => `${e.organization_id}|${normalizeEmail(e.email)}`));
+        const faltando = linhas.filter(l => !jaExiste.has(`${l.organization_id}|${l.email}`));
+        if (faltando.length === 0) return;   // caso comum: nada vai ao banco
+
+        // ignoreDuplicates = ON CONFLICT DO NOTHING: se outra aba criou no meio,
+        // a linha dela fica como está.
+        const { error } = await supabase
+            .from('broker_profiles')
+            .upsert(faltando, { onConflict: 'organization_id,email', ignoreDuplicates: true });
+        if (error) {
+            console.error('[SUPPLIER SERVICE] Error creating missing broker profiles:', error);
+            throw error;
+        }
     },
 
     lookupCnpjRegistration: async (document: string): Promise<CnpjaSupplierUpdate> => {

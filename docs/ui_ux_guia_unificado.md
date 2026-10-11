@@ -2895,10 +2895,13 @@ moldura.
 > ℹ️ Medido com Playwright em `ContractModal.tsx` (modo `inline`, 2026-09-19):
 > título→rótulo 34px, rótulo→campo 3–6px, último campo→próximo título 32px; o
 > formulário (3 seções + rodapé) passou de ~2 telas para 1 em 1600×1000.
-> ⚠️ **Pendência de propagação:** aplicado só em `ContractModal.tsx` (drawer e
-> embutido). `SupplierModal.tsx`, `ClientModal.tsx`, `ProjectModal.tsx`,
-> `DealModal.tsx` etc. ainda usam `space-y-2`/`gap-6`/`space-y-10` — ao tocar
-> em qualquer formulário, aplicar esta régua.
+> ⚠️ **Pendência de propagação:** aplicado em `ContractModal.tsx` (drawer e
+> embutido) e, em 2026-10-11, nas abas Cliente/Unidade/Financeiro/Partes do
+> `DealModal.tsx` (Gerenciar Negociação) — junto com a largura toda em duas
+> colunas `xl:`. As abas Parcelas/Contrato/Garantias do `DealModal`, e
+> `SupplierModal.tsx`, `ClientModal.tsx`, `ProjectModal.tsx` etc. ainda usam
+> `space-y-2`/`gap-6`/`space-y-10` — ao tocar em qualquer formulário, aplicar
+> esta régua.
 
 ---
 

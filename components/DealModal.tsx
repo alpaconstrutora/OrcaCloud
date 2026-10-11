@@ -2666,7 +2666,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 Somente leitura: quem define o formato é a máscara em
                                 Configurações do Sistema › Nomenclatura. */}
                             {canGenerateContract && formData.id && (
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500">
                                         {formData.type === 'RENTAL' ? 'Código da Negociação de Locação' : 'Código da Negociação de Venda'}
                                     </label>
@@ -2699,9 +2699,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 da lista de unidades, sem hierarquia entre eles. */}
                             {isMultiBuyer ? (
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-blue-600">
-                                        <User className="w-5 h-5" />
-                                        <h3 className="text-sm font-bold text-gray-800">{partyLabel.plural}</h3>
+                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                        <User className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-sm font-semibold text-gray-900">{partyLabel.plural}</h3>
                                         <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
 
@@ -2761,9 +2761,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    <div className="flex items-center gap-2 text-blue-600">
-                                        <User className="w-5 h-5" />
-                                        <h3 className="text-sm font-bold text-gray-800">Cliente</h3>
+                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                        <User className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-sm font-semibold text-gray-900">Cliente</h3>
                                         <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                     </div>
                                     <ClientSelect
@@ -2780,7 +2780,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             )}
 
                             {/* Origem / Canal — alimenta "Fontes de Locação" (e Vendas) */}
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-500">Origem / Canal</label>
                                 <select
                                     value={formData.origin_channel || ''}
@@ -2801,7 +2801,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             {/* Competência do aluguel — só locação. Define o mês de auferimento
                                 em relação ao vencimento, usado na apuração por competência. */}
                             {formData.type === 'RENTAL' && (
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500">Competência do aluguel</label>
                                     <select
                                         value={String(formData.rental_competencia_offset_months ?? 0)}
@@ -2830,10 +2830,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 clicado na lista acima (o primeiro, por padrão). */}
                             {conferenceClient && (
                                 <div className="p-6 bg-white rounded-[10px] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-500 shadow-sm">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-blue-600">
-                                            <UserCheck className="w-4 h-4" />
-                                            <h4 className="text-sm font-bold text-gray-800">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                                        <div className="flex items-center gap-2">
+                                            <UserCheck className="w-4 h-4 text-blue-600" />
+                                            <h4 className="text-sm font-semibold text-gray-900">
                                                 Dados Cadastrados — Conferência
                                                 {isMultiBuyer && dealBuyers.length > 1 && (
                                                     <span className="font-normal text-gray-500"> · {conferenceClient.name}</span>
@@ -2847,25 +2847,25 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                         <div>
-                                            <p className="text-xs font-semibold text-slate-500 mb-1">Tipo de Pessoa</p>
+                                            <p className="text-xs font-semibold text-slate-500 mb-1.5">Tipo de Pessoa</p>
                                             <p className="text-sm font-bold text-gray-800">{conferenceClient.type === 'PJ' ? 'Pessoa Jurídica' : 'Pessoa Física'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                                            <p className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
                                                 <FileText className="w-3 h-3" /> CPF / CNPJ
                                             </p>
                                             <p className="text-sm font-bold text-gray-800">{conferenceClient.document || '—'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                                            <p className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
                                                 <Mail className="w-3 h-3" /> E-mail
                                             </p>
                                             <p className="text-sm font-bold text-gray-800 truncate">{conferenceClient.email || '—'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                                            <p className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
                                                 <Phone className="w-3 h-3" /> Telefone
                                             </p>
                                             <p className="text-sm font-bold text-gray-800">{conferenceClient.phone || '—'}</p>
@@ -2873,7 +2873,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
 
                                     <div>
-                                        <p className="text-xs font-semibold text-slate-500 mb-1 flex items-center gap-1">
+                                        <p className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
                                             <MapPin className="w-3 h-3" /> Endereço
                                         </p>
                                         <p className="text-sm font-bold text-gray-800">{clientAddressLine1 || '—'}</p>
@@ -2908,10 +2908,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 }));
                                 return (
                                     <div key={pessoa.id} className="space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2 text-blue-600">
-                                                <FileText className="w-5 h-5" />
-                                                <h3 className="text-sm font-bold text-gray-800">
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <FileText className="w-4 h-4 text-blue-600" />
+                                                <h3 className="text-sm font-semibold text-gray-900">
                                                     Documentos — {isPJ ? 'Pessoa Jurídica' : 'Pessoa Física'}
                                                     {!soUm && <span className="font-normal text-gray-500"> · {pessoa.name}</span>}
                                                 </h3>
@@ -2963,9 +2963,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         // numa coluna de 672px com metade da tela vazia.
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-8 items-start">
                             <div className="space-y-4 min-w-0">
-                                <div className="flex items-center gap-2 text-blue-600">
-                                    <Building className="w-5 h-5" />
-                                    <h3 className="text-sm font-bold text-gray-800">Imóveis da Negociação</h3>
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <Building className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Imóveis da Negociação</h3>
                                     <span className="text-xs font-semibold text-red-500">Obrigatório</span>
                                 </div>
 
@@ -3146,9 +3146,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 11/10/2026: sem teto — a aba ocupa a largura toda (pedido do
                                 usuário); os campos curtos dividem a linha (§30) em vez de esticar. */}
                             <div className="space-y-6">
-                                <div className="flex items-center gap-2 text-blue-600">
-                                    <DollarSign className="w-5 h-5" />
-                                    <h3 className="text-sm font-bold text-gray-800">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <DollarSign className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">
                                         {formData.type === 'SALE' ? 'Condições de Venda' :
                                             formData.type === 'RENTAL' ? 'Condições de Aluguel' : 'Condições do Acordo'}
                                     </h3>
@@ -3177,7 +3177,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     Substitui também o antigo campo read-only "Valor do Fechamento",
                                     que era este mesmo `formData.value` — a soma agora é o total
                                     deste bloco, sem repetir o número duas vezes na tela. */}
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500">
                                         {formData.type === 'RENTAL' ? 'Composição do valor mensal' : 'Composição do valor'}
                                     </label>
@@ -3235,7 +3235,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     acima) e continua editável: o fechamento negociado pode
                                     divergir da soma de tabela. */}
                                 {usaTrioFinanceiro && (
-                                    <div className="space-y-2 max-w-xs">
+                                    <div className="space-y-1.5 max-w-xs">
                                         <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
@@ -3400,7 +3400,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 {/* Datas + Forma de Pagamento: três campos curtos, uma linha. */}
                                 <div className="grid grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
-                                    <div className="space-y-2">
+                                    <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500">Data Efetiva</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -3412,7 +3412,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
+                                    <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
                                         <div className="relative">
                                             <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
@@ -3435,7 +3435,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
 
                                 {/* Forma de Pagamento */}
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500">Forma de Pagamento</label>
                                     <select
                                         value={formData.payment_method}
@@ -3468,9 +3468,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 {formData.payment_method === 'INSTALLMENTS' && usaTrioFinanceiro && (
                                     <div className="space-y-2 p-4 bg-gray-50 border border-gray-100 rounded-[10px]">
                                         <label className="text-xs font-semibold text-slate-500">Montar plano de pagamento</label>
-                                        <div className={`grid grid-cols-2 gap-4 ${formData.type === 'SALE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                                        <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${formData.type === 'SALE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                                             {formData.type === 'SALE' && (
-                                                <div className="space-y-2">
+                                                <div className="space-y-1.5">
                                                     <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
                                                     <div className="relative">
                                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
@@ -3483,7 +3483,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     </div>
                                                 </div>
                                             )}
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
                                                 <input
                                                     type="number" min="1" step="1" placeholder="12"
@@ -3492,7 +3492,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 />
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
                                                 <select
                                                     value={planoRapido.tipo}
@@ -3504,7 +3504,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div className="space-y-2">
+                                            <div className="space-y-1.5">
                                                 <label className="text-xs font-semibold text-slate-500">1º vencimento</label>
                                                 <input
                                                     type="date"
@@ -3540,7 +3540,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     herdadas por TODAS as parcelas — na aba Parcelas
                                     aparecem só como colunas de leitura. */}
                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
                                     <CostCenterSelect
                                         costCenters={costCenters}
@@ -3551,7 +3551,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     />
                                 </div>
 
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
                                     <PlanoContasSelect
                                         planoContas={planoContas}
@@ -3567,7 +3567,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     nasce como "Retido pelo cliente" e a parcela passa a conciliar
                                     pelo valor líquido (valor_esperado). Chaves = as da locação. */}
                                 {formData.type === 'RENTAL' && (
-                                    <div className="space-y-2">
+                                    <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500">Locador</label>
                                         <ClientSelect
                                             clients={clients}
@@ -3589,7 +3589,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
 
                                 {formData.type === 'RENTAL' && (
-                                    <div className="space-y-2">
+                                    <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500">Tributos retidos pelo cliente</label>
                                         {/* Pedido de confirmação: a regra pede IRRF e ele não está marcado. */}
                                         {regraPedeIrrf && !(formData.tributos_retidos ?? []).includes('irrf') && (
@@ -4090,9 +4090,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         <div className="space-y-8">
                             {/* Corretor */}
                             <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-amber-600">
-                                    <UserCheck className="w-5 h-5" />
-                                    <h3 className="text-sm font-bold text-gray-800">Corretor da Negociação</h3>
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <UserCheck className="w-4 h-4 text-amber-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Corretor da Negociação</h3>
                                     <span className="text-xs font-semibold text-amber-500">Opcional</span>
                                 </div>
 
@@ -4148,7 +4148,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                                 {formData.broker_id && (
                                     <div className="grid grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 animate-in slide-in-from-top-2 duration-300">
-                                        <div className="space-y-2">
+                                        <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">
                                                 <Percent className="w-3 h-3 inline mr-1" />% Comissão
                                             </label>
@@ -4174,7 +4174,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2">
+                                        <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">Valor da Comissão</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-500 font-mono">R$</span>
@@ -4197,7 +4197,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2">
+                                        <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">Forma de Pagto.</label>
                                             <select
                                                 value={formData.broker_payment_method || ''}
@@ -4213,7 +4213,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </select>
                                         </div>
 
-                                        <div className="space-y-2">
+                                        <div className="space-y-1.5">
                                             <label className="text-xs font-semibold text-slate-500">Data de Pagto.</label>
                                             <input
                                                 type="date"

@@ -156,10 +156,14 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       const selecao = selecaoDoNivel(m, nivel, hip.selecao, cx.modelos);
       for (const a of selecao.ambientes) {
         if (!a.sugestao.escolhido && a.sugestao.motivo && a.evaporadoras.length === 0) pendencia('SEM_SOLUCAO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${a.sugestao.motivo}`);
-        for (const p of a.pendencias) pendencia('NAO_DECIDIDO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${p}`);
       }
       const plano = planejarEquipamentosSplit(m, selecao, nivel, hip.selecao);
       n += aplicar(plano.comandos);
+      // 11/10/2026: as pendências do ambiente sobre o desenho DEPOIS do lote — antes saía "evaporadora sem
+      // condensadora" para a evaporadora que acabou de ganhar a dela.
+      for (const a of selecaoDoNivel(m, nivel, hip.selecao, cx.modelos).ambientes) {
+        for (const p of a.pendencias) pendencia('NAO_DECIDIDO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${p}`);
+      }
       for (const s of plano.semLugar) pendencia('SEM_SOLUCAO', `${nomeDoNivel(nivel.levelId)} › ${s.nome}: ${s.motivo}`);
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(nivel.levelId)}: ${plano.aCriar.length} split(s)`);
       // 11/10/2026: a evaporadora existente sem condensadora ganha a dela.

@@ -3188,3 +3188,9 @@ Pedido: **"faça"**.
 aceitar; sem lugar; e o gerador inteiro (EQUIPAMENTOS e LINHA lançam, a linha existe).
 `blueprintPosicaoSplit.test.ts`: o teste de relançar segue a regra nova (a evaporadora aceita não é
 apagada nem duplicada; o sistema volta inteiro; aceita a condensadora, "já atendido").
+
+**Rodado no rascunho real do usuário** (só em memória, depois dos dois ajustes no banco — catálogo
+semeado e clima declarado): carga 17.607 BTU/h no "Ambiente 1"; a condensadora entra ligada à
+evaporadora, a linha e o dreno com sifão seguem; quantitativo e orçamento calculam. O relatório
+ainda dizia "1 evaporadora sem condensadora": as pendências da seleção eram lidas do desenho de
+ANTES do lote. Agora são do desenho de depois (`blueprintGeradorClimatizacao.ts`, +1 asserção).

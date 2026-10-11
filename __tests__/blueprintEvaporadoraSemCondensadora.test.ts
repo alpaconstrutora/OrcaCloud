@@ -98,6 +98,8 @@ describe('a evaporadora existente sem condensadora ganha a dela', () => {
     const etapa = (id: string) => plano.etapas.find((e) => e.id === id)!;
     expect(etapa('EQUIPAMENTOS').situacao).toBe('LANCOU');
     expect(etapa('LINHA').situacao).toBe('LANCOU');
+    // O relatório diz o desenho de DEPOIS: a evaporadora ganhou a condensadora, não sai mais "sem condensadora".
+    expect(plano.pendencias.map((p) => p.texto).join(' | ')).not.toMatch(/sem condensadora/);
     const depois = applyBatch(m, plano.comandos).model;
     const s = sistemasDoNivel(depois, t)[0];
     expect(linhaExistente(depois, s)).not.toBeNull();

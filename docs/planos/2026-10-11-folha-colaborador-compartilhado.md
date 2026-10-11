@@ -61,7 +61,7 @@ compartilhados no ciclo da Alpa; não abre ciclo na Garden (`payroll_runs` não 
   verificado de novo no banco publicado)
 - [x] Item 2 — teste 4/4
 - [x] Item 3
-- [ ] Publicado (push em `main`)
+- [x] Publicado — `317ab127` em 11/10/2026; domínio conferido servindo o commit, CI verde
 
 ## Verificação
 

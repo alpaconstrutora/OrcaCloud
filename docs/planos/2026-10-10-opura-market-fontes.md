@@ -183,12 +183,11 @@ Todo conector produz `AnuncioLido[]` e grava pelo mesmo `gravarFeed`, na Edge Fu
 
 - [x] Fase A
 - [x] Fase B (captura no navegador passa a ser o caminho para portal; ver o achado acima)
-- [x] Fase C (falta o clique num navegador de verdade, nos portais ao vivo)
+- [x] Fase C — aprovada pelo usuário no navegador real (10/10/2026, VivaReal ao vivo: dados certos; 2º envio = "já está na base", sem duplicar)
 - [x] Fase D (só sob comando: o banco recusa coleta diária da Conexão 381; migration `aplicar_20271010004200`, aplicada)
 - [ ] ~~Fase E~~ — cancelada (revisão de 10/10/2026)
 - [ ] Fase F — pendência para implementação futura
 
 **Pendências que ficam:**
-- Clicar no favorito "Enviar ao ÒPURA" num navegador de verdade, nos portais ao vivo (com o usuário).
 - Fase F: comparar fornecedores de dados pagos.
 - De antes deste plano: cadastrar os 38 bairros que faltam na praça e decidir os 16 anúncios do "Centro" sem nome de bairro de origem.

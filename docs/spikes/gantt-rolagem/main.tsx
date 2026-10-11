@@ -16,6 +16,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
+import { ligarBarraDeRolagemProxima } from '../../../utils/barraDeRolagemProxima';
 import { ScheduleGantt } from '../../../components/schedule/ScheduleGantt';
 import { SchedulingEngine } from '../../../utils/schedulingEngine';
 import {
@@ -136,6 +137,9 @@ function Harness() {
 // (o <main> do Layout: `overflow-y-auto p-4 md:p-6`), abaixo do espaço do ribbon, num pai
 // `overflow-x-auto min-h-[400px] flex flex-col` SEM altura (FinancialSchedule.tsx). É o
 // que faz o contêiner do Gantt crescer até a última linha (11/10/2026).
+// Como em index.tsx: a barra alarga quando o cursor se aproxima.
+ligarBarraDeRolagemProxima();
+
 const raiz = document.getElementById('raiz')!;
 if (params.get('layout') === 'app') {
     raiz.removeAttribute('style');

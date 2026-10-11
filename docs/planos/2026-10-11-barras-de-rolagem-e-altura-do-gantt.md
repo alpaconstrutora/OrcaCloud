@@ -18,6 +18,19 @@ limitar a altura do Gantt para a barra horizontal ficar à vista. Resposta do us
 
 > Se concordar, implemento a barra discreta que alarga no hover para o app inteiro, mais a altura limitada do Gantt, com o mesmo cuidado de medir antes e depois: de acordo!
 
+### Pedido de 11/10/2026 (2), depois da publicação
+
+> a barra continua nao alterando de tamanhp
+
+Medido em PRODUÇÃO, no Gantt real (usuário de leitura): polegar de **6px em todos os
+estados**, faixa de 10px — a barra do app nem valia ali. Causa: o contêiner do Gantt tinha
+`scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent`, que eu tinha dado
+como "classes inertes, sem plugin" — mas o **Tailwind v4 as gera** (`scrollbar-width: thin`,
+`scrollbar-color`), e no Chrome 121+ isso desliga o `::-webkit-scrollbar` do elemento
+(barra nativa). O harness do item 1 passou porque media uma área SEM essas classes. Além
+disso, o item 1 só alargava com o mouse EM CIMA do polegar de 4px — aquém do pedido
+("quando o cursor se aproximar"). Ver item 4.
+
 ## Decisões
 
 - **Largura reservada continua 8px.** Alargar o espaço da barra (ex.: 12px) tiraria 4px de
@@ -66,6 +79,22 @@ limitar a altura do Gantt para a barra horizontal ficar à vista. Resposta do us
   cabeçalho rolava junto; DEPOIS 648px, termina em 876px, barra à vista, rola sozinho e o
   cabeçalho fica no topo após descer 2.000px. Rolagem: 0–1 quadro > 50ms (ruído no limite
   de 50ms, repetido 2×); arrasto da barra e navegação antes do início seguem verdes.
+
+### 4. Barra alarga ao se APROXIMAR, e nada a desliga (pedido 2)
+- **Muda:** sai `scrollbar-thin/-thumb-*/-track-*` do Gantt; trava em
+  `__tests__/barraDeRolagemPadrao.test.ts` contra essas classes (e `scrollbarWidth`/
+  `scrollbarColor` inline) em qualquer tela — `scrollbar-none`/`-hide` seguem permitidas;
+  `utils/barraDeRolagemProxima.ts` (ligado em `index.tsx`): um `pointermove` por quadro
+  marca o contêiner rolável com `data-barra-proxima="v"|"h"` quando o cursor está a até
+  16px de onde a barra começa, ou sobre o trilho; `index.css` alarga/escurece nesse estado.
+- **Pronto quando:** harness das barras mede 8px com o cursor PERTO (10px antes da barra) e
+  no TRILHO; no Gantt do harness (layout da tela) a barra horizontal mede 4px longe e 8px
+  perto/no trilho/no polegar; seguir o mouse sobre o Gantt de 300 tarefas não custa quadro;
+  a trava falha no Gantt antigo; em produção, depois de publicar, o Gantt real alarga.
+- **Estado:** em andamento (11/10). Harness das barras: perto 8px, trilho 8px (antes 4px).
+  Gantt do harness: longe 4px; 10px acima da barra 8px; trilho 8px; polegar 8px; reservado
+  8px (era 10px nativo). 80 movimentos do mouse: p95 17ms, 0 quadros > 50ms. A trava acusa
+  `ScheduleGantt.tsx:1122 scrollbar-thin` na versão antiga. Falta: suíte, publicar, produção.
 
 ### 3. Verificação e publicação
 - **Pronto quando:** typecheck, build, check de UI e suíte completa com a conta fechando;

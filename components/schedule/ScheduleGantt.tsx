@@ -1119,7 +1119,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                 onScroll={handleScroll}
                 onWheel={handleWheel}
                 onPointerDown={handlePointerDown}
-                className="flex-1 overflow-auto bg-white border border-gray-100 rounded-3xl shadow-sm relative scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
+                // Sem `scrollbar-thin`/`scrollbar-thumb-*`/`scrollbar-track-*`: o Tailwind v4 os
+                // traduz em scrollbar-width/scrollbar-color, que no Chrome 121+ DESLIGAM a barra
+                // do app (index.css) neste elemento — o Gantt ficava com a barra nativa, que não
+                // alarga (11/10/2026). Travado em __tests__/barraDeRolagemPadrao.test.ts.
+                className="flex-1 overflow-auto bg-white border border-gray-100 rounded-3xl shadow-sm relative"
             >
                 <div className="inline-block min-w-full">
                     {/* Gantt Header */}

@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
+import { ligarBarraDeRolagemProxima } from './utils/barraDeRolagemProxima';
+
+// Barra de rolagem alarga quando o cursor se aproxima (utils/barraDeRolagemProxima.ts).
+ligarBarraDeRolagemProxima();
 import App from './App';
 import { queryClient } from './lib/queryClient';
 import { ConfirmProvider } from './components/ui/confirm';

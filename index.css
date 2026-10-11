@@ -134,7 +134,21 @@
     background-color: #94a3b8;
   }
 
-  ::-webkit-scrollbar-thumb:active {
+  /* cursor PERTO da barra (até 16px da borda) ou sobre o trilho: o mesmo alargar do
+     hover do polegar. O atributo é posto por utils/barraDeRolagemProxima.ts — CSS não tem
+     seletor para "perto". Mudar --barra-sob-o-mouse junto é o que faz o Chrome repintar. */
+  [data-barra-proxima] {
+    --barra-sob-o-mouse: 2;
+  }
+
+  [data-barra-proxima="v"]::-webkit-scrollbar-thumb:vertical,
+  [data-barra-proxima="h"]::-webkit-scrollbar-thumb:horizontal {
+    border-width: 0;
+    background-color: #94a3b8;
+  }
+
+  ::-webkit-scrollbar-thumb:active,
+  [data-barra-proxima]::-webkit-scrollbar-thumb:active {
     border-width: 0;
     background-color: #64748b;
   }

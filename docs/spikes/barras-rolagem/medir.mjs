@@ -75,7 +75,20 @@ for (const eixo of ['v', 'h']) {
         : { x: g.left + 20, y: g.top + g.clientHeight + g.reservadoH / 2 };
     await page.mouse.move(sobre.x, sobre.y); await page.waitForTimeout(250);
     const sobrePolegar = await polegar(eixo, 'polegar');
-    res[eixo === 'v' ? 'vertical' : 'horizontal'] = { repouso, area, polegar: sobrePolegar };
+    // PERTO da barra, ainda sobre o conteúdo (10px da borda) — o pedido era "alargar
+    // quando o cursor se aproximar". E sobre o TRILHO longe do polegar.
+    const perto = eixo === 'v'
+        ? { x: g.left + g.clientWidth - 10, y: g.top + 20 }
+        : { x: g.left + 20, y: g.top + g.clientHeight - 10 };
+    await page.mouse.move(fora.x, fora.y); await page.waitForTimeout(150);
+    await page.mouse.move(perto.x, perto.y); await page.waitForTimeout(250);
+    const pertoDaBarra = await polegar(eixo, 'perto');
+    const trilho = eixo === 'v'
+        ? { x: g.left + g.clientWidth + g.reservadoV / 2, y: g.top + g.clientHeight - 20 }
+        : { x: g.left + g.clientWidth - 20, y: g.top + g.clientHeight + g.reservadoH / 2 };
+    await page.mouse.move(trilho.x, trilho.y); await page.waitForTimeout(250);
+    const noTrilho = await polegar(eixo, 'trilho');
+    res[eixo === 'v' ? 'vertical' : 'horizontal'] = { repouso, area, polegar: sobrePolegar, perto: pertoDaBarra, trilho: noTrilho };
 }
 // Critérios do plano (item 1). Falha = exit 1.
 const falhas = [];
@@ -86,6 +99,8 @@ for (const eixo of ['vertical', 'horizontal']) {
     if (r.polegar.espessura !== 8) falhas.push(`${eixo}: sob o mouse o polegar tem ${r.polegar.espessura}px (deve alargar para 8)`);
     if (!(r.area.luminancia < r.repouso.luminancia)) falhas.push(`${eixo}: mouse sobre a área não deu mais contraste (${r.repouso.cor} → ${r.area.cor})`);
     if (!(r.polegar.luminancia < r.area.luminancia)) falhas.push(`${eixo}: polegar sob o mouse não escureceu`);
+    if (r.perto.espessura !== 8) falhas.push(`${eixo}: com o cursor PERTO da barra o polegar tem ${r.perto.espessura}px (deve alargar para 8)`);
+    if (r.trilho.espessura !== 8) falhas.push(`${eixo}: com o cursor no TRILHO o polegar tem ${r.trilho.espessura}px (deve alargar para 8)`);
 }
 res.falhas = falhas;
 console.log(JSON.stringify(res, null, 2));

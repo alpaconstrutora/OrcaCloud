@@ -8,6 +8,10 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
+import { ligarBarraDeRolagemProxima } from '../../../utils/barraDeRolagemProxima';
+
+// Como em index.tsx: a barra alarga quando o cursor se aproxima.
+ligarBarraDeRolagemProxima();
 
 createRoot(document.getElementById('raiz')!).render(
     <div

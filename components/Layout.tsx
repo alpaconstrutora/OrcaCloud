@@ -1153,13 +1153,13 @@ const Layout: React.FC<LayoutProps> = ({
                     hasActiveChild={['opportunities','opura-market','planta-ai','blueprint','bim-viewer','imovib','empreendimentos','area-engine','laudo-avaliacao'].includes(activeView)}
                   >
                     <DropdownItem id="empreendimentos" label="Empreendimentos" icon={Building2} />
+                    <DropdownItem id="blueprint" label="Planta Inteligente" icon={PencilRuler} />
                     <DropdownItem id="opportunities" label="Oportunidades" icon={Building2} />
                     <DropdownItem id="opura-market" label="Inteligência de Mercado" icon={Search} />
                     {/* ESTUDO DE MASSA (01/10/2026): saiu daqui o Planta AI v1 (lote retangular,
                         VGV/custo fixos no código). O estudo de massa agora mora DENTRO da
                         Planta Inteligente (aba Terreno › Massa). A rota `planta-ai` continua
                         viva para os links internos do Empreendimento — só o item de menu saiu. */}
-                    <DropdownItem id="blueprint" label="Planta Inteligente" icon={PencilRuler} />
                     <DropdownItem id="bim-viewer" label="Modelo 3D (IFC)" icon={Boxes} />
                     <DropdownItem id="imovib" label="Estudos de Viabilidade" icon={BarChart3} />
                     <DropdownItem id="laudo-avaliacao" label="Laudo de Avaliação" icon={FileSpreadsheet} />

@@ -450,7 +450,10 @@ export const quotationService = {
                 // é o da resposta vencedora. Até aqui o cotado ia direto para
                 // `unitPrice`, e o pedido perdia o "quanto eu previa".
                 items: montarItensDoPedidoDaCotacao(requestRaw.items ?? [], responsesRaw.items ?? []),
-                notes: `Gerado a partir da cotação ${requestRaw.number}. ${responsesRaw.notes || ''}`
+                notes: `Gerado a partir da cotação ${requestRaw.number}. ${responsesRaw.notes || ''}`,
+                // Sem isto o pedido não dizia de qual cotação veio, e quem segue a
+                // cadeia a partir da SC (Pós-Obra & Garantia) o perdia de vista.
+                quotationRequestId: requestRaw.id,
             });
         }
     }

@@ -143,6 +143,8 @@ export interface PurchaseOrder {
     notes?: string;
     /** FALSE = as observações não são entregues ao fornecedor (portal/área logada). Default TRUE. */
     notesVisibleToSupplier?: boolean;
+    /** Cotação que gerou o pedido (selectWinner) — aplicar_20271011000600. */
+    quotationRequestId?: string | null;
     /** Nome do empreendimento da obra — só a RPC do portal preenche (a RLS de `empreendimentos` barra o fornecedor). */
     empreendimentoName?: string;
     items: PurchaseOrderItem[];

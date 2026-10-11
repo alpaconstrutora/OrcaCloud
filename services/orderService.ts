@@ -68,6 +68,7 @@ export const orderService = {
                 plano_de_contas_id: order.planoDeContasId,
                 notes: order.notes,
                 notes_visible_to_supplier: order.notesVisibleToSupplier ?? true,
+                ...(order.quotationRequestId ? { quotation_request_id: order.quotationRequestId } : {}),
                 items: order.items
             })
             .select()

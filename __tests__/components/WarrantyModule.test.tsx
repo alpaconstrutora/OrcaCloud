@@ -71,6 +71,10 @@ vi.mock('../../services/financialRegistryService', () => ({
     },
 }));
 
+vi.mock('../../services/warrantySuprimentosService', () => ({
+    warrantySuprimentosService: { carregar: vi.fn(async () => ({ solicitacoes: [], pedidos: [], contratos: [] })) },
+}));
+
 vi.mock('../../services/clientEmpreendimentoService', () => ({
     clientEmpreendimentoService: { listIdsByClient: vi.fn(async () => []) },
 }));
@@ -461,5 +465,43 @@ describe('Pós-Obra & Garantia · ações por estado (ciclo de vida, 2026-10-11)
         const b = screen.getByRole('button', { name: /Agendar visita/ });
         expect(b).toBeDisabled();
         expect(b).toHaveAttribute('title', 'Chamado encerrado.');
+    });
+});
+
+describe('Pós-Obra & Garantia · aba Suprimentos (2026-10-11)', () => {
+    async function abrirAba(over: Record<string, unknown>, props: Record<string, unknown> = {}) {
+        listClaims.mockResolvedValue([chamado({ id: 'cs', sistema_descricao: 'Chamado de compras', ...over })]);
+        const user = userEvent.setup();
+        render(<WarrantyModule projects={PROJETOS} {...props} />);
+        await waitFor(() => expect(screen.getByText('Chamado de compras')).toBeInTheDocument());
+        await user.click(screen.getByText('Chamado de compras'));
+        await user.click(await screen.findByRole('button', { name: 'Suprimentos' }));
+        return user;
+    }
+
+    it('sem a permissão de Compras: botões desligados dizendo onde pedir', async () => {
+        await abrirAba({ state: 'EM_GARANTIA', in_warranty: true, project_id: 'obraA' });
+        const b = screen.getByRole('button', { name: /Gerar solicitação de compra/ });
+        expect(b).toBeDisabled();
+        expect(b.getAttribute('title')).toMatch(/Suprimentos › Compras/);
+        expect(screen.getByRole('button', { name: /Novo contrato/ })).toBeDisabled();
+    });
+
+    it('com permissão, mas sem obra: pede a obra', async () => {
+        await abrirAba({ state: 'EM_GARANTIA', in_warranty: true, project_id: null }, { podeUsarSuprimentos: true });
+        expect(screen.getByRole('button', { name: /Gerar solicitação de compra/ }).getAttribute('title')).toMatch(/Editar › Obra/);
+    });
+
+    it('não triado: pede a triagem antes', async () => {
+        await abrirAba({ state: 'ABERTO', in_warranty: null, project_id: 'obraA' }, { podeUsarSuprimentos: true });
+        expect(screen.getByRole('button', { name: /Gerar solicitação de compra/ }).getAttribute('title')).toMatch(/triagem/);
+    });
+
+    it('mostra os três totais e o estado vazio', async () => {
+        await abrirAba({ state: 'EM_GARANTIA', in_warranty: true });
+        expect(screen.getByText('Previsto')).toBeInTheDocument();
+        expect(screen.getByText('Comprometido')).toBeInTheDocument();
+        expect(screen.getByText('Realizado')).toBeInTheDocument();
+        expect(await screen.findByText('Nada em Suprimentos ainda')).toBeInTheDocument();
     });
 });

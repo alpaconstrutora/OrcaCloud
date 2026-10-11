@@ -126,7 +126,28 @@ KPI "Custo/mês" e `fluxoMensal` por `closed_at`. **Pronto quando:** `warrantyAn
 
 ---
 
-## Fase 1 — Solicitação de Compra ligada ao chamado + roll-up
+## Fase 1 — Solicitação de Compra ligada ao chamado + roll-up ✅ (publicada 2026-10-11)
+
+> **Estado (2026-10-11):** 1.1–1.8 feitos. Migration `aplicar_20271011000600_garantia_vinculo_suprimentos.sql`
+> aplicada (SC, contrato e pedido←cotação; triggers de org e de evento; ACL só authenticated).
+> Provado em bloco que aborta: SC/contrato com chamado de outra org recusados (P0004); mesma org
+> grava `ProcurementLinked` ('solicitacao'/'contrato'). Testes: `warrantySuprimentos` 9/9,
+> `purchaseRequestWarrantyLink` 3/3 (update não envia o vínculo), `WarrantyModule` 27/27.
+> Navegador: chamado de teste (006, obra e CC automáticos, unidade "Galpão · Salão" pelo cliente)
+> → triagem → aba Suprimentos → "Gerar solicitação" abre o formulário NO LUGAR do chamado com
+> origem, título, obra, CC/plano, prioridade → item avulso → rascunho → a SC aparece na aba e o
+> Histórico mostra "Vinculado a Suprimentos · Solicitação de compra SC-006-006-0001"; 0 erro.
+> Limpeza: SC, item, contador `document_number_counters` (006|006, criado pelo teste) e os 2
+> chamados de teste apagados; 5 chamados, 0 eventos órfãos.
+>
+> **Ajustes na execução:**
+> - 1.8: em vez de consumir `viewFocus`, o `AppRouter` passa `onOpenSolicitacao/Pedido/Contrato`
+>   com os MESMOS callbacks que a lista de SC já usava (`pedirEdicaoDaSolicitacao` por import
+>   dinâmico, para não tirar a lista do carregamento preguiçoso).
+> - `purchase_orders` não tem FK para `suppliers`: o nome do fornecedor vem em consulta separada.
+> - A aba Suprimentos tem os 2 botões com o mesmo motivo (`motivoNaoComprar`); o detalhe carrega o
+>   roll-up uma vez e o usa também para sugerir custo estimado (previsto+comprometido) e custo real
+>   (realizado) — sugestão nunca sobrescreve o digitado.
 
 ### 1.1 Migration B `…_garantia_vinculo_suprimentos.sql` (parte SC/pedido)
 - `purchase_requests.warranty_claim_id` (FK `ON DELETE SET NULL`, índice parcial).
@@ -189,7 +210,18 @@ Clicar numa linha usa `navigateToFocus(view, id, fonte)` (`store/useStore.ts:200
 
 ---
 
-## Fase 2 — Contrato a partir do chamado
+## Fase 2 — Contrato a partir do chamado ✅ (publicada 2026-10-11)
+
+> **Estado (2026-10-11):** 2.1–2.4 feitos (coluna e travas na mesma migration da Fase 1).
+> "Novo contrato" pede confirmação ("gera títulos em Contas a Pagar") e abre o `ContractModal`
+> local (SUPRIMENTOS/INCOMING) com obra, empreendimento, CC/plano (só se mesma org), título,
+> descrição, natureza Serviço e valor = custo estimado. No navegador: aviso e pré-preenchimento
+> conferidos; o contrato **não** foi salvo no teste (geraria títulos) — a gravação com vínculo e
+> o evento foram provados no banco em bloco que aborta.
+> **Ajuste:** o tipo de contrato NÃO é pré-preenchido: a lista vem do catálogo da organização, e
+> "Manutenção" fora do catálogo aparecia como a 1ª opção ("Administração") mas seria gravada
+> como "Manutenção". Observação (não alterado, é do próprio formulário): o padrão
+> 'Empreitada Global' do `ContractModal` tem o mesmo risco em organizações sem esse tipo.
 
 ### 2.1 Migration B (parte contratos) — `contracts.warranty_claim_id` + as mesmas triggers
 Antes: conferir em `pg_policies` que `contracts` só tem policies por organização (REGRA #7).

@@ -64,11 +64,13 @@ interface Props {
     editingId: string | null;
     /** Rascunho pré-montado (ex.: "Gerar solicitação" no Plano de Aquisições). */
     initialDraft?: Partial<PurchaseRequestDraft>;
+    /** De onde a SC veio, mostrado sob o título (ex.: "Chamado de garantia — Impermeabilização"). */
+    origemLabel?: string;
     onBack: () => void;
     onSaved: (sc: PurchaseRequest, info: { created: boolean; submitted: boolean }) => void;
 }
 
-const SolicitacaoCompraForm: React.FC<Props> = ({ editingId, initialDraft, onBack, onSaved }) => {
+const SolicitacaoCompraForm: React.FC<Props> = ({ editingId, initialDraft, origemLabel, onBack, onSaved }) => {
     const confirm = useConfirm();
     const { showToast } = useToast();
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
@@ -244,6 +246,7 @@ const SolicitacaoCompraForm: React.FC<Props> = ({ editingId, initialDraft, onBac
                             ? 'Ajuste os itens e reenvie para aprovação.'
                             : 'Peça material ou serviço para a obra. Depois de aprovada, ela vira cotação ou pedido.'}
                     </p>
+                    {origemLabel && <p className="text-xs text-gray-500 mt-1">Origem: {origemLabel}</p>}
                 </div>
             </div>
 

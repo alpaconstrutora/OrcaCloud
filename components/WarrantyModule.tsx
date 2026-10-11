@@ -25,6 +25,18 @@ import ActionIconButton from './ui/ActionIconButton';
 import { FilterPopover } from './ui/FilterPopover';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import UnitSelect from './UnitSelect';
+import WarrantySuprimentosTab from './warranty/WarrantySuprimentosTab';
+import { warrantySuprimentosService } from '../services/warrantySuprimentosService';
+import { contractService } from '../services/contractService';
+import {
+    consolidarSuprimentos, motivoNaoComprar, rascunhoDaSolicitacao, sugestaoCustoReal,
+    type ConsolidadoSuprimentos, type LinhaSuprimentos,
+} from '../utils/warrantySuprimentos';
+import type { Contract } from '../types/contracts';
+// Telas de Suprimentos abertas a partir do chamado — preguiçosas para não
+// trazer o módulo de compras inteiro para o pacote do Pós-Obra.
+const SolicitacaoCompraForm = React.lazy(() => import('./suprimentos/SolicitacaoCompraForm'));
+const ContractModalLazy = React.lazy(() => import('./ContractModal').then(m => ({ default: m.ContractModal })));
 import CostCenterSelect from './CostCenterSelect';
 import PlanoContasSelect from './PlanoContasSelect';
 import { costCenterService } from '../services/costCenterService';
@@ -686,12 +698,23 @@ const VIEWS: { id: WarrantyView; label: string }[] = [
     { id: 'analise', label: 'Análise' },
 ];
 
-interface WarrantyModuleProps {
+/** Ponte para Suprimentos (2026-10-11): quem tem a navegação é o AppRouter. */
+interface SuprimentosNav {
+    /** Chave `canViewOrders`/'compras' — sem ela, SC/pedido/contrato não abrem (botão diz por quê). */
+    podeUsarSuprimentos?: boolean;
+    onOpenSolicitacao?: (id: string) => void;
+    onOpenPedido?: (id: string) => void;
+    onOpenContrato?: (id: string) => void;
+}
+
+interface WarrantyModuleProps extends SuprimentosNav {
     projects?: ProjectOption[];
     onOpenClaim?: () => void;
 }
 
-const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenClaim }) => {
+const WarrantyModule: React.FC<WarrantyModuleProps> = ({
+    projects = [], onOpenClaim, podeUsarSuprimentos = false, onOpenSolicitacao, onOpenPedido, onOpenContrato,
+}) => {
     const { showToast } = useToast();
     // REGRA #5 — a organização vem do seletor do topo pelo hook, nunca de prop.
     // `null` significa "Todas as organizações" e NUNCA bloqueia o carregamento.
@@ -950,6 +973,10 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({ projects = [], onOpenCl
                 onClose={closeDetail}
                 onRefresh={handleClaimChanged}
                 onDeleted={handleClaimDeleted}
+                podeUsarSuprimentos={podeUsarSuprimentos}
+                onOpenSolicitacao={onOpenSolicitacao}
+                onOpenPedido={onOpenPedido}
+                onOpenContrato={onOpenContrato}
             />
         );
     }
@@ -1834,7 +1861,7 @@ export function WarrantyClaimModal({
 
 // ── Detalhe do Chamado ────────────────────────────────────────────────────────
 
-interface WarrantyClaimDetailProps {
+interface WarrantyClaimDetailProps extends SuprimentosNav {
     claim: WarrantyClaim;
     organizationId: string;
     projects?: ProjectOption[];
@@ -1901,6 +1928,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     claim, organizationId, projects = [], developments = [], obraToDevelopment = {}, clients = [],
     systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS, initialEditMode = false,
     developmentLabel, onClose, onRefresh, onDeleted,
+    podeUsarSuprimentos = false, onOpenSolicitacao, onOpenPedido, onOpenContrato,
 }) => {
     const obraName = claim.project_id ? projects.find(p => p.id === claim.project_id)?.name : null;
     // O pai resolve (inclusive a dedução pela obra); o fallback local cobre quem
@@ -1912,7 +1940,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const confirm = useConfirm();
     const [events, setEvents] = React.useState<import('../types/warranty').WarrantyClaimEvent[]>([]);
     const [visits, setVisits] = React.useState<import('../types/warranty').WarrantyClaimVisit[]>([]);
-    const [tab, setTab] = React.useState<'info' | 'visitas' | 'historico'>('info');
+    const [tab, setTab] = React.useState<'info' | 'visitas' | 'suprimentos' | 'historico'>('info');
     const [triaging, setTriaging] = React.useState(false);
     const [closing, setClosing] = React.useState(false);
     const [npsNota, setNpsNota] = React.useState<number | ''>('');
@@ -1934,6 +1962,79 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [registrandoVisita, setRegistrandoVisita] = React.useState<string | null>(null);
     const [resultadoForm, setResultadoForm] = React.useState({ realizada: agoraLocal(), diagnostico: '', parecer: '' as VisitParecer | '', acao: '' });
     const estadoAtual = { state: claim.state, in_warranty: claim.in_warranty ?? null };
+
+    // ── Suprimentos (2026-10-11) — o que o chamado já gerou em compras ──────
+    const obrasDoStore = useStore(s => s.projects);
+    const obraDoChamado = obrasDoStore.find(p => p.id === claim.project_id) as
+        { organization_id?: string | null; settings?: { organizationId?: string | null } } | undefined;
+    const orgDaObra = obraDoChamado ? (obraDoChamado.organization_id ?? obraDoChamado.settings?.organizationId ?? null) : null;
+    const motivoCompra = motivoNaoComprar(
+        { state: claim.state, in_warranty: claim.in_warranty ?? null, project_id: claim.project_id, organization_id: claim.organization_id },
+        { podeUsarSuprimentos, orgDaObra },
+    );
+    const [suprimentos, setSuprimentos] = React.useState<ConsolidadoSuprimentos | null>(null);
+    const [carregandoSup, setCarregandoSup] = React.useState(true);
+    const [erroSup, setErroSup] = React.useState<string | null>(null);
+    const carregarSuprimentos = React.useCallback(async () => {
+        setCarregandoSup(true);
+        try {
+            const d = await warrantySuprimentosService.carregar(claim.id);
+            setSuprimentos(consolidarSuprimentos(d.solicitacoes, d.pedidos, d.contratos));
+            setErroSup(null);
+        } catch (e) {
+            console.error('[Suprimentos do chamado]', e);
+            setErroSup('Não foi possível carregar o que este chamado gerou em Suprimentos.');
+        } finally {
+            setCarregandoSup(false);
+        }
+    }, [claim.id]);
+    React.useEffect(() => { carregarSuprimentos(); }, [carregarSuprimentos]);
+    const [criandoSolicitacao, setCriandoSolicitacao] = React.useState(false);
+    const [contratoAberto, setContratoAberto] = React.useState(false);
+
+    // Sugestões a partir do que já foi comprado — nunca sobre o que o usuário digitou.
+    const fmtValor = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const custoRealSugerido = suprimentos ? sugestaoCustoReal(suprimentos) : null;
+    const [custoRealEditado, setCustoRealEditado] = React.useState(false);
+    React.useEffect(() => {
+        if (!custoRealEditado) setCustoRealTxt(custoRealSugerido != null ? fmtValor(custoRealSugerido) : '');
+    }, [custoRealSugerido, custoRealEditado]);   // eslint-disable-line react-hooks/exhaustive-deps
+    const custoEstimadoSugerido = suprimentos && (suprimentos.previsto + suprimentos.comprometido) > 0
+        ? suprimentos.previsto + suprimentos.comprometido : null;
+    const [custoEstimadoEditado, setCustoEstimadoEditado] = React.useState(false);
+    React.useEffect(() => {
+        if (!custoEstimadoEditado) setCustoEstimadoTxt(custoEstimadoSugerido != null ? fmtValor(custoEstimadoSugerido) : '');
+    }, [custoEstimadoSugerido, custoEstimadoEditado]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+    const abrirLinha = (l: LinhaSuprimentos) => {
+        if (l.tipo === 'solicitacao') onOpenSolicitacao?.(l.id);
+        else if (l.tipo === 'pedido') onOpenPedido?.(l.id);
+        else onOpenContrato?.(l.id);
+    };
+
+    const abrirNovoContrato = async () => {
+        const ok = await confirm({
+            title: 'Novo contrato a partir do chamado?',
+            message: 'Ao salvar, o contrato gera os títulos em Contas a Pagar conforme a forma de pagamento escolhida.',
+            variant: 'warning',
+            confirmLabel: 'Continuar',
+        });
+        if (ok) setContratoAberto(true);
+    };
+
+    const handleContratoSubmit = async (data: Partial<Contract>) => {
+        await contractService.createContract({
+            ...data,
+            direction: 'INCOMING',
+            domain: 'SUPRIMENTOS',
+            organization_id: claim.organization_id,
+            warranty_claim_id: claim.id,
+        } as Omit<Contract, 'id' | 'created_at' | 'current_value'>);
+        setContratoAberto(false);
+        showToast('Contrato criado e vinculado ao chamado', 'success');
+        carregarSuprimentos();
+        warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
+    };
     const [editMode, setEditMode] = React.useState(initialEditMode);
     const [saving, setSaving] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
@@ -2223,6 +2324,29 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
         if (ok) setRegistrandoVisita(null);
     };
 
+
+    // Gerar SC: a tela de Suprimentos abre NO LUGAR do chamado, já preenchida
+    // com o que o chamado sabe; salvar ou voltar devolve à aba Suprimentos.
+    if (criandoSolicitacao) {
+        return (
+            <React.Suspense fallback={<div className="text-center py-12 text-gray-500">Carregando...</div>}>
+                <SolicitacaoCompraForm
+                    editingId={null}
+                    initialDraft={rascunhoDaSolicitacao(claim, hojeIso, orgDaObra)}
+                    origemLabel={`Chamado de garantia — ${claim.sistema_descricao}`}
+                    onBack={() => { setCriandoSolicitacao(false); setTab('suprimentos'); }}
+                    onSaved={() => {
+                        setCriandoSolicitacao(false);
+                        setTab('suprimentos');
+                        carregarSuprimentos();
+                        warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
+                        showToast('Solicitação de compra criada e vinculada ao chamado', 'success');
+                    }}
+                />
+            </React.Suspense>
+        );
+    }
+
     return (
         /*
          * TELA, não overlay.
@@ -2285,6 +2409,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                     {([
                         { id: 'info', label: 'Informações' },
                         { id: 'visitas', label: 'Visitas' },
+                        { id: 'suprimentos', label: 'Suprimentos' },
                         { id: 'historico', label: 'Histórico' },
                     ] as const).map(t => (
                         <button
@@ -2631,7 +2756,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                                 <label className={LABEL_CLASS}>Custo estimado (opcional)</label>
                                                 <input
                                                     value={custoEstimadoTxt}
-                                                    onChange={e => setCustoEstimadoTxt(e.target.value)}
+                                                    onChange={e => { setCustoEstimadoTxt(e.target.value); setCustoEstimadoEditado(true); }}
                                                     inputMode="decimal"
                                                     placeholder={claim.custo_estimado != null ? String(claim.custo_estimado) : 'Ex.: 1.500,00'}
                                                     className={FIELD_CLASS}
@@ -2657,11 +2782,19 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                             <label className={LABEL_CLASS}>Custo real</label>
                                             <input
                                                 value={custoRealTxt}
-                                                onChange={e => setCustoRealTxt(e.target.value)}
+                                                onChange={e => { setCustoRealTxt(e.target.value); setCustoRealEditado(true); }}
                                                 inputMode="decimal"
                                                 placeholder="Ex.: 1.234,56"
                                                 className={FIELD_CLASS}
                                             />
+                                            {!custoRealEditado && custoRealSugerido != null && (
+                                                <p className="text-xs text-gray-400">Sugerido pelos pedidos entregues e medições</p>
+                                            )}
+                                            {suprimentos && suprimentos.comprometido > suprimentos.realizado && (
+                                                <p className="text-xs text-amber-600">
+                                                    {(suprimentos.comprometido - suprimentos.realizado).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} comprometido ainda não realizado em Suprimentos.
+                                                </p>
+                                            )}
                                         </div>
                                         <div className="space-y-1.5">
                                             <label className={LABEL_CLASS}>Nota NPS do cliente (0-10, opcional)</label>
@@ -2837,6 +2970,48 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 </div>
                             ))}
                         </div>
+                    )}
+
+                    {tab === 'suprimentos' && (
+                        <WarrantySuprimentosTab
+                            dados={suprimentos}
+                            carregando={carregandoSup}
+                            erro={erroSup}
+                            motivo={motivoCompra}
+                            onGerarSolicitacao={() => setCriandoSolicitacao(true)}
+                            onNovoContrato={abrirNovoContrato}
+                            onAbrir={abrirLinha}
+                        />
+                    )}
+                    {contratoAberto && claim.project_id && (
+                        <React.Suspense fallback={null}>
+                            <ContractModalLazy
+                                isOpen
+                                onClose={() => setContratoAberto(false)}
+                                onSubmit={handleContratoSubmit}
+                                projectId={claim.project_id}
+                                organizationId={claim.organization_id}
+                                domain="SUPRIMENTOS"
+                                direction="INCOMING"
+                                titleNew="Novo contrato do chamado de garantia"
+                                onToast={(m, t) => showToast(m, t)}
+                                initialData={{
+                                    project_id: claim.project_id,
+                                    empreendimento_id: claim.development_id ?? null,
+                                    ...(orgDaObra === claim.organization_id ? {
+                                        cost_center_id: claim.cost_center_id ?? undefined,
+                                        plano_de_contas_id: claim.plano_de_contas_id ?? undefined,
+                                    } : {}),
+                                    title: ['Garantia', claim.sistema_descricao, claim.unidade_ref].filter(Boolean).join(' — ').slice(0, 200),
+                                    description: [claim.descricao, claim.local_afetado && `Local: ${claim.local_afetado}`].filter(Boolean).join(' · '),
+                                    // Tipo NÃO vem pré-preenchido: a lista é o catálogo da
+                                    // organização (Configurações › Tipos de contrato), e um valor
+                                    // fora dele aparece como a 1ª opção mas é gravado como estava.
+                                    nature: 'Serviço',
+                                    ...(claim.custo_estimado ? { original_value: Number(claim.custo_estimado) } : {}),
+                                }}
+                            />
+                        </React.Suspense>
                     )}
 
                     {tab === 'historico' && (

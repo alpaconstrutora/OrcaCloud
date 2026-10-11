@@ -1303,6 +1303,17 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         <WarrantyModule
           projects={typedProjects
             .map(p => ({ id: p.id, name: p.name }))}
+          // Ponte com Suprimentos (2026-10-11): o chamado gera SC/contrato e
+          // abre o que gerou. Mesma chave que libera as telas supplies-*.
+          podeUsarSuprimentos={isModuleAllowed('canViewOrders', 'compras')}
+          onOpenSolicitacao={(id) => {
+            // A lista de SC é preguiçosa: o pedido de abertura vai pelo módulo dela.
+            import('./suprimentos/SolicitacoesCompraList')
+              .then(m => m.pedirEdicaoDaSolicitacao(id))
+              .finally(() => setActiveView('supplies-solicitacoes'));
+          }}
+          onOpenPedido={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); setActiveView('supplies-orders'); }}
+          onOpenContrato={(id) => { setSelectedContractId(id); setActiveView('supplies-contracts'); }}
         />
       );
 

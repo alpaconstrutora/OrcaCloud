@@ -93,6 +93,7 @@ function mapRequest(r: Row): PurchaseRequest {
         approvalRequiredLevels: (r.approval_required_levels ?? 1) as 1 | 2,
         cancelledAt: r.cancelled_at,
         cancelReason: r.cancel_reason,
+        warrantyClaimId: r.warranty_claim_id ?? null,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
         items,
@@ -169,6 +170,16 @@ export const purchaseRequestService = {
         return (data ?? []).map(mapRequest);
     },
 
+    /** SCs nascidas de um chamado de Pós-Obra & Garantia (aba Suprimentos do chamado). */
+    async listByWarrantyClaim(claimId: string): Promise<PurchaseRequest[]> {
+        const { data, error } = await supabase
+            .from('purchase_requests').select(SELECT_SC)
+            .eq('warranty_claim_id', claimId)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return (data ?? []).map(mapRequest);
+    },
+
     async get(id: string): Promise<PurchaseRequest> {
         const { data, error } = await supabase.from('purchase_requests').select(SELECT_SC).eq('id', id).single();
         if (error) throw error;
@@ -197,6 +208,7 @@ export const purchaseRequestService = {
             .insert({
                 ...headerFromDraft(draft),
                 organization_id: organizationId,
+                warranty_claim_id: draft.warrantyClaimId || null,
                 number,
                 requested_by: user.id ?? null,
                 requested_by_name: user.name ?? null,

@@ -75,6 +75,8 @@ export interface PurchaseRequest {
     approvalRequiredLevels: 1 | 2;
     cancelledAt?: string | null;
     cancelReason?: string | null;
+    /** Chamado de Pós-Obra & Garantia que originou a SC (aplicar_20271011000600). */
+    warrantyClaimId?: string | null;
     createdAt?: string;
     updatedAt?: string;
     items: PurchaseRequestItem[];
@@ -89,5 +91,11 @@ export interface PurchaseRequestDraft {
     priority: PurchaseRequestPriority;
     costCenterId?: string | null;
     planoDeContasId?: string | null;
+    /**
+     * Origem em Pós-Obra & Garantia. Gravado SÓ na criação (`create`) — o
+     * `update` usa `headerFromDraft`, que não o leva, para editar a SC nunca
+     * apagar o vínculo.
+     */
+    warrantyClaimId?: string | null;
     items: PurchaseRequestItem[];
 }

@@ -1156,6 +1156,7 @@ export default function MenuComponentes(props: Props) {
                       setAberto(false);
                     }}
                     title={letra ? `${item.ajuda} Atalho: ${letra}.` : item.ajuda}
+                    aria-keyshortcuts={letra ?? undefined}
                     className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                       selecionado
                         ? 'bg-blue-50 font-medium text-blue-700'
@@ -1164,8 +1165,10 @@ export default function MenuComponentes(props: Props) {
                   >
                     <IconeItem className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{item.rotulo}</span>
+                    {/* `aria-hidden`: a letra é dica VISUAL — no nome acessível ela viraria
+                        "Parede W". O atalho vai pelo `aria-keyshortcuts` do item. */}
                     {letra && (
-                      <kbd className="ml-auto shrink-0 rounded border border-slate-200 bg-slate-50 px-1 text-[10px] font-medium text-slate-500">
+                      <kbd aria-hidden="true" className="ml-auto shrink-0 rounded border border-slate-200 bg-slate-50 px-1 text-[10px] font-medium text-slate-500">
                         {letra}
                       </kbd>
                     )}

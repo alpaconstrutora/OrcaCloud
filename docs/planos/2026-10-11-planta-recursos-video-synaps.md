@@ -92,7 +92,17 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   - A letra aparece como `<kbd>` à direita do item no menu Componentes e no tooltip dos botões
     `Ferramenta` (derivada de `letraDoAtalho`, a mesma regra do teclado).
   - Prova: `__tests__/blueprintAtalhos.test.ts` 6/6; `tsc exit=0`; `check-ui-standard` limpo nos 2
-    `.tsx`. **Falta a prova no app** (pede a senha da conta de teste).
+    `.tsx`.
+  - ⚠️ **Defeito pego no app real (11/10)**: a 1ª versão travava o atalho em `vistaDePlanta !== null`,
+    mas `vistaDePlanta` só existe nas vistas ESPECIAIS (situação, forro…) e é `null` na planta baixa
+    comum — os atalhos não funcionavam onde se desenha. A trava passou a ser `!emVista`, a MESMA
+    condição que mostra a barra de opções. O teste de unidade não pegava (testa a regra da tecla, não
+    a vista). E o 1º roteiro "aprovou" o W porque o editor já abriu em "Parede" (ferramenta guardada
+    de outra sessão): agora cada tecla tem de MUDAR o rótulo.
+  - **Prova no app (11/10, dev server da frente, conta agente-leitura, "Planta 14/09/2026")**: V, W,
+    R, P, J, M, H, A — cada uma muda a barra para a sua ferramenta; Shift+W não arma; com foco no
+    campo de nome, W vira texto e não arma a parede. Sem escrita no estudo: `draft_saved_at` e
+    `draft_hash` iguais antes e depois (as 2 POST vistas são RPCs `STABLE` da Central de Controle).
 
 **F2 — Ambiente com um clique** · `BlueprintCanvas.tsx`, `BlueprintEditor.tsx`, `useBlueprintEditor.ts`
 - Muda: ferramenta `ambiente`. No movimento do mouse, o realce da face sob o cursor vem de `ambientesDoNivel` (~2046) + `pointInPolygon(ring)` sem os `holes`, como faz `aplicarEtiquetas`. O clique emite `NameSpace` (ou `PlaceSpaceLabel` com `at` = ponto clicado) e abre a edição do nome no lugar, com o tipo de ambiente sugerido por `usoDoNome`.
@@ -109,8 +119,17 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   - Prova: `__tests__/blueprintAmbienteNoPonto.test.ts` (3, inclusive o pátio dentro da casa e o
     modelo real do kernel); harness `docs/spikes/ambiente-um-clique/` em Chrome com canvas REAL —
     8/8, e **reprova** (4 ❌, exit 1) com o X do clique espelhado, cada rodada com servidor novo.
-  - **Falta a prova no app**: o campo da barra de opções, o Enter que grava e o Ctrl+Z (pede a
-    senha da conta de teste).
+  - ⚠️ **Defeito pego no app real (11/10)**: o campo nascia com `autoFocus`, mas dentro do
+    `pointerdown` do canvas — o `mousedown` seguinte devolvia o foco ao canvas, e era preciso clicar
+    de novo no campo para digitar. Agora o foco (e a seleção do texto) vem num `setTimeout(0)`
+    depois do clique; digitar já substitui o nome.
+  - **Prova no app (11/10, mesma sessão da F1)**: com a ferramenta armada pela tecla A, clicar num
+    ambiente abre "Nome do ambiente" com o nome atual ("Ambiente 2"), a área (25,7 m²), o foco e o
+    texto selecionado; o ambiente aparece realçado; Esc fecha sem gravar. Print:
+    `C:/tmp/f1f2-app/1-ambiente-realcado-e-nome.png`.
+  - **Não provado no app, de propósito**: o **Enter que grava** e o **Ctrl+Z** — gravariam no estudo,
+    e a prova foi combinada sem escrita. Para fechar: um estudo DESCARTÁVEL autorizado pelo usuário.
+    O caminho do Enter é o mesmo `NameSpace` do renomear da lista lateral, que já está em uso.
 
 **F3 — Separador de ambiente na aba Arquitetura** · `BlueprintEditor.tsx` (ribbon), `BlueprintCanvas.tsx`, `utils/blueprintExport.ts`, `utils/blueprintDxf.ts`
 - Muda: botão "Separador de ambiente" na Arquitetura, que reaproveita `tool:'divisa'` com `kind:'DIVISA'` (sem bump). Traço próprio (tracejado fino) distinto de divisa de terreno; aparece no PDF e numa camada DXF própria.
@@ -179,7 +198,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - Pronto quando: teste do pós-processamento com uma resposta JSON fixa; no app, um escaneado de exemplo gera paredes alinhadas ao fundo e o resultado mostra quantas paredes foram aceitas e quantas descartadas.
 
 ## Estado
-- [ ] F0 · [ ] F1 · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
+- [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [ ] F2 — **parcial**: tudo provado no app menos
+  Enter-grava e Ctrl+Z (ver F2) · [ ] F3 · [ ] F4 · [ ] F5
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

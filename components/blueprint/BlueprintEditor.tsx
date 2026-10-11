@@ -8165,12 +8165,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * da tecla mora em `utils/blueprintAtalhos.ts`. Passa pelo MESMO `escolherComponente`
    * do menu, para a tecla e o clique não divergirem no subtipo.
    *
-   * Só vale numa vista de PLANTA: o passeio 3D anda com W/A/S/D escutando a janela
+   * Só vale onde as ferramentas de desenho valem — `!emVista`, a MESMA condição que
+   * mostra a barra de opções: o passeio 3D anda com W/A/S/D escutando a janela
    * inteira, e cada passo armaria a parede. Pelo mesmo motivo, nada acontece com o
    * mouse travado pelo passeio (`pointerLockElement`).
+   *
+   * ⚠️ NÃO é `vistaDePlanta`: ela só existe nas vistas ESPECIAIS (situação, forro…)
+   * e é `null` na planta baixa comum — a primeira versão usou ela e os atalhos não
+   * funcionavam em lugar nenhum onde se desenha (pego no app real, 11/10/2026).
    */
-  const atalhoRef = useRef({ escolherComponente, emPlanta: vistaDePlanta !== null });
-  atalhoRef.current = { escolherComponente, emPlanta: vistaDePlanta !== null };
+  const atalhoRef = useRef({ escolherComponente, emPlanta: !emVista });
+  atalhoRef.current = { escolherComponente, emPlanta: !emVista };
   useEffect(() => {
     function aoTeclar(e: KeyboardEvent) {
       if (!atalhoRef.current.emPlanta || document.pointerLockElement) return;
@@ -8189,6 +8194,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   useEffect(() => {
     if (editor.tool !== 'ambiente') setAmbienteEmNome(null);
   }, [editor.tool]);
+
+  // F2: o campo do nome pega o foco DEPOIS do clique. `autoFocus` sozinho não basta:
+  // o campo nasce dentro do `pointerdown` do canvas, e o `mousedown` que vem logo
+  // depois devolve o foco ao canvas — quem clicava no ambiente tinha de clicar de
+  // novo no campo para digitar (pego no app real, 11/10/2026). Com o texto
+  // selecionado, digitar já substitui o nome.
+  const campoNomeDoAmbienteRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!ambienteEmNome) return;
+    const t = window.setTimeout(() => {
+      campoNomeDoAmbienteRef.current?.focus();
+      campoNomeDoAmbienteRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [ambienteEmNome]);
 
   /** Os ambientes classificados que ainda devem tomada (9.5.2.2.1) — a contagem do botão. */
   const ambientesComDeficit = ambientes.filter(
@@ -13816,8 +13836,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   Nome do ambiente
                   <input
                     key={alvo.id}
+                    ref={campoNomeDoAmbienteRef}
                     type="text"
-                    autoFocus
                     defaultValue={alvo.name ?? ''}
                     aria-label="Nome do ambiente clicado"
                     onKeyDown={(e) => {

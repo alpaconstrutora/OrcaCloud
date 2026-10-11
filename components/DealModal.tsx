@@ -3575,12 +3575,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                                             {([['pis', 'PIS'], ['cofins', 'COFINS'], ['inss', 'INSS'], ['irrf', 'IRRF']] as const).map(([chave, rotulo]) => {
                                                 const retidos = formData.tributos_retidos ?? [];
+                                                // Locador PF: PIS/COFINS não incidem (taxPayableService não gera) —
+                                                // a caixa fica desligada e diz por quê.
+                                                const naoIncide = locadorLocacao?.type === 'PF' && (chave === 'pis' || chave === 'cofins');
                                                 return (
-                                                    <label key={chave} className="flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer">
+                                                    <label
+                                                        key={chave}
+                                                        title={naoIncide ? `${rotulo} é contribuição de pessoa jurídica — não incide com locador pessoa física.` : undefined}
+                                                        className={`flex items-center gap-2 text-sm font-normal ${naoIncide ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 cursor-pointer'}`}
+                                                    >
                                                         <input
                                                             type="checkbox"
-                                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                            checked={retidos.includes(chave)}
+                                                            disabled={naoIncide}
+                                                            className={`w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${naoIncide ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                            checked={!naoIncide && retidos.includes(chave)}
                                                             onChange={e => setFormData({
                                                                 ...formData,
                                                                 tributos_retidos: e.target.checked
@@ -3599,6 +3607,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             Desmarcado: concilia pelo valor bruto e o tributo fica a pagar. IRRF (tabela progressiva
                                             sobre a parcela) só existe quando retido: inquilino pessoa jurídica e locador pessoa física.
                                         </p>
+                                        {locadorLocacao?.type === 'PF' && (
+                                            <p className="text-xs text-gray-500">
+                                                Locador pessoa física: PIS e COFINS não incidem (são contribuições de pessoa jurídica) e não são
+                                                gerados. Sobre o aluguel só há Imposto de Renda — retido na fonte quando o inquilino é pessoa
+                                                jurídica, ou recolhido pelo próprio locador no Carnê-Leão.
+                                            </p>
+                                        )}
                                         {(formData.tributos_retidos ?? []).includes('irrf') && !regraPedeIrrf && (
                                             <p className="text-xs text-amber-700">
                                                 IRRF marcado, mas pela regra só há retenção com inquilino pessoa jurídica e locador pessoa física —

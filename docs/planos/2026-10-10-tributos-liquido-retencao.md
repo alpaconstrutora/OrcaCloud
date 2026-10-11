@@ -39,6 +39,19 @@ Feito (migration `aplicar_20271010005100`):
 - Anotado, sem mudar: vencimento do IRRF em `taxDueDate` é dia 25 (aluguel retido: dia 20,
   informativo — quem recolhe é o cliente); DRE classifica "IRRF" em impostos s/ receita.
 
+### Pedido posterior (11/10/2026) — calcular só o que foi selecionado
+> o app precisa calcular o que foi selecionado. Se existe campo para ser selecionado e o app desconsidera, nao precisaria ter este campo. Então corrija de forma a calcular somente o que foi selecionado (veja print)
+
+Esclarecimento do usuário: "PIS e Cofins: São contribuições federais aplicáveis exclusivamente a
+pessoas jurídicas (empresas), não incidindo sobre locações declaradas por pessoa física no CPF.
+Imposto de Renda (IRPF): O aluguel recebido por pessoa física está sujeito ao Imposto de Renda,
+que deve ser recolhido mensalmente pelo Carnê-Leão (se pago por outra pessoa física) ou retido na
+fonte (se pago por uma empresa/PJ)".
+
+Causa: CTL-006-012-0001 (locador ALTAIR PEREIRA DA ROSA, PF) gerava PIS/COFINS pelo regime da
+empresa do imóvel, ignorando o locador. Feito: com locador PF, `generateForDeal` não gera
+PIS/COFINS; na aba Financeiro as caixas PIS/COFINS ficam desligadas com o motivo. INSS inalterado.
+
 ## Decisões tomadas com o usuário
 | Data | Pergunta | Resposta |
 |---|---|---|

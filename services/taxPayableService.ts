@@ -570,14 +570,27 @@ export const taxPayableService = {
         // mas não é "a pagar" e a parcela concilia pelo líquido (valor_esperado).
         // Leitura própria e tolerante, como a defasagem de competência.
         let retidos = new Set<string>();
+        // Locador pessoa física (cliente cadastrado com tipo PF): PIS/COFINS são
+        // contribuições de pessoa JURÍDICA e não incidem — sobre o aluguel de PF só
+        // há IR (retido pelo inquilino PJ, ou Carnê-Leão do próprio locador).
+        let locadorPf = false;
         {
             const { data: d, error } = await supabase
                 .from('commercial_deals')
-                .select('tributos_retidos')
+                .select('tributos_retidos, locador_client_id')
                 .eq('id', deal.id)
                 .maybeSingle();
             if (!error) {
-                retidos = new Set((d as { tributos_retidos?: string[] | null } | null)?.tributos_retidos ?? []);
+                const dd = d as { tributos_retidos?: string[] | null; locador_client_id?: string | null } | null;
+                retidos = new Set(dd?.tributos_retidos ?? []);
+                if (dd?.locador_client_id) {
+                    const { data: loc } = await supabase
+                        .from('clients')
+                        .select('type')
+                        .eq('id', dd.locador_client_id)
+                        .maybeSingle();
+                    locadorPf = (loc as { type?: string | null } | null)?.type === 'PF';
+                }
             }
         }
 
@@ -709,7 +722,9 @@ export const taxPayableService = {
                 cofinsRatesService.list(),
                 inssBracketsService.list(),
             ]);
-            const regimeLabel = regime ? REGIME_LABEL[regime] : null;
+            // Locador PF: sem PIS/COFINS, qualquer que seja o regime da empresa do imóvel.
+            const regimeLabel = regime && !locadorPf ? REGIME_LABEL[regime] : null;
+            if (locadorPf) console.log(`[TAX-PAYABLE] Locação ${shortId}: locador pessoa física — PIS/COFINS não incidem.`);
             console.log(`[TAX-PAYABLE] Locação ${shortId}: regime=${JSON.stringify(regime)} → label=${JSON.stringify(regimeLabel)}; pisRates=${pisRates.length} cofinsRates=${cofinsRates.length} inssBrackets=${inssBrackets.length}`);
             if (!regimeLabel) {
                 console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);

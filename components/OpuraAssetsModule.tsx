@@ -1384,25 +1384,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // ações de OPERAÇÃO do bem (agenda, oficina, papelada, etiqueta) — não CRUD do
   // cadastro, que ficou visível na coluna a pedido do usuário em 2026-09-09.
   const acoesSecundariasDoAtivo = (asset: OpuraAsset) => [
-    { icon: <Calendar className="w-[18px] h-[18px]" />, label: 'Reservar', onClick: () => abrirReservaAtivo(asset) },
     { icon: <Wrench className="w-[18px] h-[18px]" />, label: 'Manutenção', onClick: () => abrirManutencaoAtivo(asset) },
     { icon: <Shield className="w-[18px] h-[18px]" />, label: 'Anexar documento', onClick: () => abrirDocumentoAtivo(asset) },
     { icon: <QrCode className="w-[18px] h-[18px]" />, label: 'QR Code', onClick: () => abrirQrCodeAtivo(asset) },
   ];
-
-  // Excluir saiu do `showDelete` do menu ⋮ (que confirma inline) e virou botão
-  // visível — então a confirmação volta a ser a do §14, e o bloqueio de ativo em
-  // obra vira `disabled` + motivo no `title`, não um alert depois do clique.
-  const confirmarExclusaoAtivo = async (asset: OpuraAsset) => {
-    const ok = await confirm({
-      title: 'Excluir ativo?',
-      message: `O ativo "${asset.name}" (${asset.code}) será excluído. Esta ação não pode ser desfeita.`,
-      variant: 'danger',
-      confirmLabel: 'Excluir',
-    });
-    if (!ok) return;
-    await handleDeleteAsset(asset);
-  };
 
   // Filtros de busca no cliente
   const filteredAssets = assets.filter(asset => {
@@ -1803,9 +1788,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                     ))}
                                     <td aria-hidden="true"></td>
                                     {assetTableColumns.visibleColumns.includes('actions') && (() => {
-                                      // CRUD visível a pedido do usuário (2026-09-09): ver · editar · duplicar ·
-                                      // excluir, mais movimentar. O ⋮ guarda só o que é operação do bem.
-                                      const emObra = asset.status === 'em_uso';
+                                      // Visível: ver · editar · duplicar · reservar (excluir saiu a pedido do usuário
+                                      // em 2026-10-11), mais movimentar. O ⋮ guarda só o que é operação do bem.
                                       return (
                                         <td className="px-6 py-2.5 text-right">
                                           <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -1825,12 +1809,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                               onClick={() => abrirDuplicacaoAtivo(asset)}
                                             />
                                             <ActionIconButton
-                                              kind="delete"
-                                              title={emObra
-                                                ? 'Ativo alocado em uma obra — registre a devolução antes de excluir'
-                                                : 'Excluir ativo'}
-                                              disabled={emObra}
-                                              onClick={() => confirmarExclusaoAtivo(asset)}
+                                              kind="move"
+                                              title="Reservar ativo"
+                                              icon={<Calendar className="w-4 h-4" />}
+                                              onClick={() => abrirReservaAtivo(asset)}
                                             />
                                             <ActionIconButton
                                               kind="move"

@@ -94,9 +94,9 @@ trabalhando no mesmo arquivo"*); retomado com *"continuar"* depois de trazer `ma
 - [x] 2.2 `PainelMapaDoLote.tsx` + `__tests__/components/PainelMapaDoLote.test.tsx` (10) + harness com Leaflet real `docs/spikes/mapa-do-lote/` (portão abaixo)
 - [x] 2.3 `PainelTerreno.tsx`: "Desenhar no mapa" ao lado de "Criar o lote digitando"
 - [x] 2.4 `BlueprintEditor.tsx`: gaveta `mapa-do-lote`, botão "Mapa" no ribbon do Terreno (desligado com lote, dizendo o porquê), lançamento = `SetGeorreferencia` + `AddBoundary` num lote, fonte → Copernicus; teste novo no `BlueprintEditor.test.tsx`
-- [ ] Suíte inteira (conta fechando), typecheck final, `verificar:build`, build
-- [ ] Publicado (push em main) e provado de fora; CI lida
-- [ ] Prova no app em produção com usuário: desenhar → Gerar curvas com Copernicus
+- [x] Suíte inteira: 8.472 = 8.438 passados + 34 pendentes + 0 falhos (conta fecha, sem "Unhandled"); `tsc` exit 0 sem erro; `check-ui-standard.sh` limpo nos 4 `.tsx`; `check-xss-sinks.sh` limpo; `check-origem-do-deploy.sh` 0; `vite build` ✓ (Leaflet em pedaço próprio, 150 kB)
+- [x] Publicado: `f85272dc` em `main`; `conferir-producao.sh "Desenhar o lote no mapa" "topografia-copernicus"` → o domínio serve `f85272d` com os dois textos; check-run `ci` = success
+- [ ] Prova no app em produção com usuário logado: desenhar no mapa → Gerar curvas com Copernicus (a Edge Function só foi provada nas recusas 401; a resposta 200 com cotas depende de um JWT de usuário — o leitor em si foi provado com o dado real pelo bundle idêntico)
 
 ## Medições (11/10/2026)
 

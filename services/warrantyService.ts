@@ -5,6 +5,7 @@ import type {
     WarrantyClaimEvidence, WarrantyClaimEvent, WarrantyTerm, WarrantyKPIs,
     OpenWarrantyClaimCommand, TriageClaimCommand, ScheduleVisitCommand, CloseClaimCommand,
     ClassifyClaimCommand, ClaimFilters, WarrantyUnitOption,
+    StartRepairCommand, CompleteRepairCommand, RecordVisitResultCommand, SetResponsibilityCommand,
 } from '../types/warranty';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 import { computeWarrantyKPIs, type WarrantyKPIRow } from '../utils/warrantyAnalytics';
@@ -159,6 +160,75 @@ export const warrantyService = {
         });
         if (error) throw error;
         return data as { version: number };
+    },
+
+    // ── Ciclo de vida (aplicar_20271011000500) ───────────────
+    // As RPCs conferem o estado de origem e devolvem P0004 com frase para a
+    // tela — `mensagemDoErro` (abaixo) a extrai.
+
+    async startRepair(cmd: StartRepairCommand): Promise<{ version: number }> {
+        const { data, error } = await supabase.rpc('start_warranty_repair', {
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_custo_estimado:   cmd.custo_estimado ?? null,
+            p_notes:            cmd.notes ?? null,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number };
+    },
+
+    async completeRepair(cmd: CompleteRepairCommand): Promise<{ version: number }> {
+        const { data, error } = await supabase.rpc('complete_warranty_repair', {
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_notes:            cmd.notes ?? null,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number };
+    },
+
+    async recordVisitResult(cmd: RecordVisitResultCommand): Promise<{ version: number }> {
+        const { data, error } = await supabase.rpc('record_warranty_visit_result', {
+            p_visit_id:         cmd.visit_id,
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_realized_at:      cmd.realized_at ?? null,
+            p_diagnostico:      cmd.diagnostico ?? null,
+            p_parecer:          cmd.parecer ?? null,
+            p_acao_definida:    cmd.acao_definida ?? null,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number };
+    },
+
+    async setResponsibility(cmd: SetResponsibilityCommand): Promise<{ version: number }> {
+        const { data, error } = await supabase.rpc('set_warranty_responsibility', {
+            p_claim_id:         cmd.claim_id,
+            p_organization_id:  cmd.organization_id,
+            p_expected_version: cmd.expected_version,
+            p_party:            cmd.party,
+            p_notes:            cmd.notes ?? null,
+            p_actor:            cmd.actor,
+        });
+        if (error) throw error;
+        return data as { version: number };
+    },
+
+    /** Visitas do chamado — a lista de chamados não as traz (a aba Visitas ficava sempre vazia). */
+    async listVisits(claimId: string): Promise<WarrantyClaimVisit[]> {
+        const { data, error } = await supabase
+            .from('warranty_claim_visits')
+            .select('*')
+            .eq('claim_id', claimId)
+            .order('scheduled_at', { ascending: false });
+        if (error) throw error;
+        return (data ?? []) as WarrantyClaimVisit[];
     },
 
     async updateVisit(visitId: string, updates: Partial<WarrantyClaimVisit>): Promise<WarrantyClaimVisit> {
@@ -351,7 +421,7 @@ export const warrantyService = {
     async getKPIs(organizationId: string | null): Promise<WarrantyKPIs> {
         let q = supabase
             .from('warranty_claims')
-            .select('state, in_warranty, nps_nota, custo_real, sla_deadline, created_at');
+            .select('state, in_warranty, nps_nota, custo_real, sla_deadline, created_at, closed_at');
         if (organizationId) q = q.eq('organization_id', organizationId);
         const { data, error } = await q;
         if (error) throw error;
@@ -359,3 +429,17 @@ export const warrantyService = {
         return computeWarrantyKPIs((data || []) as WarrantyKPIRow[]);
     },
 };
+
+/**
+ * Frase para a tela a partir do erro de uma RPC do chamado: as recusas de
+ * estado (P0004) já vêm escritas para o usuário; conflito de versão vira
+ * "recarregue"; o resto cai no texto genérico de quem chamou.
+ */
+export function mensagemDoErro(e: unknown, generica: string): string {
+    const err = e as { code?: string; message?: string } | null;
+    if (err?.code === 'P0004' && err.message) return err.message;
+    if (err?.code === 'P0003' || /CONCURRENCY_CONFLICT/.test(err?.message ?? '')) {
+        return 'O chamado foi alterado por outra pessoa — volte à lista e abra de novo.';
+    }
+    return generica;
+}

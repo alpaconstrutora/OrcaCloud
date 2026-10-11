@@ -31,6 +31,7 @@ const DIRETORIO = [{
 }];
 
 vi.mock('../../services/warrantyService', () => ({
+    mensagemDoErro: (_e: unknown, g: string) => g,
     warrantyService: {
         list: (...args: unknown[]) => listClaims(...args),
         getTaxonomySystems: vi.fn(async () => [{ code: 'HID', name: 'Hidráulica', normRef: 'NBR 17170' }]),
@@ -45,6 +46,12 @@ vi.mock('../../services/warrantyService', () => ({
         close: vi.fn(async () => ({})),
         delete: vi.fn(async () => undefined),
         getUnitDirectory: vi.fn(async () => DIRETORIO),
+        listVisits: vi.fn(async () => []),
+        startRepair: vi.fn(async () => ({ version: 2 })),
+        completeRepair: vi.fn(async () => ({ version: 2 })),
+        recordVisitResult: vi.fn(async () => ({ version: 2 })),
+        setResponsibility: vi.fn(async () => ({ version: 2 })),
+        scheduleVisit: vi.fn(async () => ({ visit_id: 'v1', version: 2 })),
     },
 }));
 
@@ -408,5 +415,51 @@ describe('Pós-Obra & Garantia · Empreendimento ordenado e Obra recortada (2026
         expect(screen.getByText('Centro de custo')).toBeInTheDocument();
         expect(screen.getByText('Plano de contas')).toBeInTheDocument();
         expect(screen.getAllByText('Preenchido automaticamente').length).toBeGreaterThan(0);
+    });
+});
+
+describe('Pós-Obra & Garantia · ações por estado (ciclo de vida, 2026-10-11)', () => {
+    async function abrir(over: Record<string, unknown>) {
+        listClaims.mockResolvedValue([chamado({ id: 'cx', sistema_descricao: 'Chamado do teste', ...over })]);
+        const user = userEvent.setup();
+        render(<WarrantyModule projects={PROJETOS} />);
+        await waitFor(() => expect(screen.getByText('Chamado do teste')).toBeInTheDocument());
+        await user.click(screen.getByText('Chamado do teste'));
+        await screen.findByRole('heading', { level: 1 });
+        return user;
+    }
+
+    it('aberto e não triado: só triagem (sem reparo nem encerramento)', async () => {
+        await abrir({ state: 'ABERTO', in_warranty: null });
+        expect(screen.getByText('Triagem')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Iniciar reparo' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Encerrar chamado' })).not.toBeInTheDocument();
+    });
+
+    it('em garantia: iniciar reparo, sem triagem', async () => {
+        await abrir({ state: 'EM_GARANTIA', in_warranty: true });
+        expect(screen.getByRole('button', { name: 'Iniciar reparo' })).toBeInTheDocument();
+        expect(screen.queryByText('Triagem')).not.toBeInTheDocument();
+    });
+
+    it('em reparo: concluir e encerrar (com custo real)', async () => {
+        await abrir({ state: 'EM_REPARO', in_warranty: true });
+        expect(screen.getByRole('button', { name: 'Concluir reparo' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Encerrar chamado' })).toBeInTheDocument();
+        expect(screen.getByText('Custo real')).toBeInTheDocument();
+    });
+
+    it('responsabilidade sugerida pela origem; salvar só com alteração e diz por quê', async () => {
+        await abrir({ state: 'EM_GARANTIA', in_warranty: true, origin: 'material' });
+        expect(screen.getByText('Sugerido pela origem provável')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Salvar responsabilidade' })).toBeEnabled();
+    });
+
+    it('encerrado: agendar visita desligado com o motivo', async () => {
+        const user = await abrir({ state: 'ENCERRADO', in_warranty: true });
+        await user.click(screen.getByRole('button', { name: 'Visitas' }));
+        const b = screen.getByRole('button', { name: /Agendar visita/ });
+        expect(b).toBeDisabled();
+        expect(b).toHaveAttribute('title', 'Chamado encerrado.');
     });
 });

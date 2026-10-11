@@ -167,3 +167,25 @@ describe('fluxoMensal', () => {
         expect(serie.find(m => m.month === '2026-08')?.abertos).toBe(0);
     });
 });
+
+describe('custo do mês e fluxo pela data de encerramento (closed_at, 2026-10-11)', () => {
+    const agora = new Date(2026, 9, 15);
+    it('aberto em setembro e encerrado em outubro conta em outubro', () => {
+        const k = computeWarrantyKPIs([
+            { state: 'ENCERRADO', in_warranty: true, nps_nota: null, custo_real: 1000, sla_deadline: undefined,
+              created_at: '2026-09-20T10:00:00Z', closed_at: '2026-10-05T10:00:00Z' },
+            { state: 'ENCERRADO', in_warranty: true, nps_nota: null, custo_real: 50, sla_deadline: undefined,
+              created_at: '2026-10-02T10:00:00Z', closed_at: '2026-09-30T10:00:00Z' },
+        ] as never, agora);
+        expect(k.custo_total_mes).toBe(1000);
+        expect(k.encerrados_mes).toBe(1);
+    });
+
+    it('fluxo mensal põe o encerramento no mês do closed_at', () => {
+        const f = fluxoMensal([
+            { state: 'ENCERRADO', created_at: '2026-08-10T10:00:00Z', updated_at: '2026-10-10T10:00:00Z', closed_at: '2026-09-01T12:00:00Z' },
+        ] as never, 3, agora);
+        expect(f.find(m => m.month === '2026-09')?.encerrados).toBe(1);
+        expect(f.find(m => m.month === '2026-10')?.encerrados).toBe(0);
+    });
+});

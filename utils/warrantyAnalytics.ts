@@ -24,7 +24,7 @@ export const ESTADOS_TERMINAIS: readonly ClaimState[] = ['ENCERRADO', 'FORA_GARA
 /** Só o que as agregações leem — a consulta de KPI não precisa da linha inteira. */
 export type WarrantyKPIRow = Pick<
     WarrantyClaim,
-    'state' | 'in_warranty' | 'nps_nota' | 'custo_real' | 'sla_deadline' | 'created_at'
+    'state' | 'in_warranty' | 'nps_nota' | 'custo_real' | 'sla_deadline' | 'created_at' | 'closed_at'
 >;
 
 /** `YYYY-MM-DD` de hoje no fuso local — nunca `toISOString()`, que é UTC. */
@@ -57,12 +57,12 @@ export function slaVencido(
 /**
  * Os 7 KPIs do topo da aba Análise.
  *
- * ⚠️ `encerrados_mes` e `custo_total_mes` filtram por `created_at`, não pela
- * data de encerramento — é o comportamento que `warrantyService.getKPIs` tinha
- * desde 20260708 e que esta extração **preserva de propósito**. Na prática lê
- * "chamados ABERTOS neste mês que já foram encerrados". Trocar para data de
- * encerramento é mudança de semântica: `warranty_claims` não tem `closed_at`,
- * só `updated_at`, que qualquer edição posterior move.
+ * `encerrados_mes` e `custo_total_mes` contam pela DATA DE ENCERRAMENTO
+ * (`closed_at`, aplicar_20271011000500) desde 2026-10-11 — antes contavam pela
+ * abertura ("chamados abertos neste mês que já foram encerrados") porque a
+ * coluna não existia. Encerrado sem `closed_at` (anterior à coluna) cai na
+ * abertura, como era. A data é a do banco (UTC): um encerramento nas 3 primeiras
+ * horas do dia 1º, no Brasil, ainda conta no mês anterior.
  */
 export function computeWarrantyKPIs(
     rows: WarrantyKPIRow[],
@@ -70,7 +70,7 @@ export function computeWarrantyKPIs(
 ): WarrantyKPIs {
     const hoje = hojeLocal(agora);
     const primeiroDoMes = inicioDoMes(agora);
-    const doMes = rows.filter(r => r.state === 'ENCERRADO' && r.created_at >= primeiroDoMes);
+    const doMes = rows.filter(r => r.state === 'ENCERRADO' && (r.closed_at ?? r.created_at) >= primeiroDoMes);
     const notas = rows.filter(r => r.nps_nota != null).map(r => r.nps_nota as number);
 
     return {
@@ -137,17 +137,16 @@ export interface MonthlyFlowItem {
 /**
  * Abertura × encerramento nos últimos `meses` meses.
  *
- * Encerramento usa `updated_at` porque não existe `closed_at` na tabela: é a
- * melhor aproximação disponível, e só é lida para chamados que já estão em
- * `ENCERRADO`. Uma edição posterior ao encerramento move a barra de mês — o
- * gráfico mostra tendência, não fecha competência.
+ * Encerramento usa `closed_at` (aplicar_20271011000500); chamado encerrado antes
+ * da coluna existir cai em `updated_at`, a aproximação antiga — uma edição
+ * posterior ao encerramento ainda move a barra desses.
  *
  * O mês sai por `slice(0, 7)` da string ISO, nunca por `new Date(...)` — um
  * timestamp de 01/09 às 00:30 em UTC-3 vira 31/08 em UTC e cairia no mês
  * anterior (mesma família de bug de `formatMonthLabel`).
  */
 export function fluxoMensal(
-    rows: Pick<WarrantyClaim, 'state' | 'created_at' | 'updated_at'>[],
+    rows: Pick<WarrantyClaim, 'state' | 'created_at' | 'updated_at' | 'closed_at'>[],
     meses = 12,
     agora: Date = new Date(),
 ): MonthlyFlowItem[] {
@@ -164,7 +163,7 @@ export function fluxoMensal(
         if (balde) balde.abertos += 1;
 
         if (row.state === 'ENCERRADO') {
-            const mesFecho = (row.updated_at ?? row.created_at ?? '').slice(0, 7);
+            const mesFecho = (row.closed_at ?? row.updated_at ?? row.created_at ?? '').slice(0, 7);
             const baldeFecho = serie.get(mesFecho);
             if (baldeFecho) baldeFecho.encerrados += 1;
         }

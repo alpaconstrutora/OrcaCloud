@@ -1,7 +1,11 @@
 import React from 'react';
 import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, ArrowLeft } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { warrantyService } from '../services/warrantyService';
+import { warrantyService, mensagemDoErro } from '../services/warrantyService';
+import { useStore } from '../store/useStore';
+import {
+    EVENT_LABELS, RESPONSAVEL_LABELS, motivoBloqueio, resumoDoEvento, sugerirResponsavel, sugestaoDeAgendamento,
+} from '../utils/warrantyLifecycle';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { clientService } from '../services/clientService';
 import { clientEmpreendimentoService } from '../services/clientEmpreendimentoService';
@@ -9,7 +13,8 @@ import { useToast } from '../hooks/useToast';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import type { WarrantyClaim, ClaimState, ClaimOrigin, WarrantyKPIs, ClaimFilters, WarrantyUnitOption } from '../types/warranty';
+import type { WarrantyClaim, ClaimState, ClaimOrigin, WarrantyKPIs, ClaimFilters, WarrantyUnitOption, ResponsibleParty, VisitParecer } from '../types/warranty';
+import type { ActorReference } from '../types/quality';
 import type { TaxonomySystem, TaxonomyPathology } from '../types/quality';
 import {
     breakdownPor, computeWarrantyKPIs, fluxoMensal, slaVencido,
@@ -1575,6 +1580,7 @@ export function WarrantyClaimModal({
     const dir = useUnitDirectory(organizationId);
     const { centros, planos } = useClassificacaoFinanceira(organizationId);
     const autofill = useClaimAutofill(form, setForm, dir, developments, centros);
+    const ator = useAtorAtual();
 
     const addFiles = (selected: File[]) => {
         setFiles(prev => {
@@ -1619,7 +1625,7 @@ export function WarrantyClaimModal({
                 warranty_term_code: form.warranty_term_code || undefined,
                 client_name:        clientName,
                 unidade_ref:        form.unidade_ref || undefined,
-                opened_by:          { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                opened_by:          ator,
                 taxonomy:           form.system_code
                     ? {
                         systemCode:    form.system_code,
@@ -1637,7 +1643,7 @@ export function WarrantyClaimModal({
                 const results = await Promise.allSettled(files.map(f =>
                     warrantyService.uploadEvidence(
                         organizationId, claimId, f,
-                        { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                        { ...ator },
                     )));
                 const falhas = results.filter(r => r.status === 'rejected').length;
                 if (falhas > 0) {
@@ -1854,6 +1860,43 @@ interface WarrantyClaimDetailProps {
     onDeleted?: (id: string) => void;
 }
 
+/**
+ * Quem está agindo, para os eventos do chamado. Até 2026-10-11 todo comando
+ * gravava `{actorId:'system', name:'Usuário'}` — o Histórico não dizia quem fez.
+ */
+function useAtorAtual(): ActorReference {
+    const session = useStore(s => s.session);
+    return React.useMemo(() => {
+        const u = session?.user as { id?: string; email?: string; user_metadata?: { full_name?: string; name?: string } } | undefined;
+        const nome = u?.user_metadata?.full_name || u?.user_metadata?.name || u?.email || 'Usuário';
+        return { actorId: u?.id ?? 'desconhecido', actorType: 'user', name: nome };
+    }, [session]);
+}
+
+/** "1.234,56" ou "1234.56" → número; vazio → null; inválido → NaN. */
+function lerValor(texto: string): number | null {
+    const t = texto.trim();
+    if (!t) return null;
+    const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+const PARECER_OPCOES: { value: VisitParecer; label: string }[] = [
+    { value: 'EM_GARANTIA', label: 'Em garantia' },
+    { value: 'FORA_GARANTIA', label: 'Fora de garantia' },
+    { value: 'AGUARDANDO_LAUDO', label: 'Aguardando laudo' },
+];
+
+const VISIT_STATUS_LABELS: Record<string, string> = {
+    AGENDADA: 'Agendada', REALIZADA: 'Realizada', CANCELADA: 'Cancelada', REAGENDADA: 'Reagendada',
+};
+
+const agoraLocal = () => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     claim, organizationId, projects = [], developments = [], obraToDevelopment = {}, clients = [],
     systems = [], taxonomyLabels = EMPTY_TAXONOMY_LABELS, initialEditMode = false,
@@ -1873,6 +1916,24 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     const [triaging, setTriaging] = React.useState(false);
     const [closing, setClosing] = React.useState(false);
     const [npsNota, setNpsNota] = React.useState<number | ''>('');
+    const ator = useAtorAtual();
+    // Ciclo de vida (2026-10-11) — utils/warrantyLifecycle.ts decide o que aparece.
+    const [acting, setActing] = React.useState<null | 'iniciar' | 'concluir' | 'resp' | 'agendar' | 'resultado'>(null);
+    const [custoEstimadoTxt, setCustoEstimadoTxt] = React.useState('');
+    const [custoRealTxt, setCustoRealTxt] = React.useState('');
+    const respInicial = React.useMemo(() => ({
+        party: (claim.responsible_party ?? sugerirResponsavel(claim.origin) ?? '') as ResponsibleParty | '',
+        notes: claim.responsible_notes ?? '',
+    }), [claim]);
+    const [respForm, setRespForm] = React.useState(respInicial);
+    React.useEffect(() => { setRespForm(respInicial); }, [respInicial]);
+    const respDirty = respForm.party !== (claim.responsible_party ?? '') || respForm.notes !== (claim.responsible_notes ?? '');
+    const respSugerida = !claim.responsible_party && !!respForm.party && respForm.party === sugerirResponsavel(claim.origin);
+    const [agendando, setAgendando] = React.useState(false);
+    const [agendaForm, setAgendaForm] = React.useState({ quando: sugestaoDeAgendamento(), tecnico: '' });
+    const [registrandoVisita, setRegistrandoVisita] = React.useState<string | null>(null);
+    const [resultadoForm, setResultadoForm] = React.useState({ realizada: agoraLocal(), diagnostico: '', parecer: '' as VisitParecer | '', acao: '' });
+    const estadoAtual = { state: claim.state, in_warranty: claim.in_warranty ?? null };
     const [editMode, setEditMode] = React.useState(initialEditMode);
     const [saving, setSaving] = React.useState(false);
     const [deleting, setDeleting] = React.useState(false);
@@ -1933,7 +1994,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
     React.useEffect(() => {
         warrantyService.getEvents(claim.id).then(setEvents).catch(console.error);
-        if (claim.visits) setVisits(claim.visits);
+        warrantyService.listVisits(claim.id).then(setVisits).catch(e => console.error('[Visitas]', e));
 
         // Chamado nascido da consolidação de 2026-08-26: as fotos ficaram no
         // bucket `condition-evidence`, lidas de lá em vez de copiadas.
@@ -1960,7 +2021,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                     normRef:       systems.find(s => s.code === classForm.system_code)?.normRef,
                 },
                 origin: classForm.origin,
-                actor:  { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                actor:  ator,
             });
             showToast('Chamado classificado', 'success');
             setClassifying(false);
@@ -2068,12 +2129,12 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                 warranty_expires_at: expires,
                 sla_deadline: sla.toISOString().slice(0, 10),
                 fora_garantia_motivo: inWarranty ? undefined : 'Prazo de garantia expirado',
-                triaged_by: { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                triaged_by: ator,
             });
             showToast(inWarranty ? 'Chamado em garantia' : 'Chamado fora de garantia', 'success');
             onRefresh();
         } catch (e: unknown) {
-            showToast('Erro na triagem', 'error');
+            showToast(mensagemDoErro(e, 'Erro na triagem'), 'error');
             console.error('[Triage]', e);
         } finally {
             setTriaging(false);
@@ -2081,33 +2142,85 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
     };
 
     const handleClose = async () => {
-        if (closing || npsNota === '') return;
+        if (closing) return;
+        const custoReal = lerValor(custoRealTxt);
+        if (Number.isNaN(custoReal)) { showToast('Custo real inválido — use números, ex.: 1.234,56', 'error'); return; }
         setClosing(true);
         try {
             await warrantyService.close({
                 claim_id: claim.id,
                 organization_id: organizationId,
                 expected_version: claim.version,
-                nps_nota: Number(npsNota),
-                closed_by: { actorId: 'system', actorType: 'user', name: 'Usuário' },
+                custo_real: custoReal ?? undefined,
+                nps_nota: npsNota === '' ? undefined : Number(npsNota),
+                closed_by: ator,
             });
             showToast('Chamado encerrado', 'success');
             onRefresh();
         } catch (e: unknown) {
-            showToast('Erro ao encerrar chamado', 'error');
+            showToast(mensagemDoErro(e, 'Erro ao encerrar chamado'), 'error');
             console.error('[CloseWarranty]', e);
         } finally {
             setClosing(false);
         }
     };
 
-    const EVENT_LABELS: Record<string, string> = {
-        ClaimOpened:   'Chamado aberto',
-        ClaimClassified: 'Classificação atualizada',
-        ClaimTriaged:  'Triagem realizada',
-        VisitScheduled:'Visita agendada',
-        ClaimClosed:   'Chamado encerrado',
-        ClaimMigratedFromCondition: 'Migrado de Qualidade & Entrega',
+    /** Roda um comando do ciclo de vida com o mesmo tratamento de erro/recarga. */
+    const executar = async (qual: NonNullable<typeof acting>, fn: () => Promise<unknown>, ok: string, erro: string) => {
+        if (acting) return false;
+        setActing(qual);
+        try {
+            await fn();
+            showToast(ok, 'success');
+            onRefresh();
+            return true;
+        } catch (e: unknown) {
+            showToast(mensagemDoErro(e, erro), 'error');
+            console.error('[Ciclo]', qual, e);
+            return false;
+        } finally {
+            setActing(null);
+        }
+    };
+
+    const handleStartRepair = () => {
+        const custo = lerValor(custoEstimadoTxt);
+        if (Number.isNaN(custo)) { showToast('Custo estimado inválido — use números, ex.: 1.234,56', 'error'); return; }
+        return executar('iniciar', () => warrantyService.startRepair({
+            claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+            custo_estimado: custo, actor: ator,
+        }), 'Reparo iniciado', 'Erro ao iniciar o reparo');
+    };
+
+    const handleCompleteRepair = () => executar('concluir', () => warrantyService.completeRepair({
+        claim_id: claim.id, organization_id: organizationId, expected_version: claim.version, actor: ator,
+    }), 'Reparo concluído', 'Erro ao concluir o reparo');
+
+    const handleSaveResp = () => executar('resp', () => warrantyService.setResponsibility({
+        claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+        party: respForm.party || null, notes: respForm.notes || undefined, actor: ator,
+    }), 'Responsabilidade salva', 'Erro ao salvar a responsabilidade');
+
+    const handleScheduleVisit = async () => {
+        if (!agendaForm.quando) { showToast('Informe a data e a hora da visita', 'error'); return; }
+        const ok = await executar('agendar', () => warrantyService.scheduleVisit({
+            claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+            scheduled_at: new Date(agendaForm.quando).toISOString(),
+            technician_name: agendaForm.tecnico.trim() || ator.name, actor: ator,
+        }), 'Visita agendada', 'Erro ao agendar a visita');
+        if (ok) setAgendando(false);
+    };
+
+    const handleRecordVisit = async (visitId: string) => {
+        const ok = await executar('resultado', () => warrantyService.recordVisitResult({
+            visit_id: visitId, claim_id: claim.id, organization_id: organizationId, expected_version: claim.version,
+            realized_at: resultadoForm.realizada ? new Date(resultadoForm.realizada).toISOString() : undefined,
+            diagnostico: resultadoForm.diagnostico.trim() || undefined,
+            parecer: resultadoForm.parecer || null,
+            acao_definida: resultadoForm.acao.trim() || undefined,
+            actor: ator,
+        }), 'Resultado da visita registrado', 'Erro ao registrar a visita');
+        if (ok) setRegistrandoVisita(null);
     };
 
     return (
@@ -2475,7 +2588,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                             )}
 
                             {/* Ações contextuais */}
-                            {claim.state === 'ABERTO' && (
+                            {motivoBloqueio('triar', estadoAtual) === null && (
                                 <div className="border border-blue-100 rounded-[10px] p-4 space-y-3">
                                     <p className="text-xs font-semibold text-blue-700">Triagem</p>
                                     <p className="text-xs text-gray-500">
@@ -2508,25 +2621,107 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                 </div>
                             )}
 
-                            {['EM_REPARO', 'CONCLUIDO'].includes(claim.state) && (
+                            {/* Reparo — iniciar (já triado) ou concluir (em reparo). */}
+                            {(motivoBloqueio('iniciar_reparo', estadoAtual) === null || motivoBloqueio('concluir_reparo', estadoAtual) === null) && (
+                                <div className="border border-orange-100 rounded-[10px] p-4 space-y-3">
+                                    <p className="text-xs font-semibold text-orange-700">Reparo</p>
+                                    {motivoBloqueio('iniciar_reparo', estadoAtual) === null ? (
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 items-end">
+                                            <div className="space-y-1.5">
+                                                <label className={LABEL_CLASS}>Custo estimado (opcional)</label>
+                                                <input
+                                                    value={custoEstimadoTxt}
+                                                    onChange={e => setCustoEstimadoTxt(e.target.value)}
+                                                    inputMode="decimal"
+                                                    placeholder={claim.custo_estimado != null ? String(claim.custo_estimado) : 'Ex.: 1.500,00'}
+                                                    className={FIELD_CLASS}
+                                                />
+                                            </div>
+                                            <button onClick={handleStartRepair} disabled={acting === 'iniciar'} className={BTN_PRIMARY}>
+                                                {acting === 'iniciar' ? 'Iniciando...' : 'Iniciar reparo'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button onClick={handleCompleteRepair} disabled={acting === 'concluir'} className={`${BTN_PRIMARY} w-full`}>
+                                            {acting === 'concluir' ? 'Concluindo...' : 'Concluir reparo'}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {motivoBloqueio('encerrar', estadoAtual) === null && (
                                 <div className="border border-teal-100 rounded-[10px] p-4 space-y-3">
-                                    <p className="text-xs font-bold text-teal-700 uppercase tracking-wider">Encerrar Chamado</p>
-                                    <div>
-                                        <label className={LABEL_CLASS}>Nota NPS do cliente (0-10)</label>
-                                        <input
-                                            type="number" min={0} max={10}
-                                            value={npsNota}
-                                            onChange={e => setNpsNota(e.target.value === '' ? '' : Number(e.target.value))}
-                                            className={FIELD_CLASS}
-                                        />
+                                    <p className="text-xs font-semibold text-teal-700">Encerrar chamado</p>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="space-y-1.5">
+                                            <label className={LABEL_CLASS}>Custo real</label>
+                                            <input
+                                                value={custoRealTxt}
+                                                onChange={e => setCustoRealTxt(e.target.value)}
+                                                inputMode="decimal"
+                                                placeholder="Ex.: 1.234,56"
+                                                className={FIELD_CLASS}
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className={LABEL_CLASS}>Nota NPS do cliente (0-10, opcional)</label>
+                                            <input
+                                                type="number" min={0} max={10}
+                                                value={npsNota}
+                                                onChange={e => setNpsNota(e.target.value === '' ? '' : Number(e.target.value))}
+                                                className={FIELD_CLASS}
+                                            />
+                                        </div>
                                     </div>
                                     <button
                                         onClick={handleClose}
-                                        disabled={closing || npsNota === ''}
+                                        disabled={closing}
                                         className="w-full inline-flex items-center justify-center h-9 px-3.5 bg-teal-600 text-white rounded-[6px] hover:bg-teal-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                                     >
-                                        {closing ? 'Encerrando...' : 'Encerrar Chamado'}
+                                        {closing ? 'Encerrando...' : 'Encerrar chamado'}
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Responsabilidade — sugerida pela origem provável já classificada. */}
+                            {motivoBloqueio('definir_responsabilidade', estadoAtual) === null && (
+                                <div className="border border-gray-100 rounded-[10px] p-4 space-y-3">
+                                    <p className="text-xs font-semibold text-gray-700">Responsabilidade</p>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="space-y-1.5">
+                                            <label className={LABEL_CLASS}>Responsável pelo defeito</label>
+                                            <select
+                                                value={respForm.party}
+                                                onChange={e => setRespForm(f => ({ ...f, party: e.target.value as ResponsibleParty | '' }))}
+                                                className={SELECT_CLASS}
+                                            >
+                                                <option value="">Não definido</option>
+                                                {(Object.keys(RESPONSAVEL_LABELS) as ResponsibleParty[]).map(r => (
+                                                    <option key={r} value={r}>{RESPONSAVEL_LABELS[r]}</option>
+                                                ))}
+                                            </select>
+                                            {respSugerida && <p className="text-xs text-gray-400">Sugerido pela origem provável</p>}
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className={LABEL_CLASS}>Observações</label>
+                                            <input
+                                                value={respForm.notes}
+                                                onChange={e => setRespForm(f => ({ ...f, notes: e.target.value }))}
+                                                className={FIELD_CLASS}
+                                                placeholder="Ex.: fornecedor da impermeabilização"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            onClick={handleSaveResp}
+                                            disabled={!respDirty || acting === 'resp'}
+                                            title={!respDirty ? 'Nenhuma alteração para salvar' : undefined}
+                                            className={BTN_PRIMARY}
+                                        >
+                                            {acting === 'resp' ? 'Salvando...' : 'Salvar responsabilidade'}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </>
@@ -2534,23 +2729,110 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
                     {tab === 'visitas' && (
                         <div className="space-y-3">
+                            {/* Agendar — padrão amanhã às 09:00, técnico = quem está agendando. */}
+                            <div className="flex justify-end">
+                                {(() => {
+                                    const motivo = motivoBloqueio('agendar_visita', estadoAtual);
+                                    return (
+                                        <button
+                                            onClick={() => { setAgendaForm({ quando: sugestaoDeAgendamento(), tecnico: ator.name }); setAgendando(a => !a); }}
+                                            disabled={!!motivo}
+                                            title={motivo ?? undefined}
+                                            className={BTN_PRIMARY}
+                                        >
+                                            <Plus className="w-[15px] h-[15px]" />
+                                            Agendar visita
+                                        </button>
+                                    );
+                                })()}
+                            </div>
+                            {agendando && (
+                                <div className="border border-blue-100 rounded-[10px] p-4 space-y-4">
+                                    <p className="text-xs font-semibold text-blue-700">Nova visita</p>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <div className="space-y-1.5">
+                                            <label className={LABEL_CLASS}>Data e hora *</label>
+                                            <input type="datetime-local" value={agendaForm.quando}
+                                                onChange={e => setAgendaForm(f => ({ ...f, quando: e.target.value }))} className={FIELD_CLASS} />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className={LABEL_CLASS}>Técnico</label>
+                                            <input value={agendaForm.tecnico}
+                                                onChange={e => setAgendaForm(f => ({ ...f, tecnico: e.target.value }))} className={FIELD_CLASS} />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                        <button onClick={() => setAgendando(false)} className={BTN_SECONDARY}>Cancelar</button>
+                                        <button onClick={handleScheduleVisit} disabled={acting === 'agendar'} className={BTN_PRIMARY}>
+                                            {acting === 'agendar' ? 'Agendando...' : 'Agendar'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             {visits.length === 0 ? (
                                 <p className="text-sm text-gray-400 text-center py-8">Nenhuma visita registrada.</p>
                             ) : visits.map(v => (
-                                <div key={v.id} className="bg-gray-50 rounded-[10px] p-4 text-sm">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="font-bold text-gray-900">{v.technician_name}</span>
-                                        <span className={`text-xs font-normal ${
+                                <div key={v.id} className="bg-gray-50 rounded-[10px] p-4 text-sm space-y-1">
+                                    <div className="flex items-center justify-between">
+                                        <span className="font-semibold text-gray-900">{v.technician_name}</span>
+                                        <span className={`text-sm font-normal ${
                                             v.status === 'REALIZADA' ? 'text-green-700' :
                                             v.status === 'CANCELADA' ? 'text-red-700' :
                                             'text-blue-700'
-                                        }`}>{v.status}</span>
+                                        }`}>{VISIT_STATUS_LABELS[v.status] ?? v.status}</span>
                                     </div>
                                     <p className="text-xs text-gray-500">
-                                        {new Date(v.scheduled_at).toLocaleString('pt-BR')}
+                                        Agendada para {new Date(v.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                                        {v.realized_at && ` · realizada em ${new Date(v.realized_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`}
                                     </p>
-                                    {v.diagnostico && (
-                                        <p className="text-xs text-gray-700 mt-2 bg-white rounded-lg p-2">{v.diagnostico}</p>
+                                    {v.diagnostico && <p className="text-sm text-gray-700"><span className="text-gray-500">Diagnóstico:</span> {v.diagnostico}</p>}
+                                    {v.parecer && <p className="text-sm text-gray-700"><span className="text-gray-500">Parecer:</span> {PARECER_OPCOES.find(o => o.value === v.parecer)?.label ?? v.parecer}</p>}
+                                    {v.acao_definida && <p className="text-sm text-gray-700"><span className="text-gray-500">Ação definida:</span> {v.acao_definida}</p>}
+
+                                    {(v.status === 'AGENDADA' || v.status === 'REAGENDADA') && claim.state !== 'ENCERRADO' && (
+                                        registrandoVisita === v.id ? (
+                                            <div className="border border-blue-100 bg-white rounded-[10px] p-4 space-y-4 mt-2">
+                                                <p className="text-xs font-semibold text-blue-700">Resultado da visita</p>
+                                                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                                    <div className="space-y-1.5">
+                                                        <label className={LABEL_CLASS}>Realizada em</label>
+                                                        <input type="datetime-local" value={resultadoForm.realizada}
+                                                            onChange={e => setResultadoForm(f => ({ ...f, realizada: e.target.value }))} className={FIELD_CLASS} />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className={LABEL_CLASS}>Parecer</label>
+                                                        <select value={resultadoForm.parecer}
+                                                            onChange={e => setResultadoForm(f => ({ ...f, parecer: e.target.value as VisitParecer | '' }))} className={SELECT_CLASS}>
+                                                            <option value="">Sem parecer</option>
+                                                            {PARECER_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                                                        </select>
+                                                    </div>
+                                                    <div className="col-span-2 space-y-1.5">
+                                                        <label className={LABEL_CLASS}>Diagnóstico</label>
+                                                        <textarea rows={3} value={resultadoForm.diagnostico}
+                                                            onChange={e => setResultadoForm(f => ({ ...f, diagnostico: e.target.value }))} className={TEXTAREA_CLASS} />
+                                                    </div>
+                                                    <div className="col-span-2 space-y-1.5">
+                                                        <label className={LABEL_CLASS}>Ação definida</label>
+                                                        <input value={resultadoForm.acao} placeholder="Ex.: trocar a manta da laje; comprar material"
+                                                            onChange={e => setResultadoForm(f => ({ ...f, acao: e.target.value }))} className={FIELD_CLASS} />
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => setRegistrandoVisita(null)} className={BTN_SECONDARY}>Cancelar</button>
+                                                    <button onClick={() => handleRecordVisit(v.id)} disabled={acting === 'resultado'} className={BTN_PRIMARY}>
+                                                        {acting === 'resultado' ? 'Salvando...' : 'Salvar resultado'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => { setResultadoForm({ realizada: agoraLocal(), diagnostico: '', parecer: '', acao: '' }); setRegistrandoVisita(v.id); }}
+                                                className="text-sm text-blue-600 hover:text-blue-800 font-medium pt-1"
+                                            >
+                                                Registrar resultado
+                                            </button>
+                                        )
                                     )}
                                 </div>
                             ))}
@@ -2570,7 +2852,12 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
                                         </span>
                                         <span className="text-gray-400 text-xs ml-2">
                                             {new Date(ev.occurred_at).toLocaleString('pt-BR')}
+                                            {typeof (ev.payload as { actor?: { name?: string } })?.actor?.name === 'string'
+                                                && ` · ${(ev.payload as { actor: { name: string } }).actor.name}`}
                                         </span>
+                                        {resumoDoEvento(ev.event_type, ev.payload) && (
+                                            <p className="text-sm text-gray-600">{resumoDoEvento(ev.event_type, ev.payload)}</p>
+                                        )}
                                     </div>
                                 </div>
                             ))}

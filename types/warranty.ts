@@ -111,6 +111,8 @@ export interface WarrantyClaim {
   in_warranty?: boolean;
   warranty_expires_at?: string;
   fora_garantia_motivo?: string;
+  /** Quando foi encerrado — aplicar_20271011000500. O KPI de custo do mês conta por aqui. */
+  closed_at?: string | null;
   responsible_party?: ResponsibleParty;
   responsible_notes?: string;
   custo_estimado?: number;
@@ -321,6 +323,47 @@ export interface CloseClaimCommand {
   nps_nota?: number;
   nps_comentario?: string;
   closed_by: ActorReference;
+}
+
+/** Ciclo de vida (aplicar_20271011000500) — ver utils/warrantyLifecycle.ts. */
+export interface StartRepairCommand {
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  custo_estimado?: number | null;
+  notes?: string;
+  actor: ActorReference;
+}
+
+export interface CompleteRepairCommand {
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  notes?: string;
+  actor: ActorReference;
+}
+
+export type VisitParecer = 'EM_GARANTIA' | 'FORA_GARANTIA' | 'AGUARDANDO_LAUDO';
+
+export interface RecordVisitResultCommand {
+  visit_id: string;
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  realized_at?: string;
+  diagnostico?: string;
+  parecer?: VisitParecer | null;
+  acao_definida?: string;
+  actor: ActorReference;
+}
+
+export interface SetResponsibilityCommand {
+  claim_id: string;
+  organization_id: string;
+  expected_version: number;
+  party: ResponsibleParty | null;
+  notes?: string;
+  actor: ActorReference;
 }
 
 // ────────────────────────────────────────────────────────────

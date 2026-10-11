@@ -153,6 +153,8 @@ import {
   type VistaDaAnotacao,
   type TracoDaAnotacao,
   type PadraoDeHachura,
+  type HachuraDaCamada,
+  type PlanoDaAnotacao,
   ALTURA_PADRAO_DO_GUARDA_CORPO_MM,
   MAX_ROTULO_DE_GUARDA_CORPO,
   type TipoDeGuardaCorpo,
@@ -687,8 +689,8 @@ export type Command =
    * 250 mm do modelo; hachura omitida na HACHURA = DIAGONAL. `MoveAnotacao`
    * desloca todos os pontos; um vértice só vai por `SetAnotacaoProps.pontos`.
    */
-  | { type: 'AddAnotacao'; vista: VistaDaAnotacao; tipo: TipoDeAnotacao; pontos: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; /** Obrigatória na NUVEM (0.50.0), recusada nas demais. */ revisao?: RevisaoDaNuvem }
-  | { type: 'SetAnotacaoProps'; anotacaoId: ObjectId; pontos?: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; revisao?: RevisaoDaNuvem }
+  | { type: 'AddAnotacao'; vista: VistaDaAnotacao; tipo: TipoDeAnotacao; pontos: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; /** Obrigatória na NUVEM (0.50.0), recusada nas demais. */ revisao?: RevisaoDaNuvem; /** F7 (0.97.0) */ material?: HachuraDaCamada; fundo?: string; tracejadoMm?: [number, number]; plano?: PlanoDaAnotacao; ordem?: number }
+  | { type: 'SetAnotacaoProps'; anotacaoId: ObjectId; pontos?: Point[]; texto?: string | null; alturaMm?: number; traco?: TracoDaAnotacao; hachura?: PadraoDeHachura | null; rotacaoGraus?: number; cor?: string | null; revisao?: RevisaoDaNuvem; /** F7 (0.97.0): `null` remove. */ material?: HachuraDaCamada | null; fundo?: string | null; tracejadoMm?: [number, number] | null; plano?: PlanoDaAnotacao | null; ordem?: number | null; }
   | { type: 'MoveAnotacao'; anotacaoId: ObjectId; dx: number; dy: number }
   | { type: 'DeleteAnotacao'; anotacaoId: ObjectId }
   /**
@@ -3301,6 +3303,12 @@ function aplicarSemHash(
           cor: command.cor ?? null,
           // NUVEM DE REVISÃO (0.50.0): a revisão vem de quem cria (os invariantes recusam nuvem sem ela).
           ...(command.tipo === 'NUVEM' && command.revisao ? { revisao: { numero: command.revisao.numero, data: command.revisao.data } } : {}),
+          // F7 (0.97.0): só quando vêm — os invariantes recusam material/fundo/plano fora da região hachurada.
+          ...(command.material ? { material: { ...command.material } } : {}),
+          ...(command.fundo ? { fundo: command.fundo } : {}),
+          ...(command.tracejadoMm ? { tracejadoMm: [command.tracejadoMm[0], command.tracejadoMm[1]] as [number, number] } : {}),
+          ...(command.plano ? { plano: command.plano } : {}),
+          ...(command.ordem !== undefined ? { ordem: command.ordem } : {}),
         },
       ];
       if (command.pontos.length < PONTOS_MINIMOS_DA_ANOTACAO[command.tipo]) {
@@ -3320,6 +3328,12 @@ function aplicarSemHash(
       if (command.rotacaoGraus !== undefined) a.rotacaoGraus = ((Math.round(command.rotacaoGraus) % 360) + 360) % 360;
       if (command.cor !== undefined) a.cor = command.cor;
       if (command.revisao !== undefined) a.revisao = { numero: command.revisao.numero, data: command.revisao.data };
+      // F7 (0.97.0): `null` REMOVE a chave — anotação sem o campo volta à forma de antes.
+      if (command.material !== undefined) { if (command.material) a.material = { ...command.material }; else delete a.material; }
+      if (command.fundo !== undefined) { if (command.fundo) a.fundo = command.fundo; else delete a.fundo; }
+      if (command.tracejadoMm !== undefined) { if (command.tracejadoMm) a.tracejadoMm = [command.tracejadoMm[0], command.tracejadoMm[1]]; else delete a.tracejadoMm; }
+      if (command.plano !== undefined) { if (command.plano) a.plano = command.plano; else delete a.plano; }
+      if (command.ordem !== undefined) { if (command.ordem !== null && command.ordem !== 0) a.ordem = command.ordem; else delete a.ordem; }
       diff.updated.push(a.id);
       break;
     }

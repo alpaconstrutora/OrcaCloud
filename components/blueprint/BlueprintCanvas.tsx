@@ -65,7 +65,7 @@ import {
   acabamentosDoAmbiente,
 } from '../../utils/blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from '../../utils/blueprintKernel';
-import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
+import { anotacoesNaOrdem, cantosDoRetangulo, contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, distanciaAAnotacao, linhasDaHachura, linhasDaRegiao, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
 import { linhasDoPadrao } from '../../utils/blueprintPadroes';
 import {
@@ -1534,6 +1534,8 @@ interface Props {
   /** ANOTAÇÃO (E8.1): as da planta deste pavimento; o tipo ativo vem da barra. */
   anotacoes?: Anotacao[];
   tipoDeAnotacao?: TipoDeAnotacao;
+  /** F7: a região hachurada em RETÂNGULO — dois cliques nos cantos opostos viram os 4 vértices. */
+  anotacaoRetangulo?: boolean;
   onAddAnotacao?: (tipo: TipoDeAnotacao, pontos: Point[]) => void;
   /** GUARDA-CORPO (E7.3): dois cliques; o tipo ativo vem da barra. */
   tipoDeGuardaCorpo?: TipoDeGuardaCorpo;
@@ -1746,6 +1748,7 @@ export default function BlueprintCanvas({
   onAddParedeCurva,
   anotacoes = SEM_ANOTACOES,
   tipoDeAnotacao = 'TEXTO',
+  anotacaoRetangulo = false,
   onAddAnotacao,
   nucleos: nucleosReais = SEM_NUCLEOS,
   onAddNucleo,
@@ -3779,6 +3782,38 @@ export default function BlueprintCanvas({
       }
     }
     meioTom(false);
+
+    // F7 — REGIÕES NO PLANO DE FUNDO: logo depois do piso, ABAIXO das paredes e dos móveis (o
+    // tapete que não cobre o sofá). Só a região hachurada vai para cá (invariante do kernel).
+    for (const a of anotacoesNaOrdem(anotacoes, 'FUNDO')) {
+      if (ocultos.has(a.id) || a.pontos.length < 3) continue;
+      const cor = selecao.has(a.id) ? COR_SELECIONADA : a.cor || COR_ANOTACAO;
+      const anel = a.pontos.map(paraTela);
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(anel[0].x, anel[0].y);
+      for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
+      ctx.closePath();
+      if (a.fundo) {
+        ctx.fillStyle = a.fundo;
+        ctx.fill();
+      }
+      ctx.strokeStyle = cor;
+      ctx.lineWidth = selecao.has(a.id) ? 2 : 1.2;
+      ctx.setLineDash(tracejadoMm(a.traco, a.alturaMm, a.tracejadoMm).map((d) => Math.max(2, d * vista.escala)));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      for (const [p, q] of linhasDaRegiao(a)) {
+        const tp = paraTela(p);
+        const tq = paraTela(q);
+        ctx.moveTo(tp.x, tp.y);
+        ctx.lineTo(tq.x, tq.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // AMBIENTE SOB O CURSOR (F2): a ferramenta "Ambiente" realça o que o clique
     // vai nomear. Por baixo das paredes, como o preenchimento: tinge o interior,
@@ -8105,7 +8140,7 @@ export default function BlueprintCanvas({
 
     // ── ANOTAÇÕES (E8.1): texto, leader, linha, hachura, cota angular — a
     // mesma geometria do PDF/DXF (`blueprintAnotacoes.ts`). ──
-    const desenharAnotacao = (a: Pick<Anotacao, 'tipo' | 'pontos' | 'texto' | 'alturaMm' | 'traco' | 'hachura' | 'rotacaoGraus' | 'cor'>, selecionada: boolean, previa: boolean) => {
+    const desenharAnotacao = (a: Pick<Anotacao, 'tipo' | 'pontos' | 'texto' | 'alturaMm' | 'traco' | 'hachura' | 'rotacaoGraus' | 'cor'> & Partial<Pick<Anotacao, 'material' | 'fundo' | 'tracejadoMm'>>, selecionada: boolean, previa: boolean) => {
       const cor = selecionada ? COR_SELECIONADA : a.cor || COR_ANOTACAO;
       const tela = a.pontos.map(paraTela);
       const pxTexto = Math.max(9, a.alturaMm * vista.escala);
@@ -8113,7 +8148,7 @@ export default function BlueprintCanvas({
       ctx.strokeStyle = cor;
       ctx.fillStyle = cor;
       ctx.lineWidth = selecionada ? 2 : 1.2;
-      ctx.setLineDash(previa ? [6, 4] : tracejadoMm(a.traco, a.alturaMm).map((d) => Math.max(2, d * vista.escala)));
+      ctx.setLineDash(previa ? [6, 4] : tracejadoMm(a.traco, a.alturaMm, a.tracejadoMm).map((d) => Math.max(2, d * vista.escala)));
       const linhaTela = (p: { x: number; y: number }, q: { x: number; y: number }) => {
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -8162,7 +8197,13 @@ export default function BlueprintCanvas({
             ctx.moveTo(tela[0].x, tela[0].y);
             for (const q of tela.slice(1)) ctx.lineTo(q.x, q.y);
             ctx.closePath();
-            if (a.hachura === 'SOLIDA') {
+            // F7: FUNDO OPACO (o tapete branco) por baixo do padrão; o SOLIDA de antes segue translúcido.
+            if (a.fundo) {
+              ctx.fillStyle = a.fundo;
+              ctx.fill();
+              ctx.fillStyle = cor;
+            }
+            if (a.hachura === 'SOLIDA' && !a.material) {
               ctx.globalAlpha = 0.25;
               ctx.fill();
               ctx.globalAlpha = 1;
@@ -8170,10 +8211,11 @@ export default function BlueprintCanvas({
             ctx.stroke();
             if (!previa) {
               ctx.lineWidth = 0.8;
-              for (const [p, q] of linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', a.alturaMm)) {
+              // F7: o MATERIAL (F6) quando declarado; senão o padrão simples.
+              for (const [p, q] of linhasDaRegiao(a)) {
                 const tp = paraTela(p);
                 const tq = paraTela(q);
-                if (a.hachura === 'PONTOS') {
+                if (a.hachura === 'PONTOS' && !a.material) {
                   ctx.beginPath();
                   ctx.arc(tp.x, tp.y, 1.2, 0, Math.PI * 2);
                   ctx.fill();
@@ -8249,12 +8291,17 @@ export default function BlueprintCanvas({
       }
       ctx.restore();
     };
-    for (const a of anotacoes) {
+    // F7: só as da FRENTE aqui, na ordem (as do FUNDO já saíram logo depois do piso).
+    for (const a of anotacoesNaOrdem(anotacoes, 'FRENTE')) {
       if (ocultos.has(a.id)) continue;
       desenharAnotacao(a, selecao.has(a.id), false);
     }
     if (tool === 'anotacao' && cursor && (caminhoAnotacao.length > 0 || tipoDeAnotacao === 'TEXTO')) {
-      const pontos = [...caminhoAnotacao, cursor];
+      // F7: no retângulo, a prévia é o retângulo inteiro do 1º clique ao cursor.
+      const pontos =
+        tipoDeAnotacao === 'HACHURA' && anotacaoRetangulo && caminhoAnotacao.length === 1
+          ? cantosDoRetangulo(caminhoAnotacao[0], cursor) ?? [...caminhoAnotacao, cursor]
+          : [...caminhoAnotacao, cursor];
       desenharAnotacao({ tipo: tipoDeAnotacao, pontos, texto: tipoDeAnotacao === 'TEXTO' || tipoDeAnotacao === 'LEADER' ? 'Texto' : null, alturaMm: 250, traco: 'CONTINUO', hachura: tipoDeAnotacao === 'HACHURA' ? 'DIAGONAL' : null, rotacaoGraus: 0, cor: null }, false, true);
     }
 
@@ -10000,7 +10047,7 @@ export default function BlueprintCanvas({
       // O orto da COTA ANGULAR é em relação ao VÉRTICE (as duas pontas saem dele); nas demais, ao vértice anterior.
       // COTA ANGULAR e COTA LINEAR travam pelo 1º ponto (vértice / início da cadeia) — ver o clique.
       const referencia = tipoDeAnotacao === 'COTA_ANGULAR' || tipoDeAnotacao === 'COTA_LINEAR' ? caminhoAnotacao[0] : caminhoAnotacao[caminhoAnotacao.length - 1];
-      if (referencia && ortoAtivo(e)) alvo = travarOrtogonal(referencia, alvo);
+      if (referencia && ortoAtivo(e) && !(tipoDeAnotacao === 'HACHURA' && anotacaoRetangulo)) alvo = travarOrtogonal(referencia, alvo);
       setCursor(alvo);
       return;
     }
@@ -10323,10 +10370,20 @@ export default function BlueprintCanvas({
       // clique de colocação caía sobre a reta dos medidos e o 2º clique do duplo virava
       // um ponto a mais (pego no app real, 11/10/2026: total de 0,88 m numa sala de 15,85).
       const referencia = tipoDeAnotacao === 'COTA_ANGULAR' || tipoDeAnotacao === 'COTA_LINEAR' ? caminhoAnotacao[0] ?? null : anterior;
-      if (referencia && ortoAtivo(e)) ponto = travarOrtogonal(referencia, ponto);
+      // F7: no retângulo o orto prenderia o canto oposto na reta do primeiro — retângulo sem largura.
+      const retangulo = tipoDeAnotacao === 'HACHURA' && anotacaoRetangulo;
+      if (referencia && ortoAtivo(e) && !retangulo) ponto = travarOrtogonal(referencia, ponto);
       // Vértice repetido — inclusive o 2º clique do duplo, que o orto pode ter
       // deslocado uns mm do anterior: a tolerância é a do clique, em mm do modelo.
       if (caminhoAnotacao.some((q) => Math.hypot(q.x - ponto.x, q.y - ponto.y) <= HIT_PX / vista.escala)) return;
+      // F7: RETÂNGULO hachurado — fecha no 2º clique, com os 4 cantos; degenerado (sem largura ou
+      // altura) não grava.
+      if (tipoDeAnotacao === 'HACHURA' && anotacaoRetangulo && caminhoAnotacao.length === 1) {
+        const c = cantosDoRetangulo(caminhoAnotacao[0], ponto);
+        if (c) onAddAnotacao?.(tipoDeAnotacao, c);
+        setCaminhoAnotacao([]);
+        return;
+      }
       const pontos = [...caminhoAnotacao, ponto];
       const fecha = tipoDeAnotacao === 'TEXTO' ? 1 : tipoDeAnotacao === 'LEADER' ? 2 : tipoDeAnotacao === 'COTA_ANGULAR' ? 3 : Infinity;
       if (pontos.length >= fecha) {

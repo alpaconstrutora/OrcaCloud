@@ -39,6 +39,7 @@ import { desenharIsometrico, desenharIsometricos, isometricosDoModelo } from './
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
+import { anotacoesNaOrdem, linhasDaRegiao } from './blueprintAnotacoes';
 import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
 import { acabamentosDoAmbiente, contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { linhasDoPadrao } from './blueprintPadroes';
@@ -540,6 +541,9 @@ export function desenharPlanta(
     }
   }
 
+  // F7: regiões hachuradas no plano de FUNDO — sobre o piso, sob paredes e móveis.
+  desenharRegioesDeFundo(d, (model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA'), px, py);
+
   // HUMANIZADA: a sombra das paredes, sob as paredes e sobre os pisos. Opaca, porque o papel não compõe alfa.
   if (opcoes.humanizada) {
     for (const w of model.walls) {
@@ -970,6 +974,27 @@ export function desenharTabelas(
  * `blueprintAnotacoes.ts` — a mesma da tela e do DXF. A altura do texto vem do
  * modelo dividida pela escala, nunca abaixo de 1,5 mm (legível).
  */
+/**
+ * F7 — as REGIÕES HACHURADAS NO PLANO DE FUNDO: chamada logo depois do piso, abaixo das paredes e
+ * dos móveis (o tapete que não cobre o sofá). Fundo opaco, padrão e contorno — a mesma geometria
+ * da tela (`linhasDaRegiao`).
+ */
+export function desenharRegioesDeFundo(
+  d: Desenhista,
+  anotacoes: readonly Anotacao[],
+  px: (x: number) => number,
+  py: (y: number) => number,
+): void {
+  for (const a of anotacoesNaOrdem(anotacoes, 'FUNDO')) {
+    if (a.pontos.length < 3) continue;
+    const estilo: EstiloTraco = { espessuraMm: 0.25, cor: a.cor || COR_PADRAO_DA_ANOTACAO };
+    const anel = a.pontos.map((p) => ({ x: px(p.x), y: py(p.y) }));
+    if (a.fundo) d.poligono(anel, a.fundo);
+    for (const [p, q] of linhasDaRegiao(a)) d.linha(px(p.x), py(p.y), px(q.x), py(q.y), { espessuraMm: 0.1, cor: estilo.cor });
+    for (let i = 0; i < anel.length; i++) d.linha(anel[i].x, anel[i].y, anel[(i + 1) % anel.length].x, anel[(i + 1) % anel.length].y, estilo);
+  }
+}
+
 export function desenharAnotacoes(
   d: Desenhista,
   anotacoes: readonly Anotacao[],
@@ -977,7 +1002,8 @@ export function desenharAnotacoes(
   px: (x: number) => number,
   py: (y: number) => number,
 ): void {
-  for (const a of anotacoes) {
+  // F7: só as da FRENTE aqui, na ordem — as do FUNDO saem em `desenharRegioesDeFundo`, logo depois do piso.
+  for (const a of anotacoesNaOrdem(anotacoes, 'FRENTE')) {
     const cor = a.cor || COR_PADRAO_DA_ANOTACAO;
     const alturaPapel = Math.max(1.5, a.alturaMm / denominador);
     const estilo: EstiloTraco = { espessuraMm: 0.25, cor };
@@ -1005,9 +1031,11 @@ export function desenharAnotacoes(
         for (let i = 1; i < a.pontos.length; i++) linha(a.pontos[i - 1], a.pontos[i]);
         break;
       case 'HACHURA': {
+        // F7: o FUNDO OPACO primeiro (o padrão e o contorno vão por cima).
+        if (a.fundo) d.poligono(a.pontos.map(P), a.fundo);
         for (let i = 0; i < a.pontos.length; i++) linha(a.pontos[i], a.pontos[(i + 1) % a.pontos.length]);
-        if (a.hachura === 'SOLIDA') d.poligono(a.pontos.map(P), cor);
-        else for (const [p, q] of linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', a.alturaMm)) linha(p, q);
+        if (a.hachura === 'SOLIDA' && !a.material) d.poligono(a.pontos.map(P), cor);
+        else for (const [p, q] of linhasDaRegiao(a)) linha(p, q);
         if (a.texto) {
           const cx = a.pontos.reduce((s, p) => s + p.x, 0) / a.pontos.length;
           const cy = a.pontos.reduce((s, p) => s + p.y, 0) / a.pontos.length;

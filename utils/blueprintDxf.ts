@@ -67,7 +67,7 @@ import {
   type LadoDoContorno,
   type SegmentoDeCota,
 } from './blueprintCotas';
-import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
+import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, linhasDaRegiao, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
@@ -685,7 +685,8 @@ function entidadesDeAnotacoes(anotacoes: readonly Anotacao[], P: (p: Ponto) => P
         break;
       case 'HACHURA': {
         saida += polilinha(CAMADAS.ANOTACOES, a.pontos.map(P));
-        for (const [p, q] of linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', alt)) saida += linha(CAMADAS.ANOTACOES, P(p), P(q));
+        // F7: o MATERIAL (F6) quando declarado; senão o padrão simples — a mesma lista da tela e do PDF.
+        for (const [p, q] of linhasDaRegiao(a)) saida += linha(CAMADAS.ANOTACOES, P(p), P(q));
         if (a.texto) {
           const cx = a.pontos.reduce((s, p) => s + p.x, 0) / a.pontos.length;
           const cy = a.pontos.reduce((s, p) => s + p.y, 0) / a.pontos.length;

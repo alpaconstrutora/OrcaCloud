@@ -314,6 +314,25 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F7 — Anotação de forma com preenchimento** · kernel (**bump**): `HACHURA` ganha `padraoVisual`, `opacidade`, `traco {tracoMm, espacoMm}`, `ordem`; modo retângulo; `BlueprintCanvas.tsx`, `blueprintExport.ts`, `PainelAnotacaoSelecionada.tsx`
 - Muda: retângulo em 2 cliques; "Trazer para frente / Enviar para trás" mexem em `ordem`; fundo sólido opaco disponível.
 - Pronto quando: golden; teste de ordenação; no app, tapete hachurado sobre o piso e atrás do sofá, igual no PDF.
+- **Feito na execução (11/10, kernel 0.97.0):**
+  - Modelo: a `Anotacao` ganhou `material?` (o `HachuraDaCamada` da F6 — padrão, escala, giro), `fundo?`
+    (`#rrggbb`, OPACO; o "Sólida" de antes segue translúcido), `tracejadoMm?` (traço × espaço próprios),
+    `plano?: 'FUNDO'` e `ordem?`. Material, fundo e plano só na HACHURA (validação no kernel). Sem os campos,
+    o canônico sai SEM as chaves (teste) — desenho antigo só muda pela versão. `SetAnotacaoProps` com `null`
+    remove a chave. A `opacidade` livre do rascunho virou o `fundo` opaco: era o caso do vídeo.
+  - Ordem: `anotacoesNaOrdem(lista, 'FRENTE'|'FUNDO')` (estável por `ordem`). A passada do FUNDO é desenhada
+    logo depois do piso — **abaixo das paredes e dos móveis** — na tela e no PDF (teste: no PDF, o polígono da
+    região de fundo sai antes da silhueta da parede e o da frente, depois). "Enviar para trás" leva ao FUNDO
+    (só HACHURA); "Trazer para frente" põe acima de todas da frente; botão sem efeito diz por quê.
+  - Retângulo: "Retângulo hachurado" no menu Anotações — dois cliques nos cantos opostos (`cantosDoRetangulo`),
+    sem orto. DXF: a região usa as linhas do material quando há (`linhasDaRegiao`).
+  - ⚠️ Achado pela prova no app: sem fundo, o seletor de cor mostrava branco, e escolher branco não dispara
+    mudança — **o fundo branco nunca era gravado**. Agora, sem fundo aparece "Pôr fundo branco"; o seletor de
+    cor só aparece quando já há fundo.
+  - Prova: `__tests__/blueprintRegiaoHachurada.test.ts` (10) + goldens. ✅ **No app com escrita (11/10,
+    "Planta 11/10/2026", estudo sozinho)**: Inserir › Anotações › Retângulo hachurado → 2 cliques → selecionar
+    → "Pôr fundo branco" → "Enviar para trás" → **no banco, 4 vértices, `fundo: #ffffff`, `plano: FUNDO`** →
+    Ctrl+Z ×3 → banco sem região. Print: o fundo branco cobre o piso do ambiente.
 
 **F8 — Esquadria configurável** · kernel (**bump**): `Opening.configuracao? {mecanismo: ABRIR|CORRER|BASCULANTE|MAXIM_AR|PIVOTANTE|FIXA|CAMARAO, folhas: {mecanismo, larguraRel}[], bandeira?: {alturaMm, mecanismo}}`; entra em `assinaturaDaEsquadria` (`model.ts:653`); canvas `:4171`; 3D `Blueprint3DViewer.tsx:319` (caixilho + folhas); `PainelParedeSelecionada.tsx`
 - Muda: editor de folhas (adicionar/remover/trocar mecanismo); porta de 2 folhas (fecha o item aberto em `2026-08-14-girar-espelhar-porta.md:102`); Espaço com a abertura sob o cursor gira o sentido (`FlipOpening`). Sem `configuracao`, o desenho atual não muda (compatibilidade).
@@ -358,7 +377,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
   app com escrita: banco 4×250 e Ctrl+Z 4×150 · [x] F5 — `90d58534`, kernel 0.95.0, provada no app com escrita
   (cota gravada e desfeita) + PDF/DXF por teste
-- [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
+- [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
+  provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

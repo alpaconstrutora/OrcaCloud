@@ -2472,6 +2472,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [tipoDeGuardaCorpo, setTipoDeGuardaCorpo] = useState<TipoDeGuardaCorpo>('GUARDA_CORPO');
   /** ANOTAÇÃO (E8.1): o tipo do próximo traçado. */
   const [tipoDeAnotacao, setTipoDeAnotacao] = useState<TipoDeAnotacao>('TEXTO');
+  /** F7: a região hachurada em RETÂNGULO (dois cantos) — o botão próprio do menu Anotações. */
+  const [anotacaoRetangulo, setAnotacaoRetangulo] = useState(false);
   /** NUVEM DE REVISÃO (P2.15): a revisão em que as PRÓXIMAS nuvens nascem; null = a próxima livre. */
   const [numeroDaRevisaoEscolhido, setNumeroDaRevisaoEscolhido] = useState<number | null>(null);
   const numeroDaRevisao = numeroDaRevisaoEscolhido ?? proximaRevisao(editor.model);
@@ -10095,6 +10097,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
       <PainelAnotacaoSelecionada
         anotacao={anotacaoSel}
+        todas={editor.model.anotacoes ?? []}
         onProps={(campos) => anotacaoSel && editor.run({ type: 'SetAnotacaoProps', anotacaoId: anotacaoSel.id, ...campos })}
         onExcluir={removerSelecionada}
       />
@@ -12780,17 +12783,35 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     icone={Icone}
                     rotulo={ROTULO_DO_TIPO_DE_ANOTACAO[tipo]}
                     contagem={resumoDeAnotacoes.porTipo[tipo] || undefined}
-                    ativo={editor.tool === 'anotacao' && tipoDeAnotacao === tipo}
+                    ativo={editor.tool === 'anotacao' && tipoDeAnotacao === tipo && !anotacaoRetangulo}
                     onClick={() => {
-                      if (editor.tool === 'anotacao' && tipoDeAnotacao === tipo) editor.setTool('selecionar');
+                      if (editor.tool === 'anotacao' && tipoDeAnotacao === tipo && !anotacaoRetangulo) editor.setTool('selecionar');
                       else {
                         setTipoDeAnotacao(tipo);
+                        setAnotacaoRetangulo(false);
                         editor.setTool('anotacao');
                       }
                     }}
                     ajuda={`${ROTULO_DO_TIPO_DE_ANOTACAO[tipo]} na planta do pavimento ativo — ${ajuda}. Sai no PDF e no DXF.${letraDoAtalho({ tool: 'anotacao', anotacao: tipo }) ? ` Atalho: ${letraDoAtalho({ tool: 'anotacao', anotacao: tipo })}.` : ''}`}
                   />
                 ))}
+                {/* F7 (11/10/2026): a região hachurada em RETÂNGULO — dois cliques nos cantos opostos (o tapete do vídeo). */}
+                <BotaoDoRibbon
+                  icone={RectangleHorizontal}
+                  rotulo="Retângulo hachurado"
+                  ativo={editor.tool === 'anotacao' && tipoDeAnotacao === 'HACHURA' && anotacaoRetangulo}
+                  onClick={() => {
+                    if (editor.tool === 'anotacao' && tipoDeAnotacao === 'HACHURA' && anotacaoRetangulo) {
+                      setAnotacaoRetangulo(false);
+                      editor.setTool('selecionar');
+                    } else {
+                      setTipoDeAnotacao('HACHURA');
+                      setAnotacaoRetangulo(true);
+                      editor.setTool('anotacao');
+                    }
+                  }}
+                  ajuda="Região hachurada em retângulo na planta do pavimento ativo — dois cliques nos cantos opostos. Padrão, material, fundo e ordem no painel. Sai no PDF e no DXF."
+                />
             </MenuDoRibbon>
             {/* IMPORTAR — trazer para dentro o que outra pessoa desenhou. O PDF
                 vira parede por reconhecimento; o IFC e o DXF, por medida
@@ -15002,6 +15023,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   vaoDaExtrusaoMm={perfilDaExtrusao.vaoMm}
                   anotacoes={anotacoesDoNivelAtivo}
                   tipoDeAnotacao={tipoDeAnotacao}
+                  anotacaoRetangulo={anotacaoRetangulo}
                   onAddAnotacao={adicionarAnotacao}
                   onAddTrecho={adicionarTrecho}
                   redeEmUmClique={prumadaDeRede != null}

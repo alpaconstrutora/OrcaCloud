@@ -2123,7 +2123,25 @@ export interface Anotacao {
   cor: string | null;
   /** Só na NUVEM (0.50.0): número e data da revisão. */
   revisao?: RevisaoDaNuvem;
+  /**
+   * F7 (0.97.0, plano `2026-10-11-planta-recursos-video-synaps.md`) — todos OPCIONAIS e só
+   * emitidos quando declarados: anotação antiga não muda de forma.
+   *
+   * `material` (só HACHURA): o padrão de MATERIAL da F6 (escala e giro próprios), no lugar do
+   * padrão simples de `hachura`. `fundo` (só HACHURA): cor OPACA por baixo do padrão — o tapete
+   * branco do vídeo; o SOLIDA de antes é translúcido. `tracejadoMm`: [traço, espaço] em mm do
+   * modelo, inteiros, quando o traço é TRACEJADO. `plano: 'FUNDO'` (só HACHURA): desenhada logo
+   * depois do piso, ABAIXO das paredes e dos móveis — sem isso o tapete cobre o sofá. `ordem`:
+   * quem fica por cima dentro do mesmo plano (maior = por cima; ausente = 0).
+   */
+  material?: HachuraDaCamada;
+  fundo?: string;
+  tracejadoMm?: [number, number];
+  plano?: PlanoDaAnotacao;
+  ordem?: number;
 }
+/** Ausente = FRENTE (por cima de tudo, como sempre foi). */
+export type PlanoDaAnotacao = 'FUNDO';
 
 export function findAnotacao(model: BlueprintModel, id: ObjectId): Anotacao {
   const a = (model.anotacoes ?? []).find((x) => x.id === id);
@@ -6010,6 +6028,17 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (a.tipo === 'HACHURA' && a.hachura == null) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: região hachurada sem padrão`);
     if (!Number.isInteger(a.rotacaoGraus) || a.rotacaoGraus < 0 || a.rotacaoGraus >= 360) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: giro tem de ser inteiro em [0, 360)`);
     if (a.cor != null && !/^#[0-9a-fA-F]{6}$/.test(a.cor)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: cor tem de ser #rrggbb`);
+    // F7 (0.97.0): material, fundo e plano só na região hachurada; tracejado e ordem inteiros.
+    if ((a.material !== undefined || a.fundo !== undefined || a.plano !== undefined) && a.tipo !== 'HACHURA') {
+      throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: material, fundo e plano só na região hachurada`);
+    }
+    assertHachuraDaCamada(a.material, `Anotação ${a.id}`);
+    if (a.fundo !== undefined && !/^#[0-9a-fA-F]{6}$/.test(a.fundo)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: fundo tem de ser #rrggbb`);
+    if (a.tracejadoMm !== undefined && !(Array.isArray(a.tracejadoMm) && a.tracejadoMm.length === 2 && a.tracejadoMm.every((v) => Number.isInteger(v) && v > 0))) {
+      throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: tracejado tem de ser [traço, espaço] inteiros positivos`);
+    }
+    if (a.plano !== undefined && a.plano !== 'FUNDO') throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: plano desconhecido ${String(a.plano)}`);
+    if (a.ordem !== undefined && !Number.isInteger(a.ordem)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: ordem tem de ser inteira`);
     // COTA LINEAR (0.95.0): o primeiro e o último ponto MEDIDOS não coincidem — sem isso não há direção.
     if (a.tipo === 'COTA_LINEAR') {
       const p0 = a.pontos[0];

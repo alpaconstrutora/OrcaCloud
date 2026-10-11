@@ -9,6 +9,7 @@
  * dentro do canvas.
  */
 import { rotuloDeCota } from './blueprintCotas';
+import { linhasDoPadrao } from './blueprintPadroes';
 import {
   signedArea,
   DATA_ISO_DA_REVISAO,
@@ -31,10 +32,70 @@ export function anotacoesDaVista(model: BlueprintModel, vista: VistaDaAnotacao):
   return (model.anotacoes ?? []).filter((a) => mesmaVista(a.vista, vista));
 }
 
-/** Padrão de tracejado em unidades do MODELO (mm) — quem desenha converte pela escala. */
-export function tracejadoMm(traco: TracoDaAnotacao, alturaMm: number): number[] {
+/**
+ * Padrão de tracejado em unidades do MODELO (mm) — quem desenha converte pela escala.
+ * F7 (0.97.0): `proprio` é o [traço, espaço] declarado na anotação — o "20 por 8" do
+ * vídeo; vale só no TRACEJADO. Ausente, a proporção de sempre pela altura do texto.
+ */
+export function tracejadoMm(traco: TracoDaAnotacao, alturaMm: number, proprio?: readonly [number, number]): number[] {
+  if (traco === 'TRACEJADO' && proprio) return [proprio[0], proprio[1]];
   const u = Math.max(20, alturaMm / 2);
   return traco === 'TRACEJADO' ? [u * 2, u] : traco === 'PONTILHADO' ? [u / 3, u / 1.5] : [];
+}
+
+/**
+ * F7: o RETÂNGULO hachurado pelos dois cantos opostos — os 4 vértices, no sentido em que o
+ * gesto foi feito. `null` quando não há largura ou altura (os dois cliques na mesma reta).
+ */
+export function cantosDoRetangulo(a: Point, b: Point): Point[] | null {
+  if (a.x === b.x || a.y === b.y) return null;
+  return [{ x: a.x, y: a.y }, { x: b.x, y: a.y }, { x: b.x, y: b.y }, { x: a.x, y: b.y }] as Point[];
+}
+
+/**
+ * F7: as linhas de padrão da REGIÃO HACHURADA — o MATERIAL (F6, com escala e giro) quando
+ * declarado; senão o padrão simples de sempre. Tela, PDF e DXF desenham a mesma lista.
+ */
+export function linhasDaRegiao(a: Pick<Anotacao, 'pontos' | 'hachura' | 'alturaMm' | 'material'>): [Point, Point][] {
+  if (a.material) return linhasDoPadrao(a.material, a.pontos).map((s) => [s.a, s.b] as [Point, Point]);
+  return linhasDaHachura(a.pontos, a.hachura ?? 'DIAGONAL', a.alturaMm);
+}
+
+/**
+ * F7: as anotações de UM plano, na ordem de desenho (menor `ordem` primeiro, estável).
+ * FRENTE = por cima de tudo, como sempre; FUNDO = logo depois do piso, abaixo das paredes e dos
+ * móveis (o tapete que não cobre o sofá).
+ */
+export function anotacoesNaOrdem<T extends Pick<Anotacao, 'plano' | 'ordem'>>(lista: readonly T[], plano: 'FRENTE' | 'FUNDO'): T[] {
+  return lista
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => (plano === 'FUNDO' ? a.plano === 'FUNDO' : a.plano !== 'FUNDO'))
+    .sort((x, y) => (x.a.ordem ?? 0) - (y.a.ordem ?? 0) || x.i - y.i)
+    .map(({ a }) => a);
+}
+
+/**
+ * F7: o que "Trazer para frente" / "Enviar para trás" gravam. Frente = plano FRENTE, acima de
+ * todas as da frente na MESMA vista; trás = plano FUNDO (só a região hachurada pode ir para lá),
+ * abaixo de todas as do fundo. `null` = a anotação já está lá — nada a gravar.
+ */
+export function ordemAoMover(
+  todas: readonly Anotacao[],
+  alvo: Anotacao,
+  sentido: 'FRENTE' | 'TRAS',
+): { plano: 'FUNDO' | null; ordem: number } | null {
+  const vizinhas = todas.filter((x) => x.id !== alvo.id && mesmaVista(x.vista, alvo.vista));
+  if (sentido === 'FRENTE') {
+    const daFrente = vizinhas.filter((x) => x.plano !== 'FUNDO');
+    const topo = daFrente.length ? Math.max(...daFrente.map((x) => x.ordem ?? 0)) : 0;
+    if (alvo.plano !== 'FUNDO' && (alvo.ordem ?? 0) > topo) return null;
+    return { plano: null, ordem: topo + 1 };
+  }
+  if (alvo.tipo !== 'HACHURA') return null;
+  const doFundo = vizinhas.filter((x) => x.plano === 'FUNDO');
+  const base = doFundo.length ? Math.min(...doFundo.map((x) => x.ordem ?? 0)) : 0;
+  if (alvo.plano === 'FUNDO' && (alvo.ordem ?? 0) < base) return null;
+  return { plano: 'FUNDO', ordem: base - 1 };
 }
 
 /**

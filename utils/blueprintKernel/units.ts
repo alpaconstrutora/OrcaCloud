@@ -641,8 +641,18 @@
  * parede, laje, cobertura, piso e forro): desenho antigo só muda pela string da
  * versão. Provado antes do bump: com a string em 0.95.0 e tudo no lugar, 411
  * testes de kernel/goldens/camadas/acabamentos/telhado/IFC passaram.
+ *
+ * ─── 0.96.0 → 0.97.0 (11/10/2026) — A REGIÃO HACHURADA COMO FORMA DE DESENHO ──
+ *
+ * F7 do plano `2026-10-11-planta-recursos-video-synaps.md`: `Anotacao` ganhou,
+ * todos opcionais e só emitidos quando declarados, `material` (o padrão da F6
+ * com escala e giro), `fundo` (cor opaca), `tracejadoMm` ([traço, espaço]),
+ * `plano: 'FUNDO'` (desenhada abaixo das paredes e dos móveis) e `ordem`.
+ * Material, fundo e plano só na região hachurada. Anotação antiga só muda pela
+ * string da versão. Provado antes do bump: com a string em 0.96.0 e tudo no
+ * lugar, 293 testes de kernel/goldens/anotações/nuvem/cotas/padrões passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.96.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.97.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.96.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.97.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2242,6 +2242,12 @@ function projetar(model) {
       cor: a.cor ?? null,
       // NUVEM DE REVISÃO (0.50.0): só a nuvem tem; as demais não ganham chave.
       revisao: a.revisao ? { numero: a.revisao.numero, data: a.revisao.data } : void 0,
+      // F7 (0.97.0): só quando declarados — anotação antiga sai byte a byte como antes.
+      material: a.material ? { padrao: a.material.padrao, escalaPct: a.material.escalaPct, rotacaoGraus: a.material.rotacaoGraus } : void 0,
+      fundo: a.fundo ?? void 0,
+      tracejadoMm: a.tracejadoMm ? [a.tracejadoMm[0], a.tracejadoMm[1]] : void 0,
+      plano: a.plano ?? void 0,
+      ordem: a.ordem ?? void 0,
       parametros: parametrosCanonicos(a.parametros)
     }),
     (x, y) => {
@@ -3049,6 +3055,12 @@ function modelFromCanonicalPayload(payload) {
       rotacaoGraus: a.rotacaoGraus,
       cor: a.cor,
       ...a.revisao ? { revisao: { numero: a.revisao.numero, data: a.revisao.data } } : {},
+      // F7 (0.97.0)
+      ...a.material ? { material: { padrao: a.material.padrao, escalaPct: a.material.escalaPct, rotacaoGraus: a.material.rotacaoGraus } } : {},
+      ...a.fundo ? { fundo: a.fundo } : {},
+      ...a.tracejadoMm ? { tracejadoMm: [a.tracejadoMm[0], a.tracejadoMm[1]] } : {},
+      ...a.plano ? { plano: a.plano } : {},
+      ...a.ordem !== void 0 && a.ordem !== null ? { ordem: a.ordem } : {},
       ...a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}
     });
   });

@@ -47,6 +47,7 @@
 
 import {
   type PadraoDeMaterial,
+  type PlanoDaAnotacao,
   type PainelDeCortina,
   type OrientacaoDeBrise,
   type MaterialDeSubRegiao,
@@ -765,6 +766,12 @@ function projetar(model: BlueprintModel): {
       cor: a.cor ?? null,
       // NUVEM DE REVISÃO (0.50.0): só a nuvem tem; as demais não ganham chave.
       revisao: a.revisao ? { numero: a.revisao.numero, data: a.revisao.data } : undefined,
+      // F7 (0.97.0): só quando declarados — anotação antiga sai byte a byte como antes.
+      material: a.material ? { padrao: a.material.padrao, escalaPct: a.material.escalaPct, rotacaoGraus: a.material.rotacaoGraus } : undefined,
+      fundo: a.fundo ?? undefined,
+      tracejadoMm: a.tracejadoMm ? [a.tracejadoMm[0], a.tracejadoMm[1]] : undefined,
+      plano: a.plano ?? undefined,
+      ordem: a.ordem ?? undefined,
       parametros: parametrosCanonicos(a.parametros),
     }),
     (x, y) => {
@@ -1599,6 +1606,12 @@ export interface CanonicalPayload {
     cor: string | null;
     /** Só na NUVEM (kernel ≥ 0.50.0): número e data ISO da revisão. */
     revisao?: { numero: number; data: string };
+    /** F7 (kernel ≥ 0.97.0): só quando declarados. */
+    material?: { padrao: string; escalaPct: number; rotacaoGraus: number };
+    fundo?: string;
+    tracejadoMm?: number[];
+    plano?: string;
+    ordem?: number;
     parametros?: Parametros;
   }[];
   /** Núcleos verticais. Ausente sob kernel < 0.39.0 e em desenho sem nenhum. */
@@ -2338,6 +2351,12 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       rotacaoGraus: a.rotacaoGraus,
       cor: a.cor,
       ...(a.revisao ? { revisao: { numero: a.revisao.numero, data: a.revisao.data } } : {}),
+      // F7 (0.97.0)
+      ...(a.material ? { material: { padrao: a.material.padrao as PadraoDeMaterial, escalaPct: a.material.escalaPct, rotacaoGraus: a.material.rotacaoGraus } } : {}),
+      ...(a.fundo ? { fundo: a.fundo } : {}),
+      ...(a.tracejadoMm ? { tracejadoMm: [a.tracejadoMm[0], a.tracejadoMm[1]] as [number, number] } : {}),
+      ...(a.plano ? { plano: a.plano as PlanoDaAnotacao } : {}),
+      ...(a.ordem !== undefined && a.ordem !== null ? { ordem: a.ordem } : {}),
       ...(a.parametros && Object.keys(a.parametros).length > 0 ? { parametros: { ...a.parametros } } : {}),
     });
   });

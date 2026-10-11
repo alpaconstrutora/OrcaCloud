@@ -62,10 +62,12 @@ import {
   pontasPresasAsPecas,
   discretizarArco,
   anguloEmTorno,
+  acabamentosDoAmbiente,
 } from '../../utils/blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from '../../utils/blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
+import { linhasDoPadrao } from '../../utils/blueprintPadroes';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -242,6 +244,8 @@ const COR_CAMADA_PAREDE: Record<FuncaoCamada, string> = {
   // Pintar cinza sugeriria material onde não há nenhum.
   CAMARA_AR: '#ffffff',
 };
+/** F6: o traço da hachura de material (camada de parede e piso) — mais escuro que as faixas, fino. */
+const COR_HACHURA_DA_CAMADA = '#64748b';
 
 /**
  * Espessura mínima, em pixel de tela, para pintar as faixas das camadas.
@@ -3554,6 +3558,21 @@ export default function BlueprintCanvas({
     return m;
   }, [pisosHumanizados, ambientesDoNivel]);
 
+  /**
+   * F6 (kernel 0.96.0): a HACHURA DE MATERIAL do piso na planta técnica — a da camada do
+   * TOPO do piso declarado (a de acabamento, a que se vê). Em mm, uma vez por modelo; a
+   * humanizada continua com a trama colorida dela (`tramasDosPisos`).
+   */
+  const tramasDeMaterial = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof linhasDoPadrao>>();
+    for (const s of ambientesDoNivel) {
+      const piso = acabamentosDoAmbiente(model, s)?.piso;
+      const h = piso?.[piso.length - 1]?.hachura;
+      if (h) m.set(s.id, linhasDoPadrao(h, s.ring, s.holes));
+    }
+    return m;
+  }, [model, ambientesDoNivel]);
+
   // ── Desenho ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -3737,6 +3756,20 @@ export default function BlueprintCanvas({
         ctx.lineWidth = 0.7;
         ctx.beginPath();
         for (const seg of trama.segmentos) {
+          const a = paraTela(seg.a);
+          const b = paraTela(seg.b);
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+        }
+        ctx.stroke();
+      }
+      // F6: a hachura de MATERIAL do piso (planta técnica) — a humanizada já tem a dela.
+      const material = humanizada ? undefined : tramasDeMaterial.get(s.id);
+      if (material && material.length > 0) {
+        ctx.strokeStyle = COR_HACHURA_DA_CAMADA;
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        for (const seg of material) {
           const a = paraTela(seg.a);
           const b = paraTela(seg.b);
           ctx.moveTo(a.x, a.y);
@@ -4075,6 +4108,25 @@ export default function BlueprintCanvas({
           ctx.moveTo(x0 + nx, y0 + ny);
           ctx.lineTo(x1 + nx, y1 + ny);
           ctx.stroke();
+
+          // HACHURA DA CAMADA (F6, kernel 0.96.0): o padrão dentro da faixa. A faixa vai
+          // para mm do modelo (`paraMundo`), o padrão é o MESMO do PDF (`linhasDoPadrao`),
+          // girado pelo ângulo da parede — o tijolo corre ao longo dela.
+          if (c.hachura) {
+            const canto = (x: number, y: number, v: number) => paraMundo(x - t.uy * v, y + t.ux * v) as Point;
+            const faixa = [canto(x0, y0, a), canto(x1, y1, a), canto(x1, y1, b), canto(x0, y0, b)];
+            const angulo = Math.atan2(t.w.b.y - t.w.a.y, t.w.b.x - t.w.a.x);
+            ctx.strokeStyle = COR_HACHURA_DA_CAMADA;
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            for (const sg of linhasDoPadrao(c.hachura, faixa, [], angulo)) {
+              const p = paraTela(sg.a);
+              const q = paraTela(sg.b);
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(q.x, q.y);
+            }
+            ctx.stroke();
+          }
         }
       }
       meioTom(false);
@@ -9509,6 +9561,8 @@ export default function BlueprintCanvas({
     fases,
     pisosHumanizados,
     tramasDosPisos,
+    tramasDeMaterial,
+    paraMundo,
     vegetacao,
     cotaAltoContraste,
     paraTela,

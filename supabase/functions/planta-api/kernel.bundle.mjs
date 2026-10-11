@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.95.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.96.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1763,6 +1763,24 @@ function aplicarEtiquetas(model) {
 }
 
 // utils/blueprintKernel/canonical.ts
+function camadaCanonica(c) {
+  return {
+    espessuraMm: c.espessuraMm,
+    itemCode: c.itemCode,
+    descricao: c.descricao,
+    funcao: c.funcao,
+    ...c.hachura ? { hachura: { padrao: c.hachura.padrao, escalaPct: c.hachura.escalaPct, rotacaoGraus: c.hachura.rotacaoGraus } } : {}
+  };
+}
+function camadaDoCanonico(c) {
+  return {
+    espessuraMm: c.espessuraMm,
+    itemCode: c.itemCode,
+    descricao: c.descricao,
+    funcao: c.funcao,
+    ...c.hachura ? { hachura: { padrao: c.hachura.padrao, escalaPct: c.hachura.escalaPct, rotacaoGraus: c.hachura.rotacaoGraus } } : {}
+  };
+}
 function cmpStr(x, y) {
   return x < y ? -1 : x > y ? 1 : 0;
 }
@@ -1849,12 +1867,7 @@ function projetar(model) {
       // aceito: recadastrar o item com outra grafia muda o hash sem a geometria
       // ter mudado. É por isso que ela fica FORA de `assinaturaDasCamadas`, que
       // é quem responde "é a mesma composição?" para unir parede e para o diff.
-      camadas: w.camadas?.length ? w.camadas.map((c) => ({
-        espessuraMm: c.espessuraMm,
-        itemCode: c.itemCode,
-        descricao: c.descricao,
-        funcao: c.funcao
-      })) : void 0
+      camadas: w.camadas?.length ? w.camadas.map(camadaCanonica) : void 0
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.a.x - y.a.x || x.a.y - y.a.y || x.b.x - y.b.x || x.b.y - y.b.y || x.thicknessMm - y.thicknessMm || // Desempate pela COMPOSIÇÃO (0.11.0). Sem ele, duas paredes com a mesma
     // geometria e a mesma espessura total mas camadas diferentes (25+140+25
@@ -1936,7 +1949,7 @@ function projetar(model) {
       baseMm: s2.baseMm,
       circular: s2.circular,
       // CAMADAS DA LAJE (0.91.0): só quando declaradas.
-      camadas: s2.camadas?.length ? s2.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) : void 0,
+      camadas: s2.camadas?.length ? s2.camadas.map(camadaCanonica) : void 0,
       rotacaoDeg: s2.rotacaoDeg,
       // `null` explícito, como em `boundaries.papel`: aqui a chave só existe
       // dentro de uma peça estrutural, que por definição é desenho novo — não
@@ -1968,7 +1981,7 @@ function projetar(model) {
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
       // CAMADAS (0.91.0): só quando declaradas — a disciplina das camadas da parede.
-      camadas: r.camadas?.length ? r.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) : void 0,
+      camadas: r.camadas?.length ? r.camadas.map(camadaCanonica) : void 0,
       // COBERTURA POR EXTRUSÃO (0.49.0): o eixo, só quando a água nasceu dele.
       extrusao: r.extrusao ? { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } : void 0,
       parametros: parametrosCanonicos(r.parametros)
@@ -2415,8 +2428,8 @@ function projetar(model) {
       // fixa — o `stableStringify` ordena chaves, mas a forma tem de ser a
       // mesma na ida e na volta.
       acabamentos: l.acabamentos ? {
-        piso: l.acabamentos.piso?.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })),
-        forro: l.acabamentos.forro ? { camadas: l.acabamentos.forro.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })), rebaixoMm: l.acabamentos.forro.rebaixoMm } : void 0,
+        piso: l.acabamentos.piso?.map(camadaCanonica),
+        forro: l.acabamentos.forro ? { camadas: l.acabamentos.forro.camadas.map(camadaCanonica), rebaixoMm: l.acabamentos.forro.rebaixoMm } : void 0,
         rodape: l.acabamentos.rodape === void 0 ? void 0 : l.acabamentos.rodape === null ? null : { alturaMm: l.acabamentos.rodape.alturaMm, itemCode: l.acabamentos.rodape.itemCode, descricao: l.acabamentos.rodape.descricao }
       } : void 0
     }),
@@ -2681,12 +2694,7 @@ function modelFromCanonicalPayload(payload) {
       // lista vazia, volta como nada — parede homogênea, que é o que um payload
       // de antes de 0.11.0 significa.
       ...w.camadas?.length ? {
-        camadas: w.camadas.map((c) => ({
-          espessuraMm: c.espessuraMm,
-          itemCode: c.itemCode,
-          descricao: c.descricao,
-          funcao: c.funcao
-        }))
+        camadas: w.camadas.map(camadaDoCanonico)
       } : {}
     });
     return id;
@@ -2755,7 +2763,7 @@ function modelFromCanonicalPayload(payload) {
       alturaMm: s2.alturaMm,
       baseMm: s2.baseMm,
       circular: s2.circular,
-      ...s2.camadas?.length ? { camadas: s2.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) } : {},
+      ...s2.camadas?.length ? { camadas: s2.camadas.map(camadaDoCanonico) } : {},
       rotacaoDeg: s2.rotacaoDeg,
       rotulo: s2.rotulo ?? null,
       ...s2.cedeSobreposicao ? { cedeSobreposicao: true } : {},
@@ -2777,7 +2785,7 @@ function modelFromCanonicalPayload(payload) {
       inclinacaoPct: r.inclinacaoPct,
       baseMm: r.baseMm,
       espessuraMm: r.espessuraMm,
-      ...r.camadas?.length ? { camadas: r.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) } : {},
+      ...r.camadas?.length ? { camadas: r.camadas.map(camadaDoCanonico) } : {},
       ...r.extrusao ? { extrusao: { a: { x: r.extrusao.a.x, y: r.extrusao.a.y }, b: { x: r.extrusao.b.x, y: r.extrusao.b.y } } } : {},
       ...r.parametros && Object.keys(r.parametros).length > 0 ? { parametros: { ...r.parametros } } : {}
     });
@@ -3213,8 +3221,8 @@ function modelFromCanonicalPayload(payload) {
       ...l.departamento ? { departamento: l.departamento } : {},
       ...l.acabamentos ? {
         acabamentos: {
-          ...l.acabamentos.piso ? { piso: l.acabamentos.piso.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })) } : {},
-          ...l.acabamentos.forro ? { forro: { camadas: l.acabamentos.forro.camadas.map((c) => ({ espessuraMm: c.espessuraMm, itemCode: c.itemCode, descricao: c.descricao, funcao: c.funcao })), rebaixoMm: l.acabamentos.forro.rebaixoMm } } : {},
+          ...l.acabamentos.piso ? { piso: l.acabamentos.piso.map(camadaDoCanonico) } : {},
+          ...l.acabamentos.forro ? { forro: { camadas: l.acabamentos.forro.camadas.map(camadaDoCanonico), rebaixoMm: l.acabamentos.forro.rebaixoMm } } : {},
           ...l.acabamentos.rodape !== void 0 ? { rodape: l.acabamentos.rodape === null ? null : { alturaMm: l.acabamentos.rodape.alturaMm, itemCode: l.acabamentos.rodape.itemCode, descricao: l.acabamentos.rodape.descricao } } : {}
         }
       } : {}

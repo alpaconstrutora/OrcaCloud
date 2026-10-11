@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '3f363117e21fae310641b374275b48775b6760f55e75dbf9fc30905cb747ddb8',
+    hash: 'f62e42e806d6e3320c9b2ac4684b78bb2a027e132bcd6f486aefb7510e06ef6e',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'a0cef242a8a352f0d040915e48ad97061d3c5acc38f9291c95b9ec60cb1463b9',
+    hash: '90a40477f90dbc4631da016d3473f7b83d7a27d4ee92ce8e9057719f29763f17',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'c8cf3a8a6937f54b0de6bf190026b95d58446de8992c6e01ddd94b0da9e1ca0f',
+    hash: 'e8986d366ca453968b7404dd82532e160e3b51ee1638c90a2f4143a4a76b23b6',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'b1520b4263bd8c47a823f385ab3236aa0630653f5a602253bc03f953718c60e0',
+    hash: '481b97fabd9040d012bd224a8ee4ed83adeed671c164857da2e85a4b06b23e8a',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '4991b2107568ce2baa86953f9ae6b7743e71db835126af917327b30ea6e3c7cc',
+    hash: 'af743b028ed1012db7859e5d010e84afc8ec2c813e2a6cec7e3c0a2925d342ce',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '24725ac46992c63ab026c0980f19e2f16b1e9d12623288337b46971e1481676c',
+    hash: '6a02db1243ea8dcb33bc02bcb60e9a7222600bb0e17d1474568cf77b4a00664e',
   },
 };
 
@@ -939,6 +939,13 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   hash: com a string em 0.94.0 e o tipo + a invariante no código, os sete testes
  *   deste arquivo passaram; depois do bump as seis falhas foram todas de hash
  *   (cada hash antigo aparecia UMA vez no arquivo), contagens idênticas.
+ *
+ *   0.95.0 → 0.96.0 (11/10/2026): `CamadaParede.hachura` opcional (F6 do plano
+ *   recursos-video-synaps), emitida só quando declarada — nenhum dos seis casos
+ *   tem camada. Mesma prova, refeita ANTES de tocar num hash: com a string em
+ *   0.95.0 e o campo, a validação e o canônico único (`camadaCanonica`) no lugar,
+ *   411 testes de kernel/goldens/camadas/acabamentos/telhado/IFC passaram; depois
+ *   do bump as seis falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

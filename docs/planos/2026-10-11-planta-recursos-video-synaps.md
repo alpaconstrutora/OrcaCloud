@@ -284,6 +284,32 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F6 — Biblioteca de padrões de hachura** · `utils/blueprintPadroes.ts` (novo, generaliza `tramaDoPiso`), kernel (**bump**): `padraoVisual {padrao, escala, rotacaoGraus}` em `AcabamentosDoAmbiente` (`model.ts:889`) e na camada de parede/material
 - Muda: padrões = os 8 atuais + espinha de peixe, tijolo, concreto, isolamento, azulejo, terra/brita. O padrão é escolhido no ambiente e na camada; a humanizada continua adivinhando só quando não há escolha. Desenha na planta técnica (canvas `:3696`, PDF `:516`) e nas camadas de parede (`:4034`).
 - Pronto quando: teste de geração de linhas por padrão/escala/rotação (contagem e ângulo); no app, banheiro em azulejo escala 3 e parede externa tijolo/isolamento/concreto, iguais em tela e PDF.
+- **Feito na execução (11/10), com mudanças em relação ao rascunho:**
+  - **Um campo só, na `CamadaParede`** (`hachura?: { padrao, escalaPct, rotacaoGraus }`), e não um
+    `padraoVisual` no ambiente E no material: o PISO do ambiente já é uma lista de `CamadaParede`, então
+    o mesmo campo serve à parede, ao piso (a camada do TOPO, a de acabamento) e ao forro. Escala em %
+    INTEIRO (10–1000) e giro inteiro [0, 360) — o kernel não guarda fração.
+  - Catálogo `PADROES_DE_MATERIAL`: diagonal, cruzada, azulejo, porcelanato, tábua, espinha de peixe,
+    tijolo, concreto, isolamento. Os 8 da humanizada continuam lá, adivinhados como antes; terra/brita
+    ficaram fora (é tema do terreno, com sub-região própria).
+  - **Kernel 0.95.0 → 0.96.0** com o ritual: com a string em 0.95.0 e campo + validação única
+    (`assertHachuraDaCamada`, chamada nas 3 validações de camadas) + canônico único (`camadaCanonica`/
+    `camadaDoCanonico`, trocando 15 pontos que repetiam a forma da camada), 411 testes de kernel/goldens/
+    camadas/acabamentos/telhado/IFC passaram; depois do bump só hashes. Camada sem hachura sai SEM a chave
+    (teste). `clonarCamadas` copia a hachura (sem isso o Ctrl+Z mudaria junto). Bundle da planta-api regerado.
+  - Geometria única `utils/blueprintPadroes.ts` (`linhasDoPadrao`): ANCORADA na origem do modelo (dois
+    ambientes vizinhos alinham juntas — teste), girada por `rotacaoGraus` + ângulo da parede (o tijolo corre
+    ao longo dela), recortada com furos (`recortarSegmento`), teto de 6000 segmentos.
+  - Tela: hachura dentro da faixa de cada camada (com "Camadas" ligado) e no piso da planta técnica. PDF:
+    piso hachurado e, nas paredes que declararam padrão, JUNTAS entre camadas + hachura (parede sem padrão
+    sai como sempre — teste conta ZERO traços novos).
+  - Edição: `CampoDeHachura` (padrão, escala %, giro °; valores corrigidos para a faixa na entrada) nas
+    camadas da parede (`PainelCamadasParede`) e do piso/forro (`EditorDeCamadas`). Tirar a hachura REMOVE
+    a chave (`camadaComHachura`).
+  - DXF: fora desta fase (o DXF segue sem hachuras, como já declarava).
+  - Prova: `__tests__/blueprintPadroes.test.ts` (13). **No app com escrita: pendente** — a rodada parou na
+    trava de segurança (havia outra pessoa no estudo); roteiro pronto: selecionar a parede → "Dividir em
+    camadas" → hachura Tijolo → banco → Ctrl+Z ×2.
 
 **F7 — Anotação de forma com preenchimento** · kernel (**bump**): `HACHURA` ganha `padraoVisual`, `opacidade`, `traco {tracoMm, espacoMm}`, `ordem`; modo retângulo; `BlueprintCanvas.tsx`, `blueprintExport.ts`, `PainelAnotacaoSelecionada.tsx`
 - Muda: retângulo em 2 cliques; "Trazer para frente / Enviar para trás" mexem em `ordem`; fundo sólido opaco disponível.
@@ -332,7 +358,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
   app com escrita: banco 4×250 e Ctrl+Z 4×150 · [x] F5 — `90d58534`, kernel 0.95.0, provada no app com escrita
   (cota gravada e desfeita) + PDF/DXF por teste
-- [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
+- [ ] F6 — **parcial**: kernel 0.96.0, tela, PDF e edição provados por teste; falta a prova no app com escrita · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

@@ -40,7 +40,8 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
 import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
-import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
+import { acabamentosDoAmbiente, contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
+import { linhasDoPadrao } from './blueprintPadroes';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
@@ -485,6 +486,8 @@ import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 const COR_TRACO = '#000000';
 const COR_AMBIENTE = '#f2f2f2';
+/** F6: o traço da hachura de material (piso e camadas de parede) — o mesmo cinza da tela. */
+const COR_HACHURA_DE_MATERIAL = '#64748b';
 const ESPESSURA_FINA_MM = 0.13;
 const ESPESSURA_TEXTO_MM = 2.2;
 /** Abaixo disto nenhuma impressora resolve o traço. */
@@ -528,6 +531,12 @@ export function desenharPlanta(
     );
     if (piso && piso.moduloMm > 0) {
       for (const seg of tramaDoPiso(s, piso)) d.linha(px(seg.a.x), py(seg.a.y), px(seg.b.x), py(seg.b.y), { espessuraMm: 0.1, cor: piso.corDoTraco });
+    }
+    // F6: a hachura de MATERIAL do piso na planta técnica — a da camada do topo, como na tela.
+    if (!opcoes.humanizada) {
+      const camadasDoPiso = acabamentosDoAmbiente(model, s)?.piso;
+      const h = camadasDoPiso?.[camadasDoPiso.length - 1]?.hachura;
+      if (h) for (const seg of linhasDoPadrao(h, s.ring, s.holes)) d.linha(px(seg.a.x), py(seg.a.y), px(seg.b.x), py(seg.b.y), { espessuraMm: 0.06, cor: COR_HACHURA_DE_MATERIAL });
     }
   }
 
@@ -609,6 +618,39 @@ export function desenharPlanta(
       t.by + t.uy * recB,
       { espessuraMm: miolo, cor: '#ffffff' },
     );
+  }
+
+  // ── Camadas com HACHURA DE MATERIAL (F6, kernel 0.96.0) ───────────────────
+  //
+  // Por cima do miolo branco (antes dele, o branco apagaria). Só nas paredes que
+  // DECLARARAM padrão em alguma camada — parede sem hachura sai como sempre saiu.
+  // As juntas entre camadas vêm junto: hachura sem a junta não diz onde a camada
+  // acaba. A composição vai da face ESQUERDA para a DIREITA do sentido a → b,
+  // como no canvas; a geometria do padrão é a MESMA da tela (`linhasDoPadrao`).
+  if (!opcoes.humanizada) {
+    for (const w of model.walls) {
+      if (!w.camadas?.some((c) => c.hachura)) continue;
+      const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+      if (L === 0) continue;
+      const ux = (w.b.x - w.a.x) / L;
+      const uy = (w.b.y - w.a.y) / L;
+      const nx = -uy;
+      const ny = ux;
+      const angulo = Math.atan2(uy, ux);
+      const em = (p: Point, o: number) => ({ x: p.x + nx * o, y: p.y + ny * o }) as Point;
+      let o1 = w.thicknessMm / 2;
+      w.camadas.forEach((c, i) => {
+        const o2 = o1 - c.espessuraMm;
+        if (i > 0) d.linha(px(em(w.a, o1).x), py(em(w.a, o1).y), px(em(w.b, o1).x), py(em(w.b, o1).y), { espessuraMm: 0.08, cor: COR_TRACO });
+        if (c.hachura) {
+          const faixa = [em(w.a, o1), em(w.b, o1), em(w.b, o2), em(w.a, o2)];
+          for (const seg of linhasDoPadrao(c.hachura, faixa, [], angulo)) {
+            d.linha(px(seg.a.x), py(seg.a.y), px(seg.b.x), py(seg.b.y), { espessuraMm: 0.06, cor: COR_HACHURA_DE_MATERIAL });
+          }
+        }
+        o1 = o2;
+      });
+    }
   }
 
   // ── Aberturas (E8.4): o vão aberto, os batentes e o símbolo — porta com folha e arco, janela no eixo, correr recolhida ──

@@ -17,7 +17,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronUp, GripVertical, Layers, Plus, Search } from 'lucide-react';
-import type { CamadaParede, FuncaoCamada, QuantidadeCamada, Wall } from '../../utils/blueprintKernel';
+import type { CamadaParede, FuncaoCamada, HachuraDaCamada, QuantidadeCamada, Wall } from '../../utils/blueprintKernel';
+import CampoDeHachura, { camadaComHachura } from './CampoDeHachura';
 import { somaDasCamadas } from '../../utils/blueprintKernel';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
@@ -416,6 +417,7 @@ export default function PainelCamadasParede({ parede, medidas, aoMudar, materiai
                 onDuplicar={() => duplicar(i)}
                 onExcluir={() => excluir(i)}
                 onMover={(d) => mover(i, d)}
+                onHachura={(h) => camadas && aoMudar(camadas.map((c, k) => (k === i ? camadaComHachura(c, h) : c)))}
               />
             ))}
           </ul>
@@ -497,6 +499,7 @@ function LinhaDeCamada({
   onDuplicar,
   onExcluir,
   onMover,
+  onHachura,
 }: {
   id: string;
   camada: CamadaParede;
@@ -512,6 +515,8 @@ function LinhaDeCamada({
   onDuplicar: () => void;
   onExcluir: () => void;
   onMover: (direcao: -1 | 1) => void;
+  /** F6: o padrão de hachura da camada; `undefined` tira. */
+  onHachura: (h: HachuraDaCamada | undefined) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -617,6 +622,11 @@ function LinhaDeCamada({
             <span className="text-slate-400"> · {medida.areaFaceM2.toFixed(2).replace('.', ',')} m²</span>
           </p>
         )}
+      </div>
+
+      {/* Faixa 2b — F6: a hachura de material, desenho e não material (não mexe no m³ acima). */}
+      <div className="mt-1 pl-5">
+        <CampoDeHachura hachura={camada.hachura} onMudar={onHachura} rotulo={`da camada ${indice + 1}`} />
       </div>
 
       {/* Faixa 3 — o material, com a largura inteira do painel: é o campo com o

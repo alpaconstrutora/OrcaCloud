@@ -631,8 +631,18 @@
  * ângulo da cota angular. Um valor novo de enum, sem campo novo — desenho antigo
  * só muda pela string da versão. Provado antes do bump: com a string em 0.94.0
  * os goldens passaram (7/7) sem outra alteração.
+ *
+ * ─── 0.95.0 → 0.96.0 (11/10/2026) — HACHURA DE MATERIAL NA CAMADA ────────────
+ *
+ * F6 do plano `2026-10-11-planta-recursos-video-synaps.md`: `CamadaParede` ganhou
+ * `hachura?: { padrao, escalaPct, rotacaoGraus }` (catálogo `PADROES_DE_MATERIAL`) —
+ * na parede, a hachura dentro da faixa da camada; no piso, a da camada do topo.
+ * Opcional e só emitida quando declarada (`camadaCanonica`, uma forma só para
+ * parede, laje, cobertura, piso e forro): desenho antigo só muda pela string da
+ * versão. Provado antes do bump: com a string em 0.95.0 e tudo no lugar, 411
+ * testes de kernel/goldens/camadas/acabamentos/telhado/IFC passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.95.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.96.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

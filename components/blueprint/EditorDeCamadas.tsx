@@ -11,6 +11,7 @@
 import React from 'react';
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import type { CamadaParede, FuncaoCamada } from '../../utils/blueprintKernel';
+import CampoDeHachura, { camadaComHachura } from './CampoDeHachura';
 import { FUNCOES_DE_CAMADA } from '../../utils/blueprintKernel';
 import SeletorDeMaterial from './SeletorDeMaterial';
 import type { Material } from '../../utils/blueprintMateriais';
@@ -49,6 +50,8 @@ export default function EditorDeCamadas({ chave, camadas, rotuloDaOrdem, onMudar
             <select value={c.funcao} onChange={(e) => trocar(i, { funcao: e.target.value as FuncaoCamada })} aria-label={`Função da camada ${i + 1}`} className={campo}>
               {FUNCOES_DE_CAMADA.map((f) => <option key={f} value={f}>{ROTULO_DA_FUNCAO_DE_CAMADA[f]}</option>)}
             </select>
+            {/* F6: a hachura de material — no PISO vale a da camada do topo (a última). */}
+            <CampoDeHachura hachura={c.hachura} onMudar={(h) => onMudar(camadas.map((x, k) => (k === i ? camadaComHachura(x, h) : x)))} rotulo={`da camada ${i + 1}`} />
             <input type="text" defaultValue={c.descricao} placeholder="Descrição" aria-label={`Descrição da camada ${i + 1}`} onBlur={(e) => e.target.value !== c.descricao && trocar(i, { descricao: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} className={`${campo} w-40`} />
             {materiais.length > 0 ? (
               <SeletorDeMaterial materiais={materiais} atual={c.itemCode} onEscolher={(m) => trocar(i, { itemCode: m.codigo, descricao: m.nome, ...(m.funcao ? { funcao: m.funcao } : {}) })} onCatalogo={() => onEscolherMaterial(i)} onLimpar={() => trocar(i, { itemCode: '' })} ariaLabel={`Material da camada ${i + 1}`} />

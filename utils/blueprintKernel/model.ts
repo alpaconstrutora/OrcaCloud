@@ -122,6 +122,64 @@ export interface CamadaParede {
   /** Descrição em CACHE — rótulo de tela. O kernel nunca a interpreta. */
   descricao: string;
   funcao: FuncaoCamada;
+  /**
+   * PADRÃO DE DESENHO da camada (0.96.0, F6 do plano `2026-10-11-planta-recursos-video-synaps.md`).
+   * Na parede, a hachura dentro da faixa da camada; no PISO do ambiente, a da camada de
+   * acabamento do topo (a última). Ausente = sem hachura (a faixa de cor de sempre).
+   * É desenho, não material: não entra no quantitativo nem na assinatura das camadas.
+   */
+  hachura?: HachuraDaCamada;
+}
+
+/**
+ * Os padrões de hachura de MATERIAL (0.96.0). O módulo de cada um a 100 % mora na
+ * geometria (`utils/blueprintPadroes.ts`), não aqui: o kernel guarda a escolha.
+ */
+export type PadraoDeMaterial =
+  | 'DIAGONAL'
+  | 'CRUZADA'
+  | 'AZULEJO'
+  | 'PORCELANATO'
+  | 'TABUA'
+  | 'ESPINHA_DE_PEIXE'
+  | 'TIJOLO'
+  | 'CONCRETO'
+  | 'ISOLAMENTO';
+export const PADROES_DE_MATERIAL: readonly PadraoDeMaterial[] = ['DIAGONAL', 'CRUZADA', 'AZULEJO', 'PORCELANATO', 'TABUA', 'ESPINHA_DE_PEIXE', 'TIJOLO', 'CONCRETO', 'ISOLAMENTO'];
+export const ROTULO_DO_PADRAO_DE_MATERIAL: Record<PadraoDeMaterial, string> = {
+  DIAGONAL: 'Diagonal',
+  CRUZADA: 'Cruzada',
+  AZULEJO: 'Azulejo',
+  PORCELANATO: 'Porcelanato',
+  TABUA: 'Tábua (piso de madeira)',
+  ESPINHA_DE_PEIXE: 'Espinha de peixe',
+  TIJOLO: 'Tijolo',
+  CONCRETO: 'Concreto',
+  ISOLAMENTO: 'Isolamento',
+};
+export interface HachuraDaCamada {
+  padrao: PadraoDeMaterial;
+  /** Escala do módulo em % inteiro (100 = módulo natural), `ESCALA_MIN`–`ESCALA_MAX`. */
+  escalaPct: number;
+  /** Giro do padrão em graus inteiros [0, 360). Na parede, somado ao ângulo da própria parede. */
+  rotacaoGraus: number;
+}
+export const ESCALA_MIN_DA_HACHURA_PCT = 10;
+export const ESCALA_MAX_DA_HACHURA_PCT = 1000;
+
+/** A regra única da hachura de camada — parede, piso, forro, cobertura e laje passam por ela. */
+export function assertHachuraDaCamada(h: unknown, onde: string): void {
+  if (h === undefined) return;
+  const x = h as Partial<HachuraDaCamada>;
+  if (!x || typeof x !== 'object' || !PADROES_DE_MATERIAL.includes(x.padrao as PadraoDeMaterial)) {
+    throw new KernelError('BAD_LAYER_HATCH', `${onde}: padrão de hachura desconhecido ${String(x?.padrao)}`);
+  }
+  if (!Number.isInteger(x.escalaPct) || (x.escalaPct as number) < ESCALA_MIN_DA_HACHURA_PCT || (x.escalaPct as number) > ESCALA_MAX_DA_HACHURA_PCT) {
+    throw new KernelError('BAD_LAYER_HATCH', `${onde}: escala da hachura tem de ser inteira em ${ESCALA_MIN_DA_HACHURA_PCT}–${ESCALA_MAX_DA_HACHURA_PCT} %`);
+  }
+  if (!Number.isInteger(x.rotacaoGraus) || (x.rotacaoGraus as number) < 0 || (x.rotacaoGraus as number) >= 360) {
+    throw new KernelError('BAD_LAYER_HATCH', `${onde}: giro da hachura tem de ser inteiro em [0, 360)`);
+  }
 }
 
 /**
@@ -354,7 +412,9 @@ export function somaDasCamadas(camadas: CamadaParede[] | undefined): number {
 export function clonarCamadas(
   camadas: CamadaParede[] | undefined,
 ): CamadaParede[] | undefined {
-  return camadas ? camadas.map((c) => ({ ...c })) : undefined;
+  // A hachura (0.96.0) é objeto: cópia rasa a deixaria COMPARTILHADA entre o modelo e o
+  // histórico — mudar o padrão de uma camada mudaria o passo anterior do Ctrl+Z junto.
+  return camadas ? camadas.map((c) => (c.hachura ? { ...c, hachura: { ...c.hachura } } : { ...c })) : undefined;
 }
 
 /**
@@ -5284,6 +5344,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
           if (c.espessuraMm <= 0) throw new KernelError('BAD_FINISH', `Camada ${i + 1} do ${onde} de ${l.id} com espessura não positiva`);
           if (!FUNCOES_DE_CAMADA.includes(c.funcao)) throw new KernelError('BAD_FINISH', `Função de camada inválida no ${onde} de ${l.id}: ${String(c.funcao)}`);
           if (typeof c.itemCode !== 'string' || typeof c.descricao !== 'string') throw new KernelError('BAD_FINISH', `Camada ${i + 1} do ${onde} de ${l.id} sem código/descrição em texto`);
+          assertHachuraDaCamada(c.hachura, `Camada ${i + 1} do ${onde} de ${l.id}`);
         }
       };
       if (a.piso) camadasOk(a.piso, 'piso');
@@ -5311,6 +5372,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (c.espessuraMm <= 0) throw new KernelError('BAD_LAYER_THICKNESS', `Camada ${i + 1} de ${onde} com espessura não positiva`);
       if (!FUNCOES_DE_CAMADA.includes(c.funcao)) throw new KernelError('BAD_LAYER_THICKNESS', `Função de camada inválida em ${onde}: ${String(c.funcao)}`);
       if (typeof c.itemCode !== 'string' || typeof c.descricao !== 'string') throw new KernelError('BAD_LAYER_THICKNESS', `Camada ${i + 1} de ${onde} sem código/descrição em texto`);
+      assertHachuraDaCamada(c.hachura, `Camada ${i + 1} de ${onde}`);
     }
   };
   for (const r of model.roofs ?? []) if (r.camadas) camadasDaPecaOk(r.camadas, `Água ${r.id}`);
@@ -5418,6 +5480,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
           );
         }
         assertIntegerMm(c.espessuraMm, `${wall.id}.camadas[${i}].espessuraMm`);
+        assertHachuraDaCamada(c.hachura, `Camada ${i + 1} de ${wall.id}`);
       }
 
       // O INVARIANTE QUE SUSTENTA TUDO. `thicknessMm` continua sendo a única

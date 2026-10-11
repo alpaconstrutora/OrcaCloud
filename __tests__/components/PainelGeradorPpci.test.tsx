@@ -39,7 +39,8 @@ describe('PainelGeradorPpci (E10)', () => {
     const e = g();
     render(<PainelGeradorPpci g={e} />);
     const etapas = within(screen.getByTestId('ppci-etapas')).getAllByRole('listitem').map((li) => li.textContent);
-    expect(etapas).toEqual(['Extintores (com placa)lança · 16', 'Sprinklers por ambiente e traçadonão exigida', 'Rede de hidrantesnão rodou']);
+    // 10/10/2026: a etapa que não rodou diz o motivo curto embaixo ("sem bomba").
+    expect(etapas).toEqual(['Extintores (com placa)lança · 16', 'Sprinklers por ambiente e traçadonão exigida', 'Rede de hidrantesnão rodousem bomba']);
     expect(screen.getByText('Percurso de fuga: 35 acima')).toBeTruthy();
     expect(screen.queryByText('Hidrantes simultâneos: 2 (IT do CBMMG)')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /CONFERIR NA NORMA/ }));
@@ -65,5 +66,29 @@ describe('PainelGeradorPpci (E10)', () => {
     const b = screen.getByRole('button', { name: /Lançar tudo/ }) as HTMLButtonElement;
     expect(b.disabled).toBe(true);
     expect(b.title).toBe('o desenho mudou desde a prévia — gere de novo');
+  });
+
+  it('10/10/2026 (o print do usuário): o gerador que PARA numa premissa diz o porquê no topo, cada etapa o motivo, e não há o verde de "nenhuma verificação em falta"', () => {
+    const parado: PlanoDoPpci = {
+      comandos: [],
+      criados: [],
+      etapas: [
+        { id: 'CARGA', rotulo: 'Carga térmica por ambiente', situacao: 'NAO_RODOU', comandos: 0, nota: 'nenhum ambiente climatizado' },
+        { id: 'EQUIPAMENTOS', rotulo: 'Equipamentos', situacao: 'NAO_RODOU', comandos: 0, nota: 'sem carga térmica' },
+      ],
+      pendencias: [{ grupo: 'PREMISSA', texto: 'Nenhum ambiente climatizado — nomeie os ambientes (sala e quarto entram pelo nome)' }],
+      resultado: emptyModel(),
+    };
+    render(<PainelGeradorPpci g={g({ plano: parado })} />);
+    expect(screen.getByTestId('gerador-parou')).toHaveTextContent('O gerador parou — falta premissa:Nenhum ambiente climatizado — nomeie os ambientes');
+    expect(screen.getByTestId('motivo-CARGA')).toHaveTextContent('nenhum ambiente climatizado');
+    expect(screen.getByTestId('motivo-EQUIPAMENTOS')).toHaveTextContent('sem carga térmica');
+    expect(screen.queryByText('Nenhuma verificação em falta no resultado.')).toBeNull();
+  });
+
+  it('o gerador que rodou não mostra o aviso de parada, e o verde volta quando não há verificação em falta', () => {
+    render(<PainelGeradorPpci g={g({ plano: { ...plano, etapas: plano.etapas.slice(0, 2), pendencias: [] } })} />);
+    expect(screen.queryByTestId('gerador-parou')).toBeNull();
+    expect(screen.getByText('Nenhuma verificação em falta no resultado.')).toBeTruthy();
   });
 });

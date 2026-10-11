@@ -100,14 +100,33 @@ export default function PainelGeradorPpci({ g, testId = 'gerador-ppci' }: { g: G
 
       {p && (
         <>
+          {/* 10/10/2026 (teste do usuário no app real): quando o gerador PARA numa premissa, o porquê
+              aparece aqui, em destaque — antes ficava num item recolhido do relatório, e a tela só
+              mostrava "não rodou" em todas as etapas. */}
+          {p.etapas.some((e) => e.situacao === 'NAO_RODOU') && p.pendencias.some((x) => x.grupo === 'PREMISSA') && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900" data-testid="gerador-parou">
+              <p className="font-medium">O gerador parou — falta premissa:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {p.pendencias
+                  .filter((x) => x.grupo === 'PREMISSA')
+                  .map((x, i) => (
+                    <li key={i} className="break-words">{x.texto}</li>
+                  ))}
+              </ul>
+            </div>
+          )}
           <ul className="space-y-1" data-testid="ppci-etapas">
             {p.etapas.map((e) => (
-              <li key={e.id} className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="min-w-0 text-slate-700">{e.rotulo}</span>
-                <span className={`shrink-0 text-xs ${COR_DA_SITUACAO[e.situacao]}`}>
-                  {ROTULO_DA_SITUACAO[e.situacao]}
-                  {e.comandos > 0 ? ` · ${e.comandos}` : ''}
+              <li key={e.id} className="text-sm">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 text-slate-700">{e.rotulo}</span>
+                  <span className={`shrink-0 text-xs ${COR_DA_SITUACAO[e.situacao]}`}>
+                    {ROTULO_DA_SITUACAO[e.situacao]}
+                    {e.comandos > 0 ? ` · ${e.comandos}` : ''}
+                  </span>
                 </span>
+                {/* O motivo curto da etapa (ex.: "sem carga térmica"), quando ela não rodou ou não se aplica. */}
+                {e.nota && (e.situacao === 'NAO_RODOU' || e.situacao === 'NAO_EXIGIDA') && <span className="block text-[11px] text-slate-500" data-testid={`motivo-${e.id}`}>{e.nota}</span>}
               </li>
             ))}
           </ul>
@@ -145,7 +164,10 @@ export default function PainelGeradorPpci({ g, testId = 'gerador-ppci' }: { g: G
                 </div>
               );
             })}
-            {!p.pendencias.some((x) => x.grupo === 'VERIFICACAO') && <p className="mt-1 text-xs text-emerald-700">Nenhuma verificação em falta no resultado.</p>}
+            {/* O verde só quando o gerador RODOU: sem nada calculado, "nenhuma verificação em falta" era conforto falso. */}
+            {!p.pendencias.some((x) => x.grupo === 'VERIFICACAO') && !p.etapas.some((e) => e.situacao === 'NAO_RODOU') && (
+              <p className="mt-1 text-xs text-emerald-700">Nenhuma verificação em falta no resultado.</p>
+            )}
           </div>
 
           <div className="flex gap-2">

@@ -3131,3 +3131,19 @@ Achados no teste do usuário no app real (print com "sem dre… 2345 VA …de dr
 **Prova:** `components/BlueprintCanvasMarcasTexto.test.tsx`: no último quadro, o texto da marca vem
 depois do "2345 VA" e abaixo dele. Rodado também contra o canvas antigo, onde falha (a marca vinha
 antes). `blueprintClimatizacaoGrupoF.test.ts` (+1): o ponto ao lado, girado, e uma vez só.
+
+### O gerador diz por que parou · 10/10/2026 (frente `gerador-motivo`)
+
+Achado no teste do usuário no app real: "Gerar climatização" num desenho sem paredes mostrou todas
+as etapas "não rodou", o motivo recolhido num item do relatório e, em verde, "Nenhuma verificação
+em falta no resultado". Pedido: **"sim"**. Vale para os dois geradores (climatização e PPCI), que
+usam a mesma gaveta (`PainelGeradorPpci`):
+
+- **O motivo no topo.** Quando o gerador parou e há premissa faltando, aparece em destaque, já
+  aberto: "O gerador parou — falta premissa:" e a lista.
+- **O motivo da etapa.** Embaixo de cada "não rodou" ou "não exigida", a nota curta da etapa (ex.:
+  "sem carga térmica").
+- **Sem verde falso.** "Nenhuma verificação em falta no resultado" só aparece quando nenhuma etapa
+  deixou de rodar.
+
+**Prova:** `components/PainelGeradorPpci.test.tsx` (+2): o caso do print, e o gerador que rodou.

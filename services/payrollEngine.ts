@@ -84,8 +84,27 @@ export const payrollEngine = {
     // uma. Um id escolhido na tela valeria só para a org dona dele e estouraria
     // a FK nas demais. Em lote, cada folha nasce sem classificação e recebe a
     // dela na tela de detalhes.
-    async runBulkPayroll(startDate: string, endDate: string, type: PayrollRun['type'] = 'mensal', subtype?: string) {
-        const orgIds = await laborService.listOrgsWithActiveEmployees();
+    //
+    // `writableOrgIds`: organizações em que o usuário é MEMBRO. A lista de
+    // colaboradores visíveis inclui os COMPARTILHADOS de outras orgs
+    // (`employee_org_shares`), e o `org_id` deles é a org de origem — sem este
+    // corte o lote tentava abrir ciclo lá, levava 42501 e abortava inteiro
+    // (fornecedor membro só da Alpa, 11/10/2026). O compartilhado entra na
+    // folha da org que o recebeu, via `listEmployees(orgId)`.
+    async runBulkPayroll(
+        startDate: string,
+        endDate: string,
+        type: PayrollRun['type'] = 'mensal',
+        subtype?: string,
+        writableOrgIds?: string[],
+    ) {
+        const visibleOrgIds = await laborService.listOrgsWithActiveEmployees();
+        const orgIds = writableOrgIds
+            ? visibleOrgIds.filter(id => writableOrgIds.includes(id))
+            : visibleOrgIds;
+        if (orgIds.length === 0) {
+            throw new Error('Nenhuma organização com colaboradores ativos em que você possa gerar folha.');
+        }
         const runs: PayrollRun[] = [];
 
         for (const orgId of orgIds) {

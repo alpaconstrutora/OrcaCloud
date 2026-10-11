@@ -14,6 +14,7 @@ import LaborAllocations from './LaborAllocations';
 import { Employee } from '../services/laborService';
 import { usePersistedState } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
+import { useWritableOrganizations } from '../hooks/useOrgContext';
 
 // ── Local types ────────────────────────────────────────────────────────────────
 interface OrganizationItem {
@@ -67,6 +68,8 @@ interface LaborPayrollProps {
 
 const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos', employees = [], onRefresh }) => {
     const [activeTab, setActiveTab] = useState<PayrollTab>(initialTab);
+    // Lote em "Todas": só as orgs em que o usuário é membro (ver runBulkPayroll).
+    const writableOrgs = useWritableOrganizations();
 
     // O menu lateral navega trocando a prop, não remontando o componente.
     useEffect(() => { setActiveTab(initialTab); }, [initialTab]);
@@ -216,7 +219,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
             if (!orgId || orgId === 'all') {
                 // Em lote não vai classificação: os dois cadastros são por
                 // organização e o id escolhido valeria só para uma delas.
-                await payrollEngine.runBulkPayroll(start, end, type as PayrollRun['type'], subtype);
+                await payrollEngine.runBulkPayroll(
+                    start, end, type as PayrollRun['type'], subtype,
+                    writableOrgs.map(o => o.id),
+                );
             } else {
                 await payrollEngine.runPayroll(orgId, start, end, type as PayrollRun['type'], subtype, undefined, {
                     cost_center_id:     newRunCostCenter || null,
@@ -230,7 +236,10 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
             notify('Folha criada com sucesso.');
         } catch (err) {
             console.error(err);
-            notify('Erro ao criar folha. Verifique os dados.', 'error');
+            // A mensagem do lote sem org gravável explica o motivo; o resto
+            // (erro cru do PostgREST) fica no console.
+            const semOrg = err instanceof Error && err.message.startsWith('Nenhuma organização');
+            notify(semOrg ? (err as Error).message : 'Erro ao criar folha. Verifique os dados.', 'error');
         } finally {
             setExecuting(false);
         }

@@ -97,6 +97,8 @@ export const reconciliationGroupService = {
      *  • 1 título → N pagamentos
      */
     async findGroups(bankAccountId: string, organizationId: string): Promise<GroupSuggestions> {
+        // Títulos de todas as orgs que a conta atende, como o motor (não só da dona).
+        const orgsDosTitulos = await bankReconciliationService.orgsAtendidasPelaConta(bankAccountId, organizationId);
         // Paginado: `.limit(2000)` aqui era teto silencioso de 1000 linhas (PostgREST).
         const [{ data: bankTxs, error: bankErr }, { data: titles, error: titleErr }, filtros] = await Promise.all([
             fetchAllPages<BankItem & { category?: string | null }>(() => supabase.from('bank_transactions')
@@ -107,7 +109,7 @@ export const reconciliationGroupService = {
                 .order('id', { ascending: true }) as unknown as RangeableQuery<BankItem & { category?: string | null }>),
             fetchAllPages<TitleItem>(() => supabase.from('internal_transactions')
                 .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, ${COLUNA_VALOR_ESPERADO}`)
-                .eq('organization_id', organizationId)
+                .in('organization_id', orgsDosTitulos)
                 .eq('status', 'PENDING')
                 .or(FILTRO_SEM_TRIBUTO_RETIDO)
                 .order('transaction_date', { ascending: true })

@@ -499,6 +499,23 @@ export const COLUNA_VALOR_ESPERADO = 'valor_esperado';
 export const FILTRO_SEM_TRIBUTO_RETIDO = 'business_status.is.null,business_status.neq.RETIDO';
 
 /**
+ * As organizações cujos títulos uma conta pode conciliar: a dona, e as que ela ATENDE
+ * (lista ou "todas"), vindas de `fn_orgs_atendidas_pela_conta`. Até 11/10/2026 o motor
+ * buscava só a dona — a conta Itaú da org "Altair" atende todas, o aluguel que cai nela é
+ * título da Alpa, e o motor rodou meses com `title_rows_scanned = 0`. A dona vai sempre,
+ * mesmo que a função devolva vazio (pessoa sem acesso à dona): nunca menos que antes.
+ */
+export function orgsDosTitulos(dona: string, atendidas: readonly (string | null | undefined)[] | null | undefined): string[] {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return [...new Set([dona, ...(atendidas ?? [])].filter((o): o is string => !!o && uuid.test(o)))];
+}
+
+/** Filtro PostgREST (`.or(...)`): cadastro de qualquer uma das orgs, ou global (org nula). */
+export function filtroOrgsOuGlobal(orgs: readonly string[]): string {
+    return `organization_id.in.(${orgs.join(',')}),organization_id.is.null`;
+}
+
+/**
  * O valor que a conciliação compara é o que o banco de fato credita: a parcela
  * cujo cliente retém tributo concilia pelo LÍQUIDO (`valor_esperado`), a demais
  * pelo bruto. Troca só o `amount` do título usado no plano — o registro no banco

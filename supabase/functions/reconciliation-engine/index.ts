@@ -12,10 +12,12 @@ import {
     comValorEsperado,
     COLUNA_VALOR_ESPERADO,
     FILTRO_SEM_TRIBUTO_RETIDO,
+    filtroOrgsOuGlobal,
     findInternalTransferPairs,
     janelaDeTitulos,
     montarAjustes,
     montarIndiceDeContrapartes,
+    orgsDosTitulos,
     planMatching,
     AJUSTES_PADRAO,
     type BankRowParaPlano,
@@ -75,14 +77,17 @@ async function carregarAjustes(servico: SupabaseLike, orgId: string): Promise<Re
     }
 }
 
-/** Aliases aprendidos + documentos de fornecedores, clientes e contas de fornecedor. */
-async function carregarContrapartes(servico: SupabaseLike, orgId: string): Promise<PartyIndex> {
-    const orgOuNulo = `organization_id.eq.${orgId},organization_id.is.null`;
+/**
+ * Aliases aprendidos (da dona) + documentos de fornecedores, clientes e contas de
+ * fornecedor das MESMAS orgs dos títulos — igual a `loadPartyIndex` no navegador.
+ */
+async function carregarContrapartes(servico: SupabaseLike, orgId: string, orgs: string[]): Promise<PartyIndex> {
+    const orgOuNulo = filtroOrgsOuGlobal(orgs);
     const [aliases, fornecedores, clientes, contas] = await Promise.all([
         servico.from('reconciliation_aliases').select('alias_token, party_type, party_id, party_name, hit_count').eq('organization_id', orgId).order('hit_count', { ascending: false }).limit(2000),
         servico.from('suppliers').select('id, name, document').or(orgOuNulo),
         servico.from('clients').select('id, name, document').or(orgOuNulo),
-        servico.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').eq('organization_id', orgId),
+        servico.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').in('organization_id', orgs),
     ]);
     return montarIndiceDeContrapartes(
         aliases.data || [], fornecedores.data || [], clientes.data || [], contas.data || []);
@@ -254,12 +259,19 @@ serve(async (req: Request) => {
 
         // Só os títulos da janela que o extrato alcança — a mesma conta dos dois lados.
         const janela = janelaDeTitulos(movimentos.map(m => m.transaction_date));
+        // …e de TODAS as orgs que a conta atende, não só da dona. Até 11/10/2026 era
+        // `.eq('organization_id', orgId)`: a conta Itaú (org Altair, "atende todas")
+        // recebe aluguel que é título da Alpa, e cada rodada nela registrou
+        // title_rows_scanned = 0. A lista é a mesma que fn_reconcile_match aceita.
+        const { data: atendidas, error: erroOrgs } = await servico.rpc('fn_orgs_atendidas_pela_conta', { p_conta: contaId });
+        if (erroOrgs) throw erroOrgs;
+        const orgs = orgsDosTitulos(orgId, atendidas as string[] | null);
         // `valor_esperado` = bruto − tributos retidos pelo cliente: a parcela com
         // retenção casa pelo líquido que o banco credita. Tributo RETIDO fica fora.
         const titulos = (await todasAsPaginas<TituloParaPlano & { valor_esperado?: number | null }>(
             (de, ate) => servico.from('internal_transactions')
                 .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${COLUNA_VALOR_ESPERADO}`)
-                .eq('organization_id', orgId)
+                .in('organization_id', orgs)
                 .eq('status', 'PENDING')
                 .or(FILTRO_SEM_TRIBUTO_RETIDO)
                 .gte('transaction_date', janela.inicio)
@@ -268,7 +280,7 @@ serve(async (req: Request) => {
                 .range(de, ate))).map(comValorEsperado);
 
         const settings = await carregarAjustes(servico, orgId);
-        const partyIndex = await carregarContrapartes(servico, orgId);
+        const partyIndex = await carregarContrapartes(servico, orgId, orgs);
         const plano = planMatching(movimentos, titulos, settings, partyIndex);
 
         // 2.a) Sugestões: troca numa transação só (`fn_replace_suggestions`). Antes era

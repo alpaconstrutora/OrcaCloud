@@ -387,6 +387,17 @@ export const bankReconciliationService = {
         return data?.organization_id ?? null;
     },
 
+    /**
+     * Organizações cujos títulos esta conta pode conciliar: a dona + as que ela atende
+     * (`fn_orgs_atendidas_pela_conta` — a MESMA consulta da Edge Function e das RPCs de
+     * vínculo). Falhando a leitura, fica só a dona, que era o comportamento anterior.
+     */
+    async orgsAtendidasPelaConta(bankAccountId: string, dona: string): Promise<string[]> {
+        const { data, error } = await supabase.rpc('fn_orgs_atendidas_pela_conta', { p_conta: bankAccountId });
+        if (error) console.warn('[Motor] orgs atendidas pela conta — usando só a dona:', error);
+        return regras.orgsDosTitulos(dona, (data as string[] | null) ?? []);
+    },
+
     /** Progresso separado: histórico mede classificação, corrente mede conciliação. */
     async progressoDaConta(bankAccountId: string): Promise<Record<string, unknown> | null> {
         const { data, error } = await supabase.rpc('fn_reconciliation_progress', { p_bank_account_id: bankAccountId });
@@ -819,13 +830,15 @@ export const bankReconciliationService = {
      * Carrega o índice de contrapartes: aliases aprendidos + documentos (CNPJ/CPF/PIX)
      * de fornecedores, clientes e contas bancárias de fornecedor.
      */
-    async loadPartyIndex(organizationId: string): Promise<PartyIndex> {
-        const orgOrNull = `organization_id.eq.${organizationId},organization_id.is.null`;
+    /** `orgsDosTitulos`: os cadastros (fornecedor, cliente, conta de fornecedor) vêm das
+     *  mesmas orgs dos títulos; aliases aprendidos seguem os da dona da conta. */
+    async loadPartyIndex(organizationId: string, orgsDosTitulos: string[] = [organizationId]): Promise<PartyIndex> {
+        const orgOrNull = regras.filtroOrgsOuGlobal(orgsDosTitulos);
         const [aliasesRes, supRes, cliRes, sbaRes] = await Promise.all([
             supabase.from('reconciliation_aliases').select('alias_token, party_type, party_id, party_name, hit_count').eq('organization_id', organizationId).order('hit_count', { ascending: false }).limit(2000),
             supabase.from('suppliers').select('id, name, document').or(orgOrNull),
             supabase.from('clients').select('id, name, document').or(orgOrNull),
-            supabase.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').eq('organization_id', organizationId),
+            supabase.from('supplier_bank_accounts').select('supplier_id, pix_key, pix_key_type, beneficiary_document').in('organization_id', orgsDosTitulos),
         ]);
         // A MONTAGEM vive em `reconciliationRules` pelo mesmo motivo dos ajustes: o corte de
         // 11 dígitos e a precedência (fornecedor, depois cliente, e a conta bancária só
@@ -1031,6 +1044,8 @@ export const bankReconciliationService = {
             throw new Error('Não foi possível identificar a organização desta conta bancária.');
         }
         organizationId = orgId;
+        // Títulos de TODAS as orgs que a conta atende — não só da dona (ver orgsDosTitulos).
+        const orgsDosTitulos = await this.orgsAtendidasPelaConta(bankAccountId, orgId);
 
         const settings = await this.loadSettings(organizationId);
         const AUTO_THRESHOLD = settings.auto_threshold;
@@ -1061,7 +1076,7 @@ export const bankReconciliationService = {
                 .in('status', ['NORMALIZED', 'RULE_APPLIED'])
                 .order('transaction_date', { ascending: true })
                 .order('id', { ascending: true }) as unknown as RangeableQuery<BankRow>),
-            this.loadPartyIndex(organizationId),
+            this.loadPartyIndex(organizationId, orgsDosTitulos),
         ]);
         if (bankErr) throw bankErr;
         if (!bankTxs || bankTxs.length === 0) return { autoApplied: 0, suggestions: 0, exactUnique: 0, transfersPaired, bankRowsScanned: 0, titleRowsScanned: 0 };
@@ -1075,7 +1090,7 @@ export const bankReconciliationService = {
         const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
             .from('internal_transactions')
             .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${regras.COLUNA_VALOR_ESPERADO}`)
-            .eq('organization_id', organizationId)
+            .in('organization_id', orgsDosTitulos)
             .eq('status', 'PENDING')
             .or(regras.FILTRO_SEM_TRIBUTO_RETIDO)
             .gte('transaction_date', windowStart)

@@ -8435,7 +8435,9 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
       linhas: [
         // Largura e altura em CENTIMETRO (P2.46): a esquadria se especifica em cm
         // ("porta 80x210"), e o quadro tem de dizer o mesmo que a tela.
-        ["Esquadria", "Tipo", "Largura (cm)", "Altura (cm)", "Quantidade", "\xC1rea total (m\xB2)", "Item", "Descri\xE7\xE3o"],
+        // 'Folhas' (F8, quant-1.28.0) no FIM: mesma medida com folhas diferentes é outra linha, e a coluna
+        // diz por quê; no fim para não deslocar as colunas que já se lê por posição.
+        ["Esquadria", "Tipo", "Largura (cm)", "Altura (cm)", "Quantidade", "\xC1rea total (m\xB2)", "Item", "Descri\xE7\xE3o", "Folhas"],
         ...quant.totais.porEsquadria.map((e) => [
           e.nome,
           nomeDoTipoDeAbertura(e.tipo),
@@ -8444,7 +8446,8 @@ function abasDoQuantitativo(quant, ctx, armadura, parametros) {
           e.quantidade,
           n2(e.areaM2),
           e.itemCode,
-          e.descricao
+          e.descricao,
+          e.configuracao
         ])
       ]
     });

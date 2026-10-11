@@ -773,6 +773,7 @@ import {
   comandosDaPotenciaDaEvaporadora,
   comandosParaEncostarEvaporadora,
   pontoEletricoDaEvaporadora,
+  pontosQueSaemComAsEvaporadoras,
   pontosEletricosDoComponente,
 } from '../../utils/blueprintPontosHidraulicos';
 import { ehEvaporadoraDeParede, encostoNaParede } from '../../utils/blueprintEncostoNaParede';
@@ -7671,7 +7672,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     if (terminalIds.length && moveuClimatizacao(editor.model, terminalIds)) {
       try {
         const depois = applyBatch(editor.model, [mover]).model;
-        const junto = comandosAoMoverClimatizacao(editor.model, depois, { terminalIds, trechoIds: rede?.trechoIds ?? [] }, climatizacaoDoEstudo.hipoteses.linha);
+        // Pendência 1 (11/10/2026): com as premissas da elétrica, o eletroduto do ponto de força também é refeito.
+        const junto = comandosAoMoverClimatizacao(editor.model, depois, { terminalIds, trechoIds: rede?.trechoIds ?? [] }, climatizacaoDoEstudo.hipoteses.linha, {
+          eletroduto: hipotesesDeEletroduto,
+          eletricas: hipotesesEletricas,
+        });
         if (junto.length) {
           editor.runBatch([mover, ...junto]);
           return;
@@ -7828,7 +7833,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     // junto (ver `DeleteQuadro`); os pontos que os citavam ficam sem circuito,
     // e não apagados — quem tirou o quadro não decidiu tirar as tomadas.
     const trechos = ids.filter((id) => (editor.model.trechos ?? []).some((t) => t.id === id));
-    const terminais = ids.filter((id) => (editor.model.terminais ?? []).some((t) => t.id === id));
+    // Pendência 2 (11/10/2026): a evaporadora apagada leva o ponto de força DELA (antes ficava solto).
+    const terminaisSel = ids.filter((id) => (editor.model.terminais ?? []).some((t) => t.id === id));
+    const terminais = [...terminaisSel, ...pontosQueSaemComAsEvaporadoras(editor.model, terminaisSel)];
     const quadros = ids.filter((id) => (editor.model.quadros ?? []).some((q) => q.id === id));
 
     const lote: Command[] = [
@@ -7881,6 +7888,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
    * procuraria algo que não existe mais.
    */
   function excluirComponente(id: string) {
+    const some = new Set<string>([id]);
     const parede = editor.model.walls.find((w) => w.id === id);
     const abertura = editor.model.openings.find((o) => o.id === id);
     const estrutura = editor.model.structures.find((s) => s.id === id);
@@ -7900,12 +7908,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo 
     else if (agua) editor.run({ type: 'DeleteAgua', aguaId: agua.id });
     else if (escada) editor.run({ type: 'DeleteEscada', escadaId: escada.id });
     else if (trecho) editor.run({ type: 'DeleteTrecho', trechoId: trecho.id });
-    else if (terminal) editor.run({ type: 'DeleteTerminal', terminalId: terminal.id });
+    else if (terminal) {
+      // Pendência 2 (11/10/2026): a evaporadora leva o ponto de força dela — um lote, um Ctrl+Z.
+      const junto = pontosQueSaemComAsEvaporadoras(editor.model, [terminal.id]);
+      editor.runBatch([terminal.id, ...junto].map((terminalId) => ({ type: 'DeleteTerminal', terminalId }) as Command));
+      for (const x of junto) some.add(x);
+    }
     // O quadro leva os circuitos dele; os pontos ficam sem circuito, não apagados.
     else if (quadro) editor.run({ type: 'DeleteQuadro', quadroId: quadro.id });
     else return;
 
-    const some = new Set<string>([id]);
     if (parede) {
       for (const o of editor.model.openings) if (o.wallId === parede.id) some.add(o.id);
     }

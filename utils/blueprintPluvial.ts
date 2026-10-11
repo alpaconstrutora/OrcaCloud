@@ -71,6 +71,9 @@ export const HIPOTESES_PLUVIAIS_PADRAO: HipotesesPluviais = {
 export const INTENSIDADE_POR_CIDADE: Readonly<Record<string, Readonly<Record<PeriodoDeRetorno, number>>>> = {
   'Belém': { 1: 138, 5: 157, 25: 185 },
   'Belo Horizonte': { 1: 132, 5: 227, 25: 230 },
+  // 11/10/2026: incluída com a do clima (as duas tabelas têm as mesmas cidades). ⚠️ Mais incerta que as
+  // demais — CONFERIR na Tabela 5 da NBR 10844 antes de emitir; na dúvida, informe a intensidade no estudo.
+  'Brasília': { 1: 122, 5: 154, 25: 164 },
   'Cuiabá': { 1: 144, 5: 190, 25: 230 },
   'Curitiba': { 1: 132, 5: 204, 25: 228 },
   'Florianópolis': { 1: 114, 5: 120, 25: 144 },

@@ -94,6 +94,8 @@ export interface ClimaDaCidade {
 export const CLIMA_POR_CIDADE: Readonly<Record<string, ClimaDaCidade>> = {
   'Belém': { tbsC: 33.4, tbuC: 26.4, altitudeM: 10, latitude: -1.46, longitude: -48.5 },
   'Belo Horizonte': { tbsC: 31.7, tbuC: 21.3, altitudeM: 850, latitude: -19.92, longitude: -43.94 },
+  // 11/10/2026 (estudo do usuário em Brasília): incluída; os mesmos números declarados à mão no estudo — CONFERIR.
+  'Brasília': { tbsC: 31.3, tbuC: 19.6, altitudeM: 1160, latitude: -15.79, longitude: -47.88 },
   'Cuiabá': { tbsC: 37.3, tbuC: 24.7, altitudeM: 165, latitude: -15.6, longitude: -56.1 },
   'Curitiba': { tbsC: 30.0, tbuC: 21.0, altitudeM: 935, latitude: -25.43, longitude: -49.27 },
   'Florianópolis': { tbsC: 31.6, tbuC: 24.8, altitudeM: 5, latitude: -27.6, longitude: -48.55 },

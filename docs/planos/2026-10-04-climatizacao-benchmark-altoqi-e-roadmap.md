@@ -3286,3 +3286,26 @@ ponto de dreno de outro dreno fica; o conjunto arrastado inteiro não é refeito
 
 Fica de fora (registrado): o ELETRODUTO do ponto de força, quando desenhado, acompanha só pela ponta
 presa (regra do kernel), não é retraçado.
+
+### As três pendências · 11/10/2026 (frente `clima-pendencias`)
+
+Pedido do usuário: **"resolva as 3 pendencias"**.
+
+1. **O eletroduto do ponto de força acompanha.** Ao mover a evaporadora, o ponto de força ia junto
+   mas o eletroduto dele só seguia pela ponta presa. Agora `comandosAoMoverClimatizacao` (passo 4)
+   tira o RAMAL do ponto (`ramalDoPonto`: do ponto até a primeira derivação, outra peça elétrica ou o
+   quadro) e relança a rede do quadro do circuito (`relancarEletrodutos`: refaz os sugeridos e liga o
+   ponto na posição nova). Os outros eletrodutos aceitos ficam. O traçado é o do planejador da
+   elétrica (pela laje, em reta, por padrão) e vem sugerido.
+2. **Apagar a evaporadora leva o ponto de força dela** (`pontosQueSaemComAsEvaporadoras`), nos dois
+   caminhos de apagar do editor (a seleção e a lixeira do painel), num lote. O ponto que outra
+   evaporadora que fica também usa, fica.
+3. **Brasília nas tabelas** de clima (`CLIMA_POR_CIDADE`: TBS 31,3 °C, TBU 19,6 °C, 1.160 m) e de
+   chuva (`INTENSIDADE_POR_CIDADE`) — as duas têm as mesmas cidades (teste). ⚠️ Os números de chuva de
+   Brasília são os mais incertos da tabela: CONFERIR na Tabela 5 da NBR 10844. O estudo do usuário
+   passa a apontar a cidade (o clima vem da tabela, não mais declarado à mão).
+
+**Prova:** `blueprintClimatizacaoPendencias.test.ts` (4): o ramal antigo sai e o ponto, na parede
+nova, chega ao quadro (o plano do quadro não tem ponto a ligar); sem as premissas da elétrica, nada
+muda; o apagar junto (e o ponto compartilhado que fica); Brasília nas duas tabelas e a capital mais
+próxima do estudo.

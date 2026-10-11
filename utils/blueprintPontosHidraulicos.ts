@@ -31,8 +31,8 @@
  * duplica; uma disciplina que faltava (a água quente ligada depois) nasce na
  * posição do ponto irmão que já existe.
  */
-import type { BlueprintModel, Command, Componente, DisciplinaDeRede, FichaDoComponente, Opening, Space, SpaceLabel, Terminal, TipoDePontoHidraulico, Wall } from './blueprintKernel';
-import { CATALOGO_DE_COMPONENTES, DISCIPLINAS_DO_PONTO_HIDRAULICO, pointInPolygon, signedArea } from './blueprintKernel';
+import type { BlueprintModel, Command, Componente, DisciplinaDeRede, FichaDoComponente, ObjectId, Opening, Space, SpaceLabel, Terminal, TipoDePontoHidraulico, Wall } from './blueprintKernel';
+import { CATALOGO_DE_COMPONENTES, DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_EVAPORADORA, pointInPolygon, signedArea } from './blueprintKernel';
 import type { Point } from './blueprintKernel';
 import { etiquetaDoAmbiente, ladosDePiso, pontoJuntoAPorta, type LadoDoAmbiente } from './blueprintDistribuicao';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
@@ -511,6 +511,25 @@ export function comandosParaEncostarEvaporadora(model: BlueprintModel, evap: Ter
     }
   }
   return lote;
+}
+
+/**
+ * 11/10/2026 (pendência do teste do usuário no app real): APAGAR a evaporadora leva o ponto de
+ * força DELA — antes ele ficava no desenho, solto, com a potência e o circuito. Só o ponto que
+ * nenhuma evaporadora que FICA também usa; o que já está na lista não se repete.
+ */
+export function pontosQueSaemComAsEvaporadoras(model: BlueprintModel, idsApagados: readonly ObjectId[]): ObjectId[] {
+  const apagados = new Set(idsApagados);
+  const evaporadoras = (model.terminais ?? []).filter((t) => !!t.tipoHidraulico && (TIPOS_DE_EVAPORADORA as readonly string[]).includes(t.tipoHidraulico));
+  const ficam = evaporadoras.filter((e) => !apagados.has(e.id));
+  const saem = new Set<ObjectId>();
+  for (const e of evaporadoras.filter((x) => apagados.has(x.id))) {
+    const p = pontoEletricoDaEvaporadoraExistente(model, e);
+    if (!p || apagados.has(p.id)) continue;
+    if (ficam.some((f) => pontoEletricoDaEvaporadoraExistente(model, f)?.id === p.id)) continue;
+    saem.add(p.id);
+  }
+  return [...saem];
 }
 
 /** O nome que o app dá à condensadora pela capacidade (o mesmo do lançamento do split). */

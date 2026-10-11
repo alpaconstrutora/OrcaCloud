@@ -1,21 +1,38 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-    ShoppingCart,
     RefreshCw,
     AlertTriangle,
     Clock,
-    CheckCircle2,
     Package,
     TrendingUp,
-    ChevronRight,
     Loader2,
     Calendar,
     ExternalLink,
 } from 'lucide-react';
-import { KpiCard as KpiCardBase } from '../ui/KpiCard';
+import { KpiCard } from '../ui/KpiCard';
+import { TabsBar } from '../ui/TabsBar';
+import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
+import { usePersistedState } from '../ui/TableUtils';
+import { formatMoney } from '../ui/Format';
 import { ProcurementPlanItem } from '../../types/procurement';
-import { procurementService, computeRiskItems } from '../../services/procurementService';
-import Button from '../ui/Button';
+import { procurementService } from '../../services/procurementService';
+
+/**
+ * Engenharia › Planejamento › vista Suprimentos — Plano de Suprimentos.
+ *
+ * 11/10/2026 (pedido: *"Transformar em tabela e aplicar o padrão
+ * ui_ux_guia_unificado.md no toolbar de abas + botão de ajuste de colunas"*):
+ * - os "baldes" por prazo (Atrasados, Próximos 7 dias…) eram acordeões com emoji;
+ *   viraram as abas da `TabsBar` (§19.1), com a contagem de cada uma e, à direita,
+ *   as ações (Módulo Aquisições + a primária §17);
+ * - o grid de 12 colunas dentro de cada acordeão (`text-[9px] uppercase`,
+ *   `font-mono`, status em pílula) virou `StandardTable` (§6.10), com o
+ *   auto-ajuste de largura (§6.1.2) embutido;
+ * - ordem da anatomia: abas → KPIs → tabela. O título da vista saiu — o seletor de
+ *   vista do ribbon já diz "Suprimentos" (§18), e a contagem de insumos está na aba
+ *   "Todos".
+ * Regras de carga, geração e KPIs não mudaram.
+ */
 
 // ─── Helpers ──────────────────────────────────────────────────
 
@@ -30,6 +47,8 @@ const fmtDate = (iso?: string | null) => {
 const fmtBRL = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
+const fmtQtd = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function addDays(iso: string, n: number): string {
     const d = new Date(iso + 'T00:00:00Z');
     d.setUTCDate(d.getUTCDate() + n);
@@ -37,6 +56,7 @@ function addDays(iso: string, n: number): string {
 }
 
 type Bucket = 'overdue' | 'week' | 'month' | 'future' | 'no_date';
+type Aba = 'all' | Bucket;
 
 function bucket(item: ProcurementPlanItem): Bucket {
     if (!item.suggestedBuyDate) return 'no_date';
@@ -49,13 +69,15 @@ function bucket(item: ProcurementPlanItem): Bucket {
     return 'future';
 }
 
-const BUCKET_LABEL: Record<Bucket, string> = {
-    overdue: '🔴 Atrasados',
-    week:    '🟠 Próximos 7 dias',
-    month:   '🟡 Próximos 30 dias',
-    future:  '🟢 Futuro',
-    no_date: '⚪ Sem data',
-};
+// Sem emoji: o prazo é a ABA; a cor que o emoji fazia mora na data em vermelho.
+const ABAS: { id: Aba; label: string }[] = [
+    { id: 'all', label: 'Todos' },
+    { id: 'overdue', label: 'Atrasados' },
+    { id: 'week', label: 'Próximos 7 dias' },
+    { id: 'month', label: 'Próximos 30 dias' },
+    { id: 'future', label: 'Futuro' },
+    { id: 'no_date', label: 'Sem data' },
+];
 
 const STATUS_LABEL: Record<string, string> = {
     pending:   'Pendente',
@@ -65,13 +87,31 @@ const STATUS_LABEL: Record<string, string> = {
     cancelled: 'Cancelado',
 };
 
+// §8: status é texto colorido, sem pílula.
 const STATUS_COLOR: Record<string, string> = {
-    pending:   'bg-gray-100 text-gray-600',
-    quoted:    'bg-blue-100 text-blue-700',
-    ordered:   'bg-indigo-100 text-indigo-700',
-    received:  'bg-emerald-100 text-emerald-700',
-    cancelled: 'bg-red-100 text-red-500',
+    pending:   'text-gray-600',
+    quoted:    'text-blue-700',
+    ordered:   'text-indigo-700',
+    received:  'text-emerald-700',
+    cancelled: 'text-red-600',
 };
+const ORDEM_STATUS: Record<string, number> = { pending: 0, quoted: 1, ordered: 2, received: 3, cancelled: 4 };
+
+// Soma 1170 px — cabe na largura da vista sem rolagem lateral.
+const COLUNAS: StandardTableColumn[] = [
+    { key: 'codigo', label: 'Código', sortable: true, width: 100 },
+    { key: 'insumo', label: 'Insumo', sortable: true, width: 280 },
+    { key: 'atividade', label: 'Atividade', sortable: true, width: 210 },
+    { key: 'qtd', label: 'Qtd', sortable: true, width: 100, align: 'right' },
+    { key: 'un', label: 'Un', sortable: true, width: 70 },
+    { key: 'lead', label: 'Lead', sortable: true, width: 80, align: 'right' },
+    { key: 'comprarAte', label: 'Comprar até', sortable: true, width: 150 },
+    { key: 'estimado', label: 'Estimado', sortable: true, width: 130, align: 'right' },
+    { key: 'status', label: 'Status', sortable: true, width: 110 },
+];
+
+/** Quantidade que ainda precisa ser comprada: a líquida, quando já houve abatimento. */
+const qtdDoItem = (i: ProcurementPlanItem) => (i.netRequiredQty > 0 ? i.netRequiredQty : i.requiredQty);
 
 // ─── Props ────────────────────────────────────────────────────
 
@@ -88,9 +128,7 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [expanded, setExpanded] = useState<Record<Bucket, boolean>>({
-        overdue: true, week: true, month: false, future: false, no_date: false,
-    });
+    const [aba, setAba] = usePersistedState<Aba>('planejamento:suprimentos:aba', 'all');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -133,13 +171,17 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
     const totalEstimated = active.reduce((s, i) => s + i.estimatedTotal, 0);
     const next30Total = next30.reduce((s, i) => s + i.estimatedTotal, 0);
 
-    // ── Grupo por bucket ──
-    const grouped = items.reduce<Record<Bucket, ProcurementPlanItem[]>>(
-        (acc, item) => { const b = bucket(item); acc[b].push(item); return acc; },
-        { overdue: [], week: [], month: [], future: [], no_date: [] }
-    );
+    // ── Abas (os antigos baldes por prazo) ──
+    const porBalde = useMemo(() => {
+        const acc: Record<Bucket, ProcurementPlanItem[]> = { overdue: [], week: [], month: [], future: [], no_date: [] };
+        items.forEach(item => acc[bucket(item)].push(item));
+        return acc;
+    }, [items]);
+    // Linhas estáveis por aba (o StandardTable detecta recorte pela identidade do array).
+    const linhas = useMemo(() => (aba === 'all' ? items : porBalde[aba]), [aba, items, porBalde]);
+    const abas = ABAS.map(a => ({ ...a, badge: a.id === 'all' ? items.length : porBalde[a.id].length }));
 
-    const toggleBucket = (b: Bucket) => setExpanded(e => ({ ...e, [b]: !e[b] }));
+    const vencido = (i: ProcurementPlanItem) => !!i.suggestedBuyDate && i.suggestedBuyDate < todayStr && i.status === 'pending';
 
     if (loading) {
         return (
@@ -151,209 +193,121 @@ export const SupplyPanel: React.FC<Props> = ({ organizationId, projectId, onNavi
     }
 
     return (
-        <div className="space-y-5">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 text-blue-600" />
-                    <h2 className="text-sm font-bold text-gray-800">Plano de Suprimentos</h2>
-                    {items.length > 0 && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
-                            {items.length} insumos
-                        </span>
-                    )}
-                </div>
+        <div>
+            {/* 1. Toolbar de abas §19.1 — prazos à esquerda, ações à direita (primária §17). */}
+            <TabsBar<Aba> tabs={abas} value={aba} onChange={setAba}>
                 <div className="flex items-center gap-2">
                     {onNavigateToProcurement && (
                         <button
+                            type="button"
                             onClick={onNavigateToProcurement}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-button font-bold text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                         >
-                            <ExternalLink className="w-3.5 h-3.5" />
+                            <ExternalLink className="w-[15px] h-[15px]" />
                             Módulo Aquisições
                         </button>
                     )}
-                    <Button
+                    <button
+                        type="button"
                         onClick={handleGenerate}
                         disabled={generating}
-                        variant="primary"
-                        size="sm"
+                        title={generating ? 'Gerando o plano a partir do cronograma…' : 'Calcula as datas ideais de compra a partir do cronograma'}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         {generating
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <RefreshCw className="w-3.5 h-3.5" />}
-                        {generating ? 'Gerando…' : items.length === 0 ? 'Gerar Plano de Compras' : 'Atualizar Plano'}
-                    </Button>
+                            ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                            : <RefreshCw className="w-[15px] h-[15px]" />}
+                        {generating ? 'Gerando…' : items.length === 0 ? 'Gerar plano de compras' : 'Atualizar plano'}
+                    </button>
                 </div>
-            </div>
+            </TabsBar>
 
-            {/* Error */}
+            {/* Erro: fora do card da tabela (§5.2). */}
             {error && (
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
+                <div className="mb-3 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3 text-sm text-amber-800 flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
                     {error}
                 </div>
             )}
 
-            {/* Empty state */}
+            {/* Nada gerado ainda: estado vazio §12 (a ação está na barra acima). */}
             {items.length === 0 && !error && (
-                <div className="bg-white border border-dashed border-gray-200 rounded-2xl py-14 text-center space-y-3">
-                    <Package className="w-10 h-10 text-gray-300 mx-auto" />
-                    <div>
-                        <p className="text-sm font-bold text-gray-500">Nenhum plano de suprimentos gerado</p>
-                        <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
-                            Clique em <strong>Gerar Plano de Compras</strong> para calcular as datas ideais de compra a partir do cronograma.
-                        </p>
-                    </div>
-                    <div className="text-xs text-gray-400 space-y-0.5">
-                        <p>Pré-requisitos: atividades com <strong>composições SINAPI</strong> + <strong>datas no cronograma</strong></p>
-                    </div>
+                <div className="text-center py-12 bg-white rounded-[10px] border border-gray-100 shadow-sm">
+                    <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum plano de suprimentos gerado</h3>
+                    <p className="text-sm text-gray-500 max-w-md mx-auto">
+                        Use <strong>Gerar plano de compras</strong> para calcular as datas ideais de compra a partir do cronograma.
+                    </p>
+                    <p className="text-sm text-gray-400 mt-2">
+                        Pré-requisitos: atividades com <strong>composições SINAPI</strong> e <strong>datas no cronograma</strong>.
+                    </p>
                 </div>
             )}
 
-            {/* KPI cards */}
             {items.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <KpiCard
-                        label="Total estimado"
-                        value={fmtBRL(totalEstimated)}
-                        sub={`${active.length} itens ativos`}
-                        color="blue"
-                        icon={<TrendingUp className="w-4 h-4" />}
-                    />
-                    <KpiCard
-                        label="Próximos 30 dias"
-                        value={fmtBRL(next30Total)}
-                        sub={`${next30.length} itens`}
-                        color={next30.length > 0 ? 'amber' : 'gray'}
-                        icon={<Calendar className="w-4 h-4" />}
-                    />
-                    <KpiCard
-                        label="Atrasados"
-                        value={String(overdue.length)}
-                        sub="data de compra vencida"
-                        color={overdue.length === 0 ? 'emerald' : 'red'}
-                        icon={<AlertTriangle className="w-4 h-4" />}
-                    />
-                    <KpiCard
-                        label="Pendentes"
-                        value={String(active.filter(i => i.status === 'pending').length)}
-                        sub={`de ${active.length} ativos`}
-                        color="gray"
-                        icon={<Clock className="w-4 h-4" />}
-                    />
-                </div>
-            )}
+                <>
+                    {/* 2. KPIs §4 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                        <KpiCard label="Total estimado" value={fmtBRL(totalEstimated)} sub={`${active.length} itens ativos`} color="blue" icon={<TrendingUp className="w-4 h-4" />} />
+                        <KpiCard label="Próximos 30 dias" value={fmtBRL(next30Total)} sub={`${next30.length} itens`} color={next30.length > 0 ? 'amber' : 'gray'} icon={<Calendar className="w-4 h-4" />} />
+                        <KpiCard label="Atrasados" value={String(overdue.length)} sub="data de compra vencida" color={overdue.length === 0 ? 'emerald' : 'red'} icon={<AlertTriangle className="w-4 h-4" />} />
+                        <KpiCard label="Pendentes" value={String(active.filter(i => i.status === 'pending').length)} sub={`de ${active.length} ativos`} color="gray" icon={<Clock className="w-4 h-4" />} />
+                    </div>
 
-            {/* Buckets */}
-            {items.length > 0 && (
-                <div className="space-y-3">
-                    {(Object.keys(grouped) as Bucket[]).map(b => {
-                        const list = grouped[b];
-                        if (list.length === 0) return null;
-                        const isOpen = expanded[b];
-                        const bucketTotal = list.reduce((s, i) => s + i.estimatedTotal, 0);
-                        return (
-                            <div key={b} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                                <button
-                                    onClick={() => toggleBucket(b)}
-                                    className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-xs font-bold text-gray-700">{BUCKET_LABEL[b]}</span>
-                                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-bold">
-                                            {list.length} {list.length === 1 ? 'item' : 'itens'}
-                                        </span>
-                                        <span className="text-xs text-gray-400">{fmtBRL(bucketTotal)}</span>
-                                    </div>
-                                    <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                                </button>
-
-                                {isOpen && (
-                                    <div className="border-t border-gray-50">
-                                        {/* Table header */}
-                                        <div className="grid grid-cols-12 gap-2 px-5 py-2 bg-gray-50 text-[9px] font-bold text-gray-400 uppercase tracking-wide">
-                                            <div className="col-span-4">Insumo</div>
-                                            <div className="col-span-2">Atividade</div>
-                                            <div className="col-span-1 text-right">Qtd</div>
-                                            <div className="col-span-1 text-center">Un</div>
-                                            <div className="col-span-1 text-center">Lead</div>
-                                            <div className="col-span-1 text-center">Comprar até</div>
-                                            <div className="col-span-1 text-right">Estimado</div>
-                                            <div className="col-span-1 text-center">Status</div>
-                                        </div>
-
-                                        <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
-                                            {list.map(item => (
-                                                <ItemRow key={item.id} item={item} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                    {/* 3. Tabela §6.10 — toolbar acoplada com busca, colunas e auto-ajuste. */}
+                    <StandardTable<ProcurementPlanItem>
+                        storageKey="planejamento:suprimentos:tabela"
+                        columns={COLUNAS}
+                        rows={linhas}
+                        rowKey={i => i.id}
+                        searchText={i => `${i.inputCode ?? ''} ${i.inputDescription} ${i.sourceBudgetItemDesc ?? ''} ${STATUS_LABEL[i.status] ?? i.status}`}
+                        searchPlaceholder="Buscar por código, insumo ou atividade..."
+                        rowClassName={i => (vencido(i) ? 'bg-red-50/30' : '')}
+                        sortValue={(k, i) => {
+                            switch (k) {
+                                case 'codigo': return i.inputCode ?? '';
+                                case 'atividade': return i.sourceBudgetItemDesc ?? '';
+                                case 'qtd': return qtdDoItem(i);
+                                case 'un': return i.inputUnit;
+                                case 'lead': return i.leadTimeDays;
+                                case 'comprarAte': return i.suggestedBuyDate ?? '9999-12-31';
+                                case 'estimado': return i.estimatedTotal;
+                                case 'status': return ORDEM_STATUS[i.status] ?? 9;
+                                default: return i.inputDescription;
+                            }
+                        }}
+                        renderCell={(k, i) => {
+                            switch (k) {
+                                case 'codigo': return i.inputCode ? <span className="text-sm font-normal text-gray-600">{i.inputCode}</span> : <span className="text-sm text-gray-400">—</span>;
+                                case 'insumo': return <span className="block truncate text-sm font-normal text-gray-700" title={i.inputDescription}>{i.inputDescription}</span>;
+                                case 'atividade': return i.sourceBudgetItemDesc
+                                    ? <span className="block truncate text-sm font-normal text-gray-600" title={i.sourceBudgetItemDesc}>{i.sourceBudgetItemDesc}</span>
+                                    : <span className="text-sm text-gray-400">—</span>;
+                                case 'qtd': return <span className="text-sm font-normal text-gray-700 tabular-nums">{fmtQtd(qtdDoItem(i))}</span>;
+                                case 'un': return <span className="text-sm font-normal text-gray-600">{i.inputUnit}</span>;
+                                case 'lead': return i.leadTimeDays > 0
+                                    ? <span className="text-sm font-normal text-gray-600" title={`Prazo de entrega: ${i.leadTimeDays} dias`}>{i.leadTimeDays}d</span>
+                                    : <span className="text-sm text-gray-400">—</span>;
+                                case 'comprarAte': return (
+                                    <span className={`text-sm font-normal ${vencido(i) ? 'text-red-600' : 'text-gray-700'}`} title={vencido(i) ? 'Data de compra vencida' : undefined}>
+                                        {fmtDate(i.suggestedBuyDate)}
+                                    </span>
+                                );
+                                case 'estimado': return i.estimatedTotal > 0
+                                    ? <span className="text-sm font-medium text-gray-800">{formatMoney(i.estimatedTotal)}</span>
+                                    : <span className="text-sm text-gray-400">—</span>;
+                                case 'status': return <span className={`text-sm font-normal ${STATUS_COLOR[i.status] ?? 'text-gray-600'}`}>{STATUS_LABEL[i.status] ?? i.status}</span>;
+                                default: return null;
+                            }
+                        }}
+                        empty={{
+                            icon: <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                            title: `Nenhum insumo em "${ABAS.find(a => a.id === aba)?.label}"`,
+                            subtitle: 'Escolha outra aba de prazo.',
+                        }}
+                    />
+                </>
             )}
         </div>
     );
 };
-
-// ─── ItemRow ─────────────────────────────────────────────────
-
-const ItemRow: React.FC<{ item: ProcurementPlanItem }> = ({ item }) => {
-    const todayStr = today();
-    const isOverdue = item.suggestedBuyDate && item.suggestedBuyDate < todayStr && item.status === 'pending';
-
-    return (
-        <div className={`grid grid-cols-12 gap-2 px-5 py-2.5 hover:bg-gray-50/50 items-center text-xs ${isOverdue ? 'bg-red-50/30' : ''}`}>
-            <div className="col-span-4">
-                <div className="font-medium text-gray-800 truncate" title={item.inputDescription}>
-                    {item.inputCode && <span className="text-[9px] text-gray-400 mr-1">{item.inputCode}</span>}
-                    {item.inputDescription}
-                </div>
-            </div>
-            <div className="col-span-2 text-xs text-gray-400 truncate" title={item.sourceBudgetItemDesc}>
-                {item.sourceBudgetItemDesc || '—'}
-            </div>
-            <div className="col-span-1 text-right font-mono text-xs text-gray-700">
-                {item.netRequiredQty > 0
-                    ? item.netRequiredQty.toFixed(2)
-                    : item.requiredQty.toFixed(2)}
-            </div>
-            <div className="col-span-1 text-center text-xs text-gray-500">{item.inputUnit}</div>
-            <div className="col-span-1 text-center text-xs text-gray-400">
-                {item.leadTimeDays > 0 ? `${item.leadTimeDays}d` : '—'}
-            </div>
-            <div className={`col-span-1 text-center text-xs font-bold ${isOverdue ? 'text-red-600' : 'text-gray-700'}`}>
-                {fmtDate(item.suggestedBuyDate)}
-            </div>
-            <div className="col-span-1 text-right text-xs font-bold text-gray-700">
-                {item.estimatedTotal > 0 ? fmtBRL(item.estimatedTotal) : '—'}
-            </div>
-            <div className="col-span-1 text-center">
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[item.status] ?? 'bg-gray-100 text-gray-500'}`}>
-                    {STATUS_LABEL[item.status] ?? item.status}
-                </span>
-            </div>
-        </div>
-    );
-};
-
-// ─── KpiCard ─────────────────────────────────────────────────
-
-const COLOR_MAP = {
-    blue:    { bg: 'bg-blue-50',    border: 'border-blue-100',    text: 'text-blue-700',    icon: 'text-blue-400' },
-    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700', icon: 'text-emerald-400' },
-    amber:   { bg: 'bg-amber-50',   border: 'border-amber-100',   text: 'text-amber-700',   icon: 'text-amber-400' },
-    red:     { bg: 'bg-red-50',     border: 'border-red-100',     text: 'text-red-700',      icon: 'text-red-400' },
-    gray:    { bg: 'bg-gray-50',    border: 'border-gray-100',    text: 'text-gray-700',    icon: 'text-gray-400' },
-};
-
-// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga.
-const KpiCard: React.FC<{
-    label: string; value: string; sub?: string;
-    color: keyof typeof COLOR_MAP; icon?: React.ReactNode;
-}> = ({ label, value, sub, color, icon }) => (
-    <KpiCardBase label={label} value={value} sub={sub} color={color} icon={icon} />
-);

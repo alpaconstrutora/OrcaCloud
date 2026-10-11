@@ -4418,7 +4418,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 )}
 
                 {viewMode === 'supply' && (
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                    // Sem card em volta: o Plano de Suprimentos já traz os próprios cards (abas
+                    // §19.1, KPIs, tabela §6.10) — card dentro de card é a moldura dupla do §5.2.
+                    <div>
                         {organizationId && settings.id
                             ? <SupplyPanel organizationId={organizationId} projectId={settings.id} onNavigateToProcurement={() => onBack?.()} />
                             : <OrgRequired />}

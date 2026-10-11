@@ -162,6 +162,8 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       n += aplicar(plano.comandos);
       for (const s of plano.semLugar) pendencia('SEM_SOLUCAO', `${nomeDoNivel(nivel.levelId)} › ${s.nome}: ${s.motivo}`);
       if (plano.aCriar.length) notas.push(`${nomeDoNivel(nivel.levelId)}: ${plano.aCriar.length} split(s)`);
+      // 11/10/2026: a evaporadora existente sem condensadora ganha a dela.
+      if (plano.condensadorasParaExistentes.length) notas.push(`${nomeDoNivel(nivel.levelId)}: ${plano.condensadorasParaExistentes.length} condensadora(s) para evaporadora(s) existente(s)`);
       if (plano.jaAtendidos.length) notas.push(`${plano.jaAtendidos.length} ambiente(s) já atendido(s) por equipamento confirmado`);
     }
     etapa('EQUIPAMENTOS', ROTULOS.EQUIPAMENTOS, 'LANCOU', n, notas.join(' · ') || null);

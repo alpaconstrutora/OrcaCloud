@@ -3164,3 +3164,27 @@ tratado pela climatização como "outro, não climatizado" — ela só lia o nom
 **Prova:** `blueprintClimatizacaoTipoAmbiente.test.ts` (3): a tabela e a ordem; o caso do usuário
 (climatizado com o tipo, não climatizado sem ele); a premissa e a declaração. Conferido também no
 rascunho real do usuário: "Ambiente 1" → SALA, climatizado.
+### A evaporadora sem condensadora · 11/10/2026 (frente `clima-evap-sem-cond`)
+
+Achado no teste do usuário no app real: a evaporadora inserida à mão, sem condensadora, fazia o
+ambiente contar como "já atendido", e o gerador parava ali — sem condensadora não há linha nem dreno.
+Pedido: **"faça"**.
+
+- **`planejarEquipamentosSplit`** (`blueprintPosicaoSplit.ts`): atendido é a evaporadora confirmada
+  COM condensadora. A que não tem ganha a condensadora no lugar que o split novo teria — do lado de
+  fora da parede mais perto dela (a mesma fachada) ou no ambiente técnico —, **sugerida**, e as duas
+  saem ligadas no mesmo lote (`condensadoraId`). A evaporadora não é duplicada; relançar refaz o
+  mesmo; aceita a condensadora, o ambiente fica atendido.
+- Sem fachada externa nem ambiente técnico, o relatório diz ("não tem condensadora, e não há
+  fachada externa nem ambiente técnico…") — nada é lançado às cegas.
+- O resumo do gerador conta essas condensadoras.
+- **O ponto de força da evaporadora aceita.** Achado na suíte: aceitar só a evaporadora e relançar
+  apagava a condensadora e o ponto elétrico sugeridos e deixava a evaporadora sozinha. Agora a
+  condensadora volta (acima) e o ponto também — pela mesma regra da inserção pelo menu
+  (`pontoEletricoDaEvaporadora`, na face da parede); com um ponto aceito, nada muda. "Já atendido"
+  passou a ser o SISTEMA aceito (evaporadora e condensadora).
+
+**Prova:** `blueprintEvaporadoraSemCondensadora.test.ts` (4): o lugar e a ligação; relançar e
+aceitar; sem lugar; e o gerador inteiro (EQUIPAMENTOS e LINHA lançam, a linha existe).
+`blueprintPosicaoSplit.test.ts`: o teste de relançar segue a regra nova (a evaporadora aceita não é
+apagada nem duplicada; o sistema volta inteiro; aceita a condensadora, "já atendido").

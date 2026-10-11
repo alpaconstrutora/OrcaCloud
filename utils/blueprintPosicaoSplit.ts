@@ -32,6 +32,7 @@ import { ladosDePiso, trechosUtilizaveis, type LadoDoAmbiente } from './blueprin
 import type { CargaTermicaDoNivel } from './blueprintCargaTermica';
 import type { HipotesesDeSelecao } from './blueprintClimatizacao';
 import { potenciaEletricaVA, type ModeloDoCatalogo, type SelecaoDoNivel } from './blueprintSelecaoClimatizacao';
+import { pontoEletricoDaEvaporadora } from './blueprintPontosHidraulicos';
 
 /** As peças de climatização que o planejador do split cria (e as únicas que o relançar dele apaga). */
 const PECAS_DO_SPLIT = [...TIPOS_DE_EVAPORADORA, 'CONDENSADORA_SPLIT'] as const;
@@ -55,9 +56,25 @@ export interface EquipamentoPlanejado {
   potenciaVA: number;
 }
 
+/**
+ * 11/10/2026 (teste do usuário no app real): a evaporadora CONFIRMADA sem
+ * condensadora (inserida à mão) ganha a condensadora — o mesmo lugar que o split
+ * novo teria — e as duas são ligadas no mesmo lote. Antes o ambiente contava como
+ * "já atendido" e nada seguia: sem condensadora não há linha nem dreno.
+ */
+export interface CondensadoraParaExistente {
+  spaceId: ObjectId;
+  nome: string;
+  evaporadoraId: ObjectId;
+  condensadora: Point;
+  lugarDaCondensadora: 'FACHADA' | 'AMBIENTE_TECNICO';
+}
+
 export interface PlanoDeEquipamentosSplit {
   comandos: Command[];
   aCriar: EquipamentoPlanejado[];
+  /** 11/10/2026: as condensadoras lançadas para evaporadoras já confirmadas que não tinham uma. */
+  condensadorasParaExistentes: CondensadoraParaExistente[];
   /** Ambientes já atendidos por equipamento CONFIRMADO (não sugerido) — o planejador não mexe. */
   jaAtendidos: string[];
   /** Ambientes em que não houve como posicionar, com o motivo. */
@@ -179,7 +196,7 @@ export function lugarDaCondensadora(
 
 /** O plano: um split por ambiente climatizado sem equipamento confirmado. */
 export function planejarEquipamentosSplit(model: BlueprintModel, selecao: SelecaoDoNivel, carga: CargaTermicaDoNivel, hip: HipotesesDeSelecao): PlanoDeEquipamentosSplit {
-  const vazio = (motivo: string, apagados = 0, comandos: Command[] = []): PlanoDeEquipamentosSplit => ({ comandos, aCriar: [], jaAtendidos: [], semLugar: [], apagados, motivo, resumo: [] });
+  const vazio = (motivo: string, apagados = 0, comandos: Command[] = []): PlanoDeEquipamentosSplit => ({ comandos, aCriar: [], condensadorasParaExistentes: [], jaAtendidos: [], semLugar: [], apagados, motivo, resumo: [] });
   const levelId = selecao.levelId;
   // As sugestões anteriores deste planejador somem no relançar (peça de climatização sugerida + o ponto elétrico sugerido do aparelho).
   // ⚠️ E6 (05/10/2026): só as peças que ESTE planejador cria (evaporadora, condensadora de split, ponto de
@@ -202,11 +219,67 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
   const semLugar: { nome: string; motivo: string }[] = [];
   /** Por ambiente planejado: índices (na lista `adds`) da evaporadora e da condensadora, para ligar depois. */
   const pares: { evap: number; cond: number | null }[] = [];
+  /** 11/10/2026: a evaporadora confirmada (id) e o índice da condensadora nova dela. */
+  const paresExistentes: { evapId: ObjectId; cond: number }[] = [];
+  const condensadorasParaExistentes: CondensadoraParaExistente[] = [];
+  const porIdDoTerminal = new Map((model.terminais ?? []).map((t) => [t.id, t]));
+  /** O modelo como fica depois de apagar as sugestões — para saber o que a evaporadora aceita perde. */
+  const semSugeridas: BlueprintModel = { ...model, terminais: (model.terminais ?? []).filter((t) => !idsSugeridas.has(t.id)) };
+  /** A condensadora vale se existe e não é uma sugestão que este relançar apaga. */
+  const temCondensadora = (e: { condensadoraId?: ObjectId | null }) => !!e.condensadoraId && porIdDoTerminal.has(e.condensadoraId) && !idsSugeridas.has(e.condensadoraId);
 
   for (const amb of selecao.ambientes) {
     const confirmadas = amb.evaporadoras.filter((e) => !idsSugeridas.has(e.id));
     if (confirmadas.length > 0) {
-      jaAtendidos.push(amb.nome);
+      // 11/10/2026: atendido é a evaporadora COM condensadora; a sem condensadora ganha a dela aqui.
+      const space = model.spaces.find((s) => s.id === amb.spaceId);
+      // 11/10/2026: o ponto de força da evaporadora aceita — se era uma sugestão que este relançar apaga,
+      // ele volta (a mesma regra da inserção pelo menu); com um ponto aceito, nada muda.
+      for (const e of confirmadas) {
+        const evap = porIdDoTerminal.get(e.id);
+        if (!evap) continue;
+        for (const c of pontoEletricoDaEvaporadora(semSugeridas, evap, hip.eerWW)) adds.push({ ...c, sugerida: true } as Command);
+      }
+      const fichaCond = FICHA_DO_PONTO_HIDRAULICO.CONDENSADORA_SPLIT;
+      const medCond = fichaCond.medidasMm ?? { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 };
+      for (const e of confirmadas.filter((x) => !temCondensadora(porIdDoTerminal.get(x.id) ?? {}))) {
+        const evap = porIdDoTerminal.get(e.id);
+        if (!evap || !space) continue;
+        // O lado do ambiente em que a evaporadora está (a parede mais perto dela): a condensadora prefere a mesma fachada.
+        const walls = model.walls.filter((w) => w.levelId === space.levelId);
+        const lados = ladosDePiso(space, walls).filter((l) => !!l.wallId);
+        const dist = (l: LadoDoAmbiente) => {
+          const dx = l.b.x - l.a.x;
+          const dy = l.b.y - l.a.y;
+          const c2 = dx * dx + dy * dy || 1;
+          const f = Math.max(0, Math.min(1, ((evap.at.x - l.a.x) * dx + (evap.at.y - l.a.y) * dy) / c2));
+          return Math.hypot(evap.at.x - (l.a.x + dx * f), evap.at.y - (l.a.y + dy * f));
+        };
+        const lado = lados.sort((a, b) => dist(a) - dist(b))[0];
+        const cond = lado ? lugarDaCondensadora(model, space, { lado, at: evap.at, normal: normalInterna(lado, space.ring), externa: ehExterna(lado.wallId!), livreMm: 0 }, medCond.profundidadeMm, ehExterna) : null;
+        if (!cond) {
+          semLugar.push({ nome: amb.nome, motivo: 'a evaporadora existente não tem condensadora, e não há fachada externa nem ambiente técnico no pavimento para ela — posicione à mão e ligue o sistema no painel da evaporadora' });
+          continue;
+        }
+        const cap = evap.capacidadeBtuH ?? null;
+        paresExistentes.push({ evapId: evap.id, cond: adds.length });
+        adds.push({
+          type: 'AddTerminal',
+          levelId,
+          disciplina: 'FRIGORIGENA',
+          tipo: cap ? `Condensadora ${cap.toLocaleString('pt-BR')} BTU/h` : 'Condensadora',
+          tipoHidraulico: 'CONDENSADORA_SPLIT',
+          at: cond.at,
+          cotaMm: Math.round(medCond.alturaMm / 2),
+          ...(cap ? { capacidadeBtuH: cap } : {}),
+          larguraMm: medCond.larguraMm,
+          profundidadeMm: medCond.profundidadeMm,
+          alturaMm: medCond.alturaMm,
+          sugerida: true,
+        } as Command);
+        condensadorasParaExistentes.push({ spaceId: amb.spaceId, nome: amb.nome, evaporadoraId: evap.id, condensadora: cond.at, lugarDaCondensadora: cond.lugar });
+      }
+      if (confirmadas.every((x) => temCondensadora(porIdDoTerminal.get(x.id) ?? {}))) jaAtendidos.push(amb.nome);
       continue;
     }
     const modelo = amb.sugestao.escolhido;
@@ -284,7 +357,7 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
 
   if (adds.length === 0) {
     const motivo = semLugar.length ? `nenhum equipamento a lançar: ${semLugar.map((s) => `${s.nome} (${s.motivo})`).join('; ')}` : apagar.length ? null : 'todos os ambientes climatizados já têm equipamento confirmado';
-    return { comandos: apagar, aCriar: [], jaAtendidos, semLugar, apagados: apagar.length, motivo, resumo: [] };
+    return { comandos: apagar, aCriar: [], condensadorasParaExistentes: [], jaAtendidos, semLugar, apagados: apagar.length, motivo, resumo: [] };
   }
 
   // Os ids que o lote vai criar, lidos numa cópia; depois a relação evaporadora → condensadora no mesmo lote.
@@ -298,6 +371,8 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
       if (par.cond == null) continue;
       ligar.push({ type: 'SetTerminalProps', terminalId: novos[par.evap].id, condensadoraId: novos[par.cond].id } as Command);
     }
+    // 11/10/2026: a evaporadora confirmada aponta a condensadora nova dela.
+    for (const par of paresExistentes) ligar.push({ type: 'SetTerminalProps', terminalId: par.evapId, condensadoraId: novos[par.cond].id } as Command);
   } catch (e) {
     return vazio(`o plano não aplica: ${e instanceof Error ? e.message : String(e)}`, apagar.length);
   }
@@ -308,5 +383,8 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
       `${p.nome}: ${p.modelo.nome} (${p.modelo.capacidadeBtuH.toLocaleString('pt-BR')} BTU/h, ${p.potenciaVA.toLocaleString('pt-BR')} VA) — evaporadora na parede, condensadora ${p.lugarDaCondensadora === 'FACHADA' ? 'na fachada' : p.lugarDaCondensadora === 'AMBIENTE_TECNICO' ? 'no ambiente técnico' : 'A POSICIONAR'}`,
     );
   }
-  return { comandos: [...apagar, ...adds, ...ligar], aCriar, jaAtendidos, semLugar, apagados: apagar.length, motivo: null, resumo };
+  for (const c of condensadorasParaExistentes) {
+    resumo.push(`${c.nome}: a evaporadora existente ganha a condensadora ${c.lugarDaCondensadora === 'FACHADA' ? 'na fachada' : 'no ambiente técnico'}, ligada a ela`);
+  }
+  return { comandos: [...apagar, ...adds, ...ligar], aCriar, condensadorasParaExistentes, jaAtendidos, semLugar, apagados: apagar.length, motivo: null, resumo };
 }

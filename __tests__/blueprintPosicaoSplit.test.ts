@@ -90,13 +90,28 @@ describe('climatização E4.2/E4.3 · posição automática do split', () => {
     const m2 = applyBatch(m1, p2.comandos).model;
     expect(terminais(m2)).toHaveLength(3);
     expect(terminais(m2).map((x) => [x.tipoHidraulico ?? x.tipoEletrico, x.at.x, x.at.y]).sort()).toEqual(terminais(m1).map((x) => [x.tipoHidraulico ?? x.tipoEletrico, x.at.x, x.at.y]).sort());
-    // Aceitar: a evaporadora deixa de ser sugerida → "já atendido", e relançar não apaga nada dela.
+    // Aceitar a evaporadora: relançar não apaga nem duplica ela. 11/10/2026: atendido é o SISTEMA aceito —
+    // com a condensadora ainda sugerida, ela é refeita no mesmo lugar, ligada à evaporadora aceita.
     const evap = terminais(m2).find((x) => x.tipoHidraulico === 'EVAPORADORA_HI_WALL')!;
     const aceito = applyCommand(m2, { type: 'SetTerminalProps', terminalId: evap.id, sugerida: false }).model;
     const p3 = planejar(aceito, t);
-    expect(p3.jaAtendidos).toEqual(['Sala']);
     expect(p3.aCriar).toHaveLength(0);
     expect(p3.comandos.filter((c) => c.type === 'DeleteTerminal').map((c) => (c as { terminalId: string }).terminalId)).not.toContain(evap.id);
+    expect(p3.condensadorasParaExistentes).toEqual([expect.objectContaining({ nome: 'Sala', evaporadoraId: evap.id })]);
+    const m3 = applyBatch(aceito, p3.comandos).model;
+    // A evaporadora e a condensadora no mesmo lugar; o ponto de força da evaporadora volta (na face da
+    // parede, como na inserção pelo menu) — antes, aceitar só a evaporadora e relançar a deixava sozinha.
+    const ass = (x: BlueprintModel) => terminais(x).map((y) => (y.tipoEletrico ? [y.tipoEletrico] : [y.tipoHidraulico, y.at.x, y.at.y])).sort();
+    expect(ass(m3)).toEqual(ass(aceito));
+    expect(terminais(m3).filter((x) => x.tipoEletrico === 'AR_CONDICIONADO')).toHaveLength(1);
+    // Aceitar também a condensadora: agora sim "já atendido", e o planejador não mexe mais.
+    const cond = terminais(m3).find((x) => x.tipoHidraulico === 'CONDENSADORA_SPLIT')!;
+    expect(terminais(m3).find((x) => x.id === evap.id)!.condensadoraId).toBe(cond.id);
+    const tudo = applyCommand(m3, { type: 'SetTerminalProps', terminalId: cond.id, sugerida: false }).model;
+    const p4 = planejar(tudo, t);
+    expect(p4.jaAtendidos).toEqual(['Sala']);
+    expect(p4.condensadorasParaExistentes).toEqual([]);
+    expect(p4.comandos.filter((c) => c.type === 'DeleteTerminal').map((c) => (c as { terminalId: string }).terminalId)).not.toContain(evap.id);
   });
 
   it('trocar o modelo muda a potência do ponto elétrico (9.000 → 24.000 BTU/h): é o que muda a seção do circuito depois', () => {

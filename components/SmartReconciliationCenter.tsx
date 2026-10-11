@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
-    Zap, Check, X, RefreshCw, Settings2, ArrowLeftRight, Loader2,
-    Landmark, FileText, ShieldCheck, Building2, User, AlertCircle, ListChecks, Lightbulb,
+    Zap, Check, X, RefreshCw, Settings2, Loader2,
+    ShieldCheck, AlertCircle, ListChecks, Lightbulb,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { bankReconciliationService, type ReconciliationRuleRow } from '../services/bankReconciliationService';
@@ -17,6 +17,10 @@ import { FilterPopover } from './ui/FilterPopover';
 import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import ActionIconButton from './ui/ActionIconButton';
+import { usePersistedState } from './ui/TableUtils';
+import Button from './ui/Button';
 
 interface CandidateTx {
     id: string;
@@ -85,9 +89,95 @@ interface SmartReconciliationCenterProps {
     credorRegistros: SupplierOption[];
 }
 
-/** Grade das sugestões: Sistema | Confiança | Extrato. A coluna do meio é FIXA para o
- *  cabeçalho alinhar com todos os cartões (com `auto` ela variava de cartão para cartão). */
-const GRADE_SUGESTAO = 'lg:grid-cols-[1fr_260px_1fr]';
+/** Uma linha da Central: um movimento do extrato, o melhor candidato e os demais. */
+export interface LinhaSugestao {
+    bankId: string;
+    bank?: BankTx;
+    sug: SuggestionRow;
+    alternativas: SuggestionRow[];
+}
+
+/**
+ * Colunas da tabela de sugestões. Os dois valores ficam lado a lado em volta da
+ * Confiança — é a comparação que o conciliador faz — e o texto livre vai para o fim:
+ * em tela estreita é ele que corta primeiro, e o `title` devolve o texto inteiro.
+ * Visíveis: 1.065 px de dado + 40 da seleção + 160 de ações = 1.265 px, dentro dos
+ * ~1.290 px úteis com a barra lateral aberta (senão "Conciliar" nasce fora da tela).
+ * "Cliente/credor" nasce oculta: o pagador/favorecido já está na coluna Extrato, e o
+ * nome do título só diverge quando o score já avisa ("Fornecedor similar").
+ */
+const COLUNAS_SUGESTAO: StandardTableColumn[] = [
+    { key: 'data',        label: 'Data',               sortable: true, width: 120 },
+    { key: 'extrato',     label: 'Extrato',            sortable: true, width: 185 },
+    { key: 'valor',       label: 'Valor',              sortable: true, width: 150, align: 'right' },
+    { key: 'confianca',   label: 'Confiança',          sortable: true, width: 120 },
+    { key: 'previsto',    label: 'Valor previsto',     sortable: true, width: 165, align: 'right' },
+    { key: 'vencimento',  label: 'Vencimento',         sortable: true, width: 130 },
+    { key: 'lancamento',  label: 'Lançamento',         sortable: true, width: 195 },
+    { key: 'contraparte', label: 'Cliente/credor',     sortable: true, width: 190, defaultHidden: true },
+    { key: 'banco',       label: 'Descrição no banco', sortable: true, width: 230, defaultHidden: true },
+    { key: 'bruto',       label: 'Valor bruto',        sortable: true, width: 130, align: 'right', defaultHidden: true },
+    // Motivos = lista de critérios do score ("Valor exato · Data dentro de 4d · …") —
+    // composta, sem valor único para ordenar (§6.3); a ordem por força é a Confiança.
+    { key: 'motivos',     label: 'Motivos',            sortable: false, width: 300, defaultHidden: true },
+];
+
+/** O que o banco credita: líquido quando o cliente retém tributo, bruto quando não. */
+const valorPrevisto = (c?: CandidateTx | null): number | null => c?.valor_esperado ?? c?.amount ?? null;
+const contraparteDoTitulo = (c?: CandidateTx | null, direction?: 'CREDIT' | 'DEBIT'): string =>
+    partyInfo(c?.entity_name || c?.party_name, c?.party_type, direction)?.name ?? '';
+/** Pagador/favorecido quando o extrato tem; senão, a descrição do banco. */
+const textoDoExtrato = (b?: BankTx): string => b?.counterparty_name || b?.description_normalized || b?.description_raw || '';
+const motivosDe = (s: SuggestionRow): string[] => (s.reason || '').split(' · ').filter(Boolean);
+
+/**
+ * Separa um lote: cada lançamento só pode ser usado por UM movimento. O segundo
+ * movimento que aponta para o mesmo título fica de fora — o banco o recusaria
+ * (título já conciliado), e a tela não deve depender da recusa para acertar.
+ */
+export function separarTitulosRepetidos<T extends { sug: { candidate_internal_transaction_id: string | null } }>(
+    alvos: T[],
+): { aConciliar: T[]; repetidos: T[] } {
+    const usados = new Set<string>();
+    const aConciliar: T[] = [];
+    const repetidos: T[] = [];
+    for (const a of alvos) {
+        const id = a.sug.candidate_internal_transaction_id;
+        if (!id) continue;
+        if (usados.has(id)) { repetidos.push(a); continue; }
+        usados.add(id);
+        aConciliar.push(a);
+    }
+    return { aConciliar, repetidos };
+}
+
+function valorParaOrdenar(key: string, l: LinhaSugestao): string | number | null {
+    const c = l.sug.candidate_internal_transaction;
+    switch (key) {
+        case 'data':        return l.bank?.transaction_date ?? null;
+        case 'extrato':     return textoDoExtrato(l.bank) || null;
+        case 'valor':       return l.bank?.amount ?? null;
+        case 'confianca':   return l.sug.confidence;
+        case 'previsto':    return valorPrevisto(c);
+        case 'vencimento':  return c?.due_date || c?.transaction_date || null;
+        case 'contraparte': return contraparteDoTitulo(c, l.bank?.direction) || null;
+        case 'lancamento':  return c?.description || null;
+        case 'banco':       return l.bank?.description_raw || null;
+        case 'bruto':       return c?.amount ?? null;
+        default:            return null;
+    }
+}
+
+/** Busca: os textos das duas pontas e os valores como aparecem na tela. */
+function textoDeBusca(l: LinhaSugestao): string {
+    const c = l.sug.candidate_internal_transaction;
+    return [
+        textoDoExtrato(l.bank), l.bank?.description_raw, contraparteDoTitulo(c, l.bank?.direction), c?.description,
+        formatBRL(l.bank?.amount), formatBRL(valorPrevisto(c)), formatDate(l.bank?.transaction_date),
+        formatDate(c?.due_date || c?.transaction_date),
+        ...l.alternativas.map(a => `${a.candidate_internal_transaction?.description ?? ''} ${contraparteDoTitulo(a.candidate_internal_transaction, l.bank?.direction)}`),
+    ].filter(Boolean).join(' ');
+}
 
 /** Quantas "regras sugeridas" a Central mostra de uma vez. */
 const MAX_SUGERIDAS = 5;
@@ -179,32 +269,60 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         return m;
     }, [bankTransactions]);
 
-    // Melhor sugestão por movimento bancário
-    const bestPerBank = useMemo(() => {
+    // Uma linha por movimento do extrato: o melhor candidato e, atrás dele, os demais.
+    const linhas = useMemo<LinhaSugestao[]>(() => {
         const byBank = new Map<string, SuggestionRow[]>();
         for (const s of suggestions) {
             if (!s.candidate_internal_transaction_id) continue;
             const arr = byBank.get(s.bank_transaction_id) ?? [];
             arr.push(s); byBank.set(s.bank_transaction_id, arr);
         }
-        const rows: { sug: SuggestionRow; alt: number }[] = [];
-        for (const arr of byBank.values()) {
+        const rows: LinhaSugestao[] = [];
+        for (const [bankId, arr] of byBank) {
             arr.sort((a, b) => b.confidence - a.confidence);
-            rows.push({ sug: arr[0], alt: arr.length - 1 });
+            rows.push({ bankId, bank: bankMap.get(bankId), sug: arr[0], alternativas: arr.slice(1) });
         }
         return rows.sort((a, b) => b.sug.confidence - a.sug.confidence);
-    }, [suggestions]);
+    }, [suggestions, bankMap]);
 
     const counts = useMemo(() => {
         const c = { high: 0, mid: 0, low: 0 };
-        bestPerBank.forEach(({ sug }) => { c[bandOf(sug.confidence)]++; });
+        linhas.forEach(({ sug }) => { c[bandOf(sug.confidence)]++; });
         return c;
-    }, [bestPerBank]);
+    }, [linhas]);
 
+    // Estável (useMemo): a tabela volta para o topo quando a identidade de `rows` muda.
     const visible = useMemo(
-        () => band === 'all' ? bestPerBank : bestPerBank.filter(({ sug }) => bandOf(sug.confidence) === band),
-        [bestPerBank, band],
+        () => band === 'all' ? linhas : linhas.filter(({ sug }) => bandOf(sug.confidence) === band),
+        [linhas, band],
     );
+
+    // Busca controlada aqui (mesma chave que a tabela usaria sozinha, §3): a seleção
+    // precisa saber quais linhas a busca está escondendo.
+    const [busca, setBusca] = usePersistedState<string>('conciliacao:central:sugestoes:search', '');
+    const filtradas = useMemo(() => {
+        const termo = busca.trim().toLowerCase();
+        return termo ? visible.filter(l => textoDeBusca(l).toLowerCase().includes(termo)) : visible;
+    }, [visible, busca]);
+
+    // Seleção em lote (§10) e linhas com os alternativos abertos. Linha que saiu da TELA
+    // — conciliada, descartada, ou escondida pela busca/filtro de confiança — sai também
+    // da seleção: "Conciliar selecionados" nunca age sobre linha que o usuário não está
+    // vendo (guia §6.7: marcar o que não se vê é armadilha em ação de lote).
+    const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+    const [abertos, setAbertos] = useState<Set<string>>(new Set());
+    React.useEffect(() => {
+        const ids = new Set(filtradas.map(l => l.bankId));
+        setSelecionados(prev => {
+            const next = new Set([...prev].filter(id => ids.has(id)));
+            return next.size === prev.size ? prev : next;
+        });
+    }, [filtradas]);
+    const alternarAbertos = (bankId: string) => setAbertos(prev => {
+        const next = new Set(prev);
+        if (next.has(bankId)) next.delete(bankId); else next.add(bankId);
+        return next;
+    });
 
     const run = async (key: string, fn: () => Promise<void>) => {
         setBusy(key);
@@ -212,6 +330,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         finally { setBusy(null); }
     };
 
+    /** Concilia o movimento com um candidato — o melhor ou um alternativo. */
     const confirm = (sug: SuggestionRow) =>
         run(sug.id, async () => {
             await onConfirm(sug.bank_transaction_id, sug.candidate_internal_transaction_id!);
@@ -225,26 +344,63 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             showToast('Sugestões descartadas', 'success');
         });
 
+    /**
+     * Concilia cada movimento com o seu melhor candidato, em sequência. Serve ao
+     * "Conciliar selecionados" e ao "Conciliar alta confiança". Dois movimentos que
+     * apontam para o MESMO título não vão juntos: o banco recusa título já conciliado
+     * (aplicar_20271011007000), e a tela não deve depender da recusa para acertar.
+     */
+    const conciliarEmLote = (alvos: LinhaSugestao[]) =>
+        run('bulk', async () => {
+            const { aConciliar, repetidos } = separarTitulosRepetidos(alvos);
+            let feitos = 0;
+            const falhas: string[] = [];
+            for (const l of aConciliar) {
+                try {
+                    await onConfirm(l.bankId, l.sug.candidate_internal_transaction_id!);
+                    feitos++;
+                } catch (e) {
+                    falhas.push(`${formatDate(l.bank?.transaction_date)} ${formatBRL(l.bank?.amount)}`);
+                    console.error('[Center] lote', e);
+                }
+            }
+            const partes = [`${feitos} conciliação(ões) aplicada(s)`];
+            if (repetidos.length > 0) partes.push(`${repetidos.length} ficou(aram) de fora por apontar(em) para um lançamento já usado neste lote — escolha outro candidato`);
+            if (falhas.length > 0) partes.push(`${falhas.length} falhou(aram): ${falhas.join(', ')}`);
+            showToast(partes.join('\n'), falhas.length > 0 || repetidos.length > 0 ? 'error' : 'success');
+            setSelecionados(new Set());
+            await onReload();
+        });
+
     const confirmAllHigh = async () => {
-        const n = bestPerBank.filter(({ sug }) => sug.confidence >= HIGH).length;
-        if (n === 0) return;
+        const highs = linhas.filter(({ sug }) => sug.confidence >= HIGH);
+        if (highs.length === 0) return;
         // Concilia tudo de uma vez: antes era sem confirmação — um clique errado
         // gravava dezenas de vínculos (desfazer é um por um, em Conciliados).
         const ok = await confirmar({
-            title: `Conciliar ${n} sugestão(ões) de alta confiança?`,
+            title: `Conciliar ${highs.length} sugestão(ões) de alta confiança?`,
             message: `Cada movimento do extrato é vinculado ao seu melhor candidato (score ≥ ${HIGH}%). Para desfazer, use a aba Conciliados, vínculo por vínculo.`,
+            variant: 'warning',
+            confirmLabel: `Conciliar ${highs.length}`,
+        });
+        if (!ok) return;
+        await conciliarEmLote(highs);
+    };
+
+    const linhasSelecionadas = useMemo(() => linhas.filter(l => selecionados.has(l.bankId)), [linhas, selecionados]);
+    const totalSelecionado = linhasSelecionadas.reduce((s, l) => s + (l.bank?.amount ?? 0), 0);
+
+    const conciliarSelecionados = async () => {
+        const n = linhasSelecionadas.length;
+        if (n === 0) return;
+        const ok = await confirmar({
+            title: `Conciliar ${n} movimento(s) selecionado(s)?`,
+            message: 'Cada movimento do extrato é vinculado ao seu melhor candidato (o que aparece na linha). Para desfazer, use a aba Conciliados, vínculo por vínculo.',
             variant: 'warning',
             confirmLabel: `Conciliar ${n}`,
         });
         if (!ok) return;
-        return run('bulk', async () => {
-            const highs = bestPerBank.filter(({ sug }) => sug.confidence >= HIGH);
-            for (const { sug } of highs) {
-                await onConfirm(sug.bank_transaction_id, sug.candidate_internal_transaction_id!);
-            }
-            showToast(`${highs.length} conciliação(ões) de alta confiança aplicadas`, 'success');
-            await onReload();
-        });
+        await conciliarEmLote(linhasSelecionadas);
     };
 
     const reprocess = async () => {
@@ -318,192 +474,279 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
 
     const semConta = 'Selecione uma conta bancária: regras e tolerâncias são da organização dela';
     const label = 'text-xs font-semibold text-slate-500';
+    /** Células da tabela — tipografia do §7: texto `font-normal`, `font-medium` só em valor. */
+    const celula = (key: string, l: LinhaSugestao): React.ReactNode => {
+        const c = l.sug.candidate_internal_transaction;
+        const texto = (valor: string | null | undefined, cor = 'text-gray-700') => (
+            <span className={`block truncate text-sm font-normal ${cor}`} title={valor || undefined}>{valor || '—'}</span>
+        );
+        switch (key) {
+            case 'data':
+                return <span className="text-sm font-normal text-gray-600 tabular-nums">{formatDate(l.bank?.transaction_date)}</span>;
+            case 'extrato':
+                return (
+                    <span className="block truncate text-sm font-normal text-gray-700" title={l.bank?.description_raw || undefined}>
+                        {textoDoExtrato(l.bank) || '—'}
+                    </span>
+                );
+            case 'valor': {
+                const credito = l.bank?.direction === 'CREDIT';
+                return (
+                    <span className={`text-sm font-medium tabular-nums whitespace-nowrap ${credito ? 'text-emerald-700' : 'text-red-600'}`}>
+                        {credito ? '+ ' : '− '}{formatBRL(l.bank?.amount)}
+                    </span>
+                );
+            }
+            case 'confianca': {
+                const bnd = bandOf(l.sug.confidence);
+                const n = l.alternativas.length;
+                return (
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <span className={`text-sm font-normal ${BAND_STYLE[bnd].text}`} title={[BAND_STYLE[bnd].label, ...motivosDe(l.sug)].join(' · ')}>
+                            {l.sug.confidence}%
+                        </span>
+                        {n > 0 && (
+                            <button
+                                onClick={() => alternarAbertos(l.bankId)}
+                                aria-expanded={abertos.has(l.bankId)}
+                                title={abertos.has(l.bankId) ? 'Esconder os outros candidatos' : `Ver ${n} outro(s) candidato(s) para este movimento`}
+                                className="text-sm font-normal text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                                · +{n}
+                            </button>
+                        )}
+                    </span>
+                );
+            }
+            case 'previsto': {
+                const previsto = valorPrevisto(c);
+                const comRetencao = c?.amount != null && previsto != null && Math.abs(previsto - c.amount) >= 0.005;
+                return (
+                    <span className="text-sm font-medium text-gray-800 tabular-nums" title={comRetencao ? `Bruto ${formatBRL(c?.amount)} — o cliente retém tributo` : undefined}>
+                        {formatBRL(previsto)}
+                    </span>
+                );
+            }
+            case 'vencimento':
+                return <span className="text-sm font-normal text-gray-600 tabular-nums">{formatDate(c?.due_date || c?.transaction_date)}</span>;
+            case 'contraparte':
+                return texto(contraparteDoTitulo(c, l.bank?.direction));
+            case 'lancamento':
+                return texto(c?.description);
+            case 'banco':
+                return texto(l.bank?.description_raw, 'text-gray-600');
+            case 'bruto':
+                return <span className="text-sm font-medium text-gray-800 tabular-nums">{formatBRL(c?.amount)}</span>;
+            case 'motivos':
+                return texto(motivosDe(l.sug).join(' · '), 'text-gray-600');
+            default:
+                return null;
+        }
+    };
 
     return (
         <div className="space-y-6 min-h-[500px]">
-            {/* Sugestões — §5.2: toolbar e lista no MESMO card. O <h1> "Central de
-                Conciliação" do pai já diz onde o usuário está (§18): sem título repetido. */}
-            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-2 border-b border-gray-100 bg-white">
-                    <div className="flex flex-col lg:flex-row gap-2.5 lg:items-center">
-                        <div className="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
-                            <FilterPopover<Band>
-                                label="Confiança"
-                                value={band}
-                                onChange={setBand}
-                                allValue="all"
-                                options={[
-                                    { value: 'all', label: `Todas (${bestPerBank.length})` },
-                                    { value: 'high', label: `Alta (${counts.high})` },
-                                    { value: 'mid', label: `Média (${counts.mid})` },
-                                    { value: 'low', label: `Baixa (${counts.low})` },
-                                ]}
+            {/* Sugestões — tabela padrão (§6.10): uma linha por movimento do extrato com o
+                melhor candidato. Era uma pilha de cartões de três blocos (pedido de
+                11/10/2026: "informações empilhadas dificultando visualização"). O <h1>
+                "Central de Conciliação" do pai já diz onde o usuário está (§18). */}
+            <StandardTable<LinhaSugestao>
+                storageKey="conciliacao:central:sugestoes"
+                columns={COLUNAS_SUGESTAO}
+                rows={visible}
+                rowKey={l => l.bankId}
+                searchText={textoDeBusca}
+                search={busca}
+                onSearchChange={setBusca}
+                searchPlaceholder="Buscar por contraparte, lançamento, descrição ou valor..."
+                sortValue={valorParaOrdenar}
+                renderCell={(key, l) => celula(key, l)}
+                rowClassName={l => (selecionados.has(l.bankId) ? 'bg-blue-50/60' : '')}
+                selection={{ selected: selecionados, onChange: setSelecionados }}
+                renderExpanded={(l, colunas) => (abertos.has(l.bankId) && l.alternativas.length > 0 ? (
+                    <tr className="bg-gray-50/60">
+                        <td colSpan={colunas} className="px-6 py-3">
+                            <p className="text-xs font-semibold text-gray-500 mb-2">
+                                Outros candidatos para o movimento de {formatDate(l.bank?.transaction_date)} · {formatBRL(l.bank?.amount)}
+                            </p>
+                            <div className="overflow-x-auto rounded-[10px] border border-gray-100 bg-white">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-sm border-b border-gray-200 whitespace-nowrap">
+                                            <th className="px-6 py-2 border-r border-gray-100">Lançamento</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Cliente/credor</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Vencimento</th>
+                                            <th className="px-6 py-2 border-r border-gray-100 text-right">Valor previsto</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Confiança</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Motivos</th>
+                                            <th className="px-6 py-2 text-right">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {l.alternativas.map(alt => {
+                                            const c = alt.candidate_internal_transaction;
+                                            const bnd = bandOf(alt.confidence);
+                                            return (
+                                                <tr key={alt.id} className="hover:bg-blue-50/50 transition-colors">
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{c?.description || '—'}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{contraparteDoTitulo(c, l.bank?.direction) || '—'}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDate(c?.due_date || c?.transaction_date)}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 text-right tabular-nums">{formatBRL(valorPrevisto(c))}</td>
+                                                    <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${BAND_STYLE[bnd].text}`}>{alt.confidence}%</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{motivosDe(alt).join(' · ') || '—'}</td>
+                                                    <td className="px-6 py-2.5 text-right">
+                                                        <button
+                                                            onClick={() => confirm(alt)}
+                                                            disabled={busy !== null}
+                                                            title={busy !== null ? 'Aguarde a conciliação em andamento' : 'Conciliar o movimento com este lançamento'}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all disabled:opacity-50 inline-flex items-center gap-1"
+                                                        >
+                                                            {busy === alt.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                            Conciliar
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                ) : null)}
+                actions={{
+                    width: 160,
+                    render: l => (
+                        <>
+                            <button
+                                onClick={() => confirm(l.sug)}
+                                disabled={busy !== null}
+                                title={busy !== null ? 'Aguarde a conciliação em andamento' : 'Conciliar o movimento com o lançamento desta linha'}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all disabled:opacity-50 inline-flex items-center gap-1"
+                            >
+                                {busy === l.sug.id && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                Conciliar
+                            </button>
+                            <ActionIconButton
+                                kind="delete"
+                                tone="neutral"
+                                icon={<X className="w-4 h-4" />}
+                                title={busy !== null ? 'Aguarde a conciliação em andamento' : 'Descartar as sugestões deste movimento (voltam no próximo Reprocessar)'}
+                                onClick={() => reject(l.sug)}
+                                disabled={busy !== null}
                             />
-                            {/* "Rodou?" respondido pela tela, não pelo banco de dados. */}
-                            {ultimaExecucao && (
-                                <p className={`text-sm min-w-0 ${ultimaExecucao.status === 'FAILED' ? 'text-red-600' : 'text-gray-500'}`}>
-                                    {ultimaExecucao.status === 'FAILED' ? (
-                                        <>
-                                            A última execução, em {formatDate(ultimaExecucao.started_at)}, <span className="font-semibold">falhou</span>
-                                            {ultimaExecucao.error_message ? `: ${ultimaExecucao.error_message}` : '.'}
-                                        </>
-                                    ) : ultimaExecucao.status === 'RUNNING' ? (
-                                        <>Uma execução iniciada em {formatDate(ultimaExecucao.started_at)} não terminou.</>
-                                    ) : (
-                                        <>
-                                            Última execução em {formatDate(ultimaExecucao.started_at)}
-                                            {ultimaExecucao.trigger === 'IMPORT' ? ', após importar extrato' : ''}:{' '}
-                                            {ultimaExecucao.auto_matched} conciliada(s) sozinha(s), {ultimaExecucao.transfers_paired} transferência(s),{' '}
-                                            {ultimaExecucao.suggestions} sugestão(ões).
-                                        </>
-                                    )}
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 shrink-0">
-                            <button
-                                onClick={reprocess}
-                                disabled={reprocessing || !selectedAccountId}
-                                title={selectedAccountId ? 'Memória, regras e conciliação automática, nesta ordem' : 'Selecione uma conta bancária'}
-                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
-                            >
-                                <RefreshCw className={`w-[15px] h-[15px] ${reprocessing ? 'animate-spin' : ''}`} />
-                                Reprocessar
-                            </button>
-                            <button
-                                onClick={() => { setPreenchida(null); setRegrasAberto(true); }}
-                                disabled={!selectedAccountId}
-                                title={selectedAccountId ? 'Regras de classificação desta organização' : semConta}
-                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
-                            >
-                                <ListChecks className="w-[15px] h-[15px]" />
-                                Regras ({regras.length})
-                            </button>
-                            <button
-                                onClick={openSettings}
-                                disabled={!orgDaConta}
-                                title={orgDaConta ? 'Tolerâncias da conciliação' : semConta}
-                                className="h-9 w-9 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
-                            >
-                                <Settings2 className="w-4 h-4" />
-                            </button>
-                            <div className="hidden lg:block w-px h-6 bg-gray-200" />
-                            {/* §17 — a única ação azul sólida da tela */}
-                            <button
-                                onClick={confirmAllHigh}
-                                disabled={busy === 'bulk' || counts.high === 0}
-                                title={counts.high === 0 ? 'Nenhuma sugestão de alta confiança agora' : `Conciliar as ${counts.high} sugestões com score ≥ ${HIGH}%`}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                                {busy === 'bulk' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ShieldCheck className="w-[15px] h-[15px]" />}
-                                Conciliar alta confiança ({counts.high})
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                {visible.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Zap className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma sugestão {band === 'all' ? 'para revisar' : 'nesta faixa'}</h3>
-                        <p className="text-sm text-gray-500">Importe um extrato ou clique em Reprocessar para gerar sugestões.</p>
-                    </div>
-                ) : (
-                    <div className="p-4 space-y-3 bg-gray-50/40">
-                        {/* Cabeçalho das colunas — no lugar do "Sistema"/"Extrato" repetido em cada
-                            cartão (pedido de 01/10/2026). Mesma grade dos cartões (GRADE_SUGESTAO);
-                            some no celular, onde os cartões empilham. */}
-                        <div className={`hidden lg:grid ${GRADE_SUGESTAO} px-px text-xs font-semibold text-gray-500`}>
-                            <p className="px-4 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Sistema</p>
-                            <p className="px-4 text-center">Confiança</p>
-                            <p className="px-4 flex items-center gap-1.5"><Landmark className="w-3.5 h-3.5" /> Extrato</p>
-                        </div>
-                        {visible.map(({ sug, alt }) => {
-                            const cand = sug.candidate_internal_transaction;
-                            const bank = bankMap.get(sug.bank_transaction_id);
-                            const bnd = bandOf(sug.confidence);
-                            const reasons = (sug.reason || '').split(' · ').filter(Boolean);
-                            const candParty = partyInfo(cand?.entity_name || cand?.party_name, cand?.party_type, bank?.direction);
-                            const bankParty = bank?.counterparty_name
-                                ? { label: bank.direction === 'CREDIT' ? 'Pagador' : 'Favorecido', name: bank.counterparty_name }
-                                : null;
-                            return (
-                                <div key={sug.id} className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
-                                    <div className={`grid grid-cols-1 ${GRADE_SUGESTAO}`}>
-                                        {/* Sistema */}
-                                        <div className="p-4 border-b lg:border-b-0 lg:border-r border-gray-100 min-w-0">
-                                            <p className={`${label} flex items-center gap-1.5 mb-1 lg:hidden`}><FileText className="w-3.5 h-3.5" /> Sistema</p>
-                                            <p className="text-sm font-medium text-gray-900 truncate" title={cand?.description}>{cand?.description || '—'}</p>
-                                            {candParty && (
-                                                <p className={`text-sm flex items-center gap-1 mt-0.5 ${candParty.isClient ? 'text-emerald-700' : 'text-indigo-700'}`} title={`${candParty.label}: ${candParty.name}`}>
-                                                    {candParty.isClient ? <User className="w-3.5 h-3.5 flex-shrink-0" /> : <Building2 className="w-3.5 h-3.5 flex-shrink-0" />}
-                                                    <span className="truncate">{candParty.label}: {candParty.name}</span>
-                                                </p>
-                                            )}
-                                            <p className="text-xs text-gray-500 mt-0.5">venc. {formatDate(cand?.due_date || cand?.transaction_date)}</p>
-                                            {/* O que o banco credita: líquido quando o cliente retém tributo. */}
-                                            <p className="text-sm font-semibold text-gray-900 tabular-nums mt-1">{formatBRL(cand?.valor_esperado ?? cand?.amount)}</p>
-                                            {cand?.valor_esperado != null && cand.amount != null && Math.abs(cand.valor_esperado - cand.amount) >= 0.005 && (
-                                                <p className="text-xs text-gray-400 tabular-nums">bruto {formatBRL(cand.amount)}</p>
-                                            )}
-                                        </div>
-
-                                        {/* Centro: score + motivos — texto, sem pílula (§8) */}
-                                        <div className="px-4 py-3 flex flex-col items-center justify-center gap-1 text-center border-b lg:border-b-0 border-gray-100">
-                                            <ArrowLeftRight className="w-4 h-4 text-gray-400" />
-                                            <p className={`text-sm font-semibold ${BAND_STYLE[bnd].text}`}>{sug.confidence}% · {BAND_STYLE[bnd].label}</p>
-                                            {reasons.length > 0 && (
-                                                <p className="text-xs text-gray-500 max-w-[260px]" title={reasons.join(' · ')}>
-                                                    {reasons.slice(0, 4).join(' · ')}{reasons.length > 4 ? ` · +${reasons.length - 4}` : ''}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        {/* Extrato */}
-                                        <div className="p-4 lg:border-l border-gray-100 min-w-0">
-                                            <p className={`${label} flex items-center gap-1.5 mb-1 lg:hidden`}><Landmark className="w-3.5 h-3.5" /> Extrato</p>
-                                            <p className="text-sm font-medium text-gray-900 truncate" title={bank?.description_raw}>{bank?.description_normalized || bank?.description_raw || '—'}</p>
-                                            {bankParty && (
-                                                <p className="text-sm text-gray-600 flex items-center gap-1 mt-0.5" title={`${bankParty.label}: ${bankParty.name}`}>
-                                                    <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
-                                                    <span className="truncate">{bankParty.label}: {bankParty.name}</span>
-                                                </p>
-                                            )}
-                                            <p className="text-xs text-gray-500 mt-0.5">{bank ? formatDate(bank.transaction_date) : '—'}</p>
-                                            <p className={`text-sm font-semibold tabular-nums mt-1 ${bank?.direction === 'CREDIT' ? 'text-emerald-700' : 'text-red-600'}`}>{formatBRL(bank?.amount)}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Ações — compactas; Conciliar em contorno para não competir com a primária (§17) */}
-                                    <div className="flex items-center justify-between gap-2 px-4 py-2 border-t border-gray-100">
-                                        <span className="text-xs text-gray-500">
-                                            {alt > 0 ? `+${alt} candidato(s) alternativo(s)` : 'Melhor candidato'}
-                                        </span>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() => reject(sug)}
-                                                disabled={busy === sug.id}
-                                                title="Descarta todas as sugestões deste movimento (voltam no próximo Reprocessar)"
-                                                className="flex items-center gap-1 h-8 px-3 rounded-[6px] text-[13px] font-medium text-gray-600 hover:bg-gray-100 transition-all disabled:opacity-50"
-                                            >
-                                                <X className="w-3.5 h-3.5" /> Descartar
-                                            </button>
-                                            <button
-                                                onClick={() => confirm(sug)}
-                                                disabled={busy === sug.id}
-                                                className="flex items-center gap-1 h-8 px-3 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-200 hover:bg-blue-50 transition-all disabled:opacity-50"
-                                            >
-                                                {busy === sug.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Conciliar
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                        </>
+                    ),
+                }}
+                empty={{
+                    icon: <Zap className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                    title: `Nenhuma sugestão ${band === 'all' ? 'para revisar' : 'nesta faixa'}`,
+                    subtitle: 'Importe um extrato ou clique em Reprocessar para gerar sugestões.',
+                }}
+                filters={
+                    <FilterPopover<Band>
+                        label="Confiança"
+                        value={band}
+                        onChange={setBand}
+                        allValue="all"
+                        options={[
+                            { value: 'all', label: `Todas (${linhas.length})` },
+                            { value: 'high', label: `Alta (${counts.high})` },
+                            { value: 'mid', label: `Média (${counts.mid})` },
+                            { value: 'low', label: `Baixa (${counts.low})` },
+                        ]}
+                    />
+                }
+                toolbarTop={ultimaExecucao && (
+                    // "Rodou?" respondido pela tela, não pelo banco de dados.
+                    <p className={`px-1 text-sm ${ultimaExecucao.status === 'FAILED' ? 'text-red-600' : 'text-gray-500'}`}>
+                        {ultimaExecucao.status === 'FAILED' ? (
+                            <>
+                                A última execução, em {formatDate(ultimaExecucao.started_at)}, <span className="font-semibold">falhou</span>
+                                {ultimaExecucao.error_message ? `: ${ultimaExecucao.error_message}` : '.'}
+                            </>
+                        ) : ultimaExecucao.status === 'RUNNING' ? (
+                            <>Uma execução iniciada em {formatDate(ultimaExecucao.started_at)} não terminou.</>
+                        ) : (
+                            <>
+                                Última execução em {formatDate(ultimaExecucao.started_at)}
+                                {ultimaExecucao.trigger === 'IMPORT' ? ', após importar extrato' : ''}:{' '}
+                                {ultimaExecucao.auto_matched} conciliada(s) sozinha(s), {ultimaExecucao.transfers_paired} transferência(s),{' '}
+                                {ultimaExecucao.suggestions} sugestão(ões).
+                            </>
+                        )}
+                    </p>
                 )}
-            </div>
+                toolbarRight={
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                            onClick={reprocess}
+                            disabled={reprocessing || !selectedAccountId}
+                            title={!selectedAccountId ? 'Selecione uma conta bancária' : reprocessing ? 'Reprocessando…' : 'Memória, regras e conciliação automática, nesta ordem'}
+                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-[15px] h-[15px] ${reprocessing ? 'animate-spin' : ''}`} />
+                            Reprocessar
+                        </button>
+                        <button
+                            onClick={() => { setPreenchida(null); setRegrasAberto(true); }}
+                            disabled={!selectedAccountId}
+                            title={selectedAccountId ? 'Regras de classificação desta organização' : semConta}
+                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all disabled:opacity-50"
+                        >
+                            <ListChecks className="w-[15px] h-[15px]" />
+                            Regras ({regras.length})
+                        </button>
+                        <button
+                            onClick={openSettings}
+                            disabled={!orgDaConta}
+                            title={orgDaConta ? 'Tolerâncias da conciliação' : semConta}
+                            className="h-9 w-9 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
+                        >
+                            <Settings2 className="w-4 h-4" />
+                        </button>
+                        <div className="hidden lg:block w-px h-6 bg-gray-200" />
+                        {/* §17 — a única ação azul sólida da tela */}
+                        <button
+                            onClick={confirmAllHigh}
+                            disabled={busy === 'bulk' || counts.high === 0}
+                            title={counts.high === 0 ? 'Nenhuma sugestão de alta confiança agora' : busy === 'bulk' ? 'Aguarde a conciliação em andamento' : `Conciliar as ${counts.high} sugestões com score ≥ ${HIGH}%`}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {busy === 'bulk' ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ShieldCheck className="w-[15px] h-[15px]" />}
+                            Conciliar alta confiança ({counts.high})
+                        </button>
+                    </div>
+                }
+            />
+
+            {/* Barra de lote §10 — fixa no rodapé, fora do fluxo da lista */}
+            {linhasSelecionadas.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {linhasSelecionadas.length} selecionado{linhasSelecionadas.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">· {formatBRL(totalSelecionado)}</span>
+                    </span>
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={conciliarSelecionados}
+                        disabled={busy !== null}
+                        title={busy !== null ? 'Aguarde a conciliação em andamento' : 'Vincula cada movimento ao lançamento da sua linha'}
+                        className="text-blue-700 border-none hover:bg-blue-50"
+                    >
+                        {busy === 'bulk' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Conciliar selecionados
+                    </Button>
+                    <button
+                        onClick={() => setSelecionados(new Set())}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
+            )}
 
             {/* Regras sugeridas pela memória: contraparte classificada ≥ 5 vezes, sem regra.
                 "Revisar e criar" abre o formulário preenchido — nada é criado sem revisão. */}

@@ -237,6 +237,41 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F5 — Cota linear manual e contínua** · kernel (**bump**): `TipoDeAnotacao += 'COTA_LINEAR'` (`pontos[]`, `afastamentoMm`, `modo: 'simples'|'continua'`, `total?: boolean`); `BlueprintCanvas.tsx`, `blueprintExport.ts`, `blueprintDxf.ts`
 - Muda: ferramenta Cota, com cliques encadeados e duplo clique para fechar (gesto da `'anotacao'`, `BlueprintCanvas.tsx:10164`) e OSNAP. O desenho reaproveita `desenharCadeia`/`LINHA_DE_CHAMADA`/`ondeFicaORotulo` nas três saídas.
 - Pronto quando: golden do kernel; teste do total = soma dos trechos; no app, cota contínua de 4 pontos sai igual em tela, PDF e DXF (abrir o DXF).
+- **Feito na execução (11/10), com mudanças em relação ao rascunho:**
+  - **Sem campo novo no modelo** (o rascunho previa `afastamentoMm`, `modo`, `total`): só o valor
+    `COTA_LINEAR` no enum. Os pontos são os MEDIDOS em sequência e o ÚLTIMO é por onde passa a linha
+    (o clique de colocação do CAD). Dois medidos = simples; mais = contínua, e o total sai sempre numa
+    segunda linha. Direção = do 1º ao último medido (cota ALINHADA). Números DERIVADOS
+    (`trechosDaCotaLinear`, no kernel ao lado de `anguloDaCota`) — clicar fora de ordem não cria trecho
+    negativo; ponto fora da reta conta pela projeção.
+  - **Kernel 0.94.0 → 0.95.0** com o ritual: com a string em 0.94.0 e tudo no lugar, goldens 7/7; depois
+    do bump, as 6 falhas foram só de hash (cada hash antigo aparecia UMA vez no arquivo). Invariante nova:
+    1º e último medidos não coincidem. 31 testes que fixavam a versão atualizados. Bundle da
+    `planta-api` regerado.
+  - Desenho único em `cotaLinearDesenhada` (`utils/blueprintAnotacoes.ts`) — tela, PDF e DXF: linha de
+    cota, chamadas com folga, traço oblíquo 45°, número no formato das cotas automáticas
+    (`rotuloDeCota`), texto nunca de cabeça para baixo. **DXF na camada `PLANTA-COTAS`** (onde o CAD
+    procura cota). Para o número da cota vertical subir junto da linha, `Desenhista.texto` ganhou
+    `opcoes {anguloGraus, centralizar}` e o `texto` do DXF, rotação (50) e centro (72/11/21) — OPCIONAIS:
+    a saída antiga não muda (teste confere que nenhum outro TEXT ganhou 50/72). No jsPDF a centralização
+    com texto girado é feita à mão (`getTextWidth`).
+  - Menu Inserir › Anotações › **Cota linear** (ícone `RulerDimensionLine`) e **atalho C**.
+  - ⚠️ **Defeitos achados no caminho:** (1) os `switch` de canvas/PDF/DXF não são exaustivos — o `tsc`
+    passou sem o caso novo e a cota sairia em branco nos três; casos acrescentados à mão. (2) A barra de
+    opções mostrava o id cru **"anotacao"** para QUALQUER anotação — agora mostra o tipo ("Cota linear",
+    "Texto"…). (3) **No app real a cota gravava 5 pontos e total 0,88 m numa sala de 15,85 m**: a trava
+    ortogonal prendia cada clique ao ANTERIOR, o clique de colocação caía sobre a reta dos medidos e o 2º
+    clique do duplo virava ponto extra. Agora a cota linear trava pelo 1º ponto (como a angular pelo
+    vértice) — no clique e na prévia.
+  - Prova: `__tests__/blueprintCotaLinear.test.ts` (14: números, desenho, seleção, kernel, PDF girado e
+    centrado, DXF em PLANTA-COTAS com 50 = 90 e saída antiga intacta) + atalho C. Harness
+    `docs/spikes/cota-linear/` em Chrome com canvas REAL e orto ligado: 4 pontos (3 na mesma reta + a
+    colocação travada pelo 1º) — e **reprova** (5 pontos) com a trava pelo anterior. A prévia desenha
+    5,20 + 6,80 e o total 12,00.
+  - **No app com escrita: parcial.** Na "Planta 11/10/2026" a tecla C armou "Cota linear" e a cota foi
+    gravada e desfeita pelo Ctrl+Z (banco conferido) — mas com o defeito (3), que foi corrigido DEPOIS. A
+    rodada com a correção parou na trava de segurança: havia outra pessoa no ramo. **Falta refazer a prova
+    no app com o estudo sozinho.**
 
 ### Bloco 2 — desenho técnico mais rico
 
@@ -289,7 +324,8 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 ## Estado
 - [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [x] F2 — provada no app com escrita, Ctrl+Z incluso
   · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
-  app com escrita: banco 4×250 e Ctrl+Z 4×150 · [ ] F5
+  app com escrita: banco 4×250 e Ctrl+Z 4×150 · [ ] F5 — **parcial**: kernel 0.95.0, saídas e gesto provados por
+  teste e harness; falta a prova no app com escrita depois da correção do gesto (estudo estava ocupado)
 - [ ] F6 · [ ] F7 · [ ] F8 · [ ] F9 · [ ] F10
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 

@@ -39,7 +39,7 @@ import { desenharIsometrico, desenharIsometricos, isometricosDoModelo } from './
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { desenharHidrossanitaria, desenharLegendaHidro, type RedeDaPrancha } from './blueprintPranchaHidro';
 import type { Anotacao, BlueprintModel, Point, Wall } from './blueprintKernel';
-import { contornoDaNuvem, cotaAngularDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
+import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevisaoBr, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, revisoesDasAnotacoes, revisoesDoModelo, COR_PADRAO_DA_ANOTACAO, type RevisaoDaPrancha } from './blueprintAnotacoes';
 import { contornoEmPlanta, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
@@ -256,7 +256,13 @@ export interface EstiloTraco {
 export interface Desenhista {
   linha(x1: number, y1: number, x2: number, y2: number, estilo: EstiloTraco): void;
   poligono(pontos: { x: number; y: number }[], preenchimento: string): void;
-  texto(x: number, y: number, texto: string, alturaMm: number, cor?: string): void;
+  /**
+   * `opcoes` (F5, 11/10/2026 — a cota linear): `anguloGraus` gira o texto no sentido
+   * anti-horário do desenho (o número da cota vertical sobe junto da linha);
+   * `centralizar` alinha pelo centro (o número fica no meio do trecho). Ausentes,
+   * o texto sai como sempre saiu.
+   */
+  texto(x: number, y: number, texto: string, alturaMm: number, cor?: string, opcoes?: { anguloGraus?: number; centralizar?: boolean }): void;
   retangulo(x: number, y: number, w: number, h: number, estilo: EstiloTraco): void;
   /** RECORTE (E8.3): tudo desenhado entre os dois fica dentro do retângulo (mm de papel). Opcional: quem não implementa desenha sem recortar. */
   recortar?(x: number, y: number, w: number, h: number): void;
@@ -296,8 +302,8 @@ export class DesenhistaDeProva implements Desenhista {
   poligono(pontos: { x: number; y: number }[], preenchimento: string): void {
     this.chamadas.push({ tipo: 'poligono', args: [pontos, preenchimento] });
   }
-  texto(x: number, y: number, texto: string, alturaMm: number, cor?: string): void {
-    this.chamadas.push({ tipo: 'texto', args: [x, y, texto, alturaMm, cor] });
+  texto(x: number, y: number, texto: string, alturaMm: number, cor?: string, opcoes?: { anguloGraus?: number; centralizar?: boolean }): void {
+    this.chamadas.push({ tipo: 'texto', args: opcoes ? [x, y, texto, alturaMm, cor, opcoes] : [x, y, texto, alturaMm, cor] });
   }
   retangulo(x: number, y: number, w: number, h: number, estilo: EstiloTraco): void {
     this.chamadas.push({ tipo: 'retangulo', args: [x, y, w, h, estilo] });
@@ -975,6 +981,19 @@ export function desenharAnotacoes(
           for (let i = 1; i < c.arco.length; i++) linha(c.arco[i - 1], c.arco[i]);
           const r = P(c.posicaoDoRotulo);
           d.texto(r.x, r.y, c.rotulo, alturaPapel, cor);
+        }
+        break;
+      }
+      // F5: COTA LINEAR — a mesma geometria da tela e do DXF; o número centrado no
+      // trecho e girado com a linha (a cota vertical sobe junto dela).
+      case 'COTA_LINEAR': {
+        const c = cotaLinearDesenhada(a);
+        if (c) {
+          for (const [p, q] of c.segmentos) linha(p, q);
+          for (const t of c.textos) {
+            const r = P(t.p);
+            d.texto(r.x, r.y, t.texto, alturaPapel, cor, { anguloGraus: Math.round((t.anguloRad * 180) / Math.PI), centralizar: true });
+          }
         }
         break;
       }

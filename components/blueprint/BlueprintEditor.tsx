@@ -110,6 +110,7 @@ import {
   RectangleHorizontal,
   Redo2,
   Ruler,
+  RulerDimensionLine,
   Scan,
   Scissors,
   ShowerHead,
@@ -848,7 +849,7 @@ import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../
 import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
 import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
-import { alvoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
+import { alvoDoAtalho, ehAnotacaoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
 import { IGUALAR_TUDO, ROTULO_DA_PROPRIEDADE, comandosParaIgualar, type OQueIgualar, type PropriedadeDaAbertura, type PropriedadeDaParede } from '../../utils/blueprintIgualar';
 
 /**
@@ -8244,7 +8245,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       if (!alvo) return;
       e.preventDefault();
       if (ehFerramentaSimples(alvo)) editor.setTool(alvo.tool);
-      else atalhoRef.current.escolherComponente(alvo);
+      else if (ehAnotacaoDoAtalho(alvo)) {
+        // F5: C arma a anotação JÁ no tipo — o mesmo par que o botão do menu Anotações monta.
+        setTipoDeAnotacao(alvo.anotacao);
+        editor.setTool('anotacao');
+      } else atalhoRef.current.escolherComponente(alvo);
     }
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
@@ -9471,7 +9476,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           ? tipoCirculacao === 'RAMPA'
             ? 'Rampa'
             : 'Escada'
-          : (ROTULO_DA_FERRAMENTA[editor.tool] ?? editor.tool);
+          : editor.tool === 'anotacao'
+            ? // O TIPO, como na abertura e na estrutura: sem isto a barra mostrava o id cru
+              // "anotacao" (achado na prova da F5, 11/10/2026).
+              ROTULO_DO_TIPO_DE_ANOTACAO[tipoDeAnotacao]
+            : (ROTULO_DA_FERRAMENTA[editor.tool] ?? editor.tool);
 
   /**
    * O painel do TERRENO — escritura, papel das divisas, recuos, zona,
@@ -12754,7 +12763,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             <MenuDoRibbon
               rotulo="Anotações"
               icone={Type}
-              ajuda="Texto, texto com seta, linha, região hachurada, cota angular e nuvem de revisão — sobre a vista, não são construção; saem no PDF e no DXF"
+              ajuda="Texto, texto com seta, linha, região hachurada, cota angular, cota linear e nuvem de revisão — sobre a vista, não são construção; saem no PDF e no DXF"
             >
                 {([
                   ['TEXTO', Type, '1 clique: o texto entra no ponto; edite no painel'],
@@ -12762,6 +12771,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ['LINHA', Slash, 'Cliques ao longo da linha; duplo clique encerra'],
                   ['HACHURA', Highlighter, 'Cliques no contorno da região; duplo clique fecha (diagonal, cruzada, pontos ou sólida)'],
                   ['COTA_ANGULAR', TriangleRight, '3 cliques: o vértice e as duas pontas — o ângulo é derivado'],
+                  // F5 (11/10/2026): cota manual — simples com 2 pontos, CONTÍNUA com mais (e o total).
+                  ['COTA_LINEAR', RulerDimensionLine, 'Cliques nos pontos a medir, em sequência; o duplo clique marca ONDE a linha de cota fica. Dois pontos = cota simples; mais = cota contínua com o total. As medidas são derivadas — acompanham o desenho'],
                   ['NUVEM', Cloud, 'Cliques no contorno da área alterada; duplo clique fecha. Leva o número e a data da revisão (barra) e a descrição (painel) — sai na tabela de revisões do carimbo'],
                 ] as const).map(([tipo, Icone, ajuda]) => (
                   <BotaoDoRibbon
@@ -12777,7 +12788,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         editor.setTool('anotacao');
                       }
                     }}
-                    ajuda={`${ROTULO_DO_TIPO_DE_ANOTACAO[tipo]} na planta do pavimento ativo — ${ajuda}. Sai no PDF e no DXF.`}
+                    ajuda={`${ROTULO_DO_TIPO_DE_ANOTACAO[tipo]} na planta do pavimento ativo — ${ajuda}. Sai no PDF e no DXF.${letraDoAtalho({ tool: 'anotacao', anotacao: tipo }) ? ` Atalho: ${letraDoAtalho({ tool: 'anotacao', anotacao: tipo })}.` : ''}`}
                   />
                 ))}
             </MenuDoRibbon>

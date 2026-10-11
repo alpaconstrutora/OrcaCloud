@@ -296,10 +296,19 @@ class DesenhistaCanvas implements Desenhista {
     this.ctx.fill();
   }
 
-  texto(x: number, y: number, texto: string, alturaMm: number, cor = '#000000'): void {
+  texto(x: number, y: number, texto: string, alturaMm: number, cor = '#000000', opcoes?: { anguloGraus?: number; centralizar?: boolean }): void {
     this.ctx.fillStyle = cor;
     this.ctx.font = `${alturaMm * this.k}px sans-serif`;
-    this.ctx.textAlign = 'left';
+    this.ctx.textAlign = opcoes?.centralizar ? 'center' : 'left';
+    if (opcoes?.anguloGraus) {
+      // Anti-horário no papel = rotação NEGATIVA no canvas (y para baixo).
+      this.ctx.save();
+      this.ctx.translate(x * this.k, y * this.k);
+      this.ctx.rotate((-opcoes.anguloGraus * Math.PI) / 180);
+      this.ctx.fillText(texto, 0, 0);
+      this.ctx.restore();
+      return;
+    }
     this.ctx.fillText(texto, x * this.k, y * this.k);
   }
 
@@ -360,12 +369,26 @@ class DesenhistaPdf implements Desenhista {
     this.doc.lines(deltas, pontos[0].x, pontos[0].y, [1, 1], 'F', true);
   }
 
-  texto(x: number, y: number, texto: string, alturaMm: number, cor = '#000000'): void {
+  texto(x: number, y: number, texto: string, alturaMm: number, cor = '#000000', opcoes?: { anguloGraus?: number; centralizar?: boolean }): void {
     this.doc.setTextColor(cor);
     // pt = mm × 72/25.4. jsPDF mede fonte em pontos mesmo com o doc em mm.
     this.doc.setFontSize(alturaMm * 2.834);
     // E8.2: as fontes-padrão do jsPDF são WinAnsi — ≥, →, √ viravam lixo em qualquer prancha.
-    this.doc.text(paraWinAnsi(texto), x, y);
+    // F5: o `angle` do jsPDF é anti-horário no papel, o mesmo sentido de `anguloGraus`.
+    const t = paraWinAnsi(texto);
+    if (opcoes?.anguloGraus) {
+      // Centraliza À MÃO com o texto girado: `align` junto de `angle` não é garantido no jsPDF.
+      // Direção do texto no papel (y para baixo, anti-horário): (cos θ, −sen θ).
+      const rad = (opcoes.anguloGraus * Math.PI) / 180;
+      const meia = opcoes.centralizar ? this.doc.getTextWidth(t) / 2 : 0;
+      this.doc.text(t, x - Math.cos(rad) * meia, y + Math.sin(rad) * meia, { angle: opcoes.anguloGraus });
+      return;
+    }
+    if (opcoes?.centralizar) {
+      this.doc.text(t, x, y, { align: 'center' });
+      return;
+    }
+    this.doc.text(t, x, y);
   }
 
   retangulo(x: number, y: number, w: number, h: number, e: EstiloTraco): void {

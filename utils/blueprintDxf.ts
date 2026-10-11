@@ -67,7 +67,7 @@ import {
   type LadoDoContorno,
   type SegmentoDeCota,
 } from './blueprintCotas';
-import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
+import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
@@ -403,7 +403,17 @@ function circulo(camada: string, c: Ponto, raio: number): string {
   );
 }
 
-function texto(camada: string, p: Ponto, conteudo: string, alturaMm: number): string {
+function texto(
+  camada: string,
+  p: Ponto,
+  conteudo: string,
+  alturaMm: number,
+  /** F5 (cota linear): giro anti-horário em graus e centralização. Ausentes, a entidade sai como sempre saiu. */
+  opcoes?: { rotacaoGraus?: number; centralizar?: boolean },
+): string {
+  const giro = opcoes?.rotacaoGraus ? par(50, num(opcoes.rotacaoGraus)) : '';
+  // TEXT centralizado: 72 = 1 (centro) e o ponto de alinhamento em 11/21 — o 10/20 vira só referência.
+  const centro = opcoes?.centralizar ? par(72, 1) + par(11, num(p.x)) + par(21, num(p.y)) + par(31, num(0)) : '';
   return (
     par(0, 'TEXT') +
     par(8, camada) +
@@ -411,7 +421,9 @@ function texto(camada: string, p: Ponto, conteudo: string, alturaMm: number): st
     par(20, num(p.y)) +
     par(30, num(0)) +
     par(40, num(alturaMm)) +
-    par(1, conteudo)
+    par(1, conteudo) +
+    giro +
+    centro
   );
 }
 
@@ -694,6 +706,16 @@ function entidadesDeAnotacoes(anotacoes: readonly Anotacao[], P: (p: Ponto) => P
         if (c) {
           saida += polilinhaAberta(CAMADAS.ANOTACOES, c.arco.map(P));
           saida += texto(CAMADAS.ANOTACOES, P(c.posicaoDoRotulo), c.rotulo, alt);
+        }
+        break;
+      }
+      // F5: a COTA LINEAR vai para PLANTA-COTAS, com as cotas automáticas — é lá que quem
+      // abre o DXF procura cota, e ela liga/desliga junto. A geometria é a da tela e do PDF.
+      case 'COTA_LINEAR': {
+        const c = cotaLinearDesenhada(a);
+        if (c) {
+          for (const [p, q] of c.segmentos) saida += linha(CAMADAS.COTAS, P(p), P(q));
+          for (const t of c.textos) saida += texto(CAMADAS.COTAS, P(t.p), t.texto, alt, { rotacaoGraus: Math.round((t.anguloRad * 180) / Math.PI), centralizar: true });
         }
         break;
       }

@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '7278a3462c86f24a3ad5ea8eb69aca2ebc65c7518123c54333f855196c39ff17',
+    hash: '3f363117e21fae310641b374275b48775b6760f55e75dbf9fc30905cb747ddb8',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'a1b25475d8b07e0cd442d6fac561e49430293c75893f6cfde86dafa756090c02',
+    hash: 'a0cef242a8a352f0d040915e48ad97061d3c5acc38f9291c95b9ec60cb1463b9',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '6092545161d7baac44ecbd34c1e6e241d85c88588f6a104bd86fa755d12ba070',
+    hash: 'c8cf3a8a6937f54b0de6bf190026b95d58446de8992c6e01ddd94b0da9e1ca0f',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: 'de24549376da3d3e1358f586af0cf448e81ef071dd83fc40e21315d1c40b5c85',
+    hash: 'b1520b4263bd8c47a823f385ab3236aa0630653f5a602253bc03f953718c60e0',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: 'b1ca94d3b1fc5c1fcf0515efe5b1bb201df86ff2950f5dc2aa329dba764ad07f',
+    hash: '4991b2107568ce2baa86953f9ae6b7743e71db835126af917327b30ea6e3c7cc',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'ca5126b549182340c817e2c4a9b3ba7617a53d8aa139e4e22168c235ce23d4c1',
+    hash: '24725ac46992c63ab026c0980f19e2f16b1e9d12623288337b46971e1481676c',
   },
 };
 
@@ -932,6 +932,13 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   os sete testes deste arquivo e os de climatização (HVAC, dutos, VRF, linha,
  *   símbolos, numeração) passaram sem outra alteração; depois do bump as seis
  *   falhas foram todas de hash, contagens idênticas.
+ *
+ *   0.94.0 → 0.95.0 (11/10/2026): tipo de anotação novo, COTA_LINEAR (F5 do plano
+ *   recursos-video-synaps), sem campo novo — pontos medidos + a posição da linha.
+ *   Nenhum dos seis casos tem anotação. Mesma prova, refeita ANTES de tocar num
+ *   hash: com a string em 0.94.0 e o tipo + a invariante no código, os sete testes
+ *   deste arquivo passaram; depois do bump as seis falhas foram todas de hash
+ *   (cada hash antigo aparecia UMA vez no arquivo), contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

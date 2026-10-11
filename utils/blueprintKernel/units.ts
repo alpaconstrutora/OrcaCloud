@@ -622,8 +622,17 @@
  * Dois valores novos de `TipoDePontoHidraulico`, sem campo novo — desenho antigo
  * só muda pela string da versão. Provado antes do bump: com a string em 0.93.0
  * os goldens e os testes de climatização passaram sem outra alteração.
+ *
+ * ─── 0.94.0 → 0.95.0 (11/10/2026) — A COTA LINEAR (SIMPLES E CONTÍNUA) ───────
+ *
+ * F5 do plano `2026-10-11-planta-recursos-video-synaps.md`: `TipoDeAnotacao`
+ * ganhou `COTA_LINEAR` — pontos medidos em sequência + o ponto por onde passa a
+ * linha (o último). Os números são DERIVADOS (`trechosDaCotaLinear`), como o
+ * ângulo da cota angular. Um valor novo de enum, sem campo novo — desenho antigo
+ * só muda pela string da versão. Provado antes do bump: com a string em 0.94.0
+ * os goldens passaram (7/7) sem outra alteração.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.94.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.95.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

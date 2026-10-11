@@ -50,3 +50,11 @@ describe('atalhos de ferramenta da Planta (F1)', () => {
     }
   });
 });
+
+describe('atalho C — cota linear (F5)', () => {
+  it('C arma a anotação JÁ no tipo cota linear; a letra aparece para esse tipo e só para ele', () => {
+    expect(alvoDoAtalho({ key: 'c' })).toEqual({ tool: 'anotacao', anotacao: 'COTA_LINEAR' });
+    expect(letraDoAtalho({ tool: 'anotacao', anotacao: 'COTA_LINEAR' })).toBe('C');
+    expect(letraDoAtalho({ tool: 'anotacao', anotacao: 'TEXTO' })).toBeNull();
+  });
+});

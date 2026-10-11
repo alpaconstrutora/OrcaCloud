@@ -64,7 +64,7 @@ import {
   anguloEmTorno,
 } from '../../utils/blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA } from '../../utils/blueprintKernel';
-import { contornoDaNuvem, cotaAngularDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
+import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, distanciaAAnotacao, linhasDaHachura, pontaDaSeta, posicaoDaEtiquetaDaNuvem, tracejadoMm } from '../../utils/blueprintAnotacoes';
 import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
 import {
   encaixarConexao,
@@ -8181,6 +8181,17 @@ export default function BlueprintCanvas({
           }
           break;
         }
+        case 'COTA_LINEAR': {
+          // F5: a MESMA geometria do PDF e do DXF. Na prévia o cursor é o ponto de
+          // colocação — a linha acompanha o mouse enquanto se escolhe onde ela fica.
+          const c = cotaLinearDesenhada(a);
+          if (c) {
+            ctx.setLineDash([]);
+            for (const [p, q] of c.segmentos) linhaTela(paraTela(p), paraTela(q));
+            for (const t of c.textos) escreverEm(paraTela(t.p), t.texto, (t.anguloRad * 180) / Math.PI, 'center');
+          } else for (let i = 1; i < tela.length; i++) linhaTela(tela[i - 1], tela[i]);
+          break;
+        }
         default:
           break;
       }
@@ -9933,7 +9944,8 @@ export default function BlueprintCanvas({
     if (tool === 'anotacao') {
       let alvo = capturarTracado(paraMundo(px, py));
       // O orto da COTA ANGULAR é em relação ao VÉRTICE (as duas pontas saem dele); nas demais, ao vértice anterior.
-      const referencia = tipoDeAnotacao === 'COTA_ANGULAR' ? caminhoAnotacao[0] : caminhoAnotacao[caminhoAnotacao.length - 1];
+      // COTA ANGULAR e COTA LINEAR travam pelo 1º ponto (vértice / início da cadeia) — ver o clique.
+      const referencia = tipoDeAnotacao === 'COTA_ANGULAR' || tipoDeAnotacao === 'COTA_LINEAR' ? caminhoAnotacao[0] : caminhoAnotacao[caminhoAnotacao.length - 1];
       if (referencia && ortoAtivo(e)) alvo = travarOrtogonal(referencia, alvo);
       setCursor(alvo);
       return;
@@ -10251,7 +10263,12 @@ export default function BlueprintCanvas({
     if (tool === 'anotacao') {
       let ponto = capturarTracado(mundo);
       const anterior = caminhoAnotacao[caminhoAnotacao.length - 1] ?? null;
-      const referencia = tipoDeAnotacao === 'COTA_ANGULAR' ? caminhoAnotacao[0] ?? null : anterior;
+      // COTA LINEAR (F5) trava pelo 1º ponto, como a angular pelo vértice: os medidos
+      // ficam na MESMA reta, e o clique de colocação (o do duplo clique, fora da reta)
+      // trava na perpendicular — guardando o afastamento. Travando pelo ANTERIOR, o
+      // clique de colocação caía sobre a reta dos medidos e o 2º clique do duplo virava
+      // um ponto a mais (pego no app real, 11/10/2026: total de 0,88 m numa sala de 15,85).
+      const referencia = tipoDeAnotacao === 'COTA_ANGULAR' || tipoDeAnotacao === 'COTA_LINEAR' ? caminhoAnotacao[0] ?? null : anterior;
       if (referencia && ortoAtivo(e)) ponto = travarOrtogonal(referencia, ponto);
       // Vértice repetido — inclusive o 2º clique do duplo, que o orto pode ter
       // deslocado uns mm do anterior: a tolerância é a do clique, em mm do modelo.

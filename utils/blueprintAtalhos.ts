@@ -27,7 +27,14 @@ export type FerramentaSimples = { tool: 'selecionar' | 'mover' | 'medir-linha' |
 /** Mesmo formato da `EscolhaComponente` do menu — passa por `escolherComponente`. */
 export type EscolhaDoAtalho = { tool: 'parede' | 'retangulo' } | { tool: 'abertura'; abertura: 'door' | 'window' };
 
-export type AlvoDoAtalho = FerramentaSimples | EscolhaDoAtalho;
+/** F5: a ferramenta de anotação já no tipo — C arma a cota linear. */
+export type AnotacaoDoAtalho = { tool: 'anotacao'; anotacao: 'COTA_LINEAR' };
+
+export type AlvoDoAtalho = FerramentaSimples | EscolhaDoAtalho | AnotacaoDoAtalho;
+
+export function ehAnotacaoDoAtalho(alvo: AlvoDoAtalho): alvo is AnotacaoDoAtalho {
+  return alvo.tool === 'anotacao';
+}
 
 /** Ferramenta sem subtipo (arma direto) × par do menu (passa por `escolherComponente`). */
 export function ehFerramentaSimples(alvo: AlvoDoAtalho): alvo is FerramentaSimples {
@@ -51,6 +58,7 @@ export const ATALHOS_DE_FERRAMENTA: Readonly<Record<string, AlvoDoAtalho>> = {
   m: { tool: 'medir-linha' },
   a: { tool: 'ambiente' },
   s: { tool: 'separador' },
+  c: { tool: 'anotacao', anotacao: 'COTA_LINEAR' },
 };
 
 /** O mínimo do `KeyboardEvent` que a regra lê — testável sem DOM. */
@@ -85,10 +93,11 @@ export function alvoDoAtalho(tecla: TeclaPressionada, alvo?: AlvoDaTecla | null)
 }
 
 /** A letra (maiúscula) que arma este alvo, para mostrar no menu e no tooltip. */
-export function letraDoAtalho(alvo: { tool: string; abertura?: string }): string | null {
+export function letraDoAtalho(alvo: { tool: string; abertura?: string; anotacao?: string }): string | null {
   for (const [letra, a] of Object.entries(ATALHOS_DE_FERRAMENTA)) {
     if (a.tool !== alvo.tool) continue;
     if ('abertura' in a && a.abertura !== alvo.abertura) continue;
+    if ('anotacao' in a && a.anotacao !== alvo.anotacao) continue;
     return letra.toUpperCase();
   }
   return null;

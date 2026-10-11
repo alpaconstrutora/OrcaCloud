@@ -8,10 +8,12 @@
  * que sai no papel e no CAD, linha por linha. É a razão de isto não viver
  * dentro do canvas.
  */
+import { rotuloDeCota } from './blueprintCotas';
 import {
   signedArea,
   DATA_ISO_DA_REVISAO,
   anguloDaCota,
+  trechosDaCotaLinear,
   mesmaVista,
   pointInPolygon,
   type Anotacao,
@@ -167,6 +169,67 @@ export function cotaAngularDesenhada(a: Anotacao): CotaAngularDesenhada | null {
   };
 }
 
+/**
+ * A COTA LINEAR DESENHADA (0.95.0, F5) — segmentos e textos, a mesma geometria
+ * para tela, PDF e DXF (como a cota angular).
+ *
+ * Convenção de cota de arquitetura: LINHA DE COTA paralela ao que se mede, no
+ * afastamento escolhido; LINHA DE CHAMADA de cada ponto medido até ela, com uma
+ * folga junto ao objeto e passando um pouco da linha; TRAÇO OBLÍQUO a 45° em cada
+ * marca; o número sobre o trecho, no formato das cotas automáticas
+ * (`rotuloDeCota`, metros com duas casas). Com 3+ pontos medidos (cota
+ * CONTÍNUA) sai também a linha do TOTAL, mais afastada.
+ */
+export interface CotaLinearDesenhada {
+  segmentos: [Point, Point][];
+  textos: { p: Point; texto: string; anguloRad: number }[];
+  trechosMm: number[];
+  totalMm: number;
+}
+
+export function cotaLinearDesenhada(a: Pick<Anotacao, 'tipo' | 'pontos' | 'alturaMm'>): CotaLinearDesenhada | null {
+  const t = trechosDaCotaLinear(a);
+  if (!t) return null;
+  const { u, n, origem, projecoesMm, trechosMm, totalMm } = t;
+  const h = a.alturaMm;
+  // Lado da linha: o do ponto de colocação; sobre a reta, para "cima" da normal.
+  const lado = t.afastamentoMm < 0 ? -1 : 1;
+  const d = t.afastamentoMm === 0 ? 0 : t.afastamentoMm;
+  const P = (s: number, off: number): Point => ({ x: Math.round(origem.x + u.x * s + n.x * off), y: Math.round(origem.y + u.y * s + n.y * off) });
+  const folga = Math.min(Math.abs(d), h * 0.4);
+  const passa = h * 0.4;
+  const meioTraco = h * 0.35;
+  // Texto legível: nunca de cabeça para baixo.
+  let ang = Math.atan2(u.y, u.x);
+  if (ang > Math.PI / 2) ang -= Math.PI;
+  if (ang <= -Math.PI / 2) ang += Math.PI;
+  const segmentos: [Point, Point][] = [];
+  const textos: CotaLinearDesenhada['textos'] = [];
+  const diag = { x: (u.x + n.x) / Math.SQRT2, y: (u.y + n.y) / Math.SQRT2 };
+  const linhaDeCota = (off: number, marcas: number[], chamadaDe: (s: number) => number) => {
+    segmentos.push([P(marcas[0], off), P(marcas[marcas.length - 1], off)]);
+    for (const s of marcas) {
+      segmentos.push([P(s, chamadaDe(s)), P(s, off + lado * passa)]);
+      const c = P(s, off);
+      segmentos.push([
+        { x: Math.round(c.x - diag.x * meioTraco), y: Math.round(c.y - diag.y * meioTraco) },
+        { x: Math.round(c.x + diag.x * meioTraco), y: Math.round(c.y + diag.y * meioTraco) },
+      ]);
+    }
+  };
+  // Trechos: a chamada sai de junto do ponto medido (com folga).
+  linhaDeCota(d, projecoesMm, () => lado * folga);
+  projecoesMm.slice(1).forEach((s, i) => textos.push({ p: P((s + projecoesMm[i]) / 2, d + lado * h * 0.7), texto: rotuloDeCota(trechosMm[i]), anguloRad: ang }));
+  // Total (cota contínua): mais afastado; as chamadas das pontas continuam as da linha dos trechos.
+  if (projecoesMm.length >= 3) {
+    const dTotal = d + lado * h * 2.2;
+    const ext = [projecoesMm[0], projecoesMm[projecoesMm.length - 1]];
+    linhaDeCota(dTotal, ext, () => d + lado * passa);
+    textos.push({ p: P((ext[0] + ext[1]) / 2, dTotal + lado * h * 0.7), texto: rotuloDeCota(totalMm), anguloRad: ang });
+  }
+  return { segmentos, textos, trechosMm, totalMm };
+}
+
 /** Distância de um ponto à anotação (para seleção): menor distância aos segmentos / ao ponto do texto. */
 export function distanciaAAnotacao(a: Anotacao, p: Point): number {
   if (a.tipo === 'TEXTO') {
@@ -184,6 +247,9 @@ export function distanciaAAnotacao(a: Anotacao, p: Point): number {
     for (let i = 0; i < pts.length; i++) segs.push([pts[i], pts[(i + 1) % pts.length]]);
   } else if (a.tipo === 'COTA_ANGULAR') {
     segs.push([pts[0], pts[1]], [pts[0], pts[2]]);
+  } else if (a.tipo === 'COTA_LINEAR') {
+    // Seleciona-se pelo que está DESENHADO (linha de cota, chamadas), não pelos pontos clicados.
+    segs.push(...(cotaLinearDesenhada(a)?.segmentos ?? []));
   } else {
     for (let i = 1; i < pts.length; i++) segs.push([pts[i - 1], pts[i]]);
   }
@@ -207,7 +273,7 @@ export interface ResumoDasAnotacoes {
 }
 
 export function resumirAnotacoes(model: BlueprintModel): ResumoDasAnotacoes {
-  const porTipo: Record<Anotacao['tipo'], number> = { TEXTO: 0, LEADER: 0, LINHA: 0, HACHURA: 0, COTA_ANGULAR: 0, NUVEM: 0 };
+  const porTipo: Record<Anotacao['tipo'], number> = { TEXTO: 0, LEADER: 0, LINHA: 0, HACHURA: 0, COTA_ANGULAR: 0, NUVEM: 0, COTA_LINEAR: 0 };
   const vistas = new Set<string>();
   for (const a of model.anotacoes ?? []) {
     porTipo[a.tipo]++;

@@ -2004,14 +2004,21 @@ export interface GuardaCorpo {
  * `pontos[1]` e `pontos[2]`, o ângulo DERIVADO (`anguloDaCota`) — nunca digitado,
  * porque cota digitada mente quando a parede move.
  *
+ * A COTA LINEAR (0.95.0, F5 do plano `2026-10-11-planta-recursos-video-synaps.md`)
+ * mede pelo mesmo princípio: `pontos[0..n-2]` são os pontos MEDIDOS, em
+ * sequência, e o ÚLTIMO é por onde passa a linha de cota (o clique de colocação
+ * do CAD). Dois pontos medidos = cota simples; mais = cota CONTÍNUA (um trecho
+ * por par, e o total numa segunda linha). A direção é a do primeiro ao último
+ * ponto medido (cota ALINHADA); os números são derivados (`trechosDaCotaLinear`).
+ *
  * `alturaMm` é a altura do texto em mm do MODELO (não do papel): a nota escala
  * com o desenho, como no CAD; a exportação divide pela escala.
  */
-export type TipoDeAnotacao = 'TEXTO' | 'LEADER' | 'LINHA' | 'HACHURA' | 'COTA_ANGULAR' | 'NUVEM';
-export const TIPOS_DE_ANOTACAO: readonly TipoDeAnotacao[] = ['TEXTO', 'LEADER', 'LINHA', 'HACHURA', 'COTA_ANGULAR', 'NUVEM'];
-export const ROTULO_DO_TIPO_DE_ANOTACAO: Record<TipoDeAnotacao, string> = { TEXTO: 'Texto', LEADER: 'Texto com seta', LINHA: 'Linha', HACHURA: 'Região hachurada', COTA_ANGULAR: 'Cota angular', NUVEM: 'Nuvem de revisão' };
-/** Quantos pontos cada tipo exige (mínimo). */
-export const PONTOS_MINIMOS_DA_ANOTACAO: Record<TipoDeAnotacao, number> = { TEXTO: 1, LEADER: 2, LINHA: 2, HACHURA: 3, COTA_ANGULAR: 3, NUVEM: 3 };
+export type TipoDeAnotacao = 'TEXTO' | 'LEADER' | 'LINHA' | 'HACHURA' | 'COTA_ANGULAR' | 'NUVEM' | 'COTA_LINEAR';
+export const TIPOS_DE_ANOTACAO: readonly TipoDeAnotacao[] = ['TEXTO', 'LEADER', 'LINHA', 'HACHURA', 'COTA_ANGULAR', 'NUVEM', 'COTA_LINEAR'];
+export const ROTULO_DO_TIPO_DE_ANOTACAO: Record<TipoDeAnotacao, string> = { TEXTO: 'Texto', LEADER: 'Texto com seta', LINHA: 'Linha', HACHURA: 'Região hachurada', COTA_ANGULAR: 'Cota angular', NUVEM: 'Nuvem de revisão', COTA_LINEAR: 'Cota linear' };
+/** Quantos pontos cada tipo exige (mínimo). COTA_LINEAR: 2 medidos + a posição da linha. */
+export const PONTOS_MINIMOS_DA_ANOTACAO: Record<TipoDeAnotacao, number> = { TEXTO: 1, LEADER: 2, LINHA: 2, HACHURA: 3, COTA_ANGULAR: 3, NUVEM: 3, COTA_LINEAR: 3 };
 /**
  * NUVEM DE REVISÃO (0.50.0, backlog P2 — P2.15): a que revisão a nuvem
  * pertence. `numero` inteiro ≥ 1 (o "Δ1" da prancha), `data` ISO `AAAA-MM-DD`
@@ -2077,6 +2084,50 @@ export function anguloDaCota(a: Pick<Anotacao, 'tipo' | 'pontos'>): number | nul
   if (la === 0 || lb === 0) return null;
   const cos = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
   return (Math.acos(cos) * 180) / Math.PI;
+}
+
+/**
+ * OS NÚMEROS DA COTA LINEAR (0.95.0) — derivados dos pontos, nunca digitados.
+ *
+ * Direção `u`: do primeiro ao último ponto MEDIDO (cota alinhada; com a trava
+ * ortogonal no gesto ela sai horizontal ou vertical). Cada ponto medido é
+ * projetado em `u` (`s`, mm a partir do primeiro), e os trechos são as
+ * diferenças entre projeções vizinhas EM ORDEM — clicar fora de ordem não cria
+ * trecho negativo nem sobreposto. `afastamentoMm`: distância, com sinal, do
+ * ponto de colocação (o último) à reta dos medidos, pela normal `n`.
+ * `null` fora da cota linear ou degenerada.
+ */
+export function trechosDaCotaLinear(a: Pick<Anotacao, 'tipo' | 'pontos'>): {
+  u: Point;
+  n: Point;
+  origem: Point;
+  /** Projeções ordenadas dos pontos medidos em `u`, em mm a partir de `origem`. */
+  projecoesMm: number[];
+  trechosMm: number[];
+  totalMm: number;
+  afastamentoMm: number;
+} | null {
+  if (a.tipo !== 'COTA_LINEAR' || a.pontos.length < 3) return null;
+  const medidos = a.pontos.slice(0, -1);
+  const colocacao = a.pontos[a.pontos.length - 1];
+  const p0 = medidos[0];
+  const pn = medidos[medidos.length - 1];
+  const L = Math.hypot(pn.x - p0.x, pn.y - p0.y);
+  if (L === 0) return null;
+  const u = { x: (pn.x - p0.x) / L, y: (pn.y - p0.y) / L } as Point;
+  const n = { x: -u.y, y: u.x } as Point;
+  const proj = (p: Point) => (p.x - p0.x) * u.x + (p.y - p0.y) * u.y;
+  const projecoesMm = [...new Set(medidos.map((p) => Math.round(proj(p))))].sort((x, y) => x - y);
+  const trechosMm = projecoesMm.slice(1).map((s, i) => s - projecoesMm[i]);
+  return {
+    u,
+    n,
+    origem: p0,
+    projecoesMm,
+    trechosMm,
+    totalMm: projecoesMm[projecoesMm.length - 1] - projecoesMm[0],
+    afastamentoMm: Math.round((colocacao.x - p0.x) * n.x + (colocacao.y - p0.y) * n.y),
+  };
 }
 
 /** Duas vistas são a mesma? */
@@ -5896,6 +5947,12 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (a.tipo === 'HACHURA' && a.hachura == null) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: região hachurada sem padrão`);
     if (!Number.isInteger(a.rotacaoGraus) || a.rotacaoGraus < 0 || a.rotacaoGraus >= 360) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: giro tem de ser inteiro em [0, 360)`);
     if (a.cor != null && !/^#[0-9a-fA-F]{6}$/.test(a.cor)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: cor tem de ser #rrggbb`);
+    // COTA LINEAR (0.95.0): o primeiro e o último ponto MEDIDOS não coincidem — sem isso não há direção.
+    if (a.tipo === 'COTA_LINEAR') {
+      const p0 = a.pontos[0];
+      const pn = a.pontos[a.pontos.length - 2];
+      if (p0.x === pn.x && p0.y === pn.y) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: cota linear com o primeiro e o último ponto medidos no mesmo lugar`);
+    }
     // NUVEM DE REVISÃO (0.50.0): toda nuvem tem revisão; nenhuma outra tem.
     if (a.tipo === 'NUVEM') {
       if (!a.revisao || !Number.isInteger(a.revisao.numero) || a.revisao.numero < 1) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: nuvem de revisão pede número de revisão inteiro ≥ 1`);

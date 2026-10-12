@@ -113,6 +113,9 @@ export interface PortalAtivoCondominio {
     marca: string | null;
     modelo: string | null;
     numeroSerie: string | null;
+    /** Onde o equipamento está instalado no prédio, texto livre (12/10/2026,
+     *  migration `aplicar_20271012000020`). */
+    localizacao: string | null;
     situacao: string | null;
     sistema: string | null;
     dataAquisicao: string | null;

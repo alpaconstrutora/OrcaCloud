@@ -846,6 +846,7 @@ const FichaDoEquipamento: React.FC<{ ativo: PortalAtivoCondominio | null; multi:
                             <CampoFicha rotulo="Marca" bruto={ativo.marca} />
                             <CampoFicha rotulo="Modelo" bruto={ativo.modelo} />
                             <CampoFicha rotulo="Nº de série" bruto={ativo.numeroSerie} />
+                            <CampoFicha rotulo="Localização" bruto={ativo.localizacao} />
                         </div>
                     </div>
 

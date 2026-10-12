@@ -20,7 +20,7 @@ export const CATEGORIA_PREDIAL = 'sistema_predial';
 
 const ASSET_COLS =
     'id, organization_id, parent_asset_id, code, name, category, subcategory, brand, model, '
-    + 'serial_number, purchase_date, purchase_value, status, notes, empreendimento_id, '
+    + 'serial_number, location, purchase_date, purchase_value, status, notes, empreendimento_id, '
     + 'building_system_id, supplier_id, supplier_warranty_until, created_at, updated_at';
 
 export interface BuildingAsset {
@@ -33,6 +33,8 @@ export interface BuildingAsset {
     brand?: string | null;
     model?: string | null;
     serial_number?: string | null;
+    /** Onde o equipamento está instalado no prédio — texto livre ("Casa de máquinas — cobertura"). */
+    location?: string | null;
     /** Data de instalação — é dela que corre a garantia do fornecedor. */
     purchase_date?: string | null;
     purchase_value?: number | null;
@@ -115,6 +117,7 @@ export const buildingAssetService = {
         brand?: string | null;
         model?: string | null;
         serial_number?: string | null;
+        location?: string | null;
         purchase_date?: string | null;
         supplier_id?: string | null;
         supplier_warranty_until?: string | null;

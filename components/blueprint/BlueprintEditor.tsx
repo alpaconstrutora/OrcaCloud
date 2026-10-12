@@ -130,6 +130,7 @@ import {
   Flame,
   GitFork,
   Thermometer,
+  ScanSearch,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -629,7 +630,7 @@ import {
 } from '../../utils/blueprintTopografiaDimensionamento';
 import type { TerrenoParaCorte } from '../../utils/blueprintCorte';
 import { useBlueprintUnderlay } from '../../hooks/useBlueprintUnderlay';
-import type { PontoPx } from '../../utils/blueprintUnderlay';
+import { pixelParaModelo, type PontoPx } from '../../utils/blueprintUnderlay';
 import type { ParedeGerada, PortaGerada } from '../../utils/blueprintVetor';
 import { extrairSegmentosPdf } from '../../services/blueprintUnderlayService';
 import type { BlueprintBranch, BlueprintProjetoExecutivoRow, BlueprintQuantitySnapshot, BlueprintStudy } from '../../types/blueprint';
@@ -673,7 +674,19 @@ import { HIPOTESES_DE_GUARDA_CORPO_PADRAO, resumirGuardaCorpos, sugerirGuardaCor
 import { resumirAcabamentos } from '../../utils/blueprintAcabamentos';
 import PainelIa, { concluirTurno, novoTurno, turnoComMudancas, type TurnoDaConversa } from './PainelIa';
 import { aplicarMudancas, interpretarPedidoLocal } from '../../utils/blueprintIa';
-import { pedirMudancasAIa, pedirMudancasDaMassaAIa } from '../../services/plantaIaService';
+import { pedirMudancasAIa, pedirMudancasDaMassaAIa, rastrearPlantaComIa } from '../../services/plantaIaService';
+import {
+  cinzaDeRgba,
+  comandosDoRastreio,
+  fatorParaLado,
+  MAX_LADO_DA_ANALISE,
+  MAX_LADO_PARA_IA,
+  rastrear,
+  recorteDaRegiao,
+  tracadoDaResposta,
+  type ResultadoDoRastreio,
+} from '../../utils/blueprintRastrear';
+import type { ResumoDoRastreio } from './PainelGerarParedes';
 import { HIPOTESES_MOBILIARIO_PADRAO, mobiliarNivel, sugerirShaft, type HipotesesDeMobiliario } from '../../utils/blueprintMobiliario';
 import { useGerador } from '../../hooks/useGerador';
 import { useGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
@@ -1219,7 +1232,7 @@ const ROTULO_DA_TAREFA = {
   etapas: 'Etapas de obra (fases personalizadas)',
   // IA conversacional (19/09/2026, E6.4): pedido → mudanças no programa/hipóteses → re-geração → delta.
   ia: 'Conversar com a planta',
-  'gerar-paredes': 'Gerar paredes do PDF',
+  'gerar-paredes': 'Gerar paredes do PDF ou da imagem',
   'importar-ifc': 'Importar do IFC',
   // REFERÊNCIA EXTERNA (08/10/2026, E10.4b): IFC de outra disciplina só para olhar no 3D.
   referencias: 'Referências externas (IFC no 3D)',
@@ -2700,6 +2713,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     y1: number;
   } | null>(null);
   const [regiaoArmada, setRegiaoArmada] = useState(false);
+  /**
+   * F15 — RASTREIO PELA IA em prévia: o resultado conferido no fundo + o resumo da tela. Os comandos NÃO ficam
+   * guardados: são recalculados no "Aplicar" sobre o modelo daquele momento (o usuário pode ter editado no meio).
+   */
+  const [rastreio, setRastreio] = useState<{ r: ResultadoDoRastreio; resumo: ResumoDoRastreio; levelId: string } | null>(null);
+  const [rastreando, setRastreando] = useState(false);
+  const [erroDoRastreio, setErroDoRastreio] = useState<string | null>(null);
 
   /**
    * Aplica as paredes derivadas do PDF em UM passo de histórico.
@@ -6407,6 +6427,92 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
 
   /**
+   * F15 — RASTREAR COM IA: recorta a região do fundo, manda a imagem ao `planta-ia` (modo "rastrear"), saneia a
+   * resposta e CONFERE cada parede no próprio fundo (`rastrear`). O resultado vira prévia tracejada; nada é
+   * gravado aqui.
+   */
+  const rastrearComIa = async () => {
+    const img = fundo.imagem;
+    const u = fundo.underlay;
+    const reg = regiao ?? limitesDaVista;
+    if (!img || !u || fundo.semAfericao || !levelId || !reg) return;
+    setErroDoRastreio(null);
+    const rec = recorteDaRegiao(u, reg, img.naturalWidth, img.naturalHeight);
+    if (!rec) {
+      setErroDoRastreio('A região marcada não cobre a planta de fundo (ou é pequena demais). Marque uma região sobre a imagem.');
+      return;
+    }
+    setRastreando(true);
+    try {
+      const desenhar = (fator: number) => {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(rec.sw * fator));
+        c.height = Math.max(1, Math.round(rec.sh * fator));
+        const ctx = c.getContext('2d', { willReadFrequently: true })!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, rec.sx, rec.sy, rec.sw, rec.sh, 0, 0, c.width, c.height);
+        return c;
+      };
+      const analise = desenhar(fatorParaLado(rec, MAX_LADO_DA_ANALISE));
+      const raster = cinzaDeRgba(analise.getContext('2d')!.getImageData(0, 0, analise.width, analise.height).data, analise.width, analise.height);
+      const paraIa = desenhar(fatorParaLado(rec, MAX_LADO_PARA_IA));
+      let tipo: 'image/png' | 'image/jpeg' = 'image/png';
+      let dados = paraIa.toDataURL('image/png').split(',')[1] ?? '';
+      if (dados.length > 4_500_000) {
+        tipo = 'image/jpeg';
+        dados = paraIa.toDataURL('image/jpeg', 0.92).split(',')[1] ?? '';
+      }
+      const resposta = await rastrearPlantaComIa(dados, tipo, paraIa.width, paraIa.height);
+      if (!resposta.tracado) {
+        setErroDoRastreio(`A IA não respondeu: ${resposta.indisponivel ?? 'sem motivo informado'}.`);
+        return;
+      }
+      const { tracado, recusados } = tracadoDaResposta(resposta.tracado, paraIa.width, paraIa.height);
+      const gx = analise.width / rec.sw;
+      const gy = analise.height / rec.sh;
+      const r = rastrear({
+        tracado,
+        raster,
+        iaParaAnalise: analise.width / paraIa.width,
+        mmPorPx: u.mmPorPixel / ((gx + gy) / 2),
+        paraModelo: (x, y) => pixelParaModelo(u, { px: rec.sx + x / gx, py: rec.sy + y / gy }),
+      });
+      const { descartes } = comandosDoRastreio(r, editor.model, levelId, { alturaMm: ALTURA_PADRAO_MM, correcoes: comandosDeConexao });
+      const resumo: ResumoDoRastreio = {
+        propostas: r.propostas,
+        paredes: r.paredes.length,
+        aberturas: r.aberturas.length - descartes.reduce((s, d) => s + d.n, 0),
+        ambientes: r.ambientes.map((a) => a.nome),
+        descartes: [...r.descartes, ...descartes, ...(recusados ? [{ motivo: 'item ilegível na resposta da IA', n: recusados }] : [])],
+        observacao: tracado.observacao,
+        cortado: resposta.cortado,
+        modelo: resposta.modelo,
+      };
+      setRastreio({ r, resumo, levelId });
+      // A prévia é tracejada SOBRE o fundo — o painel modal a esconderia: recolhe, e a pílula dá "Lançar"/"Voltar".
+      setDrawerRecolhido(true);
+    } catch (e) {
+      setErroDoRastreio(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRastreando(false);
+    }
+  };
+
+  /** Aplica a prévia do rastreio: paredes + conexões em T + aberturas + nomes, num lote — um Ctrl+Z. */
+  const aplicarRastreio = () => {
+    if (!rastreio) return;
+    try {
+      const { comandos } = comandosDoRastreio(rastreio.r, editor.model, rastreio.levelId, { alturaMm: ALTURA_PADRAO_MM, correcoes: comandosDeConexao });
+      if (comandos.length) editor.runBatch(comandos);
+      setRastreio(null);
+      setErroDoRastreio(null);
+    } catch (e) {
+      setErroDoRastreio(`O desenho recusou o traçado: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  /**
    * O mesmo passe, agora sob demanda.
    *
    * Diz o que fez — inclusive quando não fez nada, que é o caso em que o usuário
@@ -9326,6 +9432,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * Memoizado para o canvas não redesenhar em loop (identidade estável).
    */
   const pecasPrevistas = useMemo<readonly PecaPrevista[] | undefined>(() => {
+    // F15: a prévia do rastreio pela IA — paredes na espessura medida e aberturas com a letra do tipo.
+    if (tarefaAberta === 'gerar-paredes' && rastreio && rastreio.levelId === levelId) {
+      return [
+        ...rastreio.r.paredes.map((p) => ({ kind: 'VIGA' as const, pontos: [p.a, p.b], larguraMm: p.espessuraMm, profundidadeMm: 0, rotacaoDeg: 0 })),
+        ...rastreio.r.aberturas.map((o) => ({
+          kind: 'VIGA' as const,
+          pontos: [o.a, o.b],
+          larguraMm: 60,
+          profundidadeMm: 0,
+          rotacaoDeg: 0,
+          rotulo: o.tipo === 'porta' ? 'P' : o.tipo === 'janela' ? 'J' : 'V',
+        })),
+      ];
+    }
     if (tarefaAberta === 'pilares' && planoDePilares) {
       return planoDePilares.pilares.map((p) => ({
         kind: 'PILAR' as const,
@@ -9385,10 +9505,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       ];
     }
     return undefined;
-  }, [tarefaAberta, planoDePilares, planoDeVigas, planoDeLajes, planoDeFundacoes]);
+  }, [tarefaAberta, planoDePilares, planoDeVigas, planoDeLajes, planoDeFundacoes, rastreio, levelId]);
   /** A pílula sobre o desenho quando a gaveta está recolhida: o que está em prévia e como lançar. */
   const previaRecolhida =
-    drawerRecolhido && tarefaAberta === 'pilares' && planoDePilares
+    drawerRecolhido && tarefaAberta === 'gerar-paredes' && rastreio && rastreio.levelId === levelId
+      ? { n: rastreio.r.paredes.length, nome: 'parede(s) rastreada(s)', lancar: aplicarRastreio, Icone: ScanSearch }
+      : drawerRecolhido && tarefaAberta === 'pilares' && planoDePilares
       ? { n: planoDePilares.pilares.length, nome: 'pilar(es)', lancar: lancarPilares, Icone: RectangleVertical }
       : drawerRecolhido && tarefaAberta === 'eixos' && propostaDeEixosDoNivel
       ? { n: propostaDeEixosDoNivel.novos, nome: 'eixo(s)', lancar: criarEixos, Icone: Grid3x3 }
@@ -12911,10 +13033,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             >
                 <BotaoDoRibbon
                   icone={FileText}
-                  rotulo="Do PDF"
+                  rotulo="Do PDF ou imagem"
                   ativo={tarefaAberta === 'gerar-paredes'}
                   onClick={() => alternarTarefa('gerar-paredes')}
-                  ajuda="Gerar paredes e portas a partir da planta de fundo em PDF"
+                  ajuda="Gerar paredes e portas a partir da planta de fundo: o traço do PDF de projeto ou, de escaneado/foto, rastreando com IA"
                 />
                 <BotaoDoRibbon
                   icone={Boxes}
@@ -16128,7 +16250,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             {tarefaAberta === 'terreno' &&
               'Área da escritura, papel de cada divisa, recuos e zona urbanística, topografia, corte e aterro, projeto executivo de terraplenagem. Traçar perfil ou drenagem fecha este painel — volte por Terreno › Dados do lote.'}
             {tarefaAberta === 'gerar-paredes' &&
-              'Paredes e portas a partir da planta de fundo em PDF. Ao marcar a região, este painel se recolhe para você arrastar sobre o desenho e volta em seguida.'}
+              'Paredes e portas a partir da planta de fundo: do traço do PDF de projeto ou, de planta escaneada/foto, rastreando com IA. Ao marcar a região — e ao chegar a prévia do rastreio — este painel se recolhe para você ver o desenho e volta em seguida.'}
             {tarefaAberta === 'referencias' &&
               'Modelos IFC de outras disciplinas desenhados no 3D, com olho, opacidade e posição próprios. Só para coordenar: não viram desenho e não entram na versão.'}
             {tarefaAberta === 'importar-ifc' &&
@@ -18688,6 +18810,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               onGerar={aplicarParedesGeradas}
               paredesDoNivel={paredesParaPortas}
               onGerarPortas={aplicarPortasGeradas}
+              rastreio={rastreio?.resumo ?? null}
+              rastreando={rastreando}
+              erroDoRastreio={erroDoRastreio}
+              onRastrear={() => void rastrearComIa()}
+              onAplicarRastreio={aplicarRastreio}
+              onDescartarRastreio={() => {
+                setRastreio(null);
+                setErroDoRastreio(null);
+              }}
             />
           )}
 

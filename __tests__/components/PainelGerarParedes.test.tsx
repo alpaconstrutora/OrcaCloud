@@ -130,3 +130,67 @@ describe('PainelGerarParedes · a janela de região', () => {
     expect(onArmarRegiao).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * F15 — RASTREAR COM IA (12/10/2026). A IA propõe; o fundo confere; o usuário aplica. A tela tem de dizer
+ * quantas paredes foram ACEITAS e quantas DESCARTADAS, e por quê — e nada se aplica sem o clique.
+ */
+describe('PainelGerarParedes · rastrear com IA (F15)', () => {
+  const comIa = { ...base, semAfericao: false, onRastrear: vi.fn(), onAplicarRastreio: vi.fn(), onDescartarRastreio: vi.fn() };
+
+  it('sem vetor, a região e o botão de rastrear aparecem; sem escala o botão desliga e diz o motivo', async () => {
+    const { rerender } = render(<PainelGerarParedes {...comIa} />);
+    expect(await screen.findByText(/de que parte da prancha/i)).toBeInTheDocument();
+    const botao = screen.getByRole('button', { name: /rastrear a área visível/i });
+    expect(botao).toBeEnabled();
+    fireEvent.click(botao);
+    expect(comIa.onRastrear).toHaveBeenCalledTimes(1);
+
+    rerender(<PainelGerarParedes {...comIa} semAfericao />);
+    expect(screen.getByRole('button', { name: /rastrear/i })).toBeDisabled();
+    expect(screen.getByText(/a IA não mede/i)).toBeInTheDocument();
+  });
+
+  it('o resultado mostra aceitas × descartadas com o motivo; aplicar e descartar chamam o editor', () => {
+    render(
+      <PainelGerarParedes
+        {...comIa}
+        rastreio={{
+          propostas: 7,
+          paredes: 5,
+          aberturas: 2,
+          ambientes: ['Sala', 'Cozinha'],
+          descartes: [
+            { motivo: 'sem traço de parede no fundo sob ela', n: 1 },
+            { motivo: 'inclinada', n: 1 },
+          ],
+          observacao: 'parte inferior cortada',
+          cortado: false,
+          modelo: 'claude-opus-5-5',
+        }}
+      />,
+    );
+    expect(screen.getByText(/5 aceitas/)).toBeInTheDocument();
+    expect(screen.getByText(/2 descartadas/)).toBeInTheDocument();
+    expect(screen.getByText(/1 × sem traço de parede no fundo sob ela/)).toBeInTheDocument();
+    expect(screen.getByText(/Sala · Cozinha/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /rastrear/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /aplicar 5 paredes/i }));
+    expect(comIa.onAplicarRastreio).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /descartar/i }));
+    expect(comIa.onDescartarRastreio).toHaveBeenCalledTimes(1);
+  });
+
+  it('nada aceito: aplicar desliga e diz por quê', () => {
+    render(
+      <PainelGerarParedes
+        {...comIa}
+        rastreio={{ propostas: 3, paredes: 0, aberturas: 0, ambientes: [], descartes: [{ motivo: 'sem traço de parede no fundo sob ela', n: 3 }], observacao: '', cortado: true, modelo: null }}
+      />,
+    );
+    const aplicar = screen.getByRole('button', { name: /aplicar 0 paredes/i });
+    expect(aplicar).toBeDisabled();
+    expect(aplicar).toHaveAttribute('title', expect.stringMatching(/nada foi aceito/i));
+    expect(screen.getByText(/pode estar incompleta/i)).toBeInTheDocument();
+  });
+});

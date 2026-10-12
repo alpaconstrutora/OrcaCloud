@@ -55,3 +55,38 @@ export async function pedirMudancasDaMassaAIa(pedido: string, contexto: unknown)
     return { mudancas: null, indisponivel: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/**
+ * RASTREAR (F15, 12/10/2026): o recorte da planta de fundo vai ao `planta-ia` no modo "rastrear" (Claude com
+ * visão) e volta o traçado CRU, em pixels da imagem enviada — quem saneia e confere no fundo é
+ * `utils/blueprintRastrear.ts`. Mesmo contrato dos outros: `indisponivel` com o motivo em vez de lançar.
+ */
+export interface RespostaDoRastreio {
+  tracado: unknown | null;
+  modelo: string | null;
+  /** A resposta passou do teto de tokens: o traçado pode estar incompleto. */
+  cortado: boolean;
+  indisponivel: string | null;
+}
+
+export async function rastrearPlantaComIa(imagemBase64: string, tipoDaImagem: 'image/png' | 'image/jpeg', largura: number, altura: number): Promise<RespostaDoRastreio> {
+  try {
+    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { modo: 'rastrear', imagem: imagemBase64, tipoDaImagem, largura, altura } });
+    if (error) {
+      const ctx = (error as { context?: Response }).context;
+      let detalhe: string | null = null;
+      try {
+        detalhe = ctx && typeof ctx.json === 'function' ? ((await ctx.json()) as { error?: string })?.error ?? null : null;
+      } catch {
+        detalhe = null;
+      }
+      const msg = detalhe ?? (error as { message?: string }).message ?? String(error);
+      return { tracado: null, modelo: null, cortado: false, indisponivel: /Failed to send|Failed to fetch|ANTHROPIC_API_KEY/i.test(msg) ? 'IA não configurada ou indisponível (a chave ANTHROPIC_API_KEY não está no Supabase)' : msg };
+    }
+    const payload = data as { tracado?: unknown; modelo?: string; cortado?: boolean; error?: string } | null;
+    if (!payload || payload.error || !payload.tracado) return { tracado: null, modelo: null, cortado: false, indisponivel: payload?.error ?? 'resposta vazia' };
+    return { tracado: payload.tracado, modelo: payload.modelo ?? null, cortado: !!payload.cortado, indisponivel: null };
+  } catch (e) {
+    return { tracado: null, modelo: null, cortado: false, indisponivel: e instanceof Error ? e.message : String(e) };
+  }
+}

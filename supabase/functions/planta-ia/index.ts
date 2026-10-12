@@ -19,6 +19,14 @@
 // unidades). O cliente valida de novo (`mudancasDaMassaDaResposta` +
 // `aplicarMudancasDaMassa` em utils/blueprintIaDaMassa.ts). Sem `modo`, é o de
 // antes (a planta).
+//
+// MODO "rastrear" (12/10/2026, F15 do plano 2026-10-11-planta-recursos-video-synaps): `{ modo: 'rastrear',
+// imagem, tipoDaImagem, largura, altura }` — a imagem (recorte da planta de fundo) vai ao Claude com VISÃO, que
+// responde pela ferramenta `emitir_tracado` (paredes pelo eixo, aberturas pelas ombreiras, nomes) em PIXELS da
+// imagem enviada. A escala NÃO é pedida: vem da calibração do fundo, no cliente. O cliente CONFERE cada parede
+// no próprio fundo antes de propor (`utils/blueprintRastrear.ts`) e nada é gravado sem o usuário confirmar.
+// Modelo: `PLANTA_RASTREAR_MODELO` (padrão claude-opus-5-5), com recuo para claude-sonnet-4-6 se o primeiro
+// não estiver disponível para a chave.
 
 // @ts-ignore
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -137,6 +145,44 @@ const FERRAMENTA_MASSA = {
   },
 };
 
+const FERRAMENTA_RASTREAR = {
+  name: 'emitir_tracado',
+  description: 'Devolve o traçado da planta baixa da imagem: paredes pelo eixo, aberturas pelas ombreiras e os nomes dos ambientes, em pixels da imagem.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      paredes: {
+        type: 'array',
+        description: 'Uma entrada por trecho RETO de parede: o EIXO (linha central da espessura), de ponta a ponta, CONTÍNUO através de portas e janelas.',
+        items: { type: 'object', properties: { x1: { type: 'number' }, y1: { type: 'number' }, x2: { type: 'number' }, y2: { type: 'number' } }, required: ['x1', 'y1', 'x2', 'y2'] },
+      },
+      aberturas: {
+        type: 'array',
+        description: 'Portas, janelas e vãos sem folha: as DUAS OMBREIRAS, sobre o eixo da parede que as recebe.',
+        items: {
+          type: 'object',
+          properties: { tipo: { type: 'string', enum: ['porta', 'janela', 'passagem'] }, x1: { type: 'number' }, y1: { type: 'number' }, x2: { type: 'number' }, y2: { type: 'number' } },
+          required: ['tipo', 'x1', 'y1', 'x2', 'y2'],
+        },
+      },
+      ambientes: {
+        type: 'array',
+        description: 'Cada ambiente: o nome escrito na planta (ou, sem texto, o deduzido pelo mobiliário) e um ponto DENTRO dele.',
+        items: { type: 'object', properties: { nome: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['nome', 'x', 'y'] },
+      },
+      observacao: { type: 'string', description: 'Uma frase, em português: o que não deu para ler (parte cortada, ilegível, curvas).' },
+    },
+    required: ['paredes', 'aberturas', 'ambientes'],
+  },
+};
+
+const SISTEMA_RASTREAR = `Você lê PLANTAS BAIXAS de arquitetura (escaneadas, fotografadas ou exportadas como imagem) para a Planta Inteligente (ÒPURA) e devolve o traçado pela ferramenta emitir_tracado. Coordenadas em PIXELS da imagem recebida, origem no canto SUPERIOR ESQUERDO, x para a direita e y para baixo.
+Regras:
+- PAREDE: o EIXO (meio da espessura) de cada trecho reto, de ponta a ponta. Parede atravessada por porta ou janela é UMA parede contínua (a abertura vai em "aberturas"). Nos cantos e encontros em T, leve a ponta até o eixo da outra parede. Não inclua mobiliário, louças, bancadas, cotas e linhas de cota, hachuras de piso, textos, eixos de projeto, linhas de projeção (beiral, laje) nem a moldura da folha.
+- ABERTURA: "porta" (folha com arco de giro ou de correr), "janela" (linhas finas paralelas dentro da espessura da parede), "passagem" (vão sem folha). x1,y1 e x2,y2 são as duas ombreiras, sobre o eixo da parede.
+- AMBIENTE: o nome como está escrito (sem a área), com um ponto bem dentro do ambiente.
+- Precisão importa mais que quantidade: na dúvida, deixe de fora e diga em "observacao". A escala NÃO é sua: não tente converter para metros.`;
+
 const SISTEMA_MASSA = `Você é a assistente do Estudo de Massa da Planta Inteligente (ÒPURA). O incorporador pede mudanças em linguagem natural; você as traduz em MUDANÇAS ESTRUTURADAS pela ferramenta emitir_mudancas_da_massa — no PRODUTO (tipologias: área privativa em m², faixa de área para todos os apartamentos, participação no mix em %, preço por m², adicionar/remover tipologia; padrão do CUB; meta de unidades; hipóteses do pavimento) e na CONFIGURAÇÃO do gerador de implantações (quais implantações testar: torre única = TORRE, duas torres = DUAS_TORRES, bloco longitudinal/lâmina = LAMINA, blocos paralelos, L, U, H, embasamento + torre; o objetivo; o estacionamento; o máximo de pavimentos; o mínimo de unidades; exigir ou não as vagas). Você NUNCA desenha blocos: quem implanta é o gerador determinístico, e o incorporador verá o delta do melhor cenário.
 Regras: "apartamentos entre 65 e 75 m²" é faixa_de_area; "reduzir área comum" é objetivo MENOR_COMUM; "sem subsolo" é estacionamento PILOTIS; use os nomes das tipologias exatamente como estão no produto; se não entender, devolva só o entendimento explicando a dúvida, sem mudanças. Responda sempre em português.`;
 
@@ -159,11 +205,61 @@ serve(async (req: Request) => {
   } = await userClient.auth.getUser();
   if (authError || !user) return json({ error: 'Token inválido' }, 401);
 
-  let body: { pedido?: string; contexto?: unknown; modo?: string };
+  let body: { pedido?: string; contexto?: unknown; modo?: string; imagem?: string; tipoDaImagem?: string; largura?: number; altura?: number };
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Corpo inválido' }, 400);
+  }
+
+  if (body.modo === 'rastrear') {
+    const imagem = typeof body.imagem === 'string' ? body.imagem : '';
+    const tipo = body.tipoDaImagem === 'image/png' ? 'image/png' : 'image/jpeg';
+    const largura = Number(body.largura);
+    const altura = Number(body.altura);
+    if (!imagem || !/^[A-Za-z0-9+/=]+$/.test(imagem.slice(0, 200))) return json({ error: 'Imagem ausente ou inválida' }, 400);
+    if (imagem.length > 7_000_000) return json({ error: 'Imagem grande demais (máx. ~5 MB)' }, 413);
+    if (!(largura > 0 && altura > 0 && largura <= 2000 && altura <= 2000)) return json({ error: 'Dimensões da imagem inválidas' }, 400);
+    const chamar = (modelo: string) =>
+      fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: modelo,
+          max_tokens: 16000,
+          system: SISTEMA_RASTREAR,
+          tools: [FERRAMENTA_RASTREAR],
+          tool_choice: { type: 'tool', name: FERRAMENTA_RASTREAR.name },
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: tipo, data: imagem } },
+                { type: 'text', text: `A imagem tem ${Math.round(largura)} × ${Math.round(altura)} pixels. Devolva o traçado da planta baixa.` },
+              ],
+            },
+          ],
+        }),
+      });
+    try {
+      const preferido = Deno.env.get('PLANTA_RASTREAR_MODELO') || 'claude-opus-5-5';
+      let res = await chamar(preferido);
+      let modelo = preferido;
+      if (!res.ok && (res.status === 404 || res.status === 400)) {
+        const txt = await res.text();
+        if (/model/i.test(txt) && preferido !== 'claude-sonnet-4-6') {
+          modelo = 'claude-sonnet-4-6';
+          res = await chamar(modelo);
+        } else return json({ error: `Anthropic API: ${txt}` }, 502);
+      }
+      if (!res.ok) return json({ error: `Anthropic API: ${await res.text()}` }, 502);
+      const data = (await res.json()) as { content: Array<{ type: string; name?: string; input?: unknown; text?: string }>; stop_reason?: string };
+      const uso = data.content?.find((c) => c.type === 'tool_use' && c.name === FERRAMENTA_RASTREAR.name);
+      if (!uso?.input) return json({ error: data.content?.find((c) => c.type === 'text')?.text ?? 'A IA não devolveu traçado.' }, 502);
+      return json({ tracado: uso.input, modelo, cortado: data.stop_reason === 'max_tokens' });
+    } catch (err) {
+      return json({ error: String(err) }, 500);
+    }
   }
   const pedido = (body.pedido ?? '').toString().trim();
   if (!pedido) return json({ error: 'Pedido vazio' }, 400);

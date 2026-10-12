@@ -34,6 +34,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 | 11/10 | Render por IA (exige fornecedor de imagem, custo por imagem) | **Incluir já.** Fase F14 começa por proposta de 2–3 fornecedores com preço; usuário escolhe antes de codar |
 | 11/10 | Rastrear planta de imagem/foto/PDF escaneado | **Fase final, com Claude visão**, sempre com confirmação humana antes de gravar |
 | 11/10 | Móveis no 3D | **Modelos glTF** (campo opcional por tipo, fallback para a caixa) |
+| 12/10 | F14.0 — qual fornecedor de imagem (comparação abaixo, na F14) | **Adiado pelo usuário:** "deixe tudo pronto para o F14.0, voltemos a concluir os fornecedores posteriormente. E vamos para a próxima fase" → segue a F15; F14.1+ continua bloqueada até a escolha |
 
 ## Levantamento (origin/main) — o que muda em relação à primeira resposta
 
@@ -578,10 +579,70 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - F14.3: segmentar/substituir elemento. As máscaras vêm do **nosso** modelo (render de IDs por objeto na mesma câmera), sem depender de segmentação do fornecedor. Também trocar por imagem enviada.
 - Limite de uso por organização (contador na tabela) e custo visível antes de gerar.
 - Pronto quando: REGRA #7 respondida no plano; função recusa sem JWT (provar com curl); no app, câmera → render → editar piso → trocar o rack, imagens persistidas e reabríveis.
+- **F14.0 — comparação feita em 12/10/2026, ESPERANDO A ESCOLHA do usuário** (preços das páginas oficiais
+  nessa data; o que veio de terceiros está marcado). Para retomar: apresentar esta tabela, o usuário escolhe,
+  registrar na tabela de decisões e só então abrir a F14.1.
+
+  | | Google — Gemini 3.1 Flash Image | BFL — FLUX (Kontext + Fill) | OpenAI — gpt-image-2 |
+  |---|---|---|---|
+  | Preço/imagem | 1K US$ 0,067 · 2K 0,101 · 4K 0,151 (lote: metade) | Kontext [pro] US$ 0,04 · Fill [pro] (máscara) 0,05 · FLUX.2 [pro] desde 0,045 | por token; 1024² ≈ 0,006 baixa · 0,053 média · 0,21 alta (terceiros) |
+  | Imagem de entrada (captura F13) | sim | sim (Kontext) | sim (edits) |
+  | Edição por texto (F14.2) | sim, conversacional | sim (Kontext) | sim |
+  | **Máscara (F14.3)** | **não há parâmetro** — só por texto | **máscara de verdade** (Fill [pro]) | aceita, mas "usa a máscara como guia, pode não seguir o formato exato" |
+  | Latência | segundos (não medido) | assíncrona com consulta (não medido) | "até 2 min" em prompt complexo |
+  | Uso comercial | sim | explícito: "você é dono do Output", uso comercial | sim |
+  | Dados | pago: não treina; 55 dias para abuso | termos NÃO dizem se treina nem retenção; BFL é dona de "data sets criados a partir do uso" | API não treina por padrão; 30 dias para abuso |
+
+  Ciclo render + 2 edições + 1 troca: BFL ≈ US$ 0,17 · OpenAI média ≈ 0,21 (+ tokens de entrada) · Google 1K ≈ 0,27.
+  **Recomendação apresentada:** BFL (único com máscara exata, que é o que a F14.3 precisa — as máscaras vêm do
+  NOSSO modelo; o mais barato), mandando só a imagem do 3D e a descrição dos ambientes (sem cliente/endereço)
+  por causa dos termos vagos. Alternativa: Google, se a clareza dos termos de dados pesar mais que a máscara.
+  Qualquer que seja, `planta-render` terá um adaptador por fornecedor. Opção oferecida: rodar os três na mesma
+  captura da "Planta 11/10/2026" (< US$ 1, precisa de uma chave de cada) antes de escolher.
+  Stability ficou de fora (página de preços não abriu; Inpaint/Search&Replace/Structure = 5 créditos = US$ 0,05
+  segundo terceiros).
+  Fontes: ai.google.dev/gemini-api/docs/pricing · ai.google.dev/gemini-api/docs/abuse-monitoring ·
+  docs.bfl.ml/quick_start/pricing · bfl.ai/legal/developer-terms-of-service · help.bfl.ai (uso comercial) ·
+  developers.openai.com/api/docs/pricing · developers.openai.com/api/docs/guides/image-generation ·
+  blog.segmind.com, enter.converge.ai (preço por imagem do gpt-image-2).
 
 **F15 — Rastrear planta de imagem (Claude visão)** · Edge Function (estender `planta-ia` com modo `rastrear` ou nova `planta-rastrear`), `PainelGerarParedes.tsx`, `utils/blueprintVetor.ts`
 - Muda: imagem/PDF escaneado sobre a planta de fundo **calibrada** (a escala vem da calibração, não da IA) → JSON de segmentos de parede, aberturas e nomes → mesmo pós-processamento do vetorizador (fechar vãos, T, espessuras) → prévia sobreposta → o usuário confirma → `AddWalls`/`AddOpenings`/`PlaceSpaceLabels`. Nada é gravado sem confirmação.
 - Pronto quando: teste do pós-processamento com uma resposta JSON fixa; no app, um escaneado de exemplo gera paredes alinhadas ao fundo e o resultado mostra quantas paredes foram aceitas e quantas descartadas.
+- **Feito na execução (12/10, pedido: "deixe tudo pronto para o F14.0 … e vamos para a próxima fase"; sem bump de
+  kernel, sem migration):**
+  - `utils/blueprintRastrear.ts` (puro): `recorteDaRegiao` (região em mm → pixels do fundo), `tracadoDaResposta`
+    (saneia a resposta: número inválido, fora da imagem, tipo desconhecido → recusado e contado), `limiarDeOtsu`,
+    `refinarNoRaster` — **a parede proposta é CONFERIDA no próprio fundo**: perfil de cobertura escura através do
+    eixo; parede = uma faixa da espessura de parede (cheia) OU um par de linhas finas a uma espessura (contorno, com
+    ou sem hachura); vence a mais larga que contém a linha proposta; sem candidato = "sem traço de parede no fundo
+    sob ela" (é o filtro de alucinação) —, `ajustarPontas` (estica/recolhe pelo fundo), `juntarSobrepostos`,
+    `encostarPontas` (ponta no EIXO da perpendicular: L e T), `rastrear` (tudo, com espessura no centímetro e
+    corte de esbeltez do vetorizador), `hospedarAberturas` (por `wallUid`, sem sobrepor: o kernel recusaria o
+    lote) e `comandosDoRastreio` (AddWalls → conexões em T do editor sobre o modelo SIMULADO → AddOpenings
+    hospedadas nas paredes já corrigidas → PlaceSpaceLabels com o tipo pelo nome) — um `runBatch`.
+  - Edge `planta-ia`, modo `rastrear`: imagem (≤ 1568 px de lado) → Claude com visão, ferramenta `emitir_tracado`
+    (paredes pelo eixo, aberturas pelas ombreiras, nomes), em pixels; a escala NÃO é pedida. Modelo
+    `PLANTA_RASTREAR_MODELO` (padrão claude-opus-5-5, recuo para claude-sonnet-4-6). Publicada; sem JWT → 401.
+    REGRA #7: não cria policy nem função SQL; a chave fica só no servidor.
+  - Tela: "Importar › Do PDF ou imagem" ganhou "Rastrear com IA — planta escaneada ou foto" (região compartilhada
+    com o caminho do PDF; botão desligado diz o motivo). A prévia chega com o painel RECOLHIDO — tracejada sobre o
+    fundo, com a pílula "Lançar N parede(s) rastreada(s)" / "Voltar à gaveta"; o resumo diz propostas, aceitas,
+    descartadas e por quê.
+  - ⚠️ **A chave `ANTHROPIC_API_KEY` não está nos segredos do Supabase** (conferido 12/10): a função responde 503
+    e a tela diz "IA não configurada ou indisponível (a chave ANTHROPIC_API_KEY não está no Supabase)". Vale
+    também para a conversa da E6.4/M5c (que hoje cai no intérprete local). Basta o usuário cadastrar a chave —
+    nenhuma mudança de código.
+  - Prova do pipeline numa imagem "escaneada" de verdade (ruído + desfoque, paredes cheias de 12 px, interna pelo
+    contorno, porta com arco, janela, cama e uma cota): as 5 paredes nos eixos exatos com 20 cm medidos; a COTA e
+    uma parede inventada recusadas ("sem traço"); porta 90 cm, janela 1,51 m; 2 ambientes fechados.
+  - **Prova no app (estudo "Planta 11/10/2026")**: importar o escaneado como fundo, aferir (gravada pela API com a
+    sessão), "Rastrear" com a função REAL → a tela diz que falta a chave; com a resposta da IA SIMULADA (rota
+    interceptada, mesma resposta acima) → imagem enviada 1400 × 900 no modo "rastrear", "7 propostas → 5 aceitas ·
+    2 descartadas · 2 × sem traço de parede no fundo sob ela", prévia sem gravar, Aplicar → banco +5 paredes nos
+    eixos (±2 cm, 20 cm) +2 aberturas +2 nomes → Ctrl+Z → md5 do rascunho idêntico; prancha e arquivo removidos.
+  - Testes: `__tests__/blueprintRastrear.test.ts` (14) e `components/PainelGerarParedes.test.tsx` (+3).
+  - Pendente (precisa da chave): medir a qualidade com o Claude de verdade em plantas reais do usuário.
 
 ## Estado
 - [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [x] F2 — provada no app com escrita, Ctrl+Z incluso
@@ -591,7 +652,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
   kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [x] F9 — provada no app com escrita (arrastar → ponto solto → Ctrl+Z) · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
-- [ ] F11 · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [x] F13 — PNG do 3D (HD/QHD/4K) por render fora da tela; provada no app · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
+- [x] F11 — `51135a40`, contorno L/U/T inteiro + aplicação em um lote; provada no app · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [x] F13 — PNG do 3D (HD/QHD/4K) por render fora da tela; provada no app · [ ] F14.0 — comparação feita, escolha ADIADA pelo usuário (12/10) · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [x] F15 — rastrear com Claude visão + conferência no fundo; provada no app com resposta simulada (falta a chave ANTHROPIC_API_KEY no Supabase)
 
 ## Verificação (por fase)
 1. `npx vitest run __tests__/<arquivos da fase>` + goldens do kernel quando houver bump; `npm run typecheck` (ler `exit=` por grep).

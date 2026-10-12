@@ -6,6 +6,7 @@ import {
   FileUp,
   Loader2,
   Ruler,
+  ScanSearch,
   SquareDashedMousePointer,
   Wand2,
   X,
@@ -23,6 +24,18 @@ import {
   type SegmentoVetor,
 } from '../../utils/blueprintVetor';
 import type { Underlay } from '../../utils/blueprintUnderlay';
+
+/** F15: o que a tela mostra do rastreio pela IA (a prévia em si é desenhada no canvas, tracejada). */
+export interface ResumoDoRastreio {
+  propostas: number;
+  paredes: number;
+  aberturas: number;
+  ambientes: string[];
+  descartes: { motivo: string; n: number }[];
+  observacao: string;
+  cortado: boolean;
+  modelo: string | null;
+}
 
 /**
  * Gerar paredes a partir do vetor do PDF.
@@ -63,6 +76,12 @@ export default function PainelGerarParedes({
   paredesDoNivel,
   onGerarPortas,
   ocupado,
+  rastreio = null,
+  rastreando = false,
+  erroDoRastreio = null,
+  onRastrear,
+  onAplicarRastreio,
+  onDescartarRastreio,
 }: {
   underlay: Underlay | null;
   temFundo: boolean;
@@ -125,6 +144,17 @@ export default function PainelGerarParedes({
   paredesDoNivel: ParedeAlvo[];
   onGerarPortas: (portas: PortaGerada[]) => void;
   ocupado: boolean;
+  /**
+   * F15 — RASTREAR COM IA (planta escaneada, foto, PDF sem vetor): o recorte do fundo vai ao Claude (visão), e
+   * cada parede proposta é CONFERIDA no próprio fundo antes de aparecer. A prévia fica tracejada no desenho;
+   * nada é gravado até "Aplicar". Ausente = a seção não aparece.
+   */
+  rastreio?: ResumoDoRastreio | null;
+  rastreando?: boolean;
+  erroDoRastreio?: string | null;
+  onRastrear?: () => void;
+  onAplicarRastreio?: () => void;
+  onDescartarRastreio?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pagina, setPagina] = useState(1);
@@ -250,6 +280,15 @@ export default function PainelGerarParedes({
     );
   }, [semAfericao, extraido, underlay, paredesDoNivel, regiaoEfetiva]);
 
+  /** Por que "Rastrear com IA" está desligado — botão desligado sempre diz o motivo. */
+  const motivoSemRastreio = semAfericao
+    ? 'Estabeleça a escala da prancha primeiro — a IA não mede: o tamanho sai da aferição.'
+    : rastreando
+      ? 'Rastreando…'
+      : ocupado
+        ? 'Aguarde a planta de fundo terminar de carregar.'
+        : null;
+
   const porEspessura = useMemo(() => {
     const m = new Map<number, number>();
     for (const p of paredes) m.set(p.espessuraMm, (m.get(p.espessuraMm) ?? 0) + 1);
@@ -279,7 +318,7 @@ export default function PainelGerarParedes({
       if (r.segmentos.length === 0) {
         setErro(
           'Este PDF não tem traço vetorial nesta página — provavelmente é um ' +
-            'escaneamento. Só dá para gerar parede de PDF de projeto, exportado do CAD.',
+            'escaneamento. Use "Rastrear com IA", abaixo, que lê a imagem do fundo.',
         );
       }
     } catch (e) {
@@ -431,7 +470,7 @@ export default function PainelGerarParedes({
         </>
       )}
 
-      {extraido && grupos.length > 0 && (
+      {(onRastrear || (extraido && grupos.length > 0)) && (
         <>
           <h3 className="mt-4 text-xs font-semibold text-slate-700">De que parte da prancha?</h3>
           <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
@@ -583,6 +622,100 @@ export default function PainelGerarParedes({
                 </>
               )}
             </>
+          )}
+        </div>
+      )}
+      {onRastrear && (
+        <div className="mt-4 border-t border-slate-200 pt-3">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+            <ScanSearch className="h-3.5 w-3.5" />
+            Rastrear com IA — planta escaneada ou foto
+          </h3>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+            A IA (Claude, visão) lê a imagem do fundo na região marcada e propõe paredes, portas, janelas e nomes.
+            Cada parede proposta é <strong>conferida no próprio fundo</strong>: o eixo vai para o traço que está
+            embaixo e a espessura é medida nele — parede sem traço sob ela é descartada. A escala vem da aferição,
+            não da IA. Nada é gravado antes de você aplicar.
+          </p>
+
+          {!rastreio && (
+            <>
+              <button
+                type="button"
+                onClick={onRastrear}
+                disabled={motivoSemRastreio !== null}
+                title={motivoSemRastreio ?? undefined}
+                className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-40"
+              >
+                {rastreando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
+                {rastreando ? 'Rastreando — pode levar até um minuto…' : regiao ? 'Rastrear a região marcada' : 'Rastrear a área visível'}
+              </button>
+              {motivoSemRastreio && !rastreando && <p className="mt-1 text-[11px] text-amber-700">{motivoSemRastreio}</p>}
+            </>
+          )}
+
+          {erroDoRastreio && (
+            <p role="alert" className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+              {erroDoRastreio}
+            </p>
+          )}
+
+          {rastreio && (
+            <div className="mt-2 rounded-md border border-violet-200 bg-violet-50/50 p-3">
+              <p className="text-[11px] text-slate-700">
+                A IA propôs <strong>{rastreio.propostas}</strong> parede{rastreio.propostas === 1 ? '' : 's'}:{' '}
+                <strong className="text-emerald-700">{rastreio.paredes} aceita{rastreio.paredes === 1 ? '' : 's'}</strong>
+                {' · '}
+                <strong className="text-red-700">
+                  {rastreio.propostas - rastreio.paredes} descartada{rastreio.propostas - rastreio.paredes === 1 ? '' : 's'}
+                </strong>
+                . {rastreio.aberturas} abertura{rastreio.aberturas === 1 ? '' : 's'} e {rastreio.ambientes.length} nome
+                {rastreio.ambientes.length === 1 ? '' : 's'}.
+              </p>
+              {rastreio.descartes.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-500">
+                  {rastreio.descartes.map((d) => (
+                    <li key={d.motivo}>
+                      {d.n} × {d.motivo}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {rastreio.ambientes.length > 0 && (
+                <p className="mt-1.5 text-[11px] text-slate-500">Ambientes: {rastreio.ambientes.join(' · ')}</p>
+              )}
+              {rastreio.observacao && <p className="mt-1.5 text-[11px] italic text-slate-500">IA: {rastreio.observacao}</p>}
+              {rastreio.cortado && (
+                <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-700">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />A resposta passou do tamanho máximo e pode estar incompleta — marque uma região menor.
+                </p>
+              )}
+              <p className="mt-1.5 text-[11px] text-slate-400">A prévia está tracejada no desenho, sobre o fundo.</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={onAplicarRastreio}
+                  disabled={rastreio.paredes === 0 && rastreio.ambientes.length === 0}
+                  title={rastreio.paredes === 0 && rastreio.ambientes.length === 0 ? 'Nada foi aceito — não há o que aplicar.' : undefined}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  Aplicar {rastreio.paredes} parede{rastreio.paredes === 1 ? '' : 's'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onDescartarRastreio}
+                  className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Descartar
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                Paredes, aberturas e nomes entram num passo só de desfazer.
+                {rastreio.modelo ? ` Modelo: ${rastreio.modelo}.` : ''}
+              </p>
+            </div>
           )}
         </div>
       )}

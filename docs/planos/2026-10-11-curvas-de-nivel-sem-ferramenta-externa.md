@@ -157,4 +157,5 @@ origem — preencher a Cota do terreno sozinho, sem nunca sobrescrever a digitad
 - [x] `cotaNaOrigem` + hook + editor
 - [x] `__tests__/components/useBlueprintTopografiaCotaDaOrigem.test.tsx` (4: preenche 875,00 na origem; não mexe na digitada; não preenche com pontos cotados; origem fora da grade pergunta só aquele ponto). Prova de que morde: tirar a condição da cota vazia → "não mexe na digitada" falha
 - [x] Suíte 8.762 = 8.728 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓ (a 1ª rodada caiu com exit 139, a queda intermitente do Node; a repetição passou)
-- [ ] Publicação e CI
+- [x] Publicado `6ae8c289`; `ci` = success; `conferir-producao.sh "Cota do terreno preenchida com"` → o domínio serve o `main` (já com uma frente posterior, `3a66646`) com o texto novo
+- [ ] Conferência do usuário: gerar de novo (com a Cota do terreno vazia) e ver o aviso sumir e a cota aparecer em "Onde fica"

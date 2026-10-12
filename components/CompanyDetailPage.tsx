@@ -27,9 +27,17 @@ interface Props {
     companies: Company[];
     onBack: () => void;
     onSaved: (updated: Company) => void;
+    /** Modo embutido na ficha da organização (empresa matriz): quem manda na aba é
+     *  o pai, que desenha cabeçalho e barra de abas próprios (TabsBar, §19.1) —
+     *  aqui some o cabeçalho com "voltar" e a barra de abas. */
+    embedded?: boolean;
+    /** Aba controlada pelo pai (só faz sentido com `embedded`). */
+    tab?: CompanyDetailTab;
 }
 
-type Tab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'metas' | 'departamentos' | 'responsaveis';
+export type CompanyDetailTab = 'identificacao' | 'socios' | 'bancos' | 'financeiro' | 'tributario' | 'obras' | 'incorporacao' | 'filiais' | 'documentos' | 'metas' | 'departamentos' | 'responsaveis';
+
+type Tab = CompanyDetailTab;
 
 // ─── Form ─────────────────────────────────────────────────────
 
@@ -296,9 +304,12 @@ function buildTabs(company: Company): { id: Tab; label: string; icon: React.Reac
     return tabs;
 }
 
+/** As abas da ficha da empresa, para quem embute a ficha com a própria barra. */
+export const buildCompanyDetailTabs = buildTabs;
+
 // ─── Componente principal ─────────────────────────────────────
 
-const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companies, onBack, onSaved }) => {
+const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companies, onBack, onSaved, embedded = false, tab: tabProp }) => {
     // ⚠️ O objeto que chega da lista é PARCIAL: companyService.list() faz um select
     // estreito (sem endereco_fiscal, retencao_pis/cofins/csll, dupla_aprovacao_*,
     // possui_*, cprb, sefaz_integrada, limites, responsáveis, certificado...).
@@ -310,7 +321,8 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
     const [loadingFull, setLoadingFull] = useState(true);
 
     const TABS = buildTabs(company);
-    const [tab, setTab] = useState<Tab>('identificacao');
+    const [tabLocal, setTab] = useState<Tab>('identificacao');
+    const tab = tabProp ?? tabLocal;
     const [form, setForm] = useState<FormData>(() => companyToForm(companyFromList));
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -423,6 +435,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {!embedded && (<>
             {/* Cabeçalho */}
             <div className="flex items-start gap-4">
                 <button onClick={onBack}
@@ -457,6 +470,7 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                     </button>
                 ))}
             </div>
+            </>)}
 
             {/* Feedback */}
             {error && (

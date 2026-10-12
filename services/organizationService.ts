@@ -216,7 +216,10 @@ export const organizationService = {
                 p_website: org.website,
                 p_logo_url: org.logoUrl,
                 p_address: org.address,
-                p_creator_email: creatorEmail
+                p_creator_email: creatorEmail,
+                // Org PF precisa nascer marcada: o gatilho que cria a empresa matriz
+                // lê `settings` no INSERT (trg_org_cria_matriz).
+                p_settings: org.settings ?? null,
             });
 
         if (error) {
@@ -243,22 +246,43 @@ export const organizationService = {
         } as Organization;
     },
 
-    async updateOrganization(id: string, org: Partial<Organization>): Promise<Organization> {
-        // 1. Update basic info
-        const { data, error } = await supabase
-            .from('organizations')
-            .update({
-                ...(org.code !== undefined && { code: org.code }),
-                name: org.name,
+    /** Org de pessoa física (`settings.tipo_pessoa = 'PF'`). Ausente = PJ. */
+    ehPessoaFisica(org: Pick<Partial<Organization>, 'settings'> | null | undefined): boolean {
+        return org?.settings?.tipo_pessoa === 'PF';
+    },
+
+    /**
+     * Colunas que um save da organização grava. CNPJ, e-mail, telefone, site e
+     * endereço de org PJ são espelho da empresa matriz, mantido pelo banco — quem
+     * edita é a matriz (ficha da organização › Identificação). Mandá-los daqui
+     * regravaria o valor que o objeto em memória tinha quando a tela abriu (e esta
+     * função é chamada também pela aba Usuários, que só mexe em membros). O banco
+     * repõe o valor da matriz de qualquer jeito (`trg_org_campos_da_matriz`); não
+     * mandar é o que deixa o save honesto. Org PF não tem matriz: os campos vão.
+     * Ver aplicar_20271012001000_organizacao_matriz_fonte_unica.sql.
+     */
+    colunasParaSalvar(org: Partial<Organization>): Record<string, unknown> {
+        return {
+            ...(org.code !== undefined && { code: org.code }),
+            name: org.name,
+            logo_url: org.logoUrl,
+            resources: org.resources,
+            settings: org.settings,
+            ...(organizationService.ehPessoaFisica(org) && {
                 cnpj: org.cnpj,
                 email: org.email,
                 phone: org.phone,
                 website: org.website,
-                logo_url: org.logoUrl,
                 address: org.address,
-                resources: org.resources,
-                settings: org.settings
-            })
+            }),
+        };
+    },
+
+    async updateOrganization(id: string, org: Partial<Organization>): Promise<Organization> {
+        // 1. Update basic info
+        const { data, error } = await supabase
+            .from('organizations')
+            .update(organizationService.colunasParaSalvar(org))
             .eq('id', id)
             .select()
             .single();

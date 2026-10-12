@@ -10,7 +10,13 @@
 // já sabia criar via organizationService.createOrganization; só faltava a UI.
 //
 // Logo, membros e configurações não entram aqui: são editados depois em Detalhes
-// (OrganizationPage), para manter a criação curta.
+// (ficha da organização), para manter a criação curta.
+//
+// Pessoa jurídica × física (12/10/2026): org PJ nasce com uma empresa matriz criada
+// pelo banco (trg_org_cria_matriz) a partir destes dados, e é na matriz que CNPJ,
+// contato e endereço passam a ser editados. Org PF não tem matriz — `companies` não
+// comporta CPF — e o CPF fica na própria org. Ver
+// docs/planos/2026-10-12-fundir-organizacao-e-grupo.md.
 import React from 'react';
 import { Loader2, Save } from 'lucide-react';
 import { Organization } from '../types';
@@ -27,6 +33,7 @@ interface Props {
 }
 
 type FormState = {
+    tipoPessoa: 'PJ' | 'PF';
     name: string;
     cnpj: string;
     email: string;
@@ -41,7 +48,7 @@ type FormState = {
 };
 
 const EMPTY: FormState = {
-    name: '', cnpj: '', email: '', phone: '', website: '',
+    tipoPessoa: 'PJ', name: '', cnpj: '', email: '', phone: '', website: '',
     street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '',
 };
 
@@ -89,6 +96,7 @@ const OrganizationCreateSheet: React.FC<Props> = ({ open, onClose, onCreate, sav
             // Sem `id`: é o que faz handleUpsertOrganization seguir pelo caminho de criação.
             await onCreate({
                 name: form.name.trim(),
+                settings: { tipo_pessoa: form.tipoPessoa },
                 cnpj: form.cnpj.trim() || undefined,
                 email: form.email.trim() || undefined,
                 phone: form.phone.trim() || undefined,
@@ -128,13 +136,31 @@ const OrganizationCreateSheet: React.FC<Props> = ({ open, onClose, onCreate, sav
 
                     <div className="space-y-4">
                         <p className="text-xs font-semibold text-blue-600">Identificação</p>
-                        <Field label="Nome da organização" required>
+                        <Field label="Tipo de pessoa">
+                            <div role="radiogroup" aria-label="Tipo de pessoa" className="inline-flex bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
+                                {([['PJ', 'Pessoa jurídica'], ['PF', 'Pessoa física']] as const).map(([v, l]) => (
+                                    <button key={v} type="button" role="radio" aria-checked={form.tipoPessoa === v}
+                                        onClick={() => setForm(p => ({ ...p, tipoPessoa: v }))}
+                                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                            form.tipoPessoa === v ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                                        }`}>
+                                        {l}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1.5">
+                                {form.tipoPessoa === 'PJ'
+                                    ? 'Estes dados formam a empresa matriz da organização; depois, CNPJ, contato e endereço são editados nela (Detalhes › Identificação).'
+                                    : 'Pessoa física não tem empresa matriz: CPF, contato e endereço ficam na própria organização.'}
+                            </p>
+                        </Field>
+                        <Field label={form.tipoPessoa === 'PF' ? 'Nome completo' : 'Nome da organização'} required>
                             <input className={inputCls} value={form.name} autoFocus
                                 onChange={e => set('name', e.target.value)} />
                         </Field>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <Field label="CNPJ">
-                                <input className={inputCls} placeholder="00.000.000/0001-00"
+                            <Field label={form.tipoPessoa === 'PF' ? 'CPF' : 'CNPJ'}>
+                                <input className={inputCls} placeholder={form.tipoPessoa === 'PF' ? '000.000.000-00' : '00.000.000/0001-00'}
                                     value={form.cnpj} onChange={e => set('cnpj', e.target.value)} />
                             </Field>
                             <Field label="Telefone">

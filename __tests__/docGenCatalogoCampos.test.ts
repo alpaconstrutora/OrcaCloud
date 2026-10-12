@@ -66,6 +66,12 @@ describe('docGen · catálogo de campos', () => {
         expect(v['empresa.site']).toBe('www.exemplo.com.br');
     });
 
+    it('site da empresa manda sobre o da organização (era o único campo do grupo que a ignorava)', () => {
+        const ctx = contextoDeExemplo();
+        ctx.company = { id: 'c1', razao_social: 'SPE', website: 'www.spe.com.br' } as unknown as NonNullable<typeof ctx.company>;
+        expect(resolverCampos(['empresa.site'], ctx)['empresa.site']).toBe('www.spe.com.br');
+    });
+
     it('chave desconhecida resolve vazio, sem lançar', () => {
         expect(resolverCampos(['nao.existe'], contextoDeExemplo())).toEqual({ 'nao.existe': '' });
         expect(rotuloDaChave('nao.existe')).toBe('nao.existe');

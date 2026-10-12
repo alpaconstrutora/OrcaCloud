@@ -893,9 +893,11 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
                 hasActiveChild={activeView === 'organization'}
               >
+                {/* "Grupo" (empresas_grupo) saiu em 12/10/2026: as empresas do grupo
+                    moram na ficha da organização (Organização › Detalhes). Ver
+                    docs/planos/2026-10-12-fundir-organizacao-e-grupo.md. */}
                 {([
                   { id: 'organizations', label: 'Organização', icon: Building2 },
-                  { id: 'empresas_grupo', label: 'Grupo', icon: Building2 },
                   { id: 'clients', label: 'Clientes', icon: Users },
                   { id: 'investors', label: 'Investidores', icon: TrendingUp },
                   { id: 'suppliers', label: 'Fornecedores', icon: Truck },

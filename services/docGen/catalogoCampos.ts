@@ -159,7 +159,7 @@ export const GRUPOS_DOC: GrupoDoc[] = [
             { chave: 'empresa.endereco_completo', rotulo: 'Endereço completo', get: c => enderecoCompleto(enderecoEmitente(c)) },
             { chave: 'empresa.telefone', rotulo: 'Telefone', get: c => s(c.company?.telefone) || s(c.organization?.phone) },
             { chave: 'empresa.email', rotulo: 'E-mail', get: c => s(c.company?.email_comercial) || s(c.organization?.email) },
-            { chave: 'empresa.site', rotulo: 'Site', get: c => s(c.organization?.website) },
+            { chave: 'empresa.site', rotulo: 'Site', get: c => s(c.company?.website) || s(c.organization?.website) },
         ],
     },
     {

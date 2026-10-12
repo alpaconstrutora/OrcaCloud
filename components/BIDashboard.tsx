@@ -460,7 +460,7 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                             </div>
                             {targets.every(t => t.status === 'sem_meta') && (
                                 <p className="text-xs text-gray-400 text-center pb-4">
-                                    Configure metas em <strong>Minha Organização → Empresas → Metas</strong>.
+                                    Configure metas em <strong>Minha Organização → Organização → Detalhes → Metas</strong>.
                                 </p>
                             )}
                         </div>

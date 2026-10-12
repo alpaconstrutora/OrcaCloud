@@ -44,14 +44,16 @@ const LaborFolhaEmpregado: React.FC<LaborFolhaEmpregadoProps> = ({ orgId, period
             const firstDay = `${y}-${m}-01`;
             const lastDay = new Date(Number(y), Number(m), 0).toISOString().slice(0, 10);
 
-            // Organização
+            // Organização. A coluna é `cnpj` — o select pedia `document`, que não
+            // existe em `organizations`: o PostgREST respondia erro, `orgRow` vinha
+            // null e o cabeçalho da folha saía sem nome nem CNPJ (achado 12/10/2026).
             const { data: orgRow } = await supabase
                 .from('organizations')
-                .select('name, document')
+                .select('name, cnpj')
                 .eq('id', orgId)
                 .single();
             setOrgName(orgRow?.name || '');
-            setOrgCnpj(orgRow?.document || '');
+            setOrgCnpj(orgRow?.cnpj || '');
 
             // Folhas FECHADAS do período
             const runs = await payrollService.listRuns(orgId, undefined, firstDay, lastDay);

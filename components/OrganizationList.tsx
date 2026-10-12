@@ -39,7 +39,8 @@ const ORG_LIST_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
     name: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100' },
     contact: { label: 'Contato', className: 'px-6 py-2 border-r border-gray-100' },
-    cnpj: { label: 'CNPJ', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    // Org de pessoa física guarda o CPF na mesma coluna (settings.tipo_pessoa = 'PF').
+    cnpj: { label: 'CNPJ / CPF', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
 };
 
 // Metadados de header por coluna da tabela fallback "Todos os Usuários".
@@ -55,7 +56,7 @@ const ALL_USERS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
 const ADVANCED_FILTER_FIELDS: FilterFieldConfig[] = [
     { key: 'name', label: 'Organização', type: 'text' },
     { key: 'email', label: 'E-mail', type: 'text' },
-    { key: 'cnpj', label: 'CNPJ', type: 'text' },
+    { key: 'cnpj', label: 'CNPJ / CPF', type: 'text' },
     { key: 'website', label: 'Website', type: 'text' },
 ];
 
@@ -154,12 +155,11 @@ import { useOrgContext } from '../hooks/useOrgContext';
 import { organizationService } from '../services/organizationService';
 import { useConfirm } from './ui/confirm';
 import OrganizationUsers from './OrganizationUsers';
-import OrganizationPage from './OrganizationPage';
+import OrganizationDetail from './OrganizationDetail';
 import ClientList from './ClientList';
 import InvestorList from './InvestorList';
 import { SupplierList } from './SupplierList';
 import FinancialRegistryManager from './FinancialRegistryManager';
-import CompaniesModule from './CompaniesModule';
 import CostCenterModule from './CostCenterModule';
 import PlanoDeContasModule from './PlanoDeContasModule';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -174,7 +174,7 @@ interface OrganizationListProps {
     onSelect: (org: Organization) => void;
     
     // Management Props
-    activeTab: 'organizations' | 'empresas_grupo' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'plano_contas' | 'settings';
+    activeTab: 'organizations' | 'projects' | 'clients' | 'investors' | 'suppliers' | 'users' | 'accounts' | 'cost_centers' | 'chart_of_accounts' | 'plano_contas' | 'settings';
     onTabChange: (tab: string) => void;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     projects: { id: string; name: string; organizationId?: string; organization_id?: string; settings?: any }[];
@@ -398,8 +398,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
             {activeTab === 'organizations' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div>
-                        <h2 className="text-3xl font-black text-gray-900 tracking-tight">Empresas do Grupo</h2>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie os perfis e logotipos das suas empresas.</p>
+                        <h2 className="text-3xl font-black text-gray-900 tracking-tight">Organizações</h2>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Clique numa organização para torná-la ativa; em Detalhes ficam a empresa matriz e as empresas do grupo.</p>
                     </div>
 
                     {/* Toolbar §5.1 (variante desaninhada, escala compacta §16) — mesma decisão já
@@ -457,7 +457,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                         >
                             <Plus className="w-[15px] h-[15px]" />
-                            Nova empresa
+                            Nova organização
                         </button>
                     </div>
 
@@ -599,27 +599,6 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         </div>
                     )}
                 </div>
-            )}
-
-            {/* Empresas do Grupo Tab */}
-            {activeTab === 'empresas_grupo' && (
-                activeOrganizationId
-                    ? <CompaniesModule orgId={activeOrganizationId} />
-                    : (
-                        <div className="flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
-                            <Building2 className="w-10 h-10 opacity-30" />
-                            <p className="text-sm font-black uppercase tracking-wide">Selecione uma organização primeiro</p>
-                            <p className="text-xs text-center max-w-xs">
-                                Vá para a aba <strong className="text-gray-600">Organização</strong>, clique em <strong className="text-gray-600">SELECIONAR</strong> na empresa desejada e volte aqui.
-                            </p>
-                            <Button
-                                onClick={() => onTabChange('organizations')}
-                                className="mt-2"
-                            >
-                                Ir para Organização
-                            </Button>
-                        </div>
-                    )
             )}
 
             {/* Other Tabs Rendering with Filtering */}
@@ -831,11 +810,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
 
                 {activeTab === 'settings' && (
                     currentOrg ? (
-                        <OrganizationPage
+                        <OrganizationDetail
                             organization={currentOrg}
-                            onUpdate={(org) => {
-                                (onSave ?? onEdit)(org);
-                            }}
+                            onSave={(org) => (onSave ?? onEdit)(org)}
+                            onBack={() => { setManagingOrgId(null); onTabChange('organizations'); }}
+                            onIrParaContas={() => onTabChange('accounts')}
                         />
                     ) : (
                         // Nunca renderizar vazio: detalhe de organização é inerentemente

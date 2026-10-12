@@ -20,6 +20,12 @@ import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton,
 
 interface CompaniesModuleProps {
     orgId: string;
+    /** Dentro da ficha da organização (aba "Empresas do grupo"): sem o título
+     *  próprio — o `<h1>` da ficha já diz de quem é o grupo (§18). */
+    embedded?: boolean;
+    /** Esconde a matriz da LISTA (ela tem abas próprias na ficha da organização).
+     *  Continua nas opções de holding/consolidadora do formulário. */
+    ocultarMatriz?: boolean;
 }
 
 // ─── Form state ───────────────────────────────────────────────
@@ -232,7 +238,7 @@ function renderCompanyCell(key: string, c: Company): React.ReactNode {
 
 // ─── Main component ───────────────────────────────────────────
 
-const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
+const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = false, ocultarMatriz = false }) => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -332,6 +338,8 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
     };
 
     const holdingOptions = companies.filter(c => c.tipo === 'holding' || c.is_headquarters);
+    // O que a lista/KPIs mostram. `companies` continua inteiro para as opções acima.
+    const visiveis = ocultarMatriz ? companies.filter(c => !c.is_headquarters) : companies;
 
     // ── Sem org selecionada ───────────────────────────────────
     if (!orgId) {
@@ -373,10 +381,16 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-black text-gray-900 tracking-tight">Empresas do Grupo</h2>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">CNPJs, tipos e configurações de cada empresa do grupo econômico.</p>
-                </div>
+                {embedded ? (
+                    <p className="text-sm text-gray-500">
+                        Empresas ligadas a esta organização além da matriz — SPEs, holdings e outras empresas do grupo econômico.
+                    </p>
+                ) : (
+                    <div>
+                        <h2 className="text-3xl font-black text-gray-900 tracking-tight">Empresas do Grupo</h2>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium">CNPJs, tipos e configurações de cada empresa do grupo econômico.</p>
+                    </div>
+                )}
                 {!showForm && (
                     <div className="flex items-center gap-2 shrink-0">
                         <button
@@ -627,19 +641,19 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
             )}
 
             {/* KPIs — §4 */}
-            {!showForm && companies.length > 0 && (
+            {!showForm && visiveis.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KpiCard label="Total de empresas" value={companies.length} icon={<Building2 className="w-5 h-5" />} color="blue" />
-                    <KpiCard label="Ativas" value={companies.filter(c => c.status === 'ativa').length} icon={<Building2 className="w-5 h-5" />} color="emerald" />
-                    <KpiCard label="Em implantação" value={companies.filter(c => c.status === 'em_implantacao').length} icon={<Building2 className="w-5 h-5" />} color="blue" />
-                    <KpiCard label="Encerradas" value={companies.filter(c => c.status === 'encerrada').length} icon={<Building2 className="w-5 h-5" />} color="gray" />
+                    <KpiCard label="Total de empresas" value={visiveis.length} icon={<Building2 className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Ativas" value={visiveis.filter(c => c.status === 'ativa').length} icon={<Building2 className="w-5 h-5" />} color="emerald" />
+                    <KpiCard label="Em implantação" value={visiveis.filter(c => c.status === 'em_implantacao').length} icon={<Building2 className="w-5 h-5" />} color="blue" />
+                    <KpiCard label="Encerradas" value={visiveis.filter(c => c.status === 'encerrada').length} icon={<Building2 className="w-5 h-5" />} color="gray" />
                 </div>
             )}
 
             {/* Toolbar acoplada + tabela — §5.2 */}
             {!showForm && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    {companies.length > 0 && (
+                    {visiveis.length > 0 && (
                         <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
                             <div className="flex-1 relative w-full">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -676,15 +690,15 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId }) => {
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                             <p className="mt-2 text-gray-500">Carregando...</p>
                         </div>
-                    ) : companies.length === 0 ? (
+                    ) : visiveis.length === 0 ? (
                         <div className="text-center py-12">
                             <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma empresa cadastrada</h3>
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">{ocultarMatriz ? 'Nenhuma empresa no grupo além da matriz' : 'Nenhuma empresa cadastrada'}</h3>
                             <p className="text-sm text-gray-500">Clique em "Nova empresa" para começar.</p>
                         </div>
                     ) : (() => {
                         const term = search.trim().toLowerCase();
-                        const filtered = !term ? companies : companies.filter(c =>
+                        const filtered = !term ? visiveis : visiveis.filter(c =>
                             c.razao_social.toLowerCase().includes(term) || (c.cnpj || '').toLowerCase().includes(term));
                         const key = tableColumns.sortColumn;
                         const sorted = !key ? filtered : [...filtered].sort((a, b) => {

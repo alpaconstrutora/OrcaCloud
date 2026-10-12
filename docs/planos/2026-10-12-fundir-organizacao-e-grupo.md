@@ -201,24 +201,24 @@ D porque a tela nova pressupõe que editar a matriz atualiza a org.
 
 ### Fase C — Código que grava (item 2)
 
-- [ ] **C1. `services/organizationService.ts:246-264`** — `updateOrganization` para
+- [x] **C1. `services/organizationService.ts:246-264`** — feito 2026-10-12: `colunasParaSalvar()` (org PF manda os campos; save sem `settings` não arrisca); `createOrganization` passa `p_settings`. Teste `__tests__/organizationColunasParaSalvar.test.ts` (6). — `updateOrganization` para
   de enviar `cnpj/email/phone/website/address`.
   Pronto quando: teste novo em `__tests__/` confere o payload do `.update()` sem esses campos.
-- [ ] **C2. `components/OrganizationPage.tsx`** — sai CNPJ, site, Contato e
+- [x] **C2. `components/OrganizationPage.tsx`** — feito 2026-10-12: virou a aba Organização da ficha; malha §30, rótulo §21, salvar não fecha + `SaveStatus` (§25); PJ mostra atalho para a Identificação da matriz; contas viraram atalho para Contas. — sai CNPJ, site, Contato e
   Endereço (passam a ser editados na Identificação da matriz); sai a seção Contas
   Bancárias (repete Minha Organização › Contas — vira link para lá). Ficam logo,
   nome, código e regime caixa/competência.
   Na org **PF** esses campos ficam (rótulo CPF no lugar de CNPJ).
   Pronto quando: a ficha de org PJ não tem mais input desses campos; a de PF tem, com CPF; `check-ui-standard.sh` limpo.
-- [ ] **C3. `components/OrganizationCreateSheet.tsx`** — continua pedindo CNPJ,
+- [x] **C3. `components/OrganizationCreateSheet.tsx`** — feito 2026-10-12: escolha PJ/PF; PF rotula CPF e grava `settings.tipo_pessoa`. — continua pedindo CNPJ,
   contato e endereço na criação (vão para a org e o gatilho B1 leva para a matriz).
   Ganha a escolha PF/PJ (PF pede CPF e grava `settings.tipo_pessoa = 'PF'`).
   Pronto quando: criar org PJ pela tela gera matriz com o CNPJ digitado; criar org PF não gera matriz.
-- [ ] **C4. `services/docGen/catalogoCampos.ts:162`** — `empresa.site` passa a ler
+- [x] **C4. `services/docGen/catalogoCampos.ts:162`** — feito 2026-10-12; caso novo no teste (8 verdes). — `empresa.site` passa a ler
   `company.website` antes de `organization.website` (hoje é o único campo do
   grupo que ignora a empresa).
   Pronto quando: `__tests__/docGenCatalogoCampos.test.ts` com caso novo verde.
-- [ ] **C5. `components/LaborFolhaEmpregado.tsx:48-54`** — bug achado no
+- [x] **C5. `components/LaborFolhaEmpregado.tsx:48-54`** — feito 2026-10-12 (`select('name, cnpj')`). §7 acusado pelo `check-ui-standard.sh` nas linhas 325+ é anterior (mesmo resultado no arquivo sem a mudança). — bug achado no
   levantamento: `select('name, document')`, coluna `document` não existe em
   `organizations`; o CNPJ do cabeçalho da folha nunca aparece. Trocar por `cnpj`.
   Pronto quando: a requisição sai sem 400 e o cabeçalho mostra o CNPJ.
@@ -227,14 +227,14 @@ D porque a tela nova pressupõe que editar a matriz atualiza a org.
 
 Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 e #4).
 
-- [ ] **D1. `components/Layout.tsx:898`** — remove o item "Grupo".
+- [x] **D1. `components/Layout.tsx:898`** — feito 2026-10-12. — remove o item "Grupo".
   Pronto quando: o menu Minha Organização não tem "Grupo".
-- [ ] **D2. `components/OrganizationList.tsx`** — aba Organização com título
+- [x] **D2. `components/OrganizationList.tsx`** — feito 2026-10-12; coluna/filtro viraram "CNPJ / CPF"; `grep empresas_grupo` só acha o comentário do Layout. — aba Organização com título
   "Organizações" (hoje "Empresas do Grupo"), botão "Nova organização" (hoje "Nova
   empresa"); remove o ramo `empresas_grupo` e o valor do tipo de `activeTab`
   (também em `AppRouter.tsx:1157`).
   Pronto quando: `grep empresas_grupo` sem resultado em `components/`; typecheck verde.
-- [ ] **D3. Ficha unificada da organização** (aberta por "Detalhes"): cabeçalho
+- [x] **D3. Ficha unificada da organização** — código feito 2026-10-12 (`components/OrganizationDetail.tsx`; `CompanyDetailPage` ganhou `embedded`/`tab`; `CompaniesModule` ganhou `embedded`/`ocultarMatriz`). Trilha de 1 salto como a Ficha do condomínio. **Verificação na tela real: pendente.** (aberta por "Detalhes"): cabeçalho
   com logo/nome da org e abas:
   - **Organização** — o que sobrou de `OrganizationPage` (C2);
   - **abas da matriz** — as de `CompanyDetailPage` (Identificação, Sócios, Contas,
@@ -249,7 +249,7 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
   Pronto quando: na tela real (preview), Alpa abre com as abas da matriz e a aba
   Empresas do grupo; criar SPE dentro do grupo funciona; editar telefone na
   Identificação aparece no cabeçalho do recibo/PDF (espelho B2).
-- [ ] **D4. `components/BIDashboard.tsx:463`** — texto "Minha Organização →
+- [x] **D4. `components/BIDashboard.tsx:463`** — feito 2026-10-12 ("Organização → Detalhes → Metas"). — texto "Minha Organização →
   Empresas → Metas" passa a "Minha Organização → Organização → Metas".
   Pronto quando: `grep "Empresas → Metas"` sem resultado.
 
@@ -268,6 +268,9 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
   "Contas" da matriz e o menu continua com Minha Organização › Contas — vale
   revisar os nomes depois.
 - Fundir as tabelas `organizations` e `companies`: descartado (ver Diagnóstico).
+- O miolo das abas da matriz (`CompanyDetailPage`: formulários `rounded-3xl`, rótulos
+  `font-black uppercase`) continua no estilo antigo — esta frente só o embutiu. Migrar
+  para §16/§21/§30 é tarefa à parte.
 - PDFs que imprimem "CNPJ:" fixo (`exportService.ts` 625/667/1142/1369) mostrarão o
   CPF com esse rótulo numa org PF. Corrigir o rótulo é tarefa à parte.
 
@@ -275,7 +278,7 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
 
 - [x] Diagnóstico e levantamento de leitores/escritores — 2026-10-12
 - [x] Plano revisado pelo usuário; pergunta aberta 1 respondida — 2026-10-12
-- Fase A: **4 de 4** · Fase B: **4 de 4** · Fase C: 0 de 5 · Fase D: 0 de 4
+- Fase A: **4 de 4** · Fase B: **4 de 4** · Fase C: **5 de 5** · Fase D: **4 de 4 no código; tela real pendente**
 
 ### Registro da Fase B (2026-10-12)
 

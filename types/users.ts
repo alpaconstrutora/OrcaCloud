@@ -539,6 +539,14 @@ export interface Organization {
          *   independente do recebimento.
          */
         tax_recognition_regime?: 'CAIXA' | 'COMPETENCIA';
+        /**
+         * Ausente = 'PJ'. Org PJ tem uma empresa matriz (`companies.is_headquarters`)
+         * e ELA é a fonte de CNPJ, contato e endereço — as colunas da org são espelho
+         * mantido pelo banco. Org PF não tem matriz (`companies` não comporta CPF) e
+         * guarda CPF (em `cnpj`), contato e endereço nela mesma.
+         * Ver aplicar_20271012001000_organizacao_matriz_fonte_unica.sql.
+         */
+        tipo_pessoa?: 'PF' | 'PJ';
     };
     resources?: {
         roles: ResourceRole[];

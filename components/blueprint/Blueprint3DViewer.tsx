@@ -12,10 +12,10 @@
 //   npm run dev  # servidor NOVO
 //   PLAYWRIGHT_CORE=/c/tmp/pwtest/node_modules/playwright-core \
 //     node docs/spikes/blueprint-3d/passeio.mjs http://localhost:3100
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, PointerLockControls, Grid, Edges, PivotControls } from '@react-three/drei';
+import { OrbitControls, PointerLockControls, Grid, Edges, PivotControls, useGLTF } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize, Footprints, BoxSelect } from 'lucide-react';
 import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
 import {
@@ -72,6 +72,7 @@ import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintA
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
 import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
 import { pecas3dDasFolhas, type MaterialDaPecaDaEsquadria } from '../../utils/blueprintFolhas';
+import { encaixeDoModelo, modeloDoTipo } from '../../utils/blueprintModelos3d';
 
 interface Props {
   model: BlueprintModel;
@@ -271,6 +272,47 @@ function biselarPonta(
  * A origem local continua em `wall.a`, e é por isso que `position` e os furos
  * (medidos a partir de `a`) não mudam com a mitra.
  */
+/**
+ * MODELO glTF DE UM COMPONENTE (F10, 11/10/2026): o móvel encaixado na caixa da peça
+ * (`encaixeDoModelo` — escala por eixo, centro na origem do grupo da peça). A cena do
+ * `useGLTF` é COMPARTILHADA entre as instâncias do mesmo arquivo: cada peça usa um clone.
+ */
+function ModeloGltf({ url, giroGraus, larguraM, alturaM, profundidadeM }: { url: string; giroGraus: number; larguraM: number; alturaM: number; profundidadeM: number }) {
+  const { scene } = useGLTF(url);
+  const { objeto, encaixe } = useMemo(() => {
+    const objeto = scene.clone(true);
+    objeto.rotation.y = (giroGraus * Math.PI) / 180;
+    objeto.updateMatrixWorld(true);
+    const caixa = new THREE.Box3().setFromObject(objeto);
+    objeto.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    return { objeto, encaixe: encaixeDoModelo({ min: caixa.min.toArray(), max: caixa.max.toArray() }, { larguraM, alturaM, profundidadeM }) };
+  }, [scene, giroGraus, larguraM, alturaM, profundidadeM]);
+  return (
+    <group scale={encaixe.escala} position={encaixe.deslocamento}>
+      <primitive object={objeto} />
+    </group>
+  );
+}
+
+/** Modelo que não carrega (rede, arquivo ruim) vira a CAIXA da peça — nunca um buraco na cena. */
+class FalhaDoModelo extends React.Component<{ reserva: React.ReactNode; children: React.ReactNode }, { falhou: boolean }> {
+  state = { falhou: false };
+  static getDerivedStateFromError() {
+    return { falhou: true };
+  }
+  componentDidCatch(e: unknown) {
+    console.warn('[planta 3D] modelo do componente não carregou — segue a caixa:', e);
+  }
+  render() {
+    return this.state.falhou ? this.props.reserva : this.props.children;
+  }
+}
+
 export function geometriaDaParede(
   model: BlueprintModel,
   wall: BlueprintModel['walls'][number],
@@ -1387,7 +1429,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
 
   /** COMPONENTES (E7.1): caixas no piso do pavimento — mobiliário cinza-quente, louça branca. */
   const caixasDeComponentes = useMemo(() => {
-    const out: { id: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; cor: string; sugerido: boolean }[] = [];
+    const out: { id: string; geom: THREE.BufferGeometry; pos: [number, number, number]; rot: number; cor: string; sugerido: boolean; modelo: ReturnType<typeof modeloDoTipo>; m: { larguraM: number; alturaM: number; profundidadeM: number } }[] = [];
     for (const c of model.componentes ?? []) {
       if (!levelIds || !levelIds.includes(c.levelId)) continue;
       if (ocultos?.has(c.id)) continue;
@@ -1400,7 +1442,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       // E11.1: a base pode estar acima do piso (evaporadora, exaustor).
       // A convenção mora em `blueprint3dPecas` (Z = y do modelo, giro invertido) — a mesma das paredes.
       const { pos, rot } = pecaNoMundo(c.at, c.rotacaoGraus, c.alturaMm, c.cotaMm ?? 0, nivel.elevationMm);
-      out.push({ id: c.id, geom, pos, rot, cor, sugerido: !!c.sugerido });
+      // F10: o MODELO glTF do tipo, quando há; a peça SUGERIDA (mobiliário automático) segue caixa
+      // translúcida — é proposta, e o móvel "de verdade" a faria parecer decidida.
+      out.push({ id: c.id, geom, pos, rot, cor, sugerido: !!c.sugerido, modelo: c.sugerido ? null : modeloDoTipo(c.tipoId), m: { larguraM: c.larguraMm * S, alturaM: c.alturaMm * S, profundidadeM: c.profundidadeMm * S } });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1492,11 +1536,34 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
 
   return (
     <group>
-      {caixasDeComponentes.map((c) => (
-        <mesh key={`componente-${c.id}`} geometry={c.geom} position={c.pos} rotation={[0, c.rot, 0]} castShadow receiveShadow {...cliqueDe(c.id)}>
-          <meshStandardMaterial color={selecionados?.has(c.id) ? '#2563eb' : c.cor} transparent={c.sugerido} opacity={c.sugerido ? 0.55 : 1} roughness={0.85} />
-        </mesh>
-      ))}
+      {caixasDeComponentes.map((c) => {
+        const sel = selecionados?.has(c.id) ?? false;
+        const caixa = (
+          <mesh geometry={c.geom} castShadow receiveShadow>
+            <meshStandardMaterial color={sel ? '#2563eb' : c.cor} transparent={c.sugerido} opacity={c.sugerido ? 0.55 : 1} roughness={0.85} />
+          </mesh>
+        );
+        return (
+          <group key={`componente-${c.id}`} position={c.pos} rotation={[0, c.rot, 0]} {...cliqueDe(c.id)}>
+            {c.modelo ? (
+              <FalhaDoModelo reserva={caixa}>
+                {/* Enquanto o arquivo chega, a caixa — a cena nunca fica com o buraco da peça. */}
+                <Suspense fallback={caixa}>
+                  <ModeloGltf url={c.modelo.url} giroGraus={c.modelo.giroGraus} {...c.m} />
+                </Suspense>
+                {/* Selecionado: a caixa da peça em azul translúcido por cima do móvel. */}
+                {sel && (
+                  <mesh geometry={c.geom}>
+                    <meshBasicMaterial color="#2563eb" transparent opacity={0.28} depthWrite={false} />
+                  </mesh>
+                )}
+              </FalhaDoModelo>
+            ) : (
+              caixa
+            )}
+          </group>
+        );
+      })}
       {paineisDeGuardaCorpo.map((g) => (
         <mesh key={`guarda-corpo-${g.chave}`} geometry={g.geom} position={g.pos} rotation={[0, g.rot, 0]} castShadow receiveShadow {...cliqueDe(g.id)}>
           <meshStandardMaterial color={selecionados?.has(g.id) ? '#2563eb' : g.material === 'VIDRO' ? '#bae6fd' : g.material === 'MADEIRA' ? '#a16207' : g.material === 'ALVENARIA' ? '#e7e5e4' : '#334155'} transparent={g.material === 'VIDRO' || g.sugerido} opacity={g.sugerido ? 0.45 : g.material === 'VIDRO' ? 0.4 : 1} roughness={g.material === 'INOX' ? 0.2 : 0.7} metalness={g.material === 'INOX' || g.material === 'METALICO' ? 0.6 : 0} />

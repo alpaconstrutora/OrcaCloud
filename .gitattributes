@@ -34,3 +34,6 @@
 #     de 03/09.
 .githooks/* text eol=lf
 .github/workflows/*.yml text eol=lf
+
+# Modelos 3D (F10, 11/10/2026): binário — nenhuma conversão de fim de linha pode tocar o .glb.
+*.glb binary

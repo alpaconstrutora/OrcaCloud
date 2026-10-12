@@ -426,6 +426,52 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F10 — Modelos glTF dos componentes** · `FichaDoComponente` (`model.ts:1736`) ganha `modelo3d?` (fora do hash, como o `uid`); bucket `blueprint-modelos-3d` + migration (REGRA #7); `utils/blueprintModelos3d.ts`; `Blueprint3DViewer.tsx:1387`
 - Muda: curadoria de modelos **CC0** (fonte e licença registradas por arquivo, em `docs/planos/…` + tabela de créditos); `useGLTF` com escala para a ficha (largura × profundidade × altura); fallback para a caixa se faltar ou falhar; peso máximo por modelo. O IFC continua com a caixa.
 - Pronto quando: teste do encaixe de escala; no app, a sala mobiliada mostra modelos, um tipo sem modelo mostra caixa, e a aba Network mostra o cache dos modelos.
+- **Feito na execução (11/10, sem bump de kernel — o modelo não guarda nada disto):**
+  - **Decisão (minha, registrada):** os modelos moram como arquivos ESTÁTICOS do app (`public/modelos-3d/`),
+    não num bucket com migration como o rascunho dizia. São CC0, públicos, iguais para toda organização e
+    versionados com o código que os encaixa; bucket pediria RLS/migration para guardar o que não é dado de
+    ninguém. Fora do precache do PWA (`globPatterns` não pega `.glb`): só baixam quando o 3D os pede; o
+    `useGLTF` os reaproveita na sessão e a CDN no navegador. `*.glb binary` no `.gitattributes`.
+  - Fonte e licença: **Kenney — Furniture Kit 2.0** (kenney.nl/assets/furniture-kit), **CC0 1.0**; o
+    `License.txt` do pacote vai junto (`public/modelos-3d/kenney/LICENSE-Kenney-Furniture-Kit.txt`). Baixado em
+    11/10/2026 numa pasta isolada; cada arquivo conferido como glTF 2.0 binário autocontido (sem uri externa,
+    sem imagem) — e o teste reconfere a cada rodada. 19 arquivos, 456 KB no total, o maior 54 KB (teto 120 KB).
+
+    | Tipo | Arquivo (CC0, Kenney) |
+    |---|---|
+    | CAMA_CASAL | `kenney/bedDouble.glb` |
+    | CAMA_SOLTEIRO | `kenney/bedSingle.glb` |
+    | CRIADO | `kenney/cabinetBedDrawer.glb` |
+    | ARMARIO | `kenney/bookcaseClosedDoors.glb` |
+    | ESTANTE | `kenney/bookcaseOpen.glb` |
+    | SOFA | `kenney/loungeSofa.glb` |
+    | POLTRONA | `kenney/loungeChair.glb` |
+    | MESA_JANTAR | `kenney/table.glb` |
+    | CADEIRA | `kenney/chair.glb` |
+    | RACK | `kenney/cabinetTelevision.glb` |
+    | ESCRIVANINHA | `kenney/desk.glb` |
+    | BANCADA | `kenney/kitchenSink.glb` |
+    | BANCADA_SECA | `kenney/kitchenCabinet.glb` |
+    | GELADEIRA | `kenney/kitchenFridgeLarge.glb` |
+    | FOGAO | `kenney/kitchenStove.glb` |
+    | MAQUINA | `kenney/washer.glb` |
+    | VASO | `kenney/toilet.glb` |
+    | LAVATORIO | `kenney/bathroomSink.glb` |
+    | BOX | `kenney/shower.glb` |
+
+    Sem modelo, de propósito (seguem CAIXA): as reservas de climatização (condensadora, evaporadora, casa de
+    máquinas, exaustor — são LUGAR, não equipamento), o TANQUE (o kit não tem) e os conjuntos (desenham os
+    filhos). A peça SUGERIDA pelo mobiliário automático também segue caixa translúcida (é proposta).
+  - `utils/blueprintModelos3d.ts`: a tabela tipo → arquivo/fonte/licença/giro e `encaixeDoModelo` (escala POR
+    EIXO para as medidas da peça — a ficha ou a que o usuário editou — e o centro da caixa do modelo na origem).
+  - 3D: o móvel dentro do grupo da peça; enquanto carrega, a caixa (`Suspense`); se o arquivo falhar, a caixa
+    (`FalhaDoModelo`) — nunca um buraco na cena. Selecionado: a caixa da peça em azul translúcido por cima.
+    IFC segue com a caixa.
+  - Orientação provada POR IMAGEM no spike `docs/spikes/moveis-3d/` (sem banco): giro 180° põe a frente do
+    móvel na frente da peça (o armário girado 180° na planta mostra as portas para o lado girado; com giro 0 as
+    portas e a cabeceira ficavam contra a parede de trás). Tanque sem modelo = caixa. Console limpo; os 19 `.glb`
+    com 200.
+  - Prova: `__tests__/blueprintModelos3d.test.ts` (6).
 
 ### Bloco 3 — IA e visualização
 
@@ -460,7 +506,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   (cota gravada e desfeita) + PDF/DXF por teste
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
-  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [~] F9 — no ar; prova com escrita pendente do estudo livre · [ ] F10
+  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [~] F9 — no ar; prova com escrita pendente do estudo livre · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

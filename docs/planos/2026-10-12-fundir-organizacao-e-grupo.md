@@ -15,6 +15,11 @@ Resposta à análise (mesma sessão, 2026-10-12 ~08:50), transcrita:
 > Também vale decidir o que será o padrão daqui para frente: SPE como organização separada (como foi feito com a Garden Cambuhy) ou SPE como empresa dentro da organização (como o modelo prevê). Se a regra for "SPE = organização separada", a aba "Empresas do grupo" quase nunca terá conteúdo, e a fusão fica ainda mais justificada.
 > Resposta: SPE pode ser empresa separada mas também pode ser uma empresa ligada a outra
 
+Resposta às perguntas abertas do plano (mesma sessão, 2026-10-12 ~09:40), transcrita:
+
+> 1 Altair Pereira da Rosa é uma organizacao, porem é pessoa fisica e nao juridica.
+>  2. Posso começar pela Fase A? Sim
+
 ("siderar" = sidebar.) Os itens 1–3 aprovados são os da proposta da análise:
 
 1. Um item só no menu, "Organização": ficha da organização com as abas da
@@ -76,6 +81,8 @@ tirar `empresas_grupo` do menu não deixa ninguém preso numa aba que sumiu.
 |---|---|---|
 | 2026-10-12 | Fundir telas? Fundir tabelas? | Fundir as **telas**; as tabelas continuam separadas (itens 1–3 aprovados). |
 | 2026-10-12 | SPE = organização separada ou empresa dentro da organização? | **As duas.** "SPE pode ser empresa separada mas também pode ser uma empresa ligada a outra." → a aba "Empresas do grupo" é necessária de verdade (SPE dentro do grupo, `tipo = 'spe'`, `holding_id`), e SPE como organização própria (caso Garden Cambuhy) continua valendo. |
+| 2026-10-12 | Altair Pereira da Rosa ganha matriz? | É organização de **pessoa física**. `companies` não comporta PF (sem coluna de CPF; o CHECK de `tipo` só aceita tipos de PJ). → **Regra B1 passa a ser: organização PJ tem exatamente uma matriz; organização PF não tem matriz** e guarda CPF, contato e endereço na própria org (como hoje). Ver "Ajuste pessoa física" abaixo. |
+| 2026-10-12 | Executar a Fase A? | Sim. |
 
 ### O que é duplicado de fato (corrige a análise inicial)
 
@@ -139,6 +146,19 @@ par na org; fica só na empresa).
 Fica na organização (não espelhado): `name`, `code`, `logo_url`, `slug`,
 `settings` (inclui o regime caixa/competência), `resources`.
 
+### Ajuste pessoa física (decisão de 2026-10-12)
+
+- **Como o sistema sabe:** `organizations.settings.tipo_pessoa` = `'PJ'` | `'PF'`
+  (ausente = PJ, que é o caso de todas as outras). Altair recebe `'PF'` em B1.
+- **B1** cria/backfill matriz só para PJ. **B2/B3** só agem quando a org tem
+  matriz — numa org PF nada é espelhado e os campos seguem editáveis na org.
+- **C2** (ficha): os campos de CNPJ/contato/endereço saem só da ficha de org PJ;
+  na PF ficam, com rótulo **CPF**. **C3** (criação): escolher PF/PJ; PF pede CPF.
+- **D3** (ficha unificada): org PF não tem abas de matriz; mantém a aba Empresas
+  do grupo (uma pessoa física pode ser sócia/controladora de empresas).
+- `organizations.cnpj` guarda o CPF na org PF (coluna já é texto livre). Os PDFs
+  que imprimem "CNPJ:" fixo com esse valor ficam registrados em Fora do escopo.
+
 ## Plano
 
 Ordem: **A (dados) → B (banco) → C (código de escrita) → D (tela)**. B antes de
@@ -146,23 +166,24 @@ D porque a tela nova pressupõe que editar a matriz atualiza a org.
 
 ### Fase A — Arrumar os dados (item 3) · escrita em produção combinada em 2026-10-12
 
-- [ ] **A1. Nome da Alpa** — `UPDATE organizations SET name = 'Alpa Construtora e Incorporadora' WHERE id = '926cf626-ba49-4ee4-9f35-472822fb90e6'`.
+- [x] **A1. Nome da Alpa** — feito 2026-10-12 (transação única A1–A3; conferido: `name` = "Alpa Construtora e Incorporadora"). — `UPDATE organizations SET name = 'Alpa Construtora e Incorporadora' WHERE id = '926cf626-ba49-4ee4-9f35-472822fb90e6'`.
   Pronto quando: `SELECT name` devolve "Incorporadora".
-- [ ] **A2. Apagar a SPE TESTE** — numa transação: `DELETE FROM debt_contracts WHERE id IN ('e2022997-8607-4dac-bf9d-5d42058e1e2b','9ed48e03-551b-476e-b30a-d74b205c8228')` (cascata: 2 schedules, 20 parcelas, 1 desembolso; antes, zerar `mirror_debt_contract_id` dos dois, que é FK entre eles), depois `DELETE FROM companies WHERE id = '3d1b5fa8-d688-46d1-b428-5dcd1e3999ef'`. Antes de rodar, reconferir que as 20 parcelas seguem com 0 pagas.
+- [x] **A2. Apagar a SPE TESTE** — feito 2026-10-12: 0 parcelas pagas na trava; 2 contratos e 1 empresa apagados; conferido 0 contratos/schedules/desembolsos e 0 parcelas órfãs. (O `mirror_debt_contract_id` é `ON DELETE SET NULL`, não precisou zerar antes.) Cópia das linhas apagadas: `fase-a-snapshot.json` no scratchpad da sessão. — numa transação: `DELETE FROM debt_contracts WHERE id IN ('e2022997-8607-4dac-bf9d-5d42058e1e2b','9ed48e03-551b-476e-b30a-d74b205c8228')` (cascata: 2 schedules, 20 parcelas, 1 desembolso; antes, zerar `mirror_debt_contract_id` dos dois, que é FK entre eles), depois `DELETE FROM companies WHERE id = '3d1b5fa8-d688-46d1-b428-5dcd1e3999ef'`. Antes de rodar, reconferir que as 20 parcelas seguem com 0 pagas.
   Pronto quando: 0 linhas em `companies`/`debt_contracts` com esses ids; 0 `debt_schedules` órfãos.
-- [ ] **A3. Endereço da Alpa para a matriz** — copiar `organizations.address` da Alpa para `companies.endereco_fiscal` da matriz `8f4369f2-b4fc-4111-9b90-602524830bec`, com o mapeamento acima.
+- [x] **A3. Endereço da Alpa para a matriz** — feito 2026-10-12; consulta de divergência org × matriz = 0. — copiar `organizations.address` da Alpa para `companies.endereco_fiscal` da matriz `8f4369f2-b4fc-4111-9b90-602524830bec`, com o mapeamento acima.
   Pronto quando: a consulta de divergência org × matriz (seção Verificação) volta vazia.
-- [ ] **A4. Matriz da "Altair Pereira da Rosa"** — **decisão pendente (ver Perguntas abertas)**. Se sim, é feita pelo backfill de B1.
+- [x] **A4. Matriz da "Altair Pereira da Rosa"** — decidido 2026-10-12: é pessoa física, **não ganha matriz** (ver Ajuste pessoa física). A marcação `tipo_pessoa = 'PF'` é feita em B1.
 
 ### Fase B — Banco (item 2) · uma migration nova, aplicada por `db query -f` (nunca `db push`)
 
 - [ ] **B1. Toda organização tem exatamente uma matriz.**
   `CREATE UNIQUE INDEX ... ON companies(org_id) WHERE is_headquarters`;
-  gatilho `AFTER INSERT ON organizations` que cria a matriz a partir da própria
+  gatilho `AFTER INSERT ON organizations` que, **se a org for PJ**, cria a matriz a partir da própria
   org (razão social = `name`, CNPJ/contato/endereço mapeados, `tipo
-  'construtora'`, `status 'ativa'`); backfill para org sem matriz.
+  'construtora'`, `status 'ativa'`); backfill para org PJ sem matriz (hoje nenhuma);
+  `settings.tipo_pessoa = 'PF'` na Altair.
   REGRA #7: função nova com `REVOKE EXECUTE ... FROM PUBLIC, anon`.
-  Pronto quando: `SELECT count(*) FROM organizations o WHERE NOT EXISTS (matriz)` = 0;
+  Pronto quando: org PJ sem matriz = 0 e org PF com matriz = 0;
   criar org de teste dentro de `BEGIN … ROLLBACK` gera 1 matriz;
   `npx vitest run __tests__/segurancaMigrations.test.ts` verde.
 - [ ] **B2. Matriz → organização.** Gatilho `AFTER INSERT OR UPDATE ON companies`
@@ -187,10 +208,12 @@ D porque a tela nova pressupõe que editar a matriz atualiza a org.
   Endereço (passam a ser editados na Identificação da matriz); sai a seção Contas
   Bancárias (repete Minha Organização › Contas — vira link para lá). Ficam logo,
   nome, código e regime caixa/competência.
-  Pronto quando: a ficha não tem mais input desses campos; `check-ui-standard.sh` limpo.
+  Na org **PF** esses campos ficam (rótulo CPF no lugar de CNPJ).
+  Pronto quando: a ficha de org PJ não tem mais input desses campos; a de PF tem, com CPF; `check-ui-standard.sh` limpo.
 - [ ] **C3. `components/OrganizationCreateSheet.tsx`** — continua pedindo CNPJ,
   contato e endereço na criação (vão para a org e o gatilho B1 leva para a matriz).
-  Pronto quando: criar org pela tela gera matriz com o CNPJ digitado.
+  Ganha a escolha PF/PJ (PF pede CPF e grava `settings.tipo_pessoa = 'PF'`).
+  Pronto quando: criar org PJ pela tela gera matriz com o CNPJ digitado; criar org PF não gera matriz.
 - [ ] **C4. `services/docGen/catalogoCampos.ts:162`** — `empresa.site` passa a ler
   `company.website` antes de `organization.website` (hoje é o único campo do
   grupo que ignora a empresa).
@@ -220,6 +243,7 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
   - **Empresas do grupo** — o `CompaniesModule` (lista sem a matriz, "Nova
     empresa", Dashboard do grupo); abrir uma empresa abre a `CompanyDetailPage`
     dela, com voltar para a ficha.
+  Org PF: sem abas da matriz; ficam Organização e Empresas do grupo.
   REGRA #5: a ficha é por natureza de uma org (caso 3) — com o topo em "Todas" ela
   usa `managingOrgId`, como hoje; nunca renderiza vazio.
   Pronto quando: na tela real (preview), Alpa abre com as abas da matriz e a aba
@@ -231,9 +255,7 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
 
 ## Perguntas abertas
 
-1. **Altair Pereira da Rosa** ganha matriz? Recomendação: **sim** (sem CNPJ, nome
-   = razão social) — a regra B1 passa a ser "toda organização tem matriz", e a
-   exceção teria de ser tratada em toda a tela nova.
+1. ~~**Altair Pereira da Rosa** ganha matriz?~~ Respondida 2026-10-12: pessoa física, sem matriz.
 2. **SPE como organização própria ligada a outra** (ex.: Garden Cambuhy
    controlada pela Alpa) — hoje não há vínculo entre organizações; a ligação
    existe só *dentro* de uma org (`holding_id`). **Fora deste plano**; registrar se
@@ -246,12 +268,14 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
   "Contas" da matriz e o menu continua com Minha Organização › Contas — vale
   revisar os nomes depois.
 - Fundir as tabelas `organizations` e `companies`: descartado (ver Diagnóstico).
+- PDFs que imprimem "CNPJ:" fixo (`exportService.ts` 625/667/1142/1369) mostrarão o
+  CPF com esse rótulo numa org PF. Corrigir o rótulo é tarefa à parte.
 
 ## Estado
 
 - [x] Diagnóstico e levantamento de leitores/escritores — 2026-10-12
-- [ ] Plano revisado pelo usuário; pergunta aberta 1 respondida
-- Fase A: 0 de 4 · Fase B: 0 de 4 · Fase C: 0 de 5 · Fase D: 0 de 4
+- [x] Plano revisado pelo usuário; pergunta aberta 1 respondida — 2026-10-12
+- Fase A: **4 de 4** · Fase B: 0 de 4 · Fase C: 0 de 5 · Fase D: 0 de 4
 
 ## Verificação
 
@@ -261,9 +285,10 @@ SELECT o.name FROM organizations o JOIN companies c ON c.org_id = o.id AND c.is_
 WHERE o.cnpj IS DISTINCT FROM c.cnpj OR o.phone IS DISTINCT FROM c.telefone
    OR o.email IS DISTINCT FROM c.email_comercial OR o.website IS DISTINCT FROM c.website
    OR coalesce(o.address->>'street','') IS DISTINCT FROM coalesce(c.endereco_fiscal->>'logradouro','');
--- toda org tem exatamente uma matriz
-SELECT o.name, count(c.id) FROM organizations o LEFT JOIN companies c ON c.org_id = o.id AND c.is_headquarters
-GROUP BY o.name HAVING count(c.id) <> 1;
+-- org PJ tem exatamente uma matriz; org PF nenhuma
+SELECT o.name, coalesce(o.settings->>'tipo_pessoa','PJ') tp, count(c.id) FROM organizations o
+LEFT JOIN companies c ON c.org_id = o.id AND c.is_headquarters
+GROUP BY o.name, tp HAVING count(c.id) <> CASE WHEN coalesce(o.settings->>'tipo_pessoa','PJ') = 'PF' THEN 0 ELSE 1 END;
 ```
 
 Mais: `npm run ci` na frente; `check-ui-standard.sh` em cada `.tsx` tocado;

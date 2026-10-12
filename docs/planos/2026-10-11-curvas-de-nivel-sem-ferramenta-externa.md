@@ -244,4 +244,5 @@ ter corrigido algo aqui.
       por cor/mestra; arco-íris; curva degenerada; cone gerado de verdade com cada vértice na sua
       cota; altura da malha nos nós, nos dois triângulos e o centro torcido; nulos; assentar)
 - [x] Suíte 8.794 = 8.760 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` (editor e viewer) e `check-xss-sinks.sh` limpos; build ✓
-- [ ] Publicação e CI
+- [x] Publicado `146d783b` (1 recusa: o `main` tinha um commit de condomínio, sem relação; rebase); `ci` = success; o domínio serve `146d783`
+- [ ] Conferência do usuário no estudo real: 3D com Terreno ligado e Exibir › Curvas de nível

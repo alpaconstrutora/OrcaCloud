@@ -284,4 +284,5 @@ Com print do 3D (menu Exibir aberto: "Terreno" desmarcado; sem item de curvas):
       ligados sozinhos, desligar grava `false` explícito e o motivo vira "Ligue o Terreno"; chave
       antiga `true` continua ligado). Prova de que morde: tirar o automático → o 2º falha
 - [x] Suíte 8.803 = 8.769 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓
-- [ ] Publicação e CI
+- [x] Publicado `23b4bb60`; `ci` = success; `conferir-producao.sh "blueprint:vista3dTerreno:v2"` → o domínio serve `23b4bb6`
+- [ ] Conferência do usuário: abrir o 3D do estudo com curvas e ver relevo + curvas sem mexer em nada

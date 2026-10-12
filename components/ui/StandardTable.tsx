@@ -263,9 +263,9 @@ export function StandardTable<T>({
                             {showActions && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
                         </colgroup>
                         <thead>
-                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="sticky top-0 z-10 bg-blue-50 text-blue-800 font-semibold text-xs border-b border-blue-200">
                                 {selection && (
-                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                    <th className="w-10 px-4 py-2 border-r border-blue-100 text-center">
                                         <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
                                             checked={allVisibleSelected} disabled={selectableVisible.length === 0} onChange={toggleAllVisible} />
                                     </th>
@@ -275,14 +275,14 @@ export function StandardTable<T>({
                                         sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
                                         onMoveColumn={tableColumns.moveColumn}
-                                        className={`${px} py-2 border-r border-gray-100 overflow-hidden ${alignClass(key)}`}>
+                                        className={`${px} py-2 border-r border-blue-100 overflow-hidden ${alignClass(key)}`}>
                                         <cols.ResizeHandle colKey={key} />
                                     </SortableHeader>
                                 ))}
                                 {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
-                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                <th aria-hidden="true" className="border-r border-blue-100" />
                                 {showActions && (
-                                    <th className={`${px} py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-500`}>
+                                    <th className={`${px} py-2 text-right relative overflow-hidden text-sm font-semibold text-blue-800`}>
                                         {actions!.label ?? 'Ações'}
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>

@@ -321,7 +321,26 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
   - **Esperado no navegador (registrado antes da prova):**
     - Bruninho (espelho com 16 unidades precificadas, soma R$ 9.999.998, preço/m² 0): sai de VGV 0 com aviso "sem preço" para R$ 9.999.998 na Estática, no Espelho e no bloco.
     - Garden (sem espelho, R$ 8.000/m²): origem "área privativa vendável × preço/m²".
-- [ ] **Fase 4 — 0 de 7:** 4.1 · 4.2 (D1) · 4.3 · 4.4 · 4.5 · 4.6 · 4.7
+- **Publicação da Fase 3** (2026-10-12, *"publicar? sim"*):
+  - Rebase sobre 1 commit novo de outra frente; suíte inteira com rc 0 (8.677 testes); `verificar:build` com rc 0.
+  - `main` = `838bd0d9`. O domínio serve `838bd0d` (conferido na 2ª tentativa). Check-run `ci`: **completed / success**.
+- [ ] **Fase 4 — 4 de 7** (2026-10-12):
+  - **Decisão D1 (2026-10-12):** *"Mover o estudo para a SPE."* Antes de gravar, avisei que 3 contas só da Alpa perderiam o acesso, entre elas desenvolvedor@. Resposta: *"Mover e incluir as 3 na SPE"*.
+  - [x] **4.1** — `writeBackImovib.load()` confere a org do estudo contra a do empreendimento, como `imovibAdapter` já fazia. Vale para a prévia e para a gravação. Testes em `__tests__/writeBackImovib.test.ts`: org diferente recusa sem chamar `createBlock`/`createUnitInstances`/`updateTower`/`updateUnit`.
+  - [x] **4.2** — Migration `aplicar_20271012100200_imovib_garden_cambuhy_para_spe.sql`, ensaiada com `ROLLBACK` e aplicada:
+    - o estudo foi para a SPE;
+    - desenvolvedor@, bruna.pereira@ e iago.marques@ entraram na SPE com papel e permissões copiados da Alpa (SPE: 3 → 6 membros);
+    - vínculos entre orgs: **0**;
+    - script de volta no arquivo.
+    - Trava no serviço: `empreendimentoLinksService.linkImovibStudy` recusa estudo de org diferente da do **empreendimento** (lida do banco). O formulário do empreendimento já listava só estudos da própria org e limpava o vínculo ao trocar de org.
+    - Pendência fora do escopo: `plantaAiIntegration.ts:224` liga a **oportunidade de investidor** ao estudo Imovib por `planta_ai_study_id`, sem conferir a org.
+  - [x] **4.3** — `applyWriteBackImovib` adota o bloco ou a instância órfãos de mesmo nome (criados numa rodada que falhou antes de gravar o vínculo) em vez de criar outro. Não adota bloco já reivindicado por outra torre. O resultado ganhou `blocksAdopted`/`instancesAdopted`. 3 testes.
+  - [x] **4.4** — `utils/imovibEspelho.ts`: `montarEspelho` + `planejarRegeneracao` (casa por bloco + nome).
+    - "Regenerar" passou a "alinhar": cria o que falta e atualiza só a estrutura (pavimento, área, tipologia). Preço, status, posição, sol e ID ficam.
+    - Unidade sobrando só sai com uma 2ª confirmação ("Manter" é opção).
+    - "Gerar" relê o banco e cria só o que falta, então o falso "não gerado" não duplica mais.
+    - Novo `imovibService.deleteUnitInstancesByIds`. 5 testes.
+  - [ ] 4.5 · [ ] 4.6 · [ ] 4.7
 - [ ] **Fase 5 — 0 de 7:** 5.1 · 5.2 · 5.3 · 5.4 · 5.5 · 5.6 · 5.7
 
 ## Verificação

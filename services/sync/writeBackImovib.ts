@@ -16,7 +16,7 @@
 import { imovibService } from '../imovibService';
 import { empreendimentoService, loadTargetState } from '../empreendimentoService';
 import { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../../types/empreendimento';
-import { ImovibUnitInstance, ImovibUnitInstanceInsert } from '../../types/imovib';
+import { ImovibBlock, ImovibUnitInstance, ImovibUnitInstanceInsert } from '../../types/imovib';
 
 /** Um campo estrutural propagado ao estudo. `from` = valor atual no estudo (null na criação). */
 export interface WriteBackFieldChange {
@@ -43,6 +43,9 @@ export interface WriteBackResult {
     blocksCreated: number;
     instancesCreated: number;
     instancesUpdated: number;
+    /** Bloco/instância que uma rodada anterior criou no estudo mas não chegou a vincular. */
+    blocksAdopted: number;
+    instancesAdopted: number;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -78,6 +81,7 @@ async function load(empreendimentoId: string): Promise<{
     empreendimento: Empreendimento;
     studyId: string;
     instanceById: Map<string, ImovibUnitInstance>;
+    blocks: ImovibBlock[];
     towers: EmpreendimentoTower[];
     units: EmpreendimentoUnit[];
 }> {
@@ -86,14 +90,27 @@ async function load(empreendimentoId: string): Promise<{
     if (!empreendimento.imovib_study_id) {
         throw new Error('Este empreendimento não está vinculado a um estudo de viabilidade (Imovib).');
     }
-    const [instances, target] = await Promise.all([
+
+    // Blindagem multi-tenant — a MESMA da leitura (imovibAdapter.loadImovibSide).
+    // Faltava aqui: o write-back criava blocos e instâncias num estudo de outra
+    // organização (caso real até 12/10/2026: empreendimento da SPE ligado a
+    // estudo da Alpa). Vale para a prévia e para a gravação.
+    const study = await imovibService.getStudyById(empreendimento.imovib_study_id, false);
+    if (!study) throw new Error('Estudo de viabilidade vinculado não foi encontrado.');
+    if (study.organization_id !== empreendimento.organization_id) {
+        throw new Error('O estudo vinculado pertence a outra organização. Envio ao estudo bloqueado.');
+    }
+
+    const [instances, blocks, target] = await Promise.all([
         imovibService.getUnitInstances(empreendimento.imovib_study_id),
+        imovibService.getBlocksByStudyId(empreendimento.imovib_study_id),
         loadTargetState(empreendimentoId),
     ]);
     return {
         empreendimento,
         studyId: empreendimento.imovib_study_id,
         instanceById: new Map(instances.map(i => [i.id, i])),
+        blocks,
         towers: target.towers,
         units: target.units,
     };
@@ -128,14 +145,23 @@ export async function previewWriteBackImovib(empreendimentoId: string): Promise<
 
 /** Aplica o write-back só das unidades selecionadas, criando bloco/instância e gravando a proveniência. */
 export async function applyWriteBackImovib(empreendimentoId: string, selectedUnitIds: string[]): Promise<WriteBackResult> {
-    const { studyId, instanceById, towers, units } = await load(empreendimentoId);
+    const { studyId, instanceById, blocks, towers, units } = await load(empreendimentoId);
     const selected = new Set(selectedUnitIds);
     const towerById = new Map(towers.map(t => [t.id, t]));
-    const result: WriteBackResult = { blocksCreated: 0, instancesCreated: 0, instancesUpdated: 0 };
+    const result: WriteBackResult = { blocksCreated: 0, instancesCreated: 0, instancesUpdated: 0, blocksAdopted: 0, instancesAdopted: 0 };
 
     // Cache do block_id por torre — vale para todas as unidades da mesma torre nesta rodada.
     const blockIdByTower = new Map<string, string>();
     for (const t of towers) if (t.imovib_block_id) blockIdByTower.set(t.id, t.imovib_block_id);
+
+    // Idempotência: criar no estudo e gravar o vínculo de volta são dois passos.
+    // Se o 2º falhou numa rodada anterior, o bloco/instância ficou no estudo SEM
+    // ninguém apontando para ele — e o reenvio criava outro. Agora, antes de
+    // criar, adota o órfão de mesmo nome (bloco do estudo / instância do bloco)
+    // que nenhuma torre/unidade do empreendimento reivindica.
+    const blocosVinculados = new Set(towers.map(t => t.imovib_block_id).filter(Boolean) as string[]);
+    const instanciasVinculadas = new Set(units.map(x => x.imovib_instance_id).filter(Boolean) as string[]);
+    const instancias = Array.from(instanceById.values());
 
     for (const u of units) {
         if (!selected.has(u.id)) continue;
@@ -158,16 +184,31 @@ export async function applyWriteBackImovib(empreendimentoId: string, selectedUni
         // Create: garantir o bloco da torre primeiro.
         let blockId = blockIdByTower.get(tower.id);
         if (!blockId) {
-            const block = await imovibService.createBlock({
-                study_id: studyId,
-                name: tower.name,
-                construction_cost_sqm: tower.construction_cost_sqm ?? 0,
-                sales_price_sqm: tower.sales_price_sqm ?? 0,
-            });
-            blockId = block.id;
+            const orfao = blocks.find(b => b.name === tower.name && !blocosVinculados.has(b.id));
+            if (orfao) {
+                blockId = orfao.id;
+                result.blocksAdopted++;
+            } else {
+                const block = await imovibService.createBlock({
+                    study_id: studyId,
+                    name: tower.name,
+                    construction_cost_sqm: tower.construction_cost_sqm ?? 0,
+                    sales_price_sqm: tower.sales_price_sqm ?? 0,
+                });
+                blockId = block.id;
+                result.blocksCreated++;
+            }
+            blocosVinculados.add(blockId);
             blockIdByTower.set(tower.id, blockId);
             await empreendimentoService.updateTower(tower.id, { imovib_block_id: blockId });
-            result.blocksCreated++;
+        }
+
+        const instOrfa = instancias.find(i => i.block_id === blockId && i.name === u.name && !instanciasVinculadas.has(i.id));
+        if (instOrfa) {
+            instanciasVinculadas.add(instOrfa.id);
+            await empreendimentoService.updateUnit(u.id, { imovib_instance_id: instOrfa.id });
+            result.instancesAdopted++;
+            continue;
         }
 
         // Criar a instância — só estrutura. price/status ficam no default do estudo.
@@ -183,6 +224,7 @@ export async function applyWriteBackImovib(empreendimentoId: string, selectedUni
             status: 'DISPONÍVEL',
         }]);
         if (created) {
+            instanciasVinculadas.add(created.id);
             await empreendimentoService.updateUnit(u.id, { imovib_instance_id: created.id });
             result.instancesCreated++;
         }

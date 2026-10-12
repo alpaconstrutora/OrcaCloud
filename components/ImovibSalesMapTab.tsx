@@ -6,6 +6,7 @@ import { pricingService } from '../services/pricingService';
 import PricingIntelligenceModal from './PricingIntelligenceModal';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
+import { planejarRegeneracao } from '../utils/imovibEspelho';
 
 interface ImovibSalesMapTabProps {
     study: ImovibStudy;
@@ -54,35 +55,15 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
         loadInstances();
     }, [loadInstances]);
 
+    // Gerar: cria SÓ o que falta, lendo o espelho do banco na hora. Antes, se o
+    // carregamento tinha falhado, a tela mostrava "não gerado" e Gerar inseria
+    // tudo de novo (duplicava).
     const generateInstances = async () => {
         setGenerating(true);
         try {
-            const batch: ImovibUnitInstanceInsert[] = [];
-            for (const block of blocks) {
-                const units = block.units || [];
-                for (const unit of units) {
-                    if (unit.is_vendavel === false) continue;
-                    const pavimentos = unit.pavimentos || 1;
-                    const quantity = unit.quantity || 1;
-                    for (let floor = 1; floor <= pavimentos; floor++) {
-                        for (let qty = 1; qty <= quantity; qty++) {
-                            batch.push({
-                                study_id: study.id,
-                                block_id: block.id,
-                                unit_id: unit.id,
-                                name: `${unit.name} ${floor}${String.fromCharCode(64 + qty)}`,
-                                floor,
-                                private_area: unit.private_area || 0,
-                                position_type: 'LATERAL',
-                                sun_orientation: 'NORTE',
-                                price: 0,
-                                status: 'DISPONÍVEL',
-                            });
-                        }
-                    }
-                }
-            }
-            await imovibService.createUnitInstances(batch);
+            const atuais = await imovibService.getUnitInstances(study.id);
+            const plano = planejarRegeneracao(study, atuais);
+            await imovibService.createUnitInstances(plano.criar);
             await loadInstances();
             onDataChanged();
         } catch (err) {
@@ -93,18 +74,39 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
         }
     };
 
+    // Regenerar: alinha o espelho às tipologias SEM apagar e recriar — unidade que
+    // continua existindo mantém id, preço, status, posição e sol (o vínculo com o
+    // empreendimento sobrevive); sobrando só sai com confirmação própria.
     const handleRegenerate = async () => {
-        const ok = await confirm({
-            title: 'Regenerar o espelho de vendas?',
-            message: 'Todas as unidades atuais do espelho serão apagadas e geradas de novo a partir das tipologias. Preços e status ajustados à mão serão perdidos.',
-            confirmLabel: 'Regenerar',
-            variant: 'danger',
-        });
-        if (!ok) return;
         setGenerating(true);
         try {
-            await imovibService.deleteUnitInstancesByStudy(study.id);
-            await generateInstances();
+            const atuais = await imovibService.getUnitInstances(study.id);
+            const plano = planejarRegeneracao(study, atuais);
+            if (!plano.criar.length && !plano.atualizar.length && !plano.sobrando.length) {
+                alert('O espelho já está de acordo com as tipologias. Nada a fazer.');
+                return;
+            }
+            const ok = await confirm({
+                title: 'Alinhar o espelho às tipologias?',
+                message: `${plano.criar.length} unidade(s) a criar e ${plano.atualizar.length} a atualizar (pavimento, área ou tipologia). Preço, status, posição e orientação das unidades existentes são mantidos.`,
+                confirmLabel: 'Alinhar',
+            });
+            if (!ok) return;
+            let removerSobrando = false;
+            if (plano.sobrando.length) {
+                removerSobrando = await confirm({
+                    title: `Remover ${plano.sobrando.length} unidade(s) que não existem mais nas tipologias?`,
+                    message: `${plano.sobrando.slice(0, 8).map(i => i.name).join(', ')}${plano.sobrando.length > 8 ? '…' : ''}. Se escolher manter, elas continuam no espelho (e no VGV).`,
+                    confirmLabel: 'Remover',
+                    cancelLabel: 'Manter',
+                    variant: 'danger',
+                });
+            }
+            await imovibService.createUnitInstances(plano.criar);
+            await Promise.all(plano.atualizar.map(a => imovibService.updateUnitInstance(a.id, a.campos)));
+            if (removerSobrando) await imovibService.deleteUnitInstancesByIds(plano.sobrando.map(i => i.id));
+            await loadInstances();
+            onDataChanged();
         } catch (err) {
             console.error('Error regenerating instances:', err);
             alert('Erro ao regenerar espelho.');

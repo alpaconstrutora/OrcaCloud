@@ -671,8 +671,25 @@ export const empreendimentoLinksService = {
         await this.updateStudyLink(ctx, 'blueprint_study_id', studyId, 'Estudo da Planta Inteligente', 'sync_blueprint');
     },
 
-    /** Vincula/desvincula o estudo de Viabilidade (Imovib). */
+    /**
+     * Vincula/desvincula o estudo de Viabilidade (Imovib). O estudo tem de ser da
+     * MESMA organização do empreendimento: a RLS só confere a org do estudo, então
+     * o vínculo entre orgs passava — e o write-back gravava no estudo da outra org
+     * (caso real até 12/10/2026, resolvido movendo o estudo para a SPE).
+     */
     async linkImovibStudy(studyId: string | null, ctx: LinkContext): Promise<void> {
+        if (studyId) {
+            const [{ data: estudo, error: eErr }, { data: emp, error: pErr }] = await Promise.all([
+                supabase.from('imovib_studies').select('organization_id').eq('id', studyId).maybeSingle(),
+                supabase.from('empreendimentos').select('organization_id').eq('id', ctx.empreendimentoId).maybeSingle(),
+            ]);
+            if (eErr || pErr) throw new Error(`Falha ao conferir a organização do estudo: ${(eErr || pErr)!.message}`);
+            if (!estudo) throw new Error('Estudo de viabilidade não encontrado.');
+            if (!emp) throw new Error('Empreendimento não encontrado.');
+            if (estudo.organization_id !== emp.organization_id) {
+                throw new Error('O estudo de viabilidade pertence a outra organização e não pode ser vinculado a este empreendimento.');
+            }
+        }
         await this.updateStudyLink(ctx, 'imovib_study_id', studyId, 'Estudo de Viabilidade', 'sync_imovib');
     },
 

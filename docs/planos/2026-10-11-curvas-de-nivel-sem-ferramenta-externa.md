@@ -204,5 +204,5 @@ relevo 860–900 m, cota zero 887,94 m):
 - [x] `onVersaoGerada` + teste no `useBlueprintTopografiaCotaDaOrigem.test.tsx` (chamado uma vez após gravar; erro não chama)
 - [x] Harness depois: o envelope inteiro no quadro; afastar com a roda não corta; com Terreno ligado, relevo + envelope
 - [x] Suíte 8.766 = 8.732 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` (editor e viewer) e `check-xss-sinks.sh` limpos; build ✓
-- [ ] Publicação e CI
+- [x] Publicado `b1c623ac`; `ci` = success; o domínio serviu `b1c623a` (o `main` já tinha 7 commits de outras frentes depois)
 - [ ] Decisão do usuário: desenhar as linhas das curvas sobre o relevo no 3D

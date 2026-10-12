@@ -35,6 +35,8 @@ const RECUO = Number(params.get('recuo') ?? 1);
 const NAVEGAR = params.get('navegar') !== '0';
 // `?criticas=1`: etapas pares críticas (folga 0), ímpares normais (folga 3d) — setas das duas cores.
 const CRITICAS = params.get('criticas') === '1';
+// ?progresso=N — % realizado das etapas (barras de resumo), para ver a ponta já pintada.
+const PROGRESSO = Number(params.get('progresso') ?? 0);
 
 const INICIO = '2026-03-20';
 const FIM = '2027-03-20';
@@ -63,7 +65,7 @@ for (let g = 0; g * 10 < N; g++) {
     }
     grupos.push({
         id: `g${g}`, uid: `g${g}`, type: 'group', name: `Etapa ${g + 1}`, level: 0, wbsCode: `${g + 1}`, children: filhos,
-        total: 10000, realizedTotal: 0, realizedPhysicalTotal: 0, realizedFinancialTotal: 0, budgetedTotal: 10000, budgetedWithBdiTotal: 10000, plannedTotal: 10000,
+        total: 10000, realizedTotal: 100 * PROGRESSO, realizedPhysicalTotal: 0, realizedFinancialTotal: 0, budgetedTotal: 10000, budgetedWithBdiTotal: 10000, plannedTotal: 10000,
         earlyStart: filhos[0].earlyStart, earlyFinish: filhos[filhos.length - 1].earlyFinish,
     });
 }

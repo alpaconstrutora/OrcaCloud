@@ -1053,6 +1053,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             const baseColor = '#6b7280';
 
                             const progress = node.total > 0 ? (node.realizedTotal / node.total) * 100 : 0;
+                            // Fundo da barra = cinza a 35%; o progresso pinta por cima o cinza sólido.
+                            const fundoDaBarra = `${baseColor}59`;
+                            // Cada gancho tem a cor da PONTA da barra ao lado (12/10/2026: "as cores devem
+                            // ser as mesmas" — eram o cinza sólido sob uma barra clara). A esquerda fica
+                            // sólida quando o progresso já começou; a direita, só ao chegar a 100%.
+                            const corGanchoEsquerdo = progress > 0 ? baseColor : fundoDaBarra;
+                            const corGanchoDireito = progress >= 100 ? baseColor : fundoDaBarra;
 
                             return (
                                 <div
@@ -1062,7 +1069,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     {/* Barra do grupo: retângulo cinza sólido (sem os ganchos em losango) */}
                                     <div
                                         className="absolute inset-0 overflow-hidden rounded-sm shadow-sm border border-black/10 flex items-center"
-                                        style={{ backgroundColor: `${baseColor}59` }}
+                                        style={{ backgroundColor: fundoDaBarra }}
                                     >
                                         {/* Progress Fill */}
                                         <div
@@ -1086,11 +1093,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         progresso (aquela tem overflow-hidden), senão seriam cortados. */}
                                     <div
                                         className="absolute left-0 top-full w-0 h-0 pointer-events-none"
-                                        style={{ borderTop: `8px solid ${baseColor}`, borderRight: '7px solid transparent' }}
+                                        style={{ borderTop: `8px solid ${corGanchoEsquerdo}`, borderRight: '7px solid transparent' }}
                                     />
                                     <div
                                         className="absolute right-0 top-full w-0 h-0 pointer-events-none"
-                                        style={{ borderTop: `8px solid ${baseColor}`, borderLeft: '7px solid transparent' }}
+                                        style={{ borderTop: `8px solid ${corGanchoDireito}`, borderLeft: '7px solid transparent' }}
                                     />
 
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">

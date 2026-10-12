@@ -279,6 +279,13 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
 - [x] Diagnóstico e levantamento de leitores/escritores — 2026-10-12
 - [x] Plano revisado pelo usuário; pergunta aberta 1 respondida — 2026-10-12
 - Fase A: **4 de 4** · Fase B: **4 de 4** · Fase C: **5 de 5** · Fase D: **4 de 4**
+- [x] **Publicado em 2026-10-12** — push `8e85fe50..6048f98e` em `main`; CI `ci` verde no
+  commit. O build de produção do Vercel deu **Error sem build** (`Builds [0ms]`, sem log —
+  o mesmo aconteceu 20 min antes com o `8e85fe50` de outra frente, que falhou em 3 s e
+  passou ao ser refeito). Refeito com `vercel redeploy` da URL do deploy falho (mesma
+  origem git; não é `deploy --prod` de árvore local), Ready em 9 min.
+  `conferir-producao.sh "Nova organização" "Empresas do grupo"` → domínio serve `6048f98`,
+  os dois textos presentes.
 
 ### Registro da Fase B (2026-10-12)
 

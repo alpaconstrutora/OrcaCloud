@@ -383,24 +383,24 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - `saveMode` do CAPEX volta ao modo anterior se a gravação falha.
     - Efeito a saber: `OpportunityDetail` e `imovibAdapter` também chamam `getStudyById`; uma falha parcial agora interrompe em vez de mostrar estudo vazio.
     - Verificado: tsc exit 0; `check-ui-standard` exit 0 nos 14 `Imovib*.tsx`; testes do módulo + `orgContextGuard` + `SyncCenterTab` 62/62.
-- [ ] **Fase 5 — código pronto, falta a prova no navegador** (2026-10-12, pedido: *"2"*, ou seja, Fase 5 e depois publicar junto com o complemento de Torres/Mapa). Feita por 2 subagentes em paralelo, com arquivos separados, e conferida por mim: tsc exit 0; `check-ui-standard` exit 0 em 15 arquivos; 83 testes em 10 arquivos; `check-org-selector-guard` exit 0; 0 `prompt(`/`alert(`/`window.confirm(`.
-  - [ ] **5.1** — `ImovibForm` virou drawer (Sheet `xl`), usado para criar (listagem) e editar (botão "Editar" no cabeçalho do detalhe, travado sem permissão).
+- [x] **Fase 5 — 7 de 7** (2026-10-12, pedido: *"2"*, ou seja, Fase 5 e depois publicar junto com o complemento de Torres/Mapa). Feita por 2 subagentes em paralelo, com arquivos separados, e conferida por mim: tsc exit 0; `check-ui-standard` exit 0 em 15 arquivos; 83 testes em 10 arquivos; `check-org-selector-guard` exit 0; 0 `prompt(`/`alert(`/`window.confirm(`.
+  - [x] **5.1** — `ImovibForm` virou drawer (Sheet `xl`), usado para criar (listagem) e editar (botão "Editar" no cabeçalho do detalhe, travado sem permissão).
     - Pede a confirmação de saída do §25. Toast de sucesso e de erro.
     - Depois de criar, abre o estudo criado.
     - Saíram a página cheia e o código morto (`editingImovibStudyId`).
     - Zoneamento, CA, TO e EIV saíram da criação: nenhum cálculo lê essas colunas (o Mapa Regulatório mora no empreendimento).
-  - [ ] **5.2** — `constants/imovibClassificacao.ts`: listas únicas (segmento, subclassificação, fase, modalidade) e leitura com fallback.
+  - [x] **5.2** — `constants/imovibClassificacao.ts`: listas únicas (segmento, subclassificação, fase, modalidade) e leitura com fallback.
     - Premissas edita `cnpj`/`developer`/`manager`, e a listagem lê com fallback. Modalidade é select nos dois lugares.
     - "% Financiado" saiu da Dinâmica; no lugar, o valor efetivo, só leitura.
     - **Motor:** `funding_debt_percent` preenchido (inclusive 0) vale; o legado só entra quando ele está vazio. Antes, 0 caía no legado. 2 testes.
     - Cores de fase alinhadas às fases reais.
-  - [ ] **5.3** — `InputRow` fora do render (módulo), com rascunho local ("12," não vira 0) e `aria-label`. O teste `ImovibFundingFormFoco` falha na versão antiga e passa na nova.
-  - [ ] **5.4** — `useUnsavedChanges` em Premissas, avisando ao trocar de sub-aba ou aba, ao voltar, ao clicar em Editar e na Planta AI. "Salvar Premissas" aparece só em 0/1 e fica desabilitado sem alteração, com o motivo.
-  - [ ] **5.5** — `calcularRatingOpura` (pura, 3 testes): a barreira é a TMA do estudo, e o cartão mostra "TIR ≥ TMA do estudo (X% a.a.)".
-  - [ ] **5.6** — Selo do PDF corrigido (texto simples §8). Nomes de arquivo sem espaço (Excel agora `_Viabilidade.xlsx`).
+  - [x] **5.3** — `InputRow` fora do render (módulo), com rascunho local ("12," não vira 0) e `aria-label`. O teste `ImovibFundingFormFoco` falha na versão antiga e passa na nova.
+  - [x] **5.4** — `useUnsavedChanges` em Premissas, avisando ao trocar de sub-aba ou aba, ao voltar, ao clicar em Editar e na Planta AI. "Salvar Premissas" aparece só em 0/1 e fica desabilitado sem alteração, com o motivo.
+  - [x] **5.5** — `calcularRatingOpura` (pura, 3 testes): a barreira é a TMA do estudo, e o cartão mostra "TIR ≥ TMA do estudo (X% a.a.)".
+  - [x] **5.6** — Selo do PDF corrigido (texto simples §8). Nomes de arquivo sem espaço (Excel agora `_Viabilidade.xlsx`).
     - Excel com 3 abas (Indicadores, Premissas, Fluxo de caixa), montado por `montarPlanilhaImovib`, com teste.
     - Financiamento na planilha segue a regra do motor.
-  - [ ] **5.7** — `window.prompt` do CAPEX virou uma linha de inclusão inline (Enter/Esc, duplicado avisado antes do banco, dentro do fieldset só leitura), com teste. O "Novo" saiu de dentro do botão de expandir (botão dentro de botão).
+  - [x] **5.7** — `window.prompt` do CAPEX virou uma linha de inclusão inline (Enter/Esc, duplicado avisado antes do banco, dentro do fieldset só leitura), com teste. O "Novo" saiu de dentro do botão de expandir (botão dentro de botão).
   - **1ª prova no navegador (`c:/tmp/pwtest/imovib_fase5.js`):**
     - **Passou:** drawer de editar preenchido; "Salvar Premissas" em Identificação (1) e não em Torres (0); aviso "Sair sem salvar?"; foco mantido ao digitar 12,5; "TIR ≥ TMA do estudo (12% a.a.)"; Excel `_Viabilidade.xlsx` com abas Indicadores/Premissas/Fluxo de caixa e valores coerentes; rubrica inline abre e fecha com Esc, sem prompt nativo.
     - **PDF NÃO saía**, com o erro `unsupported color function "oklch"`: o html2canvas 1.4 não entende as cores do Tailwind v4. Provavelmente quebrado em produção desde a migração para o v4, porque a captura não mudou.
@@ -416,6 +416,13 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
         - **Não provado no app tela a tela** (precisa de contrato/holerite com dados): o mecanismo é o mesmo provado acima.
       - **Erro meu de verificação** (achado aqui): o loop `echo "$(basename $f) exit=$?"` imprimia o `$?` do `basename`, não o do verificador. Refeito com `rc=$?` logo depois do comando: os 6 arquivos de Torres/Mapa estavam de fato limpos (rc 0, 0 linhas).
     - **"Cancelar" do drawer de criar "não fechou":** falso alarme do roteiro. O Sheet fechado continua montado (só desliza com translate-x), e o drawer de editar abriu normal logo depois. O roteiro passou a conferir a posição do campo.
+  - **Causa final do PDF** (diagnósticos `c:/tmp/pwtest/imovib_diag_pdf.js` e `imovib_diag_pdf2.js`): faltava `-webkit-text-stroke-color` na lista. O html2canvas a lê como cor, e no Resumo real ela seguiu em oklch.
+    - O 1º diagnóstico varreu todas as propriedades e mostrou as que o html2canvas nem lê (bordas lógicas, `text-emphasis-color`, `-webkit-text-fill-color`).
+    - O 2º rodou a captura na página real com html2canvas não minificado: com a propriedade tratada, gerou, e não sobrou nenhuma cor moderna na cópia (341 propriedades reescritas).
+  - **Prova final no app** (roteiro da Fase 5, botão real; escritas bloqueadas: 1, o salvamento no blur de "Sinal / Ato", interceptado; erros de console: 0):
+    - `Imovib_Garden_Cambuhy_Viabilidade.pdf` gerado, 769 KB, começando com `%PDF-`.
+    - A imagem extraída do PDF mostra os KPIs, a Curva S, o ESG e o Master Budget com base ("3% do terreno", "4% da obra", "5% do VGV") e total de R$ 7.037.982, igual ao card do CAPEX.
+    - "Cancelar" do drawer de criar: o campo foi para x = 1640 (fora da tela), ou seja, fechou.
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);
     - `StarRating` do ESG declarado dentro do render (botões; efeito menor);

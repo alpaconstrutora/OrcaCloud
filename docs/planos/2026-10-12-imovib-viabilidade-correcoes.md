@@ -248,7 +248,7 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
 
 ## Estado
 
-- [ ] **Fase 1 — 7 de 8** (2026-10-12):
+- [x] **Fase 1 — 8 de 8** (2026-10-12):
   - [x] **1.1** — `__tests__/imovibMath.test.ts`, 16 casos. Contra o motor antigo, 15 falharam pelos motivos do diagnóstico; o 16º (fluxo sem troca de sinal → NaN) já passava.
   - [x] **1.2** — O resultado expõe `debtPayoffAtEnd` (o valor quitado). O texto original dizia `debtBalanceEnd`, mas esse campo daria sempre 0 depois da quitação, então troquei por um que mostra quanto foi quitado. Também gera o aviso `divida_quitada_no_fim`.
     - 100% de dívida a R$ 9.000/m²: VPL −12,81 mi, quitação de 10,86 mi.
@@ -258,19 +258,29 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
   - [x] **1.4** — `constants/imovibDefaults.ts`, lido pelo motor, pela Dinâmica, por Receitas & Capital e pelos textos do Fluxo de Caixa.
   - [x] **1.5** — Bissecção com checagem de troca de sinal no intervalo [−90%, 1000%] a.m. Sem raiz, devolve NaN. Os testes conferem que a TIR devolvida zera o VPL.
   - [x] **1.6** — ESG soma também no CAPEX simplificado. Avisos novos: `recebimento_nao_soma_100`, `sem_area`, `sem_preco`.
-  - [ ] **1.7** — Código pronto: `components/ImovibAvisosBanner.tsx` no Resumo, na Sensibilidade e na Dinâmica, com "Corrigir em …" que troca a aba. **Falta a prova no navegador** (roteiro `c:/tmp/pwtest/imovib_avisos_banner.js`).
+  - [x] **1.7** — `components/ImovibAvisosBanner.tsx` no Resumo, na Sensibilidade e na Dinâmica, com "Corrigir em …" que troca a aba. **Provado no navegador** (preview da frente, conta agente-leitura, roteiro `c:/tmp/pwtest/imovib_avisos_banner.js`, escritas bloqueadas: 0, erros de console: 0):
+    - Bruninho: banner nas 3 abas ("Nenhum bloco tem preço de venda por m²"); "Corrigir em Premissas" abre Premissas.
+    - Davi Bueno: o banner achou 2 problemas reais do estudo de teste: sem tipologia com área, e recebimento somando **180%**.
+    - Garden Cambuhy: sem banner.
   - [x] **1.8** — `ImovibCapexForm` usa `math.totalBlockArea`, que considera os pavimentos.
   - Estudo-base sem regressão: VPL 1,46 mi e TIR 20,81%, iguais ao motor antigo.
   - **REGRA #1 nos arquivos tocados** (antecipa o item 5.7 nesses arquivos): `check-ui-standard.sh` dá exit 0 em CashFlow, ExecutiveSummary, DynamicForm, CapexForm, Sensitivity, Funding, DetailView e no banner novo. Correções: §7 em `<td>` (CashFlow, ExecutiveSummary, CapexForm), §8 na pílula "Salvando…" (DynamicForm) e §14 `window.confirm` → `useConfirm` (CapexForm). O `alert`/`prompt` do CapexForm continua no 5.7.
-- [ ] **Fase 2 — código pronto, falta aplicar as 2 migrations e conferir no navegador** (2026-10-12):
+- [x] **Fase 2 — 6 de 6** (2026-10-12). Migrations aplicadas às 15:36 UTC, com o OK do usuário (*"Aplique as duas migrações agora"*). Prova no navegador (Davi Bueno, modo Completo):
+  - Dinâmica com 2 campos desabilitados e o motivo visível.
+  - Card "Rubricas no cálculo": R$ 40.000 (terreno 15.000 · obra 25.000 · VGV 0, porque o estudo não tem área).
+  - Coluna "No cálculo" nas 9 categorias e 26 seletores de base.
+  - Sem aviso de impostos em dobro.
+  - Controle negativo: o Bruninho, no Simplificado, ficou com 0 campos desabilitados.
+  - Banco conferido depois do teste: nada gravado.
+  - Detalhe de cada item:
   - **Decisões:** D2 — apagar duplicatas com reversão; D3 — **regime normal** (RET vai a 0 nos estudos de teste; o template de estudos novos também traz RET 0 e o normal 6,73%).
   - **Ordem obrigatória:** aplicar `aplicar_20271012100000` e `aplicar_20271012100100` ANTES de publicar o código, porque o serviço passa a ler `base` e `capex_seeded_at` (sem a migration, dá 42703).
-  - [ ] **2.1** — `aplicar_20271012100000_imovib_capex_base.sql`: coluna `base` + CHECK + backfill pela categoria. O motor também deduz a base pela categoria (`baseDaRubrica`) quando ela vem vazia.
+  - [x] **2.1** — (aplicada; base conferida por categoria) `aplicar_20271012100000_imovib_capex_base.sql`: coluna `base` + CHECK + backfill pela categoria. O motor também deduz a base pela categoria (`baseDaRubrica`) quando ela vem vazia.
   - [x] **2.2** — Motor soma as rubricas: terreno no mês 1; obra ao longo da obra (financiável); % de VGV deduzido junto com a receita; valor fixo de VGV ao longo das vendas. Com rubricas, imposto e corretagem da Dinâmica não entram. O resultado traz `capexRubricas` e `capexValorPorRubrica`. 7 testes novos, incluindo um calculado à mão. A listagem passa a carregar as rubricas em lote (4 consultas fixas, antes 3), para bater com o Resumo.
   - [x] **2.3** — Dinâmica: imposto e corretagem desabilitados no modo Completo, com o motivo no `title` e no texto. Template sem "Juros SFH". Aviso na tela quando há mais de um imposto com valor.
   - [x] **2.4** — CAPEX: card "Rubricas no cálculo" (terreno/obra/VGV/total) e colunas **Base** (editável) e **No cálculo** (R$ do motor), com total por categoria.
   - [x] **2.5** — PDF "Master Budget": premissa com a base certa ("3% do terreno", e não "% do VGV" em tudo), R$ do motor por rubrica e total.
-  - [ ] **2.6** — Código: `imovibService.seedCapexTemplate` idempotente (upsert com `ignoreDuplicates` na trava única + `capex_seeded_at`); Premissas deixou de gravar `capex_seeded_at`. Banco: `aplicar_20271012100100_imovib_capex_dedup_unique.sql`. A cópia que fica é a criada PRIMEIRO, porque nenhuma rubrica foi editada depois de criada e nos 3 pares divergentes o valor informado está na mais antiga.
+  - [x] **2.6** — (aplicada: 218 → 105, 0 duplicatas, reversão 117, trava criada) Código: `imovibService.seedCapexTemplate` idempotente (upsert com `ignoreDuplicates` na trava única + `capex_seeded_at`); Premissas deixou de gravar `capex_seeded_at`. Banco: `aplicar_20271012100100_imovib_capex_dedup_unique.sql`. A cópia que fica é a criada PRIMEIRO, porque nenhuma rubrica foi editada depois de criada e nos 3 pares divergentes o valor informado está na mais antiga.
   - **Ensaio no banco real** com `ROLLBACK` (as duas migrations juntas):
     - 218 → 105 linhas, 0 duplicatas, 0 "Juros", 0 RET com valor, 0 base nula;
     - base: obra 57, terreno 16, vgv 32;

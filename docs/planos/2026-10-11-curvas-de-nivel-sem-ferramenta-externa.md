@@ -246,3 +246,42 @@ ter corrigido algo aqui.
 - [x] Suíte 8.794 = 8.760 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` (editor e viewer) e `check-xss-sinks.sh` limpos; build ✓
 - [x] Publicado `146d783b` (1 recusa: o `main` tinha um commit de condomínio, sem relação; rebase); `ci` = success; o domínio serve `146d783`
 - [ ] Conferência do usuário no estudo real: 3D com Terreno ligado e Exibir › Curvas de nível
+
+---
+
+# Pedido posterior — 12/10/2026: o relevo e as curvas não apareciam no 3D do estudo
+
+Com print do 3D (menu Exibir aberto: "Terreno" desmarcado; sem item de curvas):
+
+> veja print, o problema com o corte da imagem foi corrigida.
+> porem o terreno 3 com as curvas nao foi gerado.
+> repare tambem que em exibir nao aparece curvas de nivel
+
+## Diagnóstico
+
+- O Terreno do 3D estava DESLIGADO (o padrão antigo) — sem ele não há relevo nem curvas.
+  "Gerar liga o Terreno" (publicado antes) só vale para quem gera DE NOVO.
+- "Curvas de nível" só existia no Exibir da PLANTA: no 3D não havia como ligar.
+
+## Decisão
+
+- Terreno do 3D com três estados, chave nova `blueprint:vista3dTerreno:v2`: `null` =
+  AUTOMÁTICO (ligado quando o estudo tem curvas geradas), `true`/`false` = escolha explícita do
+  menu ou de um modelo de vista. Migração: `true` na chave antiga (escolha de quem ligou)
+  continua ligado; `false`/ausente (quase sempre o padrão) vira automático. Estudos só de
+  edificação (sem curvas) seguem sem o lote no 3D, como antes.
+- O espelho `haCurvasGeradas` é declarado ANTES do memo da configuração de vista (que lê o
+  Terreno na renderização) e atualizado por um efeito depois do hook da topografia — ler a
+  topografia direto lá seria constante antes de existir.
+- "Curvas de nível" no Exibir do 3D, logo abaixo de Terreno: a MESMA escolha da planta;
+  desligada dizendo o porquê ("Não há curvas geradas…" / "Ligue o Terreno…").
+
+## Estado
+
+- [x] Editor (estado em três, migração, espelho, item do menu)
+- [x] 3 testes no `BlueprintEditor.test.tsx` (sem curvas: automático desligado e o item das curvas
+      desligado com o motivo; com curvas — `listar` espionado com uma versão —: Terreno e curvas
+      ligados sozinhos, desligar grava `false` explícito e o motivo vira "Ligue o Terreno"; chave
+      antiga `true` continua ligado). Prova de que morde: tirar o automático → o 2º falha
+- [x] Suíte 8.803 = 8.769 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓
+- [ ] Publicação e CI

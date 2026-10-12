@@ -7972,3 +7972,75 @@ describe('BlueprintEditor · aba Estrutural', () => {
   });
 });
 
+
+/**
+ * TERRENO DO 3D AUTOMÁTICO + CURVAS NO EXIBIR DO 3D (12/10/2026). Print do
+ * usuário: o 3D sem relevo e sem curvas — o Terreno do 3D nascia desligado e
+ * "Curvas de nível" só existia no Exibir da PLANTA. A cena é WebGL (opaca no
+ * jsdom); o que se prova é a porta: o menu do 3D e a escolha persistida.
+ */
+describe('BlueprintEditor · terreno e curvas no Exibir do 3D', () => {
+  async function comLote() {
+    const k = await import('../../utils/blueprintKernel');
+    const m0 = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const lv = m0.levels[0].id;
+    const c = [k.point(0, 0), k.point(20_000, 0), k.point(20_000, 30_000), k.point(0, 30_000)];
+    return k.applyBatch(m0, c.map((a, i) => ({ type: 'AddBoundary' as const, levelId: lv, a, b: c[(i + 1) % 4], kind: 'TERRENO' as const }))).model;
+  }
+  const VERSAO = {
+    id: 'v1', study_id: 'std_1', organization_id: 'org_1', versao: 1, fonte_codigo: 'COPERNICUS_GLO30',
+    fonte_nome: 'Copernicus DEM GLO-30 (AWS Open Data)', dataset_versao: 'x', resolucao_fonte_m: 30, referencia_vertical: 'EGM2008',
+    classe_qualidade: 'PRELIMINAR_REMOTO',
+    grade: { origem: { x: 0, y: 0 }, espacamentoMm: 10_000, colunas: 3, linhas: 4, cotasM: [880, 881, 882, 881, 882, 883, 882, 883, 884, 883, 884, 885] },
+    equidistancia_m: 1, modo_niveis: 'EQUIDISTANCIA', niveis_m: null, curvas: [],
+    estatisticas: { cotaMinM: 880, cotaMaxM: 885, cotaMediaM: 882.5, amplitudeM: 5, amostrasValidas: 12, amostrasAusentes: 0, amostrasNoLote: 12, areaM2: 600, espacamentoM: 10, curvas: 0, comprimentoDasCurvasM: 0 },
+    pontos_cotados: [], linhas_de_quebra: [], tin_importada: null, anel: [], georreferencia: null, algoritmo_nome: 'a', algoritmo_versao: '1',
+    hash_entrada: 'e', hash_resultado: 'h1', avisos: [], created_by: null, created_at: '2026-10-12T12:00:00Z',
+  };
+
+  async function abrirExibirDo3d() {
+    localStorage.setItem('blueprint:vista', JSON.stringify('3d'));
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^vista$/i);
+    await user.click(botao(/exibir/i));
+    return user;
+  }
+
+  it('sem curvas geradas: Terreno automático desligado; "Curvas de nível" no menu, desligada, dizendo o porquê', async () => {
+    localStorage.clear();
+    loadBranchModel.mockResolvedValue(await comLote());
+    await abrirExibirDo3d();
+    expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'false');
+    const curvas = screen.getByRole('menuitemcheckbox', { name: /^curvas de nível$/i });
+    expect(curvas).toBeDisabled();
+    expect(curvas.getAttribute('title')).toMatch(/Não há curvas geradas/);
+  });
+
+  it('com curvas geradas: o Terreno liga sozinho e as curvas também; desligar vira escolha gravada', async () => {
+    localStorage.clear();
+    loadBranchModel.mockResolvedValue(await comLote());
+    const svc = await import('../../services/blueprintTopografiaService');
+    const listar = vi.spyOn(svc.blueprintTopografiaService, 'listar').mockResolvedValue([VERSAO] as never);
+    try {
+      const user = await abrirExibirDo3d();
+      await waitFor(() => expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'true'));
+      const curvas = screen.getByRole('menuitemcheckbox', { name: /^curvas de nível$/i });
+      expect(curvas).toBeEnabled();
+      expect(curvas).toHaveAttribute('aria-checked', 'true');
+      await user.click(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i }));
+      expect(JSON.parse(localStorage.getItem('blueprint:vista3dTerreno:v2')!)).toBe(false);
+      expect(screen.getByRole('menuitemcheckbox', { name: /^curvas de nível$/i }).getAttribute('title')).toMatch(/Ligue o Terreno/);
+    } finally {
+      listar.mockRestore();
+    }
+  });
+
+  it('quem tinha LIGADO o Terreno na chave antiga continua ligado (mesmo sem curvas)', async () => {
+    localStorage.clear();
+    localStorage.setItem('blueprint:vista3dTerreno', 'true');
+    loadBranchModel.mockResolvedValue(await comLote());
+    await abrirExibirDo3d();
+    expect(screen.getByRole('menuitemcheckbox', { name: /^terreno$/i })).toHaveAttribute('aria-checked', 'true');
+  });
+});

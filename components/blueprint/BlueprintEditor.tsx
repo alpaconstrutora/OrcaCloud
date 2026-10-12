@@ -921,6 +921,20 @@ type PontaSolta = { p: Point; wallId: string; end: 'a' | 'b'; oposta: Point };
  * deslocados alguns centímetros um do outro (as faces do PDF não são exatas), e
  * recusar isso mataria vãos legítimos.
  */
+/**
+ * Migração do Terreno do 3D (12/10/2026): a chave antiga `blueprint:vista3dTerreno`
+ * guardava um booleano desligado por padrão. `true` lá foi escolha de quem ligou
+ * — continua ligado; `false` ou ausente vira AUTOMÁTICO (`null`). Só vale
+ * enquanto a chave nova não existe (é o padrão do `usePersistedState`).
+ */
+function terreno3dDaChaveAntiga(): boolean | null {
+  try {
+    return typeof window !== 'undefined' && JSON.parse(localStorage.getItem('blueprint:vista3dTerreno') ?? 'null') === true ? true : null;
+  } catch {
+    return null;
+  }
+}
+
 const DESALINHO_MAX_MM = 150;
 
 /**
@@ -1827,10 +1841,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         .map((r) => ({ chave: r.arquivoId, bytes: bytesDasReferencias[r.arquivoId], matriz: matrizDaReferencia(r), opacidade: r.opacidade })),
     [referenciasExternas, bytesDasReferencias],
   );
-  const [mostrarTerreno3d, setMostrarTerreno3d] = usePersistedState(
-    'blueprint:vista3dTerreno',
-    false,
+  /**
+   * TERRENO DO 3D (12/10/2026): `null` = AUTOMÁTICO — ligado quando o estudo
+   * tem curvas geradas. Era um booleano desligado por padrão, e quem gerava
+   * relevo abria o 3D e via só o envelope, chato (*"o terreno 3 com as curvas
+   * nao foi gerado"*). Clicar no menu vira escolha explícita, respeitada.
+   * Chave nova (v2): na antiga, `false` era quase sempre o padrão, não uma
+   * escolha; quem tinha LIGADO lá continua ligado.
+   */
+  const [terreno3dEscolhido, setTerreno3dEscolhido] = usePersistedState<boolean | null>(
+    'blueprint:vista3dTerreno:v2',
+    terreno3dDaChaveAntiga(),
   );
+  /**
+   * Espelho de "há curvas geradas", declarado AQUI porque o hook da topografia
+   * vem bem depois no arquivo, e `mostrarTerreno3d` é lido antes dele (o memo
+   * da configuração de vista roda na renderização — ler a topografia lá seria
+   * constante antes de existir). Um efeito depois do hook o atualiza.
+   */
+  const [haCurvasGeradas, setHaCurvasGeradas] = useState(false);
+  const mostrarTerreno3d = terreno3dEscolhido ?? haCurvasGeradas;
   /** ENVELOPE 3D (E3.3): os prismas edificáveis por pavimento, translúcidos. */
   const [mostrarEnvelope3d, setMostrarEnvelope3d] = usePersistedState('blueprint:vista3dEnvelope', true);
 
@@ -3815,7 +3845,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       setMostrarLaje3d(c.vista3d.laje);
       setMostrarArestas3d(c.vista3d.arestas);
       setMostrarArmadura3d(c.vista3d.armadura);
-      setMostrarTerreno3d(c.vista3d.terreno);
+      setTerreno3dEscolhido(c.vista3d.terreno);
       setMostrarEnvelope3d(c.vista3d.envelope);
       setEstilo3d(c.estilo3d);
       setEstiloPlanta(c.estiloPlanta);
@@ -4950,7 +4980,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * sendo mostradas no 3d"*). Gerar liga; desligar continua sendo escolha dele.
    */
   const ligarRelevo3dRef = useRef<() => void>(() => {});
-  ligarRelevo3dRef.current = () => setMostrarTerreno3d(true);
+  ligarRelevo3dRef.current = () => setTerreno3dEscolhido(true);
   const aoGerarVersao = useCallback(() => ligarRelevo3dRef.current(), []);
   const topografia = useBlueprintTopografia(
     study.id,
@@ -4961,6 +4991,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     preencherCotaDaOrigem,
     aoGerarVersao,
   );
+  // O espelho declarado lá em cima (`haCurvasGeradas`): o Terreno do 3D automático liga com ele.
+  const temCurvasGeradas = !!topografia.selecionada;
+  useEffect(() => {
+    setHaCurvasGeradas(temCurvasGeradas);
+  }, [temCurvasGeradas]);
 
   /**
    * A cota absoluta do ZERO do desenho — o que põe a cota 1.083 m do terreno no
@@ -13838,11 +13873,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                           rotulo: 'Terreno',
                           icone: LandPlot,
                           ligado: mostrarTerreno3d,
-                          alternar: () => setMostrarTerreno3d((v) => !v),
+                          alternar: () => setTerreno3dEscolhido(!mostrarTerreno3d),
                           desabilitado: !temTerreno,
                           ajuda: temTerreno
-                            ? 'O polígono do lote como plano de chão, sob a edificação. O enquadramento passa a incluir o lote inteiro.'
+                            ? `O lote como chão — com o relevo, quando há curvas geradas. O enquadramento passa a incluir o lote inteiro.${terreno3dEscolhido === null ? ' Automático: liga sozinho quando o estudo tem curvas.' : ''}`
                             : 'Não há divisa de terreno desenhada — use a ferramenta Terreno na planta baixa.',
+                        },
+                        {
+                          // 12/10/2026: no 3D não havia como ligar as curvas (o botão só existia no Exibir da planta).
+                          // A MESMA escolha da planta — ligar aqui liga lá.
+                          chave: 'curvas-de-nivel-3d',
+                          rotulo: 'Curvas de nível',
+                          icone: Mountain,
+                          ligado: mostrarCurvasDeNivel && mostrarTerreno3d && !!topografia.selecionada,
+                          alternar: () => setMostrarCurvasDeNivel((v) => !v),
+                          desabilitado: !topografia.selecionada || !mostrarTerreno3d,
+                          ajuda: !topografia.selecionada
+                            ? 'Não há curvas geradas — Terreno › Dados do lote › Curvas de nível › Gerar curvas.'
+                            : !mostrarTerreno3d
+                              ? 'Ligue o Terreno (acima): as curvas ficam sobre o relevo.'
+                              : 'As linhas das curvas sobre o relevo, na cor da planta. É a mesma escolha da planta (Exibir › Curvas de nível).',
                         },
                         {
                           chave: 'envelope-3d',

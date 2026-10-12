@@ -383,8 +383,13 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
        do caixilho, quase preta (#0f172a) — não some mais no quadro de longe.
     - Prova: `blueprintFolhas.test.ts` (28), `blueprintCatalogoFolhas.test.ts` (3),
       `components/PainelEsquadria.test.tsx` (+1); suíte inteira 841 arquivos / 8564 testes.
-      ⏳ **Prova no app pendente**: o estudo de testes "Planta 11/10/2026" foi editado por outra pessoa às
-      19:18 (4 paredes, 2 janelas novas) — não escrevi nele; a rodada parou antes da 1ª escrita.
+      ✅ **No app com escrita (12/10, "Planta 11/10/2026" liberada pelo usuário; estado dele conferido por md5
+      do rascunho antes e depois)**: janela de teste em x=14 m (longe das 2 janelas do usuário) com 3 folhas +
+      bandeira → nome JF8T → "Salvar tipo" numa organização (Alpa) → **no catálogo, as 3 folhas + bandeira** →
+      "Desenho padrão" (sem folhas no banco) → "Aplicar tipo" (as folhas voltaram) → elevação "Fundos" com
+      montantes, travessa e os tracejados. Limpeza: rascunho com o MESMO md5 de antes; o tipo JF8T apagado pela
+      API com a sessão do usuário (a 1ª tentativa deu 401 — cabeçalho capturado ANTES do login; refeita com o
+      token da sessão, HTTP 200) e catálogo conferido vazio no banco.
   - Prova: `__tests__/blueprintFolhas.test.ts` (23). ✅ **No app com escrita (11/10, "Planta 11/10/2026",
     estudo sozinho)**: J + clique na parede de cima → Configurar folhas → + Folha → folha 1 Fixa, folha 2 De
     abrir → Pôr bandeira → **no banco, FIXA 33 / ABRIR 33 / CORRER 34 + bandeira BASCULANTE 400**; largura
@@ -420,8 +425,9 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   - Prova: `__tests__/blueprintBiblioteca.test.ts` (12), `components/PainelBibliotecaComponentes.test.tsx` (4).
     ✅ Olhar SÓ-LEITURA no app ("Planta 26/09/2026", 11/10): o botão Biblioteca abre a seção; 28 peças com
     miniatura; "cama" acha casal, solteiro e o conjunto de dormitório; a miniatura é arrastável; o rascunho
-    do estudo NÃO mudou (draft_saved_at igual antes e depois). ⏳ Prova COM ESCRITA (arrastar sofá e cama →
-    peça no ponto solto, Ctrl+Z) pendente do estudo de testes livre.
+    do estudo NÃO mudou (draft_saved_at igual antes e depois). ✅ **Com escrita (12/10, "Planta 11/10/2026")**:
+    sofá e cama arrastados da Biblioteca caíram no ponto solto (sofá em 5,96/4,05 m para o alvo 6,0/4,0; cama
+    idem ±15 cm) e o Ctrl+Z devolveu o rascunho ao md5 de antes.
 
 **F10 — Modelos glTF dos componentes** · `FichaDoComponente` (`model.ts:1736`) ganha `modelo3d?` (fora do hash, como o `uid`); bucket `blueprint-modelos-3d` + migration (REGRA #7); `utils/blueprintModelos3d.ts`; `Blueprint3DViewer.tsx:1387`
 - Muda: curadoria de modelos **CC0** (fonte e licença registradas por arquivo, em `docs/planos/…` + tabela de créditos); `useGLTF` com escala para a ficha (largura × profundidade × altura); fallback para a caixa se faltar ou falhar; peso máximo por modelo. O IFC continua com a caixa.
@@ -471,7 +477,9 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
     móvel na frente da peça (o armário girado 180° na planta mostra as portas para o lado girado; com giro 0 as
     portas e a cabeceira ficavam contra a parede de trás). Tanque sem modelo = caixa. Console limpo; os 19 `.glb`
     com 200.
-  - Prova: `__tests__/blueprintModelos3d.test.ts` (6).
+  - Prova: `__tests__/blueprintModelos3d.test.ts` (6). ✅ No app (12/10, só leitura, "Planta 11/10/2026"):
+    3D visto de cima com o armário, a cama de casal e os criados como MODELOS (3 `.glb` com 200, console
+    limpo, rascunho intocado). Produção serve o `.glb` com `model/gltf-binary`.
 
 ### Bloco 3 — IA e visualização
 
@@ -506,7 +514,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   (cota gravada e desfeita) + PDF/DXF por teste
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
-  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [~] F9 — no ar; prova com escrita pendente do estudo livre · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
+  kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [x] F9 — provada no app com escrita (arrastar → ponto solto → Ctrl+Z) · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
 - [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)

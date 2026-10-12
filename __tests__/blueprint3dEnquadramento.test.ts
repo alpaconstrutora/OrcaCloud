@@ -303,3 +303,37 @@ describe('enquadramento 3d · a grade que não treme', () => {
     }
   });
 });
+
+/**
+ * O ENVELOPE entra na caixa (12/10/2026, print do usuário): estudo só com lote
+ * de ~346 m, Terreno do 3D desligado e envelope ligado — os dois padrões do
+ * editor. Sem o envelope a caixa era a cena VAZIA (20 m na origem): a câmera
+ * ficava dentro do envelope e o `far` curto cortava o desenho ao afastar.
+ */
+describe('enquadramento 3d · envelope construtivo', () => {
+  const lote = [
+    { x: -173_000, y: -172_000 },
+    { x: 173_000, y: -172_000 },
+    { x: 173_000, y: 172_000 },
+    { x: -173_000, y: 172_000 },
+  ];
+  const envelope = [{ anel: lote, baseMm: 0, topoMm: 2800 }];
+
+  it('sem o envelope, um estudo só com nível é a cena vazia (o defeito)', () => {
+    expect(enquadramentoDoModelo(comNivel().model, false, null)).toEqual(ENQUADRAMENTO_VAZIO);
+  });
+
+  it('com o envelope, a caixa é o lote inteiro e a altura do envelope', () => {
+    const e = enquadramentoDoModelo(comNivel().model, false, null, envelope);
+    expect(e.temConteudo).toBe(true);
+    expect(e.raio[0]).toBeCloseTo(173, 3);
+    expect(e.raio[2]).toBeCloseTo(172, 3);
+    expect(e.spread).toBeCloseTo(346, 3);
+    expect(e.alturaTopo).toBeGreaterThanOrEqual(2.8);
+  });
+
+  it('envelope vazio ou ausente não muda nada', () => {
+    const m = comNivel().model;
+    expect(enquadramentoDoModelo(m, false, null, [])).toEqual(enquadramentoDoModelo(m, false));
+  });
+});

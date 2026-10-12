@@ -118,3 +118,25 @@ describe('useBlueprintTopografia · cota da origem pelo DEM', () => {
     expect(onCota.mock.calls[0][0]).toBeCloseTo(875, 2);
   });
 });
+
+describe('useBlueprintTopografia · versão gerada liga o relevo no 3D', () => {
+  it('onVersaoGerada é chamado uma vez, depois de gravar; erro na geração não chama', async () => {
+    versoes.length = 0;
+    const gerada = vi.fn();
+    const { result } = renderHook(() => useBlueprintTopografia('s1', 'o1', 'Estudo', LOTE_NA_ORIGEM, GEO, undefined, gerada));
+    await waitFor(() => expect(result.current.carregando).toBe(false));
+    act(() => result.current.setFonteCodigo('COPERNICUS_GLO30'));
+    await act(async () => {
+      await result.current.gerar();
+    });
+    expect(versoes).toHaveLength(1);
+    expect(gerada).toHaveBeenCalledTimes(1);
+    // Sem pontos cotados a geração falha: nada de ligar o 3D.
+    act(() => result.current.setFonteCodigo('PONTOS_COTADOS'));
+    await act(async () => {
+      await result.current.gerar();
+    });
+    expect(result.current.erro).toMatch(/três pontos/);
+    expect(gerada).toHaveBeenCalledTimes(1);
+  });
+});

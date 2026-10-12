@@ -2328,10 +2328,12 @@ export default function Blueprint3DViewer(props: Props) {
   // compilador e coberta por teste. Ela morava AQUI DENTRO, sob `@ts-nocheck`, e
   // foi assim que ficou incompleta — ignorando estrutura e escada — sem que nada
   // acusasse, até a importação de IFC trazer um estudo só com estrutura.
+  // 12/10/2026: o ENVELOPE também entra — vem de fora do modelo, como o relevo,
+  // e sem ele um estudo só com lote enquadrava a cena vazia (ver a função).
   const { centro, raio, spread, alturaTopo } = useMemo(
-    () => enquadramentoDoModelo(model, !!mostrarTerreno, mostrarTerreno ? (relevo ?? null) : null),
+    () => enquadramentoDoModelo(model, !!mostrarTerreno, mostrarTerreno ? (relevo ?? null) : null, props.envelope ?? null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, mostrarTerreno, relevoChave],
+    [model, mostrarTerreno, relevoChave, props.envelope],
   );
 
   // A grade do chão desce para baixo do ponto mais baixo do relevo: fixa em

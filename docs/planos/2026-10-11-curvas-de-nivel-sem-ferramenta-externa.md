@@ -159,3 +159,50 @@ origem — preencher a Cota do terreno sozinho, sem nunca sobrescrever a digitad
 - [x] Suíte 8.762 = 8.728 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓ (a 1ª rodada caiu com exit 139, a queda intermitente do Node; a repetição passou)
 - [x] Publicado `6ae8c289`; `ci` = success; `conferir-producao.sh "Cota do terreno preenchida com"` → o domínio serve o `main` (já com uma frente posterior, `3a66646`) com o texto novo
 - [ ] Conferência do usuário: gerar de novo (com a Cota do terreno vazia) e ver o aviso sumir e a cota aparecer em "Onde fica"
+
+---
+
+# Pedido posterior — 12/10/2026: o 3D cortava a imagem e não mostrava o relevo
+
+Com print do 3D (um plano bege, cortado):
+
+> a vizualizacao 3d tem bug
+> 1. a imagem esta sendo cortada.
+> 2. as curvas de nivel nao esta sendo mostradas no 3d
+
+Depois de pedir o teste do botão Centralizar, com mais dois prints:
+
+> a) clique em botão ↺ (Centralizar) e gere a imagem do print. e a medida de dou zoom out o desenho comeca a ser cortado.
+> b) veja se o print é esse o caso
+
+## Diagnóstico (reproduzido antes de corrigir)
+
+Harness `docs/spikes/terreno-grande-3d/` (o `Blueprint3DViewer` de verdade, lote de 346 × 344 m,
+relevo 860–900 m, cota zero 887,94 m):
+
+- Com o Terreno do 3D LIGADO, o enquadramento e o relevo saem certos, com 887,94 e com a média —
+  a cota preenchida pelo DEM não é a causa.
+- No editor, os PADRÕES são Terreno do 3D **desligado** (`blueprint:vista3dTerreno` = false) e
+  Envelope **ligado**. Com `?semTerreno=1&envelope=1` o harness dá EXATAMENTE o print do usuário:
+  a caixa bege do envelope (lote × 2,8 m, sem gabarito) vista de dentro.
+- Causa 1: `enquadramentoDoModelo` não via o envelope (vem de fora do modelo, como o relevo). Estudo
+  só com lote → caixa = a cena VAZIA (20 m na origem) → câmera dentro do envelope de 346 m e
+  `far` curto → corte reto ao afastar. É o defeito "família esquecida no enquadramento" de novo.
+- Causa 2: o relevo não aparecia porque o Terreno do 3D estava desligado.
+- "Curvas no 3D": o 3D nunca desenhou as LINHAS das curvas; só a superfície (malha) do relevo.
+
+## Decisão
+
+- `enquadramentoDoModelo(model, mostrarTerreno, relevo, envelope)`: o envelope entra na caixa.
+- O hook recebe `onVersaoGerada`; o editor liga o Terreno do 3D ao gerar uma versão (quem acabou de
+  gerar relevo quer vê-lo). Desligar continua sendo escolha do usuário.
+- As LINHAS das curvas no 3D ficam como proposta, para o usuário decidir.
+
+## Estado
+
+- [x] Envelope no enquadramento + 3 testes em `__tests__/blueprint3dEnquadramento.test.ts`
+- [x] `onVersaoGerada` + teste no `useBlueprintTopografiaCotaDaOrigem.test.tsx` (chamado uma vez após gravar; erro não chama)
+- [x] Harness depois: o envelope inteiro no quadro; afastar com a roda não corta; com Terreno ligado, relevo + envelope
+- [x] Suíte 8.766 = 8.732 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` (editor e viewer) e `check-xss-sinks.sh` limpos; build ✓
+- [ ] Publicação e CI
+- [ ] Decisão do usuário: desenhar as linhas das curvas sobre o relevo no 3D

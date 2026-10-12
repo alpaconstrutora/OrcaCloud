@@ -4943,6 +4943,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     );
   };
   const preencherCotaDaOrigem = useCallback((cotaM: number, fonte: string) => preencherCotaRef.current(cotaM, fonte), []);
+  /**
+   * GEROU CURVAS → O RELEVO NO 3D (12/10/2026). O "Terreno" do 3D nasce
+   * desligado (Vista › Exibir), e o usuário que acabou de gerar relevo abria o
+   * 3D e via só o envelope, chato, sem morro (*"as curvas de nivel nao esta
+   * sendo mostradas no 3d"*). Gerar liga; desligar continua sendo escolha dele.
+   */
+  const ligarRelevo3dRef = useRef<() => void>(() => {});
+  ligarRelevo3dRef.current = () => setMostrarTerreno3d(true);
+  const aoGerarVersao = useCallback(() => ligarRelevo3dRef.current(), []);
   const topografia = useBlueprintTopografia(
     study.id,
     study.organization_id,
@@ -4950,6 +4959,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     anelDoLoteFechado,
     editor.model.georreferencia ?? null,
     preencherCotaDaOrigem,
+    aoGerarVersao,
   );
 
   /**

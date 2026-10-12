@@ -101,6 +101,15 @@ export function enquadramentoDoModelo(
    * colina de 8 m ficaria fora do quadro com a caixa centrada no pé-direito.
    */
   relevo?: MalhaDoTerreno | null,
+  /**
+   * O ENVELOPE construtivo (12/10/2026): como o relevo, vem de FORA do modelo
+   * (zona × lote) e a cena o desenha — então a caixa tem de vê-lo. Num estudo
+   * só com lote, o Terreno do 3D desligado (o padrão) e o envelope ligado (o
+   * padrão), nada mais entrava na caixa: a câmera enquadrava a cena VAZIA de
+   * 20 m na origem, ficava dentro do envelope de 346 m, e o `far` curto
+   * cortava o desenho ao afastar (print do usuário).
+   */
+  envelope?: readonly { anel: readonly { x: number; y: number }[]; baseMm: number; topoMm: number }[] | null,
 ): Enquadramento3d {
   const S = ESCALA_3D;
   const xs: number[] = [];
@@ -174,6 +183,15 @@ export function enquadramentoDoModelo(
     }
     topo = Math.max(topo, relevo.maxY);
     fundo = Math.min(fundo, relevo.minY);
+  }
+
+  for (const p of envelope ?? []) {
+    for (const q of p.anel) {
+      xs.push(q.x * S);
+      zs.push(q.y * S);
+    }
+    topo = Math.max(topo, p.topoMm * S);
+    fundo = Math.min(fundo, p.baseMm * S);
   }
 
   if (xs.length === 0) return ENQUADRAMENTO_VAZIO;

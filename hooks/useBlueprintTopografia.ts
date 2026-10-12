@@ -228,6 +228,8 @@ export function useBlueprintTopografia(
    * fica › Cota do terreno" está vazia — o editor grava (comando, Ctrl+Z desfaz).
    */
   onCotaDaOrigem?: (cotaM: number, fonte: string) => void,
+  /** 12/10/2026: uma versão nova foi gerada e gravada — o editor liga o relevo no 3D. */
+  onVersaoGerada?: () => void,
 ): Topografia {
   const [fonteCodigo, setFonteCodigo] = useState<CodigoDaFonte>('PONTOS_COTADOS');
   const [pontosCotados, setPontosCotados] = useState<PontoDeLevantamento[]>([]);
@@ -600,6 +602,7 @@ export function useBlueprintTopografia(
       setVersoes((vs) => [linha, ...vs]);
       setSelecionadaId(linha.id);
       setEquidistanciaM(equid);
+      onVersaoGerada?.();
 
       // A COTA DA ORIGEM (12/10/2026): com DEM de satélite a altitude é
       // absoluta, e o app acabou de medi-la — "Onde fica › Cota do terreno"
@@ -647,6 +650,7 @@ export function useBlueprintTopografia(
     salvarLevantamento,
     levantamentoId,
     onCotaDaOrigem,
+    onVersaoGerada,
   ]);
 
   const apagarVersao = useCallback(

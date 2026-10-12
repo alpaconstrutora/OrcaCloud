@@ -1,6 +1,6 @@
 /**
  * SÍMBOLOS 2D DO MOBILIÁRIO COM QUALIDADE DE PRANCHA (12/10/2026 — F16 do plano
- * `2026-10-11-planta-recursos-video-synaps.md`; estilo aprovado na prancha `docs/spikes/simbolos-2d/prancha.png`).
+ * `2026-10-11-planta-recursos-video-synaps.md`; estilo aprovado na prancha `docs/spikes/simbolos-2d/prancha.svg`).
  *
  * FONTE ÚNICA do desenho de cada peça: a tela, o PDF técnico (opção Mobiliário), o PDF humanizado e a miniatura
  * da Biblioteca leem daqui (via `simboloNoMundo`). O DXF não desenha mobiliário; o 3D tem os modelos glTF.

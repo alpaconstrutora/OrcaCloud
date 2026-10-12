@@ -650,7 +650,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 
 Pedido (12/10/2026): *"símbolos em planta (2D) São desenhados pelo próprio código do sistema. Como melhorar a
 qualidade dos desenhos?"* → proposta (desenho próprio: curvas, penas, nível de detalhe por escala; prancha de
-comparação antes) → *"sim"* → prancha `docs/spikes/simbolos-2d/prancha.png` (cama, sofá, mesa, vaso; hoje ×
+comparação antes) → *"sim"* → prancha `docs/spikes/simbolos-2d/prancha.svg` (cama, sofá, mesa, vaso; hoje ×
 proposta em 1:50 e 1:100) → *"Melhorou bastante. Pode alterar."*
 
 - Muda: o símbolo passa a ser uma função das MEDIDAS da peça, em mm (raio de canto, travesseiro, cuba não
@@ -683,7 +683,7 @@ proposta em 1:50 e 1:100) → *"Melhorou bastante. Pode alterar."*
   - `CONJUNTOS_DE_COMPONENTES.CONJUNTO_JANTAR`: cadeiras ao norte giro 0, ao sul 180 (estavam de costas para a
     mesa). ⚠️ Conjuntos JÁ colocados guardam a rotação antiga — no estudo "Planta 11/10/2026" as 4 cadeiras
     aparecem de costas (girar cada uma 180°, ou apagar e inserir o conjunto de novo).
-  - Conferência visual: `docs/spikes/simbolos-2d/catalogo.png` (os 24 tipos em 1:50 e 1:100, pelo módulo real).
+  - Conferência visual: `docs/spikes/simbolos-2d/catalogo.svg` (os 24 tipos em 1:50 e 1:100, pelo módulo real).
   - Prova: `__tests__/blueprintSimbolosMobiliario.test.ts` (10: dentro da caixa e sem NaN para todo tipo; menos
     linhas sem detalhe; hierarquia das penas; raio do sofá igual ao esticar e almofadas pela largura; travesseiros
     1/2; mesa = tampo de 1,40 × 0,90; vaso recortado; cadeiras do conjunto de frente; PDF 1:50 com as 3 penas e

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   afimDoLadrilho,
+  estiloDaGrade,
   algumMapaAVista,
   alternarMeioTomDoMapa,
   alternarOlhoDoMapa,
@@ -118,5 +119,19 @@ describe('estado das linhas do mapa', () => {
   it('URL com subdomínio e o ladrilho', () => {
     expect(urlDoLadrilho('RUAS', { z: 17, x: 48_772, y: 74_472 })).toMatch(/^https:\/\/[abc]\.tile\.openstreetmap\.org\/17\/48772\/74472\.png$/);
     expect(urlDoLadrilho('RELEVO', { z: 17, x: 1, y: 1 })).toMatch(/^https:\/\/[abc]\.tile\.opentopomap\.org\/17\/1\/1\.png$/);
+  });
+});
+
+describe('estiloDaGrade (12/10/2026: a grade lavava o mapa)', () => {
+  it('sem mapa: a grade de sempre (cinza claro opaco, finas a partir de 6 px)', () => {
+    expect(estiloDaGrade(false, 10)).toEqual({ cor: '#e2e8f0', corForte: '#cbd5e1', soFortes: false });
+    expect(estiloDaGrade(false, 5).soFortes).toBe(true);
+  });
+  it('sobre o mapa: escurece (ardósia translúcida, nunca branco) e as finas só com 12 px', () => {
+    const g = estiloDaGrade(true, 10);
+    expect(g.cor).toMatch(/^rgba\(15, 23, 42, 0\.\d+\)$/);
+    expect(g.corForte).toMatch(/^rgba\(15, 23, 42, 0\.\d+\)$/);
+    expect(g.soFortes).toBe(true);
+    expect(estiloDaGrade(true, 12).soFortes).toBe(false);
   });
 });

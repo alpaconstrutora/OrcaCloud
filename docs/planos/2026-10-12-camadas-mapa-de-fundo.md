@@ -87,3 +87,31 @@ FALHA nos três. A olho: a AMG-1950 corta o lado oeste do lote, a represa fica n
 SO e o córrego no NE — o mesmo arranjo do print do Contour Map Creator que o usuário mandou.
 Na primeira rodada o portão media 81% certo × 77–86% deslocado: área quase toda de uma cor
 (pasto), errar a posição dava a mesma cor — daí a seleção por contraste.
+
+---
+
+# Pedido posterior — 12/10/2026: a grade lavava o mapa
+
+O usuário mandou o print do estudo real com Mapa: ruas e Mapa: relevo ligados (*"veja como
+ficou"*). A avaliação: posição certa (rodovia, represa e rio onde devem estar; o topo das
+curvas de 895 m no morro do OpenTopoMap), mas a grade de 5 m, cinza claro OPACO, virava um
+quadriculado branco por cima das cores. Proposta: *com algum mapa à vista, a grade fica mais
+clara e fina, sem sumir*. Resposta:
+
+> sim
+
+## Decisão
+
+`estiloDaGrade(sobreMapa, passoTelaPx)` em `utils/blueprintMapaDeFundo.ts` (fonte única das
+cores da grade; as constantes `COR_GRADE`/`COR_GRADE_FORTE` do canvas saíram): sem mapa, a
+grade de sempre; sobre o mapa, ardósia translúcida (`rgba(15, 23, 42, 0.07)` / `0.16`) — a
+grade ESCURECE de leve em vez de clarear — e as linhas finas só com célula ≥ 12 px.
+
+## Estado
+
+- [x] `estiloDaGrade` + 2 testes em `__tests__/blueprintMapaDeFundo.test.ts`
+- [x] Portão de posição com a grade nova: a concordância na posição certa SUBIU
+      (ruas 80→86%, relevo 71→76%, giro 83→90%) — a grade deixou de pintar o mapa;
+      deslocado ±6 px continua ≤ 64%. Prints: só as linhas fortes, escuras e finas.
+- [x] Suíte 8.741 = 8.707 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓
+- [ ] Publicação e CI

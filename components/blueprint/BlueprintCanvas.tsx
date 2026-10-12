@@ -86,6 +86,7 @@ import {
 } from '../../utils/blueprintMedicoes';
 import {
   afimDoLadrilho,
+  estiloDaGrade,
   FONTE_DO_MAPA,
   ladrilhosDaArea,
   urlDoLadrilho,
@@ -323,8 +324,7 @@ export function instalarMeioTom(ctx: CanvasRenderingContext2D): FatorDoMeioTom {
 /** Âmbar: vão em aberto e ponta solta. Mesma cor do aviso no painel. */
 const COR_ALERTA = '#d97706';
 const COR_AMBIENTE = 'rgba(37, 99, 235, 0.08)';
-const COR_GRADE = '#e2e8f0';
-const COR_GRADE_FORTE = '#cbd5e1';
+// As cores da grade moram em `estiloDaGrade` (blueprintMapaDeFundo.ts): sobre o mapa elas mudam.
 /**
  * COTA: o NÚMERO é escuro, o TRAÇO é claro — a convenção de prancha, e a
  * correção do pedido de 28/08/2026 ("cotas está na cor cinza e dificulta a
@@ -3801,14 +3801,17 @@ export default function BlueprintCanvas({
       const nx = Math.ceil(tamanho.w / passoTela) + 1;
       const ny = Math.ceil(tamanho.h / passoTela) + 1;
       // Com a grade muito fina, só as linhas fortes — senão vira mancha cinza.
-      const soFortes = passoTela < 6;
+      // Sobre o mapa de fundo, cores e limiar próprios (`estiloDaGrade`): o cinza
+      // claro opaco virava um quadriculado branco por cima das cores.
+      const grade = estiloDaGrade(!!mapaDeFundo && mapaDeFundo.fontes.length > 0, passoTela);
+      const soFortes = grade.soFortes;
 
       ctx.lineWidth = 1;
       for (let i = 0; i <= nx; i++) {
         const indice = x0 + i;
         const forte = indice % 5 === 0;
         if (soFortes && !forte) continue;
-        ctx.strokeStyle = forte ? COR_GRADE_FORTE : COR_GRADE;
+        ctx.strokeStyle = forte ? grade.corForte : grade.cor;
         const gx = Math.round(indice * passoTela + vista.dx) + 0.5;
         ctx.beginPath();
         ctx.moveTo(gx, 0);
@@ -3819,7 +3822,7 @@ export default function BlueprintCanvas({
         const indice = y0 + i;
         const forte = indice % 5 === 0;
         if (soFortes && !forte) continue;
-        ctx.strokeStyle = forte ? COR_GRADE_FORTE : COR_GRADE;
+        ctx.strokeStyle = forte ? grade.corForte : grade.cor;
         const gy = Math.round(indice * passoTela + vista.dy) + 0.5;
         ctx.beginPath();
         ctx.moveTo(0, gy);

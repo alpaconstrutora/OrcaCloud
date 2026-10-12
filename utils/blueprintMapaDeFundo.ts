@@ -163,6 +163,20 @@ export function afimDoLadrilho(t: Ladrilho, geo: Georreferencia): { origem: Poin
   };
 }
 
+// ── A grade por cima do mapa (12/10/2026) ───────────────────────────────────
+
+/**
+ * Cores e densidade da grade. Sem mapa, a de sempre: cinza claro opaco no
+ * fundo branco. COM mapa, aquele cinza claro vira um quadriculado BRANCO sobre
+ * as cores e lava o mapa inteiro (print do usuário, 12/10/2026) — então a
+ * grade passa a ESCURECER de leve (ardósia translúcida), e as linhas finas só
+ * entram com folga (célula ≥ 12 px), senão a trama cobre o mapa.
+ */
+export function estiloDaGrade(sobreMapa: boolean, passoTelaPx: number): { cor: string; corForte: string; soFortes: boolean } {
+  if (!sobreMapa) return { cor: '#e2e8f0', corForte: '#cbd5e1', soFortes: passoTelaPx < 6 };
+  return { cor: 'rgba(15, 23, 42, 0.07)', corForte: 'rgba(15, 23, 42, 0.16)', soFortes: passoTelaPx < 12 };
+}
+
 export function urlDoLadrilho(f: FonteDoMapa, t: Ladrilho): string {
   const d = FONTE_DO_MAPA[f];
   const s = d.subdominios[(t.x + t.y) % d.subdominios.length];

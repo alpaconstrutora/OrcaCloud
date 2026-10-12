@@ -192,7 +192,7 @@ export default function LancarNoCondominioSheet({ open, onClose, payables, compe
                     {payables.length} título{payables.length !== 1 ? 's' : ''} · {dinheiro(totalGeral)} · competência {rotuloCompetencia(competencia)}
                 </SheetDescription>
             </SheetHeader>
-            <SheetPanel>
+            <SheetPanel className="p-6">
                 <div className="space-y-4">
                     <p className="text-xs text-gray-400">
                         As despesas vão pelos títulos marcados no Fechamento, não por um novo recorte de data — a

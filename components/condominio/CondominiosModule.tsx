@@ -436,7 +436,7 @@ const CondominiosModule: React.FC = () => {
                         Escolha quais viram condomínio. Nada é copiado — é o mesmo empreendimento, agora também operado.
                     </SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {disponiveis.length === 0 ? (
                         <div className="text-center py-12">
                             <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />

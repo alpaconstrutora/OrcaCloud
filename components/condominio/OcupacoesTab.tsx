@@ -1049,7 +1049,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                     <SheetTitle>Nova ocupação</SheetTitle>
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Unidade</label>

@@ -444,7 +444,7 @@ const DocumentosTab: React.FC<Props> = ({ empreendimento }) => {
                     <SheetTitle>Novo documento</SheetTitle>
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     <div className="space-y-4">
                         {/* Enviar × apontar: são dois documentos diferentes do ponto
                             de vista de quem administra (um é nosso, o outro mora

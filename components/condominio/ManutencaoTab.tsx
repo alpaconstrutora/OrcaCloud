@@ -845,7 +845,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     <SheetTitle>Criar plano de manutenção</SheetTitle>
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     {propostos.length === 0 ? (
                         <div className="text-center py-12">
                             <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -925,7 +925,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     <SheetTitle>Novo item do plano</SheetTitle>
                     <SheetDescription>{plano?.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Sistema predial</label>
@@ -1021,7 +1021,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     <SheetTitle>Nova ordem de serviço</SheetTitle>
                     <SheetDescription>{empreendimento.name}</SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="p-6">
                     <div className="space-y-4">
                         <div>
                             <label className="text-xs font-semibold text-slate-500">Tipo</label>

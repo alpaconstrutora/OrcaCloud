@@ -37,6 +37,16 @@ import {
   type EstadosDasCamadas,
 } from '../../utils/blueprintCamadasPorDisciplina';
 import { usePersistedState } from '../ui/TableUtils';
+import {
+  algumMapaAVista,
+  alternarMeioTomDoMapa,
+  alternarOlhoDoMapa,
+  FONTE_DO_MAPA,
+  FONTES_DO_MAPA,
+  MAPA_OCULTO,
+  type EstadosDoMapa,
+  type FonteDoMapa,
+} from '../../utils/blueprintMapaDeFundo';
 
 interface Props {
   estados: EstadosDasCamadas;
@@ -49,6 +59,13 @@ interface Props {
   onIsolar: (alvo: AlvoDeCamada) => void;
   /** Volta ao estado de antes do isolamento. */
   onReexibir: () => void;
+  /**
+   * 12/10/2026: o MAPA DE FUNDO — *"camada terreno trazer as duas camadas
+   * (relevo e ruas)"*. Com isto o Terreno expande em Mapa: ruas e Mapa: relevo.
+   * Estado próprio (não é camada de peça): a linha do Terreno continua mandando
+   * só no lote e na topografia. `motivoDesligado` = sem "Onde fica".
+   */
+  mapa?: { estados: EstadosDoMapa; onMudar: (e: EstadosDoMapa) => void; motivoDesligado: string | null };
 }
 
 const TEXTO_DO_ESTADO: Record<EstadoDaCamada | 'MISTO', string> = {
@@ -70,11 +87,14 @@ function BotaoDaLinha({
   pressionado,
   onClick,
   children,
+  desligado,
 }: {
   titulo: string;
   pressionado?: boolean | 'mixed';
   onClick: () => void;
   children: React.ReactNode;
+  /** O motivo, quando desligado — vira o `title` (botão desligado sempre diz o porquê). */
+  desligado?: string | null;
 }) {
   return (
     <button
@@ -82,8 +102,9 @@ function BotaoDaLinha({
       onClick={onClick}
       aria-pressed={pressionado}
       aria-label={titulo}
-      title={titulo}
-      className="shrink-0 rounded-[6px] p-1 transition-colors hover:bg-slate-100"
+      title={desligado ?? titulo}
+      disabled={!!desligado}
+      className="shrink-0 rounded-[6px] p-1 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
     >
       {children}
     </button>
@@ -174,16 +195,53 @@ function Linha({ alvo, rotulo, ajuda, cor, estado, quantidade, isolado, nivel, e
   );
 }
 
-export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada, onBaseAtenuada, onIsolar, onReexibir }: Props) {
+/**
+ * Uma linha do mapa de fundo: olho e meio-tom como as camadas, sem contagem
+ * (não há peça) e sem Isolar (fundo não é disciplina — fica um vão do tamanho
+ * do botão para as colunas alinharem com as outras linhas).
+ */
+function LinhaDoMapa({ fonte, estado, motivoDesligado, onOlho, onMeioTom }: { fonte: FonteDoMapa; estado: EstadoDaCamada; motivoDesligado: string | null; onOlho: () => void; onMeioTom: () => void }) {
+  const { rotulo, ajuda } = FONTE_DO_MAPA[fonte];
+  const oculta = estado === 'OCULTA';
+  return (
+    <li data-mapa={fonte} data-estado={estado} className="flex items-center gap-1 py-0.5 pl-6 pr-1">
+      <span
+        className={`min-w-0 flex-1 truncate text-sm ${TEXTO_DO_ESTADO[estado]} ${motivoDesligado ? 'opacity-60' : ''}`}
+        title={`${rotulo} — ${ROTULO_DO_ESTADO[estado]}. ${ajuda}${motivoDesligado ? ` ${motivoDesligado}` : ''}`}
+      >
+        {rotulo}
+      </span>
+      <span className="shrink-0 rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-400" title="Mapa de fundo: não tem peças">
+        —
+      </span>
+      <BotaoDaLinha
+        titulo={estado === 'ATENUADA' ? `Tirar ${rotulo} do meio-tom` : `${rotulo} em meio-tom (claro, por baixo do desenho)`}
+        pressionado={estado === 'ATENUADA'}
+        onClick={onMeioTom}
+        desligado={motivoDesligado}
+      >
+        <Contrast className={`h-3.5 w-3.5 ${estado === 'ATENUADA' ? 'text-blue-600' : 'text-slate-400'}`} />
+      </BotaoDaLinha>
+      <BotaoDaLinha titulo={oculta ? `Exibir ${rotulo}` : `Ocultar ${rotulo}`} pressionado={!oculta} onClick={onOlho} desligado={motivoDesligado}>
+        {oculta ? <EyeOff className="h-3.5 w-3.5 text-slate-400" /> : <Eye className="h-3.5 w-3.5 text-blue-600" />}
+      </BotaoDaLinha>
+      <span className="w-[22px] shrink-0" aria-hidden="true" />
+    </li>
+  );
+}
+
+export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada, onBaseAtenuada, onIsolar, onReexibir, mapa }: Props) {
   // Grupos expandidos: preferência de leitura, como o aberto/fechado das seções.
   const [expandidos, setExpandidos] = usePersistedState<Record<string, boolean>>('blueprint:camadasExpandidas', {});
   const isolado = alvoIsolado(estados, { baseAtenuada });
   const tudoVisivel = estadosIguais(estados, ESTADOS_PADRAO);
-  const tudoOculto = estadosIguais(estados, definirTodas('OCULTA'));
+  // "Ocultar todas" também esconde o mapa: ocultar tudo e o mapa ficar seria defeito.
+  const tudoOculto = estadosIguais(estados, definirTodas('OCULTA')) && !(mapa && algumMapaAVista(mapa.estados));
 
-  const linhaDaCamada = (c: Camada, g: DefinicaoDoGrupo, nivel: 0 | 1) => (
+  const linhaDaCamada = (c: Camada, g: DefinicaoDoGrupo, nivel: 0 | 1, expansor?: LinhaProps['expansor']) => (
     <Linha
       key={c}
+      expansor={expansor}
       alvo={c}
       rotulo={nivel === 0 ? g.rotulo : ROTULO_DA_CAMADA[c]}
       ajuda={AJUDA_DA_CAMADA[c]}
@@ -206,14 +264,17 @@ export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada
           type="button"
           onClick={() => onMudar(ESTADOS_PADRAO)}
           disabled={tudoVisivel}
-          title={tudoVisivel ? 'Todas as camadas já estão visíveis' : 'Mostrar todas as camadas'}
+          title={tudoVisivel ? 'Todas as camadas já estão visíveis' : 'Mostrar todas as camadas (o mapa de fundo não liga sozinho: ele baixa imagens da internet)'}
           className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Eye className="h-3 w-3" /> Mostrar todas
         </button>
         <button
           type="button"
-          onClick={() => onMudar(definirTodas('OCULTA'))}
+          onClick={() => {
+            onMudar(definirTodas('OCULTA'));
+            if (mapa && algumMapaAVista(mapa.estados)) mapa.onMudar(MAPA_OCULTO);
+          }}
           disabled={tudoOculto}
           title={tudoOculto ? 'Todas as camadas já estão ocultas' : 'Ocultar todas as camadas (depois ligue só as que quer comparar)'}
           className="inline-flex items-center gap-1 rounded-[6px] border border-slate-300 px-1.5 py-0.5 text-xs text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -224,6 +285,31 @@ export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada
 
       <ul className="divide-y divide-slate-100" aria-label="Camadas por disciplina">
         {GRUPOS_DE_CAMADAS.map((g) => {
+          // TERRENO com o mapa: a linha é a MESMA de hoje (lote e topografia), com a
+          // seta que abre as duas linhas do mapa de fundo — independentes dela.
+          if (g.id === 'TERRENO' && mapa && g.camadas.length === 1) {
+            const aberto = expandidos[g.id] ?? false;
+            const idDoCorpo = 'camadas-terreno';
+            return (
+              <li key={g.id} className="list-none">
+                <ul>{linhaDaCamada(g.camadas[0], g, 0, { aberto, idDoCorpo, onAlternar: () => setExpandidos((e) => ({ ...e, [g.id]: !aberto })) })}</ul>
+                {aberto && (
+                  <ul id={idDoCorpo} className="ml-4 border-l border-slate-200" aria-label="Mapa de fundo">
+                    {FONTES_DO_MAPA.map((f) => (
+                      <LinhaDoMapa
+                        key={f}
+                        fonte={f}
+                        estado={mapa.estados[f]}
+                        motivoDesligado={mapa.motivoDesligado}
+                        onOlho={() => mapa.onMudar(alternarOlhoDoMapa(mapa.estados, f))}
+                        onMeioTom={() => mapa.onMudar(alternarMeioTomDoMapa(mapa.estados, f))}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          }
           if (g.camadas.length === 1) return linhaDaCamada(g.camadas[0], g, 0);
           const aberto = expandidos[g.id] ?? false;
           const idDoCorpo = `camadas-${g.id.toLowerCase()}`;

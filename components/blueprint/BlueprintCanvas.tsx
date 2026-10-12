@@ -85,6 +85,15 @@ import {
   type TipoMedida,
 } from '../../utils/blueprintMedicoes';
 import {
+  afimDoLadrilho,
+  FONTE_DO_MAPA,
+  ladrilhosDaArea,
+  urlDoLadrilho,
+  zoomDoLadrilho,
+  type FonteDoMapa,
+} from '../../utils/blueprintMapaDeFundo';
+import type { Georreferencia } from '../../utils/blueprintKernel';
+import {
   modeloParaPixel,
   pixelParaModelo,
   type PontoPx,
@@ -1132,6 +1141,11 @@ interface Props {
   /** F9 (10/10/2026): o IFC de referência cortado na altura da planta — linhas de fundo, em mm do modelo. */
   referenciasEmPlanta?: readonly { a: { x: number; y: number }; b: { x: number; y: number } }[];
   /**
+   * 12/10/2026: o MAPA DE FUNDO (camadas Mapa: ruas / Mapa: relevo do Terreno) —
+   * ladrilhos ao vivo, postos pela georreferência. Ausente ou sem fontes = sem mapa.
+   */
+  mapaDeFundo?: { georreferencia: Georreferencia; fontes: readonly { fonte: FonteDoMapa; opacidade: number }[] } | null;
+  /**
    * Identidade da prancha ATIVA. Quando ela muda, a vista se enquadra na
    * imagem — e só então.
    *
@@ -1671,6 +1685,7 @@ export default function BlueprintCanvas({
   mostrarCamadasParedes = false,
   fundo = null,
   referenciasEmPlanta,
+  mapaDeFundo = null,
   onMoveVertex,
   onAddLimite,
   kindDaDivisa = 'DIVISA',
@@ -2467,6 +2482,31 @@ export default function BlueprintCanvas({
     }),
     [vista],
   );
+
+  /**
+   * MAPA DE FUNDO (12/10/2026): cada ladrilho é uma imagem baixada uma vez e
+   * guardada aqui; quando ela chega, o contador força um redesenho. Erro fica
+   * marcado para não pedir de novo a cada quadro. `crossOrigin` anônimo: os dois
+   * servidores mandam `Access-Control-Allow-Origin: *` (medido), então o canvas
+   * não fica "contaminado" — uma leitura de pixel dele continuaria possível.
+   */
+  const ladrilhos = useRef(new Map<string, HTMLImageElement | 'erro'>());
+  const [ladrilhosCarregados, setLadrilhosCarregados] = useState(0);
+  const imagemDoLadrilho = useCallback((url: string): HTMLImageElement | null => {
+    const c = ladrilhos.current;
+    const ja = c.get(url);
+    if (ja === 'erro') return null;
+    if (ja) return ja.complete && ja.naturalWidth > 0 ? ja : null;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => setLadrilhosCarregados((n) => n + 1);
+    img.onerror = () => c.set(url, 'erro');
+    img.src = url;
+    c.set(url, img);
+    // Teto do cache: os mais antigos saem (a ordem do Map é a de inserção).
+    while (c.size > 400) c.delete(c.keys().next().value!);
+    return null;
+  }, []);
 
   /**
    * Os pontos de encaixe das peças de CONCRETO do nível, prontos.
@@ -3641,6 +3681,37 @@ export default function BlueprintCanvas({
     ctx.fillRect(0, 0, tamanho.w, tamanho.h);
     // Simbologia e textos crescem com o zoom — ver `fatorDeAnotacao`.
     const fz = fatorDeAnotacao(vista.escala);
+
+    // ── Mapa de fundo (12/10/2026) ──────────────────────────────────────────
+    //
+    // O primeiro de tudo — debaixo até da planta de fundo e da grade. Cada
+    // ladrilho entra pela mesma composição da planta de fundo: a afim pixel do
+    // ladrilho → mm (`afimDoLadrilho`, Mercator + "Onde fica" + giro do norte)
+    // seguida de `paraTela`. A área pedida são os QUATRO cantos da tela: com o
+    // norte girado, ela não é um retângulo alinhado no mundo.
+    if (mapaDeFundo && mapaDeFundo.fontes.length > 0) {
+      const g = mapaDeFundo.georreferencia;
+      const cantosDaTela = [paraMundo(0, 0), paraMundo(tamanho.w, 0), paraMundo(tamanho.w, tamanho.h), paraMundo(0, tamanho.h)];
+      for (const { fonte, opacidade } of mapaDeFundo.fontes) {
+        const z = zoomDoLadrilho(vista.escala, g.latitude, FONTE_DO_MAPA[fonte].maxNativeZoom);
+        for (const t of ladrilhosDaArea(cantosDaTela, g, z)) {
+          const img = imagemDoLadrilho(urlDoLadrilho(fonte, t));
+          if (!img) continue;
+          const a = afimDoLadrilho(t, g);
+          const o = paraTela(a.origem);
+          const ex = paraTela({ x: a.origem.x + a.porPxX.x, y: a.origem.y + a.porPxX.y });
+          const ey = paraTela({ x: a.origem.x + a.porPxY.x, y: a.origem.y + a.porPxY.y });
+          ctx.save();
+          ctx.globalAlpha = opacidade;
+          ctx.setTransform((ex.x - o.x) * dpr, (ex.y - o.y) * dpr, (ey.x - o.x) * dpr, (ey.y - o.y) * dpr, o.x * dpr, o.y * dpr);
+          // Meio pixel a mais de cada lado do ladrilho: sem ele a junta entre dois
+          // vizinhos aparece como um fio branco no zoom em que a escala não é inteira.
+          ctx.drawImage(img, 0, 0, 256, 256, -0.25, -0.25, 256.5, 256.5);
+          ctx.restore();
+        }
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
 
     // ── Planta de fundo ──────────────────────────────────────────────────────
     //
@@ -9535,6 +9606,9 @@ export default function BlueprintCanvas({
     mostrarMedidasLoteMassa,
     fundo,
     referenciasEmPlanta,
+    mapaDeFundo,
+    ladrilhosCarregados,
+    imagemDoLadrilho,
     calibP1,
     medicoesDoNivel,
     limitesDoNivel,
@@ -11487,6 +11561,13 @@ export default function BlueprintCanvas({
         onContextMenu={(e) => e.preventDefault()}
       />
 
+      {/* Atribuição exigida pela licença dos mapas, só enquanto um deles está à vista. No
+          canto de CIMA: embaixo a barra de dicas do canvas ocupa a largura e a cobria. */}
+      {mapaDeFundo && mapaDeFundo.fontes.length > 0 && (
+        <div className="pointer-events-none absolute right-2 top-2 rounded-[6px] bg-white/85 px-1.5 py-0.5 text-[10px] text-slate-500" data-testid="atribuicao-do-mapa">
+          {mapaDeFundo.fontes.map((f) => FONTE_DO_MAPA[f.fonte].atribuicaoTexto).join(' · ')}
+        </div>
+      )}
       <div className="pointer-events-none absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
         {tool === 'terreno' || ehDivisa
           ? inicio

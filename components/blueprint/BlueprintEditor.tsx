@@ -545,6 +545,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
+import { FONTES_DO_MAPA, MAPA_OCULTO, OPACIDADE_DO_MAPA, sanearEstadosDoMapa, type EstadosDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, conflitoVisivel, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
@@ -3245,6 +3246,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [padraoDasCamadas] = useState(estadosIniciaisDasCamadas);
   const [camadasSalvas, setCamadasSalvas] = usePersistedState<EstadosDasCamadas>('blueprint:camadasPorDisciplina:v1', padraoDasCamadas);
   const camadas = useMemo(() => sanearEstados(camadasSalvas), [camadasSalvas]);
+  /**
+   * MAPA DE FUNDO (12/10/2026): *"camada terreno trazer as duas camadas (relevo
+   * e ruas)"*. Estado próprio, por navegador como as camadas; oculto por padrão.
+   */
+  const [mapaSalvo, setMapaSalvo] = usePersistedState<EstadosDoMapa>('blueprint:mapaDeFundo:v1', MAPA_OCULTO);
+  const estadosDoMapa = useMemo(() => sanearEstadosDoMapa(mapaSalvo), [mapaSalvo]);
+  const mapaDeFundo = useMemo(() => {
+    const g = editor.model.georreferencia;
+    const fontes = FONTES_DO_MAPA.filter((f) => estadosDoMapa[f] !== 'OCULTA').map((f) => ({ fonte: f, opacidade: OPACIDADE_DO_MAPA[estadosDoMapa[f]] }));
+    return g && fontes.length > 0 ? { georreferencia: g, fontes } : null;
+  }, [editor.model.georreferencia, estadosDoMapa]);
   const classificacaoDasPecas = useMemo(() => classificarPecas(editor.model), [editor.model]);
   const idsDasCamadas = useMemo(() => idsPorEstado(classificacaoDasPecas, camadas), [classificacaoDasPecas, camadas]);
   /** Isolar deixa a arquitetura em meio-tom (preferência do navegador, ligada por padrão). */
@@ -15040,6 +15052,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 <BlueprintCanvas
                   pressoesDaAgua={pressoesDaAgua}
                   referenciasEmPlanta={referenciasEmPlanta.length ? referenciasEmPlanta : undefined}
+                  mapaDeFundo={mapaDeFundo}
                   marcasDoCalculo={[...(coberturaDeIncendio ? [...marcasDoCalculoIncendio, ...marcasDaCobertura(coberturaDeIncendio)] : marcasDoCalculoIncendio), ...marcasDaClima]}
                   encaixesAtivos={encaixesAtivos}
                   mostrarCircuitos={ajusteDaVista ? false : mostrarCircuitos && eletricaAVista}
@@ -15474,6 +15487,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onBaseAtenuada={setIsolarComBaseAtenuada}
                 onIsolar={isolarCamada}
                 onReexibir={reexibirCamadas}
+                mapa={{
+                  estados: estadosDoMapa,
+                  onMudar: setMapaSalvo,
+                  motivoDesligado: editor.model.georreferencia
+                    ? null
+                    : 'Sem "Onde fica": informe a latitude e a longitude em Terreno › Dados do lote (ou desenhe o lote no mapa) para o mapa saber onde o desenho está.',
+                }}
               />
             </SecaoAccordion>
           )}

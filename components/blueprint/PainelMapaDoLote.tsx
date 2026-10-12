@@ -29,6 +29,7 @@ import {
   retanguloGeoPorCantos,
   type AreaParaLote,
 } from '../../utils/blueprintMapaDoLote';
+import { FONTE_DO_MAPA, type FonteDoMapa } from '../../utils/blueprintMapaDeFundo';
 
 const ROTULO = 'text-xs font-semibold text-slate-500';
 const CAMPO =
@@ -37,7 +38,7 @@ const BOTAO_SECUNDARIO =
   'flex items-center gap-1.5 h-9 px-3 rounded-[6px] border border-gray-200 bg-white text-[13px] font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
 type Modo = 'POLIGONO' | 'RETANGULO';
-type Fundo = 'RUAS' | 'RELEVO';
+type Fundo = FonteDoMapa;
 
 const MODOS: TabsBarItem<Modo>[] = [
   { id: 'POLIGONO', label: 'Contorno' },
@@ -49,23 +50,12 @@ const FUNDOS: TabsBarItem<Fundo>[] = [
 ];
 
 /**
- * `maxNativeZoom` é até onde o servidor tem ladrilho; acima disso o Leaflet
- * AMPLIA o do último nível. Sem isso, trocar para Relevo (que só vai ao 17)
- * com o mapa no 18 fazia o mapa recuar sozinho — e o contorno encolhia na tela.
+ * As fontes (URL, atribuição, zoom nativo) moram em `blueprintMapaDeFundo.ts`,
+ * as mesmas das camadas de mapa da planta. `maxNativeZoom` é até onde o
+ * servidor tem ladrilho; acima disso o Leaflet AMPLIA o do último nível. Sem
+ * isso, trocar para Relevo (que só vai ao 17) com o mapa no 18 fazia o mapa
+ * recuar sozinho — e o contorno encolhia na tela.
  */
-const CAMADAS: Record<Fundo, { url: string; atribuicao: string; maxNativeZoom: number }> = {
-  RUAS: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    atribuicao: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxNativeZoom: 19,
-  },
-  RELEVO: {
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    atribuicao:
-      'Mapa: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM · Estilo: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
-    maxNativeZoom: 17,
-  },
-};
 const ZOOM_MAXIMO = 19;
 
 /** Centro do Brasil, quando o estudo ainda não diz onde fica. */
@@ -207,8 +197,10 @@ export default function PainelMapaDoLote({
     const lf = L.current;
     if (!mapaPronto || !m || !lf) return;
     camadaDeFundo.current?.remove();
-    const c = CAMADAS[fundo];
-    camadaDeFundo.current = lf.tileLayer(c.url, { attribution: c.atribuicao, maxNativeZoom: c.maxNativeZoom, maxZoom: ZOOM_MAXIMO }).addTo(m);
+    const c = FONTE_DO_MAPA[fundo];
+    camadaDeFundo.current = lf
+      .tileLayer(c.url, { attribution: c.atribuicaoHtml, subdomains: [...c.subdominios], maxNativeZoom: c.maxNativeZoom, maxZoom: ZOOM_MAXIMO })
+      .addTo(m);
   }, [fundo, mapaPronto]);
 
   // O desenho: contorno (fechado na prévia), vértices, a origem já informada.

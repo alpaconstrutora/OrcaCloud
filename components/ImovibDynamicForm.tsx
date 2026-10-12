@@ -3,6 +3,7 @@ import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Calendar, Percent, Save, TrendingUp } from 'lucide-react';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import { useImovibMath } from '../hooks/useImovibMath';
 
 interface ImovibDynamicFormProps {
     study: ImovibStudy;
@@ -14,6 +15,10 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
 
     // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
     const D = IMOVIB_DEFAULTS;
+    // No modo Completo com rubricas, imposto e corretagem vêm do CAPEX
+    // (categorias 5 e 7) — estes campos não entram no cálculo.
+    const { capexRubricasAtivas } = useImovibMath(study);
+    const motivoDeducoesForaDoCalculo = 'No modo Completo do Orçamento (CAPEX), imposto e corretagem vêm das rubricas das categorias 5 e 7. Este campo não entra no cálculo.';
     const initial = (v: number | null | undefined, padrao: number) => String(v ?? padrao);
 
     const [constructionDurationMonths, setConstructionDurationMonths] = useState(initial(study.construction_duration_months, D.construction_duration_months));
@@ -170,7 +175,9 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 value={taxRate}
                                 onChange={(e) => setTaxRate(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors text-red-700"
+                                disabled={capexRubricasAtivas}
+                                title={capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
+                                className="disabled:opacity-50 disabled:cursor-not-allowed w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors text-red-700"
                             />
                         </div>
                         <div>
@@ -181,11 +188,15 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 value={brokerageFee}
                                 onChange={(e) => setBrokerageFee(e.target.value)}
                                 onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors text-red-700"
+                                disabled={capexRubricasAtivas}
+                                title={capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
+                                className="disabled:opacity-50 disabled:cursor-not-allowed w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm font-medium transition-colors text-red-700"
                             />
                         </div>
-                        <div className="col-span-2 text-xs text-gray-500 font-medium px-1 mt-1">
-                            Calculadas como % direto sobre o VGV da receita bruta mensal de vendas.
+                        <div className={`col-span-2 text-xs font-medium px-1 mt-1 ${capexRubricasAtivas ? 'text-amber-700' : 'text-gray-500'}`}>
+                            {capexRubricasAtivas
+                                ? motivoDeducoesForaDoCalculo
+                                : 'Calculadas como % direto sobre o VGV da receita bruta mensal de vendas.'}
                         </div>
                     </div>
                 </div>

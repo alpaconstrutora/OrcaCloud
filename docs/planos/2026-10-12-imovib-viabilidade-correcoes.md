@@ -262,7 +262,22 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
   - [x] **1.8** — `ImovibCapexForm` usa `math.totalBlockArea`, que considera os pavimentos.
   - Estudo-base sem regressão: VPL 1,46 mi e TIR 20,81%, iguais ao motor antigo.
   - **REGRA #1 nos arquivos tocados** (antecipa o item 5.7 nesses arquivos): `check-ui-standard.sh` dá exit 0 em CashFlow, ExecutiveSummary, DynamicForm, CapexForm, Sensitivity, Funding, DetailView e no banner novo. Correções: §7 em `<td>` (CashFlow, ExecutiveSummary, CapexForm), §8 na pílula "Salvando…" (DynamicForm) e §14 `window.confirm` → `useConfirm` (CapexForm). O `alert`/`prompt` do CapexForm continua no 5.7.
-- [ ] **Fase 2 — 0 de 6:** 2.1 · 2.2 · 2.3 (D3) · 2.4 · 2.5 · 2.6 (D2)
+- [ ] **Fase 2 — código pronto, falta aplicar as 2 migrations e conferir no navegador** (2026-10-12):
+  - **Decisões:** D2 — apagar duplicatas com reversão; D3 — **regime normal** (RET vai a 0 nos estudos de teste; o template de estudos novos também traz RET 0 e o normal 6,73%).
+  - **Ordem obrigatória:** aplicar `aplicar_20271012100000` e `aplicar_20271012100100` ANTES de publicar o código, porque o serviço passa a ler `base` e `capex_seeded_at` (sem a migration, dá 42703).
+  - [ ] **2.1** — `aplicar_20271012100000_imovib_capex_base.sql`: coluna `base` + CHECK + backfill pela categoria. O motor também deduz a base pela categoria (`baseDaRubrica`) quando ela vem vazia.
+  - [x] **2.2** — Motor soma as rubricas: terreno no mês 1; obra ao longo da obra (financiável); % de VGV deduzido junto com a receita; valor fixo de VGV ao longo das vendas. Com rubricas, imposto e corretagem da Dinâmica não entram. O resultado traz `capexRubricas` e `capexValorPorRubrica`. 7 testes novos, incluindo um calculado à mão. A listagem passa a carregar as rubricas em lote (4 consultas fixas, antes 3), para bater com o Resumo.
+  - [x] **2.3** — Dinâmica: imposto e corretagem desabilitados no modo Completo, com o motivo no `title` e no texto. Template sem "Juros SFH". Aviso na tela quando há mais de um imposto com valor.
+  - [x] **2.4** — CAPEX: card "Rubricas no cálculo" (terreno/obra/VGV/total) e colunas **Base** (editável) e **No cálculo** (R$ do motor), com total por categoria.
+  - [x] **2.5** — PDF "Master Budget": premissa com a base certa ("3% do terreno", e não "% do VGV" em tudo), R$ do motor por rubrica e total.
+  - [ ] **2.6** — Código: `imovibService.seedCapexTemplate` idempotente (upsert com `ignoreDuplicates` na trava única + `capex_seeded_at`); Premissas deixou de gravar `capex_seeded_at`. Banco: `aplicar_20271012100100_imovib_capex_dedup_unique.sql`. A cópia que fica é a criada PRIMEIRO, porque nenhuma rubrica foi editada depois de criada e nos 3 pares divergentes o valor informado está na mais antiga.
+  - **Ensaio no banco real** com `ROLLBACK` (as duas migrations juntas):
+    - 218 → 105 linhas, 0 duplicatas, 0 "Juros", 0 RET com valor, 0 base nula;
+    - base: obra 57, terreno 16, vgv 32;
+    - reversão com 117 linhas;
+    - 4 estudos com `capex_seeded_at`;
+    - Bruninho mantém ITBI 4% e comissão do terreno 4%.
+    - Depois do `ROLLBACK`, o banco continuou com 218 linhas e sem a coluna `base`.
 - [ ] **Fase 3 — 0 de 4:** 3.1 · 3.2 · 3.3 · 3.4
 - [ ] **Fase 4 — 0 de 7:** 4.1 · 4.2 (D1) · 4.3 · 4.4 · 4.5 · 4.6 · 4.7
 - [ ] **Fase 5 — 0 de 7:** 5.1 · 5.2 · 5.3 · 5.4 · 5.5 · 5.6 · 5.7

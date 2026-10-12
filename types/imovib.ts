@@ -437,9 +437,18 @@ export interface ImovibCapexItem {
     name: string;
     value_type: 'currency' | 'percent';
     value: number;
+    /**
+     * Sobre o que o % incide e quando a saída acontece (migration
+     * aplicar_20271012100000): 'terreno' → mês 1; 'obra' → ao longo da obra;
+     * 'vgv' → junto com a receita. Opcional para ler linha anterior à coluna —
+     * `baseDaRubrica` (hooks/useImovibMath.ts) deduz pela categoria.
+     */
+    base?: ImovibCapexBase;
     created_at: string;
     updated_at: string;
 }
+
+export type ImovibCapexBase = 'vgv' | 'obra' | 'terreno';
 
 export type ImovibCapexItemInsert = Omit<ImovibCapexItem, 'id' | 'created_at' | 'updated_at'>;
 
@@ -505,6 +514,8 @@ export interface ImovibStudy {
     capex_mode?: 'simplified' | 'detailed';
     capex_simplified_cost_sqm?: number;
     capex_simplified_area_sqm?: number;
+    /** Quando o template de rubricas do CAPEX foi aplicado. Preenchido = nunca reaplicar. */
+    capex_seeded_at?: string | null;
     terreno_frente?: number;
     terreno_fundos?: number;
     terreno_lateral_direita?: number;

@@ -4,7 +4,8 @@ import { imovibService } from '../services/imovibService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { Calculator, ChevronRight, Activity, Leaf, Plus, LayoutList, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
-import { useImovibMath } from '../hooks/useImovibMath';
+import { useImovibMath, baseDaRubrica } from '../hooks/useImovibMath';
+import type { ImovibCapexBase } from '../types';
 import { useConfirm } from './ui/confirm';
 
 const parseRegVal = (v: string | undefined): number | null => {
@@ -53,17 +54,26 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '6. Legais e Incorporação', name: 'EIA/RIMA ou EIV', value_type: 'currency', value: 0 },
     { category: '6. Legais e Incorporação', name: 'Outorga Onerosa', value_type: 'currency', value: 0 },
 
-    // 7. Impostos Consolidados
-    { category: '7. Impostos', name: 'RET (Regime Especial)', value_type: 'percent', value: 4 },
+    // 7. Impostos Consolidados — RET e regime normal são ALTERNATIVOS: só um
+    // com valor. Padrão = regime normal (decisão D3, 2026-10-12); para usar o
+    // RET, zere o normal e preencha o RET.
+    { category: '7. Impostos', name: 'RET (Regime Especial)', value_type: 'percent', value: 0 },
     { category: '7. Impostos', name: 'PIS/COFINS/IRPJ/CSLL (Normal)', value_type: 'percent', value: 6.73 },
 
-    // 8. Despesas Financeiras
+    // 8. Despesas Financeiras. Sem rubrica de juros: os juros vêm do
+    // financiamento (Receitas & Capital) e contariam duas vezes.
     { category: '8. Financeiras', name: 'Taxas de Estruturação (Plano Empresário)', value_type: 'percent', value: 1.5 },
-    { category: '8. Financeiras', name: 'Juros SFH / Construção', value_type: 'percent', value: 0 },
 
     // 9. Contingência
     { category: '9. Contingência', name: 'Fundo de Reserva', value_type: 'percent', value: 2 },
 ];
+
+// Base da rubrica: sobre o que o % incide e quando a saída acontece no fluxo.
+const BASE_LABEL: Record<ImovibCapexBase, string> = {
+    terreno: 'Terreno (mês 1)',
+    obra: 'Obra (ao longo da obra)',
+    vgv: 'VGV (com a receita)',
+};
 
 const fmt = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
@@ -126,38 +136,36 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
     const categories = useMemo(() => Object.keys(groupedItems).sort(), [groupedItems]);
 
+    // Valor de cada rubrica NO CÁLCULO vem do motor (não recalcular aqui: com
+    // inflação a rubrica de base vgv é corrigida mês a mês).
+    const valorNoCalculo = math.capexValorPorRubrica;
+    const totalDaCategoria = (cat: string) =>
+        (groupedItems[cat] || []).reduce((acc, i) => acc + (valorNoCalculo[i.id] || 0), 0);
+
+    // RET e regime normal são alternativos — os dois com valor = imposto em dobro.
+    const impostosComValor = items.filter(i => i.category.startsWith('7.') && i.value_type === 'percent' && (i.value || 0) > 0);
+
     useEffect(() => {
         const fetchOrSeed = async () => {
             setInitializing(true);
             try {
-                const { data: existing, error } = await (await import('../lib/supabase')).supabase
-                    .from('imovib_capex_items')
-                    .select('id, study_id, category, subcategory, name, value_type, value, created_at, updated_at')
-                    .eq('study_id', study.id)
-                    .order('created_at', { ascending: true });
-
-                if (error) throw error;
-
-                if (existing && existing.length > 0) {
-                    setItems(existing);
-                    const uniqueCats = Array.from(new Set(existing.map((i: any) => i.category))).sort() as string[];
-                    setExpandedCategories(uniqueCats.slice(0, 2));
-                } else {
-                    const toInsert: ImovibCapexItemInsert[] = DEFAULT_CAPEX_TEMPLATE.map(t => ({
-                        study_id: study.id,
-                        category: t.category,
-                        name: t.name,
-                        value_type: t.value_type as 'currency' | 'percent',
-                        value: t.value
-                    }));
-                    const inserted = await imovibService.upsertCapexItems(toInsert);
-                    setItems(inserted);
-                    if (inserted.length > 0) {
-                        const uniqueCats = Array.from(new Set(inserted.map(i => i.category))).sort();
-                        setExpandedCategories(uniqueCats.slice(0, 2));
-                    }
-                    onDataChanged();
-                }
+                // Template aplicado UMA vez por estudo (capex_seeded_at + UNIQUE no
+                // banco): o efeito rodar 2× no StrictMode não duplica mais nada, e
+                // apagar todas as rubricas não traz o template de volta.
+                const jaAplicado = !!study.capex_seeded_at;
+                const template: ImovibCapexItemInsert[] = DEFAULT_CAPEX_TEMPLATE.map(t => ({
+                    study_id: study.id,
+                    category: t.category,
+                    name: t.name,
+                    value_type: t.value_type as 'currency' | 'percent',
+                    value: t.value,
+                    base: baseDaRubrica({ category: t.category }),
+                }));
+                const loaded = await imovibService.seedCapexTemplate(study.id, template);
+                setItems(loaded);
+                const uniqueCats = Array.from(new Set(loaded.map(i => i.category))).sort();
+                setExpandedCategories(uniqueCats.slice(0, 2));
+                if (!jaAplicado) onDataChanged();
             } catch (e) {
                 console.error('Failed to seed capex', e);
             } finally {
@@ -254,7 +262,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const handleAddItem = async (category: string) => {
         const name = window.prompt('Nome do novo item:');
         if (!name) return;
-        const newItem: ImovibCapexItemInsert = { study_id: study.id, category, name, value_type: 'currency', value: 0 };
+        const newItem: ImovibCapexItemInsert = { study_id: study.id, category, name, value_type: 'currency', value: 0, base: baseDaRubrica({ category }) };
         try {
             setIsSaving(true);
             const inserted = await imovibService.upsertCapexItems([newItem]);
@@ -262,7 +270,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             onDataChanged();
         } catch (e) {
             console.error('Failed to add item', e);
-            alert('Erro ao adicionar item.');
+            const msg = String((e as Error)?.message || '');
+            alert(msg.includes('imovib_capex_items_study_category_name_key') || msg.includes('duplicate key')
+                ? `Já existe a rubrica "${name}" em ${category}.`
+                : 'Erro ao adicionar item.');
         } finally {
             setIsSaving(false);
         }
@@ -493,6 +504,32 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             </div>
                         )}
 
+                        {/* O que as rubricas somam no cálculo de VPL/TIR (item 2.4) */}
+                        <div className="mb-6 p-4 bg-white rounded-[10px] border border-slate-200">
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <h4 className="text-sm font-semibold text-slate-800">Rubricas no cálculo</h4>
+                                <span className="text-lg font-semibold text-slate-900">{fmt(math.capexRubricas.total)}</span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-slate-600">
+                                <div>Sobre o terreno (mês 1): <span className="font-medium text-slate-800">{fmt(math.capexRubricas.terreno)}</span></div>
+                                <div>Sobre a obra (ao longo da obra): <span className="font-medium text-slate-800">{fmt(math.capexRubricas.obra)}</span></div>
+                                <div>Sobre o VGV (junto com a receita): <span className="font-medium text-slate-800">{fmt(math.capexRubricas.vgv)}</span></div>
+                            </div>
+                            <p className="mt-2 text-xs text-slate-500">
+                                {math.capexRubricasAtivas
+                                    ? 'No modo Completo, imposto e corretagem vêm destas rubricas (categorias 5 e 7); os campos da aba Dinâmica não entram no cálculo.'
+                                    : 'Sem rubricas cadastradas: valem imposto e corretagem da aba Dinâmica.'}
+                            </p>
+                        </div>
+
+                        {impostosComValor.length > 1 && (
+                            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-[10px] text-sm text-amber-800" role="alert">
+                                <span className="font-semibold">Impostos em dobro:</span>{' '}
+                                {impostosComValor.map(i => `${i.name} (${i.value}%)`).join(' e ')} estão com valor ao mesmo tempo.
+                                RET e regime normal são alternativos — zere o que não se aplica em "7. Impostos".
+                            </div>
+                        )}
+
                         <div className="flex justify-end gap-2 mb-4">
                             <button onClick={expandAll} className="px-3 py-1.5 text-button font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Expandir Tudo</button>
                             <button onClick={collapseAll} className="px-3 py-1.5 text-button font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">Recolher Tudo</button>
@@ -512,6 +549,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             <h3 className="font-bold text-slate-800 tracking-tight">{category}</h3>
                                         </div>
                                         <div className="flex items-center gap-3">
+                                            <span className="text-sm font-medium text-slate-700">{fmt(totalDaCategoria(category))}</span>
                                             <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
                                                 {groupedItems[category].length} itens
                                             </span>
@@ -530,9 +568,12 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             <table className="w-full text-left bg-white">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
-                                                        <th className="px-6 py-3 w-1/2">Rubrica / Linha de Custo</th>
-                                                        <th className="px-6 py-3 w-1/4">Tipo</th>
-                                                        <th className="px-6 py-3 w-1/4">Valor</th>
+                                                        <th className="px-6 py-3">Rubrica / Linha de Custo</th>
+                                                        <th className="px-6 py-3">Tipo</th>
+                                                        <th className="px-6 py-3">Base</th>
+                                                        <th className="px-6 py-3">Valor</th>
+                                                        <th className="px-6 py-3 text-right">No cálculo</th>
+                                                        <th className="px-6 py-3 w-12"></th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-50">
@@ -554,6 +595,18 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                 <span className={`text-sm font-normal ${item.value_type === 'percent' ? 'text-amber-700' : 'text-emerald-700'}`}>
                                                                     {item.value_type === 'percent' ? 'Percentual (%)' : 'Moeda (R$)'}
                                                                 </span>
+                                                            </td>
+                                                            <td className="px-6 py-3">
+                                                                <select
+                                                                    value={baseDaRubrica(item)}
+                                                                    onChange={(e) => handleUpdateItem(item.id, { base: e.target.value as ImovibCapexBase })}
+                                                                    title={item.value_type === 'percent' ? 'Sobre o que o % incide' : 'Quando o valor sai do caixa'}
+                                                                    className="text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 text-gray-900 cursor-pointer"
+                                                                >
+                                                                    {(Object.keys(BASE_LABEL) as ImovibCapexBase[]).map(b => (
+                                                                        <option key={b} value={b}>{BASE_LABEL[b]}</option>
+                                                                    ))}
+                                                                </select>
                                                             </td>
                                                             <td className="px-6 py-3">
                                                                 <div className="relative flex items-center">
@@ -581,6 +634,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                         </div>
                                                                     )}
                                                                 </div>
+                                                            </td>
+                                                            <td className="px-6 py-3 text-right text-sm font-medium text-slate-800 whitespace-nowrap">
+                                                                {fmt(valorNoCalculo[item.id] || 0)}
                                                             </td>
                                                             <td className="px-6 py-3 text-right">
                                                                 <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" title="Excluir item" onClick={() => handleDeleteItem(item.id)} />

@@ -164,6 +164,76 @@ describe('1.5 — TIR honesta', () => {
     });
 });
 
+describe('2.2 — rubricas do CAPEX detalhado entram no cálculo', () => {
+    const rubrica = (category: string, name: string, value_type: 'currency' | 'percent', value: number, base?: string) =>
+        ({ id: name, study_id: 'estudo-teste', category, name, value_type, value, base, created_at: '', updated_at: '' });
+
+    // R$ 100 mil fixos de obra, 3% sobre o terreno, 2% sobre a obra, 5% sobre o VGV.
+    const itens = [
+        rubrica('2. Projetos e Consultorias', 'Projeto', 'currency', 100_000, 'obra'),
+        rubrica('1. Terreno', 'ITBI', 'percent', 3, 'terreno'),
+        rubrica('9. Contingência', 'Reserva', 'percent', 2, 'obra'),
+        rubrica('7. Impostos', 'Regime normal', 'percent', 5, 'vgv'),
+    ];
+    const acc = (r: ReturnType<typeof computeImovibMath>) => r.monthlyFlows[r.monthlyFlows.length - 1].acc;
+
+    it('soma cada rubrica sobre a sua base e substitui imposto + corretagem da Dinâmica', () => {
+        // tax_rate 4 e brokerage 5 do estudo-base NÃO podem entrar.
+        const r = computeImovibMath(baseStudy({ capex_items: itens }));
+        const obra = 40 * 90 * 4_500;
+        const totalRev = sum(r.monthlyFlows.map(f => f.rev));
+        const esperado = totalRev * 0.95 - (5_000_000 + 0.03 * 5_000_000 + obra + 0.02 * obra + 100_000);
+        expect(r.capexRubricasAtivas).toBe(true);
+        expect(acc(r)).toBeCloseTo(esperado, 2);
+        expect(r.capexRubricas.terreno).toBeCloseTo(150_000);
+        expect(r.capexRubricas.obra).toBeCloseTo(100_000 + 0.02 * obra);
+        expect(r.capexRubricas.vgv).toBeCloseTo(totalRev * 0.05);
+    });
+
+    it('rubrica de terreno sai no mês 1', () => {
+        const r = computeImovibMath(baseStudy({ capex_items: [rubrica('1. Terreno', 'ITBI', 'percent', 3, 'terreno')] }));
+        expect(r.monthlyFlows[0].cost).toBeCloseTo(5_000_000 * 1.03);
+    });
+
+    it('rubrica em R$ com base vgv sai ao longo das vendas', () => {
+        const r = computeImovibMath(baseStudy({ capex_items: [rubrica('5. Marketing e Vendas', 'Stand', 'currency', 240_000, 'vgv')] }));
+        // 24 meses de vendas a partir do mês 1 → R$ 10 mil/mês somados ao custo.
+        const semRubrica = computeImovibMath(baseStudy({ tax_rate: 0, brokerage_fee: 0 }));
+        expect(r.monthlyFlows[0].cost - semRubrica.monthlyFlows[0].cost).toBeCloseTo(10_000);
+        expect(r.capexRubricas.vgv).toBeCloseTo(240_000);
+    });
+
+    it('valor por rubrica soma o total do motor, inclusive com inflação', () => {
+        const comFixoVgv = [...itens, rubrica('5. Marketing e Vendas', 'Stand', 'currency', 240_000, 'vgv')];
+        const r = computeImovibMath(baseStudy({ capex_items: comFixoVgv, inflation_rate: 0.5 }));
+        const soma = sum(Object.values(r.capexValorPorRubrica));
+        expect(soma).toBeCloseTo(r.capexRubricas.total, 2);
+        expect(r.capexValorPorRubrica['Stand']).toBeGreaterThan(240_000); // corrigido pela inflação
+    });
+
+    it('sem a coluna base (linha antiga), deduz pela categoria', () => {
+        const comBase = computeImovibMath(baseStudy({ capex_items: itens }));
+        const semBase = computeImovibMath(baseStudy({ capex_items: itens.map(i => ({ ...i, base: undefined })) }));
+        expect(semBase.vpl).toBeCloseTo(comBase.vpl, 2);
+    });
+
+    it('modo simplificado ignora as rubricas', () => {
+        const simples = { capex_mode: 'simplified', capex_simplified_cost_sqm: 4_500 };
+        const com = computeImovibMath(baseStudy({ ...simples, capex_items: itens }));
+        const sem = computeImovibMath(baseStudy(simples));
+        expect(com.capexRubricasAtivas).toBe(false);
+        expect(com.vpl).toBeCloseTo(sem.vpl, 2);
+    });
+
+    it('sem rubricas cadastradas, valem imposto e corretagem da Dinâmica', () => {
+        const r = computeImovibMath(baseStudy({ capex_items: [] }));
+        expect(r.capexRubricasAtivas).toBe(false);
+        const totalRev = sum(r.monthlyFlows.map(f => f.rev));
+        const totalCost = sum(r.monthlyFlows.map(f => f.cost));
+        expect(acc(r)).toBeCloseTo(totalRev * (1 - 0.09) - totalCost, 2);
+    });
+});
+
 describe('1.6 — ESG no modo simplificado e avisos de premissa', () => {
     const esg = { esg_initiatives: [{ id: 'e1', name: 'Solar', category: 'E', cost: 1_000_000, vgv_premium: 0, funding_discount: 0, active: true }] };
 

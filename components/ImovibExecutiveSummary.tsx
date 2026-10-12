@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ImovibStudy } from '../types';
-import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
+import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { Activity, TrendingUp, AlertCircle, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Leaf, Banknote } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
@@ -18,7 +19,13 @@ const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 };
 
-const formatPercent = (value: number) => {
+const BASE_PDF: Record<ImovibCapexBase, string> = {
+    terreno: 'do terreno',
+    obra: 'da obra',
+    vgv: 'do VGV',
+};
+
+const formatPercent =(value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 2 }).format(value / 100);
 };
 
@@ -411,23 +418,39 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                                         <tr>
                                             <th className="p-4 font-bold text-slate-600">Categoria</th>
                                             <th className="p-4 font-bold text-slate-600">Descrição</th>
-                                            <th className="p-4 font-bold text-slate-600 text-right">Custo Estimado</th>
+                                            <th className="p-4 font-bold text-slate-600">Premissa</th>
+                                            <th className="p-4 font-bold text-slate-600 text-right">No cálculo</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {study.capex_items && study.capex_items.length > 0 ? (
-                                            study.capex_items.map(item => (
-                                                <tr key={item.id}>
-                                                    <td className="p-4 text-slate-700 font-medium">{item.category}</td>
-                                                    <td className="p-4 text-slate-600">{item.name}</td>
-                                                    <td className="p-4 text-slate-900 font-medium text-right">
-                                                        {item.value_type === 'percent' ? `${item.value.toFixed(2)}% do VGV` : formatCurrency(item.value || 0)}
-                                                    </td>
+                                        {cashFlowData.capexRubricasAtivas ? (
+                                            <>
+                                                {(study.capex_items || []).map(item => (
+                                                    <tr key={item.id}>
+                                                        <td className="p-4 text-slate-700 font-medium">{item.category}</td>
+                                                        <td className="p-4 text-slate-600">{item.name}</td>
+                                                        <td className="p-4 text-slate-600">
+                                                            {item.value_type === 'percent'
+                                                                ? `${Number(item.value).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% ${BASE_PDF[baseDaRubrica(item)]}`
+                                                                : formatCurrency(item.value || 0)}
+                                                        </td>
+                                                        <td className="p-4 text-slate-900 font-medium text-right">
+                                                            {formatCurrency(cashFlowData.capexValorPorRubrica[item.id] || 0)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                <tr className="bg-slate-50">
+                                                    <td colSpan={3} className="p-4 text-slate-700 font-medium">Total das rubricas no cálculo</td>
+                                                    <td className="p-4 text-slate-900 font-medium text-right">{formatCurrency(cashFlowData.capexRubricas.total)}</td>
                                                 </tr>
-                                            ))
+                                            </>
                                         ) : (
                                             <tr>
-                                                <td colSpan={3} className="p-4 text-center text-slate-500">Nenhum item de CAPEX detalhado. Referenciando custo paramétrico dos blocos.</td>
+                                                <td colSpan={4} className="p-4 text-center text-slate-500">
+                                                    {study.capex_mode === 'simplified'
+                                                        ? 'CAPEX no modo simplificado: custo total por área × custo/m², sem rubricas.'
+                                                        : 'Nenhuma rubrica de CAPEX detalhado. Referenciando custo paramétrico dos blocos.'}
+                                                </td>
                                             </tr>
                                         )}
                                     </tbody>

@@ -3,7 +3,12 @@ import {
     ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate,
     ImovibBlock, ImovibBlockInsert, ImovibBlockUpdate,
     ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
+    ImovibCapexItem, ImovibCapexItemInsert,
 } from '../types';
+
+// `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
+// tem de estar no banco ANTES de publicar código que lê esta lista (42703).
+const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, created_at, updated_at';
 
 export const imovibService = {
     async getStudies(organizationId?: string): Promise<ImovibStudy[]> {
@@ -32,11 +37,12 @@ export const imovibService = {
      * motor financeiro (computeImovibMath) consome — para a listagem calcular
      * VGV/VPL/TIR/margem por linha sem abrir estudo por estudo.
      *
-     * Custo fixo de 3 round-trips independentemente do número de estudos:
-     * estudos → blocos (in study_id) → unidades (in block_id). O nesting é
-     * remontado em memória, mesmo padrão de getStudyById. capex_items NÃO é
-     * carregado de propósito: o motor não lê capex detalhado (só usa os campos
-     * capex_simplified_* quando capex_mode === 'simplified').
+     * Custo fixo de 4 round-trips independentemente do número de estudos:
+     * estudos → blocos (in study_id) → unidades (in block_id), e rubricas do
+     * CAPEX (in study_id) em paralelo com os blocos. O nesting é remontado em
+     * memória, mesmo padrão de getStudyById. As rubricas entram no cálculo desde
+     * 2026-10-12 (modo Completo) — sem elas a listagem mostraria VPL/TIR
+     * diferentes do Resumo do mesmo estudo.
      */
     async getStudiesWithMetrics(organizationId?: string): Promise<ImovibStudy[]> {
         let query = supabase
@@ -60,11 +66,23 @@ export const imovibService = {
 
         const studyIds = studies.map(s => s.id);
 
-        const { data: blocks, error: blocksError } = await supabase
-            .from('imovib_blocks')
-            .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
-            .in('study_id', studyIds)
-            .order('created_at', { ascending: true });
+        const [{ data: blocks, error: blocksError }, { data: capex, error: capexError }] = await Promise.all([
+            supabase
+                .from('imovib_blocks')
+                .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
+                .in('study_id', studyIds)
+                .order('created_at', { ascending: true }),
+            supabase
+                .from('imovib_capex_items')
+                .select(CAPEX_COLS)
+                .in('study_id', studyIds)
+                .order('created_at', { ascending: true }),
+        ]);
+
+        if (capexError) {
+            console.error('Error fetching IMOVIB CAPEX items in batch:', capexError);
+            throw new Error(`Failed to fetch IMOVIB CAPEX items: ${capexError.message}`);
+        }
 
         if (blocksError) {
             console.error('Error fetching IMOVIB blocks in batch:', blocksError);
@@ -95,7 +113,14 @@ export const imovibService = {
             blocksByStudy.set(b.study_id, arr);
         });
 
-        return studies.map(s => ({ ...s, blocks: blocksByStudy.get(s.id) || [] }));
+        const capexByStudy = new Map<string, ImovibCapexItem[]>();
+        ((capex || []) as ImovibCapexItem[]).forEach(c => {
+            const arr = capexByStudy.get(c.study_id) || [];
+            arr.push(c);
+            capexByStudy.set(c.study_id, arr);
+        });
+
+        return studies.map(s => ({ ...s, blocks: blocksByStudy.get(s.id) || [], capex_items: capexByStudy.get(s.id) || [] }));
     },
 
     async getStudyById(id: string, includeDetails: boolean = false): Promise<ImovibStudy | null> {
@@ -146,7 +171,7 @@ export const imovibService = {
                 // Fetch CAPEX Items
                 const { data: capex, error: capexError } = await supabase
                     .from('imovib_capex_items')
-                    .select('id, study_id, category, subcategory, name, value_type, value, created_at, updated_at')
+                    .select(CAPEX_COLS)
                     .eq('study_id', id)
                     .order('category', { ascending: true })
                     .order('created_at', { ascending: true });
@@ -269,6 +294,44 @@ export const imovibService = {
         }
 
         return data || [];
+    },
+
+    /**
+     * Aplica o template de rubricas ao estudo UMA vez. Idempotente: a trava
+     * UNIQUE (study_id, category, name) ignora rubrica que já existe (o efeito
+     * do ImovibCapexForm rodava 2× no StrictMode e duplicava o template inteiro),
+     * e `capex_seeded_at` impede que apagar todas as rubricas faça o template
+     * voltar. Devolve as rubricas do estudo depois do seed.
+     */
+    async seedCapexTemplate(studyId: string, template: ImovibCapexItemInsert[]): Promise<ImovibCapexItem[]> {
+        const { data: study, error: studyError } = await supabase
+            .from('imovib_studies')
+            .select('capex_seeded_at')
+            .eq('id', studyId)
+            .single();
+        if (studyError) throw new Error(`Failed to read CAPEX seed state: ${studyError.message}`);
+
+        if (!study?.capex_seeded_at && template.length > 0) {
+            const { error: insertError } = await supabase
+                .from('imovib_capex_items')
+                .upsert(template, { onConflict: 'study_id,category,name', ignoreDuplicates: true });
+            if (insertError) throw new Error(`Failed to seed CAPEX template: ${insertError.message}`);
+
+            const { error: markError } = await supabase
+                .from('imovib_studies')
+                .update({ capex_seeded_at: new Date().toISOString() })
+                .eq('id', studyId)
+                .is('capex_seeded_at', null);
+            if (markError) throw new Error(`Failed to mark CAPEX seed: ${markError.message}`);
+        }
+
+        const { data, error } = await supabase
+            .from('imovib_capex_items')
+            .select(CAPEX_COLS)
+            .eq('study_id', studyId)
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Failed to load CAPEX items: ${error.message}`);
+        return (data || []) as ImovibCapexItem[];
     },
 
     async updateCapexItem(id: string, updates: Partial<import('../types').ImovibCapexItem>): Promise<void> {

@@ -25,7 +25,9 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const handleSaveAllForm = async () => {
         try {
             setIsSaving(true);
-            const { id, created_at, updated_at, blocks, capex_items, organization_id, ...cleanData } = formData as any;
+            // capex_seeded_at é do CAPEX: gravar o valor de quando a tela abriu poderia
+            // devolver null e fazer o template de rubricas voltar.
+            const { id, created_at, updated_at, blocks, capex_items, organization_id, capex_seeded_at, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, cleanData);
             alert('Premissas salvas com sucesso!');
             onDataChanged();

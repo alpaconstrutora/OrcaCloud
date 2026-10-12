@@ -1,6 +1,19 @@
 import { useMemo } from 'react';
-import { ImovibStudy } from '../types';
+import { ImovibStudy, ImovibCapexItem, ImovibCapexBase } from '../types';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+
+/**
+ * Base de uma rubrica do CAPEX detalhado. Usa a coluna `base` quando existe; para
+ * linha anterior a ela, deduz pela categoria do template — o MESMO mapeamento do
+ * backfill da migration aplicar_20271012100000_imovib_capex_base.sql.
+ */
+export const baseDaRubrica = (item: Pick<ImovibCapexItem, 'category' | 'base'>): ImovibCapexBase => {
+    if (item.base === 'vgv' || item.base === 'obra' || item.base === 'terreno') return item.base;
+    const cat = item.category || '';
+    if (cat.startsWith('1.')) return 'terreno';
+    if (cat.startsWith('5.') || cat.startsWith('7.') || cat.startsWith('8.')) return 'vgv';
+    return 'obra';
+};
 
 export interface MonthlyFlow {
     month: number;
@@ -46,6 +59,20 @@ export interface ImovibMathResult {
     totalBlockArea: number;
     /** Saldo devedor que as receitas não amortizaram e o investidor quita no último mês. */
     debtPayoffAtEnd: number;
+    /**
+     * Rubricas do CAPEX detalhado entraram no cálculo? Só no modo Completo e com
+     * rubricas cadastradas. Quando sim, imposto e corretagem da Dinâmica NÃO
+     * entram (viriam em dobro com as rubricas 5 e 7).
+     */
+    capexRubricasAtivas: boolean;
+    /** Valor em R$ de cada grupo de rubricas no cálculo (0 quando inativas). */
+    capexRubricas: { terreno: number; obra: number; vgv: number; total: number };
+    /**
+     * Valor em R$ de cada rubrica no cálculo, por id — a tela de CAPEX e o PDF
+     * exibem ESTE número em vez de recalcular (com inflação, rubrica de base
+     * vgv é corrigida mês a mês). A soma é `capexRubricas.total`.
+     */
+    capexValorPorRubrica: Record<string, number>;
     avisos: ImovibAviso[];
 }
 
@@ -116,6 +143,9 @@ const EMPTY_RESULT: ImovibMathResult = {
     esgFundingDiscount: 0,
     totalBlockArea: 0,
     debtPayoffAtEnd: 0,
+    capexRubricasAtivas: false,
+    capexRubricas: { terreno: 0, obra: 0, vgv: 0, total: 0 },
+    capexValorPorRubrica: {},
     avisos: [],
 };
 
@@ -228,15 +258,49 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const vgvTotal = baseVgvTotal * (vgvDeltaMultiplier + esgVgvPremium);
         const esgVgvPremiumValue = baseVgvTotal * esgVgvPremium;
 
-        // CAPEX simplificado: área única × custo/m² substitui o custo dos blocos.
+        // CAPEX simplificado: área única × custo/m² substitui o custo dos blocos
+        // E as rubricas do detalhado.
         // O custo ESG soma nos DOIS modos (antes sumia no simplificado).
+        const simplificadoAtivo = study.capex_mode === 'simplified' && !!study.capex_simplified_cost_sqm;
         let constCostTotal: number;
-        if (study.capex_mode === 'simplified' && study.capex_simplified_cost_sqm) {
+        if (simplificadoAtivo) {
             const effectiveArea = study.capex_simplified_area_sqm || totalBlockArea;
-            constCostTotal = (effectiveArea * study.capex_simplified_cost_sqm + esgCostTotal) * costDeltaMultiplier;
+            constCostTotal = (effectiveArea * (study.capex_simplified_cost_sqm || 0) + esgCostTotal) * costDeltaMultiplier;
         } else {
             constCostTotal = (baseConstCostTotal + esgCostTotal) * costDeltaMultiplier;
         }
+
+        // CAPEX detalhado (decisão de 2026-10-12: entra no cálculo). Cada rubrica
+        // em R$ entra direto; em % incide sobre a sua base:
+        //   terreno → % do terreno, saída no mês 1;
+        //   obra    → % do custo de obra, saída ao longo da obra (financiável);
+        //   vgv     → % da receita bruta do mês, deduzida junto com a receita;
+        //             valor em R$ com base vgv sai ao longo das vendas.
+        // Ativas, substituem imposto e corretagem da Dinâmica.
+        const rubricas = simplificadoAtivo ? [] : (study.capex_items || []);
+        const capexRubricasAtivas = rubricas.length > 0;
+        let rubricaTerreno = 0;
+        let rubricaObra = 0;
+        let rubricaVgvPct = 0;
+        let rubricaVgvFixo = 0;
+        rubricas.forEach(item => {
+            const v = Number(item.value) || 0;
+            const pct = item.value_type === 'percent';
+            switch (baseDaRubrica(item)) {
+                case 'terreno':
+                    rubricaTerreno += pct ? landCost * v / 100 : v;
+                    break;
+                case 'obra':
+                    rubricaObra += pct ? constCostTotal * v / 100 : v * costDeltaMultiplier;
+                    break;
+                case 'vgv':
+                    if (pct) rubricaVgvPct += v / 100;
+                    else rubricaVgvFixo += v;
+                    break;
+            }
+        });
+        // Com rubricas, as deduções sobre a receita vêm delas.
+        const deducaoReceitaPct = capexRubricasAtivas ? rubricaVgvPct : taxRate + brokerageFee;
 
         // Apply Swap Physical (reduces marketed VGV)
         const swapPhysical = val(study.swap_physical_percent, D.swap_physical_percent) / 100;
@@ -274,7 +338,11 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const handoverMonth = constStart + constDur - 1; // Paid at the end of construction
 
         const constMonths = Math.max(1, constDur);
-        const monthlyConstCost = constCostTotal / constMonths;
+        const monthlyConstCost = (constCostTotal + rubricaObra) / constMonths;
+        const monthlyVgvFixo = salesDur > 0 ? rubricaVgvFixo / salesDur : 0;
+        let rubricaVgvTotal = 0;
+        let totalGrossRev = 0;
+        let somaInflacaoVendas = 0; // Σ fator de inflação nos meses de venda
 
         // Fallback to old financingPercent if Sprint 8 fields not used, but prefer debt
         const fundingDebtPct = val(study.funding_debt_percent, D.funding_debt_percent) / 100;
@@ -312,17 +380,28 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             // Inflate Revenue if needed (optional based on models, we apply it here)
             grossRev = grossRev * inflationMult;
 
-            const taxDeduction = grossRev * taxRate;
-            const brokerageDeduction = grossRev * brokerageFee;
-            const netRev = grossRev - taxDeduction - brokerageDeduction;
+            // Deduções sobre a receita: rubricas de base vgv (modo Completo) ou
+            // imposto + corretagem da Dinâmica — nunca os dois.
+            totalGrossRev += grossRev;
+            if (m >= salesStart && m < salesStart + salesDur) somaInflacaoVendas += inflationMult;
+            const revenueDeduction = grossRev * deducaoReceitaPct;
+            const netRev = grossRev - revenueDeduction;
+            if (capexRubricasAtivas) rubricaVgvTotal += revenueDeduction;
 
             let totalCost = 0;
             let equityCost = 0;
             let financedCost = 0;
 
             if (m === 1) {
-                totalCost += landCost;
-                equityCost += landCost;
+                totalCost += landCost + rubricaTerreno;
+                equityCost += landCost + rubricaTerreno;
+            }
+
+            if (monthlyVgvFixo > 0 && m >= salesStart && m < salesStart + salesDur) {
+                const fixo = monthlyVgvFixo * inflationMult;
+                totalCost += fixo;
+                equityCost += fixo;
+                rubricaVgvTotal += fixo;
             }
 
             if (m >= constStart && m < constStart + constDur) {
@@ -385,6 +464,21 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             });
         }
 
+        // Valor de cada rubrica no cálculo — mesma regra do bloco acima, item a item.
+        const capexValorPorRubrica: Record<string, number> = {};
+        const fatorVendas = salesDur > 0 ? somaInflacaoVendas / salesDur : 1;
+        rubricas.forEach(item => {
+            const v = Number(item.value) || 0;
+            const pct = item.value_type === 'percent';
+            let valor = 0;
+            switch (baseDaRubrica(item)) {
+                case 'terreno': valor = pct ? landCost * v / 100 : v; break;
+                case 'obra': valor = pct ? constCostTotal * v / 100 : v * costDeltaMultiplier; break;
+                case 'vgv': valor = pct ? totalGrossRev * v / 100 : v * fatorVendas; break;
+            }
+            capexValorPorRubrica[item.id] = valor;
+        });
+
         // 3. Calculate Advanced Indicators
         const vpl = calculateNPV(monthlyDiscount, finalRawNetFlows); // Using monthly discount rate
 
@@ -410,6 +504,14 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             esgFundingDiscount,
             totalBlockArea,
             debtPayoffAtEnd,
+            capexRubricasAtivas,
+            capexRubricas: {
+                terreno: rubricaTerreno,
+                obra: rubricaObra,
+                vgv: rubricaVgvTotal,
+                total: rubricaTerreno + rubricaObra + rubricaVgvTotal,
+            },
+            capexValorPorRubrica,
             avisos,
         };
 };

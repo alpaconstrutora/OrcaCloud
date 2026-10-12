@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rotaDaDependencia, DEGRAU_PX, ALTURA_LINHA_PX } from '../utils/ganttDependencias';
+import { rotaDaDependencia, DEGRAU_PX, ALTURA_LINHA_PX, COMPRIMENTO_SETA_PX, DEGRAU_CHEGADA_PX } from '../utils/ganttDependencias';
 
 /** Converte o `d` ("M x y H x V y H x") em pontos absolutos. */
 function pontos(d: string): Array<[number, number]> {
@@ -33,7 +33,7 @@ describe('rotaDaDependencia', () => {
         expect(p[2][1]).toBe(linha(0) + ALTURA_LINHA_PX / 2);  // divisa entre as linhas
         const [penultimo, ultimo] = p.slice(-2);
         expect(ultimo).toEqual([150, linha(1)]);
-        expect(penultimo[0]).toBe(150 - DEGRAU_PX);             // chega andando para a DIREITA (seta certa)
+        expect(penultimo[0]).toBe(150 - DEGRAU_CHEGADA_PX);     // chega andando para a DIREITA (seta certa)
     });
 
     it('SS: sai do início da origem para a esquerda e entra no início do destino', () => {
@@ -54,6 +54,24 @@ describe('rotaDaDependencia', () => {
         const p = pontos(rotaDaDependencia({ left: 100, right: 300, y: linha(3) }, { left: 150, right: 260, y: linha(1) }, 'FS'));
         expect(p[2][1]).toBe(linha(3) - ALTURA_LINHA_PX / 2);
         expect(p[p.length - 1]).toEqual([150, linha(1)]);
+    });
+
+    it('a seta assenta num trecho reto MAIOR que ela — o traço chega pela base, não pela lateral', () => {
+        // varre o destino em volta da origem: sequência, quase colada, sobreposta, SS/FF/SF
+        for (const tipo of ['FS', 'SS', 'FF', 'SF'] as const) {
+            for (let esquerda = 60; esquerda <= 360; esquerda += 3) {
+                const p = pontos(rotaDaDependencia({ left: 100, right: 200, y: linha(0) }, { left: esquerda, right: esquerda + 80, y: linha(1) }, tipo));
+                const [penultimo, ultimo] = p.slice(-2);
+                expect(penultimo[1]).toBe(ultimo[1]);                                   // último trecho é horizontal
+                expect(Math.abs(ultimo[0] - penultimo[0])).toBeGreaterThan(COMPRIMENTO_SETA_PX);
+            }
+        }
+    });
+
+    it('caso do print: destino 10px depois do degrau de saída não desce direto (a seta não caberia)', () => {
+        const p = pontos(rotaDaDependencia({ left: 100, right: 200, y: linha(0) }, { left: 200 + DEGRAU_PX + 10, right: 300, y: linha(1) }, 'FS'));
+        const [penultimo, ultimo] = p.slice(-2);
+        expect(ultimo[0] - penultimo[0]).toBeGreaterThanOrEqual(DEGRAU_CHEGADA_PX);
     });
 
     it('todo segmento é horizontal ou vertical (nada de diagonal)', () => {

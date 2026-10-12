@@ -6,7 +6,7 @@ import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, Sinapi
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TASK_NATURE_META } from '../../utils/taskNature';
 import { TaskDetailModal } from './TaskDetailModal';
-import { rotaDaDependencia, TipoDependencia } from '../../utils/ganttDependencias';
+import { rotaDaDependencia, TipoDependencia, COMPRIMENTO_SETA_PX, ALTURA_SETA_PX } from '../../utils/ganttDependencias';
 
 /**
  * Formata uma data 'YYYY-MM-DD' (ou ISO) para pt-BR SEM deslocamento de fuso.
@@ -1312,13 +1312,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         key={tipo}
                                         id={`gantt-seta-${tipo}`}
                                         markerUnits="userSpaceOnUse"
-                                        markerWidth="12"
-                                        markerHeight="8"
-                                        refX="11"
-                                        refY="4"
+                                        markerWidth={COMPRIMENTO_SETA_PX}
+                                        markerHeight={ALTURA_SETA_PX}
+                                        refX={COMPRIMENTO_SETA_PX - 1}
+                                        refY={ALTURA_SETA_PX / 2}
                                         orient="auto"
                                     >
-                                        <path d="M0,0 L12,4 L0,8 Z" fill={cor} />
+                                        <path d={`M0,0 L${COMPRIMENTO_SETA_PX},${ALTURA_SETA_PX / 2} L0,${ALTURA_SETA_PX} Z`} fill={cor} />
                                     </marker>
                                 ))}
                             </defs>

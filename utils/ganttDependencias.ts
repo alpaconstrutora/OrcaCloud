@@ -22,7 +22,18 @@ export interface BordasDaBarra {
     y: number;
 }
 
+/** Degrau de SAÍDA: o traço anda isto colado na origem antes de descer. */
 export const DEGRAU_PX = 8;
+
+/** Seta (marcador SVG do Gantt): comprimento e altura em px de tela. O desenho do marcador
+ *  em ScheduleGantt.tsx lê estas constantes — mudou aqui, muda lá. */
+export const COMPRIMENTO_SETA_PX = 12;
+export const ALTURA_SETA_PX = 8;
+
+/** Degrau de CHEGADA: o trecho reto em que a seta assenta. Tem de ser MAIOR que a seta —
+ *  com 8px (12/10/2026) a seta de 12px passava da curva e o traço vertical encostava na
+ *  LATERAL dela (*"a linha se conecte corretamente pela base da seta e nao pela laterial"*). */
+export const DEGRAU_CHEGADA_PX = COMPRIMENTO_SETA_PX + 6;
 
 /** Altura de uma linha do Gantt (`h-9`). */
 export const ALTURA_LINHA_PX = 36;
@@ -42,13 +53,14 @@ export function rotaDaDependencia(origem: BordasDaBarra, destino: BordasDaBarra,
     const sentidoChegada = chegaNoInicio ? 1 : -1;
 
     const xSaida = x0 + sentidoSaida * DEGRAU_PX;      // depois do degrau de saída
-    const xEntrada = xt - sentidoChegada * DEGRAU_PX;  // antes do degrau de chegada
+    const xEntrada = xt - sentidoChegada * DEGRAU_CHEGADA_PX;  // antes do degrau de chegada
     const y0 = origem.y;
     const yt = destino.y;
 
     // Desce direto, colado na origem (logo depois do degrau de saída), quando dali ainda
-    // sobra um degrau inteiro até a borda de chegada, no sentido em que a seta entra.
-    if (sentidoChegada * (xt - xSaida) >= DEGRAU_PX - 0.5) {
+    // sobra um degrau de CHEGADA inteiro até a borda, no sentido em que a seta entra —
+    // senão a seta não cabe no trecho reto e o traço encosta na lateral dela.
+    if (sentidoChegada * (xt - xSaida) >= DEGRAU_CHEGADA_PX - 0.5) {
         return `M ${x0} ${y0} H ${xSaida} V ${yt} H ${xt}`;
     }
     // Contorno: desce até a divisa das linhas, cruza até antes do destino e desce até ele.

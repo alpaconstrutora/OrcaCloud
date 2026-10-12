@@ -401,6 +401,13 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - Excel com 3 abas (Indicadores, Premissas, Fluxo de caixa), montado por `montarPlanilhaImovib`, com teste.
     - Financiamento na planilha segue a regra do motor.
   - [ ] **5.7** — `window.prompt` do CAPEX virou uma linha de inclusão inline (Enter/Esc, duplicado avisado antes do banco, dentro do fieldset só leitura), com teste. O "Novo" saiu de dentro do botão de expandir (botão dentro de botão).
+  - **1ª prova no navegador (`c:/tmp/pwtest/imovib_fase5.js`):**
+    - **Passou:** drawer de editar preenchido; "Salvar Premissas" em Identificação (1) e não em Torres (0); aviso "Sair sem salvar?"; foco mantido ao digitar 12,5; "TIR ≥ TMA do estudo (12% a.a.)"; Excel `_Viabilidade.xlsx` com abas Indicadores/Premissas/Fluxo de caixa e valores coerentes; rubrica inline abre e fecha com Esc, sem prompt nativo.
+    - **PDF NÃO saía**, com o erro `unsupported color function "oklch"`: o html2canvas 1.4 não entende as cores do Tailwind v4. Provavelmente quebrado em produção desde a migração para o v4, porque a captura não mudou.
+      - Correção: `utils/html2canvasCores.ts` (`coresCompativeisNaCopia`) no `onclone`. Na CÓPIA, toda cor oklch/oklab/lab/lch/color-mix vira rgba (inclusive dentro de gradiente e sombra) e as sombras saem. A tela não é tocada.
+      - Prova em página local com o CSS real do build: sem a correção, o mesmo erro; com ela, gera, e o pixel do cartão azul dá rgb(37, 77, 239). 4 testes da troca de funções.
+      - **Pendência fora do escopo:** `ContractDetailView`, `FinancialSchedule` e `PaystubModal` chamam html2canvas sem proteção, então o PDF deles provavelmente tem a mesma falha (não provado).
+    - **"Cancelar" do drawer de criar "não fechou":** falso alarme do roteiro. O Sheet fechado continua montado (só desliza com translate-x), e o drawer de editar abriu normal logo depois. O roteiro passou a conferir a posição do campo.
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);
     - `StarRating` do ESG declarado dentro do render (botões; efeito menor);

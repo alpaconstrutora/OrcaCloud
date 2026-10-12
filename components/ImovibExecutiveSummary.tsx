@@ -9,6 +9,7 @@ import { Activity, TrendingUp, AlertCircle, Building2, Wallet, PieChart, Coins, 
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import * as XLSX from 'xlsx';
 import { useToast } from '../hooks/useToast';
 
@@ -152,7 +153,11 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                 scale: 1.5, // Slightly lower scale to prevent memory issues on very long pages
                 useCORS: true,
                 logging: false,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                // Tailwind v4 usa oklch em toda a paleta e o html2canvas aborta com
+                // 'unsupported color function "oklch"' — o PDF não saía. Na CÓPIA,
+                // as cores viram rgba e as sombras saem (ver utils/html2canvasCores.ts).
+                onclone: (_doc, raiz) => { coresCompativeisNaCopia(raiz, { semSombra: true }); },
             });
 
             const imgData = canvas.toDataURL('image/jpeg', 0.95); // Use JPEG for smaller size

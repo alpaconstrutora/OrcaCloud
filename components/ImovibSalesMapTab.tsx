@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, BrainCircuit, BarChart3, Home, TrendingUp } from 'lucide-react';
+import { RefreshCw, BrainCircuit, BarChart3, Home, TrendingUp, AlertCircle } from 'lucide-react';
 import { ImovibStudy, ImovibUnitInstance, ImovibUnitInstanceInsert, HedonicPricingConfig, Property, PropertyStatus } from '../types';
 import { imovibService } from '../services/imovibService';
 import { pricingService } from '../services/pricingService';
@@ -7,6 +7,7 @@ import PricingIntelligenceModal from './PricingIntelligenceModal';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
 import { planejarRegeneracao } from '../utils/imovibEspelho';
+import { useToast } from '../hooks/useToast';
 
 interface ImovibSalesMapTabProps {
     study: ImovibStudy;
@@ -30,22 +31,28 @@ const formatBRL = (value: number): string =>
 const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChanged }) => {
     const [instances, setInstances] = useState<ImovibUnitInstance[]>([]);
     const [loading, setLoading] = useState(true);
+    // Falha ao ler o espelho ≠ espelho vazio: com erro, a tela mostra o erro e
+    // "Tentar de novo"; o estado vazio (com Gerar) só aparece se a leitura deu certo.
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [generating, setGenerating] = useState(false);
     const [pricingModalOpen, setPricingModalOpen] = useState(false);
 
     const blocks = study.blocks || [];
     const math = useImovibMath(study);
     const confirm = useConfirm();
+    const { showToast } = useToast();
 
     const blockMap = Object.fromEntries(blocks.map(b => [b.id, b.name]));
 
     const loadInstances = useCallback(async () => {
         setLoading(true);
+        setLoadError(null);
         try {
             const data = await imovibService.getUnitInstances(study.id);
             setInstances(data);
         } catch (err) {
             console.error('Error loading unit instances:', err);
+            setLoadError((err as Error)?.message || String(err));
         } finally {
             setLoading(false);
         }
@@ -68,7 +75,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             onDataChanged();
         } catch (err) {
             console.error('Error generating instances:', err);
-            alert('Erro ao gerar espelho de vendas.');
+            showToast(`Erro ao gerar o espelho de vendas: ${(err as Error).message}`, 'error');
         } finally {
             setGenerating(false);
         }
@@ -83,7 +90,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             const atuais = await imovibService.getUnitInstances(study.id);
             const plano = planejarRegeneracao(study, atuais);
             if (!plano.criar.length && !plano.atualizar.length && !plano.sobrando.length) {
-                alert('O espelho já está de acordo com as tipologias. Nada a fazer.');
+                showToast('O espelho já está de acordo com as tipologias. Nada a fazer.', 'success');
                 return;
             }
             const ok = await confirm({
@@ -109,7 +116,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             onDataChanged();
         } catch (err) {
             console.error('Error regenerating instances:', err);
-            alert('Erro ao regenerar espelho.');
+            showToast(`Erro ao regenerar o espelho de vendas: ${(err as Error).message}`, 'error');
         } finally {
             setGenerating(false);
         }
@@ -129,6 +136,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             if (field === 'status') onDataChanged();
         } catch (err) {
             console.error('Error updating instance:', err);
+            showToast(`Erro ao salvar a unidade (a alteração foi desfeita): ${(err as Error).message}`, 'error');
             await loadInstances();
         }
     };
@@ -187,7 +195,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             onDataChanged();
         } catch (err) {
             console.error('Error applying pricing:', err);
-            alert('Erro ao aplicar precificação.');
+            showToast(`Erro ao aplicar a precificação: ${(err as Error).message}`, 'error');
         } finally {
             setPricingModalOpen(false);
         }
@@ -222,7 +230,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
-                    {instances.length > 0 && (
+                    {!loadError && instances.length > 0 && (
                         <>
                             <button
                                 onClick={handleRegenerate}
@@ -245,7 +253,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             </div>
 
             {/* KPIs */}
-            {instances.length > 0 && (
+            {!loadError && instances.length > 0 && (
                 <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
                     <div className="p-5 flex items-center gap-3">
                         <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
@@ -280,7 +288,24 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             )}
 
             {/* Body */}
-            {instances.length === 0 ? (
+            {loadError ? (
+                <div className="p-12 flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="p-4 bg-red-50 rounded-2xl">
+                        <AlertCircle className="w-10 h-10 text-red-500" />
+                    </div>
+                    <div>
+                        <p className="font-black text-slate-800 text-lg">Erro ao carregar as unidades do espelho de vendas</p>
+                        <p className="text-slate-500 text-sm mt-1">{loadError}</p>
+                    </div>
+                    <button
+                        onClick={loadInstances}
+                        className="flex items-center gap-2 h-9 px-4 bg-white border border-slate-200 text-slate-700 rounded-[6px] text-sm font-medium hover:bg-slate-50 transition-colors"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Tentar de novo
+                    </button>
+                </div>
+            ) : instances.length === 0 ? (
                 <div className="p-12 flex flex-col items-center justify-center gap-4 text-center">
                     <div className="p-4 bg-slate-100 rounded-2xl">
                         <Home className="w-10 h-10 text-slate-400" />

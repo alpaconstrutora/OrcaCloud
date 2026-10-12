@@ -2,12 +2,24 @@ import React, { useState } from 'react';
 import { ImovibStudy } from '../types';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { imovibService } from '../services/imovibService';
+import { useToast } from '../hooks/useToast';
 import { Leaf, Users, Shield, Award, CheckCircle2, ChevronDown, Gavel, DollarSign, TrendingUp, Percent } from 'lucide-react';
 
 interface ImovibEsgReportFormProps {
     study: ImovibStudy;
     onDataChanged: () => void;
 }
+
+// Nome do campo como o usuário o vê, para a mensagem de erro ao salvar.
+const ROTULO_CAMPO: Partial<Record<keyof ImovibStudy, string>> = {
+    esg_certifications: 'as certificações',
+    esg_environmental_score: 'a nota ambiental (E)',
+    esg_social_score: 'a nota social (S)',
+    esg_governance_score: 'a nota de governança (G)',
+    esg_notes: 'as notas ESG',
+    committee_decision: 'a decisão do comitê',
+    committee_notes: 'as notas do comitê',
+};
 
 const AVAILABLE_CERTIFICATIONS = [
     'LEED (Ouro/Platina)',
@@ -21,6 +33,7 @@ const AVAILABLE_CERTIFICATIONS = [
 
 const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onDataChanged }) => {
     const math = useImovibMath(study);
+    const { showToast } = useToast();
 
     // ESG State
     const [envScore, setEnvScore] = useState(study.esg_environmental_score ?? 3);
@@ -87,6 +100,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
             onDataChanged();
         } catch (e) {
             console.error(e);
+            showToast(`Erro ao salvar ${ROTULO_CAMPO[field] ?? String(field)}: ${(e as Error).message}`, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -98,7 +112,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
         handleUpdate('esg_certifications', newCerts);
     };
 
-    const toggleInitiative = (id: string) => {
+    const toggleInitiative = async (id: string) => {
         const newInis = initiatives.map(ini =>
             ini.id === id ? { ...ini, active: !ini.active } : ini
         );
@@ -121,14 +135,20 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
         setSocScore(finalS);
         setGovScore(finalG);
 
+        // Antes: updateStudy sem await e sem catch — isSaving voltava a false na
+        // hora e a falha não aparecia para o usuário.
         try {
             setIsSaving(true);
-            imovibService.updateStudy(study.id, {
+            await imovibService.updateStudy(study.id, {
                 esg_initiatives: newInis,
                 esg_environmental_score: finalE,
                 esg_social_score: finalS,
                 esg_governance_score: finalG
-            }).then(() => onDataChanged());
+            });
+            onDataChanged();
+        } catch (e) {
+            console.error(e);
+            showToast(`Erro ao salvar a iniciativa ESG: ${(e as Error).message}`, 'error');
         } finally {
             setIsSaving(false);
         }

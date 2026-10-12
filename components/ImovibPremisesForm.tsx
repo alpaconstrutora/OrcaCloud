@@ -5,6 +5,7 @@ import { Building, FileText, PieChart, Activity, Save, Loader2, Map, Layers } fr
 import EstudoMapaRegulatorio from './EstudoMapaRegulatorio';
 import ImovibBlocksTypologyTab from './ImovibBlocksTypologyTab';
 import EstudoTorresUnidades from './torres/EstudoTorresUnidades';
+import { useToast } from '../hooks/useToast';
 
 
 interface ImovibPremisesFormProps {
@@ -16,6 +17,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const [activeTab, setActiveTab] = useState<'identificacao' | 'mercado' | 'blocos' | 'torres' | 'regulatorio'>('identificacao');
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
     const [isSaving, setIsSaving] = useState(false);
+    const { showToast } = useToast();
 
     useEffect(() => {
         setFormData(study);
@@ -30,11 +32,11 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             // unit_instances (espelho) vem montado em memória, não é coluna.
             const { id, created_at, updated_at, blocks, capex_items, unit_instances, organization_id, capex_seeded_at, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, cleanData);
-            alert('Premissas salvas com sucesso!');
+            showToast('Premissas salvas com sucesso!', 'success');
             onDataChanged();
         } catch (error) {
             console.error(error);
-            alert('Erro ao salvar premissas.');
+            showToast(`Erro ao salvar as premissas: ${(error as Error).message}`, 'error');
         } finally {
             setIsSaving(false);
         }

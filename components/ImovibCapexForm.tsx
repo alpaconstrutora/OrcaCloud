@@ -7,6 +7,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { useImovibMath, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibCapexBase } from '../types';
 import { useConfirm } from './ui/confirm';
+import { useToast } from '../hooks/useToast';
 
 const parseRegVal = (v: string | undefined): number | null => {
     if (!v || v === 'N.A.' || v.trim() === '') return null;
@@ -83,6 +84,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const confirm = useConfirm();
+    const { showToast } = useToast();
     const [initializing, setInitializing] = useState(true);
     const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
     const [landCostFocused, setLandCostFocused] = useState(false);
@@ -100,7 +102,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const math = useImovibMath(study);
 
     useEffect(() => {
-        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setZones).catch(console.error);
+        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setZones).catch((e) => {
+            console.error(e);
+            showToast(`Erro ao carregar as zonas regulatórias (área total): ${(e as Error).message}`, 'error');
+        });
     }, [study.id]);
 
     // Área Total = Σ(T.O. × Área do Terreno × Pavimentos) — igual à coluna nas Premissas
@@ -168,6 +173,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 if (!jaAplicado) onDataChanged();
             } catch (e) {
                 console.error('Failed to seed capex', e);
+            showToast(`Erro ao carregar as rubricas de CAPEX do estudo: ${(e as Error).message}`, 'error');
             } finally {
                 setInitializing(false);
             }
@@ -181,6 +187,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             onDataChanged();
         } catch (e) {
             console.error('Failed to save construction_cost_sqm', e);
+            showToast(`Erro ao salvar o custo de obra do bloco: ${(e as Error).message}`, 'error');
         }
     };
 
@@ -190,16 +197,21 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             onDataChanged();
         } catch (e) {
             console.error('Failed to save land_cost', e);
+            showToast(`Erro ao salvar o custo do terreno: ${(e as Error).message}`, 'error');
         }
     };
 
     const saveMode = async (newMode: 'simplified' | 'detailed') => {
+        const anterior = capexMode;
         setCapexMode(newMode);
         try {
             await imovibService.updateStudy(study.id, { capex_mode: newMode });
             onDataChanged();
         } catch (e) {
+            // Não gravou: a tela volta ao modo que está no banco (e no cálculo).
+            setCapexMode(anterior);
             console.error('Failed to save capex_mode', e);
+            showToast(`Erro ao salvar o modo do CAPEX (simplificado/detalhado): ${(e as Error).message}`, 'error');
         }
     };
 
@@ -212,6 +224,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             onDataChanged();
         } catch (e) {
             console.error('Failed to save simplified capex', e);
+            showToast(`Erro ao salvar o CAPEX simplificado (custo/m² e área): ${(e as Error).message}`, 'error');
         }
     };
 
@@ -230,7 +243,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             onDataChanged();
         } catch (e) {
             console.error('Failed to update item', e);
-            alert('Erro ao salvar item CAPEX.');
+            showToast(`Erro ao salvar a rubrica de CAPEX: ${(e as Error).message}`, 'error');
             setItems(origItems);
         } finally {
             setIsSaving(false);
@@ -253,7 +266,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             onDataChanged();
         } catch (e) {
             console.error('Failed to delete item', e);
-            alert('Erro ao excluir item.');
+            showToast(`Erro ao excluir a rubrica de CAPEX: ${(e as Error).message}`, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -271,9 +284,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         } catch (e) {
             console.error('Failed to add item', e);
             const msg = String((e as Error)?.message || '');
-            alert(msg.includes('imovib_capex_items_study_category_name_key') || msg.includes('duplicate key')
+            showToast(msg.includes('imovib_capex_items_study_category_name_key') || msg.includes('duplicate key')
                 ? `Já existe a rubrica "${name}" em ${category}.`
-                : 'Erro ao adicionar item.');
+                : `Erro ao adicionar a rubrica de CAPEX: ${msg}`, 'error');
         } finally {
             setIsSaving(false);
         }

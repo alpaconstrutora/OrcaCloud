@@ -13,6 +13,7 @@ import ImovibFundingForm from './ImovibFundingForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibEsgReportForm from './ImovibEsgReportForm';
 import { ErrorBoundary } from './ErrorBoundary';
+import { useToast } from '../hooks/useToast';
 
 interface ImovibDetailViewProps {
     studyId: string;
@@ -23,6 +24,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     const [study, setStudy] = useState<ImovibStudy | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'esg_report' | 'viability_static' | 'viability_dynamic'>('executive_summary');
 
     useEffect(() => {
@@ -35,7 +37,12 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
             const data = await imovibService.getStudyById(studyId, true);
             setStudy(data);
         } catch (err: any) {
-            setError(err.message);
+            console.error('Error loading IMOVIB study:', err);
+            // Carga inicial: sem estudo na tela, o erro ocupa o lugar dela.
+            // Recarga depois de salvar: o estudo continua na tela e o erro vira
+            // toast — trocar a tela inteira pelo erro descartaria o que está aberto.
+            if (showGlobalLoader || !study) setError(`Erro ao carregar o estudo: ${err?.message ?? err}`);
+            else showToast(`Erro ao atualizar os dados do estudo (os números na tela podem estar desatualizados): ${err?.message ?? err}`, 'error');
         } finally {
             if (showGlobalLoader) setLoading(false);
         }
@@ -86,7 +93,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                                 onClick={async () => {
                                     const res = await PlantaAiIntegration.updatePlantaAiFromImovib(study.id, study.planta_ai_study_id!);
                                     if (!res.success) {
-                                        alert("Erro ao atualizar o Planta AI: " + res.error);
+                                        showToast("Erro ao atualizar o Planta AI: " + res.error, 'error');
                                     }
                                     window.location.hash = `#/planta-ai?studyId=${study.planta_ai_study_id}`;
                                 }}
@@ -103,7 +110,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                                     if (res.success && res.plantaAiStudyId) {
                                         window.location.hash = `#/planta-ai?studyId=${res.plantaAiStudyId}`;
                                     } else {
-                                        alert("Erro ao criar estudo na Planta AI: " + res.error);
+                                        showToast("Erro ao criar estudo na Planta AI: " + res.error, 'error');
                                     }
                                 }}
                                 className="mt-3 flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest"

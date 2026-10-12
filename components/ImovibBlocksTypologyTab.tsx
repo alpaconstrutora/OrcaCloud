@@ -72,7 +72,10 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
 
     useEffect(() => { setFormData(study); }, [study]);
     useEffect(() => {
-        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setRegulatoryZones).catch(console.error);
+        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setRegulatoryZones).catch((e) => {
+            console.error(e);
+            notify(`Erro ao carregar as zonas regulatórias (potencial construtivo): ${(e as Error).message}`, 'error');
+        });
     }, [study.id]);
 
     const handleSaveLand = async () => {
@@ -150,6 +153,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
             onDataChanged();
         } catch (e) {
             console.error(e);
+            notify(`Erro ao adicionar tipologia: ${(e as Error).message}`, 'error');
         }
     };
 
@@ -164,12 +168,25 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
             onDataChanged();
         } catch (e) {
             console.error(e);
+            notify(`Erro ao salvar a tipologia "${unit.name}": ${(e as Error).message}`, 'error');
         }
     };
 
-    const handleDeleteUnit = async (id: string) => {
-        await imovibService.deleteUnit(id);
-        onDataChanged();
+    const handleDeleteUnit = async (unit: ImovibUnit) => {
+        const ok = await confirm({
+            title: 'Excluir tipologia?',
+            message: `A tipologia "${unit.name}" será excluída.`,
+            confirmLabel: 'Excluir',
+            variant: 'danger',
+        });
+        if (!ok) return;
+        try {
+            await imovibService.deleteUnit(unit.id);
+            onDataChanged();
+        } catch (e) {
+            console.error(e);
+            notify(`Erro ao excluir a tipologia "${unit.name}": ${(e as Error).message}`, 'error');
+        }
     };
 
     // ── Potencial construtivo (lógica preservada) ────────────────────────────
@@ -410,7 +427,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                                                 className="w-4 h-4 rounded accent-emerald-600 cursor-pointer" title="Incluir em Vendas de Ativos" />
                                                         </td>
                                                         <td className="px-4 py-2.5">
-                                                            <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUnit(unit.id)} />
+                                                            <ActionIconButton kind="delete" className="opacity-0 group-hover:opacity-100" onClick={() => handleDeleteUnit(unit)} />
                                                         </td>
                                                     </tr>
                                                 );

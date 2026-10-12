@@ -47,7 +47,7 @@ export const imovibService = {
      * 2026-10-12 (modo Completo) — sem elas a listagem mostraria VPL/TIR
      * diferentes do Resumo do mesmo estudo.
      */
-    async getStudiesWithMetrics(organizationId?: string): Promise<ImovibStudy[]> {
+    async getStudiesWithMetrics(organizationId?: string | null): Promise<ImovibStudy[]> {
         let query = supabase
             .from('imovib_studies')
             // metadados da listagem + todos os escalares lidos por computeImovibMath
@@ -161,52 +161,56 @@ export const imovibService = {
         }
 
         if (study && includeDetails) {
-            try {
-                const { data: blocks, error: blocksError } = await supabase
-                    .from('imovib_blocks')
-                    .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
-                    .eq('study_id', id)
+            // Blocos/tipologias e CAPEX: falha aqui PROPAGA, como no espelho logo
+            // abaixo. Antes cada leitura tinha um try/catch que devolvia [] — sem
+            // blocos o VGV e o custo de obra caíam a zero, sem rubricas o CAPEX
+            // sumia do cálculo, e a tela mostrava esses números como se fossem
+            // reais, sem nenhum aviso. Quem chama (ImovibDetailView) mostra o erro.
+            const { data: blocks, error: blocksError } = await supabase
+                .from('imovib_blocks')
+                .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
+                .eq('study_id', id)
+                .order('created_at', { ascending: true });
+
+            if (blocksError) {
+                console.error('Error loading study blocks:', blocksError);
+                throw new Error(`Failed to fetch study blocks: ${blocksError.message}`);
+            }
+
+            if (blocks && blocks.length > 0) {
+                const blockIds = blocks.map(b => b.id);
+                const { data: units, error: unitsError } = await supabase
+                    .from('imovib_units')
+                    .select('id, block_id, name, quantity, private_area, common_area, pavimentos, is_vendavel, created_at, updated_at')
+                    .in('block_id', blockIds)
                     .order('created_at', { ascending: true });
 
-                if (blocksError) throw blocksError;
-
-                if (blocks && blocks.length > 0) {
-                    const blockIds = blocks.map(b => b.id);
-                    const { data: units, error: unitsError } = await supabase
-                        .from('imovib_units')
-                        .select('id, block_id, name, quantity, private_area, common_area, pavimentos, is_vendavel, created_at, updated_at')
-                        .in('block_id', blockIds)
-                        .order('created_at', { ascending: true });
-
-                    if (unitsError) throw unitsError;
-
-                    study.blocks = blocks.map(b => ({
-                        ...b,
-                        units: units ? units.filter(u => u.block_id === b.id) : []
-                    }));
-                } else {
-                    study.blocks = [];
+                if (unitsError) {
+                    console.error('Error loading study units:', unitsError);
+                    throw new Error(`Failed to fetch study units: ${unitsError.message}`);
                 }
-            } catch (err) {
-                console.error('Error loading study blocks/units:', err);
+
+                study.blocks = blocks.map(b => ({
+                    ...b,
+                    units: units ? units.filter(u => u.block_id === b.id) : []
+                }));
+            } else {
                 study.blocks = [];
             }
 
-            try {
-                // Fetch CAPEX Items
-                const { data: capex, error: capexError } = await supabase
-                    .from('imovib_capex_items')
-                    .select(CAPEX_COLS)
-                    .eq('study_id', id)
-                    .order('category', { ascending: true })
-                    .order('created_at', { ascending: true });
+            // Fetch CAPEX Items
+            const { data: capex, error: capexError } = await supabase
+                .from('imovib_capex_items')
+                .select(CAPEX_COLS)
+                .eq('study_id', id)
+                .order('category', { ascending: true })
+                .order('created_at', { ascending: true });
 
-                if (capexError) throw capexError;
-                study.capex_items = capex || [];
-            } catch (err) {
-                console.error('Error loading study CAPEX items:', err);
-                study.capex_items = [];
+            if (capexError) {
+                console.error('Error loading study CAPEX items:', capexError);
+                throw new Error(`Failed to fetch CAPEX items: ${capexError.message}`);
             }
+            study.capex_items = capex || [];
 
             // Espelho de vendas: o VGV do bloco sai dele quando existe. Falha aqui
             // PROPAGA — engolir faria o VGV cair em silêncio para preço/m².

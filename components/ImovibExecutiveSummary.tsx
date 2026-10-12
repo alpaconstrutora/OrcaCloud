@@ -8,6 +8,7 @@ import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChar
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
+import { useToast } from '../hooks/useToast';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -33,6 +34,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const { showToast } = useToast();
 
     // Calculate Net Margin
     const netProfit = cashFlowData.vpl; // Technically VPL is discounted. Let's calculate plain Net Profit
@@ -51,10 +53,15 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             'Exposição Acumulada (Fundo de Caixa)': flow.acc
         }));
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Fluxo_de_Caixa");
-        XLSX.writeFile(wb, `Imovib_${study.name.replace(/ /g, '_')} _Fluxo.xlsx`);
+        try {
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Fluxo_de_Caixa");
+            XLSX.writeFile(wb, `Imovib_${study.name.replace(/ /g, '_')} _Fluxo.xlsx`);
+        } catch (err) {
+            console.error('Error exporting Excel:', err);
+            showToast(`Erro ao exportar o fluxo de caixa para Excel: ${(err as Error).message}`, 'error');
+        }
     };
 
     const exportToPDF = async () => {
@@ -101,7 +108,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             pdf.save(`Imovib_${study.name.replace(/ /g, '_')} _Viabilidade.pdf`);
         } catch (err) {
             console.error('Error exporting PDF:', err);
-            alert('Ocorreu um erro ao gerar o PDF.');
+            showToast(`Erro ao gerar o PDF do resumo executivo: ${(err as Error).message}`, 'error');
         } finally {
             setIsExporting(false);
         }

@@ -9,8 +9,10 @@ import { KpiCard } from './ui/KpiCard';
 import { formatMoney, formatDateBR, formatPercent, Money } from './ui/Format';
 import { computeImovibMath, ImovibMathResult } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
+import { useOrgContext } from '../hooks/useOrgContext';
 
 interface ImovibDashboardProps {
+    /** Ignorado: a organização vem do topo (useOrgContext, REGRA #5). */
     organizationId?: string;
     onNewStudy: () => void;
     onViewStudy: (id: string) => void;
@@ -73,7 +75,11 @@ interface StudyRow {
     margin: number; // pontos percentuais; NaN quando VGV = 0
 }
 
-const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ organizationId, onNewStudy, onViewStudy }) => {
+const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStudy }) => {
+    // REGRA #5: a org vem do topo via useOrgContext (empresa no topo herda a org
+    // dela; null = "Todas", que não bloqueia a leitura). A prop crua que vinha
+    // do AppRouter era null com empresa selecionada e listava todas as orgs.
+    const { orgId: organizationId } = useOrgContext();
     const [studies, setStudies] = useState<ImovibStudy[]>([]);
     const [loading, setLoading] = useState(true);
     // F2: filtros/visão sobrevivem a navegação/reload.

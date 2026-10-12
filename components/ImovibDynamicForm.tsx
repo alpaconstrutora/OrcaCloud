@@ -4,6 +4,7 @@ import { imovibService } from '../services/imovibService';
 import { Calendar, Percent, Save, TrendingUp } from 'lucide-react';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useImovibMath } from '../hooks/useImovibMath';
+import { useToast } from '../hooks/useToast';
 
 interface ImovibDynamicFormProps {
     study: ImovibStudy;
@@ -12,6 +13,7 @@ interface ImovibDynamicFormProps {
 
 const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChanged }) => {
     const [saving, setSaving] = useState(false);
+    const { showToast } = useToast();
 
     // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
     const D = IMOVIB_DEFAULTS;
@@ -55,6 +57,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
             onDataChanged();
         } catch (e) {
             console.error(e);
+            showToast(`Erro ao salvar as premissas dinâmicas: ${(e as Error).message}`, 'error');
         } finally {
             setSaving(false);
         }

@@ -5,6 +5,7 @@ import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Activity, TrendingDown, TrendingUp, AlertOctagon, ShieldAlert } from 'lucide-react';
 import { imovibService } from '../services/imovibService';
+import { useToast } from '../hooks/useToast';
 
 interface ImovibSensitivityFormProps {
     study: ImovibStudy;
@@ -72,6 +73,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
     // Qualitative Risk Management (Saved in swot_analysis JSONB for simplicity)
     const [riskNotes, setRiskNotes] = useState((study.swot_analysis?.risks as string) || '');
     const [isSaving, setIsSaving] = useState(false);
+    const { showToast } = useToast();
 
     const handleSaveRisks = async () => {
         try {
@@ -83,6 +85,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
             onDataChanged();
         } catch (e) {
             console.error(e);
+            showToast(`Erro ao salvar o mapa de riscos qualitativos: ${(e as Error).message}`, 'error');
         } finally {
             setIsSaving(false);
         }

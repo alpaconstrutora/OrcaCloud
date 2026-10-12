@@ -2,8 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Building2, MapPin, Target, AlertCircle, Loader2 } from 'lucide-react';
 import { ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate } from '../types';
 import { imovibService } from '../services/imovibService';
+import { useOrgWriteTarget } from '../hooks/useOrgContext';
+import { useToast } from '../hooks/useToast';
 
 interface ImovibFormProps {
+    /** Ignorado: a organização vem do topo (useOrgWriteTarget, REGRA #5). */
     organizationId?: string;
     studyId?: string; // If provided, edit mode. If not, create mode.
     onBack: () => void;
@@ -15,7 +18,9 @@ const SUB_CLASSIFICATIONS = ['Econômico', 'Médio', 'Alto', 'Luxo', 'MCMV F1', 
 const PHASES = ['Greenfield', 'Brownfield', 'Retrofit', 'Conversão de Uso'];
 const MODALITIES = ['Incorporação Própria', 'Built-to-Sell', 'Built-to-Rent', 'Land Banking', 'Permuta'];
 
-const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack, onSaved }) => {
+const ImovibForm: React.FC<ImovibFormProps> = ({ studyId, onBack, onSaved }) => {
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(!!studyId);
     const [formData, setFormData] = useState<Partial<ImovibStudy>>({
@@ -45,6 +50,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                 }
             } catch (error) {
                 console.error('Error loading study:', error);
+                showToast(`Erro ao carregar o estudo para edição: ${(error as Error).message}`, 'error');
             } finally {
                 setInitialLoading(false);
             }
@@ -68,7 +74,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name) {
-            alert('O nome do empreendimento é obrigatório.');
+            showToast('O nome do empreendimento é obrigatório.', 'error');
             return;
         }
 
@@ -78,14 +84,14 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
             if (studyId) {
                 saved = await imovibService.updateStudy(studyId, formData as ImovibStudyUpdate);
             } else {
-                if (!organizationId) {
-                    alert('Por favor, selecione uma organização no menu superior antes de salvar.');
-                    setLoading(false);
-                    return;
-                }
+                // REGRA #5: o topo manda. Org ou empresa selecionada → usa a org
+                // dela, sem perguntar; "Todas" → pergunta (estudo é de UMA org).
+                // Antes: alert "selecione uma organização" mesmo com empresa no topo.
+                const target = await resolveWriteOrg('single');
+                if (!target || target.kind !== 'org') { setLoading(false); return; }
                 const newStudy: ImovibStudyInsert = {
                     ...formData,
-                    organization_id: organizationId,
+                    organization_id: target.orgId,
                     name: formData.name || 'Novo Estudo',
                     version: formData.version || '1.0',
                 } as ImovibStudyInsert;
@@ -94,7 +100,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
             onSaved(saved);
         } catch (error) {
             console.error('Error saving study:', error);
-            alert('Erro ao salvar o estudo.');
+            showToast(`Erro ao salvar o estudo: ${(error as Error).message}`, 'error');
         } finally {
             setLoading(false);
         }
@@ -370,6 +376,7 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ organizationId, studyId, onBack
                     </div>
                 </div>
             </form>
+            {orgTargetModal}
         </div>
     );
 };

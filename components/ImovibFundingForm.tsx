@@ -4,6 +4,20 @@ import { imovibService } from '../services/imovibService';
 import { DollarSign, Landmark, PieChart, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import ImovibSalesMapTab from './ImovibSalesMapTab';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import { useToast } from '../hooks/useToast';
+
+// Nome do campo como aparece na tela, para a mensagem de erro ao salvar.
+const ROTULO_CAMPO: Partial<Record<keyof ImovibStudy, string>> = {
+    revenue_downpayment_percent: 'Sinal / Ato',
+    revenue_construction_percent: 'Mensais / Obra',
+    revenue_handover_percent: 'Repasse Bancário / Chaves',
+    default_rate_percent: 'Inadimplência (Default)',
+    cancellation_rate_percent: 'Distratos Projetados',
+    funding_equity_percent: 'Capital Próprio (Equity)',
+    funding_debt_percent: 'Financ. à Produção / Dívida',
+    swap_financial_percent: 'Permuta Financeira',
+    swap_physical_percent: 'Permuta Física',
+};
 
 interface ImovibFundingFormProps {
     study: ImovibStudy;
@@ -14,6 +28,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
     // We keep local state for instant feedback on validation, but still auto-save on blur
     // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
     const D = IMOVIB_DEFAULTS;
+    const { showToast } = useToast();
     const [downpayment, setDownpayment] = useState<number>(study.revenue_downpayment_percent ?? D.revenue_downpayment_percent);
     const [construction, setConstruction] = useState<number>(study.revenue_construction_percent ?? D.revenue_construction_percent);
     const [handover, setHandover] = useState<number>(study.revenue_handover_percent ?? D.revenue_handover_percent);
@@ -36,7 +51,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
             onDataChanged();
         } catch (e) {
             console.error('Failed to update field', field, e);
-            alert(`Erro ao salvar campo: ${field}`);
+            showToast(`Erro ao salvar o campo "${ROTULO_CAMPO[field] ?? String(field)}": ${(e as Error).message}`, 'error');
         }
     };
 

@@ -340,7 +340,16 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - Unidade sobrando só sai com uma 2ª confirmação ("Manter" é opção).
     - "Gerar" relê o banco e cria só o que falta, então o falso "não gerado" não duplica mais.
     - Novo `imovibService.deleteUnitInstancesByIds`. 5 testes.
-  - [ ] 4.5 · [ ] 4.6 · [ ] 4.7
+  - [x] **4.5** — `ImovibDashboard` lê a org de `useOrgContext()` (empresa no topo herda a org; "Todas" = null, não bloqueia) e `ImovibForm` cria com `useOrgWriteTarget` no modo `'single'` (topo com org/empresa = sem pergunta; "Todas" = modal), no lugar do `alert('selecione uma organização')`. A prop crua `organizationId` ficou ignorada nos dois. `SalesManagementModule` continua passando a prop para os outros submódulos (Vendas, Locações), fora do escopo. Verificado: `orgContextGuard` 14/14, `check-org-selector-guard.sh` exit 0.
+  - [ ] **4.6** — Decisão (2026-10-12): *"Aplicar canEditImovib"*. Sem a permissão, o estudo abre só para leitura. A trava de rota em "Todas" continua igual à dos outros módulos.
+  - [x] **4.7** — Falhas visíveis em 12 componentes + serviço (feito por um subagente na frente; conferido por mim):
+    - 0 `alert(`. Cada um dos 36 `console.error` avisa o usuário na mesma função.
+    - `getStudyById` propaga erro de blocos/unidades/CAPEX (antes devolvia `[]` e o VGV/custo caía a zero em silêncio).
+    - Espelho: falha de leitura vira estado de erro com "Tentar de novo"; o "Gerar" só aparece com leitura OK e vazia.
+    - ESG `toggleInitiative` com `await`/`catch`. Excluir tipologia pede confirmação.
+    - `saveMode` do CAPEX volta ao modo anterior se a gravação falha.
+    - Efeito a saber: `OpportunityDetail` e `imovibAdapter` também chamam `getStudyById`; uma falha parcial agora interrompe em vez de mostrar estudo vazio.
+    - Verificado: tsc exit 0; `check-ui-standard` exit 0 nos 14 `Imovib*.tsx`; testes do módulo + `orgContextGuard` + `SyncCenterTab` 62/62.
 - [ ] **Fase 5 — 0 de 7:** 5.1 · 5.2 · 5.3 · 5.4 · 5.5 · 5.6 · 5.7
 
 ## Verificação

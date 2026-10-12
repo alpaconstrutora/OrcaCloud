@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { ITENS_DA_BIBLIOTECA, familiasDaBiblioteca, filtrarBiblioteca, miniaturaDoComponente, pontoDoSoltar, tipoDoArraste } from '../utils/blueprintBiblioteca';
-import { tracosDoComponente } from '../utils/blueprintHumanizada';
+import { linhasDoMobiliario, tracosDoMobiliario } from '../utils/blueprintSimbolosMobiliario';
+import { CATALOGO_DE_COMPONENTES } from '../utils/blueprintKernel';
 import { DesenhistaDeProva, PAPEIS, desenharPlanta, enquadrar } from '../utils/blueprintExport';
 
 describe('biblioteca — a busca e as famílias', () => {
@@ -71,18 +72,22 @@ describe('biblioteca — a miniatura e os símbolos por tipo', () => {
     expect(miniaturaDoComponente('CONJUNTO_JANTAR').contornos).toHaveLength(5);
   });
 
-  it('símbolos por tipo: o sofá ganha os assentos e difere da poltrona; o fogão segue com as 4 bocas; tudo dentro da peça', () => {
-    expect(tracosDoComponente('SOFA').length).toBeGreaterThan(tracosDoComponente('POLTRONA').length);
-    expect(tracosDoComponente('FOGAO').filter((t) => t.tipo === 'circulo')).toHaveLength(4);
-    expect(tracosDoComponente('RACK')).not.toEqual(tracosDoComponente('CRIADO'));
+  it('símbolos por tipo (F16): o sofá tem mais almofadas que a poltrona; o fogão segue com as 4 bocas; rack ≠ criado; tudo dentro da peça', () => {
+    const f = (t: keyof typeof CATALOGO_DE_COMPONENTES) => CATALOGO_DE_COMPONENTES[t];
+    const n = (t: keyof typeof CATALOGO_DE_COMPONENTES) => linhasDoMobiliario(t, f(t).larguraMm, f(t).profundidadeMm, { detalhe: false }).length;
+    expect(n('SOFA')).toBeGreaterThan(n('POLTRONA'));
+    const bocas = tracosDoMobiliario('FOGAO', 600, 600).tracos.filter((t) => t.tipo === 'elipse' && t.pena === 'detalhe');
+    expect(bocas).toHaveLength(4);
+    expect(linhasDoMobiliario('RACK', 500, 400, { detalhe: true })).not.toEqual(linhasDoMobiliario('CRIADO', 500, 400, { detalhe: true }));
     for (const it of ITENS_DA_BIBLIOTECA) {
-      for (const t of tracosDoComponente(it.tipoId)) {
-        const pts = t.tipo === 'linha' ? [t.a, t.b] : t.tipo === 'poli' ? t.pontos : [t.c];
-        for (const [x, y] of pts) {
+      const L = f(it.tipoId).larguraMm;
+      const P = f(it.tipoId).profundidadeMm;
+      for (const l of linhasDoMobiliario(it.tipoId, L, P, { detalhe: true })) {
+        for (const [x, y] of l.pts) {
           expect(x, it.tipoId).toBeGreaterThanOrEqual(0);
-          expect(x, it.tipoId).toBeLessThanOrEqual(1);
+          expect(x, it.tipoId).toBeLessThanOrEqual(L);
           expect(y, it.tipoId).toBeGreaterThanOrEqual(0);
-          expect(y, it.tipoId).toBeLessThanOrEqual(1);
+          expect(y, it.tipoId).toBeLessThanOrEqual(P);
         }
       }
     }
@@ -101,7 +106,7 @@ describe('biblioteca — mobiliário na planta técnica do PDF', () => {
     const d = new DesenhistaDeProva();
     const op = { denominador: 50, papel: PAPEIS[0], titulo: 't', revisao: 1, hash: 'h', data: new Date('2026-10-11T12:00:00Z'), ...extra } as Parameters<typeof desenharPlanta>[2];
     desenharPlanta(d, m, op, enquadrar(m, 50, PAPEIS[0], true));
-    return d.chamadas.filter((c) => c.tipo === 'linha' && (c.args[4] as { cor: string }).cor === '#555555').length;
+    return d.chamadas.filter((c) => c.tipo === 'linha' && (c.args[4] as { cor: string }).cor === '#1f2937').length;
   };
 
   it('desligado (o padrão): a técnica sai sem móveis, como sempre', () => {

@@ -5,7 +5,7 @@
  * põe a peça no ponto solto (um Ctrl+Z desfaz). Clicar arma a ferramenta, para quem
  * prefere (ou só tem) o teclado: o clique seguinte na planta põe a peça.
  *
- * A miniatura é o MESMO símbolo da planta e do PDF (`tracosDoComponente`), encaixado.
+ * A miniatura é o MESMO símbolo da planta e do PDF (`simboloNoMundo`, sem o detalhe fino), encaixado.
  * As contas (busca, ponto do soltar, miniatura) moram em `utils/blueprintBiblioteca.ts`.
  */
 import { useMemo, useState } from 'react';
@@ -30,10 +30,10 @@ function Miniatura({ tipoId }: { tipoId: TipoDeComponente }) {
   return (
     <svg viewBox="0 0 56 56" className="h-14 w-14" aria-hidden="true">
       {m.contornos.map((c, i) => (
-        <path key={`c${i}`} d={caminho(c)} className="fill-slate-100 stroke-slate-500" strokeWidth={1} />
+        <path key={`c${i}`} d={caminho(c)} className="fill-slate-100 stroke-none" />
       ))}
       {m.tracos.map((t, i) => (
-        <path key={`t${i}`} d={caminho(t)} className="fill-none stroke-slate-500" strokeWidth={0.8} />
+        <path key={`t${i}`} d={caminho(t)} className="fill-none stroke-slate-700" strokeWidth={0.9} />
       ))}
     </svg>
   );

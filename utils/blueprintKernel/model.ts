@@ -2013,12 +2013,15 @@ export const CONJUNTOS_DE_COMPONENTES: Partial<Record<TipoDeComponente, readonly
     { tipoId: 'LAVATORIO', dxMm: -150, dyMm: 450, rotacaoGraus: 0 },
     { tipoId: 'BOX', dxMm: 750, dyMm: -300, rotacaoGraus: 0 },
   ],
+  // F16 (12/10/2026): as cadeiras de FRENTE para a mesa. O encosto da peça fica no fundo local (+y com giro 0):
+  // a cadeira ao norte (dy > 0) gira 0 e a ao sul 180. Antes estava trocado e as 4 nasciam de costas para a mesa
+  // (no 2D e no 3D). Vale para conjuntos novos; os já colocados guardam a rotação que tinham.
   CONJUNTO_JANTAR: [
     { tipoId: 'MESA_JANTAR', dxMm: 0, dyMm: 0, rotacaoGraus: 0 },
-    { tipoId: 'CADEIRA', dxMm: -350, dyMm: 700, rotacaoGraus: 180 },
-    { tipoId: 'CADEIRA', dxMm: 350, dyMm: 700, rotacaoGraus: 180 },
-    { tipoId: 'CADEIRA', dxMm: -350, dyMm: -700, rotacaoGraus: 0 },
-    { tipoId: 'CADEIRA', dxMm: 350, dyMm: -700, rotacaoGraus: 0 },
+    { tipoId: 'CADEIRA', dxMm: -350, dyMm: 700, rotacaoGraus: 0 },
+    { tipoId: 'CADEIRA', dxMm: 350, dyMm: 700, rotacaoGraus: 0 },
+    { tipoId: 'CADEIRA', dxMm: -350, dyMm: -700, rotacaoGraus: 180 },
+    { tipoId: 'CADEIRA', dxMm: 350, dyMm: -700, rotacaoGraus: 180 },
   ],
   CONJUNTO_DORMITORIO: [
     { tipoId: 'CAMA_CASAL', dxMm: 0, dyMm: 0, rotacaoGraus: 0 },

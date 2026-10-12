@@ -644,6 +644,53 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
   - Testes: `__tests__/blueprintRastrear.test.ts` (14) e `components/PainelGerarParedes.test.tsx` (+3).
   - Pendente (precisa da chave): medir a qualidade com o Claude de verdade em plantas reais do usuário.
 
+### Bloco 4 — qualidade do desenho (pedido depois da F15)
+
+**F16 — Símbolos 2D de mobiliário com qualidade de prancha** · `utils/blueprintSimbolosMobiliario.ts` (novo), `utils/blueprintHumanizada.ts` (`simboloNoMundo`), `BlueprintCanvas.tsx`, `utils/blueprintExport.ts`, `utils/blueprintBiblioteca.ts`, `PainelBibliotecaComponentes.tsx`
+
+Pedido (12/10/2026): *"símbolos em planta (2D) São desenhados pelo próprio código do sistema. Como melhorar a
+qualidade dos desenhos?"* → proposta (desenho próprio: curvas, penas, nível de detalhe por escala; prancha de
+comparação antes) → *"sim"* → prancha `docs/spikes/simbolos-2d/prancha.png` (cama, sofá, mesa, vaso; hoje ×
+proposta em 1:50 e 1:100) → *"Melhorou bastante. Pode alterar."*
+
+- Muda: o símbolo passa a ser uma função das MEDIDAS da peça, em mm (raio de canto, travesseiro, cuba não
+  deformam ao esticar), com curvas (canto arredondado, elipse, Bézier), três penas no papel (contorno 0,25 ·
+  detalhe 0,13 · textura 0,09 mm), tracejado para o que fica escondido e nível de detalhe (o fino só de 1:50
+  para cima na prancha; na tela, só com a peça grande o bastante). Os 24 tipos redesenhados; o conjunto segue
+  desenhando os filhos. Fonte única para tela, PDF técnico (opção Mobiliário), PDF humanizado e miniatura da
+  Biblioteca. O DXF segue sem mobiliário (como na F9). 3D não muda.
+- Decisões: a MESA DE JANTAR desenha só o tampo, na medida real — as cadeiras são peças próprias (o "Conjunto de
+  jantar" já é mesa + 4 cadeiras; o desenho de hoje punha cadeiras DENTRO da mesa e o conjunto ficava com 8).
+  Traço quase preto (lê melhor impresso).
+- Defeito achado no caminho: no "Conjunto de jantar" as 4 cadeiras nasciam DE COSTAS para a mesa (rotações
+  trocadas em `CONJUNTOS_DE_COMPONENTES`) — no 2D e no 3D. Corrigido no catálogo (vale para conjuntos novos;
+  os já colocados mantêm a rotação gravada).
+- Pronto quando: teste — todo tipo desenha dentro da caixa, sem NaN, com contorno; menos traços sem o detalhe;
+  esticar a peça não deforma o raio; cadeiras do conjunto de frente para a mesa; no app, a planta com móveis na
+  tela e no PDF técnico com Mobiliário.
+- **Feito na execução (12/10, sem bump de kernel — o formato do modelo não muda):**
+  - `utils/blueprintSimbolosMobiliario.ts`: `tracosDoMobiliario(tipo, L, P)` (os 24 tipos em mm, com curvas,
+    penas e `lod`), `linhasDoMobiliario(…, {detalhe})` (polilinhas prontas, presas à caixa; a bacia do vaso
+    recortada sob a caixa acoplada), `PENA_MM`/`PENA_PX`, `DENOMINADOR_MAXIMO_DO_DETALHE` (50) e
+    `PX_MINIMO_DO_DETALHE` (48 px no menor lado). Saíram `tracosDoSimbolo`/`tracosDoComponente` (o desenho de antes
+    ficou em `docs/spikes/simbolos-2d/simbolosDeAntes.ts` para a prancha de comparação continuar gerável).
+  - `simboloNoMundo(c, {detalhe})` devolve `linhas` com a pena (e `tracos` sem ela). Tela: cada linha na pena
+    (px), tracejado, detalhe pelo tamanho na tela; a CAIXA só é contornada selecionada/sugerida/em fase/conjunto
+    (senão duplicaria o contorno arredondado). PDF técnico: penas de prancha em `#1f2937`, detalhe só ≤ 1:50,
+    tracejado com a fase contínua ao longo da polilinha (`linhaDoMobiliario`). PDF humanizado: mesmas linhas na
+    cor da família; a caixa do CONJUNTO deixou de ser pintada (é agrupamento). Miniatura: versão limpa, caixa só
+    como fundo.
+  - `CONJUNTOS_DE_COMPONENTES.CONJUNTO_JANTAR`: cadeiras ao norte giro 0, ao sul 180 (estavam de costas para a
+    mesa). ⚠️ Conjuntos JÁ colocados guardam a rotação antiga — no estudo "Planta 11/10/2026" as 4 cadeiras
+    aparecem de costas (girar cada uma 180°, ou apagar e inserir o conjunto de novo).
+  - Conferência visual: `docs/spikes/simbolos-2d/catalogo.png` (os 24 tipos em 1:50 e 1:100, pelo módulo real).
+  - Prova: `__tests__/blueprintSimbolosMobiliario.test.ts` (10: dentro da caixa e sem NaN para todo tipo; menos
+    linhas sem detalhe; hierarquia das penas; raio do sofá igual ao esticar e almofadas pela largura; travesseiros
+    1/2; mesa = tampo de 1,40 × 0,90; vaso recortado; cadeiras do conjunto de frente; PDF 1:50 com as 3 penas e
+    1:100 sem a textura) + `blueprintBiblioteca`/`blueprintHumanizada` atualizados ao requisito novo.
+    ✅ No app (só leitura, "Planta 11/10/2026"): camas com travesseiros e edredom, mesa só com o tampo, cadeiras
+    com encosto curvo, armário com cabideiro; rascunho intocado (md5 igual antes/depois).
+
 ## Estado
 - [x] F0 — `9e4ae93e` · [x] F1 — provada no app 11/10 · [x] F2 — provada no app com escrita, Ctrl+Z incluso
   · [x] F3 — `932030a5`, provada no app com escrita + PDF/DXF por teste · [x] F4 — `892681e4`, provada no
@@ -652,7 +699,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
   kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [x] F9 — provada no app com escrita (arrastar → ponto solto → Ctrl+Z) · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
-- [x] F11 — `51135a40`, contorno L/U/T inteiro + aplicação em um lote; provada no app · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [x] F13 — PNG do 3D (HD/QHD/4K) por render fora da tela; provada no app · [ ] F14.0 — comparação feita, escolha ADIADA pelo usuário (12/10) · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [x] F15 — rastrear com Claude visão + conferência no fundo; provada no app com resposta simulada (falta a chave ANTHROPIC_API_KEY no Supabase)
+- [x] F11 — `51135a40`, contorno L/U/T inteiro + aplicação em um lote; provada no app · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [x] F13 — PNG do 3D (HD/QHD/4K) por render fora da tela; provada no app · [ ] F14.0 — comparação feita, escolha ADIADA pelo usuário (12/10) · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [x] F15 · [x] F16 — símbolos 2D com penas, curvas e detalhe por escala; provada no app (só leitura) — rastrear com Claude visão + conferência no fundo; provada no app com resposta simulada (falta a chave ANTHROPIC_API_KEY no Supabase)
 
 ## Verificação (por fase)
 1. `npx vitest run __tests__/<arquivos da fase>` + goldens do kernel quando houver bump; `npm run typecheck` (ler `exit=` por grep).

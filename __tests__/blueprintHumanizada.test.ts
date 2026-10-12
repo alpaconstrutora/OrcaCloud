@@ -144,17 +144,25 @@ describe('planta humanizada (E8.4)', () => {
     expect(vegetacaoSimbolica(semLote, t).map((p) => p.tipo)).toEqual(['ARBUSTO']);
   });
 
-  it('componente: o símbolo no mundo tem o contorno de 4 pontos, os traços do fogão (4 círculos de 25 lados) e as cores da família', () => {
+  it('componente: o símbolo no mundo tem a caixa de 4 pontos, as 4 bocas do fogão (círculos de 41 pontos, pena de detalhe) e as cores da família', () => {
     const { m, t } = casa();
     const r = applyCommand(m, { type: 'AddComponente', levelId: t, tipoId: 'FOGAO', at: point(5000, 1000), rotacaoGraus: 0 } as Command);
     const fogao = r.model.componentes![0];
-    const s = simboloNoMundo(fogao);
+    const s = simboloNoMundo(fogao, { detalhe: false });
     expect(s.contorno).toHaveLength(4);
-    expect(s.tracos).toHaveLength(4);
-    expect(s.tracos.every((tr) => tr.length === 25)).toBe(true);
+    const bocas = s.linhas.filter((l) => l.pena === 'detalhe' && l.pts.length === 41);
+    expect(bocas).toHaveLength(4);
+    expect(s.tracos).toHaveLength(s.linhas.length);
     expect(s.cores).toEqual({ fundo: '#e5e7eb', traco: '#4b5563' });
-    // Todos os pontos dos círculos ficam dentro do contorno da peça.
-    for (const tr of s.tracos) for (const p of tr) expect(pointInPolygon(s.contorno, p)).toBe(true);
+    // Tudo fica dentro da caixa da peça (com 1 mm de folga do arredondamento).
+    const xs = s.contorno.map((p) => p.x);
+    const ys = s.contorno.map((p) => p.y);
+    for (const tr of s.tracos) for (const p of tr) {
+      expect(p.x).toBeGreaterThanOrEqual(Math.min(...xs) - 1);
+      expect(p.x).toBeLessThanOrEqual(Math.max(...xs) + 1);
+      expect(p.y).toBeGreaterThanOrEqual(Math.min(...ys) - 1);
+      expect(p.y).toBeLessThanOrEqual(Math.max(...ys) + 1);
+    }
   });
 
   it('PDF: a planta humanizada pinta o piso com a cor do material e a trama, a sombra de cada parede, o mobiliário com a cor da família e a copa das árvores; sem cotas; a técnica não tem nada disso', () => {

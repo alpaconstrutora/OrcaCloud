@@ -44,6 +44,7 @@ import { contornoDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, dataDaRevis
 import { acabamentosDoAmbiente, contornoEmPlanta, ehConjunto, extensaoDeCanto, isFreeWallEnd, wallLength } from './blueprintKernel';
 import { linhasDoPadrao } from './blueprintPadroes';
 import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
+import { DENOMINADOR_MAXIMO_DO_DETALHE, PENA_MM, type Pena } from './blueprintSimbolosMobiliario';
 import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo, sombraDaParede, tramaDoPiso, vegetacaoSimbolica } from './blueprintHumanizada';
 import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
@@ -349,7 +350,7 @@ export interface OpcoesExportacao {
   humanizada?: boolean;
   /**
    * MOBILIÁRIO NA PLANTA TÉCNICA (F9, 11/10/2026): os componentes com o contorno e o símbolo do tipo
-   * (`simboloNoMundo` — o mesmo da tela), em traço fino cinza. Ausente/false = a técnica sem móveis, como
+   * (`simboloNoMundo` — o mesmo da tela), com as penas de prancha (F16; o detalhe fino só de 1:50 para cima). Ausente/false = a técnica sem móveis, como
    * sempre; a humanizada já os leva coloridos.
    */
   mobiliario?: boolean;
@@ -712,11 +713,11 @@ export function desenharPlanta(
   // ── HUMANIZADA (E8.4): mobiliário por família e vegetação simbólica ──────
   if (opcoes.humanizada) {
     for (const c of model.componentes ?? []) {
-      const { contorno, tracos: linhas, cores } = simboloNoMundo(c);
+      // O CONJUNTO é agrupamento: os filhos desenham por si (pintar a caixa dele cobriria a sala).
+      if (ehConjunto(c.tipoId)) continue;
+      const { contorno, linhas, cores } = simboloNoMundo(c, { detalhe: opcoes.denominador <= DENOMINADOR_MAXIMO_DO_DETALHE });
       d.poligono(contorno.map((p) => ({ x: px(p.x), y: py(p.y) })), cores.fundo);
-      const fechado = [...contorno, contorno[0]];
-      for (let i = 0; i + 1 < fechado.length; i++) d.linha(px(fechado[i].x), py(fechado[i].y), px(fechado[i + 1].x), py(fechado[i + 1].y), { espessuraMm: ESPESSURA_FINA_MM, cor: cores.traco });
-      for (const poli of linhas) for (let i = 0; i + 1 < poli.length; i++) d.linha(px(poli[i].x), py(poli[i].y), px(poli[i + 1].x), py(poli[i + 1].y), { espessuraMm: 0.12, cor: cores.traco });
+      for (const l of linhas) linhaDoMobiliario(d, l.pts.map((p) => ({ x: px(p.x), y: py(p.y) })), l.pena, l.tracejado, cores.traco);
     }
     // Uma vegetação por pavimento: a planta exportada pode ter mais de um (a prancha por pavimento recorta antes).
     for (const nivel of model.levels) {
@@ -737,15 +738,13 @@ export function desenharPlanta(
 
   // ── MOBILIÁRIO NA PLANTA TÉCNICA (F9): só com a opção, e nunca por cima da humanizada ─────────
   if (opcoes.mobiliario && !opcoes.humanizada) {
-    const fino = { espessuraMm: ESPESSURA_FINA_MM, cor: '#555555' };
-    const detalhe = { espessuraMm: 0.1, cor: '#555555' };
+    // F16: o símbolo com as PENAS de prancha (contorno 0,25 · detalhe 0,13 · textura 0,09 mm), quase preto, e o
+    // detalhe fino só de 1:50 para cima — em 1:100 a versão limpa. O contorno é o do símbolo, não o da caixa.
+    const detalhe = opcoes.denominador <= DENOMINADOR_MAXIMO_DO_DETALHE;
     for (const c of model.componentes ?? []) {
       // O CONJUNTO é agrupamento: os filhos desenham por si.
       if (ehConjunto(c.tipoId)) continue;
-      const { contorno, tracos: linhas } = simboloNoMundo(c);
-      const fechado = [...contorno, contorno[0]];
-      for (let i = 0; i + 1 < fechado.length; i++) d.linha(px(fechado[i].x), py(fechado[i].y), px(fechado[i + 1].x), py(fechado[i + 1].y), fino);
-      for (const poli of linhas) for (let i = 0; i + 1 < poli.length; i++) d.linha(px(poli[i].x), py(poli[i].y), px(poli[i + 1].x), py(poli[i + 1].y), detalhe);
+      for (const l of simboloNoMundo(c, { detalhe }).linhas) linhaDoMobiliario(d, l.pts.map((p) => ({ x: px(p.x), y: py(p.y) })), l.pena, l.tracejado, COR_DO_MOBILIARIO);
     }
   }
 
@@ -1694,6 +1693,40 @@ const TEXTO_COTA_MM = 2.0;
 const COR_ENVELOPE_PRANCHA = '#f59e0b';
 
 /** Um anel fechado tracejado (2 mm cheio, 1 mm vazio) — o `Desenhista` não tem tracejado. */
+/** F16: o traço do mobiliário — quase preto (lê melhor impresso que o cinza de antes). */
+const COR_DO_MOBILIARIO = '#1f2937';
+
+/**
+ * Uma polilinha do símbolo de mobiliário no papel, na pena dela; tracejada com a FASE contínua ao longo da
+ * polilinha (1,2 cheio · 0,8 vazio mm) — a elipse tesselada tem lados menores que o traço, e recomeçar a fase em
+ * cada lado a desenharia cheia.
+ */
+function linhaDoMobiliario(d: Desenhista, pts: { x: number; y: number }[], pena: Pena, tracejada: boolean, cor: string): void {
+  const estilo = { espessuraMm: PENA_MM[pena], cor };
+  if (!tracejada) {
+    for (let i = 0; i + 1 < pts.length; i++) d.linha(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, estilo);
+    return;
+  }
+  const CHEIO = 1.2;
+  const PERIODO = 2;
+  let s = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp < 1e-9) continue;
+    let t = 0;
+    while (t < comp) {
+      const fase = (s + t) % PERIODO;
+      const resto = fase < CHEIO ? CHEIO - fase : PERIODO - fase;
+      const fim = Math.min(comp, t + resto);
+      if (fase < CHEIO) d.linha(a.x + ((b.x - a.x) * t) / comp, a.y + ((b.y - a.y) * t) / comp, a.x + ((b.x - a.x) * fim) / comp, a.y + ((b.y - a.y) * fim) / comp, estilo);
+      t = fim;
+    }
+    s += comp;
+  }
+}
+
 function tracejado(d: Desenhista, anel: { x: number; y: number }[], estilo: EstiloTraco): void {
   for (let i = 0; i < anel.length; i++) segmentoTracejado(d, anel[i], anel[(i + 1) % anel.length], estilo);
 }

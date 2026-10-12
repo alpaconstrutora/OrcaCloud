@@ -98,7 +98,8 @@ import { COR_DO_USO_DO_BLOCO, rotuloDoBloco } from '../../utils/blueprintMassa';
 /** Identidade estável para o padrão do prop (um `new Set()` no parâmetro redesenharia a cada render). */
 const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
 import { COR_DA_FASE } from '../../utils/blueprintFases';
-import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tracosDoComponente, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
+import { linhasDoMobiliario, PENA_PX, PX_MINIMO_DO_DETALHE } from '../../utils/blueprintSimbolosMobiliario';
+import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
 import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
@@ -7534,7 +7535,9 @@ export default function BlueprintCanvas({
       for (const q of anel.slice(1)) ctx.lineTo(q.x, q.y);
       ctx.closePath();
       if (!ehPai) ctx.fill();
-      ctx.stroke();
+      // F16: a CAIXA só é contornada quando diz algo (selecionada, sugerida, fase de reforma, conjunto) — no
+      // resto, o contorno é o do SÍMBOLO (cantos arredondados, a bacia oval), e a caixa por cima o duplicaria.
+      if (selecionado || ehPai || c.sugerido || corDaFaseDoComponente) ctx.stroke();
       ctx.setLineDash([]);
       if (ehPai) continue;
       // Símbolo: no espaço local da peça (x ao longo da largura, y da frente ao encosto),
@@ -7542,41 +7545,26 @@ export default function BlueprintCanvas({
       const ux = { x: (anel[1].x - anel[0].x), y: (anel[1].y - anel[0].y) };
       const uy = { x: (anel[3].x - anel[0].x), y: (anel[3].y - anel[0].y) };
       const P = (fx: number, fy: number) => ({ x: anel[0].x + ux.x * fx + uy.x * fy, y: anel[0].y + ux.y * fx + uy.y * fy });
-      const linha = (a: { x: number; y: number }, b: { x: number; y: number }) => {
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      };
-      const poli = (pts: { x: number; y: number }[]) => {
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
-        ctx.closePath();
-        ctx.stroke();
-      };
       const larguraPx = Math.hypot(ux.x, ux.y);
       const profPx = Math.hypot(uy.x, uy.y);
       if (larguraPx >= 10 && profPx >= 10) {
-        ctx.lineWidth = 1;
         ctx.strokeStyle = cor;
-        // F9: os traços do TIPO (`tracosDoComponente`) — a mesma fonte do PDF e da miniatura da
-        // biblioteca. Frações locais 0..1: x ao longo da largura, y da frente ao encosto.
-        for (const tr of tracosDoComponente(c.tipoId)) {
-          if (tr.tipo === 'linha') linha(P(...tr.a), P(...tr.b));
-          else if (tr.tipo === 'poli') poli(tr.pontos.map(([fx, fy]) => P(fx, fy)));
-          else if (tr.tipo === 'circulo') {
-            const cc = P(...tr.c);
-            ctx.beginPath();
-            ctx.arc(cc.x, cc.y, Math.min(larguraPx, profPx) * tr.r, 0, Math.PI * 2);
-            ctx.stroke();
-          } else {
-            const cc = P(...tr.c);
-            ctx.beginPath();
-            ctx.ellipse(cc.x, cc.y, larguraPx * tr.rx, profPx * tr.ry, Math.atan2(ux.y, ux.x), 0, Math.PI * 2);
-            ctx.stroke();
-          }
+        // F16: o símbolo do TIPO nas medidas da peça (`linhasDoMobiliario` — a mesma fonte dos dois PDFs e da
+        // miniatura), com a pena de cada linha e o detalhe fino só com a peça grande o bastante na tela.
+        // Polilinhas em mm LOCAIS (x ao longo da largura, y da frente ao encosto), levadas à tela pelos cantos.
+        const detalhe = Math.min(larguraPx, profPx) >= PX_MINIMO_DO_DETALHE;
+        for (const l of linhasDoMobiliario(c.tipoId, c.larguraMm, c.profundidadeMm, { detalhe })) {
+          ctx.lineWidth = PENA_PX[l.pena] * (selecionado ? 1.3 : 1);
+          ctx.setLineDash(l.tracejado ? [4, 3] : []);
+          ctx.beginPath();
+          l.pts.forEach(([x, y], i) => {
+            const q = P(x / c.larguraMm, y / c.profundidadeMm);
+            if (i) ctx.lineTo(q.x, q.y);
+            else ctx.moveTo(q.x, q.y);
+          });
+          ctx.stroke();
         }
+        ctx.setLineDash([]);
       }
       // A FOLGA de manutenção da reserva (E11.1), tracejada e fina: é o que o clash confere.
       const folgaMm = c.familia === 'CLIMATIZACAO' ? (CATALOGO_DE_COMPONENTES[c.tipoId]?.folgaMm ?? 0) : 0;

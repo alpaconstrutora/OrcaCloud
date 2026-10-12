@@ -118,7 +118,7 @@ export function miniaturaDoComponente(tipoId: TipoDeComponente, ladoPx = 56, mar
       larguraMm: fi.larguraMm,
       profundidadeMm: fi.profundidadeMm,
       alturaMm: fi.alturaMm,
-    } as unknown as Parameters<typeof simboloNoMundo>[0]);
+    } as unknown as Parameters<typeof simboloNoMundo>[0], { detalhe: false });
   });
   const todos = pecas.flatMap((p) => p.contorno);
   const minX = Math.min(...todos.map((p) => p.x));

@@ -3,7 +3,7 @@ import {
     Building2, Mail, Plus, Search,
     Trash2, Edit2, LayoutDashboard, Table2,
     Activity, Users, UserPlus,
-    TrendingUp, HandCoins, Filter, Truck, Settings, Send, MoveHorizontal, Library
+    TrendingUp, HandCoins, Filter, Truck, Send, MoveHorizontal, Library, Loader2
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -147,7 +147,7 @@ function renderAllUsersCell(key: string, item: { org: Organization; member: Orga
             return null;
     }
 }
-import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import ActionIconButton from './ui/ActionIconButton';
 import { Organization, OrganizationMember, BudgetEntry } from '../types';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -512,25 +512,25 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     <td className="px-6 py-2.5 text-right">
                                                         {/* Selecionar = clique na linha (ação dominante, §9.1). O botão
                                                             "Ativo/Selecionar" antigo duplicava exatamente essa ação —
-                                                            removido. Kebab só tem o que sobra (Detalhes/Excluir). */}
-                                                        <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                                                            {isActive && <span className="text-xs font-medium text-emerald-600">Ativa</span>}
-                                                            <InlineDisclosureMenu
-                                                                menuItems={[
-                                                                    {
-                                                                        icon: <Settings className="w-[18px] h-[18px]" />,
-                                                                        label: 'Detalhes',
-                                                                        onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
-                                                                    },
-                                                                    {
-                                                                        icon: <Library className="w-[18px] h-[18px]" />,
-                                                                        label: incluindoCatalogos === org.id ? 'Incluindo...' : 'Incluir nos catálogos do grupo',
-                                                                        onClick: () => handleIncluirNosCatalogos(org),
-                                                                    },
-                                                                ]}
-                                                                showDelete
-                                                                onDelete={() => onDelete(org.id)}
+                                                            removido. O resto fica SEMPRE à vista (§9) — até 12/10/2026
+                                                            morava num menu "Mais opções" que escondia três ações
+                                                            (pedido do usuário: "não faz sentido colocarmos em mais opções"). */}
+                                                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                            {isActive && <span className="text-xs font-medium text-emerald-600 mr-1">Ativa</span>}
+                                                            <button
+                                                                onClick={() => { setManagingOrgId(org.id); onTabChange('settings'); }}
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
+                                                            >
+                                                                Detalhes
+                                                            </button>
+                                                            <ActionIconButton
+                                                                kind="share"
+                                                                title={incluindoCatalogos === org.id ? 'Incluindo nos catálogos do grupo…' : 'Incluir nos catálogos do grupo'}
+                                                                icon={incluindoCatalogos === org.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Library className="w-4 h-4" />}
+                                                                disabled={incluindoCatalogos === org.id}
+                                                                onClick={() => handleIncluirNosCatalogos(org)}
                                                             />
+                                                            <ActionIconButton kind="delete" title="Excluir organização" onClick={() => onDelete(org.id)} />
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -580,17 +580,10 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             <h3 className="text-sm font-normal text-gray-900 truncate">{org.name}</h3>
                                             <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                                                 {isActive && <span className="text-xs font-medium text-emerald-600">Ativa</span>}
-                                                <InlineDisclosureMenu
-                                                    menuItems={[
-                                                        {
-                                                            icon: <Settings className="w-[18px] h-[18px]" />,
-                                                            label: 'Detalhes',
-                                                            onClick: () => { setManagingOrgId(org.id); onTabChange('settings'); },
-                                                        },
-                                                    ]}
-                                                    showDelete
-                                                    onDelete={() => onDelete(org.id)}
-                                                />
+                                                {/* Ações à vista, como na lista (§9). */}
+                                                <ActionIconButton kind="settings" title="Detalhes"
+                                                    onClick={() => { setManagingOrgId(org.id); onTabChange('settings'); }} />
+                                                <ActionIconButton kind="delete" title="Excluir organização" onClick={() => onDelete(org.id)} />
                                             </div>
                                         </div>
                                     </div>

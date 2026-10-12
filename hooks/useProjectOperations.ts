@@ -3,6 +3,7 @@ import { projectService } from '../services/projectService';
 import { resolveProjectBudget } from '../services/budgetResolver';
 import { contractService } from '../services/contractService';
 import { organizationService } from '../services/organizationService';
+import { useConfirm } from '../components/ui/confirm';
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService';
 import { BudgetEntry, ProjectSettings, Organization, Contract } from '../types';
 import { TipoObra } from '../types/project';
@@ -46,6 +47,7 @@ export const useProjectOperations = ({
 }: UseProjectOperationsProps) => {
 
   const [isSaving, setIsSaving] = useState(false);
+  const confirm = useConfirm();
 
   const handleNewProject = useCallback((classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO') => {
     setProjectModalInitialClassification(classification);
@@ -347,7 +349,16 @@ export const useProjectOperations = ({
   };
 
   const handleDeleteOrganization = async (id: string) => {
-    if (window.confirm("Deseja EXCLUIR PERMANENTEMENTE esta organização?\n\nAção irreversível e pode falhar se houver projetos ou dados vinculados.")) {
+    // useConfirm (§14), não window.confirm: a lixeira saiu do menu "Mais opções"
+    // (que tinha confirmação própria) e ficou exposta na linha — esta passou a
+    // ser a única confirmação.
+    const ok = await confirm({
+      title: 'Excluir organização?',
+      message: 'A exclusão é permanente e não pode ser desfeita. Ela é recusada se houver obras, colaboradores, fornecedores ou outros dados vinculados à organização.',
+      variant: 'danger',
+      confirmLabel: 'Excluir organização',
+    });
+    if (ok) {
       try {
         await organizationService.deleteOrganization(id);
         fetchOrganizations();

@@ -426,21 +426,22 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
   - **Publicação da Fase 5 + Torres/Mapa + PDFs:** `main` = `071b4ced`.
     - Rebase sobre 9 commits; 2 deles eram da frente "cabeçalhos sem cinza", que tocou arquivos daqui.
     - Suíte inteira: 8.751 testes, rc 0 (inclusive a trava de cabeçalho); `verificar:build` rc 0.
-    - O domínio passou a servir `071b4ce`.
+    - O domínio passou a servir `071b4ce`. Check-run `ci` no `071b4ce`: **completed / success**.
   - **Pendências corrigidas** (pedido de 2026-10-12: *"corrigir: Pendências pequenas no plano"*):
-    - [ ] **(a) Escala de raio em Premissas (§16):**
+    - [x] **(a) Escala de raio em Premissas (§16):**
       - campos `h-9 rounded-[6px]`, containers `rounded-[10px]`;
       - sub-abas e "Salvar Premissas" no botão compacto da §17;
       - de quebra, o título "Módulo 2 — Análise de Mercado" virou "Módulo 1" (a sub-aba é a 1);
       - 0 classes da escala antiga no arquivo.
-    - [ ] **(b) Notas ESG fora do render:** `NotaEsg` de módulo, com tipos, `aria-label` "Ambiental (E): nota N de 5", `aria-pressed` e `rounded-[6px]`. 2 testes (`__tests__/components/ImovibEsgNota.test.tsx`): mesmo nó depois de renderizar de novo, e o clique grava `esg_governance_score`.
-    - [ ] **(c) Trocar de módulo com edição pendente:**
+    - [x] **(b) Notas ESG fora do render:** `NotaEsg` de módulo, com tipos, `aria-label` "Ambiental (E): nota N de 5", `aria-pressed` e `rounded-[6px]`. 2 testes (`__tests__/components/ImovibEsgNota.test.tsx`): mesmo nó depois de renderizar de novo, e o clique grava `esg_governance_score`.
+    - [x] **(c) Trocar de módulo com edição pendente:**
       - `lib/guardaDeSaida.ts`: registro global de pendências por adesão, com `useUnsavedChanges({ guardarNavegacao: true })`;
       - `App.trocarDeTela` passou a ser o `onChangeView` do Layout, então menu, paleta e menu de perfil perguntam;
       - `useTabRouter`: voltar/avançar pergunta e, se cancelar, restaura o endereço;
       - `beforeunload` ao fechar ou recarregar a aba;
       - só Premissas adere: há drawers que ficam montados com dirty=true e perguntariam à toa. 4 testes.
-    - Verificado: tsc rc 0; `check-ui-standard` rc 0 (Premissas, ESG); 26 testes relacionados + 4 do `useUnsavedChanges` existente. **Falta a prova no navegador** (`c:/tmp/pwtest/imovib_pendencias.js`).
+    - Verificado: tsc rc 0; `check-ui-standard` rc 0 (Premissas, ESG); 26 testes relacionados + 4 do `useUnsavedChanges` existente. **Prova no navegador** (`c:/tmp/pwtest/imovib_pendencias.js`; escritas bloqueadas: 0; erros de console: 0): 15 botões de nota com rótulo; campo de Premissas 6px/36px; menu e mudança de endereço perguntam e mantêm o valor; endereço restaurado para `#/imovib`; fechar a aba dispara `beforeunload` e recusar mantém a página; "Sair e descartar" navega; sem pendência não pergunta.
+    - **Próxima pendência (fora do pedido):** cabeçalho do estudo e abas principais do `ImovibDetailView` ainda na escala antiga (§16, e §19.1: abas em caixa alta, `font-black`).
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);
     - `StarRating` do ESG declarado dentro do render (botões; efeito menor);

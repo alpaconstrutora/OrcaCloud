@@ -6,6 +6,7 @@ import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, Sinapi
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TASK_NATURE_META } from '../../utils/taskNature';
 import { TaskDetailModal } from './TaskDetailModal';
+import { rotaDaDependencia, TipoDependencia } from '../../utils/ganttDependencias';
 
 /**
  * Formata uma data 'YYYY-MM-DD' (ou ISO) para pt-BR SEM deslocamento de fuso.
@@ -177,6 +178,44 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
         return () => window.removeEventListener('resize', medirAlturaMaxima);
     }, [medirAlturaMaxima]);
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+    // GEOMETRIA DAS BARRAS para o traço das dependências — a MESMA conta que desenha cada
+    // barra (tarefa, marco e resumo). Antes o traço usava início + duração da agenda, que não
+    // batia com a barra desenhada (split, duração zero, marco, resumo por earlyStart/Finish).
+    const nosPorId = React.useMemo(() => {
+        const m = new Map<string, HierarchyNode>();
+        const walk = (ns: HierarchyNode[]) => ns.forEach(n => { m.set(n.id, n); if (n.children) walk(n.children); });
+        walk(hierarchy);
+        return m;
+    }, [hierarchy]);
+    const agendaPorId = React.useMemo(
+        () => new Map((schedule.itemSchedules || []).map(s => [s.id, s])),
+        [schedule.itemSchedules]
+    );
+    const bordasDesenhadas = (id: string): { left: number; right: number } | null => {
+        const DIA_MS = 1000 * 60 * 60 * 24;
+        const node = nosPorId.get(id);
+        if (!node) return null;
+        const x0 = getGanttSidebarTotal();
+        const t0 = minDate.getTime();
+        if (node.type === 'item') {
+            const s = agendaPorId.get(id);
+            if (!s?.startDate || s.duration === undefined) return null;
+            const ini = new Date(s.startDate).getTime();
+            const left = Math.max(0, (ini - t0) / DIA_MS) * pxPerDay + x0;
+            // Marco: losango de 14px centrado no início (translateX(-50%)).
+            if (node.isMilestone) return { left: left - 7, right: left + 7 };
+            const isSplit = !!(s.segments && s.segments.length > 0);
+            const span = isSplit && s.endDate ? Math.max(1, (new Date(s.endDate).getTime() - ini) / DIA_MS) : (s.duration || 0);
+            return { left, right: left + Math.max(pxPerDay / 2, span * pxPerDay) };
+        }
+        // Resumo (grupo/etapa): earlyStart → earlyFinish, só se o nível está visível.
+        if (!visibleSummaryLevels.has(node.type) || !node.earlyStart || !node.earlyFinish) return null;
+        const ini = new Date(node.earlyStart).getTime();
+        const fim = new Date(node.earlyFinish).getTime();
+        const left = Math.max(0, (ini - t0) / DIA_MS) * pxPerDay + x0;
+        return { left, right: left + Math.max(1, (fim - ini) / DIA_MS + 1) * pxPerDay };
+    };
 
     // Flat list of all items for predecessor name lookup
     const allItems = React.useMemo(() => {
@@ -797,7 +836,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     </div>
 
                                     <div
-                                        className={`relative h-6 rounded shadow-sm border group/bar transition-all z-[2] flex overflow-hidden ${itemSchedule?.isCritical ? 'border-red-600' : 'border-black/10'} cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 hover:z-[10] ${isSimulationMode ? 'hover:ring-purple-400' : ''} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-blue-600 ring-offset-1' : ''}`}
+                                        className={`relative shrink-0 h-6 rounded shadow-sm border group/bar transition-all z-[2] flex overflow-hidden ${itemSchedule?.isCritical ? 'border-red-600' : 'border-black/10'} cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 hover:z-[10] ${isSimulationMode ? 'hover:ring-purple-400' : ''} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-blue-600 ring-offset-1' : ''}`}
                                         style={{ width: `${width}px`, backgroundColor: `${baseColor}55` }} // translucent base
                                         onMouseDown={(e) => handleGanttBarMouseDown(e, item.id, itemSchedule.startDate as string)}
                                         onClick={(e) => e.stopPropagation()}
@@ -853,7 +892,11 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                 e.stopPropagation();
                                                 handleUpdateItemSchedule(item.id, 'endDate', projectEndDate);
                                             }}
-                                            className="opacity-0 group-hover/task-container:opacity-100 transition-opacity ml-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
+                                            // `absolute left-full`, fora do fluxo: dentro do flex de largura fixa
+                                            // ele ocupava 32px e a BARRA encolhia para caber — toda barra saía 32px
+                                            // mais curta que a duração e o traço da dependência ficava solto dela
+                                            // (medido em produção, 11/10/2026).
+                                            className="absolute left-full top-1/2 -translate-y-1/2 opacity-0 group-hover/task-container:opacity-100 transition-opacity ml-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
                                         >
                                             <ArrowRightToLine className="w-3 h-3" />
                                         </button>
@@ -1286,36 +1329,22 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     const taskIdx = flattened[task.id];
                                     if (taskIdx === undefined) return null;
 
-                                    const taskStart = new Date(task.startDate).getTime();
-                                    const taskLeft = ((taskStart - minDate.getTime()) / (1000 * 60 * 60 * 24)) * pxPerDay + getGanttSidebarTotal();
-                                    const taskWidth = (task.duration || 1) * pxPerDay;
-                                    const taskRight = taskLeft + taskWidth;
+                                    const destino = bordasDesenhadas(task.id);
+                                    if (!destino) return null;
                                     const taskY = taskIdx * 36 + 18;
 
                                     return task.predecessors.map((pred, pIdx) => {
                                         const predTask = tasks.find(t => t.id === pred.id);
                                         const fromIdx = flattened[pred.id];
                                         if (!predTask?.startDate || fromIdx === undefined) return null;
-
-                                        const predStart = new Date(predTask.startDate).getTime();
-                                        const predLeft = ((predStart - minDate.getTime()) / (1000 * 60 * 60 * 24)) * pxPerDay + getGanttSidebarTotal();
-                                        const predWidth = (predTask.duration || 1) * pxPerDay;
-                                        const predRight = predLeft + predWidth;
+                                        const origem = bordasDesenhadas(pred.id);
+                                        if (!origem) return null;
                                         const predY = fromIdx * 36 + 18;
 
-                                        let startX = 0;
-                                        let endX = 0;
-
-                                        if (pred.type === 'FS') { startX = predRight; endX = taskLeft; }
-                                        else if (pred.type === 'SS') { startX = predLeft; endX = taskLeft; }
-                                        else if (pred.type === 'FF') { startX = predRight; endX = taskRight; }
-                                        else if (pred.type === 'SF') { startX = predLeft; endX = taskRight; }
-
+                                        const tipo: TipoDependencia = (['FS', 'SS', 'FF', 'SF'] as const).includes(pred.type as TipoDependencia) ? pred.type as TipoDependencia : 'FS';
                                         const isCritical = task.isCritical && predTask.isCritical;
                                         const color = isCritical ? COR_DEPENDENCIA_CRITICA : COR_DEPENDENCIA;
-
-                                        const midX = startX + (endX - startX) / 2;
-                                        const d = `M ${startX} ${predY} L ${midX} ${predY} L ${midX} ${taskY} L ${endX} ${taskY}`;
+                                        const d = rotaDaDependencia({ ...origem, y: predY }, { ...destino, y: taskY }, tipo);
 
                                         return (
                                             <path

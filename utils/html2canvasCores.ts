@@ -17,6 +17,9 @@ const PROPRIEDADES = [
     'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
     'outline-color', 'text-decoration-color', 'box-shadow', 'text-shadow',
     'fill', 'stroke', 'caret-color', 'column-rule-color',
+    // html2canvas também interpreta esta como cor (CSSParsedDeclaration). O padrão
+    // é currentcolor e acompanha `color`, mas um valor explícito escaparia.
+    '-webkit-text-stroke-color',
 ];
 
 const FUNCAO_MODERNA = /\b(oklch|oklab|lab|lch|color-mix)\(/i;

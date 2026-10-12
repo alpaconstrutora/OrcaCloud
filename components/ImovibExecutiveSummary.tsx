@@ -300,7 +300,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                     </div>
                     <h3 className="text-lg font-bold text-slate-700 mb-2">Simulação Completa</h3>
                     <p className="text-slate-500 max-w-md">
-                        Os indicadores acima são atualizados em tempo real com base no Estudo Estático e nas Premissas Dinâmicas.
+                        Os indicadores acima vêm do mesmo cálculo da Estática, do Espelho de vendas e da listagem: blocos e espelho (VGV), Orçamento (CAPEX), Receitas &amp; Capital e Premissas Dinâmicas.
                         Utilize este resumo para validação de comitê de investimento.
                     </p>
                 </div>

@@ -4,6 +4,8 @@ import { ImovibStudy, ImovibUnitInstance, ImovibUnitInstanceInsert, HedonicPrici
 import { imovibService } from '../services/imovibService';
 import { pricingService } from '../services/pricingService';
 import PricingIntelligenceModal from './PricingIntelligenceModal';
+import { useImovibMath } from '../hooks/useImovibMath';
+import { useConfirm } from './ui/confirm';
 
 interface ImovibSalesMapTabProps {
     study: ImovibStudy;
@@ -31,6 +33,8 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     const [pricingModalOpen, setPricingModalOpen] = useState(false);
 
     const blocks = study.blocks || [];
+    const math = useImovibMath(study);
+    const confirm = useConfirm();
 
     const blockMap = Object.fromEntries(blocks.map(b => [b.id, b.name]));
 
@@ -90,7 +94,13 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     };
 
     const handleRegenerate = async () => {
-        if (!window.confirm('Isso apagará todas as instâncias atuais e regerará. Confirma?')) return;
+        const ok = await confirm({
+            title: 'Regenerar o espelho de vendas?',
+            message: 'Todas as unidades atuais do espelho serão apagadas e geradas de novo a partir das tipologias. Preços e status ajustados à mão serão perdidos.',
+            confirmLabel: 'Regenerar',
+            variant: 'danger',
+        });
+        if (!ok) return;
         setGenerating(true);
         try {
             await imovibService.deleteUnitInstancesByStudy(study.id);
@@ -113,6 +123,8 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
         );
         try {
             await imovibService.updateUnitInstance(id, { [field]: value as any });
+            // Status muda o VGV (permutada sai): recarrega o estudo para o motor.
+            if (field === 'status') onDataChanged();
         } catch (err) {
             console.error('Error updating instance:', err);
             await loadInstances();
@@ -182,9 +194,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     // KPI calculations
     const totalUnits = instances.length;
     const soldUnits = instances.filter(i => i.status === 'VENDIDO').length;
-    const vgvTotal = instances
-        .filter(i => i.status !== 'PERMUTADO')
-        .reduce((sum, i) => sum + (i.price || 0), 0);
+    // VGV do motor — o mesmo do Resumo, da Estática e da listagem (unidade sem
+    // preço vale área × preço/m² do bloco; permutada fica fora; com prêmio ESG).
+    const vgvTotal = math.vgvTotal;
 
     if (loading) {
         return (
@@ -331,7 +343,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}
                                     >
                                         {/* Unidade */}
-                                        <td className="px-4 py-2.5 font-bold text-slate-800">{inst.name}</td>
+                                        <td className="px-4 py-2.5 text-slate-800">{inst.name}</td>
 
                                         {/* Bloco */}
                                         <td className="px-4 py-2.5 text-slate-600 font-medium">
@@ -347,7 +359,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         </td>
 
                                         {/* Preço */}
-                                        <td className="px-4 py-2.5 text-right font-black text-slate-800">
+                                        <td className="px-4 py-2.5 text-right font-medium text-slate-800">
                                             {inst.price > 0 ? formatBRL(inst.price) : '—'}
                                         </td>
 
@@ -357,24 +369,24 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         </td>
 
                                         {/* Peso Pos. */}
-                                        <td className="px-4 py-2.5 text-center text-xs font-black">
+                                        <td className="px-4 py-2.5 text-center text-sm">
                                             <div className="flex flex-col items-center">
                                                 <span className="text-slate-900 leading-none mb-0.5">
                                                     {inst.position_type === 'FRENTE' ? '1.03x' : inst.position_type === 'FUNDOS' ? '0.97x' : '1.00x'}
                                                 </span>
-                                                <span className="text-slate-400 font-bold uppercase text-[8px] tracking-tighter">
+                                                <span className="text-slate-500 text-xs">
                                                     {inst.position_type === 'FRENTE' ? 'Frente' : inst.position_type === 'FUNDOS' ? 'Fundos' : 'Lateral / Base'}
                                                 </span>
                                             </div>
                                         </td>
 
                                         {/* Peso Sol */}
-                                        <td className="px-4 py-2.5 text-center text-xs font-black">
+                                        <td className="px-4 py-2.5 text-center text-sm">
                                             <div className="flex flex-col items-center">
                                                 <span className="text-slate-900 leading-none mb-0.5">
                                                     {inst.sun_orientation === 'NORTE' ? '1.02x' : inst.sun_orientation === 'LESTE' ? '1.01x' : inst.sun_orientation === 'OESTE' ? '0.99x' : '0.98x'}
                                                 </span>
-                                                <span className="text-slate-400 font-bold uppercase text-[8px] tracking-tighter">
+                                                <span className="text-slate-500 text-xs">
                                                     {inst.sun_orientation === 'NORTE' ? 'Norte' : inst.sun_orientation === 'LESTE' ? 'Leste' : inst.sun_orientation === 'OESTE' ? 'Oeste' : 'Sul'}
                                                 </span>
                                             </div>
@@ -387,7 +399,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'position_type', e.target.value)
                                                 }
-                                                className="text-form-input font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer"
+                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer"
                                             >
                                                 {POSITION_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -402,7 +414,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'sun_orientation', e.target.value)
                                                 }
-                                                className="text-form-input font-bold bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer"
+                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer"
                                             >
                                                 {SUN_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -417,7 +429,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'status', e.target.value)
                                                 }
-                                                className={`text-table-body font-bold border rounded-lg px-2 py-1 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
+                                                className={`text-sm font-normal border rounded px-2 py-1 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
                                             >
                                                 {STATUS_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>

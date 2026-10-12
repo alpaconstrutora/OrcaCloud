@@ -3,12 +3,15 @@ import {
     ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate,
     ImovibBlock, ImovibBlockInsert, ImovibBlockUpdate,
     ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
-    ImovibCapexItem, ImovibCapexItemInsert,
+    ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance,
 } from '../types';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
 const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, created_at, updated_at';
+
+// Só o que o motor lê do espelho para o VGV (computeImovibMath).
+const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
 
 export const imovibService = {
     async getStudies(organizationId?: string): Promise<ImovibStudy[]> {
@@ -37,9 +40,9 @@ export const imovibService = {
      * motor financeiro (computeImovibMath) consome — para a listagem calcular
      * VGV/VPL/TIR/margem por linha sem abrir estudo por estudo.
      *
-     * Custo fixo de 4 round-trips independentemente do número de estudos:
-     * estudos → blocos (in study_id) → unidades (in block_id), e rubricas do
-     * CAPEX (in study_id) em paralelo com os blocos. O nesting é remontado em
+     * Custo fixo de 5 consultas (3 níveis) independentemente do número de
+     * estudos: estudos → [blocos, rubricas do CAPEX, espelho de vendas] em
+     * paralelo (in study_id) → unidades (in block_id). O nesting é remontado em
      * memória, mesmo padrão de getStudyById. As rubricas entram no cálculo desde
      * 2026-10-12 (modo Completo) — sem elas a listagem mostraria VPL/TIR
      * diferentes do Resumo do mesmo estudo.
@@ -66,7 +69,7 @@ export const imovibService = {
 
         const studyIds = studies.map(s => s.id);
 
-        const [{ data: blocks, error: blocksError }, { data: capex, error: capexError }] = await Promise.all([
+        const [{ data: blocks, error: blocksError }, { data: capex, error: capexError }, { data: instancias, error: instError }] = await Promise.all([
             supabase
                 .from('imovib_blocks')
                 .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
@@ -77,7 +80,17 @@ export const imovibService = {
                 .select(CAPEX_COLS)
                 .in('study_id', studyIds)
                 .order('created_at', { ascending: true }),
+            // Espelho de vendas: o VGV do bloco sai dele quando existe.
+            supabase
+                .from('imovib_unit_instances')
+                .select(INSTANCIA_VGV_COLS)
+                .in('study_id', studyIds),
         ]);
+
+        if (instError) {
+            console.error('Error fetching IMOVIB unit instances in batch:', instError);
+            throw new Error(`Failed to fetch IMOVIB unit instances: ${instError.message}`);
+        }
 
         if (capexError) {
             console.error('Error fetching IMOVIB CAPEX items in batch:', capexError);
@@ -120,7 +133,19 @@ export const imovibService = {
             capexByStudy.set(c.study_id, arr);
         });
 
-        return studies.map(s => ({ ...s, blocks: blocksByStudy.get(s.id) || [], capex_items: capexByStudy.get(s.id) || [] }));
+        const instByStudy = new Map<string, ImovibUnitInstance[]>();
+        ((instancias || []) as ImovibUnitInstance[]).forEach(i => {
+            const arr = instByStudy.get(i.study_id) || [];
+            arr.push(i);
+            instByStudy.set(i.study_id, arr);
+        });
+
+        return studies.map(s => ({
+            ...s,
+            blocks: blocksByStudy.get(s.id) || [],
+            capex_items: capexByStudy.get(s.id) || [],
+            unit_instances: instByStudy.get(s.id) || [],
+        }));
     },
 
     async getStudyById(id: string, includeDetails: boolean = false): Promise<ImovibStudy | null> {
@@ -182,6 +207,15 @@ export const imovibService = {
                 console.error('Error loading study CAPEX items:', err);
                 study.capex_items = [];
             }
+
+            // Espelho de vendas: o VGV do bloco sai dele quando existe. Falha aqui
+            // PROPAGA — engolir faria o VGV cair em silêncio para preço/m².
+            const { data: instancias, error: instError } = await supabase
+                .from('imovib_unit_instances')
+                .select(INSTANCIA_VGV_COLS)
+                .eq('study_id', id);
+            if (instError) throw new Error(`Failed to fetch unit instances: ${instError.message}`);
+            study.unit_instances = (instancias || []) as ImovibUnitInstance[];
         }
 
         return study;

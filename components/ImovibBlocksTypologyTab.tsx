@@ -12,6 +12,9 @@ import { ImovibBlock, EmpreendimentoRegulatoryZone, ImovibStudy, ImovibUnit } fr
 import { imovibService } from '../services/imovibService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { TorreCard, TorreEmpty } from './torres/TorreCard';
+import { useImovibMath } from '../hooks/useImovibMath';
+
+const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 const parseRegVal = (v: string | undefined): number | null => {
     if (!v || v === 'N.A.' || v.trim() === '') return null;
@@ -47,6 +50,24 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
     const notify = (msg: string, type: 'success' | 'error' = 'success') => {
         setNotice({ msg, type });
         setTimeout(() => setNotice(null), 4000);
+    };
+
+    // VGV de cada bloco vem do motor (mesmo número do Resumo, Estática e Espelho).
+    const math = useImovibMath(study);
+
+    // Preço de venda por m² do bloco. O campo tinha sumido da tela (commit
+    // 820e5d28 levou o custo para o CAPEX e o preço não foi junto): bloco nascia
+    // com 0 e o VGV ficava zerado sem lugar para corrigir.
+    const handleSavePrice = async (block: ImovibBlock, raw: string) => {
+        const value = parseFloat(raw) || 0;
+        if (value === (block.sales_price_sqm || 0)) return;
+        try {
+            await imovibService.updateBlock(block.id, { sales_price_sqm: value });
+            onDataChanged();
+        } catch (e) {
+            console.error(e);
+            notify('Erro ao salvar o preço de venda do bloco.', 'error');
+        }
     };
 
     useEffect(() => { setFormData(study); }, [study]);
@@ -290,6 +311,25 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                 isOpen={isOpen}
                                 onToggle={() => setExpandedId(isOpen ? null : block.id)}
                             >
+                                <div className="flex flex-wrap items-end gap-4 px-4 py-3 border-b border-gray-100">
+                                    <div>
+                                        <label htmlFor={`preco-m2-${block.id}`} className="block text-xs font-semibold text-gray-500 mb-1.5">Preço de venda (R$/m²)</label>
+                                        <input id={`preco-m2-${block.id}`} type="number" min={0} step="1"
+                                            key={`${block.id}-${block.sales_price_sqm}`}
+                                            defaultValue={block.sales_price_sqm || ''}
+                                            placeholder="0"
+                                            onBlur={(e) => handleSavePrice(block, e.target.value)}
+                                            className={`${inputCls} w-40 text-right`} />
+                                    </div>
+                                    <div className="text-sm text-gray-600 pb-2">
+                                        VGV do bloco: <span className="font-medium text-gray-900">{fmtBRL(math.vgvPorBloco[block.id]?.vgv ?? 0)}</span>
+                                        <span className="text-xs text-gray-500 ml-2">
+                                            {math.vgvPorBloco[block.id]?.fonte === 'espelho'
+                                                ? '· pelo espelho de vendas (unidade sem preço usa este R$/m²)'
+                                                : '· área privativa vendável × preço/m²'}
+                                        </span>
+                                    </div>
+                                </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
                                         <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">

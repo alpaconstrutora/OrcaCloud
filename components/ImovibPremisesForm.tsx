@@ -27,7 +27,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             setIsSaving(true);
             // capex_seeded_at é do CAPEX: gravar o valor de quando a tela abriu poderia
             // devolver null e fazer o template de rubricas voltar.
-            const { id, created_at, updated_at, blocks, capex_items, organization_id, capex_seeded_at, ...cleanData } = formData as any;
+            // unit_instances (espelho) vem montado em memória, não é coluna.
+            const { id, created_at, updated_at, blocks, capex_items, unit_instances, organization_id, capex_seeded_at, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, cleanData);
             alert('Premissas salvas com sucesso!');
             onDataChanged();

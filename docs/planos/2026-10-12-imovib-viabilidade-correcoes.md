@@ -288,7 +288,25 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - 4 estudos com `capex_seeded_at`;
     - Bruninho mantém ITBI 4% e comissão do terreno 4%.
     - Depois do `ROLLBACK`, o banco continuou com 218 linhas e sem a coluna `base`.
-- [ ] **Fase 3 — 0 de 4:** 3.1 · 3.2 · 3.3 · 3.4
+- **Publicação das Fases 1 e 2** (2026-10-12, pedido: *"Publicar as Fases 1 e 2 agora. e na sequencia seguir para a fase 3"*):
+  - O 1º push foi recusado porque outra frente entrou no `main` durante a suíte. Refiz o rebase e rodei a suíte de novo.
+  - Suíte inteira: rc 0, 8.668 testes. `verificar:build`: rc 0.
+  - `main` = `45414a15`. `conferir-producao.sh` confirmou que o domínio serve `45414a1`.
+- [ ] **Fase 3 — código pronto, falta a prova no navegador** (2026-10-12):
+  - [ ] **3.1** — "Preço de venda (R$/m²)" no corpo de cada bloco (Premissas › 2. Blocos e Tipologia), com o VGV do bloco e a origem dele, vindos do motor.
+  - [ ] **3.2** — VGV por bloco no motor. Com espelho, cada unidade vale o próprio preço; unidade sem preço vale área × preço/m²; PERMUTADA fica fora. Sem espelho, vale área privativa **vendável** × preço/m².
+    - Achado novo: tipologia `is_vendavel = false` (área comum) entrava no VGV. Agora entra só no custo.
+    - Aviso novo `permuta_em_dobro`: espelho com permutada e Permuta Física > 0.
+    - O espelho é carregado no detalhe (falha propaga, não cai em silêncio para preço/m²) e em lote na listagem (5 consultas, 3 níveis).
+    - Premissas deixou de gravar `unit_instances`.
+    - 5 testes novos: 28 no total.
+  - [ ] **3.3** — Estática reescrita sobre o motor: VGV, terreno, obra, rubricas do CAPEX (no modo Completo) e áreas. Saíram as fórmulas próprias (`vgvFormula`, T.O. × terreno × pavimentos). Ganhou o banner de avisos e ficou com o guia de UI limpo.
+  - [ ] **3.4** — O cabeçalho do espelho usa `math.vgvTotal`. Mudar o status de uma unidade recarrega o estudo, porque a permutada sai do VGV. O texto "com base no Estudo Estático" foi corrigido.
+    - **VGV exibido** (Estática, Espelho, listagem, Resumo) = `vgvTotal`, que inclui o prêmio ESG. A Estática diz quando há prêmio.
+    - **Guia de UI no espelho:** §7 (9×) e §14 (`window.confirm` → `useConfirm`), por causa da REGRA #1 em arquivo tocado.
+  - **Esperado no navegador:**
+    - Bruninho (espelho com 16 unidades precificadas, soma R$ 9.999.998, preço/m² 0): sai de VGV 0 com aviso "sem preço" para R$ 9.999.998 na Estática, no Espelho e no bloco.
+    - Garden (sem espelho, R$ 8.000/m²): origem "área privativa vendável × preço/m²".
 - [ ] **Fase 4 — 0 de 7:** 4.1 · 4.2 (D1) · 4.3 · 4.4 · 4.5 · 4.6 · 4.7
 - [ ] **Fase 5 — 0 de 7:** 5.1 · 5.2 · 5.3 · 5.4 · 5.5 · 5.6 · 5.7
 

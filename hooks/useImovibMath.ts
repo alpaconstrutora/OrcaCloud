@@ -37,7 +37,7 @@ export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'divida_quitada_no_fim';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'divida_quitada_no_fim' | 'permuta_em_dobro';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -57,6 +57,20 @@ export interface ImovibMathResult {
     esgFundingDiscount: number;
     /** Área construída (privativa + comum) × quantidade × pavimentos — a MESMA que a aba CAPEX exibe. */
     totalBlockArea: number;
+    /** Parcelas de totalBlockArea (todas as tipologias, vendáveis ou não). */
+    totalPrivateArea: number;
+    totalCommonArea: number;
+    /**
+     * VGV bruto dos blocos, antes de sensibilidade, prêmio ESG, permuta e
+     * contingências — o número que Estática, Espelho e listagem exibem como "VGV".
+     */
+    vgvBase: number;
+    /**
+     * VGV de cada bloco e de onde veio: 'espelho' (preço de cada unidade do espelho
+     * de vendas; unidade ainda sem preço vale área × preço/m²) ou 'preco_m2'
+     * (área privativa VENDÁVEL × preço/m² do bloco).
+     */
+    vgvPorBloco: Record<string, { vgv: number; fonte: 'espelho' | 'preco_m2' }>;
     /** Saldo devedor que as receitas não amortizaram e o investidor quita no último mês. */
     debtPayoffAtEnd: number;
     /**
@@ -142,6 +156,10 @@ const EMPTY_RESULT: ImovibMathResult = {
     esgVgvPremiumValue: 0,
     esgFundingDiscount: 0,
     totalBlockArea: 0,
+    totalPrivateArea: 0,
+    totalCommonArea: 0,
+    vgvBase: 0,
+    vgvPorBloco: {},
     debtPayoffAtEnd: 0,
     capexRubricasAtivas: false,
     capexRubricas: { terreno: 0, obra: 0, vgv: 0, total: 0 },
@@ -223,18 +241,47 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         let baseVgvTotal = 0;
         let baseConstCostTotal = 0;
         let totalBlockArea = 0;
+        let totalPrivateArea = 0;
+        let totalCommonArea = 0;
+        const vgvPorBloco: ImovibMathResult['vgvPorBloco'] = {};
+        const instancias = study.unit_instances || [];
+        let espelhoTemPermutada = false;
 
         study.blocks?.forEach(block => {
             let blockPrivateArea = 0;
             let blockCommonArea = 0;
+            let blockVendavelArea = 0;
             block.units?.forEach(u => {
-                const pav = (u as any).pavimentos || 1;
-                blockPrivateArea += (u.quantity || 0) * pav * (u.private_area || 0);
+                const pav = u.pavimentos || 1;
+                const priv = (u.quantity || 0) * pav * (u.private_area || 0);
+                blockPrivateArea += priv;
                 blockCommonArea += (u.quantity || 0) * pav * (u.common_area || 0);
+                // Tipologia não vendável é área comum (o espelho e o sync a tratam
+                // assim): entra no custo de obra, NÃO no VGV. Antes entrava nos dois.
+                if (u.is_vendavel !== false) blockVendavelArea += priv;
             });
-            baseVgvTotal += blockPrivateArea * (block.sales_price_sqm || 0);
+
+            // VGV do bloco: espelho de vendas quando existe (decisão de 2026-10-12),
+            // senão área privativa vendável × preço/m².
+            const precoM2 = block.sales_price_sqm || 0;
+            const doBloco = instancias.filter(i => i.block_id === block.id);
+            let blockVgv: number;
+            if (doBloco.length > 0) {
+                if (doBloco.some(i => i.status === 'PERMUTADO')) espelhoTemPermutada = true;
+                blockVgv = doBloco
+                    .filter(i => i.status !== 'PERMUTADO')
+                    .reduce((acc, i) => acc + ((i.price || 0) > 0 ? i.price : (i.private_area || 0) * precoM2), 0);
+                vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
+            } else {
+                blockVgv = blockVendavelArea * precoM2;
+                vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'preco_m2' };
+            }
+
+            baseVgvTotal += blockVgv;
             baseConstCostTotal += (blockPrivateArea + blockCommonArea) * (block.construction_cost_sqm || 0);
             totalBlockArea += blockPrivateArea + blockCommonArea;
+            totalPrivateArea += blockPrivateArea;
+            totalCommonArea += blockCommonArea;
         });
 
         if (totalBlockArea <= 0) {
@@ -304,6 +351,13 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
 
         // Apply Swap Physical (reduces marketed VGV)
         const swapPhysical = val(study.swap_physical_percent, D.swap_physical_percent) / 100;
+        if (espelhoTemPermutada && swapPhysical > 0) {
+            avisos.push({
+                codigo: 'permuta_em_dobro',
+                mensagem: `O espelho de vendas já tem unidades permutadas (fora do VGV) e a Permuta Física de ${Number((swapPhysical * 100).toFixed(2)).toLocaleString('pt-BR')}% também está preenchida: a permuta pode estar sendo descontada duas vezes.`,
+                aba: 'funding',
+            });
+        }
         const marketedVgv = vgvTotal * (1 - swapPhysical);
 
         // Apply Contingencies (Default, Cancellation, Swap Financial)
@@ -503,6 +557,10 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             esgVgvPremiumValue,
             esgFundingDiscount,
             totalBlockArea,
+            totalPrivateArea,
+            totalCommonArea,
+            vgvBase: baseVgvTotal,
+            vgvPorBloco,
             debtPayoffAtEnd,
             capexRubricasAtivas,
             capexRubricas: {

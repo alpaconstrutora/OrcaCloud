@@ -234,6 +234,53 @@ describe('2.2 — rubricas do CAPEX detalhado entram no cálculo', () => {
     });
 });
 
+describe('3.2 — VGV: espelho de vendas, senão preço/m² do bloco', () => {
+    const inst = (id: string, block_id: string, price: number, status = 'DISPONÍVEL', private_area = 70) =>
+        ({ id, study_id: 'estudo-teste', block_id, name: id, floor: 1, private_area, position_type: 'LATERAL', sun_orientation: 'NORTE', price, status, created_at: '', updated_at: '' });
+
+    it('sem espelho: área privativa vendável × preço/m²', () => {
+        const r = computeImovibMath(baseStudy());
+        expect(r.vgvBase).toBeCloseTo(40 * 70 * 10_000);
+        expect(r.vgvPorBloco['b1']).toEqual({ vgv: 40 * 70 * 10_000, fonte: 'preco_m2' });
+    });
+
+    it('tipologia não vendável (área comum) entra no custo, não no VGV', () => {
+        const s = baseStudy();
+        s.blocks[0].units.push({ id: 'u2', quantity: 1, private_area: 300, common_area: 0, is_vendavel: false });
+        const r = computeImovibMath(s);
+        expect(r.vgvBase).toBeCloseTo(40 * 70 * 10_000);
+        expect(r.constCostTotal).toBeCloseTo((40 * 90 + 300) * 4_500);
+    });
+
+    it('com espelho: soma o preço de cada unidade; sem preço vale área × preço/m²; permutada fica fora', () => {
+        const r = computeImovibMath(baseStudy({
+            unit_instances: [
+                inst('a', 'b1', 800_000),
+                inst('b', 'b1', 0),                    // sem preço → 70 m² × 10.000
+                inst('c', 'b1', 900_000, 'PERMUTADO'), // fora do VGV
+                inst('d', 'b1', 750_000, 'VENDIDO'),
+            ],
+        }));
+        expect(r.vgvPorBloco['b1']).toEqual({ vgv: 800_000 + 700_000 + 750_000, fonte: 'espelho' });
+        expect(r.vgvBase).toBeCloseTo(2_250_000);
+    });
+
+    it('bloco com espelho e bloco sem espelho somam cada um pela sua regra', () => {
+        const s = baseStudy({ unit_instances: [inst('a', 'b1', 1_000_000)] });
+        s.blocks.push({ id: 'b2', name: 'Torre B', sales_price_sqm: 5_000, construction_cost_sqm: 4_500,
+            units: [{ id: 'u3', quantity: 10, private_area: 50, common_area: 10 }] });
+        const r = computeImovibMath(s);
+        expect(r.vgvPorBloco['b1'].fonte).toBe('espelho');
+        expect(r.vgvPorBloco['b2']).toEqual({ vgv: 10 * 50 * 5_000, fonte: 'preco_m2' });
+        expect(r.vgvBase).toBeCloseTo(1_000_000 + 2_500_000);
+    });
+
+    it('permutada no espelho + Permuta Física preenchida = aviso de permuta em dobro', () => {
+        const r = computeImovibMath(baseStudy({ swap_physical_percent: 10, unit_instances: [inst('c', 'b1', 900_000, 'PERMUTADO'), inst('a', 'b1', 800_000)] }));
+        expect(r.avisos.some(a => a.codigo === 'permuta_em_dobro')).toBe(true);
+    });
+});
+
 describe('1.6 — ESG no modo simplificado e avisos de premissa', () => {
     const esg = { esg_initiatives: [{ id: 'e1', name: 'Solar', category: 'E', cost: 1_000_000, vgv_premium: 0, funding_discount: 0, active: true }] };
 

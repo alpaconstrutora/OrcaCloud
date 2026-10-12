@@ -537,6 +537,12 @@ export interface ImovibStudy {
     updated_at: string;
     blocks?: ImovibBlock[];
     capex_items?: ImovibCapexItem[];
+    /**
+     * Espelho de vendas (imovib_unit_instances). Quando o bloco tem espelho, o VGV
+     * dele sai do preço de cada unidade (permutadas fora); sem espelho, de área
+     * privativa vendável × preço/m² do bloco — ver computeImovibMath.
+     */
+    unit_instances?: ImovibUnitInstance[];
 }
 
 export type ImovibStudyInsert = Omit<ImovibStudy, 'id' | 'created_at' | 'updated_at' | 'blocks'>;

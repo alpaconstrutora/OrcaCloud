@@ -240,7 +240,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         </ErrorBoundary>
                     )}
                     {activeTab === 'viability_static' && (
-                        <ImovibStaticViability study={study} />
+                        <ImovibStaticViability study={study} onIrPara={setActiveTab} />
                     )}
                     {activeTab === 'viability_dynamic' && (
                         <ErrorBoundary>

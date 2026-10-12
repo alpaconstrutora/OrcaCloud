@@ -1,105 +1,78 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { ImovibStudy, EmpreendimentoRegulatoryZone, ImovibUnitInstance } from '../types';
-import { imovibService } from '../services/imovibService';
-import { empreendimentoService } from '../services/empreendimentoService';
+import React from 'react';
+import { ImovibStudy } from '../types';
 import { Calculator, TrendingUp, DollarSign, PieChart, Activity } from 'lucide-react';
-
-const parseRegVal = (v: string | undefined): number | null => {
-    if (!v || v === 'N.A.' || v.trim() === '') return null;
-    return parseFloat(v.replace(',', '.')) || null;
-};
+import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import ImovibAvisosBanner from './ImovibAvisosBanner';
 
 interface ImovibStaticViabilityProps {
     study: ImovibStudy;
+    /** Abre a aba que corrige a premissa de um aviso do motor. */
+    onIrPara?: (aba: ImovibAba) => void;
 }
 
-const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) => {
-    const [zones, setZones] = useState<EmpreendimentoRegulatoryZone[]>([]);
-    const [unitInstances, setUnitInstances] = useState<ImovibUnitInstance[]>([]);
+const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 
-    useEffect(() => {
-        empreendimentoService.listRegulatoryZonesByImovibStudy(study.id).then(setZones).catch(console.error);
-        imovibService.getUnitInstances(study.id).then(setUnitInstances).catch(console.error);
-    }, [study.id]);
+const formatArea = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value) + ' m²';
 
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
-    };
+const pctDoVgv = (valor: number, vgv: number) =>
+    vgv > 0 ? `${((valor / vgv) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '—';
 
-    const formatArea = (value: number) => {
-        return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value) + ' m²';
-    };
+/**
+ * Viabilidade estática: VGV − custos, sem tempo nem desconto.
+ *
+ * Todos os números vêm do motor (computeImovibMath) — os MESMOS do Resumo, da
+ * listagem e do Espelho. Antes esta aba tinha fórmulas próprias: o custo de obra
+ * era T.O. × área do terreno × pavimentos (zerava sem Mapa Regulatório, e o lucro
+ * ficava igual ao VGV) e o VGV vinha do espelho por outra conta.
+ */
+const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, onIrPara }) => {
+    const math = useImovibMath(study);
 
-    const calculations = useMemo(() => {
-        let totalPrivateArea = 0;
-        let totalCommonArea = 0;
-        let totalConstructionArea = 0;
-        let vgvFormula = 0;
-        let constructionCost = 0;
-        const landCost = study.land_cost || 0;
+    // VGV com prêmio ESG — o mesmo número do Resumo, do Espelho e da listagem.
+    const vgv = math.vgvTotal;
+    const landCost = math.landCost;
+    const constructionCost = math.constCostTotal;
+    const rubricas = math.capexRubricasAtivas ? math.capexRubricas.total : 0;
+    const totalCost = landCost + constructionCost + rubricas;
+    const grossProfit = vgv - totalCost;
+    const margin = vgv > 0 ? (grossProfit / vgv) * 100 : 0;
 
-        const toVal = zones.length ? parseRegVal(zones[0].taxa_ocupacao_maxima) : null;
-        const terrArea = study.terreno_area || null;
-        const toBase = (toVal != null && terrArea) ? toVal * terrArea : null;
+    const blocos = Object.values(math.vgvPorBloco);
+    const blocosPeloEspelho = blocos.filter(b => b.fonte === 'espelho').length;
+    const origemVgv = blocos.length === 0
+        ? 'Sem blocos cadastrados'
+        : blocosPeloEspelho === blocos.length
+            ? 'Pelo espelho de vendas'
+            : blocosPeloEspelho === 0
+                ? 'Área privativa vendável × preço/m²'
+                : `Espelho em ${blocosPeloEspelho} de ${blocos.length} blocos; demais por área × preço/m²`;
+    const origemVgvCompleta = math.esgVgvPremiumValue > 0
+        ? `${origemVgv} · inclui prêmio ESG de ${formatCurrency(math.esgVgvPremiumValue)}`
+        : origemVgv;
 
-        study.blocks?.forEach(block => {
-            let blockPrivateArea = 0;
-            let blockCommonArea = 0;
-            let blockAreaTotal = 0;
-
-            block.units?.forEach(unit => {
-                const qty = unit.quantity || 0;
-                const pav = (unit as any).pavimentos || 1;
-                blockPrivateArea += qty * pav * (unit.private_area || 0);
-                blockCommonArea += qty * pav * (unit.common_area || 0);
-                if (toBase != null) blockAreaTotal += toBase * pav;
-            });
-
-            totalPrivateArea += blockPrivateArea;
-            totalCommonArea += blockCommonArea;
-            totalConstructionArea += blockAreaTotal;
-
-            vgvFormula += blockPrivateArea * (block.sales_price_sqm || 0);
-            constructionCost += blockAreaTotal * (block.construction_cost_sqm || 0);
-        });
-
-        // Use espelho de vendas VGV when instances with prices exist
-        const espelhoVgv = unitInstances
-            .filter(i => i.status !== 'PERMUTADO')
-            .reduce((sum, i) => sum + (i.price || 0), 0);
-        const vgvFromEspelho = espelhoVgv > 0;
-        const vgv = vgvFromEspelho ? espelhoVgv : vgvFormula;
-
-        const totalCost = landCost + constructionCost;
-        const grossProfit = vgv - totalCost;
-        const margin = vgv > 0 ? (grossProfit / vgv) * 100 : 0;
-
-        return {
-            totalPrivateArea,
-            totalCommonArea,
-            totalConstructionArea,
-            vgv,
-            vgvFromEspelho,
-            landCost,
-            constructionCost,
-            totalCost,
-            grossProfit,
-            margin
-        };
-    }, [study, zones, unitInstances]);
+    const linhas: { rotulo: string; valor: number; detalhe?: string }[] = [
+        { rotulo: '(−) Aquisição do terreno', valor: -landCost },
+        { rotulo: '(−) Custo de construção', valor: -constructionCost, detalhe: study.capex_mode === 'simplified' ? 'CAPEX simplificado: área × custo/m²' : 'Área construída × custo/m² de cada bloco' },
+    ];
+    if (math.capexRubricasAtivas) {
+        linhas.push({ rotulo: '(−) Rubricas do CAPEX', valor: -rubricas, detalhe: 'Terreno, obra e deduções sobre o VGV (aba Orçamento)' });
+    }
 
     return (
         <div className="space-y-6 pb-10">
+            <ImovibAvisosBanner avisos={math.avisos} onIrPara={onIrPara} />
 
-            {/* Top Main KPIs */}
+            {/* KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/20">
                     <div className="flex items-center gap-2 text-blue-100 mb-2 font-medium tracking-tight">
                         <TrendingUp className="w-5 h-5" />
                         VGV Potencial (Receita)
                     </div>
-                    <div className="text-3xl font-black tracking-tight">{formatCurrency(calculations.vgv)}</div>
-                    <div className="text-sm mt-3 text-blue-100 font-medium">100% das vendas projetadas</div>
+                    <div className="text-3xl font-black tracking-tight">{formatCurrency(vgv)}</div>
+                    <div className="text-sm mt-3 text-blue-100 font-medium">{origemVgvCompleta}</div>
                 </div>
 
                 <div className="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-6 text-white shadow-lg shadow-red-900/20">
@@ -107,8 +80,10 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
                         <DollarSign className="w-5 h-5" />
                         Custo Total Estimado
                     </div>
-                    <div className="text-3xl font-black tracking-tight">{formatCurrency(calculations.totalCost)}</div>
-                    <div className="text-sm mt-3 text-red-100 font-medium">Terreno + Construção</div>
+                    <div className="text-3xl font-black tracking-tight">{formatCurrency(totalCost)}</div>
+                    <div className="text-sm mt-3 text-red-100 font-medium">
+                        Terreno + Construção{math.capexRubricasAtivas ? ' + Rubricas do CAPEX' : ''}
+                    </div>
                 </div>
 
                 <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-900/20 relative overflow-hidden">
@@ -120,109 +95,69 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study }) 
                             <Activity className="w-5 h-5" />
                             Lucro Bruto (Margem)
                         </div>
-                        <div className="text-3xl font-black tracking-tight">{formatCurrency(calculations.grossProfit)}</div>
-                        <div className="text-sm mt-3 text-emerald-100 font-semibold bg-emerald-800/30 inline-flex px-3 py-1 rounded-full border border-emerald-400/20">
-                            {calculations.margin.toFixed(2)}% Margem Bruta
+                        <div className="text-3xl font-black tracking-tight">{formatCurrency(grossProfit)}</div>
+                        <div className="text-sm mt-3 text-emerald-100 font-medium">
+                            {vgv > 0 ? `${margin.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% de margem bruta` : 'Sem VGV para calcular a margem'}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Detailed DRE Table */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* DRE simplificada */}
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex items-center gap-3">
                     <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
                         <Calculator className="w-5 h-5" />
                     </div>
-                    <h3 className="text-xl font-black text-gray-900 tracking-tight">Viabilidade Estática (Simplificada)</h3>
+                    <h3 className="text-lg font-semibold text-gray-900">Viabilidade Estática (Simplificada)</h3>
                 </div>
-                <div className="p-0">
-                    <table className="w-full text-left">
-                        <tbody className="divide-y divide-gray-100">
-                            {/* VGV */}
-                            <tr className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-6 py-4">
-                                    <span className="font-black text-gray-900 flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                                        Valor Geral de Vendas (VGV)
-                                        {calculations.vgvFromEspelho && (
-                                            <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">
-                                                Vendas de Ativos
-                                            </span>
-                                        )}
-                                    </span>
+                <table className="w-full text-left">
+                    <tbody className="divide-y divide-gray-100">
+                        <tr>
+                            <td className="px-6 py-3 text-sm text-gray-900">
+                                Valor Geral de Vendas (VGV)
+                                <span className="block text-xs text-gray-500">{origemVgvCompleta}</span>
+                            </td>
+                            <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">{formatCurrency(vgv)}</td>
+                            <td className="px-6 py-3 text-right text-sm text-gray-500 w-32">{vgv > 0 ? '100,00%' : '—'}</td>
+                        </tr>
+                        {linhas.map(l => (
+                            <tr key={l.rotulo}>
+                                <td className="px-6 py-3 pl-12 text-sm text-gray-600">
+                                    {l.rotulo}
+                                    {l.detalhe && <span className="block text-xs text-gray-500">{l.detalhe}</span>}
                                 </td>
-                                <td className="px-6 py-4 text-right font-black text-gray-900">
-                                    {formatCurrency(calculations.vgv)}
-                                </td>
-                                <td className="px-6 py-4 text-right text-gray-500 font-medium w-32">100,00%</td>
+                                <td className="px-6 py-3 text-right text-sm font-medium text-red-600">{formatCurrency(l.valor)}</td>
+                                <td className="px-6 py-3 text-right text-sm text-gray-500">{pctDoVgv(l.valor, vgv)}</td>
                             </tr>
-                            {/* Cost of Land */}
-                            <tr className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-6 py-4 pl-12 text-gray-600 font-medium flex items-center gap-2">
-                                    (-) Aquisição do Terreno
-                                </td>
-                                <td className="px-6 py-4 text-right text-gray-600 font-medium text-red-600">
-                                    {formatCurrency(-calculations.landCost)}
-                                </td>
-                                <td className="px-6 py-4 text-right text-gray-500 font-medium">
-                                    {calculations.vgv > 0 ? ((-calculations.landCost / calculations.vgv) * 100).toFixed(2) : '0.00'}%
-                                </td>
-                            </tr>
-                            {/* Construction Cost */}
-                            <tr className="hover:bg-gray-50/50 transition-colors group">
-                                <td className="px-6 py-4 pl-12 text-gray-600 font-medium flex items-center gap-2">
-                                    (-) Custo de Construção
-                                </td>
-                                <td className="px-6 py-4 text-right text-gray-600 font-medium text-red-600">
-                                    {formatCurrency(-calculations.constructionCost)}
-                                </td>
-                                <td className="px-6 py-4 text-right text-gray-500 font-medium">
-                                    {calculations.vgv > 0 ? ((-calculations.constructionCost / calculations.vgv) * 100).toFixed(2) : '0.00'}%
-                                </td>
-                            </tr>
-                            {/* Total Cost Baseline */}
-                            <tr className="bg-gray-50">
-                                <td className="px-6 py-4">
-                                    <span className="font-bold text-gray-700 uppercase tracking-widest text-xs">Total de Custos Fixos</span>
-                                </td>
-                                <td className="px-6 py-4 text-right font-black text-gray-900 border-t border-gray-200">
-                                    {formatCurrency(-calculations.totalCost)}
-                                </td>
-                                <td className="px-6 py-4 text-right text-gray-500 font-medium">
-                                    {calculations.vgv > 0 ? ((-calculations.totalCost / calculations.vgv) * 100).toFixed(2) : '0.00'}%
-                                </td>
-                            </tr>
-                            {/* Gross Profit */}
-                            <tr className="bg-emerald-50/30">
-                                <td className="px-6 py-5">
-                                    <span className="font-black text-emerald-900 text-lg">Lucro Bruto</span>
-                                </td>
-                                <td className="px-6 py-5 text-right font-black text-emerald-700 text-lg">
-                                    {formatCurrency(calculations.grossProfit)}
-                                </td>
-                                <td className="px-6 py-5 text-right text-emerald-600 font-black">
-                                    {calculations.margin.toFixed(2)}%
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                        ))}
+                        <tr className="bg-gray-50">
+                            <td className="px-6 py-3 text-sm text-gray-700">Total de custos</td>
+                            <td className="px-6 py-3 text-right text-sm font-medium text-gray-900">{formatCurrency(-totalCost)}</td>
+                            <td className="px-6 py-3 text-right text-sm text-gray-500">{pctDoVgv(-totalCost, vgv)}</td>
+                        </tr>
+                        <tr className="bg-emerald-50/30">
+                            <td className="px-6 py-4 text-base text-emerald-900">Lucro Bruto</td>
+                            <td className="px-6 py-4 text-right text-base font-medium text-emerald-700">{formatCurrency(grossProfit)}</td>
+                            <td className="px-6 py-4 text-right text-sm text-emerald-700">{vgv > 0 ? pctDoVgv(grossProfit, vgv) : '—'}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
 
-            {/* Areas Info */}
+            {/* Áreas — as mesmas que o motor usa */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <span className="text-gray-400 text-xs font-black uppercase tracking-wider">Área Privativa Venda</span>
-                    <div className="text-xl font-black text-gray-900 mt-1">{formatArea(calculations.totalPrivateArea)}</div>
+                <div className="bg-white rounded-[10px] p-5 border border-gray-100 shadow-sm">
+                    <span className="text-xs font-semibold text-gray-500">Área privativa</span>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">{formatArea(math.totalPrivateArea)}</div>
                 </div>
-                <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
-                    <span className="text-gray-400 text-xs font-black uppercase tracking-wider">Área Comum Coberta</span>
-                    <div className="text-xl font-black text-gray-900 mt-1">{formatArea(calculations.totalCommonArea)}</div>
+                <div className="bg-white rounded-[10px] p-5 border border-gray-100 shadow-sm">
+                    <span className="text-xs font-semibold text-gray-500">Área comum</span>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">{formatArea(math.totalCommonArea)}</div>
                 </div>
-                <div className="bg-white rounded-2xl p-5 border border-green-100 shadow-sm bg-green-50/30">
-                    <span className="text-green-700 text-xs font-black uppercase tracking-wider">Área Total Construída</span>
-                    <div className="text-2xl font-black text-green-900 mt-1">{formatArea(calculations.totalConstructionArea)}</div>
+                <div className="bg-white rounded-[10px] p-5 border border-green-100 shadow-sm">
+                    <span className="text-xs font-semibold text-green-700">Área construída (base do custo de obra)</span>
+                    <div className="text-xl font-semibold text-green-900 mt-1">{formatArea(math.totalBlockArea)}</div>
                 </div>
             </div>
         </div>

@@ -11,7 +11,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import Blueprint3DViewer from '../../../components/blueprint/Blueprint3DViewer';
 import { applyBatch, applyCommand, emptyModel, point, type Command } from '../../../utils/blueprintKernel';
-import { malhaDaGrade, planejarGrade } from '../../../utils/blueprintTopografia';
+import { amostradorDaMalha, gerarCurvas, malhaDaGrade, planejarGrade } from '../../../utils/blueprintTopografia';
+import { corArcoIrisDaCota } from '../../../utils/blueprintTopografiaAnalises';
+import { curvasDeNivel3d } from '../../../utils/blueprintTopografia3dExtras';
 
 const q = new URLSearchParams(location.search);
 const COTA_ZERO = Number(q.get('cotaZero') ?? 887.94);
@@ -36,6 +38,16 @@ const cotasM = grade.cotasM.map((_, k) => {
   return 860 + 40 * Math.exp(-d2 / (2 * 110 ** 2));
 });
 const relevo = malhaDaGrade({ ...grade, cotasM }, COTA_ZERO);
+// `?curvas=1`: as linhas das curvas de 1 m sobre o relevo; `&arcoiris=1` pinta pela cota (860 → 900).
+// `&semAssentar=1`: a linha na cota da curva, sem assentar na malha (como era — fica tracejada).
+const curvas = q.get('curvas')
+  ? curvasDeNivel3d(
+      gerarCurvas({ ...grade, cotasM }, CANTOS, 1),
+      COTA_ZERO,
+      q.get('arcoiris') ? (c: number) => corArcoIrisDaCota(c, 860, 900) : null,
+      q.get('semAssentar') ? null : { altura: amostradorDaMalha({ ...grade, cotasM }), passoMm: grade.espacamentoMm / 8 },
+    )
+  : [];
 
 declare global {
   interface Window {
@@ -55,6 +67,8 @@ createRoot(document.getElementById('raiz')!).render(
       relevo={q.get('semTerreno') ? null : relevo}
       relevoChave={`h:${COTA_ZERO}`}
       envelope={q.get('envelope') ? [{ levelId, nome: 'Térreo', anel: CANTOS, baseMm: 0, topoMm: 2800, acimaDoGabarito: false }] : undefined}
+      extrasDoRelevo={curvas.length ? { drenagem: [], muros: [], curvas } : null}
+      extrasChave={`curvas:${q.get('curvas') ?? ''}:${q.get('arcoiris') ?? ''}:${q.get('semAssentar') ?? ''}`}
     />
   </div>,
 );

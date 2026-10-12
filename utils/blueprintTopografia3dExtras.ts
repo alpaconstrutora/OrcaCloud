@@ -9,6 +9,7 @@
 
 import type { Point } from './blueprintKernel';
 import type { LinhaDeDrenagem, MuroDeArrimo } from './blueprintTopografiaAnalises';
+import type { CurvaDeNivel } from './blueprintTopografia';
 
 export interface LinhaDeDrenagem3d {
   id: string;
@@ -28,6 +29,78 @@ export interface MuroDeArrimo3d {
 export interface ExtrasDoRelevo3d {
   drenagem: LinhaDeDrenagem3d[];
   muros: MuroDeArrimo3d[];
+  /** 12/10/2026: as linhas das curvas de nível sobre o relevo. */
+  curvas?: CurvasDoRelevo3d[];
+}
+
+/**
+ * CURVAS DE NÍVEL NO 3D (12/10/2026, pedido: *"as curvas de nivel nao esta
+ * sendo mostradas no 3d"* → *"SIM"* para desenhar as linhas). Um grupo por cor
+ * e tipo (mestra ou não) — um `LineSegments` por grupo, e não um objeto por
+ * curva: um terreno de 40 m com curva de 1 m tem dezenas de curvas e
+ * milhares de trechos.
+ */
+export interface CurvasDoRelevo3d {
+  cor: string;
+  mestra: boolean;
+  /** Pares de vértices (cada trecho é ponta + ponta), x, y, z em metros de mundo. */
+  posicoes: Float32Array;
+}
+
+/** A cor da curva no 2D (`COR_CURVA_DE_NIVEL` do canvas), a mesma no 3D. */
+export const COR_CURVA_3D = '#b45309';
+/**
+ * Quanto a linha flutua sobre o relevo. A curva está na cota exata, mas a
+ * malha do 3D é DECIMADA (`malhaDaGrade`, teto de triângulos): entre dois nós
+ * ela corta reto e pode passar por cima da linha — sem a folga, trechos
+ * somem dentro do morro. 8 cm não se vê numa encosta de dezenas de metros.
+ */
+export const FOLGA_DA_CURVA_3D_M = 0.08;
+
+export function curvasDeNivel3d(
+  curvas: readonly CurvaDeNivel[],
+  cotaZeroM: number,
+  /** A cor por cota (arco-íris), quando a planta pinta as curvas pela cota; `null` = a cor única. */
+  corDe?: ((cotaM: number) => string) | null,
+  /**
+   * A superfície que o 3D desenha (`amostradorDaMalha`) e o passo da
+   * subdivisão, em mm. Com ela, cada trecho é cortado em pedaços de até
+   * `passoMm` e cada ponto ASSENTA na malha (+ folga): dentro de uma célula a
+   * malha são dois planos que passam acima da reta entre as arestas, e sem
+   * isto a linha sumia em trechos. Sem ela, a linha fica na cota da curva.
+   */
+  malha?: { altura: (p: { x: number; y: number }) => number | null; passoMm: number } | null,
+): CurvasDoRelevo3d[] {
+  const grupos = new Map<string, { cor: string; mestra: boolean; v: number[] }>();
+  for (const c of curvas) {
+    if (c.pontos.length < 2) continue;
+    const cor = corDe ? corDe(c.cotaM) : COR_CURVA_3D;
+    const chave = `${cor}|${c.mestra ? 1 : 0}`;
+    let g = grupos.get(chave);
+    if (!g) {
+      g = { cor, mestra: c.mestra, v: [] };
+      grupos.set(chave, g);
+    }
+    const yDe = (x: number, y: number) => ((malha ? malha.altura({ x, y }) : null) ?? c.cotaM) - cotaZeroM + FOLGA_DA_CURVA_3D_M;
+    for (let i = 0; i + 1 < c.pontos.length; i++) {
+      const a = c.pontos[i];
+      const b = c.pontos[i + 1];
+      const n = malha ? Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / malha.passoMm)) : 1;
+      let px = a.x;
+      let py = a.y;
+      let pz = yDe(px, py);
+      for (let k = 1; k <= n; k++) {
+        const qx = a.x + ((b.x - a.x) * k) / n;
+        const qy = a.y + ((b.y - a.y) * k) / n;
+        const qz = yDe(qx, qy);
+        g.v.push(px / 1000, pz, py / 1000, qx / 1000, qz, qy / 1000);
+        px = qx;
+        py = qy;
+        pz = qz;
+      }
+    }
+  }
+  return [...grupos.values()].map((g) => ({ cor: g.cor, mestra: g.mestra, posicoes: new Float32Array(g.v) }));
 }
 
 /** A linha, amostrada a `passoMm`, apoiada na superfície de projeto e 5 cm acima dela (para não sumir dentro da malha). */

@@ -205,4 +205,43 @@ relevo 860–900 m, cota zero 887,94 m):
 - [x] Harness depois: o envelope inteiro no quadro; afastar com a roda não corta; com Terreno ligado, relevo + envelope
 - [x] Suíte 8.766 = 8.732 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` (editor e viewer) e `check-xss-sinks.sh` limpos; build ✓
 - [x] Publicado `b1c623ac`; `ci` = success; o domínio serviu `b1c623a` (o `main` já tinha 7 commits de outras frentes depois)
-- [ ] Decisão do usuário: desenhar as linhas das curvas sobre o relevo no 3D
+- [x] Decisão do usuário: desenhar as linhas das curvas sobre o relevo no 3D — *"SIM"* (ver o pedido seguinte)
+
+---
+
+# Pedido posterior — 12/10/2026: as linhas das curvas no 3D
+
+> As linhas das curvas de nível no 3D: o 3D mostra o relevo como superfície, mas nunca desenhou as linhas das curvas por cima dele. Quer que eu implemente? SIM
+
+## Decisão
+
+- `curvasDeNivel3d` (`utils/blueprintTopografia3dExtras.ts`, puro): as curvas da versão em
+  `LineSegments`, UM por cor/tipo (não um por curva), na convenção do 3D; mestra opaca, as
+  demais a 60 %. Cor = a da planta (`#b45309`) ou o arco-íris quando "Curvas coloridas pela
+  cota" está ligado. Mesma chave da planta: Exibir › Curvas de nível; e, como todo extra do
+  relevo, só com o Terreno do 3D ligado e a camada Terreno à vista.
+- `amostradorDaMalha` (`utils/blueprintTopografia.ts`): a altura EXATA da malha do 3D (mesma
+  decimação, mesma diagonal). Cada trecho é subdividido a ⅛ da célula e assenta nela (+ 8 cm):
+  dentro de uma célula a malha são dois planos que podem passar acima da reta da curva (no
+  teste da célula torcida: 20 no centro contra 17,5 da bilinear).
+- No editor, as curvas entram num memo DEPOIS de `corDaCota` (o memo dos extras vem antes dela
+  no arquivo — usá-la lá seria constante antes de existir).
+
+## O que o harness mostrou (e o que NÃO concluir)
+
+`docs/spikes/terreno-grande-3d/?curvas=1` (e `&arcoiris=1`): as curvas de 1 m acompanham o morro,
+nas duas cores. Trechos tracejados no canto SE: medido — as curvas de 861–864 m JÁ saem da
+geração em pedaços (863 m: 3 pedaços), porque o terreno ali é quase plano e as curvas entram e
+saem do lote; é o dado, não o 3D (a planta mostra o mesmo). Assentar na malha NÃO mudou esse
+print (18.707 × 18.719 pixels de curva): neste morro liso o desnível dentro da célula é pequeno;
+o assentamento é para terreno real, mais irregular — mantido por ser a superfície exata, não por
+ter corrigido algo aqui.
+
+## Estado
+
+- [x] `curvasDeNivel3d` + `amostradorDaMalha` + viewer (`lineSegments`) + editor
+- [x] `__tests__/blueprintCurvasNo3d.test.ts` (9: pares de pontas na cota relativa; agrupamento
+      por cor/mestra; arco-íris; curva degenerada; cone gerado de verdade com cada vértice na sua
+      cota; altura da malha nos nós, nos dois triângulos e o centro torcido; nulos; assentar)
+- [x] Suíte 8.794 = 8.760 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` (editor e viewer) e `check-xss-sinks.sh` limpos; build ✓
+- [ ] Publicação e CI

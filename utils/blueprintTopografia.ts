@@ -1417,6 +1417,59 @@ export function malhaDaGrade(
   };
 }
 
+/**
+ * A ALTURA DA MALHA DO 3D num ponto do desenho (12/10/2026) — a superfície
+ * EXATA que `malhaDaGrade` desenha: a mesma decimação e a mesma diagonal
+ * (triângulos 00-10-11 e 00-11-01). Em cota absoluta (m).
+ *
+ * Existe para as curvas de nível no 3D: a curva sai da grade (interpolação nas
+ * arestas), mas dentro de cada célula a malha são DOIS planos, que numa
+ * encosta passam dezenas de centímetros acima da linha reta entre as arestas —
+ * e a linha sumia em trechos (tracejada no print do harness). Assentar a linha
+ * nesta altura a mantém sobre a superfície. `null` fora da grade ou em célula
+ * com canto sem dado (onde a malha não tem triângulo).
+ */
+export function amostradorDaMalha(grade: GradeDeElevacao, maxTriangulos = 20_000): (p: Point) => number | null {
+  const { origem, espacamentoMm: esp, colunas, linhas, cotasM } = grade;
+  const celulas = Math.max(0, (colunas - 1) * (linhas - 1));
+  const passo = Math.max(1, Math.ceil(Math.sqrt((celulas * 2) / maxTriangulos)));
+  const cols = indicesAmostrados(colunas, passo);
+  const lins = indicesAmostrados(linhas, passo);
+  /** O maior índice amostrado ≤ v (busca binária na lista crescente). */
+  const faixa = (lista: number[], v: number): number => {
+    let lo = 0;
+    let hi = lista.length - 2;
+    if (hi < 0) return -1;
+    while (lo < hi) {
+      const m = (lo + hi + 1) >> 1;
+      if (lista[m] <= v) lo = m;
+      else hi = m - 1;
+    }
+    return lo;
+  };
+  return (p: Point) => {
+    const fc = (p.x - origem.x) / esp;
+    const fl = (p.y - origem.y) / esp;
+    if (fc < 0 || fl < 0 || fc > colunas - 1 || fl > linhas - 1) return null;
+    const ic = faixa(cols, fc);
+    const il = faixa(lins, fl);
+    if (ic < 0 || il < 0) return null;
+    const c0 = cols[ic];
+    const c1 = cols[ic + 1];
+    const l0 = lins[il];
+    const l1 = lins[il + 1];
+    const z00 = cotasM[l0 * colunas + c0];
+    const z10 = cotasM[l0 * colunas + c1];
+    const z01 = cotasM[l1 * colunas + c0];
+    const z11 = cotasM[l1 * colunas + c1];
+    if (z00 === null || z10 === null || z01 === null || z11 === null) return null;
+    const u = (fc - c0) / (c1 - c0);
+    const v = (fl - l0) / (l1 - l0);
+    // A diagonal 00→11 divide a célula como em `malhaDaGrade`.
+    return u >= v ? z00 + u * (z10 - z00) + v * (z11 - z10) : z00 + v * (z01 - z00) + u * (z11 - z01);
+  };
+}
+
 /** `0, passo, 2·passo, …` mais o último índice, para a borda não sumir. */
 function indicesAmostrados(n: number, passo: number): number[] {
   const out: number[] = [];

@@ -1409,7 +1409,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       g.computeVertexNormals();
       return { aresta: m.aresta, geometria: g };
     });
-    return { linhas, muros };
+    // 12/10/2026: as curvas de nível, um LineSegments por cor (ver `curvasDeNivel3d`).
+    const curvas = (extrasDoRelevo.curvas ?? []).map((c, i) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(c.posicoes, 3));
+      return { chave: `${c.cor}-${c.mestra ? 'm' : 'n'}-${i}`, cor: c.cor, mestra: c.mestra, geometria: g };
+    });
+    return { linhas, muros, curvas };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mostrarTerreno, extrasChave]);
 
@@ -1627,6 +1633,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         <line key={`dren-${l.id}`} geometry={l.geometria}>
           <lineBasicMaterial color={l.atende ? '#0284c7' : '#dc2626'} linewidth={2} />
         </line>
+      ))}
+      {/* Curvas de nível sobre o relevo: mestra opaca, as demais mais leves — o
+          mesmo peso relativo da planta (a largura de linha do WebGL é 1 px). */}
+      {extras3d?.curvas.map((c) => (
+        <lineSegments key={`curva-${c.chave}`} geometry={c.geometria}>
+          <lineBasicMaterial color={c.cor} transparent opacity={c.mestra ? 1 : 0.6} />
+        </lineSegments>
       ))}
       {extras3d?.muros.map((m) => (
         <mesh key={`muro-${m.aresta}`} geometry={m.geometria} castShadow receiveShadow>

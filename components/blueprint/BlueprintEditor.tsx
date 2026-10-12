@@ -590,7 +590,7 @@ import type { PranchaExport } from '../../services/blueprintExportService';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintTopografia } from '../../hooks/useBlueprintTopografia';
-import { amostradorDaGrade, amostradorDoChao, malhaDaGrade } from '../../utils/blueprintTopografia';
+import { amostradorDaGrade, amostradorDaMalha, amostradorDoChao, malhaDaGrade } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
   cotaDeEquilibrio,
@@ -622,7 +622,7 @@ import {
   type EmissaoExecutiva,
 } from '../../utils/blueprintTopografiaExecutivo';
 import { blueprintSnapshotTopografiaService } from '../../services/blueprintSnapshotTopografiaService';
-import { linhasDeDrenagem3d, murosDeArrimo3d, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import { curvasDeNivel3d, linhasDeDrenagem3d, murosDeArrimo3d, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import {
   areasDeContribuicao,
   dimensionarDrenagem,
@@ -5594,6 +5594,29 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     (cotaM: number) => (faixaDaRampa ? corArcoIrisDaCota(cotaM, faixaDaRampa.deM, faixaDaRampa.ateM) : '#000000'),
     [faixaDaRampa],
   );
+  /**
+   * CURVAS DE NÍVEL NO 3D (12/10/2026): as mesmas linhas da planta, sobre o
+   * relevo, com a mesma cor (a única, ou o arco-íris quando "Curvas coloridas
+   * pela cota" está ligado) e a mesma chave: Exibir › Curvas de nível. Junta-se
+   * aos extras (drenagem, muros) AQUI, depois de `corDaCota` — o memo dos
+   * extras vem antes dela no arquivo, e usá-la lá seria constante antes de
+   * existir (o 3D já caiu inteiro assim, ver memória `3D const antes de existir`).
+   */
+  const extrasDoRelevoNo3d = useMemo<ExtrasDoRelevo3d | null>(() => {
+    const v = topografia.selecionada;
+    // Assentadas na MESMA malha do 3D (`relevo3d` usa `malhaDaGrade` com o teto padrão), subdivididas a ⅛ da célula.
+    const curvas =
+      v && mostrarCurvasDeNivel
+        ? curvasDeNivel3d(v.curvas, cotaZeroDoTerrenoM, curvasPelaCota ? corDaCota : null, {
+            altura: amostradorDaMalha(v.grade),
+            passoMm: v.grade.espacamentoMm / 8,
+          })
+        : [];
+    if (curvas.length === 0) return extrasDoRelevo3d;
+    return { drenagem: extrasDoRelevo3d?.drenagem ?? [], muros: extrasDoRelevo3d?.muros ?? [], curvas };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extrasDoRelevo3d, chaveDaTopografia, mostrarCurvasDeNivel, cotaZeroDoTerrenoM, curvasPelaCota, corDaCota]);
+  const extrasDoRelevoNo3dChave = `${extrasDoRelevo3dChave}|curvas:${mostrarCurvasDeNivel ? 1 : 0}:${curvasPelaCota && faixaDaRampa ? `${faixaDaRampa.deM}-${faixaDaRampa.ateM}` : 'cor'}:${chaveDaTopografia}:${cotaZeroDoTerrenoM}`;
   const hipsometria = useMemo(() => {
     const v = topografia.selecionada;
     if (!v) return null;
@@ -10867,8 +10890,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       relevo={mostrarTerreno3d && terrenoAVista ? relevo3d : null}
       relevoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}`}
       alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
-      extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevo3d : null}
-      extrasChave={extrasDoRelevo3dChave}
+      extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevoNo3d : null}
+      extrasChave={extrasDoRelevoNo3dChave}
       ocultos={ocultosNo3d}
       atenuados={idsDasCamadas.atenuados}
       terrenoEmMeioTom={camadas.TERRENO === 'ATENUADA'}

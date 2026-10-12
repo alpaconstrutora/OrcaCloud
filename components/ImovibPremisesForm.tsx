@@ -177,13 +177,16 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             {activeTab === 'blocos' && (
                 <ImovibBlocksTypologyTab study={study} onDataChanged={onDataChanged} />
             )}
-            {/* TAB: TORRES & UNIDADES — as MESMAS do empreendimento vinculado (fonte única) */}
+            {/* TAB: TORRES & UNIDADES — as MESMAS do empreendimento vinculado (fonte única).
+                Torres e Mapa Regulatório gravam no EMPREENDIMENTO, mas por dentro do estudo
+                seguem a permissão do estudo (decisão de 2026-10-12: "Travar também pela
+                permissão de estudo"). */}
             {activeTab === 'torres' && (
-                <EstudoTorresUnidades studyId={study.id} origin="imovib" />
+                <EstudoTorresUnidades studyId={study.id} origin="imovib" somenteLeitura={!pode ? motivo : undefined} />
             )}
             {/* TAB: MAPA REGULATÓRIO */}
             {activeTab === 'regulatorio' && (
-                <EstudoMapaRegulatorio studyId={study.id} origin="imovib" />
+                <EstudoMapaRegulatorio studyId={study.id} origin="imovib" somenteLeitura={!pode ? motivo : undefined} />
             )}
 
         </div>

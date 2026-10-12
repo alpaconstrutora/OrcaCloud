@@ -12,11 +12,13 @@ import MapaRegulatorioEditor from './MapaRegulatorioEditor';
 interface Props {
     studyId: string;
     origin: 'imovib' | 'planta_ai';
+    /** Motivo do modo só leitura (Viabilidade sem canEditImovib). Ausente: editável. */
+    somenteLeitura?: string;
 }
 
 const COLUMN = { imovib: 'imovib_study_id', planta_ai: 'planta_ai_study_id' } as const;
 
-export const EstudoMapaRegulatorio: React.FC<Props> = ({ studyId, origin }) => {
+export const EstudoMapaRegulatorio: React.FC<Props> = ({ studyId, origin, somenteLeitura }) => {
     const [emp, setEmp] = React.useState<{ id: string; organization_id: string } | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
@@ -60,7 +62,7 @@ export const EstudoMapaRegulatorio: React.FC<Props> = ({ studyId, origin }) => {
         );
     }
 
-    return <MapaRegulatorioEditor empreendimentoId={emp.id} organizationId={emp.organization_id} />;
+    return <MapaRegulatorioEditor empreendimentoId={emp.id} organizationId={emp.organization_id} somenteLeitura={somenteLeitura} />;
 };
 
 export default EstudoMapaRegulatorio;

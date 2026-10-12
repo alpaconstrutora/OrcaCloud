@@ -22,11 +22,18 @@ interface Props {
   empreendimento?: Empreendimento;
   /** Chamado depois de salvar o Terreno, para o pai recarregar o empreendimento (Visão Geral usa os mesmos campos). */
   onTerrenoSaved?: () => void;
+  /**
+   * Motivo do modo só leitura. Usado pela Viabilidade (EstudoTorresUnidades): sem
+   * canEditImovib as torres aparecem e expandem, mas não editam (decisão de
+   * 2026-10-12). Ausente: editável, como no módulo Empreendimentos.
+   */
+  somenteLeitura?: string;
 }
 
 const TERRENO_TIPO_OPTIONS = ['Regular (Retangular)', 'Irregular (Geometria complexa)'];
 
-export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved }) => {
+export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved, somenteLeitura }) => {
+  const travado = !!somenteLeitura;
   const { projects } = useStore();
   const confirm = useConfirm();
   const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
@@ -183,6 +190,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         <h4 className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
           <MapPin className="w-3.5 h-3.5" /> Terreno
         </h4>
+        <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
         <form onSubmit={handleSaveTerreno} className="bg-blue-50/40 border border-blue-100 rounded-[10px] p-3 grid grid-cols-2 md:grid-cols-6 gap-2 items-end">
           <div>
             <label className="text-[10px] font-semibold text-gray-400 block mb-1">Tipo de Terreno</label>
@@ -221,8 +229,10 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
             Adicionar Terreno
           </button>
         </form>
+        </fieldset>
       </div>
 
+      <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
       <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-4 gap-2.5 items-center">
         <input className={inputCls} placeholder="Nome (ex: Torre A)" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
         <input className={inputCls} placeholder="Nº pavimentos" type="number" value={form.floors_count} onChange={e => setForm(p => ({ ...p, floors_count: e.target.value }))} />
@@ -236,6 +246,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
           Adicionar torre
         </button>
       </form>
+      </fieldset>
 
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
@@ -293,8 +304,10 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                     Sem obra — vincule em Editar Empreendimento
                   </span>
                 )}
-                <ActionIconButton kind="edit" title="Editar torre" onClick={() => startEdit(tower)} />
-                <ActionIconButton kind="delete" onClick={() => handleDelete(tower)} />
+                <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0 inline-flex items-center gap-1">
+                  <ActionIconButton kind="edit" title="Editar torre" onClick={() => startEdit(tower)} />
+                  <ActionIconButton kind="delete" onClick={() => handleDelete(tower)} />
+                </fieldset>
               </>
             );
 
@@ -311,14 +324,14 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                 isOpen={isOpen}
                 onToggle={() => setExpandedId(isOpen ? null : tower.id)}
               >
-                <div className="divide-y divide-gray-100">
+                <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0 divide-y divide-gray-100">
                   <div className="p-4">
                     <FloorEditor tower={tower} onUnitsRegenerated={() => handleUnitsRegenerated(tower.id)} />
                   </div>
                   <div className="p-4">
                     <UnitEditor key={unitKeyByTower[tower.id] ?? 0} tower={tower} onUnitsChange={handleUnitsChange} />
                   </div>
-                </div>
+                </fieldset>
               </TorreCard>
             );
           })}

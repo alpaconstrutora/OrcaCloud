@@ -130,11 +130,18 @@ interface Props<T extends ZoneLike> {
     /** Slot extra ao lado do botão "Nova Zona" (ex.: "Importar de mapa cadastrado"). */
     headerActions?: React.ReactNode;
     emptyLabel?: string;
+    /**
+     * Motivo do modo só leitura (ex.: estudo de viabilidade aberto sem canEditImovib).
+     * Presente: "Nova zona", ações do cabeçalho, células e excluir ficam travados;
+     * busca, colunas e ordenação continuam livres. Ausente: tudo editável, como antes.
+     */
+    somenteLeitura?: string;
 }
 
 export function RegulatoryZoneTable<T extends ZoneLike>({
-    tableId, title, subtitle, zones, loading, adding, savingId, onAdd, onUpdate, onDelete, headerActions, emptyLabel,
+    tableId, title, subtitle, zones, loading, adding, savingId, onAdd, onUpdate, onDelete, headerActions, emptyLabel, somenteLeitura,
 }: Props<T>) {
+    const travado = !!somenteLeitura;
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState<string>(`${tableId}:search`, '');
     const tableColumns = useTableColumns(COLUMNS_FOR_CONFIG, `${tableId}Columns`);
@@ -194,7 +201,7 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                     </h2>
                     <p className="text-gray-500 text-xs mt-1 font-medium">{subtitle}</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-2 shrink-0">
                     {headerActions}
                     <button
                         onClick={onAdd}
@@ -204,7 +211,7 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         {adding ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
                         Nova zona
                     </button>
-                </div>
+                </fieldset>
             </div>
 
             <div className="flex flex-col md:flex-row gap-2.5 items-center px-4 py-3 border-b border-gray-100">
@@ -295,19 +302,19 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                             {visibleZones.map(zone => (
                                 <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}>
                                     {visibleColumnDefs.map(col => (
-                                        <td key={col.key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                        <td key={col.key} title={somenteLeitura} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             {col.type === 'select' ? (
                                                 <SelectCell
                                                     value={zone[col.key] as string | undefined}
                                                     options={ZONE_SELECT_OPTIONS[col.key] ?? []}
                                                     onChange={(v) => onUpdate(zone.id, col.key, v)}
-                                                    saving={savingId === zone.id}
+                                                    saving={savingId === zone.id || travado}
                                                 />
                                             ) : (
                                                 <TextCell
                                                     value={zone[col.key] as string | undefined}
                                                     onCommit={(v) => onUpdate(zone.id, col.key, v)}
-                                                    saving={savingId === zone.id}
+                                                    saving={savingId === zone.id || travado}
                                                     placeholder={col.placeholder}
                                                 />
                                             )}
@@ -315,9 +322,9 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                                     ))}
                                     <td aria-hidden="true"></td>
                                     <td className="px-6 py-2.5 text-right">
-                                        <div onClick={(e) => e.stopPropagation()}>
+                                        <fieldset disabled={travado} title={somenteLeitura} onClick={(e) => e.stopPropagation()} className="imovib-ro min-w-0 border-0 p-0 m-0 inline-block">
                                             <ActionIconButton kind="delete" title="Excluir zona" onClick={() => handleDelete(zone.id)} />
-                                        </div>
+                                        </fieldset>
                                     </td>
                                 </tr>
                             ))}

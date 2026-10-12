@@ -21,9 +21,15 @@ import ImportRegulatoryZonesModal from './regulatoryMap/ImportRegulatoryZonesMod
 interface Props {
     empreendimentoId: string;
     organizationId: string;
+    /**
+     * Motivo do modo só leitura. Usado pela Viabilidade (EstudoMapaRegulatorio):
+     * sem canEditImovib o mapa aparece mas não edita (decisão de 2026-10-12).
+     * Ausente: editável, como no módulo Empreendimentos.
+     */
+    somenteLeitura?: string;
 }
 
-export const MapaRegulatorioEditor: React.FC<Props> = ({ empreendimentoId, organizationId }) => {
+export const MapaRegulatorioEditor: React.FC<Props> = ({ empreendimentoId, organizationId, somenteLeitura }) => {
     const [zones, setZones] = React.useState<EmpreendimentoRegulatoryZone[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [savingId, setSavingId] = React.useState<string | null>(null);
@@ -75,6 +81,7 @@ export const MapaRegulatorioEditor: React.FC<Props> = ({ empreendimentoId, organ
                 onUpdate={handleUpdate}
                 onDelete={handleDelete}
                 emptyLabel='Clique em "Nova Zona" ou "Importar de mapa cadastrado" para adicionar'
+                somenteLeitura={somenteLeitura}
                 headerActions={
                     <button onClick={() => setImportOpen(true)}
                         className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-sm transition-all">

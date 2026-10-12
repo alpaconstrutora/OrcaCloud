@@ -359,7 +359,12 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
       - listagem: excluir e "Novo estudo" com motivo;
       - criar/editar estudo: recusa com toast;
       - CAPEX: quem só lê não aplica o template de rubricas ao abrir.
-    - **Pendente (decisão):** Premissas › "3. Torres & Unidades" e "4. Mapa Regulatório" gravam no **empreendimento** (TowerEditor/MapaRegulatorioEditor) e continuam editáveis, porque a permissão ali seria a do módulo Empreendimentos.
+    - **Complemento (2026-10-12):** Premissas › "3. Torres & Unidades" e "4. Mapa Regulatório" gravam no **empreendimento** (TowerEditor/MapaRegulatorioEditor). Expliquei que, travando pela permissão do estudo, quem pode editar empreendimentos ainda edita as mesmas torres pelo módulo Empreendimentos. Decisão: *"2. Travar também pela permissão de estudo."*
+      - Prop opcional `somenteLeitura` (o motivo) em `TowerEditor`, `MapaRegulatorioEditor` e `RegulatoryZoneTable`, repassada por `EstudoTorresUnidades`/`EstudoMapaRegulatorio` e passada só pela Viabilidade. **Sem a prop, nada muda** no módulo Empreendimentos nem na Planta AI.
+      - Travam: barra de terreno, nova torre, editar/excluir torre, pavimentos e unidades, "Nova zona", "Importar de mapa cadastrado", células e excluir zona.
+      - Continuam livres: expandir torre, busca, colunas e ordenação da tabela de zonas.
+      - Verificado: tsc exit 0; `check-ui-standard` exit 0 nos 6 arquivos; testes relacionados 17/17. Prova no navegador: roteiro `c:/tmp/pwtest/imovib_ro_torres_mapa.js` (Garden, simulando falta de permissão na SPE).
+      - Publicação da Fase 4 (4.1–4.7, sem este complemento): `main` = `d8181eb2`. O 1º push foi recusado (outra frente entrou); rebase e suíte de novo: 8.724 testes, rc 0; `verificar:build` rc 0.
   - [x] **4.7** — Falhas visíveis em 12 componentes + serviço (feito por um subagente na frente; conferido por mim):
     - 0 `alert(`. Cada um dos 36 `console.error` avisa o usuário na mesma função.
     - `getStudyById` propaga erro de blocos/unidades/CAPEX (antes devolvia `[]` e o VGV/custo caía a zero em silêncio).

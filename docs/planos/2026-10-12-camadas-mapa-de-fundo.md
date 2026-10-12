@@ -115,3 +115,33 @@ grade ESCURECE de leve em vez de clarear — e as linhas finas só com célula �
       deslocado ±6 px continua ≤ 64%. Prints: só as linhas fortes, escuras e finas.
 - [x] Suíte 8.741 = 8.707 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓
 - [x] Publicado `4fd1c80e`; `conferir-producao.sh "rgba(15, 23, 42, 0.07)"` → o domínio serve `4fd1c80` com a cor nova; check-run `ci` = success
+
+---
+
+# Pedido posterior — 12/10/2026: o zoom travava ao afastar
+
+Com print do estudo real (lote de 346 × 344 m, mapa ligado):
+
+> pergunta: zoom - fica bloqueado em um limite?
+
+Resposta: sim — o piso do canvas da planta era 0,002 px/mm (2 px/m), ~460 m numa tela de
+~900 px. Proposta: baixar para 0,2 px/m (~4,5 km). Resposta:
+
+> sim
+
+## Decisão
+
+`ESCALA_MINIMA = 0.0002` e `ESCALA_MAXIMA = 2` no `BlueprintCanvas.tsx`, uma constante para os
+três lugares que repetiam o número (roda, botões/`limitar`, Enquadrar). O `useCanvasVista`
+(outros canvas) não muda. A escada da grade vai a 50 m — 10 px nesse piso, então a grade
+continua aparecendo.
+
+## Estado
+
+- [x] Constantes nos três lugares
+- [x] `docs/spikes/mapa-de-fundo/afastar.mjs` (canvas real, roda do mouse até parar): **465 m →
+      4.500 m**; mapa desenhado lá longe (nível 15), zero erro. Com o piso antigo de volta, o
+      mesmo script para em **450 m** e FALHA — o portão mede a trava. O print afastado mostra
+      o lote ao lado de Cambuí (MG), Lagoa do Mato e a AMG-1950, grade de 50 m discreta.
+- [x] Suíte 8.758 = 8.724 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` limpo; build ✓
+- [ ] Publicação e CI

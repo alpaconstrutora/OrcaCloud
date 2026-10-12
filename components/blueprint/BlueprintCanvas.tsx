@@ -495,6 +495,20 @@ const ESCADA_MM = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000, 20_000, 
 const MIN_PX_ENTRE_LINHAS = 9;
 
 /**
+ * LIMITES DO ZOOM, em pixels por milímetro — os mesmos para a roda, os botões
+ * e o Enquadrar (uma vista que o zoom não reproduz seria um estado sem volta).
+ *
+ * O piso era 0,002 px/mm (2 px/m): numa tela de ~900 px, no máximo ~460 m.
+ * Com terreno grande e o mapa de fundo (12/10/2026, *"zoom - fica bloqueado em
+ * um limite?"*), travava antes de mostrar o lote inteiro com o entorno. 0,0002
+ * px/mm (0,2 px/m) mostra ~4,5 km — o kernel aceita ±1 km da origem, então a
+ * área inteira cabe com folga. A escada da grade vai a 50 m, que nesse piso
+ * ainda dá 10 px entre linhas.
+ */
+const ESCALA_MINIMA = 0.0002;
+const ESCALA_MAXIMA = 2;
+
+/**
  * Passo adaptativo: o MENOR da escada cujo espaçamento em tela ainda é legível.
  *
  * Era daqui que vinha o bug de a grade sumir no zoom out. Com passo fixo de
@@ -3529,8 +3543,8 @@ export default function BlueprintCanvas({
     // Mesmos limites da roda do mouse: uma vista que o zoom não consegue
     // reproduzir seria um estado sem volta.
     const escala = Math.max(
-      0.002,
-      Math.min(2, Math.min(util(tamanho.w) / larguraMm, util(tamanho.h) / alturaMm)),
+      ESCALA_MINIMA,
+      Math.min(ESCALA_MAXIMA, Math.min(util(tamanho.w) / larguraMm, util(tamanho.h) / alturaMm)),
     );
 
     const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
@@ -3556,7 +3570,7 @@ export default function BlueprintCanvas({
     if (!navegacao || navegacao.seq === navegacaoAtendida.current) return;
     if (tamanho.w <= 0 || tamanho.h <= 0) return;
     navegacaoAtendida.current = navegacao.seq;
-    const limitar = (e: number) => Math.max(0.002, Math.min(2, e));
+    const limitar = (e: number) => Math.max(ESCALA_MINIMA, Math.min(ESCALA_MAXIMA, e));
     const noCentro = (escala: number) => {
       const cx = tamanho.w / 2;
       const cy = tamanho.h / 2;
@@ -11380,7 +11394,7 @@ export default function BlueprintCanvas({
     const { px, py } = posicao(e);
     const antes = paraMundo(px, py);
     const fator = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    const escala = Math.max(0.002, Math.min(2, vista.escala * fator));
+    const escala = Math.max(ESCALA_MINIMA, Math.min(ESCALA_MAXIMA, vista.escala * fator));
 
     // Mantém sob o cursor o mesmo ponto do mundo — zoom "para onde se olha".
     // O sinal do Y acompanha `paraTela`: resolver `-antes.y * escala + dy = py`.

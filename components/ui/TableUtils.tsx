@@ -424,8 +424,8 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   onMoveColumn,
 }) => {
   const caseClasses = uppercase
-    ? 'text-blue-800 uppercase tracking-wider'
-    : 'text-blue-800';
+    ? 'text-gray-700 uppercase tracking-wider'
+    : 'text-gray-700';
   const [dragOver, setDragOver] = React.useState(false);
   const [dragging, setDragging] = React.useState(false);
 
@@ -479,7 +479,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <th
       onClick={() => onSort?.(colKey)}
-      className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-blue-950 transition-colors select-none group ${dragOverClasses} ${draggingClasses}`}
+      className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-gray-900 transition-colors select-none group ${dragOverClasses} ${draggingClasses}`}
       {...dragProps}
     >
       <div className="flex items-center gap-1.5">
@@ -489,7 +489,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
             escuro e neutro (dois sentidos) quando inativa — gray-400 ainda sumia contra
             o bg-gray-50 do <thead> (reportado 2026-08-08, 2ª rodada); azul + direção
             quando é a ativa. */}
-        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-700 group-hover:text-blue-900' : 'text-blue-500 group-hover:text-blue-800'}`}>
+        <span className={`inline-flex items-center ${sortColumn === colKey ? 'text-blue-600 group-hover:text-blue-700' : 'text-gray-500 group-hover:text-gray-700'}`}>
           {sortColumn === colKey
             ? (sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)
             : <ChevronsUpDown className="w-3.5 h-3.5" />}

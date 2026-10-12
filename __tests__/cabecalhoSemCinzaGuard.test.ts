@@ -2,8 +2,9 @@
  * TRAVA — nenhum cabeçalho de tabela/grade em cinza (12/10/2026).
  *
  * Pedido do usuário (com print do cabeçalho do Gantt): *"Nenhum header deve estar na cor
- * cinza!"*. Plano: docs/planos/2026-10-12-cabecalhos-sem-cinza.md. A cor do cabeçalho é a de
- * `components/ui/cabecalhoDeTabela.ts` (azul-claro que o app já usa).
+ * cinza!"*. Plano: docs/planos/2026-10-12-cabecalhos-sem-cinza.md. O cabeçalho tem fundo BRANCO e
+ * texto na cor do texto das células (`components/ui/cabecalhoDeTabela.ts`) — o usuário decidiu:
+ * *"mesma cor do texto ja usada nas tabelas"*.
  *
  * É uma CATRACA, nos moldes de `orgContextGuard`: `BASELINE` é a dívida herdada de
  * 12/10/2026 (cabeçalho escrito à mão, fora do `StandardTable`) e SÓ PODE DIMINUIR.
@@ -242,7 +243,7 @@ describe('trava: nenhum cabeçalho de tabela em cinza', () => {
     });
 
     it('não confunde com o que é permitido (cabeçalho azul, linha de dado zebrada, comentário)', () => {
-        expect(contarCabecalhosCinza('<thead className="bg-blue-50 text-blue-800">')).toBe(0);
+        expect(contarCabecalhosCinza('<thead className="bg-white text-gray-700">')).toBe(0);
         expect(contarCabecalhosCinza('<tr className="hover:bg-gray-50 transition-colors">')).toBe(0);
         expect(contarCabecalhosCinza('// <thead className="bg-gray-50">')).toBe(0);
         expect(contarCabecalhosCinza('<tr className="bg-gray-50/50">')).toBe(0);

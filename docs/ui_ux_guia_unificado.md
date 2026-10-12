@@ -732,7 +732,7 @@ const advancedFields = useMemo(() => [
 <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
   <table className="w-full text-left border-collapse">
 
-    <thead className="bg-blue-50 text-blue-800 font-semibold uppercase text-xs tracking-wider border-b border-blue-200">
+    <thead className="bg-white text-gray-700 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
       <tr>
         {/* Checkbox (só se houver ações em lote) */}
         <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
@@ -991,7 +991,7 @@ numa correção (migrou a escala mas manteve `uppercase`).
 > `Fornecedor`, nunca `FORNECEDOR`).
 
 ```tsx
-<tr className="bg-blue-50 text-blue-800 font-semibold text-xs border-b border-blue-200">
+<tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
 ```
 
 ### 6.3 Toda coluna de valor único é ordenável
@@ -1041,7 +1041,7 @@ vertical própria e o `<thead>` fica fixo no topo dessa área.
     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth }}>
       <colgroup>{/* ... */}</colgroup>
       <thead>
-        <tr className="sticky top-0 z-10 bg-blue-50 text-blue-800 font-semibold text-xs border-b border-blue-200">
+        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
           {/* ... */}
         </tr>
       </thead>
@@ -1141,7 +1141,7 @@ Dentro de painel lateral, então:
     <div className="overflow-x-auto rounded-[10px] border border-gray-100">
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="bg-blue-50 text-blue-800 font-semibold text-xs border-b border-blue-200">
+          <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
             <th className="px-3 py-2 border-r border-gray-100">#</th>
             {/* coluna larga (texto livre): px-4 */}
             <th className="px-4 py-2">Confrontante</th>
@@ -1237,34 +1237,38 @@ const COLUMNS: StandardTableColumn[] = [                 // só colunas de DADO
 > `LaborTrainings` — hand-rolled, com resize/autofit adicionados).
 
 
-### 6.11 Cabeçalho de tabela é AZUL, nunca cinza
+### 6.11 Cabeçalho de tabela: fundo BRANCO, texto na cor das células — nunca fundo cinza
 
 **Regra do usuário, 12/10/2026** (com print do cabeçalho do Gantt do Planejamento):
 *"Nenhum header deve estar na cor cinza! cores cinzas são pessimos do ponto de vista do User
 experience"*. Cinza em cabeçalho lê como "desabilitado/vazio". Plano:
 `docs/planos/2026-10-12-cabecalhos-sem-cinza.md`.
 
-A cor é o azul-claro que o app já usava em cabeçalho (`bg-blue-50`, ex.: colunas ES/EF) e a
-mesma família do azul de ação. **Fonte única: `components/ui/cabecalhoDeTabela.ts`.**
+⚠️ **Histórico, para não repetir:** a 1ª versão (publicada em `851ba0ee`) pintou o cabeçalho de
+azul-claro, alegando que *"o app já usava essa cor em cabeçalho"*. Era falso: o `grep` que sustentava
+isso contava `<tr className="hover:bg-blue-50/50">` (linha de DADO que azula ao passar o mouse);
+nenhum `<thead>` era azul. O usuário perguntou onde estava o azul e decidiu: *"mesma cor do texto
+ja usada nas tabelas"*. **Antes de dizer que o app "já usa" uma cor, abrir a ocorrência.**
+
+**Fonte única: `components/ui/cabecalhoDeTabela.ts`.**
 
 | Parte | Classe |
 |---|---|
-| Fundo da linha de cabeçalho | `bg-blue-50` |
-| Linha embaixo | `border-b border-blue-200` |
-| Divisória entre células | `border-r border-blue-100` |
-| Rótulo | `text-blue-800` (contraste AA — o `gray-400/500` antigo não passava) |
-| Subrótulo / ícone de ordenação em repouso | `text-blue-600` / `text-blue-500` |
+| Fundo da linha de cabeçalho | `bg-white` (sem preenchimento) |
+| Linha embaixo | `border-b border-gray-200` |
+| Divisória entre células | `border-r border-gray-100` |
+| Rótulo | `text-gray-700 font-semibold` — o MESMO `text-gray-700` do texto das células (§7) |
+| Subrótulo / ícone de ordenação em repouso | `text-gray-500` |
+| Coluna ordenada / ícone de ordenação ativo | `text-blue-600` (estado, como já era) |
 
 > ✅ `StandardTable`, `SortableHeader`, a grade do Planejamento e o cabeçalho do Gantt já
-> seguem. Tela nova usa `StandardTable` (§6.10) e herda a cor.
-> ✅ Tabela escrita à mão: copie a linha de cabeçalho acima (os snippets deste guia já estão
-> em azul) ou importe `CABECALHO_TABELA`.
+> seguem. Tela nova usa `StandardTable` (§6.10) e herda.
 > ⚠️ **Os snippets antigos, de outros arquivos ou de versões anteriores deste guia, com
-> `bg-gray-50`/`bg-slate-50` no `<thead>`, estão errados** — troque pelo azul.
+> `bg-gray-50`/`bg-slate-50` no `<thead>`, estão errados** — troque por `bg-white`.
 > ❌ Não é cabeçalho (e segue como está): barras de resumo do Gantt, trilho de abas §19.1, barra
 > de opções do ribbon.
-> 🔒 **Trava:** `__tests__/cabecalhoSemCinzaGuard.test.ts` reprova cabeçalho cinza novo. O
-> `BASELINE` do teste é a dívida herdada de 12/10/2026 (180 arquivos, 273 linhas, escritos à
+> 🔒 **Trava:** `__tests__/cabecalhoSemCinzaGuard.test.ts` reprova cabeçalho com FUNDO cinza novo.
+> O `BASELINE` do teste é a dívida herdada de 12/10/2026 (180 arquivos, 273 linhas, escritos à
 > mão) e **só pode diminuir** — ao migrar um arquivo, abaixe/remova a entrada dele.
 
 ---
@@ -2950,7 +2954,7 @@ Percorrer antes de dizer "aplicado". Reportar item a item, não em bloco.
 | 5b | Se redimensiona: espaçador antes de "Ações" + botão de autofit (§6.1.1/§6.1.2) | borda de "Ações" anda ao arrastar coluna |
 | 6 | `rounded-[10px]`/`rounded-[6px]`, controles `h-9` (§16) | `rounded-2xl`/`rounded-xl` sobrando |
 | 7 | Tipografia da tabela (§7) | `font-bold`/`text-xs` em célula de dado |
-| 7b | Cabeçalho da tabela em AZUL (§6.11) | `bg-gray-50`/`bg-slate-50` no `<thead>` |
+| 7b | Cabeçalho com fundo branco e texto `gray-700` (§6.11) | `bg-gray-50`/`bg-slate-50` no `<thead>` |
 | 8 | Ações como link de texto; destrutiva com `useConfirm()` (§9/§14) | botão com borda+sombra na linha |
 | 9 | Criar/editar/excluir atualiza o array local, sem recarregar tudo; scroll preservado ao voltar de edição em página cheia (§22) | `carregar()`/refetch completo por 1 item; foco "volta pra primeira linha" |
 

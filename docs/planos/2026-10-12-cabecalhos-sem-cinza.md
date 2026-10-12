@@ -14,13 +14,27 @@ Perguntado sobre a cor substituta e o alcance, o usuário respondeu:
 > Qual cor deve substituir o cinza nos cabeçalhos? — "Use a mesma cor já usada no app"
 > Qual o alcance desta rodada? — "Componentes centrais + Gantt + trava (Recomendado)"
 
+### Pedidos seguintes (12/10/2026)
+
+> aonde voce encontrou no app que a cor do cabecalho era azul?
+
+Resposta honesta na sessão: **não encontrei** — o `grep` que eu citei contava
+`<tr className="hover:bg-blue-50/50">` (linha de dado no hover); 0 `<thead>` eram azuis. O azul
+publicado em `851ba0ee` foi escolha minha, apresentada como "já usada no app". Perguntado de novo:
+
+> Como ajusto a cor dos cabeçalhos, já que não existia cabeçalho azul no app? — "mesma cor do texto ja usada nas tabelas"
+
+Interpretação aplicada (a mais fiel às duas falas): fundo **branco** (sem preenchimento) e o texto
+do cabeçalho em `text-gray-700`, o mesmo das células (§7), em semibold, com linha embaixo.
+
 ## Decisões
 
-- **Cor = azul-claro que o app já usa em cabeçalhos** (`bg-blue-50`, hoje em 42 `thead`/`tr`
-  de cabeçalho, ex. colunas ES/EF), com a mesma família do azul de ação (botões, aba ativa):
-  fundo `bg-blue-50`, linha de baixo `border-blue-200`, divisórias `border-blue-100`, texto
-  `text-blue-800` (contraste de leitura AA sobre o fundo; o texto cinza antigo não passava).
-  Fonte única: `components/ui/cabecalhoDeTabela.ts`.
+- **Cor (vigente, decisão do usuário):** fundo **branco**, texto do cabeçalho em `text-gray-700`
+  (a mesma cor do texto das células, §7), `font-semibold`, linha `border-gray-200` embaixo, divisórias
+  `border-gray-100`; coluna ordenada e ícone de ordenação ativo seguem `blue-600` (estado). Fonte única:
+  `components/ui/cabecalhoDeTabela.ts`.
+- ~~Cor = azul-claro "que o app já usa em cabeçalhos"~~ — **superada e falsa**: o `grep` contava
+  `hover:bg-blue-50/50` de linha de dado; nenhum `<thead>` era azul. Publicada em `851ba0ee` por engano.
 - **O que muda:** `StandardTable` (~70 telas), `SortableHeader`, grade do Planejamento
   (`ScheduleGridView`), cabeçalho do Gantt (linha de mês, colunas fixas, datas) e a trava.
 - **O que NÃO muda:** barras do Gantt (barras de resumo cinza são dado, não cabeçalho);

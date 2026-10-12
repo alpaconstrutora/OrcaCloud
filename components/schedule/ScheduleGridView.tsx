@@ -190,7 +190,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     ))}
                     <col data-col="totalPct" style={{ width: getColWidth('totalPct') }} />
                 </colgroup>
-                <thead className="sticky top-0 z-20 bg-blue-50 text-blue-800 font-medium border-b border-blue-200 uppercase tracking-widest">
+                <thead className="sticky top-0 z-20 bg-white text-gray-700 font-medium border-b border-gray-200 uppercase tracking-widest">
                     <tr>
                         <th className="px-1 py-3 text-center relative">ID<ResizeHandle colKey="uid" /></th>
                         <th className="px-1 py-3 text-center relative">ITEM<ResizeHandle colKey="wbs" /></th>
@@ -202,7 +202,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-center relative">Duração<ResizeHandle colKey="duration" /></th>
                         <th className="px-4 py-3 text-center relative">Início<ResizeHandle colKey="start" /></th>
                         <th className="px-4 py-3 text-center relative">Término<ResizeHandle colKey="end" /></th>
-                        <th className="px-4 py-3 text-center bg-blue-100/70 relative">ES/EF<ResizeHandle colKey="esef" /></th>
+                        <th className="px-4 py-3 text-center bg-blue-50/50 relative">ES/EF<ResizeHandle colKey="esef" /></th>
                         <th className="px-4 py-3 text-center bg-orange-50/50 relative">LS/LF<ResizeHandle colKey="lslf" /></th>
                         <th className="px-4 py-3 text-center relative">Folga<ResizeHandle colKey="float" /></th>
                         <th className="px-4 py-3 text-right relative">Orçado (B)<ResizeHandle colKey="budgeted" /></th>
@@ -210,8 +210,8 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-right relative">Plan. (C)<ResizeHandle colKey="planned" /></th>
                         <th className="px-4 py-3 text-right relative">Real<ResizeHandle colKey="realized" /></th>
                         <th className="px-4 py-3 text-right relative" title="Valor Planejado atual menos o valor planejado quando a baseline ativa foi salva">Var.<ResizeHandle colKey="variation" /></th>
-                        <th className="px-4 py-3 text-left relative text-table-header text-blue-800 uppercase tracking-widest font-medium">Recursos</th>
-                        <th className="px-4 py-3 text-center border-l border-blue-200 relative">% Físico<ResizeHandle colKey="realPct" /></th>
+                        <th className="px-4 py-3 text-left relative text-table-header text-gray-700 uppercase tracking-widest font-medium">Recursos</th>
+                        <th className="px-4 py-3 text-center border-l border-gray-200 relative">% Físico<ResizeHandle colKey="realPct" /></th>
                         <th className="px-4 py-3 text-center relative">% Financeiro<ResizeHandle colKey="finPct" /></th>
                         <th
                             className="relative p-0 cursor-col-resize select-none group/splitter"
@@ -232,17 +232,17 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                             )}
                         </th>
                         {timelineColumns.map(column => (
-                            <th key={column.id} className="px-2 py-3 text-center border-l border-blue-100 relative">
-                                <div className="text-xs font-medium text-blue-900">{column.name}</div>
+                            <th key={column.id} className="px-2 py-3 text-center border-l border-gray-100 relative">
+                                <div className="text-xs font-medium text-gray-700">{column.name}</div>
                                 {timeScale !== 'day' && (
-                                    <div className="text-xs font-normal text-blue-600">
+                                    <div className="text-xs font-normal text-gray-500">
                                         {new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(column.date)}
                                     </div>
                                 )}
                                 <ResizeHandle colKey={`tl-${column.id}`} />
                             </th>
                         ))}
-                        <th className="px-4 py-3 text-center border-l border-blue-200 relative">Total %<ResizeHandle colKey="totalPct" /></th>
+                        <th className="px-4 py-3 text-center border-l border-gray-200 relative">Total %<ResizeHandle colKey="totalPct" /></th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">

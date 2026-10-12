@@ -65,8 +65,9 @@ frente com alteração não publicada na Planta nas últimas 24 h.
 - [x] 2 `BlueprintCanvas.tsx`: prop `mapaDeFundo`, cache de imagens (`crossOrigin` anônimo, teto 400), ladrilhos antes de tudo, atribuição no canto de CIMA (embaixo a barra de dicas a cobria — só o print mostrou)
 - [x] 3 `PainelCamadas.tsx` + `__tests__/components/PainelCamadasMapa.test.tsx` (6)
 - [x] 4 `BlueprintEditor.tsx`: `blueprint:mapaDeFundo:v1`, painel e canvas ligados
-- [ ] Suíte, typecheck, build
-- [ ] Publicado e provado de fora; CI lida
+- [x] Suíte 8.739 = 8.705 + 34 pendentes + 0 falhos (conta fecha); `tsc` exit 0 sem erro; `check-ui-standard.sh` limpo nos 4 `.tsx`; `check-xss-sinks.sh` limpo; `vite build` ✓
+- [x] Publicado `d698f34c`; `conferir-producao.sh "Mapa: relevo" "blueprint:mapaDeFundo:v1"` → o domínio serve `d698f34` com os dois textos; check-run `ci` = success
+- [ ] Conferência do usuário no estudo real (Camadas › Terreno › expandir › Mapa: ruas/relevo)
 
 ## Portão de posição (12/10/2026)
 

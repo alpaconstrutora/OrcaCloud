@@ -114,4 +114,4 @@ grade ESCURECE de leve em vez de clarear — e as linhas finas só com célula �
       (ruas 80→86%, relevo 71→76%, giro 83→90%) — a grade deixou de pintar o mapa;
       deslocado ±6 px continua ≤ 64%. Prints: só as linhas fortes, escuras e finas.
 - [x] Suíte 8.741 = 8.707 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓
-- [ ] Publicação e CI
+- [x] Publicado `4fd1c80e`; `conferir-producao.sh "rgba(15, 23, 42, 0.07)"` → o domínio serve `4fd1c80` com a cor nova; check-run `ci` = success

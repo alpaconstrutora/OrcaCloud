@@ -441,7 +441,17 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
       - `beforeunload` ao fechar ou recarregar a aba;
       - só Premissas adere: há drawers que ficam montados com dirty=true e perguntariam à toa. 4 testes.
     - Verificado: tsc rc 0; `check-ui-standard` rc 0 (Premissas, ESG); 26 testes relacionados + 4 do `useUnsavedChanges` existente. **Prova no navegador** (`c:/tmp/pwtest/imovib_pendencias.js`; escritas bloqueadas: 0; erros de console: 0): 15 botões de nota com rótulo; campo de Premissas 6px/36px; menu e mudança de endereço perguntam e mantêm o valor; endereço restaurado para `#/imovib`; fechar a aba dispara `beforeunload` e recusar mantém a página; "Sair e descartar" navega; sem pendência não pergunta.
-    - **Próxima pendência (fora do pedido):** cabeçalho do estudo e abas principais do `ImovibDetailView` ainda na escala antiga (§16, e §19.1: abas em caixa alta, `font-black`).
+    - **Publicação das 3 pendências:** `main` = `ee9da923`; o domínio serve `ee9da92` (conferido por ancestralidade, porque outra frente publicou depois). Check-run `ci`: **completed / success**.
+    - [x] **(d) Cabeçalho e abas do detalhe** (pedido: *"Pode cirrigir"*, sobre a pendência que eu registrei fora do pedido): `ImovibDetailView` (`c25b51f7`).
+      - título solto fora de card (§20) e versão em texto simples;
+      - abas no `TabsBar` (§19.1: sem caixa alta, `flex-wrap`);
+      - Editar e Planta AI compactos (§17);
+      - conteúdo rola com a página (saiu a caixa `h-[calc(100vh-14rem)]`).
+      - Verificado: tsc rc 0; `check-ui-standard` rc 0; travas `orgContextGuard` + `cabecalhoSemCinzaGuard` 18/18. **Prova no navegador** (`c:/tmp/pwtest/imovib_cabecalho.js`, larguras 1600 e 1100; escritas bloqueadas: 0; erros de console: 0):
+        - 8 abas, sem caixa alta, peso 500; em 1100 px quebram em 2 linhas (sem rolagem lateral);
+        - h1 fora de card; botão Planta AI sem caixa alta; CAPEX abre pela aba.
+        - O `rolagem_da_pagina: false` do roteiro era erro de medição: o Layout é `h-screen overflow-hidden` e quem rola é o `<main>` (`Layout.tsx:1597`), nunca o documento. O print confirma o conteúdo fluindo sem caixa interna.
+    - **Próxima pendência (fora do pedido):** o CONTEÚDO das abas ainda está na escala antiga (§16/§21). Visto no print do CAPEX: cartões `rounded-2xl`/`3xl` e rótulos `font-black uppercase` ("ÁREA TOTAL (M²)"); vale também para Receitas, Sensibilidade, ESG, Estática, Dinâmica e Resumo.
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);
     - `StarRating` do ESG declarado dentro do render (botões; efeito menor);

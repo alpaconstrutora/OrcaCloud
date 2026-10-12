@@ -486,6 +486,39 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F11 — Gerar planta dentro de um contorno desenhado** · `utils/blueprintGerador.ts`, `TelaGerador.tsx`, `BlueprintEditor.tsx` (~5613–5690)
 - Muda: o envelope pode vir de um polígono selecionado (anotação HACHURA/LINHA fechada ou ambiente). `maiorRetanguloInscrito` é trocado por uma decomposição do polígono ortogonal em retângulos, com as faixas recortadas contra o polígono, e o aviso de área perdida vira percentual. `comandosDeGeometria` passa para `AddWalls`/`AddOpenings`/`PlaceSpaceLabels` (como `blueprintPlantaDaUnidade.ts:581`). O pedido em texto reaproveita o PainelIa/`planta-ia`.
 - Pronto quando: teste: contorno em L de 161 m² com "3 quartos" usa ≥ 90 % da área e não gera parede fora do polígono; teste da contagem de comandos (lote); no app, desenhar o L, digitar e receber a planta editável.
+- **Feito na execução (12/10, pedido: "pode usar a 'Planta 11/10/2026' e depois do teste seguir para F11"; sem
+  bump de kernel):**
+  - `utils/blueprintContorno.ts` (puro): `ehOrtogonal`, `retangulosDoContorno` (fatias em X e em Y, fundidas;
+    fica a decomposição de MAIOR retângulo principal), `trechosNaBorda` (os trechos de um lado que caem na borda,
+    com a normal externa S/N/L/O — anel horário ou anti-horário) e `subtrairBorda`.
+  - Gerador: contorno ORTOGONAL (L, U, T…) é usado INTEIRO — o maior retângulo é o principal (zonas, corredor,
+    recozimento, como antes) e os outros são ANEXOS: recebem íntimos (depois, serviço) até a parte de área
+    deles, pelo MESMO treemap em faixas com a 1ª faixa encostada no lado comum com a casa (a suíte encosta na
+    casa; o banheiro da suíte fica atrás dela). Sem íntimo no principal, o corredor sai. Externas = arestas do
+    contorno; internas = lados dos ambientes MENOS a borda; janelas e entrada nos trechos de borda (com a
+    normal); "lados externos" pelo contorno quando há anexo. Contorno OBLÍQUO segue no maior retângulo, com
+    aviso do percentual que ficou de fora. Anexo com menos de 1,50 m não recebe ambiente (aviso).
+    1ª versão punha os ambientes do anexo numa linha só → banheiro de 1,15 × 7 m; trocada pelo treemap.
+  - Aplicar = `comandosDeAplicacao`: `AddWalls` + `AddOpenings` (por `wallUid`) + `PlaceSpaceLabels` num
+    `runBatch` — UM Ctrl+Z tira a planta inteira (antes eram dois lotes, e o 1º Ctrl+Z tirava só os nomes).
+  - UI: "Gerar planta aqui" no painel da REGIÃO HACHURADA (abre Gerar com ela como contorno); a tela Gerar diz
+    "Contorno DESENHADO: N m²" com "voltar ao envelope do lote", e oferece "Gerar dentro da região selecionada".
+    O pedido em TEXTO segue na Conversa (PainelIa), que muda o programa e re-gera — sobre o contorno em uso.
+  - Testes que mudaram por requisito: o L do `blueprintGerador.test.ts` deixou de ser "o maior retângulo" (agora
+    "Contorno ortogonal … 100 % da área"), e o 2Q que antes não cabia no L agora cabe (o aviso de área mínima
+    passou a ser conferido num envelope pequeno de verdade).
+  - Prova: `__tests__/blueprintContorno.test.ts` (5) e `__tests__/blueprintGeradorContorno.test.ts` (5: o L de
+    161 m² com o programa de 3 quartos em 3 sementes — ≥ 90 % da área em ambientes, nenhuma parede fora do
+    polígono, todos fechados/nomeados e com porta, a ala recebe ambiente, entrada pela frente; aplicar = 3
+    comandos de lote; oblíquo avisa). Diagnóstico da semente 1: ala de 5 × 7 m com a suíte (5 × 5,4) e o
+    banheiro da suíte atrás; 16 paredes, 13 portas, 9 janelas, nota 86.
+    ✅ **No app com escrita (12/10, "Planta 11/10/2026")**: L de 33,20 m² desenhado como região hachurada dentro
+    da sala → "Gerar planta aqui" → a tela diz "Contorno DESENHADO: 33,20 m²" → semente 2 quartos no programa
+    (o estudo não tinha) → de volta ao Gerar, o contorno continua → 4 alternativas → "Aplicar neste pavimento":
+    **4 → 17 paredes no banco, 8 ambientes nomeados**, a planta seguindo os dois braços do L → **um Ctrl+Z** a
+    tira inteira → limpeza: rascunho com o MESMO md5 de antes e o programa apagado pela API com a sessão (204).
+    Os ambientes saíram apertados (sala 4,95 m²) porque o L cabia na sala existente — 33 m² para um programa
+    de ~60 m²; a tela marca as áreas em vermelho.
 
 **F12 — Câmera** · kernel (**bump**): família `Camera {posicao, alvo, alturaOlhoMm, focalMm, nome}`; ferramenta de 2 cliques no 2D; `Blueprint3DViewer.tsx` (Canvas `:2242`, `Percorrer`); `utils/blueprintBcf.ts` (`PerspectiveCamera`)
 - Muda: o símbolo da câmera com cone no 2D; prévia 3D do ponto de vista; lista de vistas salvas; mexer na janela atualiza a prévia; o BCF exporta a câmera em perspectiva quando há uma.

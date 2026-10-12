@@ -40,13 +40,15 @@ interface Props {
     ordem?: number | null;
   }) => void;
   onExcluir: () => void;
+  /** F11: a região hachurada vira o CONTORNO do gerador de plantas (abre a tela Gerar). */
+  onGerarPlantaAqui?: () => void;
 }
 
 const ROTULO_TRACO: Record<TracoDaAnotacao, string> = { CONTINUO: 'Contínuo', TRACEJADO: 'Tracejado', PONTILHADO: 'Pontilhado' };
 const ROTULO_HACHURA: Record<PadraoDeHachura, string> = { DIAGONAL: 'Diagonal 45°', CRUZADA: 'Cruzada', PONTOS: 'Pontos', SOLIDA: 'Sólida (translúcida)' };
 const nomeDaVista = (a: Anotacao) => (a.vista.tipo === 'PLANTA' ? 'planta' : a.vista.tipo === 'CORTE' ? 'corte' : `elevação ${a.vista.direcao.toLowerCase().replace('_', ' ')}`);
 
-export default function PainelAnotacaoSelecionada({ anotacao: a, todas = [], onProps, onExcluir }: Props) {
+export default function PainelAnotacaoSelecionada({ anotacao: a, todas = [], onProps, onExcluir, onGerarPlantaAqui }: Props) {
   if (!a) return null;
   // F7: o que os botoes de ordem gravariam; null = nao ha o que fazer (o botao diz por que).
   const paraFrente = ordemAoMover(todas, a, 'FRENTE');
@@ -218,6 +220,17 @@ export default function PainelAnotacaoSelecionada({ anotacao: a, todas = [], onP
         >
           Enviar para trás
         </button>
+        {/* F11: o vídeo — desenhar o contorno e pedir a planta dentro dele. */}
+        {a.tipo === 'HACHURA' && onGerarPlantaAqui && (
+          <button
+            type="button"
+            onClick={onGerarPlantaAqui}
+            title="Abre o gerador de plantas com esta região como contorno: o programa de necessidades é distribuído dentro dela (L, U ou T usados inteiros)"
+            className="rounded-md border border-blue-300 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100"
+          >
+            Gerar planta aqui
+          </button>
+        )}
         {a.plano === 'FUNDO' && <span className="text-[11px] text-slate-500">no fundo: abaixo das paredes e dos móveis</span>}
       </div>
       <details className="mt-2 text-xs">

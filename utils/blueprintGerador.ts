@@ -60,6 +60,7 @@ import { planejarLajes, planejarVigas } from './blueprintVigasLajesAutomaticas';
 import { planejarPontosDoNivel } from './blueprintPontosHidraulicos';
 import { comandosDeIluminacao, comandosParaCompletar, conferirIluminacao, conferirTomadas, distribuirAoLongo, etiquetaDoAmbiente, ladosDePiso } from './blueprintDistribuicao';
 import { aplicarPotenciaPadrao } from './blueprintPotenciaPadrao';
+import { anelDoRetangulo, areaDoRetangulo, ladoComumDosRetangulos, retangulosDoContorno, subtrairBorda, trechosNaBorda, type LadoNoDesenho } from './blueprintContorno';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -132,7 +133,11 @@ export interface AmbienteGerado {
 export interface ResultadoDoGerador {
   semente: number;
   hipoteses: HipotesesDoGerador;
+  /** O retângulo PRINCIPAL (zonas, corredor, recozimento). */
   retangulo: Retangulo;
+  /** F11: o CONTORNO de trabalho (a casca das paredes externas) e os retângulos ANEXOS dele. */
+  contorno: Point[];
+  anexos: Retangulo[];
   frente: LadoDaFrente;
   ambientes: AmbienteGerado[];
   /** Comandos aplicados na ordem sobre um modelo vazio + pavimento. */
@@ -517,18 +522,43 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   const rnd = prng(semente);
   const { programa } = entrada;
 
-  // Retângulo de trabalho.
+  // Retângulo de trabalho — e, desde a F11 (12/10/2026), o CONTORNO: um contorno ORTOGONAL
+  // (L, U, T…) é decomposto em retângulos; o maior é o principal (zonas, corredor, recozimento)
+  // e os outros são ANEXOS que recebem ambientes — antes, o "maior inscrito" jogava fora a ala.
+  // Contorno oblíquo segue no maior inscrito, com o percentual que ficou de fora dito.
   let ret: Retangulo;
+  let anexos: Retangulo[] = [];
+  let contorno: Point[];
   if (entrada.envelope && entrada.envelope.length >= 3) {
-    const r = maiorRetanguloInscrito(entrada.envelope);
-    if (!r) throw new Error('gerador: o envelope não contém um retângulo de eixos alinhados');
-    ret = r;
-    decisoes.push(`Retângulo de trabalho ${f2((r.x1 - r.x0) / 1000)} × ${f2((r.y1 - r.y0) / 1000)} m — o maior de eixos alinhados dentro do envelope edificável.`);
+    const naMalha = entrada.envelope
+      .map((p) => point(snap(p.x, hip.malhaMm), snap(p.y, hip.malhaMm)))
+      .filter((p, i, xs) => i === 0 || p.x !== xs[i - 1].x || p.y !== xs[i - 1].y);
+    const pecas = retangulosDoContorno(naMalha);
+    const areaDoEnvelope = Math.abs(polygonArea(entrada.envelope));
+    if (pecas.length > 0) {
+      ret = pecas[0];
+      anexos = pecas.slice(1);
+      contorno = naMalha;
+      decisoes.push(
+        `Contorno ortogonal de ${f2(areaDoEnvelope / 1e6)} m² em ${pecas.length} retângulo(s): o principal de ${f2((ret.x1 - ret.x0) / 1000)} × ${f2((ret.y1 - ret.y0) / 1000)} m (zonas e corredor)` +
+          (anexos.length ? ` e ${anexos.length} anexo(s) — ${anexos.map((a) => `${f2((a.x1 - a.x0) / 1000)} × ${f2((a.y1 - a.y0) / 1000)} m`).join(', ')}` : '') +
+          ` — ${f2((pecas.reduce((s, r) => s + areaDoRetangulo(r), 0) / (areaDoEnvelope || 1)) * 100)} % da área do contorno.`,
+      );
+    } else {
+      const r = maiorRetanguloInscrito(entrada.envelope);
+      if (!r) throw new Error('gerador: o envelope não contém um retângulo de eixos alinhados');
+      ret = { x0: snap(r.x0, hip.malhaMm), y0: snap(r.y0, hip.malhaMm), x1: snap(r.x1, hip.malhaMm), y1: snap(r.y1, hip.malhaMm) };
+      contorno = anelDoRetangulo(ret);
+      const usado = areaDoRetangulo(ret) / (areaDoEnvelope || 1);
+      decisoes.push(`Retângulo de trabalho ${f2((r.x1 - r.x0) / 1000)} × ${f2((r.y1 - r.y0) / 1000)} m — o maior de eixos alinhados dentro do envelope (oblíquo): ${f2(usado * 100)} % da área.`);
+      if (usado < 0.98) avisos.push(`O contorno não é ortogonal: ${f2((1 - usado) * 100)} % da área ficou fora do retângulo de trabalho.`);
+    }
   } else {
     ret = { x0: 0, y0: 0, x1: hip.retanguloSemEnvelope.larguraMm, y1: hip.retanguloSemEnvelope.profundidadeMm };
     decisoes.push(`Sem envelope: retângulo declarado ${f2(ret.x1 / 1000)} × ${f2(ret.y1 / 1000)} m na origem.`);
+    ret = { x0: snap(ret.x0, hip.malhaMm), y0: snap(ret.y0, hip.malhaMm), x1: snap(ret.x1, hip.malhaMm), y1: snap(ret.y1, hip.malhaMm) };
+    contorno = anelDoRetangulo(ret);
   }
-  ret = { x0: snap(ret.x0, hip.malhaMm), y0: snap(ret.y0, hip.malhaMm), x1: snap(ret.x1, hip.malhaMm), y1: snap(ret.y1, hip.malhaMm) };
   const frente = ladoDaFrente(entrada.direcaoDaFrente);
   const nomeDaFrente: Record<LadoDaFrente, string> = { S: 'sul (−Y)', N: 'norte (+Y)', L: 'leste (+X)', O: 'oeste (−X)' };
   decisoes.push(`Frente do lote a ${nomeDaFrente[frente]}${entrada.direcaoDaFrente ? ' (pela divisa FRENTE)' : ' (suposição: sem divisa marcada)'}; norte do desenho ${entrada.rotacaoNorteDeg == null ? '= +Y' : `girado ${entrada.rotacaoNorteDeg}°`}.`);
@@ -553,6 +583,52 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   // (a)+(b) zona e alocação.
   const base = itensPlanejados(programa);
   if (base.frente.length + base.fundo.length === 0) throw new Error('gerador: o programa não tem ambientes (fora a circulação)');
+
+  // F11 — OS ANEXOS: cada um recebe ambientes íntimos (depois, de serviço) até a sua parte da área,
+  // em UMA linha ao longo do lado que encosta no principal — assim todo ambiente do anexo encosta
+  // na casa e ganha porta pela busca em largura. A sala e o resto do social ficam no principal.
+  const noAnexo: { ret: Retangulo; itens: ItemPlanejado[] }[] = [];
+  if (anexos.length) {
+    const areaDosItens = [...base.frente, ...base.fundo].reduce((s, i) => s + i.areaAlvoMm2, 0);
+    const areaTotal = areaDoRetangulo(ret) + anexos.reduce((s, a) => s + areaDoRetangulo(a), 0);
+    const fatorGlobal = areaTotal / (areaDosItens || 1);
+    for (const ax of anexos) {
+      const menorLado = Math.min(ax.x1 - ax.x0, ax.y1 - ax.y0);
+      if (menorLado < 1500) {
+        avisos.push(`Anexo de ${f2((ax.x1 - ax.x0) / 1000)} × ${f2((ax.y1 - ax.y0) / 1000)} m estreito demais para ambiente (< 1,50 m) — ficou sem uso.`);
+        continue;
+      }
+      let capacidade = areaDoRetangulo(ax) / fatorGlobal;
+      const escolhidos: ItemPlanejado[] = [];
+      const candidatos = () => [...base.fundo, ...base.frente.filter((i) => i.zona === 'SERVICO')];
+      for (;;) {
+        const c = candidatos()
+          .filter((i) => i.areaAlvoMm2 <= capacidade * 1.25)
+          .sort((a, b) => b.areaAlvoMm2 - a.areaAlvoMm2)[0];
+        if (!c) break;
+        escolhidos.push(c);
+        capacidade -= c.areaAlvoMm2;
+        base.fundo = base.fundo.filter((x) => x !== c);
+        base.frente = base.frente.filter((x) => x !== c);
+      }
+      if (!escolhidos.length) {
+        const menor = candidatos().sort((a, b) => a.areaAlvoMm2 - b.areaAlvoMm2)[0];
+        if (menor) {
+          escolhidos.push(menor);
+          base.fundo = base.fundo.filter((x) => x !== menor);
+          base.frente = base.frente.filter((x) => x !== menor);
+        }
+      }
+      if (escolhidos.length) noAnexo.push({ ret: ax, itens: escolhidos });
+      else avisos.push(`Anexo de ${f2((ax.x1 - ax.x0) / 1000)} × ${f2((ax.y1 - ax.y0) / 1000)} m sem ambiente íntimo ou de serviço para receber — ficou sem uso.`);
+    }
+    if (noAnexo.length) decisoes.push(`Anexos: ${noAnexo.map((n) => n.itens.map((i) => i.nome).join(', ')).join(' | ')} — em linha ao longo do lado que encosta na casa.`);
+    // Sem íntimo no principal, o corredor não serve a ninguém: sai, e o anexo encosta direto na casa.
+    if (base.fundo.length === 0 && base.corredor) {
+      decisoes.push('Todo o íntimo foi para os anexos: o retângulo principal fica sem corredor.');
+      base.corredor = null;
+    }
+  }
   const areaPedida = [...base.frente, ...base.fundo].reduce((s, i) => s + i.areaAlvoMm2, 0) + (base.corredor ? W * hip.larguraCorredorMm : 0);
   const areaDisponivel = W * D;
   const fator = areaDisponivel / (areaPedida || 1);
@@ -599,6 +675,38 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     });
     ambientes.push({ item: t.item, nome: t.nome, zona: t.zona, ret: r, areaM2: Math.round(((r.x1 - r.x0) * (r.y1 - r.y0)) / 10_000) / 100, larguraMinM: Math.min(r.x1 - r.x0, r.y1 - r.y0) / 1000, ladosExternos: lados });
   }
+  /** Os lados do retângulo que caem na borda do CONTORNO, com a normal externa (F11). */
+  const ladosNaBorda = (r: Retangulo) =>
+    [
+      [point(r.x0, r.y0), point(r.x1, r.y0)],
+      [point(r.x1, r.y0), point(r.x1, r.y1)],
+      [point(r.x1, r.y1), point(r.x0, r.y1)],
+      [point(r.x0, r.y1), point(r.x0, r.y0)],
+    ].flatMap(([a, b]) => trechosNaBorda(a, b, contorno));
+  // F11: os ANEXOS pelo MESMO treemap em faixas do principal, com a 1ª faixa encostada no lado comum
+  // com a casa: quem está nela ganha porta para a casa; quem fica atrás, para o vizinho da faixa
+  // (o banheiro da suíte atrás da suíte). "Uma linha só" esticava o ambiente (1,15 × 7 m num anexo fundo).
+  for (const { ret: ax, itens } of noAnexo) {
+    const comum = ladoComumDosRetangulos(ax, ret) ?? anexos.map((o) => (o === ax ? null : ladoComumDosRetangulos(ax, o))).find(Boolean) ?? null;
+    const aoLongoDeX = comum ? comum.horizontal : ax.x1 - ax.x0 >= ax.y1 - ax.y0;
+    // Onde está o lado comum: embaixo/em cima (aoLongoDeX) ou à esquerda/à direita.
+    const noInicio = comum ? (aoLongoDeX ? Math.abs(comum.a.y - ax.y0) < 1 : Math.abs(comum.a.x - ax.x0) < 1) : true;
+    const Wa = aoLongoDeX ? ax.x1 - ax.x0 : ax.y1 - ax.y0;
+    const Da = aoLongoDeX ? ax.y1 - ax.y0 : ax.x1 - ax.x0;
+    const doAnexo = (cx: number, cy: number): Point =>
+      aoLongoDeX ? point(ax.x0 + cx, noInicio ? ax.y0 + cy : ax.y1 - cy) : point(noInicio ? ax.x0 + cy : ax.x1 - cy, ax.y0 + cx);
+    const ordenados = [...itens].sort((p, q) => q.areaAlvoMm2 - p.areaAlvoMm2);
+    for (const [it, c] of treemapEmFaixas(ordenados, Wa, Da, 0)) {
+      const s = { x0: snap(c.x0, hip.malhaMm), y0: snap(c.y0, hip.malhaMm), x1: snap(c.x1, hip.malhaMm), y1: snap(c.y1, hip.malhaMm) };
+      const p1 = doAnexo(s.x0, s.y0);
+      const p2 = doAnexo(s.x1, s.y1);
+      const r: Retangulo = { x0: Math.min(p1.x, p2.x), y0: Math.min(p1.y, p2.y), x1: Math.max(p1.x, p2.x), y1: Math.max(p1.y, p2.y) };
+      ambientes.push({ item: it.item, nome: it.nome, zona: it.zona, ret: r, areaM2: Math.round(((r.x1 - r.x0) * (r.y1 - r.y0)) / 10_000) / 100, larguraMinM: Math.min(r.x1 - r.x0, r.y1 - r.y0) / 1000, ladosExternos: [] });
+    }
+  }
+  // Com anexo, "lado externo" é o que cai na borda do CONTORNO — o lado do principal que encosta no
+  // anexo não é fachada (no desenho: S/N/L/O pela normal externa da borda).
+  if (anexos.length) for (const a of ambientes) a.ladosExternos = [...new Set(ladosNaBorda(a.ret).map((x) => x.lado as LadoDaFrente))];
 
   // (d) paredes.
   let model = emptyModel();
@@ -610,12 +718,8 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   };
   aplicar([{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: hip.peDireitoMm }]);
   const levelId = model.levels[0].id;
-  const externas = [
-    { a: point(ret.x0, ret.y0), b: point(ret.x1, ret.y0) },
-    { a: point(ret.x1, ret.y0), b: point(ret.x1, ret.y1) },
-    { a: point(ret.x1, ret.y1), b: point(ret.x0, ret.y1) },
-    { a: point(ret.x0, ret.y1), b: point(ret.x0, ret.y0) },
-  ];
+  // F11: as externas são as ARESTAS DO CONTORNO (no retângulo, os 4 lados de sempre).
+  const externas = contorno.map((p, i) => ({ a: p, b: contorno[(i + 1) % contorno.length] })).filter((s) => Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y) > 1);
   const internas = unirSegmentos(
     ambientes.flatMap((a) => [
       { a: point(a.ret.x0, a.ret.y0), b: point(a.ret.x1, a.ret.y0) },
@@ -623,10 +727,7 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
       { a: point(a.ret.x1, a.ret.y1), b: point(a.ret.x0, a.ret.y1) },
       { a: point(a.ret.x0, a.ret.y1), b: point(a.ret.x0, a.ret.y0) },
     ]),
-  ).filter((s) => {
-    const naBorda = (Math.abs(s.a.x - s.b.x) < 1 && (Math.abs(s.a.x - ret.x0) < 1 || Math.abs(s.a.x - ret.x1) < 1)) || (Math.abs(s.a.y - s.b.y) < 1 && (Math.abs(s.a.y - ret.y0) < 1 || Math.abs(s.a.y - ret.y1) < 1));
-    return !naBorda;
-  });
+  ).flatMap((s) => subtrairBorda(s.a, s.b, contorno)); // a borda já é parede externa (F11)
   const uidDaParede = (k: number) => uidDeterministico(`gerador:${semente}:parede:${k}`);
   aplicar(externas.map((s, k): Command => ({ type: 'AddWall', levelId, a: s.a, b: s.b, thicknessMm: hip.espessuraExternaMm, heightMm: hip.peDireitoMm, uid: uidDaParede(k) })));
   aplicar(internas.map((s, k): Command => ({ type: 'AddWall', levelId, a: s.a, b: s.b, thicknessMm: hip.espessuraInternaMm, heightMm: hip.peDireitoMm, uid: uidDaParede(externas.length + k) })));
@@ -727,10 +828,12 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     for (const a of ambientes.filter((x) => x.item.id === r.a)) for (const b of ambientes.filter((x) => x.item.id === r.b)) if (ladoComum(a.ret, b.ret)) abrirPorta(a, b);
   }
   // Entrada: no lado da frente da sala (ou do corredor).
-  const entradaEm = [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => a && (frente === 'S' ? Math.abs(a.ret.y0 - ret.y0) < 1 : frente === 'N' ? Math.abs(a.ret.y1 - ret.y1) < 1 : frente === 'O' ? Math.abs(a.ret.x0 - ret.x0) < 1 : Math.abs(a.ret.x1 - ret.x1) < 1));
+  // F11: o lado da FRENTE é o trecho do ambiente na borda do contorno que olha para a frente.
+  const trechoDaFrente = (a: AmbienteGerado | null) =>
+    a ? ladosNaBorda(a.ret).filter((x) => x.lado === (frente as LadoNoDesenho)).sort((p, q) => Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y) - Math.hypot(p.b.x - p.a.x, p.b.y - p.a.y))[0] ?? null : null;
+  const entradaEm = [sala, ...ambientes.filter((a) => a.zona === 'SOCIAL' && a !== sala), corredor, ...ambientes].find((a) => !!trechoDaFrente(a ?? null)) ?? null;
   if (entradaEm) {
-    const r = entradaEm.ret;
-    const seg = frente === 'S' ? { a: point(r.x0, r.y0), b: point(r.x1, r.y0) } : frente === 'N' ? { a: point(r.x0, r.y1), b: point(r.x1, r.y1) } : frente === 'O' ? { a: point(r.x0, r.y0), b: point(r.x0, r.y1) } : { a: point(r.x1, r.y0), b: point(r.x1, r.y1) };
+    const seg = trechoDaFrente(entradaEm)!;
     const cmd = porta(seg, hip.larguraEntradaMm);
     if (cmd) {
       aberturas.push(cmd);
@@ -743,12 +846,8 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
     if (a.zona === 'CIRCULACAO') continue;
     const precisa = a.item.exigeIluminacao || a.item.exigeFachada || a.item.exigeVentilacao;
     if (!precisa) continue;
-    const ladosExt: { a: Point; b: Point; lado: LadoDaFrente }[] = [];
-    const r = a.ret;
-    if (Math.abs(r.y0 - ret.y0) < 1) ladosExt.push({ a: point(r.x0, r.y0), b: point(r.x1, r.y0), lado: 'S' });
-    if (Math.abs(r.y1 - ret.y1) < 1) ladosExt.push({ a: point(r.x0, r.y1), b: point(r.x1, r.y1), lado: 'N' });
-    if (Math.abs(r.x0 - ret.x0) < 1) ladosExt.push({ a: point(r.x0, r.y0), b: point(r.x0, r.y1), lado: 'O' });
-    if (Math.abs(r.x1 - ret.x1) < 1) ladosExt.push({ a: point(r.x1, r.y0), b: point(r.x1, r.y1), lado: 'L' });
+    // F11: os lados EXTERNOS são os trechos do ambiente na borda do contorno (não só do retângulo).
+    const ladosExt: { a: Point; b: Point; lado: LadoDaFrente }[] = ladosNaBorda(a.ret).map((x) => ({ a: x.a, b: x.b, lado: x.lado as LadoDaFrente }));
     if (ladosExt.length === 0) {
       avisos.push(`${a.nome} exige ${a.item.exigeIluminacao ? 'iluminação' : a.item.exigeFachada ? 'fachada' : 'ventilação'} e ficou sem lado externo.`);
       continue;
@@ -820,12 +919,17 @@ export function gerar(entrada: EntradaDoGerador, semente: number, hipParcial: Pa
   );
   const paredesM = model.walls.reduce((s, w) => s + wallLength(w), 0) / 1000;
   const areaUtilM2 = model.spaces.reduce((s, sp) => s + areaRecuada(sp.ring, model.walls).areaMm2, 0) / 1e6;
-  const areaConstruidaM2 = ((ret.x1 - ret.x0 + hip.espessuraExternaMm) * (ret.y1 - ret.y0 + hip.espessuraExternaMm)) / 1e6;
+  const perimetro = contorno.reduce((s, p, i) => s + Math.hypot(contorno[(i + 1) % contorno.length].x - p.x, contorno[(i + 1) % contorno.length].y - p.y), 0);
+  const areaConstruidaM2 = anexos.length
+    ? (Math.abs(polygonArea(contorno)) + (perimetro * hip.espessuraExternaMm) / 2) / 1e6
+    : ((ret.x1 - ret.x0 + hip.espessuraExternaMm) * (ret.y1 - ret.y0 + hip.espessuraExternaMm)) / 1e6;
   decisoes.push(`Resultado: ${f2(areaConstruidaM2)} m² construídos, ${f2(areaUtilM2)} m² úteis, ${f2(paredesM)} m de parede; nota ${avaliacao.notaGeral ?? '—'}.`);
   return {
     semente,
     hipoteses: hip,
     retangulo: ret,
+    contorno,
+    anexos,
     frente,
     ambientes,
     comandos,
@@ -879,6 +983,24 @@ export function comandosDeGeometria(r: ResultadoDoGerador, levelId: ObjectId): C
       // A abertura vai pela identidade da parede — o id é do modelo gerado.
       return { ...c, wallId: '' };
     });
+}
+
+/**
+ * F11 — APLICAR EM LOTE (12/10/2026): as paredes, as aberturas e os nomes em TRÊS comandos de
+ * lote (`AddWalls`, `AddOpenings` por `wallUid`, `PlaceSpaceLabels` no centro de cada ambiente) —
+ * um `runBatch`, UM Ctrl+Z, e a cauda do kernel (arranjo, invariantes) roda uma vez por lote em
+ * vez de uma vez por parede (ver o custo por comando do kernel). Os nomes não precisam mais de
+ * simulação: a etiqueta nomeia o ambiente em que cai.
+ */
+export function comandosDeAplicacao(r: ResultadoDoGerador, levelId: ObjectId): Command[] {
+  const walls = r.comandos.flatMap((c) => (c.type === 'AddWall' ? [(({ type: _t, ...resto }) => ({ ...resto, levelId }))(c)] : []));
+  const openings = r.comandos.flatMap((c) => (c.type === 'AddOpening' ? [(({ type: _t, ...resto }) => ({ ...resto, wallId: '' }))(c)] : []));
+  const labels = r.ambientes.map((a) => ({ levelId, at: point(snap((a.ret.x0 + a.ret.x1) / 2, 10), snap((a.ret.y0 + a.ret.y1) / 2, 10)), name: a.nome, tipoDeAmbiente: FICHA_DO_USO[a.item.uso].tipoNbr5410 }));
+  const out: Command[] = [];
+  if (walls.length) out.push({ type: 'AddWalls', walls });
+  if (openings.length) out.push({ type: 'AddOpenings', openings });
+  if (labels.length) out.push({ type: 'PlaceSpaceLabels', labels });
+  return out;
 }
 
 export function nomesParaOModelo(r: ResultadoDoGerador, model: BlueprintModel, levelId: ObjectId): Command[] {

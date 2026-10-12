@@ -681,7 +681,7 @@ import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../../utils
 import { plantasDasUnidades, unidadeTemPlanta } from '../../utils/blueprintPlantaDaUnidade';
 import { garagemLancada, lancarGaragem } from '../../utils/blueprintGaragemDaMassa';
 import { comandosDoCandidato, modeloDoCandidato, type CandidatoDeMassa } from '../../utils/blueprintGeradorDeMassa';
-import { comandosDeGeometria, HIPOTESES_DO_GERADOR_PADRAO, nomesParaOModelo, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
+import { comandosDeAplicacao, HIPOTESES_DO_GERADOR_PADRAO, type HipotesesDoGerador, type ResultadoDoGerador } from '../../utils/blueprintGerador';
 import { conferirPrograma as conferirProgramaDeOutro } from '../../utils/blueprintConferenciaDoPrograma';
 import {
   POLITICA_PADRAO,
@@ -5723,9 +5723,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     setTelaAberta(null);
   };
   const [hipotesesDoGerador, setHipotesesDoGerador] = usePersistedState<HipotesesDoGerador>('blueprint:gerador', HIPOTESES_DO_GERADOR_PADRAO);
+  /**
+   * F11 (12/10/2026): o CONTORNO DESENHADO — os vértices de uma região hachurada — no lugar do envelope
+   * do lote. Fica guardado (e não lido da seleção a cada render) porque abrir a tela Gerar e clicar
+   * nela não pode trocar o contorno de quem já o escolheu.
+   */
+  const [contornoDoGerador, setContornoDoGerador] = useState<Point[] | null>(null);
+  const regiaoSelecionada = anotacaoSel && anotacaoSel.tipo === 'HACHURA' && anotacaoSel.vista.tipo === 'PLANTA' && anotacaoSel.pontos.length >= 3 ? anotacaoSel.pontos : null;
   const entradaDoGerador = useMemo(() => {
     const prisma = envelope3d?.prismas.find((p) => p.levelId === levelId) ?? null;
-    const anel = prisma && prisma.anel.length >= 3 ? prisma.anel : envelope?.valido ? envelope.anel : null;
+    const anel = contornoDoGerador ?? (prisma && prisma.anel.length >= 3 ? prisma.anel : envelope?.valido ? envelope.anel : null);
     let direcaoDaFrente: { x: number; y: number } | null = null;
     const frentes = limitesDoNivel.filter((b) => b.kind === 'TERRENO' && b.papel === 'FRENTE');
     if (terreno && frentes.length) {
@@ -5739,16 +5746,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       entrada: { programa: programaDoEstudo.programa, envelope: anel, direcaoDaFrente, rotacaoNorteDeg: norteDoDesenho, latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual },
       contexto: { temPrograma: programaDoEstudo.programa.itens.length > 0, temEnvelope: !!anel, frenteDeclarada: !!direcaoDaFrente, envelopeM2: anel ? Math.round(Math.abs(polygonArea(anel)) / 10_000) / 100 : null },
     };
-  }, [envelope3d, envelope, levelId, limitesDoNivel, terreno, programaDoEstudo.programa, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual]);
+  }, [contornoDoGerador, envelope3d, envelope, levelId, limitesDoNivel, terreno, programaDoEstudo.programa, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual]);
   /** "Aplicar neste pavimento": geometria num lote (paredes por uid + aberturas por wallUid), nomes no segundo. */
   const aplicarAlternativaGerada = async (r: ResultadoDoGerador) => {
     if (!levelId) throw new Error('Abra um pavimento para aplicar.');
-    const geo = comandosDeGeometria(r, levelId);
-    // O kernel é determinístico: simular o lote dá os mesmos ids que o editor vai criar.
-    const simulado = applyBatch(editor.model, geo).model;
-    const nomes = nomesParaOModelo(r, simulado, levelId);
-    editor.runBatch(geo);
-    if (nomes.length) editor.runBatch(nomes);
+    // F11: paredes, aberturas e nomes em TRÊS comandos de lote num runBatch só — um Ctrl+Z desfaz a
+    // planta inteira (antes eram dois lotes, e o 1º Ctrl+Z tirava só os nomes).
+    editor.runBatch(comandosDeAplicacao(r, levelId));
     setTelaAberta(null);
   };
   /**
@@ -10118,6 +10122,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         todas={editor.model.anotacoes ?? []}
         onProps={(campos) => anotacaoSel && editor.run({ type: 'SetAnotacaoProps', anotacaoId: anotacaoSel.id, ...campos })}
         onExcluir={removerSelecionada}
+        onGerarPlantaAqui={
+          regiaoSelecionada
+            ? () => {
+                setContornoDoGerador(regiaoSelecionada.map((p) => ({ ...p })));
+                setTelaAberta('gerar');
+              }
+            : undefined
+        }
       />
       <PainelRodapeSelecionado
         rodape={rodapeSel}
@@ -10887,6 +10899,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 setTelaAberta('alternativas');
               }}
               onAplicarAqui={aplicarAlternativaGerada}
+              contorno={{
+                emUsoM2: contornoDoGerador ? Math.round(Math.abs(polygonArea(contornoDoGerador)) / 10_000) / 100 : null,
+                selecionadoM2: regiaoSelecionada ? Math.round(Math.abs(polygonArea(regiaoSelecionada)) / 10_000) / 100 : null,
+                usarSelecionado: () => regiaoSelecionada && setContornoDoGerador(regiaoSelecionada.map((p) => ({ ...p }))),
+                soltar: () => setContornoDoGerador(null),
+              }}
             />
           </div>
         </div>

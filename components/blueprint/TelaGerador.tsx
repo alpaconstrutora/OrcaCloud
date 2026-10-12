@@ -28,6 +28,12 @@ interface Props {
   /** O pavimento aberto já tem paredes? (aviso antes de aplicar) */
   pavimentoTemParedes: boolean;
   onAbrirPrograma: () => void;
+  /**
+   * F11 (12/10/2026): o CONTORNO DESENHADO — uma região hachurada da planta — como envelope.
+   * `emUsoM2` = o contorno que o gerador está usando; `selecionadoM2` = há uma região hachurada
+   * selecionada que pode virar o contorno.
+   */
+  contorno?: { emUsoM2: number | null; selecionadoM2: number | null; usarSelecionado: () => void; soltar: () => void };
 }
 
 const COLUNAS: StandardTableColumn[] = [
@@ -43,7 +49,7 @@ const COLUNAS: StandardTableColumn[] = [
 
 const f2 = (v: number) => v.toFixed(2).replace('.', ',');
 
-export default function TelaGerador({ gerador, entrada, hipoteses, onHipoteses, contexto, onCriarAlternativa, onAplicarAqui, pavimentoTemParedes, onAbrirPrograma }: Props) {
+export default function TelaGerador({ gerador, entrada, hipoteses, onHipoteses, contexto, onCriarAlternativa, onAplicarAqui, pavimentoTemParedes, onAbrirPrograma, contorno }: Props) {
   const [escolhida, setEscolhida] = useState<number | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -135,14 +141,31 @@ export default function TelaGerador({ gerador, entrada, hipoteses, onHipoteses, 
               antes de gerar.{' '}
             </>
           )}
-          {contexto.temEnvelope ? (
+          {contorno?.emUsoM2 != null ? (
             <>
-              Envelope edificável do pavimento: <strong>{contexto.envelopeM2 != null ? `${f2(contexto.envelopeM2)} m²` : '—'}</strong> (o gerador usa o maior retângulo de eixos alinhados dentro dele).{' '}
+              Contorno DESENHADO: <strong>{f2(contorno.emUsoM2)} m²</strong> (contorno em L, U ou T é usado inteiro; oblíquo, o maior retângulo dentro dele) —{' '}
+              <button type="button" onClick={contorno.soltar} className="font-medium text-blue-700 hover:underline">
+                voltar ao envelope do lote
+              </button>
+              .{' '}
+            </>
+          ) : contexto.temEnvelope ? (
+            <>
+              Envelope edificável do pavimento: <strong>{contexto.envelopeM2 != null ? `${f2(contexto.envelopeM2)} m²` : '—'}</strong> (contorno em L, U ou T é usado inteiro; oblíquo, o maior retângulo dentro dele).{' '}
             </>
           ) : (
             <>Sem lote/envelope: usa o retângulo declarado acima. </>
           )}
-          Frente {contexto.frenteDeclarada ? 'pela divisa FRENTE do lote' : 'suposta ao sul (marque a divisa FRENTE em Terreno › Dados do lote)'}; norte {entrada.rotacaoNorteDeg == null ? '= +Y do desenho' : `girado ${entrada.rotacaoNorteDeg}°`}. Mesma entrada e mesma semente dão sempre a mesma planta.
+          Frente {contexto.frenteDeclarada ? 'pela divisa FRENTE do lote' : 'suposta ao sul (marque a divisa FRENTE em Terreno › Dados do lote)'}; norte {entrada.rotacaoNorteDeg == null ? '= +Y do desenho' : `girado ${entrada.rotacaoNorteDeg}°`}. Mesma entrada e mesma semente dão sempre a mesma planta.{' '}
+          {contorno && contorno.emUsoM2 == null && (
+            contorno.selecionadoM2 != null ? (
+              <button type="button" onClick={contorno.usarSelecionado} className="font-medium text-blue-700 hover:underline">
+                Gerar dentro da região selecionada ({f2(contorno.selecionadoM2)} m²).{' '}
+              </button>
+            ) : (
+              <>Para gerar dentro de um contorno seu, desenhe uma região hachurada (Inserir › Anotações) e use "Gerar planta aqui" no painel dela. </>
+            )
+          )}
         </p>
         {(erro || gerador.erros.length > 0) && (
           <p className="mt-2 flex items-center gap-1 text-xs text-red-700" role="alert">
@@ -216,7 +239,7 @@ export default function TelaGerador({ gerador, entrada, hipoteses, onHipoteses, 
               <button type="button" disabled={!!ocupado} onClick={() => void agir('criar', () => onCriarAlternativa(atual))} className="h-9 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50" data-testid="criar-alternativa-gerada">
                 {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa com esta'}
               </button>
-              <button type="button" disabled={!!ocupado} onClick={() => void agir('aplicar', () => onAplicarAqui(atual))} className="h-9 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-300" data-testid="aplicar-gerada" title={pavimentoTemParedes ? 'O pavimento aberto já tem paredes: a alternativa entra por cima (Ctrl+Z desfaz os dois lotes)' : 'Paredes, portas, janelas e nomes entram no pavimento aberto'}>
+              <button type="button" disabled={!!ocupado} onClick={() => void agir('aplicar', () => onAplicarAqui(atual))} className="h-9 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-300" data-testid="aplicar-gerada" title={pavimentoTemParedes ? 'O pavimento aberto já tem paredes: a alternativa entra por cima (um Ctrl+Z desfaz a planta inteira)' : 'Paredes, portas, janelas e nomes entram no pavimento aberto'}>
                 {ocupado === 'aplicar' ? 'Aplicando…' : 'Aplicar neste pavimento'}
               </button>
             </span>

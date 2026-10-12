@@ -83,7 +83,8 @@ describe('gerador determinístico', () => {
     const L = [point(0, 0), point(10000, 0), point(10000, 5000), point(5000, 5000), point(5000, 10000), point(0, 10000)];
     const r = gerar({ ...entrada2Q, envelope: L, direcaoDaFrente: point(0, 1) }, 3, { iteracoes: 80 });
     expect(r.frente).toBe('N');
-    expect(r.decisoes[0]).toMatch(/Retângulo de trabalho (10,00 × 5,00|5,00 × 10,00) m/);
+    // F11 (12/10/2026): o L é decomposto (principal + anexo) e usado INTEIRO — antes, só o maior retângulo.
+    expect(r.decisoes[0]).toMatch(/^Contorno ortogonal de 75,00 m² em 2 retângulo\(s\).*100,00 % da área do contorno/);
     // Frente ao norte: a sala encosta no lado de cima do retângulo.
     const sala = r.ambientes.find((a) => a.item.uso === 'SALA')!;
     expect(sala.ret.y1).toBe(r.retangulo.y1);
@@ -93,7 +94,10 @@ describe('gerador determinístico', () => {
     expect((r.model.terminais ?? []).some((t) => t.tipoHidraulico)).toBe(true);
     expect(r.decisoes.some((d) => /^Automáticos: pilares: \d+/.test(d))).toBe(true);
     // Pequeno para o programa: avisa quem cai abaixo da área mínima.
-    expect(r.avisos.some((a) => /abaixo da área mínima/.test(a))).toBe(true);
+    // F11: com o L INTEIRO (75 m², não 50) o 2Q cabe — o aviso some; um envelope pequeno de verdade ainda avisa.
+    expect(r.avisos.some((a) => /abaixo da área mínima/.test(a))).toBe(false);
+    const pequeno = gerar({ ...entrada2Q, envelope: [point(0, 0), point(6000, 0), point(6000, 5000), point(0, 5000)] }, 1, { automaticos: false, iteracoes: 30 });
+    expect(pequeno.avisos.some((a) => /abaixo da área mínima/.test(a))).toBe(true);
     // Ranking e Pareto.
     const lista = gerarAlternativas(entrada2Q, { sementes: 3, iteracoes: 60, automaticos: false });
     for (let i = 1; i < lista.length; i++) expect(lista[i - 1].avaliacao.notaGeral! >= lista[i].avaliacao.notaGeral!).toBe(true);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Building, FileText, PieChart, Activity, Save, Loader2, Map, Layers } from 'lucide-react';
@@ -7,24 +7,71 @@ import ImovibBlocksTypologyTab from './ImovibBlocksTypologyTab';
 import EstudoTorresUnidades from './torres/EstudoTorresUnidades';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import {
+    IMOVIB_MODALIDADES, opcoesComValorAtual,
+    imovibCnpj, imovibIncorporadora, imovibGestor, imovibIdentificacaoParaGravar,
+} from '../constants/imovibClassificacao';
 
 
 interface ImovibPremisesFormProps {
     study: ImovibStudy;
     onDataChanged: () => void;
+    /** Avisa o detalhe quando há edição pendente (item 5.4) — ele guarda a troca de aba e o "voltar". */
+    onDirtyChange?: (dirty: boolean) => void;
 }
 
-const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged }) => {
-    const [activeTab, setActiveTab] = useState<'identificacao' | 'mercado' | 'blocos' | 'torres' | 'regulatorio'>('identificacao');
-    const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
+type SubAba = 'identificacao' | 'mercado' | 'blocos' | 'torres' | 'regulatorio';
+// Só estas duas sub-abas editam o formulário local e são gravadas por "Salvar Premissas".
+// Blocos, Torres e Mapa Regulatório gravam sozinhos (cada um com o seu salvar).
+const SUB_ABAS_DO_FORMULARIO: SubAba[] = ['identificacao', 'mercado'];
+
+// Item 5.2: CNPJ, incorporadora e gestor são editados nas colunas canônicas
+// (`cnpj`/`developer`/`manager`, as mesmas da criação e da listagem). O valor
+// abre com a leitura de compatibilidade (cai na coluna antiga quando a canônica
+// está vazia), e salvar grava na canônica.
+const comCanonicas = (s: ImovibStudy): Partial<ImovibStudy> => ({
+    ...s,
+    cnpj: imovibCnpj(s),
+    developer: imovibIncorporadora(s),
+    manager: imovibGestor(s),
+});
+
+const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged, onDirtyChange }) => {
+    const [activeTab, setActiveTab] = useState<SubAba>('identificacao');
+    const [formData, setFormData] = useState<Partial<ImovibStudy>>(() => comCanonicas(study));
     const [isSaving, setIsSaving] = useState(false);
     const { showToast } = useToast();
     const { pode, motivo } = useImovibEdicao();
+    // §25: Identificação e Mercado ficam em estado local até "Salvar Premissas".
+    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+    const onDirtyChangeRef = useRef(onDirtyChange);
+    onDirtyChangeRef.current = onDirtyChange;
+    useEffect(() => { onDirtyChangeRef.current?.(dirty); }, [dirty]);
+    // Desmontou (troca de aba já confirmada pelo detalhe): nada mais pendente aqui.
+    useEffect(() => () => onDirtyChangeRef.current?.(false), []);
 
     useEffect(() => {
-        setFormData(study);
+        setFormData(comCanonicas(study));
     }, [study]);
 
+    const setCampo = (field: keyof ImovibStudy, valor: unknown) => {
+        setFormData(prev => ({ ...prev, [field]: valor }));
+        markDirty();
+    };
+
+    // Sair de Identificação/Mercado para uma sub-aba que não é do formulário
+    // descartaria a edição sem aviso (e o salvar de Blocos recarrega o estudo).
+    const trocarSubAba = async (destino: SubAba) => {
+        if (destino === activeTab) return;
+        const saiDoFormulario = SUB_ABAS_DO_FORMULARIO.includes(activeTab) && !SUB_ABAS_DO_FORMULARIO.includes(destino);
+        if (saiDoFormulario && dirty) {
+            if (!(await confirmDiscard())) return;
+            setFormData(comCanonicas(study));
+            markSaved();
+        }
+        setActiveTab(destino);
+    };
 
     const handleSaveAllForm = async () => {
         try {
@@ -33,7 +80,15 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             // devolver null e fazer o template de rubricas voltar.
             // unit_instances (espelho) vem montado em memória, não é coluna.
             const { id, created_at, updated_at, blocks, capex_items, unit_instances, organization_id, capex_seeded_at, ...cleanData } = formData as any;
-            await imovibService.updateStudy(study.id, cleanData);
+            await imovibService.updateStudy(study.id, {
+                ...cleanData,
+                ...imovibIdentificacaoParaGravar({
+                    cnpj: String(formData.cnpj ?? ''),
+                    developer: String(formData.developer ?? ''),
+                    manager: String(formData.manager ?? ''),
+                }),
+            });
+            markSaved();
             showToast('Premissas salvas com sucesso!', 'success');
             onDataChanged();
         } catch (error) {
@@ -47,7 +102,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const renderInput = (label: string, field: keyof ImovibStudy, type: 'text' | 'number' | 'date' = 'text', placeholder: string = "", isPercent: boolean = false) => {
         return (
             <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                     {label} {isPercent && '(%)'}
                 </label>
                 <input
@@ -56,7 +111,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     placeholder={placeholder}
                     onChange={(e) => {
                         const val = type === 'number' ? (e.target.value === '' ? '' : parseFloat(e.target.value)) : e.target.value;
-                        setFormData(prev => ({ ...prev, [field]: val }));
+                        setCampo(field, val);
                     }}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all font-medium text-slate-700"
                 />
@@ -68,14 +123,14 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const renderTextarea = (label: string, field: keyof ImovibStudy, placeholder: string = "", rows: number = 3) => {
         return (
             <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                     {label}
                 </label>
                 <textarea
                     value={(formData[field as keyof ImovibStudy] as string) ?? ''}
                     placeholder={placeholder}
                     rows={rows}
-                    onChange={(e) => setFormData(prev => ({ ...prev, [field]: e.target.value }))}
+                    onChange={(e) => setCampo(field, e.target.value)}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all font-medium text-slate-700 resize-none"
                 />
             </div>
@@ -96,7 +151,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                 ].map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
+                        onClick={() => trocarSubAba(tab.id as SubAba)}
                         className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all ${activeTab === tab.id
                             ? 'bg-indigo-600 text-white shadow-md'
                             : 'bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
@@ -107,11 +162,12 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     </button>
                 ))}
                 </div>
-                {activeTab !== 'regulatorio' && activeTab !== 'blocos' && (
+                {/* Só onde ele salva alguma coisa: 0. Identificação e 1. Mercado (item 5.4). */}
+                {SUB_ABAS_DO_FORMULARIO.includes(activeTab) && (
                     <button
                         onClick={handleSaveAllForm}
-                        disabled={isSaving || !pode}
-                        title={!pode ? motivo : undefined}
+                        disabled={isSaving || !pode || !dirty}
+                        title={!pode ? motivo : isSaving ? 'Salvando...' : !dirty ? 'Nada foi alterado em Identificação ou Mercado.' : undefined}
                         className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm shadow-emerald-600/20 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -133,11 +189,22 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                         </div>
 
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {renderInput('CNPJ da SPE', 'spe_cnpj', 'text', 'Ex: 00.000.000/0001-00')}
-                            {renderInput('Incorporadora / Desenvolvedor', 'developer_name', 'text', 'Nome da Empresa')}
-                            {renderInput('Gestor do Projeto', 'project_manager', 'text', 'Nome do Responsável')}
+                            {renderInput('CNPJ da SPE', 'cnpj', 'text', 'Ex: 00.000.000/0001-00')}
+                            {renderInput('Incorporadora / Desenvolvedor', 'developer', 'text', 'Nome da Empresa')}
+                            {renderInput('Gestor do Projeto', 'manager', 'text', 'Nome do Responsável')}
                             {renderInput('Data-base da Análise', 'base_date', 'date')}
-                            {renderInput('Modalidade de Desenvolvimento', 'development_modality', 'text', 'Ex: Incorporação / Permuta / BTS')}
+                            {/* Mesma lista da criação (item 5.2); valor antigo digitado à mão continua como opção. */}
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Modalidade de Desenvolvimento</label>
+                                <select
+                                    value={formData.development_modality ?? ''}
+                                    onChange={(e) => setCampo('development_modality', e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all font-medium text-slate-700 cursor-pointer"
+                                >
+                                    <option value="">Selecione...</option>
+                                    {opcoesComValorAtual(IMOVIB_MODALIDADES, formData.development_modality).map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                            </div>
                         </fieldset>
 
                     </div>

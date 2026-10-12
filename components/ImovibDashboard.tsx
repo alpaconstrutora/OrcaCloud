@@ -11,6 +11,7 @@ import { computeImovibMath, ImovibMathResult } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useImovibPermissaoPorOrg } from '../hooks/useImovibEdicao';
+import { imovibIncorporadora } from '../constants/imovibClassificacao';
 
 interface ImovibDashboardProps {
     /** Ignorado: a organização vem do topo (useOrgContext, REGRA #5). */
@@ -52,20 +53,21 @@ const IMOVIB_COL_WIDTHS: Record<string, number> = {
     margin: 110, exposure: 140, created_at: 130, updated_at: 130, actions: 60,
 };
 
-// Fase é texto livre; cores conhecidas mapeadas, resto cai no cinza. §8: texto colorido puro.
+// Cores das fases que o formulário grava (IMOVIB_FASES em
+// constants/imovibClassificacao.ts). O mapa antigo coloria 'Viabilidade',
+// 'Aprovado' etc., que nenhuma tela grava — toda fase real caía no cinza, e
+// estudo sem fase aparecia como "Estudo Inicial". Valor fora da lista: cinza.
+// §8: texto colorido puro.
 const PHASE_COLORS: Record<string, string> = {
-    'Estudo Inicial': 'text-gray-600',
-    'Prospecção': 'text-blue-700',
-    'Viabilidade': 'text-indigo-700',
-    'Aprovado': 'text-emerald-700',
-    'Em Análise': 'text-amber-700',
-    'Reprovado': 'text-red-600',
-    'Standby': 'text-gray-500',
+    'Greenfield': 'text-emerald-700',
+    'Brownfield': 'text-amber-700',
+    'Retrofit': 'text-blue-700',
+    'Conversão de Uso': 'text-indigo-700',
 };
 
 const PhaseLabel: React.FC<{ phase?: string }> = ({ phase }) => (
     <span className={`text-sm font-normal ${phase ? (PHASE_COLORS[phase] || 'text-gray-700') : 'text-gray-400'}`}>
-        {phase || 'Estudo Inicial'}
+        {phase || '—'}
     </span>
 );
 
@@ -147,7 +149,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
         const term = searchTerm.toLowerCase();
         const result = rows.filter(({ study }) =>
             study.name.toLowerCase().includes(term) ||
-            (study.developer && study.developer.toLowerCase().includes(term))
+            imovibIncorporadora(study).toLowerCase().includes(term)
         );
 
         const { sortColumn, sortDirection } = tableColumns;
@@ -166,7 +168,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
             const a = ra.study, b = rb.study;
             switch (sortColumn) {
                 case 'name': return txt(a.name).localeCompare(txt(b.name), 'pt-BR') * dir;
-                case 'developer': return txt(a.developer).localeCompare(txt(b.developer), 'pt-BR') * dir;
+                case 'developer': return imovibIncorporadora(a).localeCompare(imovibIncorporadora(b), 'pt-BR') * dir;
                 case 'segment': return txt(a.segment).localeCompare(txt(b.segment), 'pt-BR') * dir;
                 case 'phase': return txt(a.phase).localeCompare(txt(b.phase), 'pt-BR') * dir;
                 case 'development_modality': return txt(a.development_modality).localeCompare(txt(b.development_modality), 'pt-BR') * dir;
@@ -369,7 +371,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                         )}
                                         {visible.includes('developer') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
-                                                {study.developer || '—'}
+                                                {imovibIncorporadora(study) || '—'}
                                             </td>
                                         )}
                                         {visible.includes('segment') && (
@@ -487,7 +489,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                     {study.name}
                                 </h3>
                                 <p className="text-sm text-gray-500 line-clamp-2">
-                                    {study.developer || 'Incorporadora não informada'}
+                                    {imovibIncorporadora(study) || 'Incorporadora não informada'}
                                 </p>
                             </div>
 

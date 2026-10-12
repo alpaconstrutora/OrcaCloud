@@ -310,6 +310,25 @@ describe('3.2 — VGV: espelho de vendas, senão preço/m² do bloco', () => {
     });
 });
 
+describe('5.2 — financiamento: um campo só', () => {
+    const acc = (r: ReturnType<typeof computeImovibMath>) => r.monthlyFlows[r.monthlyFlows.length - 1].acc;
+
+    it('Financ. à Produção = 0 vale 0 mesmo com o "% Financiado" antigo preenchido', () => {
+        const proprio = computeImovibMath(baseStudy());
+        const legadoIgnorado = computeImovibMath(baseStudy({ funding_debt_percent: 0, financing_percent: 80 }));
+        expect(acc(legadoIgnorado)).toBeCloseTo(acc(proprio), 2);
+        expect(legadoIgnorado.debtPayoffAtEnd).toBe(0);
+    });
+
+    it('Financ. à Produção vazio: o "% Financiado" antigo ainda vale (estudo anterior ao campo)', () => {
+        const s = baseStudy({ financing_percent: 80, financing_rate_annual: 30 });
+        delete s.funding_debt_percent;
+        const comLegado = computeImovibMath(s);
+        const proprio = computeImovibMath(baseStudy());
+        expect(acc(comLegado)).toBeLessThan(acc(proprio)); // juros de 30% a.a. pesam
+    });
+});
+
 describe('1.6 — ESG no modo simplificado e avisos de premissa', () => {
     const esg = { esg_initiatives: [{ id: 'e1', name: 'Solar', category: 'E', cost: 1_000_000, vgv_premium: 0, funding_discount: 0, active: true }] };
 

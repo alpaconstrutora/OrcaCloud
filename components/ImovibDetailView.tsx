@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { PlantaAiIntegration } from '../services/plantaAiIntegration';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award, Layers, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Award, Layers, PlusCircle, Pencil } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -12,24 +12,54 @@ import ImovibCapexForm from './ImovibCapexForm';
 import ImovibFundingForm from './ImovibFundingForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibEsgReportForm from './ImovibEsgReportForm';
+import ImovibForm from './ImovibForm';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
 import { useImovibPodeEditar, ImovibEdicaoProvider } from '../hooks/useImovibEdicao';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 interface ImovibDetailViewProps {
     studyId: string;
     onBack: () => void;
 }
 
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'esg_report' | 'viability_static' | 'viability_dynamic';
+
 const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) => {
     const [study, setStudy] = useState<ImovibStudy | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const { showToast } = useToast();
-    const [activeTab, setActiveTab] = useState<'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'esg_report' | 'viability_static' | 'viability_dynamic'>('executive_summary');
+    const [activeTab, setActiveTab] = useState<AbaDoEstudo>('executive_summary');
     // canEditImovib (plano 2026-10-12, item 4.6): sem a permissão na org DONA do
     // estudo, ele abre só para leitura. Antes dos returns antecipados (regra dos Hooks).
     const edicao = useImovibPodeEditar(study?.organization_id);
+    // Editar nome/versão/classificação (item 5.1) — o mesmo drawer da criação.
+    const [editando, setEditando] = useState(false);
+    // Premissas › Identificação/Mercado guardam o formulário em estado local
+    // (item 5.4, §25). O filho avisa aqui quando há edição pendente; toda saída
+    // que desmontaria ou recarregaria aquele formulário passa por `podeSair`.
+    const premissas = useUnsavedChanges();
+    // Trocar a key remonta Premissas: é assim que "Sair e descartar" volta o
+    // formulário ao que está gravado quando ele continua na tela (ex.: Editar).
+    const [premissasKey, setPremissasKey] = useState(0);
+    const podeSair = async (): Promise<boolean> => {
+        if (!premissas.dirty) return true;
+        if (!(await premissas.confirmDiscard())) return false;
+        premissas.markSaved();
+        setPremissasKey(k => k + 1);
+        return true;
+    };
+    const irPara = async (aba: AbaDoEstudo) => {
+        if (aba === activeTab) return;
+        if (await podeSair()) setActiveTab(aba);
+    };
+    const voltar = async () => {
+        if (await podeSair()) onBack();
+    };
+    const abrirEdicao = async () => {
+        if (await podeSair()) setEditando(true);
+    };
 
     useEffect(() => {
         loadStudyDetails(true);
@@ -77,7 +107,8 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
             <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-6">
                 <div className="flex items-start gap-4">
                     <button
-                        onClick={onBack}
+                        onClick={voltar}
+                        title="Voltar para a lista de estudos"
                         className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-500 mt-1"
                     >
                         <ArrowLeft className="w-5 h-5" />
@@ -88,6 +119,16 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             <span className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs font-black tracking-wider uppercase rounded-lg border border-blue-100">
                                 v{study.version}
                             </span>
+                            <button
+                                type="button"
+                                onClick={abrirEdicao}
+                                disabled={!edicao.pode}
+                                title={!edicao.pode ? edicao.motivo : 'Editar nome, versão e classificação do estudo'}
+                                className="flex items-center gap-1.5 h-8 px-3 text-sm font-medium text-slate-600 bg-white border border-gray-200 rounded-[6px] hover:bg-gray-50 hover:text-slate-900 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Editar
+                            </button>
                         </div>
                         <p className="text-gray-500 text-sm font-medium">
                             {study.segment} {study.sub_classification ? `• ${study.sub_classification}` : ''} {study.phase ? `• ${study.phase}` : ''}
@@ -97,6 +138,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                                 disabled={!edicao.pode}
                                 title={!edicao.pode ? edicao.motivo : undefined}
                                 onClick={async () => {
+                                    if (!(await podeSair())) return;
                                     const res = await PlantaAiIntegration.updatePlantaAiFromImovib(study.id, study.planta_ai_study_id!);
                                     if (!res.success) {
                                         showToast("Erro ao atualizar o Planta AI: " + res.error, 'error');
@@ -114,6 +156,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                                 title={!edicao.pode ? edicao.motivo : undefined}
                                 onClick={async () => {
                                     if (!study.organization_id) return;
+                                    if (!(await podeSair())) return;
                                     const res = await PlantaAiIntegration.createPlantaAiFromImovib(study.id, study.organization_id, study.name);
                                     if (res.success && res.plantaAiStudyId) {
                                         window.location.hash = `#/planta-ai?studyId=${res.plantaAiStudyId}`;
@@ -142,7 +185,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                 {/* Tabs */}
                 <div className="flex items-center border-b border-gray-100 overflow-x-auto no-scrollbar">
                     <button
-                        onClick={() => setActiveTab('executive_summary')}
+                        onClick={() => irPara('executive_summary')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors rounded-tl-3xl ${activeTab === 'executive_summary'
                             ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -153,7 +196,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('premises')}
+                        onClick={() => irPara('premises')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'premises'
                             ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -164,7 +207,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('capex')}
+                        onClick={() => irPara('capex')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'capex'
                             ? 'text-rose-600 border-b-2 border-rose-600 bg-rose-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -175,7 +218,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('funding')}
+                        onClick={() => irPara('funding')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'funding'
                             ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -186,7 +229,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('risk_scenarios')}
+                        onClick={() => irPara('risk_scenarios')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'risk_scenarios'
                             ? 'text-rose-600 border-b-2 border-rose-600 bg-rose-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -197,7 +240,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('esg_report')}
+                        onClick={() => irPara('esg_report')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'esg_report'
                             ? 'text-teal-600 border-b-2 border-teal-600 bg-teal-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -208,7 +251,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('viability_static')}
+                        onClick={() => irPara('viability_static')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors ${activeTab === 'viability_static'
                             ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -219,7 +262,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                     <div className="w-px h-8 bg-gray-100 shrink-0"></div>
                     <button
-                        onClick={() => setActiveTab('viability_dynamic')}
+                        onClick={() => irPara('viability_dynamic')}
                         className={`flex whitespace-nowrap items-center justify-center gap-2 px-6 py-4 text-sm font-black tracking-widest uppercase transition-colors rounded-tr-3xl ${activeTab === 'viability_dynamic'
                             ? 'text-indigo-600 border-b-2 border-indigo-600 bg-indigo-50/30'
                             : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
@@ -235,11 +278,16 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                   <ImovibEdicaoProvider value={edicao}>
                     {activeTab === 'executive_summary' && (
                         <ErrorBoundary>
-                            <ImovibExecutiveSummary study={study} onIrPara={setActiveTab} />
+                            <ImovibExecutiveSummary study={study} onIrPara={irPara} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'premises' && (
-                        <ImovibPremisesForm study={study} onDataChanged={loadStudyDetails} />
+                        <ImovibPremisesForm
+                            key={premissasKey}
+                            study={study}
+                            onDataChanged={loadStudyDetails}
+                            onDirtyChange={(d) => (d ? premissas.markDirty() : premissas.markSaved())}
+                        />
                     )}
                     {activeTab === 'capex' && (
                         <ErrorBoundary>
@@ -253,7 +301,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     )}
                     {activeTab === 'risk_scenarios' && (
                         <ErrorBoundary>
-                            <ImovibSensitivityForm study={study} onDataChanged={loadStudyDetails} onIrPara={setActiveTab} />
+                            <ImovibSensitivityForm study={study} onDataChanged={loadStudyDetails} onIrPara={irPara} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'esg_report' && (
@@ -262,17 +310,25 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         </ErrorBoundary>
                     )}
                     {activeTab === 'viability_static' && (
-                        <ImovibStaticViability study={study} onIrPara={setActiveTab} />
+                        <ImovibStaticViability study={study} onIrPara={irPara} />
                     )}
                     {activeTab === 'viability_dynamic' && (
                         <ErrorBoundary>
                             <ImovibDynamicForm study={study} onDataChanged={() => loadStudyDetails(false)} />
-                            <ImovibCashFlow study={study} onIrPara={setActiveTab} />
+                            <ImovibCashFlow study={study} onIrPara={irPara} />
                         </ErrorBoundary>
                     )}
                   </ImovibEdicaoProvider>
                 </div>
             </div>
+
+            {/* Salvo → recarrega o detalhe (cabeçalho e abas leem o estudo novo). */}
+            <ImovibForm
+                open={editando}
+                study={study}
+                onClose={() => setEditando(false)}
+                onSaved={() => { setEditando(false); loadStudyDetails(false); }}
+            />
         </div>
     );
 };

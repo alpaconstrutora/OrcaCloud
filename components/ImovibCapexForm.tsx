@@ -84,6 +84,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [items, setItems] = useState<ImovibCapexItem[]>([]);
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    // Categoria com a linha de inclusão aberta (null = nenhuma) e o nome digitado.
+    const [incluindoEm, setIncluindoEm] = useState<string | null>(null);
+    const [novoNome, setNovoNome] = useState('');
+    const [adicionando, setAdicionando] = useState(false);
     const confirm = useConfirm();
     const { showToast } = useToast();
     const { pode, motivo } = useImovibEdicao();
@@ -276,14 +280,33 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         }
     };
 
+    // Inclusão inline (item 5.7): linha com nome + Adicionar/Cancelar dentro da
+    // própria categoria, no lugar do window.prompt.
+    const abrirInclusao = (category: string) => {
+        setIncluindoEm(category);
+        setNovoNome('');
+        setExpandedCategories(prev => prev.includes(category) ? prev : [...prev, category]);
+    };
+    const cancelarInclusao = () => {
+        setIncluindoEm(null);
+        setNovoNome('');
+    };
+
     const handleAddItem = async (category: string) => {
-        const name = window.prompt('Nome do novo item:');
-        if (!name) return;
+        const name = novoNome.trim();
+        if (!name || adicionando) return;
+        // Mesma mensagem da UNIQUE do banco, sem ir ao banco quando já dá para saber.
+        if (items.some(i => i.category === category && i.name === name)) {
+            showToast(`Já existe a rubrica "${name}" em ${category}.`, 'error');
+            return;
+        }
         const newItem: ImovibCapexItemInsert = { study_id: study.id, category, name, value_type: 'currency', value: 0, base: baseDaRubrica({ category }) };
         try {
             setIsSaving(true);
+            setAdicionando(true);
             const inserted = await imovibService.upsertCapexItems([newItem]);
-            setItems([...items, ...inserted]);
+            setItems(prev => [...prev, ...inserted]);
+            cancelarInclusao();
             onDataChanged();
         } catch (e) {
             console.error('Failed to add item', e);
@@ -293,6 +316,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 : `Erro ao adicionar a rubrica de CAPEX: ${msg}`, 'error');
         } finally {
             setIsSaving(false);
+            setAdicionando(false);
         }
     };
 
@@ -555,32 +579,41 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         <div className="space-y-4">
                             {categories.map(category => (
                                 <div key={category} className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm transition-all">
-                                    <button
-                                        onClick={() => toggleCategory(category)}
-                                        className="w-full px-6 py-4 flex items-center justify-between bg-slate-50 hover:bg-slate-100 transition-colors"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-1 rounded-md transition-transform ${expandedCategories.includes(category) ? 'rotate-90 bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
-                                                <ChevronRight className="w-4 h-4" />
+                                    {/* Cabeçalho: o "Novo" fica FORA do botão de expandir (antes era
+                                        <button> dentro de <button>, HTML inválido). */}
+                                    <div className="w-full flex items-center bg-slate-50 hover:bg-slate-100 transition-colors">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleCategory(category)}
+                                            aria-expanded={expandedCategories.includes(category)}
+                                            className="flex-1 min-w-0 pl-6 pr-3 py-4 flex items-center justify-between gap-3 text-left"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-1 rounded-md transition-transform ${expandedCategories.includes(category) ? 'rotate-90 bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </div>
+                                                <h3 className="font-bold text-slate-800 tracking-tight">{category}</h3>
                                             </div>
-                                            <h3 className="font-bold text-slate-800 tracking-tight">{category}</h3>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-sm font-medium text-slate-700">{fmt(totalDaCategoria(category))}</span>
-                                            <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
-                                                {groupedItems[category].length} itens
-                                            </span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm font-medium text-slate-700">{fmt(totalDaCategoria(category))}</span>
+                                                <span className="text-xs font-bold text-slate-400 bg-white px-2 py-1 rounded-md border border-slate-200">
+                                                    {groupedItems[category].length} itens
+                                                </span>
+                                            </div>
+                                        </button>
+                                        <div className="pr-6 py-4 shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); handleAddItem(category); }}
+                                                type="button"
+                                                onClick={() => abrirInclusao(category)}
                                                 disabled={!pode}
-                                                title={!pode ? motivo : undefined}
-                                                className="p-1 px-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                                                title={!pode ? motivo : `Incluir uma rubrica em ${category}`}
+                                                className="p-1 px-2 flex items-center gap-1.5 text-xs font-medium bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-[6px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                                             >
                                                 <Plus className="w-3 h-3" />
                                                 Novo
                                             </button>
                                         </div>
-                                    </button>
+                                    </div>
 
                                     {expandedCategories.includes(category) && (
                                         <div className="p-0 border-t border-slate-200">
@@ -665,6 +698,40 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                     ))}
                                                 </tbody>
                                             </table>
+                                            {incluindoEm === category && (
+                                                <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-t border-slate-100 bg-slate-50/50">
+                                                    <input
+                                                        type="text"
+                                                        autoFocus
+                                                        value={novoNome}
+                                                        onChange={(e) => setNovoNome(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') { e.preventDefault(); handleAddItem(category); }
+                                                            else if (e.key === 'Escape') { e.preventDefault(); cancelarInclusao(); }
+                                                        }}
+                                                        placeholder="Nome da nova rubrica"
+                                                        aria-label={`Nome da nova rubrica em ${category}`}
+                                                        className="h-9 flex-1 min-w-[200px] px-3 bg-white border border-slate-200 rounded-[6px] text-sm text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAddItem(category)}
+                                                        disabled={!novoNome.trim() || adicionando}
+                                                        title={!pode ? motivo : !novoNome.trim() ? 'Digite o nome da rubrica' : adicionando ? 'Adicionando…' : undefined}
+                                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                                                    >
+                                                        <Plus className="w-[15px] h-[15px]" />
+                                                        Adicionar
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={cancelarInclusao}
+                                                        className="h-9 px-3.5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-[6px] font-medium text-[13px] transition-colors"
+                                                    >
+                                                        Cancelar
+                                                    </button>
+                                                </div>
+                                            )}
                                           </fieldset>
                                         </div>
                                     )}

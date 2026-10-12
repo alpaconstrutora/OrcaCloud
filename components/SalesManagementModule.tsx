@@ -47,9 +47,9 @@ const SalesManagementModule: React.FC<Props> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<SalesTab>(defaultTab)
 
-  // Imovib sub-estado
+  // Imovib sub-estado. Criar é um drawer (ImovibForm) por cima da listagem;
+  // editar abre o MESMO drawer de dentro do detalhe (ImovibDetailView).
   const [isCreatingImovibStudy, setIsCreatingImovibStudy] = useState(false)
-  const [editingImovibStudyId, setEditingImovibStudyId]   = useState<string | null>(null)
   const [viewingImovibStudyId, setViewingImovibStudyId]   = useState<string | null>(null)
 
   // Corretor selecionado para visualizar o portal
@@ -61,7 +61,6 @@ const SalesManagementModule: React.FC<Props> = ({
     setSelectedBroker(null)
     if (defaultTab !== 'viabilidade') {
       setIsCreatingImovibStudy(false)
-      setEditingImovibStudyId(null)
       setViewingImovibStudyId(null)
     }
   }, [defaultTab])
@@ -126,24 +125,25 @@ const SalesManagementModule: React.FC<Props> = ({
           )}
 
           {activeTab === 'viabilidade' && (
-            isCreatingImovibStudy ? (
-              <ImovibForm
-                organizationId={organizationId}
-                studyId={editingImovibStudyId || undefined}
-                onBack={() => { setIsCreatingImovibStudy(false); setEditingImovibStudyId(null) }}
-                onSaved={() => { setIsCreatingImovibStudy(false); setEditingImovibStudyId(null) }}
-              />
-            ) : viewingImovibStudyId ? (
+            viewingImovibStudyId ? (
               <ImovibDetailView
                 studyId={viewingImovibStudyId}
                 onBack={() => setViewingImovibStudyId(null)}
               />
             ) : (
-              <ImovibDashboard
-                organizationId={organizationId}
-                onNewStudy={() => { setEditingImovibStudyId(null); setIsCreatingImovibStudy(true) }}
-                onViewStudy={(id: string) => setViewingImovibStudyId(id)}
-              />
+              <>
+                <ImovibDashboard
+                  organizationId={organizationId}
+                  onNewStudy={() => setIsCreatingImovibStudy(true)}
+                  onViewStudy={(id: string) => setViewingImovibStudyId(id)}
+                />
+                {/* Criado → abre o estudo (antes voltava para a lista sem retorno). */}
+                <ImovibForm
+                  open={isCreatingImovibStudy}
+                  onClose={() => setIsCreatingImovibStudy(false)}
+                  onSaved={(study) => { setIsCreatingImovibStudy(false); setViewingImovibStudyId(study.id) }}
+                />
+              </>
             )
           )}
         </Suspense>

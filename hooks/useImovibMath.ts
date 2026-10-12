@@ -427,8 +427,13 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         let somaInflacaoVendas = 0; // Σ fator de inflação nos meses de venda
 
         // Fallback to old financingPercent if Sprint 8 fields not used, but prefer debt
-        const fundingDebtPct = val(study.funding_debt_percent, D.funding_debt_percent) / 100;
-        const actualFinPct = fundingDebtPct > 0 ? fundingDebtPct : financingPercent;
+        // "Financ. à Produção" (Receitas & Capital) é o campo único desde a Fase 5:
+        // preenchido — inclusive com 0 — ele vale. O "% Financiado" antigo da
+        // Dinâmica só entra quando ele está VAZIO (estudo anterior ao campo novo).
+        // Antes, 0 caía no legado e o financiamento não chegava a zero.
+        const actualFinPct = study.funding_debt_percent != null && !Number.isNaN(study.funding_debt_percent)
+            ? study.funding_debt_percent / 100
+            : financingPercent;
 
         let accumulatedFlow = 0;
         let maxExposure = 0;

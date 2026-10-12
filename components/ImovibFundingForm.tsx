@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { DollarSign, Landmark, PieChart, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -24,6 +24,67 @@ interface ImovibFundingFormProps {
     study: ImovibStudy;
     onDataChanged: () => void;
 }
+
+interface InputRowProps {
+    label: string;
+    desc?: string;
+    value: number;
+    /** A cada tecla com número válido — atualiza o estado do pai (soma 100%, etc.). */
+    onChange: (valor: number) => void;
+    /** Ao sair do campo — grava. */
+    onCommit: (valor: number) => void;
+}
+
+/**
+ * Linha "rótulo + campo %" de Receitas & Capital. Fica no nível do MÓDULO de
+ * propósito (item 5.3 do plano 2026-10-12): declarada dentro do render, cada
+ * tecla criava um componente novo, o React desmontava o <input> e o foco caía.
+ *
+ * O texto digitado fica num rascunho local: no meio de "12,5" o navegador
+ * entrega "" para um <input type="number"> (entrada incompleta), e converter
+ * isso em 0 na hora fazia o React trocar o "12," por "0".
+ */
+const InputRow: React.FC<InputRowProps> = ({ label, desc, value, onChange, onCommit }) => {
+    const [texto, setTexto] = useState<string>(String(value));
+    const [editando, setEditando] = useState(false);
+
+    // Valor mudou por fora (recarga do estudo) e o usuário não está digitando.
+    useEffect(() => {
+        if (!editando) setTexto(String(value));
+    }, [value, editando]);
+
+    return (
+        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-300 transition-colors group">
+            <div className="flex-1 pr-4">
+                <span className="font-bold text-slate-800 block mb-0.5">{label}</span>
+                {desc && <span className="text-xs font-medium text-slate-500 block">{desc}</span>}
+            </div>
+            <div className="relative w-32 shrink-0">
+                <input
+                    type="number"
+                    value={texto}
+                    onFocus={() => setEditando(true)}
+                    onChange={(e) => {
+                        setTexto(e.target.value);
+                        const n = parseFloat(e.target.value);
+                        if (!Number.isNaN(n)) onChange(n);
+                    }}
+                    onBlur={() => {
+                        setEditando(false);
+                        const n = parseFloat(texto) || 0;
+                        setTexto(String(n));
+                        onChange(n);
+                        onCommit(n);
+                    }}
+                    step="0.01"
+                    aria-label={label}
+                    className="w-full pr-8 pl-4 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-right transition-all"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
+            </div>
+        </div>
+    );
+};
 
 const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChanged }) => {
     // We keep local state for instant feedback on validation, but still auto-save on blur
@@ -57,26 +118,6 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
         }
     };
 
-    const InputRow = ({ label, value, setter, field, desc }: any) => (
-        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-300 transition-colors group">
-            <div className="flex-1 pr-4">
-                <span className="font-bold text-slate-800 block mb-0.5">{label}</span>
-                {desc && <span className="text-xs font-medium text-slate-500 block">{desc}</span>}
-            </div>
-            <div className="relative w-32 shrink-0">
-                <input
-                    type="number"
-                    value={value}
-                    onChange={(e) => setter(parseFloat(e.target.value) || 0)}
-                    onBlur={() => handleUpdateField(field, value)}
-                    step="0.01"
-                    className="w-full pr-8 pl-4 py-2.5 bg-white border border-slate-200 rounded-xl font-black text-slate-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-right transition-all"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">%</span>
-            </div>
-        </div>
-    );
-
     return (
         <div className="space-y-6 pb-10 max-w-5xl mx-auto">
 
@@ -99,9 +140,9 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
                     </div>
 
                     <div className="space-y-3 flex-1">
-                        <InputRow label="Sinal / Ato" desc="Entrada paga direto à loteadora/incorporadora" value={downpayment} setter={setDownpayment} field="revenue_downpayment_percent" />
-                        <InputRow label="Mensais / Obra" desc="Fluxo da carteira durante o ciclo" value={construction} setter={setConstruction} field="revenue_construction_percent" />
-                        <InputRow label="Repasse Bancário / Chaves" desc="Financiamento do cliente final" value={handover} setter={setHandover} field="revenue_handover_percent" />
+                        <InputRow label="Sinal / Ato" desc="Entrada paga direto à loteadora/incorporadora" value={downpayment} onChange={setDownpayment} onCommit={(v) => handleUpdateField('revenue_downpayment_percent', v)} />
+                        <InputRow label="Mensais / Obra" desc="Fluxo da carteira durante o ciclo" value={construction} onChange={setConstruction} onCommit={(v) => handleUpdateField('revenue_construction_percent', v)} />
+                        <InputRow label="Repasse Bancário / Chaves" desc="Financiamento do cliente final" value={handover} onChange={setHandover} onCommit={(v) => handleUpdateField('revenue_handover_percent', v)} />
                     </div>
 
                     <div className={`mt-6 p-4 rounded-xl flex items-center justify-between border ${isRevenueValid ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'
@@ -184,7 +225,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
                             </div>
                         </div>
 
-                        <InputRow label="Financ. à Produção / Dívida" desc="Plano Empresário ou Bancos" value={debt} setter={setDebt} field="funding_debt_percent" />
+                        <InputRow label="Financ. à Produção / Dívida" desc="Plano Empresário ou Bancos" value={debt} onChange={setDebt} onCommit={(v) => handleUpdateField('funding_debt_percent', v)} />
                     </div>
 
                     <div className="h-px bg-slate-100 my-8"></div>
@@ -198,8 +239,8 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
                     </div>
 
                     <div className="space-y-3">
-                        <InputRow label="Permuta Financeira" desc="% do VGV retido para o Terrenista" value={swapFin} setter={setSwapFin} field="swap_financial_percent" />
-                        <InputRow label="Permuta Física" desc="% de Unidades (VGV Cedido na base)" value={swapPhys} setter={setSwapPhys} field="swap_physical_percent" />
+                        <InputRow label="Permuta Financeira" desc="% do VGV retido para o Terrenista" value={swapFin} onChange={setSwapFin} onCommit={(v) => handleUpdateField('swap_financial_percent', v)} />
+                        <InputRow label="Permuta Física" desc="% de Unidades (VGV Cedido na base)" value={swapPhys} onChange={setSwapPhys} onCommit={(v) => handleUpdateField('swap_physical_percent', v)} />
                     </div>
 
                 </div>

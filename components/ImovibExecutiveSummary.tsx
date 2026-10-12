@@ -1,6 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { ImovibStudy } from '../types';
 import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
+import type { ImovibMathResult } from '../hooks/useImovibMath';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { Activity, TrendingUp, AlertCircle, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Leaf, Banknote } from 'lucide-react';
@@ -30,6 +32,88 @@ const formatPercent =(value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 2 }).format(value / 100);
 };
 
+/** Campo vazio (null/NaN) usa o padrão — a MESMA regra do motor (`val` em useImovibMath). */
+const premissa = (x: number | null | undefined, padrao: number): number =>
+    x == null || Number.isNaN(x) ? padrao : x;
+
+type Linha = (string | number | null)[];
+
+export interface PlanilhaImovib {
+    indicadores: Linha[];
+    premissas: Linha[];
+    fluxo: Linha[];
+}
+
+/**
+ * Conteúdo das abas do Excel do Resumo Executivo — valores NUMÉRICOS (sem
+ * "R$"/"%" dentro da célula), unidade em coluna própria. Pura: testada em
+ * __tests__/imovibExportacaoExcel.test.ts. Item 5.6 do plano 2026-10-12.
+ */
+export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): PlanilhaImovib {
+    const D = IMOVIB_DEFAULTS;
+    const tma = premissa(study.discount_rate, D.discount_rate);
+    const tirDefinida = Number.isFinite(m.annualIrr);
+    const rubricas = m.capexRubricasAtivas;
+
+    const indicadores: Linha[] = [
+        ['Indicador', 'Valor', 'Unidade', 'Observação'],
+        ['VGV bruto', m.vgvTotal, 'R$', 'Inclui o prêmio ESG, se houver'],
+        ['VGV líquido', m.netVgvTotal, 'R$', 'Depois de permutas, inadimplência e distratos'],
+        ['Custo de obra', m.constCostTotal, 'R$', null],
+        ['Terreno', m.landCost, 'R$', null],
+        ['Rubricas do CAPEX no cálculo — sobre o terreno', m.capexRubricas.terreno, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
+        ['Rubricas do CAPEX no cálculo — sobre a obra', m.capexRubricas.obra, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
+        ['Rubricas do CAPEX no cálculo — sobre o VGV', m.capexRubricas.vgv, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
+        ['Rubricas do CAPEX no cálculo — total', m.capexRubricas.total, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
+        ['VPL', m.vpl, 'R$', `Descontado à TMA de ${tma.toLocaleString('pt-BR')}% a.a.`],
+        ['TIR', tirDefinida ? m.annualIrr : null, '% a.a.', tirDefinida ? null : 'Sem TIR: o fluxo não troca de sinal'],
+        ['Exposição máxima de caixa', m.maxExposure, 'R$', null],
+        ['TMA', tma, '% a.a.', null],
+        ['Duração', m.duration, 'meses', null],
+    ];
+
+    const naoEntra = rubricas ? 'Não entra no cálculo: vem das rubricas do CAPEX (modo Completo)' : null;
+    const premissas: Linha[] = [
+        ['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação'],
+        ['Cronograma', 'Início das vendas', premissa(study.sales_start_month, D.sales_start_month), 'mês', null],
+        ['Cronograma', 'Duração das vendas', premissa(study.sales_duration_months, D.sales_duration_months), 'meses', null],
+        ['Cronograma', 'Início da obra', premissa(study.construction_start_month, D.construction_start_month), 'mês', null],
+        ['Cronograma', 'Duração da obra', premissa(study.construction_duration_months, D.construction_duration_months), 'meses', null],
+        ['Taxas', 'Inflação', premissa(study.inflation_rate, D.inflation_rate), '% a.m.', null],
+        ['Taxas', 'TMA', tma, '% a.a.', null],
+        ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', naoEntra],
+        ['Taxas', 'Corretagem', premissa(study.brokerage_fee, D.brokerage_fee), '%', naoEntra],
+        ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', null],
+        ['Taxas', 'Distratos', premissa(study.cancellation_rate_percent, D.cancellation_rate_percent), '%', null],
+        ['Perfil de recebimento', 'Sinal / ato', premissa(study.revenue_downpayment_percent, D.revenue_downpayment_percent), '%', null],
+        ['Perfil de recebimento', 'Mensais / obra', premissa(study.revenue_construction_percent, D.revenue_construction_percent), '%', null],
+        ['Perfil de recebimento', 'Repasse bancário / chaves', premissa(study.revenue_handover_percent, D.revenue_handover_percent), '%', null],
+        ['Financiamento', 'Capital próprio (equity)', premissa(study.funding_equity_percent, D.funding_equity_percent), '%', null],
+        // Mesma regra do motor (actualFinPct): campo novo preenchido vale; vazio → "% Financiado" legado.
+        ['Financiamento', 'Financiamento à produção / dívida', study.funding_debt_percent != null ? study.funding_debt_percent : premissa(study.financing_percent, D.financing_percent), '%', study.funding_debt_percent == null && (study.financing_percent ?? 0) > 0 ? 'valor legado (% Financiado)' : null],
+        ['Financiamento', 'Taxa do financiamento', premissa(study.financing_rate_annual, D.financing_rate_annual), '% a.a.', m.esgFundingDiscount > 0 ? `Antes do desconto ESG de ${Number((m.esgFundingDiscount * 100).toFixed(2)).toLocaleString('pt-BR')} p.p.` : null],
+        ['Financiamento', 'Permuta financeira', premissa(study.swap_financial_percent, D.swap_financial_percent), '%', null],
+        ['Financiamento', 'Permuta física', premissa(study.swap_physical_percent, D.swap_physical_percent), '%', null],
+    ];
+
+    const fluxo: Linha[] = [
+        ['Mês do projeto', 'Mês', 'Receitas (R$)', 'Custos (R$)', 'Caixa líquido do mês (R$)', 'Exposição acumulada (R$)'],
+        ...m.monthlyFlows.map(f => [f.month, f.name, f.rev, f.cost, f.net, f.acc]),
+    ];
+
+    return { indicadores, premissas, fluxo };
+}
+
+/** Nome de arquivo sem espaço nem caractere proibido no Windows. */
+const nomeDeArquivo = (nome: string) =>
+    (nome || 'Estudo').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_');
+
+const abaDoExcel = (linhas: Linha[], larguras: number[]) => {
+    const ws = XLSX.utils.aoa_to_sheet(linhas);
+    ws['!cols'] = larguras.map(wch => ({ wch }));
+    return ws;
+};
+
 const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara }) => {
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
@@ -44,20 +128,13 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
     const netMargin = cashFlowData.vgvTotal > 0 ? (totalNetProfit / cashFlowData.vgvTotal) * 100 : 0;
 
     const exportToExcel = () => {
-        const data = cashFlowData.monthlyFlows.map(flow => ({
-            'Mês do Projeto': flow.month,
-            'Nome do Mês': flow.name,
-            'Receitas (VGV Bruto)': flow.rev,
-            'Custos (Construção + Terreno)': flow.cost,
-            'Caixa Líquido do Mês (Net Flow)': flow.net,
-            'Exposição Acumulada (Fundo de Caixa)': flow.acc
-        }));
-
         try {
-            const ws = XLSX.utils.json_to_sheet(data);
+            const planilha = montarPlanilhaImovib(study, cashFlowData);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Fluxo_de_Caixa");
-            XLSX.writeFile(wb, `Imovib_${study.name.replace(/ /g, '_')} _Fluxo.xlsx`);
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60]), 'Premissas');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, 24, 24]), 'Fluxo de caixa');
+            XLSX.writeFile(wb, `Imovib_${nomeDeArquivo(study.name)}_Viabilidade.xlsx`);
         } catch (err) {
             console.error('Error exporting Excel:', err);
             showToast(`Erro ao exportar o fluxo de caixa para Excel: ${(err as Error).message}`, 'error');
@@ -105,7 +182,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                 pdf.addImage(imgData, 'JPEG', margin, position, printableWidth, canvasImgHeight);
                 heightLeft -= pdfHeight;
             }
-            pdf.save(`Imovib_${study.name.replace(/ /g, '_')} _Viabilidade.pdf`);
+            pdf.save(`Imovib_${nomeDeArquivo(study.name)}_Viabilidade.pdf`);
         } catch (err) {
             console.error('Error exporting PDF:', err);
             showToast(`Erro ao gerar o PDF do resumo executivo: ${(err as Error).message}`, 'error');
@@ -153,15 +230,15 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                                 <p className="text-slate-500 font-medium text-lg">Relatório Executivo de Viabilidade Financeira</p>
                             </div>
                             <div className="text-right">
-                                <span className={`px - 4 py - 2 rounded - xl text - sm font - bold border inline - block ${study.committee_decision === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                        study.committee_decision === 'rejected' ? 'bg-rose-50 text-rose-700 border-rose-200' :
-                                            'bg-slate-50 text-slate-500 border-slate-200'
-                                    } `}>
-                                    Status: {
-                                        study.committee_decision === 'approved' ? 'APROVADO' :
-                                            study.committee_decision === 'rejected' ? 'REPROVADO' :
-                                                study.committee_decision === 'in_review' ? 'EM ANÁLISE' : 'RASCUNHO'
-                                    }
+                                {/* §8: status é texto colorido simples — sem pílula, fundo ou caixa alta. */}
+                                <span className="text-sm text-slate-500">Status: </span>
+                                <span className={`text-sm font-normal ${study.committee_decision === 'approved' ? 'text-emerald-700' :
+                                    study.committee_decision === 'rejected' ? 'text-rose-700' :
+                                        study.committee_decision === 'in_review' ? 'text-blue-700' : 'text-slate-600'
+                                    }`}>
+                                    {study.committee_decision === 'approved' ? 'Aprovado' :
+                                        study.committee_decision === 'rejected' ? 'Reprovado' :
+                                            study.committee_decision === 'in_review' ? 'Em análise' : 'Rascunho'}
                                 </span>
                             </div>
                         </div>

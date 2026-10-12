@@ -221,6 +221,10 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
 **5.2 Campos duplicados unificados**
 - **O que muda:** a criação grava as mesmas colunas que Premissas edita (`spe_cnpj`, `developer_name`, `project_manager`); a listagem lê essas colunas. "% Financiado" (Dinâmica) e "Financ. à Produção" viram um campo só.
 - **Como sei que terminou:** no app, editar a incorporadora em Premissas muda a lista; o `grep` de `financing_percent` só aparece na migração de dados.
+- **Mudança de rumo (2026-10-12, ao executar):**
+  - **Colunas canônicas:** a canônica passou a ser `cnpj`/`developer`/`manager`, as que a criação e a listagem já usavam. As outras (`spe_cnpj`/`developer_name`/`project_manager`) viram só fallback de leitura.
+  - **Sem migração:** os pares quase não tinham dado (só "ALPA" em `developer_name` no Bruninho) e "% Financiado" está 0 nos 4 estudos.
+  - **`financing_percent` continua lido:** o motor (fallback quando `funding_debt_percent` está vazio), a tela (valor efetivo só leitura) e a planilha. Isso substitui o critério do `grep` acima.
 
 **5.3 Foco nos campos de Receitas**
 - **Arquivo:** `ImovibFundingForm.tsx:40`
@@ -370,6 +374,7 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
       - Publicação da Fase 4 (4.1–4.7, sem este complemento): `main` = `d8181eb2`.
         - O 1º push foi recusado (outra frente entrou); rebase e suíte de novo: 8.724 testes, rc 0; `verificar:build` rc 0.
         - A Vercel ficou em "deploying" por mais de 7 min. Esperei o status virar `success`, e o `conferir-producao.sh` confirmou que o domínio serve `d8181eb`.
+        - Check-run `ci` no `d8181eb`: **completed / success**.
   - [x] **4.7** — Falhas visíveis em 12 componentes + serviço (feito por um subagente na frente; conferido por mim):
     - 0 `alert(`. Cada um dos 36 `console.error` avisa o usuário na mesma função.
     - `getStudyById` propaga erro de blocos/unidades/CAPEX (antes devolvia `[]` e o VGV/custo caía a zero em silêncio).
@@ -378,7 +383,28 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - `saveMode` do CAPEX volta ao modo anterior se a gravação falha.
     - Efeito a saber: `OpportunityDetail` e `imovibAdapter` também chamam `getStudyById`; uma falha parcial agora interrompe em vez de mostrar estudo vazio.
     - Verificado: tsc exit 0; `check-ui-standard` exit 0 nos 14 `Imovib*.tsx`; testes do módulo + `orgContextGuard` + `SyncCenterTab` 62/62.
-- [ ] **Fase 5 — 0 de 7:** 5.1 · 5.2 · 5.3 · 5.4 · 5.5 · 5.6 · 5.7
+- [ ] **Fase 5 — código pronto, falta a prova no navegador** (2026-10-12, pedido: *"2"*, ou seja, Fase 5 e depois publicar junto com o complemento de Torres/Mapa). Feita por 2 subagentes em paralelo, com arquivos separados, e conferida por mim: tsc exit 0; `check-ui-standard` exit 0 em 15 arquivos; 83 testes em 10 arquivos; `check-org-selector-guard` exit 0; 0 `prompt(`/`alert(`/`window.confirm(`.
+  - [ ] **5.1** — `ImovibForm` virou drawer (Sheet `xl`), usado para criar (listagem) e editar (botão "Editar" no cabeçalho do detalhe, travado sem permissão).
+    - Pede a confirmação de saída do §25. Toast de sucesso e de erro.
+    - Depois de criar, abre o estudo criado.
+    - Saíram a página cheia e o código morto (`editingImovibStudyId`).
+    - Zoneamento, CA, TO e EIV saíram da criação: nenhum cálculo lê essas colunas (o Mapa Regulatório mora no empreendimento).
+  - [ ] **5.2** — `constants/imovibClassificacao.ts`: listas únicas (segmento, subclassificação, fase, modalidade) e leitura com fallback.
+    - Premissas edita `cnpj`/`developer`/`manager`, e a listagem lê com fallback. Modalidade é select nos dois lugares.
+    - "% Financiado" saiu da Dinâmica; no lugar, o valor efetivo, só leitura.
+    - **Motor:** `funding_debt_percent` preenchido (inclusive 0) vale; o legado só entra quando ele está vazio. Antes, 0 caía no legado. 2 testes.
+    - Cores de fase alinhadas às fases reais.
+  - [ ] **5.3** — `InputRow` fora do render (módulo), com rascunho local ("12," não vira 0) e `aria-label`. O teste `ImovibFundingFormFoco` falha na versão antiga e passa na nova.
+  - [ ] **5.4** — `useUnsavedChanges` em Premissas, avisando ao trocar de sub-aba ou aba, ao voltar, ao clicar em Editar e na Planta AI. "Salvar Premissas" aparece só em 0/1 e fica desabilitado sem alteração, com o motivo.
+  - [ ] **5.5** — `calcularRatingOpura` (pura, 3 testes): a barreira é a TMA do estudo, e o cartão mostra "TIR ≥ TMA do estudo (X% a.a.)".
+  - [ ] **5.6** — Selo do PDF corrigido (texto simples §8). Nomes de arquivo sem espaço (Excel agora `_Viabilidade.xlsx`).
+    - Excel com 3 abas (Indicadores, Premissas, Fluxo de caixa), montado por `montarPlanilhaImovib`, com teste.
+    - Financiamento na planilha segue a regra do motor.
+  - [ ] **5.7** — `window.prompt` do CAPEX virou uma linha de inclusão inline (Enter/Esc, duplicado avisado antes do banco, dentro do fieldset só leitura), com teste. O "Novo" saiu de dentro do botão de expandir (botão dentro de botão).
+  - **Pendências registradas pelos subagentes:**
+    - inputs de Premissas ainda na escala antiga de raio (§16);
+    - `StarRating` do ESG declarado dentro do render (botões; efeito menor);
+    - trocar de módulo pelo menu lateral desmonta o detalhe sem passar pelo aviso de edição não salva.
 
 ## Verificação
 

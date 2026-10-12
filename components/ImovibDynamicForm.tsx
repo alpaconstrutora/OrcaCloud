@@ -36,7 +36,15 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
     // Advanced Finance
     const [taxRate, setTaxRate] = useState(initial(study.tax_rate, D.tax_rate));
     const [brokerageFee, setBrokerageFee] = useState(initial(study.brokerage_fee, D.brokerage_fee));
-    const [financingPercent, setFinancingPercent] = useState(initial(study.financing_percent, D.financing_percent));
+    // "% Financiado" saiu daqui (item 5.2): duplicava "Financ. à Produção" de
+    // Receitas & Capital. Mesma regra do motor (useImovibMath, `actualFinPct`):
+    // funding_debt_percent preenchido (inclusive 0) vale; vazio → financing_percent
+    // legado. A tela mostra esse mesmo valor efetivo, só leitura.
+    const usaLegado = study.funding_debt_percent == null;
+    const financiadoEfetivo = usaLegado ? (study.financing_percent ?? D.financing_percent) : study.funding_debt_percent!;
+    const financiadoOrigem = usaLegado && (study.financing_percent ?? 0) > 0
+        ? 'valor legado deste estudo — passe a defini-lo em Receitas & Capital'
+        : 'definido em Receitas & Capital';
     const [financingRateAnnual, setFinancingRateAnnual] = useState(initial(study.financing_rate_annual, D.financing_rate_annual));
 
     const handleSave = async () => {
@@ -53,7 +61,6 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                 discount_rate: parseFloat(discountRate) || 0,
                 tax_rate: parseFloat(taxRate) || 0,
                 brokerage_fee: parseFloat(brokerageFee) || 0,
-                financing_percent: parseFloat(financingPercent) || 0,
                 financing_rate_annual: parseFloat(financingRateAnnual) || 0,
             });
             onDataChanged();
@@ -214,15 +221,14 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-form-label font-semibold text-gray-600 mb-1">% Financiado</label>
-                            <input
-                                type="number"
-                                step="0.1"
-                                value={financingPercent}
-                                onChange={(e) => setFinancingPercent(e.target.value)}
-                                onBlur={handleSave}
-                                className="w-full px-4 py-2 bg-blue-50 border border-blue-200 rounded-xl focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none text-sm font-medium transition-colors text-blue-800"
-                            />
+                            <span className="block text-form-label font-semibold text-gray-600 mb-1">% Financiado</span>
+                            <div
+                                title={`Valor usado no cálculo — ${financiadoOrigem}.`}
+                                className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium text-gray-700"
+                            >
+                                {financiadoEfetivo.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
+                            </div>
+                            <span className="block text-xs text-gray-500 mt-1">{financiadoOrigem}</span>
                         </div>
                         <div>
                             <label className="block text-form-label font-semibold text-gray-600 mb-1">Juros (a.a %)</label>

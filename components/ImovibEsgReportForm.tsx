@@ -4,6 +4,7 @@ import { useImovibMath } from '../hooks/useImovibMath';
 import { imovibService } from '../services/imovibService';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { Leaf, Users, Shield, Award, CheckCircle2, ChevronDown, Gavel, DollarSign, TrendingUp, Percent } from 'lucide-react';
 
 interface ImovibEsgReportFormProps {
@@ -31,6 +32,34 @@ const AVAILABLE_CERTIFICATIONS = [
     'Fitwel',
     'Procelifica'
 ];
+
+export interface RatingOpura {
+    rating: string;
+    cor: string;
+    fundo: string;
+}
+
+/**
+ * Rating Opura: prêmio da TIR sobre a barreira (TMA do estudo) + média ESG.
+ * Até 2026-10-12 a barreira era 12% a.a. FIXO, qualquer que fosse a TMA da aba
+ * Dinâmica (item 5.5 do plano). Testado em __tests__/imovibRatingOpura.test.ts.
+ *
+ * @param tirAnual TIR do projeto em % a.a. (NaN = sem TIR)
+ * @param tma      TMA do estudo em % a.a. (a barreira)
+ * @param mediaEsg média das notas E, S e G (1 a 5)
+ */
+export function calcularRatingOpura(tirAnual: number, tma: number, mediaEsg: number): RatingOpura {
+    const tir = Number.isNaN(tirAnual) ? 0 : tirAnual;
+    if (tir > 0) {
+        if (tir > tma + 8) return { rating: mediaEsg >= 4 ? 'AAA' : 'AA', cor: 'text-emerald-700', fundo: 'bg-emerald-100 border-emerald-200' };
+        if (tir > tma + 4) return { rating: mediaEsg >= 3.5 ? 'AA' : 'A', cor: 'text-emerald-600', fundo: 'bg-emerald-50 border-emerald-200' };
+        if (tir >= tma) return { rating: mediaEsg >= 3 ? 'BBB' : 'BB', cor: 'text-blue-600', fundo: 'bg-blue-50 border-blue-200' };
+        return { rating: 'C', cor: 'text-rose-600', fundo: 'bg-rose-50 border-rose-200' };
+    }
+    return { rating: 'N/A', cor: 'text-slate-400', fundo: 'bg-slate-50' };
+}
+
+const fmtPct = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
 const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onDataChanged }) => {
     const math = useImovibMath(study);
@@ -63,37 +92,11 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
 
     const [isSaving, setIsSaving] = useState(false);
 
-    // Calculate Opura Rating based on IRR vs basic hurdles 
-    // Usually WACC/Hurdle is internal. Let's assume a baseline hurdle of 12% a.a real.
-    const hurdleRate = 12;
-    const projectIrr = isNaN(math.annualIrr) ? 0 : math.annualIrr;
-
-    // Qualitative penalty: If average ESG score < 3, penalize rating
+    // Barreira do rating = TMA do estudo (aba Dinâmica); vazio usa o MESMO padrão do motor.
+    const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
+    // Penalidade qualitativa: média ESG baixa rebaixa o rating.
     const avgEsg = (envScore + socScore + govScore) / 3;
-
-    let rating = 'N/A';
-    let ratingColor = 'text-slate-400';
-    let ratingBg = 'bg-slate-50';
-
-    if (projectIrr > 0) {
-        if (projectIrr > hurdleRate + 8) {
-            rating = avgEsg >= 4 ? 'AAA' : 'AA';
-            ratingColor = 'text-emerald-700';
-            ratingBg = 'bg-emerald-100 border-emerald-200';
-        } else if (projectIrr > hurdleRate + 4) {
-            rating = avgEsg >= 3.5 ? 'AA' : 'A';
-            ratingColor = 'text-emerald-600';
-            ratingBg = 'bg-emerald-50 border-emerald-200';
-        } else if (projectIrr >= hurdleRate) {
-            rating = avgEsg >= 3 ? 'BBB' : 'BB';
-            ratingColor = 'text-blue-600';
-            ratingBg = 'bg-blue-50 border-blue-200';
-        } else if (projectIrr > 0) {
-            rating = 'C';
-            ratingColor = 'text-rose-600';
-            ratingBg = 'bg-rose-50 border-rose-200';
-        }
-    }
+    const { rating, cor: ratingColor, fundo: ratingBg } = calcularRatingOpura(math.annualIrr, tma, avgEsg);
 
     const handleUpdate = async (field: keyof ImovibStudy, value: any) => {
         try {
@@ -194,6 +197,12 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                     <div>
                         <span className="block text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Rating Opura</span>
                         <span className={`block text-4xl font-black tracking-tighter ${ratingColor}`}>{rating}</span>
+                        <span
+                            className="block text-xs text-slate-500 mt-1"
+                            title="A TMA vem da aba Dinâmica. Faixas: TIR acima de TMA + 8 p.p. = AA/AAA; acima de TMA + 4 p.p. = A/AA; a partir da TMA = BB/BBB; abaixo = C."
+                        >
+                            TIR ≥ TMA do estudo ({fmtPct(tma)}% a.a.)
+                        </span>
                     </div>
                 </div>
             </div>

@@ -143,7 +143,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-50/30">
+                                <thead className="bg-white">
                                     <tr>
                                         <th className="px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest">Item</th>
                                         <th className="px-5 py-3 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Qtd Pedida</th>

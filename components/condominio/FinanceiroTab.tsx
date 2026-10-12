@@ -408,7 +408,7 @@ const TabelaLancamentos: React.FC<{
                     <col data-col-key="valor" style={{ width: `${cols.getWidth('valor')}px` }} />
                 </colgroup>
                 <thead>
-                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Código<cols.ResizeHandle colKey="codigo" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 overflow-hidden relative">Documento<cols.ResizeHandle colKey="documento" /></th>
                         <th className="px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden relative">Data<cols.ResizeHandle colKey="data" /></th>
@@ -1430,7 +1430,7 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                     <div className="overflow-auto max-h-[70vh]">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {v.includes('number') && <SortableHeader colKey="number" label="Número" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('competencia') && <SortableHeader colKey="competencia" label="Competência" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}

@@ -119,7 +119,7 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="bg-gray-50/50">
+                        <thead className="bg-white">
                             <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                 <th className="px-8 py-4">Descrição</th>
                                 <th className="px-8 py-4">Tipo</th>

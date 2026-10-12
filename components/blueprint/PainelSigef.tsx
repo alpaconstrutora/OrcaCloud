@@ -187,7 +187,7 @@ export default function PainelSigef({ model, sigef, onComandos, onPlanilha, onBa
             </div>
             <div className="mt-1 overflow-x-auto rounded-md border border-slate-200">
               <table className="w-full text-xs" data-testid="sigef-vertices">
-                <thead className="bg-slate-50 text-left text-slate-600">
+                <thead className="bg-white text-left text-gray-700">
                   <tr>
                     <th className="px-2 py-1.5">Código</th>
                     <th className="px-2 py-1.5">Tipo</th>
@@ -257,7 +257,7 @@ export default function PainelSigef({ model, sigef, onComandos, onPlanilha, onBa
             <p className="font-medium text-slate-800">Trechos · limite e confrontante</p>
             <div className="mt-1 overflow-x-auto rounded-md border border-slate-200">
               <table className="w-full text-xs" data-testid="sigef-trechos">
-                <thead className="bg-slate-50 text-left text-slate-600">
+                <thead className="bg-white text-left text-gray-700">
                   <tr>
                     <th className="px-2 py-1.5">Trecho</th>
                     <th className="px-2 py-1.5">Tipo de limite</th>

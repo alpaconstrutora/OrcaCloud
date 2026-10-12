@@ -283,7 +283,7 @@ const NomenclaturaTable: React.FC = () => {
     };
 
     const tableHead = (
-        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+        <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
             <tr>
                 <th className="px-6 py-2 border-r border-gray-100 text-left whitespace-nowrap">Módulo</th>
                 <th className="px-6 py-2 border-r border-gray-100 text-left">Prefixo</th>

@@ -291,7 +291,7 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
               <p className="font-medium text-slate-800">Estacas e greide</p>
               <div className="mt-1 max-h-72 overflow-auto rounded-md border border-slate-200">
                 <table className="w-full text-xs" data-testid="vias-estacas">
-                  <thead className="sticky top-0 bg-slate-50 text-left text-slate-600">
+                  <thead className="sticky top-0 bg-white text-left text-gray-700">
                     <tr>
                       <th className="px-2 py-1.5">Estaca</th>
                       <th className="px-2 py-1.5 text-right">Dist. (m)</th>
@@ -412,7 +412,7 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
               </dl>
               <div className="mt-1 max-h-48 overflow-auto rounded-md border border-slate-200">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-left text-slate-600">
+                  <thead className="sticky top-0 bg-white text-left text-gray-700">
                     <tr>
                       <th className="px-2 py-1.5">Trecho</th>
                       <th className="px-2 py-1.5 text-right">L (m)</th>
@@ -468,7 +468,7 @@ export default function PainelViasEGreide({ vias, ativaId, onAtiva, onTracar, on
               </p>
               <div className="mt-1 max-h-64 overflow-auto rounded-md border border-slate-200">
                 <table className="w-full text-xs" data-testid="vias-nota">
-                  <thead className="sticky top-0 bg-slate-50 text-left text-slate-600">
+                  <thead className="sticky top-0 bg-white text-left text-gray-700">
                     <tr>
                       <th className="px-2 py-1.5">Estaca</th>
                       <th className="px-2 py-1.5 text-right">Terreno</th>

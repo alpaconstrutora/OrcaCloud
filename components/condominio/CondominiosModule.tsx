@@ -369,7 +369,7 @@ const CondominiosModule: React.FC = () => {
                     <div className="overflow-auto max-h-[70vh]">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {v.includes('code') && <SortableHeader colKey="code" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('name') && <SortableHeader colKey="name" label="Condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('cnpj') && <SortableHeader colKey="cnpj" label="CNPJ do condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}

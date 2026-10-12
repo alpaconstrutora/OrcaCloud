@@ -516,7 +516,7 @@ const PortalHelpSettings: React.FC = () => {
           </p>
           <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+              <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                 <tr>
                   {!orgId && <th className="px-6 py-2 border-r border-gray-100">Organização</th>}
                   <th className="px-6 py-2 border-r border-gray-100">Quem</th>
@@ -575,7 +575,7 @@ const PortalHelpSettings: React.FC = () => {
       {!acompanhamento && (
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+          <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
             <tr>
               {!orgId && <th className="px-6 py-2 border-r border-gray-100">Organização</th>}
               {ehTour ? (

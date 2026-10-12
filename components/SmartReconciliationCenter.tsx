@@ -572,7 +572,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                             <div className="overflow-x-auto rounded-[10px] border border-gray-100 bg-white">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-sm border-b border-gray-200 whitespace-nowrap">
+                                        <tr className="bg-white text-gray-700 font-semibold text-sm border-b border-gray-200 whitespace-nowrap">
                                             <th className="px-6 py-2 border-r border-gray-100">Lançamento</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Cliente/credor</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Vencimento</th>

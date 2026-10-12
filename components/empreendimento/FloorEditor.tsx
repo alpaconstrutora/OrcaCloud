@@ -313,7 +313,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onUnitsRegenerated }) => {
             </tbody>
             {floors.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-gray-200 bg-gray-50/70 font-bold text-xs text-gray-600">
+                <tr className="border-t-2 border-gray-200 bg-white font-bold text-xs text-gray-700">
                   <td className="py-2.5 px-4" colSpan={3}>
                     <span className="text-[10px] font-semibold text-gray-400">Total</span>
                   </td>

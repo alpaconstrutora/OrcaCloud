@@ -459,7 +459,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className="px-6 py-2 border-r border-gray-100">Código</th>
                                         <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
                                         <th className="px-6 py-2 border-r border-gray-100 text-right">Qtd</th>
@@ -661,7 +661,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className="px-6 py-2 border-r border-gray-100">Data</th>
                                         <th className="px-6 py-2 border-r border-gray-100">Autor</th>
                                         <th className="px-6 py-2 border-r border-gray-100">Ação</th>

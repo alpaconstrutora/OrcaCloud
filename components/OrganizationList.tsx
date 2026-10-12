@@ -469,7 +469,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                     telas do módulo Organização. */}
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             {tableColumns.orderedVisibleColumns.map(key => {
                                                 const def = ORG_LIST_COLUMN_HEADERS[key];
                                                 if (!def) return null;
@@ -667,7 +667,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                         <col data-col-key="actions" style={{ width: `${allUsersCols.getWidth('actions')}px` }} />
                                     </colgroup>
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             {allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                                 const def = ALL_USERS_COLUMN_HEADERS[key];
                                                 if (!def) return null;

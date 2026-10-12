@@ -708,7 +708,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                 <td className="py-1.5 px-2 text-right font-bold text-gray-900">{formatMoney(item.total)}</td>
                                             </tr>
                                         ))}
-                                        <tr className="bg-gray-100 font-bold text-gray-900 text-xs border-t-2 border-gray-200">
+                                        <tr className="bg-white font-bold text-gray-900 text-xs border-t-2 border-gray-200">
                                             <td colSpan={6} className="py-3 px-2 text-right uppercase">Total de Insumos (Sem BDI)</td>
                                             <td className="py-3 px-2 text-right">{formatMoney(totalInsumos)}</td>
                                         </tr>
@@ -774,7 +774,7 @@ const ReportViewer: React.FC<ReportViewerProps> = ({ budget, settings, organizat
                                                     return (
                                                         <React.Fragment key={phase.id}>
                                                             {/* PHASE ROW */}
-                                                            <tr className="bg-gray-100 font-bold text-gray-800 uppercase text-xs break-inside-avoid">
+                                                            <tr className="border-y border-gray-200 bg-white font-bold text-gray-800 uppercase text-xs break-inside-avoid">
                                                                 <td className="py-1.5 px-2 border-r border-gray-200">{phaseItemStr}</td>
                                                                 <td className="py-1.5 px-2 border-r border-gray-200"></td>
                                                                 <td className="py-1.5 px-2 border-r border-gray-200"></td>

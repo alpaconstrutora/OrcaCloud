@@ -374,7 +374,7 @@ export default function TelaTabelas({ model, tabelas, carregando, indisponivel, 
                 renderTotals={
                   montada.colunas.some((c) => c.total)
                     ? (n) => (
-                        <tr className="bg-gray-50 text-xs font-semibold text-gray-700" data-testid="totais-do-grupo">
+                        <tr className="border-t border-gray-200 bg-white text-xs font-semibold text-gray-700" data-testid="totais-do-grupo">
                           <td colSpan={n} className="px-6 py-2">
                             <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
                               <span>{montada.definicao.agruparPor ? 'Subtotal' : 'Total'}</span>

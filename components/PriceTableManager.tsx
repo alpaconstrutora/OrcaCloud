@@ -905,7 +905,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                         ))}
                                     </colgroup>
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                 <input
                                                     type="checkbox"

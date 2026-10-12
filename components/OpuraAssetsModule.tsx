@@ -1751,7 +1751,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               <col data-col-key="actions" style={{ width: `${assetCols.getWidth('actions')}px` }} />
                             </colgroup>
                             <thead>
-                              <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                              <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                 {orderedVisibleKeys.map(key => {
                                   const def = ASSET_COLUMN_HEADERS[key];
                                   if (!def) return null;
@@ -1934,7 +1934,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                           <col data-col-key="actions" style={{ width: `${reservationCols.getWidth('actions')}px` }} />
                         </colgroup>
                         <thead>
-                          <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                          <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                             {orderedVisibleKeys.map(key => {
                               const def = RESERVATION_COLUMN_HEADERS[key];
                               if (!def) return null;
@@ -2128,7 +2128,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                             <col data-col-key="actions" style={{ width: `${maintenanceCols.getWidth('actions')}px` }} />
                           </colgroup>
                           <thead>
-                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                               {orderedVisibleKeys.map(key => {
                                 const def = MAINTENANCE_COLUMN_HEADERS[key];
                                 if (!def) return null;
@@ -2310,7 +2310,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                               ))}
                             </colgroup>
                             <thead>
-                              <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                              <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                 {orderedVisibleKeys.map(key => {
                                   const def = RATEIO_COLUMN_HEADERS[key];
                                   if (!def) return null;

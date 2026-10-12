@@ -356,7 +356,7 @@ export const DocumentsTable: React.FC<DocumentsTableProps> = ({
               {visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
             </colgroup>
           )}
-          <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+          <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
             <tr>
               {selectable && (
                 <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">

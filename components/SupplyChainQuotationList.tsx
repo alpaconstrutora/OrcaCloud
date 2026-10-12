@@ -360,7 +360,7 @@ const SupplyChainQuotationList: React.FC<SupplyChainQuotationListProps> = ({ onC
                             {/* thead em sentence case (§6.2) — escala compacta; uppercase={false} porque
                                 SortableHeader força uppercase internamente por padrão. */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                         const def = QUOTATION_COLUMN_HEADERS[key];
                                         if (!def) return null;

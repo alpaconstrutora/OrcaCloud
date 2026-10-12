@@ -509,7 +509,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           searchPlaceholder="Buscar ambiente..."
           empty={{ title: 'Nenhum ambiente fechado', subtitle: 'Feche o contorno das paredes para o ambiente nascer.' }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total {pavimentoFiltro ? 'do pavimento' : 'dos ambientes'}</span>
@@ -567,7 +567,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           onRowClick={onSelecionarPeca ? (s) => onSelecionarPeca(s.structuralId) : undefined}
           empty={{ title: 'Nenhuma peça estrutural na planta', subtitle: 'Lance pilares, vigas, lajes ou fundações (aba Estrutural).' }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total {pavimentoFiltro ? 'do pavimento' : 'da estrutura'}</span>
@@ -626,7 +626,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           searchPlaceholder="Buscar pavimento..."
           empty={{ title: 'Nenhum pavimento', subtitle: 'Adicione um pavimento no painel Pavimentos.' }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total dos pavimentos</span>
@@ -695,7 +695,7 @@ export default function TelaQuantitativos({ model, quant, armadura, revisao, ofi
           }
           empty={{ title: 'Nenhuma instalação na planta', subtitle: 'Lance pontos e trechos em Elétrica ou Hidráulica — ou use os lançamentos automáticos.' }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>

@@ -639,7 +639,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {CHAMADO_COLUMNS.filter(c => cv.includes(c.key)).map(c => (
                                             <SortableHeader
                                                 key={c.key} colKey={c.key} label={c.label} uppercase={false}
@@ -719,7 +719,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {iv.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                         {iv.includes('servico') && <SortableHeader colKey="servico" label="Serviço" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                         {iv.includes('periodicidade') && <SortableHeader colKey="periodicidade" label="Periodicidade" uppercase={false} sortColumn={itemColumns.sortColumn} sortDirection={itemColumns.sortDirection} onSort={itemColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
@@ -784,7 +784,7 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                     <div className="overflow-auto max-h-[70vh]">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {ov.includes('sistema') && <SortableHeader colKey="sistema" label="Sistema" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {ov.includes('descricao') && <SortableHeader colKey="descricao" label="Descrição" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {ov.includes('tipo') && <SortableHeader colKey="tipo" label="Tipo" uppercase={false} sortColumn={orderColumns.sortColumn} sortDirection={orderColumns.sortDirection} onSort={orderColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}

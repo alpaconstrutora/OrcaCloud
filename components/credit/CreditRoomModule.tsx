@@ -263,7 +263,7 @@ export default function CreditRoomModule() {
                     <div className="overflow-auto max-h-[70vh]">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.visibleColumns.includes('code') && (
                                         <SortableHeader colKey="code" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className={th} />
                                     )}

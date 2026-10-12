@@ -298,7 +298,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                             <div className="overflow-auto max-h-[50vh]">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className={th}>Versão</th>
                                             <th className={th}>Rótulo</th>
                                             <th className={`${th} text-center`}>Data-base</th>
@@ -367,7 +367,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={th}>Documento</th>
                                         <th className={th}>Categoria</th>
                                         <th className={th}>Tipo</th>
@@ -432,7 +432,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                             <div className="overflow-auto max-h-[70vh]">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className={th}>E-mail</th>
                                             <th className={th}>Nome</th>
                                             <th className={th}>Instituição</th>
@@ -511,7 +511,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={`${th} text-center`}>Quando</th>
                                         <th className={th}>Quem</th>
                                         <th className={`${th} text-center`}>Lado</th>

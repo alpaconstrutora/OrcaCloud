@@ -66,7 +66,7 @@ const Tabela: React.FC<{
         </div>
         <div className="overflow-x-auto">
             <table className="w-full">
-                <thead className="bg-gray-50/70 border-b border-gray-100">
+                <thead className="bg-white border-b border-gray-100">
                     <tr>
                         <th className={`${th} text-left w-[42%]`}>Descrição</th>
                         <th className={`${th} text-left w-[32%]`}>Natureza</th>

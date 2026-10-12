@@ -380,7 +380,7 @@ const PlanningList: React.FC<PlanningListProps> = ({
                 viewMode === 'list' ? (
                     <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50 border-b border-gray-200">
+                            <thead className="bg-white border-b border-gray-200">
                                 <tr>
                                     {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                         const def = PLANNING_COLUMN_HEADERS[key];

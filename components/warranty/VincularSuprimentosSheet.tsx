@@ -98,7 +98,7 @@ const VincularSuprimentosSheet: React.FC<Props> = ({ organizationId, projectId, 
                         <col style={{ width: 120 }} />
                         <col style={{ width: 120 }} />
                     </colgroup>
-                    <thead className="bg-gray-50/80 sticky top-0 z-10 text-xs font-semibold text-gray-500">
+                    <thead className="bg-white sticky top-0 z-10 text-xs font-semibold text-gray-700">
                         <tr>
                             <th className={th}>Tipo</th>
                             <th className={th}>Número</th>

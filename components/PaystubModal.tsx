@@ -235,7 +235,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         {/* Rubrics Table */}
                         <div className="min-h-[400px]">
                             <table className="w-full">
-                                <thead className="bg-slate-50 border-b border-slate-200 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                <thead className="bg-white border-b border-slate-200 text-[9px] font-black text-gray-700 uppercase tracking-widest">
                                     <tr>
                                         <th className="py-2 px-4 text-left">Cód</th>
                                         <th className="py-2 px-4 text-left">Descrição</th>

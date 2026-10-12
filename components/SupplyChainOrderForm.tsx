@@ -1677,7 +1677,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 {/* §6.2 sentence case (uppercase={false}) · §6.3 toda
                                                     coluna ordenável · §6.6 px-6 + separador vertical */}
                                                 <thead>
-                                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                         {colunasAvulsos.orderedVisibleColumns.filter(k => k !== 'actions').map(key => {
                                                             const def = AVULSO_HEADERS[key];
                                                             if (!def) return null;
@@ -1856,7 +1856,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 a seleção continua linha a linha, que é o gesto real
                                                 (cada item leva quantidade e preço próprios). */}
                                             <thead>
-                                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                     {/* Coluna do checkbox: estrutural, fora da engrenagem
                                                         e sem ordenação (§6.3 fala de coluna de DADO). */}
                                                     <th aria-hidden="true" className="w-10 px-4 py-2 border-r border-gray-100"></th>

@@ -4844,7 +4844,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                        <thead className="bg-white text-xs font-semibold text-gray-700">
                           <tr>
                             <th className="px-4 py-3">Tipo de Documento</th>
                             <th className="px-4 py-3 text-right">Ação</th>
@@ -4941,7 +4941,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     {/* Tabela de Disciplinas */}
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                        <thead className="bg-white text-xs font-semibold text-gray-700">
                           <tr>
                             <th className="px-4 py-3">Código</th>
                             <th className="px-4 py-3">Nome da Disciplina</th>
@@ -5064,7 +5064,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     {/* Tabela de Padrões */}
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                        <thead className="bg-white text-xs font-semibold text-gray-700">
                           <tr>
                             <th className="px-4 py-3">Nome do Padrão</th>
                             <th className="px-4 py-3">Fórmula / Máscara</th>
@@ -5229,7 +5229,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
                     <div className="border border-slate-100 rounded-[10px] overflow-hidden bg-white">
                       <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                        <thead className="bg-white text-xs font-semibold text-gray-700">
                           <tr>
                             <th className="px-4 py-3 w-16">Ícone</th>
                             <th className="px-4 py-3">Extensão</th>

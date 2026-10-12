@@ -776,7 +776,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                 ) : projectData ? (
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left text-sm">
-                                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
+                                            <thead className="bg-white text-gray-700 font-bold uppercase text-xs">
                                                 <tr>
                                                     <th className="px-4 py-3 rounded-l-lg w-10"></th>
                                                     <th className="px-4 py-3">Cód.</th>
@@ -888,7 +888,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left text-sm">
-                                        <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
+                                        <thead className="bg-white text-gray-700 font-bold uppercase text-xs">
                                             <tr>
                                                 <th className="px-4 py-3 rounded-l-lg">Código</th>
                                                 <th className="px-4 py-3">Descrição</th>

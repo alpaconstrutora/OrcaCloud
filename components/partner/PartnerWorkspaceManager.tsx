@@ -1627,7 +1627,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                             <col data-col-key="actions" style={{ width: `${wsUserCols.getWidth('actions')}px` }} />
                           </colgroup>
                           <thead>
-                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                               {orderedVisible.map(key => {
                                 const def = WS_USER_COLUMN_HEADERS[key];
                                 if (!def) return null;
@@ -1948,7 +1948,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       <div className="overflow-auto max-h-[26rem]">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                               {WS_MEASUREMENT_COLUMNS.filter((c) => c.key !== 'actions').map((c) => (
                                 measurementColumns.visibleColumns.includes(c.key) && (
                                   <SortableHeader
@@ -2114,7 +2114,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       <div className="overflow-auto max-h-[26rem]">
                         <table className="w-full text-left border-collapse">
                           <thead>
-                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                               {WS_INSTALLMENT_COLUMNS.filter((c) => c.key !== 'actions').map((c) => (
                                 installmentColumns.visibleColumns.includes(c.key) && (
                                   <SortableHeader
@@ -2365,7 +2365,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                       <col data-col-key="actions" style={{ width: `${partnerCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
-                      <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                      <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                         {tableColumns.orderedVisibleColumns.map(key => {
                           const def = PARTNER_COLUMN_HEADERS[key];
                           if (!def) return null;

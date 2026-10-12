@@ -427,7 +427,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                     <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <SortableHeader colKey="name" label="Empreendimento" uppercase={false}
                                         sortColumn={buildingSort.col} sortDirection={buildingSort.dir} onSort={handleBuildingSort}
                                         className="px-6 py-2 border-r border-gray-100" />
@@ -544,7 +544,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.map(key => {
                                         const def = priceColumnHeaders[key];
                                         if (!def) return null;

@@ -1249,7 +1249,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
 
                   <div className="overflow-hidden rounded-2xl border border-gray-100 shadow-sm">
                     <table className="w-full text-left">
-                      <thead className="bg-gray-50/80 text-xs font-black text-gray-400 uppercase tracking-widest">
+                      <thead className="bg-white text-xs font-black text-gray-700 uppercase tracking-widest">
                         <tr>
                           <th className="px-6 py-4">Insumo / Especialidade</th>
                           <th className="px-6 py-4 text-center">Unidade</th>

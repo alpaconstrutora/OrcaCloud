@@ -110,7 +110,7 @@ export default function PainelReurb({ model, dados, onDados, ocupantes, onRecarr
             </p>
             <div className="mt-1 max-h-64 overflow-auto rounded-md border border-slate-200">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-slate-50 text-left text-slate-600">
+                <thead className="sticky top-0 bg-white text-left text-gray-700">
                   <tr>
                     <th className="px-2 py-1.5">Lote</th>
                     <th className="px-2 py-1.5">Ocupante(s)</th>

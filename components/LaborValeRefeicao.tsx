@@ -395,7 +395,7 @@ const AbaRegras: React.FC<{ orgId: string | null; projects: { id: string; name: 
                                 )}
                             </colgroup>
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns
                                         .filter(key => key !== 'actions')
                                         .map(key => {
@@ -709,7 +709,7 @@ const AbaCalendario: React.FC<{ orgId: string | null; organizations: { id: strin
                                 )}
                             </colgroup>
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns
                                         .filter(key => key !== 'actions')
                                         .map(key => {
@@ -1103,7 +1103,7 @@ const AbaCalculo: React.FC<{ orgId: string | null; employees: Employee[]; projec
                                 )}
                             </colgroup>
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                         <input type="checkbox" onChange={toggleAll} checked={rascunhos.length > 0 && selectedIds.size === rascunhos.length} className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 cursor-pointer" />
                                     </th>
@@ -1420,7 +1420,7 @@ const AbaAprovados: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                 ))}
                             </colgroup>
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.map(key => {
                                         const def = APROVADOS_COLUMN_HEADERS[key];
                                         if (!def) return null;
@@ -1606,7 +1606,7 @@ const AbaHistorico: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                                 ))}
                             </colgroup>
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.map(key => {
                                         const def = HISTORICO_COLUMN_HEADERS[key];
                                         if (!def) return null;

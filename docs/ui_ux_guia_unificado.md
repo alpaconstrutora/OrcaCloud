@@ -1268,8 +1268,8 @@ ja usada nas tabelas"*. **Antes de dizer que o app "já usa" uma cor, abrir a oc
 > ❌ Não é cabeçalho (e segue como está): barras de resumo do Gantt, trilho de abas §19.1, barra
 > de opções do ribbon.
 > 🔒 **Trava:** `__tests__/cabecalhoSemCinzaGuard.test.ts` reprova cabeçalho com FUNDO cinza novo.
-> O `BASELINE` do teste é a dívida herdada de 12/10/2026 (180 arquivos, 273 linhas, escritos à
-> mão) e **só pode diminuir** — ao migrar um arquivo, abaixe/remova a entrada dele.
+> O `BASELINE` do teste ficou **vazio** em 12/10/2026: os 180 arquivos / 273 linhas escritos à mão
+> foram migrados (fundo branco, texto `text-gray-700`). Não adicione entrada: use `CABECALHO_TABELA`.
 
 ---
 

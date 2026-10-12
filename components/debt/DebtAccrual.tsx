@@ -225,7 +225,7 @@ export default function DebtAccrual({ contract, parcelas, onContratoAlterado }: 
                         <div className="overflow-auto max-h-[60vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={`${th} text-left`}>Competência</th>
                                         <th className={`${th} text-right`}>Juros apropriados</th>
                                         <th className={`${th} text-right`}>Correção</th>

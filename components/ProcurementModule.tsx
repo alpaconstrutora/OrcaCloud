@@ -823,7 +823,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId, onCha
                     ) : (
                         <div className="bg-white rounded-lg border overflow-hidden">
                             <table className="w-full text-sm">
-                                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                                <thead className="bg-white text-xs text-gray-700 uppercase">
                                     <tr>
                                         <th className="px-3 py-2 text-left">Insumo</th>
                                         <th className="px-3 py-2 text-right">Qtd</th>
@@ -865,7 +865,7 @@ export const ProcurementModule: React.FC<Props> = ({ activeOrganizationId, onCha
                             <CurvaSChart4 data={monthlyBreakdown} />
                             <div className="bg-white rounded-lg border overflow-hidden">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                                    <thead className="bg-white text-xs text-gray-700 uppercase">
                                         <tr>
                                             <th className="px-3 py-2 text-left">Mês</th>
                                             <th className="px-3 py-2 text-right text-indigo-700">Planejado</th>
@@ -1251,7 +1251,7 @@ function ConsolidationCard({
                 {expanded && consolidation.items && consolidation.items.length > 0 && (
                     <div className="border-t">
                         <table className="w-full text-xs">
-                            <thead className="bg-gray-50 text-gray-500 uppercase">
+                            <thead className="bg-white text-gray-700 uppercase">
                                 <tr>
                                     <th className="px-3 py-2 text-left">Obra</th>
                                     <th className="px-3 py-2 text-right">Qtd</th>
@@ -1515,7 +1515,7 @@ function RiscoPanel({ riskItems, items }: { riskItems: RiskItem[]; items: Procur
                         </div>
                         <div className="bg-white rounded-lg border overflow-hidden">
                             <table className="w-full text-sm">
-                                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                                <thead className="bg-white text-xs text-gray-700 uppercase">
                                     <tr>
                                         <th className="px-3 py-2 text-left">Insumo</th>
                                         <th className="px-3 py-2 text-center">Score</th>

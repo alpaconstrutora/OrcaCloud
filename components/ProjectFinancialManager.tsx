@@ -1151,7 +1151,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     </div>
                 )}
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                    <thead className="bg-white text-gray-700 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                         <tr>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">DESCRIÇÃO</th>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">VENCIMENTO</th>
@@ -1307,7 +1307,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             )}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                    <thead className="bg-white text-gray-700 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                         <tr>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">DESCRIÇÃO</th>
                             <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">FORNECEDOR</th>
@@ -1404,7 +1404,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <span className="text-sm font-normal text-indigo-600">KPIs consolidados</span>
                     </div>
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                        <thead className="bg-white text-gray-700 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                             <tr>
                                 <th className="px-6 py-4">Imóvel</th>
                                 <th className="px-6 py-4 text-right">Receita Acum.</th>
@@ -1483,7 +1483,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                        <thead className="bg-white text-gray-700 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                             <tr>
                                 <th className="px-8 py-5">Item</th>
                                 <th className="px-8 py-5">Data</th>

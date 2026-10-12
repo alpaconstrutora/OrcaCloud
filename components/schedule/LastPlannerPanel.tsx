@@ -305,7 +305,7 @@ const LookaheadView: React.FC<{
                 <table className="w-full text-xs">
                     <thead>
                         <tr className="bg-gray-50 border-b border-gray-100">
-                            <th className="text-left px-4 py-3 font-bold text-gray-600 w-64 sticky left-0 bg-gray-50">Atividade</th>
+                            <th className="text-left px-4 py-3 font-bold text-gray-700 w-64 sticky left-0 bg-white">Atividade</th>
                             {weeks.map((w, i) => (
                                 <th key={w} className={`text-center px-3 py-3 font-bold min-w-[120px] ${i === 0 ? 'text-indigo-600 bg-indigo-50/50' : 'text-gray-500'}`}>
                                     {i === 0 ? 'Esta semana' : `+${i} sem`}
@@ -634,7 +634,7 @@ const PpcChart: React.FC<{ ppcData: PpcWeek[] }> = ({ ppcData }) => {
             {/* Summary table */}
             <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
                 <table className="w-full text-xs">
-                    <thead className="bg-gray-50 border-b border-gray-100">
+                    <thead className="bg-white border-b border-gray-100">
                         <tr>
                             <th className="text-left px-4 py-2.5 font-bold text-gray-600">Semana</th>
                             <th className="text-center px-4 py-2.5 font-bold text-gray-600">Planejados</th>

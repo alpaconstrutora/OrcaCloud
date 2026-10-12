@@ -394,7 +394,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
                     )}
                   </colgroup>
                   <thead>
-                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                       {tableColumns.visibleColumns.includes('name') && (
                         <SortableHeader
                           colKey="name"

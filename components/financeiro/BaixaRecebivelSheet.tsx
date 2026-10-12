@@ -145,7 +145,7 @@ export default function BaixaRecebivelSheet({
                     <div className="overflow-x-auto rounded-[10px] border border-gray-100 max-h-64 overflow-y-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="sticky top-0 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-4 py-2 border-r border-gray-100">{rotulos.contraparte}</th>
                                     <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Vencimento</th>
                                     <th className="px-3 py-2 text-right">Valor</th>

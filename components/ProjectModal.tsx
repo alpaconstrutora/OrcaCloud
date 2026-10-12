@@ -2031,7 +2031,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         </div>
                       ) : (
                         <table className="w-full text-left">
-                          <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-400">
+                          <thead className="bg-white text-xs font-bold uppercase text-gray-700">
                             <tr>
                               <th className="px-4 py-2">Projeto / Recurso</th>
                               <th className="px-4 py-2">Tipo</th>

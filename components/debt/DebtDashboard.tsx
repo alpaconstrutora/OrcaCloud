@@ -365,7 +365,7 @@ export default function DebtDashboard() {
                             <div className="overflow-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className={`${th} text-left`}>Mês</th>
                                             <th className={`${th} text-right`}>Amortização</th>
                                             <th className={`${th} text-right`}>Juros</th>
@@ -425,7 +425,7 @@ export default function DebtDashboard() {
                             <div className="overflow-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className={`${th} text-left`}>Tipo</th>
                                             <th className={`${th} text-left`}>Destino</th>
                                             <th className={`${th} text-right`}>Saldo</th>

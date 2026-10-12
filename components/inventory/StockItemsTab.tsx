@@ -105,7 +105,7 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                 {tableItems.orderedVisibleColumns.map(key => {
                                     const def = STOCK_ITEMS_COLUMNS.find(c => c.key === key);
                                     if (!def) return null;

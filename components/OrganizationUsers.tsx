@@ -1010,7 +1010,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     Visualizar/Editar são toggles, não dado comparável. Exceção legítima
                                     documentada, mesmo padrão da matriz de Visibilidade de Módulos abaixo
                                     neste arquivo (Administrador/Membro/Visualizador também não ordenam). */}
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-6 py-2 border-r border-gray-100">Módulo</th>
                                     <th className="px-6 py-2 border-r border-gray-100 text-center w-32 last:border-r-0">Visualizar</th>
                                     <th className="px-6 py-2 text-center w-32">Editar</th>
@@ -1194,7 +1194,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
                             </colgroup>
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                         const def = MEMBER_COLUMN_HEADERS[key];
                                         if (!def) return null;
@@ -1369,7 +1369,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     por produto, MODULES_BY_PRODUCT) na ordem em que aparecem no menu, e as
                                     colunas de papel são toggles, não dado comparável. Mesma exceção
                                     documentada na tabela de Permissões Detalhadas acima. */}
-                                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500">
+                                <tr className="bg-white border-b border-gray-200 text-xs font-semibold text-gray-700">
                                     <th className="px-6 py-2 min-w-[280px] border-r border-gray-100">Módulo / Recurso</th>
                                     <th className="px-6 py-2 text-center border-r border-gray-100">
                                         <div className="flex flex-col items-center gap-0.5">

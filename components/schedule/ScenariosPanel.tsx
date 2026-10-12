@@ -118,7 +118,7 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                     <table className="w-full text-xs">
                         <thead>
                             <tr className="bg-gray-50 border-b border-gray-100">
-                                <th className="text-left px-4 py-3 font-bold text-gray-500 w-48 sticky left-0 bg-gray-50">Métrica</th>
+                                <th className="text-left px-4 py-3 font-bold text-gray-700 w-48 sticky left-0 bg-white">Métrica</th>
 
                                 {/* Base column */}
                                 <th className="text-center px-4 py-3 min-w-[160px]">

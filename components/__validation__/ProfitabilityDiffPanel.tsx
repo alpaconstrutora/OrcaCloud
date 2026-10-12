@@ -102,7 +102,7 @@ const ProfitabilityDiffPanel: React.FC<Props> = ({ legacyInput, extractedInput, 
 
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-[13px]">
-                    <thead className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                    <thead className="bg-white text-gray-700 border-b border-gray-200">
                         <tr>
                             <th className="px-4 py-2">Imóvel</th>
                             <th className="px-4 py-2 text-right">Receita (leg → ext)</th>

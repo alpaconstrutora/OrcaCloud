@@ -251,7 +251,7 @@ export const RegulatoryMapExcelImportModal: React.FC<Props> = ({ regulatoryMapId
                             </div>
                             <div className="overflow-x-auto max-h-96">
                                 <table className="min-w-max text-sm w-full">
-                                    <thead className="bg-gray-50 text-xs font-semibold text-gray-400 sticky top-0">
+                                    <thead className="bg-white text-xs font-semibold text-gray-700 sticky top-0">
                                         <tr>
                                             <th className="px-3 py-2 w-8" />
                                             {ZONE_COLUMNS.filter(c => mapping.includes(c.key)).map(c => (

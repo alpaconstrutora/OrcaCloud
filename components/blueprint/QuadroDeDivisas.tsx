@@ -195,7 +195,7 @@ export default function QuadroDeDivisas({
         <div className="overflow-x-auto rounded-[10px] border border-gray-100">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+              <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                 {/* Larguras explícitas: sem elas o navegador espremia a coluna de
                     Papel e o select cortava "Lateral esquerda" no meio — o rótulo
                     que o usuário precisa ler para conferir contra a matrícula. */}

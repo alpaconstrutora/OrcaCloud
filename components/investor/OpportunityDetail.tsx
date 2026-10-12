@@ -820,7 +820,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                 </div>
                                                 <div className="border border-gray-100 rounded-3xl overflow-x-auto bg-white shadow-sm">
                                                     <table className="min-w-[640px] w-full text-left text-xs sm:text-sm">
-                                                        <thead className="bg-gray-50/80 text-gray-500 font-black uppercase tracking-wider border-b border-gray-100">
+                                                        <thead className="bg-white text-gray-700 font-black uppercase tracking-wider border-b border-gray-100">
                                                             <tr>
                                                                 <th className="p-4">Risco Identificado</th>
                                                                 <th className="p-4">Probabilidade / Impacto</th>

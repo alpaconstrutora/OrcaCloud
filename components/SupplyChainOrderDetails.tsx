@@ -1233,7 +1233,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             {/* §6.2 sentence case: `uppercase={false}`, porque o
                                 SortableHeader força CAIXA ALTA por padrão. */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {colunasDeDado.map(key => {
                                         const def = ITEM_COLUMN_HEADERS[key];
                                         if (!def) return null;
@@ -1569,7 +1569,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 <div className="overflow-x-auto">
                                     <table className="w-full min-w-[480px] text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Parcela</th>
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500">Vencimento</th>
                                                 <th className="px-3 py-2 text-table-header font-semibold text-gray-500 text-right">Valor</th>
@@ -1704,7 +1704,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 {receipt.items.length > 0 && (
                                     <div className="overflow-x-auto rounded-xl border border-gray-100">
                                         <table className="w-full">
-                                            <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 <tr>
                                                     <th className="px-6 py-2 text-left border-r border-gray-100">Item</th>
                                                     <th className="px-6 py-2 text-right border-r border-gray-100">Pedido</th>

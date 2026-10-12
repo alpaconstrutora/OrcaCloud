@@ -2103,7 +2103,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     <col />
                                 </colgroup>
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
                                             <SortableHeader
                                                 key={c.key}
@@ -2238,7 +2238,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     <col />
                                 </colgroup>
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
                                             <SortableHeader
                                                 key={c.key}
@@ -2471,7 +2471,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                             unitsModeColumnKeys). Mapa de header troca com o modo porque 'price' muda
                                             de rótulo ("Patrimônio" × "Valor base"). */}
                                         <thead>
-                                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 {unitsTableColumns.orderedVisibleColumns.filter(key => (unitsModeColumnKeys as readonly string[]).includes(key)).map(key => {
                                                     const def = (selectedBuildingId ? UNITS_UNIT_COLUMN_HEADERS : UNITS_BUILDING_COLUMN_HEADERS)[key];
                                                     if (!def) return null;
@@ -2849,7 +2849,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     {/* thead em sentence case (§6.2) — escala compacta; ordenável (§6.3);
                                         ordem vem de orderedVisibleColumns (arraste estilo ClickUp) */}
                                     <thead>
-                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             {dealTableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => {
                                                 const def = DEAL_COLUMN_HEADERS[key];
                                                 if (!def) return null;
@@ -2996,7 +2996,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     ))}
                                 </colgroup>
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {brokerTableColumns.orderedVisibleColumns.map(key => {
                                             const def = BROKER_COLUMN_HEADERS[key];
                                             if (!def) return null;

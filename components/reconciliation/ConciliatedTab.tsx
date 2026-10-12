@@ -352,7 +352,7 @@ export default function ConciliatedTab({
                                 {temAcoes && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
                             </colgroup>
                             <thead>
-                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {colunasDeDados.map(k => (
                                         <th key={k} className={`relative overflow-hidden px-6 py-2 whitespace-nowrap border-r border-gray-100 font-semibold ${ALINHAMENTO_CABECALHO[k] ?? ''}`}>
                                             {cabecalho(k)}

@@ -100,7 +100,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
             ) : (
                 <div className="border border-gray-100 rounded-3xl overflow-x-auto bg-white shadow-sm">
                     <table className="min-w-[760px] w-full text-left text-sm">
-                        <thead className="bg-gray-50/80 text-gray-500 font-black uppercase tracking-wider text-xs border-b border-gray-100">
+                        <thead className="bg-white text-gray-700 font-black uppercase tracking-wider text-xs border-b border-gray-100">
                             <tr>
                                 <th className="p-4">Risco</th>
                                 <th className="p-4">Categoria</th>

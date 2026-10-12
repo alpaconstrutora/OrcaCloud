@@ -96,7 +96,7 @@ const HoldingsList: React.FC<Props> = ({
                 </div>
                 <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-50/50 border-b border-gray-100">
+                    <thead className="bg-white border-b border-gray-100">
                         <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                             <th className="px-6 py-4">Empreendimento</th>
                             <th className="px-6 py-4 text-center">Status</th>

@@ -390,7 +390,7 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
           <div className="overflow-x-auto rounded-[10px] border border-gray-100">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                   <th className={`${TH} w-9 text-center`}>#</th>
                   <th className={`${TH} w-24`}>Vértice</th>
                   <th className={`${TH} w-28`}>Medida (m)</th>
@@ -456,7 +456,7 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
           <div className="overflow-x-auto rounded-[10px] border border-gray-100">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                   <th className={`${TH} w-9 text-center`}>#</th>
                   <th className={`${TH} w-24`}>Vértice</th>
                   <th className={`${TH} w-36`}>Azimute ou rumo</th>

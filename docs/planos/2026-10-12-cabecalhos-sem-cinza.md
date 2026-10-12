@@ -72,3 +72,11 @@ do cabeçalho em `text-gray-700`, o mesmo das células (§7), em semibold, com l
 - **Pronto quando:** typecheck, XSS, build e suíte completa com a conta fechando; publicado só
   com autorização; conferido em produção com o usuário de leitura.
 - **Estado:** guia ✅ (§6.11 nova, 4 snippets corrigidos, item 7b no checklist). Typecheck, XSS, build, check de UI e suíte (8628 + 34 pulados = 8662, conta fechando) verdes. **Publicação: pendente de autorização.**
+
+### 5. Migração da dívida do baseline (12/10/2026)
+- **Pedido:** "sim eu quero" (migrar os 180 arquivos que a trava deixou no baseline).
+- **Feito:** `docs/spikes/cabecalhos-sem-cinza/migrar_lote.py` troca, só nas linhas que a trava marca,
+  `bg-{gray|slate|…}-N` -> `bg-white` e texto cinza claro -> `text-gray-700`, conferindo por linha que
+  nada além de bg/text mudou. 4 lotes; BASELINE = 0 arquivos / 0 linhas. As 8 linhas de TOTAL
+  (`renderTotals`) e a faixa de fase do `ReportViewer` ganharam `border-t`/`border-y` para manter a
+  separação que o cinza dava.

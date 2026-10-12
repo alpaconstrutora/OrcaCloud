@@ -304,7 +304,7 @@ export default function TelaArmadura({ hipoteses: h, onHipoteses, armadura, onSe
             subtitle: 'Lance pilares, vigas, lajes ou fundações (aba Estrutural) para ver o aço.',
           }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total {familiaFiltro ? 'da família' : 'da estrutura'}</span>
@@ -346,7 +346,7 @@ export default function TelaArmadura({ hipoteses: h, onHipoteses, armadura, onSe
           }}
           empty={{ title: 'Nenhuma peça estrutural na planta' }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total · {armadura.pecas.length} peça(s)</span>

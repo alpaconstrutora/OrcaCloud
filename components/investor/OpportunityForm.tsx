@@ -555,7 +555,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {form.risks_json && form.risks_json.length > 0 && (
                                 <div className="border border-gray-150 rounded-2xl overflow-hidden mt-2">
                                     <table className="w-full text-left text-xs">
-                                        <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider">
+                                        <thead className="bg-white text-gray-700 font-bold uppercase tracking-wider">
                                             <tr>
                                                 <th className="p-3">Risco</th>
                                                 <th className="p-3">Prob. / Impacto</th>
@@ -734,7 +734,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {competitors && competitors.length > 0 && (
                                 <div className="border border-gray-150 rounded-2xl overflow-hidden mt-2">
                                     <table className="w-full text-left text-xs">
-                                        <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-wider">
+                                        <thead className="bg-white text-gray-700 font-bold uppercase tracking-wider">
                                             <tr>
                                                 <th className="p-3">Concorrente</th>
                                                 <th className="p-3">Preço/m²</th>

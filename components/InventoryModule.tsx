@@ -822,7 +822,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-sm text-left">
                                             <thead>
-                                                <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-500 text-xs uppercase font-medium">
+                                                <tr className="border-b border-gray-100 bg-white text-gray-700 text-xs uppercase font-medium">
                                                     <th className="px-4 py-3">Insumo</th>
                                                     <th className="px-4 py-3 hidden md:table-cell">Almoxarifado</th>
                                                     <th className="px-4 py-3 text-right">Saldo</th>
@@ -887,7 +887,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                     <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-left">
                                         <thead>
-                                            <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-500 text-xs uppercase font-medium">
+                                            <tr className="border-b border-gray-100 bg-white text-gray-700 text-xs uppercase font-medium">
                                                 <th className="px-4 py-3">Insumo</th>
                                                 <th className="text-right px-4 py-3">Saídas 30d</th>
                                                 <th className="text-right px-4 py-3">Entradas 30d</th>
@@ -1155,7 +1155,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-left">
                                         <thead>
-                                            <tr className="border-b border-gray-100 bg-gray-50/50 text-gray-500 text-xs uppercase font-medium">
+                                            <tr className="border-b border-gray-100 bg-white text-gray-700 text-xs uppercase font-medium">
                                                 <th className="px-4 py-3">Fornecedor</th>
                                                 <th className="px-4 py-3">Insumo / Categoria</th>
                                                 <th className="px-4 py-3 text-center">Prazo (dias)</th>
@@ -1651,7 +1651,7 @@ const RequisitionsTab: React.FC<RequisitionsTabProps> = ({
                         {req.notes && <p className="text-sm text-gray-500 italic px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">{req.notes}</p>}
                         <div className="overflow-x-auto rounded-xl border border-gray-100 mt-2">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-50/50">
+                                <thead className="bg-white">
                                     <tr className="text-gray-500 border-b border-gray-100">
                                         <th className="px-4 py-2 font-medium">Insumo</th>
                                         <th className="px-4 py-2 font-medium">Cód.</th>

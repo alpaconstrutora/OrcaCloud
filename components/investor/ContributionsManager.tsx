@@ -181,7 +181,7 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                         <div className="py-12 text-center text-sm text-gray-400">Nenhuma movimentação registrada.</div>
                     ) : (
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50/50 sticky top-0">
+                            <thead className="bg-white sticky top-0">
                                 <tr className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                                     <th className="px-6 py-3">Descrição</th>
                                     <th className="px-6 py-3">Tipo</th>

@@ -152,7 +152,7 @@ export default function SeletorDestinatario({ open, onClose, organizationId, org
                             <div className="overflow-x-auto rounded-[10px] border border-gray-100 max-h-[60vh] overflow-y-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className="px-4 py-2 border-r border-gray-100">Nome</th>
                                             <th className="px-3 py-2 border-r border-gray-100">CPF / CNPJ</th>
                                             <th className="px-3 py-2">Detalhe</th>

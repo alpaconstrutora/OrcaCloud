@@ -286,7 +286,7 @@ export function FiscalRules({ organizationId, writeOrganizationId, onToast, chro
                 <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
               </colgroup>
               <thead>
-                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                   {visibleR.map(key => {
                     const def = RULES_COLUMN_HEADERS[key];
                     if (!def) return null;

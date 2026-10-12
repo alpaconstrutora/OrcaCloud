@@ -932,7 +932,7 @@ export default function PainelEletrica({
             subtitle: 'Crie um em "Novo circuito", ou deixe Instalações › Circuitos automáticos propor pelos pontos.',
           }}
           renderTotals={(n) => (
-            <tr className="bg-gray-50 text-sm font-semibold text-gray-700">
+            <tr className="border-t border-gray-200 bg-white text-sm font-semibold text-gray-700">
               <td colSpan={n} className="px-6 py-2.5">
                 <span className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span>Total {quadroFiltro ? 'do quadro' : 'dos quadros'}</span>

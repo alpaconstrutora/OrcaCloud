@@ -190,7 +190,7 @@ const UnitSelect: React.FC<Props> = ({
                             <col />
                             <col style={{ width: 230 }} />
                         </colgroup>
-                        <thead className="bg-gray-50/80 sticky top-0 z-10">
+                        <thead className="bg-white sticky top-0 z-10">
                             <tr>
                                 <SortableHeader label="Unidade" colKey="unidade" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />
                                 <SortableHeader label="Empreendimento" colKey="empreendimento" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />

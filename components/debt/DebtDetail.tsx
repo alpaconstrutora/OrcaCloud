@@ -469,7 +469,7 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={`${th} text-center`}>#</th>
                                         <th className={`${th} text-center`}>Vencimento</th>
                                         <th className={`${th} text-right`}>Saldo inicial</th>
@@ -546,7 +546,7 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                         <div className="overflow-auto max-h-[70vh]">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={`${th} text-center`}>Data</th>
                                         <th className={`${th} text-left`}>Evento</th>
                                         <th className={`${th} text-right`}>Valor</th>
@@ -603,7 +603,7 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                         <div className="overflow-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={`${th} text-center`}>Data</th>
                                         <th className={`${th} text-right`}>Bruto</th>
                                         <th className={`${th} text-right`}>Retido</th>

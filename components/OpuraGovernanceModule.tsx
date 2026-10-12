@@ -115,9 +115,25 @@ export default function OpuraGovernanceModule({
       // Busca o nome da organização para usar como razão social
       const { data: orgData } = await supabase
         .from('organizations')
-        .select('name')
+        .select('name, settings')
         .eq('id', createOrgId)
         .single();
+
+      // Org PJ já nasce com matriz (gatilho `trg_org_cria_matriz`) e o banco recusa
+      // uma segunda (`companies_uma_matriz_por_org`) — se a org escolhida já tem,
+      // só seleciona. Org PF não tem matriz: a empresa entra em Empresas do grupo.
+      // Ver aplicar_20271012001000_organizacao_matriz_fonte_unica.sql.
+      if (orgData?.settings?.tipo_pessoa === 'PF') {
+        alert('Organização de pessoa física não tem empresa matriz. Cadastre a empresa em Minha Organização › Organização › Empresas do grupo.');
+        return;
+      }
+      const existentes = await companyService.list(createOrgId);
+      const matriz = existentes.find(c => c.is_headquarters);
+      if (matriz) {
+        setCompanies(existentes);
+        setSelectedCompanyId(matriz.id);
+        return;
+      }
 
       const orgName = orgData?.name || 'Empresa Principal';
 

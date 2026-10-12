@@ -176,7 +176,7 @@ D porque a tela nova pressupõe que editar a matriz atualiza a org.
 
 ### Fase B — Banco (item 2) · uma migration nova, aplicada por `db query -f` (nunca `db push`)
 
-- [ ] **B1. Toda organização tem exatamente uma matriz.**
+- [x] **B1. Toda organização PJ tem exatamente uma matriz.** — aplicado 2026-10-12 (`aplicar_20271012001000_organizacao_matriz_fonte_unica.sql`, seções 1, 3, 6 e 7; inclui `create_organization_v2` com `p_settings`).
   `CREATE UNIQUE INDEX ... ON companies(org_id) WHERE is_headquarters`;
   gatilho `AFTER INSERT ON organizations` que, **se a org for PJ**, cria a matriz a partir da própria
   org (razão social = `name`, CNPJ/contato/endereço mapeados, `tipo
@@ -186,16 +186,16 @@ D porque a tela nova pressupõe que editar a matriz atualiza a org.
   Pronto quando: org PJ sem matriz = 0 e org PF com matriz = 0;
   criar org de teste dentro de `BEGIN … ROLLBACK` gera 1 matriz;
   `npx vitest run __tests__/segurancaMigrations.test.ts` verde.
-- [ ] **B2. Matriz → organização.** Gatilho `AFTER INSERT OR UPDATE ON companies`
+- [x] **B2. Matriz → organização.** — aplicado 2026-10-12 (seção 4). Gatilho `AFTER INSERT OR UPDATE ON companies`
   (só `is_headquarters`) copia os 5 campos para a org, só quando `IS DISTINCT FROM`.
   Pronto quando: em `BEGIN … ROLLBACK`, `UPDATE companies SET telefone = 'X'` na
   matriz faz `organizations.phone = 'X'`.
-- [ ] **B3. A matriz vence.** Gatilho `BEFORE UPDATE ON organizations` repõe os 5
+- [x] **B3. A matriz vence.** — aplicado 2026-10-12 (seção 5). Gatilho `BEFORE UPDATE ON organizations` repõe os 5
   campos a partir da matriz (`NEW.cnpj := matriz.cnpj` …). Sem erro, para não
   derrubar cliente com bundle antigo.
   Pronto quando: em `BEGIN … ROLLBACK`, `UPDATE organizations SET cnpj = 'lixo'`
   termina com o CNPJ da matriz; salvar a aba Usuários na tela não altera os 5 campos.
-- [ ] **B4. `OpuraGovernanceModule.tsx:116-130`** cria matriz copiando só o nome —
+- [x] **B4. `OpuraGovernanceModule.tsx:116-130`** — feito 2026-10-12: se a org já tem matriz, só seleciona; org PF recebe aviso. (`check-ui-standard.sh` acusa §7 em tabelas pré-existentes da Governança, linhas 635–876 — dívida anterior, não tocada.) cria matriz copiando só o nome —
   com B1 isso viola o índice único. Passa a reutilizar a matriz existente.
   Pronto quando: o fluxo da Governança não cria `companies` com `is_headquarters` em org que já tem matriz.
 
@@ -275,7 +275,33 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
 
 - [x] Diagnóstico e levantamento de leitores/escritores — 2026-10-12
 - [x] Plano revisado pelo usuário; pergunta aberta 1 respondida — 2026-10-12
-- Fase A: **4 de 4** · Fase B: 0 de 4 · Fase C: 0 de 5 · Fase D: 0 de 4
+- Fase A: **4 de 4** · Fase B: **4 de 4** · Fase C: 0 de 5 · Fase D: 0 de 4
+
+### Registro da Fase B (2026-10-12)
+
+Simulação antes de aplicar — migration inteira + 8 testes numa transação abortada
+de propósito (`RAISE EXCEPTION` no fim; conferido depois: 0 orgs de teste, Altair
+com `settings` intacto, 0 gatilhos):
+
+| Teste | Resultado |
+|---|---|
+| T1 org PJ criada pela RPC nasce com matriz (CNPJ, telefone, e-mail, endereço) | 1 ✅ |
+| T2 org PF (`p_settings` PF) nasce sem empresa | 0 ✅ |
+| T3 telefone/cidade editados na matriz aparecem na org | ✅ |
+| T4 UPDATE na org com CNPJ/e-mail/endereço "lixo" → voltam da matriz; `name` grava | ✅ |
+| T5 org PF: CPF editável na própria org | ✅ |
+| T6 Alpa: save com objeto velho (5 campos nulos) não muda nada; `settings` grava | ✅ |
+| T7 segunda matriz na mesma org | recusada ✅ |
+| T8 Altair marcada PF, sem matriz | ✅ |
+
+Aplicada em produção com exit 0 e verificação embutida verde. Conferido de fora:
+3 gatilhos, índice `companies_uma_matriz_por_org`, funções de gatilho sem EXECUTE
+para `authenticated`/`anon`, `create_organization_v2(…, jsonb)` sem `anon`.
+
+⚠️ **Janela entre B e C:** com B no ar e C ainda não publicado, a ficha antiga da
+org (Minha Organização › Organização › Detalhes) ainda mostra CNPJ, site, contato
+e endereço editáveis numa org PJ — e o valor salvo ali **volta** ao da matriz
+(B3). Editar pela matriz (aba Grupo) funciona e chega à org.
 
 ## Verificação
 

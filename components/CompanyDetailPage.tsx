@@ -143,9 +143,12 @@ function companyToForm(c: Company): FormData {
         email_comercial: c.email_comercial ?? '',
         website: c.website ?? '',
         crt: c.crt ?? '',
-        retencao_iss: c.retencao_iss,
-        retencao_inss: c.retencao_inss,
-        retencao_irrf: c.retencao_irrf,
+        // `?? false`: o objeto da lista (select estreito) não traz estes três — sem o
+        // fallback as caixas nasciam `undefined` (não controladas) e o React avisava
+        // ao chegar a empresa completa. O Salvar já espera o carregamento completo.
+        retencao_iss: c.retencao_iss ?? false,
+        retencao_inss: c.retencao_inss ?? false,
+        retencao_irrf: c.retencao_irrf ?? false,
         holding_id: c.holding_id ?? '',
         responsavel_legal_nome: c.responsavel_legal_nome ?? '',
         responsavel_financeiro_nome: c.responsavel_financeiro_nome ?? '',

@@ -234,7 +234,7 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
   empresa"); remove o ramo `empresas_grupo` e o valor do tipo de `activeTab`
   (também em `AppRouter.tsx:1157`).
   Pronto quando: `grep empresas_grupo` sem resultado em `components/`; typecheck verde.
-- [x] **D3. Ficha unificada da organização** — código feito 2026-10-12 (`components/OrganizationDetail.tsx`; `CompanyDetailPage` ganhou `embedded`/`tab`; `CompaniesModule` ganhou `embedded`/`ocultarMatriz`). Trilha de 1 salto como a Ficha do condomínio. **Verificação na tela real: pendente.** (aberta por "Detalhes"): cabeçalho
+- [x] **D3. Ficha unificada da organização** — código feito 2026-10-12 (`components/OrganizationDetail.tsx`; `CompanyDetailPage` ganhou `embedded`/`tab`; `CompaniesModule` ganhou `embedded`/`ocultarMatriz`). Trilha de 1 salto como a Ficha do condomínio. **Verificado na tela real em 2026-10-12** (Playwright, conta de leitura, servidor da frente, ficha da Garden Cambuhy SPE nos 3 contextos — Todas / organização / empresa): menu sem "Grupo"; lista "Organizações" + "Nova organização" + "CNPJ / CPF"; 13 abas; Identificação com o CNPJ da matriz; Empresas do grupo vazia "além da matriz"; trilha volta à lista; **0 escritas ao PostgREST, 0 erro de JS/console, 0 HTTP ≥ 400**. A 1ª rodada pegou um aviso do React (checkbox não controlado → controlado) vindo de `CompanyDetailPage.companyToForm` — `retencao_iss/inss/irrf` não vêm no select estreito da lista; pré-existente, mas agora aparecia em toda ficha (matriz já montada). Corrigido com `?? false`; 2ª rodada limpa. Org PF não verificada na tela: a conta de leitura não enxerga a Altair. (aberta por "Detalhes"): cabeçalho
   com logo/nome da org e abas:
   - **Organização** — o que sobrou de `OrganizationPage` (C2);
   - **abas da matriz** — as de `CompanyDetailPage` (Identificação, Sócios, Contas,
@@ -278,7 +278,7 @@ Antes: ler `docs/ui_ux_guia_unificado.md` inteiro e `UI_PATTERNS.md` (REGRAS #1 
 
 - [x] Diagnóstico e levantamento de leitores/escritores — 2026-10-12
 - [x] Plano revisado pelo usuário; pergunta aberta 1 respondida — 2026-10-12
-- Fase A: **4 de 4** · Fase B: **4 de 4** · Fase C: **5 de 5** · Fase D: **4 de 4 no código; tela real pendente**
+- Fase A: **4 de 4** · Fase B: **4 de 4** · Fase C: **5 de 5** · Fase D: **4 de 4**
 
 ### Registro da Fase B (2026-10-12)
 

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ImovibStudy } from '../types';
-import { useImovibMath } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { Activity, TrendingUp, AlertCircle, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Leaf, Banknote } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
 import { jsPDF } from 'jspdf';
@@ -9,6 +10,8 @@ import * as XLSX from 'xlsx';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
+    /** Abre a aba que corrige a premissa de um aviso do motor. */
+    onIrPara?: (aba: ImovibAba) => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -19,7 +22,7 @@ const formatPercent = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 2 }).format(value / 100);
 };
 
-const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study }) => {
+const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara }) => {
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -122,6 +125,8 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study }
                     </button>
                 </div>
             </div>
+
+            <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
 
             {/* Printable Container */}
             <div ref={printRef} className="bg-slate-50 p-6 rounded-3xl space-y-8 max-w-5xl mx-auto">
@@ -415,7 +420,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study }
                                                 <tr key={item.id}>
                                                     <td className="p-4 text-slate-700 font-medium">{item.category}</td>
                                                     <td className="p-4 text-slate-600">{item.name}</td>
-                                                    <td className="p-4 text-slate-900 font-black text-right">
+                                                    <td className="p-4 text-slate-900 font-medium text-right">
                                                         {item.value_type === 'percent' ? `${item.value.toFixed(2)}% do VGV` : formatCurrency(item.value || 0)}
                                                     </td>
                                                 </tr>

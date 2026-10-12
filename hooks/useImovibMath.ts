@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ImovibStudy } from '../types';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 
 export interface MonthlyFlow {
     month: number;
@@ -15,101 +16,151 @@ export interface ImovibMathOptions {
     costDelta?: number; // percentage (-10 to 10)
 }
 
+/** Aba do detalhe do estudo onde a premissa de um aviso é corrigida. */
+export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
+
+/**
+ * Premissa que o motor não consegue usar como está. O motor calcula assim mesmo
+ * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
+ */
+export interface ImovibAviso {
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'divida_quitada_no_fim';
+    mensagem: string;
+    aba: ImovibAba;
+}
+
 export interface ImovibMathResult {
     monthlyFlows: MonthlyFlow[];
     maxExposure: number;
     vpl: number;
     annualIrr: number;
     vgvTotal: number;
-    netVgvTotal: number; // Added
+    netVgvTotal: number;
     constCostTotal: number;
     duration: number;
     landCost: number;
     esgCostTotal: number;
     esgVgvPremiumValue: number;
     esgFundingDiscount: number;
+    /** Área construída (privativa + comum) × quantidade × pavimentos — a MESMA que a aba CAPEX exibe. */
+    totalBlockArea: number;
+    /** Saldo devedor que as receitas não amortizaram e o investidor quita no último mês. */
+    debtPayoffAtEnd: number;
+    avisos: ImovibAviso[];
 }
 
-// Bisection method for IRR (more stable than Newton-Raphson)
 const calculateNPV = (rate: number, cashFlows: number[]): number => {
     return cashFlows.reduce((acc, val, i) => acc + val / Math.pow(1 + rate, i), 0);
 };
 
+// Limites da busca da TIR MENSAL. −90% a.m. já é perda total em qualquer
+// horizonte; abaixo disso (1 + r)^i perde precisão em fluxos longos.
+const IRR_LOW = -0.9;
+const IRR_HIGH = 10.0;
+
+/**
+ * TIR mensal por bissecção. Devolve NaN quando não há raiz no intervalo —
+ * nunca um dos limites. O motor antigo assumia que o VPL sempre cai com a
+ * taxa e, sem raiz, convergia para o limite: exibia TIR de −100% a.a. como se
+ * fosse uma taxa calculada.
+ */
 const calculateIRR = (cashFlows: number[]): number => {
-    // Check if there are both positive and negative cash flows
-    let hasPositive = false;
-    let hasNegative = false;
-
-    // First, verify we have any valid flows to avoid empty array issues
     if (!cashFlows || cashFlows.length === 0) return NaN;
-
-    for (let flow of cashFlows) {
-        if (flow > 0) hasPositive = true;
-        if (flow < 0) hasNegative = true;
-        if (hasPositive && hasNegative) break;
-    }
-
+    const hasPositive = cashFlows.some(f => f > 0);
+    const hasNegative = cashFlows.some(f => f < 0);
     if (!hasPositive || !hasNegative) return NaN;
 
-    let low = -0.99; // Can't go below -100%
-    let high = 10.0; // Assume max 1000% monthly to avoid infinite loops
-    const tolerance = 1e-4; // 0.01%
-    const maxIterations = 1000;
+    let low = IRR_LOW;
+    let high = IRR_HIGH;
+    let npvLow = calculateNPV(low, cashFlows);
+    const npvHigh = calculateNPV(high, cashFlows);
+    if (!Number.isFinite(npvLow) || !Number.isFinite(npvHigh)) return NaN;
+    if (npvLow === 0) return low;
+    if (npvHigh === 0) return high;
+    if (Math.sign(npvLow) === Math.sign(npvHigh)) return NaN;
 
-    let mid = 0;
-
-    // Simple Bisection
-    for (let i = 0; i < maxIterations; i++) {
-        mid = (low + high) / 2;
+    // Segue o lado cujo sinal é o do limite inferior — não assume VPL decrescente.
+    for (let i = 0; i < 200 && high - low > 1e-12; i++) {
+        const mid = (low + high) / 2;
         const npvMid = calculateNPV(mid, cashFlows);
-
-        if (Math.abs(npvMid) < tolerance) return mid;
-
-        // Normal projects: NPV decreases as rate increases
-        if (npvMid > 0) {
+        if (npvMid === 0) return mid;
+        if (Math.sign(npvMid) === Math.sign(npvLow)) {
             low = mid;
+            npvLow = npvMid;
         } else {
             high = mid;
         }
     }
-
     return (low + high) / 2;
+};
+
+/** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
+const val = (x: number | null | undefined, padrao: number): number =>
+    x == null || Number.isNaN(x) ? padrao : x;
+
+const fmtBRL = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+
+const EMPTY_RESULT: ImovibMathResult = {
+    monthlyFlows: [],
+    maxExposure: 0,
+    vpl: 0,
+    annualIrr: NaN,
+    vgvTotal: 0,
+    netVgvTotal: 0,
+    constCostTotal: 0,
+    duration: 0,
+    landCost: 0,
+    esgCostTotal: 0,
+    esgVgvPremiumValue: 0,
+    esgFundingDiscount: 0,
+    totalBlockArea: 0,
+    debtPayoffAtEnd: 0,
+    avisos: [],
 };
 
 /**
  * Núcleo de cálculo puro — sem React. Extraído do corpo do useMemo abaixo para
  * poder rodar em lote (ex.: uma linha por estudo na listagem de Estudos de
  * Viabilidade), onde chamar o hook num loop violaria as regras dos Hooks.
- * O hook useImovibMath passou a ser um wrapper memoizado desta função.
+ * O hook useImovibMath é um wrapper memoizado desta função.
+ *
+ * Testes: __tests__/imovibMath.test.ts.
  */
 export const computeImovibMath = (study: ImovibStudy | null | undefined, options?: ImovibMathOptions): ImovibMathResult => {
-        if (!study) {
-            return {
-                monthlyFlows: [],
-                maxExposure: 0,
-                vpl: 0,
-                annualIrr: NaN,
-                vgvTotal: 0,
-                netVgvTotal: 0,
-                constCostTotal: 0,
-                duration: 0,
-                landCost: 0,
-                esgCostTotal: 0,
-                esgVgvPremiumValue: 0,
-                esgFundingDiscount: 0
-            };
-        }
+        if (!study) return { ...EMPTY_RESULT, avisos: [] };
 
-        const constDur = study.construction_duration_months || 24;
-        const salesDur = study.sales_duration_months || 36;
-        const constStart = study.construction_start_month || 6;
-        const salesStart = study.sales_start_month || 1;
+        const avisos: ImovibAviso[] = [];
+        const D = IMOVIB_DEFAULTS;
+
+        // Cronograma: vazio usa o padrão; valor impossível (duração ≤ 0, mês < 1)
+        // também usa o padrão, mas AVISA — o motor antigo trocava em silêncio.
+        const cronogramaInvalido: string[] = [];
+        const mes = (x: number | null | undefined, padrao: number, minimo: number, rotulo: string) => {
+            if (x == null || Number.isNaN(x)) return padrao;
+            if (x < minimo) {
+                cronogramaInvalido.push(`${rotulo} = ${x}`);
+                return padrao;
+            }
+            return Math.round(x);
+        };
+        const constDur = mes(study.construction_duration_months, D.construction_duration_months, 1, 'duração da obra');
+        const salesDur = mes(study.sales_duration_months, D.sales_duration_months, 1, 'duração das vendas');
+        const constStart = mes(study.construction_start_month, D.construction_start_month, 1, 'mês de início da obra');
+        const salesStart = mes(study.sales_start_month, D.sales_start_month, 1, 'mês de início das vendas');
+        if (cronogramaInvalido.length) {
+            avisos.push({
+                codigo: 'cronograma_invalido',
+                mensagem: `Cronograma inválido (${cronogramaInvalido.join('; ')}). Foi usado o padrão no cálculo.`,
+                aba: 'viability_dynamic',
+            });
+        }
 
         // Total duration is dictated by whichever finishes last
         const duration = Math.max(constStart + constDur - 1, salesStart + salesDur - 1, 1);
 
-        const inflation = (study.inflation_rate || 0) / 100; // Monthly
-        const discount = (study.discount_rate || 0) / 100; // Expected Annual
+        const inflation = val(study.inflation_rate, D.inflation_rate) / 100; // Monthly
+        const discount = val(study.discount_rate, D.discount_rate) / 100; // Expected Annual
         const monthlyDiscount = Math.pow(1 + discount, 1 / 12) - 1; // Convert annual to monthly
 
         // Calculate ESG Impacts
@@ -126,10 +177,10 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         });
 
         // Advanced Finance
-        const taxRate = (study.tax_rate || 4.0) / 100;
-        const brokerageFee = (study.brokerage_fee || 6.0) / 100;
-        const financingPercent = (study.financing_percent || 0.0) / 100;
-        let financingRateAnnual = (study.financing_rate_annual || 10.0) / 100;
+        const taxRate = val(study.tax_rate, D.tax_rate) / 100;
+        const brokerageFee = val(study.brokerage_fee, D.brokerage_fee) / 100;
+        const financingPercent = val(study.financing_percent, D.financing_percent) / 100;
+        let financingRateAnnual = val(study.financing_rate_annual, D.financing_rate_annual) / 100;
 
         // Apply ESG Funding Discount
         financingRateAnnual = Math.max(0, financingRateAnnual - esgFundingDiscount);
@@ -156,6 +207,20 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             totalBlockArea += blockPrivateArea + blockCommonArea;
         });
 
+        if (totalBlockArea <= 0) {
+            avisos.push({
+                codigo: 'sem_area',
+                mensagem: 'Nenhuma tipologia com área cadastrada: VGV e custo de obra ficam zerados.',
+                aba: 'premises',
+            });
+        } else if (baseVgvTotal <= 0) {
+            avisos.push({
+                codigo: 'sem_preco',
+                mensagem: 'Nenhum bloco tem preço de venda por m²: o VGV fica zerado.',
+                aba: 'premises',
+            });
+        }
+
         // Apply Sensitivity Deltas & ESG Premiums
         const vgvDeltaMultiplier = 1 + (options?.vgvDelta || 0) / 100;
         const costDeltaMultiplier = 1 + (options?.costDelta || 0) / 100;
@@ -163,30 +228,42 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const vgvTotal = baseVgvTotal * (vgvDeltaMultiplier + esgVgvPremium);
         const esgVgvPremiumValue = baseVgvTotal * esgVgvPremium;
 
-        // Simplified CAPEX mode: single area × cost/m² replaces block costs + CAPEX items
+        // CAPEX simplificado: área única × custo/m² substitui o custo dos blocos.
+        // O custo ESG soma nos DOIS modos (antes sumia no simplificado).
         let constCostTotal: number;
         if (study.capex_mode === 'simplified' && study.capex_simplified_cost_sqm) {
             const effectiveArea = study.capex_simplified_area_sqm || totalBlockArea;
-            constCostTotal = effectiveArea * study.capex_simplified_cost_sqm * costDeltaMultiplier;
+            constCostTotal = (effectiveArea * study.capex_simplified_cost_sqm + esgCostTotal) * costDeltaMultiplier;
         } else {
             constCostTotal = (baseConstCostTotal + esgCostTotal) * costDeltaMultiplier;
         }
 
         // Apply Swap Physical (reduces marketed VGV)
-        const swapPhysical = (study.swap_physical_percent || 0) / 100;
+        const swapPhysical = val(study.swap_physical_percent, D.swap_physical_percent) / 100;
         const marketedVgv = vgvTotal * (1 - swapPhysical);
 
         // Apply Contingencies (Default, Cancellation, Swap Financial)
-        const swapFinancial = (study.swap_financial_percent || 0) / 100;
-        const defaultRate = (study.default_rate_percent || 0) / 100;
-        const cancellationRate = (study.cancellation_rate_percent || 0) / 100;
+        const swapFinancial = val(study.swap_financial_percent, D.swap_financial_percent) / 100;
+        const defaultRate = val(study.default_rate_percent, D.default_rate_percent) / 100;
+        const cancellationRate = val(study.cancellation_rate_percent, D.cancellation_rate_percent) / 100;
 
         const netVgvTotal = marketedVgv * (1 - (swapFinancial + defaultRate + cancellationRate));
 
         // Revenue Curve Distribution (J-Curve Profile)
-        const downpaymentPct = (study.revenue_downpayment_percent ?? 10) / 100;
-        const constructionPct = (study.revenue_construction_percent ?? 20) / 100;
-        const handoverPct = (study.revenue_handover_percent ?? 70) / 100;
+        const downpaymentPctRaw = val(study.revenue_downpayment_percent, D.revenue_downpayment_percent);
+        const constructionPctRaw = val(study.revenue_construction_percent, D.revenue_construction_percent);
+        const handoverPctRaw = val(study.revenue_handover_percent, D.revenue_handover_percent);
+        const revenueSum = downpaymentPctRaw + constructionPctRaw + handoverPctRaw;
+        if (Math.abs(revenueSum - 100) > 0.01) {
+            avisos.push({
+                codigo: 'recebimento_nao_soma_100',
+                mensagem: `O perfil de recebimento soma ${Number(revenueSum.toFixed(2)).toLocaleString('pt-BR')}% (sinal + obra + repasse deveria ser 100%). O cálculo usa os valores como estão.`,
+                aba: 'funding',
+            });
+        }
+        const downpaymentPct = downpaymentPctRaw / 100;
+        const constructionPct = constructionPctRaw / 100;
+        const handoverPct = handoverPctRaw / 100;
 
         const downpaymentVol = netVgvTotal * downpaymentPct;
         const constructionVol = netVgvTotal * constructionPct;
@@ -199,9 +276,14 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const constMonths = Math.max(1, constDur);
         const monthlyConstCost = constCostTotal / constMonths;
 
+        // Fallback to old financingPercent if Sprint 8 fields not used, but prefer debt
+        const fundingDebtPct = val(study.funding_debt_percent, D.funding_debt_percent) / 100;
+        const actualFinPct = fundingDebtPct > 0 ? fundingDebtPct : financingPercent;
+
         let accumulatedFlow = 0;
         let maxExposure = 0;
         let debtBalance = 0;
+        let debtPayoffAtEnd = 0;
 
         const finalMonthlyFlows: MonthlyFlow[] = [];
         const finalRawNetFlows: number[] = [];
@@ -246,13 +328,6 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             if (m >= constStart && m < constStart + constDur) {
                 const currentConstCost = monthlyConstCost * inflationMult;
                 totalCost += currentConstCost;
-
-                // Incorporate Debt Funding %
-                const fundingDebtPct = (study.funding_debt_percent ?? 0) / 100;
-
-                // Fallback to old financingPercent if Sprint 8 fields not used, but prefer debt
-                const actualFinPct = fundingDebtPct > 0 ? fundingDebtPct : financingPercent;
-
                 financedCost = currentConstCost * actualFinPct;
                 equityCost += currentConstCost - financedCost;
             }
@@ -271,11 +346,20 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
                 } else {
                     investorRev = netRev;
                 }
-            } else {
-                investorRev = 0;
             }
 
-            const netFlow = investorRev - equityCost;
+            let netFlow = investorRev - equityCost;
+
+            // Último mês: o saldo que as receitas não amortizaram é quitado pelo
+            // investidor. O motor antigo terminava o fluxo com a dívida em
+            // aberto e a descartava — com 100% de dívida, subir o custo de obra
+            // não mudava o VPL.
+            if (m === duration && debtBalance > 0.005) {
+                debtPayoffAtEnd = debtBalance;
+                netFlow -= debtBalance;
+                debtBalance = 0;
+            }
+
             accumulatedFlow += netFlow;
 
             if (accumulatedFlow < maxExposure) {
@@ -291,6 +375,14 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
                 acc: accumulatedFlow
             });
             finalRawNetFlows.push(netFlow);
+        }
+
+        if (debtPayoffAtEnd > 0) {
+            avisos.push({
+                codigo: 'divida_quitada_no_fim',
+                mensagem: `As receitas não amortizaram todo o financiamento: ${fmtBRL(debtPayoffAtEnd)} de saldo devedor são quitados com capital próprio no mês ${duration}.`,
+                aba: 'funding',
+            });
         }
 
         // 3. Calculate Advanced Indicators
@@ -315,7 +407,10 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
             landCost,
             esgCostTotal,
             esgVgvPremiumValue,
-            esgFundingDiscount
+            esgFundingDiscount,
+            totalBlockArea,
+            debtPayoffAtEnd,
+            avisos,
         };
 };
 

@@ -3,6 +3,7 @@ import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { DollarSign, Landmark, PieChart, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import ImovibSalesMapTab from './ImovibSalesMapTab';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 
 interface ImovibFundingFormProps {
     study: ImovibStudy;
@@ -11,17 +12,19 @@ interface ImovibFundingFormProps {
 
 const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChanged }) => {
     // We keep local state for instant feedback on validation, but still auto-save on blur
-    const [downpayment, setDownpayment] = useState(study.revenue_downpayment_percent ?? 10);
-    const [construction, setConstruction] = useState(study.revenue_construction_percent ?? 20);
-    const [handover, setHandover] = useState(study.revenue_handover_percent ?? 70);
+    // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
+    const D = IMOVIB_DEFAULTS;
+    const [downpayment, setDownpayment] = useState<number>(study.revenue_downpayment_percent ?? D.revenue_downpayment_percent);
+    const [construction, setConstruction] = useState<number>(study.revenue_construction_percent ?? D.revenue_construction_percent);
+    const [handover, setHandover] = useState<number>(study.revenue_handover_percent ?? D.revenue_handover_percent);
 
-    const [defaultRate, setDefaultRate] = useState(study.default_rate_percent ?? 3);
-    const [cancellation, setCancellation] = useState(study.cancellation_rate_percent ?? 5);
+    const [defaultRate, setDefaultRate] = useState<number>(study.default_rate_percent ?? D.default_rate_percent);
+    const [cancellation, setCancellation] = useState<number>(study.cancellation_rate_percent ?? D.cancellation_rate_percent);
 
-    const [equity, setEquity] = useState(study.funding_equity_percent ?? 100);
-    const [debt, setDebt] = useState(study.funding_debt_percent ?? 0);
-    const [swapFin, setSwapFin] = useState(study.swap_financial_percent ?? 0);
-    const [swapPhys, setSwapPhys] = useState(study.swap_physical_percent ?? 0);
+    const [equity, setEquity] = useState<number>(study.funding_equity_percent ?? D.funding_equity_percent);
+    const [debt, setDebt] = useState<number>(study.funding_debt_percent ?? D.funding_debt_percent);
+    const [swapFin, setSwapFin] = useState<number>(study.swap_financial_percent ?? D.swap_financial_percent);
+    const [swapPhys, setSwapPhys] = useState<number>(study.swap_physical_percent ?? D.swap_physical_percent);
 
     const revenueTotal = Number((downpayment + construction + handover).toFixed(2));
     const isRevenueValid = revenueTotal === 100;

@@ -5,19 +5,30 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface ImovibCashFlowProps {
     study: ImovibStudy;
+    /** Abre a aba que corrige a premissa de um aviso do motor. */
+    onIrPara?: (aba: ImovibAba) => void;
 }
 
-import { useImovibMath } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import ImovibAvisosBanner from './ImovibAvisosBanner';
+
+const fmtTaxa = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
 const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(value);
 };
 
-const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study }) => {
+const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study, onIrPara }) => {
     const cashFlowData = useImovibMath(study);
+    // Mesmo padrão do motor quando o campo está vazio — antes o texto saía "a % a.a."
+    const discountRate = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
+    const inflationRate = study.inflation_rate ?? IMOVIB_DEFAULTS.inflation_rate;
 
     return (
         <div className="space-y-6">
+            <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
+
             {/* Top Main KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
@@ -29,7 +40,7 @@ const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study }) => {
                     <div className="text-3xl font-black text-gray-900 tracking-tight">
                         {formatCurrency(cashFlowData.vpl)}
                     </div>
-                    <div className="text-sm mt-2 text-gray-500 font-medium">Descontado a {study.discount_rate}% a.a.</div>
+                    <div className="text-sm mt-2 text-gray-500 font-medium">Descontado a {fmtTaxa(discountRate)}% a.a.</div>
                 </div>
 
                 <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden">
@@ -119,7 +130,7 @@ const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study }) => {
                         </div>
                         <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa Mensal</h3>
                     </div>
-                    <span className="text-sm text-gray-400 font-medium">Base: Inflacionada {study.inflation_rate}% a.m.</span>
+                    <span className="text-sm text-gray-400 font-medium">Base: Inflacionada {fmtTaxa(inflationRate)}% a.m.</span>
                 </div>
 
                 <div className="w-full overflow-x-auto">
@@ -136,13 +147,13 @@ const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study }) => {
                         <tbody className="divide-y divide-gray-50">
                             {cashFlowData.monthlyFlows.map((row) => (
                                 <tr key={row.month} className="hover:bg-gray-50/50 transition-colors">
-                                    <td className="px-6 py-3 font-black text-gray-600">Mês {row.month}</td>
+                                    <td className="px-6 py-3 text-gray-600">Mês {row.month}</td>
                                     <td className="px-6 py-3 text-right text-emerald-600 font-medium">{formatCurrency(row.rev)}</td>
                                     <td className="px-6 py-3 text-right text-red-600 font-medium">{formatCurrency(row.cost)}</td>
-                                    <td className={`px-6 py-3 text-right font-bold ${row.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                    <td className={`px-6 py-3 text-right font-medium ${row.net >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                                         {formatCurrency(row.net)}
                                     </td>
-                                    <td className={`px-6 py-3 text-right font-black ${row.acc >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                    <td className={`px-6 py-3 text-right font-medium ${row.acc >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                                         {formatCurrency(row.acc)}
                                     </td>
                                 </tr>

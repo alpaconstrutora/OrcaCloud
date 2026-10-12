@@ -213,7 +213,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
                     {activeTab === 'executive_summary' && (
                         <ErrorBoundary>
-                            <ImovibExecutiveSummary study={study} />
+                            <ImovibExecutiveSummary study={study} onIrPara={setActiveTab} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'premises' && (
@@ -231,7 +231,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     )}
                     {activeTab === 'risk_scenarios' && (
                         <ErrorBoundary>
-                            <ImovibSensitivityForm study={study} onDataChanged={loadStudyDetails} />
+                            <ImovibSensitivityForm study={study} onDataChanged={loadStudyDetails} onIrPara={setActiveTab} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'esg_report' && (
@@ -245,7 +245,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     {activeTab === 'viability_dynamic' && (
                         <ErrorBoundary>
                             <ImovibDynamicForm study={study} onDataChanged={() => loadStudyDetails(false)} />
-                            <ImovibCashFlow study={study} />
+                            <ImovibCashFlow study={study} onIrPara={setActiveTab} />
                         </ErrorBoundary>
                     )}
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ImovibStudy } from '../types';
-import { useImovibMath } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Activity, TrendingDown, TrendingUp, AlertOctagon, ShieldAlert } from 'lucide-react';
 import { imovibService } from '../services/imovibService';
@@ -8,9 +9,11 @@ import { imovibService } from '../services/imovibService';
 interface ImovibSensitivityFormProps {
     study: ImovibStudy;
     onDataChanged: () => void;
+    /** Abre a aba que corrige a premissa de um aviso do motor. */
+    onIrPara?: (aba: ImovibAba) => void;
 }
 
-const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, onDataChanged }) => {
+const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, onDataChanged, onIrPara }) => {
     // Sliders for specific "Stress Test" scenario
     const [scenarioVgvDelta, setScenarioVgvDelta] = useState(0);
     const [scenarioCostDelta, setScenarioCostDelta] = useState(0);
@@ -87,6 +90,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
 
     return (
         <div className="space-y-6 pb-10 max-w-7xl mx-auto">
+            <ImovibAvisosBanner avisos={baseMath.avisos} onIrPara={onIrPara} />
 
             <div className="flex items-center justify-between">
                 <div>

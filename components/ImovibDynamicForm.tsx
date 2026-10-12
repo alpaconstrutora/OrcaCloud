@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Calendar, Percent, Save, TrendingUp } from 'lucide-react';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 
 interface ImovibDynamicFormProps {
     study: ImovibStudy;
@@ -11,29 +12,34 @@ interface ImovibDynamicFormProps {
 const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChanged }) => {
     const [saving, setSaving] = useState(false);
 
-    const [constructionDurationMonths, setConstructionDurationMonths] = useState(study.construction_duration_months?.toString() || '24');
-    const [salesDurationMonths, setSalesDurationMonths] = useState(study.sales_duration_months?.toString() || '36');
-    const [constructionStartMonth, setConstructionStartMonth] = useState(study.construction_start_month?.toString() || '6');
-    const [salesStartMonth, setSalesStartMonth] = useState(study.sales_start_month?.toString() || '1');
+    // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
+    const D = IMOVIB_DEFAULTS;
+    const initial = (v: number | null | undefined, padrao: number) => String(v ?? padrao);
 
-    const [inflationRate, setInflationRate] = useState(study.inflation_rate?.toString() || '0.4');
-    const [discountRate, setDiscountRate] = useState(study.discount_rate?.toString() || '12');
+    const [constructionDurationMonths, setConstructionDurationMonths] = useState(initial(study.construction_duration_months, D.construction_duration_months));
+    const [salesDurationMonths, setSalesDurationMonths] = useState(initial(study.sales_duration_months, D.sales_duration_months));
+    const [constructionStartMonth, setConstructionStartMonth] = useState(initial(study.construction_start_month, D.construction_start_month));
+    const [salesStartMonth, setSalesStartMonth] = useState(initial(study.sales_start_month, D.sales_start_month));
+
+    const [inflationRate, setInflationRate] = useState(initial(study.inflation_rate, D.inflation_rate));
+    const [discountRate, setDiscountRate] = useState(initial(study.discount_rate, D.discount_rate));
 
     // Advanced Finance
-    const [taxRate, setTaxRate] = useState(study.tax_rate?.toString() || '4.0');
-    const [brokerageFee, setBrokerageFee] = useState(study.brokerage_fee?.toString() || '6.0');
-    const [financingPercent, setFinancingPercent] = useState(study.financing_percent?.toString() || '0');
-    const [financingRateAnnual, setFinancingRateAnnual] = useState(study.financing_rate_annual?.toString() || '10.0');
+    const [taxRate, setTaxRate] = useState(initial(study.tax_rate, D.tax_rate));
+    const [brokerageFee, setBrokerageFee] = useState(initial(study.brokerage_fee, D.brokerage_fee));
+    const [financingPercent, setFinancingPercent] = useState(initial(study.financing_percent, D.financing_percent));
+    const [financingRateAnnual, setFinancingRateAnnual] = useState(initial(study.financing_rate_annual, D.financing_rate_annual));
 
     const handleSave = async () => {
         try {
             setSaving(true);
             await imovibService.updateStudy(study.id, {
-                // Ensure legacy field is cleared or synced if needed, we'll just not send it or send max
-                construction_duration_months: parseInt(constructionDurationMonths) || 24,
-                sales_duration_months: parseInt(salesDurationMonths) || 36,
-                construction_start_month: parseInt(constructionStartMonth) || 6,
-                sales_start_month: parseInt(salesStartMonth) || 1,
+                // Mês/duração vazio cai no padrão; valor impossível é gravado como
+                // veio e o motor avisa (cronograma_invalido) em vez de esconder.
+                construction_duration_months: parseInt(constructionDurationMonths) || D.construction_duration_months,
+                sales_duration_months: parseInt(salesDurationMonths) || D.sales_duration_months,
+                construction_start_month: parseInt(constructionStartMonth) || D.construction_start_month,
+                sales_start_month: parseInt(salesStartMonth) || D.sales_start_month,
                 inflation_rate: parseFloat(inflationRate) || 0,
                 discount_rate: parseFloat(discountRate) || 0,
                 tax_rate: parseFloat(taxRate) || 0,
@@ -57,7 +63,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     Premissas Dinâmicas (Macroeconomia e Tempo)
                 </h3>
                 {saving && (
-                    <span className="flex items-center gap-2 text-xs font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full">
+                    <span className="flex items-center gap-2 text-xs font-medium text-blue-600">
                         <Save className="w-3 h-3 animate-pulse" />
                         Salvando...
                     </span>

@@ -20,6 +20,8 @@ A avaliação terminou com a pergunta *"Quer que eu abra o plano de correção e
 | 2026-10-12 | O CAPEX detalhado (as 28 rubricas: ITBI, RET, contingência, comissão…) deve entrar no cálculo de VPL/TIR? | **Entra no cálculo.** No modo "Completo", as rubricas passam a ser somadas: valor em R$ entra direto, e o % incide sobre a base de cada rubrica (VGV para comissão e RET, custo de obra para contingência). RET e comissão saem da aba Dinâmica, para não contar duas vezes. |
 | 2026-10-12 | De onde o VGV deve sair? | **Do espelho, senão do bloco.** Se o espelho de vendas tiver preço por unidade, o VGV é a soma do espelho. Se não tiver, é área privativa × preço/m² do bloco, campo que volta a ser editável em Blocos e Tipologia. Motor, Estática e listagem usam a mesma regra. |
 
+| 2026-10-12 | Registrar VGV/VPL/TIR dos 4 estudos reais antes de mudar o motor? | **Não precisa:** *"nbao precisa regiustrar os 4 estudos existentes pois são testes. comece com a fase 1"*. Os 4 estudos do banco são de teste; a mudança de número é conferida pelos testes do motor. |
+
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
 - **D1 (item 4.2).** O empreendimento "011 - Garden Cambuhy" pertence à org "Construção do Edifício Garden Cambuhy SPE", mas está ligado ao estudo "Garden Cambuhy", que pertence à org "Alpa Construtora e Incoporadora". O que fazer: mover o estudo para a SPE, desvincular, ou aceitar o vínculo entre orgs como legítimo e só bloquear a escrita?
@@ -246,7 +248,20 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
 
 ## Estado
 
-- [ ] **Fase 1 — 0 de 8:** 1.1 · 1.2 · 1.3 · 1.4 · 1.5 · 1.6 · 1.7 · 1.8
+- [ ] **Fase 1 — 7 de 8** (2026-10-12):
+  - [x] **1.1** — `__tests__/imovibMath.test.ts`, 16 casos. Contra o motor antigo, 15 falharam pelos motivos do diagnóstico; o 16º (fluxo sem troca de sinal → NaN) já passava.
+  - [x] **1.2** — O resultado expõe `debtPayoffAtEnd` (o valor quitado). O texto original dizia `debtBalanceEnd`, mas esse campo daria sempre 0 depois da quitação, então troquei por um que mostra quanto foi quitado. Também gera o aviso `divida_quitada_no_fim`.
+    - 100% de dívida a R$ 9.000/m²: VPL −12,81 mi, quitação de 10,86 mi.
+    - 100% de dívida a R$ 14.000/m²: VPL −28,52 mi, quitação de 31,32 mi.
+    - Antes, os dois davam −4,48 mi.
+  - [x] **1.3** — `??` nas taxas. Cronograma inválido usa o padrão e gera o aviso `cronograma_invalido`.
+  - [x] **1.4** — `constants/imovibDefaults.ts`, lido pelo motor, pela Dinâmica, por Receitas & Capital e pelos textos do Fluxo de Caixa.
+  - [x] **1.5** — Bissecção com checagem de troca de sinal no intervalo [−90%, 1000%] a.m. Sem raiz, devolve NaN. Os testes conferem que a TIR devolvida zera o VPL.
+  - [x] **1.6** — ESG soma também no CAPEX simplificado. Avisos novos: `recebimento_nao_soma_100`, `sem_area`, `sem_preco`.
+  - [ ] **1.7** — Código pronto: `components/ImovibAvisosBanner.tsx` no Resumo, na Sensibilidade e na Dinâmica, com "Corrigir em …" que troca a aba. **Falta a prova no navegador** (roteiro `c:/tmp/pwtest/imovib_avisos_banner.js`).
+  - [x] **1.8** — `ImovibCapexForm` usa `math.totalBlockArea`, que considera os pavimentos.
+  - Estudo-base sem regressão: VPL 1,46 mi e TIR 20,81%, iguais ao motor antigo.
+  - **REGRA #1 nos arquivos tocados** (antecipa o item 5.7 nesses arquivos): `check-ui-standard.sh` dá exit 0 em CashFlow, ExecutiveSummary, DynamicForm, CapexForm, Sensitivity, Funding, DetailView e no banner novo. Correções: §7 em `<td>` (CashFlow, ExecutiveSummary, CapexForm), §8 na pílula "Salvando…" (DynamicForm) e §14 `window.confirm` → `useConfirm` (CapexForm). O `alert`/`prompt` do CapexForm continua no 5.7.
 - [ ] **Fase 2 — 0 de 6:** 2.1 · 2.2 · 2.3 (D3) · 2.4 · 2.5 · 2.6 (D2)
 - [ ] **Fase 3 — 0 de 4:** 3.1 · 3.2 · 3.3 · 3.4
 - [ ] **Fase 4 — 0 de 7:** 4.1 · 4.2 (D1) · 4.3 · 4.4 · 4.5 · 4.6 · 4.7

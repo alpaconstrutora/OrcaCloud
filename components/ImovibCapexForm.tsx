@@ -5,6 +5,7 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { Calculator, ChevronRight, Activity, Leaf, Plus, LayoutList, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useImovibMath } from '../hooks/useImovibMath';
+import { useConfirm } from './ui/confirm';
 
 const parseRegVal = (v: string | undefined): number | null => {
     if (!v || v === 'N.A.' || v.trim() === '') return null;
@@ -71,6 +72,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [items, setItems] = useState<ImovibCapexItem[]>([]);
     const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const confirm = useConfirm();
     const [initializing, setInitializing] = useState(true);
     const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
     const [landCostFocused, setLandCostFocused] = useState(false);
@@ -106,16 +108,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         return total;
     }, [study, zones]);
 
-    // Total area from blocks for pre-filling
-    const totalBlockArea = useMemo(() => {
-        let area = 0;
-        study.blocks?.forEach(block => {
-            block.units?.forEach(u => {
-                area += (u.quantity || 0) * ((u.private_area || 0) + (u.common_area || 0));
-            });
-        });
-        return area;
-    }, [study.blocks]);
+    // Área construída dos blocos — a MESMA do motor (com pavimentos). Antes esta
+    // tela recalculava sem pavimentos e mostrava um total diferente do usado no VPL.
+    const totalBlockArea = math.totalBlockArea;
 
     const effectiveArea = simplifiedAreaSqm > 0 ? simplifiedAreaSqm : totalBlockArea;
     const simplifiedTotal = effectiveArea * simplifiedCostSqm;
@@ -235,7 +230,14 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     };
 
     const handleDeleteItem = async (id: string) => {
-        if (!window.confirm('Excluir este item do orçamento?')) return;
+        const item = items.find(i => i.id === id);
+        const ok = await confirm({
+            title: 'Excluir rubrica?',
+            message: `A rubrica "${item?.name ?? ''}" será removida do orçamento deste estudo.`,
+            confirmLabel: 'Excluir',
+            variant: 'danger',
+        });
+        if (!ok) return;
         try {
             setIsSaving(true);
             await imovibService.deleteCapexItem(id);
@@ -545,21 +547,18 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                             handleUpdateItem(item.id, { name: e.target.value });
                                                                         }
                                                                     }}
-                                                                    className="bg-transparent border-none focus:ring-0 font-bold text-sm text-slate-700 w-full p-0 py-0.5 hover:bg-slate-100/50 rounded transition-colors focus:bg-white focus:px-2"
+                                                                    className="bg-transparent border-none focus:ring-0 font-normal text-sm text-slate-700 w-full p-0 py-0.5 hover:bg-slate-100/50 rounded transition-colors focus:bg-white focus:px-2"
                                                                 />
                                                             </td>
                                                             <td className="px-6 py-3">
-                                                                <span className={`inline-flex items-center px-2 py-1 text-xs font-black tracking-wider uppercase rounded-md ${item.value_type === 'percent'
-                                                                    ? 'bg-amber-100 text-amber-700'
-                                                                    : 'bg-emerald-100 text-emerald-700'
-                                                                    }`}>
+                                                                <span className={`text-sm font-normal ${item.value_type === 'percent' ? 'text-amber-700' : 'text-emerald-700'}`}>
                                                                     {item.value_type === 'percent' ? 'Percentual (%)' : 'Moeda (R$)'}
                                                                 </span>
                                                             </td>
                                                             <td className="px-6 py-3">
                                                                 <div className="relative flex items-center">
                                                                     {item.value_type === 'currency' && (
-                                                                        <span className="absolute left-3 text-slate-400 font-bold text-sm">R$</span>
+                                                                        <span className="absolute left-3 text-slate-400 font-normal text-sm">R$</span>
                                                                     )}
                                                                     <input
                                                                         type="number"
@@ -571,10 +570,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                                 handleUpdateItem(item.id, { value: val });
                                                                             }
                                                                         }}
-                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-2 px-3 font-bold text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
+                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-xl py-2 px-3 font-normal text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
                                                                     />
                                                                     {item.value_type === 'percent' && (
-                                                                        <span className="absolute right-3 text-slate-400 font-bold text-sm">%</span>
+                                                                        <span className="absolute right-3 text-slate-400 font-normal text-sm">%</span>
                                                                     )}
                                                                     {isSaving && (
                                                                         <div className="absolute right-3 opacity-0 group-focus-within:opacity-100 transition-opacity">

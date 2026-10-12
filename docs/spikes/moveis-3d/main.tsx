@@ -46,6 +46,6 @@ m = applyBatch(m, cmds).model;
 
 createRoot(document.getElementById('raiz')!).render(
   <div style={{ position: 'absolute', inset: 0, width: '100vw', height: '100vh' }}>
-    <Blueprint3DTab model={m} levelIds={[t]} mostrarArestas />
+    <Blueprint3DTab model={m} levelIds={[t]} mostrarArestas nomeDoEstudo="spike moveis" />
   </div>,
 );

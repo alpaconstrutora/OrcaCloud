@@ -6,8 +6,9 @@
  * seletor de vista está em "Planta" ou numa elevação, nada de three é baixado.
  */
 
-import React, { Suspense } from 'react';
-import { Camera, Loader2 } from 'lucide-react';
+import React, { Suspense, useRef, useState } from 'react';
+import { Camera, ImageDown, Loader2 } from 'lucide-react';
+import { RESOLUCOES_DA_CAPTURA, nomeDaCaptura, type ResolucaoDaCaptura } from '../../utils/blueprintCaptura';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
@@ -16,6 +17,13 @@ import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
 
 interface Props {
+  /**
+   * F13 (12/10/2026): onde o viewer PUBLICA a função de captura — `(largura, altura, focalMm?) → PNG`.
+   * Quem segura a ref (a aba) chama; o viewer desenha a cena num alvo fora da tela. Ver `blueprintCaptura`.
+   */
+  capturaRef?: React.MutableRefObject<((largura: number, altura: number, focalMm?: number) => Promise<Blob>) | null>;
+  /** F13: o nome do estudo, para o nome do PNG. Ausente = sem o botão "Exportar imagem". */
+  nomeDoEstudo?: string;
   /**
    * F12 (12/10/2026): o PONTO DE VISTA de uma câmera salva — olho e alvo no mundo do 3D (metros) e a
    * focal. Presente, a câmera do 3D vai para lá (a órbita gira em torno do alvo); `chave` muda quando a
@@ -92,8 +100,81 @@ const Carregando = () => (
   </div>
 );
 
+/**
+ * F13 — EXPORTAR IMAGEM: a resolução e o botão. O PNG sai do ponto de vista em uso (a câmera salva, com a
+ * lente dela) ou da órbita livre. Falha (placa de vídeo sem memória, cena vazia) aparece aqui, com o motivo.
+ */
+function BarraDaCaptura({
+  capturaRef,
+  nomeDoEstudo,
+  vista,
+  focalMm,
+}: {
+  capturaRef: React.MutableRefObject<((largura: number, altura: number, focalMm?: number) => Promise<Blob>) | null>;
+  nomeDoEstudo: string;
+  vista: string | null;
+  focalMm?: number;
+}) {
+  const [resolucao, setResolucao] = useState<ResolucaoDaCaptura>('HD');
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const exportar = async () => {
+    const r = RESOLUCOES_DA_CAPTURA.find((x) => x.id === resolucao)!;
+    if (!capturaRef.current) {
+      setErro('O 3D ainda está carregando.');
+      return;
+    }
+    setGerando(true);
+    setErro(null);
+    try {
+      const png = await capturaRef.current(r.largura, r.altura, focalMm);
+      const url = URL.createObjectURL(png);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeDaCaptura(nomeDoEstudo, vista, new Date());
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : String(e));
+    } finally {
+      setGerando(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-xs text-slate-600 shadow-sm">
+        <select
+          value={resolucao}
+          onChange={(e) => setResolucao(e.target.value as ResolucaoDaCaptura)}
+          aria-label="Resolução da imagem"
+          className="h-7 rounded-[6px] border border-slate-200 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+        >
+          {RESOLUCOES_DA_CAPTURA.map((r) => (
+            <option key={r.id} value={r.id}>{r.rotulo}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => void exportar()}
+          disabled={gerando}
+          title={`PNG do que se vê${vista ? ` — ${vista}` : ''}, sem a grade nem a alça. A seleção sai destacada: limpe com Esc antes, se não a quiser na imagem.`}
+          className="inline-flex h-7 items-center gap-1 rounded-[6px] bg-blue-600 px-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+        >
+          {gerando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageDown className="h-3.5 w-3.5" />}
+          {gerando ? 'Gerando…' : 'Exportar imagem'}
+        </button>
+      </div>
+      {erro && <p className="max-w-xs rounded-md bg-white/95 px-2 py-1 text-[11px] text-red-700 shadow-sm" role="alert">{erro}</p>}
+    </div>
+  );
+}
+
 export default function Blueprint3DTab(props: Props) {
   const { onSelecionar, selecionados } = props;
+  // F13: o viewer publica aqui a função de captura (ver `Captura` no viewer).
+  const capturaRef = useRef<((largura: number, altura: number, focalMm?: number) => Promise<Blob>) | null>(null);
   return (
     // ESC LIMPA A SELEÇÃO NO 3D (16/09/2026: *"quando clico na tecla ESC a
     // seleção se desfaz. O mesmo comportamento não acontece na visualização
@@ -114,26 +195,31 @@ export default function Blueprint3DTab(props: Props) {
         }
       }}
     >
-      {/* F12: as VISTAS SALVAS (câmeras da planta). "Livre" devolve a órbita de sempre. */}
-      {props.pontosDeVista && props.pontosDeVista.length > 0 && props.onPontoDeVista && (
-        <label className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-xs text-slate-600 shadow-sm">
-          <Camera className="h-3.5 w-3.5 text-violet-600" aria-hidden="true" />
-          Ponto de vista
-          <select
-            value={props.pontoDeVistaId ?? ''}
-            onChange={(e) => props.onPontoDeVista?.(e.target.value || null)}
-            aria-label="Ponto de vista do 3D"
-            className="h-7 rounded-[6px] border border-slate-200 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-blue-500"
-          >
-            <option value="">Livre (órbita)</option>
-            {props.pontosDeVista.map((v) => (
-              <option key={v.id} value={v.id}>{v.nome}</option>
-            ))}
-          </select>
-        </label>
+      {/* F12: as VISTAS SALVAS (câmeras da planta) — "Livre" devolve a órbita de sempre. F13: a CAPTURA em PNG. */}
+      {((props.pontosDeVista && props.pontosDeVista.length > 0 && props.onPontoDeVista) || props.nomeDoEstudo) && (
+        <div className="absolute left-3 top-3 z-10 flex flex-wrap items-center gap-2">
+          {props.pontosDeVista && props.pontosDeVista.length > 0 && props.onPontoDeVista && (
+            <label className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-xs text-slate-600 shadow-sm">
+              <Camera className="h-3.5 w-3.5 text-violet-600" aria-hidden="true" />
+              Ponto de vista
+              <select
+                value={props.pontoDeVistaId ?? ''}
+                onChange={(e) => props.onPontoDeVista?.(e.target.value || null)}
+                aria-label="Ponto de vista do 3D"
+                className="h-7 rounded-[6px] border border-slate-200 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+              >
+                <option value="">Livre (órbita)</option>
+                {props.pontosDeVista.map((v) => (
+                  <option key={v.id} value={v.id}>{v.nome}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          {props.nomeDoEstudo && <BarraDaCaptura capturaRef={capturaRef} nomeDoEstudo={props.nomeDoEstudo} vista={props.pontosDeVista?.find((v) => v.id === props.pontoDeVistaId)?.nome ?? null} focalMm={props.pontoDeVista?.focalMm} />}
+        </div>
       )}
       <Suspense fallback={<Carregando />}>
-        <Blueprint3DViewer {...props} />
+        <Blueprint3DViewer {...props} capturaRef={capturaRef} />
       </Suspense>
     </div>
   );

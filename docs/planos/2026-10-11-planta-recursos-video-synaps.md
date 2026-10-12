@@ -554,6 +554,22 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F13 — Captura da imagem do 3D** · `Blueprint3DViewer.tsx` (`preserveDrawingBuffer` só na captura, `gl.domElement.toBlob`)
 - Muda: "Exportar imagem" da câmera ativa em PNG, na resolução escolhida; pode entrar como imagem na prancha.
 - Pronto quando: no app, o PNG baixado corresponde à câmera e não sai preto (o teste é abrir o arquivo).
+- **Feito na execução (12/10, sem bump de kernel):**
+  - A captura NÃO lê o canvas da tela (sem `preserveDrawingBuffer` ele vem preto, e na resolução da janela):
+    desenha a cena de novo num `WebGLRenderTarget` do tamanho pedido (MSAA ×4, sRGB) e lê os pixels de lá —
+    `Captura` no viewer publica a função; a aba chama. HD, QHD e 4K, reduzidos na mesma proporção se a placa
+    não aceitar (`dimensoesDaCaptura`). Com câmera salva, a LENTE dela no formato da imagem; sem, a órbita.
+  - Os ajudantes saem da imagem: grade do chão, alça de mover e contorno da caixa de corte levam
+    `userData.naoCapturar` e ficam invisíveis só durante o desenho. A seleção sai destacada (o botão diz).
+  - A captura confere a si mesma: menos de 1 % de pixels com conteúdo = recusa com o motivo (nunca baixa PNG
+    preto). Nome: `estudo--vista--dia.png`.
+  - UI: "Exportar imagem" + resolução na barra do 3D, ao lado de "Ponto de vista".
+  - ⏳ Fica para depois: a imagem como figura NA PRANCHA (o plano dizia "pode entrar").
+  - Prova: `__tests__/blueprintCaptura.test.ts` (5). No spike dos móveis (sem banco): PNG HD 1920 × 1080 e 4K
+    3840 × 2160, 0 % de pixels escuros, igual à tela e SEM a grade. ✅ **No app com escrita (12/10, "Planta
+    11/10/2026")**: câmera criada → "Ver no 3D" → Exportar imagem HD → `planta-11-10-2026--camera-1--2026-10-12.png`,
+    1920 × 1080, 0 % escuro, a vista DE DENTRO da sala (aberturas, sombras, criado) → Ctrl+Z → rascunho com o
+    mesmo conteúdo de antes (md5 sem o carimbo do kernel).
 
 **F14 — Render por IA** · Edge Function `planta-render` (nova, padrão `planta-ia`: CORS, auth, chave só no servidor, REGRA #7 pergunta 3), `services/blueprintRenderService.ts`, tabela `blueprint_renders` + bucket (migration, RLS por org), `PainelRender.tsx`
 - **F14.0 (portão):** comparar 2–3 fornecedores de imagem que aceitem imagem de entrada e edição por máscara (preço por imagem, latência, termos de uso comercial e de dados). O usuário escolhe; a decisão é registrada na tabela de decisões. Sem isso, F14.1+ não começa.
@@ -575,7 +591,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
   kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [x] F9 — provada no app com escrita (arrastar → ponto solto → Ctrl+Z) · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
-- [ ] F11 · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
+- [ ] F11 · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [x] F13 — PNG do 3D (HD/QHD/4K) por render fora da tela; provada no app · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)
 1. `npx vitest run __tests__/<arquivos da fase>` + goldens do kernel quando houver bump; `npm run typecheck` (ler `exit=` por grep).

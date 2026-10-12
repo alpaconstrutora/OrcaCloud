@@ -74,8 +74,14 @@ import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
 import { pecas3dDasFolhas, type MaterialDaPecaDaEsquadria } from '../../utils/blueprintFolhas';
 import { encaixeDoModelo, modeloDoTipo } from '../../utils/blueprintModelos3d';
 import { fovVerticalGraus } from '../../utils/blueprintCamera';
+import { dimensoesDaCaptura, fracaoComConteudo, inverterLinhas } from '../../utils/blueprintCaptura';
 
 interface Props {
+  /**
+   * F13 (12/10/2026): onde o viewer PUBLICA a função de captura — `(largura, altura, focalMm?) → PNG`.
+   * Quem segura a ref (a aba) chama; o viewer desenha a cena num alvo fora da tela. Ver `blueprintCaptura`.
+   */
+  capturaRef?: React.MutableRefObject<((largura: number, altura: number, focalMm?: number) => Promise<Blob>) | null>;
   /**
    * F12 (12/10/2026): o PONTO DE VISTA de uma câmera salva — olho e alvo no mundo do 3D (metros) e a
    * focal. Presente, a câmera do 3D vai para lá (a órbita gira em torno do alvo); `chave` muda quando a
@@ -1982,6 +1988,59 @@ function PontoDeVista({
 }
 
 /**
+ * CAPTURA (F13): publica em `alvo` a função que desenha a cena num `WebGLRenderTarget` do tamanho pedido
+ * (MSAA, sRGB) com a câmera da tela — ou a lente da câmera salva, no formato da imagem — e devolve o PNG.
+ * Os ajudantes (grade do chão, alça de mover, contorno da caixa de corte) saem da imagem: são marcados com
+ * `userData.naoCapturar` e escondidos só durante o desenho. Imagem vazia é RECUSADA com o motivo.
+ */
+function Captura({ alvo }: { alvo?: React.MutableRefObject<((largura: number, altura: number, focalMm?: number) => Promise<Blob>) | null> }) {
+  const gl = useThree((e) => e.gl);
+  const scene = useThree((e) => e.scene);
+  const camera = useThree((e) => e.camera);
+  useEffect(() => {
+    if (!alvo) return;
+    alvo.current = async (largura: number, altura: number, focalMm?: number) => {
+      const ctx = gl.getContext();
+      const maximo = Math.min(gl.capabilities.maxTextureSize, ctx.getParameter(ctx.MAX_RENDERBUFFER_SIZE) as number);
+      const d = dimensoesDaCaptura(largura, altura, maximo);
+      const cam = (camera as THREE.PerspectiveCamera).clone();
+      cam.aspect = d.largura / d.altura;
+      if (focalMm) cam.fov = fovVerticalGraus(focalMm, cam.aspect);
+      cam.updateProjectionMatrix();
+      const escondidos: THREE.Object3D[] = [];
+      scene.traverse((o) => {
+        if (o.userData?.naoCapturar && o.visible) {
+          o.visible = false;
+          escondidos.push(o);
+        }
+      });
+      const rt = new THREE.WebGLRenderTarget(d.largura, d.altura, { samples: 4 });
+      rt.texture.colorSpace = THREE.SRGBColorSpace;
+      const px = new Uint8Array(d.largura * d.altura * 4);
+      try {
+        gl.setRenderTarget(rt);
+        gl.render(scene, cam);
+        gl.readRenderTargetPixels(rt, 0, 0, d.largura, d.altura, px);
+      } finally {
+        gl.setRenderTarget(null);
+        rt.dispose();
+        for (const o of escondidos) o.visible = true;
+      }
+      if (fracaoComConteudo(px) < 0.01) throw new Error('A captura saiu vazia (a placa de vídeo não desenhou a cena) — tente uma resolução menor.');
+      const tela = document.createElement('canvas');
+      tela.width = d.largura;
+      tela.height = d.altura;
+      tela.getContext('2d')!.putImageData(new ImageData(inverterLinhas(px, d.largura, d.altura), d.largura, d.altura), 0, 0);
+      return await new Promise<Blob>((ok, falha) => tela.toBlob((b) => (b ? ok(b) : falha(new Error('O navegador não gerou o PNG.'))), 'image/png'));
+    };
+    return () => {
+      if (alvo) alvo.current = null;
+    };
+  }, [alvo, gl, scene, camera]);
+  return null;
+}
+
+/**
  * ANDAR dentro do desenho — o modo walk.
  *
  * ─── POR QUE PRIMEIRA PESSOA, E NÃO SÓ "ZOOM MAIS PERTO" ────────────────────
@@ -2442,6 +2501,7 @@ export default function Blueprint3DViewer(props: Props) {
           fadeDistance={alcanceDaGrade}
           position={[centro[0], cotaDaGrade, centro[2]]}
           infiniteGrid
+          userData={{ naoCapturar: true }}
         />
         <Recortado caixa={caixa}>
         {(() => {
@@ -2473,11 +2533,15 @@ export default function Blueprint3DViewer(props: Props) {
         })()}
         {props.referencias?.map((r) => <ReferenciaIfc key={r.chave} {...r} />)}
         </Recortado>
-        {caixa && <ContornoDaCaixa caixa={caixa} />}
+        {caixa && (
+          <group userData={{ naoCapturar: true }}>
+            <ContornoDaCaixa caixa={caixa} />
+          </group>
+        )}
         {/* E10.3 — a ALÇA de mover: só em planta (X e Z); a prévia translúcida acompanha durante o arraste;
             ao soltar, UM comando (TranslateEntities) — um Ctrl+Z. */}
         {alca && !andando && (
-          <group key={chaveDaAlca} position={alca}>
+          <group key={chaveDaAlca} position={alca} userData={{ naoCapturar: true }}>
             <PivotControls
               activeAxes={[true, !!onElevar, true]}
               disableRotations
@@ -2546,6 +2610,7 @@ export default function Blueprint3DViewer(props: Props) {
         {/* F12: DEPOIS do Enquadrar — efeitos de irmãos rodam na ordem da árvore, e o enquadramento
             automático da montagem passava por cima do ponto de vista (o 3D abria de fora, não do olho). */}
         {!andando && <PontoDeVista vista={props.pontoDeVista ?? null} controlsRef={controlsRef} />}
+        <Captura alvo={props.capturaRef} />
       </Canvas>
     </div>
   );

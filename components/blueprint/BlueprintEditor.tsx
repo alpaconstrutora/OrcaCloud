@@ -10679,6 +10679,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       levelIds={levelIdsDaVista}
       // F12: as VISTAS SALVAS — as câmeras dos pavimentos à vista — e a que está em uso.
       pontoDeVista={pontoDeVista3d}
+      nomeDoEstudo={study.name}
       pontosDeVista={(editor.model.cameras ?? []).filter((c) => !levelIdsDaVista || levelIdsDaVista.includes(c.levelId)).map((c) => ({ id: c.id, nome: c.nome }))}
       pontoDeVistaId={cameraDo3d}
       onPontoDeVista={setCameraDo3d}

@@ -3587,7 +3587,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 {tableColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${statementResize.getWidth('actions')}px` }} />}
                                             </colgroup>
                                             <thead>
-                                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                         <input
                                                             type="checkbox"
@@ -3902,7 +3902,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 {pendingBankColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${pendingBankResize.getWidth('actions')}px` }} />}
                                             </colgroup>
                                             <thead>
-                                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                         <input
                                                             type="checkbox"
@@ -4367,7 +4367,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                 {pendingInternalColumns.visibleColumns.includes('actions') && <col data-col-key="actions" style={{ width: `${pendingInternalResize.getWidth('actions')}px` }} />}
                                             </colgroup>
                                             <thead>
-                                                <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                     <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                         <input
                                                             type="checkbox"

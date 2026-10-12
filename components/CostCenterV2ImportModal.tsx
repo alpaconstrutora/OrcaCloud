@@ -164,7 +164,7 @@ const CostCenterV2ImportModal: React.FC<Props> = ({ target, onClose, onSuccess }
                                 <span className="text-red-500">{errorCount} erros</span>
                             </div>
                             <table className="min-w-full divide-y divide-gray-100">
-                                <thead className="bg-gray-50 text-gray-500 text-xs font-semibold">
+                                <thead className="bg-white text-gray-700 text-xs font-semibold">
                                     <tr>
                                         <th className="px-4 py-2 text-center w-10"></th>
                                         <th className="px-4 py-2 text-left">Grupo</th>

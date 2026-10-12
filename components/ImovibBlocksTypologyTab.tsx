@@ -355,7 +355,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <tr>
                                                 <th className="px-4 py-2">Tipologia</th>
                                                 <th className="px-4 py-2 w-28 text-center">Un./pav.</th>

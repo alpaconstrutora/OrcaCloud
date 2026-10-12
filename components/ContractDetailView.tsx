@@ -1497,7 +1497,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <div className="overflow-x-auto border border-gray-50 rounded-[10px]">
                                     <table className="w-full text-left text-xs border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 <th className="px-6 py-2 border-r border-gray-100 text-left">Item</th>
                                                 <th className="px-6 py-2 border-r border-gray-100 text-right">Orçado original</th>
                                                 <th className="px-6 py-2 border-r border-gray-100 text-right">Atual na obra</th>
@@ -2201,7 +2201,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     border-r em todo cabeçalho. Siglas (WBS, C, O) seguem
                                     maiúsculas — exceção do §6.2. */}
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         {ITEMS_COLUMNS.filter(c => c.key !== 'actions' && vi.includes(c.key)).map(c => (
                                             <SortableHeader
                                                 key={c.key}
@@ -2370,7 +2370,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <div className="overflow-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className="px-6 py-2 border-r border-gray-100">Código</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-center">Unid.</th>
@@ -2427,7 +2427,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 <th className="px-6 py-2 border-r border-gray-100">Item</th>
                                                 <th className="px-6 py-2 border-r border-gray-100">Fornece</th>
                                                 <th className="px-6 py-2 border-r border-gray-100">Transporta</th>
@@ -2592,7 +2592,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                         <table className="w-full text-left border-collapse">
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-6 py-2 border-r border-gray-100 text-left">ID / período</th>
                                     <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
                                     <th className="px-6 py-2 border-r border-gray-100 text-right">Valor medido</th>
@@ -2857,7 +2857,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 ) : (
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
                                                 <th className="px-6 py-2 border-r border-gray-100 text-left">Data</th>
                                                 <th className="px-6 py-2 text-right">Valor</th>
@@ -2968,7 +2968,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             ))}
                                         </colgroup>
                                         <thead>
-                                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 {FINANCE_COLUMNS.filter(c => visibleFinCols.includes(c.key)).map(c => (
                                                     <SortableHeader
                                                         key={c.key}
@@ -3048,7 +3048,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className="px-6 py-2 border-r border-gray-100 text-left">Mês ref.</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-left">Vencimento</th>
@@ -3149,7 +3149,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             ) : (
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className="px-6 py-2 border-r border-gray-100 text-left">Tipo</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-left">Motivo</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-left">Status</th>
@@ -3246,7 +3246,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         ) : (
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className="px-6 py-2 border-r border-gray-100 text-left">Período</th>
                                         <th className="px-6 py-2 text-right">Nota</th>
                                     </tr>

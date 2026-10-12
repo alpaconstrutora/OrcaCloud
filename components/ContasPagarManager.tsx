@@ -1020,7 +1020,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                                 {/* thead em sentence case (§6.2) — uppercase={false} porque SortableHeader
                                     força uppercase internamente por padrão. */}
                                 <thead>
-                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                             <input
                                                 type="checkbox"

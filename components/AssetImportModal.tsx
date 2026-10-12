@@ -620,7 +620,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
               <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto max-h-[40vh] no-scrollbar">
                   <table className="min-w-full divide-y divide-gray-100 text-left text-xs font-medium">
-                    <thead className="bg-gray-50 text-gray-400 font-bold uppercase tracking-wider text-xs">
+                    <thead className="bg-white text-gray-700 font-bold uppercase tracking-wider text-xs">
                       <tr>
                         <th className="px-6 py-3.5">Linha</th>
                         <th className="px-6 py-3.5">Código</th>

@@ -214,7 +214,7 @@ const ClientSelect: React.FC<Props> = ({
                             <col style={{ width: 168 }} />
                             <col style={{ width: 190 }} />
                         </colgroup>
-                        <thead className="bg-gray-50/80 sticky top-0 z-10">
+                        <thead className="bg-white sticky top-0 z-10">
                             <tr>
                                 <SortableHeader label="Nome" colKey="name" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />
                                 <SortableHeader label="CPF / CNPJ" colKey="document" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />

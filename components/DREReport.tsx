@@ -191,7 +191,7 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                     <col data-col-key="margem_pct" style={{ width: `${cols.getWidth('margem_pct')}px` }} />
                 </colgroup>
                 <thead>
-                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                         <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Obra<cols.ResizeHandle colKey="obra" /></th>
                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Receita<cols.ResizeHandle colKey="receita" /></th>
                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Custo<cols.ResizeHandle colKey="custo" /></th>
@@ -400,7 +400,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                                 <col data-col-key="previsto" style={{ width: `${dreCols.getWidth('previsto')}px` }} />
                             </colgroup>
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Linha<dreCols.ResizeHandle colKey="linha" /></th>
                                     <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Realizado<dreCols.ResizeHandle colKey="realizado" /></th>
                                     <th className="px-6 py-2 text-right relative overflow-hidden">Previsto<dreCols.ResizeHandle colKey="previsto" /></th>

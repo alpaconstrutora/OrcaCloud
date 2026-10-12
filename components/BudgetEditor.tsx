@@ -2439,7 +2439,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                   ) : (
                     <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                      <thead className="sticky top-0 bg-white border-b border-gray-200 z-10">
                         <tr>
                           <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Status</th>
                           <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Código</th>
@@ -2542,7 +2542,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                   ) : (
                     <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                      <thead className="sticky top-0 bg-white border-b border-gray-200 z-10">
                         <tr>
                           <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Código</th>
                           <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Descrição</th>
@@ -2647,7 +2647,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                   ) : (
                     <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10">
+                      <thead className="sticky top-0 bg-white border-b border-gray-200 z-10">
                         <tr>
                           <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Código</th>
                           <th className="px-6 py-2 border-r border-gray-100 last:border-r-0 text-sm font-semibold text-gray-500">Descrição</th>
@@ -2719,7 +2719,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               ))}
             </colgroup>
             <thead>
-              <tr className="sticky top-0 z-10 bg-gray-50 border-b border-gray-200 text-sm font-semibold text-gray-500">
+              <tr className="sticky top-0 z-10 bg-white border-b border-gray-200 text-sm font-semibold text-gray-700">
                 <th className="px-3 py-2 border-r border-gray-100"></th>
                 <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Item<cols.ResizeHandle colKey="item" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Base<cols.ResizeHandle colKey="base" /></th>

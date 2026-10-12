@@ -122,7 +122,7 @@ const CofinsRatesSettings: React.FC = () => {
                         </div>
                     ) : (
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                            <thead className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                 <tr>
                                     {tableColumns.orderedVisibleColumns.map(key => {
                                         const def = COFINS_COLUMN_HEADERS[key];

@@ -304,7 +304,7 @@ const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
                         {dupVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${dupCols.getWidth(key)}px` }} />)}
                     </colgroup>
                     <thead>
-                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                             {dupTableColumns.orderedVisibleColumns.map(key => {
                                 const def = DUPLICATE_COLUMN_HEADERS[key];
                                 if (!def) return null;
@@ -350,7 +350,7 @@ const AnomaliesPanel: React.FC<AnomaliesPanelProps> = ({ organizationId }) => {
                         {outlierVisible.map(key => <col key={key} data-col-key={key} style={{ width: `${outlierCols.getWidth(key)}px` }} />)}
                     </colgroup>
                     <thead>
-                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                             {outlierTableColumns.orderedVisibleColumns.map(key => {
                                 const def = OUTLIER_COLUMN_HEADERS[key];
                                 if (!def) return null;

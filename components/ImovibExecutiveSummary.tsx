@@ -421,7 +421,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                             <h2 className="text-2xl font-black text-slate-900 border-b-2 border-slate-200 pb-2 mb-6">Master Budget (CAPEX)</h2>
                             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                                 <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-50 border-b border-slate-200">
+                                    <thead className="bg-white border-b border-slate-200">
                                         <tr>
                                             <th className="p-4 font-bold text-slate-600">Categoria</th>
                                             <th className="p-4 font-bold text-slate-600">Descrição</th>

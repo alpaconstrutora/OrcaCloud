@@ -676,7 +676,7 @@ export default function FinancialIntelligence({ organizationId, onNavigate }: Pr
                                         {/* Tabela de scorecards */}
                                         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
                                             <table className="w-full text-sm">
-                                                <thead className="bg-gray-50 text-gray-500 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
+                                                <thead className="bg-white text-gray-700 font-semibold uppercase text-xs tracking-wider border-b border-gray-200">
                                                     <tr>
                                                         {['Obra', 'Receita Real.', 'Custo Real.', 'Margem', 'AR Pendente', 'AP Pendente', 'Saldo Proj.', 'Risco'].map(h => (
                                                             <th key={h} className="px-4 py-3 text-left whitespace-nowrap">

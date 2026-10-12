@@ -1089,7 +1089,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                                 snippet oficial do guia. Ordem vem de orderedVisibleColumns — arrastar um header
                                 (onMoveColumn) reordena e persiste, estilo ClickUp. */}
                             <thead>
-                                <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {tableColumns.orderedVisibleColumns.map(key => {
                                         const def = CLIENT_COLUMN_HEADERS[key];
                                         if (!def) return null;

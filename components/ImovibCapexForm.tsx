@@ -587,7 +587,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                           <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
                                             <table className="w-full text-left bg-white">
                                                 <thead>
-                                                    <tr className="bg-slate-50/50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
+                                                    <tr className="bg-white text-xs font-black tracking-widest uppercase text-gray-700 border-b border-slate-100">
                                                         <th className="px-6 py-3">Rubrica / Linha de Custo</th>
                                                         <th className="px-6 py-3">Tipo</th>
                                                         <th className="px-6 py-3">Base</th>

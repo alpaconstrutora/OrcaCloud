@@ -233,7 +233,7 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                                     {Object.keys(CASHFLOW_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
                                 </colgroup>
                                 <thead>
-                                    <tr className="bg-gray-50 text-gray-500 border-b border-gray-200 text-xs font-semibold">
+                                    <tr className="bg-white text-gray-700 border-b border-gray-200 text-xs font-semibold">
                                         <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Período<cols.ResizeHandle colKey="periodo" /></th>
                                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Entradas<cols.ResizeHandle colKey="entradas" /></th>
                                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Saídas<cols.ResizeHandle colKey="saidas" /></th>

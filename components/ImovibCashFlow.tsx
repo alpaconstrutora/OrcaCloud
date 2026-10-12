@@ -136,7 +136,7 @@ const ImovibCashFlow: React.FC<ImovibCashFlowProps> = ({ study, onIrPara }) => {
                 <div className="w-full overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100 uppercase tracking-widest text-xs font-black text-gray-400">
+                            <tr className="bg-white border-b border-gray-100 uppercase tracking-widest text-xs font-black text-gray-700">
                                 <th className="px-6 py-4">Mês</th>
                                 <th className="px-6 py-4 text-right">Receitas (R$)</th>
                                 <th className="px-6 py-4 text-right">Custos (R$)</th>

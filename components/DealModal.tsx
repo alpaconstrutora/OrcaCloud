@@ -3506,7 +3506,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         <div className="overflow-x-auto">
                                                             <table className="w-full text-left border-collapse">
                                                                 <thead>
-                                                                    <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                                         <th className={TH}>Parcela</th>
                                                                         <th className={`${TH} text-right`}>Quantidade</th>
                                                                         <th className={`${TH} text-right`}>Valor</th>
@@ -3965,7 +3965,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         via SortableHeader + onMoveColumn) é um eixo diferente —
                                                         só troca a posição visual, não mexe na ordem das linhas —
                                                         por isso pode ficar ligado mesmo aqui. */}
-                                                    <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                         <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
                                                             {contractEntries.length > 0 && (
                                                                 <input

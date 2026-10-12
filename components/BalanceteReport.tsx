@@ -194,7 +194,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                             {Object.keys(BALANCETE_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
                         </colgroup>
                         <thead>
-                            <tr className="bg-gray-50 text-gray-500 border-b border-gray-200 text-xs font-semibold">
+                            <tr className="bg-white text-gray-700 border-b border-gray-200 text-xs font-semibold">
                                 <th className="px-6 py-2 border-r border-gray-100 relative overflow-hidden">Conta / Categoria<cols.ResizeHandle colKey="conta" /></th>
                                 <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Créditos<cols.ResizeHandle colKey="creditos" /></th>
                                 <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Débitos<cols.ResizeHandle colKey="debitos" /></th>

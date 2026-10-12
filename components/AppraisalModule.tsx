@@ -211,7 +211,7 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                     ) : (
                         <div className="border border-gray-100 rounded-3xl overflow-x-auto bg-white shadow-sm">
                             <table className="min-w-[820px] w-full text-left text-sm">
-                                <thead className="bg-gray-50/80 text-gray-500 font-black uppercase tracking-wider text-xs border-b border-gray-100">
+                                <thead className="bg-white text-gray-700 font-black uppercase tracking-wider text-xs border-b border-gray-100">
                                     <tr>
                                         <th className="p-4">Endereço</th>
                                         <th className="p-4">Fonte</th>
@@ -492,7 +492,7 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
             ) : (
                 <div className="border border-gray-100 rounded-3xl overflow-x-auto bg-white shadow-sm">
                     <table className="min-w-[820px] w-full text-left text-sm">
-                        <thead className="bg-gray-50/80 text-gray-500 font-black uppercase tracking-wider text-xs border-b border-gray-100">
+                        <thead className="bg-white text-gray-700 font-black uppercase tracking-wider text-xs border-b border-gray-100">
                             <tr>
                                 <th className="p-4">Título</th>
                                 <th className="p-4">Solicitante</th>

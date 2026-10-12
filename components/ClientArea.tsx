@@ -1963,7 +1963,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 <div className="overflow-auto max-h-[70vh]">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                            <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                                 <th className="px-6 py-2 border-r border-gray-100">Descrição</th>
                                                 <th className="px-6 py-2 border-r border-gray-100">Vencimento</th>
                                                 <th className="px-6 py-2 border-r border-gray-100">Valor</th>
@@ -2188,7 +2188,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     ) : (
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                            <thead className="bg-white border-b border-gray-100">
                                 <tr className="text-xs font-bold text-gray-400">
                                     <th className="px-6 py-2.5">Descrição</th>
                                     <th className="px-6 py-2.5">Vencimento</th>
@@ -2392,7 +2392,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         </div>
                     ) : (
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                            <thead className="bg-white border-b border-gray-100">
                                 <tr className="text-xs font-bold text-gray-400">
                                     <th className="px-6 py-2.5">Etapa / Medição</th>
                                     <th className="px-6 py-2.5">Data</th>
@@ -3015,7 +3015,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 ) : (
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <table className="w-full text-left">
-                            <thead className="bg-gray-50/50 border-b border-gray-100">
+                            <thead className="bg-white border-b border-gray-100">
                                 <tr className="text-xs font-bold text-gray-400">
                                     <th className="px-6 py-5">Data</th>
                                     <th className="px-6 py-5">Clima</th>
@@ -3379,7 +3379,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     ) : (
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                             <table className="w-full text-left">
-                                <thead className="bg-gray-50/50 border-b border-gray-100">
+                                <thead className="bg-white border-b border-gray-100">
                                     <tr className="text-xs font-bold text-gray-400">
                                         <th className="px-6 py-5">Nome do Arquivo</th>
                                         <th className="px-6 py-5">Categoria</th>

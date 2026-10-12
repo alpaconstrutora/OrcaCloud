@@ -550,7 +550,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <col data-col-key="actions" style={{ width: `${bankCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
-                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                             {bankVisible.map(key => {
                                 const def = BANK_COLUMN_HEADERS[key];
                                 if (!def) return null;
@@ -611,7 +611,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <col data-col-key="actions" style={{ width: `${internalCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
-                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                             {internalVisible.map(key => {
                                 const def = INTERNAL_COLUMN_HEADERS[key];
                                 if (!def) return null;
@@ -672,7 +672,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <col data-col-key="actions" style={{ width: `${mismatchCols.getWidth('actions')}px` }} />
                     </colgroup>
                     <thead>
-                        <tr className="sticky top-0 z-10 bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                        <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                             {mismatchVisible.map(key => {
                                 const def = MISMATCH_COLUMN_HEADERS[key];
                                 if (!def) return null;

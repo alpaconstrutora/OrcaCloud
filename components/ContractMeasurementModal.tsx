@@ -436,7 +436,7 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                         <col style={{ width: 112 }} />
                                     </colgroup>
                                     <thead>
-                                        <tr className="bg-gray-50 text-gray-500 font-semibold text-xs border-b border-gray-200">
+                                        <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                             <th className="px-4 py-2 border-r border-gray-100">Item</th>
                                             <th className="px-3 py-2 border-r border-gray-100">Unid.</th>
                                             <th className="px-3 py-2 border-r border-gray-100 text-right">Qtd. contrato</th>

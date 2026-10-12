@@ -122,7 +122,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                         </colgroup>
                         <thead>
                             <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-5 py-2 text-xs font-semibold text-slate-500 sticky left-0 bg-slate-50">
+                                <th className="px-5 py-2 text-xs font-semibold text-gray-700 sticky left-0 bg-white">
                                     Linha DRE
                                 </th>
                                 {data.map(spe => (

@@ -720,7 +720,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                             {viewMode === 'list' && (
                                 <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
                                     <table className="w-full text-left border-collapse">
-                                        <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-xs tracking-widest">
+                                        <thead className="bg-white border-b border-gray-200 text-gray-700 font-bold uppercase text-xs tracking-widest">
                                             <tr>
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Imóvel</th>
                                                 <th className="px-6 py-2 border-r border-gray-100 last:border-r-0">Cliente</th>
@@ -1028,7 +1028,7 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
                         ) : (
                             <div className="bg-white border border-gray-100 rounded-[2.5rem] overflow-hidden shadow-xl shadow-gray-200/20">
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-gray-50 border-b border-gray-100 italic">
+                                    <thead className="bg-white border-b border-gray-100 italic">
                                         <tr>
                                             <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Imóvel</th>
                                             <th className="px-8 py-6 text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Cliente</th>

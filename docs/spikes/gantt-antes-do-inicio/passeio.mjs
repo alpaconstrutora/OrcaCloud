@@ -44,7 +44,7 @@ page.on('console', (m) => { if (m.type() === 'error') erros.push('CONSOLE: ' + m
 const falhas = [];
 const confere = (ok, msg, extra) => { if (!ok) falhas.push(msg + (extra ? ' ' + JSON.stringify(extra) : '')); };
 
-const SCROLLER = 'div.overflow-auto.rounded-3xl';
+const SCROLLER = '[data-gantt-rolador]';
 const estado = () => page.evaluate((sel) => {
     const el = document.querySelector(sel);
     const h = window.__harness;

@@ -1172,7 +1172,12 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                 // traduz em scrollbar-width/scrollbar-color, que no Chrome 121+ DESLIGAM a barra
                 // do app (index.css) neste elemento — o Gantt ficava com a barra nativa, que não
                 // alarga (11/10/2026). Travado em __tests__/barraDeRolagemPadrao.test.ts.
-                className="flex-1 overflow-auto bg-white border border-gray-100 rounded-3xl shadow-sm relative"
+                // SEM moldura própria (12/10/2026: "parece haver duas bornas arredondadas na vista gannt"): o card
+                // da vista (FinancialSchedule: `rounded-2xl border shadow-sm overflow-hidden`, compartilhado com
+                // a Tabela) já é a moldura — o Gantt tinha outra, `rounded-3xl border shadow-sm`, dentro dela.
+                // `data-gantt-rolador` é o gancho dos testes de navegador (antes: o `rounded-3xl`).
+                data-gantt-rolador
+                className="flex-1 overflow-auto bg-white relative"
             >
                 <div className="inline-block min-w-full">
                     {/* Gantt Header */}

@@ -55,8 +55,8 @@ const res = {};
 // 1) Cabeçalho do Gantt (linha de mês + colunas fixas + datas): o 1º `.sticky.top-0` do Gantt
 const gantt = await browser.newPage({ viewport: { width: 1700, height: 900 } });
 await gantt.goto(`${urlBase}/docs/spikes/gantt-rolagem/index.html?layout=app&escala=day&tarefas=40`, { waitUntil: 'networkidle' });
-await gantt.waitForSelector('div.overflow-auto.rounded-3xl'); await gantt.waitForTimeout(700);
-await gantt.evaluate(() => { document.querySelector('div.overflow-auto.rounded-3xl .sticky.top-0').id = 'cab-gantt'; });
+await gantt.waitForSelector('[data-gantt-rolador]'); await gantt.waitForTimeout(700);
+await gantt.evaluate(() => { document.querySelector('[data-gantt-rolador] .sticky.top-0').id = 'cab-gantt'; });
 res.gantt = await gantt.evaluate(cinzas, '#cab-gantt');
 await gantt.screenshot({ path: path.join(outDir, 'gantt.png'), clip: { x: 0, y: 160, width: 1700, height: 200 } });
 

@@ -93,7 +93,7 @@ function Harness() {
     React.useEffect(() => {
         (window as any).__harness = {
             colunas: columns.length, tarefas: N, passos: steps,
-            nos: () => document.querySelector('div.overflow-auto.rounded-3xl')?.querySelectorAll('*').length ?? 0,
+            nos: () => document.querySelector('[data-gantt-rolador]')?.querySelectorAll('*').length ?? 0,
         };
     });
 
@@ -153,8 +153,11 @@ if (params.get('layout') === 'app') {
         <main id="rolador-pagina" className="overflow-y-auto p-6" style={{ height: '100vh', boxSizing: 'border-box' }}>
             <div className="space-y-6">
                 <div data-ribbon className="rounded-[10px] border border-gray-100 bg-white shadow-sm" style={{ height: 180 }} />
-                <div className="overflow-x-auto min-h-[400px] bg-white flex flex-col">
-                    <Harness />
+                {/* O card externo da vista, como em FinancialSchedule.tsx (compartilhado com a Tabela). */}
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto min-h-[400px] bg-white flex flex-col">
+                        <Harness />
+                    </div>
                 </div>
             </div>
         </main>

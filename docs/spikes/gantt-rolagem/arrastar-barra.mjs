@@ -27,7 +27,7 @@ const chromium = await loadChromium();
 // Sem --hide-scrollbars (padrão do Playwright em headless): sem isso não há barra para arrastar.
 const browser = await chromium.launch({ headless: true, channel: process.env.BROWSER_CHANNEL ?? 'chrome', ignoreDefaultArgs: ['--hide-scrollbars'] });
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-const SC = 'div.overflow-auto.rounded-3xl';
+const SC = '[data-gantt-rolador]';
 await page.goto(`${urlBase}/docs/spikes/gantt-rolagem/index.html?${consulta}`, { waitUntil: 'networkidle' });
 await page.waitForSelector(SC);
 await page.waitForTimeout(800);

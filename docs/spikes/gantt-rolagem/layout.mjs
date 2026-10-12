@@ -20,7 +20,7 @@ const consulta = process.argv[4] ?? 'layout=app&escala=day&tarefas=300';
 const chromium = await loadChromium();
 const browser = await chromium.launch({ headless: true, channel: process.env.BROWSER_CHANNEL ?? 'chrome', ignoreDefaultArgs: ['--hide-scrollbars'] });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-const SC = 'div.overflow-auto.rounded-3xl';
+const SC = '[data-gantt-rolador]';
 await page.goto(`${urlBase}/docs/spikes/gantt-rolagem/index.html?${consulta}`, { waitUntil: 'networkidle' });
 await page.waitForSelector(SC);
 await page.waitForTimeout(900);

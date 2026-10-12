@@ -27,7 +27,7 @@ const cenarios = process.argv.slice(3).length ? process.argv.slice(3) : [
 ];
 const chromium = await loadChromium();
 const browser = await chromium.launch({ headless: true, channel: process.env.BROWSER_CHANNEL ?? 'chrome' });
-const SC = 'div.overflow-auto.rounded-3xl';
+const SC = '[data-gantt-rolador]';
 
 async function quadros(page, acao) {
     await page.evaluate(() => {

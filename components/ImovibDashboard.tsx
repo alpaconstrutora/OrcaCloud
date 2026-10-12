@@ -516,7 +516,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                         // pointer-events-none e o próprio `title` não aparece.
                                         const ed = avaliarEdicao(study.organization_id);
                                         return (
-                                            <fieldset disabled={!ed.pode} title={!ed.pode ? ed.motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex">
+                                            <fieldset disabled={!ed.pode} title={!ed.pode ? ed.motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex">
                                                 <ActionIconButton kind="delete" title="Excluir Estudo" onClick={() => handleDeleteStudy(study.id, study.name)} />
                                             </fieldset>
                                         );

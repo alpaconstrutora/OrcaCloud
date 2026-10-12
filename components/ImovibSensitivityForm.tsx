@@ -262,7 +262,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                     </p>
                 </div>
 
-                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 relative">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 relative">
                     <textarea
                         value={riskNotes}
                         onChange={(e) => setRiskNotes(e.target.value)}

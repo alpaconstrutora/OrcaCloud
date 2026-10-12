@@ -502,3 +502,13 @@
 .editor-rico .condicional-bloco { margin: 0.5rem 0; padding: 0.25rem 0.75rem 0.5rem; border-left: 3px solid #8b5cf6; background: #faf5ff; border-radius: 0 6px 6px 0; }
 .editor-rico .condicional-rotulo { display: block; font-size: 0.75rem; color: #6d28d9; font-weight: 600; margin-bottom: 0.25rem; user-select: none; }
 .editor-rico .tabela-dinamica-bloco { border-color: #10b981; background: #ecfdf5; color: #047857; }
+
+/* Estudos de Viabilidade (Imovib), item 4.6: sem canEditImovib o estudo abre só
+   para leitura via <fieldset class="imovib-ro" disabled>. O navegador desliga o
+   campo mas não muda a cara dele — o campo travado tem de PARECER travado (mesma
+   linguagem do app: opacidade + cursor). Restrito à classe para não alterar
+   outras telas que usam fieldset disabled. */
+fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
+    cursor: not-allowed;
+    opacity: 0.6;
+}

@@ -232,7 +232,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     </div>
                 </div>
                 {/* Regenerar e Precificação gravam no espelho. */}
-                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-3 flex-wrap">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 flex-wrap">
                     {!loadError && instances.length > 0 && (
                         <>
                             <button
@@ -347,7 +347,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             ) : (
                 <div className="overflow-x-auto">
                   {/* Posição, Sol e Status gravam na hora (handleInlineUpdate). */}
-                  <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
+                  <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50">

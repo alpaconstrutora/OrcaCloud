@@ -84,7 +84,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
             <ImovibSalesMapTab study={study} onDataChanged={onDataChanged} />
 
             {/* Tudo aqui grava no blur (perfil de recebimento, inadimplência, funding, permutas). */}
-            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* REVENUE PROFILE */}
                 <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm flex flex-col h-full">

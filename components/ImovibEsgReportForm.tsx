@@ -199,7 +199,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
             </div>
 
             {/* Tudo aqui grava: notas E/S/G, certificações, memorando, iniciativas e ata do comitê. */}
-            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <div className="space-y-6">
                     {/* ESG SCORING */}

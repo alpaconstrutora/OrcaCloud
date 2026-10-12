@@ -341,7 +341,12 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - "Gerar" relê o banco e cria só o que falta, então o falso "não gerado" não duplica mais.
     - Novo `imovibService.deleteUnitInstancesByIds`. 5 testes.
   - [x] **4.5** — `ImovibDashboard` lê a org de `useOrgContext()` (empresa no topo herda a org; "Todas" = null, não bloqueia) e `ImovibForm` cria com `useOrgWriteTarget` no modo `'single'` (topo com org/empresa = sem pergunta; "Todas" = modal), no lugar do `alert('selecione uma organização')`. A prop crua `organizationId` ficou ignorada nos dois. `SalesManagementModule` continua passando a prop para os outros submódulos (Vendas, Locações), fora do escopo. Verificado: `orgContextGuard` 14/14, `check-org-selector-guard.sh` exit 0.
-  - [ ] **4.6** — Decisão (2026-10-12): *"Aplicar canEditImovib"*. Sem a permissão, o estudo abre só para leitura. A trava de rota em "Todas" continua igual à dos outros módulos. **Código pronto, falta a prova no navegador** (roteiro `c:/tmp/pwtest/imovib_somente_leitura.js`, que simula `canEditImovib=false` alterando só a resposta de `organization_members` no navegador do teste).
+  - [x] **4.6** — Decisão (2026-10-12): *"Aplicar canEditImovib"*. Sem a permissão, o estudo abre só para leitura. A trava de rota em "Todas" continua igual à dos outros módulos.
+    - **Prova no navegador** (`c:/tmp/pwtest/imovib_somente_leitura.js`, que simula `canEditImovib=false` na Alpa alterando só a resposta de `organization_members` no navegador; escritas bloqueadas: 0; erros de console: 0; banco conferido sem gravação):
+      - Bruninho: aviso com o motivo; Dinâmica 10/10 campos travados; preço/m² travado; sub-aba, "Exportar PDF" e os 2 sliders livres.
+      - Davi Bueno: "Expandir Tudo" livre; 26/26 bases e 27/27 valores do CAPEX travados.
+      - Garden (SPE, admin): sem aviso; só 2/10 travados, que são imposto e corretagem, fora do cálculo pelas rubricas.
+    - **Ajuste depois da prova:** o print mostrou os campos travados com a mesma cara dos editáveis. Agora os fieldsets têm a classe `imovib-ro`, e `index.css` dá opacidade 0,6 e cursor de bloqueado só a eles (outras telas com fieldset disabled não mudam).
     - **Regra** — `hooks/useImovibEdicao.tsx` (`avaliarEdicaoImovib`, 6 testes). Avaliada sobre a org **dona do estudo**:
       - desenvolvedor, admin e owner editam;
       - `canEditImovib` definido no membro vale; sem definição, segue o papel (viewer não edita);

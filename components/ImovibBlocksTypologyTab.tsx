@@ -232,7 +232,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                     </button>
                 </div>
 
-                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                     {LAND_FIELDS.map(({ label, key }) => (
                         <div key={String(key)}>
                             <label className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</label>
@@ -275,7 +275,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                 <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
                     <Building className="w-5 h-5 text-indigo-500" /> Blocos e tipologias
                 </h2>
-                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-2">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-2">
                     <input type="text" placeholder="Nome do bloco/fase" value={newBlockName}
                         onChange={(e) => { setNewBlockName(e.target.value); setBlockNameError(false); }}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddBlock()}
@@ -314,7 +314,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                         const actions = (
                             // Fieldset (não `disabled` no botão): ActionIconButton desabilitado tem
                             // pointer-events-none e o próprio `title` sumiria — o motivo fica aqui.
-                            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-1.5">
+                            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-1.5">
                                 <ActionIconButton kind="edit" title="Renomear bloco" onClick={() => startEditBlock(block)} />
                                 <ActionIconButton kind="delete" title="Excluir bloco" onClick={() => handleDeleteBlock(block)} />
                             </fieldset>
@@ -333,7 +333,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                 isOpen={isOpen}
                                 onToggle={() => setExpandedId(isOpen ? null : block.id)}
                             >
-                              <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
+                              <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
                                 <div className="flex flex-wrap items-end gap-4 px-4 py-3 border-b border-gray-100">
                                     <div>
                                         <label htmlFor={`preco-m2-${block.id}`} className="block text-xs font-semibold text-gray-500 mb-1.5">Preço de venda (R$/m²)</label>

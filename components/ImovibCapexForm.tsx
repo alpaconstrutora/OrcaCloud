@@ -327,7 +327,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         </p>
                     </div>
                     {/* Mode toggle */}
-                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
+                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
                         <button
                             onClick={() => saveMode('simplified')}
                             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
@@ -375,7 +375,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         <label className="block text-form-label font-black uppercase tracking-wider text-slate-500 mb-4">
                             Custo de Obra (R$/m²) por Bloco
                         </label>
-                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 space-y-3">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 space-y-3">
                             {study.blocks.map(block => (
                                 <div key={block.id} className="flex items-center gap-4">
                                     <span className="text-sm font-bold text-slate-700 min-w-[120px]">{block.name}</span>
@@ -407,7 +407,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     <label className="block text-form-label font-black uppercase tracking-wider text-amber-700 mb-3">
                         Custo de Aquisição do Terreno (R$)
                     </label>
-                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-3 max-w-xs">
+                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 max-w-xs">
                         <span className="text-slate-500 font-bold text-sm">R$</span>
                         <input
                             type={landCostFocused ? 'number' : 'text'}
@@ -427,7 +427,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 {/* ── SIMPLIFIED MODE ── */}
                 {capexMode === 'simplified' && (
                     <div className="space-y-6">
-                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Área */}
                             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
                                 <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">
@@ -584,7 +584,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
                                     {expandedCategories.includes(category) && (
                                         <div className="p-0 border-t border-slate-200">
-                                          <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
+                                          <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
                                             <table className="w-full text-left bg-white">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">

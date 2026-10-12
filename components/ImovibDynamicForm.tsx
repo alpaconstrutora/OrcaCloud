@@ -81,7 +81,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
             </div>
 
             {/* Todos os campos gravam no blur (handleSave). */}
-            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
+            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Time Parameters */}
                 <div className="space-y-4">

@@ -132,7 +132,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             <p className="text-slate-500 text-sm mt-1 font-medium">Informações legais e contextuais da análise.</p>
                         </div>
 
-                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {renderInput('CNPJ da SPE', 'spe_cnpj', 'text', 'Ex: 00.000.000/0001-00')}
                             {renderInput('Incorporadora / Desenvolvedor', 'developer_name', 'text', 'Nome da Empresa')}
                             {renderInput('Gestor do Projeto', 'project_manager', 'text', 'Nome do Responsável')}
@@ -156,7 +156,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             <p className="text-slate-500 text-sm mt-1 font-medium">Inteligência de mercado, demanda e concorrência.</p>
                         </div>
 
-                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-1 gap-6">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-1 gap-6">
                             {renderTextarea('Macrolocalização (Cidade/Região)', 'location_macro', 'Dinâmica econômica local...')}
                             {renderTextarea('Microlocalização (Bairro/Vizinhança)', 'location_micro', 'Infraestrutura de transportes, saúde...')}
 

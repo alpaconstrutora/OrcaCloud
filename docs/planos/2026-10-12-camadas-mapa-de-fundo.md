@@ -144,4 +144,4 @@ continua aparecendo.
       mesmo script para em **450 m** e FALHA — o portão mede a trava. O print afastado mostra
       o lote ao lado de Cambuí (MG), Lagoa do Mato e a AMG-1950, grade de 50 m discreta.
 - [x] Suíte 8.758 = 8.724 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` limpo; build ✓
-- [ ] Publicação e CI
+- [x] Publicado `441f0e84` (o push foi recusado uma vez: o `main` tinha andado com um commit do menu lateral, sem relação; rebase e push); `ci` = success; o Vercel levou mais que o normal ("pending" por ~15 min), depois `conferir-producao.sh` → o domínio serve `441f0e8`

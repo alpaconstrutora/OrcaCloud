@@ -8,6 +8,7 @@ import { useImovibMath } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
 import { planejarRegeneracao } from '../utils/imovibEspelho';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 interface ImovibSalesMapTabProps {
     study: ImovibStudy;
@@ -41,6 +42,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     const math = useImovibMath(study);
     const confirm = useConfirm();
     const { showToast } = useToast();
+    const { pode, motivo } = useImovibEdicao();
 
     const blockMap = Object.fromEntries(blocks.map(b => [b.id, b.name]));
 
@@ -229,13 +231,14 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                         <p className="text-slate-500 text-sm font-medium mt-0.5">Unidades individualizadas do empreendimento</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap">
+                {/* Regenerar e Precificação gravam no espelho. */}
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-3 flex-wrap">
                     {!loadError && instances.length > 0 && (
                         <>
                             <button
                                 onClick={handleRegenerate}
                                 disabled={generating}
-                                title="Regenerar espelho"
+                                title={!pode ? motivo : 'Regenerar espelho'}
                                 className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
                             >
                                 <RefreshCw className={`w-5 h-5 ${generating ? 'animate-spin' : ''}`} />
@@ -249,7 +252,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             </button>
                         </>
                     )}
-                </div>
+                </fieldset>
             </div>
 
             {/* KPIs */}
@@ -323,8 +326,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     ) : (
                         <button
                             onClick={generateInstances}
-                            disabled={generating}
-                            className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                            disabled={generating || !pode}
+                            title={!pode ? motivo : undefined}
+                            className="flex items-center gap-2 px-8 py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {generating ? (
                                 <>
@@ -342,6 +346,8 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 </div>
             ) : (
                 <div className="overflow-x-auto">
+                  {/* Posição, Sol e Status gravam na hora (handleInlineUpdate). */}
+                  <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50">
@@ -426,7 +432,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'position_type', e.target.value)
                                                 }
-                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer"
+                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
                                             >
                                                 {POSITION_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -441,7 +447,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'sun_orientation', e.target.value)
                                                 }
-                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer"
+                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
                                             >
                                                 {SUN_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -456,7 +462,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                                 onChange={e =>
                                                     handleInlineUpdate(inst.id, 'status', e.target.value)
                                                 }
-                                                className={`text-sm font-normal border rounded px-2 py-1 focus:outline-none cursor-pointer ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
+                                                className={`text-sm font-normal border rounded px-2 py-1 focus:outline-none cursor-pointer disabled:cursor-not-allowed ${STATUS_COLORS[inst.status] || 'bg-slate-100 text-slate-700'} border-transparent`}
                                             >
                                                 {STATUS_OPTIONS.map(o => (
                                                     <option key={o} value={o}>{o}</option>
@@ -468,6 +474,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             })}
                         </tbody>
                     </table>
+                  </fieldset>
                 </div>
             )}
 

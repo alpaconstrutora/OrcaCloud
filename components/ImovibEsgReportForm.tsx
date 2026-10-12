@@ -3,6 +3,7 @@ import { ImovibStudy } from '../types';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { imovibService } from '../services/imovibService';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { Leaf, Users, Shield, Award, CheckCircle2, ChevronDown, Gavel, DollarSign, TrendingUp, Percent } from 'lucide-react';
 
 interface ImovibEsgReportFormProps {
@@ -34,6 +35,7 @@ const AVAILABLE_CERTIFICATIONS = [
 const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onDataChanged }) => {
     const math = useImovibMath(study);
     const { showToast } = useToast();
+    const { pode, motivo } = useImovibEdicao();
 
     // ESG State
     const [envScore, setEnvScore] = useState(study.esg_environmental_score ?? 3);
@@ -196,7 +198,8 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Tudo aqui grava: notas E/S/G, certificações, memorando, iniciativas e ata do comitê. */}
+            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <div className="space-y-6">
                     {/* ESG SCORING */}
@@ -294,8 +297,10 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                             {initiatives.map((ini) => (
                                 <div
                                     key={ini.id}
-                                    className={`relative overflow-hidden p-4 rounded-2xl border transition-all cursor-pointer group ${ini.active ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50'}`}
-                                    onClick={() => toggleInitiative(ini.id)}
+                                    // <div> clicável: o fieldset desabilitado não o alcança — a trava é aqui.
+                                    className={`relative overflow-hidden p-4 rounded-2xl border transition-all ${pode ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'} group ${ini.active ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50'}`}
+                                    aria-disabled={!pode || undefined}
+                                    onClick={() => { if (pode) toggleInitiative(ini.id); }}
                                 >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3">
@@ -398,7 +403,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                     </div>
                 </div>
 
-            </div>
+            </fieldset>
 
         </div>
     );

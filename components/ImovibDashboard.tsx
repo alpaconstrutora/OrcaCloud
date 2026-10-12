@@ -10,6 +10,7 @@ import { formatMoney, formatDateBR, formatPercent, Money } from './ui/Format';
 import { computeImovibMath, ImovibMathResult } from '../hooks/useImovibMath';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext } from '../hooks/useOrgContext';
+import { useImovibPermissaoPorOrg } from '../hooks/useImovibEdicao';
 
 interface ImovibDashboardProps {
     /** Ignorado: a organização vem do topo (useOrgContext, REGRA #5). */
@@ -80,6 +81,11 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
     // dela; null = "Todas", que não bloqueia a leitura). A prop crua que vinha
     // do AppRouter era null com empresa selecionada e listava todas as orgs.
     const { orgId: organizationId } = useOrgContext();
+    // canEditImovib (plano 2026-10-12, item 4.6): excluir vale pela org DE CADA
+    // estudo; criar, pela org do topo — em "Todas" a org alvo só é escolhida no
+    // formulário (ImovibForm confere lá).
+    const avaliarEdicao = useImovibPermissaoPorOrg();
+    const criacao = organizationId ? avaliarEdicao(organizationId) : { pode: true as const, motivo: undefined };
     const [studies, setStudies] = useState<ImovibStudy[]>([]);
     const [loading, setLoading] = useState(true);
     // F2: filtros/visão sobrevivem a navegação/reload.
@@ -277,7 +283,9 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                 {/* CTA primário compacto (§17) — dentro da régua, criação é ação esporádica */}
                 <button
                     onClick={onNewStudy}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                    disabled={!criacao.pode}
+                    title={!criacao.pode ? criacao.motivo : undefined}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600 disabled:active:scale-100"
                 >
                     <Plus className="w-[15px] h-[15px]" />
                     Novo estudo
@@ -304,7 +312,12 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                             Limpar busca
                         </button>
                     ) : (
-                        <button onClick={onNewStudy} className="text-blue-600 font-medium hover:underline">
+                        <button
+                            onClick={onNewStudy}
+                            disabled={!criacao.pode}
+                            title={!criacao.pode ? criacao.motivo : undefined}
+                            className="text-blue-600 font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline"
+                        >
                             Criar primeiro estudo
                         </button>
                     )}
@@ -433,7 +446,12 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                         <td aria-hidden="true"></td>
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
-                                                <InlineDisclosureMenu showDelete onDelete={() => handleDeleteStudy(study.id, study.name)} />
+                                                <InlineDisclosureMenu
+                                                    showDelete
+                                                    onDelete={() => handleDeleteStudy(study.id, study.name)}
+                                                    deleteDisabled={!avaliarEdicao(study.organization_id).pode}
+                                                    deleteDisabledTitle={avaliarEdicao(study.organization_id).motivo}
+                                                />
                                             </div>
                                         </td>
                                     </tr>
@@ -493,7 +511,16 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                     <span className="text-xs font-normal">{formatDateBR(study.created_at)}</span>
                                 </div>
                                 <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                                    <ActionIconButton kind="delete" title="Excluir Estudo" onClick={() => handleDeleteStudy(study.id, study.name)} />
+                                    {(() => {
+                                        // Fieldset leva o motivo: ActionIconButton desabilitado tem
+                                        // pointer-events-none e o próprio `title` não aparece.
+                                        const ed = avaliarEdicao(study.organization_id);
+                                        return (
+                                            <fieldset disabled={!ed.pode} title={!ed.pode ? ed.motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex">
+                                                <ActionIconButton kind="delete" title="Excluir Estudo" onClick={() => handleDeleteStudy(study.id, study.name)} />
+                                            </fieldset>
+                                        );
+                                    })()}
                                     <div className="flex items-center gap-1 text-indigo-600 font-medium text-xs group-hover:gap-2 transition-all">
                                         Ver dados
                                         <ChevronRight className="w-4 h-4" />

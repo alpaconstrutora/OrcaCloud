@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { Activity, TrendingDown, TrendingUp, AlertOctagon, ShieldAlert } from 'lucide-react';
 import { imovibService } from '../services/imovibService';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 interface ImovibSensitivityFormProps {
     study: ImovibStudy;
@@ -74,6 +75,8 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
     const [riskNotes, setRiskNotes] = useState((study.swot_analysis?.risks as string) || '');
     const [isSaving, setIsSaving] = useState(false);
     const { showToast } = useToast();
+    // Só o mapa de riscos grava; os sliders do stress test são simulação local.
+    const { pode, motivo } = useImovibEdicao();
 
     const handleSaveRisks = async () => {
         try {
@@ -259,7 +262,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                     </p>
                 </div>
 
-                <div className="relative">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 relative">
                     <textarea
                         value={riskNotes}
                         onChange={(e) => setRiskNotes(e.target.value)}
@@ -272,7 +275,7 @@ const ImovibSensitivityForm: React.FC<ImovibSensitivityFormProps> = ({ study, on
                             <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></div>
                         </div>
                     )}
-                </div>
+                </fieldset>
             </div>
 
         </div>

@@ -14,6 +14,7 @@ import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibEsgReportForm from './ImovibEsgReportForm';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
+import { useImovibPodeEditar, ImovibEdicaoProvider } from '../hooks/useImovibEdicao';
 
 interface ImovibDetailViewProps {
     studyId: string;
@@ -26,6 +27,9 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     const [error, setError] = useState<string | null>(null);
     const { showToast } = useToast();
     const [activeTab, setActiveTab] = useState<'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'esg_report' | 'viability_static' | 'viability_dynamic'>('executive_summary');
+    // canEditImovib (plano 2026-10-12, item 4.6): sem a permissão na org DONA do
+    // estudo, ele abre só para leitura. Antes dos returns antecipados (regra dos Hooks).
+    const edicao = useImovibPodeEditar(study?.organization_id);
 
     useEffect(() => {
         loadStudyDetails(true);
@@ -90,6 +94,8 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         </p>
                         {study.planta_ai_study_id ? (
                             <button
+                                disabled={!edicao.pode}
+                                title={!edicao.pode ? edicao.motivo : undefined}
                                 onClick={async () => {
                                     const res = await PlantaAiIntegration.updatePlantaAiFromImovib(study.id, study.planta_ai_study_id!);
                                     if (!res.success) {
@@ -97,13 +103,15 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                                     }
                                     window.location.hash = `#/planta-ai?studyId=${study.planta_ai_study_id}`;
                                 }}
-                                className="mt-3 flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors rounded-xl border border-indigo-200 text-xs font-black uppercase tracking-widest"
+                                className="mt-3 flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors rounded-xl border border-indigo-200 text-xs font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-50"
                             >
                                 <Layers className="w-4 h-4" />
                                 Modificar Arquitetura (Planta AI)
                             </button>
                         ) : (
                             <button
+                                disabled={!edicao.pode}
+                                title={!edicao.pode ? edicao.motivo : undefined}
                                 onClick={async () => {
                                     if (!study.organization_id) return;
                                     const res = await PlantaAiIntegration.createPlantaAiFromImovib(study.id, study.organization_id, study.name);
@@ -113,7 +121,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                                         showToast("Erro ao criar estudo na Planta AI: " + res.error, 'error');
                                     }
                                 }}
-                                className="mt-3 flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest"
+                                className="mt-3 flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors rounded-xl border border-emerald-200 text-xs font-black uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-50"
                             >
                                 <PlusCircle className="w-4 h-4" />
                                 Gerar Arquitetura (Planta AI)
@@ -122,6 +130,12 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </div>
                 </div>
             </div>
+
+            {!edicao.pode && (
+                <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-[10px] text-sm text-amber-800">
+                    Somente leitura — {edicao.motivo}
+                </div>
+            )}
 
             {/* Main Content Area */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-14rem)]">
@@ -218,6 +232,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
 
                 {/* Tab Content */}
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
+                  <ImovibEdicaoProvider value={edicao}>
                     {activeTab === 'executive_summary' && (
                         <ErrorBoundary>
                             <ImovibExecutiveSummary study={study} onIrPara={setActiveTab} />
@@ -255,6 +270,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             <ImovibCashFlow study={study} onIrPara={setActiveTab} />
                         </ErrorBoundary>
                     )}
+                  </ImovibEdicaoProvider>
                 </div>
             </div>
         </div>

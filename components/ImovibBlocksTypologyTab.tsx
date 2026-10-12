@@ -13,6 +13,7 @@ import { imovibService } from '../services/imovibService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { TorreCard, TorreEmpty } from './torres/TorreCard';
 import { useImovibMath } from '../hooks/useImovibMath';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
@@ -36,6 +37,7 @@ const LAND_FIELDS: { label: string; key: keyof ImovibStudy }[] = [
 
 const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
     const confirm = useConfirm();
+    const { pode, motivo } = useImovibEdicao();
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
     const [regulatoryZones, setRegulatoryZones] = useState<EmpreendimentoRegulatoryZone[]>([]);
     const [addingBlock, setAddingBlock] = useState(false);
@@ -222,14 +224,15 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                     <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
                         <MapPin className="w-5 h-5 text-indigo-500" /> Dados do terreno
                     </h2>
-                    <button onClick={handleSaveLand} disabled={savingLand}
-                        className="h-9 flex items-center gap-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all disabled:opacity-60">
+                    <button onClick={handleSaveLand} disabled={savingLand || !pode}
+                        title={!pode ? motivo : undefined}
+                        className="h-9 flex items-center gap-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all disabled:opacity-60 disabled:cursor-not-allowed">
                         {savingLand ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         {savingLand ? 'Salvando…' : 'Salvar terreno'}
                     </button>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                     {LAND_FIELDS.map(({ label, key }) => (
                         <div key={String(key)}>
                             <label className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</label>
@@ -238,7 +241,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                 className={inputCls} placeholder="0" />
                         </div>
                     ))}
-                </div>
+                </fieldset>
 
                 {!regulatoryZones.length ? (
                     <div className="mt-6 pt-6 border-t border-gray-100">
@@ -272,7 +275,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                 <h2 className="text-lg font-black text-gray-900 tracking-tight flex items-center gap-2">
                     <Building className="w-5 h-5 text-indigo-500" /> Blocos e tipologias
                 </h2>
-                <div className="flex items-center gap-2">
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-2">
                     <input type="text" placeholder="Nome do bloco/fase" value={newBlockName}
                         onChange={(e) => { setNewBlockName(e.target.value); setBlockNameError(false); }}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddBlock()}
@@ -281,7 +284,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                         className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[6px] font-medium text-[13px] transition-all disabled:opacity-50 flex items-center gap-1.5">
                         <Plus className="w-4 h-4" /> Adicionar bloco
                     </button>
-                </div>
+                </fieldset>
             </div>
 
             <div className="space-y-2.5">
@@ -309,10 +312,12 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                         );
 
                         const actions = (
-                            <>
+                            // Fieldset (não `disabled` no botão): ActionIconButton desabilitado tem
+                            // pointer-events-none e o próprio `title` sumiria — o motivo fica aqui.
+                            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-1.5">
                                 <ActionIconButton kind="edit" title="Renomear bloco" onClick={() => startEditBlock(block)} />
                                 <ActionIconButton kind="delete" title="Excluir bloco" onClick={() => handleDeleteBlock(block)} />
-                            </>
+                            </fieldset>
                         );
 
                         return (
@@ -328,6 +333,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                 isOpen={isOpen}
                                 onToggle={() => setExpandedId(isOpen ? null : block.id)}
                             >
+                              <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
                                 <div className="flex flex-wrap items-end gap-4 px-4 py-3 border-b border-gray-100">
                                     <div>
                                         <label htmlFor={`preco-m2-${block.id}`} className="block text-xs font-semibold text-gray-500 mb-1.5">Preço de venda (R$/m²)</label>
@@ -456,6 +462,7 @@ const ImovibBlocksTypologyTab: React.FC<Props> = ({ study, onDataChanged }) => {
                                         </tbody>
                                     </table>
                                 </div>
+                              </fieldset>
                             </TorreCard>
                         );
                     })

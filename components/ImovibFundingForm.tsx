@@ -5,6 +5,7 @@ import { DollarSign, Landmark, PieChart, AlertTriangle, CheckCircle2 } from 'luc
 import ImovibSalesMapTab from './ImovibSalesMapTab';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 // Nome do campo como aparece na tela, para a mensagem de erro ao salvar.
 const ROTULO_CAMPO: Partial<Record<keyof ImovibStudy, string>> = {
@@ -29,6 +30,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
     // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
     const D = IMOVIB_DEFAULTS;
     const { showToast } = useToast();
+    const { pode, motivo } = useImovibEdicao();
     const [downpayment, setDownpayment] = useState<number>(study.revenue_downpayment_percent ?? D.revenue_downpayment_percent);
     const [construction, setConstruction] = useState<number>(study.revenue_construction_percent ?? D.revenue_construction_percent);
     const [handover, setHandover] = useState<number>(study.revenue_handover_percent ?? D.revenue_handover_percent);
@@ -81,7 +83,8 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
             {/* ── ESPELHO DE VENDAS ── */}
             <ImovibSalesMapTab study={study} onDataChanged={onDataChanged} />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Tudo aqui grava no blur (perfil de recebimento, inadimplência, funding, permutas). */}
+            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 {/* REVENUE PROFILE */}
                 <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm flex flex-col h-full">
@@ -201,7 +204,7 @@ const ImovibFundingForm: React.FC<ImovibFundingFormProps> = ({ study, onDataChan
 
                 </div>
 
-            </div>
+            </fieldset>
 
         </div>
     );

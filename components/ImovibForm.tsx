@@ -4,6 +4,7 @@ import { ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate } from '../types';
 import { imovibService } from '../services/imovibService';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
+import { useImovibPermissaoPorOrg } from '../hooks/useImovibEdicao';
 
 interface ImovibFormProps {
     /** Ignorado: a organização vem do topo (useOrgWriteTarget, REGRA #5). */
@@ -21,6 +22,8 @@ const MODALITIES = ['Incorporação Própria', 'Built-to-Sell', 'Built-to-Rent',
 const ImovibForm: React.FC<ImovibFormProps> = ({ studyId, onBack, onSaved }) => {
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const { showToast } = useToast();
+    // canEditImovib (plano 2026-10-12, item 4.6), avaliada na org ALVO do estudo.
+    const avaliarEdicao = useImovibPermissaoPorOrg();
     const [loading, setLoading] = useState(false);
     const [initialLoading, setInitialLoading] = useState(!!studyId);
     const [formData, setFormData] = useState<Partial<ImovibStudy>>({
@@ -82,6 +85,8 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ studyId, onBack, onSaved }) => 
             setLoading(true);
             let saved: ImovibStudy;
             if (studyId) {
+                const edicao = avaliarEdicao(formData.organization_id);
+                if (!edicao.pode) { showToast(edicao.motivo ?? 'Sem permissão para editar este estudo.', 'error'); return; }
                 saved = await imovibService.updateStudy(studyId, formData as ImovibStudyUpdate);
             } else {
                 // REGRA #5: o topo manda. Org ou empresa selecionada → usa a org
@@ -89,6 +94,8 @@ const ImovibForm: React.FC<ImovibFormProps> = ({ studyId, onBack, onSaved }) => 
                 // Antes: alert "selecione uma organização" mesmo com empresa no topo.
                 const target = await resolveWriteOrg('single');
                 if (!target || target.kind !== 'org') { setLoading(false); return; }
+                const edicao = avaliarEdicao(target.orgId);
+                if (!edicao.pode) { showToast(edicao.motivo ?? 'Sem permissão para criar estudos nesta organização.', 'error'); return; }
                 const newStudy: ImovibStudyInsert = {
                     ...formData,
                     organization_id: target.orgId,

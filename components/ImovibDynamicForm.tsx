@@ -5,6 +5,7 @@ import { Calendar, Percent, Save, TrendingUp } from 'lucide-react';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 interface ImovibDynamicFormProps {
     study: ImovibStudy;
@@ -14,6 +15,7 @@ interface ImovibDynamicFormProps {
 const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChanged }) => {
     const [saving, setSaving] = useState(false);
     const { showToast } = useToast();
+    const { pode, motivo } = useImovibEdicao();
 
     // Padrões vêm de IMOVIB_DEFAULTS — os MESMOS que o motor usa quando o campo está vazio.
     const D = IMOVIB_DEFAULTS;
@@ -78,6 +80,8 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                 )}
             </div>
 
+            {/* Todos os campos gravam no blur (handleSave). */}
+            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Time Parameters */}
                 <div className="space-y-4">
@@ -237,6 +241,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </div>
                 </div>
             </div>
+            </fieldset>
         </div>
     );
 };

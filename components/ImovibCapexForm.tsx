@@ -8,6 +8,7 @@ import { useImovibMath, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibCapexBase } from '../types';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 const parseRegVal = (v: string | undefined): number | null => {
     if (!v || v === 'N.A.' || v.trim() === '') return null;
@@ -85,6 +86,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const [isSaving, setIsSaving] = useState(false);
     const confirm = useConfirm();
     const { showToast } = useToast();
+    const { pode, motivo } = useImovibEdicao();
     const [initializing, setInitializing] = useState(true);
     const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
     const [landCostFocused, setLandCostFocused] = useState(false);
@@ -166,7 +168,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     value: t.value,
                     base: baseDaRubrica({ category: t.category }),
                 }));
-                const loaded = await imovibService.seedCapexTemplate(study.id, template);
+                // Quem só lê (sem canEditImovib) não aplica o template: abrir a aba
+                // não pode gravar. Template vazio = o serviço só lê as rubricas.
+                const loaded = await imovibService.seedCapexTemplate(study.id, pode ? template : []);
                 setItems(loaded);
                 const uniqueCats = Array.from(new Set(loaded.map(i => i.category))).sort();
                 setExpandedCategories(uniqueCats.slice(0, 2));
@@ -323,7 +327,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         </p>
                     </div>
                     {/* Mode toggle */}
-                    <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
+                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center bg-slate-100 rounded-xl p-1 gap-1 shrink-0">
                         <button
                             onClick={() => saveMode('simplified')}
                             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
@@ -346,7 +350,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             <LayoutList className="w-3.5 h-3.5" />
                             Completo
                         </button>
-                    </div>
+                    </fieldset>
                 </div>
 
                 {/* ── ÁREA TOTAL ── */}
@@ -371,7 +375,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         <label className="block text-form-label font-black uppercase tracking-wider text-slate-500 mb-4">
                             Custo de Obra (R$/m²) por Bloco
                         </label>
-                        <div className="space-y-3">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 space-y-3">
                             {study.blocks.map(block => (
                                 <div key={block.id} className="flex items-center gap-4">
                                     <span className="text-sm font-bold text-slate-700 min-w-[120px]">{block.name}</span>
@@ -394,7 +398,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                     )}
                                 </div>
                             ))}
-                        </div>
+                        </fieldset>
                     </div>
                 )}
 
@@ -403,7 +407,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     <label className="block text-form-label font-black uppercase tracking-wider text-amber-700 mb-3">
                         Custo de Aquisição do Terreno (R$)
                     </label>
-                    <div className="flex items-center gap-3 max-w-xs">
+                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 flex items-center gap-3 max-w-xs">
                         <span className="text-slate-500 font-bold text-sm">R$</span>
                         <input
                             type={landCostFocused ? 'number' : 'text'}
@@ -414,7 +418,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             onBlur={() => { setLandCostFocused(false); saveLandCost(landCost); }}
                             className="flex-1 px-4 py-3 bg-white border border-amber-300 rounded-xl focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none font-bold text-slate-800 text-lg"
                         />
-                    </div>
+                    </fieldset>
                     <p className="text-xs text-amber-600 font-medium mt-2">
                         Valor usado em: Estática → Aquisição do Terreno
                     </p>
@@ -423,7 +427,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 {/* ── SIMPLIFIED MODE ── */}
                 {capexMode === 'simplified' && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Área */}
                             <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
                                 <label className="block text-form-label font-black uppercase tracking-wider text-slate-400 mb-2">
@@ -478,7 +482,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                     />
                                 </div>
                             </div>
-                        </div>
+                        </fieldset>
 
                         {/* Total result */}
                         <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100 flex items-center justify-between">
@@ -568,7 +572,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             </span>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handleAddItem(category); }}
-                                                className="p-1 px-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95"
+                                                disabled={!pode}
+                                                title={!pode ? motivo : undefined}
+                                                className="p-1 px-2 flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-white hover:bg-slate-200 text-indigo-600 border border-slate-200 rounded-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                                             >
                                                 <Plus className="w-3 h-3" />
                                                 Novo
@@ -578,6 +584,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
                                     {expandedCategories.includes(category) && (
                                         <div className="p-0 border-t border-slate-200">
+                                          <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0">
                                             <table className="w-full text-left bg-white">
                                                 <thead>
                                                     <tr className="bg-slate-50/50 text-xs font-black tracking-widest uppercase text-slate-400 border-b border-slate-100">
@@ -658,6 +665,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                     ))}
                                                 </tbody>
                                             </table>
+                                          </fieldset>
                                         </div>
                                     )}
                                 </div>

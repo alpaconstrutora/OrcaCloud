@@ -6,6 +6,7 @@ import EstudoMapaRegulatorio from './EstudoMapaRegulatorio';
 import ImovibBlocksTypologyTab from './ImovibBlocksTypologyTab';
 import EstudoTorresUnidades from './torres/EstudoTorresUnidades';
 import { useToast } from '../hooks/useToast';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 
 interface ImovibPremisesFormProps {
@@ -18,6 +19,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(study);
     const [isSaving, setIsSaving] = useState(false);
     const { showToast } = useToast();
+    const { pode, motivo } = useImovibEdicao();
 
     useEffect(() => {
         setFormData(study);
@@ -108,8 +110,9 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                 {activeTab !== 'regulatorio' && activeTab !== 'blocos' && (
                     <button
                         onClick={handleSaveAllForm}
-                        disabled={isSaving}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm shadow-emerald-600/20 disabled:opacity-70"
+                        disabled={isSaving || !pode}
+                        title={!pode ? motivo : undefined}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm shadow-emerald-600/20 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         {isSaving ? 'Salvando...' : 'Salvar Premissas'}
@@ -129,13 +132,13 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             <p className="text-slate-500 text-sm mt-1 font-medium">Informações legais e contextuais da análise.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
                             {renderInput('CNPJ da SPE', 'spe_cnpj', 'text', 'Ex: 00.000.000/0001-00')}
                             {renderInput('Incorporadora / Desenvolvedor', 'developer_name', 'text', 'Nome da Empresa')}
                             {renderInput('Gestor do Projeto', 'project_manager', 'text', 'Nome do Responsável')}
                             {renderInput('Data-base da Análise', 'base_date', 'date')}
                             {renderInput('Modalidade de Desenvolvimento', 'development_modality', 'text', 'Ex: Incorporação / Permuta / BTS')}
-                        </div>
+                        </fieldset>
 
                     </div>
                 </div>
@@ -153,7 +156,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             <p className="text-slate-500 text-sm mt-1 font-medium">Inteligência de mercado, demanda e concorrência.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-1 gap-6">
                             {renderTextarea('Macrolocalização (Cidade/Região)', 'location_macro', 'Dinâmica econômica local...')}
                             {renderTextarea('Microlocalização (Bairro/Vizinhança)', 'location_micro', 'Infraestrutura de transportes, saúde...')}
 
@@ -165,7 +168,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             {renderTextarea('Público Alvo / Buyer Persona', 'target_audience', 'Perfil de renda, ocupação familiar...')}
                             {renderTextarea('Demanda e Déficit', 'demand_deficit', 'Déficit habitacional por faixa de renda...')}
                             {renderTextarea('Análise de Concorrentes', 'competitors_analysis', 'Oferta ativa num raio de influência, tickets médios...')}
-                        </div>
+                        </fieldset>
                     </div>
                 </div>
             )}

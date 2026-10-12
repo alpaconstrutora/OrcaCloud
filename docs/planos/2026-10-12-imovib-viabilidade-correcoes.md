@@ -341,7 +341,20 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - "Gerar" relê o banco e cria só o que falta, então o falso "não gerado" não duplica mais.
     - Novo `imovibService.deleteUnitInstancesByIds`. 5 testes.
   - [x] **4.5** — `ImovibDashboard` lê a org de `useOrgContext()` (empresa no topo herda a org; "Todas" = null, não bloqueia) e `ImovibForm` cria com `useOrgWriteTarget` no modo `'single'` (topo com org/empresa = sem pergunta; "Todas" = modal), no lugar do `alert('selecione uma organização')`. A prop crua `organizationId` ficou ignorada nos dois. `SalesManagementModule` continua passando a prop para os outros submódulos (Vendas, Locações), fora do escopo. Verificado: `orgContextGuard` 14/14, `check-org-selector-guard.sh` exit 0.
-  - [ ] **4.6** — Decisão (2026-10-12): *"Aplicar canEditImovib"*. Sem a permissão, o estudo abre só para leitura. A trava de rota em "Todas" continua igual à dos outros módulos.
+  - [ ] **4.6** — Decisão (2026-10-12): *"Aplicar canEditImovib"*. Sem a permissão, o estudo abre só para leitura. A trava de rota em "Todas" continua igual à dos outros módulos. **Código pronto, falta a prova no navegador** (roteiro `c:/tmp/pwtest/imovib_somente_leitura.js`, que simula `canEditImovib=false` alterando só a resposta de `organization_members` no navegador do teste).
+    - **Regra** — `hooks/useImovibEdicao.tsx` (`avaliarEdicaoImovib`, 6 testes). Avaliada sobre a org **dona do estudo**:
+      - desenvolvedor, admin e owner editam;
+      - `canEditImovib` definido no membro vale; sem definição, segue o papel (viewer não edita);
+      - quem não é membro da org do estudo: só leitura.
+      - Hoje ninguém perde acesso: nas duas orgs, todos têm `canEditImovib` true ou vazio.
+    - **Telas** (feito por subagente, conferido por mim):
+      - aviso "Somente leitura — motivo" no detalhe;
+      - `<fieldset disabled title=motivo>` só nas regiões que gravam, nas 8 abas;
+      - continuam livres: sub-abas, expandir/recolher, exportar, "Corrigir em…", sliders de stress test e "Tentar de novo";
+      - listagem: excluir e "Novo estudo" com motivo;
+      - criar/editar estudo: recusa com toast;
+      - CAPEX: quem só lê não aplica o template de rubricas ao abrir.
+    - **Pendente (decisão):** Premissas › "3. Torres & Unidades" e "4. Mapa Regulatório" gravam no **empreendimento** (TowerEditor/MapaRegulatorioEditor) e continuam editáveis, porque a permissão ali seria a do módulo Empreendimentos.
   - [x] **4.7** — Falhas visíveis em 12 componentes + serviço (feito por um subagente na frente; conferido por mim):
     - 0 `alert(`. Cada um dos 36 `console.error` avisa o usuário na mesma função.
     - `getStudyById` propaga erro de blocos/unidades/CAPEX (antes devolvia `[]` e o VGV/custo caía a zero em silêncio).

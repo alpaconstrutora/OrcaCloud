@@ -292,19 +292,33 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
   - O 1º push foi recusado porque outra frente entrou no `main` durante a suíte. Refiz o rebase e rodei a suíte de novo.
   - Suíte inteira: rc 0, 8.668 testes. `verificar:build`: rc 0.
   - `main` = `45414a15`. `conferir-producao.sh` confirmou que o domínio serve `45414a1`.
-- [ ] **Fase 3 — código pronto, falta a prova no navegador** (2026-10-12):
-  - [ ] **3.1** — "Preço de venda (R$/m²)" no corpo de cada bloco (Premissas › 2. Blocos e Tipologia), com o VGV do bloco e a origem dele, vindos do motor.
-  - [ ] **3.2** — VGV por bloco no motor. Com espelho, cada unidade vale o próprio preço; unidade sem preço vale área × preço/m²; PERMUTADA fica fora. Sem espelho, vale área privativa **vendável** × preço/m².
+  - Check-run `ci` do GitHub no `45414a1`: **completed / success**.
+- [x] **Fase 3 — 4 de 4** (2026-10-12):
+  - [x] **3.1** — "Preço de venda (R$/m²)" no corpo de cada bloco (Premissas › 2. Blocos e Tipologia), com o VGV do bloco e a origem dele, vindos do motor.
+  - [x] **3.2** — VGV por bloco no motor. Com espelho, cada unidade vale o próprio preço; unidade sem preço vale área × preço/m²; PERMUTADA fica fora. Sem espelho, vale área privativa **vendável** × preço/m².
     - Achado novo: tipologia `is_vendavel = false` (área comum) entrava no VGV. Agora entra só no custo.
     - Aviso novo `permuta_em_dobro`: espelho com permutada e Permuta Física > 0.
     - O espelho é carregado no detalhe (falha propaga, não cai em silêncio para preço/m²) e em lote na listagem (5 consultas, 3 níveis).
     - Premissas deixou de gravar `unit_instances`.
     - 5 testes novos: 28 no total.
-  - [ ] **3.3** — Estática reescrita sobre o motor: VGV, terreno, obra, rubricas do CAPEX (no modo Completo) e áreas. Saíram as fórmulas próprias (`vgvFormula`, T.O. × terreno × pavimentos). Ganhou o banner de avisos e ficou com o guia de UI limpo.
-  - [ ] **3.4** — O cabeçalho do espelho usa `math.vgvTotal`. Mudar o status de uma unidade recarrega o estudo, porque a permutada sai do VGV. O texto "com base no Estudo Estático" foi corrigido.
+  - [x] **3.3** — Estática reescrita sobre o motor: VGV, terreno, obra, rubricas do CAPEX (no modo Completo) e áreas. Saíram as fórmulas próprias (`vgvFormula`, T.O. × terreno × pavimentos). Ganhou o banner de avisos e ficou com o guia de UI limpo.
+  - [x] **3.4** — O cabeçalho do espelho usa `math.vgvTotal`. Mudar o status de uma unidade recarrega o estudo, porque a permutada sai do VGV. O texto "com base no Estudo Estático" foi corrigido.
     - **VGV exibido** (Estática, Espelho, listagem, Resumo) = `vgvTotal`, que inclui o prêmio ESG. A Estática diz quando há prêmio.
     - **Guia de UI no espelho:** §7 (9×) e §14 (`window.confirm` → `useConfirm`), por causa da REGRA #1 em arquivo tocado.
-  - **Esperado no navegador:**
+  - **Correção do item 1.5, achada na prova da Fase 3:**
+    - **Sintoma:** a listagem mostrou o Garden Cambuhy com TIR "—" e VPL de R$ 12 mi.
+    - **Causa:** o fluxo dele é + → − → + (sinal de venda antes da obra, terreno 0) e o VPL cruza o zero duas vezes (~10% e ~30% a.m.). A checagem do 1.5 só comparava os extremos do intervalo, positivos nos dois, e devolvia NaN.
+    - **Já está em produção desde a publicação das Fases 1 e 2.** Antes delas, o motor antigo mostrava "> 999%" para esse mesmo fluxo.
+    - **Correção:** `calcularTirMensal` varre o VPL em grade e refina cada troca de sinal. Com mais de uma raiz, devolve a de menor módulo e gera o aviso `tir_multipla`. 4 testes novos (raiz única, duas raízes a 10%/20%, sem raiz, formato do Garden): 32 no total.
+    - **Dados reais**, todos com VPL na TIR = 0,00:
+      - Garden: 214,8% a.a. + aviso de TIR múltipla;
+      - Bruninho: 14,4%;
+      - Córrego: −15,1%;
+      - Davi: sem TIR (sem área).
+  - **Prova no navegador** (roteiro `c:/tmp/pwtest/imovib_fase3.js`, escritas bloqueadas: 0, erros de console: 0):
+    - Bruninho: R$ 9.999.998 na listagem, na Estática ("pelo espelho de vendas"), no bloco e no Espelho. Sem banner, porque o "sem preço" sumiu.
+    - Garden: R$ 38.400.000 na listagem, na Estática ("área privativa vendável × preço/m²") e no bloco (R$ 8.000/m² no campo). Não tem espelho gerado, então não há o número do Espelho.
+  - **Esperado no navegador (registrado antes da prova):**
     - Bruninho (espelho com 16 unidades precificadas, soma R$ 9.999.998, preço/m² 0): sai de VGV 0 com aviso "sem preço" para R$ 9.999.998 na Estática, no Espelho e no bloco.
     - Garden (sem espelho, R$ 8.000/m²): origem "área privativa vendável × preço/m²".
 - [ ] **Fase 4 — 0 de 7:** 4.1 · 4.2 (D1) · 4.3 · 4.4 · 4.5 · 4.6 · 4.7

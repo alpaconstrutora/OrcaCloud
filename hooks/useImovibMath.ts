@@ -37,7 +37,7 @@ export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'divida_quitada_no_fim' | 'permuta_em_dobro';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -99,28 +99,11 @@ const calculateNPV = (rate: number, cashFlows: number[]): number => {
 const IRR_LOW = -0.9;
 const IRR_HIGH = 10.0;
 
-/**
- * TIR mensal por bissecção. Devolve NaN quando não há raiz no intervalo —
- * nunca um dos limites. O motor antigo assumia que o VPL sempre cai com a
- * taxa e, sem raiz, convergia para o limite: exibia TIR de −100% a.a. como se
- * fosse uma taxa calculada.
- */
-const calculateIRR = (cashFlows: number[]): number => {
-    if (!cashFlows || cashFlows.length === 0) return NaN;
-    const hasPositive = cashFlows.some(f => f > 0);
-    const hasNegative = cashFlows.some(f => f < 0);
-    if (!hasPositive || !hasNegative) return NaN;
-
-    let low = IRR_LOW;
-    let high = IRR_HIGH;
+/** Bissecção num intervalo [a, b] onde o VPL troca de sinal. */
+const bissectar = (cashFlows: number[], a: number, b: number): number => {
+    let low = a;
+    let high = b;
     let npvLow = calculateNPV(low, cashFlows);
-    const npvHigh = calculateNPV(high, cashFlows);
-    if (!Number.isFinite(npvLow) || !Number.isFinite(npvHigh)) return NaN;
-    if (npvLow === 0) return low;
-    if (npvHigh === 0) return high;
-    if (Math.sign(npvLow) === Math.sign(npvHigh)) return NaN;
-
-    // Segue o lado cujo sinal é o do limite inferior — não assume VPL decrescente.
     for (let i = 0; i < 200 && high - low > 1e-12; i++) {
         const mid = (low + high) / 2;
         const npvMid = calculateNPV(mid, cashFlows);
@@ -133,6 +116,51 @@ const calculateIRR = (cashFlows: number[]): number => {
         }
     }
     return (low + high) / 2;
+};
+
+// Grade da varredura: fina onde ficam as taxas de projeto (até 100% a.m.),
+// grossa daí até o limite superior.
+const GRADE_TIR: number[] = (() => {
+    const g: number[] = [];
+    for (let r = IRR_LOW; r < 1; r += 0.0025) g.push(r);
+    for (let r = 1; r <= IRR_HIGH + 1e-9; r += 0.05) g.push(r);
+    return g;
+})();
+
+/**
+ * TIR mensal. Varre o VPL em [−90%, 1000%] a.m., acha CADA troca de sinal e
+ * refina por bissecção.
+ *
+ * - Sem raiz no intervalo: NaN (a tela mostra "N/A"), nunca um dos limites. O
+ *   motor antigo assumia VPL sempre decrescente e, sem raiz, convergia para o
+ *   limite — exibia −100% a.a. como taxa calculada.
+ * - Mais de uma raiz (fluxo com sinal + → − → +, como sinal de venda ANTES da
+ *   obra): devolve a de menor módulo e `raizes` > 1, para o motor avisar. A 1ª
+ *   versão da correção só comparava os extremos (positivos nos dois) e dava NaN
+ *   para o Garden Cambuhy, que tem TIR perto de 10% a.m.
+ */
+export const calcularTirMensal = (cashFlows: number[]): { taxa: number; raizes: number } => {
+    if (!cashFlows || cashFlows.length === 0) return { taxa: NaN, raizes: 0 };
+    const hasPositive = cashFlows.some(f => f > 0);
+    const hasNegative = cashFlows.some(f => f < 0);
+    if (!hasPositive || !hasNegative) return { taxa: NaN, raizes: 0 };
+
+    const raizes: number[] = [];
+    let rAnt = GRADE_TIR[0];
+    let vAnt = calculateNPV(rAnt, cashFlows);
+    for (let k = 1; k < GRADE_TIR.length; k++) {
+        const r = GRADE_TIR[k];
+        const v = calculateNPV(r, cashFlows);
+        if (!Number.isFinite(v) || !Number.isFinite(vAnt)) { rAnt = r; vAnt = v; continue; }
+        if (vAnt === 0) raizes.push(rAnt);
+        else if (Math.sign(v) !== Math.sign(vAnt) && v !== 0) raizes.push(bissectar(cashFlows, rAnt, r));
+        rAnt = r;
+        vAnt = v;
+    }
+    if (vAnt === 0) raizes.push(rAnt);
+    if (raizes.length === 0) return { taxa: NaN, raizes: 0 };
+    const taxa = raizes.reduce((best, r) => (Math.abs(r) < Math.abs(best) ? r : best), raizes[0]);
+    return { taxa, raizes: raizes.length };
 };
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
@@ -537,10 +565,18 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
         const vpl = calculateNPV(monthlyDiscount, finalRawNetFlows); // Using monthly discount rate
 
         // IRR is returned as a monthly rate. Convert to annual.
-        const monthlyIrr = calculateIRR(finalRawNetFlows);
+        const tir = calcularTirMensal(finalRawNetFlows);
+        const monthlyIrr = tir.taxa;
         let annualIrr = NaN;
         if (!isNaN(monthlyIrr) && isFinite(monthlyIrr)) {
             annualIrr = (Math.pow(1 + monthlyIrr, 12) - 1) * 100;
+        }
+        if (tir.raizes > 1) {
+            avisos.push({
+                codigo: 'tir_multipla',
+                mensagem: `O fluxo troca de sinal mais de uma vez e tem ${tir.raizes} TIRs; a exibida (${annualIrr.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% a.a.) é a de menor valor. Para decidir, use o VPL.`,
+                aba: 'viability_dynamic',
+            });
         }
 
         return {

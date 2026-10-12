@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeImovibMath } from '../hooks/useImovibMath';
+import { computeImovibMath, calcularTirMensal } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 
 /**
@@ -156,6 +156,35 @@ describe('1.5 — TIR honesta', () => {
             expect(r.annualIrr).toBeGreaterThan(-99.9);
             expect(tirEhRaiz(r)).toBe(true);
         }
+    });
+
+    it('fluxo com uma troca de sinal: a raiz única', () => {
+        const t = calcularTirMensal([-100, 110]);
+        expect(t.raizes).toBe(1);
+        expect(t.taxa).toBeCloseTo(0.1, 8);
+    });
+
+    it('fluxo + → − → + com duas raízes (10% e 20%): devolve a menor e conta as duas', () => {
+        // 100 − 230/(1+r) + 132/(1+r)² = 0 → r = 10% ou 20%. Os extremos da busca
+        // têm o MESMO sinal — a 1ª versão da correção só olhava os extremos e dava NaN.
+        const t = calcularTirMensal([100, -230, 132]);
+        expect(t.raizes).toBe(2);
+        expect(t.taxa).toBeCloseTo(0.1, 8);
+    });
+
+    it('sem raiz no intervalo: NaN', () => {
+        expect(Number.isNaN(calcularTirMensal([-100, -10]).taxa)).toBe(true);
+        expect(Number.isNaN(calcularTirMensal([100, -1, 100]).taxa)).toBe(true); // VPL > 0 em toda taxa
+    });
+
+    it('estudo com sinal de venda antes da obra e terreno zero (formato do Garden Cambuhy) tem TIR', () => {
+        // Meses 1–5: só sinal (positivo); 6–29: obra (negativo); 29: repasse (positivo).
+        const r = computeImovibMath(baseStudy({ land_cost: 0 }));
+        const net = r.monthlyFlows.map(f => f.net);
+        expect(net[0]).toBeGreaterThan(0);
+        expect(Math.min(...net)).toBeLessThan(0);
+        expect(Number.isFinite(r.annualIrr)).toBe(true);
+        expect(tirEhRaiz(r)).toBe(true);
     });
 
     it('fluxo sem troca de sinal dá TIR NaN', () => {

@@ -956,7 +956,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             window.document.body.appendChild(container);
             try {
                 const { default: html2canvas } = await import('html2canvas');
-                const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+                const { coresCompativeisNaCopia } = await import('../utils/html2canvasCores');
+                // Tailwind v4 = cores oklch; html2canvas 1.4 aborta sem isto (utils/html2canvasCores.ts).
+                const canvas = await html2canvas(container, { scale: 2, useCORS: true, onclone: (_d, raiz) => { coresCompativeisNaCopia(raiz, { semSombra: true }); } });
                 const imgData = canvas.toDataURL('image/jpeg', 0.95);
                 const pageW = doc.internal.pageSize.getWidth();
                 const pageH = doc.internal.pageSize.getHeight();

@@ -3,6 +3,7 @@ import {
     X, Printer, Loader2, FileText, AlertCircle, Download
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 
@@ -102,7 +103,9 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                 scale: 2, // Aumenta a qualidade
                 useCORS: true,
                 logging: false,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                // Tailwind v4 = cores oklch; html2canvas 1.4 aborta sem isto (utils/html2canvasCores.ts).
+                onclone: (_d, raiz) => { coresCompativeisNaCopia(raiz, { semSombra: true }); },
             });
 
             const imgData = canvas.toDataURL('image/png');
@@ -261,23 +264,23 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
 
                                         return (
                                         <tr key={idx} className="border-b border-slate-50 last:border-0">
-                                            <td className="py-3 px-4 font-bold text-slate-400">{(item.code || '???').substring(0, 3)}</td>
-                                            <td className="py-3 px-4 font-black text-slate-900 uppercase text-xs leading-tight">{displayName}</td>
-                                            <td className="py-3 px-4 text-center font-bold text-slate-600 italic text-xs">
+                                            <td className="py-3 px-4 text-slate-500">{(item.code || '???').substring(0, 3)}</td>
+                                            <td className="py-3 px-4 text-slate-900 uppercase text-xs leading-tight">{displayName}</td>
+                                            <td className="py-3 px-4 text-center text-slate-600 italic text-xs">
                                                 {item.reference ? 
                                                     (typeof item.reference === 'number' ? 
                                                         `${(item.reference > 1 ? item.reference : item.reference * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1 })}%` : 
                                                         item.reference) 
                                                 : ''}
                                             </td>
-                                            <td className="py-3 px-4 text-right font-black">
+                                            <td className="py-3 px-4 text-right font-medium">
                                                 {item.type === 'provento' ? (
                                                     <span className="text-slate-900">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 ) : (item.type === 'informativa' || item.type === 'encargo') ? (
-                                                    <span className="text-slate-400 font-bold italic text-xs">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    <span className="text-slate-400 italic text-xs">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 ) : ''}
                                             </td>
-                                            <td className="py-3 px-4 text-right font-black">
+                                            <td className="py-3 px-4 text-right font-medium">
                                                 {item.type === 'desconto' ? (
                                                     <span className="text-rose-500">R$ {(item.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                 ) : ''}

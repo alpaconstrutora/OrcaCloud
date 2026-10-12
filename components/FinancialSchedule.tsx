@@ -3,6 +3,7 @@ import Button from './ui/Button';
 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import {
     ProjectSettings,
     BudgetEntry,
@@ -3186,7 +3187,9 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 scale: 2, // High resolution
                 useCORS: true,
                 logging: false,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                // Tailwind v4 = cores oklch; html2canvas 1.4 aborta sem isto (utils/html2canvasCores.ts).
+                onclone: (_d, raiz) => { coresCompativeisNaCopia(raiz, { semSombra: true }); },
             });
 
             const imgData = canvas.toDataURL('image/png');

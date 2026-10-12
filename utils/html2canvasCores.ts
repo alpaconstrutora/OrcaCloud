@@ -77,7 +77,12 @@ export function coresCompativeisNaCopia(raiz: HTMLElement, opcoes: { semSombra?:
     if (!view) return 0;
     const converter = criarConversor(doc);
     let reescritas = 0;
-    const elementos: Element[] = [raiz, ...Array.from(raiz.querySelectorAll('*'))];
+    // <html> e <body> da cópia entram também: o html2canvas SEMPRE lê a cor de
+    // fundo dos dois (parseBackgroundColor), mesmo com `backgroundColor` informado
+    // e mesmo capturando só um elemento lá dentro. No app o body tem fundo oklch —
+    // a 1ª versão desta correção só tratava a subárvore e o PDF seguia abortando.
+    const extremos = [doc.documentElement, doc.body].filter((e): e is HTMLElement => !!e && e !== raiz);
+    const elementos: Element[] = [...extremos, raiz, ...Array.from(raiz.querySelectorAll('*'))];
     for (const el of elementos) {
         const estilo = view.getComputedStyle(el);
         const alvo = (el as HTMLElement | SVGElement).style;

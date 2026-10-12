@@ -406,7 +406,15 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - **PDF NÃO saía**, com o erro `unsupported color function "oklch"`: o html2canvas 1.4 não entende as cores do Tailwind v4. Provavelmente quebrado em produção desde a migração para o v4, porque a captura não mudou.
       - Correção: `utils/html2canvasCores.ts` (`coresCompativeisNaCopia`) no `onclone`. Na CÓPIA, toda cor oklch/oklab/lab/lch/color-mix vira rgba (inclusive dentro de gradiente e sombra) e as sombras saem. A tela não é tocada.
       - Prova em página local com o CSS real do build: sem a correção, o mesmo erro; com ela, gera, e o pixel do cartão azul dá rgb(37, 77, 239). 4 testes da troca de funções.
-      - **Pendência fora do escopo:** `ContractDetailView`, `FinancialSchedule` e `PaystubModal` chamam html2canvas sem proteção, então o PDF deles provavelmente tem a mesma falha (não provado).
+      - **2ª prova no app: o PDF ainda falhava.** Causa: o html2canvas SEMPRE lê a cor de fundo do `<html>` e do `<body>` da cópia (`parseBackgroundColor`), mesmo com `backgroundColor` informado e capturando só um elemento.
+        - No app o body tem fundo oklch. A página de teste usava `bg-white` (#fff, sem oklch), por isso não reproduziu o caso real.
+        - Corrigido: `<html>`/`<body>` da cópia entram no tratamento.
+        - A prova passou a valer: com body `bg-gray-50` (oklch), a versão anterior falha com o MESMO erro do app e a nova gera.
+      - **Outras telas** (pedido: *"verificar e Corrigir"*): `ContractDetailView` (PDF do contrato), `FinancialSchedule` (cronograma financeiro) e `PaystubModal` (holerite) não tinham proteção e agora usam `coresCompativeisNaCopia`. `docxRenderService` já se protegia (iframe isolado); `opuraMarketRelatorioPdf` desliga folhas de estilo (serve para mapa).
+        - Holerite: 6 `<td>` com `font-bold`/`font-black` (§7, anteriores) corrigidos por causa da REGRA #1.
+        - Verificado: tsc rc 0; `check-ui-standard` rc 0 nos 3; 115 testes existentes dessas telas passando.
+        - **Não provado no app tela a tela** (precisa de contrato/holerite com dados): o mecanismo é o mesmo provado acima.
+      - **Erro meu de verificação** (achado aqui): o loop `echo "$(basename $f) exit=$?"` imprimia o `$?` do `basename`, não o do verificador. Refeito com `rc=$?` logo depois do comando: os 6 arquivos de Torres/Mapa estavam de fato limpos (rc 0, 0 linhas).
     - **"Cancelar" do drawer de criar "não fechou":** falso alarme do roteiro. O Sheet fechado continua montado (só desliza com translate-x), e o drawer de editar abriu normal logo depois. O roteiro passou a conferir a posição do campo.
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);

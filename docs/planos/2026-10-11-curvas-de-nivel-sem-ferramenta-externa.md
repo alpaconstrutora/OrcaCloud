@@ -129,3 +129,32 @@ Estudo descartável → Dados do lote → "Desenhar no mapa" → colar `-22,6153
 desenhar a área do terreno do usuário (~288 × 248 m) → Usar esta área → Curvas de nível
 já em Copernicus 30 m → Equidistância 1 m → Gerar curvas → comparar faixa de cotas com o
 `contours (1).kml` (863–896 m).
+
+---
+
+# Pedido posterior — 12/10/2026: a Cota do terreno vem do próprio DEM
+
+O usuário gerou as curvas com o Copernicus 30 m em produção (a prova logada que faltava) e
+mandou as duas mensagens que apareceram:
+
+> somente essa mensagem: No corte e no 3D, o zero do desenho está na cota média (873,91 m). Para ancorar de verdade, informe a Cota do terreno em "Onde fica".
+>
+> A grade (15,0 m) é mais densa que a fonte (30 m): o desenho fica mais suave, mas a precisão continua a da fonte.
+
+As duas são avisos (a geração funcionou). Proposta: o app acabou de medir a altitude da
+origem — preencher a Cota do terreno sozinho, sem nunca sobrescrever a digitada. Resposta:
+
+> sim
+
+## Decisão
+
+- `cotaNaOrigem(grade)` (puro, `utils/blueprintTopografia.ts`): a altitude bilinear no (0, 0) da grade, ao centímetro.
+- O hook recebe `onCotaDaOrigem`; depois de gravar a versão, com fonte REMOTA (altitude absoluta — pontos cotados do topógrafo podem ser relativos), "Onde fica" informado e `elevacaoM` vazia: lê a grade na origem; origem fora da grade → pergunta ao DEM só aquele ponto; falhou → fica vazia, como antes.
+- O editor relê o modelo ATUAL antes de gravar (nunca por cima do que foi digitado nesse meio-tempo), grava com `SetGeorreferencia` (Ctrl+Z desfaz) e avisa com o valor e a fonte. O aviso do painel some sozinho (`cotaDeOrigemInformada`).
+
+## Estado
+
+- [x] `cotaNaOrigem` + hook + editor
+- [x] `__tests__/components/useBlueprintTopografiaCotaDaOrigem.test.tsx` (4: preenche 875,00 na origem; não mexe na digitada; não preenche com pontos cotados; origem fora da grade pergunta só aquele ponto). Prova de que morde: tirar a condição da cota vazia → "não mexe na digitada" falha
+- [x] Suíte 8.762 = 8.728 + 34 pendentes + 0 falhos; `tsc` exit 0; `check-ui-standard.sh` e `check-xss-sinks.sh` limpos; build ✓ (a 1ª rodada caiu com exit 139, a queda intermitente do Node; a repetição passou)
+- [ ] Publicação e CI

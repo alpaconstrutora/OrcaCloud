@@ -46,6 +46,7 @@ import {
   hashDoResultado,
   localParaGeo,
   amostradorDaGrade,
+  cotaNaOrigem,
   nosDaGrade,
   planejarGrade,
   sugerirEquidistancia,
@@ -61,6 +62,7 @@ import {
   FonteIndisponivel,
   type CodigoDaFonte,
   type FonteDeElevacao,
+  type InvocarFuncao,
 } from '../utils/blueprintElevacaoProvedores';
 import {
   avisoDaVersao,
@@ -75,6 +77,9 @@ import {
 import { gerarDxfDaTopografia } from '../utils/blueprintDxf';
 import type { EmissaoExecutiva } from '../utils/blueprintTopografiaExecutivo';
 import { supabase } from '../lib/supabase';
+
+/** Fonte atrás de Edge Function (Copernicus, SRTM): o cliente do Supabase leva o JWT. */
+const invocarFuncao: InvocarFuncao = (nome, corpo) => supabase.functions.invoke(nome, { body: corpo as Record<string, unknown> });
 
 /**
  * A topografia do estudo: fonte, pontos cotados, geração e versões.
@@ -218,6 +223,11 @@ export function useBlueprintTopografia(
   /** O anel do lote FECHADO, em mm; `null` sem lote ou com contorno aberto. */
   anel: Point[] | null,
   georreferencia: Georreferencia | null,
+  /**
+   * 12/10/2026: a altitude da origem medida pelo DEM de satélite, quando "Onde
+   * fica › Cota do terreno" está vazia — o editor grava (comando, Ctrl+Z desfaz).
+   */
+  onCotaDaOrigem?: (cotaM: number, fonte: string) => void,
 ): Topografia {
   const [fonteCodigo, setFonteCodigo] = useState<CodigoDaFonte>('PONTOS_COTADOS');
   const [pontosCotados, setPontosCotados] = useState<PontoDeLevantamento[]>([]);
@@ -476,9 +486,7 @@ export function useBlueprintTopografia(
         const coords = nosDaGrade(grade).map((n) => localParaGeo(n, georreferencia));
         // Fonte atrás de Edge Function (SRTM 30 m): o cliente do Supabase leva
         // o JWT; a function é que fala com o provedor sem CORS.
-        const cotas = await amostrarRemoto(fonte, coords, fetch, (nome, corpo) =>
-          supabase.functions.invoke(nome, { body: corpo as Record<string, unknown> }),
-        );
+        const cotas = await amostrarRemoto(fonte, coords, fetch, invocarFuncao);
         grade = { ...grade, cotasM: cotas };
       }
 
@@ -592,6 +600,23 @@ export function useBlueprintTopografia(
       setVersoes((vs) => [linha, ...vs]);
       setSelecionadaId(linha.id);
       setEquidistanciaM(equid);
+
+      // A COTA DA ORIGEM (12/10/2026): com DEM de satélite a altitude é
+      // absoluta, e o app acabou de medi-la — "Onde fica › Cota do terreno"
+      // vazia é preenchida sozinha (nunca sobrescreve a digitada). Origem fora
+      // da grade: pergunta ao DEM só aquele ponto. Falhou? Fica vazia, como antes.
+      if (onCotaDaOrigem && fonte.tipo !== 'LOCAL' && georreferencia && georreferencia.elevacaoM == null) {
+        let cota = cotaNaOrigem(grade);
+        if (cota === null) {
+          try {
+            const [v] = await amostrarRemoto(fonte, [{ lat: georreferencia.latitude, lon: georreferencia.longitude }], fetch, invocarFuncao);
+            cota = v === null ? null : Math.round(v * 100) / 100;
+          } catch {
+            cota = null;
+          }
+        }
+        if (cota !== null) onCotaDaOrigem(cota, fonte.rotuloCurto);
+      }
     } catch (e) {
       if (e instanceof FonteIndisponivel) {
         setErro(`${e.message}. Tente de novo em instantes ou troque a fonte.`);
@@ -621,6 +646,7 @@ export function useBlueprintTopografia(
     persistenciaIndisponivel,
     salvarLevantamento,
     levantamentoId,
+    onCotaDaOrigem,
   ]);
 
   const apagarVersao = useCallback(

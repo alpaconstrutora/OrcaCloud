@@ -4921,12 +4921,35 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   // A3: a cota de cheia da mancha de inundação (sessão; não é premissa de projeto).
   const [cotaDeCheiaM, setCotaDeCheiaM] = useState<number | null>(null);
+  /**
+   * A COTA DA ORIGEM (12/10/2026): o aviso *"o zero do desenho está na cota
+   * média … informe a Cota do terreno"* pedia um número que o app acabara de
+   * medir. Gerar com DEM de satélite preenche "Onde fica › Cota do terreno"
+   * quando está vazia (o hook confere; aqui se relê o modelo ATUAL, para nunca
+   * gravar por cima do que foi digitado nesse meio-tempo). Um comando: Ctrl+Z desfaz.
+   */
+  const preencherCotaRef = useRef<(cotaM: number, fonte: string) => void>(() => {});
+  preencherCotaRef.current = (cotaM, fonte) => {
+    const g = editor.model.georreferencia;
+    if (!g || typeof g.elevacaoM === 'number') return;
+    try {
+      editor.run({ type: 'SetGeorreferencia', georreferencia: { ...g, elevacaoM: cotaM } });
+    } catch {
+      return;
+    }
+    setAvisoConexaoT(
+      `Cota do terreno preenchida com ${cotaM.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m — a altitude do ${fonte} na origem do desenho. ` +
+        'O corte e o 3D passam a usar a altitude real. Se tiver a cota do levantamento, troque em "Onde fica". Ctrl+Z desfaz.',
+    );
+  };
+  const preencherCotaDaOrigem = useCallback((cotaM: number, fonte: string) => preencherCotaRef.current(cotaM, fonte), []);
   const topografia = useBlueprintTopografia(
     study.id,
     study.organization_id,
     study.name,
     anelDoLoteFechado,
     editor.model.georreferencia ?? null,
+    preencherCotaDaOrigem,
   );
 
   /**

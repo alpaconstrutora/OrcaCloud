@@ -826,6 +826,18 @@ export function amostradorDoChao(grade: GradeDeElevacao): (p: Point) => number |
   };
 }
 
+/**
+ * A COTA DA ORIGEM (12/10/2026): a altitude do ponto (0, 0) do desenho na
+ * grade gerada — o que "Onde fica › Cota do terreno" pede para ancorar o
+ * corte e o 3D. Só faz sentido com fonte de altitude ABSOLUTA (DEM de
+ * satélite); `null` se a origem cai fora da grade ou sobre célula sem dado.
+ * Arredondada ao centímetro: mais casas seriam precisão que o DEM não tem.
+ */
+export function cotaNaOrigem(grade: GradeDeElevacao): number | null {
+  const v = amostradorDaGrade(grade)({ x: 0, y: 0 });
+  return v === null ? null : Math.round(v * 100) / 100;
+}
+
 // ── Níveis ────────────────────────────────────────────────────────────────
 
 /**

@@ -363,8 +363,13 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
       - Prop opcional `somenteLeitura` (o motivo) em `TowerEditor`, `MapaRegulatorioEditor` e `RegulatoryZoneTable`, repassada por `EstudoTorresUnidades`/`EstudoMapaRegulatorio` e passada só pela Viabilidade. **Sem a prop, nada muda** no módulo Empreendimentos nem na Planta AI.
       - Travam: barra de terreno, nova torre, editar/excluir torre, pavimentos e unidades, "Nova zona", "Importar de mapa cadastrado", células e excluir zona.
       - Continuam livres: expandir torre, busca, colunas e ordenação da tabela de zonas.
-      - Verificado: tsc exit 0; `check-ui-standard` exit 0 nos 6 arquivos; testes relacionados 17/17. Prova no navegador: roteiro `c:/tmp/pwtest/imovib_ro_torres_mapa.js` (Garden, simulando falta de permissão na SPE).
-      - Publicação da Fase 4 (4.1–4.7, sem este complemento): `main` = `d8181eb2`. O 1º push foi recusado (outra frente entrou); rebase e suíte de novo: 8.724 testes, rc 0; `verificar:build` rc 0.
+      - Verificado: tsc exit 0; `check-ui-standard` exit 0 nos 6 arquivos; testes relacionados 17/17.
+      - **Prova no navegador** (`c:/tmp/pwtest/imovib_ro_torres_mapa.js`, Garden simulando falta de permissão na SPE; escritas bloqueadas: 0; erros de console: 0):
+        - aviso visível; "Adicionar torre", "Adicionar Terreno", "Nova zona" e "Importar" desabilitados; 26/26 células do mapa travadas; busca do mapa livre;
+        - nas Torres, 44/45 campos travados. No print, o único campo de texto livre é a busca do topo do app ("Buscar contratos…"), fora do estudo — não confirmado pelo log.
+      - Publicação da Fase 4 (4.1–4.7, sem este complemento): `main` = `d8181eb2`.
+        - O 1º push foi recusado (outra frente entrou); rebase e suíte de novo: 8.724 testes, rc 0; `verificar:build` rc 0.
+        - A Vercel ficou em "deploying" por mais de 7 min. Esperei o status virar `success`, e o `conferir-producao.sh` confirmou que o domínio serve `d8181eb`.
   - [x] **4.7** — Falhas visíveis em 12 componentes + serviço (feito por um subagente na frente; conferido por mim):
     - 0 `alert(`. Cada um dos 36 `console.error` avisa o usuário na mesma função.
     - `getStudyById` propaga erro de blocos/unidades/CAPEX (antes devolvia `[]` e o VGV/custo caía a zero em silêncio).

@@ -423,6 +423,24 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
     - `Imovib_Garden_Cambuhy_Viabilidade.pdf` gerado, 769 KB, começando com `%PDF-`.
     - A imagem extraída do PDF mostra os KPIs, a Curva S, o ESG e o Master Budget com base ("3% do terreno", "4% da obra", "5% do VGV") e total de R$ 7.037.982, igual ao card do CAPEX.
     - "Cancelar" do drawer de criar: o campo foi para x = 1640 (fora da tela), ou seja, fechou.
+  - **Publicação da Fase 5 + Torres/Mapa + PDFs:** `main` = `071b4ced`.
+    - Rebase sobre 9 commits; 2 deles eram da frente "cabeçalhos sem cinza", que tocou arquivos daqui.
+    - Suíte inteira: 8.751 testes, rc 0 (inclusive a trava de cabeçalho); `verificar:build` rc 0.
+    - O domínio passou a servir `071b4ce`.
+  - **Pendências corrigidas** (pedido de 2026-10-12: *"corrigir: Pendências pequenas no plano"*):
+    - [ ] **(a) Escala de raio em Premissas (§16):**
+      - campos `h-9 rounded-[6px]`, containers `rounded-[10px]`;
+      - sub-abas e "Salvar Premissas" no botão compacto da §17;
+      - de quebra, o título "Módulo 2 — Análise de Mercado" virou "Módulo 1" (a sub-aba é a 1);
+      - 0 classes da escala antiga no arquivo.
+    - [ ] **(b) Notas ESG fora do render:** `NotaEsg` de módulo, com tipos, `aria-label` "Ambiental (E): nota N de 5", `aria-pressed` e `rounded-[6px]`. 2 testes (`__tests__/components/ImovibEsgNota.test.tsx`): mesmo nó depois de renderizar de novo, e o clique grava `esg_governance_score`.
+    - [ ] **(c) Trocar de módulo com edição pendente:**
+      - `lib/guardaDeSaida.ts`: registro global de pendências por adesão, com `useUnsavedChanges({ guardarNavegacao: true })`;
+      - `App.trocarDeTela` passou a ser o `onChangeView` do Layout, então menu, paleta e menu de perfil perguntam;
+      - `useTabRouter`: voltar/avançar pergunta e, se cancelar, restaura o endereço;
+      - `beforeunload` ao fechar ou recarregar a aba;
+      - só Premissas adere: há drawers que ficam montados com dirty=true e perguntariam à toa. 4 testes.
+    - Verificado: tsc rc 0; `check-ui-standard` rc 0 (Premissas, ESG); 26 testes relacionados + 4 do `useUnsavedChanges` existente. **Falta a prova no navegador** (`c:/tmp/pwtest/imovib_pendencias.js`).
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);
     - `StarRating` do ESG declarado dentro do render (botões; efeito menor);

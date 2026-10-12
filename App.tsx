@@ -383,6 +383,8 @@ const PublicDocumentoChecker = React.lazy(() => import('./components/public/Publ
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { useTabRouter } from './hooks/useTabRouter';
 import { syncViewToUrl } from './lib/tabRouter';
+import { useConfirm } from './components/ui/confirm';
+import { haPendenciaDeSaida, limparPendencias, CONFIRMAR_SAIDA } from './lib/guardaDeSaida';
 
 const App: React.FC = () => {
   const {
@@ -459,8 +461,21 @@ const App: React.FC = () => {
     localStorage.getItem('app_viewing_imovib_id')
   );
 
+  // Troca de módulo com edição não salva (lib/guardaDeSaida.ts): menu lateral,
+  // paleta e menu de perfil passam por aqui (Layout.onChangeView) e o
+  // voltar/avançar do navegador pelo useTabRouter — os dois perguntam antes.
+  const confirmGlobal = useConfirm();
+  const confirmarSaida = React.useCallback(() => confirmGlobal(CONFIRMAR_SAIDA), [confirmGlobal]);
+  const trocarDeTela = React.useCallback(async (view: string) => {
+    if (view !== activeView && haPendenciaDeSaida()) {
+      if (!(await confirmarSaida())) return;
+      limparPendencias();
+    }
+    setActiveView(view);
+  }, [activeView, confirmarSaida, setActiveView]);
+
   // Multi-tab routing: sync URL hash → state and handle cross-tab auth events.
-  useTabRouter(activeView, setActiveView, useStore.getState().logout);
+  useTabRouter(activeView, setActiveView, useStore.getState().logout, confirmarSaida);
 
   // Ensure the URL hash reflects the current view on first render.
   React.useEffect(() => {
@@ -848,7 +863,7 @@ const App: React.FC = () => {
   return (
     <Layout
       activeView={activeView}
-      onChangeView={setActiveView}
+      onChangeView={trocarDeTela}
       projectName={settingsWithId.name || ''}
       onEditProject={handleEditActiveProject}
       onSaveProject={handleSaveProject}

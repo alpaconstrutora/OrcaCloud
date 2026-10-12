@@ -61,6 +61,34 @@ export function calcularRatingOpura(tirAnual: number, tma: number, mediaEsg: num
 
 const fmtPct = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
+/**
+ * Nota de 1 a 5 (E, S e G). Componente de MÓDULO: declarado dentro do render, o
+ * React o tratava como componente novo a cada renderização e remontava os
+ * botões (mesmo defeito do InputRow de Receitas & Capital, item 5.3).
+ */
+const NotaEsg: React.FC<{
+    rotulo: string;
+    valor: number;
+    onChange: (nota: number) => void;
+    icone: React.ElementType;
+    corAtiva: string;
+}> = ({ rotulo, valor, onChange, icone: Icone, corAtiva }) => (
+    <div className="flex items-center gap-1" role="group" aria-label={rotulo}>
+        {[1, 2, 3, 4, 5].map(nota => (
+            <button
+                key={nota}
+                type="button"
+                onClick={() => onChange(nota)}
+                aria-label={`${rotulo}: nota ${nota} de 5`}
+                aria-pressed={nota <= valor}
+                className={`p-1.5 rounded-[6px] transition-colors ${nota <= valor ? corAtiva : 'text-slate-200 hover:text-slate-300'}`}
+            >
+                <Icone className="w-6 h-6 fill-current" />
+            </button>
+        ))}
+    </div>
+);
+
 const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onDataChanged }) => {
     const math = useImovibMath(study);
     const { showToast } = useToast();
@@ -159,25 +187,6 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
         }
     };
 
-    // Helper for 1-5 rating UI
-    const StarRating = ({ value, setter, field, icon: Icon, colorClass }: any) => (
-        <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map(star => (
-                <button
-                    key={star}
-                    onClick={() => {
-                        setter(star);
-                        handleUpdate(field, star);
-                    }}
-                    className={`p-1.5 rounded-lg transition-colors ${star <= value ? colorClass : 'text-slate-200 hover:text-slate-300'
-                        }`}
-                >
-                    <Icon className="w-6 h-6 fill-current" />
-                </button>
-            ))}
-        </div>
-    );
-
     return (
         <div className="space-y-6 pb-20 max-w-6xl mx-auto">
 
@@ -224,7 +233,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                     </span>
                                     <span className="text-xs text-emerald-600/70 font-medium">Impacto no terreno, resíduos, carbono.</span>
                                 </div>
-                                <StarRating value={envScore} setter={setEnvScore} field="esg_environmental_score" icon={Leaf} colorClass="text-emerald-500" />
+                                <NotaEsg rotulo="Ambiental (E)" valor={envScore} onChange={(n) => { setEnvScore(n); handleUpdate('esg_environmental_score', n); }} icone={Leaf} corAtiva="text-emerald-500" />
                             </div>
 
                             <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
@@ -235,7 +244,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                     </span>
                                     <span className="text-xs text-blue-600/70 font-medium">Comunidade entorno, acessibilidade urbana.</span>
                                 </div>
-                                <StarRating value={socScore} setter={setSocScore} field="esg_social_score" icon={Users} colorClass="text-blue-500" />
+                                <NotaEsg rotulo="Social (S)" valor={socScore} onChange={(n) => { setSocScore(n); handleUpdate('esg_social_score', n); }} icone={Users} corAtiva="text-blue-500" />
                             </div>
 
                             <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
@@ -246,7 +255,7 @@ const ImovibEsgReportForm: React.FC<ImovibEsgReportFormProps> = ({ study, onData
                                     </span>
                                     <span className="text-xs text-indigo-600/70 font-medium">Transparência da SPE, compliance legal.</span>
                                 </div>
-                                <StarRating value={govScore} setter={setGovScore} field="esg_governance_score" icon={Shield} colorClass="text-indigo-500" />
+                                <NotaEsg rotulo="Governança (G)" valor={govScore} onChange={(n) => { setGovScore(n); handleUpdate('esg_governance_score', n); }} icone={Shield} corAtiva="text-indigo-500" />
                             </div>
                         </div>
 

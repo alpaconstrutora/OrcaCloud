@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
-import { parseHashView } from '../lib/tabRouter';
+import { parseHashView, syncViewToUrl } from '../lib/tabRouter';
+import { haPendenciaDeSaida, limparPendencias } from '../lib/guardaDeSaida';
 
 /**
  * Enables multi-tab/window routing:
@@ -10,19 +11,29 @@ export function useTabRouter(
   activeView: string,
   setActiveView: (view: string) => void,
   onSignedOut: () => void,
+  /** Pergunta antes de sair de uma tela com edição não salva (lib/guardaDeSaida.ts). */
+  confirmarSaida?: () => Promise<boolean>,
 ) {
   // Update state when the URL hash changes (e.g. browser back/forward, or
   // another piece of code calls window.history.pushState with a new hash).
   useEffect(() => {
-    const handle = () => {
+    const handle = async () => {
       const view = parseHashView(window.location.hash);
-      if (view && view !== activeView) {
-        setActiveView(view);
+      if (!view || view === activeView) return;
+      // Voltar/avançar com edição pendente: pergunta; se o usuário fica, o
+      // endereço volta para a tela atual (o hash já tinha mudado).
+      if (confirmarSaida && haPendenciaDeSaida()) {
+        if (!(await confirmarSaida())) {
+          syncViewToUrl(activeView);
+          return;
+        }
+        limparPendencias();
       }
+      setActiveView(view);
     };
     window.addEventListener('hashchange', handle);
     return () => window.removeEventListener('hashchange', handle);
-  }, [activeView, setActiveView]);
+  }, [activeView, setActiveView, confirmarSaida]);
 
   // Cross-tab sign-out sync: when any tab logs out, all others log out too.
   const stableOnSignedOut = useCallback(onSignedOut, []); // eslint-disable-line react-hooks/exhaustive-deps

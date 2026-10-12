@@ -44,7 +44,9 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     const { showToast } = useToast();
     const { pode, motivo } = useImovibEdicao();
     // §25: Identificação e Mercado ficam em estado local até "Salvar Premissas".
-    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+    // guardarNavegacao: trocar de módulo pelo menu / voltar do navegador / fechar
+    // a aba também perguntam (lib/guardaDeSaida.ts) — Premissas desmonta ao sair.
+    const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges({ guardarNavegacao: true });
     const onDirtyChangeRef = useRef(onDirtyChange);
     onDirtyChangeRef.current = onDirtyChange;
     useEffect(() => { onDirtyChangeRef.current?.(dirty); }, [dirty]);
@@ -113,7 +115,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                         const val = type === 'number' ? (e.target.value === '' ? '' : parseFloat(e.target.value)) : e.target.value;
                         setCampo(field, val);
                     }}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all font-medium text-slate-700"
+                    className="h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                 />
             </div>
         );
@@ -131,7 +133,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     placeholder={placeholder}
                     rows={rows}
                     onChange={(e) => setCampo(field, e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all font-medium text-slate-700 resize-none"
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none"
                 />
             </div>
         );
@@ -140,7 +142,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
     return (
         <div className="space-y-6 pb-10">
             {/* Header / Tabs */}
-            <div className="bg-white rounded-3xl p-2 border border-slate-100 shadow-sm flex flex-wrap gap-2 items-center justify-between">
+            <div className="bg-white rounded-[10px] p-1.5 border border-slate-100 shadow-sm flex flex-wrap gap-1.5 items-center justify-between">
                 <div className="flex flex-wrap gap-2">
                 {[
                     { id: 'identificacao', label: '0. Identificação', icon: <FileText className="w-4 h-4" /> },
@@ -152,8 +154,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     <button
                         key={tab.id}
                         onClick={() => trocarSubAba(tab.id as SubAba)}
-                        className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all ${activeTab === tab.id
-                            ? 'bg-indigo-600 text-white shadow-md'
+                        className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] font-medium text-[13px] transition-all ${activeTab === tab.id
+                            ? 'bg-indigo-600 text-white'
                             : 'bg-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                             }`}
                     >
@@ -168,7 +170,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                         onClick={handleSaveAllForm}
                         disabled={isSaving || !pode || !dirty}
                         title={!pode ? motivo : isSaving ? 'Salvando...' : !dirty ? 'Nada foi alterado em Identificação ou Mercado.' : undefined}
-                        className="flex items-center gap-2 px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-sm transition-all shadow-sm shadow-emerald-600/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                         {isSaving ? 'Salvando...' : 'Salvar Premissas'}
@@ -179,13 +181,13 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             {/* TAB: IDENTIFICAÇÃO */}
             {activeTab === 'identificacao' && (
                 <div className="space-y-6">
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8">
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm space-y-6">
                         <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                                 <FileText className="w-5 h-5 text-indigo-500" />
                                 Módulo 0 — Ficha de Identificação
                             </h2>
-                            <p className="text-slate-500 text-sm mt-1 font-medium">Informações legais e contextuais da análise.</p>
+                            <p className="text-slate-500 text-sm mt-1">Informações legais e contextuais da análise.</p>
                         </div>
 
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -199,7 +201,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                 <select
                                     value={formData.development_modality ?? ''}
                                     onChange={(e) => setCampo('development_modality', e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all font-medium text-slate-700 cursor-pointer"
+                                    className="h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all cursor-pointer"
                                 >
                                     <option value="">Selecione...</option>
                                     {opcoesComValorAtual(IMOVIB_MODALIDADES, formData.development_modality).map(o => <option key={o} value={o}>{o}</option>)}
@@ -214,13 +216,13 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             {/* TAB: MERCADO */}
             {activeTab === 'mercado' && (
                 <div className="space-y-6">
-                    <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm space-y-8">
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm space-y-6">
                         <div>
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
                                 <Activity className="w-5 h-5 text-indigo-500" />
-                                Módulo 2 — Análise de Mercado
+                                Módulo 1 — Análise de Mercado
                             </h2>
-                            <p className="text-slate-500 text-sm mt-1 font-medium">Inteligência de mercado, demanda e concorrência.</p>
+                            <p className="text-slate-500 text-sm mt-1">Inteligência de mercado, demanda e concorrência.</p>
                         </div>
 
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-1 gap-6">

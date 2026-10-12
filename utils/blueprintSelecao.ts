@@ -40,7 +40,8 @@ export function comandoDeMover(model: BlueprintModel, selectedIds: readonly stri
   const vagaIds = (model.vagas ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
   const componenteIds = (model.componentes ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
   const blocoIds = (model.blocos ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
-  const total = f.wallIds.length + f.boundaryIds.length + f.structuralIds.length + f.aguaIds.length + f.trechoIds.length + f.terminalIds.length + f.quadroIds.length + nucleoIds.length + vagaIds.length + componenteIds.length + blocoIds.length;
+  const cameraIds = (model.cameras ?? []).filter((x) => sel.has(x.id)).map((x) => x.id);
+  const total = f.wallIds.length + f.boundaryIds.length + f.structuralIds.length + f.aguaIds.length + f.trechoIds.length + f.terminalIds.length + f.quadroIds.length + nucleoIds.length + vagaIds.length + componenteIds.length + blocoIds.length + cameraIds.length;
   if (!total) return null;
   return {
     type: 'TranslateEntities',
@@ -55,6 +56,7 @@ export function comandoDeMover(model: BlueprintModel, selectedIds: readonly stri
     vagaIds,
     componenteIds,
     blocoIds,
+    cameraIds,
     delta: { x: delta.x, y: delta.y } as Point,
     manterJuncoes,
   } as Command;

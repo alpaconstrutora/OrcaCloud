@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.98.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.99.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -894,6 +894,7 @@ function emptyModel() {
     areasPublicas: [],
     areasDeOperacao: [],
     blocos: [],
+    cameras: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -2239,6 +2240,18 @@ function projetar(model) {
     }),
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.cotaBaseMm - y.cotaBaseMm || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome, y.nome)
   );
+  const cameras = ordenar(
+    model.cameras ?? [],
+    (c) => ({
+      level: nivel(c.levelId),
+      posicao: { x: c.posicao.x, y: c.posicao.y },
+      alvo: { x: c.alvo.x, y: c.alvo.y },
+      alturaOlhoMm: c.alturaOlhoMm,
+      focalMm: c.focalMm,
+      nome: c.nome
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.posicao.x - y.posicao.x || x.posicao.y - y.posicao.y || x.alvo.x - y.alvo.x || x.alvo.y - y.alvo.y || cmpStr(x.nome, y.nome)
+  );
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
     (v) => ({
@@ -2590,6 +2603,7 @@ function projetar(model) {
     areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : void 0,
     areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : void 0,
     blocos: blocos.length ? blocos.map((b) => b.geom) : void 0,
+    cameras: cameras.length ? cameras.map((c) => c.geom) : void 0,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : void 0,
     trechos: trechos.length ? trechos.map((t) => t.geom) : void 0,
     terminais: terminais.length ? terminais.map((t) => t.geom) : void 0,
@@ -2628,6 +2642,7 @@ function projetar(model) {
     areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
     ...areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {},
     ...blocos.length ? { blocos: blocos.map((b) => b.item.uid ?? null) } : {},
+    ...cameras.length ? { cameras: cameras.map((c) => c.item.uid ?? null) } : {},
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -3049,6 +3064,20 @@ function modelFromCanonicalPayload(payload) {
       peDireitoMm: b.peDireitoMm,
       uso: b.uso,
       ...b.parametros && Object.keys(b.parametros).length > 0 ? { parametros: { ...b.parametros } } : {}
+    });
+  });
+  const camerasPayload = payload.cameras ?? [];
+  camerasPayload.forEach((c, i) => {
+    if (!levelIds[c.level]) return;
+    (model.cameras ??= []).push({
+      id: nextId(model, "cam"),
+      uid: uidDe("cameras", i, camerasPayload.length),
+      levelId: levelIds[c.level],
+      posicao: { x: c.posicao.x, y: c.posicao.y },
+      alvo: { x: c.alvo.x, y: c.alvo.y },
+      alturaOlhoMm: c.alturaOlhoMm,
+      focalMm: c.focalMm,
+      nome: c.nome
     });
   });
   const vistasDependentes = payload.vistasDependentes ?? [];

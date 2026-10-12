@@ -523,6 +523,33 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 **F12 — Câmera** · kernel (**bump**): família `Camera {posicao, alvo, alturaOlhoMm, focalMm, nome}`; ferramenta de 2 cliques no 2D; `Blueprint3DViewer.tsx` (Canvas `:2242`, `Percorrer`); `utils/blueprintBcf.ts` (`PerspectiveCamera`)
 - Muda: o símbolo da câmera com cone no 2D; prévia 3D do ponto de vista; lista de vistas salvas; mexer na janela atualiza a prévia; o BCF exporta a câmera em perspectiva quando há uma.
 - Pronto quando: golden; teste de conversão focal→fov; no app, a câmera na sala abre o 3D daquele ponto e o BCF reabre a vista no viewer.
+- **Feito na execução (12/10, kernel 0.99.0):**
+  - Modelo: família `cameras?` — pavimento, posição, alvo (≠ posição), altura do olho (0,30–20 m, padrão 1,60),
+    focal EQUIVALENTE a 35 mm (10–200, padrão 24) e nome ("Câmera N"). `AddCamera`/`SetCameraProps`/
+    `DeleteCamera`; `TranslateEntities` com `cameraIds` (posição e alvo juntos; mover no 2D e no 3D);
+    `RemoveLevel` leva as câmeras do pavimento. Omitida do canônico (geometria e identidade) quando não há.
+    Classificada como REFERÊNCIA nas camadas por disciplina (como o corte): esconder a arquitetura não some
+    com a vista salva — o portão de "coleção nova precisa ser classificada" pegou a falta.
+  - `utils/blueprintCamera.ts`: a lente preserva o ângulo HORIZONTAL (o do cone na planta; 24 mm = 73,7°) e o
+    vertical sai do formato da tela; o cone; o olho no mundo do 3D (câmera nivelada); o tópico BCF.
+  - Planta: Inserir › Câmera (2 cliques, prévia do cone; Orto como o corte — Shift solta), símbolo violeta com
+    cone translúcido e nome; clicar no corpo seleciona. Painel: nome, altura do olho, lente (atalhos 16/24/35/
+    50 mm com o ângulo), "Ver no 3D".
+  - 3D: seletor "Ponto de vista" (Livre ou as câmeras dos pavimentos à vista); a câmera vai ao olho, a órbita
+    gira em torno do alvo, e mexer na planta atualiza o 3D (é o mesmo modelo). ⚠️ Achado pela prova: o
+    `PontoDeVista` vinha ANTES do `Enquadrar` na árvore e o enquadramento automático da montagem passava por
+    cima (o 3D abria de fora) — trocado de ordem; com câmera salva o limite polar da órbita vai a 90°.
+  - BCF: cada câmera vira o tópico "Vista — nome" com `PerspectiveCamera` (olho, direção, Z para cima,
+    `FieldOfView` vertical do quadro de 35 mm); sem câmera, a vista ortogonal de sempre.
+  - ⏳ Fica para depois: prévia 3D DENTRO do painel da câmera na planta (hoje é "Ver no 3D"), e a câmera no DXF/PDF.
+  - Prova: `__tests__/blueprintCamera.test.ts` (9) + goldens. ✅ **No app com escrita (12/10, "Planta 11/10/2026")**:
+    Inserir › Câmera, 2 cliques (o 2º com Shift, em diagonal) → **no banco, posição 4,0/3,0 m e alvo 12,0/5,6 m**
+    → lente 35 mm (banco: 35) → "Ver no 3D": o 3D abre DE DENTRO da sala, à altura do olho, olhando o alvo;
+    "Livre" volta à órbita e a câmera volta ao mesmo ponto → Exportar BCF: tópico "Vista — Câmera 1" com
+    `PerspectiveCamera` (olho 4/3/1,6 m, direção 0,95/0,31/0) → Ctrl+Z → rascunho com o MESMO conteúdo de antes.
+    ⚠️ O md5 do rascunho inteiro mudou só no carimbo `kernel` (o servidor local já grava 0.99.0); conferido
+    que, com o carimbo devolvido a 0.98.0, o md5 é o original — o parser não recusa carimbo mais novo, então
+    a produção (0.98.0) abre o rascunho normalmente.
 
 **F13 — Captura da imagem do 3D** · `Blueprint3DViewer.tsx` (`preserveDrawingBuffer` só na captura, `gl.domElement.toBlob`)
 - Muda: "Exportar imagem" da câmera ativa em PNG, na resolução escolhida; pode entrar como imagem na prancha.
@@ -548,7 +575,7 @@ tudo em fases?" — tratado como **tudo, em fases**, bloco 1 primeiro.)
 - [x] F6 — `b4b0ffe1`, kernel 0.96.0, provada no app com escrita + tela/PDF por teste · [x] F7 — kernel 0.97.0,
   provada no app com escrita (fundo branco + plano FUNDO gravados e desfeitos) + PDF por teste · [x] F8 —
   kernel 0.98.0 / quant-1.28.0, provada no app com escrita (3 folhas + bandeira, Espaço, quadro, 3D) + PDF/DXF por teste · [x] F9 — provada no app com escrita (arrastar → ponto solto → Ctrl+Z) · [x] F10 — modelos glTF CC0 (Kenney), provado no spike 3D + produção servindo os .glb
-- [ ] F11 · [ ] F12 · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
+- [ ] F11 · [x] F12 — kernel 0.99.0, câmera na planta → 3D do olho → BCF em perspectiva; provada no app com escrita · [ ] F13 · [ ] F14.0 · [ ] F14.1 · [ ] F14.2 · [ ] F14.3 · [ ] F15
 
 ## Verificação (por fase)
 1. `npx vitest run __tests__/<arquivos da fase>` + goldens do kernel quando houver bump; `npm run typecheck` (ler `exit=` por grep).

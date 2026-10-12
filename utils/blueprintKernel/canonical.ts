@@ -740,6 +740,21 @@ function projetar(model: BlueprintModel): {
     (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.cotaBaseMm - y.cotaBaseMm || x.pontos[0].x - y.pontos[0].x || x.pontos[0].y - y.pontos[0].y || cmpStr(x.nome, y.nome),
   );
 
+  // CÂMERAS (0.99.0): pavimento por índice, posição, alvo, altura do olho, focal, nome. Omitidas quando
+  // não há — desenho sem câmera não ganha chave nova (o hash dele só muda pela versão).
+  const cameras = ordenar(
+    model.cameras ?? [],
+    (c) => ({
+      level: nivel(c.levelId),
+      posicao: { x: c.posicao.x, y: c.posicao.y },
+      alvo: { x: c.alvo.x, y: c.alvo.y },
+      alturaOlhoMm: c.alturaOlhoMm,
+      focalMm: c.focalMm,
+      nome: c.nome,
+    }),
+    (x, y) => nivel(x.levelId) - nivel(y.levelId) || x.posicao.x - y.posicao.x || x.posicao.y - y.posicao.y || x.alvo.x - y.alvo.x || x.alvo.y - y.alvo.y || cmpStr(x.nome, y.nome),
+  );
+
   // VISTAS DEPENDENTES (0.51.0): pavimento por índice, nome, recorte, escala. Omitidas quando não há.
   const vistasDependentes = ordenar(
     model.vistasDependentes ?? [],
@@ -1201,6 +1216,7 @@ function projetar(model: BlueprintModel): {
     areasPublicas: areasPublicas.length ? areasPublicas.map((a) => a.geom) : undefined,
     areasDeOperacao: areasDeOperacao.length ? areasDeOperacao.map((a) => a.geom) : undefined,
     blocos: blocos.length ? blocos.map((b) => b.geom) : undefined,
+    cameras: cameras.length ? cameras.map((c) => c.geom) : undefined,
     rodapes: rodapes.length ? rodapes.map((r) => r.geom) : undefined,
     trechos: trechos.length ? trechos.map((t) => t.geom) : undefined,
     terminais: terminais.length ? terminais.map((t) => t.geom) : undefined,
@@ -1244,6 +1260,7 @@ function projetar(model: BlueprintModel): {
     areasPublicas: areasPublicas.map((a) => a.item.uid ?? null),
     ...(areasDeOperacao.length ? { areasDeOperacao: areasDeOperacao.map((a) => a.item.uid ?? null) } : {}),
     ...(blocos.length ? { blocos: blocos.map((b) => b.item.uid ?? null) } : {}),
+    ...(cameras.length ? { cameras: cameras.map((c) => c.item.uid ?? null) } : {}),
     rodapes: rodapes.map((r) => r.item.uid ?? null),
     trechos: trechos.map((t) => t.item.uid ?? null),
     terminais: terminais.map((t) => t.item.uid ?? null),
@@ -1342,6 +1359,8 @@ export interface IdentidadeCanonica {
   areasDeOperacao?: (ElementUid | null)[];
   /** Ausente sob kernel < 0.90.0 e em desenho sem nenhum. */
   blocos?: (ElementUid | null)[];
+  /** Ausente sob kernel < 0.99.0 e em desenho sem câmera. */
+  cameras?: (ElementUid | null)[];
   rodapes?: (ElementUid | null)[];
   trechos?: (ElementUid | null)[];
   terminais?: (ElementUid | null)[];
@@ -1602,6 +1621,8 @@ export interface CanonicalPayload {
   areasDeOperacao?: { level: number; pontos: { x: number; y: number }[]; risco?: RiscoDeSprinkler; nome?: string; parametros?: Parametros }[];
   /** ESTUDO DE MASSA. Ausente sob kernel < 0.90.0 e em desenho sem nenhum. */
   blocos?: { level: number; nome: string; pontos: { x: number; y: number }[]; cotaBaseMm: number; pavimentos: number; peDireitoMm: number; uso: UsoDoBloco; parametros?: Parametros }[];
+  /** CÂMERAS. Ausente sob kernel < 0.99.0 e em desenho sem câmera. */
+  cameras?: { level: number; posicao: { x: number; y: number }; alvo: { x: number; y: number }; alturaOlhoMm: number; focalMm: number; nome: string }[];
   /** Vistas dependentes (recortes nomeados de planta). Ausente sob kernel < 0.51.0 e em desenho sem nenhuma. */
   vistasDependentes?: { level: number; nome: string; recorte: { minX: number; minY: number; maxX: number; maxY: number }; denominador: number }[];
   /** Anotações por vista. Ausente sob kernel < 0.45.0 e em desenho sem nenhuma. */
@@ -2331,6 +2352,22 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
       peDireitoMm: b.peDireitoMm,
       uso: b.uso,
       ...(b.parametros && Object.keys(b.parametros).length > 0 ? { parametros: { ...b.parametros } } : {}),
+    });
+  });
+
+  // CÂMERAS (0.99.0): pavimento por índice.
+  const camerasPayload = payload.cameras ?? [];
+  camerasPayload.forEach((c, i) => {
+    if (!levelIds[c.level]) return;
+    (model.cameras ??= []).push({
+      id: nextId(model, 'cam'),
+      uid: uidDe('cameras', i, camerasPayload.length),
+      levelId: levelIds[c.level],
+      posicao: { x: c.posicao.x, y: c.posicao.y },
+      alvo: { x: c.alvo.x, y: c.alvo.y },
+      alturaOlhoMm: c.alturaOlhoMm,
+      focalMm: c.focalMm,
+      nome: c.nome,
     });
   });
 

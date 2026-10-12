@@ -21,6 +21,7 @@ import {
   AlignHorizontalDistributeCenter,
   AlignStartVertical,
   LayoutGrid,
+  Video,
   History,
   KeyRound,
   Webhook,
@@ -347,6 +348,8 @@ import { comandosDeAceite as aceitarVagas, comandosDeLimpeza as limparVagas, HIP
 import { nucleosDoNivel } from '../../utils/blueprintNucleoVertical';
 import PainelEsquadria from './PainelEsquadria';
 import PainelFolhas from './PainelFolhas';
+import PainelCameraSelecionada from './PainelCameraSelecionada';
+import { cameraNoMundo3d, topicoDaCamera } from '../../utils/blueprintCamera';
 import PainelBibliotecaComponentes from './PainelBibliotecaComponentes';
 import PainelEsquadrias from './PainelEsquadrias';
 import { comandosDaUnificacao, unificacoesPropostas, TOLERANCIA_PADRAO_MM } from '../../utils/blueprintUnificarEsquadrias';
@@ -371,7 +374,7 @@ import { artefatoDeTabelaXlsx, baixarArtefatos, exportarBcf } from '../../servic
 import { blueprintTabelaService } from '../../services/blueprintTabelaService';
 import TelaTabelas from './TelaTabelas';
 import type { DefinicaoDeTabela, TabelaSalva } from '../../utils/blueprintTabelas';
-import { topicosDeComentarios, topicosDeConflitos, topicosDeConflitosArquitetonicos } from '../../utils/blueprintBcf';
+import { guidDoTopico, topicosDeComentarios, topicosDeConflitos, topicosDeConflitosArquitetonicos } from '../../utils/blueprintBcf';
 import { ESCALAS, PAPEIS } from '../../utils/blueprintExport';
 import { useStore } from '../../store/useStore';
 import { posicoesPorUid } from '../../utils/blueprintComentarios';
@@ -4196,6 +4199,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       // O BCF leva o que a lista mostra (com camada oculta, o recorte dela — ver `conflitosExibidos`).
       ...topicosDeConflitos(editor.model, conflitosExibidos, autor, agora, aceitesParaBcf),
       ...topicosDeConflitosArquitetonicos(editor.model, conflitosArqExibidos, autor, agora, aceitesParaBcf),
+      // F12: cada CÂMERA salva vira um tópico "Vista — nome" com a câmera em perspectiva.
+      ...(editor.model.cameras ?? []).map((c) =>
+        topicoDaCamera(c, editor.model.levels.find((l) => l.id === c.levelId)?.elevationMm ?? 0, guidDoTopico(`camera:${c.uid}`), autor, agora),
+      ),
       ...topicosDeComentarios(
         comentarios.map((c) => ({
           id: c.id,
@@ -4461,6 +4468,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
   const anotacaoSel = (editor.model.anotacoes ?? []).find((a) => a.id === editor.selectedId) ?? null;
+  /** F12: a câmera selecionada e a câmera que o 3D está usando como ponto de vista (`null` = órbita livre). */
+  const cameraSel = (editor.model.cameras ?? []).find((c) => c.id === editor.selectedId) ?? null;
+  const [cameraDo3d, setCameraDo3d] = useState<string | null>(null);
+  const pontoDeVista3d = useMemo(() => {
+    const c = (editor.model.cameras ?? []).find((x) => x.id === cameraDo3d);
+    if (!c) return null;
+    const nivel = editor.model.levels.find((l) => l.id === c.levelId);
+    const w = cameraNoMundo3d(c, nivel?.elevationMm ?? 0);
+    return { chave: `${c.id}:${c.posicao.x},${c.posicao.y}:${c.alvo.x},${c.alvo.y}:${c.alturaOlhoMm}:${c.focalMm}`, posicao: w.posicao, alvo: w.alvo, focalMm: c.focalMm };
+  }, [editor.model.cameras, editor.model.levels, cameraDo3d]);
   const anotacoesDoNivelAtivo = useMemo(() => (editor.model.anotacoes ?? []).filter((a) => a.vista.tipo === 'PLANTA' && (!levelId || a.vista.levelId === levelId)), [editor.model.anotacoes, levelId]);
   const resumoDeAnotacoes = useMemo(() => resumirAnotacoes(editor.model), [editor.model]);
   const guardaCorposDoNivelAtivo = useMemo(() => (editor.model.guardaCorpos ?? []).filter((g) => !levelId || g.levelId === levelId), [editor.model.guardaCorpos, levelId]);
@@ -7754,7 +7771,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     aguaIds: string[],
     delta: Point,
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
-    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[] },
+    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[]; cameraIds?: string[] },
   ) {
     const mover: Command = {
       type: 'TranslateEntities',
@@ -7767,6 +7784,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       vagaIds: pecas?.vagaIds ?? [],
       componenteIds: pecas?.componenteIds ?? [],
       blocoIds: pecas?.blocoIds ?? [],
+      cameraIds: pecas?.cameraIds ?? [],
       // Instalações no MESMO comando, e não num segundo: arrastar a parede e a
       // rede em dois passos deixaria um estado intermediário em que o cano
       // atravessa a parede, e o desfazer teria de ser dado duas vezes.
@@ -7936,6 +7954,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const subRegioesSel = ids.filter((id) => (editor.model.subRegioes ?? []).some((s) => s.id === id));
     const vagas = ids.filter((id) => (editor.model.vagas ?? []).some((v) => v.id === id));
     const blocosSel = ids.filter((id) => (editor.model.blocos ?? []).some((b) => b.id === id));
+    const camerasSel = ids.filter((id) => (editor.model.cameras ?? []).some((c) => c.id === id));
     const componentesSel = ids.filter((id) => (editor.model.componentes ?? []).some((c) => c.id === id));
     const guardaCorposSel = ids.filter((id) => (editor.model.guardaCorpos ?? []).some((g) => g.id === id));
     const rodapesSel = ids.filter((id) => (editor.model.rodapes ?? []).some((r) => r.id === id));
@@ -7967,6 +7986,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       ...subRegioesSel.map((subRegiaoId) => ({ type: 'DeleteSubRegiao', subRegiaoId }) as const),
       ...vagas.map((vagaId) => ({ type: 'DeleteVaga', vagaId }) as const),
       ...blocosSel.map((blocoId) => ({ type: 'DeleteBloco', blocoId }) as const),
+      ...camerasSel.map((cameraId) => ({ type: 'DeleteCamera', cameraId }) as const),
       ...componentesSel.map((componenteId) => ({ type: 'DeleteComponente', componenteId }) as const),
       ...guardaCorposSel.map((guardaCorpoId) => ({ type: 'DeleteGuardaCorpo', guardaCorpoId }) as const),
       ...rodapesSel.map((rodapeId) => ({ type: 'DeleteRodape', rodapeId }) as const),
@@ -10131,6 +10151,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             : undefined
         }
       />
+      <PainelCameraSelecionada
+        camera={cameraSel}
+        onProps={(campos) => cameraSel && editor.run({ type: 'SetCameraProps', cameraId: cameraSel.id, ...campos })}
+        onVerNo3d={() => {
+          if (!cameraSel) return;
+          setCameraDo3d(cameraSel.id);
+          setVista('3d');
+        }}
+        onExcluir={removerSelecionada}
+      />
       <PainelRodapeSelecionado
         rodape={rodapeSel}
         onProps={(campos) => rodapeSel && editor.run({ type: 'SetRodapeProps', rodapeId: rodapeSel.id, ...campos })}
@@ -10647,6 +10677,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     <Blueprint3DTab
       model={editor.model}
       levelIds={levelIdsDaVista}
+      // F12: as VISTAS SALVAS — as câmeras dos pavimentos à vista — e a que está em uso.
+      pontoDeVista={pontoDeVista3d}
+      pontosDeVista={(editor.model.cameras ?? []).filter((c) => !levelIdsDaVista || levelIdsDaVista.includes(c.levelId)).map((c) => ({ id: c.id, nome: c.nome }))}
+      pontoDeVistaId={cameraDo3d}
+      onPontoDeVista={setCameraDo3d}
       mostrarLaje={mostrarLaje3d}
       mostrarArestas={mostrarArestas3d || estilo3d === 'LINHA_OCULTA'}
       mostrarRotulosDeRede={mostrarRotulosDeRede3d}
@@ -12925,6 +12960,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ajuda="Pontos cotados do topógrafo (CSV/TXT PNEZD, GeoJSON, KML, DXF, SVG, LandXML) e, quando o arquivo traz o perímetro, as divisas do lote: abre em Terreno › Dados do lote, com prévia antes de entrar"
                 />
             </MenuDoRibbon>
+            {/* F12 (12/10/2026): a CÂMERA — 1º clique onde o observador está, 2º para onde olha. Vira
+                vista salva no 3D (Ponto de vista) e tópico em perspectiva no BCF. */}
+            <BotaoDoRibbon
+              icone={Video}
+              rotulo="Câmera"
+              ativo={editor.tool === 'camera'}
+              onClick={() => editor.setTool(editor.tool === 'camera' ? 'selecionar' : 'camera')}
+              ajuda="Ponto de vista na planta: clique onde o observador está e depois para onde ele olha. Abre o 3D daquele ponto (Ver no 3D) e sai no BCF como câmera em perspectiva."
+            />
           </GrupoDoRibbon>
           <GrupoDoRibbon rotulo="Referência">
             <ControlesDeFundo
@@ -15076,6 +15120,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   tipoDeAnotacao={tipoDeAnotacao}
                   anotacaoRetangulo={anotacaoRetangulo}
                   onSoltarComponente={(tipoId, at) => adicionarComponente(at, tipoId)}
+                  onAddCamera={(posicao, alvo) => {
+                    if (!levelId) return;
+                    const criados = editor.run({ type: 'AddCamera', levelId, posicao, alvo });
+                    if (criados.length > 0) {
+                      editor.setTool('selecionar');
+                      selecionar([criados[0]]);
+                    }
+                  }}
                   onAddAnotacao={adicionarAnotacao}
                   onAddTrecho={adicionarTrecho}
                   redeEmUmClique={prumadaDeRede != null}

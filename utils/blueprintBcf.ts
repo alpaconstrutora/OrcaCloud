@@ -56,6 +56,12 @@ export interface TopicoBcf {
   descricao: string;
   /** Os elementos apontados, já em `IfcGuid`. */
   componentes: string[];
+  /**
+   * F12 (12/10/2026): a CÂMERA em perspectiva — olho em mm no mundo (Z para cima), direção unitária e o
+   * ângulo VERTICAL de visão. Presente, o viewpoint sai como `PerspectiveCamera`; ausente, a vista
+   * ortogonal de cima de sempre.
+   */
+  camera?: { posicao: { x: number; y: number; z: number }; direcao: { x: number; y: number; z: number }; fovVerticalGraus: number };
   /** Onde olhar, em MILÍMETRO no mundo. */
   alvo: { x: number; y: number; z: number };
 }
@@ -182,6 +188,30 @@ export function viewpointDoTopico(t: TopicoBcf): ArquivoBcf {
       '    </Selection>\n' +
       '    <Visibility DefaultVisibility="true" />\n' +
       '  </Components>\n' +
+      // F12 (12/10/2026): com câmera salva, a PERSPECTIVA dela — o ponto de vista que alguém escolheu.
+      (t.camera ? cameraEmPerspectiva(t.camera, M) : cameraOrtogonal(t, M)) +
+      '</VisualizationInfo>\n',
+  };
+}
+
+/** A câmera da câmera salva (F12): olho, direção, "para cima" = +Z e o ângulo vertical de visão. */
+function cameraEmPerspectiva(c: NonNullable<TopicoBcf['camera']>, M: number): string {
+  return (
+    '  <PerspectiveCamera>\n' +
+    '    <CameraViewPoint>\n' +
+    `      <X>${(c.posicao.x * M).toFixed(6)}</X>\n` +
+    `      <Y>${(c.posicao.y * M).toFixed(6)}</Y>\n` +
+    `      <Z>${(c.posicao.z * M).toFixed(6)}</Z>\n` +
+    '    </CameraViewPoint>\n' +
+    `    <CameraDirection><X>${c.direcao.x.toFixed(6)}</X><Y>${c.direcao.y.toFixed(6)}</Y><Z>${c.direcao.z.toFixed(6)}</Z></CameraDirection>\n` +
+    '    <CameraUpVector><X>0</X><Y>0</Y><Z>1</Z></CameraUpVector>\n' +
+    `    <FieldOfView>${c.fovVerticalGraus.toFixed(2)}</FieldOfView>\n` +
+    '  </PerspectiveCamera>\n'
+  );
+}
+
+function cameraOrtogonal(t: TopicoBcf, M: number): string {
+  return (
       // Ortogonal e de cima: é a vista em que a pendência foi criada, e não um
       // enquadramento 3D que ninguém escolheu. Ver o cabeçalho.
       '  <OrthogonalCamera>\n' +
@@ -197,9 +227,8 @@ export function viewpointDoTopico(t: TopicoBcf): ArquivoBcf {
       // enquadra um cômodo com folga. Lido como fator, o número seria absurdo e
       // o receptor abriria numa escala sem sentido.
       '    <ViewToWorldScale>10</ViewToWorldScale>\n' +
-      '  </OrthogonalCamera>\n' +
-      '</VisualizationInfo>\n',
-  };
+      '  </OrthogonalCamera>\n'
+  );
 }
 
 /**

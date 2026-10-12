@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: '64fb47643976ee20c167196bf1d089b3ad78d036a0170fff6ddd0dfa3cf5d835',
+    hash: '942afbfb2484611c0bc8aeccf30ef69a36a2cf6ceffb227dc860410653bfd866',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: 'cc3b7959cd311046028b3b42e7f33fd2003a93b7e3380a34fdc6f2820fa5793a',
+    hash: '715b6c7d6ce62a356fda21ad61bbe6390529bae07a811f8263340b4491113dea',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: '2d00299334ef5a7accfe480a5001e73be4b86b6311b22dfb197038a10bf4de92',
+    hash: '618d77cc5ea57bf99a866cf8d5448ea11cee38762b047ccb1a29c801b454e4d1',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '76d04c2cf2a09ab10ecf96094bd7e9c74bc1ecd049f9d23b8609d495c66e71ca',
+    hash: 'a06ac3e64d34550856fc45a2e8b2a92be62de9c9e3d8ea479769ca18a9b92038',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '248254ba33391ec6493d8ac1769924875ffd31e12b3def3553b411bb75082c6e',
+    hash: 'ab85e0423fe8a23f8bb769bcdb09ab9e842846f0370393363f9ae744b38c52cf',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: 'cc55e31b47652022a31f2ea02be9330efcbffc180a0c3eb6acaf457bf9548d1e',
+    hash: '3ea9da8d2732ce75cdfc68f99ec849efe8750821fda200e58348ef371760fc08',
   },
 };
 
@@ -958,6 +958,11 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   Mesma prova, ANTES de tocar num hash: com a string em 0.97.0 e tudo no lugar, 318
  *   testes de kernel/goldens/esquadria/quantitativo/igualar passaram; depois do bump as seis
  *   falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
+ *
+ *   0.98.0 → 0.99.0 (12/10/2026): família nova `cameras` (F12), omitida quando não há — nenhum
+ *   dos seis casos tem câmera. Mesma prova, ANTES de tocar num hash: com a string em 0.98.0 e
+ *   tudo no lugar, 339 testes de kernel/goldens/identidade/comentários/comandos/câmera/folhas/BCF
+ *   passaram; depois do bump as seis falhas foram todas de hash (cada uma UMA vez), contagens idênticas.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

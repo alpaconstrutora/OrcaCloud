@@ -663,8 +663,18 @@
  * de quem não tem não muda. Omitida do canônico quando ausente: desenho antigo só
  * muda pela string da versão. Provado antes do bump: com a string em 0.97.0 e
  * tudo no lugar, 318 testes de kernel/goldens/esquadria/quantitativo/igualar passaram.
+ *
+ * ─── 0.98.0 → 0.99.0 (12/10/2026) — A CÂMERA ───────────────────────────────
+ *
+ * F12 do plano `2026-10-11-planta-recursos-video-synaps.md`: família nova `cameras?` — o
+ * ponto de vista salvo (pavimento, posição, alvo, altura do olho, focal equivalente a 35 mm,
+ * nome), com `AddCamera`/`SetCameraProps`/`DeleteCamera`; `TranslateEntities` ganhou
+ * `cameraIds` (posição e alvo andam juntos) e `RemoveLevel` leva as câmeras do pavimento.
+ * Omitida do canônico (geometria e identidade) quando não há: desenho antigo só muda pela
+ * string da versão. Provado antes do bump: com a string em 0.98.0 e tudo no lugar, 339 testes
+ * de kernel/goldens/identidade/comentários/comandos/câmera/folhas/BCF passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.98.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.99.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

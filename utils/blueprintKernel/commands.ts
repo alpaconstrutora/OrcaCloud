@@ -64,6 +64,12 @@ import {
   findAreaPublica,
   findAreaDeOperacao,
   findBloco,
+  findCamera,
+  assertCamera,
+  ALTURA_DO_OLHO_PADRAO_MM,
+  FOCAL_PADRAO_MM,
+  MAX_NOME_DE_CAMERA,
+  type Camera,
   USOS_DO_BLOCO,
   MAX_NOME_DE_BLOCO,
   MAX_PAVIMENTOS_DO_BLOCO,
@@ -457,6 +463,10 @@ export type Command =
   /** Move UMA ponta da linha. Espelha `MoveBoundaryVertex`. */
   | { type: 'MoveCorteVertex'; corteId: ObjectId; end: 'a' | 'b'; to: Point }
   | { type: 'DeleteCorte'; corteId: ObjectId }
+  /** CÂMERA (0.99.0): o ponto de vista. Omitidos: altura do olho 1,60 m, focal 24 mm, nome "Câmera N". */
+  | { type: 'AddCamera'; levelId: ObjectId; posicao: Point; alvo: Point; alturaOlhoMm?: number; focalMm?: number; nome?: string }
+  | { type: 'SetCameraProps'; cameraId: ObjectId; posicao?: Point; alvo?: Point; alturaOlhoMm?: number; focalMm?: number; nome?: string }
+  | { type: 'DeleteCamera'; cameraId: ObjectId }
   /**
    * EIXO da malha (E1.4). `nome` omitido = palpite pela direção: horizontal
    * (|dx| ≥ |dy|) ganha a próxima LETRA, vertical o próximo NÚMERO — a
@@ -1229,6 +1239,8 @@ export type Command =
       componenteIds?: ObjectId[];
       /** ESTUDO DE MASSA (0.90.0): o bloco anda rígido, como o núcleo. */
       blocoIds?: ObjectId[];
+      /** CÂMERA (0.99.0): posição e alvo andam juntos. */
+      cameraIds?: ObjectId[];
       delta: Point;
       manterJuncoes: boolean;
     }
@@ -2242,6 +2254,46 @@ function aplicarSemHash(
       const anotacoesDoCorte = (next.anotacoes ?? []).filter((a) => a.vista.tipo === 'CORTE' && a.vista.corteId === corte.id);
       next.anotacoes = (next.anotacoes ?? []).filter((a) => !(a.vista.tipo === 'CORTE' && a.vista.corteId === corte.id));
       diff.deleted.push(corte.id, ...anotacoesDoCorte.map((a) => a.id));
+      break;
+    }
+
+    // ── Câmera (0.99.0) ──────────────────────────────────────────────────────
+
+    case 'AddCamera': {
+      findLevel(next, command.levelId);
+      const id = nextId(next, 'cam');
+      const camera: Camera = {
+        id,
+        uid: novoUid(),
+        levelId: command.levelId,
+        posicao: paraPontoMm(command.posicao, 0),
+        alvo: paraPontoMm(command.alvo, 1),
+        alturaOlhoMm: Math.round(command.alturaOlhoMm ?? ALTURA_DO_OLHO_PADRAO_MM),
+        focalMm: Math.round(command.focalMm ?? FOCAL_PADRAO_MM),
+        nome: (command.nome ?? '').trim().slice(0, MAX_NOME_DE_CAMERA).trim() || `Câmera ${(next.cameras ?? []).length + 1}`,
+      };
+      assertCamera(camera);
+      next.cameras = [...(next.cameras ?? []), camera];
+      diff.created.push(id);
+      break;
+    }
+
+    case 'SetCameraProps': {
+      const c = findCamera(next, command.cameraId);
+      if (command.posicao !== undefined) c.posicao = paraPontoMm(command.posicao, 0);
+      if (command.alvo !== undefined) c.alvo = paraPontoMm(command.alvo, 1);
+      if (command.alturaOlhoMm !== undefined) c.alturaOlhoMm = Math.round(command.alturaOlhoMm);
+      if (command.focalMm !== undefined) c.focalMm = Math.round(command.focalMm);
+      if (command.nome !== undefined) c.nome = command.nome.trim().slice(0, MAX_NOME_DE_CAMERA).trim();
+      assertCamera(c);
+      diff.updated.push(c.id);
+      break;
+    }
+
+    case 'DeleteCamera': {
+      const c = findCamera(next, command.cameraId);
+      next.cameras = (next.cameras ?? []).filter((x) => x.id !== c.id);
+      diff.deleted.push(c.id);
       break;
     }
 
@@ -4284,6 +4336,7 @@ function aplicarSemHash(
       const vagaIds = command.vagaIds ?? [];
       const componenteIds = command.componenteIds ?? [];
       const blocoIds = command.blocoIds ?? [];
+      const cameraIds = command.cameraIds ?? [];
       if (
         command.wallIds.length === 0 &&
         command.boundaryIds.length === 0 &&
@@ -4295,7 +4348,8 @@ function aplicarSemHash(
         nucleoIds.length === 0 &&
         vagaIds.length === 0 &&
         componenteIds.length === 0 &&
-        blocoIds.length === 0
+        blocoIds.length === 0 &&
+        cameraIds.length === 0
       ) {
         throw new KernelError('EMPTY_SELECTION', 'Nada para deslocar');
       }
@@ -4453,6 +4507,12 @@ function aplicarSemHash(
         const b = findBloco(next, id);
         b.pontos = b.pontos.map((p) => ({ x: inteiro(p.x + dx), y: inteiro(p.y + dy) }));
         diff.updated.push(b.id);
+      }
+      for (const id of cameraIds) {
+        const c = findCamera(next, id);
+        c.posicao = { x: inteiro(c.posicao.x + dx), y: inteiro(c.posicao.y + dy) };
+        c.alvo = { x: inteiro(c.alvo.x + dx), y: inteiro(c.alvo.y + dy) };
+        diff.updated.push(c.id);
       }
       // FAMÍLIAS ANINHADAS: os filhos dos conjuntos selecionados vão junto (uma vez só).
       const idsDeComponente = new Set(componenteIds);
@@ -5241,6 +5301,10 @@ function aplicarSemHash(
       // O bloco de massa vai junto: a cota dele é medida DESTE pavimento.
       const blocosDoNivel = (next.blocos ?? []).filter((b) => b.levelId === level.id);
       next.blocos = (next.blocos ?? []).filter((b) => b.levelId !== level.id);
+      // CÂMERAS (0.99.0): a altura do olho conta do piso deste pavimento — vão junto.
+      const camerasDoNivel = (next.cameras ?? []).filter((c) => c.levelId === level.id);
+      next.cameras = (next.cameras ?? []).filter((c) => c.levelId !== level.id);
+      diff.deleted.push(...camerasDoNivel.map((c) => c.id));
       // O LOTEAMENTO deste piso vai junto (quadras, lotes, vias, áreas públicas) — antes ficava, e o invariante
       // "pavimento inexistente" recusava a remoção inteira com um erro críptico. Lote de OUTRO piso que apontava para
       // uma quadra daqui fica sem quadra, como no `DeleteQuadra`.

@@ -162,7 +162,7 @@ export default function PainelConflitos({
       </button>
       {erro && <p className="mt-1 text-[11px] text-red-600">{erro}</p>}
       <p className="mt-1 text-[11px] text-slate-500">
-        Conflitos <strong>e comentários</strong> num arquivo que Revit, Navisworks e
+        Conflitos, <strong>comentários e vistas salvas</strong> (as câmeras, em perspectiva) num arquivo que Revit, Navisworks e
         Solibri abrem.{' '}
         <strong>Mande o IFC junto</strong>: o BCF aponta os elementos por identificador e
         não os descreve — sozinho, ele abre sem nada para selecionar.

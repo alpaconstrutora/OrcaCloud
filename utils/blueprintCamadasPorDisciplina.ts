@@ -117,7 +117,8 @@ const pertencaEletrica = (c: 'COMUM' | 'ILUMINACAO' | 'FORCA'): Pertenca =>
 /**
  * id → camada de TODA peça desenhável do modelo. Fica de fora (sempre visível)
  * o que é referência, não disciplina: pavimentos, cortes, eixos, anotações,
- * vistas dependentes, etapas, unidades e grupos.
+ * vistas dependentes, etapas, unidades, grupos e câmeras (F12: ponto de vista,
+ * não peça — esconder a arquitetura não pode sumir com a vista salva).
  */
 export function classificarPecas(model: BlueprintModel): Map<ObjectId, Pertenca> {
   const m = new Map<ObjectId, Pertenca>();

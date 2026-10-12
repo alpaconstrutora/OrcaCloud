@@ -41,6 +41,7 @@ import {
   DIMENSAO_DA_VAGA,
   contornoDoComponente,
   CATALOGO_DE_COMPONENTES,
+  FOCAL_PADRAO_MM,
   type Componente,
   type TipoDeComponente,
   type GuardaCorpo,
@@ -70,6 +71,7 @@ import { ambienteNoPonto } from '../../utils/blueprintAmbienteNoPonto';
 import { linhasDoPadrao } from '../../utils/blueprintPadroes';
 import { simboloDasFolhas } from '../../utils/blueprintFolhas';
 import { MIME_DO_COMPONENTE, pontoDoSoltar, tipoDoArraste } from '../../utils/blueprintBiblioteca';
+import { coneDaCamera } from '../../utils/blueprintCamera';
 import {
   encaixarConexao,
   pontosDeConexaoDaParede,
@@ -442,6 +444,8 @@ const SEM_COMPONENTES: Componente[] = [];
 const SEM_ANOTACOES: Anotacao[] = [];
 /** A MARCA do corte em planta — azul de anotação, não de construção. */
 const COR_CORTE = '#0284c7';
+/** F12: a câmera — violeta, para não se confundir com o corte (azul) nem com a seleção. */
+const COR_CAMERA = '#7c3aed';
 /** Eixo da malha: cinza-azulado discreto — referência, não construção. */
 const COR_EIXO = '#64748b';
 /** Guarda-corpo (E7.3): linha dupla com balaústres; corrimão linha simples grossa. */
@@ -957,7 +961,7 @@ interface Props {
     /** Instalações — ver `TranslateEntities`. Só x e y; a cota não muda. */
     rede?: { trechoIds: string[]; terminalIds: string[]; quadroIds: string[] },
     /** Núcleos, vagas e componentes (P2.4) — rígidos, no mesmo comando. Blocos de massa (M1) idem. */
-    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[] },
+    pecas?: { nucleoIds: string[]; vagaIds: string[]; componenteIds: string[]; blocoIds?: string[]; cameraIds?: string[] },
   ) => void;
   /** Desloca as medições selecionadas. Camada separada, gravação separada. */
   onMoverMedicoes?: (ids: string[], delta: Point) => void;
@@ -1531,6 +1535,8 @@ interface Props {
   // ── Corte ─────────────────────────────────────────────────────────────────
   /** Confirma uma LINHA DE CORTE: dois cliques, como a viga. */
   onAddCorte?: (a: Point, b: Point) => void;
+  /** F12 (12/10/2026): a CÂMERA — 1º clique onde o observador está, 2º para onde olha. */
+  onAddCamera?: (posicao: Point, alvo: Point) => void;
   /** EIXO da malha (E1.4): dois cliques. */
   onAddEixo?: (a: Point, b: Point) => void;
   /** ANOTAÇÃO (E8.1): as da planta deste pavimento; o tipo ativo vem da barra. */
@@ -1749,6 +1755,7 @@ export default function BlueprintCanvas({
   vaoDaExtrusaoMm,
   onMoveAguaVertex,
   onAddCorte,
+  onAddCamera,
   onAddEixo,
   tipoDeGuardaCorpo = 'GUARDA_CORPO',
   onAddGuardaCorpo,
@@ -1925,6 +1932,8 @@ export default function BlueprintCanvas({
   const [movendoEscada, setMovendoEscada] = useState<{ escadaId: string; index: number } | null>(null);
   /** Primeira ponta da linha de corte em curso. */
   const [pontoCorte, setPontoCorte] = useState<Point | null>(null);
+  /** F12: a posição da câmera em curso (o 2º clique é o alvo). */
+  const [pontoCamera, setPontoCamera] = useState<Point | null>(null);
   /** Primeiro clique do EIXO em curso (E1.4). */
   const [pontoEixo, setPontoEixo] = useState<Point | null>(null);
   const [pontoGuardaCorpo, setPontoGuardaCorpo] = useState<Point | null>(null);
@@ -2132,6 +2141,8 @@ export default function BlueprintCanvas({
   const eixos = useMemo(() => (mostrarEixos ? (model.eixos ?? []).filter((e) => !ocultos.has(e.id)) : []), [model.eixos, ocultos, mostrarEixos]);
   /** GUARDA-CORPOS (E7.3) do pavimento. */
   const guardaCorpos = useMemo(() => (model.guardaCorpos ?? []).filter((g) => (!levelId || g.levelId === levelId) && !ocultos.has(g.id)), [model.guardaCorpos, levelId, ocultos]);
+  /** F12: as CÂMERAS do pavimento ativo. */
+  const cameras = useMemo(() => (model.cameras ?? []).filter((c) => (!levelId || c.levelId === levelId) && !ocultos.has(c.id)), [model.cameras, levelId, ocultos]);
   const rodapes = useMemo(() => rodapesReais.filter((r) => (!levelId || r.levelId === levelId) && !ocultos.has(r.id)), [rodapesReais, levelId, ocultos]);
 
   // ── Seleção ───────────────────────────────────────────────────────────────
@@ -3162,6 +3173,18 @@ export default function BlueprintCanvas({
       return null;
     },
     [guardaCorpos, vista.escala, atenuados],
+  );
+
+  /** F12: qual CÂMERA está sob o cursor — pelo corpo (a posição), símbolo de tamanho fixo na tela. */
+  const cameraSob = useCallback(
+    (mundo: { x: number; y: number }): { id: string } | null => {
+      const folga = (HIT_PX * 1.5) / vista.escala;
+      for (let i = cameras.length - 1; i >= 0; i--) {
+        if (Math.hypot(cameras[i].posicao.x - mundo.x, cameras[i].posicao.y - mundo.y) <= folga) return cameras[i];
+      }
+      return null;
+    },
+    [cameras, vista.escala],
   );
 
   /** Qual LINHA DE CORTE está sob o cursor — pela linha, que é tudo que ela é. */
@@ -8259,6 +8282,73 @@ export default function BlueprintCanvas({
       ctx.setLineDash([]);
     }
 
+    // ── CÂMERAS (F12): o corpo no ponto do observador, o CONE da lente até o alvo e o nome. ──
+    const desenharCamera = (pos: Point, alvo: Point, focalMm: number, cor: string, nome: string | null, tracejado: boolean) => {
+      const cone = coneDaCamera({ posicao: pos, alvo, focalMm });
+      const p = paraTela(pos);
+      const e = paraTela(cone.esquerda);
+      const d = paraTela(cone.direita);
+      const a = paraTela(alvo);
+      ctx.save();
+      ctx.strokeStyle = cor;
+      ctx.fillStyle = cor;
+      ctx.globalAlpha = 0.12;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(e.x, e.y);
+      ctx.lineTo(d.x, d.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+      ctx.setLineDash(tracejado ? [5, 4] : []);
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.lineTo(d.x, d.y);
+      ctx.stroke();
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(a.x, a.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // O corpo: um retângulo de 14 × 10 px virado para o alvo, com a "lente" na frente.
+      const ang = Math.atan2(a.y - p.y, a.x - p.x);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(-9, -5, 12, 10);
+      ctx.strokeRect(-9, -5, 12, 10);
+      ctx.beginPath();
+      ctx.moveTo(3, -3);
+      ctx.lineTo(8, -5);
+      ctx.lineTo(8, 5);
+      ctx.lineTo(3, 3);
+      ctx.closePath();
+      ctx.fillStyle = cor;
+      ctx.fill();
+      ctx.restore();
+      if (nome) {
+        ctx.font = `600 ${Math.round(10 * fz)}px ui-sans-serif, system-ui, sans-serif`;
+        ctx.fillStyle = cor;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(nome, p.x, p.y + 9);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+      }
+    };
+    for (const c of cameras) {
+      meioTom(atenuados.has(c.id));
+      desenharCamera(c.posicao, c.alvo, c.focalMm, selecao.has(c.id) ? COR_SELECIONADA : COR_CAMERA, c.nome, false);
+    }
+    meioTom(false);
+    if (tool === 'camera' && pontoCamera && cursor && (cursor.x !== pontoCamera.x || cursor.y !== pontoCamera.y)) {
+      desenharCamera(pontoCamera, cursor, FOCAL_PADRAO_MM, COR_CAMERA, null, true);
+    }
+
     for (const c of cortes) {
       const selecionado = selecao.has(c.id);
       const cor = selecionado ? COR_SELECIONADA : COR_CORTE;
@@ -9261,6 +9351,7 @@ export default function BlueprintCanvas({
         tool === 'estrutural' ||
         tool === 'telhado' ||
         tool === 'corte' ||
+        tool === 'camera' ||
         tool === 'eixo' ||
         tool === 'guardacorpo' ||
         tool === 'rodape' ||
@@ -9470,6 +9561,8 @@ export default function BlueprintCanvas({
     movendoEscada,
     cortes,
     pontoCorte,
+    cameras,
+    pontoCamera,
     movendoCorte,
     guardaCorpos,
     rodapes,
@@ -9947,6 +10040,12 @@ export default function BlueprintCanvas({
     if (tool === 'corte') {
       let alvo = capturarTracado(paraMundo(px, py));
       if (pontoCorte && ortoAtivo(e)) alvo = travarOrtogonal(pontoCorte, alvo);
+      setCursor(alvo);
+      return;
+    }
+    if (tool === 'camera') {
+      let alvo = capturarTracado(paraMundo(px, py));
+      if (pontoCamera && ortoAtivo(e)) alvo = travarOrtogonal(pontoCamera, alvo);
       setCursor(alvo);
       return;
     }
@@ -10476,6 +10575,19 @@ export default function BlueprintCanvas({
       return;
     }
 
+    if (tool === 'camera') {
+      const ponto = capturarTracado(mundo);
+      if (!pontoCamera) {
+        setPontoCamera(ponto);
+        return;
+      }
+      const alvo = ortoAtivo(e) ? travarOrtogonal(pontoCamera, ponto) : ponto;
+      if (alvo.x === pontoCamera.x && alvo.y === pontoCamera.y) return;
+      onAddCamera?.(pontoCamera, alvo);
+      setPontoCamera(null);
+      return;
+    }
+
     if (tool === 'corte') {
       const ponto = capturarTracado(mundo);
       if (!pontoCorte) {
@@ -10720,6 +10832,7 @@ export default function BlueprintCanvas({
       const anotacaoClicada = anotacaoSob(mundo);
       const clicado =
         anotacaoClicada?.id ??
+        cameraSob(mundo)?.id ??
         aberturaClicada?.id ??
         guardaCorpoClicado?.id ??
         rodapeSob(mundo)?.id ??
@@ -11003,6 +11116,8 @@ export default function BlueprintCanvas({
       vagaIds: idsDeVagasSelecionadas,
       componenteIds: idsDeComponentesSelecionados,
       blocoIds: (model.blocos ?? []).filter((b) => selecao.has(b.id)).map((b) => b.id),
+      // F12: a câmera anda com a seleção (posição e alvo juntos).
+      cameraIds: (model.cameras ?? []).filter((c) => selecao.has(c.id)).map((c) => c.id),
     };
     if (
       idsDeParedesSelecionadas.length > 0 ||
@@ -11015,7 +11130,8 @@ export default function BlueprintCanvas({
       pecas.nucleoIds.length > 0 ||
       pecas.vagaIds.length > 0 ||
       pecas.componenteIds.length > 0 ||
-      pecas.blocoIds.length > 0
+      pecas.blocoIds.length > 0 ||
+      pecas.cameraIds.length > 0
     ) {
       onMoverSelecao?.(
         idsDeParedesSelecionadas,
@@ -11302,6 +11418,7 @@ export default function BlueprintCanvas({
       setAnelAgua([]);
       setCaminhoEscada([]);
       setPontoCorte(null);
+      setPontoCamera(null);
       setPontoEixo(null);
       setPontoGuardaCorpo(null);
       setPontoRodape(null);

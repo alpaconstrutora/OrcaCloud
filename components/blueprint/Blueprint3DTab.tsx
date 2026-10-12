@@ -7,7 +7,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Camera, Loader2 } from 'lucide-react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
@@ -16,6 +16,16 @@ import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
 
 interface Props {
+  /**
+   * F12 (12/10/2026): o PONTO DE VISTA de uma câmera salva — olho e alvo no mundo do 3D (metros) e a
+   * focal. Presente, a câmera do 3D vai para lá (a órbita gira em torno do alvo); `chave` muda quando a
+   * câmera muda (posição, alvo, lente). Ausente = navegação livre de sempre.
+   */
+  pontoDeVista?: { chave: string; posicao: [number, number, number]; alvo: [number, number, number]; focalMm: number } | null;
+  /** F12: as câmeras salvas, para o seletor "Ponto de vista" (ausente = sem seletor). */
+  pontosDeVista?: { id: string; nome: string }[];
+  pontoDeVistaId?: string | null;
+  onPontoDeVista?: (id: string | null) => void;
   model: BlueprintModel;
   levelIds?: string[];
   mostrarLaje?: boolean;
@@ -94,7 +104,7 @@ export default function Blueprint3DTab(props: Props) {
     // quadro. Só age quando há o que limpar, para não engolir o Escape de um
     // diálogo aberto por cima.
     <div
-      className="h-full w-full outline-none"
+      className="relative h-full w-full outline-none"
       data-testid="cena-3d"
       tabIndex={onSelecionar ? 0 : undefined}
       onKeyDown={(e) => {
@@ -104,6 +114,24 @@ export default function Blueprint3DTab(props: Props) {
         }
       }}
     >
+      {/* F12: as VISTAS SALVAS (câmeras da planta). "Livre" devolve a órbita de sempre. */}
+      {props.pontosDeVista && props.pontosDeVista.length > 0 && props.onPontoDeVista && (
+        <label className="absolute left-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-slate-200 bg-white/95 px-2 py-1 text-xs text-slate-600 shadow-sm">
+          <Camera className="h-3.5 w-3.5 text-violet-600" aria-hidden="true" />
+          Ponto de vista
+          <select
+            value={props.pontoDeVistaId ?? ''}
+            onChange={(e) => props.onPontoDeVista?.(e.target.value || null)}
+            aria-label="Ponto de vista do 3D"
+            className="h-7 rounded-[6px] border border-slate-200 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-blue-500"
+          >
+            <option value="">Livre (órbita)</option>
+            {props.pontosDeVista.map((v) => (
+              <option key={v.id} value={v.id}>{v.nome}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <Suspense fallback={<Carregando />}>
         <Blueprint3DViewer {...props} />
       </Suspense>

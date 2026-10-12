@@ -73,8 +73,15 @@ import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprin
 import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
 import { pecas3dDasFolhas, type MaterialDaPecaDaEsquadria } from '../../utils/blueprintFolhas';
 import { encaixeDoModelo, modeloDoTipo } from '../../utils/blueprintModelos3d';
+import { fovVerticalGraus } from '../../utils/blueprintCamera';
 
 interface Props {
+  /**
+   * F12 (12/10/2026): o PONTO DE VISTA de uma câmera salva — olho e alvo no mundo do 3D (metros) e a
+   * focal. Presente, a câmera do 3D vai para lá (a órbita gira em torno do alvo); `chave` muda quando a
+   * câmera muda (posição, alvo, lente). Ausente = navegação livre de sempre.
+   */
+  pontoDeVista?: { chave: string; posicao: [number, number, number]; alvo: [number, number, number]; focalMm: number } | null;
   model: BlueprintModel;
   /** Níveis a mostrar. Omitido = todos. */
   levelIds?: string[];
@@ -1937,6 +1944,44 @@ function Enquadrar({
 }
 
 /**
+ * PONTO DE VISTA (F12): leva a câmera do 3D ao olho de uma câmera SALVA, com a órbita em torno do alvo e
+ * o ângulo da lente (vertical, para o formato desta tela — o horizontal é o da lente). Volta à lente
+ * padrão (45°) quando a câmera salva sai. Como `Enquadrar`, é componente porque a prop `camera` do
+ * Canvas só vale na montagem.
+ */
+function PontoDeVista({
+  vista,
+  controlsRef,
+}: {
+  vista: { chave: string; posicao: [number, number, number]; alvo: [number, number, number]; focalMm: number } | null;
+  controlsRef: React.MutableRefObject<{ target?: THREE.Vector3; update?: () => void } | null>;
+}) {
+  const camera = useThree((e) => e.camera);
+  const tamanho = useThree((e) => e.size);
+  const chave = vista?.chave ?? null;
+  useEffect(() => {
+    const c = camera as THREE.PerspectiveCamera;
+    if (!vista) {
+      if (c.fov !== 45) {
+        c.fov = 45;
+        c.updateProjectionMatrix();
+      }
+      return;
+    }
+    const aspecto = tamanho.height > 0 ? tamanho.width / tamanho.height : 1.6;
+    c.position.set(vista.posicao[0], vista.posicao[1], vista.posicao[2]);
+    c.fov = fovVerticalGraus(vista.focalMm, aspecto);
+    c.near = 0.05;
+    c.updateProjectionMatrix();
+    controlsRef.current?.target?.set(vista.alvo[0], vista.alvo[1], vista.alvo[2]);
+    controlsRef.current?.update?.();
+    // A CHAVE (e não o objeto) decide: o objeto é recriado a cada render do editor.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, camera, tamanho.width, tamanho.height, controlsRef]);
+  return null;
+}
+
+/**
  * ANDAR dentro do desenho — o modo walk.
  *
  * ─── POR QUE PRIMEIRA PESSOA, E NÃO SÓ "ZOOM MAIS PERTO" ────────────────────
@@ -2487,7 +2532,7 @@ export default function Blueprint3DViewer(props: Props) {
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}
         {!andando && (
-          <OrbitControls ref={controlsRef} makeDefault target={centro} enableDamping maxPolarAngle={Math.PI / 2.05} />
+          <OrbitControls ref={controlsRef} makeDefault target={centro} enableDamping maxPolarAngle={props.pontoDeVista ? Math.PI / 2 : Math.PI / 2.05} />
         )}
         <Percorrer ativo={andando} centro={centro} alturaDoChao={alturaDoChao} onSair={() => setAndando(false)} />
         <Enquadrar
@@ -2498,6 +2543,9 @@ export default function Blueprint3DViewer(props: Props) {
           token={tokenDeEnquadrar}
           controlsRef={controlsRef}
         />
+        {/* F12: DEPOIS do Enquadrar — efeitos de irmãos rodam na ordem da árvore, e o enquadramento
+            automático da montagem passava por cima do ponto de vista (o 3D abria de fora, não do olho). */}
+        {!andando && <PontoDeVista vista={props.pontoDeVista ?? null} controlsRef={controlsRef} />}
       </Canvas>
     </div>
   );

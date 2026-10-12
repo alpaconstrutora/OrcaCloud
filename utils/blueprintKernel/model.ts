@@ -2144,6 +2144,48 @@ export interface GuardaCorpo {
 }
 
 /**
+ * CÂMERA (12/10/2026, kernel 0.99.0 — F12 do plano `2026-10-11-planta-recursos-video-synaps.md`):
+ * um PONTO DE VISTA salvo no desenho — onde o observador está, para onde olha, a altura do olho e a
+ * lente. Desenhada na planta (o símbolo com o cone de visão), abre o 3D daquele ponto, vai no BCF
+ * como câmera em perspectiva e é a base da captura (F13) e do render (F14).
+ *
+ * É do PAVIMENTO: a altura do olho conta do piso dele, e apagar o pavimento leva as câmeras junto.
+ * `focalMm` é a distância focal EQUIVALENTE a 35 mm (36 × 24): 24 mm é a grande-angular de interior;
+ * a conversão para o ângulo de visão do 3D mora em `utils/blueprintCamera.ts`.
+ */
+export const ALTURA_DO_OLHO_PADRAO_MM = 1600;
+export const ALTURA_DO_OLHO_MIN_MM = 300;
+export const ALTURA_DO_OLHO_MAX_MM = 20000;
+export const FOCAL_PADRAO_MM = 24;
+export const FOCAL_MIN_MM = 10;
+export const FOCAL_MAX_MM = 200;
+export const MAX_NOME_DE_CAMERA = 40;
+export interface Camera {
+  id: ObjectId;
+  uid: ElementUid;
+  levelId: ObjectId;
+  /** Onde o observador está, mm inteiros. */
+  posicao: Point;
+  /** Para onde olha, mm inteiros, diferente de `posicao`. A direção é horizontal; a altura é a do olho. */
+  alvo: Point;
+  /** Altura do olho acima do piso do pavimento, mm inteiro em [300, 20000]. */
+  alturaOlhoMm: number;
+  /** Focal equivalente a 35 mm, mm inteiro em [10, 200]. */
+  focalMm: number;
+  /** "Sala — da varanda". Não vazio, sem espaço nas pontas, até 40 caracteres. */
+  nome: string;
+}
+/** Confere uma câmera; o mesmo critério do invariante e dos comandos. */
+export function assertCamera(c: Camera): void {
+  const onde = `Câmera ${c.id}`;
+  for (const [k, v] of [['posicao.x', c.posicao.x], ['posicao.y', c.posicao.y], ['alvo.x', c.alvo.x], ['alvo.y', c.alvo.y]] as const) assertIntegerMm(v, `${c.id}.${k}`);
+  if (c.posicao.x === c.alvo.x && c.posicao.y === c.alvo.y) throw new KernelError('BAD_CAMERA', `${onde}: o alvo não pode ser a própria posição`);
+  if (!Number.isInteger(c.alturaOlhoMm) || c.alturaOlhoMm < ALTURA_DO_OLHO_MIN_MM || c.alturaOlhoMm > ALTURA_DO_OLHO_MAX_MM) throw new KernelError('BAD_CAMERA', `${onde}: altura do olho fora de [${ALTURA_DO_OLHO_MIN_MM}, ${ALTURA_DO_OLHO_MAX_MM}] mm`);
+  if (!Number.isInteger(c.focalMm) || c.focalMm < FOCAL_MIN_MM || c.focalMm > FOCAL_MAX_MM) throw new KernelError('BAD_CAMERA', `${onde}: focal fora de [${FOCAL_MIN_MM}, ${FOCAL_MAX_MM}] mm`);
+  if (typeof c.nome !== 'string' || c.nome.trim() !== c.nome || c.nome.length === 0 || c.nome.length > MAX_NOME_DE_CAMERA) throw new KernelError('BAD_CAMERA', `${onde}: nome vazio, com espaço nas pontas ou maior que ${MAX_NOME_DE_CAMERA}`);
+}
+
+/**
  * ANOTAÇÃO (19/09/2026, roadmap E8.1): o que o desenhista escreve SOBRE a
  * vista — texto, texto com seta (leader), linha de chamada, região hachurada,
  * cota angular. Não é construção: não entra em ambiente, quantitativo,
@@ -2706,6 +2748,11 @@ export function findBloco(model: BlueprintModel, id: ObjectId): Bloco {
   const b = (model.blocos ?? []).find((x) => x.id === id);
   if (!b) throw new KernelError('MASS_NOT_FOUND', `Bloco de massa inexistente: ${id}`);
   return b;
+}
+export function findCamera(model: BlueprintModel, id: ObjectId): Camera {
+  const c = (model.cameras ?? []).find((x) => x.id === id);
+  if (!c) throw new KernelError('CAMERA_NOT_FOUND', `Câmera inexistente: ${id}`);
+  return c;
 }
 
 export function findEtapa(model: BlueprintModel, id: ObjectId): Etapa {
@@ -3958,6 +4005,8 @@ export interface BlueprintModel {
   areasDeOperacao?: AreaDeOperacao[];
   /** ESTUDO DE MASSA (0.90.0) - blocos volumétricos. Ver `Bloco`. */
   blocos?: Bloco[];
+  /** CÂMERAS (0.99.0) — pontos de vista salvos. Ver `Camera`. */
+  cameras?: Camera[];
   /**
    * Escadas e rampas. Como a estrutura e o telhado, NÃO participam do arranjo
    * planar: uma escada dentro da sala não parte o ambiente. O que ela faz ao
@@ -4086,6 +4135,7 @@ export function emptyModel(): BlueprintModel {
     areasPublicas: [],
     areasDeOperacao: [],
     blocos: [],
+    cameras: [],
     stairs: [],
     trechos: [],
     terminais: [],
@@ -4169,6 +4219,7 @@ export function cloneModel(model: BlueprintModel): BlueprintModel {
     areasPublicas: (model.areasPublicas ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     areasDeOperacao: (model.areasDeOperacao ?? []).map((a) => ({ ...a, pontos: a.pontos.map((p) => ({ ...p })), ...(a.parametros ? { parametros: { ...a.parametros } } : {}) })),
     blocos: (model.blocos ?? []).map((b) => ({ ...b, pontos: b.pontos.map((p) => ({ ...p })), ...(b.parametros ? { parametros: { ...b.parametros } } : {}) })),
+    cameras: (model.cameras ?? []).map((c) => ({ ...c, posicao: { ...c.posicao }, alvo: { ...c.alvo } })),
     grupos: (model.grupos ?? []).map((g) => ({
       ...g,
       pivo: { ...g.pivo },
@@ -5429,6 +5480,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     ['Área pública', model.areasPublicas ?? []],
     ['Área de operação', model.areasDeOperacao ?? []],
     ['Bloco de massa', model.blocos ?? []],
+    ['Câmera', model.cameras ?? []],
     ['Trecho', model.trechos ?? []],
     ['Terminal', model.terminais ?? []],
     ['Quadro', model.quadros ?? []],
@@ -6252,6 +6304,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
   // BLOCO DE MASSA (0.90.0): pavimento vivo, >= 3 vértices inteiros, nome curto e aparado,
   // uso da lista, pavimentos e piso a piso inteiros dentro dos limites, cota inteira.
+  // CÂMERA (0.99.0): pavimento vivo e o resto por `assertCamera`.
+  for (const c of model.cameras ?? []) {
+    if (!model.levels.some((l) => l.id === c.levelId)) throw new KernelError('BAD_CAMERA', `Câmera ${c.id}: pavimento inexistente`);
+    assertCamera(c);
+  }
   for (const b of model.blocos ?? []) {
     if (!model.levels.some((l) => l.id === b.levelId)) throw new KernelError('BAD_MASS', `Bloco ${b.id}: pavimento inexistente`);
     if (!Array.isArray(b.pontos) || b.pontos.length < 3) throw new KernelError('BAD_MASS', `Bloco ${b.id}: o contorno precisa de pelo menos 3 vértices`);

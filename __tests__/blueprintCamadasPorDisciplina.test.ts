@@ -122,7 +122,8 @@ describe('classificação peça → camada', () => {
     // Acrescentou uma coleção desenhável ao `emptyModel`? Classifique-a em
     // `classificarPecas` ou, se for referência, inclua-a aqui com o porquê.
     // `verticesDoTerreno` não tem id (nome de um ponto da divisa — some com ela).
-    const REFERENCIAS = new Set(['levels', 'sections', 'eixos', 'restricoes', 'unidades', 'grupos', 'anotacoes', 'vistasDependentes', 'etapas', 'verticesDoTerreno']);
+    // `cameras` (F12): ponto de vista salvo, referência como o corte — não é peça de disciplina.
+    const REFERENCIAS = new Set(['levels', 'sections', 'eixos', 'restricoes', 'unidades', 'grupos', 'anotacoes', 'vistasDependentes', 'etapas', 'verticesDoTerreno', 'cameras']);
     const vazio = emptyModel() as unknown as Record<string, unknown>;
     const colecoes = Object.keys(vazio).filter((k) => Array.isArray(vazio[k]) && !REFERENCIAS.has(k));
     for (const k of colecoes) {

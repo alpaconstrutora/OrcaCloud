@@ -1723,6 +1723,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     'blueprint:vistaCotasAltura',
     true,
   );
+  // MEDIDAS NO CORTE DO TERRENO (13/10/2026): níveis + corte/aterro, e os comprimentos.
+  const [mostrarCotasDoTerrenoNoCorte, setMostrarCotasDoTerrenoNoCorte] = usePersistedState('blueprint:corteCotasDoTerreno', true);
+  const [mostrarComprimentosNoCorte, setMostrarComprimentosNoCorte] = usePersistedState('blueprint:corteComprimentos', true);
   const [mostrarRotulosEsquadria, setMostrarRotulosEsquadria] = usePersistedState(
     'blueprint:vistaRotulosEsquadria',
     true,
@@ -13788,6 +13791,40 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                           alternar: () => setMostrarCotasAltura((v) => !v),
                           ajuda: 'A cadeia vertical à esquerda, do piso ao topo da edificação.',
                         },
+                        // MEDIDAS DO TERRENO — só no corte, e só com o terreno nele (a camada
+                        // "Curvas de nível" é a que leva o perfil ao corte).
+                        ...(corteAtual
+                          ? (() => {
+                              const semTerreno = !mostrarCurvasDeNivel || !terrenoParaCorteComPlato;
+                              const motivo = !terrenoParaCorte
+                                ? 'O estudo ainda não tem relevo — gere as curvas de nível (Terreno › Dados do lote › Curvas de nível › Gerar curvas).'
+                                : 'Ligue "Curvas de nível" na planta (Exibir): é a camada que leva o terreno ao corte.';
+                              return [
+                                {
+                                  chave: 'corte-cotas-terreno',
+                                  rotulo: 'Cotas do terreno',
+                                  icone: Mountain,
+                                  ligado: mostrarCotasDoTerrenoNoCorte,
+                                  alternar: () => setMostrarCotasDoTerrenoNoCorte((v) => !v),
+                                  desabilitado: semTerreno,
+                                  ajuda: semTerreno
+                                    ? motivo
+                                    : 'Cotas de nível do terreno (pontas, ponto alto e baixo), do platô e do piso; o maior corte (vermelho) e o maior aterro (azul); a altura e a inclinação de cada talude e muro.',
+                                },
+                                {
+                                  chave: 'corte-comprimentos',
+                                  rotulo: 'Comprimentos',
+                                  icone: RulerDimensionLine,
+                                  ligado: mostrarComprimentosNoCorte,
+                                  alternar: () => setMostrarComprimentosNoCorte((v) => !v),
+                                  desabilitado: semTerreno,
+                                  ajuda: semTerreno
+                                    ? motivo
+                                    : 'Abaixo do desenho: cada talude e cada trecho de platô (nas bordas exatas) e, embaixo, a extensão do perfil do terreno.',
+                                },
+                              ];
+                            })()
+                          : []),
                         {
                           chave: 'rotulos-esquadria',
                           rotulo: 'Rótulos de esquadria',
@@ -15166,6 +15203,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               mostrarRotulosEsquadria={mostrarRotulosEsquadria}
               mostrarParedesInternas={mostrarParedesInternas}
               mostrarEstrutura={mostrarEstruturaVista}
+              mostrarCotasDoTerreno={mostrarCotasDoTerrenoNoCorte}
+              mostrarComprimentos={mostrarComprimentosNoCorte}
               enquadrarToken={enquadrarVistaToken}
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.

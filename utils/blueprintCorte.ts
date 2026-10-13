@@ -237,8 +237,28 @@ export interface ProjecaoCorte {
    * sendo; esta é o chão de verdade, que pode estar 2 m acima ou abaixo dele.
    */
   perfilDoTerreno?: { u: number; v: number }[][];
-  /** A linha do platô de terraplenagem, nos trechos em que o plano o atravessa. */
-  platoNoCorte?: { u: number; v: number }[][];
+  /**
+   * A linha do platô de terraplenagem, nos trechos em que o plano o atravessa.
+   * Cada ponto diz o que ele é (`trecho`, 13/10/2026): o platô, o talude ou a
+   * face de um muro de arrimo — é o que deixa cotar cada um (`medidasDoCorte`).
+   */
+  platoNoCorte?: PontoDoPlatoNoCorte[][];
+  /**
+   * Os `u` EXATOS em que a linha de corte cruza o anel do platô, em ordem
+   * (13/10/2026). A linha do platô é amostrada no passo; a borda medida por
+   * ela erraria até um passo — a cota de comprimento usa estes.
+   */
+  bordasDoPlato?: number[];
+  /** A cota absoluta (m) do zero do desenho — presente quando há terreno. Converte `v` em cota. */
+  cotaZeroM?: number;
+}
+
+/** O que um ponto da linha do projeto é: platô (ou via, na cota dele), talude ou face de muro. */
+export type TrechoDoPlato = 'PLATO' | 'TALUDE' | 'MURO';
+export interface PontoDoPlatoNoCorte {
+  u: number;
+  v: number;
+  trecho?: TrechoDoPlato;
 }
 
 /**
@@ -610,8 +630,35 @@ export function projetarCorte(
     ...proj,
     bbox: bboxComPerfil(bbox, [...perfil, ...(plato ?? [])]),
     perfilDoTerreno: perfil,
-    ...(plato ? { platoNoCorte: plato } : {}),
+    cotaZeroM: opts.terreno.cotaZeroM,
+    ...(plato ? { platoNoCorte: plato, bordasDoPlato: bordasDoAnelNoCorte(corte, base, opts.terreno.plato!.anel) } : {}),
   };
+}
+
+/**
+ * Os `u` exatos em que a linha de corte (o plano `p·d = a·d`) cruza as arestas
+ * do anel, em ordem crescente. Analítico, sem amostragem: é a borda do platô
+ * que a cota de comprimento mede.
+ */
+export function bordasDoAnelNoCorte(corte: Corte, base: BaseElevacao, anel: Point[]): number[] {
+  if (anel.length < 3) return [];
+  const fa = corte.a.x * base.d.x + corte.a.y * base.d.y;
+  const lado = (p: Point) => p.x * base.d.x + p.y * base.d.y - fa;
+  const us: number[] = [];
+  for (let i = 0; i < anel.length; i++) {
+    const p = anel[i];
+    const q = anel[(i + 1) % anel.length];
+    const sp = lado(p);
+    const sq = lado(q);
+    // Meio-aberto [p, q): um vértice exatamente na linha conta uma vez só.
+    if ((sp < 0 && sq >= 0) || (sp >= 0 && sq < 0)) {
+      const t = sp / (sp - sq);
+      const x = p.x + t * (q.x - p.x);
+      const y = p.y + t * (q.y - p.y);
+      us.push(Math.round(x * base.u.x + y * base.u.y));
+    }
+  }
+  return us.sort((m, n) => m - n);
 }
 
 /**
@@ -626,7 +673,7 @@ function platoNoCorte(
   bbox: ProjecaoCorte['bbox'],
   terreno: TerrenoParaCorte,
   plato: NonNullable<TerrenoParaCorte['plato']>,
-): { u: number; v: number }[][] {
+): PontoDoPlatoNoCorte[][] {
   if (plato.anel.length < 3) return [];
   const passo = Math.max(50, terreno.passoMm ?? 250);
   const largura = bbox.uMax - bbox.uMin;
@@ -649,8 +696,8 @@ function platoNoCorte(
   const alcance = hc || ha || plato.parametros ? 30_000 : 0;
   const uMin = Math.min(bbox.uMin - folga, Math.min(...usDoAnel) - folga - alcance);
   const uMax = Math.max(bbox.uMax + folga, Math.max(...usDoAnel) + folga + alcance);
-  const pedacos: { u: number; v: number }[][] = [];
-  let atual: { u: number; v: number }[] = [];
+  const pedacos: PontoDoPlatoNoCorte[][] = [];
+  let atual: PontoDoPlatoNoCorte[] = [];
   // Muro de arrimo (fase 6): ao sair do platô para trás de um muro, a linha
   // desce (ou sobe) na VERTICAL até o terreno — o muro é isso no corte.
   const vDoTerreno = (p: Point): number | null => {
@@ -667,9 +714,9 @@ function platoNoCorte(
         // Entrando no platô vindo de trás de um muro: a face do muro primeiro,
         // no MESMO u — é vertical, não uma rampa de um passo.
         const vt = vDoTerreno(p);
-        if (vt !== null && vt !== v) atual.push({ u: Math.round(u), v: vt });
+        if (vt !== null && vt !== v) atual.push({ u: Math.round(u), v: vt, trecho: 'MURO' });
       }
-      atual.push({ u: Math.round(u), v: vDe(cotaDoPlatoEm(p)) });
+      atual.push({ u: Math.round(u), v: vDe(cotaDoPlatoEm(p)), trecho: 'PLATO' });
       dentroAntes = true;
       muroAntes = false;
       uAnterior = u;
@@ -682,7 +729,7 @@ function platoNoCorte(
           // Saindo do platô para trás do muro: a face desce no u do último
           // ponto interno (a borda), até o terreno logo atrás.
           const vt = vDoTerreno(p);
-          if (vt !== null && vt !== v) atual.push({ u: Math.round(uAnterior), v: vt });
+          if (vt !== null && vt !== v) atual.push({ u: Math.round(uAnterior), v: vt, trecho: 'MURO' });
         }
         uAnterior = u;
         if (atual.length >= 2) pedacos.push(atual);
@@ -699,6 +746,7 @@ function platoNoCorte(
     // MESMA conta de `terraplenagemComTalude`, ponto a ponto (`superficieDeProjeto`
     // com banqueta, via e talude por aresta; ou a reta simples com só os `h`).
     let vTalude: number | null = null;
+    let naVia = false;
     if (hc || ha || plato.parametros) {
       const t = terreno.cotaEmM(p);
       if (t !== null) {
@@ -711,13 +759,17 @@ function platoNoCorte(
         };
         const cotaDaBorda = cotaDoPlatoEm(p);
         const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
-        if (s.naVia) vTalude = vDe(cotaDaBorda);
+        if (s.naVia) {
+          vTalude = vDe(cotaDaBorda);
+          naVia = true;
+        }
         else if ((hc || plato.parametros) && t > s.corteM) vTalude = vDe(s.corteM);
         else if ((ha || plato.parametros) && t < s.aterroM) vTalude = vDe(s.aterroM);
       }
     }
     if (vTalude !== null) {
-      atual.push({ u: Math.round(u), v: vTalude });
+      // A via de serviço fica na cota da borda: é platô, não talude.
+      atual.push({ u: Math.round(u), v: vTalude, trecho: naVia ? 'PLATO' : 'TALUDE' });
     } else if (atual.length > 0) {
       if (atual.length >= 2) pedacos.push(atual);
       atual = [];

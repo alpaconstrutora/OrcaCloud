@@ -189,6 +189,8 @@ const dem = busca.get('fonte') === 'dem';
 /** `?decl=1` pinta as faixas; `?plato=1` liga a hachura de corte/aterro e o platô no corte. */
 const comDeclividade = busca.get('decl') === '1';
 const comPlato = busca.get('plato') === '1';
+/** `?medidas=1` (13/10/2026): no corte, as cotas do terreno e os comprimentos. */
+const comMedidas = busca.get('medidas') === '1';
 /** `?hipso=1` pinta as classes de cota (fase 3); `?hipso=eq` por equidistância (fase 4). */
 const comHipsometria = busca.get('hipso') === '1' || busca.get('hipso') === 'eq';
 const hipsoPorEquidistancia = busca.get('hipso') === 'eq';
@@ -466,6 +468,8 @@ function App() {
               : null,
           }}
           terrenoChave={versao.hash_resultado}
+          mostrarCotasDoTerreno={comMedidas}
+          mostrarComprimentos={comMedidas}
         />
       </div>
     );

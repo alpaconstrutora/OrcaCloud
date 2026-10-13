@@ -19,6 +19,7 @@ import {
 } from '../../utils/blueprintElevation';
 import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
+import { medidasDoCorte } from '../../utils/blueprintCorteMedidas';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
@@ -52,6 +53,10 @@ interface Props {
   mostrarParedesInternas?: boolean;
   /** ON (padrão) = a estrutura de concreto aparece na fachada. */
   mostrarEstrutura?: boolean;
+  /** Só no corte com terreno (13/10/2026): cotas de nível, corte/aterro, talude e muro. */
+  mostrarCotasDoTerreno?: boolean;
+  /** Só no corte com terreno (13/10/2026): a cadeia de comprimentos abaixo do desenho. */
+  mostrarComprimentos?: boolean;
   /** Muda de valor → reenquadra. O botão "Enquadrar" da barra bumpa isto. */
   enquadrarToken?: number;
   /**
@@ -91,6 +96,10 @@ const COR_TELHADO_BORDA = '#9a3412';
 const COR_ESCADA = 'rgba(100, 116, 139, 0.35)';
 const COR_ESCADA_BORDA = '#475569';
 const COR_CORTE_ESCADA = '#64748b';
+/** Medidas do terreno: corte em vermelho e aterro em azul — a convenção da planta de terraplenagem. */
+const COR_MEDIDA_CORTE = '#dc2626';
+const COR_MEDIDA_ATERRO = '#2563eb';
+const COR_MEDIDA_TALUDE = '#475569';
 
 const ROTULO_ABERTURA: Record<string, string> = {
   door: 'Porta',
@@ -160,6 +169,8 @@ export default function ElevationCanvas({
   mostrarRotulosEsquadria = false,
   mostrarParedesInternas = false,
   mostrarEstrutura = true,
+  mostrarCotasDoTerreno = false,
+  mostrarComprimentos = false,
   enquadrarToken = 0,
   terreno = null,
   terrenoChave = '',
@@ -178,6 +189,9 @@ export default function ElevationCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y, terrenoChave, !!terreno],
   );
+
+  // As medidas do terreno (níveis, corte/aterro, comprimentos) — puras, só no corte.
+  const medidas = useMemo(() => (ehCorte(projecao) ? medidasDoCorte(projecao) : null), [projecao]);
 
   const { vista, paraTela, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
     useCanvasVista({ margemPx: 56 });
@@ -609,6 +623,106 @@ export default function ElevationCanvas({
       ctx.fillText(metros(bb.vMax - bb.vMin), 0, 0);
       ctx.restore();
     }
+
+    // 6. MEDIDAS DO TERRENO (13/10/2026) — a conta é `medidasDoCorte`; aqui só se pinta.
+    //
+    // Rótulo com halo branco (lê sobre a terra e sobre as linhas) e SEM sobreposição: o
+    // que cairia sobre um rótulo já posto é pulado — a ordem de pintura é a de importância
+    // (corte/aterro, talude, níveis, comprimentos).
+    if (medidas && (mostrarCotasDoTerreno || mostrarComprimentos)) {
+      const ocupados: { x: number; y: number; w: number; h: number }[] = [];
+      const rotulo = (
+        texto: string,
+        x: number,
+        y: number,
+        cor: string,
+        alinhar: CanvasTextAlign = 'center',
+        base: CanvasTextBaseline = 'bottom',
+        peso = '',
+      ): boolean => {
+        ctx.font = `${peso}11px ui-sans-serif, system-ui, sans-serif`;
+        const w = ctx.measureText(texto).width;
+        const h = 13;
+        const x0 = alinhar === 'center' ? x - w / 2 : alinhar === 'right' || alinhar === 'end' ? x - w : x;
+        const y0 = base === 'bottom' || base === 'alphabetic' ? y - h : base === 'middle' ? y - h / 2 : y;
+        const caixa = { x: x0 - 2, y: y0 - 1, w: w + 4, h: h + 2 };
+        if (ocupados.some((o) => caixa.x < o.x + o.w && o.x < caixa.x + caixa.w && caixa.y < o.y + o.h && o.y < caixa.y + caixa.h)) return false;
+        ocupados.push(caixa);
+        ctx.save();
+        ctx.textAlign = alinhar;
+        ctx.textBaseline = base;
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.strokeText(texto, x, y);
+        ctx.fillStyle = cor;
+        ctx.fillText(texto, x, y);
+        ctx.restore();
+        return true;
+      };
+      const traco = (pts: [number, number][], cor: string, largura = 1) => {
+        ctx.save();
+        ctx.strokeStyle = cor;
+        ctx.lineWidth = largura;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.stroke();
+        ctx.restore();
+      };
+
+      if (mostrarCotasDoTerreno) {
+        // 2 · Cotas verticais: o maior corte, o maior aterro, a altura de cada talude e muro.
+        for (const c of medidas.verticais) {
+          const de = paraTela({ x: c.u, y: c.vDe });
+          const ate = paraTela({ x: c.u, y: c.vAte });
+          if (Math.abs(de.y - ate.y) < 8) continue;
+          const cor = c.tipo === 'CORTE' ? COR_MEDIDA_CORTE : c.tipo === 'ATERRO' ? COR_MEDIDA_ATERRO : c.tipo === 'MURO' ? COR_FUNDACAO_BORDA : COR_MEDIDA_TALUDE;
+          traco([[de.x, de.y], [ate.x, ate.y]], cor, c.tipo === 'CORTE' || c.tipo === 'ATERRO' ? 1.5 : 1);
+          traco([[de.x - 4, de.y], [de.x + 4, de.y]], cor);
+          traco([[ate.x - 4, ate.y], [ate.x + 4, ate.y]], cor);
+          const meio = (de.y + ate.y) / 2;
+          // À direita da linha; se não couber, à esquerda.
+          if (!rotulo(c.rotulo, de.x + 6, meio, cor, 'left', 'middle', c.tipo === 'CORTE' || c.tipo === 'ATERRO' ? '600 ' : '')) rotulo(c.rotulo, de.x - 6, meio, cor, 'right', 'middle');
+        }
+        // 1 · Níveis: o triângulo com a ponta na linha e a cota em cima.
+        for (const n of medidas.niveis) {
+          const t = paraTela({ x: n.u, y: n.v });
+          const cor = n.tipo === 'TERRENO' ? COR_TERRENO_NATURAL : n.tipo === 'PLATO' ? COR_PLATO : COR_SOLO;
+          if (!rotulo(n.rotulo, t.x, t.y - 11, cor)) continue;
+          ctx.save();
+          ctx.fillStyle = cor;
+          ctx.beginPath();
+          ctx.moveTo(t.x, t.y);
+          ctx.lineTo(t.x - 5, t.y - 8);
+          ctx.lineTo(t.x + 5, t.y - 8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // 3 · Comprimentos: duas linhas de cota abaixo do ponto mais baixo desenhado —
+      //     os trechos do projeto (talude, platô) e, embaixo, o perfil inteiro. Presas à
+      //     tela: com o desenho no pé do quadro, sobem até caber.
+      if (mostrarComprimentos && medidas.vMinimo !== null && medidas.horizontais.length > 0) {
+        const yBaixo = paraTela({ x: 0, y: medidas.vMinimo }).y;
+        const y0 = Math.min(yBaixo + 30, tamanho.h - 44);
+        for (const c of medidas.horizontais) {
+          const y = y0 + c.linha * 26;
+          const a = paraTela({ x: c.uDe, y: 0 }).x;
+          const b = paraTela({ x: c.uAte, y: 0 }).x;
+          if (Math.abs(b - a) < 6) continue;
+          const cor = c.tipo === 'PLATO' ? COR_PLATO : c.tipo === 'TALUDE' ? COR_MEDIDA_TALUDE : COR_TERRENO_NATURAL;
+          traco([[a, y], [b, y]], cor);
+          traco([[a, y - 5], [a, y + 5]], cor);
+          traco([[b, y - 5], [b, y + 5]], cor);
+          // O texto só se couber entre os dois traços — senão a cota fica só desenhada.
+          ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+          if (ctx.measureText(c.rotulo).width + 6 <= Math.abs(b - a)) rotulo(c.rotulo, (a + b) / 2, y - 3, cor);
+        }
+      }
+    }
   }, [
     projecao,
     vista,
@@ -618,6 +732,9 @@ export default function ElevationCanvas({
     mostrarRotulosEsquadria,
     mostrarCotasAltura,
     mostrarEstrutura,
+    medidas,
+    mostrarCotasDoTerreno,
+    mostrarComprimentos,
   ]);
 
   // "Vazio" tem de contar a estrutura também: uma planta de fôrmas — só pilares

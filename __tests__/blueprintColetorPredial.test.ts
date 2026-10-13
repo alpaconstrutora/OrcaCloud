@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, point, type BlueprintModel } from '../utils/blueprintKernel';
 import { HIPOTESES_ESGOTO_PADRAO, esgotoTrechoATrecho, planejarEsgoto, trechosDeEsgotoSemDestino } from '../utils/blueprintEsgotoAutomatico';
-import { ROTULO_DA_CI_DO_COLETOR, ROTULO_DO_COLETOR, planejarColetorPredial } from '../utils/blueprintColetorPredial';
+import { MOTIVO_SEM_FRENTE, ROTULO_DA_CI_DO_COLETOR, ROTULO_DO_COLETOR, planejarColetorPredial } from '../utils/blueprintColetorPredial';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
 import { verificacoesHidro } from '../utils/blueprintHidroExecutivo';
 import { HIPOTESES_HIDRO_PADRAO } from '../utils/blueprintMemorialHidro';
@@ -20,9 +20,11 @@ const comLigacao = (x: number, y: number, cota: number) => {
 };
 
 describe('E5.3 — sem o que ligar', () => {
-  it('sem a ligação: diz onde pôr; e a ligação NÃO é fonte do esgoto automático', () => {
+  it('sem a ligação e sem frente do lote: pede a frente; e a ligação NÃO é fonte do esgoto automático', () => {
     const m = sobrado(true, { cotaDaCaixaMm: 4500 });
-    expect(planejar(m).motivo).toMatch(/^Coloque a ligação à rede pública/);
+    // Desde 13/10/2026 a ligação nasce sozinha na frente do lote (blueprintColetorLigacaoAutomatica.test.ts);
+    // o sobrado não tem divisas, então o que falta é saber onde é a rua.
+    expect(planejar(m).motivo).toBe(MOTIVO_SEM_FRENTE);
     const com = comLigacao(6000, -6000, -800);
     expect(planejarEsgoto(com).aLigar).toBe(planejarEsgoto(m).aLigar);
   });

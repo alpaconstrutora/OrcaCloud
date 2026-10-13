@@ -223,8 +223,20 @@ export function verificacoesHidro(model: BlueprintModel, hip: HipotesesHidro, re
       item: 'Coletor predial até a rede pública',
       norma: 'NBR 8160',
       exigido: 'ligação, coletor lançado e escoamento por gravidade',
-      obtido: col.motivo ?? (!coletorLancado ? 'coletor não lançado' : col.porGravidade ? `DN ${col.dnMm} a ${nBr(col.declividadePct, 2)} %` : col.avisos[0] ?? 'sem gravidade'),
-      atende: !col.motivo && coletorLancado && col.porGravidade,
+      // 13/10/2026: a ligação só PROPOSTA (o lançamento a põe) não existe; e a cota
+      // ESTIMADA pelo automático não emite ART até alguém confirmar com a concessionária.
+      obtido:
+        col.motivo ??
+        (col.ligacaoProposta
+          ? 'ligação à rede pública não lançada'
+          : !coletorLancado
+            ? 'coletor não lançado'
+            : !col.porGravidade
+              ? (col.avisos[0] ?? 'sem gravidade')
+              : col.cotaEstimada
+                ? 'cota da rede ESTIMADA — confirmar com a concessionária'
+                : `DN ${col.dnMm} a ${nBr(col.declividadePct, 2)} %`),
+      atende: !col.motivo && !col.ligacaoProposta && coletorLancado && col.porGravidade && !col.cotaEstimada,
     });
     // E5.4: ventilação de cada desconector e as colunas (DN da tabela, acima da cobertura).
     const vent = verificarVentilacao(model, hip.esgoto);

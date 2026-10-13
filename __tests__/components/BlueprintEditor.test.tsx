@@ -3934,6 +3934,50 @@ describe('BlueprintEditor · ribbon', () => {
     expect(botaoEsgoto()).not.toHaveTextContent('3');
   });
 
+  it('Esgoto automático SEM caixa nem ligação (13/10/2026): um clique lança tudo, diz o que presumiu, e "Confirmar cota" tira o aviso', async () => {
+    // O pedido: "cliquei em esgoto automatico e recebi … Coloque a ligação à rede pública … para lançar o coletor predial".
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number) =>
+      ({ type: 'AddWall', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), thicknessMm: 150, heightMm: 2800 }) as const;
+    const divisa = (ax: number, ay: number, bx: number, by: number, frente = false) =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', ...(frente ? { papel: 'FRENTE' as const } : {}) }) as const;
+    m = k.applyBatch(m, [
+      w(0, 0, 2000, 0), w(2000, 0, 2000, 3000), w(2000, 3000, 0, 3000), w(0, 3000, 0, 0),
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Lavatório', at: k.point(600, 2500), cotaMm: 500, tipoHidraulico: 'LAVATORIO' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Caixa sifonada', at: k.point(1200, 2100), cotaMm: 0, tipoHidraulico: 'CAIXA_SIFONADA' },
+      { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Vaso', at: k.point(600, 800), cotaMm: 0, tipoHidraulico: 'VASO_SANITARIO' },
+      // O lote, com a frente ao sul — sem caixa de inspeção e sem ligação à rede.
+      divisa(-3000, -8000, 7500, -8000, true), divisa(7500, -8000, 7500, 6000), divisa(7500, 6000, -3000, 6000), divisa(-3000, 6000, -3000, -8000),
+    ]).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+
+    await abrirAba(/^hidráulica$/i);
+    await user.click(botao(/^esgoto automático/i));
+    const gaveta = await screen.findByTestId('tarefa-esgoto');
+    const dialog = gaveta.closest('[role="dialog"]') as HTMLElement;
+    // As duas premissas novas, editáveis na gaveta (com os padrões).
+    expect(within(gaveta).getByLabelText('Profundidade presumida da rede pública em mm')).toHaveValue(1500);
+    expect(within(gaveta).getByLabelText('Afastamento da caixa de inspeção automática em mm')).toHaveValue(1000);
+    // Antes: o painel do coletor já não manda pôr a ligação à mão.
+    expect(gaveta).not.toHaveTextContent(/Coloque a ligação/);
+    expect(dialog).toHaveTextContent(/a caixa de inspeção vai entre a fachada e a frente do lote/);
+    expect(dialog).toHaveTextContent(/a ligação à rede vai na frente do lote/);
+
+    await user.click(within(dialog).getByRole('button', { name: /^lançar \(3\)$/i }));
+    const presumido = await screen.findByTestId('esgoto-presumido');
+    expect(presumido).toHaveTextContent(/Caixa de inspeção posta entre a fachada e a frente do lote/);
+    expect(presumido).toHaveTextContent(/Ligação à rede pública posta na frente do lote, com a rede ESTIMADA a 1,50 m/);
+    await waitFor(() => expect(screen.getByTestId('tarefa-esgoto')).toHaveTextContent(/já estão ligados/));
+    // O coletor já está lançado até a ligação, e a cota da rede está estimada.
+    const estimada = await screen.findByTestId('coletor-cota-estimada');
+    await user.click(within(estimada).getByRole('button', { name: /^confirmar cota$/i }));
+    await waitFor(() => expect(screen.queryByTestId('coletor-cota-estimada')).not.toBeInTheDocument());
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

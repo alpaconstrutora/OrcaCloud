@@ -145,7 +145,7 @@ import {
   MAX_ENCOSTO_MM,
 } from '../../utils/blueprintGuardaCorpoEncosto';
 import type { TipoDePontoEletrico, AcabamentosDoAmbiente, ObjectId, TipoDeAreaPublica, TipoDeLote } from '../../utils/blueprintKernel';
-import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from '../../utils/blueprintKernel';
+import { pontoEletricoDoComponente, TIPOS_DE_CONDENSADORA, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA, PARAMETRO_COTA_DA_REDE } from '../../utils/blueprintKernel';
 import { TIPOS_DE_AREA_PUBLICA, TIPOS_DE_AREA_DO_LOTEAMENTO, TIPOS_AMBIENTAIS, FICHA_DA_AREA_PUBLICA, TIPOS_DE_LOTE } from '../../utils/blueprintKernel';
 import {
   numerarQuadra,
@@ -315,6 +315,7 @@ import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
+import { planejarEsgotoCompleto } from '../../utils/blueprintEsgotoCompleto';
 import PainelTratamento from './PainelTratamento';
 import PainelAquecedor from './PainelAquecedor';
 import { dimensionarAquecedores } from '../../utils/blueprintAquecedor';
@@ -815,7 +816,6 @@ import {
 import {
   planejarEsgoto,
   refazerEsgoto,
-  relancarEsgoto,
   type HipotesesDeEsgoto,
 } from '../../utils/blueprintEsgotoAutomatico';
 import {
@@ -8976,11 +8976,30 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (tarefaAberta === 'esgoto' ? planejarVentilacao(editor.model, hipotesesDeEsgoto) : null),
     [tarefaAberta, editor.model, hipotesesDeEsgoto],
   );
-  /** COLETOR PREDIAL (29/09/2026, E5.3): da CI à ligação na rede pública. */
+  /**
+   * COLETOR PREDIAL (29/09/2026, E5.3): da CI à ligação na rede pública. Sem
+   * ligação no desenho, ela é proposta na frente do lote (13/10/2026), na cota
+   * do terreno ali — a topografia exibida, a mesma do corte.
+   */
   const planoDoColetor = useMemo(
-    () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipotesesDeEsgoto) : null),
-    [tarefaAberta, editor.model, hipotesesDeEsgoto],
+    () => (tarefaAberta === 'esgoto' ? planejarColetorPredial(editor.model, hipotesesDeEsgoto, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte],
   );
+  /**
+   * O ESGOTO INTEIRO NUM CLIQUE (13/10/2026, docs/planos/2026-10-13-hidro-ancoras-automaticas.md):
+   * caixa (se faltar) → ramais → ligação à rede (se faltar) → coletor → ventilação, num
+   * `runBatch` só — um Ctrl+Z desfaz tudo. Os botões de cada seção continuam, para
+   * relançar só uma parte.
+   */
+  const planoDoEsgotoCompleto = useMemo(
+    () => (tarefaAberta === 'esgoto' ? planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte],
+  );
+  /** O que o último lançamento presumiu (e o que ficou de fora), até a gaveta fechar. */
+  const [resumoDoEsgoto, setResumoDoEsgoto] = useState<{ presumido: string[]; pendencias: string[] } | null>(null);
+  useEffect(() => {
+    if (tarefaAberta !== 'esgoto') setResumoDoEsgoto(null);
+  }, [tarefaAberta]);
   /** TRATAMENTO INDIVIDUAL (29/09/2026, E7): sem rede pública, tanque → filtro → sumidouro. */
   const hipDeTratamento = hidroDoEstudo.hipoteses.tratamento;
   // E7.2: o dimensionamento pela população da reservação; o lançamento já cria as peças nesse tamanho.
@@ -9233,14 +9252,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, study.name],
   );
   const lancarEsgoto = () => {
-    const comandos = planoDeEsgoto.comandos.length > 0
-      ? planoDeEsgoto.comandos
-      : planoDeEsgoto.sugeridos > 0
-        ? relancarEsgoto(editor.model, hipotesesDeEsgoto).comandos
-        : [];
-    if (comandos.length === 0) return;
-    const criados = editor.runBatch(comandos);
+    const p = planoDoEsgotoCompleto;
+    if (!p || p.comandos.length === 0) return;
+    const criados = editor.runBatch(p.comandos);
     if (criados.length > 0) selecionar(criados);
+    setResumoDoEsgoto(p.presumido.length > 0 || p.pendencias.length > 0 ? { presumido: p.presumido, pendencias: p.pendencias } : null);
   };
   const refazerRedeDeEsgoto = async () => {
     const ok = await confirmar({
@@ -17493,6 +17509,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
           {tarefaAberta === 'esgoto' && (
             <div className="space-y-4" data-testid="tarefa-esgoto">
+              {resumoDoEsgoto && (
+                <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="esgoto-presumido">
+                  <p className="font-semibold">{resumoDoEsgoto.presumido.length > 0 ? 'O lançamento presumiu' : 'Ficou de fora do lançamento'}</p>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {[...resumoDoEsgoto.presumido, ...resumoDoEsgoto.pendencias].map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
                 <ul className="mt-1 list-disc space-y-0.5 pl-4">
@@ -17512,6 +17538,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     ventilação DN {hipotesesDeEsgoto.dnVentilacaoMm} até o teto. <strong>Pré-dimensionamento</strong>: não
                     desvia de fundação, viga ou laje.
                   </li>
+                  <li>
+                    Sem caixa de inspeção ou sem ligação à rede pública, o lançamento as <strong>põe</strong>: a caixa{' '}
+                    {hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} mm além da fachada, no rumo da frente do lote; a ligação na
+                    frente, com a rede <strong>estimada</strong> a {hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} mm do
+                    terreno. Arraste as peças para onde estão de verdade; o plano recalcula.
+                  </li>
                 </ul>
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <label className="flex items-center gap-2">
@@ -17530,6 +17562,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     Sob o piso
                     <input type="number" max={0} step={50} value={hipotesesDeEsgoto.cotaMinimaSobPisoMm} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, cotaMinimaSobPisoMm: Math.min(0, Math.round(Number(e.target.value) || -150)) })} aria-label="Cota do ramal sob o piso em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
                     mm
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Rede pública a
+                    <input type="number" min={300} step={100} value={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, profundidadeDaRedeMm: Math.max(300, Math.round(Number(e.target.value) || 1500)) })} aria-label="Profundidade presumida da rede pública em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
+                    mm de profundidade
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Caixa a
+                    <input type="number" min={300} step={100} value={hipotesesDeEsgoto.afastamentoDaCiMm ?? 1000} onChange={(e) => setHipDeEsgotoSalvas({ ...hipotesesDeEsgoto, afastamentoDaCiMm: Math.max(300, Math.round(Number(e.target.value) || 1000)) })} aria-label="Afastamento da caixa de inspeção automática em mm" className="w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums" />
+                    mm da fachada
                   </label>
                 </div>
               </div>
@@ -17602,8 +17644,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               {planoDoColetor && (
                 <PainelColetorPredial
                   plano={planoDoColetor}
+                  profundidadeDaRedeMm={hipotesesDeEsgoto.profundidadeDaRedeMm ?? 1500}
                   onLancar={() => {
                     if (planoDoColetor.comandos.length) editor.runBatch(planoDoColetor.comandos);
+                  }}
+                  onConfirmarCota={() => {
+                    if (planoDoColetor.ligacaoId) {
+                      editor.runBatch([{ type: 'SetParametros', familia: 'terminal', id: planoDoColetor.ligacaoId, valores: { [PARAMETRO_COTA_DA_REDE]: 'confirmada' } }]);
+                    }
                   }}
                 />
               )}
@@ -19190,7 +19238,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           {tarefaAberta === 'esgoto' && (
             <>
               <span className="mr-auto text-xs text-slate-500">
-                {planoDeEsgoto.destinoId == null ? 'Sem caixa de inspeção no desenho.' : `${planoDeEsgoto.aLigar} fonte(s) a ligar.`}
+                {[
+                  planoDeEsgoto.caixaProposta
+                    ? `${planoDeEsgoto.aLigar} fonte(s) a ligar · a caixa de inspeção vai ${planoDeEsgoto.caixaProposta.rumo === 'FACHADA' ? 'junto à fachada mais próxima' : 'entre a fachada e a frente do lote'}`
+                    : planoDeEsgoto.destinoId == null ? 'Sem caixa de inspeção no desenho' : `${planoDeEsgoto.aLigar} fonte(s) a ligar`,
+                  planoDoEsgotoCompleto?.lancaColetor && planoDoEsgotoCompleto.coletor?.ligacaoProposta ? 'a ligação à rede vai na frente do lote' : null,
+                ].filter(Boolean).join(' · ')}.
               </span>
               {planoDeEsgoto.trechosDaRede > 0 && (
                 <button
@@ -19204,7 +19257,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               <button
                 type="button"
                 onClick={lancarEsgoto}
-                disabled={planoDeEsgoto.comandos.length === 0 && planoDeEsgoto.sugeridos === 0}
+                disabled={!planoDoEsgotoCompleto || planoDoEsgotoCompleto.comandos.length === 0}
+                title={
+                  planoDoEsgotoCompleto && planoDoEsgotoCompleto.comandos.length > 0
+                    ? 'Caixa, ramais, ligação à rede, coletor e ventilação, num passo só (Ctrl+Z desfaz tudo)'
+                    : (planoDoEsgotoCompleto?.pendencias[0] ?? 'Nada a lançar: a rede de esgoto já está completa')
+                }
                 className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <Waves className="h-4 w-4" />

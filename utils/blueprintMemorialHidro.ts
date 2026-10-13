@@ -450,6 +450,8 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
       for (const a of d.avisos) B.push({ tipo: 'paragrafo', texto: a });
       B.push({ tipo: 'paragrafo', texto: 'A taxa de infiltração (Ci) é a do ensaio de infiltração do solo no local (NBR 13969, Anexo A).' });
     } else if (col.motivo) B.push({ tipo: 'paragrafo', texto: col.motivo });
+    // 13/10/2026: a ligação só proposta não existe no desenho — não há o que tabelar.
+    else if (col.ligacaoProposta) B.push({ tipo: 'paragrafo', texto: 'Sem ligação à rede pública no desenho: o lançamento do esgoto a põe na frente do lote.' });
     else {
       B.push({
         tipo: 'tabela',
@@ -463,6 +465,12 @@ export function memorialDeCalculoHidro(model: BlueprintModel, hip: HipotesesHidr
         ],
       });
       B.push({ tipo: 'paragrafo', texto: col.porGravidade ? 'Atende: o esgoto chega à rede pública por gravidade.' : `Não atende: ${col.avisos[0] ?? 'sem declividade para a gravidade.'}` });
+      if (col.cotaEstimada) {
+        B.push({
+          tipo: 'paragrafo',
+          texto: `Cota da rede pública ESTIMADA: ${nBr((hip.esgoto.profundidadeDaRedeMm ?? 1500) / 1000)} m abaixo do terreno na frente do lote (premissa). Confirmar com a concessionária antes da execução.`,
+        });
+      }
     }
     const caixasComCota = [...caixas.values()].map((c) => ({ c, ext: extensaoVerticalDaCaixa(c) })).filter((x) => x.ext);
     if (caixasComCota.length) {

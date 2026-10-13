@@ -192,6 +192,7 @@ import {
   type TipoDeRestricao,
   type FamiliaRestringivel,
   type Parametros,
+  PARAMETRO_COTA_DA_REDE,
   type ValorDeParametro,
   type Level,
   type SpaceLabel,
@@ -793,6 +794,13 @@ export type Command =
       comandoGlobal?: boolean | null;
       /** Gerado pela distribuição automática — ver `Terminal.sugerida`. */
       sugerida?: boolean | null;
+      /**
+       * Parâmetros já na criação (13/10/2026): a ligação à rede posta pelo esgoto
+       * automático nasce com `cota_da_rede: 'estimada'`. Sem isto, o lançamento
+       * teria de mandar um `SetParametros` com o id que `nextId` ainda vai gerar.
+       * Validados pela invariante, como os do `SetParametros`.
+       */
+      parametros?: Parametros;
       /** Potência já conhecida ao criar (a mínima da norma na luz sugerida). */
       potenciaW?: number | null;
       /** A variante do interruptor — ver `TIPOS_DE_INTERRUPTOR`. */
@@ -3694,6 +3702,7 @@ function aplicarSemHash(
           comando: command.comando?.trim() || null,
           comandoGlobal: command.comandoGlobal ? true : null,
           sugerida: command.sugerida ? true : null,
+          ...(command.parametros && Object.keys(command.parametros).length > 0 ? { parametros: { ...command.parametros } } : {}),
           ...(command.quadroId ? { quadroId: command.quadroId } : {}),
           ...(command.unidadeId ? { unidadeId: command.unidadeId } : {}),
           ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
@@ -3747,6 +3756,11 @@ function aplicarSemHash(
       }
       if (command.cotaMm !== undefined) {
         terminal.cotaMm = assertIntegerMm(roundToMm(command.cotaMm), 'cotaMm');
+        // 13/10/2026: editar a cota é DECIDIR a cota — a da rede, estimada pelo esgoto
+        // automático, passa a confirmada. Objeto novo: o anterior é do histórico.
+        if (terminal.parametros?.[PARAMETRO_COTA_DA_REDE] === 'estimada') {
+          terminal.parametros = { ...terminal.parametros, [PARAMETRO_COTA_DA_REDE]: 'confirmada' };
+        }
       }
       if (command.itemCode !== undefined) terminal.itemCode = command.itemCode?.trim() || null;
       if (command.rotulo !== undefined) terminal.rotulo = command.rotulo?.trim() || null;

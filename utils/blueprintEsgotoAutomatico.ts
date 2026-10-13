@@ -55,6 +55,7 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { shaftPreferido } from './blueprintNucleoVertical';
 import { redeDaOrigem } from './blueprintAguaAutomatica';
 import { pontosDaLouca } from './blueprintPontosHidraulicos';
+import { pontoNaFrente } from './blueprintAncorasHidro';
 
 export interface HipotesesDeEsgoto {
   /** Caimento mínimo, em %, para DN até 75 e para DN 100 ou mais (NBR 8160). */
@@ -67,6 +68,14 @@ export interface HipotesesDeEsgoto {
   rotaMaximaVezes: number | null;
   /** Raio em que um SHAFT (E2.4) atrai o tubo de queda. Ausente = 3000. */
   raioDoShaftMm?: number;
+  /** Quanto a caixa de inspeção AUTOMÁTICA fica para fora da fachada, mm (13/10/2026). Ausente = 1000. */
+  afastamentoDaCiMm?: number;
+  /**
+   * Profundidade presumida da rede pública (geratriz inferior) abaixo do terreno
+   * na frente, mm (13/10/2026): a cota ESTIMADA da ligação posta pelo esgoto
+   * automático, até alguém confirmar com a concessionária. Ausente = 1500.
+   */
+  profundidadeDaRedeMm?: number;
 }
 
 export const HIPOTESES_ESGOTO_PADRAO: HipotesesDeEsgoto = {
@@ -77,6 +86,8 @@ export const HIPOTESES_ESGOTO_PADRAO: HipotesesDeEsgoto = {
   dnVentilacaoMm: 50,
   rotaMaximaVezes: 1.5,
   raioDoShaftMm: 3000,
+  afastamentoDaCiMm: 1000,
+  profundidadeDaRedeMm: 1500,
 };
 
 /** DN do ramal pelas UHC acumuladas (NBR 8160, simplificado). */
@@ -114,6 +125,21 @@ export interface PlanoDeEsgoto {
   metrosPrevistos: number;
   avisos: string[];
   motivo: string | null;
+  /**
+   * Sem caixa de inspeção no desenho, a que o lançamento PÕE (13/10/2026): o
+   * `AddTerminal` dela é o primeiro dos `comandos`. `destinoId` continua null
+   * até o lançamento — a conferência do executivo lê null como "sem caixa", e
+   * uma caixa só proposta não existe. Ausente = a caixa já está no desenho.
+   */
+  caixaProposta?: CaixaProposta | null;
+}
+
+export interface CaixaProposta {
+  levelId: ObjectId;
+  at: Ponto2;
+  cotaMm: number;
+  /** De onde veio a direção: a frente do lote (e qual regra a achou) ou, sem frente, a fachada mais perto. */
+  rumo: 'PAPEL' | 'TESTADA' | 'VIA' | 'FACHADA';
 }
 
 type Fonte = {
@@ -263,6 +289,107 @@ export function caixasDeInspecao(model: BlueprintModel): Terminal[] {
  * `AddTrecho` — sem depender dos ids que o kernel dará (relançar apaga antes).
  */
 export function planejarEsgoto(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): PlanoDeEsgoto {
+  return caixasDeInspecao(model).length > 0 ? planejarEsgotoComDn(model, hip) : comCaixaProposta(model, hip);
+}
+
+// ─── A CAIXA DE INSPEÇÃO AUTOMÁTICA (13/10/2026) ─────────────────────────────
+//
+// Plano `docs/planos/2026-10-13-hidro-ancoras-automaticas.md`, item 2.1. Antes,
+// sem CI o esgoto automático parava em "coloque uma caixa de inspeção" — um
+// passo manual num botão que se chama automático. A caixa nasce `sugerida`;
+// mover apaga a marca, e o plano recalcula sobre a posição nova.
+
+/** As 8 direções da busca pela fachada mais perto, quando o lote não diz onde é a rua. */
+const OITO_RUMOS = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ x: Math.round(Math.cos((k * Math.PI) / 4) * 1e6) / 1e6, y: Math.round(Math.sin((k * Math.PI) / 4) * 1e6) / 1e6 }));
+
+/**
+ * Até onde o raio que sai de `de` no rumo `u` ainda cruza parede do pavimento:
+ * a ÚLTIMA parede cruzada, mais meia espessura dela. null = não cruza nenhuma.
+ */
+function saidaDasParedes(model: BlueprintModel, levelId: ObjectId, de: Ponto2, u: Ponto2, alcanceMm: number): number | null {
+  let ultima: number | null = null;
+  for (const w of model.walls) {
+    if (w.levelId !== levelId) continue;
+    const ex = w.b.x - w.a.x;
+    const ey = w.b.y - w.a.y;
+    const den = u.x * ey - u.y * ex;
+    if (Math.abs(den) < 1e-9) continue; // paralela ao raio
+    const wx = w.a.x - de.x;
+    const wy = w.a.y - de.y;
+    const t = (wx * ey - wy * ex) / den; // ao longo do raio
+    const s = (wx * u.y - wy * u.x) / den; // ao longo da parede
+    if (t <= 0 || t > alcanceMm || s < 0 || s > 1) continue;
+    const fim = t + w.thicknessMm / 2;
+    if (ultima == null || fim > ultima) ultima = fim;
+  }
+  return ultima;
+}
+
+/**
+ * ONDE a caixa automática fica: a SAÍDA do esgoto (a fonte de maior UHC — o
+ * vaso, em geral, que é também onde o tubo de queda desce) levada no rumo da
+ * frente do lote até passar a última parede, mais `afastamentoDaCiMm`. Com o
+ * prédio colado na frente, a caixa fica entre a fachada e a divisa. Sem frente
+ * conhecida, a fachada mais perto da saída. null = não há fonte de esgoto.
+ */
+export function posicaoDaCaixaProposta(model: BlueprintModel, hip: HipotesesDeEsgoto = HIPOTESES_ESGOTO_PADRAO): Omit<CaixaProposta, 'cotaMm'> | null {
+  const fontes = fontesDeEsgoto(model);
+  if (fontes.length === 0) return null;
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const nivelId = [...fontes].sort((a, b) => (elevacao.get(a.levelId) ?? 0) - (elevacao.get(b.levelId) ?? 0))[0].levelId;
+  const saida = [...fontes].sort((a, b) => uhcDe(b) - uhcDe(a) || a.id.localeCompare(b.id))[0].at;
+  const afastamento = hip.afastamentoDaCiMm ?? 1000;
+  const no = (u: Ponto2, d: number) => ({ x: Math.round(saida.x + u.x * d), y: Math.round(saida.y + u.y * d) });
+
+  const frente = pontoNaFrente(model, saida);
+  if (frente) {
+    const ate = distancia(saida, frente.ponto);
+    if (ate < 1) return { levelId: nivelId, at: { ...frente.ponto }, rumo: frente.origem };
+    const u = { x: (frente.ponto.x - saida.x) / ate, y: (frente.ponto.y - saida.y) / ate };
+    const fachada = saidaDasParedes(model, nivelId, saida, u, ate) ?? 0;
+    // Cabe o afastamento antes da divisa? Senão, o meio do caminho entre a fachada e ela.
+    const d = fachada + afastamento <= ate ? fachada + afastamento : (fachada + ate) / 2;
+    return { levelId: nivelId, at: no(u, d), rumo: frente.origem };
+  }
+  let melhor: { u: Ponto2; d: number } | null = null;
+  for (const u of OITO_RUMOS) {
+    const d = saidaDasParedes(model, nivelId, saida, u, 1e9);
+    if (d != null && (!melhor || d < melhor.d - 1e-6)) melhor = { u, d };
+  }
+  // Sem parede nenhuma no pavimento: ao lado da saída, para o sul.
+  const r = melhor ?? { u: { x: 0, y: -1 }, d: 0 };
+  return { levelId: nivelId, at: no(r.u, r.d + afastamento), rumo: 'FACHADA' };
+}
+
+/** O plano com a caixa PROPOSTA: traça sobre um rascunho que já a tem, e a caixa vai à frente no lote de comandos. */
+function comCaixaProposta(model: BlueprintModel, hip: HipotesesDeEsgoto): PlanoDeEsgoto {
+  // Sem fonte não há caixa a propor — mas o traçado roda assim mesmo, num rascunho
+  // com uma caixa no térreo, para o motivo dizer o que falta de VERDADE (a louça sem
+  // ponto, o aparelho só na água fria), e não "coloque uma caixa de inspeção".
+  const terreo = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm)[0];
+  if (!terreo) return planejarEsgotoComDn(model, hip);
+  const pos = posicaoDaCaixaProposta(model, hip) ?? { levelId: terreo.id, at: { x: 0, y: 0 }, rumo: 'FACHADA' as const };
+  const cotaDaFicha = FICHA_DO_PONTO_HIDRAULICO.CAIXA_INSPECAO.cotaMm.ESGOTO ?? -600;
+  const caixa = (cotaMm: number): Extract<Command, { type: 'AddTerminal' }> => ({
+    type: 'AddTerminal', levelId: pos.levelId, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.CAIXA_INSPECAO.rotulo,
+    at: { ...pos.at }, cotaMm, tipoHidraulico: 'CAIXA_INSPECAO', sugerida: true,
+  });
+  const tracar = (cotaMm: number) => planejarEsgotoComDn(applyBatch(model, [caixa(cotaMm)]).model, hip);
+  let cotaMm = cotaDaFicha;
+  let plano = tracar(cotaMm);
+  // A chegada da rede não depende da cota da caixa: se ela chega mais funda que a
+  // ficha, a caixa automática é assentada ali — nasce sem o aviso "aprofunde a caixa".
+  if (plano.cotaDeChegadaMm != null && plano.cotaDeChegadaMm < cotaMm) {
+    cotaMm = plano.cotaDeChegadaMm;
+    plano = tracar(cotaMm);
+  }
+  // Nada a ligar (sem aparelho, louça sem ponto…): o motivo do traçado vale, e não se propõe caixa vazia.
+  if (plano.comandos.length === 0) return { ...plano, destinoId: null, trechosDaRede: 0, sugeridos: 0, caixaProposta: null };
+  return { ...plano, destinoId: null, comandos: [caixa(cotaMm), ...plano.comandos], caixaProposta: { ...pos, cotaMm } };
+}
+
+/** O plano sobre uma CI que já está no desenho: o traçado e o DN pelas tabelas (E5.1). */
+function planejarEsgotoComDn(model: BlueprintModel, hip: HipotesesDeEsgoto): PlanoDeEsgoto {
   const plano = planejarEsgotoTracado(model, hip);
   const indices = plano.comandos.map((c, i) => (c.type === 'AddTrecho' ? i : -1)).filter((i) => i >= 0);
   if (indices.length === 0) return plano;

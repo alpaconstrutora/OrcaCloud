@@ -121,9 +121,11 @@ describe('planejarEsgoto — casa térrea', () => {
     expect(p2.avisos.some((a) => /aprofunde/.test(a))).toBe(true);
   });
 
-  it('sem caixa de inspeção: motivo; banheiro sem coletor: aviso e o aparelho vai direto à CI', () => {
+  it('sem caixa nem aparelho: o motivo aponta os aparelhos; banheiro sem coletor: aviso e o aparelho vai direto à CI', () => {
     const { m, t } = nivel();
-    expect(planejarEsgoto(m).motivo).toMatch(/caixa de inspeção/);
+    // Desde 13/10/2026 a caixa nasce sozinha (docs/planos/2026-10-13-hidro-ancoras-automaticas.md):
+    // sem CI, o que falta é o aparelho — não se pede mais "coloque uma caixa de inspeção".
+    expect(planejarEsgoto(m).motivo).toMatch(/coloque os aparelhos/);
     const semColetor = applyBatch(m, [
       w(t, 0, 0, 2000, 0), w(t, 2000, 0, 2000, 3000), w(t, 2000, 3000, 0, 3000), w(t, 0, 3000, 0, 0),
       esg(t, 'LAVATORIO', 600, 2500, 500),

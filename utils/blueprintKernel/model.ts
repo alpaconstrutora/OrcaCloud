@@ -678,6 +678,15 @@ export type Parametros = Record<string, ValorDeParametro>;
 export const CHAVE_DE_PARAMETRO = /^[a-z][a-z0-9_]{0,39}$/;
 export const MAX_PARAMETROS_POR_PECA = 50;
 export const MAX_TEXTO_DE_PARAMETRO = 200;
+/**
+ * A COTA DA REDE PÚBLICA na ligação de esgoto (13/10/2026): `'estimada'` quando a
+ * ligação foi posta pelo esgoto automático (terreno na frente menos a
+ * profundidade presumida da rede); `'confirmada'` depois que alguém decide. Sem a
+ * chave (a ligação posta à mão, com a cota digitada) vale como confirmada.
+ * Editar a cota é decidir a cota: `SetTerminalProps` com `cotaMm` confirma —
+ * o irmão de "mover é decidir" do `sugerida`.
+ */
+export const PARAMETRO_COTA_DA_REDE = 'cota_da_rede';
 
 /** Valida o objeto de parâmetros de uma peça; `undefined` é sempre válido. */
 export function assertParametros(parametros: Parametros | undefined, onde: string): void {

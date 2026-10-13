@@ -38,6 +38,8 @@ import {
 } from 'lucide-react';
 import { assetService } from '../services/assetService';
 import { inventoryService } from '../services/inventoryService';
+import { AssetQrLabelModal } from './AssetQrLabelModal';
+import { ativoDoHash, HASH_SEM_PEDIDO } from '../utils/assetQrLink';
 import type { Warehouse } from '../types/inventory';
 import { laborService } from '../services/laborService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -673,6 +675,34 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // LINK DIRETO (QR Code da etiqueta, 13/10/2026): `#/opura-assets?ativo=<id>`
+  // abre a ficha do bem em modo leitura. Mesmo padrão da Planta
+  // (`#/blueprint?studyId=…`): vale na montagem e quando o endereço muda com a
+  // tela já aberta; o parâmetro sai do hash depois de usado.
+  const [ativoPedido, setAtivoPedido] = React.useState<string | null>(() =>
+    typeof window !== 'undefined' ? ativoDoHash(window.location.hash) : null);
+  React.useEffect(() => {
+    const aoMudar = () => { const id = ativoDoHash(window.location.hash); if (id) setAtivoPedido(id); };
+    window.addEventListener('hashchange', aoMudar);
+    return () => window.removeEventListener('hashchange', aoMudar);
+  }, []);
+  React.useEffect(() => {
+    if (!ativoPedido || loading) return;
+    const id = ativoPedido;
+    setAtivoPedido(null);
+    if (ativoDoHash(window.location.hash)) window.history.replaceState(null, '', HASH_SEM_PEDIDO);
+    // Fora da lista (topo noutra organização): busca pelo id — a RLS decide se pode ver.
+    const daLista = assets.find(a => a.id === id);
+    (daLista ? Promise.resolve(daLista) : assetService.getById(id))
+      .then(ativo => {
+        if (!ativo) { alert('Ativo da etiqueta não encontrado, ou sem acesso a ele com este usuário.'); return; }
+        setActiveTab('bens');
+        abrirVisualizacaoAtivo(ativo);
+      })
+      .catch((err: unknown) => alert(`Erro ao abrir o ativo da etiqueta: ${(err as Error).message}`));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ativoPedido, loading, assets]);
 
   // Recarregar só os documentos (coluna "Documentos") — depois de anexar um documento
   // não há motivo para refazer as 6 consultas do loadData (§22 do guia de UI).
@@ -2931,86 +2961,13 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       )}
 
       {/* 7. MODAL: QR CODE PATRIMONIAL */}
+      {/* Etiqueta com QR Code real (13/10/2026): codifica o link que abre a ficha do bem. */}
       {isQrCodeOpen && selectedAsset && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-2xl w-full max-w-sm relative text-center space-y-6 animate-in zoom-in-95 duration-200 flex flex-col items-center">
-            <button
-              onClick={() => setIsQrCodeOpen(false)}
-              className="absolute right-4 top-4 p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div>
-              <h3 className="font-bold text-gray-800 text-lg">Etiqueta Patrimonial</h3>
-              <p className="text-gray-400 text-xs">Imprima esta etiqueta para fixar fisicamente no bem.</p>
-            </div>
-
-            {/* Simulação Premium da Etiqueta de Patrimônio */}
-            <div className="border-[3px] border-dashed border-gray-300 p-6 rounded-2xl w-64 bg-slate-50/50 flex flex-col items-center gap-4 relative overflow-hidden">
-              {/* Logo da Opura */}
-              <div className="flex items-center gap-1.5 justify-center border-b border-gray-200 w-full pb-2">
-                <div className="w-6 h-6 rounded bg-[#0F172A] flex items-center justify-center text-white text-xs font-bold font-sans">
-                  O
-                </div>
-                <span className="font-sans font-black text-gray-900 tracking-wider text-sm">ÒPURA</span>
-                <span className="text-xs text-gray-400 uppercase tracking-widest font-bold">Patrimônio</span>
-              </div>
-
-              {/* Desenho do QR Code Realista em SVG puro */}
-              <div className="w-32 h-32 bg-white border border-gray-100 p-2 rounded-xl flex items-center justify-center">
-                <svg className="w-28 h-28 text-[#0F172A]" viewBox="0 0 100 100" fill="currentColor">
-                  {/* Bordas e Marcadores de Canto Estilo QR Code */}
-                  <path d="M 5,5 h 25 v 25 h -25 z m 5,5 v 15 h 15 v -15 z m 5,5 h 5 v 5 h -5 z" />
-                  <path d="M 70,5 h 25 v 25 h -25 z m 5,5 v 15 h 15 v -15 z m 5,5 h 5 v 5 h -5 z" />
-                  <path d="M 5,70 h 25 v 25 h -25 z m 5,5 v 15 h 15 v -15 z m 5,5 h 5 v 5 h -5 z" />
-                  {/* Dados Binários Aleatórios (Estilo QR Code Real) */}
-                  <rect x="35" y="5" width="5" height="5" />
-                  <rect x="45" y="5" width="10" height="5" />
-                  <rect x="60" y="5" width="5" height="5" />
-                  <rect x="35" y="15" width="5" height="10" />
-                  <rect x="45" y="15" width="5" height="5" />
-                  <rect x="55" y="15" width="10" height="5" />
-                  <rect x="35" y="30" width="15" height="5" />
-                  <rect x="55" y="30" width="5" height="15" />
-                  <rect x="5" y="35" width="5" height="15" />
-                  <rect x="15" y="45" width="10" height="5" />
-                  <rect x="35" y="40" width="5" height="5" />
-                  <rect x="45" y="40" width="10" height="10" />
-                  <rect x="65" y="40" width="5" height="5" />
-                  <rect x="5" y="55" width="10" height="5" />
-                  <rect x="20" y="55" width="5" height="10" />
-                  <rect x="30" y="55" width="15" height="5" />
-                  <rect x="60" y="50" width="10" height="15" />
-                  <rect x="75" y="45" width="5" height="15" />
-                  <rect x="85" y="55" width="10" height="5" />
-                  <rect x="35" y="65" width="5" height="15" />
-                  <rect x="45" y="75" width="15" height="5" />
-                  <rect x="65" y="70" width="5" height="20" />
-                  <rect x="75" y="70" width="15" height="5" />
-                  <rect x="75" y="80" width="5" height="10" />
-                  <rect x="85" y="85" width="10" height="10" />
-                </svg>
-              </div>
-
-              {/* Código Patrimonial Legível */}
-              <div className="text-center">
-                <span className="text-gray-400 block text-xs font-bold uppercase tracking-widest">Código do Bem</span>
-                <span className="font-mono text-gray-800 font-black text-sm tracking-widest">{selectedAsset.code}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                window.print();
-              }}
-              className="px-6 py-2.5 bg-gray-900 hover:bg-gray-850 text-white w-full rounded-2xl font-black text-button uppercase tracking-widest flex items-center justify-center gap-2 transition-colors shadow-lg active:scale-95"
-            >
-              <FileText className="w-4 h-4" />
-              Imprimir Código
-            </button>
-          </div>
-        </div>
+        <AssetQrLabelModal
+          asset={selectedAsset}
+          organizationName={organizations.find(o => o.id === selectedAsset.organization_id)?.name}
+          onClose={() => setIsQrCodeOpen(false)}
+        />
       )}
 
       {/* 8. MODAL: IMPORTAR ATIVOS VIA EXCEL */}

@@ -125,4 +125,4 @@ O GED (`components/OpuraDocsModule.tsx`) monta as abas a partir do array `CATEGO
   - Limpeza pelo app no `finally`. No banco: 0 documentos e 0 arquivos de teste restantes.
 - [x] Ajuste vindo da prova na tela: as colunas de norma ficavam no fim da tabela, fora da tela a 1600px. Em `COLUMNS` elas passaram para logo depois de "Documento" (`mesclarOrdemDeColunas` encaixa coluna nova ao lado da vizinha da ordem padrão), e "Autor" fica oculto em Normas.
 - [x] Re-rodada após o ajuste: tsc rc=0. Suíte 885 arquivos, 8942 = 8908 + 34 pendentes, rc=0; a 1ª tentativa caiu com `# Fatal error` do V8 (Node 24, ver memória) e foi descartada. check-ui-standard, check-origem-do-deploy e check-xss-sinks com rc=0.
-- [ ] Publicar (`git push origin HEAD:main`) e `conferir-producao.sh "Normas"`, depois ler o check-run `ci`.
+- [x] Publicado: `398844cd` em main. Vercel `success`, check-run `ci` `completed/success`, e `conferir-producao.sh` confirma que o domínio serve exatamente `398844c`, com "Substituída por" e "ged-normas-orgaos" no bundle.

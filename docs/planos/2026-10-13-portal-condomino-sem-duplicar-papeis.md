@@ -88,4 +88,4 @@ na mesma linha, e as ações continuam agindo sobre os registros:
 - `tsc --noEmit`: exit 0, 0 erros.
 - `acessoAoCondominio.test.ts` + `orgContextGuard.test.ts`: 32/32.
 - Publicação 1 (itens 1–3): `c11d44d`, domínio conferido com "PESSOAS VINCULADAS", CI `success`.
-- Publicação 2 (item 4): push em `main`, depois CI e `conferir-producao.sh "Encerrar só como"`.
+- Publicação 2 (item 4): `ba40a13`, domínio conferido com "Encerrar só como", CI `success`.

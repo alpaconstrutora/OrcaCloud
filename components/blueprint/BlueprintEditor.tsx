@@ -314,6 +314,9 @@ import { planejarCondutores, verificarCondutores } from '../../utils/blueprintCo
 import PainelAlimentador from './PainelAlimentador';
 import PainelRecalque from './PainelRecalque';
 import PainelColetorPredial from './PainelColetorPredial';
+import AvisoDoLancamento from './AvisoDoLancamento';
+import { planejarAguaCompleta } from '../../utils/blueprintAguaCompleta';
+import { planejarPluvialCompleta } from '../../utils/blueprintPluvialCompleto';
 import { planejarColetorPredial } from '../../utils/blueprintColetorPredial';
 import { planejarEsgotoCompleto } from '../../utils/blueprintEsgotoCompleto';
 import PainelTratamento from './PainelTratamento';
@@ -8965,7 +8968,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const criados = editor.runBatch(re.comandos);
     if (criados.length > 0) selecionar(criados);
   };
-  const haAguaALancar = planosDeAgua.some((p) => p.comandos.length > 0 || p.sugeridos > 0);
 
   /** ─── ESGOTO AUTOMÁTICO (18/09/2026, F5) ─────────────────────────────────── */
   const hipotesesDeEsgoto = hidroDoEstudo.hipoteses.esgoto;
@@ -8995,11 +8997,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (tarefaAberta === 'esgoto' ? planejarEsgotoCompleto(editor.model, hipotesesDeEsgoto, terrenoParaCorte) : null),
     [tarefaAberta, editor.model, hipotesesDeEsgoto, terrenoParaCorte],
   );
-  /** O que o último lançamento presumiu (e o que ficou de fora), até a gaveta fechar. */
-  const [resumoDoEsgoto, setResumoDoEsgoto] = useState<{ presumido: string[]; pendencias: string[] } | null>(null);
+  /** A ÁGUA e a CHUVA inteiras num clique (13/10/2026, item 5.3): o irmão do esgoto. */
+  const planoDaAguaCompleta = useMemo(
+    () => (tarefaAberta === 'agua' ? planejarAguaCompleta(editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses, terrenoParaCorte],
+  );
+  const planoDaPluvialCompleta = useMemo(
+    () => (tarefaAberta === 'pluvial' ? planejarPluvialCompleta(editor.model, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte) : null),
+    [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte],
+  );
+  /** O que o último "Lançar" de uma gaveta presumiu (e o que ficou de fora), até a gaveta fechar ou trocar. */
+  const [resumoDoLancamento, setResumoDoLancamento] = useState<{ tarefa: string; presumido: string[]; pendencias: string[] } | null>(null);
   useEffect(() => {
-    if (tarefaAberta !== 'esgoto') setResumoDoEsgoto(null);
+    setResumoDoLancamento(null);
   }, [tarefaAberta]);
+  const lancarTudo = (tarefa: string, p: { comandos: Command[]; presumido: string[]; pendencias: string[] } | null) => {
+    if (!p || p.comandos.length === 0) return;
+    const criados = editor.runBatch(p.comandos);
+    if (criados.length > 0) selecionar(criados);
+    setResumoDoLancamento(p.presumido.length > 0 || p.pendencias.length > 0 ? { tarefa, presumido: p.presumido, pendencias: p.pendencias } : null);
+  };
   /** TRATAMENTO INDIVIDUAL (29/09/2026, E7): sem rede pública, tanque → filtro → sumidouro. */
   const hipDeTratamento = hidroDoEstudo.hipoteses.tratamento;
   // E7.2: o dimensionamento pela população da reservação; o lançamento já cria as peças nesse tamanho.
@@ -9251,13 +9268,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     },
     [analisesDoMemorialDeIncendio, editor.model, hipotesesDeIncendioDoEstudo, study.name],
   );
-  const lancarEsgoto = () => {
-    const p = planoDoEsgotoCompleto;
-    if (!p || p.comandos.length === 0) return;
-    const criados = editor.runBatch(p.comandos);
-    if (criados.length > 0) selecionar(criados);
-    setResumoDoEsgoto(p.presumido.length > 0 || p.pendencias.length > 0 ? { presumido: p.presumido, pendencias: p.pendencias } : null);
-  };
+  const lancarEsgoto = () => lancarTudo('esgoto', planoDoEsgotoCompleto);
   const refazerRedeDeEsgoto = async () => {
     const ok = await confirmar({
       title: 'Refazer a rede de esgoto?',
@@ -17370,6 +17381,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
           {tarefaAberta === 'pluvial' && contribuicaoDaChuva && (
             <div data-testid="tarefa-pluvial">
+              {resumoDoLancamento?.tarefa === 'pluvial' && (
+                <div className="mb-4">
+                  <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="pluvial-presumido" />
+                </div>
+              )}
               <PainelPluvial
                 c={contribuicaoDaChuva}
                 hip={hipotesesHidro.pluvial}
@@ -17509,15 +17525,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
           {tarefaAberta === 'esgoto' && (
             <div className="space-y-4" data-testid="tarefa-esgoto">
-              {resumoDoEsgoto && (
-                <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="esgoto-presumido">
-                  <p className="font-semibold">{resumoDoEsgoto.presumido.length > 0 ? 'O lançamento presumiu' : 'Ficou de fora do lançamento'}</p>
-                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
-                    {[...resumoDoEsgoto.presumido, ...resumoDoEsgoto.pendencias].map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
-                </div>
+              {resumoDoLancamento?.tarefa === 'esgoto' && (
+                <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="esgoto-presumido" />
               )}
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
@@ -17674,6 +17683,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
 
           {tarefaAberta === 'agua' && (
             <div className="space-y-4" data-testid="tarefa-agua">
+              {resumoDoLancamento?.tarefa === 'agua' && (
+                <AvisoDoLancamento presumido={resumoDoLancamento.presumido} pendencias={resumoDoLancamento.pendencias} testId="agua-presumido" />
+              )}
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-700">Hipóteses do lançamento</p>
                 <ul className="mt-1 list-disc space-y-0.5 pl-4">
@@ -19277,12 +19289,36 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               </span>
               <button
                 type="button"
-                onClick={() => lancarAgua(planosDeAgua)}
-                disabled={!haAguaALancar}
+                onClick={() => lancarTudo('agua', planoDaAguaCompleta)}
+                disabled={!planoDaAguaCompleta || planoDaAguaCompleta.comandos.length === 0}
+                title={
+                  planoDaAguaCompleta && planoDaAguaCompleta.comandos.length > 0
+                    ? "Peças da caixa, rede de todas as origens, hidrômetro e alimentador, e o recalque — num passo só (Ctrl+Z desfaz tudo)"
+                    : (planoDaAguaCompleta?.pendencias[0] ?? 'Nada a lançar: a água já está completa')
+                }
                 className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 <Droplets className="h-4 w-4" />
-                Lançar em todas as origens
+                Lançar tudo
+              </button>
+            </>
+          )}
+          {tarefaAberta === 'pluvial' && (
+            <>
+              <span className="mr-auto text-xs text-slate-500">Calhas, bocais, condutores e a saída pluvial.</span>
+              <button
+                type="button"
+                onClick={() => lancarTudo('pluvial', planoDaPluvialCompleta)}
+                disabled={!planoDaPluvialCompleta || planoDaPluvialCompleta.comandos.length === 0}
+                title={
+                  planoDaPluvialCompleta && planoDaPluvialCompleta.comandos.length > 0
+                    ? 'Calhas, bocais, condutores e a saída pluvial — num passo só (Ctrl+Z desfaz tudo)'
+                    : (planoDaPluvialCompleta?.pendencias[0] ?? 'Nada a lançar: a rede pluvial já está completa')
+                }
+                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <CloudRain className="h-4 w-4" />
+                Lançar tudo
               </button>
             </>
           )}

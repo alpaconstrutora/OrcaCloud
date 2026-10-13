@@ -284,10 +284,19 @@ for tocado, regerar o bundle **depois da última edição** e rodar
   Com caixa de areia e sem saída, nada muda (o aviso de sempre). Botão "Lançar saída e condutores".
   Os testes antigos que exigiam "Coloque o hidrômetro…" / "Coloque a caixa de areia…" (sem divisas)
   passaram a exigir o pedido de frente. 24/24 nos três arquivos.
-- [ ] 5.3 um botão só (água e pluvial) — NÃO feito, de propósito, até o usuário decidir: o passo
-  manual que o pedido reclama já sumiu com 5.1/5.2 (cada botão de seção põe a peça que falta).
-  Encadear rede de água + alimentador + recalque, ou calhas + condutores, num botão único é
-  conveniência à parte, com risco próprio (pressão/ajuste de DN da água entre etapas).
+- [x] 5.3 um botão só (água e pluvial) — pedido pelo usuário em 13/10 ("sim" à pergunta "Faço o
+  5.3?"). `utils/blueprintAguaCompleta.ts` (peças da caixa → rede de todas as origens com ajuste
+  de pressão → alimentador com hidrômetro na frente → recalque) e `utils/blueprintPluvialCompleto.ts`
+  (calhas → condutores com a saída na frente); "Lançar tudo" no rodapé das duas gavetas (o da água
+  substitui "Lançar em todas as origens"; o lançar por origem continua na tabela). Aviso único
+  `AvisoDoLancamento` para as três gavetas. `__tests__/blueprintAguaPluvialCompletas.test.ts` (6/6)
+  + teste de componente das duas gavetas.
+  - ⚠️ Achado: a calha põe o BOCAL na ponta mais perto do destino (caixa de areia/saída); com a
+    saída só proposta, o 1º clique punha o bocal na ponta errada e o 2º o mudava de lado (o teste
+    "clicar de novo não muda a rede" pegou). Correção: DUAS PASSADAS — a 1ª acha a saída, a 2ª
+    refaz calhas e condutores com ela no desenho.
+  - As peças da caixa entraram no encadeamento: são idempotentes, e é a BOIA que o alimentador
+    procura (sem ela, ele chegava "ao alto da caixa" com aviso).
 - [x] 6.1 bundle da planta-api: regerado DEPOIS do rebase sobre origin/main (`aea200e4`) —
   conteúdo IDÊNTICO ao versionado (só a quebra de linha mudava; descartado). O bundle só exporta
   leitura/quantitativo/IFC/planilha; os comandos alterados (`AddTerminal`, `SetTerminalProps`)

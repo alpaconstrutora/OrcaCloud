@@ -3978,6 +3978,38 @@ describe('BlueprintEditor · ribbon', () => {
     await waitFor(() => expect(screen.queryByTestId('coletor-cota-estimada')).not.toBeInTheDocument());
   });
 
+  it('Água e Pluvial — "Lançar tudo" (13/10/2026): o hidrômetro e a saída pluvial nascem na frente do lote e a gaveta diz o que presumiu', async () => {
+    const k = await import('../../utils/blueprintKernel');
+    let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const divisa = (ax: number, ay: number, bx: number, by: number, frente = false) =>
+      ({ type: 'AddBoundary', levelId: t, a: k.point(ax, ay), b: k.point(bx, by), kind: 'TERRENO', ...(frente ? { papel: 'FRENTE' as const } : {}) }) as const;
+    m = k.applyBatch(m, [
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: "Caixa d'água", at: k.point(500, 500), cotaMm: 2800, tipoHidraulico: 'RESERVATORIO', volumeL: 1000 },
+      { type: 'AddTerminal', levelId: t, disciplina: 'AGUA_FRIA', tipo: 'Chuveiro', at: k.point(1000, 2500), cotaMm: 2100, tipoHidraulico: 'CHUVEIRO' },
+      { type: 'AddAgua', levelId: t, pontos: [k.point(0, 0), k.point(10000, 0), k.point(10000, 4000), k.point(0, 4000)], beiralIndex: 0, inclinacaoPct: 30, baseMm: 2800, espessuraMm: 100 },
+      divisa(-3000, -8000, 13000, -8000, true), divisa(13000, -8000, 13000, 12000), divisa(13000, 12000, -3000, 12000), divisa(-3000, 12000, -3000, -8000),
+    ] as never).model;
+    loadBranchModel.mockResolvedValue(m);
+    await montar();
+    const user = userEvent.setup();
+    await abrirAba(/^hidráulica$/i);
+
+    // Água: um clique põe as peças da caixa, a rede, o hidrômetro na frente e o alimentador.
+    await user.click(botao(/^água automática/i));
+    const gavetaAgua = await screen.findByTestId('tarefa-agua');
+    const dialogAgua = gavetaAgua.closest('[role="dialog"]') as HTMLElement;
+    await user.click(within(dialogAgua).getByRole('button', { name: /^lançar tudo$/i }));
+    expect(await screen.findByTestId('agua-presumido')).toHaveTextContent(/Hidrômetro posto no cavalete da frente do lote/);
+
+    // Pluvial: um clique põe as calhas, os bocais, os condutores e a saída na frente.
+    await user.click(botao(/^águas pluviais/i));
+    const gavetaPluvial = await screen.findByTestId('tarefa-pluvial');
+    const dialogPluvial = gavetaPluvial.closest('[role="dialog"]') as HTMLElement;
+    await user.click(within(dialogPluvial).getByRole('button', { name: /^lançar tudo$/i }));
+    expect(await screen.findByTestId('pluvial-presumido')).toHaveTextContent(/Saída pluvial posta na frente do lote/);
+  });
+
   it('a aba persiste entre montagens — é preferência, não gesto', async () => {
     await montar();
     await abrirAba(/^elétrica$/i);

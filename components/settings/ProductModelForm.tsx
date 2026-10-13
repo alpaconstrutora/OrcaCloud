@@ -1,15 +1,21 @@
-// components/settings/ProductModelSheet.tsx — criar/editar modelo do catálogo
+// components/settings/ProductModelForm.tsx — criar/editar um modelo DENTRO do painel da marca
 //
-// Plano: docs/planos/2026-10-13-marcas-e-modelos.md.
-// A organização do modelo é a da MARCA escolhida (FK composta no banco) — por
-// isso aqui não se pergunta organização nem em "Todas": escolher a marca já
-// decide. Com nomes de marca repetidos entre organizações, o rótulo traz a org.
+// Plano: docs/planos/2026-10-13-marcas-e-modelos.md (pedido posterior de 13/10:
+// "modelo deve ser fundido com marca. no proprio cadastro de marca, habilite
+// cadastro de modelo"). Todo modelo pertence a uma marca, então ele não tem
+// tela própria: o painel da marca troca de conteúdo para este formulário e
+// volta ao terminar. Não é um segundo `Sheet` — drawer dentro de drawer é
+// proibido (UI_PATTERNS §4.4).
+//
+// Devolve corpo (`SheetPanel`) e rodapé (`SheetFooter`): o cabeçalho é o do
+// painel da marca, que muda o título. A organização do modelo é a da marca
+// (FK composta no banco), por isso aqui não se pergunta organização.
 //
 // Os padrões (categoria + vida útil) são o que o formulário do ativo
 // autopreenche ao escolher o modelo, sem sobrescrever o que foi digitado.
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
-import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
+import { SheetPanel, SheetFooter } from '../ui/sheet';
 import { brandModelService } from '../../services/brandModelService';
 import { errorMessage } from '../../hooks/useOrgContext';
 import type { ProductBrand, ProductItemType, ProductModel, ProductModelInput } from '../../types/brandModel';
@@ -22,7 +28,6 @@ const LABEL = 'text-xs font-semibold text-slate-500';
 const INPUT = 'w-full h-9 px-3 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-normal text-gray-900 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all';
 
 interface Form {
-    brand_id: string;
     name: string;
     item_type: ProductItemType;
     manufacturer_code: string;
@@ -33,8 +38,7 @@ interface Form {
     is_active: boolean;
 }
 
-const formDe = (m: ProductModel | null, brandId: string): Form => ({
-    brand_id: m?.brand_id ?? brandId,
+const formDe = (m: ProductModel | null): Form => ({
     name: m?.name ?? '',
     item_type: m?.item_type ?? 'equipamento',
     manufacturer_code: m?.manufacturer_code ?? '',
@@ -46,66 +50,42 @@ const formDe = (m: ProductModel | null, brandId: string): Form => ({
 });
 
 interface Props {
-    open: boolean;
-    /** null = novo modelo */
+    brand: ProductBrand;
+    /** null = novo modelo desta marca */
     model: ProductModel | null;
-    brands: ProductBrand[];
-    /** Marca já escolhida ao abrir um novo (filtro da tela). */
-    defaultBrandId?: string | null;
-    /** Nome da org por id — só usado para desambiguar marcas de mesmo nome em "Todas". */
-    orgName: (orgId: string) => string;
-    onClose: () => void;
+    /** Volta à marca sem salvar (quem chama pergunta se houver pendência). */
+    onBack: () => void;
     onSaved: (m: ProductModel, criado: boolean) => void;
+    /** Pendência do formulário — o painel usa na guarda de saída. */
+    onDirtyChange: (dirty: boolean) => void;
 }
 
-export const ProductModelSheet: React.FC<Props> = ({ open, model, brands, defaultBrandId, orgName, onClose, onSaved }) => {
-    const [form, setForm] = React.useState<Form>(() => formDe(model, defaultBrandId ?? ''));
-    const [inicial, setInicial] = React.useState<Form>(form);
+export const ProductModelForm: React.FC<Props> = ({ brand, model, onBack, onSaved, onDirtyChange }) => {
+    const [inicial] = React.useState<Form>(() => formDe(model));
+    const [form, setForm] = React.useState<Form>(inicial);
     const [saving, setSaving] = React.useState(false);
     const [erro, setErro] = React.useState<string | null>(null);
 
-    React.useEffect(() => {
-        if (!open) return;
-        const f = formDe(model, defaultBrandId ?? '');
-        setForm(f);
-        setInicial(f);
-        setErro(null);
-    }, [open, model, defaultBrandId]);
-
     const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm(prev => ({ ...prev, [k]: v }));
     const dirty = JSON.stringify(form) !== JSON.stringify(inicial);
+    React.useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
 
-    // Marcas oferecidas: ativas (+ a atual). Ao EDITAR, só as da mesma org (a FK não deixa cruzar).
-    const opcoesMarca = React.useMemo(() => {
-        const base = brands.filter(b => (b.is_active || b.id === form.brand_id)
-            && (!model || b.organization_id === model.organization_id));
-        const repetidos = new Set(
-            base.map(b => b.name.toLowerCase()).filter((n, i, arr) => arr.indexOf(n) !== i),
-        );
-        return base.map(b => ({
-            id: b.id,
-            label: repetidos.has(b.name.toLowerCase()) ? `${b.name} · ${orgName(b.organization_id)}` : b.name,
-        })).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-    }, [brands, form.brand_id, model, orgName]);
-
-    const marca = brands.find(b => b.id === form.brand_id) ?? null;
     const vida = form.default_useful_life_months.trim();
     const vidaInvalida = vida !== '' && !(Number.isInteger(Number(vida)) && Number(vida) >= 1 && Number(vida) <= 1200);
     const urlInvalida = form.datasheet_url.trim() !== '' && !/^https?:\/\//i.test(form.datasheet_url.trim());
 
-    const motivoBloqueio = !marca ? 'Escolha a marca'
-        : !normalizarNome(form.name) ? 'Informe o nome do modelo'
+    const motivoBloqueio = !normalizarNome(form.name) ? 'Informe o nome do modelo'
         : vidaInvalida ? 'Vida útil padrão: meses inteiros entre 1 e 1200'
         : urlInvalida ? 'A ficha técnica precisa ser um link http:// ou https://'
         : model && !dirty ? 'Nada foi alterado'
         : null;
 
     const salvar = async () => {
-        if (motivoBloqueio || !marca) return;
+        if (motivoBloqueio) return;
         setSaving(true);
         setErro(null);
         const input: ProductModelInput = {
-            brand_id: marca.id,
+            brand_id: brand.id,
             name: form.name,
             item_type: form.item_type,
             manufacturer_code: form.manufacturer_code,
@@ -118,7 +98,8 @@ export const ProductModelSheet: React.FC<Props> = ({ open, model, brands, defaul
         try {
             const salvo = model
                 ? await brandModelService.updateModel(model.id, input)
-                : await brandModelService.createModel(marca.organization_id, input);
+                : await brandModelService.createModel(brand.organization_id, input);
+            onDirtyChange(false);
             onSaved(salvo, !model);
         } catch (e) {
             setErro(errorMessage(e, 'Não foi possível salvar o modelo.'));
@@ -128,37 +109,15 @@ export const ProductModelSheet: React.FC<Props> = ({ open, model, brands, defaul
     };
 
     return (
-        <Sheet open={open} onClose={onClose} size="lg" dirty={dirty}>
-            <SheetHeader onClose={onClose}>
-                <SheetTitle>{model ? 'Editar modelo' : 'Novo modelo'}</SheetTitle>
-                <SheetDescription>
-                    {model
-                        ? 'Renomear ou trocar a marca atualiza os ativos e itens vinculados.'
-                        : 'O modelo nasce na organização da marca escolhida.'}
-                </SheetDescription>
-            </SheetHeader>
+        <>
             <SheetPanel className="px-6 py-5">
                 <div className="space-y-8">
                     <div className="space-y-4">
                         <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">Identificação</h3>
                         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                             <div className="space-y-1.5">
-                                <label htmlFor="modelo-marca" className={LABEL}>Marca</label>
-                                <select
-                                    id="modelo-marca"
-                                    value={form.brand_id}
-                                    onChange={e => set('brand_id', e.target.value)}
-                                    className={INPUT}
-                                    disabled={opcoesMarca.length === 0}
-                                    title={opcoesMarca.length === 0 ? 'Cadastre uma marca antes (folha Marcas)' : undefined}
-                                >
-                                    <option value="">{opcoesMarca.length === 0 ? 'Nenhuma marca cadastrada' : 'Selecione a marca...'}</option>
-                                    {opcoesMarca.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-                                </select>
-                            </div>
-                            <div className="space-y-1.5">
                                 <label htmlFor="modelo-nome" className={LABEL}>Modelo</label>
-                                <input id="modelo-nome" maxLength={100} value={form.name} onChange={e => set('name', e.target.value)}
+                                <input id="modelo-nome" autoFocus maxLength={100} value={form.name} onChange={e => set('name', e.target.value)}
                                     placeholder="Ex.: MSZ-HJ12, W22 5cv" className={INPUT} />
                             </div>
                             <div className="space-y-1.5">
@@ -239,8 +198,8 @@ export const ProductModelSheet: React.FC<Props> = ({ open, model, brands, defaul
                 {erro && <p className="mt-6 text-sm text-red-600">{erro}</p>}
             </SheetPanel>
             <SheetFooter>
-                <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">
-                    Cancelar
+                <button onClick={onBack} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">
+                    Voltar para a marca
                 </button>
                 <button
                     onClick={() => void salvar()}
@@ -251,8 +210,8 @@ export const ProductModelSheet: React.FC<Props> = ({ open, model, brands, defaul
                     {saving ? 'Salvando...' : model ? 'Salvar modelo' : 'Criar modelo'}
                 </button>
             </SheetFooter>
-        </Sheet>
+        </>
     );
 };
 
-export default ProductModelSheet;
+export default ProductModelForm;

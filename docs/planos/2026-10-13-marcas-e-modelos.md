@@ -9,6 +9,15 @@
 
 Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
 
+### Pedido posterior — 13/10/2026 (mesma sessão, com print da folha Marcas)
+> marcas e modelos nao deve ser separados, pois todo modelo esta vinculado a uma marca. Pode existir cadastro de marca sem modelo, mas nenhum, modelo sem marca.
+> entao modelo deve ser fundido com marca. no proprio cadastro de marca, habilite cadastro de modelo e ficara resolvido
+
+**Mudança de rumo:** a folha "Modelos" separada sai. Configurações ganha UMA folha
+"Marcas e Modelos"; o painel da marca lista os modelos dela e cadastra/edita cada
+um ali mesmo (o painel troca de conteúdo — sem drawer dentro de drawer, UI_PATTERNS
+§4.4). Itens na seção "Fase 2 — fundir" abaixo.
+
 ## Contexto
 - Marca e modelo do ativo são **texto livre** em `opura_assets.brand/model` (VARCHAR 100). As duas telas pedidas gravam nessa mesma tabela.
 - Existe um catálogo só de marcas, `opura_asset_brands`. Ele tem `organization_id` sem FK, RLS por subselect `user_id` e só a Gestão de Ativos o usa. Mesmo assim o ativo grava o **nome** da marca, não o id.
@@ -276,6 +285,16 @@ e conferido no banco (0 restantes, 88 ativos, catálogo = DeWalt/Elevacon/Menego
   (não é multi-aba) · Drawer §26 = `Sheet` ✅ · §27 identificador: **não se aplica** ·
   §30 malha no Sheet de modelo ✅ · Gráficos §28: **não se aplica** · grade/lista:
   **não se aplica**.
+
+## Fase 2 — fundir Modelos dentro de Marcas (pedido posterior de 13/10)
+
+- [x] `components/Settings.tsx`: "Marcas e Modelos" vira folha ÚNICA (sem filhos); sai o filtro "Ver modelos". **Pronto:** a árvore não tem mais "Modelos" (conferido na tela: 0 botões "Modelos").
+- [x] `components/settings/ProductModelsSettings.tsx` e `ProductModelSheet.tsx`: **removidos** (lista de modelos separada e painel próprio).
+- [x] `components/settings/ProductModelForm.tsx` (novo): formulário do modelo que vive DENTRO do painel da marca (devolve `SheetPanel` + `SheetFooter`; a marca é fixa, a org é a dela). **Pronto:** tsc + check-ui.
+- [x] `components/settings/BrandsSettings.tsx`: lista de marcas (coluna Modelos = contagem; busca acha a marca pelo nome do modelo); painel `2xl` com a seção "Modelos (N)" — tabela `dense` com busca escopada pela marca, "Novo modelo", editar/excluir; o painel troca para o formulário do modelo com "← marca" e volta. Marca nova numa org só vira a edição dela ("cadastre os modelos abaixo"); replicada em N orgs, fecha e avisa. **Pronto:** `__tests__/components/BrandsModelsSettings.test.tsx` (10) verde.
+- [x] Verificação na tela (:3118, Alpa, dados ZZTeste apagados e conferidos): criar marca → painel vira edição → "Novo modelo" → criar → volta à marca com "Modelos (1)" → lista mostra 1. Zero erro de JS/console/HTTP. **Achados e corrigidos na tela:** (1) tabela de modelos cortava "Tipo" e encostava "Ações" → colunas ~580px, "Em uso"/vida útil ocultas por padrão; (2) o toast do canto cobria "Fechar/Salvar" do painel → com o painel aberto o aviso vai no rodapé (`role=status`); (3) o temporizador do aviso anterior apagava o seguinte → um temporizador por vez.
+- [x] Suíte: tsc 0 erros; Vitest 875 arquivos / 8.849 testes verdes.
+- [ ] Publicar (push em main + conferir-producao + CI) e fechar a frente `marcas-modelos-fundir`.
 
 ## Riscos
 - Lock da FK em `opura_assets` com o módulo aberto: `lock_timeout` e repetir se der 40P01.

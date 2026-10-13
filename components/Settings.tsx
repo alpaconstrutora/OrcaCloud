@@ -20,13 +20,12 @@ import PisRatesSettings from './PisRatesSettings';
 import CofinsRatesSettings from './CofinsRatesSettings';
 import PortalHelpSettings from './PortalHelpSettings';
 import BrandsSettings from './settings/BrandsSettings';
-import ProductModelsSettings from './settings/ProductModelsSettings';
 
 type SettingsLeafId =
     | 'nomenclatura'
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-caracteristicas-unidade' | 'cat-financeiro' | 'cat-pagamentos'
-    | 'catalogo-marcas' | 'catalogo-modelos'
+    | 'catalogo-marcas'
     | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
     | 'whatsapp' | 'email' | 'database' | 'ajuda-portais';
 
@@ -54,11 +53,9 @@ const SETTINGS_NAV: SettingsNavNode[] = [
     ]},
     // Marcas e Modelos (13/10/2026) — catálogo de equipamentos, componentes e
     // materiais usado por Gestão de Ativos, Ativos do edifício e Almoxarifado.
-    // docs/planos/2026-10-13-marcas-e-modelos.md
-    { id: 'catalogo', label: 'Marcas e Modelos', icon: Tags, children: [
-        { id: 'catalogo-marcas', label: 'Marcas' },
-        { id: 'catalogo-modelos', label: 'Modelos' },
-    ]},
+    // UMA folha: todo modelo pertence a uma marca e é cadastrado dentro dela
+    // (pedido de 13/10). docs/planos/2026-10-13-marcas-e-modelos.md
+    { id: 'catalogo', label: 'Marcas e Modelos', icon: Tags, leafId: 'catalogo-marcas' },
     { id: 'indices', label: 'Índices de Reajuste', icon: Percent, leafId: 'indices' },
     { id: 'tributos', label: 'Tributos e Impostos', icon: Landmark, children: [
         { id: 'tributos-geral', label: 'Geral' },
@@ -78,13 +75,7 @@ const Settings: React.FC = () => {
     const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('nomenclatura');
     const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
     const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
-    // "Ver modelos" numa marca abre a folha Modelos já filtrada por ela.
-    const [catalogoBrandFilter, setCatalogoBrandFilter] = React.useState<string | null>(null);
-    const verModelosDaMarca = (brandId: string) => {
-        setCatalogoBrandFilter(brandId);
-        setOpenNavNodes(o => ({ ...o, catalogo: true }));
-        setActiveLeaf('catalogo-modelos');
-    };
+
 
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
@@ -476,10 +467,7 @@ const Settings: React.FC = () => {
             {activeLeaf === 'cat-caracteristicas-unidade' && <EmpreendimentoUnitCharacteristicsSettings />}
             {activeLeaf === 'cat-pagamentos' && <PaymentTypesSettings />}
             {activeLeaf === 'cat-financeiro' && <FinancialCategoriesManager />}
-            {activeLeaf === 'catalogo-marcas' && <BrandsSettings onVerModelos={verModelosDaMarca} />}
-            {activeLeaf === 'catalogo-modelos' && (
-                <ProductModelsSettings brandFilter={catalogoBrandFilter} onBrandFilterChange={setCatalogoBrandFilter} />
-            )}
+            {activeLeaf === 'catalogo-marcas' && <BrandsSettings />}
 
             {activeLeaf === 'indices' && (
                 <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">

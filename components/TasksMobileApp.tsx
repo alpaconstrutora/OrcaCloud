@@ -745,7 +745,6 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
     return t.due_date.split('T')[0] === selectedDate
   }), [tasks, done, selectedFolder, filterTab, selectedDate])
 
-  const timeStr  = useMemo(() => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), [])
   const monthName = MONTH_PT[_TODAY.getMonth()]
 
   // Navigation helpers
@@ -776,24 +775,8 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
   return (
     <div className="flex flex-col h-screen bg-[#eef2ff] font-sans select-none overflow-hidden relative">
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-5 pt-3 pb-1 bg-white flex-shrink-0">
-        <span className="text-xs font-semibold text-slate-700">{timeStr}</span>
-        <div className="flex items-center gap-1.5">
-          <div className="flex gap-0.5 items-end h-3">
-            {[3, 5, 7, 9].map((h, i) => (
-              <div key={i} className="w-1 bg-slate-700 rounded-sm" style={{ height: h }} />
-            ))}
-          </div>
-          <div className="w-6 h-3 border border-slate-700 rounded-sm relative">
-            <div className="absolute inset-0.5 bg-slate-700 rounded-[1px]" style={{ width: '70%' }} />
-            <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-0.5 h-1.5 bg-slate-700 rounded-r" />
-          </div>
-        </div>
-      </div>
-
       {/* App header */}
-      <div className="bg-white px-4 pt-2 pb-0 flex-shrink-0 border-b border-slate-100">
+      <div className="bg-white px-4 pt-3 pb-0 flex-shrink-0 border-b border-slate-100">
         {/* Breadcrumb header (space or folder selected) */}
         {headerTitle ? (
           <div className="flex items-center gap-2 pb-3">
@@ -954,7 +937,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId }) => {
       {/* Bottom nav */}
       <div className="bg-white border-t border-slate-100 px-8 py-3 flex items-center justify-around flex-shrink-0">
         {([
-          { key: 'inbox',   icon: Mail,       label: 'Inbox'   },
+          { key: 'inbox',   icon: Mail,       label: 'Entrada' },
           { key: 'espacos', icon: LayoutGrid,  label: 'Espaços' },
         ] as const).map(({ key, icon: Icon, label }) => (
           <button

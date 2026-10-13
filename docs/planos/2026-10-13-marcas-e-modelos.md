@@ -294,7 +294,7 @@ e conferido no banco (0 restantes, 88 ativos, catálogo = DeWalt/Elevacon/Menego
 - [x] `components/settings/BrandsSettings.tsx`: lista de marcas (coluna Modelos = contagem; busca acha a marca pelo nome do modelo); painel `2xl` com a seção "Modelos (N)" — tabela `dense` com busca escopada pela marca, "Novo modelo", editar/excluir; o painel troca para o formulário do modelo com "← marca" e volta. Marca nova numa org só vira a edição dela ("cadastre os modelos abaixo"); replicada em N orgs, fecha e avisa. **Pronto:** `__tests__/components/BrandsModelsSettings.test.tsx` (10) verde.
 - [x] Verificação na tela (:3118, Alpa, dados ZZTeste apagados e conferidos): criar marca → painel vira edição → "Novo modelo" → criar → volta à marca com "Modelos (1)" → lista mostra 1. Zero erro de JS/console/HTTP. **Achados e corrigidos na tela:** (1) tabela de modelos cortava "Tipo" e encostava "Ações" → colunas ~580px, "Em uso"/vida útil ocultas por padrão; (2) o toast do canto cobria "Fechar/Salvar" do painel → com o painel aberto o aviso vai no rodapé (`role=status`); (3) o temporizador do aviso anterior apagava o seguinte → um temporizador por vez.
 - [x] Suíte: tsc 0 erros; Vitest 875 arquivos / 8.849 testes verdes.
-- [ ] Publicar (push em main + conferir-producao + CI) e fechar a frente `marcas-modelos-fundir`.
+- [x] Publicado em 13/10: `fe0e1ecf`. `conferir-producao.sh "Voltar para a marca"`: o domínio serve exatamente `fe0e1ec`; check-run `ci`: success. Frente `marcas-modelos-fundir` fechada.
 
 ## Riscos
 - Lock da FK em `opura_assets` com o módulo aberto: `lock_timeout` e repetir se der 40P01.

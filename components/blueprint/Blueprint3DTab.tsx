@@ -86,6 +86,8 @@ interface Props {
   onMover?: (delta: { x: number; y: number }) => void;
   /** Subir/descer a seleção pela seta verde (ver `Blueprint3DViewer`). */
   onElevar?: (dzMm: number) => void;
+  /** A trava de 90° do 2D (botão "Trava 90°"/F8) — vale no arraste da peça no 3D. */
+  ortogonal?: boolean;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**

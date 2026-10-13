@@ -729,10 +729,14 @@ const referencias = params.get('referencia') === '1'
  * mostra a cota dele.
  */
 const comPonto = params.get('peca') === 'ponto';
+/** `?peca=movel` (13/10/2026): um móvel no piso, no meio da casa — para arrastar pelo piso, como no 2D. */
+const comMovel = params.get('peca') === 'movel';
 const modeloDeEditar = comPonto
   ? applyCommand(model, { type: 'AddTerminal', levelId: terreoId, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(2000, 2500), cotaMm: 2200 } as Command).model
-  : model;
-const idInicial = comPonto ? modeloDeEditar.terminais![0].id : (model.walls[0]?.id ?? '');
+  : comMovel
+    ? applyCommand(model, { type: 'AddComponente', levelId: terreoId, tipoId: 'CONDENSADORA', at: point(2000, 2000) } as Command).model
+    : model;
+const idInicial = comPonto ? modeloDeEditar.terminais![0].id : comMovel ? modeloDeEditar.componentes![0].id : (model.walls[0]?.id ?? '');
 
 function AppEditar() {
   const [historico] = useState(() => new ModelHistory(modeloDeEditar));
@@ -754,7 +758,8 @@ function AppEditar() {
     <>
       <div id="barra">
         EDITAR · SELECIONADO: {selecionados.join(',') || '(nenhum)'} · PAREDE: {parede.a.x},{parede.a.y}
-        {ponto && ` · COTA: ${ponto.cotaMm}`}
+        {ponto && ` · COTA: ${ponto.cotaMm} · PONTO: ${ponto.at.x},${ponto.at.y}`}
+        {comMovel && ` · MOVEL: ${m.componentes!.find((x) => x.id === idInicial)!.at.x},${m.componentes!.find((x) => x.id === idInicial)!.at.y}`}
       </div>
       <div id="tela">
         <Blueprint3DTab
@@ -763,6 +768,8 @@ function AppEditar() {
           mostrarArestas
           selecionados={new Set(selecionados)}
           onSelecionar={setSelecionados}
+          // `?orto=0` (13/10/2026): a trava de 90° desligada — o arraste da peça pelo piso anda livre.
+          ortogonal={params.get('orto') !== '0'}
           onMover={(d) => {
             const cmd = comandoDeMover(m, selecionados, d, false);
             if (!cmd) return;

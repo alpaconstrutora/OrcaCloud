@@ -10966,6 +10966,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       }}
       // SUBIR/DESCER (10/10/2026): a seta verde muda a COTA de ponto, trecho, quadro
       // e componente — um lote, um Ctrl+Z; o que não tem cota própria é dito.
+      // A MESMA trava de 90° do 2D: arrastar a peça no 3D anda livre com ela desligada.
+      ortogonal={ortogonal}
       onElevar={(dz) => {
         const r = comandosDeElevar(editor.model, editor.selectedIds, dz);
         if (!r.ok) {

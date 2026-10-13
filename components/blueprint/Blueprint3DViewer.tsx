@@ -48,7 +48,7 @@ import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
-import { caixaInicial, deltaDoMundoParaModelo, deltaVerticalMm, ehClique, limitarCaixa, planosDaCaixaDeCorte, selecaoDoClique, type CaixaDeCorte } from '../../utils/blueprint3dSelecao';
+import { caixaInicial, deltaDoMundoParaModelo, deltaVerticalMm, deslocamentoDoArrasteNoPiso, ehClique, limitarCaixa, planosDaCaixaDeCorte, pontoNoPlanoHorizontal, selecaoDoClique, type CaixaDeCorte } from '../../utils/blueprint3dSelecao';
 import { pontoDaAlca } from '../../utils/blueprintSelecao';
 import { prismasDoNucleo } from '../../utils/blueprintNucleo3d';
 import {
@@ -193,6 +193,16 @@ interface Props {
    * Ausente = a alça só anda em planta.
    */
   onElevar?: (dzMm: number) => void;
+  /**
+   * A TRAVA DE 90° do 2D (13/10/2026) — o mesmo estado do botão "Trava 90°"/F8. Vale no
+   * arraste da peça pelo piso; Shift inverte durante o gesto, como no 2D. Ausente = ligada.
+   */
+  ortogonal?: boolean;
+  /**
+   * Interno: o aperto na peça que inicia o arraste pelo piso (o viewer passa à `Cena`
+   * principal). Recebe o ponto agarrado no MUNDO (metro).
+   */
+  onAgarrar?: (pontoNoMundo: [number, number, number]) => void;
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**
@@ -976,13 +986,44 @@ const COR_SELECIONADA = '#2563eb';
  * peças ATRÁS da clicada, e a última a responder ganharia — selecionando algo
  * que a pessoa nem vê.
  */
-function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?: Set<string>) {
+/** O objeto está dentro da alça de mover (as setas)? — o aperto ali é dela, não da peça. */
+function ehDaAlca(o: THREE.Object3D | null): boolean {
+  for (let x = o; x; x = x.parent) if (x.userData?.alca) return true;
+  return false;
+}
+
+/**
+ * ARRASTAR COMO NO 2D (13/10/2026): apertar SEM Shift/Ctrl sobre uma peça já
+ * selecionada pega o conjunto e arrasta pelo piso; a PEÇA (`peca` — móvel,
+ * ponto, quadro) arrasta já no primeiro aperto, como no `BlueprintCanvas`. Só
+ * a peça da FRENTE decide (`intersections[0]`): apertar uma parede diante da
+ * selecionada não arrasta a escondida. Apertar a alça continua sendo a alça.
+ */
+function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?: Set<string>, onAgarrar?: (p: [number, number, number]) => void) {
   const inicio = useRef<{ x: number; y: number } | null>(null);
-  return (id: string) =>
+  const podeAgarrar = (id: string, peca: boolean) => !!onAgarrar && (peca || !!selecionados?.has(id));
+  return (id: string, peca = false) =>
     onSelecionar
       ? {
-          onPointerDown: (e: { clientX: number; clientY: number }) => {
+          onPointerDown: (e: {
+            clientX: number;
+            clientY: number;
+            button?: number;
+            shiftKey?: boolean;
+            ctrlKey?: boolean;
+            metaKey?: boolean;
+            point: THREE.Vector3;
+            object: THREE.Object3D;
+            intersections: { object: THREE.Object3D }[];
+            stopPropagation: () => void;
+          }) => {
             inicio.current = { x: e.clientX, y: e.clientY };
+            const acumular = e.shiftKey || e.ctrlKey || e.metaKey;
+            if (acumular || (e.button ?? 0) !== 0 || !podeAgarrar(id, peca)) return;
+            if (e.intersections[0]?.object !== e.object || e.intersections.some((i) => ehDaAlca(i.object))) return;
+            e.stopPropagation();
+            if (!selecionados?.has(id)) onSelecionar([id]);
+            onAgarrar?.([e.point.x, e.point.y, e.point.z]);
           },
           onPointerUp: (e: {
             clientX: number;
@@ -1003,7 +1044,8 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?:
             e.stopPropagation();
             // O cursor é o que ANUNCIA que a cena é clicável. Sem ele ninguém
             // descobre o recurso — foi o que aconteceu com "Inverter o lado".
-            document.body.style.cursor = 'pointer';
+            // O que se arrasta anuncia o arraste.
+            document.body.style.cursor = podeAgarrar(id, peca) ? 'move' : 'pointer';
           },
           onPointerOut: () => {
             document.body.style.cursor = '';
@@ -1134,7 +1176,7 @@ function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; pos
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1143,7 +1185,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   const chaveOcultos = ocultos ? [...ocultos].sort().join(',') : '';
   const escondida = (id: string) => !!ocultos?.has(id);
 
-  const cliqueDe = usarCliqueDePeca(onSelecionar, selecionados);
+  const cliqueDe = usarCliqueDePeca(onSelecionar, selecionados, onAgarrar);
 
   const paredes = useMemo(
     () =>
@@ -1673,7 +1715,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           </mesh>
         );
         return (
-          <group key={`componente-${c.id}`} position={c.pos} rotation={[0, c.rot, 0]} {...cliqueDe(c.id)}>
+          <group key={`componente-${c.id}`} position={c.pos} rotation={[0, c.rot, 0]} {...cliqueDe(c.id, true)}>
             {c.modelo ? (
               <FalhaDoModelo reserva={caixa}>
                 {/* Enquanto o arquivo chega, a caixa — a cena nunca fica com o buraco da peça. */}
@@ -1917,7 +1959,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           // O grupo nasce NO CENTRO da caixa e gira em torno dele; corpo e tampa
           // vão em coordenadas relativas — girar um grupo na origem do mundo
           // levaria a caixa para longe do lugar.
-          <group key={`terminal-${t.id}`} position={t.corpo.centro} rotation={[0, t.giroY, 0]} {...cliqueDe(t.id)}>
+          <group key={`terminal-${t.id}`} position={t.corpo.centro} rotation={[0, t.giroY, 0]} {...cliqueDe(t.id, true)}>
             <mesh castShadow>
               {t.corpo.forma === 'CILINDRO' ? (
                 <cylinderGeometry args={[t.corpo.tamanho[0] / 2, t.corpo.tamanho[0] / 2, t.corpo.tamanho[1], 24]} />
@@ -1944,7 +1986,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             position={t.position}
             rotation={[0, t.giroY, 0]}
             castShadow
-            {...cliqueDe(t.id)}
+            {...cliqueDe(t.id, true)}
           >
             {t.cilindro ? <cylinderGeometry args={[t.tamanho[0] / 2, t.tamanho[0] / 2, t.tamanho[1], 32]} /> : <boxGeometry args={t.tamanho} />}
             <meshStandardMaterial
@@ -1979,7 +2021,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           position={q.position}
           rotation={[0, q.giroY, 0]}
           castShadow
-          {...cliqueDe(q.id)}
+          {...cliqueDe(q.id, true)}
         >
           <boxGeometry args={q.tamanho} />
           <meshStandardMaterial
@@ -2302,6 +2344,63 @@ const OPACIDADE_DO_MEIO_TOM = 0.18;
  * `onClick` da peça fantasma roubaria o clique da peça de trás. Confere a cada
  * quadro porque o R3F troca malha e material quando a geometria muda.
  */
+/**
+ * ARRASTAR A PEÇA PELO PISO (13/10/2026) — o gesto do 2D no 3D. Com `agarre`, segue
+ * o ponteiro na janela: o raio da câmera corta o plano horizontal na altura do ponto
+ * agarrado, e a conta (passo, trava de 90° com Shift invertendo, mundo → modelo) é
+ * `deslocamentoDoArrasteNoPiso`. Soltar entrega o deslocamento do modelo; Esc cancela.
+ */
+function ArrastarNoPiso({
+  agarre,
+  ortogonal,
+  onMudar,
+  onSoltar,
+}: {
+  agarre: [number, number, number] | null;
+  ortogonal: boolean;
+  onMudar: (desenho: [number, number, number]) => void;
+  onSoltar: (modelo: { x: number; y: number }) => void;
+}) {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  // Os callbacks mudam a cada render do pai: em ref, para o efeito não se refazer no meio do gesto.
+  const cb = useRef({ onMudar, onSoltar });
+  cb.current = { onMudar, onSoltar };
+  useEffect(() => {
+    if (!agarre) return;
+    const raio = new THREE.Raycaster();
+    let ultimo = { x: 0, y: 0 };
+    const seguir = (e: PointerEvent) => {
+      const r = gl.domElement.getBoundingClientRect();
+      raio.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      const p = pontoNoPlanoHorizontal(raio.ray.origin.toArray(), raio.ray.direction.toArray(), agarre[1]);
+      if (!p) return;
+      const d = deslocamentoDoArrasteNoPiso(agarre, p, ortogonal !== e.shiftKey);
+      ultimo = d.modelo;
+      cb.current.onMudar(d.desenho);
+    };
+    const soltar = (e: PointerEvent) => {
+      seguir(e);
+      cb.current.onSoltar(ultimo);
+    };
+    const cancelar = () => cb.current.onSoltar({ x: 0, y: 0 });
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelar();
+    };
+    window.addEventListener('pointermove', seguir);
+    window.addEventListener('pointerup', soltar);
+    window.addEventListener('pointercancel', cancelar);
+    window.addEventListener('keydown', tecla);
+    return () => {
+      window.removeEventListener('pointermove', seguir);
+      window.removeEventListener('pointerup', soltar);
+      window.removeEventListener('pointercancel', cancelar);
+      window.removeEventListener('keydown', tecla);
+    };
+  }, [agarre, ortogonal, camera, gl]);
+  return null;
+}
+
 function Fantasma({ children }: { children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   useFrame(() => {
@@ -2515,6 +2614,44 @@ export default function Blueprint3DViewer(props: Props) {
   const [arrastando, setArrastando] = useState(false);
   const [chaveDaAlca, setChaveDaAlca] = useState(0);
   const deslocamentoRef = useRef<[number, number, number]>([0, 0, 0]);
+  /** Arrastar a peça pelo piso (13/10/2026): o ponto agarrado (mundo) e a prévia (desenho). */
+  const [agarre, setAgarre] = useState<[number, number, number] | null>(null);
+  const [previaNoPiso, setPreviaNoPiso] = useState<[number, number, number]>([0, 0, 0]);
+  const agarrar = onMover && !andando
+    ? (p: [number, number, number]) => {
+        // A órbita já recebeu o aperto (ouve o canvas antes do R3F): desligada aqui, ela ignora o
+        // resto do gesto; o `pointerup` dela não depende do `enabled` e a solta normalmente.
+        if (controlsRef.current) controlsRef.current.enabled = false;
+        setPreviaNoPiso([0, 0, 0]);
+        setAgarre(p);
+      }
+    : undefined;
+  const soltarDoPiso = (m: { x: number; y: number }) => {
+    if (controlsRef.current) controlsRef.current.enabled = true;
+    setAgarre(null);
+    if (m.x || m.y) onMover?.(m);
+  };
+  /** A prévia translúcida da seleção (só ela), no espaço do desenho — a da alça e a do piso. */
+  const previaDaSelecao = () => (
+    <Fantasma>
+      <Cena
+        {...props}
+        ocultos={(() => {
+          const o = new Set(idsDoModelo(props.model));
+          for (const id of selecionados ?? []) o.delete(id);
+          return o;
+        })()}
+        mostrarRotulosDeRede={false}
+        selecionados={undefined}
+        onSelecionar={undefined}
+        armadura={undefined}
+        mostrarTerreno={false}
+        envelope={undefined}
+        massa={undefined}
+        entorno={undefined}
+      />
+    </Fantasma>
+  );
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-50">
@@ -2594,7 +2731,7 @@ export default function Blueprint3DViewer(props: Props) {
         {andando
           ? 'WASD ou setas para andar · mouse para olhar · Esc para sair'
           : alca
-            ? `Arraste as setas da alça para mover a seleção${onElevar ? ' (a verde sobe e desce)' : ''} · Shift+clique soma à seleção · Ctrl+Z desfaz`
+            ? `Arraste a peça para movê-la (trava 90° ${(props.ortogonal ?? true) ? 'ligada' : 'desligada'}, Shift inverte) · setas da alça para um eixo${onElevar ? ', a verde sobe e desce' : ''} · Ctrl+Z desfaz`
             : 'Arraste para orbitar · scroll para zoom · botão direito para mover · Shift+clique soma à seleção'}
       </div>
 
@@ -2664,14 +2801,14 @@ export default function Blueprint3DViewer(props: Props) {
           // CAMADAS EM MEIO-TOM: a principal esconde os atenuados; o fantasma mostra só eles.
           const { atenuados, terrenoEmMeioTom, ocultos } = props;
           const comMeioTom = (atenuados?.size ?? 0) > 0 || !!terrenoEmMeioTom;
-          if (!comMeioTom) return <Cena {...props} />;
+          if (!comMeioTom) return <Cena {...props} onAgarrar={agarrar} />;
           const ocultosDaPrincipal = new Set([...(ocultos ?? []), ...(atenuados ?? [])]);
           const ocultosDoFantasma = new Set([...(ocultos ?? [])]);
           for (const id of idsDoModelo(props.model)) if (!atenuados?.has(id)) ocultosDoFantasma.add(id);
           const semTerreno = { mostrarTerreno: false, relevo: null, extrasDoRelevo: null, envelope: undefined, massa: undefined };
           return (
             <>
-              <Cena {...props} ocultos={ocultosDaPrincipal} {...(terrenoEmMeioTom ? semTerreno : {})} />
+              <Cena {...props} onAgarrar={agarrar} ocultos={ocultosDaPrincipal} {...(terrenoEmMeioTom ? semTerreno : {})} />
               <Fantasma>
                 <Cena
                   {...props}
@@ -2696,8 +2833,10 @@ export default function Blueprint3DViewer(props: Props) {
         )}
         {/* E10.3 — a ALÇA de mover: só em planta (X e Z); a prévia translúcida acompanha durante o arraste;
             ao soltar, UM comando (TranslateEntities) — um Ctrl+Z. */}
-        {alca && !andando && (
-          <group key={chaveDaAlca} position={alca} userData={{ naoCapturar: true }}>
+        {/* Arrastar a peça pelo piso (13/10/2026): a prévia anda com o ponteiro; a alça some no gesto. */}
+        {agarre && <group position={previaNoPiso}>{previaDaSelecao()}</group>}
+        {alca && !andando && !agarre && (
+          <group key={chaveDaAlca} position={alca} userData={{ naoCapturar: true, alca: true }}>
             <PivotControls
               activeAxes={[true, !!onElevar, true]}
               disableRotations
@@ -2725,26 +2864,7 @@ export default function Blueprint3DViewer(props: Props) {
               }}
             >
               {arrastando && (
-                <group position={[-alca[0], -alca[1], -alca[2]]}>
-                  <Fantasma>
-                    <Cena
-                      {...props}
-                      ocultos={(() => {
-                        const o = new Set(idsDoModelo(props.model));
-                        for (const id of selecionados ?? []) o.delete(id);
-                        return o;
-                      })()}
-                      mostrarRotulosDeRede={false}
-                      selecionados={undefined}
-                      onSelecionar={undefined}
-                      armadura={undefined}
-                      mostrarTerreno={false}
-                      envelope={undefined}
-                      massa={undefined}
-                      entorno={undefined}
-                    />
-                  </Fantasma>
-                </group>
+                <group position={[-alca[0], -alca[1], -alca[2]]}>{previaDaSelecao()}</group>
               )}
             </PivotControls>
           </group>
@@ -2753,8 +2873,9 @@ export default function Blueprint3DViewer(props: Props) {
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}
         {!andando && (
-          <OrbitControls ref={controlsRef} makeDefault target={centroNoMundo} enableDamping maxPolarAngle={props.pontoDeVista ? Math.PI / 2 : Math.PI / 2.05} />
+          <OrbitControls ref={controlsRef} makeDefault target={centroNoMundo} enabled={!agarre} enableDamping maxPolarAngle={props.pontoDeVista ? Math.PI / 2 : Math.PI / 2.05} />
         )}
+        <ArrastarNoPiso agarre={agarre} ortogonal={props.ortogonal ?? true} onMudar={setPreviaNoPiso} onSoltar={soltarDoPiso} />
         <Percorrer ativo={andando} centro={centroNoMundo} alturaDoChao={alturaDoChaoNoMundo} onSair={() => setAndando(false)} />
         <Enquadrar
           centro={centroNoMundo}

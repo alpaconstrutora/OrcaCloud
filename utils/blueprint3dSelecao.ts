@@ -14,6 +14,8 @@
 // compilador nem teste alcançam lá dentro. É a mesma lição que o enquadramento
 // e a grade já custaram.
 
+import { doDesenhoParaMundo } from './blueprint3dEspelho';
+
 /** Quantos pixels de arraste ainda contam como clique parado. */
 export const TOLERANCIA_DE_CLIQUE_PX = 4;
 
@@ -111,4 +113,44 @@ export function limitarCaixa(c: CaixaDeCorte, folgaM = 0.05): CaixaDeCorte {
   const max = [...c.max] as [number, number, number];
   for (let i = 0; i < 3; i++) if (min[i] > max[i] - folgaM) min[i] = max[i] - folgaM;
   return { min, max };
+}
+
+/**
+ * ARRASTAR A PEÇA NO 3D (13/10/2026): onde o raio do ponteiro corta o plano
+ * HORIZONTAL na altura `y` (mundo, metro) — a peça desliza no piso dela, como
+ * no 2D. `direcao` normalizada (é o que o `Raycaster` dá), então `t` é metro.
+ * `null` quando o raio corre paralelo ao plano, aponta para longe dele ou o
+ * corta além de `alcanceM`: perto do horizonte um pixel vira quilômetros, e o
+ * arraste saltaria a peça para fora do desenho.
+ */
+export function pontoNoPlanoHorizontal(
+  origem: readonly [number, number, number],
+  direcao: readonly [number, number, number],
+  y: number,
+  alcanceM = 2000,
+): [number, number, number] | null {
+  if (Math.abs(direcao[1]) < 1e-6) return null;
+  const t = (y - origem[1]) / direcao[1];
+  if (!(t > 0) || t > alcanceM) return null;
+  return [origem[0] + t * direcao[0], y, origem[2] + t * direcao[2]];
+}
+
+/**
+ * O arraste no piso, de `inicio` a `atual` (MUNDO, metro — norte em −Z), no
+ * modelo (mm, passo do arraste) e no espaço do DESENHO (metro, para a prévia
+ * que vive no grupo espelhado). `orto` é a trava de 90° do 2D já com o Shift
+ * aplicado: zera o eixo menor (no empate, fica a horizontal — `travarOrtogonal`).
+ */
+export function deslocamentoDoArrasteNoPiso(
+  inicio: readonly [number, number, number],
+  atual: readonly [number, number, number],
+  orto: boolean,
+  passoMm = 10,
+): { modelo: { x: number; y: number }; desenho: [number, number, number] } {
+  const m = deltaDoMundoParaModelo(doDesenhoParaMundo([atual[0] - inicio[0], 0, atual[2] - inicio[2]]), passoMm);
+  if (orto) {
+    if (Math.abs(m.x) >= Math.abs(m.y)) m.y = 0;
+    else m.x = 0;
+  }
+  return { modelo: m, desenho: [m.x / 1000, 0, m.y / 1000] };
 }

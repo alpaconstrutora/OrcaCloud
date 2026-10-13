@@ -69,6 +69,7 @@ import {
 import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
+import { doDesenhoParaMundo, ESCALA_DO_DESENHO_NO_MUNDO, planoNoMundo } from '../../utils/blueprint3dEspelho';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
 import { paineisDaPolilinha, pecaNoMundo } from '../../utils/blueprint3dPecas';
@@ -2102,11 +2103,14 @@ function PontoDeVista({
       return;
     }
     const aspecto = tamanho.height > 0 ? tamanho.width / tamanho.height : 1.6;
-    c.position.set(vista.posicao[0], vista.posicao[1], vista.posicao[2]);
+    // `cameraNoMundo3d` devolve o espaço do DESENHO; a câmera vive no mundo (ver `blueprint3dEspelho`).
+    const olho = doDesenhoParaMundo(vista.posicao);
+    const alvo = doDesenhoParaMundo(vista.alvo);
+    c.position.set(olho[0], olho[1], olho[2]);
     c.fov = fovVerticalGraus(vista.focalMm, aspecto);
     c.near = 0.05;
     c.updateProjectionMatrix();
-    controlsRef.current?.target?.set(vista.alvo[0], vista.alvo[1], vista.alvo[2]);
+    controlsRef.current?.target?.set(alvo[0], alvo[1], alvo[2]);
     controlsRef.current?.update?.();
     // A CHAVE (e não o objeto) decide: o objeto é recriado a cada render do editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2339,7 +2343,12 @@ function Recortado({ caixa, children }: { caixa: CaixaDeCorte | null; children: 
   const vazio = useMemo<THREE.Plane[]>(() => [], []);
   useEffect(() => {
     if (!caixa) return;
-    planosDaCaixaDeCorte(caixa).forEach((pl, i) => planos[i].set(new THREE.Vector3(...pl.normal), pl.constante));
+    // A caixa é do espaço do desenho; o three aplica `clippingPlanes` no MUNDO, e
+    // este grupo vive dentro do espelho (ver `blueprint3dEspelho`) — a normal troca o z.
+    planosDaCaixaDeCorte(caixa).forEach((pl, i) => {
+      const w = planoNoMundo(pl);
+      planos[i].set(new THREE.Vector3(...w.normal), w.constante);
+    });
   }, [caixa, planos]);
   useFrame(() => {
     const alvo = caixa ? planos : vazio;
@@ -2461,6 +2470,18 @@ export default function Blueprint3DViewer(props: Props) {
     () => enquadramentoDoModelo(model, !!mostrarTerreno, mostrarTerreno ? (relevo ?? null) : null, props.envelope ?? null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, mostrarTerreno, relevoChave, props.envelope],
+  );
+  /**
+   * SEM ESPELHO (12/10/2026): o enquadramento é do espaço do DESENHO (norte em
+   * +Z); a cena entra num grupo espelhado e câmera, órbita, luzes, grade e o
+   * percorrer vivem no MUNDO (norte em −Z) — recebem este centro. Ver
+   * `utils/blueprint3dEspelho.ts`.
+   */
+  const centroNoMundo = useMemo(() => doDesenhoParaMundo(centro), [centro]);
+  /** O chão do percorrer é consultado no espaço do desenho: o z da câmera volta trocado. */
+  const alturaDoChaoNoMundo = useMemo(
+    () => (alturaDoChao ? (x: number, z: number) => alturaDoChao(x, -z) : undefined),
+    [alturaDoChao],
   );
 
   // A grade do chão desce para baixo do ponto mais baixo do relevo: fixa em
@@ -2585,7 +2606,7 @@ export default function Blueprint3DViewer(props: Props) {
           s.gl.localClippingEnabled = true;
         }}
         camera={{
-          position: [centro[0] + spread * 1.1, alturaTopo + spread * 0.8, centro[2] + spread * 1.3],
+          position: [centroNoMundo[0] + spread * 1.1, alturaTopo + spread * 0.8, centroNoMundo[2] + spread * 1.3],
           fov: 45,
           near: 0.1,
           far: spread * 20,
@@ -2596,13 +2617,14 @@ export default function Blueprint3DViewer(props: Props) {
         {/* A câmera de sombra acompanha a CENA (`sombraDaCena`): a padrão cobre
             ±5 m, e num lote de 60 m com relevo a sombra simplesmente não
             existia fora daquele quadrado — ou virava acne com o mapa esticado. */}
-        {/* SOL (E5.1): com a direção do sol, a luz vem de lá — o desenho é Y
-            para cima e o mundo é Z para "baixo da tela" (y → −z, como no
-            rotateX(−π/2) das extrusões). Sol baixo, luz mais fraca e quente. */}
+        {/* SOL (E5.1): com a direção do sol, a luz vem de lá — no MUNDO o norte é −Z
+            (y → −z). Até 12/10/2026 a geometria punha o norte em +Z (o 3D espelhado)
+            e o sol ficava do lado oposto: as sombras saíam trocadas. Sol baixo, luz
+            mais fraca e quente. */}
         <directionalLight
           position={
             props.sol
-              ? [centro[0] + props.sol.x * spread * 2, Math.max(0.5, props.sol.z * spread * 2), centro[2] - props.sol.y * spread * 2]
+              ? [centroNoMundo[0] + props.sol.x * spread * 2, Math.max(0.5, props.sol.z * spread * 2), centroNoMundo[2] - props.sol.y * spread * 2]
               : [spread, alturaTopo + spread, spread * 0.6]
           }
           intensity={props.sol ? (props.sol.z <= 0 ? 0.15 : 0.6 + 0.7 * Math.min(1, props.sol.z * 1.5)) : 1.1}
@@ -2628,10 +2650,15 @@ export default function Blueprint3DViewer(props: Props) {
           sectionThickness={1}
           sectionColor="#9ca3af"
           fadeDistance={alcanceDaGrade}
-          position={[centro[0], cotaDaGrade, centro[2]]}
+          position={[centroNoMundo[0], cotaDaGrade, centroNoMundo[2]]}
           infiniteGrid
           userData={{ naoCapturar: true }}
         />
+        {/* SEM ESPELHO (12/10/2026): tudo o que está no espaço do DESENHO (norte em +Z) — a
+            cena, as referências IFC, o contorno da caixa e a alça de mover — entra neste grupo,
+            que leva ao mundo (norte em −Z). Ver `utils/blueprint3dEspelho.ts`. A alça dentro dele
+            continua devolvendo deslocamento do desenho. */}
+        <group scale={ESCALA_DO_DESENHO_NO_MUNDO}>
         <Recortado caixa={caixa}>
         {(() => {
           // CAMADAS EM MEIO-TOM: a principal esconde os atenuados; o fantasma mostra só eles.
@@ -2722,14 +2749,15 @@ export default function Blueprint3DViewer(props: Props) {
             </PivotControls>
           </group>
         )}
+        </group>
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}
         {!andando && (
-          <OrbitControls ref={controlsRef} makeDefault target={centro} enableDamping maxPolarAngle={props.pontoDeVista ? Math.PI / 2 : Math.PI / 2.05} />
+          <OrbitControls ref={controlsRef} makeDefault target={centroNoMundo} enableDamping maxPolarAngle={props.pontoDeVista ? Math.PI / 2 : Math.PI / 2.05} />
         )}
-        <Percorrer ativo={andando} centro={centro} alturaDoChao={alturaDoChao} onSair={() => setAndando(false)} />
+        <Percorrer ativo={andando} centro={centroNoMundo} alturaDoChao={alturaDoChaoNoMundo} onSair={() => setAndando(false)} />
         <Enquadrar
-          centro={centro}
+          centro={centroNoMundo}
           raio={raio}
           spread={spread}
           alturaTopo={alturaTopo}

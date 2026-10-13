@@ -170,4 +170,8 @@ Frente `ged-normas-lote`.
   - As duas "NR-98" (org Garden) foram excluídas pelo app, com o arquivo no Storage, por um roteiro restrito ao nome exato. Conferido no banco.
   - Nada da Alpa foi tocado.
 - [x] Publicado: `b4db3d27` em main. Vercel `success`, `ci` `completed/success`, e `conferir-producao.sh` confirma que o domínio serve `b4db3d2`, com "Informe o código da norma" e "O código não se edita em lote" no bundle. Suíte antes do push: 886 arquivos, 8973 = 8939 + 34 pendentes, rc=0; duas tentativas anteriores caíram com Fatal error do V8 e foram descartadas.
-- [ ] **Pendente de decisão do usuário:** as 6 normas reais da Alpa enviadas antes desta versão estão sem código, órgão e edição. A extração preencheria todas (casos cobertos nos testes). Não foram tocadas.
+- [x] **Backfill autorizado pelo usuário ("sim", 13/10/2026):** as 6 normas reais da Alpa receberam órgão/código/edição deduzidos do nome do arquivo (`extrairNormaDoNomeDoArquivo`). UPDATE por id, só onde `norma_codigo IS NULL`; o `RETURNING` confirmou 6 linhas.
+  - Ids: `546ac41f…`, `4c1a3e63…` (NBR 6492), `31621064…` (NBR 13532), `a84056ba…` (NBR 16280), `b56c2bce…` (NBR 6118), `fa4ae4ea…` (NBR 6122, edição 2010).
+  - Nome do documento e situação NÃO foram alterados: o arquivo não informa a situação.
+  - Reverter = voltar os três campos para NULL nesses ids.
+  - NÃO feito: excluir a NBR 6492 duplicada (`4c1a3e63…`, "(1)"). É irreversível e depende de pedido explícito.

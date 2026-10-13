@@ -35,7 +35,7 @@ import { useStore } from '../store/useStore';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import { formatMoney, formatDateBR, formatPercent } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
-import StockItemsTab, { STOCK_ITEMS_COLUMNS } from './inventory/StockItemsTab';
+import StockItemsTab, { STOCK_ITEMS_COLUMNS, marcaModelo } from './inventory/StockItemsTab';
 import StockItemSheet from './inventory/StockItemSheet';
 import StockItemImportModal from './inventory/StockItemImportModal';
 import StockItemSelect from './inventory/StockItemSelect';
@@ -572,7 +572,9 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
     );
     const filteredStockItems = stockItems.filter(i =>
         !searchTerm || i.inputDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        i.inputCode?.toLowerCase().includes(searchTerm.toLowerCase())
+        i.inputCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        // Marca / modelo (Configurações › Marcas e Modelos)
+        marcaModelo(i).toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const totalValue = balances.reduce((s, b) => s + b.totalValue, 0);

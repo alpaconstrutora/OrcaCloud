@@ -39,7 +39,7 @@ const LEAD_TIME_COLS =
     'id, organization_id, supplier_id, input_code, category_id, lead_time_days, notes, created_at, updated_at, supplier:suppliers(name)';
 
 const STOCK_ITEM_COLS =
-    'id, organization_id, input_code, input_description, input_unit, category, default_supplier_id, notes, is_active, source, origin_project_id, unit_cost_hint, created_at, updated_at, default_supplier:suppliers(name)';
+    'id, organization_id, input_code, input_description, input_unit, category, default_supplier_id, notes, is_active, source, origin_project_id, unit_cost_hint, brand_id, model_id, brand, model, created_at, updated_at, default_supplier:suppliers(name)';
 
 function mapWarehouse(row: Record<string, unknown>): Warehouse {
     return {
@@ -112,6 +112,10 @@ function mapStockItem(row: Record<string, unknown>): StockItem {
         source: row.source as StockItem['source'],
         originProjectId: row.origin_project_id as string | undefined,
         unitCostHint: row.unit_cost_hint != null ? Number(row.unit_cost_hint) : undefined,
+        brandId: (row.brand_id as string | null) ?? null,
+        modelId: (row.model_id as string | null) ?? null,
+        brand: (row.brand as string | null) ?? null,
+        model: (row.model as string | null) ?? null,
         created_at: row.created_at as string,
         updated_at: row.updated_at as string,
     };
@@ -235,6 +239,15 @@ export const inventoryService = {
             default_supplier_id: input.defaultSupplierId ?? null,
             notes: input.notes ?? null,
             is_active: input.isActive ?? true,
+            // Marca/modelo (Configurações › Marcas e Modelos) só quando informados:
+            // o upsert da importação sobrescreve item existente, e mandar null
+            // aqui apagaria a marca de quem já tinha. O banco espelha o texto.
+            ...(input.brandId !== undefined || input.brand !== undefined ? {
+                brand_id: input.brandId ?? null,
+                model_id: input.modelId ?? null,
+                brand: input.brand ?? null,
+                model: input.model ?? null,
+            } : {}),
         };
         const query = input.id
             ? supabase.from('stock_items').update(common).eq('id', input.id)
@@ -287,6 +300,9 @@ export const inventoryService = {
                         unitCostHint: row.unitCostHint,
                         source: row.source,
                         originProjectId: row.originProjectId,
+                        ...(row.brandId !== undefined || row.brand !== undefined
+                            ? { brandId: row.brandId, modelId: row.modelId, brand: row.brand, model: row.model }
+                            : {}),
                     });
                     const status = before?.data ? 'updated' : 'created';
                     result[status]++;

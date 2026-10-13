@@ -132,6 +132,10 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
 
     const onBlur = () => {
         setFocado(false);
+        // Tab para o próximo campo fecha a lista (verificado na tela em 13/10: ela
+        // ficava aberta por cima do formulário). Clicar numa opção não passa por
+        // aqui — o painel faz preventDefault no mousedown e o foco fica no input.
+        setOpen(false);
         // Texto idêntico a um item existente (ignorando caixa/acento) vincula sozinho.
         if (!selectedId && value.trim()) {
             const igual = acharPorNome(options, value);

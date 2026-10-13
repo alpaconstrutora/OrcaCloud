@@ -8,15 +8,23 @@
 //
 // Nome e nº de série ficam FORA de propósito: são a identidade de cada
 // aparelho. Gravar o mesmo valor em vários deles é sempre engano.
+//
+// Marca e modelo (13/10/2026) são UM campo, do catálogo de Configurações ›
+// Marcas e Modelos (guia §7.1.2): "Definir" grava os dois juntos — marca nova
+// com o modelo antigo de outra marca seria par impossível. Texto digitado e
+// não cadastrado vira cadastro ao aplicar, na org do empreendimento.
 import React from 'react';
 import { AlertTriangle, Pencil } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import type { BuildingAsset, BuildingAssetRow } from '../../services/buildingAssetService';
 import type { BuildingSystem } from '../../types/condominio';
+import { BrandModelPicker } from '../catalog/BrandModelPicker';
+import { brandModelService } from '../../services/brandModelService';
+import { BRAND_MODEL_VAZIO, type BrandModelValue } from '../../types/brandModel';
 
 /** Campos que o lote pode gravar. Ausente = não alterar; `null` = limpar. */
 export type AtivoLotePatch = Partial<Pick<BuildingAsset,
-    'building_system_id' | 'location' | 'brand' | 'model' | 'purchase_date' | 'supplier_warranty_until' | 'notes'
+    'building_system_id' | 'location' | 'brand' | 'model' | 'brand_id' | 'model_id' | 'purchase_date' | 'supplier_warranty_until' | 'notes'
 >>;
 
 type Modo = '' | 'set' | 'clear';
@@ -65,6 +73,8 @@ const CampoComModo: React.FC<{
 
 interface Props {
     open: boolean;
+    /** Org do empreendimento — todos os equipamentos do lote são dele. */
+    organizationId: string;
     ativos: BuildingAssetRow[];
     sistemas: BuildingSystem[];
     onClose: () => void;
@@ -72,15 +82,17 @@ interface Props {
     onApply: (patch: AtivoLotePatch) => Promise<void>;
 }
 
-const AtivosEdicaoEmLoteSheet: React.FC<Props> = ({ open, ativos, sistemas, onClose, onApply }) => {
+const AtivosEdicaoEmLoteSheet: React.FC<Props> = ({ open, organizationId, ativos, sistemas, onClose, onApply }) => {
     const [sistema, setSistema] = React.useState('');
     const [campos, setCampos] = React.useState<Record<string, { modo: Modo; valor: string }>>({});
+    const [modoMarca, setModoMarca] = React.useState<Modo>('');
+    const [marcaModelo, setMarcaModelo] = React.useState<BrandModelValue>(BRAND_MODEL_VAZIO);
     const [saving, setSaving] = React.useState(false);
     const [erro, setErro] = React.useState<string | null>(null);
 
     // Reabrir começa do zero — o lote anterior não pode vazar para o próximo.
     React.useEffect(() => {
-        if (open) { setSistema(''); setCampos({}); setErro(null); }
+        if (open) { setSistema(''); setCampos({}); setModoMarca(''); setMarcaModelo(BRAND_MODEL_VAZIO); setErro(null); }
     }, [open]);
 
     const campo = (k: string) => campos[k] ?? { modo: '' as Modo, valor: '' };
@@ -96,11 +108,13 @@ const AtivosEdicaoEmLoteSheet: React.FC<Props> = ({ open, ativos, sistemas, onCl
             if (c.modo === 'clear') (p as any)[k] = null;
             else if (c.valor.trim()) (p as any)[k] = c.valor.trim();
         };
-        (['location', 'brand', 'model', 'purchase_date', 'supplier_warranty_until', 'notes'] as const).forEach(texto);
+        (['location', 'purchase_date', 'supplier_warranty_until', 'notes'] as const).forEach(texto);
         return p;
     }, [sistema, campos]);
 
-    const nadaMudou = Object.keys(patch).length === 0;
+    const definirMarca = modoMarca === 'set' && (!!marcaModelo.brandId || marcaModelo.brandName.trim() !== '');
+    const mexeNaMarca = modoMarca === 'clear' || definirMarca;
+    const nadaMudou = Object.keys(patch).length === 0 && !mexeNaMarca;
     const n = ativos.length;
     const plural = n !== 1 ? 's' : '';
 
@@ -108,7 +122,13 @@ const AtivosEdicaoEmLoteSheet: React.FC<Props> = ({ open, ativos, sistemas, onCl
         if (nadaMudou) return;
         setSaving(true); setErro(null);
         try {
-            await onApply(patch);
+            let final: AtivoLotePatch = patch;
+            if (modoMarca === 'clear') {
+                final = { ...patch, brand: null, model: null, brand_id: null, model_id: null };
+            } else if (definirMarca) {
+                final = { ...patch, ...await brandModelService.resolverMarcaModelo(organizationId, marcaModelo, 'equipamento') };
+            }
+            await onApply(final);
             onClose();
         } catch (e) {
             setErro(e instanceof Error ? e.message : String(e));
@@ -172,8 +192,38 @@ const AtivosEdicaoEmLoteSheet: React.FC<Props> = ({ open, ativos, sistemas, onCl
                             </select>
                         </div>
                         {comModo('location', 'Localização', 'text', { placeholder: 'Ex: Casa de máquinas — cobertura', larga: true })}
-                        {comModo('brand', 'Marca', 'text')}
-                        {comModo('model', 'Modelo', 'text')}
+                        <div className="col-span-2 space-y-1.5">
+                            <label htmlFor="lote-marca-modelo" className={ROTULO}>Marca e modelo</label>
+                            <div className="space-y-2">
+                                <select
+                                    id="lote-marca-modelo" value={modoMarca} disabled={saving}
+                                    onChange={e => setModoMarca(e.target.value as Modo)}
+                                    className={CAMPO}
+                                >
+                                    <option value="">Não alterar</option>
+                                    <option value="set">Definir</option>
+                                    <option value="clear">Limpar</option>
+                                </select>
+                                {modoMarca === 'set' && (
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                        <BrandModelPicker
+                                            organizationId={organizationId}
+                                            value={marcaModelo}
+                                            onChange={v => setMarcaModelo(v)}
+                                            itemTypes={['equipamento', 'componente', 'outro']}
+                                            defaultItemType="equipamento"
+                                            disabled={saving}
+                                            labelClassName={ROTULO}
+                                            inputClassName={`${CAMPO} pr-8`}
+                                            idPrefix="lote"
+                                        />
+                                    </div>
+                                )}
+                                {modoMarca === 'set' && (
+                                    <p className="text-xs text-gray-400">Grava marca e modelo juntos — modelo em branco limpa o modelo.</p>
+                                )}
+                            </div>
+                        </div>
                         {comModo('purchase_date', 'Instalação', 'date')}
                         {comModo('supplier_warranty_until', 'Garantia do fornecedor até', 'date')}
                         {comModo('notes', 'Observações', 'text', { larga: true })}

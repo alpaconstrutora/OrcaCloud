@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabase';
 export const CATEGORIA_PREDIAL = 'sistema_predial';
 
 const ASSET_COLS =
-    'id, organization_id, parent_asset_id, code, name, category, subcategory, brand, model, '
+    'id, organization_id, parent_asset_id, code, name, category, subcategory, brand, model, brand_id, model_id, '
     + 'serial_number, location, purchase_date, purchase_value, status, notes, empreendimento_id, '
     + 'building_system_id, supplier_id, supplier_warranty_until, created_at, updated_at';
 
@@ -30,8 +30,11 @@ export interface BuildingAsset {
     name: string;
     category: string;
     subcategory?: string | null;
+    /** Texto espelhado pelo banco a partir de brand_id/model_id (Configurações › Marcas e Modelos). */
     brand?: string | null;
     model?: string | null;
+    brand_id?: string | null;
+    model_id?: string | null;
     serial_number?: string | null;
     /** Onde o equipamento está instalado no prédio — texto livre ("Casa de máquinas — cobertura"). */
     location?: string | null;
@@ -116,6 +119,8 @@ export const buildingAssetService = {
         building_system_id?: string | null;
         brand?: string | null;
         model?: string | null;
+        brand_id?: string | null;
+        model_id?: string | null;
         serial_number?: string | null;
         location?: string | null;
         purchase_date?: string | null;

@@ -19,16 +19,20 @@ import { ASSET_CATEGORY_LABELS } from '../../utils/assetToStockItemRow';
 import { ProductModelSheet } from './ProductModelSheet';
 import { descreverUso } from './BrandsSettings';
 
+// Larguras somam ~950px com "Ações" — o que cabe no card da folha em 1600px com a
+// árvore lateral aberta (verificado na tela em 13/10/2026: com as 9 colunas
+// visíveis "Ações" nascia fora da vista). Os padrões do ativo (categoria, vida
+// útil) começam ocultos e entram pela engrenagem de colunas.
 const COLUMNS: StandardTableColumn[] = [
-    { key: 'brand', label: 'Marca', sortable: true, width: 170 },
-    { key: 'name', label: 'Modelo', sortable: true, width: 190 },
-    { key: 'type', label: 'Tipo', sortable: true, width: 120 },
-    { key: 'code', label: 'Código do fabricante', sortable: true, width: 170 },
-    { key: 'category', label: 'Categoria padrão', sortable: true, width: 150 },
-    { key: 'life', label: 'Vida útil padrão', sortable: true, width: 140, align: 'right' },
-    { key: 'datasheet', label: 'Ficha técnica', sortable: true, width: 120 },
-    { key: 'inUse', label: 'Em uso', sortable: true, width: 150 },
-    { key: 'status', label: 'Situação', sortable: true, width: 100 },
+    { key: 'brand', label: 'Marca', sortable: true, width: 150 },
+    { key: 'name', label: 'Modelo', sortable: true, width: 150 },
+    { key: 'type', label: 'Tipo', sortable: true, width: 110 },
+    { key: 'code', label: 'Código do fabricante', sortable: true, width: 130 },
+    { key: 'category', label: 'Categoria padrão', sortable: true, width: 150, defaultHidden: true },
+    { key: 'life', label: 'Vida útil padrão', sortable: true, width: 140, align: 'right', defaultHidden: true },
+    { key: 'datasheet', label: 'Ficha técnica', sortable: true, width: 100 },
+    { key: 'inUse', label: 'Em uso', sortable: true, width: 120 },
+    { key: 'status', label: 'Situação', sortable: true, width: 90 },
 ];
 const ORG_COLUMN: StandardTableColumn = { key: 'org', label: 'Organização', sortable: true, width: 180 };
 

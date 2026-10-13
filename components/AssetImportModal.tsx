@@ -629,39 +629,46 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                 </button>
               </div>
 
-              {/* Tabela de Preview */}
-              <div className="border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto max-h-[40vh] no-scrollbar">
-                  <table className="min-w-full divide-y divide-gray-100 text-left text-xs font-medium">
-                    <thead className="bg-white text-gray-700 font-bold uppercase tracking-wider text-xs">
-                      <tr>
-                        <th className="px-6 py-3.5">Linha</th>
-                        <th className="px-6 py-3.5">Código</th>
-                        <th className="px-6 py-3.5">Nome do Ativo</th>
-                        <th className="px-6 py-3.5">Categoria</th>
-                        <th className="px-6 py-3.5">Valor (R$)</th>
-                        <th className="px-6 py-3.5">Status Validação</th>
+              {/* Tabela de Preview — tabela dentro de modal (guia §6.9): px-3/px-4,
+                  py-2.5, separador vertical, cabeçalho sentence case (§6.2),
+                  status em texto colorido (§8). A coluna Marca / modelo mostra o
+                  que vai para Configurações › Marcas e Modelos ao importar. */}
+              <div className="border border-gray-100 rounded-[10px] overflow-hidden shadow-sm">
+                <div className="overflow-x-auto max-h-[40vh]">
+                  <table className="min-w-full text-left border-collapse">
+                    <thead>
+                      <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                        <th className="px-3 py-2 border-r border-gray-100">Linha</th>
+                        <th className="px-3 py-2 border-r border-gray-100">Código</th>
+                        <th className="px-4 py-2 border-r border-gray-100">Nome do ativo</th>
+                        <th className="px-3 py-2 border-r border-gray-100">Categoria</th>
+                        <th className="px-4 py-2 border-r border-gray-100">Marca / modelo</th>
+                        <th className="px-3 py-2 border-r border-gray-100 text-right">Valor (R$)</th>
+                        <th className="px-3 py-2">Validação</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-50 bg-white text-gray-700">
+                    <tbody className="divide-y divide-gray-200 bg-white">
                       {parsedRows.map((row) => (
                         <React.Fragment key={row.index}>
-                          <tr className={row.isValid ? 'hover:bg-slate-50/50' : 'bg-rose-50/30'}>
-                            <td className="px-6 py-3.5 font-bold text-gray-400">#{row.index}</td>
-                            <td className="px-6 py-3.5 font-bold">{row.code || 'Vazio'}</td>
-                            <td className="px-6 py-3.5 font-semibold">{row.name || 'Vazio'}</td>
-                            <td className="px-6 py-3.5 uppercase">{row.category || 'Vazio'}</td>
-                            <td className="px-6 py-3.5 font-bold">
+                          <tr className={row.isValid ? 'hover:bg-blue-50/50' : 'bg-rose-50/30'}>
+                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-500">#{row.index}</td>
+                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.code || 'Vazio'}</td>
+                            <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{row.name || 'Vazio'}</td>
+                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{row.category || 'Vazio'}</td>
+                            <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
+                              {[row.brand, row.model].filter(Boolean).join(' ') || '—'}
+                            </td>
+                            <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 text-right">
                               {row.purchase_value ? `R$ ${row.purchase_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
                             </td>
-                            <td className="px-6 py-3.5">
+                            <td className="px-3 py-2.5 text-sm font-normal">
                               {row.isValid ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-black uppercase tracking-wider">
+                                <span className="inline-flex items-center gap-1 text-emerald-700">
                                   <CheckCircle className="w-3.5 h-3.5" />
                                   Ok
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-700 rounded-lg text-xs font-black uppercase tracking-wider">
+                                <span className="inline-flex items-center gap-1 text-rose-700">
                                   <AlertTriangle className="w-3.5 h-3.5" />
                                   Erro
                                 </span>
@@ -670,7 +677,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                           </tr>
                           {!row.isValid && (
                             <tr className="bg-rose-50/20">
-                              <td colSpan={6} className="px-8 py-2 text-rose-600 font-semibold border-b border-gray-100 text-xs">
+                              <td colSpan={7} className="px-4 py-2 text-sm font-normal text-rose-600">
                                 <div className="flex items-center gap-1.5">
                                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                                   <span>{row.errors.join(' | ')}</span>

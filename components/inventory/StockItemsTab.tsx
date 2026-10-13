@@ -16,6 +16,8 @@ export const STOCK_ITEMS_COLUMNS: ColumnConfig[] = [
     { key: 'inputDescription', label: 'Descrição', sortable: true },
     { key: 'inputUnit', label: 'Unidade', sortable: false },
     { key: 'category', label: 'Categoria', sortable: true },
+    // Configurações › Marcas e Modelos (13/10/2026)
+    { key: 'brandModel', label: 'Marca / modelo', sortable: true },
     { key: 'defaultSupplierName', label: 'Fornecedor padrão', sortable: true },
     { key: 'source', label: 'Origem', sortable: true },
     { key: 'isActive', label: 'Situação', sortable: true },
@@ -30,6 +32,9 @@ const SOURCE_LABELS: Record<StockItemSource, string> = {
     recebimento: 'Recebimento',
     ativos: 'Gestão de Ativos',
 };
+
+/** "Marca Modelo" do item — o texto que o banco espelha do catálogo. */
+export const marcaModelo = (i: Pick<StockItem, 'brand' | 'model'>) => [i.brand, i.model].filter(v => v && v.trim()).join(' ');
 
 interface Props {
     items: StockItem[];
@@ -47,9 +52,10 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
         if (!tableItems.sortColumn) return items;
         const col = tableItems.sortColumn as keyof StockItem;
         const dir = tableItems.sortDirection === 'asc' ? 1 : -1;
+        const valor = (i: StockItem) => (tableItems.sortColumn === 'brandModel' ? marcaModelo(i) : i[col]);
         return [...items].sort((a, b) => {
-            const av = String(a[col] ?? '').toLowerCase();
-            const bv = String(b[col] ?? '').toLowerCase();
+            const av = String(valor(a) ?? '').toLowerCase();
+            const bv = String(valor(b) ?? '').toLowerCase();
             return av.localeCompare(bv) * dir;
         });
     }, [items, tableItems.sortColumn, tableItems.sortDirection]);
@@ -154,6 +160,10 @@ const StockItemsTab: React.FC<Props> = ({ items, tableItems, onEdit, onNew, onIm
                                         }
                                         if (key === 'category') {
                                             return <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.category || '—'}</td>;
+                                        }
+                                        if (key === 'brandModel') {
+                                            const mm = marcaModelo(item);
+                                            return <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600" title={mm || undefined}>{mm || '—'}</td>;
                                         }
                                         if (key === 'defaultSupplierName') {
                                             return <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{item.defaultSupplierName || '—'}</td>;

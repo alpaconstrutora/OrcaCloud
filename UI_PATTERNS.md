@@ -151,6 +151,11 @@ Ficaram de fora, de propósito: `ProjectModal` (campo aceita nome livre fora do
 catálogo + autocomplete) e `ProOrcamentoForm` (catálogo próprio do Pro Orçamento,
 com "+ Cadastrar Novo Cliente" inline).
 
+> **Catálogo pequeno e criável (marca, modelo)** não é drawer: é
+> `CreatableCombobox` / `BrandModelPicker` — campo com busca e
+> `+ Cadastrar "X"`, lista por portal, Esc fecha só a lista. Ver §7.1.2 de
+> `docs/ui_ux_guia_unificado.md` (2026-10-13).
+
 ### 5.4 `useConfirm` — confirmação / exclusão
 
 Substitui `window.confirm`. Promise-based. O `ConfirmProvider` já está montado no root.

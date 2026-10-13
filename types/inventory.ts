@@ -299,6 +299,11 @@ export interface StockItem {
     source?: StockItemSource;
     originProjectId?: string;
     unitCostHint?: number;
+    /** Configurações › Marcas e Modelos. O texto é espelhado pelo banco a partir do id. */
+    brandId?: string | null;
+    modelId?: string | null;
+    brand?: string | null;
+    model?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -316,6 +321,12 @@ export interface CreateStockItemInput {
     source?: StockItemSource;
     originProjectId?: string | null;
     unitCostHint?: number;
+    /** Ausentes = não mexer (o upsert da importação não pode apagar a marca de
+     *  quem já tinha). Presentes, gravam os quatro — null limpa. */
+    brandId?: string | null;
+    modelId?: string | null;
+    brand?: string | null;
+    model?: string | null;
 }
 
 // Linha crua de uma das três origens de importação, antes da pré-visualização
@@ -329,6 +340,11 @@ export interface StockItemImportRow {
     originProjectId?: string;
     /** Preenchido só quando a planilha traz saldo inicial a lançar. */
     initialQuantity?: number;
+    /** Origem "Gestão de Ativos": a marca/modelo do bem vêm junto (mesma org, mesmo catálogo). */
+    brandId?: string | null;
+    modelId?: string | null;
+    brand?: string | null;
+    model?: string | null;
 }
 
 export interface StockItemImportRowResult {

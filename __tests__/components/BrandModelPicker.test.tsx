@@ -117,6 +117,18 @@ describe('BrandModelPicker', () => {
         document.removeEventListener('keydown', noDocument);
     });
 
+    it('Tab para o próximo campo fecha a lista (não fica aberta por cima do formulário)', async () => {
+        render(<Harness onChange={vi.fn()} />);
+        await waitFor(() => expect(listBrands).toHaveBeenCalled());
+        await userEvent.type(screen.getByLabelText('Marca'), 'Gree');
+        expect(screen.getByRole('button', { name: /Cadastrar “Gree”/ })).toBeInTheDocument();
+        await userEvent.tab();
+        // O foco foi para o Modelo (que abre a PRÓPRIA lista); a da Marca fechou.
+        expect(screen.getByLabelText('Modelo')).toHaveFocus();
+        expect(screen.queryByRole('button', { name: /Cadastrar “Gree”/ })).not.toBeInTheDocument();
+        expect(screen.getAllByRole('listbox')).toHaveLength(1);
+    });
+
     it('sem organização: campos desligados com o motivo, e nada é carregado', async () => {
         render(<Harness org={null} onChange={vi.fn()} />);
         const marca = screen.getByLabelText('Marca');

@@ -32,5 +32,10 @@ export function assetToStockItemRow(asset: OpuraAsset): StockItemImportRow {
         unitCostHint: asset.purchase_value > 0 ? asset.purchase_value : undefined,
         source: 'ativos',
         initialQuantity: 1,
+        // Marca/modelo do bem entram no item (mesma org, mesmo catálogo de
+        // Configurações › Marcas e Modelos). Ativo sem marca não mexe na do item.
+        ...(asset.brand_id || (asset.brand && asset.brand.trim())
+            ? { brandId: asset.brand_id ?? null, modelId: asset.model_id ?? null, brand: asset.brand ?? null, model: asset.model ?? null }
+            : {}),
     };
 }

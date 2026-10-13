@@ -186,6 +186,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §6.10 Tabela nova usa `StandardTable` (ou justifica hand-rolled)
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
+- [ ] §7.1.2 Se o formulário escolhe marca/modelo (catálogo criável): usa `BrandModelPicker`/`CreatableCombobox` com a org do registro, não `<select>` nem texto livre
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`
 - [ ] §7.3 Planilha densa de itens (exceção — exige os 3 critérios)
 - [ ] §8 Status Badge
@@ -1365,6 +1366,62 @@ cadastro, id de outra organização) em vez de cair no placeholder.
 > obra/conta/mês estou vendo", não "qual entidade gravar") e listas com opção
 > especial embutida ("Autor do projeto" com "Outro", "Fornecedor / Prestador"
 > com sufixo de portal). **Obra** ainda não tem drawer padrão (`ProjectSelect`).
+
+### 7.1.2 Campo de catálogo criável (marca, modelo) = combobox com "Cadastrar", não drawer
+
+**Criado em 2026-10-13** com Configurações › Marcas e Modelos
+(`docs/planos/2026-10-13-marcas-e-modelos.md`). Catálogo **pequeno e criável
+pela própria pessoa** — marca e modelo de equipamento, componente ou material —
+não é entidade de §7.1.1 (não tem documento, endereço nem tabela própria para
+escolher). O campo é **`components/ui/CreatableCombobox.tsx`**, e o par
+Marca → Modelo em cascata é **`components/catalog/BrandModelPicker.tsx`**.
+Em uso: Gestão de Ativos (cadastro do bem), Condomínio › Ativos do edifício
+(cadastro e edição em lote) e Almoxarifado (item do catálogo).
+
+```tsx
+<BrandModelPicker
+  organizationId={orgDoRegistro}            // a org DO REGISTRO; null = campo desligado com o motivo
+  value={{ brandId, brandName, modelId, modelName }}
+  onChange={(v, modelo) => ...}             // `modelo` vem junto para autopreencher (utils/catalogoAutopreencher)
+  itemTypes={['equipamento', 'componente']} // recorte do catálogo pela tela
+  defaultItemType="equipamento"             // tipo do modelo cadastrado daqui
+  labelClassName={ROTULO} inputClassName={CAMPO}   // a régua da tela que usa
+/>
+```
+
+O que o componente garante (não reescrever na tela):
+
+- **Nunca bloqueia.** Digitar sem escolher deixa o texto no campo, com o aviso
+  "será cadastrada ao salvar"; o salvar chama `brandModelService.resolverMarcaModelo`,
+  que cadastra o que faltar. Clicar em `+ Cadastrar "X"` cadastra na hora e já
+  seleciona.
+- **Não duplica:** não oferece cadastrar o que já existe ignorando caixa **e
+  acento** (o UNIQUE do banco pega a caixa, não o acento); sair do campo com um
+  texto igual a um item existente vincula o item.
+- **A organização é a do registro**, nunca perguntada aqui (REGRA #5): ativo do
+  edifício = org do empreendimento; bem patrimonial = org do formulário; item de
+  estoque = org do almoxarifado. Sem org, os dois campos ficam desligados com
+  "Escolha a organização proprietária" (botão desligado sempre diz o motivo).
+- **Lista por portal** em `document.body`, `position: fixed` — dentro do
+  `SheetPanel` (rolável, com `transform`) um `absolute` seria cortado. Mesmo
+  motivo do §5.4.
+- **Esc fecha só a lista** (`stopPropagation`): o `Sheet` em volta escuta
+  `keydown` em `document` e fecharia junto (UI_PATTERNS §4.4).
+- Modelo desligado ("Escolha a marca primeiro") até haver marca; trocar de
+  marca solta o modelo e mantém o texto digitado.
+- A busca é estado **transitório** (§3.1): filtra o seletor, não a tela.
+
+> ✅ **Edição em lote:** aqui o seletor "Não alterar / Definir / Limpar" na
+> frente do campo **continua** (`AtivosEdicaoEmLoteSheet.tsx`) — a proibição do
+> §7.1.1 é para os drawers de entidade, em que o campo vazio já significa "não
+> alterar". Um combobox vazio não diz se é "não mexer" ou "limpar", e "Definir"
+> grava marca **e** modelo juntos (marca nova com modelo de outra marca seria par
+> impossível).
+> ✅ O texto `brand`/`model` dos registros é **derivado no banco** a partir dos
+> ids (gatilho `fn_catalogo_espelho`); renomear em Configurações chega a todo
+> ativo/item vinculado. A tela grava ids — nunca reescreve o texto à mão.
+> ❌ Não usar `<select>` nativo listando o catálogo (era o "Selecione a Marca..."
+> da Gestão de Ativos): sem busca, sem cadastrar, e gravava o NOME.
 
 ### 7.2 Altura da linha — padding vertical padrão
 

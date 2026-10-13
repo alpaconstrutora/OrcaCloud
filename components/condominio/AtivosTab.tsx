@@ -25,6 +25,13 @@ import {
 import { maintenanceService } from '../../services/maintenanceService';
 import type { BuildingSystem } from '../../types/condominio';
 import type { Empreendimento } from '../../types/empreendimento';
+import { BrandModelPicker } from '../catalog/BrandModelPicker';
+import { brandModelService } from '../../services/brandModelService';
+import type { BrandModelValue, ProductItemType } from '../../types/brandModel';
+
+// Equipamento instalado no prédio: o catálogo oferece equipamentos e componentes
+// (Configurações › Marcas e Modelos); material é estoque, não ativo do edifício.
+const TIPOS_DE_ITEM_PREDIAL: ProductItemType[] = ['equipamento', 'componente', 'outro'];
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'codigo', label: 'Código', sortable: true },
@@ -65,6 +72,9 @@ interface FormAtivo {
     location: string;
     brand: string;
     model: string;
+    /** Vínculo com o catálogo. null = digitado e ainda não cadastrado (cadastra ao salvar). */
+    brand_id: string | null;
+    model_id: string | null;
     serial_number: string;
     purchase_date: string;
     supplier_warranty_until: string;
@@ -72,7 +82,7 @@ interface FormAtivo {
 }
 
 const formVazio = (): FormAtivo => ({
-    name: '', building_system_id: '', location: '', brand: '', model: '', serial_number: '',
+    name: '', building_system_id: '', location: '', brand: '', model: '', brand_id: null, model_id: null, serial_number: '',
     purchase_date: hojeISO(), supplier_warranty_until: '', notes: '',
 });
 
@@ -83,6 +93,8 @@ function formDoAtivo(a: BuildingAsset): FormAtivo {
         location: a.location || '',
         brand: a.brand || '',
         model: a.model || '',
+        brand_id: a.brand_id ?? null,
+        model_id: a.model_id ?? null,
         serial_number: a.serial_number || '',
         purchase_date: (a.purchase_date || '').slice(0, 10),
         supplier_warranty_until: (a.supplier_warranty_until || '').slice(0, 10),
@@ -269,19 +281,25 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
     const salvar = async () => {
         if (!form.name.trim()) { notify('Informe o nome do equipamento.', 'error'); return; }
-        const campos = {
-            name: form.name.trim(),
-            building_system_id: form.building_system_id || null,
-            location: form.location.trim() || null,
-            brand: form.brand.trim() || null,
-            model: form.model.trim() || null,
-            serial_number: form.serial_number.trim() || null,
-            purchase_date: form.purchase_date || null,
-            supplier_warranty_until: form.supplier_warranty_until || null,
-            notes: form.notes.trim() || null,
-        };
         setSalvando(true);
         try {
+            // Marca/modelo vão para o catálogo da org do EMPREENDIMENTO; texto
+            // digitado e não cadastrado vira cadastro aqui (nunca bloqueia).
+            const marcaModelo = await brandModelService.resolverMarcaModelo(
+                orgId,
+                { brandId: form.brand_id, brandName: form.brand, modelId: form.model_id, modelName: form.model },
+                'equipamento',
+            );
+            const campos = {
+                name: form.name.trim(),
+                building_system_id: form.building_system_id || null,
+                location: form.location.trim() || null,
+                ...marcaModelo,
+                serial_number: form.serial_number.trim() || null,
+                purchase_date: form.purchase_date || null,
+                supplier_warranty_until: form.supplier_warranty_until || null,
+                notes: form.notes.trim() || null,
+            };
             if (editando) {
                 const salvo = await buildingAssetService.update(editando.id, campos);
                 // §22 — troca só a linha editada, sem recarregar a aba.
@@ -629,22 +647,20 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
                             />
                         </div>
 
-                        <div className="space-y-1.5">
-                            <label className={ROTULO}>Marca</label>
-                            <input
-                                type="text" value={form.brand}
-                                onChange={e => set('brand', e.target.value)}
-                                className={CAMPO}
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className={ROTULO}>Modelo</label>
-                            <input
-                                type="text" value={form.model}
-                                onChange={e => set('model', e.target.value)}
-                                className={CAMPO}
-                            />
-                        </div>
+                        {/* Configurações › Marcas e Modelos — catálogo da org do
+                            empreendimento; "Cadastrar" na hora (guia §7.1.2). */}
+                        <BrandModelPicker
+                            organizationId={orgId}
+                            value={{ brandId: form.brand_id, brandName: form.brand, modelId: form.model_id, modelName: form.model }}
+                            onChange={(v: BrandModelValue) => setForm(f => ({
+                                ...f, brand: v.brandName, model: v.modelName, brand_id: v.brandId, model_id: v.modelId,
+                            }))}
+                            itemTypes={TIPOS_DE_ITEM_PREDIAL}
+                            defaultItemType="equipamento"
+                            labelClassName={ROTULO}
+                            inputClassName={`${CAMPO} pr-8`}
+                            idPrefix="ativo-predial"
+                        />
 
                         <div className="space-y-1.5">
                             <label className={ROTULO}>Instalação</label>
@@ -715,6 +731,7 @@ const AtivosTab: React.FC<Props> = ({ empreendimento }) => {
 
             <AtivosEdicaoEmLoteSheet
                 open={loteAberto}
+                organizationId={orgId}
                 ativos={ativosDoLote}
                 sistemas={sistemas}
                 onClose={() => setLoteAberto(false)}

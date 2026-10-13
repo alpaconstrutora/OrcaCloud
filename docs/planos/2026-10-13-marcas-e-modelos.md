@@ -42,11 +42,11 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
 ## Plano (um item por arquivo; cada item diz o que muda e como sei que terminou)
 
 ### 0. Frente e diagnóstico
-- [ ] `bash scripts/nova-frente.sh marcas-modelos`. Copiar este plano para `docs/planos/2026-10-13-marcas-e-modelos.md`. **Pronto:** `HEAD` = origin/main e plano commitado.
-- [ ] Diagnóstico só de leitura: `select version()` (precisa PG ≥ 15 para `SET NULL (col)`), triggers não internos em `opura_assets`/`stock_items`, `pg_publication_tables`, `length(brand) > 100`, e se a org da marca antiga existe. **Pronto:** resultados colados no plano. Se o PG for < 15, a FK composta é trocada por validação no trigger.
+- [x] `bash scripts/nova-frente.sh marcas-modelos`. Copiar este plano para `docs/planos/2026-10-13-marcas-e-modelos.md`. **Pronto:** `HEAD` = origin/main e plano commitado.
+- [x] Diagnóstico só de leitura: `select version()` (precisa PG ≥ 15 para `SET NULL (col)`), triggers não internos em `opura_assets`/`stock_items`, `pg_publication_tables`, `length(brand) > 100`, e se a org da marca antiga existe. **Pronto:** resultados colados no plano. Se o PG for < 15, a FK composta é trocada por validação no trigger.
 
 ### 1. Banco
-- [ ] `supabase/migrations/aplicar_20271013000100_catalogo_marcas_modelos.sql` (conferir o maior prefixo em origin/main na hora; molde `aplicar_20270921000061_blueprint_plugins.sql`). Blocos:
+- [x] `supabase/migrations/aplicar_20271013000100_catalogo_marcas_modelos.sql` (conferir o maior prefixo em origin/main na hora; molde `aplicar_20270921000061_blueprint_plugins.sql`). Blocos:
   1. `product_brands`:
      - `id`, `organization_id` FK CASCADE, `name` com CHECK 1–100 e espaços normalizados, `name_key` gerado com `lower(name)`;
      - `is_active`, `created_by`, `created_at`, `updated_at`;
@@ -73,7 +73,7 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   - aplicado bloco a bloco com `npx supabase db query --linked -f`, nunca `db push`;
   - pós-check: os 88 ativos estão intactos e todo ativo com texto de marca tem `brand_id`;
   - `bash scripts/check-rls-postura.sh` sem achado novo.
-- [ ] `scripts/prova-marcas-modelos.sql` (`BEGIN … ROLLBACK`). **Pronto:** passa provando seis coisas:
+- [x] `scripts/prova-marcas-modelos.sql` (`BEGIN … ROLLBACK`). **Pronto:** passa provando seis coisas:
   - renomear propaga para ativo e item;
   - FK cross-org é rejeitada;
   - modelo de outra marca vira NULL;
@@ -83,10 +83,10 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
 - [ ] `aplicar_20271013000200_congelar_opura_asset_brands.sql` (COMMENT DEPRECADA + REVOKE de escrita). Aplicado **depois** do deploy. **Pronto:** INSERT como authenticated falha com 42501.
 
 ### 2. Tipos, utilitários puros e service
-- [ ] `types/brandModel.ts`: `ProductBrand`, `ProductModel`, `ProductItemType`, `ITEM_TYPE_LABELS`. **Pronto:** tsc.
-- [ ] `utils/catalogoNome.ts`: `normalizarNome`, `chaveNome`, `chaveBusca` (sem acento, mesma `norm` de `components/inventory/StockItemSelect.tsx`), `deveOferecerCadastro` (ignora maiúsculas e acento). **Pronto:** `__tests__/catalogoNome.test.ts` verde.
-- [ ] `utils/catalogoAutopreencher.ts`: `aplicarPadroesDoModelo(campos com origem 'vazio'|'padrao'|'auto'|'manual', modelo)`. Nunca toca em `manual`, e trocar de modelo atualiza o que estava em `auto`. **Pronto:** `__tests__/catalogoAutopreencher.test.ts` verde, com o caso "não sobrescreve manual".
-- [ ] `services/brandModelService.ts`:
+- [x] `types/brandModel.ts`: `ProductBrand`, `ProductModel`, `ProductItemType`, `ITEM_TYPE_LABELS`. **Pronto:** tsc.
+- [x] `utils/catalogoNome.ts`: `normalizarNome`, `chaveNome`, `chaveBusca` (sem acento, mesma `norm` de `components/inventory/StockItemSelect.tsx`), `deveOferecerCadastro` (ignora maiúsculas e acento). **Pronto:** `__tests__/catalogoNome.test.ts` verde.
+- [x] `utils/catalogoAutopreencher.ts`: `aplicarPadroesDoModelo(campos com origem 'vazio'|'padrao'|'auto'|'manual', modelo)`. Nunca toca em `manual`, e trocar de modelo atualiza o que estava em `auto`. **Pronto:** `__tests__/catalogoAutopreencher.test.ts` verde, com o caso "não sobrescreve manual".
+- [x] `services/brandModelService.ts`:
   - `listBrands`/`listModels(orgId?)`, que só aplicam `.eq` quando há org;
   - contagem de uso;
   - create/update/setActive/delete, com 23503 e 23505 traduzidos em mensagem;
@@ -94,16 +94,16 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   - `resolverMarcaModelo(orgId, valor, defaultItemType)`: ponto único dos salvar.
 
   **Pronto:** `__tests__/brandModelService.test.ts` (supabase mockado) verde.
-- [ ] `services/assetService.ts` L808-885 e `types/assets.ts` L156-166: remover `listBrands`/`createBrand`/`updateBrand`/`deleteBrand` e `OpuraAssetBrand*`, sem adaptador. `OpuraAsset` ganha `brand_id?`/`model_id?`. **Pronto:** `rg "assetService\.(list|create|update|delete)Brand"` vazio.
+- [x] `services/assetService.ts` L808-885 e `types/assets.ts` L156-166: remover `listBrands`/`createBrand`/`updateBrand`/`deleteBrand` e `OpuraAssetBrand*`, sem adaptador. `OpuraAsset` ganha `brand_id?`/`model_id?`. **Pronto:** `rg "assetService\.(list|create|update|delete)Brand"` vazio.
 
 ### 3. Componentes reutilizáveis
-- [ ] `components/ui/CreatableCombobox.tsx`:
+- [x] `components/ui/CreatableCombobox.tsx`:
   - input `h-9 text-sm font-normal`, busca sem acento, até 50 resultados;
   - última opção `+ Cadastrar "X"`, teclado ↑ ↓ Enter Esc;
   - lista por **portal fixed** (como `FilterPopover.tsx`), para não ser cortada no Sheet;
   - Esc com `stopPropagation`, para fechar só a lista;
   - valor legado sem id exibido com o hint "não vinculado ao catálogo".
-- [ ] `components/catalog/BrandModelPicker.tsx`:
+- [x] `components/catalog/BrandModelPicker.tsx`:
   - marca e modelo em cascata, com `organizationId: string` não nulo e `itemTypes`/`defaultItemType`;
   - "Cadastrar" chama `findOrCreate*` na org do registro;
   - `onChange(valor, modelo)` devolve o modelo para o autopreenchimento;
@@ -111,21 +111,21 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   - sem org, o campo fica desabilitado com "Escolha a organização proprietária" (nada de `if (!org) return`).
 
   **Pronto:** `__tests__/components/BrandModelPicker.test.tsx` verde, cobrindo cadastrar, não duplicar, modelo travado sem marca e Esc. `check-ui-standard.sh` nos dois arquivos (o `useState` da busca é a exceção §3.1, citada).
-- [ ] `docs/ui_ux_guia_unificado.md` nova **§7.1.2 "Campo de catálogo criável"** (anatomia, portal, Esc, "a org do registro decide", "nunca bloqueia", caso do lote) + uma linha em `UI_PATTERNS.md` §5.3. **Pronto:** seção commitada (REGRA #1 item 4).
+- [x] `docs/ui_ux_guia_unificado.md` nova **§7.1.2 "Campo de catálogo criável"** (anatomia, portal, Esc, "a org do registro decide", "nunca bloqueia", caso do lote) + uma linha em `UI_PATTERNS.md` §5.3. **Pronto:** seção commitada (REGRA #1 item 4).
 
 ### 4. Configurações do Sistema
-- [ ] `components/Settings.tsx`: nó "Marcas e Modelos" (ícone `Tags`) com as folhas `catalogo-marcas` e `catalogo-modelos`. Estender `SettingsLeafId` (L23-27) e as linhas de render (L454-472). **Pronto:** as duas folhas abrem.
-- [ ] `components/settings/BrandsSettings.tsx`:
+- [x] `components/Settings.tsx`: nó "Marcas e Modelos" (ícone `Tags`) com as folhas `catalogo-marcas` e `catalogo-modelos`. Estender `SettingsLeafId` (L23-27) e as linhas de render (L454-472). **Pronto:** as duas folhas abrem.
+- [x] `components/settings/BrandsSettings.tsx`:
   - `StandardTable` (§6.10) com Nome · Modelos · Em uso · Situação · Organização (só em "Todas") · Ações;
   - `Sheet size="sm"` com `dirty`;
   - criar com `resolveWriteOrg('all-allowed')` + `forEachTargetOrg`;
   - excluir só sem uso, via `useConfirm`, e no resto Inativar;
   - "Ver modelos" troca de folha com filtro;
   - §22: atualiza o estado local.
-- [ ] `components/settings/ProductModelsSettings.tsx`:
+- [x] `components/settings/ProductModelsSettings.tsx`:
   - colunas Marca · Modelo · Tipo · Part number · Categoria padrão · Vida útil padrão · Ficha · Em uso · Situação · [Org] · Ações;
   - filtros Tipo e Marca (`FilterPopover`).
-- [ ] `components/settings/ProductModelSheet.tsx`:
+- [x] `components/settings/ProductModelSheet.tsx`:
   - `size="lg"` com malha §30, especificação em `col-span-2`;
   - a org vem da marca, sem `resolveWriteOrg`;
   - em "Todas", a marca aparece como "Marca · Org" quando o nome se repete.
@@ -139,7 +139,7 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   `check-ui-standard.sh` nos 4 arquivos.
 
 ### 5. Gestão de Ativos › Ativos Patrimoniais
-- [ ] `components/OpuraAssetsModule.tsx`:
+- [x] `components/OpuraAssetsModule.tsx`:
   - **Sai:** estado e handlers de marca (L490-495, L580-591, L618-620, L644-690), botão "Gerenciar" (L2465-2477) e modal L2871-2968.
   - **Entra:** `BrandModelPicker` no grid (Marca · Modelo · Nº de série), sem `material`. A org é `activeOrganizationId ?? assetForm.organization_id`, ou `asset.organization_id` na edição; trocar a org zera os ids.
   - **Autopreenchimento:** mapa de origem para `category` e `useful_life_months`. Em novo é `padrao`; em edição é `manual` se houver valor, `vazio` se null. Para isso `formularioDoAtivo` (L1326) deixa de fazer `|| 60` antes de registrar a origem, e os onChange manuais marcam `manual`. Mostra o hint "Preenchido pelo modelo X".
@@ -149,27 +149,27 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
 - [ ] `components/AssetImportModal.tsx` L427-453: o laço de `createBrand` vira `findOrCreateBrand` por marca distinta e `findOrCreateModel` por par, com o tipo derivado da categoria. Os inserts levam os ids. **Pronto:** tsc, e na tela uma planilha com marca nova cria e vincula a marca.
 
 ### 6. Comercial › Condomínios › Ativos do edifício (rebase antes)
-- [ ] `services/buildingAssetService.ts`: `brand_id, model_id` em `ASSET_COLS`, `BuildingAsset` e no payload de `create`/`update`/`updateMany`. **Pronto:** tsc.
-- [ ] `components/condominio/AtivosTab.tsx`:
+- [x] `services/buildingAssetService.ts`: `brand_id, model_id` em `ASSET_COLS`, `BuildingAsset` e no payload de `create`/`update`/`updateMany`. **Pronto:** tsc.
+- [x] `components/condominio/AtivosTab.tsx`:
   - `FormAtivo`, `formVazio` e `formDoAtivo` com os ids (o Duplicar copia);
   - inputs L635-650 viram picker (`equipamento|componente|outro`, org = `empreendimento.organization_id`);
   - `salvar` chama `resolverMarcaModelo`.
 
   **Pronto:** tsc + `check-ui-standard.sh`.
-- [ ] `components/condominio/AtivosEdicaoEmLoteSheet.tsx` L175-176: um campo "Marca e modelo" com Não alterar/Definir (picker)/Limpar. O patch leva os 4 campos. **Pronto:** tsc + `check-ui-standard.sh`.
+- [x] `components/condominio/AtivosEdicaoEmLoteSheet.tsx` L175-176: um campo "Marca e modelo" com Não alterar/Definir (picker)/Limpar. O patch leva os 4 campos. **Pronto:** tsc + `check-ui-standard.sh`.
 
 ### 7. Almoxarifado (materiais)
-- [ ] `types/inventory.ts` (`StockItem` L288, `CreateStockItemInput` L307, `StockItemImportRow` L322): `brandId?`, `modelId?`, `brand?`, `model?`.
-- [ ] `services/inventoryService.ts`: `STOCK_ITEM_COLS`, `mapStockItem`, `upsertStockItem`, `importStockItems`.
-- [ ] `components/inventory/StockItemSheet.tsx`: picker entre Descrição e Categoria (`material|componente|ferramenta|outro`, default `material`); o salvar resolve os ids.
-- [ ] `components/inventory/StockItemsTab.tsx` + `InventoryModule.tsx`: coluna "Marca / modelo" e busca por ela.
-- [ ] `utils/assetToStockItemRow.ts`: propaga ids e textos; a descrição "Nome — Marca Modelo" não muda.
+- [x] `types/inventory.ts` (`StockItem` L288, `CreateStockItemInput` L307, `StockItemImportRow` L322): `brandId?`, `modelId?`, `brand?`, `model?`.
+- [x] `services/inventoryService.ts`: `STOCK_ITEM_COLS`, `mapStockItem`, `upsertStockItem`, `importStockItems`.
+- [x] `components/inventory/StockItemSheet.tsx`: picker entre Descrição e Categoria (`material|componente|ferramenta|outro`, default `material`); o salvar resolve os ids.
+- [x] `components/inventory/StockItemsTab.tsx` + `InventoryModule.tsx`: coluna "Marca / modelo" e busca por ela.
+- [x] `utils/assetToStockItemRow.ts`: propaga ids e textos; a descrição "Nome — Marca Modelo" não muda.
 
 **Pronto:** `__tests__/assetToStockItemRow.test.ts` atualizado e verde, tsc, e `check-ui-standard.sh` nos tsx.
 
 ### 8. Fechamento
-- [ ] Suíte: `npx tsc --noEmit -p .` (exit lido por grep) + `npx vitest run` (conferir `Errors` além do JSON), incluindo `orgContextGuard` (o BASELINE não cresce). **Pronto:** os dois verdes.
-- [ ] Verificação na tela (skill `rodar-app`, com a org específica **e** com "Todas"):
+- [x] Suíte: `npx tsc --noEmit -p .` (exit lido por grep) + `npx vitest run` (conferir `Errors` além do JSON), incluindo `orgContextGuard` (o BASELINE não cresce). **Pronto:** os dois verdes.
+- [x] Verificação na tela (skill `rodar-app`, com a org específica **e** com "Todas"):
   1. Criar uma marca em "Todas" e conferir que replicou.
   2. Criar um modelo com padrões.
   3. Num ativo novo, digitar uma marca inexistente, usar "Cadastrar" e ver a marca selecionada.
@@ -190,6 +190,84 @@ Sessão `36a3996f-7d6b-4de8-af01-563517bb81be` · 2026-10-13
   - `bash scripts/fechar-frente.sh marcas-modelos`.
 
   **Pronto:** SHA no bundle servido e o plano com todos os itens `[x]` ou "N de M".
+
+## Estado — 13/10/2026
+
+**Itens: 27 de 30.** Em aberto: a importação de ativos por planilha não foi
+exercitada na tela (só tsc + o caminho é o mesmo `resolverMarcaModelo` provado nas
+outras telas); o congelamento de `opura_asset_brands` (só depois do deploy); a
+publicação.
+
+Commits na frente `feat/marcas-modelos`: `e5bb5f4c` (banco + catálogo + Configurações
++ Gestão de Ativos) e o seguinte (Condomínio, Almoxarifado, guia, correções da tela).
+
+### Diagnóstico do banco (item 0.2, só leitura)
+- PostgreSQL **17.6** → `ON DELETE SET NULL (coluna)` disponível, FK composta mantida.
+- `opura_assets`: **nenhum** gatilho não interno; `stock_items`: `trg_stock_items_generate_code`
+  e `trg_stock_items_updated_at`. Nenhuma das duas está em publicação de Realtime.
+- 88 ativos; 3 com marca em texto (DeWalt, Elevacon, Menegotti — todos da Alpa); 0 com
+  modelo; `length(brand) > 100` = 0; a única linha de `opura_asset_brands` (DeWalt) é de
+  org existente.
+
+### Migration `aplicar_20271013000100` (aplicada em 13/10)
+- Pós-check: 88 ativos intactos, `marca_sem_id = 0`, DeWalt manteve o id antigo
+  (`f9ee3bdd…`), 4 gatilhos e 2 policies no lugar.
+- `scripts/prova-marcas-modelos.sql`: **PROVA_OK — 7 grupos de asserts** (renomear
+  propaga a ativo e item; FK cross-org rejeitada; modelo de outra marca: a marca segue o
+  modelo / trocar a marca solta o modelo; texto do lote revincula e texto livre
+  desvincula; excluir modelo mantém o texto; marca com modelo não se exclui; mover modelo
+  de marca leva os ativos; INSERT só com texto vincula e não cria). Nada gravado.
+- `segurancaMigrations` + `migrationsPrefixo` verdes.
+
+### Suíte
+- `tsc --noEmit`: 0 erros (lido por grep). Vitest completo: **875 arquivos, 8.844
+  testes, 0 falhas, 0 "Errors"**. Testes novos: `catalogoNome`, `catalogoAutopreencher`,
+  `brandModelService`, `components/BrandModelPicker` (8), `components/BrandsModelsSettings` (6);
+  `assetToStockItemRow` ampliado.
+- `check-ui-standard.sh`: 0 violação em todos os .tsx tocados. `AssetImportModal.tsx`
+  tinha violações ANTIGAS de §7/§8 na tabela de prévia (font-bold/pílula) — corrigidas
+  (tabela em modal §6.9, status em texto §8) e ganhou a coluna Marca / modelo.
+
+### Verificação na tela (rodar-app, servidor da frente :3117, conta agente-leitura)
+Org Alpa, com escrita de dados `ZZTeste*` autorizada pelo usuário; tudo apagado no fim
+e conferido no banco (0 restantes, 88 ativos, catálogo = DeWalt/Elevacon/Menegotti).
+- Configurações › Marcas: criar → toast "Marca criada", linha nova; "Em uso" mostra
+  "1 ativo" nas marcas migradas. Modelos: criar com tipo, part number, categoria
+  padrão, vida útil 36 e ficha técnica.
+- Gestão de Ativos: escolher o modelo preencheu **categoria = Ferramenta e vida útil = 36**,
+  com o aviso "Categoria e vida útil preenchidas pelo modelo ZZT-100"; vida útil digitada
+  (50) + trocar de modelo (ZZT-200 cadastrado na hora) e voltar → **ficou 50**. Banco:
+  `category=ferramenta`, `useful_life_months=50`, ids ligados.
+- Renomear a marca em Configurações → `opura_assets.brand` = nome novo no banco. (A lista
+  da Gestão de Ativos abre em GRADE, que não mostra marca — a prova é a do banco.)
+- Condomínio › Bella Vista › Ativos: marca escolhida do catálogo + modelo só digitado →
+  cadastrado ao salvar (`item_type=equipamento`).
+- Almoxarifado › Itens: marca só digitada → cadastrada ao salvar, mesma org; coluna
+  "Marca / modelo" na lista.
+- Topo em "Todas" (só leitura): coluna Organização nas duas folhas; **10 consultas ao
+  catálogo, 0 com `organization_id=eq.`**. "Cadastrar ativo" já nascia desligado em
+  "Todas" antes desta mudança (comportamento antigo, fora do escopo).
+- Zero erro de JS/console e zero 4xx/5xx do PostgREST em todas as etapas.
+
+**Defeitos achados na tela e corrigidos:**
+1. Tab saindo do campo deixava a lista do combobox aberta por cima do formulário —
+   `onBlur` agora fecha; teste novo reprova sem a correção (provado com stash).
+2. Modelos com 9 colunas: "Ações" nascia fora da vista — categoria/vida útil padrão
+   começam ocultas (engrenagem de colunas), soma ~950px.
+
+### Checklist de aplicação do guia (REGRA #1.3) — telas novas de Configurações
+- Imports TableUtils/StandardTable ✅ · Cabeçalho §20: segue o card + `h2` das folhas
+  irmãs de Configurações (a tela-mãe tem o `h1`) ✅ · COLUMNS fora do componente ✅ ·
+  busca persistida (StandardTable) ✅, filtro Tipo persistido; filtro Marca é estado do
+  `Settings` (vem de "Ver modelos") · KPI cards: **não se aplica** (catálogo, sem
+  métrica) · Toolbar acoplada §5.2 + FilterPopover §5.4 ✅ · SortableHeader ✅ ·
+  Redimensionar/autofit (StandardTable) ✅ · TDs `text-sm font-normal`, py-2.5, px-6,
+  border-r ✅ · campos inline em TD: **não há** · Status em texto colorido §8 ✅ · Ações
+  com ActionIconButton, desligado diz o motivo ✅ · Loading/Empty ✅ · Toast ✅ ·
+  `useConfirm` ✅ · §22 estado local ✅ · §25: formulário curto, criar e editar fecham
+  (não é multi-aba) · Drawer §26 = `Sheet` ✅ · §27 identificador: **não se aplica** ·
+  §30 malha no Sheet de modelo ✅ · Gráficos §28: **não se aplica** · grade/lista:
+  **não se aplica**.
 
 ## Riscos
 - Lock da FK em `opura_assets` com o módulo aberto: `lock_timeout` e repetir se der 40P01.

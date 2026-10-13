@@ -8,6 +8,13 @@ import { masterDataService, type MasterUnit } from '../../services/masterDataSer
 import { supplierService } from '../../services/supplierService';
 import SupplierSelect from '../SupplierSelect';
 import type { StockItem, CreateStockItemInput } from '../../types/inventory';
+import { BrandModelPicker } from '../catalog/BrandModelPicker';
+import { brandModelService } from '../../services/brandModelService';
+import type { BrandModelValue, ProductItemType } from '../../types/brandModel';
+
+// Item de estoque: o catálogo oferece materiais, componentes e ferramentas
+// (Configurações › Marcas e Modelos). Equipamento/veículo é bem patrimonial.
+const TIPOS_DE_ITEM_DO_ESTOQUE: ProductItemType[] = ['material', 'componente', 'ferramenta', 'outro'];
 
 /**
  * Cadastro de item avulso do almoxarifado. Painel lateral (UI_PATTERNS §3 —
@@ -54,6 +61,10 @@ const StockItemSheet: React.FC<Props> = ({ open, onClose, organizationId, item, 
         defaultSupplierId: item?.defaultSupplierId ?? null,
         notes: item?.notes ?? '',
         isActive: item?.isActive ?? true,
+        brandId: item?.brandId ?? null,
+        modelId: item?.modelId ?? null,
+        brand: item?.brand ?? '',
+        model: item?.model ?? '',
     });
 
     React.useEffect(() => {
@@ -67,6 +78,10 @@ const StockItemSheet: React.FC<Props> = ({ open, onClose, organizationId, item, 
             defaultSupplierId: item?.defaultSupplierId ?? null,
             notes: item?.notes ?? '',
             isActive: item?.isActive ?? true,
+            brandId: item?.brandId ?? null,
+            modelId: item?.modelId ?? null,
+            brand: item?.brand ?? '',
+            model: item?.model ?? '',
         });
         setDirty(false);
         setError('');
@@ -91,8 +106,19 @@ const StockItemSheet: React.FC<Props> = ({ open, onClose, organizationId, item, 
         setSaving(true);
         setError('');
         try {
+            // Marca/modelo digitados e não cadastrados viram cadastro no catálogo
+            // da org do item (nunca bloqueia). O banco espelha o texto pelo id.
+            const marcaModelo = await brandModelService.resolverMarcaModelo(
+                organizationId,
+                { brandId: form.brandId ?? null, brandName: form.brand ?? '', modelId: form.modelId ?? null, modelName: form.model ?? '' },
+                'material',
+            );
             const saved = await inventoryService.upsertStockItem(organizationId, {
                 ...form,
+                brandId: marcaModelo.brand_id,
+                modelId: marcaModelo.model_id,
+                brand: marcaModelo.brand,
+                model: marcaModelo.model,
                 inputDescription: form.inputDescription.trim(),
                 inputUnit: form.inputUnit.trim(),
                 category: form.category?.trim() || undefined,
@@ -153,6 +179,23 @@ const StockItemSheet: React.FC<Props> = ({ open, onClose, organizationId, item, 
                             autoFocus
                         />
                     </Campo>
+
+                    {/* Configurações › Marcas e Modelos (guia §7.1.2) */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <BrandModelPicker
+                            organizationId={organizationId}
+                            value={{ brandId: form.brandId ?? null, brandName: form.brand ?? '', modelId: form.modelId ?? null, modelName: form.model ?? '' }}
+                            onChange={(v: BrandModelValue) => {
+                                setForm(f => ({ ...f, brandId: v.brandId, modelId: v.modelId, brand: v.brandName, model: v.modelName }));
+                                setDirty(true);
+                            }}
+                            itemTypes={TIPOS_DE_ITEM_DO_ESTOQUE}
+                            defaultItemType="material"
+                            labelClassName="text-xs font-semibold text-gray-500"
+                            inputClassName={`${inputCls} pr-8`}
+                            idPrefix="estoque"
+                        />
+                    </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <Campo label="Categoria">

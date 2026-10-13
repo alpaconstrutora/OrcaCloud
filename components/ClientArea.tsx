@@ -4016,16 +4016,23 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         </div>
     );
 
-    // O selo de Avisos mora no MENU, visível de qualquer tela do portal — por
-    // isso os dados do Condomínio carregam na abertura do link, e não só ao
-    // entrar na aba (o efeito de cima continua recarregando ao entrar). Só no
-    // link público: é o único modo com menu lateral.
+    // O selo de Avisos mora no MENU (lateral no desktop, barra inferior no
+    // celular), visível de qualquer tela do portal — por isso os dados do
+    // Condomínio carregam na abertura do link, e não só ao entrar na aba (o
+    // efeito de cima continua recarregando ao entrar). Só no link público: é o
+    // modo do condômino; o gestor espiando vê o selo depois de abrir a aba.
     const condominioNoMenu = isStandalone && enabledTabIds.includes('condominio');
     React.useEffect(() => {
         if (!condominioNoMenu || !portalToken) return;
         clientPortalService.getCondominioByToken(portalToken).then(setCondominio).catch(console.error);
     }, [condominioNoMenu, portalToken]);
     const avisosNaoLidos = condominio.avisos.filter(a => !a.lido).length;
+    /** O MESMO selo em todos os lugares onde "Condomínio" aparece — grupo e
+     *  subitem do menu lateral, barra inferior, botão "Mais" e a folha "Mais".
+     *  Pendência que some num deles é pendência que a pessoa não vê. */
+    const seloAvisos = (extra = '') => avisosNaoLidos > 0 ? (
+        <span className={`min-w-[18px] h-[18px] px-1 rounded-full bg-[#E1553C] text-white text-[11px] font-semibold flex items-center justify-center ${extra}`}>{avisosNaoLidos}</span>
+    ) : null;
 
     const toggleTabVisibility = async (tabId: string) => {
         const current = enabledTabIds;
@@ -4186,11 +4193,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <span className="flex-1 text-left">{tab.label}</span>
                                     {/* Fechado, o selo de Avisos sobe para o grupo —
                                         senão a pendência some junto com o subitem. */}
-                                    {!condominioAberto && avisosNaoLidos > 0 && (
-                                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#E1553C] text-white text-[11px] font-semibold flex items-center justify-center">
-                                            {avisosNaoLidos}
-                                        </span>
-                                    )}
+                                    {!condominioAberto && seloAvisos()}
                                     <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${condominioAberto ? 'rotate-90' : ''}`} />
                                 </button>
                                 {condominioAberto && (
@@ -4210,11 +4213,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     }`}
                                                 >
                                                     <span className="flex-1">{sub.curto}</span>
-                                                    {sub.id === 'avisos' && avisosNaoLidos > 0 && (
-                                                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#E1553C] text-white text-[11px] font-semibold flex items-center justify-center">
-                                                            {avisosNaoLidos}
-                                                        </span>
-                                                    )}
+                                                    {sub.id === 'avisos' && seloAvisos()}
                                                 </button>
                                             );
                                         })}
@@ -4349,6 +4348,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                             {tab.label.split(' ')[0]}
                                         </span>
                                         {isAdmin && !isVisible && <EyeOff className="w-2 h-2 absolute top-2 right-2 text-gray-200" />}
+                                        {tab.id === 'condominio' && seloAvisos('absolute top-1.5 left-1/2 ml-1')}
                                     </button>
                                 );
                             })}
@@ -4368,6 +4368,8 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                     <span className="text-[9px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
                                         Mais
                                     </span>
+                                    {/* Condomínio escondido no "Mais" leva o selo junto. */}
+                                    {moreTabs.some(t => t.id === 'condominio') && seloAvisos('absolute top-1.5 left-1/2 ml-1')}
                                 </button>
                             )}
                         </div>
@@ -4406,6 +4408,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         >
                                             <span className={isActive ? 'text-blue-500' : 'text-gray-400'}>{tab.icon}</span>
                                             <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
+                                            {tab.id === 'condominio' && seloAvisos('ml-auto')}
                                             {isAdmin && !isVisible && <EyeOff className="w-3.5 h-3.5 ml-auto text-gray-300" />}
                                         </button>
                                     );

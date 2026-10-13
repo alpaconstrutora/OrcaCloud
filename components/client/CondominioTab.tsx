@@ -25,7 +25,7 @@
 import React from 'react';
 import {
     Building2, Megaphone, FileText, ExternalLink, Check, Users, Scale,
-    Wrench, Package, Wallet, CalendarClock, Download,
+    Wrench, Package, Wallet, CalendarClock, Download, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import type {
     PortalCondominio, PortalUnidadeCondominio, PortalAvisoCondominio,
@@ -561,15 +561,78 @@ const BotaoPdfDoRateio: React.FC<{ rateio: PortalRateioCondominio; onResolverCom
     );
 };
 
+/** As competências que TÊM rateio, da mais recente para a mais antiga, sem
+ *  repetir. `competencia` é DATE ISO ('2026-08-01'), então comparar texto já
+ *  ordena por data — sem `new Date`, que o fuso desloca (ver `competencia()`). */
+export function competenciasDosRateios(rateios: Pick<PortalRateioCondominio, 'competencia'>[]): string[] {
+    return [...new Set(rateios.map(r => r.competencia))].sort((a, b) => b.localeCompare(a));
+}
+
+/** Uma competência por vez (13/10/2026). Empilhados, os rateios de todos os
+ *  meses viravam uma rolagem sem fim, e o mês que importa — o atual — ficava
+ *  igual aos outros.
+ *
+ *  ⚠️ `<select>` das competências que EXISTEM, e não o campo de mês livre da
+ *  tela do síndico (`condominio/FinanceiroTab`). Lá o campo livre é de
+ *  propósito: o síndico precisa alcançar o mês que tem despesa e ainda não tem
+ *  rateio, para criá-lo. Aqui o condômino só tem o que ver onde há rateio
+ *  publicado — um mês livre o levaria a uma tela vazia, achando que o sistema
+ *  perdeu a cobrança dele. */
 const PainelFinanceiro: React.FC<{
     rateios: PortalRateioCondominio[];
     multi: boolean;
     onResolverComprovantes?: ResolverComprovantes;
-}> = ({ rateios, multi, onResolverComprovantes }) => (
+}> = ({ rateios, multi, onResolverComprovantes }) => {
+    const competencias = React.useMemo(() => competenciasDosRateios(rateios), [rateios]);
+    const [escolhida, setEscolhida] = React.useState<string | null>(null);
+    // Escolha que sumiu da lista (dados recarregados) cai na mais recente.
+    const atual = escolhida && competencias.includes(escolhida) ? escolhida : competencias[0];
+    const idx = competencias.indexOf(atual);
+    // A lista vem da mais recente para a mais antiga: "anterior" é idx + 1.
+    const anterior = competencias[idx + 1];
+    const seguinte = idx > 0 ? competencias[idx - 1] : undefined;
+    const doMes = rateios.filter(r => r.competencia === atual);
+
+    return (
     <div>
         <Descricao icone={<Wallet className="w-4 h-4" />}>
             Despesas do prédio e o rateio entre as unidades
         </Descricao>
+        {competencias.length > 0 && (
+            <div className="flex items-center gap-2 mb-4">
+                <label htmlFor="portal-competencia" className="text-xs font-semibold text-slate-500 whitespace-nowrap">
+                    Competência
+                </label>
+                <button
+                    type="button"
+                    onClick={() => anterior && setEscolhida(anterior)}
+                    disabled={!anterior}
+                    aria-label="Competência anterior"
+                    title={anterior ? `Ver ${competencia(anterior)}` : 'Não há rateio publicado antes desta competência'}
+                    className="h-9 w-9 flex items-center justify-center rounded-[6px] border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                </button>
+                <select
+                    id="portal-competencia"
+                    value={atual}
+                    onChange={e => setEscolhida(e.target.value)}
+                    className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                >
+                    {competencias.map(c => <option key={c} value={c}>{competencia(c)}</option>)}
+                </select>
+                <button
+                    type="button"
+                    onClick={() => seguinte && setEscolhida(seguinte)}
+                    disabled={!seguinte}
+                    aria-label="Próxima competência"
+                    title={seguinte ? `Ver ${competencia(seguinte)}` : 'Esta é a competência mais recente com rateio'}
+                    className="h-9 w-9 flex items-center justify-center rounded-[6px] border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                    <ChevronRight className="w-4 h-4" />
+                </button>
+            </div>
+        )}
         {rateios.length === 0 ? (
             <Vazio
                 icone={<Wallet className="w-12 h-12" />}
@@ -578,7 +641,9 @@ const PainelFinanceiro: React.FC<{
             />
         ) : (
             <div className="space-y-4">
-                {rateios.map((r: PortalRateioCondominio) => (
+                {/* Mais de um rateio no mesmo mês é normal: ordinária +
+                    extraordinária, ou dois prédios da mesma pessoa. */}
+                {doMes.map((r: PortalRateioCondominio) => (
                     <div key={r.id} className="rounded-[10px] border border-gray-100 overflow-hidden">
                         <div className="bg-gray-50/60 px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-gray-100">
                             <div>
@@ -675,7 +740,8 @@ const PainelFinanceiro: React.FC<{
             </div>
         )}
     </div>
-);
+    );
+};
 
 // ── Manutenção do prédio ─────────────────────────────────────────────────────
 const PainelManutencao: React.FC<{

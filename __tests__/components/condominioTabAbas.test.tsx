@@ -20,7 +20,7 @@
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import CondominioTab from '../../components/client/CondominioTab';
+import CondominioTab, { competenciasDosRateios } from '../../components/client/CondominioTab';
 import { ConfirmProvider } from '../../components/ui/confirm';
 import { CONDOMINIO_VAZIO, type PortalCondominio } from '../../services/clientPortalService';
 
@@ -204,5 +204,52 @@ describe('CondominioTab — seção controlada pelo menu lateral', () => {
     it('seção salva que não existe mais cai em Dados Gerais, não em tela branca', () => {
         montar(<CondominioTab dados={dados} loading={false} aba={'aposentada' as never} onAbaChange={vi.fn()} abasNoMenuLateral />);
         expect(screen.getByText(MARCA['Dados Gerais'])).toBeInTheDocument();
+    });
+});
+
+// 13/10/2026 — Financeiro do condomínio mostra UMA competência por vez. O que
+// erra em silêncio: o seletor mudar e os cards continuarem os de outro mês, ou
+// a lista sair em ordem de chegada da RPC e o padrão não ser o mês mais recente.
+describe('CondominioTab — seletor de competência no Financeiro', () => {
+    const rateio = (id: string, comp: string, valor: number) => ({
+        ...dados.rateios[0], id, numero: id, competencia: comp,
+        cotas: [{ ...dados.rateios[0].cotas[0], id: `co-${id}`, valor }],
+    });
+    // fora de ordem e com dois rateios no mesmo mês (ordinária + extra)
+    const comTres = {
+        ...dados,
+        rateios: [rateio('R-JUL', '2026-07-01', 11), rateio('R-SET', '2026-09-01', 33),
+                  rateio('R-AGO', '2026-08-01', 22), rateio('R-SET-EXTRA', '2026-09-01', 44)],
+    };
+
+    /** O número sai como " · R-SET" ao lado da competência; casar o fim exato
+     *  impede que R-SET case também com R-SET-EXTRA. */
+    const numeroDoRateio = (n: string) => new RegExp(`· ${n}$`);
+
+    it('competenciasDosRateios: mais recente primeiro, sem repetir', () => {
+        expect(competenciasDosRateios(comTres.rateios)).toEqual(['2026-09-01', '2026-08-01', '2026-07-01']);
+    });
+
+    it('abre na mais recente, com todos os rateios dela e nenhum de outro mês', () => {
+        montar(<CondominioTab dados={comTres} loading={false} aba="financeiro" onAbaChange={vi.fn()} />);
+        expect(screen.getByText(numeroDoRateio('R-SET'))).toBeInTheDocument();
+        expect(screen.getByText(numeroDoRateio('R-SET-EXTRA'))).toBeInTheDocument();
+        expect(screen.queryByText(numeroDoRateio('R-AGO'))).toBeNull();
+        expect((screen.getByLabelText('Competência') as HTMLSelectElement).value).toBe('2026-09-01');
+        // na ponta mais recente não há "próxima" — e o botão diz por quê
+        const prox = screen.getByRole('button', { name: 'Próxima competência' });
+        expect(prox).toBeDisabled();
+        expect(prox.getAttribute('title')).toMatch(/mais recente/);
+    });
+
+    it('as setas e o select trocam o mês mostrado', () => {
+        montar(<CondominioTab dados={comTres} loading={false} aba="financeiro" onAbaChange={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Competência anterior' }));
+        expect(screen.getByText(numeroDoRateio('R-AGO'))).toBeInTheDocument();
+        expect(screen.queryByText(numeroDoRateio('R-SET'))).toBeNull();
+
+        fireEvent.change(screen.getByLabelText('Competência'), { target: { value: '2026-07-01' } });
+        expect(screen.getByText(numeroDoRateio('R-JUL'))).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Competência anterior' })).toBeDisabled();
     });
 });

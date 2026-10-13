@@ -24,7 +24,7 @@ describe('migration do vínculo Ativo ↔ Almoxarifado', () => {
     });
 
     it('a sincronia é reconciliação, não evento: a função lê o saldo antes de lançar', () => {
-        const fn = /FUNCTION public\.fn_reconciliar_estoque_do_ativo[\s\S]*?\nEND;\n\$\$;/.exec(sql)?.[0] ?? '';
+        const fn = /FUNCTION public\.fn_reconciliar_estoque_do_ativo[\s\S]*?\r?\nEND;\r?\n\$\$;/.exec(sql)?.[0] ?? '';
         expect(fn).toMatch(/FROM public\.stock_balances/);
         // Saída e entrada são sempre a DIFERENÇA para o desejado (1 UN em casa, 0 fora).
         expect(fn).toMatch(/v_excesso := r\.quantity - CASE WHEN r\.warehouse_id = v_destino THEN 1 ELSE 0 END/);

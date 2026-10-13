@@ -452,7 +452,7 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
         - h1 fora de card; botão Planta AI sem caixa alta; CAPEX abre pela aba.
         - O `rolagem_da_pagina: false` do roteiro era erro de medição: o Layout é `h-screen overflow-hidden` e quem rola é o `<main>` (`Layout.tsx:1597`), nunca o documento. O print confirma o conteúdo fluindo sem caixa interna.
     - **Publicação de (d):** `main` = `b537bba9`; o domínio serve `b537bba` (conferido por ancestralidade). Check-run `ci`: **completed / success**.
-    - [ ] **(e) Conteúdo das abas no padrão do guia** (pedido: *"corrigir: … o conteúdo das abas … ainda está no estilo antigo"*). Feito por 3 subagentes em paralelo, com arquivos separados, e conferido por mim:
+    - [x] **(e) Conteúdo das abas no padrão do guia** (pedido: *"corrigir: … o conteúdo das abas … ainda está no estilo antigo"*). Feito por 3 subagentes em paralelo, com arquivos separados, e conferido por mim:
       - **A:** CAPEX, Receitas, Espelho de vendas.
       - **B:** Sensibilidade, ESG, Dinâmica, Fluxo de caixa.
       - **C:** Resumo, Estática.
@@ -465,7 +465,11 @@ Ordem: **Fase 1 → 2 → 3 → 4 → 5**. As Fases 1 a 3 mudam números exibido
         - O miolo dos gráficos Recharts (§28) não mudou.
         - "Gerar Vendas de Ativos" e "Exportar PDF" mantêm as cores originais (verde e slate) no formato compacto.
         - A tabela do espelho ficou mais larga (`px-6` em 11 colunas, com rolagem lateral).
-      - Falta a prova no navegador (`c:/tmp/pwtest/imovib_abas_visual.js`, que também regera PDF e Excel).
+      - **Prova no navegador** (2026-10-13, `c:/tmp/pwtest/imovib_abas_visual.js`; escritas bloqueadas: 0; erros de console: 0):
+        - CAPEX, Receitas e Premissas › Blocos: 0 sobra;
+        - nas demais abas, as únicas "sobras" medidas são o `rounded-full` dos círculos de ícone (KpiCard e banner de avisos) e os rótulos do `KpiCard` em caixa alta (§4) — nenhum cartão com raio grande nem rótulo de campo/título gritado;
+        - Excel `_Viabilidade.xlsx` e PDF (628 KB, `%PDF-`) regerados depois da mudança visual;
+        - prints do Resumo e do ESG conferidos.
     - **Registro anterior:** o CONTEÚDO das abas ainda estava na escala antiga (§16/§21). Visto no print do CAPEX: cartões `rounded-2xl`/`3xl` e rótulos `font-black uppercase` ("ÁREA TOTAL (M²)"); vale também para Receitas, Sensibilidade, ESG, Estática, Dinâmica e Resumo.
   - **Pendências registradas pelos subagentes:**
     - inputs de Premissas ainda na escala antiga de raio (§16);

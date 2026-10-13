@@ -3,6 +3,7 @@ import { ArrowLeft, Calculator, ClipboardList, Loader2, Package, CalendarClock, 
 import ActionIconButton from '../ui/ActionIconButton';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import SaveStatus from '../ui/SaveStatus';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { formatMoney } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
@@ -375,8 +376,8 @@ const SolicitacaoCompraForm: React.FC<Props> = ({ editingId, initialDraft, orige
                             return <input type="number" min={0} step="any" className={`${CELL_INPUT} text-right`} value={i.quantity} disabled={ro}
                                 onChange={e => setItem(id, { quantity: Number(e.target.value) })} />;
                         case 'price':
-                            return <input type="number" min={0} step="0.01" className={`${CELL_INPUT} text-right`} value={i.estimatedUnitPrice} disabled={ro}
-                                onChange={e => setItem(id, { estimatedUnitPrice: Number(e.target.value) })} />;
+                            return <MoneyCentsInput className={`${CELL_INPUT} text-right`} value={i.estimatedUnitPrice} disabled={ro}
+                                onChange={v => setItem(id, { estimatedUnitPrice: v === '' ? 0 : Number(v) })} />;
                         case 'total':
                             return <span className="text-sm font-medium text-gray-800">{formatMoney(totalDoItem(i))}</span>;
                         case 'needDate':

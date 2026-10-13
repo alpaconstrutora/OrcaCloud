@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { contractRenewalService, RenewalPreview, RenewalMode } from '../../services/contractRenewalService';
 import { Contract } from '../../types';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     open: boolean;
@@ -274,13 +275,10 @@ const RenewContractSheet: React.FC<Props> = ({ open, contractId, onClose, onRene
                         {/* Novo valor */}
                         <div className="space-y-2">
                             <label className="text-xs font-semibold text-slate-500">Novo valor do aluguel</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
+                            <MoneyCentsInput
                                 value={valueOverride}
-                                placeholder={String(preview.newValue.toFixed(2))}
-                                onChange={(e) => setValueOverride(e.target.value)}
+                                placeholder={preview.newValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                onChange={(v) => setValueOverride(v)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                             />
                             <p className="text-sm text-gray-500">

@@ -13,6 +13,7 @@ import {
     type CreditRoomDisbursementStatus,
     type CreditRoomSide,
 } from '../../types/creditRoom';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 /**
  * Desembolsos da operação — PRD §68 (cadastro), §69 (workflow), §70 (medição
@@ -265,7 +266,7 @@ const NovoDesembolsoSheet: React.FC<{
             <SheetPanel className="px-6 py-5 space-y-4">
                 <div className="space-y-1.5">
                     <label className={rotulo}>Valor solicitado (R$)</label>
-                    <input autoFocus type="number" min={0} step="0.01" value={valor} onChange={e => setValor(e.target.value)} className={`${campo} ${a.ring}`} />
+                    <MoneyCentsInput autoFocus value={valor} onChange={setValor} className={`${campo} ${a.ring}`} />
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Finalidade</label>
@@ -391,7 +392,7 @@ const DesembolsoSheet: React.FC<{
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className={rotulo}>Valor aprovado (R$)</label>
-                                    <input type="number" min={0} step="0.01" value={aprovado} onChange={e => setAprovado(e.target.value)} className={`${campo} ${a.ring}`} />
+                                    <MoneyCentsInput value={aprovado} onChange={setAprovado} className={`${campo} ${a.ring}`} />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
@@ -443,7 +444,7 @@ const DesembolsoSheet: React.FC<{
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <label className={rotulo}>Valor liberado (R$)</label>
-                                <input type="number" min={0} step="0.01" value={bruto} onChange={e => setBruto(e.target.value)} className={`${campo} ${a.ring}`} />
+                                <MoneyCentsInput value={bruto} onChange={setBruto} className={`${campo} ${a.ring}`} />
                             </div>
                             <div className="space-y-1.5">
                                 <label className={rotulo}>Data da liberação</label>

@@ -9,6 +9,7 @@ import {
   totaisPorItem,
   type FormaMedida,
 } from '../../utils/blueprintMedicoes';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 const ROTULO_TIPO = {
   POLIGONO: 'Área',
@@ -258,14 +259,11 @@ export default function PainelMedicoes({
                         aria-label={`Nome do item avulso da medição ${rotulo}`}
                         className="min-w-0 flex-1 rounded-md border border-slate-300 px-1.5 py-0.5 text-[11px]"
                       />
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={f.itemPreco ?? ''}
-                        onChange={(e) =>
+                      <MoneyCentsInput
+                        value={f.itemPreco}
+                        onChange={(v) =>
                           onEditarItem(f.id, {
-                            itemPreco: e.target.value === '' ? null : Number(e.target.value),
+                            itemPreco: v === '' ? null : Number(v),
                           })
                         }
                         placeholder="R$/un"

@@ -14,6 +14,7 @@ import { useStore } from '../../store/useStore';
 import { useConfirm } from '../ui/confirm';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import SaveStatus from '../ui/SaveStatus';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import {
   Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, EmpreendimentoTower, ImovibStudy, Organization,
 } from '../../types';
@@ -617,7 +618,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className={labelCls}>VGV Total (R$)</label>
-              <input type="number" step="0.01" className={inputCls} value={form.vgv_total} onChange={e => set('vgv_total', e.target.value)} />
+              <MoneyCentsInput className={inputCls} value={form.vgv_total} onChange={v => set('vgv_total', v)} />
             </div>
             <div>
               <label className={labelCls}>Lançamento</label>

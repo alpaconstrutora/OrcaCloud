@@ -16,6 +16,7 @@ import { useConfirm } from './ui/confirm';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // ─── Tipos de props ─────────────────────────────────────────
 interface EmployeeLite { id: string; name: string; status?: string }
@@ -294,7 +295,7 @@ const LaunchTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<stri
                                 ))}
                             </div>
                             {valorTipo === 'fixo' ? (
-                                <input type="number" step="0.01" className={inputCls} value={amount || ''} onChange={e => setAmount(parseFloat(e.target.value) || 0)} placeholder="0,00" />
+                                <MoneyCentsInput className={inputCls} value={amount || ''} onChange={v => setAmount(v === '' ? 0 : Number(v))} placeholder="0,00" />
                             ) : (
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2">
@@ -335,7 +336,7 @@ const LaunchTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<stri
                         </div>
                         <div>
                             <Label>{distMode === 'equal' ? 'Valor total a ratear (R$)' : 'Valor por colaborador (R$)'}</Label>
-                            <input type="number" step="0.01" className={inputCls} value={amount || ''} onChange={e => setAmount(parseFloat(e.target.value) || 0)} />
+                            <MoneyCentsInput className={inputCls} value={amount || ''} onChange={v => setAmount(v === '' ? 0 : Number(v))} />
                         </div>
                     </>
                 )}
@@ -702,21 +703,21 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                     <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl">
                         <div><Label>Dias mínimos presentes</Label><input type="number" className={inputCls} value={c.min_days ?? 22} onChange={e => updCond({ min_days: parseInt(e.target.value) || 0 })} /></div>
                         <div><Label>Faltas máximas</Label><input type="number" className={inputCls} value={c.max_faltas ?? 0} onChange={e => updCond({ max_faltas: parseInt(e.target.value) || 0 })} /></div>
-                        <div className="col-span-2"><Label>Valor do prêmio (R$)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
+                        <div className="col-span-2"><Label>Valor do prêmio (R$)</Label><MoneyCentsInput className={inputCls} value={rule.amount || ''} onChange={v => upd({ amount: v === '' ? 0 : Number(v) })} /></div>
                     </div>
                 )}
                 {rule.rule_type === 'PRODUTIVIDADE' && (
                     <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl">
                         <div><Label>Produtividade mínima (%)</Label><input type="number" className={inputCls} value={c.min_productivity_pct ?? 100} onChange={e => updCond({ min_productivity_pct: parseFloat(e.target.value) || 0 })} /></div>
-                        <div><Label>R$ por unidade produzida</Label><input type="number" step="0.01" className={inputCls} value={c.rate_per_unit ?? 0} onChange={e => updCond({ rate_per_unit: parseFloat(e.target.value) || 0 })} /></div>
+                        <div><Label>R$ por unidade produzida</Label><MoneyCentsInput className={inputCls} value={c.rate_per_unit ?? 0} onChange={v => updCond({ rate_per_unit: v === '' ? 0 : Number(v) })} /></div>
                         <div className="col-span-2 flex items-start gap-2 text-xs text-slate-400 font-bold"><Info size={12} className="mt-0.5 shrink-0" /> Se "R$/unidade" = 0, usa o valor fixo abaixo.</div>
-                        <div className="col-span-2"><Label>Valor fixo alternativo (R$)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
+                        <div className="col-span-2"><Label>Valor fixo alternativo (R$)</Label><MoneyCentsInput className={inputCls} value={rule.amount || ''} onChange={v => upd({ amount: v === '' ? 0 : Number(v) })} /></div>
                     </div>
                 )}
                 {rule.rule_type === 'SEGURANCA' && (
                     <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl">
                         <div><Label>Dias sem acidente</Label><input type="number" className={inputCls} value={c.dias_sem_acidente ?? 60} onChange={e => updCond({ dias_sem_acidente: parseInt(e.target.value) || 0 })} /></div>
-                        <div><Label>Prêmio coletivo (R$/pessoa)</Label><input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} /></div>
+                        <div><Label>Prêmio coletivo (R$/pessoa)</Label><MoneyCentsInput className={inputCls} value={rule.amount || ''} onChange={v => upd({ amount: v === '' ? 0 : Number(v) })} /></div>
                         <label className="col-span-2 flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
                             <input type="checkbox" checked={(rule.condition as Record<string, unknown>).exclude_quase_acidente !== false} onChange={e => updCond({ exclude_quase_acidente: e.target.checked })} />
                             Ignorar "quase-acidentes" na contagem
@@ -727,7 +728,7 @@ const RuleEditor: React.FC<{ rule: IncentiveRule; setRule: (r: IncentiveRule) =>
                 {!['ASSIDUIDADE', 'PRODUTIVIDADE', 'SEGURANCA'].includes(rule.rule_type) && (
                     <div className="p-4 bg-slate-50 rounded-2xl">
                         <Label>Valor fixo por colaborador do escopo (R$)</Label>
-                        <input type="number" step="0.01" className={inputCls} value={rule.amount || ''} onChange={e => upd({ amount: parseFloat(e.target.value) || 0 })} />
+                        <MoneyCentsInput className={inputCls} value={rule.amount || ''} onChange={v => upd({ amount: v === '' ? 0 : Number(v) })} />
                         <p className="text-xs text-slate-400 font-bold mt-2 flex items-center gap-1"><Info size={12} /> Disparo manual: aplica o valor a todos do escopo ao rodar a competência.</p>
                     </div>
                 )}
@@ -833,7 +834,7 @@ const SimulatorTab: React.FC<{ projects: ProjectLite[] }> = ({ projects }) => {
                             {projects.map(p => <option key={p.id} value={p.id}>{projName(p)}</option>)}
                         </select>
                     </div>
-                    <div><Label>R$ / unidade</Label><input type="number" step="0.01" className={inputCls} value={rate} onChange={e => setRate(parseFloat(e.target.value) || 0)} /></div>
+                    <div><Label>R$ / unidade</Label><MoneyCentsInput className={inputCls} value={rate} onChange={v => setRate(v === '' ? 0 : Number(v))} /></div>
                     <div><Label>Fase (opcional)</Label><input className={inputCls} value={phase} onChange={e => setPhase(e.target.value)} placeholder="Ex: Estrutura" /></div>
                     <div className="flex items-end"><button onClick={run} disabled={loading || !projectId} className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50">{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator size={14} />} Simular</button></div>
                 </div>

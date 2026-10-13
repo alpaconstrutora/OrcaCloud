@@ -124,7 +124,7 @@ describe('InstallmentLoteEditModal — todas as colunas da tabela', () => {
         const user = userEvent.setup();
         const { onSave, aplicar } = montar();
         await user.selectOptions(screen.getByLabelText('Valor (bruto)'), 'SET');
-        await user.type(screen.getByLabelText('Novo valor (R$)'), '2500.5');
+        await user.type(screen.getByLabelText('Novo valor (R$)'), '250050');
         await user.selectOptions(screen.getByLabelText('Tipo'), 'CHAVES');
         await user.selectOptions(screen.getByLabelText('Forma de pagamento'), 'PIX');
         await user.click(aplicar);

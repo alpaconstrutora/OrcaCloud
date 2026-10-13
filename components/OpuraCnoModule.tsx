@@ -44,6 +44,7 @@ import {
   CNO_DOCUMENT_CATALOG
 } from '../types';
 import type { OpuraDocument } from '../types/documents';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // §2 — colunas da tela de seleção de obra. Sem coluna `actions`: a única ação da
 // tela (abrir a previdência da obra) é a própria linha — ver §9.1.
@@ -1108,12 +1109,11 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="space-y-1">
                     <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Valor VAU (Atualizado)</label>
-                    <input
-                      type="number"
+                    <MoneyCentsInput
                       value={cnoForm.vau_value}
-                      onChange={(e) => setCnoForm(prev => ({ ...prev, vau_value: Number(e.target.value) }))}
+                      onChange={(v) => setCnoForm(prev => ({ ...prev, vau_value: v === '' ? 0 : Number(v) }))}
                       className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
-                      placeholder="Ex: 2450.00"
+                      placeholder="Ex: 2.450,00"
                     />
                   </div>
                 </div>
@@ -1480,20 +1480,18 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Valor Principal</label>
-                      <input
-                        type="number"
+                      <MoneyCentsInput
                         value={dctfForm.principal_amount}
-                        onChange={(e) => setDctfForm(prev => ({ ...prev, principal_amount: e.target.value }))}
+                        onChange={(v) => setDctfForm(prev => ({ ...prev, principal_amount: v }))}
                         className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                         placeholder="0,00"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Multa (R$)</label>
-                      <input
-                        type="number"
+                      <MoneyCentsInput
                         value={dctfForm.fine_amount}
-                        onChange={(e) => setDctfForm(prev => ({ ...prev, fine_amount: e.target.value }))}
+                        onChange={(v) => setDctfForm(prev => ({ ...prev, fine_amount: v }))}
                         className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                         placeholder="0,00"
                       />
@@ -1502,10 +1500,9 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="space-y-1">
                     <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Juros (R$)</label>
-                    <input
-                      type="number"
+                    <MoneyCentsInput
                       value={dctfForm.interest_amount}
-                      onChange={(e) => setDctfForm(prev => ({ ...prev, interest_amount: e.target.value }))}
+                      onChange={(v) => setDctfForm(prev => ({ ...prev, interest_amount: v }))}
                       className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       placeholder="0,00"
                     />

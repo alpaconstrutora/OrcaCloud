@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState } from 'react';
 import { XCircle, AlertTriangle, X, FileText } from 'lucide-react';
 import { commercialFinanceService } from '../services/commercialFinanceService';
@@ -122,11 +123,9 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                         <label className="text-xs font-black text-gray-500 uppercase tracking-widest">
                             Valor a Devolver ao Cliente (R$)
                         </label>
-                        <input
-                            type="number"
-                            min={0}
+                        <MoneyCentsInput
                             value={refundAmount}
-                            onChange={(e) => setRefundAmount(parseFloat(e.target.value) || 0)}
+                            onChange={(v) => setRefundAmount(v === '' ? 0 : Number(v))}
                             className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
                         />
                         <p className="text-xs text-gray-400 font-bold uppercase tracking-wide">

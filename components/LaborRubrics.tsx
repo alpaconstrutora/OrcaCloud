@@ -12,6 +12,7 @@ import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import { useOrgWriteTarget } from '../hooks/useOrgContext';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 const RUBRIC_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
@@ -732,13 +733,11 @@ const LaborRubrics: React.FC = () => {
                                                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Valor Unitário Fixo</label>
                                                 <div className="relative">
                                                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
+                                                    <MoneyCentsInput
                                                         value={formData.calculation_config?.amount || 0}
-                                                        onChange={(e) => setFormData({
+                                                        onChange={(v) => setFormData({
                                                             ...formData,
-                                                            calculation_config: { ...formData.calculation_config, amount: parseFloat(e.target.value) }
+                                                            calculation_config: { ...formData.calculation_config, amount: v === '' ? 0 : Number(v) }
                                                         })}
                                                         className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
                                                     />

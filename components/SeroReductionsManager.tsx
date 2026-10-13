@@ -3,6 +3,7 @@ import { OpuraCnoReduction } from '../types';
 import { cnoService } from '../services/cnoService';
 import { Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { useConfirm } from './ui/confirm';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface SeroReductionsManagerProps {
   organizationId: string;
@@ -123,12 +124,11 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
         </div>
         <div>
           <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Valor Total NF</label>
-          <input
-            type="number"
+          <MoneyCentsInput
             value={form.nf_value}
-            onChange={e => setForm(prev => ({ ...prev, nf_value: e.target.value }))}
+            onChange={v => setForm(prev => ({ ...prev, nf_value: v }))}
             className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
-            placeholder="0.00"
+            placeholder="0,00"
           />
         </div>
 

@@ -18,6 +18,7 @@ import {
 } from '../types';
 import Button from './ui/Button';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface Props {
     orgId: string | null;
@@ -595,9 +596,9 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                                         </label>
                                         <div>
                                             <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">Valor mensal (R$)</label>
-                                            <input type="number" min="0" step="0.01" className={cls}
+                                            <MoneyCentsInput className={cls}
                                                 value={editForm.prolabore_amount}
-                                                onChange={e => setEditForm(f => ({ ...f, prolabore_amount: e.target.value }))} />
+                                                onChange={v => setEditForm(f => ({ ...f, prolabore_amount: v }))} />
                                         </div>
                                         <div>
                                             <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">Dia de pagamento</label>
@@ -757,21 +758,21 @@ const LaborRemuneracaoSocietaria: React.FC<Props> = ({ orgId, organizations, onR
                                 </div>
                                 <div>
                                     <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">Lucro contábil apurado (opcional)</label>
-                                    <input type="number" min="0" step="0.01" className={cls} value={newBatchForm.accountingProfitAmount}
-                                        onChange={e => setNewBatchForm(f => ({ ...f, accountingProfitAmount: e.target.value }))} />
+                                    <MoneyCentsInput className={cls} value={newBatchForm.accountingProfitAmount}
+                                        onChange={v => setNewBatchForm(f => ({ ...f, accountingProfitAmount: v }))} />
                                 </div>
                                 <div>
                                     <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">
                                         Lucro disponível (informado manualmente) *
                                     </label>
-                                    <input type="number" min="0" step="0.01" className={cls} value={newBatchForm.availableProfitAmount}
-                                        onChange={e => setNewBatchForm(f => ({ ...f, availableProfitAmount: e.target.value }))} />
+                                    <MoneyCentsInput className={cls} value={newBatchForm.availableProfitAmount}
+                                        onChange={v => setNewBatchForm(f => ({ ...f, availableProfitAmount: v }))} />
                                     <p className="text-[10px] text-amber-600 mt-1">Não é apurado automaticamente pelo sistema — confira com a contabilidade e anexe o balancete como ata.</p>
                                 </div>
                                 <div>
                                     <label className="block text-form-label font-black uppercase tracking-widest text-gray-500 mb-1">Valor proposto para distribuição *</label>
-                                    <input type="number" min="0" step="0.01" className={cls} value={newBatchForm.proposedAmount}
-                                        onChange={e => setNewBatchForm(f => ({ ...f, proposedAmount: e.target.value }))} />
+                                    <MoneyCentsInput className={cls} value={newBatchForm.proposedAmount}
+                                        onChange={v => setNewBatchForm(f => ({ ...f, proposedAmount: v }))} />
                                 </div>
                                 <div className="flex justify-end gap-2 pt-1 border-t border-gray-200">
                                     <button type="button" onClick={() => setShowNewBatchForm(false)}

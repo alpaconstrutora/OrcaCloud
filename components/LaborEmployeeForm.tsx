@@ -18,6 +18,7 @@ import LaborEmployeeSalaryHistory from './LaborEmployeeSalaryHistory';
 import { supabase } from '../lib/supabase';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import SaveStatus from './ui/SaveStatus';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface OrganizationOption {
     id: string;
@@ -727,31 +728,28 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         </div>
                         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                             <InputGroup label="Custo por Dia (R$)" icon={DollarSign}>
-                                <input
-                                    type="number" min="0" step="0.01"
+                                <MoneyCentsInput
                                     value={form.daily_cost || ''}
-                                    onChange={e => setField('daily_cost', parseFloat(e.target.value) || 0)}
+                                    onChange={v => setField('daily_cost', v === '' ? 0 : Number(v))}
                                     onFocus={e => e.target.select()}
                                     className={inputCls}
-                                    placeholder="200.00"
+                                    placeholder="200,00"
                                 />
                             </InputGroup>
                             <InputGroup label="Custo por Hora (R$)" icon={DollarSign}>
-                                <input
-                                    type="number" min="0" step="0.01"
+                                <MoneyCentsInput
                                     value={form.hourly_cost || ''}
-                                    onChange={e => setField('hourly_cost', parseFloat(e.target.value) || 0)}
+                                    onChange={v => setField('hourly_cost', v === '' ? 0 : Number(v))}
                                     onFocus={e => e.target.select()}
                                     className={inputCls}
-                                    placeholder="25.00"
+                                    placeholder="25,00"
                                 />
                             </InputGroup>
                             <InputGroup label="Salário Base (220h)" icon={Calculator}>
-                                <input
-                                    type="number" min="0" step="0.01"
+                                <MoneyCentsInput
                                     value={form.base_salary || ''}
-                                    onChange={e => {
-                                        const val = parseFloat(e.target.value) || 0;
+                                    onChange={v => {
+                                        const val = v === '' ? 0 : Number(v);
                                         const h = val / 220;
                                         const d = h * 8;
                                         setForm(prev => ({
@@ -764,7 +762,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     }}
                                     onFocus={e => e.target.select()}
                                     className={inputCls + " border-indigo-200 bg-indigo-50/30"}
-                                    placeholder="2500.00"
+                                    placeholder="2500,00"
                                 />
                                 {isEditing && (
                                     <p className="text-xs text-slate-400 mt-1.5">

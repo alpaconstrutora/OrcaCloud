@@ -12,6 +12,7 @@ import {
     type CreditRoomSide,
     type CreditRoomVersion,
 } from '../../types/creditRoom';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 /**
  * Quadro de Fontes e Usos — PRD §47.
@@ -100,9 +101,9 @@ const Tabela: React.FC<{
                             </td>
                             <td className={`${td} text-right ${editavel ? '' : 'border-r-0'}`}>
                                 {editavel ? (
-                                    <input
-                                        type="number" min={0} step="0.01" value={e.amount || ''}
-                                        onChange={ev => mudar(lista, e.id!, 'amount', ev.target.value)}
+                                    <MoneyCentsInput
+                                        value={e.amount}
+                                        onChange={v => mudar(lista, e.id!, 'amount', v)}
                                         className={`${campo} ${ring} text-right`}
                                     />
                                 ) : formatMoney(e.amount)}

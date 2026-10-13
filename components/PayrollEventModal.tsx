@@ -9,6 +9,7 @@ import {
     isDuplicateRubric,
 } from '../lib/payrollUIHelpers';
 import { formatMoney } from './ui/Format';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface PayrollEventModalProps {
     run: PayrollRun;
@@ -260,10 +261,10 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                         <div className="md:col-span-3">
                             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
                             <div className="flex gap-2">
-                                <input
-                                    type="number" step="0.01" placeholder="0.00"
+                                <MoneyCentsInput
+                                    placeholder="0,00"
                                     value={eventAmount}
-                                    onChange={e => setEventAmount(parseFloat(e.target.value) || 0)}
+                                    onChange={v => setEventAmount(v === '' ? 0 : Number(v))}
                                     readOnly={eventUnit !== 'fixed'}
                                     className={`w-full px-3 py-2 border border-slate-200 rounded-xl text-button font-bold focus:ring-2 focus:ring-indigo-500 outline-none ${eventUnit !== 'fixed' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'}`}
                                 />

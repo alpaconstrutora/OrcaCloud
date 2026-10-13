@@ -69,6 +69,7 @@ import {
     SEM_CATEGORIA,
     type RentalClientTypeScope,
 } from '../lib/rentalByClientType';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface RentalsModuleProps {
     organizationId?: string;
@@ -2675,10 +2676,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-gray-500">Mudar preço sugerido para</label>
                                     <div className="flex gap-2">
-                                        <input
-                                            type="number"
+                                        <MoneyCentsInput
                                             value={bulkPriceValue}
-                                            onChange={(e) => setBulkPriceValue(e.target.value)}
+                                            onChange={(v) => setBulkPriceValue(v)}
                                             placeholder="Novo preço (R$)"
                                             className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />

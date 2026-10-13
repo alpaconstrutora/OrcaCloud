@@ -19,6 +19,7 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // ── Colunas das tabelas padrão (§6.10) ────────────────────────────────────────
 
@@ -248,8 +249,8 @@ const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSave
                                     onChange={e => set('cargo_saida', e.target.value)} />
                             </Field>
                             <Field label="Salário na saída">
-                                <input type="number" className={inputCls} value={form.salario_saida || ''}
-                                    onChange={e => set('salario_saida', Number(e.target.value))} />
+                                <MoneyCentsInput className={inputCls} value={form.salario_saida || ''}
+                                    onChange={v => set('salario_saida', v === '' ? 0 : Number(v))} />
                             </Field>
                         </div>
                     )}
@@ -260,8 +261,8 @@ const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSave
                                     onChange={e => set('cargo_entrada', e.target.value)} />
                             </Field>
                             <Field label="Salário na entrada">
-                                <input type="number" className={inputCls} value={form.salario_entrada || ''}
-                                    onChange={e => set('salario_entrada', Number(e.target.value))} />
+                                <MoneyCentsInput className={inputCls} value={form.salario_entrada || ''}
+                                    onChange={v => set('salario_entrada', v === '' ? 0 : Number(v))} />
                             </Field>
                         </div>
                     )}

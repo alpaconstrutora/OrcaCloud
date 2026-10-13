@@ -25,5 +25,9 @@ describe('MoneyCentsInput — digitação por centavos', () => {
         expect(decimalParaExibicao('1234.5')).toBe('1.234,50');
         expect(decimalParaExibicao('')).toBe('');
         expect(decimalParaExibicao('x')).toBe('');
+        expect(decimalParaExibicao(1234.5)).toBe('1.234,50');
+        expect(decimalParaExibicao(0)).toBe('');
+        expect(decimalParaExibicao(null)).toBe('');
+        expect(decimalParaExibicao(undefined)).toBe('');
     });
 });

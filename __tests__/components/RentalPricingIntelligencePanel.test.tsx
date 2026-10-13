@@ -23,7 +23,7 @@ describe('RentalPricingIntelligencePanel', () => {
     it('abre em R$/m² e aplica o valor digitado como base por metro', () => {
         const onApply = vi.fn();
         render(<RentalPricingIntelligencePanel onApply={onApply} />);
-        fireEvent.change(valor(), { target: { value: '85' } });
+        fireEvent.change(valor(), { target: { value: '8500' } });
         fireEvent.click(aplicar());
         expect(onApply).toHaveBeenCalledWith({ mode: 'PER_SQM', base_per_sqm: 85, target_total_rent: 0 });
     });
@@ -32,14 +32,14 @@ describe('RentalPricingIntelligencePanel', () => {
         const onApply = vi.fn();
         render(<RentalPricingIntelligencePanel onApply={onApply} />);
         fireEvent.click(screen.getByText('Aluguel-alvo total'));
-        fireEvent.change(valor(), { target: { value: '20000' } });
+        fireEvent.change(valor(), { target: { value: '2000000' } });
         fireEvent.click(aplicar());
         expect(onApply).toHaveBeenCalledWith({ mode: 'TARGET_TOTAL', base_per_sqm: 0, target_total_rent: 20000 });
     });
 
     it('trocar de modo não carrega o número digitado no outro — o campo vem vazio', () => {
         render(<RentalPricingIntelligencePanel onApply={vi.fn()} />);
-        fireEvent.change(valor(), { target: { value: '85' } });
+        fireEvent.change(valor(), { target: { value: '8500' } });
         fireEvent.click(screen.getByText('Aluguel-alvo total'));
         // 85 R$/m² não é 85 reais de prédio inteiro: o campo não pode herdar o valor.
         expect(valor().value).toBe('');

@@ -13,6 +13,7 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // Colunas das tabelas padrão (§6.10)
 const CATALOG_COLUMNS: StandardTableColumn[] = [
@@ -155,7 +156,7 @@ const EpiCatalogForm: React.FC<EpiFormProps> = ({ orgId, item, onClose, onSaved 
                             <input type="number" min="0" value={form.estoque_minimo} onChange={e => set('estoque_minimo', parseInt(e.target.value) || 0)} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Custo Unitário (R$)">
-                            <input type="number" min="0" step="0.01" value={form.custo_unitario} onChange={e => set('custo_unitario', parseFloat(e.target.value) || 0)} className={inputCls} />
+                            <MoneyCentsInput value={form.custo_unitario} onChange={v => set('custo_unitario', v === '' ? 0 : Number(v))} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Fornecedor">
                             <input value={form.fornecedor || ''} onChange={e => set('fornecedor', e.target.value)} className={inputCls} placeholder="Nome do fornecedor" />

@@ -18,6 +18,7 @@ import {
 } from '../../utils/debtSimulator';
 import { DEBT_AMORTIZATION_PT, type AmortizationSystem } from '../../types/debt';
 import type { DebtScheduleParams } from '../../utils/debtAmortization';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 type Eixo = 'SISTEMA' | 'PRAZO' | 'CARENCIA' | 'ENTRADA' | 'INDEXADOR';
 
@@ -187,8 +188,8 @@ export default function DebtSimulator() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="space-y-1">
                         <Label>Valor financiado</Label>
-                        <input type="number" step="0.01" className={campo} value={principal}
-                               onChange={e => setPrincipal(Number(e.target.value) || 0)} />
+                        <MoneyCentsInput className={campo} value={principal}
+                               onChange={v => setPrincipal(Number(v) || 0)} />
                     </div>
                     <div className="space-y-1">
                         <Label>Taxa (% a.m.)</Label>
@@ -221,13 +222,13 @@ export default function DebtSimulator() {
                     </div>
                     <div className="space-y-1">
                         <Label>IOF retido</Label>
-                        <input type="number" step="0.01" className={campo} value={iof}
-                               onChange={e => setIof(Number(e.target.value) || 0)} />
+                        <MoneyCentsInput className={campo} value={iof}
+                               onChange={v => setIof(Number(v) || 0)} />
                     </div>
                     <div className="space-y-1">
                         <Label>Tarifas retidas</Label>
-                        <input type="number" step="0.01" className={campo} value={tarifas}
-                               onChange={e => setTarifas(Number(e.target.value) || 0)} />
+                        <MoneyCentsInput className={campo} value={tarifas}
+                               onChange={v => setTarifas(Number(v) || 0)} />
                     </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-3">

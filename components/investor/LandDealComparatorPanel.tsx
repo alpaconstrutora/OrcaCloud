@@ -3,6 +3,7 @@ import { Plus, Trash2, Pencil, CheckCircle2, Scale } from 'lucide-react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { fmtBRL, fmtPct } from '../../utils/format';
 import {
     landDealComparatorService, LandDealScenario, LandDealType, LandDealPremises,
@@ -34,9 +35,9 @@ const PremisesFields: React.FC<{ dealType: LandDealType; premises: LandDealPremi
             return (
                 <div className="grid grid-cols-2 gap-4">
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor total</label>
-                        <input type="number" value={premises.valor_total ?? ''} onChange={e => onChange({ ...premises, valor_total: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.valor_total} onChange={v => onChange({ ...premises, valor_total: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Entrada</label>
-                        <input type="number" value={premises.entrada ?? ''} onChange={e => onChange({ ...premises, entrada: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.entrada} onChange={v => onChange({ ...premises, entrada: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Nº de parcelas</label>
                         <input type="number" value={premises.num_parcelas ?? ''} onChange={e => onChange({ ...premises, num_parcelas: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Correção mensal (%)</label>
@@ -49,7 +50,7 @@ const PremisesFields: React.FC<{ dealType: LandDealType; premises: LandDealPremi
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Unidades prometidas</label>
                         <input type="number" value={premises.unidades_prometidas ?? ''} onChange={e => onChange({ ...premises, unidades_prometidas: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor de referência das unidades</label>
-                        <input type="number" value={premises.valor_referencia_unidades ?? ''} onChange={e => onChange({ ...premises, valor_referencia_unidades: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.valor_referencia_unidades} onChange={v => onChange({ ...premises, valor_referencia_unidades: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo de entrega (meses)</label>
                         <input type="number" value={premises.prazo_entrega_meses ?? ''} onChange={e => onChange({ ...premises, prazo_entrega_meses: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                 </div>
@@ -60,18 +61,18 @@ const PremisesFields: React.FC<{ dealType: LandDealType; premises: LandDealPremi
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">% sobre o VGV</label>
                         <input type="number" step="0.1" value={premises.percentual_sobre_vgv ?? ''} onChange={e => onChange({ ...premises, percentual_sobre_vgv: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor mínimo garantido</label>
-                        <input type="number" value={premises.valor_minimo_garantido ?? ''} onChange={e => onChange({ ...premises, valor_minimo_garantido: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.valor_minimo_garantido} onChange={v => onChange({ ...premises, valor_minimo_garantido: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                 </div>
             );
         case 'opcao_compra':
             return (
                 <div className="grid grid-cols-2 gap-4">
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Prêmio da opção</label>
-                        <input type="number" value={premises.premio_opcao ?? ''} onChange={e => onChange({ ...premises, premio_opcao: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.premio_opcao} onChange={v => onChange({ ...premises, premio_opcao: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo da opção (meses)</label>
                         <input type="number" value={premises.prazo_opcao_meses ?? ''} onChange={e => onChange({ ...premises, prazo_opcao_meses: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor de exercício</label>
-                        <input type="number" value={premises.valor_exercicio ?? ''} onChange={e => onChange({ ...premises, valor_exercicio: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.valor_exercicio} onChange={v => onChange({ ...premises, valor_exercicio: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                 </div>
             );
         case 'sociedade':
@@ -80,7 +81,7 @@ const PremisesFields: React.FC<{ dealType: LandDealType; premises: LandDealPremi
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Participação do proprietário (%)</label>
                         <input type="number" step="0.1" value={premises.participacao_pct ?? ''} onChange={e => onChange({ ...premises, participacao_pct: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                     <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Aporte de terreno equivalente</label>
-                        <input type="number" value={premises.aporte_terreno_equivalente ?? ''} onChange={e => onChange({ ...premises, aporte_terreno_equivalente: num(e.target.value) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
+                        <MoneyCentsInput value={premises.aporte_terreno_equivalente} onChange={v => onChange({ ...premises, aporte_terreno_equivalente: num(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" /></div>
                 </div>
             );
     }

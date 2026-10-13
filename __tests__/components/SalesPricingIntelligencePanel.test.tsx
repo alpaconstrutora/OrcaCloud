@@ -24,7 +24,7 @@ describe('SalesPricingIntelligencePanel', () => {
     it('aplica só VGV-alvo e o recorte de permutadas — nenhum peso hedônico sai daqui', () => {
         const onApply = vi.fn();
         render(<SalesPricingIntelligencePanel onApply={onApply} />);
-        fireEvent.change(vgv(), { target: { value: '2500000' } });
+        fireEvent.change(vgv(), { target: { value: '250000000' } });
         fireEvent.click(aplicar());
         expect(onApply).toHaveBeenCalledTimes(1);
         expect(onApply).toHaveBeenCalledWith({ target_vgv: 2500000, include_exchanged: false });
@@ -40,14 +40,14 @@ describe('SalesPricingIntelligencePanel', () => {
             expect(screen.queryByText(texto)).not.toBeInTheDocument();
         }
         expect(screen.queryByRole('slider')).not.toBeInTheDocument();
-        expect(screen.getAllByRole('spinbutton')).toHaveLength(1); // só o VGV
+        expect(screen.getAllByRole('textbox')).toHaveLength(1); // só o VGV
         expect(screen.getAllByRole('checkbox')).toHaveLength(1);   // só permutadas
     });
 
     it('o toggle de permutadas segue no contrato', () => {
         const onApply = vi.fn();
         render(<SalesPricingIntelligencePanel onApply={onApply} />);
-        fireEvent.change(vgv(), { target: { value: '1000' } });
+        fireEvent.change(vgv(), { target: { value: '100000' } });
         fireEvent.click(permutadas());
         fireEvent.click(aplicar());
         expect(onApply).toHaveBeenCalledWith({ target_vgv: 1000, include_exchanged: true });

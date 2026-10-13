@@ -5,6 +5,7 @@ import { useConfirm } from '../ui/confirm';
 import { contractRenewalService, RenewalMode, RenewalPreview } from '../../services/contractRenewalService';
 import { contractService } from '../../services/contractService';
 import { Contract, ContractAddendum } from '../../types';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     /** Contrato gerado a partir desta negociação. */
@@ -332,8 +333,8 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className={LABEL}>Valor do Aluguel</label>
-                            <input type="number" step="0.01" min="0" value={valor}
-                                onChange={e => setValor(e.target.value)} className={INPUT} />
+                            <MoneyCentsInput value={valor}
+                                onChange={v => setValor(v)} className={INPUT} />
                             {preview?.index && (
                                 <p className="text-[11px] font-medium text-gray-400 px-1">
                                     {preview.index.name} {fmtMonth(preview.index.baseMonth)} → {fmtMonth(preview.index.currentMonth)}

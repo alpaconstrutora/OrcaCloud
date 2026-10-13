@@ -70,6 +70,7 @@ import { brandModelService } from '../services/brandModelService';
 import { itemTypeDaCategoria, type BrandModelValue, type ProductItemType, type ProductModel } from '../types/brandModel';
 import { aplicarPadroesDoModelo, origemInicial, type OrigemCampo } from '../utils/catalogoAutopreencher';
 import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '../utils/assetToStockItemRow';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface OpuraAssetsModuleProps {
   activeOrganizationId: string | null;
@@ -2697,10 +2698,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500">Valor Aquisição (R$)</label>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={assetForm.purchase_value || ''}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, purchase_value: parseFloat(e.target.value) || 0 }))}
+                    onChange={(v) => setAssetForm(prev => ({ ...prev, purchase_value: v === '' ? 0 : Number(v) }))}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
@@ -2721,10 +2721,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-500">Valor Residual (R$)</label>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={assetForm.residual_value || ''}
-                    onChange={(e) => setAssetForm(prev => ({ ...prev, residual_value: parseFloat(e.target.value) || 0 }))}
+                    onChange={(v) => setAssetForm(prev => ({ ...prev, residual_value: v === '' ? 0 : Number(v) }))}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
@@ -3097,10 +3096,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                   <div className="space-y-1">
                     <label className={rotulo}>Custo Estimado (R$)</label>
-                    <input
-                      type="number"
+                    <MoneyCentsInput
                       value={maintForm.cost || ''}
-                      onChange={(e) => setMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                      onChange={(v) => setMaintForm(prev => ({ ...prev, cost: v === '' ? 0 : Number(v) }))}
                       className={campo}
                       placeholder="Opcional"
                     />
@@ -3216,11 +3214,10 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 <div className="space-y-1">
                   <label className="text-gray-400 uppercase tracking-widest text-[9px]">Custo Real Final (R$)</label>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     required
                     value={finishMaintForm.cost || ''}
-                    onChange={(e) => setFinishMaintForm(prev => ({ ...prev, cost: parseFloat(e.target.value) || 0 }))}
+                    onChange={(v) => setFinishMaintForm(prev => ({ ...prev, cost: v === '' ? 0 : Number(v) }))}
                     className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Custo real final do serviço"
                   />

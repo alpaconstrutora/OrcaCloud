@@ -5,6 +5,7 @@ import { speService, SpeEntity, SpePartner } from '../../services/speService';
 import { investorService, Investor } from '../../services/investorService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import CapitalCallPanel from './CapitalCallPanel';
 
 interface Props {
@@ -162,8 +163,8 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Social (R$)</span>
-                            <input type="number" min="0" step="0.01" value={entityForm.capital_social || ''}
-                                onChange={e => setEntityForm(f => ({ ...f, capital_social: parseFloat(e.target.value) || 0 }))}
+                            <MoneyCentsInput value={entityForm.capital_social || ''}
+                                onChange={v => setEntityForm(f => ({ ...f, capital_social: v === '' ? 0 : Number(v) }))}
                                 className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="0,00" />
                         </label>
@@ -257,9 +258,9 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                                                 <option value="call">Chamar</option>
                                                                                 <option value="payment">Pagar</option>
                                                                             </select>
-                                                                            <input type="number" min="0" step="0.01"
+                                                                            <MoneyCentsInput
                                                                                 value={ci.amount || ''}
-                                                                                onChange={e => setCapitalInput(c => ({ ...c, [p.id!]: { ...ci, amount: parseFloat(e.target.value) || 0 } }))}
+                                                                                onChange={v => setCapitalInput(c => ({ ...c, [p.id!]: { ...ci, amount: v === '' ? 0 : Number(v) } }))}
                                                                                 className="w-24 px-2 py-1 border border-gray-200 rounded text-form-input focus:outline-none"
                                                                                 placeholder="0,00"
                                                                             />
@@ -305,9 +306,9 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                 </label>
                                                 <label className="flex flex-col gap-1">
                                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Chamado (R$)</span>
-                                                    <input type="number" min="0" step="0.01"
+                                                    <MoneyCentsInput
                                                         value={partnerForm[entity.id!]?.capital_calls_total || ''}
-                                                        onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], capital_calls_total: parseFloat(e.target.value) || 0 } }))}
+                                                        onChange={v => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], capital_calls_total: v === '' ? 0 : Number(v) } }))}
                                                         className="w-32 px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="0,00"
                                                     />

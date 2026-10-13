@@ -14,17 +14,23 @@ export function digitosParaDecimal(texto: string): string {
     return (parseInt(digitos, 10) / 100).toFixed(2);
 }
 
-/** "42.10" → "42,10"; "1234.5" → "1.234,50"; '' (ou inválido) → ''. */
-export function decimalParaExibicao(valor: string): string {
-    if (valor === '') return '';
+/**
+ * "42.10" → "42,10"; "1234.5" → "1.234,50"; '' / null / undefined / inválido → ''.
+ * Aceita número direto (estado numérico). 0 numérico aparece vazio (placeholder
+ * "0,00") — o mesmo que os formulários faziam com `value={n || ''}`.
+ */
+export function decimalParaExibicao(valor: string | number | null | undefined): string {
+    if (valor === '' || valor == null) return '';
     const n = Number(valor);
+    if (typeof valor === 'number' && n === 0) return '';
     if (!Number.isFinite(n)) return '';
     return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 interface MoneyCentsInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'> {
-    /** Decimal com ponto ("42.10") ou '' — o mesmo formato de `<input type="number">`. */
-    value: string;
+    /** Decimal com ponto ("42.10"), número, ou vazio — aceita o estado string ou numérico do formulário. */
+    value: string | number | null | undefined;
+    /** Sempre devolve decimal com ponto ("42.10") ou '' se não há dígito. Estado numérico: `v => setN(v === '' ? 0 : Number(v))`. */
     onChange: (valor: string) => void;
 }
 

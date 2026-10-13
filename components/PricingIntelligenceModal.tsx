@@ -10,6 +10,7 @@ import React, { useState } from 'react';
 import { X, TrendingUp, Calculator, ShieldCheck, ArrowRight, Info, BrainCircuit } from 'lucide-react';
 import { HedonicPricingConfig } from '../types';
 import Button from './ui/Button';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface PricingIntelligenceModalProps {
     isOpen: boolean;
@@ -82,10 +83,9 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                                 <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">VGV Alvo do Projeto (R$)</label>
                                 <div className="relative flex items-center">
                                     <span className="absolute left-5 font-black text-gray-400">R$</span>
-                                    <input
-                                        type="number"
+                                    <MoneyCentsInput
                                         value={config.target_vgv || ''}
-                                        onChange={(e) => setConfig({ ...config, target_vgv: parseFloat(e.target.value) || 0 })}
+                                        onChange={(v) => setConfig({ ...config, target_vgv: v === '' ? 0 : Number(v) })}
                                         className="w-full pl-12 pr-6 py-4 bg-gray-50 border border-gray-100 focus:bg-white focus:border-blue-500 rounded-2xl outline-none font-black text-2xl text-gray-900 transition-all shadow-inner"
                                         placeholder="0,00"
                                     />

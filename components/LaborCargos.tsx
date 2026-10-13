@@ -12,6 +12,7 @@ import { companyService } from '../services/companyService';
 import { laborService, Employee } from '../services/laborService';
 import { useConfirm } from './ui/confirm';
 import { CompanyDepartment, OrgRole, OrgFuncao } from '../types';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface LaborCargosProps {
     orgId: string | null;
@@ -785,13 +786,13 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1">
                                         <label className={labelCls}>Piso (R$)</label>
-                                        <input type="number" min={0} step="0.01" placeholder="5000" value={roleForm.salario_minimo}
-                                            onChange={e => setRoleForm({ ...roleForm, salario_minimo: e.target.value })} className={inputCls} />
+                                        <MoneyCentsInput placeholder="5.000,00" value={roleForm.salario_minimo}
+                                            onChange={v => setRoleForm({ ...roleForm, salario_minimo: v })} className={inputCls} />
                                     </div>
                                     <div className="space-y-1">
                                         <label className={labelCls}>Teto (R$)</label>
-                                        <input type="number" min={0} step="0.01" placeholder="8000" value={roleForm.salario_maximo}
-                                            onChange={e => setRoleForm({ ...roleForm, salario_maximo: e.target.value })} className={inputCls} />
+                                        <MoneyCentsInput placeholder="8.000,00" value={roleForm.salario_maximo}
+                                            onChange={v => setRoleForm({ ...roleForm, salario_maximo: v })} className={inputCls} />
                                     </div>
                                 </div>
                             </div>

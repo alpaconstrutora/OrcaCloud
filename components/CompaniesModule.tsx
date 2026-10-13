@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Building2, Plus, Star, ChevronDown, ChevronUp,
@@ -486,8 +487,8 @@ const CompaniesModule: React.FC<CompaniesModuleProps> = ({ orgId, embedded = fal
                                     onChange={e => set('data_abertura', e.target.value)} />
                             </Field>
                             <Field label="Capital Social (R$)">
-                                <input type="number" min="0" step="0.01" className={inputCls}
-                                    value={form.capital_social} onChange={e => set('capital_social', e.target.value)} />
+                                <MoneyCentsInput className={inputCls}
+                                    value={form.capital_social} onChange={v => set('capital_social', v)} />
                             </Field>
                             <Field label="Status">
                                 <select className={selectCls} value={form.status}

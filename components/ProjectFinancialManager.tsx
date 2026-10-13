@@ -79,6 +79,7 @@ import { mergeInstallments, computeProfitabilityByProperty, type MergeInstallmen
 // Harness temporário da Fase 2 — remover junto com o painel após o portão.
 import ProfitabilityDiffPanel, { isProfitabilityDebugOn } from './__validation__/ProfitabilityDiffPanel';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface ProjectFinancialManagerProps {
     settings: ProjectSettings;
@@ -1087,7 +1088,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                             <label className="text-sm font-normal text-gray-400 uppercase tracking-widest ml-1">{commercialProject ? 'Total em Contratos' : 'Valor Total da Negociação'}</label>
-                            <input type="number" value={financialInfo.totalValue} onChange={e => handleSaveMultiple({ totalValue: parseFloat(e.target.value) || 0 })} className="w-full bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-sm font-normal text-indigo-900 focus:bg-white focus:border-indigo-500 outline-none transition-all" placeholder="Valor Total" />
+                            <MoneyCentsInput value={financialInfo.totalValue} onChange={v => handleSaveMultiple({ totalValue: v === '' ? 0 : Number(v) })} className="w-full bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-sm font-normal text-indigo-900 focus:bg-white focus:border-indigo-500 outline-none transition-all" placeholder="Valor Total" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-sm font-normal text-gray-400 uppercase tracking-widest ml-1">Modalidade de Pagamento</label>
@@ -1140,7 +1141,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 {isAdding && (
                     <div className="p-4 bg-indigo-50/30 grid grid-cols-1 md:grid-cols-5 gap-3 border-b border-indigo-100 items-end">
                         <input type="text" value={installmentForm.description} onChange={e => setInstallmentForm({ ...installmentForm, description: e.target.value })} placeholder="Desc." className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                        <input type="number" value={installmentForm.value} onChange={e => setInstallmentForm({ ...installmentForm, value: parseFloat(e.target.value) || 0 })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
+                        <MoneyCentsInput value={installmentForm.value} onChange={v => setInstallmentForm({ ...installmentForm, value: v === '' ? 0 : Number(v) })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                         <input type="date" value={installmentForm.dueDate} onChange={e => setInstallmentForm({ ...installmentForm, dueDate: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                         <div className="flex gap-2">
                             <input type="number" value={installmentForm.commissionRate || ''} onChange={e => setInstallmentForm({ ...installmentForm, commissionRate: parseFloat(e.target.value) || 0 })} placeholder="Comissão %" className="w-1/2 p-2 rounded-lg border border-gray-200 text-sm bg-white" />
@@ -1292,7 +1293,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             {isAddingTransaction && (
                 <div className="p-4 bg-red-50/30 grid grid-cols-1 md:grid-cols-6 gap-3 border border-red-100 rounded-2xl items-end">
                     <input type="text" value={txForm.description} onChange={e => setTxForm({ ...txForm, description: e.target.value })} placeholder="Descrição" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                    <input type="number" value={txForm.value} onChange={e => setTxForm({ ...txForm, value: parseFloat(e.target.value) || 0 })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
+                    <MoneyCentsInput value={txForm.value} onChange={v => setTxForm({ ...txForm, value: v === '' ? 0 : Number(v) })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
                     <select value={txForm.category} onChange={e => setTxForm({ ...txForm, category: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white">{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
                     <SupplierSelect
                         suppliers={suppliersList}

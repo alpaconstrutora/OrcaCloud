@@ -11,6 +11,7 @@ import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import SaveStatus from './ui/SaveStatus';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface QuotationResponseFormProps {
     request: QuotationRequest;
@@ -481,12 +482,10 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
                                                     {item.quantity} {item.unit}
                                                 </td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-right">
-                                                    <input
-                                                        type="number"
-                                                        step="0.01"
+                                                    <MoneyCentsInput
                                                         required
                                                         value={item.unitPrice}
-                                                        onChange={e => handleUpdatePrice(idx, parseFloat(e.target.value) || 0)}
+                                                        onChange={v => handleUpdatePrice(idx, v === '' ? 0 : Number(v))}
                                                         className={`w-32 h-9 px-3 text-right text-sm font-normal rounded-[6px] border outline-none focus:ring-2 transition-all ${
                                                             divergente
                                                                 ? 'border-amber-300 bg-amber-50 text-amber-700 ring-2 ring-amber-100'

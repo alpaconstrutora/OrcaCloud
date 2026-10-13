@@ -12,6 +12,7 @@ import {
     type ContractGuarantee,
 } from '../../types/contracts';
 import type { DebtContract } from '../../types/debt';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     contract: DebtContract;
@@ -289,13 +290,13 @@ export default function DebtGuarantees({ contract, saldoDevedor }: Props) {
                         </div>
                         <div className="space-y-1">
                             <Label>Valor de mercado</Label>
-                            <input type="number" step="0.01" className={campo} value={edicao.market_value ?? ''}
-                                   onChange={e => setEdicao({ ...edicao, market_value: Number(e.target.value) || undefined })} />
+                            <MoneyCentsInput className={campo} value={edicao.market_value}
+                                   onChange={v => setEdicao({ ...edicao, market_value: Number(v) || undefined })} />
                         </div>
                         <div className="space-y-1">
                             <Label>Valor aceito pelo banco</Label>
-                            <input type="number" step="0.01" className={campo} value={edicao.accepted_value ?? ''}
-                                   onChange={e => setEdicao({ ...edicao, accepted_value: Number(e.target.value) || undefined })} />
+                            <MoneyCentsInput className={campo} value={edicao.accepted_value}
+                                   onChange={v => setEdicao({ ...edicao, accepted_value: Number(v) || undefined })} />
                         </div>
                         <div className="space-y-1">
                             <Label>Percentual comprometido (%)</Label>

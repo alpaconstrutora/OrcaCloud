@@ -5,6 +5,7 @@ import { debtService } from '../../services/debtService';
 import { debtFinanceService } from '../../services/debtFinanceService';
 import type { DebtAllocation, DebtContract, DebtInstallment } from '../../types/debt';
 import { DEBT_AMORTIZATION_PT, type AmortizationEffect, type AmortizationSystem } from '../../types/debt';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 type Modo = 'AMORTIZACAO' | 'RENEGOCIACAO';
 
@@ -171,9 +172,9 @@ export default function DebtRenegotiateSheet({ open, onClose, contract, installm
                         <>
                             <div className="space-y-1">
                                 <Label>Valor amortizado</Label>
-                                <input
-                                    type="number" step="0.01" className={campo} value={valor}
-                                    onChange={e => setValor(e.target.value === '' ? 0 : Number(e.target.value))}
+                                <MoneyCentsInput
+                                    className={campo} value={valor}
+                                    onChange={v => setValor(v === '' ? 0 : Number(v))}
                                 />
                             </div>
                             <div className="space-y-1 md:col-span-2">

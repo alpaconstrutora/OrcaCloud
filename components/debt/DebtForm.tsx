@@ -14,6 +14,7 @@ import type { Company } from '../../types/company';
 import type { Supplier } from '../../types/users';
 import SupplierSelect from '../SupplierSelect';
 import { verificarDatasDoContrato } from '../../utils/debtAmortization';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     open: boolean;
@@ -273,35 +274,35 @@ export default function DebtForm({ open, onClose, contract, draft, companies, su
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="space-y-1">
                             <Label>Valor contratado</Label>
-                            <input type="number" step="0.01" className={campo} value={form.principalContracted} onChange={e => set('principalContracted', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.principalContracted} onChange={v => set('principalContracted', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Valor liberado</Label>
-                            <input type="number" step="0.01" className={campo} value={form.principalReleased} onChange={e => set('principalReleased', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.principalReleased} onChange={v => set('principalReleased', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Valor retido</Label>
-                            <input type="number" step="0.01" className={campo} value={form.retainedAmount} onChange={e => set('retainedAmount', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.retainedAmount} onChange={v => set('retainedAmount', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Tarifas</Label>
-                            <input type="number" step="0.01" className={campo} value={form.fees} onChange={e => set('fees', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.fees} onChange={v => set('fees', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>IOF</Label>
-                            <input type="number" step="0.01" className={campo} value={form.iof} onChange={e => set('iof', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.iof} onChange={v => set('iof', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Seguros</Label>
-                            <input type="number" step="0.01" className={campo} value={form.insurance} onChange={e => set('insurance', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.insurance} onChange={v => set('insurance', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Custos cartorários</Label>
-                            <input type="number" step="0.01" className={campo} value={form.notaryCosts} onChange={e => set('notaryCosts', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.notaryCosts} onChange={v => set('notaryCosts', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Outras despesas</Label>
-                            <input type="number" step="0.01" className={campo} value={form.otherCosts} onChange={e => set('otherCosts', num(e.target.value))} />
+                            <MoneyCentsInput className={campo} value={form.otherCosts} onChange={v => set('otherCosts', num(v))} />
                         </div>
                         <div className="space-y-1">
                             <Label>Valor líquido recebido</Label>

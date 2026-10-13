@@ -11,6 +11,7 @@ import ClientSelect from './ClientSelect';
 import { useConfirm } from './ui/confirm';
 import { supabase } from '../lib/supabase';
 import Button from './ui/Button';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface PropertyModalProps {
     isOpen: boolean;
@@ -464,12 +465,10 @@ const PropertyModal: React.FC<PropertyModalProps> = ({ isOpen, onClose, onSubmit
                         <div className="grid grid-cols-12 gap-x-3 gap-y-2.5">
                             <div className="space-y-1 col-span-12 md:col-span-3">
                                 <label className={`${LABEL_CLS} text-blue-600`}>Valor de venda (R$)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
+                                <MoneyCentsInput
                                     value={formData.initial_price || formData.price || 0}
-                                    onChange={(e) => {
-                                        const val = parseFloat(e.target.value) || 0;
+                                    onChange={(v) => {
+                                        const val = v === '' ? 0 : Number(v);
                                         update({ initial_price: val, price: val });
                                     }}
                                     className={PRICE_CLS}

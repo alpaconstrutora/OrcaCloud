@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Landmark, Plus, Save, X,
@@ -244,9 +245,9 @@ const CompanyBankAccountsTab: React.FC<Props> = ({ companyId }) => {
                                     onChange={e => set('favorecido', e.target.value)} />
                             </Field>
                             <Field label="Limite de Crédito (R$)">
-                                <input type="number" min="0" step="0.01" className={cls}
+                                <MoneyCentsInput className={cls}
                                     value={form.limite_credito}
-                                    onChange={e => set('limite_credito', e.target.value)} />
+                                    onChange={v => set('limite_credito', v)} />
                             </Field>
                         </div>
                     </div>

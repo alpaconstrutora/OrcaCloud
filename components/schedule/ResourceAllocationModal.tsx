@@ -2,6 +2,7 @@ import React from 'react';
 import { Users, X, Plus } from 'lucide-react';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { ProjectSchedule, ResourceAllocation } from '../../types';
 
 interface ResourceAllocationModalProps {
@@ -30,6 +31,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
     onUpdateAllocation
 }) => {
     const taskAllocations = schedule.itemSchedules?.find(s => s.id === taskId)?.allocations || [];
+    const [custoFixo, setCustoFixo] = React.useState('');
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] animate-in fade-in duration-200">
@@ -93,7 +95,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                     const formData = new FormData(e.currentTarget);
 
                                     if (allocationType === 'COST') {
-                                        const fixedCost = parseFloat(formData.get('fixedCost') as string) || 0;
+                                        const fixedCost = Number(custoFixo) || 0;
                                         if (fixedCost <= 0) return;
                                         const newAlloc: ResourceAllocation = {
                                             id: crypto.randomUUID(),
@@ -104,6 +106,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                             fixedCost,
                                         };
                                         onUpdateAllocation(taskId, [...taskAllocations, newAlloc]);
+                                        setCustoFixo('');
                                         e.currentTarget.reset();
                                         return;
                                     }
@@ -166,7 +169,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                 {allocationType === 'COST' ? (
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor Fixo (R$)</label>
-                                        <input name="fixedCost" type="number" step="0.01" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" placeholder="Ex: mobilização, taxa" />
+                                        <MoneyCentsInput value={custoFixo} onChange={setCustoFixo} required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" placeholder="Ex: mobilização, taxa" />
                                     </div>
                                 ) : allocationType === 'MATERIAL' ? (
                                     <div className="space-y-2">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Ruler, LayoutGrid, ShieldCheck, ArrowRight, Info } from 'lucide-react';
 import { RentalPricingConfig } from '../types';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface RentalPricingIntelligencePanelProps {
     onApply: (config: RentalPricingConfig) => void;
@@ -74,12 +75,11 @@ const RentalPricingIntelligencePanel: React.FC<RentalPricingIntelligencePanelPro
                     </label>
                     <div className="relative flex items-center">
                         <span className="absolute left-3 text-sm font-medium text-gray-400">R$</span>
-                        <input
+                        <MoneyCentsInput
                             id="rental-pricing-target"
-                            type="number"
                             value={(isPerSqm ? config.base_per_sqm : config.target_total_rent) || ''}
-                            onChange={e => {
-                                const valor = parseFloat(e.target.value) || 0;
+                            onChange={v => {
+                                const valor = v === '' ? 0 : Number(v);
                                 setConfig(isPerSqm
                                     ? { ...config, base_per_sqm: valor }
                                     : { ...config, target_total_rent: valor });

@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Plus, Search, FileText, Loader2, RefreshCw,
@@ -1120,26 +1121,20 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         {/* Valor mínimo */}
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor mínimo (R$)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                            <MoneyCentsInput
                                 placeholder="0,00"
                                 value={valorMin}
-                                onChange={(e) => setValorMin(e.target.value)}
+                                onChange={v => setValorMin(v)}
                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         {/* Valor máximo */}
                         <div>
                             <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor máximo (R$)</label>
-                            <input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                            <MoneyCentsInput
                                 placeholder="—"
                                 value={valorMax}
-                                onChange={(e) => setValorMax(e.target.value)}
+                                onChange={v => setValorMax(v)}
                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>

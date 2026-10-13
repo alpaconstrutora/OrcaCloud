@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import { OpuraMarketCityConfig, OpuraMarketRule } from '../types';
 // Fonte única das regras padrão (antes havia uma cópia aqui e outra no módulo).
@@ -264,12 +265,11 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-slate-400 text-xs">R$</span>
                   </div>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={limits.ecoToMed}
-                    onChange={(e) => handleLimitChange('ecoToMed', Number(e.target.value))}
+                    onChange={(v) => handleLimitChange('ecoToMed', v === '' ? 0 : Number(v))}
                     className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="3200"
+                    placeholder="3.200,00"
                   />
                 </div>
               </div>
@@ -282,12 +282,11 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-slate-400 text-xs">R$</span>
                   </div>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={limits.medToMedAlt}
-                    onChange={(e) => handleLimitChange('medToMedAlt', Number(e.target.value))}
+                    onChange={(v) => handleLimitChange('medToMedAlt', v === '' ? 0 : Number(v))}
                     className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="4300"
+                    placeholder="4.300,00"
                   />
                 </div>
               </div>
@@ -300,12 +299,11 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-slate-400 text-xs">R$</span>
                   </div>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={limits.medAltToAlto}
-                    onChange={(e) => handleLimitChange('medAltToAlto', Number(e.target.value))}
+                    onChange={(v) => handleLimitChange('medAltToAlto', v === '' ? 0 : Number(v))}
                     className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="5500"
+                    placeholder="5.500,00"
                   />
                 </div>
               </div>
@@ -318,12 +316,11 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-slate-400 text-xs">R$</span>
                   </div>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={limits.altoToLuxo}
-                    onChange={(e) => handleLimitChange('altoToLuxo', Number(e.target.value))}
+                    onChange={(v) => handleLimitChange('altoToLuxo', v === '' ? 0 : Number(v))}
                     className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="7500"
+                    placeholder="7.500,00"
                   />
                 </div>
               </div>

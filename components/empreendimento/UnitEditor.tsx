@@ -15,6 +15,7 @@ import {
   RENTAL_STATUS_LABEL,
 } from '../../utils/empreendimentoComercial';
 import { useConfirm } from '../ui/confirm';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
 
@@ -470,8 +471,13 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               ].map(({ label, key, type, placeholder }) => (
                 <div key={key}>
                   <label className="text-xs font-semibold text-slate-500 block mb-1">{label}</label>
-                  <input type={type} step={type === 'number' ? '0.01' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
-                    value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
+                  {key === 'price' || key === 'rental_price' ? (
+                    <MoneyCentsInput className={inputCls + ' w-full'}
+                      value={(genForm as any)[key]} onChange={v => setGenForm(p => ({ ...p, [key]: v }))} />
+                  ) : (
+                    <input type={type} step={type === 'number' ? '0.01' : undefined} className={inputCls + ' w-full'} placeholder={placeholder}
+                      value={(genForm as any)[key]} onChange={e => setGenForm(p => ({ ...p, [key]: e.target.value }))} />
+                  )}
                 </div>
               ))}
             </div>
@@ -739,7 +745,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, onUnitsChange }) => {
               {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
             </select>
             {/* Eixo de locação — aluguel-alvo herdado ao publicar em Locações */}
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Aluguel-alvo R$" value={bulkForm.rental_price} onChange={e => setBulkForm(p => ({ ...p, rental_price: e.target.value }))} />
+            <MoneyCentsInput className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Aluguel-alvo R$" value={bulkForm.rental_price} onChange={v => setBulkForm(p => ({ ...p, rental_price: v }))} />
             <select value={bulkForm.rental_status} onChange={e => setBulkForm(p => ({ ...p, rental_status: e.target.value as RentalUnitStatus | '' }))}
               className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
               <option value="">Status locação...</option>

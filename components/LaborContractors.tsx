@@ -18,6 +18,7 @@ import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // Colunas da tabela padrão (§6.10)
 const MEAS_COLUMNS: StandardTableColumn[] = [
@@ -177,7 +178,7 @@ const ContractorForm: React.FC<ContractorFormProps> = ({ orgId, contractor, onCl
                             <input type="date" value={form.contrato_fim || ''} onChange={e => set('contrato_fim', e.target.value)} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Valor do Contrato (R$)">
-                            <input type="number" min="0" step="0.01" value={form.valor_contrato ?? ''} onChange={e => set('valor_contrato', parseFloat(e.target.value) || undefined)} className={inputCls} />
+                            <MoneyCentsInput value={form.valor_contrato ?? ''} onChange={v => set('valor_contrato', Number(v) || undefined)} className={inputCls} />
                         </InputGroup>
                     </div>
                     <div>
@@ -307,7 +308,7 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
                     <div className="flex items-end gap-2">
                         <div className="flex-1">
                             <InputGroup label="Valor Bruto (R$) *">
-                                <input type="number" min="0" step="0.01" value={form.valor_bruto || ''} onChange={e => setForm(p => ({ ...p, valor_bruto: parseFloat(e.target.value) || 0 }))} className={inputCls} />
+                                <MoneyCentsInput value={form.valor_bruto || ''} onChange={v => setForm(p => ({ ...p, valor_bruto: v === '' ? 0 : Number(v) }))} className={inputCls} />
                             </InputGroup>
                         </div>
                         {selectedContractor && (
@@ -318,16 +319,16 @@ const MeasurementForm: React.FC<MeasurementFormProps> = ({ orgId, contractors, p
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <InputGroup label="Retenção INSS (R$)">
-                            <input type="number" min="0" step="0.01" value={form.retencao_inss} onChange={e => setForm(p => ({ ...p, retencao_inss: parseFloat(e.target.value) || 0 }))} className={inputCls} />
+                            <MoneyCentsInput value={form.retencao_inss} onChange={v => setForm(p => ({ ...p, retencao_inss: v === '' ? 0 : Number(v) }))} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Retenção ISS (R$)">
-                            <input type="number" min="0" step="0.01" value={form.retencao_iss} onChange={e => setForm(p => ({ ...p, retencao_iss: parseFloat(e.target.value) || 0 }))} className={inputCls} />
+                            <MoneyCentsInput value={form.retencao_iss} onChange={v => setForm(p => ({ ...p, retencao_iss: v === '' ? 0 : Number(v) }))} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Retenção IRRF (R$)">
-                            <input type="number" min="0" step="0.01" value={form.retencao_irrf} onChange={e => setForm(p => ({ ...p, retencao_irrf: parseFloat(e.target.value) || 0 }))} className={inputCls} />
+                            <MoneyCentsInput value={form.retencao_irrf} onChange={v => setForm(p => ({ ...p, retencao_irrf: v === '' ? 0 : Number(v) }))} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Outras Retenções (R$)">
-                            <input type="number" min="0" step="0.01" value={form.outras_retencoes} onChange={e => setForm(p => ({ ...p, outras_retencoes: parseFloat(e.target.value) || 0 }))} className={inputCls} />
+                            <MoneyCentsInput value={form.outras_retencoes} onChange={v => setForm(p => ({ ...p, outras_retencoes: v === '' ? 0 : Number(v) }))} className={inputCls} />
                         </InputGroup>
                     </div>
                     <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center justify-between">

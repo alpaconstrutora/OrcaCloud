@@ -1,4 +1,5 @@
 ﻿import React from 'react';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
 import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal } from 'lucide-react';
@@ -3149,13 +3150,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                     <div className="col-span-2">
                       <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Preço Base (R$)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
+                      <MoneyCentsInput
                         className="w-full rounded-[6px] border border-gray-200 p-2 text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.price}
-                        onChange={(e) => setNewItem({ ...newItem, price: Number(e.target.value) })}
+                        onChange={(v) => setNewItem({ ...newItem, price: v === '' ? 0 : Number(v) })}
                       />
                     </div>
                     <div className="col-span-9">
@@ -3755,11 +3753,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         <div className="col-span-2">
                           <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
                             <span className="text-xs text-gray-400">R$</span>
-                            <input
-                              type="number"
-                              step="0.01"
+                            <MoneyCentsInput
                               value={displayPrice.toFixed(2)}
-                              onChange={(e) => handleUpdateComposition(selectedCPUItem.id, idx, { price: Number(e.target.value) })}
+                              onChange={(v) => handleUpdateComposition(selectedCPUItem.id, idx, { price: v === '' ? 0 : Number(v) })}
                               className="w-full text-center outline-none bg-transparent py-1 text-sm font-medium"
                             />
                           </div>

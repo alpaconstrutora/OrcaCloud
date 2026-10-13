@@ -14,6 +14,7 @@ import { formatMoney, formatDateBR } from './ui/Format';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import type { Company, ProlaboreManualEntry } from '../types';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // A categoria pode ter sido gravada de formas diferentes: o RH grava
 // 'Pró-labore' (com acento/hífen) ao enviar a folha ao financeiro
@@ -570,7 +571,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
                 <input type="text" value={manualDescription} onChange={e => setManualDescription(e.target.value)}
                     placeholder="Descrição (opcional)"
                     className="flex-1 min-w-[160px] h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
-                <input type="number" min="0" step="0.01" value={manualAmount} onChange={e => setManualAmount(e.target.value)}
+                <MoneyCentsInput value={manualAmount} onChange={v => setManualAmount(v)}
                     placeholder="Valor (R$)"
                     className="w-32 h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />
                 <button onClick={handleAddManualEntry} disabled={addingManual}

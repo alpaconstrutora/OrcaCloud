@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import SupplierSelect from './SupplierSelect';
 import ClientSelect, { type ClientOption } from './ClientSelect';
@@ -1260,15 +1261,12 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     </label>
                                     <div className="relative group">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
-                                        <input
-                                            type="number"
+                                        <MoneyCentsInput
                                             required={!formData.is_recurring}
-                                            min="0"
-                                            step="0.01"
                                             placeholder={formData.is_recurring ? 'Variável — preencha se souber' : '0,00'}
                                             value={formData.original_value || ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                            onChange={(v) => {
+                                                const val = v === '' ? 0 : Number(v);
                                                 setFormData({ ...formData, original_value: val });
                                             }}
                                             className="w-full pl-9 pr-3 h-9 bg-blue-50/30 border border-blue-100/50 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
@@ -1281,9 +1279,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             <label className="text-xs font-semibold text-slate-500 ml-1">Valor Mão de Obra (Opcional)</label>
                                             <div className="relative group">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
-                                                <input type="number" min="0" step="0.01" placeholder="0,00"
+                                                <MoneyCentsInput placeholder="0,00"
                                                     value={formData.labor_value || ''}
-                                                    onChange={e => setFormData({ ...formData, labor_value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                                    onChange={v => setFormData({ ...formData, labor_value: v === '' ? undefined : Number(v) })}
                                                     className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
@@ -1292,9 +1290,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             <label className="text-xs font-semibold text-slate-500 ml-1">Valor Materiais (Opcional)</label>
                                             <div className="relative group">
                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
-                                                <input type="number" min="0" step="0.01" placeholder="0,00"
+                                                <MoneyCentsInput placeholder="0,00"
                                                     value={formData.materials_value || ''}
-                                                    onChange={e => setFormData({ ...formData, materials_value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
+                                                    onChange={v => setFormData({ ...formData, materials_value: v === '' ? undefined : Number(v) })}
                                                     className="w-full pl-9 pr-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
@@ -1482,13 +1480,10 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 <label className="text-xs font-semibold text-slate-500 ml-1">Entrada (Opcional)</label>
                                                 <div className="relative group">
                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">R$</span>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
+                                                    <MoneyCentsInput
                                                         placeholder="0,00"
                                                         value={gerador.entrada || ''}
-                                                        onChange={(e) => atualizarGerador({ entrada: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                                                        onChange={(v) => atualizarGerador({ entrada: v === '' ? 0 : Number(v) })}
                                                         className={`${campo} pl-9`}
                                                     />
                                                 </div>
@@ -1580,14 +1575,11 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                                     }}
                                                                     className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                                 />
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.01"
+                                                                <MoneyCentsInput
                                                                     value={inst.value}
-                                                                    onChange={e => {
+                                                                    onChange={v => {
                                                                         const updated = [...installmentSchedule];
-                                                                        updated[i] = { ...updated[i], value: parseFloat(e.target.value) || 0 };
+                                                                        updated[i] = { ...updated[i], value: v === '' ? 0 : Number(v) };
                                                                         setInstallmentSchedule(updated);
                                                                     }}
                                                                     className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"

@@ -3,6 +3,7 @@ import { X, Plus, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import {
     investorContributionsService,
     InvestorContribution,
@@ -128,10 +129,9 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Valor (R$)</span>
-                            <input
-                                type="number" min="0" step="0.01"
+                            <MoneyCentsInput
                                 value={form.amount || ''}
-                                onChange={e => setForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
+                                onChange={v => setForm(f => ({ ...f, amount: v === '' ? 0 : Number(v) }))}
                                 className="px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="0,00"
                             />

@@ -10,6 +10,7 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { inventoryService } from '../../services/inventoryService';
 import { ASSET_CATEGORIES, ASSET_CATEGORY_LABELS } from '../../utils/assetToStockItemRow';
 import type { AssetCategory } from '../../types/assets';
@@ -161,8 +162,8 @@ const PatrimoniarItemSheet: React.FC<Props> = ({ item, warehouses, onClose, onDo
                                     onChange={e => setVidaUtil(Number(e.target.value))} className={inputCls} />
                             </Campo>
                             <Campo label="Valor de aquisição (por unidade)" htmlFor="patrimoniar-valor" ajuda="Sugerido: custo médio do saldo">
-                                <input id="patrimoniar-valor" type="number" min={0} step="0.01" value={valor}
-                                    onChange={e => setValor(Number(e.target.value))} className={inputCls} />
+                                <MoneyCentsInput id="patrimoniar-valor" value={valor}
+                                    onChange={v => setValor(v === '' ? 0 : Number(v))} className={inputCls} />
                             </Campo>
                         </div>
                         <p className="text-sm text-gray-500">

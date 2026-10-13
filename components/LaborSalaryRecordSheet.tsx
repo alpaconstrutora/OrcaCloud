@@ -4,6 +4,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { formatMoney } from './ui/Format';
 import { EmployeeSalaryRecord, SalaryChangeType } from '../services/laborService';
 import { OrgRole } from '../types';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 /** Rótulos dos motivos — fonte única, compartilhada com a tabela do histórico. */
 export const SALARY_CHANGE_LABELS: Record<SalaryChangeType, string> = {
@@ -202,10 +203,9 @@ const LaborSalaryRecordSheet: React.FC<LaborSalaryRecordSheetProps> = ({
                         </div>
                         <div className="space-y-1.5">
                             <label className={labelCls}>Novo salário *</label>
-                            <input
-                                type="number" min="0" step="0.01"
+                            <MoneyCentsInput
                                 value={newSalary}
-                                onChange={e => setNewSalary(e.target.value)}
+                                onChange={v => setNewSalary(v)}
                                 onFocus={e => e.target.select()}
                                 className={inputCls + ' border-indigo-200 bg-white'}
                                 placeholder="0,00"

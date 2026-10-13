@@ -5,6 +5,7 @@ import { servicesCommercialService, ServiceBudget, ServiceBudgetItem } from '../
 import { useServicesToast } from './useServicestoast';
 import ServicesToast from './ServicesToast';
 import Button from '../ui/Button';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
   opportunityId: string;
@@ -112,7 +113,7 @@ const ServicesBudget: React.FC<Props> = ({ opportunityId, organizationId, onBack
             <input className={INPUT} value={it.description ?? ''} onChange={e => updateItem(idx, 'description', e.target.value)} placeholder="Descrição do item" />
             <input className={INPUT} value={it.unit ?? 'un'} onChange={e => updateItem(idx, 'unit', e.target.value)} />
             <input className={INPUT} type="number" min="0" value={it.quantity ?? ''} onChange={e => updateItem(idx, 'quantity', parseFloat(e.target.value) || 0)} />
-            <input className={INPUT} type="number" min="0" step="0.01" value={it.unit_price ?? ''} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
+            <MoneyCentsInput className={INPUT} value={it.unit_price ?? ''} onChange={v => updateItem(idx, 'unit_price', v === '' ? 0 : Number(v))} />
             <ActionIconButton kind="delete" className="flex justify-center" onClick={() => removeItem(idx)} />
           </div>
         ))}

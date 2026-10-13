@@ -44,6 +44,7 @@ import {
   RaciRoleType,
   CompanyInsert
 } from '../types';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface OpuraGovernanceModuleProps {
   activeOrganizationId: string | null;
@@ -1012,19 +1013,17 @@ export default function OpuraGovernanceModule({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Mínimo (R$)</label>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={newLimit.limite_minimo}
-                    onChange={(e) => setNewLimit({ ...newLimit, limite_minimo: Number(e.target.value) })}
+                    onChange={(v) => setNewLimit({ ...newLimit, limite_minimo: v === '' ? 0 : Number(v) })}
                     className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Máximo (R$)</label>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     value={newLimit.limite_maximo}
-                    onChange={(e) => setNewLimit({ ...newLimit, limite_maximo: Number(e.target.value) })}
+                    onChange={(v) => setNewLimit({ ...newLimit, limite_maximo: v === '' ? 0 : Number(v) })}
                     className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
                   />
                 </div>
@@ -1118,11 +1117,10 @@ export default function OpuraGovernanceModule({
                 </div>
                 <div className="space-y-1">
                   <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Limite Máx (R$)</label>
-                  <input
-                    type="number"
+                  <MoneyCentsInput
                     placeholder="Opcional"
                     value={newDelegation.limite_maximo}
-                    onChange={(e) => setNewDelegation({ ...newDelegation, limite_maximo: e.target.value })}
+                    onChange={(v) => setNewDelegation({ ...newDelegation, limite_maximo: v })}
                     className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
                   />
                 </div>

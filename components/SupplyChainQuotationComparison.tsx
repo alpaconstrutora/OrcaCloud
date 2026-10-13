@@ -27,6 +27,7 @@ import { getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import ActionIconButton from './ui/ActionIconButton';
 import { getQuotationNumberLockReason, regenerateQuotationNumber } from '../services/quotationNumberRegenService';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface SupplyChainQuotationComparisonProps {
     requestId: string;
@@ -727,12 +728,11 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                         <td className="px-6 py-4 text-right">
                                                             <div className="flex items-center justify-end">
                                                                 <span className="text-gray-400 mr-1 text-xs font-black">R$</span>
-                                                                <input
-                                                                    type="number"
+                                                                <MoneyCentsInput
                                                                     value={counterFormData.items[idx]?.unitPrice}
-                                                                    onChange={(e) => {
+                                                                    onChange={(v) => {
                                                                         const newItems = [...counterFormData.items];
-                                                                        newItems[idx] = { ...newItems[idx], unitPrice: parseFloat(e.target.value) || 0 };
+                                                                        newItems[idx] = { ...newItems[idx], unitPrice: v === '' ? 0 : Number(v) };
                                                                         setCounterFormData(prev => ({ ...prev, items: newItems }));
                                                                     }}
                                                                     className="w-24 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-sm font-black text-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-right"

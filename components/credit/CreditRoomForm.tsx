@@ -27,6 +27,7 @@ import {
     type CreditRoomGuarantee,
     type CreditRoomGuaranteeKind,
 } from '../../utils/creditRoomSnapshot';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     open: boolean;
@@ -255,7 +256,7 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="space-y-1.5 col-span-2">
                             <label className={rotulo}>Valor solicitado (R$)</label>
-                            <input type="number" min={0} step="0.01" value={form.requestedAmount || ''} onChange={e => set('requestedAmount', num(e.target.value))} className={campo} />
+                            <MoneyCentsInput value={form.requestedAmount} onChange={v => set('requestedAmount', num(v))} className={campo} />
                         </div>
                         <div className="space-y-1.5">
                             <label className={rotulo}>Prazo (meses)</label>
@@ -285,11 +286,11 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className={rotulo}>Equity previsto (R$)</label>
-                            <input type="number" min={0} step="0.01" value={form.equityCommitted || ''} onChange={e => set('equityCommitted', num(e.target.value))} className={campo} />
+                            <MoneyCentsInput value={form.equityCommitted} onChange={v => set('equityCommitted', num(v))} className={campo} />
                         </div>
                         <div className="space-y-1.5">
                             <label className={rotulo}>Equity aportado (R$)</label>
-                            <input type="number" min={0} step="0.01" value={form.equityContributed || ''} onChange={e => set('equityContributed', num(e.target.value))} className={campo} />
+                            <MoneyCentsInput value={form.equityContributed} onChange={v => set('equityContributed', num(v))} className={campo} />
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -332,7 +333,7 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
                                     </div>
                                     <div className="col-span-3 space-y-1">
                                         {idx === 0 && <label className={rotulo}>Valor (R$)</label>}
-                                        <input type="number" min={0} step="0.01" value={g.value || ''} onChange={e => setGarantia(idx, { value: num(e.target.value) })} className={campo} />
+                                        <MoneyCentsInput value={g.value} onChange={v => setGarantia(idx, { value: num(v) })} className={campo} />
                                     </div>
                                     <div className="col-span-1 space-y-1">
                                         {idx === 0 && <label className={rotulo}>Haircut %</label>}

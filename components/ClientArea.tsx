@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
 import {
@@ -1688,19 +1689,17 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <>
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-2">Sinal (Entrada)</label>
-                                                <input
-                                                    type="number"
+                                                <MoneyCentsInput
                                                     value={genConfig.sinal}
-                                                    onChange={(e) => setGenConfig({ ...genConfig, sinal: parseFloat(e.target.value) || 0 })}
+                                                    onChange={(v) => setGenConfig({ ...genConfig, sinal: v === '' ? 0 : Number(v) })}
                                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-2">Entrega (Chaves)</label>
-                                                <input
-                                                    type="number"
+                                                <MoneyCentsInput
                                                     value={genConfig.chaves}
-                                                    onChange={(e) => setGenConfig({ ...genConfig, chaves: parseFloat(e.target.value) || 0 })}
+                                                    onChange={(v) => setGenConfig({ ...genConfig, chaves: v === '' ? 0 : Number(v) })}
                                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                 />
                                             </div>
@@ -1732,11 +1731,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         onChange={(e) => setGenConfig({ ...genConfig, numSeme: parseInt(e.target.value) || 0 })}
                                                         className="w-16 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
-                                                    <input
-                                                        type="number"
+                                                    <MoneyCentsInput
                                                         placeholder="Valor"
                                                         value={genConfig.valSeme}
-                                                        onChange={(e) => setGenConfig({ ...genConfig, valSeme: parseFloat(e.target.value) || 0 })}
+                                                        onChange={(v) => setGenConfig({ ...genConfig, valSeme: v === '' ? 0 : Number(v) })}
                                                         className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
                                                 </div>
@@ -1751,11 +1749,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         onChange={(e) => setGenConfig({ ...genConfig, numAnual: parseInt(e.target.value) || 0 })}
                                                         className="w-16 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
-                                                    <input
-                                                        type="number"
+                                                    <MoneyCentsInput
                                                         placeholder="Valor"
                                                         value={genConfig.valAnual}
-                                                        onChange={(e) => setGenConfig({ ...genConfig, valAnual: parseFloat(e.target.value) || 0 })}
+                                                        onChange={(v) => setGenConfig({ ...genConfig, valAnual: v === '' ? 0 : Number(v) })}
                                                         className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                                     />
                                                 </div>

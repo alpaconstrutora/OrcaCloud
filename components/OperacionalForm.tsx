@@ -7,6 +7,7 @@ import type { WorkOrderType, WorkOrderPriority, BudgetItemRef, PlanningItemRef }
 import type { BudgetEntry } from '../types'
 import type { ItemScheduleDetails } from '../types/schedule'
 import Button from './ui/Button'
+import MoneyCentsInput from './ui/MoneyCentsInput'
 
 interface Team { id: string; name: string }
 interface Employee { id: string; name: string; role: string | null }
@@ -892,16 +893,13 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
               />
             </Field>
             <Field label="Custo previsto (R$)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
+              <MoneyCentsInput
                 value={form.plannedCost}
-                onChange={e => setForm(f => ({ ...f, plannedCost: e.target.value }))}
+                onChange={v => setForm(f => ({ ...f, plannedCost: v }))}
                 placeholder={
                   selectedBudgetItem && form.plannedQuantity
-                    ? String((selectedBudgetItem.unitCost * parseFloat(form.plannedQuantity)).toFixed(2))
-                    : '0.00'
+                    ? String((selectedBudgetItem.unitCost * parseFloat(form.plannedQuantity)).toFixed(2)).replace('.', ',')
+                    : '0,00'
                 }
                 className={inputCls}
               />

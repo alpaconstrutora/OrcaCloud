@@ -47,6 +47,7 @@ import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface SalesModuleProps {
     organizationId?: string;
@@ -1799,10 +1800,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mudar preço sugerido para</label>
                                     <div className="flex gap-2">
-                                        <input
-                                            type="number"
+                                        <MoneyCentsInput
                                             value={bulkPriceValue}
-                                            onChange={(e) => setBulkPriceValue(e.target.value)}
+                                            onChange={(v) => setBulkPriceValue(v)}
                                             placeholder="Novo preço (R$)"
                                             className="flex-1 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />

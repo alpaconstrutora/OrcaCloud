@@ -7,6 +7,7 @@ import {
 } from '../../services/salesPlanService';
 import { brokerPortalService } from '../../services/brokerPortalService';
 import { allocateProRata } from '../../services/brokerService';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface BrokerProposalSimulatorProps {
     /**
@@ -389,7 +390,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 <label className="block text-form-label font-black text-gray-500 uppercase tracking-wider mb-1.5">
                                     <DollarSign className="w-3.5 h-3.5 inline mr-1" />Renda Mensal
                                 </label>
-                                <input type="number" value={buyerIncome || ''} onChange={e => setBuyerIncome(Number(e.target.value))}
+                                <MoneyCentsInput value={buyerIncome} onChange={v => setBuyerIncome(v === '' ? 0 : Number(v))}
                                     className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
                                     placeholder="R$ 0,00" />
                             </div>
@@ -677,13 +678,11 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                         </div>
                                         <div className="relative shrink-0">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={a.allocated_value || ''}
-                                                onChange={e => setManualAlloc(prev => ({
+                                            <MoneyCentsInput
+                                                value={a.allocated_value}
+                                                onChange={v => setManualAlloc(prev => ({
                                                     ...(prev ?? Object.fromEntries(proRata.map(p => [p.property_id, p.allocated_value]))),
-                                                    [a.property_id]: parseFloat(e.target.value) || 0,
+                                                    [a.property_id]: v === '' ? 0 : Number(v),
                                                 }))}
                                                 className="w-40 pl-9 pr-3 py-2 bg-white border border-gray-200 focus:border-indigo-400 rounded-xl outline-none text-sm text-right text-gray-700 transition-all"
                                                 placeholder="0,00"

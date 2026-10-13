@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { servicesCommercialService, ServiceOpportunity, Priority } from '../../services/servicesCommercialService';
 import Button from '../ui/Button';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
   organizationId: string;
@@ -115,7 +116,7 @@ const ServicesOpportunityModal: React.FC<Props> = ({ organizationId, initial, on
             </div>
             <div>
               <label className={LABEL}>Valor estimado (R$)</label>
-              <input className={INPUT} type="number" min="0" value={form.estimated_value} onChange={set('estimated_value')} />
+              <MoneyCentsInput className={INPUT} value={form.estimated_value} onChange={v => setForm(f => ({ ...f, estimated_value: v }))} />
             </div>
             <div>
               <label className={LABEL}>Prioridade</label>

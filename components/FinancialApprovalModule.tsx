@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp,
@@ -516,19 +517,18 @@ function ApprovalConfigModal({ editing, setEditing, saving, onSave, onClose }: C
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className={LABEL_CLASS}>Valor mínimo (R$)</label>
-                            <input
-                                type="number" min={0} step="1"
+                            <MoneyCentsInput
                                 value={editing.faixa_min ?? 0}
-                                onChange={e => setEditing(f => ({ ...f!, faixa_min: parseFloat(e.target.value) || 0 }))}
+                                onChange={v => setEditing(f => ({ ...f!, faixa_min: v === '' ? 0 : Number(v) }))}
                                 className={INPUT_CLASS}
                             />
                         </div>
                         <div>
                             <label className={LABEL_CLASS}>Valor máximo (R$, vazio = sem limite)</label>
-                            <input
-                                type="number" min={0} step="1" placeholder="Sem limite"
+                            <MoneyCentsInput
+                                placeholder="Sem limite"
                                 value={editing.faixa_max ?? ''}
-                                onChange={e => setEditing(f => ({ ...f!, faixa_max: e.target.value ? parseFloat(e.target.value) : null }))}
+                                onChange={v => setEditing(f => ({ ...f!, faixa_max: v ? Number(v) : null }))}
                                 className={INPUT_CLASS}
                             />
                         </div>

@@ -17,6 +17,7 @@ import StructuralDimension from './structural/StructuralDimension'
 import Button from './ui/Button'
 import Breadcrumb from './ui/Breadcrumb'
 import { formatMoney } from './ui/Format'
+import MoneyCentsInput from './ui/MoneyCentsInput'
 
 interface Props {
   activeOrganizationId?: string
@@ -129,9 +130,9 @@ const SteelForm: React.FC<{
       </label>
       <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
         Custo/kg (R$)
-        <input
-          type="number" step="0.01" value={f.custoKg}
-          onChange={e => set('custoKg', e.target.value)}
+        <MoneyCentsInput
+          value={f.custoKg}
+          onChange={v => set('custoKg', v)}
           className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
         />
       </label>

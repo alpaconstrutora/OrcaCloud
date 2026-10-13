@@ -24,6 +24,7 @@ import { STALE } from '../lib/queryClient';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 import TabsBar from './ui/TabsBar';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -171,10 +172,10 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
                             <input type="date" value={form.data_limite || ''} onChange={e => set('data_limite', e.target.value)} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Salário Mín. (R$)">
-                            <input type="number" min="0" step="100" value={form.salario_min ?? ''} onChange={e => set('salario_min', parseFloat(e.target.value) || undefined)} className={inputCls} />
+                            <MoneyCentsInput value={form.salario_min ?? ''} onChange={v => set('salario_min', Number(v) || undefined)} className={inputCls} />
                         </InputGroup>
                         <InputGroup label="Salário Máx. (R$)">
-                            <input type="number" min="0" step="100" value={form.salario_max ?? ''} onChange={e => set('salario_max', parseFloat(e.target.value) || undefined)} className={inputCls} />
+                            <MoneyCentsInput value={form.salario_max ?? ''} onChange={v => set('salario_max', Number(v) || undefined)} className={inputCls} />
                         </InputGroup>
                     </div>
                     <InputGroup label="Descrição">
@@ -473,7 +474,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                                     </div>
                                 </InputGroup>
                                 <InputGroup label="Pretensão (R$)">
-                                    <input type="number" min="0" step="100" value={editForm.pretensao_salarial} onChange={e => setEditForm(p => ({ ...p, pretensao_salarial: e.target.value }))} className={inputCls} />
+                                    <MoneyCentsInput value={editForm.pretensao_salarial} onChange={v => setEditForm(p => ({ ...p, pretensao_salarial: v }))} className={inputCls} />
                                 </InputGroup>
                                 <InputGroup label="Experiência (anos)">
                                     <input type="number" min="0" step="1" value={editForm.experiencia_anos} onChange={e => setEditForm(p => ({ ...p, experiencia_anos: e.target.value }))} className={inputCls} />

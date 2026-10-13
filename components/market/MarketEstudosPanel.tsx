@@ -1,5 +1,6 @@
 import React from 'react';
 import Button from '../ui/Button';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import type { OpuraMarketTerrainStudy } from '../../types';
 import type { MarketVocacao } from '../../hooks/useMarketVocacao';
 import { DESCRICAO_HIPOTESES, HIPOTESES_PADRAO } from '../../utils/opuraMarketVocacao';
@@ -37,15 +38,23 @@ function Hipoteses({ v }: { v: MarketVocacao }) {
               <label className="block text-[11px] font-semibold text-slate-500 leading-tight">
                 {d.rotulo} <span className="font-normal text-slate-400">({d.unidade})</span>
               </label>
-              <input
-                type="number"
-                step={d.passo}
-                min={d.min}
-                max={d.max}
-                value={Number.isFinite(hipoteses[d.chave]) ? hipoteses[d.chave] : ''}
-                onChange={(e) => setHipoteses(h => ({ ...h, [d.chave]: e.target.value === '' ? Number.NaN : Number(e.target.value) }))}
-                className={`w-full px-2 h-8 bg-white border rounded-[6px] text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 ${hipoteses[d.chave] !== HIPOTESES_PADRAO[d.chave] ? 'border-amber-300' : 'border-slate-200'}`}
-              />
+              {d.unidade === 'R$/m²' ? (
+                <MoneyCentsInput
+                  value={hipoteses[d.chave]}
+                  onChange={(valor) => setHipoteses(h => ({ ...h, [d.chave]: valor === '' ? Number.NaN : Number(valor) }))}
+                  className={`w-full px-2 h-8 bg-white border rounded-[6px] text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 ${hipoteses[d.chave] !== HIPOTESES_PADRAO[d.chave] ? 'border-amber-300' : 'border-slate-200'}`}
+                />
+              ) : (
+                <input
+                  type="number"
+                  step={d.passo}
+                  min={d.min}
+                  max={d.max}
+                  value={Number.isFinite(hipoteses[d.chave]) ? hipoteses[d.chave] : ''}
+                  onChange={(e) => setHipoteses(h => ({ ...h, [d.chave]: e.target.value === '' ? Number.NaN : Number(e.target.value) }))}
+                  className={`w-full px-2 h-8 bg-white border rounded-[6px] text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500 ${hipoteses[d.chave] !== HIPOTESES_PADRAO[d.chave] ? 'border-amber-300' : 'border-slate-200'}`}
+                />
+              )}
             </div>
           ))}
         </div>

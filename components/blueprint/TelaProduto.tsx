@@ -39,6 +39,7 @@ import {
   type UsoDaTipologia,
 } from '../../utils/blueprintProduto';
 import { ROTULO_DO_ARRANJO, type ArranjoDasVagas } from '../../utils/blueprintVagasAutomaticas';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
   produto: Produto;
@@ -216,7 +217,7 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
                 if (k === 'dormitorios') return num(x.dormitorios, 'dormitorios', 1, 'Dormitórios');
                 if (k === 'area') return num(x.areaPrivativaM2, 'areaPrivativaM2', 1, 'Área privativa');
                 if (k === 'vagas') return num(x.vagasPorUnidade, 'vagasPorUnidade', 0.5, 'Vagas por unidade');
-                if (k === 'preco') return num(x.precoM2, 'precoM2', 100, 'Preço por m²');
+                if (k === 'preco') return <MoneyCentsInput aria-label={`Preço por m² — ${x.nome}`} value={x.precoM2} onChange={(v) => atualizarTipologia(x.id, { precoM2: v === '' ? 0 : Number(v) })} className={`${celula} text-right`} />;
                 return num(x.proporcaoPct, 'proporcaoPct', 5, 'Participação no mix');
               }}
               actions={{ width: 70, render: (x) => <ActionIconButton kind="delete" title={`Remover ${x.nome}`} onClick={() => onProduto((a) => ({ ...a, tipologias: a.tipologias.filter((y) => y.id !== x.id) }))} /> }}
@@ -291,14 +292,11 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="produto-f-manual" className="text-xs font-semibold text-slate-500">Custo de obra digitado (R$/m²)</label>
-                <input
+                <MoneyCentsInput
                   id="produto-f-manual"
-                  type="number"
-                  min={0}
-                  step={50}
                   placeholder="pelo CUB"
-                  value={f.custoM2Manual ?? ''}
-                  onChange={(e) => fin('custoM2Manual', e.target.value === '' ? null : Math.max(0, Number(e.target.value)) || null)}
+                  value={f.custoM2Manual}
+                  onChange={(v) => fin('custoM2Manual', v === '' ? null : Math.max(0, Number(v)) || null)}
                   className={campo}
                 />
               </div>
@@ -315,6 +313,14 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
               ).map(([k, rotulo, step]) => (
                 <div key={k} className="space-y-1.5">
                   <label htmlFor={`produto-f-${k}`} className="text-xs font-semibold text-slate-500">{rotulo}</label>
+                  {k === 'terrenoR$' ? (
+                    <MoneyCentsInput
+                      id={`produto-f-${k}`}
+                      value={f[k]}
+                      onChange={(v) => fin(k, v === '' ? 0 : Number(v))}
+                      className={campo}
+                    />
+                  ) : (
                   <input
                     id={`produto-f-${k}`}
                     type="number"
@@ -327,6 +333,7 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
                     }}
                     className={campo}
                   />
+                  )}
                 </div>
               ))}
             </div>

@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Target, Plus, Save, X,
@@ -139,9 +140,9 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                                 value={form.ano} onChange={e => set('ano', e.target.value)} />
                         </Field>
                         <Field label="Faturamento Meta (R$)">
-                            <input type="number" min="0" step="1000" className={cls}
-                                placeholder="ex: 5000000"
-                                value={form.faturamento_meta} onChange={e => set('faturamento_meta', e.target.value)} />
+                            <MoneyCentsInput className={cls}
+                                placeholder="ex: 5.000.000,00"
+                                value={form.faturamento_meta} onChange={v => set('faturamento_meta', v)} />
                         </Field>
                         <Field label="Margem Alvo (%)">
                             <input type="number" min="0" max="100" step="0.1" className={cls}
@@ -149,12 +150,12 @@ const CompanyTargetsTab: React.FC<Props> = ({ companyId }) => {
                                 value={form.margem_alvo_pct} onChange={e => set('margem_alvo_pct', e.target.value)} />
                         </Field>
                         <Field label="EBITDA Alvo (R$)">
-                            <input type="number" min="0" step="1000" className={cls}
-                                value={form.ebitda_alvo} onChange={e => set('ebitda_alvo', e.target.value)} />
+                            <MoneyCentsInput className={cls}
+                                value={form.ebitda_alvo} onChange={v => set('ebitda_alvo', v)} />
                         </Field>
                         <Field label="Ticket Médio Alvo (R$)">
-                            <input type="number" min="0" step="1000" className={cls}
-                                value={form.ticket_medio_alvo} onChange={e => set('ticket_medio_alvo', e.target.value)} />
+                            <MoneyCentsInput className={cls}
+                                value={form.ticket_medio_alvo} onChange={v => set('ticket_medio_alvo', v)} />
                         </Field>
                         <Field label="Obras Meta (qtd)">
                             <input type="number" min="0" step="1" className={cls}

@@ -17,6 +17,7 @@ import { useConfirm } from '../ui/confirm';
 import type { NovoMaterial } from '../../services/blueprintMaterialService';
 import { FUNCOES_DE_CAMADA, type FuncaoCamada } from '../../utils/blueprintKernel';
 import { MATERIAIS_SEMENTE, UNIDADES_DE_MATERIAL, resumirUso, validarMaterial, type Material, type UsoDeMaterial } from '../../utils/blueprintMateriais';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
   materiais: Material[];
@@ -140,7 +141,7 @@ export default function TelaMateriais({ materiais, carregando, indisponivel, uso
             </label>
             <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
               Custo (R$ / unidade)
-              <input type="number" min={0} step={0.01} value={form.custo} onChange={(e) => setForm({ ...form, custo: Number(e.target.value) })} aria-label="Custo do material" className={campo} />
+              <MoneyCentsInput value={form.custo} onChange={(v) => setForm({ ...form, custo: v === '' ? 0 : Number(v) })} aria-label="Custo do material" className={campo} />
             </label>
             <label className="col-span-2 flex flex-col gap-1 text-xs font-medium text-slate-600">
               Fabricante

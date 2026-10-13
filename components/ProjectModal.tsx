@@ -19,6 +19,7 @@ import { useConfirm } from './ui/confirm';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { empreendimentoLinksService } from '../services/empreendimentoLinksService';
 import { costCenterService } from '../services/costCenterService';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 export interface NewProjectData {
   id?: string;
@@ -1875,20 +1876,20 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </div>
                     <div>
                       <label className="block text-form-label font-medium text-gray-600 mb-1">Valor Estimado (R$)</label>
-                      <input
-                        type="number" min={0} step={1000} placeholder="Ex: 2500000"
+                      <MoneyCentsInput
+                        placeholder="Ex: 2.500.000,00"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.valorEstimado ?? ''}
-                        onChange={(e) => setFormData({ ...formData, valorEstimado: e.target.value ? Number(e.target.value) : undefined })}
+                        value={formData.valorEstimado}
+                        onChange={(v) => setFormData({ ...formData, valorEstimado: v ? Number(v) : undefined })}
                       />
                     </div>
                     <div>
                       <label className="block text-form-label font-medium text-gray-600 mb-1">Valor Contratado (R$)</label>
-                      <input
-                        type="number" min={0} step={1000} placeholder="Ex: 2350000"
+                      <MoneyCentsInput
+                        placeholder="Ex: 2.350.000,00"
                         className="w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                        value={formData.valorContratado ?? ''}
-                        onChange={(e) => setFormData({ ...formData, valorContratado: e.target.value ? Number(e.target.value) : undefined })}
+                        value={formData.valorContratado}
+                        onChange={(v) => setFormData({ ...formData, valorContratado: v ? Number(v) : undefined })}
                       />
                     </div>
                   </div>

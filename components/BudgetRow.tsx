@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -212,11 +213,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 <td className={TD}>
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <span className="text-xs text-gray-400 shrink-0">R$</span>
-                        <input
-                            type="number"
-                            step="0.01"
+                        <MoneyCentsInput
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
-                            onChange={(e) => onUpdatePrice(item.id, Number(e.target.value))}
+                            onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v))}
                             disabled={isLocked}
                             className={`w-full text-center text-sm outline-none bg-transparent py-0.5 ${isLocked ? 'text-gray-400 cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : ''}`}
                         />
@@ -373,11 +372,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                         <div className="col-span-1 text-center">
                                             <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
                                                 <span className="text-[9px] text-gray-400">R$</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
+                                                <MoneyCentsInput
                                                     value={displayPrice}
-                                                    onChange={(e) => onUpdateComposition(item.id, idx, { price: Number(e.target.value) })}
+                                                    onChange={(v) => onUpdateComposition(item.id, idx, { price: v === '' ? 0 : Number(v) })}
                                                     className="w-full text-center outline-none bg-transparent py-0.5 text-sm"
                                                 />
                                             </div>

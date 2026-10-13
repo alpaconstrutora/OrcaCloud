@@ -3,6 +3,7 @@ import { proService } from '../services/proService';
 import { ProCliente, ProOrcamento } from '../types';
 import ClientSelect from './ClientSelect';
 import jsPDF from 'jspdf';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface ProOrcamentoFormProps {
   userId: string;
@@ -590,12 +591,10 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               </div>
               <div className="space-y-1">
                 <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unitário (R$)</label>
-                <input
-                  type="number"
-                  placeholder="Ex: 200"
+                <MoneyCentsInput
+                  placeholder="Ex: 200,00"
                   value={valorUnitario}
-                  onChange={(e) => {
-                    const u = e.target.value;
+                  onChange={(u) => {
                     setValorUnitario(u);
                     const qNum = parseFloat(quantidade);
                     const uNum = parseFloat(u);
@@ -620,11 +619,10 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           {/* Valor */}
           <div className="space-y-1.5">
             <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Valor Cobrado (R$)</label>
-            <input
-              type="number"
+            <MoneyCentsInput
               placeholder="0,00"
               value={valor}
-              onChange={(e) => setValor(e.target.value)}
+              onChange={(v) => setValor(v)}
               className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             />
           </div>

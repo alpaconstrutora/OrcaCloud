@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import { useStore } from '../store/useStore';
 import {
@@ -1157,11 +1158,9 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                         <p className="text-xs text-gray-400 font-bold uppercase whitespace-nowrap">Preço Unitário</p>
                                         <div className="flex items-center justify-end gap-1 group/price">
                                             <span className="text-xl font-black text-emerald-600">R$</span>
-                                            <input
-                                                type="number"
-                                                step="0.01"
+                                            <MoneyCentsInput
                                                 value={selectedItem.price}
-                                                onChange={(e) => setSelectedItem({ ...selectedItem, price: Number(e.target.value) })}
+                                                onChange={(v) => setSelectedItem({ ...selectedItem, price: v === '' ? 0 : Number(v) })}
                                                 className="text-xl font-black text-emerald-600 bg-transparent text-right outline-none border-b border-transparent hover:border-blue-200 focus:border-blue-500 transition-colors w-32 px-1"
                                             />
                                         </div>
@@ -1329,11 +1328,9 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                                             <div className="col-span-1">
                                                                 <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
                                                                     <span className="text-xs text-gray-400">R$</span>
-                                                                    <input
-                                                                        type="number"
-                                                                        step="0.01"
+                                                                    <MoneyCentsInput
                                                                         value={resolvedPrice}
-                                                                        onChange={(e) => handleUpdateComposition({ price: Number(e.target.value) }, idx)}
+                                                                        onChange={(v) => handleUpdateComposition({ price: v === '' ? 0 : Number(v) }, idx)}
                                                                         className={`w-full text-right outline-none bg-transparent py-1 text-form-input font-bold ${isLoadingAuxiliary && resolvedPrice === 0 ? 'animate-pulse text-gray-300' : 'text-gray-700'}`}
                                                                     />
                                                                 </div>

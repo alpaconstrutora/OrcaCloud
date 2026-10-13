@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertCircle, Check, ChevronDown, ChevronUp,
@@ -349,13 +350,10 @@ function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: No
                     <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">Valor (R$) *</label>
-                            <input
-                                type="number"
+                            <MoneyCentsInput
                                 placeholder="0,00"
-                                min={0}
-                                step="0.01"
                                 value={form.amount}
-                                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                                onChange={v => setForm(f => ({ ...f, amount: v }))}
                                 className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
@@ -651,10 +649,9 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label>
-                                                <input
-                                                    type="number" min={0} step="0.01"
+                                                <MoneyCentsInput
                                                     value={editAmount}
-                                                    onChange={e => setEditAmount(e.target.value)}
+                                                    onChange={v => setEditAmount(v)}
                                                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                                 />
                                             </div>

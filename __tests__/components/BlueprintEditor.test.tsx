@@ -2782,7 +2782,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.type(within(tela).getByLabelText('Código do material'), 'INT-GESSO');
     await user.type(within(tela).getByLabelText('Nome do material'), 'Gesso acartonado');
     await user.clear(within(tela).getByLabelText('Custo do material'));
-    await user.type(within(tela).getByLabelText('Custo do material'), '45');
+    await user.type(within(tela).getByLabelText('Custo do material'), '4500');
     await user.click(within(tela).getByTestId('salvar-material'));
     await waitFor(() => expect(createMaterial).toHaveBeenCalledTimes(1));
     expect(createMaterial.mock.calls[0][1]).toMatchObject({ codigo: 'INT-GESSO', nome: 'Gesso acartonado', custo: 45, unidade: 'm²' });

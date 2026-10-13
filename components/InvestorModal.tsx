@@ -5,6 +5,7 @@ import { projectService } from '../services/projectService';
 import { investorContributionsService } from '../services/investorContributionsService';
 import ContributionsManager from './investor/ContributionsManager';
 import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -315,10 +316,9 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                                         </label>
                                                         <label className="flex flex-col gap-1">
                                                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Comprometido (R$)</span>
-                                                            <input
-                                                                type="number" min="0" step="0.01"
+                                                            <MoneyCentsInput
                                                                 value={participations[project.id]?.committed_amount ?? ''}
-                                                                onChange={(e) => setParticipationField(project.id, 'committed_amount', parseFloat(e.target.value) || 0)}
+                                                                onChange={(v) => setParticipationField(project.id, 'committed_amount', v === '' ? 0 : Number(v))}
                                                                 className="w-40 px-2 py-1 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-purple-500"
                                                                 placeholder="0,00"
                                                             />

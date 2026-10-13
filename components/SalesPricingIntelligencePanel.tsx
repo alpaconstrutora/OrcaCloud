@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, Info, Loader2, ShieldCheck } from 'lucide-react';
 import { SalesPricingConfig } from '../types';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface SalesPricingIntelligencePanelProps {
     onApply: (config: SalesPricingConfig) => void;
@@ -52,12 +53,10 @@ const SalesPricingIntelligencePanel: React.FC<SalesPricingIntelligencePanelProps
                     </label>
                     <div className="relative flex items-center">
                         <span className="absolute left-3 text-sm font-medium text-gray-400">R$</span>
-                        <input
+                        <MoneyCentsInput
                             id="sales-pricing-vgv"
-                            type="number"
-                            min="0"
                             value={config.target_vgv || ''}
-                            onChange={e => setConfig({ ...config, target_vgv: parseFloat(e.target.value) || 0 })}
+                            onChange={v => setConfig({ ...config, target_vgv: v === '' ? 0 : Number(v) })}
                             className="w-full h-9 pl-10 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             placeholder="0,00"
                         />

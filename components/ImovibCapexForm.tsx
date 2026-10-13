@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useMemo } from 'react';
 import { ImovibStudy, ImovibCapexItem, ImovibCapexItemInsert, EmpreendimentoRegulatoryZone } from '../types';
 import { imovibService } from '../services/imovibService';
@@ -406,10 +407,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                     <span className="text-sm font-medium text-slate-700 min-w-[120px]">{block.name}</span>
                                     <div className="flex items-center gap-2">
                                         <span className="text-slate-500 font-medium text-sm">R$</span>
-                                        <input
-                                            type="number"
+                                        <MoneyCentsInput
                                             value={blockCosts[block.id] ?? block.construction_cost_sqm ?? 0}
-                                            onChange={(e) => setBlockCosts(prev => ({ ...prev, [block.id]: parseFloat(e.target.value) || 0 }))}
+                                            onChange={(v) => setBlockCosts(prev => ({ ...prev, [block.id]: v === '' ? 0 : Number(v) }))}
                                             onBlur={() => saveBlockCost(block.id, blockCosts[block.id] ?? 0)}
                                             className="w-32 h-9 px-3 bg-white border border-slate-200 rounded-[6px] focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-sm font-medium text-slate-800 text-right"
                                         />
@@ -434,13 +434,11 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     </label>
                     <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 max-w-xs">
                         <span className="text-slate-500 font-medium text-sm">R$</span>
-                        <input
-                            type={landCostFocused ? 'number' : 'text'}
-                            value={landCostFocused ? (landCost || '') : fmtBRL(landCost)}
+                        <MoneyCentsInput
+                            value={landCost}
                             placeholder="0,00"
-                            onFocus={() => setLandCostFocused(true)}
-                            onChange={(e) => setLandCost(parseFloat(e.target.value) || 0)}
-                            onBlur={() => { setLandCostFocused(false); saveLandCost(landCost); }}
+                            onChange={(v) => setLandCost(v === '' ? 0 : Number(v))}
+                            onBlur={() => saveLandCost(landCost)}
                             className="flex-1 h-9 px-3 bg-white border border-amber-300 rounded-[6px] focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-sm font-medium text-slate-800"
                         />
                     </fieldset>
@@ -497,11 +495,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                 </p>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">R$</span>
-                                    <input
-                                        type="number"
-                                        placeholder="0"
+                                    <MoneyCentsInput
                                         value={simplifiedCostSqm || ''}
-                                        onChange={(e) => setSimplifiedCostSqm(parseFloat(e.target.value) || 0)}
+                                        onChange={(v) => setSimplifiedCostSqm(v === '' ? 0 : Number(v))}
                                         onBlur={() => saveSimplifiedFields(simplifiedCostSqm, simplifiedAreaSqm)}
                                         className="w-full h-9 bg-white border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-[6px] pl-9 pr-3 text-sm font-medium text-slate-800 transition-all"
                                     />

@@ -10,6 +10,7 @@ import {
   CheckSquare, Layers, Image as ImageIcon, HardHat, Calendar,
   CheckCircle2, ExternalLink, DollarSign, AlertTriangle, TrendingUp, Filter
 } from 'lucide-react';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface OfficesEspecificadorProps {
   userId: string;
@@ -535,7 +536,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                   <span className="block text-[8px] font-black uppercase tracking-widest text-[#D47A55]">Cadastrar Parcela</span>
                   <input type="text" value={financeiroParcela} onChange={e => setFinanceiroParcela(e.target.value)} placeholder="Ex: Parcela 2/3" className={`w-full ${CHIP}`} required />
                   <div className="grid grid-cols-2 gap-2">
-                    <input type="number" value={financeiroValor} onChange={e => setFinanceiroValor(e.target.value)} placeholder="Valor (R$)" className={CHIP} required />
+                    <MoneyCentsInput value={financeiroValor} onChange={v => setFinanceiroValor(v)} placeholder="Valor (R$)" className={CHIP} required />
                     <input type="date" value={financeiroVencimento} onChange={e => setFinanceiroVencimento(e.target.value)} className={CHIP} required />
                   </div>
                   <button type="submit" className="w-full py-2 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-[9px] uppercase tracking-widest rounded-xl active:scale-95 transition-all">
@@ -751,7 +752,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 </div>
                 <div className="space-y-1">
                   <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Valor Unit. (R$)</label>
-                  <input type="number" step="0.01" value={precoUnitario} onChange={e => setPrecoUnitario(e.target.value)} className={CHIP} required />
+                  <MoneyCentsInput value={precoUnitario} onChange={v => setPrecoUnitario(v)} className={CHIP} required />
                 </div>
               </div>
               <div className="space-y-1">

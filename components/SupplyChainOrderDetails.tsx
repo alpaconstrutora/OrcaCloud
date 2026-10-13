@@ -29,6 +29,7 @@ import { reciboPagamentoPortalService, rotuloRecibo } from '../services/reciboPa
 import { ehCompradorDoPedido } from '../utils/pedidoPerfil';
 import { round2 } from '../utils/financialMath';
 import { fornecedorPodeCotar, temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface SupplyChainOrderDetailsProps {
     orderId: string;
@@ -911,7 +912,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 );
             case 'unitPrice':
                 return editando ? (
-                    <input type="number" value={editPrice} onChange={(e) => setEditPrice(parseFloat(e.target.value) || 0)}
+                    <MoneyCentsInput value={editPrice} onChange={(v) => setEditPrice(v === '' ? 0 : Number(v))}
                         className={`w-24 text-right ${inputDaCelula} ${A.ring}`} />
                 ) : (
                     <span className="text-sm font-medium text-gray-800">{formatBRL(item.unitPrice)}</span>

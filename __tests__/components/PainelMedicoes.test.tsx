@@ -142,7 +142,7 @@ describe('PainelMedicoes · item avulso', () => {
     });
     expect(props.onEditarItem).toHaveBeenCalledWith('a', { itemNome: 'Demolição' });
 
-    fireEvent.change(screen.getByLabelText(/preço unitário/i), { target: { value: '45' } });
+    fireEvent.change(screen.getByLabelText(/preço unitário/i), { target: { value: '4500' } });
     expect(props.onEditarItem).toHaveBeenCalledWith('a', { itemPreco: 45 });
   });
 

@@ -3,6 +3,7 @@ import { reformasService } from '../services/reformasService';
 import { reformasExportService } from '../services/reformasExportService';
 import { ReformaProjeto } from '../types';
 import { Landmark, Calendar, MapPin, Plus, Loader2, ArrowRight, FileDown } from 'lucide-react';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 interface ReformasDashboardProps {
   userId: string;
@@ -304,11 +305,10 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Orçamento (R$)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
+                  <MoneyCentsInput
+                    placeholder="0,00"
                     value={orcamentoTotal}
-                    onChange={(e) => setOrcamentoTotal(e.target.value)}
+                    onChange={(v) => setOrcamentoTotal(v)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
                   />
                 </div>

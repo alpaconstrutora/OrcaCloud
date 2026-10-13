@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ArrowLeft, Save, Loader2, AlertCircle, CheckCircle2,
@@ -552,8 +553,8 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                     onChange={e => set('data_abertura', e.target.value)} />
                             </Field>
                             <Field label="Capital Social (R$)">
-                                <input type="number" min="0" step="0.01" className={inputCls}
-                                    value={form.capital_social} onChange={e => set('capital_social', e.target.value)} />
+                                <MoneyCentsInput className={inputCls}
+                                    value={form.capital_social} onChange={v => set('capital_social', v)} />
                             </Field>
                             <Field label="Status">
                                 <select className={selectCls} value={form.status}
@@ -720,16 +721,16 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                                 </select>
                             </Field>
                             <Field label="Limite Aprovação Compras (R$)">
-                                <input type="number" min="0" step="0.01" className={inputCls}
+                                <MoneyCentsInput className={inputCls}
                                     placeholder="Sem limite"
                                     value={form.limite_aprovacao_compras}
-                                    onChange={e => set('limite_aprovacao_compras', e.target.value)} />
+                                    onChange={v => set('limite_aprovacao_compras', v)} />
                             </Field>
                             <Field label="Limite Aprovação Pagamentos (R$)">
-                                <input type="number" min="0" step="0.01" className={inputCls}
+                                <MoneyCentsInput className={inputCls}
                                     placeholder="Sem limite"
                                     value={form.limite_aprovacao_pagamentos}
-                                    onChange={e => set('limite_aprovacao_pagamentos', e.target.value)} />
+                                    onChange={v => set('limite_aprovacao_pagamentos', v)} />
                             </Field>
                         </div>
                         {(form.limite_aprovacao_compras || form.limite_aprovacao_pagamentos) && (
@@ -774,10 +775,10 @@ const CompanyDetailPage: React.FC<Props> = ({ company: companyFromList, companie
                             </div>
                             {(form.dupla_aprovacao_compras || form.dupla_aprovacao_pagamentos) && (
                                 <Field label="Valor mínimo para dupla aprovação (R$)">
-                                    <input type="number" min="0" step="0.01" className={inputCls}
+                                    <MoneyCentsInput className={inputCls}
                                         placeholder="Acima deste valor exige 2ª aprovação"
                                         value={form.limite_dupla_aprovacao}
-                                        onChange={e => set('limite_dupla_aprovacao', e.target.value)} />
+                                        onChange={v => set('limite_dupla_aprovacao', v)} />
                                 </Field>
                             )}
                         </div>

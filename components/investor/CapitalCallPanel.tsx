@@ -4,6 +4,7 @@ import { formatCurrency } from '../../utils/financialMath';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { SpePartner } from '../../services/speService';
 import {
     capitalCallService, CapitalCall, CapitalCallItem,
@@ -178,9 +179,9 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
                                                             <td className="py-2 text-right">
                                                                 {item.status !== 'pago' && (
                                                                     <div className="flex items-center justify-end gap-1">
-                                                                        <input type="number" min="0" step="0.01"
+                                                                        <MoneyCentsInput
                                                                             value={paymentInput[item.id!] || ''}
-                                                                            onChange={e => setPaymentInput(p => ({ ...p, [item.id!]: parseFloat(e.target.value) || 0 }))}
+                                                                            onChange={v => setPaymentInput(p => ({ ...p, [item.id!]: v === '' ? 0 : Number(v) }))}
                                                                             className="w-24 px-2 py-1 border border-gray-200 rounded text-form-input"
                                                                             placeholder="0,00"
                                                                         />
@@ -211,9 +212,9 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-600 mb-1.5">Valor total (R$) *</label>
-                            <input type="number" min="0" step="0.01" value={callForm.total_amount || ''}
-                                onChange={e => {
-                                    const total = parseFloat(e.target.value) || 0;
+                            <MoneyCentsInput value={callForm.total_amount || ''}
+                                onChange={v => {
+                                    const total = v === '' ? 0 : Number(v);
                                     setCallForm({ ...callForm, total_amount: total });
                                     applyProportionalRateio(total);
                                 }}
@@ -240,9 +241,9 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
                             {partners.map(p => (
                                 <div key={p.id} className="flex items-center justify-between gap-3">
                                     <span className="text-sm text-gray-700 flex-1 truncate">{p.investor_name} <span className="text-xs text-gray-400">({Number(p.ownership_pct).toFixed(2)}%)</span></span>
-                                    <input type="number" min="0" step="0.01"
+                                    <MoneyCentsInput
                                         value={rateio[p.id!] ?? ''}
-                                        onChange={e => setRateio(r => ({ ...r, [p.id!]: parseFloat(e.target.value) || 0 }))}
+                                        onChange={v => setRateio(r => ({ ...r, [p.id!]: v === '' ? 0 : Number(v) }))}
                                         className="w-32 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-right"
                                     />
                                 </div>

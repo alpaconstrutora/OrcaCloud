@@ -21,6 +21,7 @@ import {
 } from '../../services/debtCovenantService';
 import { debtService } from '../../services/debtService';
 import type { DebtContract } from '../../types/debt';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 const SITUACAO_COR: Record<CovenantSituacao, string> = {
     REGULAR: 'text-green-700',
@@ -208,8 +209,8 @@ export default function DebtCovenants() {
                     {precisaCaixa && (
                         <div className="flex items-center gap-1.5">
                             <span className="text-xs font-semibold text-slate-500">Caixa e equivalentes</span>
-                            <input type="number" step="0.01" value={caixa}
-                                   onChange={e => setCaixa(Number(e.target.value) || 0)}
+                            <MoneyCentsInput value={caixa}
+                                   onChange={v => setCaixa(Number(v) || 0)}
                                    className="h-9 w-40 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium" />
                         </div>
                     )}

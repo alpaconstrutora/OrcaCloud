@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2 } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, DealBuyer, CostCenter } from '../types';
@@ -348,10 +349,9 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                         {amountMode === 'SET' && (
                             <div>
                                 <label htmlFor="lote-valor-novo" className={LABEL}>Novo valor (R$)</label>
-                                <input id="lote-valor-novo"
-                                    type="number" min="0" step="0.01"
+                                <MoneyCentsInput id="lote-valor-novo"
                                     value={amountValue}
-                                    onChange={(e) => setAmountValue(e.target.value)}
+                                    onChange={(v) => setAmountValue(v)}
                                     placeholder="Ex: 2500,00"
                                     className={FIELD}
                                 />
@@ -3213,11 +3213,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         </div>
                                                         <div className="relative shrink-0">
                                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
-                                                            <input
-                                                                type="number"
-                                                                step="0.01"
+                                                            <MoneyCentsInput
                                                                 value={u.value || ''}
-                                                                onChange={(e) => setUnitValue(u.property_id, parseFloat(e.target.value) || 0)}
+                                                                onChange={(v) => setUnitValue(u.property_id, v === '' ? 0 : Number(v))}
                                                                 className="w-40 h-9 pl-9 pr-3 bg-white border border-gray-200 focus:border-blue-500 rounded-[6px] outline-none text-sm text-right text-gray-700 transition-all"
                                                                 placeholder="0,00"
                                                             />
@@ -3247,14 +3245,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
+                                            <MoneyCentsInput
                                                 value={formData.contract_total_value ?? ''}
-                                                onChange={(e) => setFormData(prev => ({
+                                                onChange={(v) => setFormData(prev => ({
                                                     ...prev,
-                                                    contract_total_value: e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0),
+                                                    contract_total_value: v === '' ? undefined : Number(v),
                                                 }))}
                                                 className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 placeholder="0,00"
@@ -3397,10 +3392,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
                                                     <div className="relative">
                                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                        <input
-                                                            type="number" min="0" step="0.01" placeholder="0,00"
+                                                        <MoneyCentsInput
+                                                            placeholder="0,00"
                                                             value={planoRapido.entrada}
-                                                            onChange={(e) => setPlanoRapido(prev => ({ ...prev, entrada: e.target.value }))}
+                                                            onChange={(v) => setPlanoRapido(prev => ({ ...prev, entrada: v }))}
                                                             className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                         />
                                                     </div>
@@ -3750,11 +3745,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     );
                                 case 'valor':
                                     return (
-                                        <input
-                                            type="number"
+                                        <MoneyCentsInput
                                             value={e.original_amount ?? e.amount}
                                             disabled={pago}
-                                            onChange={(ev) => patchContractEntry(e.id, { amount: parseFloat(ev.target.value) || 0 })}
+                                            onChange={(v) => patchContractEntry(e.id, { amount: v === '' ? 0 : Number(v) })}
                                             className={pago ? CELL_RO : CELL}
                                         />
                                     );
@@ -4183,13 +4177,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <label className="text-xs font-semibold text-slate-500">Valor da Comissão</label>
                                             <div className="relative">
                                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-500 font-mono">R$</span>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    step="0.01"
+                                                <MoneyCentsInput
                                                     value={formData.broker_commission_value ?? ''}
-                                                    onChange={(e) => {
-                                                        const val = parseFloat(e.target.value) || 0;
+                                                    onChange={(v) => {
+                                                        const val = v === '' ? 0 : Number(v);
                                                         setFormData({
                                                             ...formData,
                                                             broker_commission_value: val,
@@ -4759,13 +4750,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </label>
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
+                                    <MoneyCentsInput
                                         readOnly={geraSerie && campoDerivado === 'PARCELA'}
                                         value={blocoForm.valorParcela}
-                                        onChange={(e) => setBlocoForm(prev => recalcularBloco({ ...prev, valorParcela: e.target.value }, campoDerivado))}
+                                        onChange={(v) => setBlocoForm(prev => recalcularBloco({ ...prev, valorParcela: v }, campoDerivado))}
                                         className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${geraSerie && campoDerivado === 'PARCELA'
                                             ? 'bg-gray-50 text-gray-800 cursor-default'
                                             : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
@@ -4795,13 +4783,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <label className="text-xs font-semibold text-slate-500">Subtotal do bloco</label>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
+                                            <MoneyCentsInput
                                                 readOnly={campoDerivado === 'SUBTOTAL'}
                                                 value={blocoForm.subtotal}
-                                                onChange={(e) => setBlocoForm(prev => recalcularBloco({ ...prev, subtotal: e.target.value }, campoDerivado))}
+                                                onChange={(v) => setBlocoForm(prev => recalcularBloco({ ...prev, subtotal: v }, campoDerivado))}
                                                 className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'SUBTOTAL'
                                                     ? 'bg-gray-50 text-gray-800 cursor-default'
                                                     : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}

@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vrService, VrRegra, VrFeriado, VrCalculo } from '../services/vrService';
 import { laborService, Employee } from '../services/laborService';
 import { supabase } from '../lib/supabase';
+import MoneyCentsInput from './ui/MoneyCentsInput';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,13 +152,10 @@ const RegraModal: React.FC<RegraModalProps> = ({ regra, orgId, projects, onClose
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className={labelCls}>Valor diário (R$)</label>
-                            <input
+                            <MoneyCentsInput
                                 className={inputCls}
-                                type="number"
-                                min="0.01"
-                                step="0.01"
                                 value={form.valor_diario ?? ''}
-                                onChange={e => set('valor_diario', parseFloat(e.target.value) || 0)}
+                                onChange={v => set('valor_diario', v === '' ? 0 : Number(v))}
                             />
                         </div>
                         <div className="space-y-1.5">

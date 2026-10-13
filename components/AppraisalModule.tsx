@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import { Plus, FileText, Trash2, Pencil, ArrowLeft, FileDown, Calculator, Home } from 'lucide-react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
@@ -416,7 +417,7 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-600 mb-1.5">Preço total (R$) *</label>
-                                    <input type="number" value={editingComparable.price_total || ''} onChange={e => setEditingComparable({ ...editingComparable, price_total: parseFloat(e.target.value) || 0 })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                                    <MoneyCentsInput value={editingComparable.price_total || ''} onChange={v => setEditingComparable({ ...editingComparable, price_total: v === '' ? 0 : Number(v) })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
                                 </div>
                             </div>
                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest pt-2">Fatores de homogeneização (1,0 = sem ajuste)</p>

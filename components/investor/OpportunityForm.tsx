@@ -10,6 +10,7 @@ import { imovibService } from '../../services/imovibService';
 import { ImovibStudy } from '../../types';
 import { storageService } from '../../services/storageService';
 import Button from '../ui/Button';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     initial?: Partial<InvestorOpportunity>;
@@ -354,20 +355,18 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-form-label font-bold text-gray-600 mb-1.5">Meta de Captação (R$)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.target_funding_value)}
-                                    onChange={e => set('target_funding_value', parseNum(e.target.value))}
+                                <MoneyCentsInput
+                                    value={form.target_funding_value}
+                                    onChange={v => set('target_funding_value', parseNum(v))}
                                     placeholder="Ex: 42500000"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
                                 <label className="block text-form-label font-bold text-gray-600 mb-1.5">Valor Já Captado (R$)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.current_funding_value)}
-                                    onChange={e => set('current_funding_value', parseNum(e.target.value))}
+                                <MoneyCentsInput
+                                    value={form.current_funding_value}
+                                    onChange={v => set('current_funding_value', parseNum(v))}
                                     placeholder="Ex: 30600000"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
@@ -860,40 +859,36 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-form-label font-bold text-gray-600 mb-1.5">VGV (R$)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.vgv)}
-                                    onChange={e => set('vgv', parseNum(e.target.value))}
+                                <MoneyCentsInput
+                                    value={form.vgv}
+                                    onChange={v => set('vgv', parseNum(v))}
                                     placeholder="0,00"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
                                 <label className="block text-form-label font-bold text-gray-600 mb-1.5">Custo estimado (R$)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.cost_estimate)}
-                                    onChange={e => set('cost_estimate', parseNum(e.target.value))}
+                                <MoneyCentsInput
+                                    value={form.cost_estimate}
+                                    onChange={v => set('cost_estimate', parseNum(v))}
                                     placeholder="0,00"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
                                 <label className="block text-form-label font-bold text-gray-600 mb-1.5">Custo/m² (R$)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.cost_per_m2)}
-                                    onChange={e => set('cost_per_m2', parseNum(e.target.value))}
+                                <MoneyCentsInput
+                                    value={form.cost_per_m2}
+                                    onChange={v => set('cost_per_m2', parseNum(v))}
                                     placeholder="0,00"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
                                 <label className="block text-form-label font-bold text-gray-600 mb-1.5">Ticket mínimo (R$)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.ticket_min)}
-                                    onChange={e => set('ticket_min', parseNum(e.target.value))}
+                                <MoneyCentsInput
+                                    value={form.ticket_min}
+                                    onChange={v => set('ticket_min', parseNum(v))}
                                     placeholder="0,00"
                                     className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />

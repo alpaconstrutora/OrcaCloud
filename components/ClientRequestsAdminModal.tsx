@@ -1,3 +1,4 @@
+import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import { X, Loader2, Plus, Wrench, ClipboardList, ChevronDown, AlertCircle, Clock, Save, Bell } from 'lucide-react';
 import { Client } from '../types';
@@ -376,7 +377,7 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         </div>
                                         <div>
                                             <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Valor (R$)</label>
-                                            <input type="number" className="w-full rounded-xl border border-indigo-200 px-3 py-2.5 text-sm bg-white outline-none" placeholder="0,00" value={newOs.value} onChange={e => setNewOs(p => ({ ...p, value: e.target.value }))} />
+                                            <MoneyCentsInput className="w-full rounded-xl border border-indigo-200 px-3 py-2.5 text-sm bg-white outline-none" placeholder="0,00" value={newOs.value} onChange={v => setNewOs(p => ({ ...p, value: v }))} />
                                         </div>
                                     </div>
                                     <div className="flex gap-2 pt-1">

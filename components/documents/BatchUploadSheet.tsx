@@ -15,7 +15,11 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { renderFileIcon } from './DocumentsTable';
 import { documentService, OpuraDmsDocumentType, OpuraDmsDiscipline } from '../../services/documentService';
 import { validateFileNameAgainstMask, extractTokenFromFileName, planBatchFileNames } from '../../utils/dmsUtils';
-import { OpuraDocumentCategoria, OpuraDocumentInsert, OpuraFolder } from '../../types';
+import { OpuraDocumentCategoria, OpuraDocumentInsert, OpuraFolder, OpuraNormaSituacao } from '../../types';
+import {
+  NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES, NORMA_SITUACAO_PADRAO,
+  formatarReferenciaNorma, extrairNormaDoNomeDoArquivo,
+} from '../../utils/gedNormas';
 
 // As extensões aceitas vêm do catálogo da organização (prop `allowedExtensions`,
 // tabela `opura_dms_file_extensions`) — o valor abaixo é só o default de quem não
@@ -35,6 +39,13 @@ interface BatchItemOverrides {
   project_id?: string;
   company_id?: string;
   tagsInput?: string;
+  // Aba Normas. `''` digitado à mão é valor (apagou de propósito) — só `undefined`
+  // cai na sugestão tirada do nome do arquivo / no padrão do lote.
+  norma_orgao?: string;
+  norma_codigo?: string;
+  norma_edicao?: string;
+  norma_situacao?: OpuraNormaSituacao;
+  norma_substituida_por?: string;
 }
 
 interface BatchItem {
@@ -47,6 +58,9 @@ interface BatchItem {
   error?: string;
   expanded: boolean;
   overrides: BatchItemOverrides;
+  /** Aba Normas: o que o nome do arquivo diz (ex.: "NBR 15575-1_2024.pdf"). Sugestão,
+   * nunca sobrescreve o digitado. */
+  sugestaoNorma: { orgao?: string; codigo?: string; edicao?: string };
 }
 
 interface CompanyOption {
@@ -166,6 +180,11 @@ export function BatchUploadSheet({
   const [defaultValidade, setDefaultValidade] = React.useState('');
   const [defaultAlertaDias, setDefaultAlertaDias] = React.useState(30);
   const [defaultTagsInput, setDefaultTagsInput] = React.useState('');
+  // Aba Normas — padrões do lote. O código não tem padrão: é único por norma.
+  const isNormas = categoria === 'normas';
+  const [defaultNormaOrgao, setDefaultNormaOrgao] = React.useState('');
+  const [defaultNormaEdicao, setDefaultNormaEdicao] = React.useState('');
+  const [defaultNormaSituacao, setDefaultNormaSituacao] = React.useState<OpuraNormaSituacao>(NORMA_SITUACAO_PADRAO);
 
   // Reset ao abrir — cada sessão de upload em lote começa limpa.
   React.useEffect(() => {
@@ -180,6 +199,9 @@ export function BatchUploadSheet({
     setDefaultValidade('');
     setDefaultAlertaDias(30);
     setDefaultTagsInput('');
+    setDefaultNormaOrgao('');
+    setDefaultNormaEdicao('');
+    setDefaultNormaSituacao(NORMA_SITUACAO_PADRAO);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -218,6 +240,7 @@ export function BatchUploadSheet({
         progress: 0,
         expanded: false,
         overrides: {},
+        sugestaoNorma: isNormas ? extrairNormaDoNomeDoArquivo(file.name) : {},
       };
     });
 
@@ -254,23 +277,49 @@ export function BatchUploadSheet({
     setItems((prev) => prev.map((i) => (i.key === key ? { ...i, overrides: { ...i.overrides, ...patch } } : i)));
   };
 
+  // Aba Normas — valor efetivo de cada campo: o digitado no arquivo, senão o que o
+  // nome do arquivo diz, senão o padrão do lote. Órgão deduzido do arquivo vence o
+  // padrão (um "NR-18.pdf" num lote ABNT é do MTE).
+  const normaDoItem = (item: BatchItem) => {
+    const orgao = item.overrides.norma_orgao ?? item.sugestaoNorma.orgao ?? defaultNormaOrgao;
+    const codigo = item.overrides.norma_codigo ?? item.sugestaoNorma.codigo ?? '';
+    const edicao = item.overrides.norma_edicao ?? item.sugestaoNorma.edicao ?? defaultNormaEdicao;
+    const situacao = item.overrides.norma_situacao ?? defaultNormaSituacao;
+    const substituidaPor = situacao === 'substituida' ? (item.overrides.norma_substituida_por ?? '') : '';
+    return { orgao, codigo, edicao, situacao, substituidaPor, referencia: formatarReferenciaNorma(orgao, codigo, edicao) };
+  };
+
+  // Norma sem código não se envia: o código é o que identifica a norma (no formulário
+  // unitário ele é obrigatório) — o arquivo fica na lista com o motivo.
+  const semCodigoKeys = React.useMemo(() => {
+    const s = new Set<string>();
+    if (isNormas) items.forEach((i) => { if (!normaDoItem(i).codigo.trim()) s.add(i.key); });
+    return s;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, isNormas]);
+
   // Colisão de nome final entre itens do lote — checada à parte da validação
-  // de máscara (que é por item), porque depende do conjunto inteiro.
+  // de máscara (que é por item), porque depende do conjunto inteiro. Na aba Normas
+  // o nome do documento é a referência da norma, então é ela que não pode repetir.
+  const chaveDeNome = (i: BatchItem) =>
+    (isNormas && normaDoItem(i).referencia ? normaDoItem(i).referencia : i.fileName).trim().toLowerCase();
   const duplicateKeys = React.useMemo(() => {
     const counts = new Map<string, number>();
     items.forEach((i) => {
-      const k = i.fileName.trim().toLowerCase();
+      const k = chaveDeNome(i);
       counts.set(k, (counts.get(k) || 0) + 1);
     });
     const dup = new Set<string>();
     items.forEach((i) => {
-      if ((counts.get(i.fileName.trim().toLowerCase()) || 0) > 1) dup.add(i.key);
+      if ((counts.get(chaveDeNome(i)) || 0) > 1) dup.add(i.key);
     });
     return dup;
-  }, [items]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, isNormas, defaultNormaOrgao, defaultNormaEdicao]);
 
-  const readyCount = items.filter((i) => i.status === 'pronto' && !duplicateKeys.has(i.key)).length;
-  const errorCount = items.filter((i) => i.status === 'invalido' || i.status === 'erro' || duplicateKeys.has(i.key)).length;
+  const bloqueado = (i: BatchItem) => duplicateKeys.has(i.key) || semCodigoKeys.has(i.key);
+  const readyCount = items.filter((i) => i.status === 'pronto' && !bloqueado(i)).length;
+  const errorCount = items.filter((i) => i.status === 'invalido' || i.status === 'erro' || bloqueado(i)).length;
 
   const targetOrgId = activeOrganizationId || orgId;
 
@@ -279,7 +328,11 @@ export function BatchUploadSheet({
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
-    const nome = item.fileName.includes('.') ? item.fileName.split('.').slice(0, -1).join('.') : item.fileName;
+    const nomeDoArquivo = item.fileName.includes('.') ? item.fileName.split('.').slice(0, -1).join('.') : item.fileName;
+    const norma = isNormas ? normaDoItem(item) : null;
+    // Na aba Normas o nome do documento é a referência ("ABNT NBR 15575-1:2024"),
+    // como no formulário unitário; o arquivo no Storage mantém o nome dele.
+    const nome = norma?.referencia || nomeDoArquivo;
     return {
       organization_id: targetOrgId,
       nome,
@@ -290,8 +343,16 @@ export function BatchUploadSheet({
       discipline_code: item.overrides.discipline_code ?? defaultDiscipline ?? undefined,
       status: 'ativo',
       data_emissao: item.overrides.data_emissao ?? defaultEmissao ?? undefined,
-      data_validade: item.overrides.data_validade ?? defaultValidade ?? undefined,
+      // Norma não vence por data — não grava validade mesmo que tenha sobrado no estado.
+      data_validade: isNormas ? undefined : (item.overrides.data_validade ?? defaultValidade ?? undefined),
       alerta_dias_antecedencia: item.overrides.alerta_dias_antecedencia ?? defaultAlertaDias,
+      ...(norma ? {
+        norma_orgao: norma.orgao.trim() || undefined,
+        norma_codigo: norma.codigo.trim() || undefined,
+        norma_edicao: norma.edicao.trim() || undefined,
+        norma_situacao: norma.situacao,
+        norma_substituida_por: norma.substituidaPor.trim() || undefined,
+      } : {}),
       tags,
       project_id: item.overrides.project_id ?? defaultProjectId ?? undefined,
       company_id: item.overrides.company_id ?? defaultCompanyId ?? undefined,
@@ -317,16 +378,22 @@ export function BatchUploadSheet({
     }
   };
 
+  /** Devolve quantos foram e quantos falharam — o resumo sai daqui, não de dentro de
+   * um `setItems(updater)`: chamar `notify` (estado do pai) dentro do updater é
+   * setState durante render ("Cannot update a component while rendering…"). */
   const runQueue = async (queue: BatchItem[]) => {
     let cursor = 0;
+    let sent = 0;
+    let failed = 0;
     const workers = Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, async () => {
       while (cursor < queue.length) {
         const item = queue[cursor];
         cursor += 1;
-        await uploadOne(item);
+        if (await uploadOne(item)) sent += 1; else failed += 1;
       }
     });
     await Promise.all(workers);
+    return { sent, failed };
   };
 
   const handleSend = async () => {
@@ -338,27 +405,23 @@ export function BatchUploadSheet({
       notify('Selecione o tipo de documento padrão do lote.', 'error');
       return;
     }
-    const queue = items.filter((i) => i.status === 'pronto' && !duplicateKeys.has(i.key));
+    const queue = items.filter((i) => i.status === 'pronto' && !bloqueado(i));
     if (queue.length === 0) {
       notify('Nenhum arquivo pronto para envio.', 'error');
       return;
     }
 
     setSending(true);
+    let resultado = { sent: 0, failed: 0 };
     try {
-      await runQueue(queue);
+      resultado = await runQueue(queue);
     } finally {
       setSending(false);
     }
 
-    // Recontagem pós-envio — os itens já foram atualizados via updateItem dentro da fila.
-    setItems((current) => {
-      const sent = current.filter((i) => i.status === 'enviado').length;
-      const failed = current.filter((i) => i.status === 'erro').length;
-      if (sent > 0) notify(`${sent} documento(s) enviado(s)${failed > 0 ? `, ${failed} com erro` : ''}.`, failed > 0 ? 'error' : 'success');
-      else if (failed > 0) notify(`${failed} documento(s) com erro.`, 'error');
-      return current;
-    });
+    const { sent, failed } = resultado;
+    if (sent > 0) notify(`${sent} documento(s) enviado(s)${failed > 0 ? `, ${failed} com erro` : ''}.`, failed > 0 ? 'error' : 'success');
+    else if (failed > 0) notify(`${failed} documento(s) com erro.`, 'error');
     onFinished();
   };
 
@@ -450,7 +513,50 @@ export function BatchUploadSheet({
         {/* Padrões do lote */}
         <div className="space-y-3 bg-slate-50/60 border border-slate-100 rounded-[10px] p-4">
           <p className="text-xs font-semibold text-slate-500">Padrões do lote (aplicados a todo arquivo sem ajuste próprio)</p>
+          {isNormas && (
+            <p className="text-xs text-slate-500">Código, órgão e edição que o nome do arquivo trouxer (ex.: "NBR 15575-1_2024.pdf") têm preferência sobre o padrão.</p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {isNormas && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Órgão</label>
+                  <input
+                    type="text"
+                    list="ged-normas-orgaos-lote"
+                    placeholder="Ex: ABNT"
+                    value={defaultNormaOrgao}
+                    onChange={(e) => setDefaultNormaOrgao(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  />
+                  <datalist id="ged-normas-orgaos-lote">
+                    {NORMA_ORGAOS_SUGERIDOS.map((o) => <option key={o.value} value={o.value} />)}
+                  </datalist>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 2024"
+                    value={defaultNormaEdicao}
+                    onChange={(e) => setDefaultNormaEdicao(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Situação</label>
+                  <select
+                    value={defaultNormaSituacao}
+                    onChange={(e) => setDefaultNormaSituacao(e.target.value as OpuraNormaSituacao)}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  >
+                    {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
+                      <option key={value} value={value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Tipo de documento</label>
               <select
@@ -516,7 +622,7 @@ export function BatchUploadSheet({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500">Data de emissão</label>
+              <label className="text-xs font-semibold text-slate-500">{isNormas ? 'Data de publicação' : 'Data de emissão'}</label>
               <input
                 type="date"
                 value={defaultEmissao}
@@ -524,6 +630,8 @@ export function BatchUploadSheet({
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               />
             </div>
+            {/* Norma não vence por data — é cancelada ou substituída. */}
+            {!isNormas && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Data de vencimento</label>
               <input
@@ -533,6 +641,7 @@ export function BatchUploadSheet({
                 className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               />
             </div>
+            )}
           </div>
         </div>
 
@@ -545,7 +654,11 @@ export function BatchUploadSheet({
             </p>
             {items.map((item) => {
               const isDuplicate = duplicateKeys.has(item.key);
-              const reason = isDuplicate ? 'Nome duplicado neste lote.' : item.invalidReason;
+              const norma = isNormas ? normaDoItem(item) : null;
+              const editavel = item.status === 'pronto' || item.status === 'invalido';
+              const reason = item.invalidReason
+                || (semCodigoKeys.has(item.key) ? 'Informe o código da norma — o nome do arquivo não o traz.' : undefined)
+                || (isDuplicate ? (isNormas ? 'Norma repetida neste lote (mesmo órgão, código e edição).' : 'Nome duplicado neste lote.') : undefined);
               return (
                 <div key={item.key} className="border border-slate-100 rounded-[10px] bg-white overflow-hidden">
                   <div className="flex items-center gap-3 p-3">
@@ -557,10 +670,45 @@ export function BatchUploadSheet({
                         disabled={item.status === 'enviando' || item.status === 'enviado'}
                         onChange={(e) => renameItem(item.key, e.target.value)}
                         className={`w-full text-sm font-medium px-2 py-1 rounded border ${
-                          reason ? 'border-red-200 bg-red-50 text-red-700' : 'border-transparent bg-transparent hover:border-slate-200 focus:border-blue-300'
+                          // Vermelho só quando o problema é o NOME do arquivo — falta de código
+                          // de norma pinta o campo Código, não este.
+                          item.invalidReason || (isDuplicate && !isNormas) ? 'border-red-200 bg-red-50 text-red-700' : 'border-transparent bg-transparent hover:border-slate-200 focus:border-blue-300'
                         } focus:outline-none disabled:opacity-70`}
                       />
                       <p className="text-xs text-slate-400 mt-0.5">{formatSize(item.file.size)}</p>
+                      {norma && (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-500">Código</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: NBR 15575-1"
+                              value={norma.codigo}
+                              disabled={!editavel}
+                              onChange={(e) => updateOverride(item.key, { norma_codigo: e.target.value })}
+                              className={`w-full px-2.5 py-1.5 border rounded-[6px] text-xs font-medium disabled:opacity-70 ${
+                                semCodigoKeys.has(item.key) ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'
+                              }`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-500">Edição / ano</label>
+                            <input
+                              type="text"
+                              placeholder="Ex: 2024"
+                              value={norma.edicao}
+                              disabled={!editavel}
+                              onChange={(e) => updateOverride(item.key, { norma_edicao: e.target.value })}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium disabled:opacity-70"
+                            />
+                          </div>
+                          {norma.referencia && (
+                            <p className="col-span-2 text-xs text-slate-500">
+                              Nome do documento: <span className="text-slate-700">{norma.referencia}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {reason && <p className="text-xs text-red-600 mt-0.5 flex items-center gap-1"><AlertTriangle className="w-3 h-3 shrink-0" />{reason}</p>}
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
@@ -615,6 +763,44 @@ export function BatchUploadSheet({
                           ))}
                         </select>
                       </div>
+                      {norma ? (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-500">Órgão</label>
+                            <input
+                              type="text"
+                              list="ged-normas-orgaos-lote"
+                              value={norma.orgao}
+                              onChange={(e) => updateOverride(item.key, { norma_orgao: e.target.value })}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-semibold text-slate-500">Situação</label>
+                            <select
+                              value={norma.situacao}
+                              onChange={(e) => updateOverride(item.key, { norma_situacao: e.target.value as OpuraNormaSituacao })}
+                              className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium"
+                            >
+                              {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
+                                <option key={value} value={value}>{s.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          {norma.situacao === 'substituida' && (
+                            <div className="space-y-1 md:col-span-2">
+                              <label className="text-[11px] font-semibold text-slate-500">Substituída por</label>
+                              <input
+                                type="text"
+                                placeholder="Ex: ABNT NBR 15575-1:2024"
+                                value={item.overrides.norma_substituida_por ?? ''}
+                                onChange={(e) => updateOverride(item.key, { norma_substituida_por: e.target.value })}
+                                className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium"
+                              />
+                            </div>
+                          )}
+                        </>
+                      ) : (
                       <div className="space-y-1">
                         <label className="text-[11px] font-semibold text-slate-500">Data de vencimento</label>
                         <input
@@ -624,6 +810,7 @@ export function BatchUploadSheet({
                           className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-[6px] text-xs font-medium"
                         />
                       </div>
+                      )}
                       <div className="space-y-1">
                         <label className="text-[11px] font-semibold text-slate-500">Tags</label>
                         <input

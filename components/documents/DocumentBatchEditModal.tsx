@@ -2,7 +2,8 @@ import React from 'react';
 import { Settings, X, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useConfirm } from '../ui/confirm';
 import { documentService, OpuraDmsDocumentType, OpuraDmsDiscipline } from '../../services/documentService';
-import { OpuraDocument, OpuraDocumentStatus, OpuraDocumentUpdate } from '../../types';
+import { OpuraDocument, OpuraDocumentStatus, OpuraDocumentUpdate, OpuraNormaSituacao } from '../../types';
+import { NORMA_ORGAOS_SUGERIDOS, NORMA_SITUACOES } from '../../utils/gedNormas';
 import { renderFileIcon } from './DocumentsTable';
 
 interface CompanyOption {
@@ -103,6 +104,13 @@ export function DocumentBatchEditModal({
   const [projectId, setProjectId] = React.useState('');
   const [companyId, setCompanyId] = React.useState('');
   const [addTagsInput, setAddTagsInput] = React.useState('');
+  // Aba Normas — só quando TODA a seleção é norma (a edição em lote parte de uma aba,
+  // mas a regra não depende disso). Código fica de fora: é único por norma.
+  const isNormas = documents.length > 0 && documents.every((d) => d.categoria === 'normas');
+  const [normaOrgao, setNormaOrgao] = React.useState('');
+  const [normaEdicao, setNormaEdicao] = React.useState('');
+  const [normaSituacao, setNormaSituacao] = React.useState<OpuraNormaSituacao | ''>('');
+  const [normaSubstituidaPor, setNormaSubstituidaPor] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [savedOnce, setSavedOnce] = React.useState(false);
 
@@ -120,7 +128,8 @@ export function DocumentBatchEditModal({
   const noneChanged =
     !tipoDocumento && !disciplineCode && !descricao.trim() && !autorChanged && !status &&
     !dataEmissao && !dataValidade && !alertaDias && !projectId && !companyId && !addTagsInput.trim() &&
-    !revisao.trim() && !extensaoNova;
+    !revisao.trim() && !extensaoNova &&
+    !normaOrgao.trim() && !normaEdicao.trim() && !normaSituacao;
 
   const buildCommonUpdates = (): OpuraDocumentUpdate => {
     const updates: OpuraDocumentUpdate = {};
@@ -141,6 +150,18 @@ export function DocumentBatchEditModal({
     if (alertaDias) updates.alerta_dias_antecedencia = parseInt(alertaDias, 10);
     if (!isMultiOrg && projectId) updates.project_id = projectId;
     if (!isMultiOrg && companyId) updates.company_id = companyId;
+    if (isNormas) {
+      if (normaOrgao.trim()) updates.norma_orgao = normaOrgao.trim();
+      if (normaEdicao.trim()) updates.norma_edicao = normaEdicao.trim();
+      if (normaSituacao) {
+        updates.norma_situacao = normaSituacao;
+        // Como na edição individual: fora de "Substituída" não existe "substituída por".
+        // `null` (não undefined) para o campo antigo sair do banco. Em "Substituída"
+        // sem texto, o valor de cada norma fica como está.
+        if (normaSituacao !== 'substituida') updates.norma_substituida_por = null;
+        else if (normaSubstituidaPor.trim()) updates.norma_substituida_por = normaSubstituidaPor.trim();
+      }
+    }
     return updates;
   };
 
@@ -159,6 +180,9 @@ export function DocumentBatchEditModal({
     if (!isMultiOrg && projectId) labels.push('Obra');
     if (!isMultiOrg && companyId) labels.push('Empresa');
     if (addTagsInput.trim()) labels.push('Tags adicionadas');
+    if (isNormas && normaOrgao.trim()) labels.push(`Órgão=${normaOrgao.trim()}`);
+    if (isNormas && normaEdicao.trim()) labels.push(`Edição=${normaEdicao.trim()}`);
+    if (isNormas && normaSituacao) labels.push(`Situação=${NORMA_SITUACOES[normaSituacao].label}`);
     return labels;
   };
 
@@ -299,6 +323,67 @@ export function DocumentBatchEditModal({
           <p className="text-xs font-semibold text-slate-500">Deixe um campo vazio para não alterá-lo nos documentos selecionados.</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {isNormas && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Órgão</label>
+                  <input
+                    type="text"
+                    list="ged-normas-orgaos-edicao-lote"
+                    placeholder="Deixe vazio para não alterar"
+                    value={normaOrgao}
+                    onChange={(e) => setNormaOrgao(e.target.value)}
+                    disabled={saving}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                  />
+                  <datalist id="ged-normas-orgaos-edicao-lote">
+                    {NORMA_ORGAOS_SUGERIDOS.map((o) => <option key={o.value} value={o.value} />)}
+                  </datalist>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
+                  <input
+                    type="text"
+                    placeholder="Deixe vazio para não alterar"
+                    value={normaEdicao}
+                    onChange={(e) => setNormaEdicao(e.target.value)}
+                    disabled={saving}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-500">Situação</label>
+                  <select
+                    value={normaSituacao}
+                    onChange={(e) => setNormaSituacao(e.target.value as OpuraNormaSituacao | '')}
+                    disabled={saving}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                  >
+                    <option value="">— Não alterar —</option>
+                    {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
+                      <option key={value} value={value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {normaSituacao === 'substituida' ? (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-500">Substituída por</label>
+                    <input
+                      type="text"
+                      placeholder="Vazio = mantém o de cada norma"
+                      value={normaSubstituidaPor}
+                      onChange={(e) => setNormaSubstituidaPor(e.target.value)}
+                      disabled={saving}
+                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                    />
+                  </div>
+                ) : (
+                  <p className="self-end text-xs text-slate-400 pb-2.5">
+                    O código não se edita em lote: é único por norma.
+                  </p>
+                )}
+              </>
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Tipo de documento</label>
               <select
@@ -329,6 +414,9 @@ export function DocumentBatchEditModal({
               </select>
             </div>
 
+            {/* Norma: Revisão vira Edição; vencimento/alerta não existem (norma não vence
+                por data); quem emite é o Órgão, não um Autor — como na edição individual. */}
+            {!isNormas && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Revisão</label>
               <input
@@ -340,6 +428,7 @@ export function DocumentBatchEditModal({
                 className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               />
             </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Status</label>
@@ -356,6 +445,7 @@ export function DocumentBatchEditModal({
               </select>
             </div>
 
+            {!isNormas && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Alerta de vencimento</label>
               <select
@@ -370,9 +460,10 @@ export function DocumentBatchEditModal({
                 ))}
               </select>
             </div>
+            )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500">Data de emissão</label>
+              <label className="text-xs font-semibold text-slate-500">{isNormas ? 'Data de publicação' : 'Data de emissão'}</label>
               <input
                 type="date"
                 value={dataEmissao}
@@ -382,6 +473,7 @@ export function DocumentBatchEditModal({
               />
             </div>
 
+            {!isNormas && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Data de vencimento</label>
               <input
@@ -392,6 +484,7 @@ export function DocumentBatchEditModal({
                 className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               />
             </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500">Obra vinculada</label>
@@ -426,6 +519,7 @@ export function DocumentBatchEditModal({
             </div>
           </div>
 
+          {!isNormas && (
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-500">Autor do Projeto</label>
             {isMultiOrg ? (
@@ -475,6 +569,7 @@ export function DocumentBatchEditModal({
               </>
             )}
           </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-500">Descrição / Notas complementares</label>

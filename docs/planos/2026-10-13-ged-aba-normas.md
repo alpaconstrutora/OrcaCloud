@@ -126,3 +126,46 @@ O GED (`components/OpuraDocsModule.tsx`) monta as abas a partir do array `CATEGO
 - [x] Ajuste vindo da prova na tela: as colunas de norma ficavam no fim da tabela, fora da tela a 1600px. Em `COLUMNS` elas passaram para logo depois de "Documento" (`mesclarOrdemDeColunas` encaixa coluna nova ao lado da vizinha da ordem padrão), e "Autor" fica oculto em Normas.
 - [x] Re-rodada após o ajuste: tsc rc=0. Suíte 885 arquivos, 8942 = 8908 + 34 pendentes, rc=0; a 1ª tentativa caiu com `# Fatal error` do V8 (Node 24, ver memória) e foi descartada. check-ui-standard, check-origem-do-deploy e check-xss-sinks com rc=0.
 - [x] Publicado: `398844cd` em main. Vercel `success`, check-run `ci` `completed/success`, e `conferir-producao.sh` confirma que o domínio serve exatamente `398844c`, com "Substituída por" e "ged-normas-orgaos" no bundle.
+
+---
+
+## Pedido 2 (13/10/2026, mesma sessão c4864451)
+> Implementar:  os campos de norma não existem no upload em lote nem na edição em lote. Uma norma enviada em lote entra sem esses dados e precisa ser completada na edição individual.
+
+Frente `ged-normas-lote`.
+
+### Plano 2 (um item por arquivo)
+1. **`utils/gedNormas.ts`**: `extrairNormaDoNomeDoArquivo(nome)` deduz órgão, código e edição a partir do nome do arquivo (NBR, NBR ISO, NR, ISO, IEC, IT, ASTM). Pronto quando: testes cobrem cada família, separadores `_ - . espaço`, ano junto e ausente, e nome sem norma (devolve vazio).
+2. **`__tests__/gedNormas.test.ts`**: os casos acima. Pronto quando: verde.
+3. **`components/documents/BatchUploadSheet.tsx`**, só com `categoria === 'normas'`:
+   - Padrões do lote ganham Órgão (datalist), Edição e Situação. Somem Vencimento e Alerta; Emissão vira "Data de publicação".
+   - Cada arquivo mostra Código e Edição na própria linha, pré-preenchidos pela extração. A extração nunca sobrescreve o que foi digitado.
+   - Ajustes por arquivo: Órgão, Situação, Substituída por.
+   - Arquivo sem código fica bloqueado com o motivo e não entra na contagem de prontos.
+   - `nome` = `formatarReferenciaNorma(...)`. A detecção de duplicado usa a referência.
+
+   Pronto quando: na tela, enviar 2 PDFs (`NBR 15575-1_2024.pdf`, `NR-18.pdf`) grava os dois com código, órgão, edição e situação certos, conferidos no banco.
+4. **`components/documents/DocumentBatchEditModal.tsx`**, quando todos os selecionados são `'normas'`:
+   - Ganha Órgão, Edição, Situação e Substituída por; este último só com Situação = Substituída. Situação diferente de Substituída limpa o "substituída por", como na edição individual.
+   - Somem Revisão, Alerta, Vencimento e Autor do Projeto; Emissão vira "Data de publicação".
+   - Código não é editável em lote, porque é único por norma; a tela diz isso.
+
+   Pronto quando: na tela, editar as 2 normas em lote para Cancelada grava nas duas, conferido no banco.
+
+### Estado 2
+- [x] 1. `extrairNormaDoNomeDoArquivo`. Entre os casos de teste estão os 6 nomes de arquivo REAIS de normas enviadas em lote na Alpa às 19:52 de 13/10, pela versão em produção e sem os campos de norma.
+- [x] 2. Testes: 33/33.
+- [x] 3. Upload em lote: padrões (Órgão, Edição, Situação), Código e Edição na linha do arquivo, ajustes por arquivo, bloqueio sem código, nome = referência.
+  - **Extra:** corrigido o "Cannot update a component while rendering" que já existia no envio. `notify` era chamado dentro do atualizador de `setItems`; agora o resumo vem do retorno de `runQueue`.
+- [x] 4. Edição em lote: Órgão, Edição, Situação e Substituída por; aviso de que o código não se edita em lote; sem Revisão, Alerta, Vencimento e Autor.
+- [x] Prova na tela (Playwright, agente-leitura, org Garden, vite da frente), 28 checks OK e 0 erros de console/HTTP:
+  - lote com 3 PDFs: `NBR 99997-1_2024` → ABNT/NBR 99997-1/2024; `NR-98` → MTE (NR), vencendo o padrão ABNT; o 3º ficou bloqueado até digitar o código;
+  - banco conferido pela API: 3 normas `em_vigor`, sem validade;
+  - edição em lote para Substituída (+ substituída por + edição 2025): conferido nas 3, com o código de cada uma preservado;
+  - edição para Cancelada: limpou o "substituída por" e manteve a edição;
+  - limpeza pelo app; consulta direta ao banco depois: 0 documentos e 0 arquivos de teste, e as 6 normas reais da Alpa intactas.
+- ⚠️ **Incidente na prova (registrado):**
+  - Na 1ª rodada a marca do roteiro (`9999`) não pegava "NR-98" e uma norma de teste ficou no banco.
+  - Ao corrigir, um patch em Python falhou sem gravar e o comando seguinte rodou o roteiro antigo: mais 3 criadas, e de novo sobrou uma "NR-98".
+  - As duas "NR-98" (org Garden) foram excluídas pelo app, com o arquivo no Storage, por um roteiro restrito ao nome exato. Conferido no banco.
+  - Nada da Alpa foi tocado.

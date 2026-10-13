@@ -71,6 +71,7 @@ import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLi
 import type { ProjecaoElevacao } from './blueprintElevation';
 import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
 import type { ProjecaoCorte } from './blueprintCorte';
+import { medidasDoCorte } from './blueprintCorteMedidas';
 import { contornoDaEscada, degrausDaEscada } from './blueprintKernel';
 
 /** Camadas previsíveis. Nome estável é o que permite filtrar e plotar por camada. */
@@ -160,6 +161,14 @@ export const CAMADAS = {
   CORTE_TELHADO: 'CORTE-TELHADO',
   CORTE_ABERTURAS: 'CORTE-ABERTURAS',
   /**
+   * O TERRENO NO CORTE (13/10/2026): o perfil natural, a linha do platô (com taludes e
+   * muro) e as medidas (níveis, corte/aterro, talude, comprimentos) — três camadas, para
+   * quem plota o corte arquitetônico poder desligar a terraplenagem.
+   */
+  CORTE_TERRENO: 'CORTE-TERRENO',
+  CORTE_PLATO: 'CORTE-PLATO',
+  CORTE_COTAS: 'CORTE-COTAS',
+  /**
    * ESCADA em camada própria nas três vistas. Em planta ela se sobrepõe ao
    * piso do ambiente e à laje; quem plota a locação a desliga, quem plota a
    * arquitetura a deixa. Camada compartilhada com a estrutura misturaria a
@@ -210,6 +219,9 @@ export const CAMADAS = {
 
 /** Cor por índice ACI, como o R12 espera. */
 const COR_CAMADA: Record<string, number> = {
+  [CAMADAS.CORTE_TERRENO]: 32, // marrom, o da curva mestra
+  [CAMADAS.CORTE_PLATO]: 5, // azul
+  [CAMADAS.CORTE_COTAS]: 8, // cinza escuro
   [CAMADAS.TOPO_CURVA]: 33, // marrom claro
   [CAMADAS.TOPO_MESTRA]: 32, // marrom
   [CAMADAS.TOPO_PONTO]: 5, // azul
@@ -816,9 +828,35 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
     }
   }
 
+  // O TERRENO no corte (13/10/2026): o perfil, o platô e as medidas — em mm reais, como o resto.
+  if ('cortados' in proj && (proj.perfilDoTerreno ?? []).some((q) => q.length >= 2)) {
+    for (const pedaco of proj.perfilDoTerreno ?? []) if (pedaco.length >= 2) saida += polilinhaAberta(CAMADAS.CORTE_TERRENO, pedaco.map((q) => P(q.u, q.v)));
+    for (const pedaco of proj.platoNoCorte ?? []) if (pedaco.length >= 2) saida += polilinhaAberta(CAMADAS.CORTE_PLATO, pedaco.map((q) => P(q.u, q.v)));
+    const m = medidasDoCorte(proj);
+    const ALT = 150;
+    // R12 lê o texto no código de página do CAD, não em UTF-8: sem acento e sem "·" o rótulo chega legível.
+    const semAcento = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u00b7/g, '-');
+    for (const c of m.verticais) {
+      saida += linha(CAMADAS.CORTE_COTAS, P(c.u, c.vDe), P(c.u, c.vAte));
+      saida += texto(CAMADAS.CORTE_COTAS, P(c.u + 100, (c.vDe + c.vAte) / 2), semAcento(c.rotulo), ALT);
+    }
+    for (const n of m.niveis) {
+      saida += polilinha(CAMADAS.CORTE_COTAS, [P(n.u, n.v), P(n.u - 90, n.v + 140), P(n.u + 90, n.v + 140)]);
+      saida += texto(CAMADAS.CORTE_COTAS, P(n.u, n.v + 200), semAcento(n.rotulo), ALT, { centralizar: true });
+    }
+    // A cadeia de comprimentos abaixo de tudo, em duas linhas.
+    for (const c of m.horizontais) {
+      const v = proj.bbox.vMin - 600 - c.linha * 500;
+      saida += linha(CAMADAS.CORTE_COTAS, P(c.uDe, v), P(c.uAte, v));
+      saida += linha(CAMADAS.CORTE_COTAS, P(c.uDe, v - 100), P(c.uDe, v + 100));
+      saida += linha(CAMADAS.CORTE_COTAS, P(c.uAte, v - 100), P(c.uAte, v + 100));
+      saida += texto(CAMADAS.CORTE_COTAS, P((c.uDe + c.uAte) / 2, v + 60), semAcento(c.rotulo), ALT, { centralizar: true });
+    }
+  }
+
   saida += texto(
     CAMADAS.TEXTO,
-    P(proj.bbox.uMin, proj.bbox.vMin - 400),
+    P(proj.bbox.uMin, proj.bbox.vMin - (('cortados' in proj && (proj.perfilDoTerreno ?? []).some((q) => q.length >= 2)) ? 1700 : 400)),
     'cortados' in proj
       ? `CORTE ${proj.rotulo}`
       : `ELEVACAO ${ROTULO_ELEVACAO[proj.direcao] ?? proj.direcao}`,

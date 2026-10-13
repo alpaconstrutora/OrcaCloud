@@ -70,7 +70,18 @@ export default function PainelVersoes({
   hipotesesDeClimatizacao,
   mostrarEixos,
   zona,
+  terrenoDoCorte,
+  cotasDoTerrenoNoCorte,
+  comprimentosNoCorte,
 }: {
+  /**
+   * 13/10/2026: o terreno do corte (o mesmo da tela) e os itens "Cotas do terreno" e
+   * "Comprimentos" de Vista › Exibir — a prancha, o PNG e o DXF do corte saem com o
+   * perfil, o platô e as medidas, como a tela mostra.
+   */
+  terrenoDoCorte?: import('../../utils/blueprintCorte').TerrenoParaCorte | null;
+  cotasDoTerrenoNoCorte?: boolean;
+  comprimentosNoCorte?: boolean;
   /** 10/10/2026: a zona do estudo — a prancha e o DXF refazem o envelope recuado e cotam o recuo. */
   zona?: import('../../utils/blueprintZonaUrbanistica').ZonaParaExportacao | null;
   /** 07/10/2026: o "Eixos" de Vista › Exibir — a prancha e o DXF levam os eixos da malha como a tela. Ausente = sim. */
@@ -400,6 +411,9 @@ export default function PainelVersoes({
       mobiliario: mobiliario || undefined,
       eixos: mostrarEixos,
       zona,
+      terrenoDoCorte,
+      cotasDoTerrenoNoCorte,
+      comprimentosNoCorte,
       // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
       // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
       eletrica: comEletrica || undefined,

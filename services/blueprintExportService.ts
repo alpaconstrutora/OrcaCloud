@@ -62,7 +62,7 @@ import {
   type DirecaoElevacao,
   type ProjecaoElevacao,
 } from '../utils/blueprintElevation';
-import { type ProjecaoCorte, projetarCorte } from '../utils/blueprintCorte';
+import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../utils/blueprintCorte';
 import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha, redesDoTemplate } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto, type ResultadoDeClimatizacaoIfc } from '../utils/blueprintIfc';
@@ -220,6 +220,8 @@ function projecaoDaPrancha(
   model: BlueprintModel,
   p: PranchaExport,
   levelIds?: string[],
+  /** O terreno do corte (13/10/2026): com ele, o corte sai com o perfil, o platô e as medidas. */
+  terreno?: TerrenoParaCorte | null,
 ): ProjecaoElevacao | ProjecaoCorte | null {
   if (ehPlantaDaPrancha(p)) return null;
   const id = corteDaPrancha(p);
@@ -228,7 +230,7 @@ function projecaoDaPrancha(
     // Corte apagado com a marcação de pé: a prancha some em vez de explodir.
     // A aba Versões pode ter sido aberta antes da exclusão.
     if (!corte) return null;
-    return projetarCorte(model, { corte, levelIds });
+    return projetarCorte(model, { corte, levelIds, terreno: terreno ?? null });
   }
   return projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p]!, levelIds });
 }
@@ -528,7 +530,7 @@ export function exportarPranchasPdf(
       }
       return [{ p, enq, proj: null }];
     }
-    const proj = projecaoDaPrancha(model, p, levelIds);
+    const proj = projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte);
     if (!proj) return [];
     const enq = enquadrarElevacao(proj, o.denominador, o.papel);
     if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
@@ -739,7 +741,7 @@ export function desenharConjunto(
       case 'CORTE':
       case 'ELEVACAO': {
         const corte = p.corteId ? (model.sections ?? []).find((c) => c.id === p.corteId) : null;
-        const proj = corte ? projetarCorte(model, { corte }) : p.direcao ? projetarElevacao(model, { direcao: p.direcao }) : null;
+        const proj = corte ? projetarCorte(model, { corte, terreno: o.terrenoDoCorte ?? null }) : p.direcao ? projetarElevacao(model, { direcao: p.direcao }) : null;
         if (!proj) {
           folhas.push({ prancha: p, denominador: 0 });
           break;
@@ -824,7 +826,7 @@ export function exportarPranchasPng(
 ): void {
   const k = dpi / 25.4;
   for (const p of pranchas) {
-    const proj = projecaoDaPrancha(model, p, levelIds);
+    const proj = projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte);
     if (!ehPlantaDaPrancha(p) && !proj) continue;
     const oArquivo = { ...o, ...opcoesDaCamada(p), titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
     const canvas = document.createElement('canvas');
@@ -983,7 +985,7 @@ export function montarDxf(
   topografia?: TopografiaParaDxf,
 ): ArtefatoExportado[] {
   const projetadas = (vistas ?? [])
-    .map((p) => projecaoDaPrancha(model, p, levelIds))
+    .map((p) => projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte))
     .filter((x): x is ProjecaoElevacao | ProjecaoCorte => x !== null);
 
   const conteudo = gerarDxf(model, {

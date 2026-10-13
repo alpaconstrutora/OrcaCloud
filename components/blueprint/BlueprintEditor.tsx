@@ -15603,6 +15603,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 pranchasIniciais={pranchaParaExportar}
                 mostrarEixos={mostrarEixos}
                 zona={zonaParaExportacao}
+                // O corte da prancha com o MESMO terreno da tela (a camada "Curvas de nível")
+                // e as mesmas escolhas de Vista › Exibir (13/10/2026).
+                terrenoDoCorte={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
+                cotasDoTerrenoNoCorte={mostrarCotasDoTerrenoNoCorte}
+                comprimentosNoCorte={mostrarComprimentosNoCorte}
                 hipotesesDeIncendio={incendioDoEstudo.hipoteses}
                 hipotesesDeClimatizacao={climatizacaoDoEstudo.hipoteses}
                 study={study}

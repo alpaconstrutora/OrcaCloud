@@ -49,7 +49,8 @@ import { copa, COR_SOMBRA_OPACA, COR_VEGETACAO, pisosHumanizados, simboloNoMundo
 import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
-import type { ProjecaoCorte } from './blueprintCorte';
+import type { ProjecaoCorte, TerrenoParaCorte } from './blueprintCorte';
+import { medidasDoCorte } from './blueprintCorteMedidas';
 import {
   AFASTAMENTO_COTA,
   AVISO_COTA_POR_FACE,
@@ -362,6 +363,16 @@ export interface OpcoesExportacao {
    * (elevação e corte). A planta lê do próprio modelo.
    */
   anotacoes?: Anotacao[];
+  /**
+   * O TERRENO NO CORTE (13/10/2026): o amostrador de cota, o zero e o platô — o mesmo
+   * que a tela passa ao `ElevationCanvas`. Com ele a prancha do corte sai com o perfil
+   * do terreno, a linha do platô e as medidas; ausente, o corte sai como sempre saiu.
+   */
+  terrenoDoCorte?: TerrenoParaCorte | null;
+  /** As cotas do terreno no corte (níveis, corte/aterro, talude, muro). Ausente = sim, havendo terreno. */
+  cotasDoTerrenoNoCorte?: boolean;
+  /** A cadeia de comprimentos abaixo do corte. Ausente = sim, havendo terreno. */
+  comprimentosNoCorte?: boolean;
   denominador: number;
   papel: Papel;
   /** Nome da planta, para o carimbo. */
@@ -1391,20 +1402,26 @@ export function enquadrarElevacao(
   // VAZIO significa "nao ha o que desenhar", e num corte isso inclui o que o
   // plano atravessa: um corte por um pavimento so de pilares nao tem parede
   // atras nenhuma, e recusar a prancha por isso seria recusar o desenho certo.
+  // O TERRENO também é desenho (13/10/2026): o corte de um estudo só com lote e platô
+  // era recusado como "vazio" — a mesma correção que a tela recebeu em 10/09/2026.
+  const comTerreno = temPerfilDoTerreno(projecao);
   const vazio =
     projecao.paredes.every((p) => p.degenerada) &&
-    (!('cortados' in projecao) || projecao.cortados.length === 0);
+    (!('cortados' in projecao) || projecao.cortados.length === 0) &&
+    !comTerreno;
   const larguraRealMm = projecao.bbox.uMax - projecao.bbox.uMin;
   const alturaRealMm = projecao.bbox.vMax - projecao.bbox.vMin;
+  // Com terreno, a faixa da cadeia de comprimentos fica reservada ABAIXO do desenho.
+  const faixa = comTerreno ? FAIXA_DOS_COMPRIMENTOS_MM : 0;
 
   const desenhoLarguraMm = larguraRealMm / denominador;
   const desenhoAlturaMm = alturaRealMm / denominador;
   const cabe =
-    !vazio && desenhoLarguraMm <= utilLarguraMm && desenhoAlturaMm <= utilAlturaMm;
+    !vazio && desenhoLarguraMm <= utilLarguraMm && desenhoAlturaMm + faixa <= utilAlturaMm;
 
   const escalaSugerida =
     ESCALAS.find(
-      (d) => larguraRealMm / d <= utilLarguraMm && alturaRealMm / d <= utilAlturaMm,
+      (d) => larguraRealMm / d <= utilLarguraMm && alturaRealMm / d + faixa <= utilAlturaMm,
     ) ?? null;
 
   return {
@@ -1412,14 +1429,14 @@ export function enquadrarElevacao(
     vazio,
     ocupacao:
       utilLarguraMm > 0 && utilAlturaMm > 0
-        ? Math.max(desenhoLarguraMm / utilLarguraMm, desenhoAlturaMm / utilAlturaMm)
+        ? Math.max(desenhoLarguraMm / utilLarguraMm, (desenhoAlturaMm + faixa) / utilAlturaMm)
         : 0,
     desenhoLarguraMm,
     desenhoAlturaMm,
     utilLarguraMm,
     utilAlturaMm,
     offsetXMm: MARGEM_MM + Math.max(0, (utilLarguraMm - desenhoLarguraMm) / 2),
-    offsetYMm: MARGEM_MM + Math.max(0, (utilAlturaMm - desenhoAlturaMm) / 2),
+    offsetYMm: MARGEM_MM + Math.max(0, (utilAlturaMm - desenhoAlturaMm - faixa) / 2),
     escalaSugerida,
   };
 }
@@ -1459,6 +1476,9 @@ export function desenharElevacao(
     espessuraMm: 0.3,
     cor: COR_TRACO,
   });
+
+  // O TERRENO e o PLATÔ (13/10/2026) — fundo, antes dos itens, como na tela.
+  if (temPerfilDoTerreno(projecao)) desenharTerrenoDoCorte(d, projecao, px, py, py(bb.vMin));
 
   // UMA PASSADA SÓ, DO FUNDO PARA A FRENTE — a mesma ordenação da tela, e pela
   // mesma razão. Três passes independentes (paredes, estruturas, vãos) faziam
@@ -1676,7 +1696,134 @@ export function desenharElevacao(
   );
   desenharAnotacoes(d, daVista, opcoes.denominador, px, py);
 
+  // AS MEDIDAS DO TERRENO (13/10/2026) — por cima de tudo, a mesma conta da tela.
+  if (temPerfilDoTerreno(projecao)) desenharMedidasDoCorte(d, projecao, opcoes, px, py, py(bb.vMin));
+
   desenharCarimbo(d, opcoes, enq, revisoesDasAnotacoes(daVista));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O terreno e as medidas do CORTE na prancha (13/10/2026)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Abaixo do corte com terreno: duas linhas de cota (trechos do projeto e o perfil). */
+export const FAIXA_DOS_COMPRIMENTOS_MM = 10;
+const COR_TERRENO_PRANCHA = '#92400e';
+const COR_TERRA_PRANCHA = '#f5efe8';
+const COR_PLATO_PRANCHA = '#1d4ed8';
+const COR_MEDIDA_CORTE_PRANCHA = '#dc2626';
+const COR_MEDIDA_ATERRO_PRANCHA = '#2563eb';
+const COR_MEDIDA_TALUDE_PRANCHA = '#475569';
+const COR_MEDIDA_MURO_PRANCHA = '#78350f';
+const COR_PISO_PRANCHA = '#475569';
+const TEXTO_MEDIDA_MM = 1.8;
+
+export function temPerfilDoTerreno(p: ProjecaoElevacao | ProjecaoCorte): p is ProjecaoCorte {
+  return 'cortados' in p && (p.perfilDoTerreno ?? []).some((pedaco) => pedaco.length >= 2);
+}
+
+/** Polilinha tracejada com a FASE contínua (os pontos do platô estão a 250 mm — menos que um traço a 1:200). */
+function polilinhaTracejada(d: Desenhista, pts: { x: number; y: number }[], estilo: EstiloTraco, cheio = 1.6, periodo = 2.6): void {
+  let s = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    const comp = Math.hypot(b.x - a.x, b.y - a.y);
+    if (comp < 1e-9) continue;
+    let t = 0;
+    while (t < comp) {
+      const fase = (s + t) % periodo;
+      const passo = Math.min(comp - t, fase < cheio ? cheio - fase : periodo - fase);
+      if (fase < cheio) d.linha(a.x + ((b.x - a.x) * t) / comp, a.y + ((b.y - a.y) * t) / comp, a.x + ((b.x - a.x) * (t + passo)) / comp, a.y + ((b.y - a.y) * (t + passo)) / comp, estilo);
+      t += passo;
+    }
+    s += comp;
+  }
+}
+
+/** O perfil do terreno com a terra embaixo e a linha do platô tracejada — o fundo do corte. */
+function desenharTerrenoDoCorte(d: Desenhista, proj: ProjecaoCorte, px: (u: number) => number, py: (v: number) => number, yFundo: number): void {
+  for (const pedaco of proj.perfilDoTerreno ?? []) {
+    if (pedaco.length < 2) continue;
+    const pts = pedaco.map((q) => ({ x: px(q.u), y: py(q.v) }));
+    d.poligono([...pts, { x: pts[pts.length - 1].x, y: yFundo }, { x: pts[0].x, y: yFundo }], COR_TERRA_PRANCHA);
+    for (let i = 0; i + 1 < pts.length; i++) d.linha(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, { espessuraMm: 0.25, cor: COR_TERRENO_PRANCHA });
+  }
+  for (const pedaco of proj.platoNoCorte ?? []) {
+    if (pedaco.length < 2) continue;
+    polilinhaTracejada(d, pedaco.map((q) => ({ x: px(q.u), y: py(q.v) })), { espessuraMm: 0.35, cor: COR_PLATO_PRANCHA });
+  }
+}
+
+/**
+ * As medidas do terreno no papel — `medidasDoCorte`, a MESMA conta da tela: níveis
+ * (triângulo + cota), o maior corte e o maior aterro, a altura de cada talude e muro, e
+ * a cadeia de comprimentos na faixa reservada abaixo do desenho. Rótulo que cairia
+ * sobre outro é pulado, na ordem de importância.
+ */
+function desenharMedidasDoCorte(
+  d: Desenhista,
+  proj: ProjecaoCorte,
+  opcoes: OpcoesExportacao,
+  px: (u: number) => number,
+  py: (v: number) => number,
+  yFundo: number,
+): void {
+  const comCotas = opcoes.cotasDoTerrenoNoCorte !== false;
+  const comComprimentos = opcoes.comprimentosNoCorte !== false;
+  if (!comCotas && !comComprimentos) return;
+  const m = medidasDoCorte(proj);
+  const A = TEXTO_MEDIDA_MM;
+  const ocupados: { x: number; y: number; w: number; h: number }[] = [];
+  // `y` é a linha de base; `alinhar` diz onde `x` cai no texto.
+  const rotulo = (t: string, x: number, y: number, cor: string, alinhar: 'esq' | 'centro' | 'dir'): boolean => {
+    const w = larguraDoTextoNoPapel(d, t, A);
+    const x0 = alinhar === 'esq' ? x : alinhar === 'centro' ? x - w / 2 : x - w;
+    const caixa = { x: x0 - 0.3, y: y - A - 0.2, w: w + 0.6, h: A + 0.6 };
+    if (ocupados.some((o) => caixa.x < o.x + o.w && o.x < caixa.x + caixa.w && caixa.y < o.y + o.h && o.y < caixa.y + caixa.h)) return false;
+    ocupados.push(caixa);
+    d.texto(x0, y, t, A, cor);
+    return true;
+  };
+  const fina = (cor: string) => ({ espessuraMm: ESPESSURA_FINA_MM, cor });
+
+  if (comCotas) {
+    for (const c of m.verticais) {
+      const x = px(c.u);
+      const y1 = py(c.vDe);
+      const y2 = py(c.vAte);
+      if (Math.abs(y1 - y2) < 1.5) continue;
+      const cor = c.tipo === 'CORTE' ? COR_MEDIDA_CORTE_PRANCHA : c.tipo === 'ATERRO' ? COR_MEDIDA_ATERRO_PRANCHA : c.tipo === 'MURO' ? COR_MEDIDA_MURO_PRANCHA : COR_MEDIDA_TALUDE_PRANCHA;
+      const estilo = { espessuraMm: c.tipo === 'CORTE' || c.tipo === 'ATERRO' ? 0.25 : ESPESSURA_FINA_MM, cor };
+      d.linha(x, y1, x, y2, estilo);
+      d.linha(x - 0.8, y1, x + 0.8, y1, estilo);
+      d.linha(x - 0.8, y2, x + 0.8, y2, estilo);
+      const meio = (y1 + y2) / 2 + A / 2;
+      if (!rotulo(c.rotulo, x + 1, meio, cor, 'esq')) rotulo(c.rotulo, x - 1, meio, cor, 'dir');
+    }
+    for (const n of m.niveis) {
+      const x = px(n.u);
+      const y = py(n.v);
+      const cor = n.tipo === 'TERRENO' ? COR_TERRENO_PRANCHA : n.tipo === 'PLATO' ? COR_PLATO_PRANCHA : COR_PISO_PRANCHA;
+      if (!rotulo(n.rotulo, x, y - 1.8, cor, 'centro')) continue;
+      d.poligono([{ x, y }, { x: x - 0.9, y: y - 1.4 }, { x: x + 0.9, y: y - 1.4 }], cor);
+    }
+  }
+
+  if (comComprimentos) {
+    for (const c of m.horizontais) {
+      const y = yFundo + 4 + c.linha * 4;
+      const a = px(c.uDe);
+      const b = px(c.uAte);
+      if (Math.abs(b - a) < 1) continue;
+      const cor = c.tipo === 'PLATO' ? COR_PLATO_PRANCHA : c.tipo === 'TALUDE' ? COR_MEDIDA_TALUDE_PRANCHA : COR_TERRENO_PRANCHA;
+      d.linha(a, y, b, y, fina(cor));
+      d.linha(a, y - 1, a, y + 1, fina(cor));
+      d.linha(b, y - 1, b, y + 1, fina(cor));
+      // O número só se couber entre os dois traços — senão a cota fica só desenhada.
+      if (larguraDoTextoNoPapel(d, c.rotulo, A) + 1 <= Math.abs(b - a)) rotulo(c.rotulo, (a + b) / 2, y - 0.5, cor, 'centro');
+    }
+  }
 }
 
 /** O que o plano de CORTE atravessa — cheio, como manda a prancha. */

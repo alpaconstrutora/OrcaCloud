@@ -162,4 +162,22 @@ describe('agruparPapeisPorPessoa — uma linha por pessoa × unidade', () => {
     it('lista vazia devolve vazio', () => {
         expect(agruparPapeisPorPessoa([])).toEqual([]);
     });
+
+    it('`ocupacoes` traz TODOS os registros do grupo, em ordem de papel — encerrar/excluir agem sobre eles', () => {
+        const rf = oc('u11', 'marcos', 'RESPONSAVEL_FINANCEIRO');
+        const pr = oc('u11', 'marcos', 'PROPRIETARIO');
+        const r = agruparPapeisPorPessoa([rf, pr]);
+        expect(r[0].ocupacoes).toEqual([pr, rf]);
+    });
+
+    it('ocupação ENCERRADA não se junta: é histórico, cada uma na sua linha', () => {
+        // Com "Incluir encerradas" na aba Ocupações: o proprietário antigo que
+        // saiu não pode virar papel da linha vigente da mesma pessoa.
+        const vigente = oc('u11', 'marcos', 'RESPONSAVEL_FINANCEIRO');
+        const enc1 = { ...oc('u11', 'marcos', 'PROPRIETARIO'), ended_at: '2025-01-01' };
+        const enc2 = { ...oc('u11', 'marcos', 'MORADOR'), ended_at: '2025-01-01' };
+        const r = agruparPapeisPorPessoa([vigente, enc1, enc2]);
+        expect(r.map(g => g.key)).toEqual(['u11:marcos', `enc:${enc1.id}`, `enc:${enc2.id}`]);
+        expect(r[0].papeis).toEqual(['RESPONSAVEL_FINANCEIRO']);
+    });
 });

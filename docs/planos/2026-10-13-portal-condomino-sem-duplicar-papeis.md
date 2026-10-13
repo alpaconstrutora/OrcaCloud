@@ -6,6 +6,10 @@ Sessão a2507f9f, 13/10/2026 ~12:49 (com print da tela de acessos do condomínio
 > portais > portal do condomínio:
 > 1. veja print. no caso em que o proprietário e o Responsável financeiro for a mesma pessoa, nao precisa vir duplicado
 
+### Pedido 2 — mesma sessão, 13/10/2026 ~13:05 (com print de Comercial › Condomínios › 007 - Bella Vista › Ocupações)
+
+> em comercial > condominios > aba ocupacoes: esta acontecendo o mesmo problema
+
 ## Contexto
 Em Portais › Portal do Condômino › Acessos ao portal, cada linha era uma **ocupação**
 (`unit_occupancies`: unidade + pessoa + papel). Quem é Proprietário **e** Responsável
@@ -49,7 +53,39 @@ cobre esses casos também.
 - **Pronto quando:** `npx vitest run __tests__/acessoAoCondominio.test.ts` sai com 0.
   Saiu com 0 (30/30 junto com `orgContextGuard`).
 
+### 4. `components/condominio/OcupacoesTab.tsx` (pedido 2) ✅
+Aqui cada papel é um registro que se encerra e exclui. A tabela junta os papéis
+na mesma linha, e as ações continuam agindo sobre os registros:
+- Uma linha por pessoa × unidade, **só entre ocupações vigentes**. Com "Incluir
+  encerradas", cada ocupação encerrada fica na sua própria linha (é histórico, com data
+  de saída própria). A regra fica em `agruparPapeisPorPessoa` (chave `enc:<id>`), que
+  agora também devolve `ocupacoes` (todos os registros do grupo).
+- Papel: um por linha, empilhados, cada um na sua cor (§8). Em linha corrida o texto
+  mede 225px (273 com o px-6) e seria cortado.
+- Entrada: uma data se for a mesma; senão, uma por papel, alinhada com a coluna Papel.
+- Encerrar (ícone da porta): encerra todos os papéis da linha, um por vez, aplicando cada
+  sucesso no estado local (§22). Falha parcial diz "N de M já encerradas".
+- Menu ⋮: com 2+ papéis, ganha "Encerrar só como <papel>" para cada um.
+- Excluir: apaga todos os registros da linha. O título diz quantos ("Excluir os 2
+  registros?") e a mensagem indica o "Encerrar só como…" para tirar um papel só.
+- KPI "OCUPAÇÕES ATIVAS" → "PESSOAS VINCULADAS" (pessoa × unidade vigente).
+- Larguras padrão (§6.1): papel 135 → 190 ("Responsável financeiro" = 141 + 48),
+  unidade 105 → 100, torre 130 → 120. A soma vai a 1390, que é exatamente a largura útil
+  medida, então o espaçador fica em 0 nesse viewport. O texto de Portal ganhou
+  `truncate` + `title`, porque sem a folga "Portal do Cliente · 69 dias" passava por
+  cima dos ícones de Ações (antes ele só cabia porque transbordava para a folga).
+  Quem já tem larguras salvas continua com as suas.
+- **Pronto quando:** no 007 - Bella Vista, 8 linhas de pessoa (eram 16) + 1 unidade sem
+  ocupante, papéis empilhados inteiros, KPI 8, menu da linha 11 com os dois "Encerrar só
+  como…", sem rolagem horizontal, sem erro.
+  - Verificado em 13/10 no app local (agente-leitura, "Todas", viewport 1700): exatamente
+    isso. Tabela 1390 = container 1390, sem erro de console nem HTTP. Encerrar e excluir
+    **não** foram executados (a conta é só de leitura e o dado é real); o caminho foi
+    coberto pelo typecheck e pela leitura do código.
+
 ## Verificação
-- `check-ui-standard.sh` no arquivo editado: nenhuma violação.
+- `check-ui-standard.sh` nos dois arquivos editados: nenhuma violação.
 - `tsc --noEmit`: exit 0, 0 erros.
-- Publicação: push em `main`, depois o check-run `ci` e `conferir-producao.sh "PESSOAS VINCULADAS"`.
+- `acessoAoCondominio.test.ts` + `orgContextGuard.test.ts`: 32/32.
+- Publicação 1 (itens 1–3): `c11d44d`, domínio conferido com "PESSOAS VINCULADAS", CI `success`.
+- Publicação 2 (item 4): push em `main`, depois CI e `conferir-producao.sh "Encerrar só como"`.

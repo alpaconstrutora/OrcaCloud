@@ -3,8 +3,11 @@
 // Plano: docs/planos/2026-08-13-opura-condominios-avaliacao.md
 //
 // Esta aba responde três perguntas que o Espelho de Vendas NÃO responde: quem é
-// DONO, quem MORA e quem PAGA. São relações distintas, e por isso a tabela lista
-// ocupações (uma linha por papel), não unidades.
+// DONO, quem MORA e quem PAGA. São relações distintas, e cada papel é um
+// registro próprio no banco. A TABELA, porém, mostra uma linha por pessoa ×
+// unidade (13/10/2026): quem é proprietário e responsável financeiro aparecia
+// duas vezes, idêntico. Os papéis vão juntos na coluna Papel, e encerrar/excluir
+// continuam agindo sobre os registros — ver `agruparPapeisPorPessoa`.
 //
 // UI: ui_ux_guia_unificado.md — §5.2 toolbar acoplada, §6.6 px-6 + border-r,
 // §7 tipografia, §8 status como texto, §9 ações, §14 useConfirm, §22 estado local.
@@ -29,7 +32,7 @@ import type { AcaoDoTitulo } from './CondominioDetail';
 // O módulo passou a conhecer DOIS caminhos de acesso ao condomínio: o link de
 // condômino (legado) e a aba Condomínio do Portal do Cliente. A regra de qual
 // vale mora num lugar só.
-import { estadoDeAcesso, type AcessoClienteLite, type EstadoDeAcesso } from '../../utils/acessoAoCondominio';
+import { estadoDeAcesso, agruparPapeisPorPessoa, type AcessoClienteLite, type EstadoDeAcesso } from '../../utils/acessoAoCondominio';
 import { condominioAcessoService } from '../../services/condominioAcessoService';
 import { clientPortalService } from '../../services/clientPortalService';
 import { useStore } from '../../store/useStore';
@@ -67,8 +70,8 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'portal', label: 'Portal', sortable: true },
 ];
 
-// §6.1 — larguras iniciais, redimensionáveis e persistidas por tela. Soma: 1210
-// de dado + 140 de Ações = 1350px, ESCOLHIDO para caber no container (medido:
+// §6.1 — larguras iniciais, redimensionáveis e persistidas por tela. Soma: 1250
+// de dado + 140 de Ações = 1390px (era 1350 até 13/10), ESCOLHIDO para caber no container (medido:
 // 1390px úteis em viewport 1700 com a sidebar). A primeira versão somava 1460 e
 // a tabela nascia com rolagem horizontal, com o espaçador do §6.1.1 em 0 e
 // "Ações" fora da borda do card. A folga que sobra vai inteira para o <col />
@@ -77,8 +80,14 @@ const COLUMNS: ColumnConfig[] = [
 // Única" cabe inteira, e "Fração ideal" tem espaço para o rótulo MAIS o ícone de
 // ordenação — com 110px o `overflow-hidden` do ResizeHandle comia o chevron e a
 // coluna parecia não ordenável (§6.8).
+// 13/10/2026: papel 135 → 190, pago por unidade 105 → 100 e torre 130 → 120
+// (mais os 40 de folga medidos acima). Com os papéis empilhados, o mais largo é
+// "Responsável financeiro": 141px de texto + 48 do px-6 = 189. Com 135 ele já
+// era cortado mesmo antes de juntar os papéis. "Torre Única" tem 69px de texto
+// e cabe nos 72 que sobram. Portal NÃO cede: com 185 cortava "Portal do
+// Cliente · 69 dias", justamente a linha de quem tem acesso.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    unidade: 105, torre: 130, pessoa: 165, documento: 125, papel: 135,
+    unidade: 100, torre: 120, pessoa: 165, documento: 125, papel: 190,
     entrada: 110, saida: 105, fracao: 135, portal: 200, actions: 140,
 };
 
@@ -196,8 +205,25 @@ interface LinhaExibida {
     unitName: string;
     towerName: string;
     fracao: number | null;
+    /** A primeira do grupo — nome, documento e portal são da pessoa, iguais em
+     *  todas. `null` = unidade sem ocupante. */
     ocupacao: UnitOccupancyRow | null;
+    /** Todas as ocupações desta pessoa nesta unidade (vigentes), em ordem de
+     *  papel. Encerrada vem sozinha. Vazio quando `ocupacao` é null. */
+    ocupacoes: UnitOccupancyRow[];
 }
+
+/** "Proprietário · Responsável financeiro" — busca e ordenação leem isto. */
+const papeisDaLinha = (l: LinhaExibida): string =>
+    l.ocupacoes.map(o => ROLE_LABELS[o.role]).join(' · ');
+
+/** Entrada única quando os papéis começaram no mesmo dia; senão, uma data por
+ *  papel, na mesma ordem da coluna Papel. Escolher uma só esconderia que o
+ *  responsável financeiro entrou depois do proprietário. */
+const entradasDaLinha = (l: LinhaExibida): string => {
+    const datas = [...new Set(l.ocupacoes.map(o => formatarData(o.started_at)))];
+    return datas.length ? datas.join(' · ') : '—';
+};
 
 interface ClienteOpcao { id: string; name: string; document?: string | null; email?: string | null; city?: string | null; state?: string | null }
 
@@ -230,11 +256,31 @@ function renderOcupacaoCell(
         case 'documento':
             return <span className="text-sm font-normal text-gray-600">{o?._client_document || '—'}</span>;
         case 'papel':
+            /* A mesma pessoa com dois papéis é UMA linha desde 13/10/2026, e os
+               papéis vão EMPILHADOS, um por linha, cada um na sua cor (§8). Em
+               linha corrida "Proprietário · Responsável financeiro" mede 225px
+               de texto (273 com o px-6) e seria cortado; empilhado, o mais
+               largo é "Responsável financeiro" (141px), que cabe na coluna. */
             return o
-                ? <span className={`text-sm font-normal ${ROLE_TEXT_COLOR[o.role]}`}>{ROLE_LABELS[o.role]}</span>
+                ? <div className="flex flex-col text-sm font-normal" title={papeisDaLinha(l)}>
+                    {l.ocupacoes.map(oc => (
+                        <span key={oc.id} className={`truncate ${ROLE_TEXT_COLOR[oc.role]}`}>{ROLE_LABELS[oc.role]}</span>
+                    ))}
+                </div>
                 : <span className="text-sm font-normal text-gray-400">—</span>;
-        case 'entrada':
-            return <span className="text-sm font-normal text-gray-600">{o ? formatarData(o.started_at) : '—'}</span>;
+        case 'entrada': {
+            /* Mesma data → uma só. Datas diferentes → uma por papel, na mesma
+               ordem e altura da coluna Papel, para cada data ficar ao lado do
+               seu papel. */
+            if (!o) return <span className="text-sm font-normal text-gray-600">—</span>;
+            const datas = l.ocupacoes.map(oc => formatarData(oc.started_at));
+            const todasIguais = new Set(datas).size === 1;
+            return todasIguais
+                ? <span className="text-sm font-normal text-gray-600">{datas[0]}</span>
+                : <div className="flex flex-col text-sm font-normal text-gray-600" title={entradasDaLinha(l)}>
+                    {datas.map((d, i) => <span key={l.ocupacoes[i].id}>{d}</span>)}
+                </div>;
+        }
         case 'saida':
             return <span className="text-sm font-normal text-gray-600">{!o ? '—' : o.ended_at ? formatarData(o.ended_at) : 'Vigente'}</span>;
         case 'fracao':
@@ -254,7 +300,7 @@ function renderOcupacaoCell(
                Ocupação encerrada não liga nada: o interruptor fica inerte. */
             if (!o || !estado) return <span className="text-sm font-normal text-gray-400">—</span>;
             return (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                     <TableSwitch
                         checked={estado.ve}
                         onChange={() => onTogglePortal(o, estado)}
@@ -269,7 +315,9 @@ function renderOcupacaoCell(
                     {/* O rótulo fica FORA do TableSwitch (que pinta o texto de
                         cinza por estado) para manter a cor semântica do §8 — o
                         âmbar de "aba desligada" é o aviso da coluna. */}
-                    <span className={`text-sm font-normal whitespace-nowrap ${estado.cor}`}>{estado.texto}</span>
+                    {/* `truncate`: sem folga no espaçador o texto longo ("Portal do
+                        Cliente · 69 dias") passava por cima dos ícones de Ações. */}
+                    <span className={`min-w-0 truncate text-sm font-normal whitespace-nowrap ${estado.cor}`} title={estado.texto}>{estado.texto}</span>
                 </div>
             );
         default:
@@ -425,7 +473,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
             // coluna a mais, não a razão da tela existir.
             try {
                 const mapa = await condominioAcessoService.mapearPorCliente(
-                    dados.map(d => d.client_id));
+                    [...new Set(dados.map(d => d.client_id))]);
                 setAcessoCliente(Object.fromEntries(mapa));
             } catch {
                 setAcessoCliente({});
@@ -446,9 +494,10 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
     }, [orgId]);
 
     const filtradas = React.useMemo(() => {
-        // A tabela parte das UNIDADES. Cada ocupação vira uma linha; unidade sem
-        // ninguém vira uma linha própria, com `ocupacao: null`. Assim o espelho
-        // do condomínio está sempre completo, e a lacuna é visível.
+        // A tabela parte das UNIDADES. Cada pessoa da unidade vira uma linha
+        // (com todos os papéis dela); unidade sem ninguém vira uma linha
+        // própria, com `ocupacao: null`. Assim o espelho do condomínio está
+        // sempre completo, e a lacuna é visível.
         const porUnidade = new Map<string, UnitOccupancyRow[]>();
         for (const l of linhas) {
             if (!porUnidade.has(l.unit_id)) porUnidade.set(l.unit_id, []);
@@ -461,14 +510,14 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
             if (ocupacoes.length === 0) {
                 todas.push({
                     key: `vazia:${u.id}`, unitId: u.id, unitName: u.unitName,
-                    towerName: u.towerName, fracao: u.fracao, ocupacao: null,
+                    towerName: u.towerName, fracao: u.fracao, ocupacao: null, ocupacoes: [],
                 });
             } else {
-                for (const o of ocupacoes) {
+                for (const g of agruparPapeisPorPessoa(ocupacoes)) {
                     todas.push({
-                        key: o.id, unitId: u.id, unitName: u.unitName,
-                        towerName: u.towerName, fracao: u.fracao ?? o._fracao_ideal ?? null,
-                        ocupacao: o,
+                        key: g.key, unitId: u.id, unitName: u.unitName,
+                        towerName: u.towerName, fracao: u.fracao ?? g.ocupacao._fracao_ideal ?? null,
+                        ocupacao: g.ocupacao, ocupacoes: g.ocupacoes,
                     });
                 }
             }
@@ -477,10 +526,12 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         // Ocupação cujo unidade não veio na lista (excluída, ou fora do recorte):
         // aparece mesmo assim, senão some sem explicação.
         for (const restantes of porUnidade.values()) {
-            for (const o of restantes) {
+            for (const g of agruparPapeisPorPessoa(restantes)) {
+                const o = g.ocupacao;
                 todas.push({
-                    key: o.id, unitId: o.unit_id, unitName: o._unit_name,
-                    towerName: o._tower_name, fracao: o._fracao_ideal ?? null, ocupacao: o,
+                    key: g.key, unitId: o.unit_id, unitName: o._unit_name,
+                    towerName: o._tower_name, fracao: o._fracao_ideal ?? null,
+                    ocupacao: o, ocupacoes: g.ocupacoes,
                 });
             }
         }
@@ -492,7 +543,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                 || l.unitName.toLowerCase().includes(termo)
                 || l.towerName.toLowerCase().includes(termo)
                 || (l.ocupacao?._client_document || '').toLowerCase().includes(termo)
-                || (l.ocupacao ? ROLE_LABELS[l.ocupacao.role].toLowerCase().includes(termo) : false))
+                || papeisDaLinha(l).toLowerCase().includes(termo))
             : todas;
 
         const valor = (l: LinhaExibida, col: string): string | number => {
@@ -501,8 +552,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                 case 'torre': return l.towerName;
                 case 'pessoa': return l.ocupacao?._client_name || '';
                 case 'documento': return l.ocupacao?._client_document || '';
-                case 'papel': return l.ocupacao ? ROLE_LABELS[l.ocupacao.role] : '';
-                case 'entrada': return l.ocupacao?.started_at || '';
+                case 'papel': return papeisDaLinha(l);
+                // A entrada mais antiga do grupo: é quando a pessoa chegou.
+                case 'entrada': return l.ocupacoes.map(o => o.started_at || '').sort()[0] || '';
                 case 'saida': return l.ocupacao?.ended_at || '';
                 case 'fracao': return l.fracao ?? -1;
                 // Ordena pelo RÓTULO: agrupa 'Ativo', 'Expirado', 'Revogado' e
@@ -535,7 +587,9 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         const vigentes = linhas.filter(l => !l.ended_at);
         const unidadesComOcupacao = new Set(vigentes.map(l => l.unit_id));
         return {
-            total: vigentes.length,
+            // Pessoa × unidade, não registro: é o que a tabela lista desde
+            // 13/10/2026, e o KPI tem de bater com as linhas vigentes.
+            total: new Set(vigentes.map(l => `${l.unit_id}:${l.client_id}`)).size,
             proprietarios: vigentes.filter(l => l.role === 'PROPRIETARIO').length,
             ocupadas: unidadesComOcupacao.size,
             semResponsavel: unidades.length - new Set(
@@ -656,22 +710,42 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         }
     };
 
-    const encerrar = async (linha: UnitOccupancyRow) => {
+    /** "proprietário e responsável financeiro" — para as mensagens de confirmação. */
+    const listarPapeis = (ocs: UnitOccupancyRow[]) => {
+        const nomes = ocs.map(o => ROLE_LABELS[o.role].toLowerCase());
+        return nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}` : nomes[0] || '';
+    };
+
+    /** Encerra um ou mais papéis da MESMA pessoa na mesma unidade. A linha junta
+     *  os papéis, mas cada um segue sendo um registro: o ícone da porta encerra
+     *  todos, e o menu ⋮ oferece encerrar um só. */
+    const encerrar = async (ocs: UnitOccupancyRow[]) => {
+        if (ocs.length === 0) return;
+        const primeira = ocs[0];
         const ok = await confirm({
             title: 'Encerrar ocupação?',
-            message: `${linha._client_name} deixa de constar como ${ROLE_LABELS[linha.role].toLowerCase()} da unidade ${linha._unit_name}. O registro é mantido no histórico — não é exclusão.`,
+            message: `${primeira._client_name} deixa de constar como ${listarPapeis(ocs)} da unidade ${primeira._unit_name}. O registro é mantido no histórico — não é exclusão.`,
             variant: 'warning',
             confirmLabel: 'Encerrar ocupação',
         });
         if (!ok) return;
+        // Um por vez, aplicando cada sucesso no estado local (§22): se o segundo
+        // falhar, o primeiro já encerrado não volta a aparecer como vigente.
+        let feitas = 0;
         try {
-            const atualizada = await unitOccupancyService.encerrar(linha.id, hojeISO());
-            setLinhas(prev => incluirEncerradas
-                ? prev.map(l => (l.id === linha.id ? { ...l, ...atualizada } : l))
-                : prev.filter(l => l.id !== linha.id));
-            notify('Ocupação encerrada. O histórico foi preservado.');
+            for (const oc of ocs) {
+                const atualizada = await unitOccupancyService.encerrar(oc.id, hojeISO());
+                setLinhas(prev => incluirEncerradas
+                    ? prev.map(l => (l.id === oc.id ? { ...l, ...atualizada } : l))
+                    : prev.filter(l => l.id !== oc.id));
+                feitas++;
+            }
+            notify(ocs.length > 1
+                ? 'Ocupações encerradas. O histórico foi preservado.'
+                : 'Ocupação encerrada. O histórico foi preservado.');
         } catch (e: any) {
-            notify(e?.message || 'Erro ao encerrar a ocupação.', 'error');
+            const parcial = feitas > 0 ? ` (${feitas} de ${ocs.length} já encerrada${feitas === 1 ? '' : 's'})` : '';
+            notify((e?.message || 'Erro ao encerrar a ocupação.') + parcial, 'error');
         }
     };
 
@@ -791,20 +865,31 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         }
     };
 
-    const excluir = async (linha: UnitOccupancyRow) => {
+    const excluir = async (ocs: UnitOccupancyRow[]) => {
+        if (ocs.length === 0) return;
+        const varios = ocs.length > 1;
         const ok = await confirm({
-            title: 'Excluir o registro?',
-            message: 'Isso apaga a ocupação de vez, sem deixar histórico. Use só para corrigir um cadastro errado — para registrar a saída de alguém, encerre a ocupação.',
+            title: varios ? `Excluir os ${ocs.length} registros?` : 'Excluir o registro?',
+            message: varios
+                // A linha junta papéis e a exclusão apaga todos — dito antes,
+                // porque quem errou um papel só deve encerrar aquele.
+                ? `Isso apaga de vez as ocupações de ${ocs[0]._client_name} como ${listarPapeis(ocs)}, sem deixar histórico. Use só para corrigir um cadastro errado — para tirar um papel só, use "Encerrar só como…" no menu.`
+                : 'Isso apaga a ocupação de vez, sem deixar histórico. Use só para corrigir um cadastro errado — para registrar a saída de alguém, encerre a ocupação.',
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
         if (!ok) return;
+        let feitas = 0;
         try {
-            await unitOccupancyService.remove(linha.id);
-            setLinhas(prev => prev.filter(l => l.id !== linha.id));
-            notify('Registro excluído.');
+            for (const oc of ocs) {
+                await unitOccupancyService.remove(oc.id);
+                setLinhas(prev => prev.filter(l => l.id !== oc.id));
+                feitas++;
+            }
+            notify(varios ? 'Registros excluídos.' : 'Registro excluído.');
         } catch (e: any) {
-            notify(e?.message || 'Erro ao excluir o registro.', 'error');
+            const parcial = feitas > 0 ? ` (${feitas} de ${ocs.length} já excluído${feitas === 1 ? '' : 's'})` : '';
+            notify((e?.message || 'Erro ao excluir o registro.') + parcial, 'error');
         }
     };
 
@@ -812,7 +897,7 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
         <div className="space-y-6">
             {/* KPIs — §4, cor semântica por indicador */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard label="OCUPAÇÕES ATIVAS" value={kpis.total} icon={<Users className="w-5 h-5" />} color="blue" />
+                <KpiCard label="PESSOAS VINCULADAS" value={kpis.total} icon={<Users className="w-5 h-5" />} color="blue" />
                 <KpiCard label="PROPRIETÁRIOS" value={kpis.proprietarios} icon={<UserCheck className="w-5 h-5" />} color="indigo" />
                 <KpiCard
                     label="UNIDADES OCUPADAS"
@@ -1009,9 +1094,11 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                                                 {o && !o.ended_at && (
                                                     <ActionIconButton
                                                         kind="edit"
-                                                        title="Encerrar ocupação"
+                                                        title={l.ocupacoes.length > 1
+                                                            ? `Encerrar ocupação (${papeisDaLinha(l)})`
+                                                            : 'Encerrar ocupação'}
                                                         icon={<DoorOpen className="w-4 h-4" />}
-                                                        onClick={() => encerrar(o)}
+                                                        onClick={() => encerrar(l.ocupacoes)}
                                                     />
                                                 )}
                                                 {o && (
@@ -1027,9 +1114,19 @@ const OcupacoesTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo }
                                                                 label: 'Ver no Portal do Cliente',
                                                                 onClick: () => navigateToFocus('client-properties', o.client_id, 'CLIENTE_CONDOMINIO'),
                                                             }] : []),
+                                                            // Linha com mais de um papel: encerrar UM sem
+                                                            // perder os outros (ex.: deixou de ser o
+                                                            // responsável financeiro, segue proprietário).
+                                                            ...(l.ocupacoes.length > 1 && !o.ended_at
+                                                                ? l.ocupacoes.map(oc => ({
+                                                                    icon: <DoorOpen className="w-[18px] h-[18px]" />,
+                                                                    label: `Encerrar só como ${ROLE_LABELS[oc.role]}`,
+                                                                    onClick: () => encerrar([oc]),
+                                                                }))
+                                                                : []),
                                                         ]}
                                                         showDelete
-                                                        onDelete={() => excluir(o)}
+                                                        onDelete={() => excluir(l.ocupacoes)}
                                                     />
                                                 )}
                                             </div>

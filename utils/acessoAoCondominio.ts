@@ -106,11 +106,15 @@ export function resumirAcessos(estados: EstadoDeAcesso[]): ResumoDeAcesso {
 const ORDEM_DOS_PAPEIS = ['PROPRIETARIO', 'INQUILINO', 'MORADOR', 'RESPONSAVEL_FINANCEIRO'];
 
 export interface PapeisDaPessoaNaUnidade<T> {
-    /** `${unit_id}:${client_id}` — estável entre carregamentos. */
+    /** `${unit_id}:${client_id}` para o grupo vigente; `enc:${id}` para
+     *  ocupação encerrada. Estável entre carregamentos. */
     key: string;
     /** A primeira ocupação do grupo, na ordem de entrada: carrega nome da
      *  pessoa e da unidade, que são iguais em todo o grupo. */
     ocupacao: T;
+    /** Todas as ocupações do grupo, em `ORDEM_DOS_PAPEIS` — é sobre elas que
+     *  encerrar/excluir agem, porque cada uma continua sendo um registro. */
+    ocupacoes: T[];
     /** Sem repetição, em `ORDEM_DOS_PAPEIS`. */
     papeis: string[];
 }
@@ -119,21 +123,26 @@ export interface PapeisDaPessoaNaUnidade<T> {
  * Uma linha por PESSOA × UNIDADE, não por ocupação.
  *
  * 13/10/2026: quem é proprietário E responsável financeiro da mesma unidade
- * tem duas ocupações, e Portais › Portal do Condômino mostrava duas linhas
- * idênticas — mesmo acesso, mesma ação — e contava a pessoa duas vezes nos
- * KPIs. O acesso ao portal é da PESSOA (`client_id`), então a segunda linha
- * não dizia nada. Em Ocupações as duas continuam separadas: lá cada papel é
- * um registro que se edita e encerra sozinho.
+ * tem duas ocupações, e Portais › Portal do Condômino e Comercial ›
+ * Condomínios › Ocupações mostravam duas linhas idênticas — mesmo acesso,
+ * mesma pessoa — e contavam a pessoa duas vezes nos KPIs. Cada papel continua
+ * sendo um registro no banco; o agrupamento é só de leitura.
+ *
+ * Só ocupações VIGENTES se juntam. Encerrada é histórico — cada uma tem a sua
+ * data de saída e fica na sua própria linha.
  */
-export function agruparPapeisPorPessoa<T extends { unit_id: string; client_id: string; role: string }>(
-    ocupacoes: T[],
-): PapeisDaPessoaNaUnidade<T>[] {
+export function agruparPapeisPorPessoa<T extends {
+    id: string; unit_id: string; client_id: string; role: string; ended_at?: string | null;
+}>(ocupacoes: T[]): PapeisDaPessoaNaUnidade<T>[] {
     const grupos = new Map<string, PapeisDaPessoaNaUnidade<T>>();
     for (const o of ocupacoes) {
-        const key = `${o.unit_id}:${o.client_id}`;
+        const key = o.ended_at ? `enc:${o.id}` : `${o.unit_id}:${o.client_id}`;
         const g = grupos.get(key);
-        if (!g) grupos.set(key, { key, ocupacao: o, papeis: [o.role] });
-        else if (!g.papeis.includes(o.role)) g.papeis.push(o.role);
+        if (!g) grupos.set(key, { key, ocupacao: o, ocupacoes: [o], papeis: [o.role] });
+        else {
+            g.ocupacoes.push(o);
+            if (!g.papeis.includes(o.role)) g.papeis.push(o.role);
+        }
     }
     const posicao = (r: string) => {
         const i = ORDEM_DOS_PAPEIS.indexOf(r);
@@ -142,6 +151,7 @@ export function agruparPapeisPorPessoa<T extends { unit_id: string; client_id: s
     for (const g of grupos.values()) {
         // sort estável: papéis desconhecidos mantêm a ordem de chegada
         g.papeis.sort((a, b) => posicao(a) - posicao(b));
+        g.ocupacoes.sort((a, b) => posicao(a.role) - posicao(b.role));
     }
     return [...grupos.values()];
 }

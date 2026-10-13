@@ -19,7 +19,7 @@ import {
 } from '../../utils/blueprintElevation';
 import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
-import { medidasDoCorte } from '../../utils/blueprintCorteMedidas';
+import { escalaGrafica, marcasDaRegua, medidasDoCorte } from '../../utils/blueprintCorteMedidas';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
 import { COR_DA_DISCIPLINA } from '../../utils/blueprintRede';
@@ -57,6 +57,11 @@ interface Props {
   mostrarCotasDoTerreno?: boolean;
   /** Só no corte com terreno (13/10/2026): a cadeia de comprimentos abaixo do desenho. */
   mostrarComprimentos?: boolean;
+  /**
+   * Régua vertical à esquerda + linhas de nível + escala gráfica (13/10/2026). No corte
+   * com terreno, em cota absoluta; na elevação, relativa ao zero do desenho.
+   */
+  mostrarRegua?: boolean;
   /** Muda de valor → reenquadra. O botão "Enquadrar" da barra bumpa isto. */
   enquadrarToken?: number;
   /**
@@ -171,6 +176,7 @@ export default function ElevationCanvas({
   mostrarEstrutura = true,
   mostrarCotasDoTerreno = false,
   mostrarComprimentos = false,
+  mostrarRegua = false,
   enquadrarToken = 0,
   terreno = null,
   terrenoChave = '',
@@ -193,7 +199,7 @@ export default function ElevationCanvas({
   // As medidas do terreno (níveis, corte/aterro, comprimentos) — puras, só no corte.
   const medidas = useMemo(() => (ehCorte(projecao) ? medidasDoCorte(projecao) : null), [projecao]);
 
-  const { vista, paraTela, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
+  const { vista, paraTela, paraMundo, enquadrar, registrarTamanho, aoRolar, aoApontarBaixo, aoApontarMover, aoApontarCima } =
     useCanvasVista({ margemPx: 56 });
 
   // A roda dá zoom sem rolar a página — listener nativo, `passive: false`.
@@ -269,6 +275,24 @@ export default function ElevationCanvas({
     ctx.clearRect(0, 0, tamanho.w, tamanho.h);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, tamanho.w, tamanho.h);
+
+    // 0. RÉGUA (13/10/2026): as marcas da faixa VISÍVEL. As linhas de nível vão por baixo
+    //    de tudo — fundo de papel milimetrado, não desenho; a régua em si vai por cima, no fim.
+    const cotaZeroDaRegua = ehCorte(projecao) ? projecao.cotaZeroM : undefined;
+    const regua = mostrarRegua
+      ? marcasDaRegua(paraMundo(0, tamanho.h).y, paraMundo(0, 0).y, vista.escala, cotaZeroDaRegua)
+      : null;
+    if (regua) {
+      for (const m of regua.marcas) {
+        const y = Math.round(paraTela({ x: 0, y: m.v }).y) + 0.5;
+        ctx.strokeStyle = m.principal ? '#e2e8f0' : '#f1f5f9';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(tamanho.w, y);
+        ctx.stroke();
+      }
+    }
 
     const retangulo = (uMin: number, uMax: number, vMin: number, vMax: number) => {
       const p1 = paraTela({ x: uMin, y: vMax });
@@ -723,6 +747,56 @@ export default function ElevationCanvas({
         }
       }
     }
+
+    // 7. A RÉGUA por cima, colada à esquerda, e a ESCALA GRÁFICA no canto inferior direito.
+    if (regua) {
+      const largura = 52;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(0, 0, largura, tamanho.h);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(largura - 0.5, 0);
+      ctx.lineTo(largura - 0.5, tamanho.h);
+      ctx.stroke();
+      ctx.font = '10px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (const m of regua.marcas) {
+        const y = Math.round(paraTela({ x: 0, y: m.v }).y) + 0.5;
+        if (y < 6 || y > tamanho.h - 6) continue;
+        ctx.strokeStyle = '#64748b';
+        ctx.beginPath();
+        ctx.moveTo(largura - (m.principal ? 10 : 5), y);
+        ctx.lineTo(largura, y);
+        ctx.stroke();
+        ctx.fillStyle = m.principal ? '#0f172a' : '#64748b';
+        ctx.fillText(m.rotulo, largura - 13, y);
+      }
+      // O que a régua mede — cota absoluta ou altura relativa.
+      ctx.fillStyle = '#475569';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(cotaZeroDaRegua !== undefined ? 'cota (m)' : 'altura (m)', 4, 4);
+
+      const e = escalaGrafica(vista.escala);
+      const x1 = tamanho.w - 24;
+      const x0 = x1 - e.px;
+      const y = tamanho.h - 18;
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(x0, y, e.px / 2, 5);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x0 + e.px / 2, y, e.px / 2, 5);
+      ctx.strokeStyle = '#0f172a';
+      ctx.strokeRect(x0 + 0.5, y + 0.5, e.px - 1, 5);
+      ctx.fillStyle = '#0f172a';
+      ctx.textBaseline = 'bottom';
+      ctx.textAlign = 'center';
+      ctx.fillText('0', x0, y - 2);
+      ctx.fillText(e.rotulo, x1, y - 2);
+      ctx.restore();
+    }
   }, [
     projecao,
     vista,
@@ -735,6 +809,8 @@ export default function ElevationCanvas({
     medidas,
     mostrarCotasDoTerreno,
     mostrarComprimentos,
+    mostrarRegua,
+    paraMundo,
   ]);
 
   // "Vazio" tem de contar a estrutura também: uma planta de fôrmas — só pilares

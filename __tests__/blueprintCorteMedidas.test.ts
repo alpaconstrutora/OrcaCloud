@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type Command, type Point } from '../utils/blueprintKernel';
 import { baseDoCorte, bordasDoAnelNoCorte, projetarCorte, type TerrenoParaCorte } from '../utils/blueprintCorte';
-import { formatarCota, medidasDoCorte } from '../utils/blueprintCorteMedidas';
+import { escalaGrafica, formatarCota, marcasDaRegua, medidasDoCorte } from '../utils/blueprintCorteMedidas';
 import { PARAMETROS_PADRAO } from '../utils/blueprintTopografiaAnalises';
 
 function soCorte() {
@@ -141,5 +141,27 @@ describe('corte · muro de arrimo', () => {
     });
     const m = medidasDoCorte(proj);
     expect(m.verticais.filter((c) => c.tipo === 'MURO').map((c) => c.rotulo)).toEqual(['muro 4,00 m']);
+  });
+});
+
+describe('régua vertical e escala gráfica', () => {
+  it('o passo é o primeiro redondo com 36 px; marcas em cotas absolutas redondas', () => {
+    // 0,02 px/mm: 1 m = 20 px (não cabe), 2 m = 40 px (cabe).
+    const r = marcasDaRegua(-3200, 6100, 0.02, 880.37);
+    expect(r.passoM).toBe(2);
+    expect(r.marcas.map((m) => m.rotulo)).toEqual(['878', '880', '882', '884', '886']);
+    expect(r.marcas[0].v).toBe(Math.round((878 - 880.37) * 1000));
+    expect(r.marcas.filter((m) => m.principal).map((m) => m.rotulo)).toEqual(['880']);
+  });
+
+  it('sem cota absoluta (elevação): relativas ao zero, com ±0 e sinal', () => {
+    const r = marcasDaRegua(-1600, 3200, 0.08, undefined);
+    expect(r.passoM).toBe(0.5);
+    expect(r.marcas.map((m) => m.rotulo)).toEqual(['−1,5', '−1,0', '−0,5', '±0', '+0,5', '+1,0', '+1,5', '+2,0', '+2,5', '+3,0']);
+  });
+
+  it('escala gráfica: o comprimento redondo mais perto de 120 px', () => {
+    expect(escalaGrafica(0.02)).toMatchObject({ comprimentoM: 5, px: 100, rotulo: '5 m' });
+    expect(escalaGrafica(0.0005).rotulo).toBe('200 m');
   });
 });

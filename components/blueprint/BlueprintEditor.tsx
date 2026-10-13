@@ -1726,6 +1726,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // MEDIDAS NO CORTE DO TERRENO (13/10/2026): níveis + corte/aterro, e os comprimentos.
   const [mostrarCotasDoTerrenoNoCorte, setMostrarCotasDoTerrenoNoCorte] = usePersistedState('blueprint:corteCotasDoTerreno', true);
   const [mostrarComprimentosNoCorte, setMostrarComprimentosNoCorte] = usePersistedState('blueprint:corteComprimentos', true);
+  const [mostrarReguaNaVista, setMostrarReguaNaVista] = usePersistedState('blueprint:vistaRegua', true);
   const [mostrarRotulosEsquadria, setMostrarRotulosEsquadria] = usePersistedState(
     'blueprint:vistaRotulosEsquadria',
     true,
@@ -13791,6 +13792,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                           alternar: () => setMostrarCotasAltura((v) => !v),
                           ajuda: 'A cadeia vertical à esquerda, do piso ao topo da edificação.',
                         },
+                        {
+                          chave: 'regua-vista',
+                          rotulo: 'Régua e escala',
+                          icone: Ruler,
+                          ligado: mostrarReguaNaVista,
+                          alternar: () => setMostrarReguaNaVista((v) => !v),
+                          ajuda: 'Régua vertical à esquerda com linhas de nível e a escala gráfica no canto. No corte com terreno, em cota absoluta; na elevação, a altura a partir do piso (±0).',
+                        },
                         // MEDIDAS DO TERRENO — só no corte, e só com o terreno nele (a camada
                         // "Curvas de nível" é a que leva o perfil ao corte).
                         ...(corteAtual
@@ -15205,6 +15214,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               mostrarEstrutura={mostrarEstruturaVista}
               mostrarCotasDoTerreno={mostrarCotasDoTerrenoNoCorte}
               mostrarComprimentos={mostrarComprimentosNoCorte}
+              mostrarRegua={mostrarReguaNaVista}
               enquadrarToken={enquadrarVistaToken}
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.

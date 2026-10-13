@@ -242,3 +242,61 @@ export function medidasDoCorte(
 
   return { niveis, verticais, horizontais, vMinimo };
 }
+
+// ── 4 · RÉGUA VERTICAL E ESCALA GRÁFICA (13/10/2026) ─────────────────────────
+
+export interface MarcaDaRegua {
+  /** mm acima do zero do desenho. */
+  v: number;
+  rotulo: string;
+  /** Marca principal: traço maior e linha de nível mais forte. */
+  principal: boolean;
+}
+
+/** Passos "redondos" da régua, em metro — o zoom escolhe o primeiro que cabe. */
+const PASSOS_DA_REGUA_M = [0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100, 200, 500];
+
+function numeroCurto(m: number, casas: number): string {
+  return (Math.round(m * 10 ** casas) / 10 ** casas + 0).toFixed(casas).replace('.', ',');
+}
+
+/**
+ * As marcas da régua entre `vDe` e `vAte` (mm, a faixa VISÍVEL), espaçadas ao
+ * menos `minPx` na tela. Com `cotaZeroM` (corte com terreno), as marcas caem em
+ * cotas ABSOLUTAS redondas (885, 885,5…) e dizem a cota; sem ela (elevação),
+ * são relativas ao zero do desenho (±0, +3, −1,5).
+ */
+export function marcasDaRegua(vDe: number, vAte: number, pxPorMm: number, cotaZeroM?: number, minPx = 36): { passoM: number; marcas: MarcaDaRegua[] } {
+  const passoM = PASSOS_DA_REGUA_M.find((p) => p * 1000 * pxPorMm >= minPx) ?? PASSOS_DA_REGUA_M[PASSOS_DA_REGUA_M.length - 1];
+  const z = cotaZeroM ?? 0;
+  const lo = z + Math.min(vDe, vAte) / 1000;
+  const hi = z + Math.max(vDe, vAte) / 1000;
+  const kDe = Math.ceil(lo / passoM - 1e-9);
+  const kAte = Math.floor(hi / passoM + 1e-9);
+  const casas = passoM < 0.1 ? 2 : passoM < 1 ? (passoM === 0.25 ? 2 : 1) : passoM === 2.5 ? 1 : 0;
+  // A cada 5 marcas (ou 4, nos passos de 2,5): 1 m, 5 m, 10 m… — a leitura de régua.
+  const cadaPrincipal = [0.25, 2.5, 25].includes(passoM) ? 4 : 5;
+  const marcas: MarcaDaRegua[] = [];
+  if (kAte - kDe > 500) return { passoM, marcas };
+  for (let k = kDe; k <= kAte; k++) {
+    const cota = k * passoM;
+    const v = Math.round((cota - z) * 1000);
+    const rel = cota - z;
+    const rotulo =
+      cotaZeroM !== undefined
+        ? numeroCurto(cota, casas)
+        : Math.abs(rel) < 1e-9
+          ? '±0'
+          : `${rel > 0 ? '+' : '−'}${numeroCurto(Math.abs(rel), casas)}`;
+    marcas.push({ v, rotulo, principal: k % cadaPrincipal === 0 });
+  }
+  return { passoM, marcas };
+}
+
+/** A barra da escala gráfica: o comprimento redondo mais perto de `alvoPx` na tela. */
+export function escalaGrafica(pxPorMm: number, alvoPx = 120): { comprimentoM: number; px: number; rotulo: string } {
+  const opcoes = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000];
+  let melhor = opcoes[0];
+  for (const m of opcoes) if (Math.abs(m * 1000 * pxPorMm - alvoPx) < Math.abs(melhor * 1000 * pxPorMm - alvoPx)) melhor = m;
+  return { comprimentoM: melhor, px: melhor * 1000 * pxPorMm, rotulo: `${numeroCurto(melhor, melhor < 1 ? 1 : 0)} m` };
+}

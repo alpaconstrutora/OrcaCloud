@@ -77,6 +77,8 @@ const dirInicial = (params.get('dir') as DirecaoElevacao) || 'FRENTE';
 const cotas = params.get('cotas') === '1';
 const rotulos = params.get('rotulos') === '1';
 const internas = params.get('internas') === '1';
+/** `?regua=1` (13/10/2026): régua vertical, linhas de nível e escala gráfica. */
+const regua = params.get('regua') === '1';
 const soTerreo = params.get('niveis') === 'terreo';
 
 const DIRECOES: DirecaoElevacao[] = ['FRENTE', 'FUNDOS', 'LATERAL_DIREITA', 'LATERAL_ESQUERDA'];
@@ -107,6 +109,7 @@ function App() {
           mostrarCotasAltura={cotas}
           mostrarRotulosEsquadria={rotulos}
           mostrarParedesInternas={internas}
+          mostrarRegua={regua}
           enquadrarToken={token}
         />
       </div>

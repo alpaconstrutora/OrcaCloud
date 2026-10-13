@@ -48,16 +48,17 @@ proposta de cinco itens: 1. cotas de nível no perfil; 2. corte e aterro (e a al
 | 2 | `utils/blueprintCorteMedidas.ts` (novo) | `medidasDoCorte` | Testes: níveis (pontas, máx., mín., platô, piso), corte e aterro máximos com o `u` certo, talude (altura, 1:x), comprimentos que somam |
 | 3 | `components/blueprint/ElevationCanvas.tsx` | Pinta níveis, cotas verticais e a cadeia horizontal | Harness/foto do corte com terreno e platô: cotas legíveis, sem sobreposição |
 | 4 | `components/blueprint/BlueprintEditor.tsx` | Os dois itens no Exibir (persistidos) | typecheck; item desabilitado diz o motivo |
-| 5 | (etapa 4 do pedido) régua vertical com escala | — | a planejar ao fechar 1–3 |
+| 5 | (etapa 4) `marcasDaRegua`, `escalaGrafica` + canvas + "Régua e escala" no Exibir | Régua à esquerda (cota absoluta no corte com terreno; altura ±0 na elevação), linhas de nível ao fundo, escala gráfica no canto; o passo é o primeiro redondo com 36 px | Testes de passo/rótulo/escala; foto do corte e da elevação |
 | 6 | (etapa 5 do pedido) Medir no corte | — | a planejar ao fechar a régua |
 
 ## Estado
 
-- [x] 1 — `bordasDoAnelNoCorte` (exata, inclusive anel girado), `trecho` nos pontos, `cotaZeroM`; os 41 testes de corte existentes passam.
+- [x] 1 — `bordasDoAnelNoCorte` (exata, inclusive anel girado), `trecho` nos pontos, `cotaZeroM`; os 42 testes de corte existentes passam.
 - [x] 2 — `__tests__/blueprintCorteMedidas.test.ts` (11): corte 3,00 / aterro 2,00; talude 4,50 m a 1:1,5 com h 3,00 (pé refinado no encontro com o terreno, ±5 mm); platô 3,80 m pela borda exata fora do passo; níveis sem repetir; muro 4,00 m. Mutação: sem o refino do pé → falha; sem a borda exata → falha.
 - [x] 3 — harness `docs/spikes/topografia/?vista=corte&plato=1&medidas=1`: aterro 1,08 m, talude 1,58 m · 1:1,5 com h 1,05 m, platô 8,00 m, perfil 11,75 m, cotas nas pontas e no piso, sem rótulo sobreposto.
 - [x] 4 — "Cotas do terreno" e "Comprimentos" em Vista › Exibir, só no corte; sem terreno, desabilitados com o motivo. typecheck 0.
 - [x] Suíte 8827 = 8793 + 34 pendentes + 0 falhas; `vite build` ok; ui-standard (ElevationCanvas, BlueprintEditor), xss e origem-do-deploy limpos.
-- [ ] Publicação, Vercel, CI
+- [x] 1–3 publicados em `795aef8b` (13/10/2026): domínio carimbado `795aef8` com "Cotas do terreno", Vercel success, check-run `ci` success.
 - Fora desta etapa: as medidas ainda não saem na prancha/PDF do corte (a função é pura, para reusar lá).
-- [ ] 5 (régua) · [ ] 6 (Medir)
+- [x] 5 (régua) — 3 testes (passo 2 m a 0,02 px/mm em cotas absolutas 878…886; relativas ±0/+/−; escala 5 m = 100 px). Fotos: corte `topografia/?vista=corte&plato=1&medidas=1` (piso 101,50 na marca 101,5) e elevação `blueprint-elevation/?regua=1&cotas=1` (5,60 m chega a +5,6). typecheck 0; suíte 8830 = 8796 + 34 + 0 (a 1ª rodada perdeu 4 testes num "Fatal error" do V8 — repetida até a conta fechar); build, ui-standard, xss, origem limpos.
+- [ ] 5 publicado · [ ] 6 (Medir)

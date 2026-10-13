@@ -470,6 +470,7 @@ function App() {
           terrenoChave={versao.hash_resultado}
           mostrarCotasDoTerreno={comMedidas}
           mostrarComprimentos={comMedidas}
+          mostrarRegua={comMedidas}
         />
       </div>
     );

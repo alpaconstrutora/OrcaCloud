@@ -88,6 +88,14 @@ import { isObra } from '../utils/projectClassification';
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'nome', label: 'Documento', sortable: true },
+  // Aba Normas — logo depois de Documento: coluna nova entra ao lado da vizinha da
+  // ordem padrão (mesclarOrdemDeColunas), então isso vale até para quem já salvou uma
+  // ordem. Fora da aba ficam ocultas (hiddenColumnsForTab).
+  { key: 'norma_codigo', label: 'Código', sortable: true },
+  { key: 'norma_orgao', label: 'Órgão', sortable: true },
+  { key: 'norma_edicao', label: 'Edição', sortable: true },
+  { key: 'norma_situacao', label: 'Situação', sortable: true },
+  { key: 'norma_substituida_por', label: 'Substituída por', sortable: true },
   { key: 'extensao', label: 'Extensão', sortable: true },
   { key: 'descricao', label: 'Descrição', sortable: true },
   { key: 'autor', label: 'Autor', sortable: true },
@@ -99,20 +107,15 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'data_emissao', label: 'Emissão', sortable: true },
   { key: 'data_validade', label: 'Validade', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
-  // Aba Normas — fora dela ficam ocultas (hiddenColumnsForTab).
-  { key: 'norma_codigo', label: 'Código', sortable: true },
-  { key: 'norma_orgao', label: 'Órgão', sortable: true },
-  { key: 'norma_edicao', label: 'Edição', sortable: true },
-  { key: 'norma_situacao', label: 'Situação', sortable: true },
-  { key: 'norma_substituida_por', label: 'Substituída por', sortable: true },
   { key: 'actions', label: 'Ações', sortable: false },
 ];
 
 // Colunas que pertencem a uma aba só. Norma não vence por data — é cancelada ou
 // substituída —, então na aba Normas a Situação toma o lugar de Validade/Status, e a
-// Edição o de Revisão/Nº do fornecedor. Nas demais abas as colunas de norma somem.
+// Edição o de Revisão/Nº do fornecedor; quem emite é o Órgão, não um Autor. Nas
+// demais abas as colunas de norma somem.
 const NORMA_COLUMN_KEYS = ['norma_codigo', 'norma_orgao', 'norma_edicao', 'norma_situacao', 'norma_substituida_por'];
-const COLUNAS_OCULTAS_EM_NORMAS = ['data_validade', 'status', 'numero_documento_fornecedor', 'revisao'];
+const COLUNAS_OCULTAS_EM_NORMAS = ['data_validade', 'status', 'numero_documento_fornecedor', 'revisao', 'autor'];
 const hiddenColumnsForTab = (tab: OpuraDocumentCategoria): string[] =>
   tab === 'normas' ? COLUNAS_OCULTAS_EM_NORMAS : NORMA_COLUMN_KEYS;
 

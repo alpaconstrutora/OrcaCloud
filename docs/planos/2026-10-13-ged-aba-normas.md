@@ -116,5 +116,13 @@ O GED (`components/OpuraDocsModule.tsx`) monta as abas a partir do array `CATEGO
 - [x] 9. `components/oficios/rotulos.ts`: rótulo (item novo, ver acima).
 - [x] Typecheck rc=0, com 12 GB pelo PowerShell; com 4 GB o Node cai, como registrado na memória.
 - [x] Suíte: 8942 = 8908 aprovados + 34 pendentes, rc=0, sem "Unhandled". `check-ui-standard` sem violação nos 3 .tsx. `orgContextGuard` 14/14. `check-system-projects` e `check-project-classification` com rc=0.
-- [ ] Verificação na interface (Playwright, login real): pendente da senha do agente-leitura e da autorização para gravar uma norma de teste.
+- [x] Verificação na interface (Playwright, agente-leitura, org Garden Cambuhy SPE, vite da frente na :3100), roteiro com 27 checks, todos OK, 0 erros de console/HTTP:
+  - colunas da aba (Código, Órgão, Edição, Situação, Substituída por presentes; Validade, Revisão, Status, Nº fornecedor e Autor ausentes; Código logo após Documento, mesmo com ordem de colunas ANTIGA salva no navegador);
+  - formulário: nome automático "ABNT NBR 99999-TESTE:2026", "Data de Publicação", sem Vencimento nem Autor do Projeto;
+  - criar → aparece "Em vigor"; editar → "Substituída" + "substituída por";
+  - filtro Situação (Cancelada esconde, Substituída mostra);
+  - obra no topo: a aba Normas continua listando, e a consulta vai sem `project_id`, enquanto a aba Projetos segue recortada (`project_id=in.`). Esse contraste prova que a obra estava mesmo no topo.
+  - Limpeza pelo app no `finally`. No banco: 0 documentos e 0 arquivos de teste restantes.
+- [x] Ajuste vindo da prova na tela: as colunas de norma ficavam no fim da tabela, fora da tela a 1600px. Em `COLUMNS` elas passaram para logo depois de "Documento" (`mesclarOrdemDeColunas` encaixa coluna nova ao lado da vizinha da ordem padrão), e "Autor" fica oculto em Normas.
+- [x] Re-rodada após o ajuste: tsc rc=0. Suíte 885 arquivos, 8942 = 8908 + 34 pendentes, rc=0; a 1ª tentativa caiu com `# Fatal error` do V8 (Node 24, ver memória) e foi descartada. check-ui-standard, check-origem-do-deploy e check-xss-sinks com rc=0.
 - [ ] Publicar (`git push origin HEAD:main`) e `conferir-producao.sh "Normas"`, depois ler o check-run `ci`.

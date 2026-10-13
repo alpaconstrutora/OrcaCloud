@@ -16,12 +16,15 @@
 
 ## Estado
 
-- [ ] 1. Migration: gerador atômico e unicidade normalizada
-- [ ] 2. Migration: renumeração
-- [ ] 3. Frontend sem gerador no navegador
-- [ ] 4. Testes
-- [ ] 5. Tela de verdade e publicação
+- [x] 1. Gerador atômico e unicidade normalizada — `aplicar_20271013170000_codigo_patrimonial_unico.sql`, aplicada em 13/10/2026
+- [x] 2. Renumeração — ensaio em BEGIN…ROLLBACK passou; aplicada: 84 ativos → OPR-PAT-000001…000084, 0 fora da série, 84 com `codigo_anterior`, item vinculado acompanhou (000036), índice `uq_opura_assets_codigo_org` criado. Tabela `opura_assets_renumeracao_20271013` — NÃO APAGAR
+- [x] 3. Frontend sem gerador no navegador (`e161f42f`) — cadastro, importação e Condomínio mandam código vazio; 23505 vira frase; busca e tooltip pelo código anterior
+- [x] 4. Testes — `codigoPatrimonialUnico.test.ts` (trava contra gerador no navegador); `scripts/teste-codigo-patrimonial.sql` e `teste-ativos-almoxarifado-vinculo.sql` passaram sobre a migration; suíte 9007 ✓ + 34 pulados = 9041; `verificar:build` ok; CI verde
+- [x] 5. Tela de verdade (produção `e161f42f`, `c:/tmp/pwtest/codigo-patrimonial.mjs`): cadastro sem código → 000085; minúsculas duplicadas recusadas; lote → 000086/000087; busca por OPR-PAT-835808 acha a Trena 10m (000010); item → ativo → 000088 com item de mesmo código. Limpeza conferida no banco (0 sobras; maior código volta a 000084)
 
+Observação: o build local (`vite build`) da frente falhou no plugin de PWA (`this.createScope is not a function`), problema do ambiente da frente; o build do Vercel do mesmo commit passou.
+
+Pendência fora do plano: o "QR" da etiqueta é um desenho fixo, não codifica nada.
 
 ## Contexto
 

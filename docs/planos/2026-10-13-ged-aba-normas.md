@@ -169,3 +169,5 @@ Frente `ged-normas-lote`.
   - Ao corrigir, um patch em Python falhou sem gravar e o comando seguinte rodou o roteiro antigo: mais 3 criadas, e de novo sobrou uma "NR-98".
   - As duas "NR-98" (org Garden) foram excluídas pelo app, com o arquivo no Storage, por um roteiro restrito ao nome exato. Conferido no banco.
   - Nada da Alpa foi tocado.
+- [x] Publicado: `b4db3d27` em main. Vercel `success`, `ci` `completed/success`, e `conferir-producao.sh` confirma que o domínio serve `b4db3d2`, com "Informe o código da norma" e "O código não se edita em lote" no bundle. Suíte antes do push: 886 arquivos, 8973 = 8939 + 34 pendentes, rc=0; duas tentativas anteriores caíram com Fatal error do V8 e foram descartadas.
+- [ ] **Pendente de decisão do usuário:** as 6 normas reais da Alpa enviadas antes desta versão estão sem código, órgão e edição. A extração preencheria todas (casos cobertos nos testes). Não foram tocadas.
